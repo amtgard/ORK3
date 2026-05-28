@@ -214,7 +214,8 @@ class Authorization extends Ork3
 				} else if ($type == AUTH_UNIT) {
 					$mundane = Ork3::$Lib->player->player_info($requester_id);
 
-					if ($this->HasAuthority($requester_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT)) {
+					if ($this->HasAuthority($requester_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) ||
+						$this->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 						logtrace("RemoveAuthorization(): KPM Unit Bypass: ", $requester_id);
 						$response = $this->remove_auth_h($request);
 					}
@@ -617,7 +618,8 @@ class Authorization extends Ork3
 		} else if (AUTH_UNIT == $request['Type']) {
 			$mundane = Ork3::$Lib->player->player_info($requester_id);
 
-			if ($this->HasAuthority($requester_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT)) {
+			if ($this->HasAuthority($requester_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) ||
+				$this->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 				$this->log->Write('Authorization:KPM Unit Bypass', $requester_id, LOG_ADD, $request);
 				$response = $this->add_auth_h($request);
 				return $response;

@@ -792,7 +792,7 @@ class Player extends Ork3 {
 	//     needs invalidating.
 	// Pass kingdom_id/park_id when the caller already knows them (e.g.
 	// merge/delete after the row is gone); otherwise we look them up.
-	private function bust_player_award_recs_cache($mundane_id, $kingdom_id = null, $park_id = null) {
+	private function bust_player_award_recs_cache($mundane_id, $kingdom_id = null, $park_id = null, $viewer_id = null) {
 		if (!valid_id($mundane_id)) return;
 		if ($kingdom_id === null || $park_id === null) {
 			$info = $this->player_info($mundane_id);
@@ -803,12 +803,19 @@ class Player extends Ork3 {
 		$kid = (int)$kingdom_id;
 		$pid = (int)$park_id;
 		$mid = (int)$mundane_id;
+		// Bust viewer-agnostic keys (used by kingdom/park-scoped views).
 		$keys = [['KingdomId' => 0, 'ParkId' => 0, 'PlayerId' => $mid]];
-		if ($kid > 0) $keys[] = ['KingdomId' => $kid, 'ParkId' => 0,   'PlayerId' => 0];
-		if ($pid > 0) $keys[] = ['KingdomId' => 0,    'ParkId' => $pid,'PlayerId' => 0];
+		if ($kid > 0) $keys[] = ['KingdomId' => $kid, 'ParkId' => 0,    'PlayerId' => 0];
+		if ($pid > 0) $keys[] = ['KingdomId' => 0,    'ParkId' => $pid, 'PlayerId' => 0];
 		foreach ($keys as $kd) {
 			Ork3::$Lib->ghettocache->bust('Report.PlayerAwardRecommendations',
 				Ork3::$Lib->ghettocache->key($kd));
+		}
+		// PlayerAwardRecommendations cache key also includes RequestedBy (viewer), so bust the
+		// viewer-specific entry when the caller knows who will be loading the tab next.
+		if ($viewer_id !== null && valid_id((int)$viewer_id)) {
+			Ork3::$Lib->ghettocache->bust('Report.PlayerAwardRecommendations',
+				Ork3::$Lib->ghettocache->key(['KingdomId' => 0, 'ParkId' => 0, 'PlayerId' => $mid, 'RequestedBy' => (int)$viewer_id]));
 		}
 		Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details',
 			Ork3::$Lib->ghettocache->key(['MundaneId' => $mid]));
@@ -2354,7 +2361,7 @@ class Player extends Ork3 {
 			$awardRec->recommended_by_id = $mundane_id;
 			$awardRec->reason = $request['Reason'];
 			$awardRec->save();
-			$this->bust_player_award_recs_cache($request['MundaneId']);
+			$this->bust_player_award_recs_cache($request['MundaneId'], null, null, $mundane_id);
 			return Success('Recommendation Added!');
 		} else {
 			return NoAuthorization();

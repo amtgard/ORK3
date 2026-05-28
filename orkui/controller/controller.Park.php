@@ -78,6 +78,10 @@ class Controller_Park extends Controller
 
 		$this->data['park_days']        = $this->Park->get_park_parkdays( $park_id );
 		$this->data['park_info']        = $this->Park->get_park_details( $park_id );
+		if (empty($this->data['park_info']['ParkInfo']['ParkId'])) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		$this->data['park_weather']     = Ork3::$Lib->weather->for_park( $park_id );
 		$this->data['park_officers']    = $this->Park->GetOfficers(['ParkId' => $park_id, 'Token' => $this->session->token]);
 		$this->data['park_tournaments'] = $this->Reports->get_tournaments( null, null, $park_id );

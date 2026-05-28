@@ -212,6 +212,10 @@ class Controller_Unit extends Controller {
 
 		$this->data['Unit_heraldryurl'] = $this->Unit->get_heraldry($unit_id);
 		$this->data['Unit'] = $this->Unit->get_unit_details($unit_id);
+		if (empty($this->data['Unit']['Details']['Unit']['UnitId'])) {
+			header('Location: ' . UIR . 'Unit/unitlist');
+			exit;
+		}
 		// Parse scope (kingdom/park) from the unit list session ref for player search scoping
 		$_ref = $this->session->unit_list_ref ?? '';
 		$_scope_kingdom_id = null;
@@ -261,7 +265,9 @@ class Controller_Unit extends Controller {
 			$_pinfo        = Ork3::$Lib->player->player_info($this->session->token);
 			$_home_kingdom = isset($_pinfo['KingdomId']) ? (int)$_pinfo['KingdomId'] : 0;
 			if ($_home_kingdom > 0) {
-				$_can_officer = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $_home_kingdom, AUTH_EDIT);
+				$_home_park    = isset($_pinfo['ParkId']) ? (int)$_pinfo['ParkId'] : 0;
+			$_can_officer = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $_home_kingdom, AUTH_EDIT)
+				|| ($_home_park > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, $_home_park, AUTH_EDIT));
 			}
 		}
 		$this->data['CanOfficerManage'] = $_can_officer;
