@@ -34,7 +34,8 @@ class Controller_Event extends Controller {
 	public function index($event_id = null) {
 		$this->data['EventDetails'] = $this->Event->get_event_details($event_id);
 		if ($this->data['EventDetails']['Status']['Status'] != 0) {
-			$this->data['Error'] = $this->data['EventDetails']['Status']['Error'];
+			header('Location: ' . UIR . 'Event/list');
+			exit;
 		}
 		if ($this->request->exists('Admin_event')) {
 			$this->data['Admin_event'] = $this->request->Admin_event->Request;
@@ -213,6 +214,10 @@ class Controller_Event extends Controller {
 
 		$eventInfo = $this->Attendance->get_event_info( $event_id );
 		$info      = $eventInfo[0] ?? [];
+		if (empty($info['EventId'])) {
+			header('Location: ' . UIR . 'Event/list');
+			exit;
+		}
 
 		$this->data['EventInfo']  = $info;
 		$this->data['event_id']   = $event_id;

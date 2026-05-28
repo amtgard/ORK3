@@ -386,6 +386,10 @@ class Controller_Kingdom extends Controller {
 		$this->data['park_summary']        = $this->Kingdom->get_park_summary($kingdom_id);
 		$this->data['principalities']      = $this->Kingdom->get_principalities($kingdom_id);
 		$this->data['kingdom_info']        = $this->Kingdom->get_kingdom_shortinfo($kingdom_id);
+		if (empty($this->data['kingdom_info']['Info']['KingdomInfo']['KingdomId'])) {
+			header('Location: ' . UIR);
+			exit;
+		}
 		$this->data['kingdom_officers']    = $this->Kingdom->GetOfficers(['KingdomId' => $kingdom_id, 'Token' => $this->session->token]);
 		$this->data['IsPrinz']             = $this->data['kingdom_info']['Info']['KingdomInfo']['IsPrincipality'];
 

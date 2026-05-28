@@ -41,6 +41,10 @@ $_actionLabels = [
 	'Kingdom::VacateOfficer'           => 'Officer Vacated',
 	'Authorization::AddAuthorization'  => 'Permission Granted',
 	'Authorization::RemoveAuthorization'=> 'Permission Revoked',
+	'Unit::RetireUnit'                 => 'Unit Retired',
+	'Unit::RestoreUnit'                => 'Unit Restored',
+	'Unit::ClaimUnit'                  => 'Unit Claimed',
+	'Unit::TransferOwnership'          => 'Unit Ownership Transferred',
 ];
 
 // ── JSON helpers (defined early — used in batch collector and render functions) ──
@@ -70,10 +74,10 @@ $_parkIds = []; $_kingdomIds = []; $_mundaneIds = []; $_eventIds = []; $_kawardI
 foreach ($AuditRows as $_lr) {
 	foreach ([$_lr['Parameters'], $_lr['PriorState'], $_lr['PostState']] as $_js) {
 		$_d = @json_decode($_js, true);
-		if (!is_array($_d)) $_d = _jsonExtract($_js ?? '', ['ParkId','park_id','KingdomId','kingdom_id','MundaneId','mundane_id','given_by_id','stripped_from','RecipientId','FromMundaneId','ToMundaneId','event_id','at_park_id','at_kingdom_id','at_event_id','kingdomaward_id','KingdomAwardId','old_kingdom_id','new_kingdom_id','from_park_id','to_park_id','from_kingdom_id','to_kingdom_id']);
+		if (!is_array($_d)) $_d = _jsonExtract($_js ?? '', ['ParkId','park_id','KingdomId','kingdom_id','MundaneId','mundane_id','given_by_id','stripped_from','RecipientId','FromMundaneId','ToMundaneId','event_id','at_park_id','at_kingdom_id','at_event_id','kingdomaward_id','KingdomAwardId','old_kingdom_id','new_kingdom_id','from_park_id','to_park_id','from_kingdom_id','to_kingdom_id','from_mundane_id','to_mundane_id']);
 		foreach (['park_id','at_park_id','ParkId','from_park_id','to_park_id'] as $_k) if (!empty($_d[$_k])) $_parkIds[(int)$_d[$_k]] = true;
 		foreach (['kingdom_id','at_kingdom_id','KingdomId','old_kingdom_id','new_kingdom_id','from_kingdom_id','to_kingdom_id'] as $_k) if (!empty($_d[$_k])) $_kingdomIds[(int)$_d[$_k]] = true;
-		foreach (['mundane_id','given_by_id','given_by','stripped_from','MundaneId','RecipientId','FromMundaneId','ToMundaneId','SuspendedById','recommended_by_id','SupporterMundaneId','supporter_mundane_id'] as $_k) if (!empty($_d[$_k]) && is_numeric($_d[$_k])) $_mundaneIds[(int)$_d[$_k]] = true;
+		foreach (['mundane_id','given_by_id','given_by','stripped_from','MundaneId','RecipientId','FromMundaneId','ToMundaneId','SuspendedById','recommended_by_id','SupporterMundaneId','supporter_mundane_id','from_mundane_id','to_mundane_id'] as $_k) if (!empty($_d[$_k]) && is_numeric($_d[$_k])) $_mundaneIds[(int)$_d[$_k]] = true;
 	// Route entity_id into the correct lookup map based on the audit row's
 	// `entity` column. Defaults to mundane when entity is unset (older rows).
 	if (!empty($_lr['EntityId'])) {
@@ -82,6 +86,7 @@ foreach ($AuditRows as $_lr) {
 			case 'Park':    $_parkIds[$_e]    = true; break;
 			case 'Kingdom': $_kingdomIds[$_e] = true; break;
 			case 'Event':   $_eventIds[$_e]   = true; break;
+			case 'Unit':    $_unitIds[$_e]    = true; break;
 			default:        $_mundaneIds[$_e] = true; break;
 		}
 	}
@@ -157,6 +162,10 @@ if ($_entityInt > 0) {
 	} elseif ($_entityType === 'Event') {
 		$DB->Clear();
 		$_r = $DB->DataSet("SELECT name FROM ork_event WHERE event_id = {$_entityInt}");
+		if ($_r && $_r->Next()) $_entityFilterName = $_r->name;
+	} elseif ($_entityType === 'Unit') {
+		$DB->Clear();
+		$_r = $DB->DataSet("SELECT name FROM ork_unit WHERE unit_id = {$_entityInt}");
 		if ($_r && $_r->Next()) $_entityFilterName = $_r->name;
 	} elseif ($_entityType === '' || $_entityType === 'Player') {
 		$_entityFilterName = $_filterPlayerNames[$_entityInt] ?? '';
@@ -449,6 +458,28 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			$_park = $_pid ? ($parkMap[$_pid] ?? 'park #' . $_pid) : 'park';
 			$_verb = $method === 'Park::RetirePark' ? 'Retired' : 'Restored';
 			return $_verb . ' ' . htmlspecialchars($_park);
+		case 'Unit::RetireUnit':
+		case 'Unit::RestoreUnit':
+			$_uid = (int)($p['UnitId'] ?? $a['unit_id'] ?? 0);
+			$_unit = $_uid ? ($unitMap[$_uid] ?? 'unit #' . $_uid) : 'unit';
+			$_verb = $method === 'Unit::RetireUnit' ? 'Retired' : 'Restored';
+			return $_verb . ' ' . htmlspecialchars($_unit);
+		case 'Unit::ClaimUnit':
+			$_uid  = (int)($p['UnitId'] ?? $a['unit_id'] ?? 0);
+			$_mid  = (int)($p['MundaneId'] ?? $a['mundane_id'] ?? 0);
+			$_unit = $_uid ? ($unitMap[$_uid] ?? 'unit #' . $_uid) : 'unit';
+			$_who  = $_mid ? ($mundaneMap[$_mid] ?? 'player #' . $_mid) : '';
+			return 'Claimed ' . htmlspecialchars($_unit) . ($_who ? ' by ' . htmlspecialchars($_who) : '');
+		case 'Unit::TransferOwnership':
+			$_uid  = (int)($p['UnitId'] ?? $a['unit_id'] ?? 0);
+			$_from = (int)($p['FromMundaneId'] ?? $a['from_mundane_id'] ?? 0);
+			$_to   = (int)($p['TargetMundaneId'] ?? $a['to_mundane_id'] ?? 0);
+			$_unit = $_uid ? ($unitMap[$_uid] ?? 'unit #' . $_uid) : 'unit';
+			$_fwho = $_from ? ($mundaneMap[$_from] ?? 'player #' . $_from) : '';
+			$_twho = $_to   ? ($mundaneMap[$_to]   ?? 'player #' . $_to)   : '';
+			return 'Transferred ' . htmlspecialchars($_unit)
+				. ($_fwho ? ' from ' . htmlspecialchars($_fwho) : '')
+				. ($_twho ? ' to '   . htmlspecialchars($_twho) : '');
 		default:
 			return '';
 	}
@@ -1193,6 +1224,44 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			$html .= '</tbody></table>';
 			return $html;
 
+		case 'Unit::RetireUnit':
+		case 'Unit::RestoreUnit':
+			$_uid     = (int)($p['UnitId'] ?? $a['unit_id'] ?? 0);
+			$_oldAct  = $b['active'] ?? null;
+			$_newAct  = $a['active'] ?? ($method === 'Unit::RetireUnit' ? 'Retired' : 'Active');
+			$html = '<table class="al-diff-table"><tbody>';
+			if ($_uid) $html .= '<tr><td class="al-diff-field">Unit</td><td colspan="2"><a href="' . UIR . 'Unit/index/' . $_uid . '" style="color:var(--rp-accent)">' . htmlspecialchars($unitMap[$_uid] ?? ('unit #' . $_uid)) . '</a></td></tr>';
+			$html .= '<tr><td class="al-diff-field">Action</td><td colspan="2">' . ($method === 'Unit::RetireUnit' ? 'Retired' : 'Restored') . '</td></tr>';
+			if ($_oldAct !== null || $_newAct !== null) {
+				$html .= '<tr class="al-diff-changed">'
+				       . '<td class="al-diff-field">Status</td>'
+				       . '<td class="al-diff-old">' . htmlspecialchars($_oldAct ?? '—') . '</td>'
+				       . '<td class="al-diff-new">' . htmlspecialchars($_newAct ?? '—') . '</td>'
+				       . '</tr>';
+			}
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'Unit::ClaimUnit':
+			$_uid  = (int)($p['UnitId'] ?? $a['unit_id'] ?? 0);
+			$_mid  = (int)($p['MundaneId'] ?? $a['mundane_id'] ?? 0);
+			$html  = '<table class="al-diff-table"><tbody>';
+			if ($_uid) $html .= '<tr><td class="al-diff-field">Unit</td><td colspan="2"><a href="' . UIR . 'Unit/index/' . $_uid . '" style="color:var(--rp-accent)">' . htmlspecialchars($unitMap[$_uid] ?? ('unit #' . $_uid)) . '</a></td></tr>';
+			if ($_mid) $html .= '<tr><td class="al-diff-field">Claimed By</td><td colspan="2">' . _auditIdLink('player', $_mid, $mundaneMap) . '</td></tr>';
+			$html  .= '</tbody></table>';
+			return $html;
+
+		case 'Unit::TransferOwnership':
+			$_uid  = (int)($p['UnitId'] ?? $a['unit_id'] ?? 0);
+			$_from = (int)($p['FromMundaneId'] ?? $a['from_mundane_id'] ?? 0);
+			$_to   = (int)($p['TargetMundaneId'] ?? $a['to_mundane_id'] ?? 0);
+			$html  = '<table class="al-diff-table"><tbody>';
+			if ($_uid)  $html .= '<tr><td class="al-diff-field">Unit</td><td colspan="2"><a href="' . UIR . 'Unit/index/' . $_uid . '" style="color:var(--rp-accent)">' . htmlspecialchars($unitMap[$_uid] ?? ('unit #' . $_uid)) . '</a></td></tr>';
+			if ($_from) $html .= '<tr><td class="al-diff-field">Previous Manager</td><td colspan="2">' . _auditIdLink('player', $_from, $mundaneMap) . '</td></tr>';
+			if ($_to)   $html .= '<tr><td class="al-diff-field">New Manager</td><td colspan="2">'      . _auditIdLink('player', $_to,   $mundaneMap) . '</td></tr>';
+			$html  .= '</tbody></table>';
+			return $html;
+
 		default:
 			$out = [];
 			if ($prior && $prior !== 'null') $out[] = '<strong>Prior state:</strong><pre class="al-raw-json">' . htmlspecialchars($prior) . '</pre>';
@@ -1398,6 +1467,7 @@ html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 							<option value="Player"  <?=$_etf==='Player'  ? 'selected' : ''?>>Player</option>
 							<option value="Park"    <?=$_etf==='Park'    ? 'selected' : ''?>>Park</option>
 							<option value="Kingdom" <?=$_etf==='Kingdom' ? 'selected' : ''?>>Kingdom</option>
+							<option value="Unit"    <?=$_etf==='Unit'    ? 'selected' : ''?>>Unit</option>
 						</select>
 						<input class="al-form-input al-player-text" id="alEntityText" type="text" autocomplete="off"
 						       placeholder="Search name or paste ID…"
@@ -1480,6 +1550,7 @@ html[data-theme="dark"] .al-table         { color:#e2e8f0; }
 								case 'Park':    $_eMap = $_parkMap;    $_eUrl = UIR . 'Park/profile/';    break;
 								case 'Kingdom': $_eMap = $_kingdomMap; $_eUrl = UIR . 'Kingdom/profile/'; break;
 								case 'Event':   $_eMap = $_eventMap;   $_eUrl = UIR . 'Event/view/';      break;
+								case 'Unit':    $_eMap = $_unitMap;    $_eUrl = UIR . 'Unit/index/';       break;
 								default:        $_eMap = $_mundaneMap; $_eUrl = UIR . 'Player/profile/';  break;
 							}
 							if ($_displayEntityId > 0):
@@ -1605,6 +1676,17 @@ var AL_SCOPES = {
 					}
 					var label = v.Name + (when ? ' (' + when + ')' : '') + (ctx ? ' — ' + ctx : '');
 					return { label: label, value: v.EventId, display: v.Name + (when ? ' (' + when + ')' : '') };
+				}));
+			});
+		}
+	},
+	Unit: {
+		source: function(term, cb) {
+			$.getJSON('../orkservice/Search/SearchService.php', {
+				Action: 'Search/Unit', name: term, limit: 8
+			}, function(data) {
+				cb($.map(data || [], function(v) {
+					return { label: v.Name, value: v.UnitId, display: v.Name };
 				}));
 			});
 		}

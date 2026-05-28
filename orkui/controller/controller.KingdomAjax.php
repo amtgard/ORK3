@@ -781,7 +781,9 @@ class Controller_KingdomAjax extends Controller {
 		}
 
 		$kingdom_id = (int)preg_replace('/[^0-9]/', '', $p ?? '');
-		if (!valid_id($kingdom_id)) {
+		$scope_check = trim($_GET['scope'] ?? 'own');
+		// kingdom_id=0 is valid for scope=all (global search with no kingdom context)
+		if (!valid_id($kingdom_id) && $scope_check !== 'all') {
 			echo json_encode([]);
 			exit;
 		}

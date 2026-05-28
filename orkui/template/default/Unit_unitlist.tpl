@@ -56,7 +56,7 @@ html[data-theme="dark"] .ul-badge-retired { background: #374151; color: #d1d5db;
 	padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: #854d0e;
 }
 .ul-limit-warn i { color: #ca8a04; margin-top: 2px; flex-shrink: 0; }
-.ul-default-note { background: #ebf8ff; border-color: #bee3f8; color: #2c5282; }
+.ul-default-note { display: flex; background: #ebf8ff; border-color: #bee3f8; color: #2c5282; }
 .ul-default-note i { color: #3182ce; }
 html[data-theme="dark"] .ul-limit-warn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
 html[data-theme="dark"] .ul-default-note { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
@@ -206,7 +206,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			<span>Your search has been limited to 250 results. Update your search criteria and click Search again to refine further.</span>
 		</div>
 		<!-- Default top-by-size note -->
-		<div class="ul-limit-warn ul-default-note" id="ul-default-note" style="display:none">
+		<div class="ul-limit-warn ul-default-note" id="ul-default-note">
 			<i class="fas fa-info-circle"></i>
 			<span>Showing the largest companies and households by member size. Search by name above to find other units.</span>
 		</div>
@@ -380,7 +380,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 		$('#ul-loading').html('<i class="fas fa-spinner fa-spin" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.4;"></i>Loading units…').show();
 		$('#ul-table').hide();
 		$('#ul-limit-warn').hide();
-		$('#ul-default-note').hide();
+		if (q) $('#ul-default-note').hide();
 
 		var url = AJAX_BASE + '&q=' + encodeURIComponent(q || '');
 		if (KID) url += '&KingdomId=' + KID;

@@ -2037,7 +2037,7 @@ class Controller_Admin extends Controller {
 		$bywhom_filter = (int)($this->request->ByWhomId ?? 0);
 		$entity_filter = (int)($this->request->EntityId ?? 0);
 		$entity_type_filter = trim($this->request->EntityType ?? '');
-		if (!in_array($entity_type_filter, ['Player', 'Park', 'Kingdom', 'Event'], true)) $entity_type_filter = '';
+		if (!in_array($entity_type_filter, ['Player', 'Park', 'Kingdom', 'Event', 'Unit'], true)) $entity_type_filter = '';
 
 		global $DB;
 		$where = "da.modified_at >= '" . mysql_real_escape_string($start) . " 00:00:00'"
@@ -2045,9 +2045,9 @@ class Controller_Admin extends Controller {
 		if ($method_filter) $where .= " AND da.method_call = '" . mysql_real_escape_string($method_filter) . "'";
 		if ($bywhom_filter) $where .= " AND da.by_whom_id = {$bywhom_filter}";
 		if ($entity_filter) $where .= " AND da.entity_id  = {$entity_filter}";
-		// Without the entity-type constraint, a pasted ID like #5 would match
-		// Player #5, Park #5, Kingdom #5, etc. all at once. Scope it.
-		if ($entity_type_filter) $where .= " AND da.entity = '" . mysql_real_escape_string($entity_type_filter) . "'";
+		// Only apply entity-type constraint when an entity ID is also set — otherwise
+		// the default EntityType=Player in the URL would silently hide Unit/Park/etc. rows.
+		if ($entity_filter && $entity_type_filter) $where .= " AND da.entity = '" . mysql_real_escape_string($entity_type_filter) . "'";
 
 		$DB->Clear();
 		$cr = $DB->DataSet("SELECT COUNT(*) AS cnt FROM ork_danger_audit da WHERE {$where}");

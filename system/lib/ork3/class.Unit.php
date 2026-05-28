@@ -464,8 +464,17 @@ class Unit extends Ork3 {
 		if (!valid_id($request['UnitId']) || !$this->unit->find()) {
 			return InvalidParameter();
 		}
+		$unit_id    = (int)$request['UnitId'];
+		$actor_id   = isset($request['ActorId']) ? (int)$request['ActorId'] : null;
+		$member_ids = array_keys($this->_active_member_roles($unit_id));
 		$this->unit->active = $waffle;
 		$this->unit->save();
+		Ork3::$Lib->dangeraudit->audit('Unit::' . ($waffle === 'Retired' ? 'RetireUnit' : 'RestoreUnit'),
+			$request, 'Unit', $unit_id, $actor_id, ['unit_id' => $unit_id, 'active' => $waffle]);
+		foreach ($member_ids as $mid) {
+			$ck = Ork3::$Lib->ghettocache->key(['MundaneId' => $mid, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1, 'Lightweight' => 1]);
+			Ork3::$Lib->ghettocache->bust('Report.UnitSummary', $ck);
+		}
 		return Success();
 	}
 
@@ -477,14 +486,17 @@ class Unit extends Ork3 {
 		$unit_id  = (int)$request['UnitId'];
 
 		$is_manager = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE);
-		$is_officer = $mundane && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT);
+		$is_officer = $mundane && (
+			Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) ||
+			Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
+		);
 		// Sole-member exception: the only remaining active roster member may
 		// retire even without management rights.
 		$members = $this->_active_member_roles($unit_id);
 		$is_sole_member = (count($members) === 1 && isset($members[$mundane_id]));
 
 		if ($is_manager || $is_officer || $is_sole_member) {
-			return $this->WaffleUnit($request, 'Retired');
+			return $this->WaffleUnit($request + ['ActorId' => $mundane_id], 'Retired');
 		}
 		return NoAuthorization();
 	}
@@ -495,8 +507,11 @@ class Unit extends Ork3 {
 		if ($mundane_id === 0) return NoAuthorization();
 		$mundane = Ork3::$Lib->player->player_info($request['Token']);
 		// Reactivation is monarchy-only — mirrors the KPM unit-auth bypass scope.
-		if ($mundane && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT)) {
-			return $this->WaffleUnit($request, 'Active');
+		if ($mundane && (
+			Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) ||
+			Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
+		)) {
+			return $this->WaffleUnit($request + ['ActorId' => $mundane_id], 'Active');
 		}
 		return NoAuthorization();
 	}
@@ -519,6 +534,8 @@ class Unit extends Ork3 {
 			return NoAuthorization('Only a leader of this unit may claim it.');
 		}
 		$this->_grant_unit_manager($mundane_id, $unit_id);
+		Ork3::$Lib->dangeraudit->audit('Unit::ClaimUnit',
+			$request, 'Unit', $unit_id, $mundane_id, ['unit_id' => $unit_id, 'mundane_id' => $mundane_id]);
 		return Success();
 	}
 
@@ -532,7 +549,10 @@ class Unit extends Ork3 {
 		if (!valid_id($target_id)) return InvalidParameter();
 
 		$is_manager = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE);
-		$is_officer = $mundane && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT);
+		$is_officer = $mundane && (
+			Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) ||
+			Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
+		);
 		if (!$is_manager && !$is_officer) return NoAuthorization();
 
 		// Grant the target manager rights (skip if they already hold them).
@@ -547,6 +567,9 @@ class Unit extends Ork3 {
 		if ($mundane_id !== $target_id) {
 			$this->_remove_unit_auth_for($mundane_id, $unit_id);
 		}
+		Ork3::$Lib->dangeraudit->audit('Unit::TransferOwnership',
+			$request, 'Unit', $unit_id, $mundane_id,
+			['unit_id' => $unit_id, 'from_mundane_id' => $mundane_id, 'to_mundane_id' => $target_id]);
 		return Success();
 	}
 
