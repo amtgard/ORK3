@@ -368,10 +368,16 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 	function loadActiveCounts(units) {
 		var ids = units.map(function (u) { return parseInt(u.UnitId) || 0; }).filter(Boolean);
 		if (!ids.length || !table) return;
-		$.getJSON(ACTIVITY_BASE + '&ids=' + ids.join(','), function (map) {
-			applyActiveCounts(map || {});
+		var CHUNK = 75, merged = {}, batches = [];
+		for (var i = 0; i < ids.length; i += CHUNK) batches.push(ids.slice(i, i + CHUNK));
+		$.when.apply($, batches.map(function (chunk) {
+			return $.getJSON(ACTIVITY_BASE + '&ids=' + chunk.join(','));
+		})).then(function () {
+			var results = batches.length === 1 ? [arguments] : Array.prototype.slice.call(arguments);
+			results.forEach(function (r) { $.extend(merged, r[0] || {}); });
+			applyActiveCounts(merged);
 		}).fail(function () {
-			applyActiveCounts({});   // resolve spinners to 0 (and badge them inactive)
+			applyActiveCounts({});
 		});
 	}
 
