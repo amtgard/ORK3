@@ -77,7 +77,7 @@ class Controller_Search extends Controller {
 				'IncludeHouseHolds' => 1,
 				'IncludeEvents'     => 1,
 				'IncludeRetired'    => $include_retired,
-				'Limit'             => 250,
+				'Limit'             => 25,
 				'OrderBy'           => 'u.name',
 			]);
 		}
@@ -87,13 +87,13 @@ class Controller_Search extends Controller {
 
 	// Lazy companion to the default unit list: given the unit_ids it just rendered,
 	// return { unit_id: active_member_count } (members with a sign-in in the last 12
-	// months). Bounded to the shown units (<=250) so it stays ~1s, and the front-end
+	// months). Bounded to the shown units (<=25) so it stays ~1s, and the front-end
 	// fires it after the list is already interactive.
 	public function unitactivity() {
 		header('Content-Type: application/json');
 		$ids = array_values(array_unique(array_filter(array_map('intval', explode(',', $_GET['ids'] ?? '')))));
 		if (empty($ids)) { echo json_encode(new stdClass()); exit; }
-		$ids = array_slice($ids, 0, 250);
+		$ids = array_slice($ids, 0, 25);
 		$cache_key = Ork3::$Lib->ghettocache->key($ids);
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.unitactivity', $cache_key, 300)) !== false) {
 			echo json_encode($cache, JSON_FORCE_OBJECT); exit;

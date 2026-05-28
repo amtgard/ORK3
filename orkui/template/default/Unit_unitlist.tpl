@@ -200,10 +200,10 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 			<button class="ul-search-btn" id="ul-search-btn"><i class="fas fa-search"></i> Search</button>
 		</div>
 
-		<!-- 250-result limit warning -->
+		<!-- result limit warning -->
 		<div class="ul-limit-warn" id="ul-limit-warn">
 			<i class="fas fa-exclamation-triangle"></i>
-			<span>Your search has been limited to 250 results. Update your search criteria and click Search again to refine further.</span>
+			<span>Your search has been limited to 25 results. Update your search criteria and click Search again to refine further.</span>
 		</div>
 		<!-- Default top-by-size note -->
 		<div class="ul-limit-warn ul-default-note" id="ul-default-note">
@@ -260,7 +260,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 	var UIR_BASE     = <?= json_encode(UIR) ?>;
 	var AJAX_BASE    = <?= json_encode(UIR . 'Search/unitsearch') ?>;
 	var ACTIVITY_BASE = <?= json_encode(UIR . 'Search/unitactivity') ?>;
-	var LIMIT        = 250;
+	var LIMIT        = 25;
 
 	// Column indices (type + activity cols are always hidden at indices 2,3)
 	// Scoped member count at 4 when HAS_SCOPE, else absent
