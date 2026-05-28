@@ -1984,6 +1984,9 @@ class Player extends Ork3 {
 				}
 				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $_audit_mundane, $_audit_prior, $_audit_after);
 
+				Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details',
+					Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$_audit_mundane]));
+
 				return Success($set_awards_id);
 			} else {
 				return InvalidParamter();
@@ -2062,6 +2065,9 @@ class Player extends Ork3 {
 					$_audit_after = $this->get_award($awards);
 				}
 				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $_audit_mundane, $_audit_prior, $_audit_after);
+
+				Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details',
+					Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$_audit_mundane]));
 
 				return Success($set_awards_id);
 			} else {
