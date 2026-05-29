@@ -908,4 +908,67 @@ class Controller_PlayerAjax extends Controller {
 		exit;
 	}
 
+	public function dietary_preferences($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+		$mundane_id = (int)($p ?? 0);
+		if (!valid_id($mundane_id) || (int)$mundane_id !== (int)$this->session->user_id) {
+			echo json_encode(['status' => 1, 'error' => 'Access denied']);
+			exit;
+		}
+		$this->load_model('Player');
+		$prefs = $this->Player->GetDietaryPreferences($mundane_id);
+		echo json_encode(['status' => 0, 'prefs' => $prefs ?: []]);
+		exit;
+	}
+
+	public function save_dietary_preferences() {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+		$mundane_id = (int)$this->session->user_id;
+		$data = [
+			'IsAnonymous'       => (int)!empty($_POST['IsAnonymous']),
+			'NoRestrictions'    => (int)!empty($_POST['NoRestrictions']),
+			'DietVegetarian'    => (int)!empty($_POST['DietVegetarian']),
+			'DietVegan'         => (int)!empty($_POST['DietVegan']),
+			'DietHalal'         => (int)!empty($_POST['DietHalal']),
+			'DietKosher'        => (int)!empty($_POST['DietKosher']),
+			'DietKeto'          => (int)!empty($_POST['DietKeto']),
+			'DietPaleo'         => (int)!empty($_POST['DietPaleo']),
+			'RestrictDairy'     => (int)!empty($_POST['RestrictDairy']),
+			'RestrictEggs'      => (int)!empty($_POST['RestrictEggs']),
+			'RestrictFish'      => (int)!empty($_POST['RestrictFish']),
+			'RestrictHoney'     => (int)!empty($_POST['RestrictHoney']),
+			'RestrictPoultry'   => (int)!empty($_POST['RestrictPoultry']),
+			'RestrictRedmeat'   => (int)!empty($_POST['RestrictRedmeat']),
+			'RestrictShellfish' => (int)!empty($_POST['RestrictShellfish']),
+			'AllergenMilk'      => max(0, min(2, (int)($_POST['AllergenMilk']      ?? 0))),
+			'AllergenEggs'      => max(0, min(2, (int)($_POST['AllergenEggs']      ?? 0))),
+			'AllergenFish'      => max(0, min(2, (int)($_POST['AllergenFish']      ?? 0))),
+			'AllergenShellfish' => max(0, min(2, (int)($_POST['AllergenShellfish'] ?? 0))),
+			'AllergenTreenuts'  => max(0, min(2, (int)($_POST['AllergenTreenuts']  ?? 0))),
+			'AllergenPeanuts'   => max(0, min(2, (int)($_POST['AllergenPeanuts']   ?? 0))),
+			'AllergenWheat'     => max(0, min(2, (int)($_POST['AllergenWheat']     ?? 0))),
+			'AllergenSoy'       => max(0, min(2, (int)($_POST['AllergenSoy']       ?? 0))),
+			'AllergenSesame'    => max(0, min(2, (int)($_POST['AllergenSesame']    ?? 0))),
+			'AllergenGarlic'    => max(0, min(2, (int)($_POST['AllergenGarlic']    ?? 0))),
+			'AllergenGluten'    => max(0, min(2, (int)($_POST['AllergenGluten']    ?? 0))),
+			'AllergenOnion'     => max(0, min(2, (int)($_POST['AllergenOnion']     ?? 0))),
+			'AllergenMushroom'  => max(0, min(2, (int)($_POST['AllergenMushroom']  ?? 0))),
+			'AllergenCorn'      => max(0, min(2, (int)($_POST['AllergenCorn']      ?? 0))),
+			'AllergenCoconut'   => max(0, min(2, (int)($_POST['AllergenCoconut']   ?? 0))),
+			'AllergenCocoa'     => max(0, min(2, (int)($_POST['AllergenCocoa']     ?? 0))),
+		];
+		$this->load_model('Player');
+		$this->Player->SaveDietaryPreferences($mundane_id, $data);
+		echo json_encode(['status' => 0]);
+		exit;
+	}
+
 }

@@ -789,6 +789,74 @@ class Controller_Event extends Controller {
 		// MealList is derived from ScheduleList — rows with category or secondary_category 'Feast and Food'
 		// (ork_event_meal table removed; meal fields are now columns on ork_event_schedule)
 		$this->data['MealList'] = array_values(array_filter($this->data['ScheduleList'], fn($s) => ($s['Category'] ?? '') === 'Feast and Food' || ($s['SecondaryCategory'] ?? '') === 'Feast and Food'));
+
+		$this->data['DietarySummary'] = null;
+		if ($this->data['CanManageFeast']) {
+			$DB->Clear();
+			$dsRows = $DB->DataSet(
+				'SELECT m.mundane_id AS MundaneId, m.persona AS Persona,
+				        IF(a.mundane_id IS NOT NULL, 1, 0) AS CheckedIn,
+				        d.is_anonymous, d.no_restrictions, d.diet_vegetarian, d.diet_vegan, d.diet_halal, d.diet_kosher, d.diet_keto, d.diet_paleo,
+				        d.restrict_dairy, d.restrict_eggs, d.restrict_fish, d.restrict_honey, d.restrict_poultry, d.restrict_redmeat, d.restrict_shellfish,
+				        d.allergen_milk, d.allergen_eggs, d.allergen_fish, d.allergen_shellfish, d.allergen_treenuts, d.allergen_peanuts,
+				        d.allergen_wheat, d.allergen_soy, d.allergen_sesame, d.allergen_garlic, d.allergen_gluten, d.allergen_onion, d.allergen_mushroom,
+				        d.allergen_corn, d.allergen_coconut, d.allergen_cocoa
+				 FROM (
+				     SELECT mundane_id FROM ' . DB_PREFIX . "event_rsvp
+				     WHERE event_calendardetail_id = $detail_id AND status = 'going'
+				     UNION
+				     SELECT mundane_id FROM " . DB_PREFIX . "attendance
+				     WHERE event_calendardetail_id = $detail_id
+				 ) src
+				 JOIN " . DB_PREFIX . 'mundane m ON m.mundane_id = src.mundane_id
+				 LEFT JOIN ' . DB_PREFIX . 'mundane_dietary d ON d.mundane_id = src.mundane_id
+				 LEFT JOIN (SELECT DISTINCT mundane_id FROM ' . DB_PREFIX . "attendance WHERE event_calendardetail_id = $detail_id) a ON a.mundane_id = src.mundane_id
+				 ORDER BY m.persona"
+			);
+			$dsList = [];
+			if ($dsRows) {
+				while ($dsRows->Next()) {
+					$dsList[] = [
+						'MundaneId'         => (int)$dsRows->MundaneId,
+						'Persona'           => (string)$dsRows->Persona,
+						'CheckedIn'         => (bool)(int)$dsRows->CheckedIn,
+						'HasPrefs'          => $dsRows->is_anonymous !== null,
+						'NoRestrictions'    => (bool)(int)($dsRows->no_restrictions ?? 0),
+						'IsAnonymous'       => (int)($dsRows->is_anonymous ?? 1),
+						'DietVegetarian'    => (int)($dsRows->diet_vegetarian  ?? 0),
+						'DietVegan'         => (int)($dsRows->diet_vegan       ?? 0),
+						'DietHalal'         => (int)($dsRows->diet_halal       ?? 0),
+						'DietKosher'        => (int)($dsRows->diet_kosher      ?? 0),
+						'DietKeto'          => (int)($dsRows->diet_keto        ?? 0),
+						'DietPaleo'         => (int)($dsRows->diet_paleo       ?? 0),
+						'RestrictDairy'     => (int)($dsRows->restrict_dairy   ?? 0),
+						'RestrictEggs'      => (int)($dsRows->restrict_eggs    ?? 0),
+						'RestrictFish'      => (int)($dsRows->restrict_fish    ?? 0),
+						'RestrictHoney'     => (int)($dsRows->restrict_honey   ?? 0),
+						'RestrictPoultry'   => (int)($dsRows->restrict_poultry ?? 0),
+						'RestrictRedmeat'   => (int)($dsRows->restrict_redmeat ?? 0),
+						'RestrictShellfish' => (int)($dsRows->restrict_shellfish ?? 0),
+						'AllergenMilk'      => (int)($dsRows->allergen_milk    ?? 0),
+						'AllergenEggs'      => (int)($dsRows->allergen_eggs    ?? 0),
+						'AllergenFish'      => (int)($dsRows->allergen_fish    ?? 0),
+						'AllergenShellfish' => (int)($dsRows->allergen_shellfish ?? 0),
+						'AllergenTreenuts'  => (int)($dsRows->allergen_treenuts ?? 0),
+						'AllergenPeanuts'   => (int)($dsRows->allergen_peanuts ?? 0),
+						'AllergenWheat'     => (int)($dsRows->allergen_wheat   ?? 0),
+						'AllergenSoy'       => (int)($dsRows->allergen_soy     ?? 0),
+						'AllergenSesame'    => (int)($dsRows->allergen_sesame  ?? 0),
+						'AllergenGarlic'    => (int)($dsRows->allergen_garlic  ?? 0),
+						'AllergenGluten'    => (int)($dsRows->allergen_gluten  ?? 0),
+						'AllergenOnion'     => (int)($dsRows->allergen_onion   ?? 0),
+						'AllergenMushroom'  => (int)($dsRows->allergen_mushroom ?? 0),
+						'AllergenCorn'      => (int)($dsRows->allergen_corn    ?? 0),
+						'AllergenCoconut'   => (int)($dsRows->allergen_coconut ?? 0),
+						'AllergenCocoa'     => (int)($dsRows->allergen_cocoa   ?? 0),
+					];
+				}
+			}
+			$this->data['DietarySummary'] = $dsList;
+		}
 	}
 
 	public function create( $p = null ) {

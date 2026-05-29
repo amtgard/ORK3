@@ -995,6 +995,72 @@ html[data-theme="dark"] .pn-cms-title { color: var(--ork-text); }
 html[data-theme="dark"] .pn-cms-item { border-bottom-color: var(--ork-border); }
 html[data-theme="dark"] .pn-cms-line { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
+
+/* ===== Dietary Preferences Card ===== */
+.dp-intro{font-size:11.5px;color:#718096;line-height:1.45;margin:0 0 12px}
+.dp-section-hdr{font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#718096;margin:14px 0 6px;display:flex;align-items:center;gap:5px}
+.dp-section-hdr:first-of-type{margin-top:0}
+.dp-info-btn{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#e2e8f0;color:#718096;font-size:9px;font-weight:700;border:none;cursor:pointer;text-transform:none;letter-spacing:0;line-height:1;transition:background .1s}
+.dp-info-btn:hover{background:#cbd5e0}
+#dp-info-pop{position:fixed;z-index:10300;width:290px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.13);padding:13px 15px;font-size:12px;line-height:1.55;color:#4a5568;display:none}
+#dp-info-pop.dp-pop-open{display:block}
+#dp-info-pop .dp-pop-title{font-size:12.5px;font-weight:700;color:#2d3748;margin:0 0 7px}
+#dp-info-pop p{margin:0 0 8px}
+#dp-info-pop p:last-child{margin-bottom:0}
+#dp-info-pop a{color:#4299e1;text-decoration:none}
+#dp-info-pop a:hover{text-decoration:underline}
+.dp-sev-legend{font-size:11px;color:#718096;margin:0 0 10px;line-height:1.8}
+.dp-sl-eg{display:inline-block;padding:1px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.dp-sl-none{background:#e2e8f0;color:#2d3748}
+.dp-sl-mild{background:#fef3c7;color:#92400e}
+.dp-sl-severe{background:#fee2e2;color:#9b1c1c}
+html[data-theme="dark"] .dp-info-btn{background:#4a5568;color:#a0aec0}
+html[data-theme="dark"] .dp-info-btn:hover{background:#718096;color:#e2e8f0}
+html[data-theme="dark"] #dp-info-pop{background:#2d3748;border-color:#4a5568;color:#e2e8f0}
+html[data-theme="dark"] #dp-info-pop .dp-pop-title{color:#f7fafc}
+html[data-theme="dark"] #dp-info-pop a{color:#63b3ed}
+html[data-theme="dark"] .dp-sev-legend{color:#a0aec0}
+html[data-theme="dark"] .dp-sl-none{background:#4a5568;color:#e2e8f0}
+html[data-theme="dark"] .dp-sl-mild{background:#78350f;color:#fde68a}
+html[data-theme="dark"] .dp-sl-severe{background:#7f1d1d;color:#fca5a5}
+.dp-toggles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px 10px;margin-bottom:2px}
+.dp-toggle-row{display:flex;align-items:center;gap:8px;cursor:pointer;padding:3px 0}
+.dp-toggle-label{font-size:12.5px;color:var(--ork-text)}
+.dp-toggle-sw{flex-shrink:0;width:34px;height:20px;border-radius:10px;background:#cbd5e0;position:relative;cursor:pointer;transition:background .15s}
+.dp-toggle-sw::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.dp-toggle-sw.dp-on{background:#48bb78}
+.dp-toggle-sw.dp-on::after{left:17px}
+.dp-anon-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0 10px;border-bottom:1px solid var(--ork-border);margin-bottom:4px}
+.dp-anon-label{font-size:13px;font-weight:600;color:var(--ork-text)}
+.dp-anon-sub{font-size:11px;color:#a0aec0;margin-top:1px}
+.dp-allergens{display:flex;flex-direction:column;gap:6px}
+.dp-al-row{display:flex;align-items:center;gap:10px}
+.dp-al-name{font-size:12.5px;color:var(--ork-text);width:80px;flex-shrink:0}
+.dp-al-slider{flex:1;display:flex;border-radius:6px;padding:2px;gap:0}
+.dp-al-seg{flex:1;padding:5px 0;font-size:11.5px;border:none;background:transparent;cursor:pointer;border-radius:4px;color:#718096;font-weight:500;text-align:center;transition:background .15s,color .15s,box-shadow .15s}
+.dp-al-seg.dp-active[data-v="0"]{background:#e2e8f0;color:#2d3748;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.dp-al-seg.dp-active[data-v="1"]{background:#fef3c7;color:#92400e;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.dp-al-seg.dp-active[data-v="2"]{background:#fee2e2;color:#9b1c1c;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+html[data-theme="dark"] .dp-intro{color:var(--ork-text-secondary)}
+html[data-theme="dark"] .dp-section-hdr{color:#a0aec0}
+html[data-theme="dark"] .dp-toggle-label{color:var(--ork-text)}
+html[data-theme="dark"] .dp-toggle-sw{background:#4a5568}
+html[data-theme="dark"] .dp-toggle-sw.dp-on{background:#48bb78}
+html[data-theme="dark"] .dp-al-slider{background:#2d3748}
+html[data-theme="dark"] .dp-al-seg{color:#a0aec0}
+html[data-theme="dark"] .dp-al-seg.dp-active[data-v="0"]{background:#4a5568;color:#e2e8f0;box-shadow:none}
+html[data-theme="dark"] .dp-al-seg.dp-active[data-v="1"]{background:#78350f;color:#fde68a}
+html[data-theme="dark"] .dp-al-seg.dp-active[data-v="2"]{background:#7f1d1d;color:#fca5a5}
+html[data-theme="dark"] .dp-anon-label{color:var(--ork-text)}
+html[data-theme="dark"] .dp-anon-row{border-bottom-color:var(--ork-border)}
+.dp-no-restrict-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;background:#f7fafc;border:1px solid #e2e8f0;margin:8px 0 12px;cursor:pointer;transition:background .15s}
+.dp-no-restrict-row:hover{background:#edf2f7}
+.dp-no-restrict-label{font-size:13px;font-weight:600;color:var(--ork-text)}
+.dp-no-restrict-sub{font-size:11px;color:#a0aec0;margin-top:1px}
+#dp-prefs-body{transition:opacity .15s}
+#dp-prefs-body.dp-locked{opacity:.35;pointer-events:none;user-select:none}
+html[data-theme="dark"] .dp-no-restrict-row{background:rgba(255,255,255,.04);border-color:var(--ork-border)}
+html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.08)}
 </style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -1687,10 +1753,146 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 						</div>
 						<?php endif; ?>
 
-					</div><!-- /.pna-feed -->
+							<!-- Feast Preferences (compact trigger) -->
+							<div class="pna-card" id="pna-dp-card">
+								<div class="pna-card-title"><i class="fas fa-utensils"></i> Feast Preferences</div>
+								<div id="pna-dp-summary" style="font-size:12px;color:#718096;margin:0 0 10px;min-height:16px"></div>
+								<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" onclick="dpOpen()">
+									<i class="fas fa-pencil-alt"></i> Edit Preferences
+								</button>
+							</div><!-- /.pna-dp-card -->
+
+						</div><!-- /.pna-feed -->
 				</div><!-- /.pna-layout -->
 			</div><!-- /#pn-tab-myamtgard -->
 			<?php endif; // isOwnProfile ?>
+
+			<?php if ($isOwnProfile): ?>
+			<!-- Feast Preferences Modal -->
+			<div class="pn-overlay" id="pn-dp-overlay">
+				<div class="pn-modal-box" style="width:500px;max-width:calc(100vw - 40px)">
+					<div class="pn-modal-header">
+						<h3 class="pn-modal-title"><i class="fas fa-utensils" style="margin-right:8px;color:#718096"></i>Feast Preferences</h3>
+						<button class="pn-modal-close-btn" id="pn-dp-close-btn" aria-label="Close">&times;</button>
+					</div>
+					<div class="pn-modal-body">
+						<p class="dp-intro">Feast organizers use these when planning meals. Your name is hidden by default&mdash;only totals are shared unless you opt in below. <strong>Remember to RSVP to events</strong>&mdash;your preferences are only included in feast planning for events you&rsquo;ve RSVPed to.</p>
+
+						<!-- Show name toggle -->
+						<div class="dp-anon-row">
+							<div>
+								<div class="dp-anon-label">Show my name to feast organizers</div>
+								<div class="dp-anon-sub">Off = only counts shared; On = organizers see your name &amp; preferences</div>
+							</div>
+							<div class="dp-toggle-sw" data-field="ShowName"></div>
+						</div>
+
+						<!-- No restrictions master toggle -->
+						<div class="dp-no-restrict-row" id="dp-no-restrict-row">
+							<div class="dp-toggle-sw" data-field="NoRestrictions"></div>
+							<div>
+								<div class="dp-no-restrict-label">No dietary restrictions</div>
+								<div class="dp-no-restrict-sub">I have no concerns — clears and disables all options below</div>
+							</div>
+						</div>
+
+						<div id="dp-prefs-body">
+						<!-- Diet -->
+						<div class="dp-section-hdr">Diet <button type="button" class="dp-info-btn" data-info-btn aria-label="About these categories">?</button></div>
+						<div class="dp-toggles">
+							<?php foreach ([
+								'DietHalal'      => 'Halal',
+								'DietKeto'       => 'Keto',
+								'DietKosher'     => 'Kosher',
+								'DietPaleo'      => 'Paleo',
+								'DietVegan'      => 'Vegan',
+								'DietVegetarian' => 'Vegetarian',
+							] as $_dpField => $_dpLabel): ?>
+							<div class="dp-toggle-row">
+								<div class="dp-toggle-sw" data-field="<?= $_dpField ?>"></div>
+								<span class="dp-toggle-label"><?= $_dpLabel ?></span>
+							</div>
+							<?php endforeach; ?>
+						</div>
+
+						<!-- Restrictions (won't eat) -->
+						<div class="dp-section-hdr">Won't Eat <button type="button" class="dp-info-btn" data-info-btn aria-label="About these categories">?</button></div>
+						<div class="dp-toggles">
+							<?php foreach ([
+								'RestrictDairy'     => 'Dairy',
+								'RestrictEggs'      => 'Eggs',
+								'RestrictFish'      => 'Fish',
+								'RestrictHoney'     => 'Honey',
+								'RestrictPoultry'   => 'Poultry',
+								'RestrictRedmeat'   => 'Red Meat',
+								'RestrictShellfish' => 'Shellfish',
+							] as $_dpField => $_dpLabel): ?>
+							<div class="dp-toggle-row">
+								<div class="dp-toggle-sw" data-field="<?= $_dpField ?>"></div>
+								<span class="dp-toggle-label"><?= $_dpLabel ?></span>
+							</div>
+							<?php endforeach; ?>
+						</div>
+
+						<!-- Allergens (3-state) -->
+						<div class="dp-section-hdr">Allergens <button type="button" class="dp-info-btn" data-info-btn aria-label="About these categories">?</button></div>
+						<div class="dp-sev-legend">
+							<span class="dp-sl-eg dp-sl-none">None</span> no concern &nbsp;·&nbsp;
+							<span class="dp-sl-eg dp-sl-mild">Mild</span> prefer to avoid &nbsp;·&nbsp;
+							<span class="dp-sl-eg dp-sl-severe">Severe</span> strict, cross-contamination risk
+						</div>
+						<div class="dp-allergens">
+							<?php foreach ([
+								'AllergenCocoa'     => 'Cocoa',
+								'AllergenCoconut'   => 'Coconut',
+								'AllergenCorn'      => 'Corn',
+								'AllergenEggs'      => 'Eggs',
+								'AllergenFish'      => 'Fish',
+								'AllergenGarlic'    => 'Garlic',
+								'AllergenGluten'    => 'Gluten',
+								'AllergenMilk'      => 'Milk',
+								'AllergenMushroom'  => 'Mushroom',
+								'AllergenOnion'     => 'Onion',
+								'AllergenPeanuts'   => 'Peanuts',
+								'AllergenSesame'    => 'Sesame',
+								'AllergenShellfish' => 'Shellfish',
+								'AllergenSoy'       => 'Soy',
+								'AllergenTreenuts'  => 'Tree Nuts',
+								'AllergenWheat'     => 'Wheat',
+							] as $_dpField => $_dpLabel): ?>
+							<div class="dp-al-row">
+								<span class="dp-al-name"><?= $_dpLabel ?></span>
+								<div class="dp-al-slider" data-field="<?= $_dpField ?>">
+									<button type="button" class="dp-al-seg dp-active" data-v="0">None</button>
+									<button type="button" class="dp-al-seg" data-v="1">Mild</button>
+									<button type="button" class="dp-al-seg" data-v="2">Severe</button>
+								</div>
+							</div>
+							<?php endforeach; ?>
+						</div>
+						</div><!-- /#dp-prefs-body -->
+					</div><!-- /.pn-modal-body -->
+					<div class="pn-modal-footer" style="align-items:center">
+						<span id="pn-dp-dirty-warn" style="display:none;color:#e53e3e;font-size:12px;margin-right:auto">
+							<i class="fas fa-exclamation-circle"></i> Unsaved changes
+						</span>
+						<button type="button" class="pn-btn pn-btn-secondary" id="pn-dp-cancel-btn">Cancel</button>
+						<button type="button" class="pn-btn pn-btn-primary" id="pn-dp-save-btn" disabled>
+							<i class="fas fa-save"></i> Save
+						</button>
+					</div>
+				</div><!-- /.pn-modal-box -->
+			</div><!-- /#pn-dp-overlay -->
+			<div id="dp-info-pop" role="tooltip">
+				<div class="dp-pop-title">About Dietary Categories</div>
+				<p><strong>Diet</strong> — overall eating styles (Vegan, Kosher, Halal, etc.).<br>
+				<strong>Won't Eat</strong> — ingredients you avoid but aren't allergic to.<br>
+				<strong>Allergens</strong> — substances that may cause a reaction.</p>
+				<p>Allergen severity: <span class="dp-sl-eg dp-sl-none">None</span>&thinsp;=&thinsp;no concern &nbsp; <span class="dp-sl-eg dp-sl-mild">Mild</span>&thinsp;=&thinsp;prefer to avoid, not critical &nbsp; <span class="dp-sl-eg dp-sl-severe">Severe</span>&thinsp;=&thinsp;strict, cross-contamination is a real risk.</p>
+				<p>Allergen list covers all <strong>US FDA Major 9</strong> (FALCPA 2004 + FASTER Act 2023: milk, eggs, fish, shellfish, tree nuts, peanuts, wheat, soy, sesame) and key <strong>Health Canada</strong> priority allergens including gluten sources.</p>
+				<p><a href="https://www.fda.gov/food/nutrition-food-labeling-and-critical-foods/food-allergies" target="_blank" rel="noopener">FDA Food Allergens</a> &nbsp;·&nbsp; <a href="https://www.canada.ca/en/health-canada/services/food-nutrition/food-safety/food-allergies-intolerances/food-allergies.html" target="_blank" rel="noopener">Health Canada</a></p>
+			</div>
+			<?php endif; // isOwnProfile (modal) ?>
 
 			<!-- About Tab -->
 				<?php if ($_showAboutTab): ?>
@@ -4992,6 +5194,267 @@ function pnRenderSparkline() {
 	if (mel) mel.innerHTML = mhtml;
 }
 pnRenderSparkline();
+
+<?php if ($isOwnProfile): ?>
+// ---- Dietary Preferences Modal ----
+(function() {
+	var DP_LOAD_URL = '<?= UIR ?>PlayerAjax/dietary_preferences/<?= (int)$Player['MundaneId'] ?>';
+	var DP_SAVE_URL = '<?= UIR ?>PlayerAjax/save_dietary_preferences';
+	var dpLoaded = false;
+	var dpDirty  = false;
+	var dpSnap   = null; // modal state at open time; restored on discard
+
+	var ALLERGEN_FIELDS = ['AllergenPeanuts','AllergenTreenuts','AllergenWheat','AllergenMilk','AllergenEggs',
+	                       'AllergenFish','AllergenShellfish','AllergenSoy','AllergenSesame','AllergenGarlic',
+	                       'AllergenGluten','AllergenOnion','AllergenMushroom','AllergenCorn','AllergenCoconut','AllergenCocoa'];
+
+	// ---- DOM helpers (scoped to modal) ----
+	function gInModal(sel) { return document.querySelector('#pn-dp-overlay ' + sel); }
+	function allInModal(sel) { return document.querySelectorAll('#pn-dp-overlay ' + sel); }
+
+	function dpSetToggle(field, val) {
+		var sw = gInModal('.dp-toggle-sw[data-field="' + field + '"]');
+		if (sw) sw.classList.toggle('dp-on', !!val);
+	}
+	function dpToggleValue(field) {
+		var sw = gInModal('.dp-toggle-sw[data-field="' + field + '"]');
+		return sw ? sw.classList.contains('dp-on') : false;
+	}
+	function dpSetAllergen(grp, v) {
+		v = parseInt(v) || 0;
+		grp.querySelectorAll('.dp-al-seg').forEach(function(btn) {
+			btn.classList.toggle('dp-active', parseInt(btn.dataset.v) === v);
+		});
+	}
+	function dpGetAllergen(field) {
+		var grp = gInModal('.dp-al-slider[data-field="' + field + '"]');
+		if (!grp) return 0;
+		var active = grp.querySelector('.dp-al-seg.dp-active');
+		return active ? parseInt(active.dataset.v) : 0;
+	}
+
+	function dpLockPrefs(lock) {
+		var body = document.getElementById('dp-prefs-body');
+		if (body) body.classList.toggle('dp-locked', !!lock);
+	}
+	function dpRender(p) {
+		dpSetToggle('ShowName',         !p.IsAnonymous);
+		dpSetToggle('NoRestrictions',    p.NoRestrictions);
+		dpLockPrefs(p.NoRestrictions);
+		dpSetToggle('DietVegetarian',    p.DietVegetarian);
+		dpSetToggle('DietVegan',         p.DietVegan);
+		dpSetToggle('DietHalal',         p.DietHalal);
+		dpSetToggle('DietKosher',        p.DietKosher);
+		dpSetToggle('DietKeto',          p.DietKeto);
+		dpSetToggle('DietPaleo',         p.DietPaleo);
+		dpSetToggle('RestrictDairy',     p.RestrictDairy);
+		dpSetToggle('RestrictEggs',      p.RestrictEggs);
+		dpSetToggle('RestrictFish',      p.RestrictFish);
+		dpSetToggle('RestrictHoney',     p.RestrictHoney);
+		dpSetToggle('RestrictPoultry',   p.RestrictPoultry);
+		dpSetToggle('RestrictRedmeat',   p.RestrictRedmeat);
+		dpSetToggle('RestrictShellfish', p.RestrictShellfish);
+		ALLERGEN_FIELDS.forEach(function(f) {
+			var grp = gInModal('.dp-al-slider[data-field="' + f + '"]');
+			if (grp) dpSetAllergen(grp, p[f] || 0);
+		});
+	}
+
+	function dpCollect() {
+		var d = {
+			IsAnonymous:       dpToggleValue('ShowName')        ? 0 : 1,
+			NoRestrictions:    dpToggleValue('NoRestrictions')  ? 1 : 0,
+			DietVegetarian:    dpToggleValue('DietVegetarian')  ? 1 : 0,
+			DietVegan:         dpToggleValue('DietVegan')       ? 1 : 0,
+			DietHalal:         dpToggleValue('DietHalal')       ? 1 : 0,
+			DietKosher:        dpToggleValue('DietKosher')      ? 1 : 0,
+			DietKeto:          dpToggleValue('DietKeto')        ? 1 : 0,
+			DietPaleo:         dpToggleValue('DietPaleo')       ? 1 : 0,
+			RestrictDairy:     dpToggleValue('RestrictDairy')   ? 1 : 0,
+			RestrictEggs:      dpToggleValue('RestrictEggs')    ? 1 : 0,
+			RestrictFish:      dpToggleValue('RestrictFish')    ? 1 : 0,
+			RestrictHoney:     dpToggleValue('RestrictHoney')   ? 1 : 0,
+			RestrictPoultry:   dpToggleValue('RestrictPoultry') ? 1 : 0,
+			RestrictRedmeat:   dpToggleValue('RestrictRedmeat') ? 1 : 0,
+			RestrictShellfish: dpToggleValue('RestrictShellfish') ? 1 : 0,
+		};
+		ALLERGEN_FIELDS.forEach(function(f) { d[f] = dpGetAllergen(f); });
+		return d;
+	}
+
+	// ---- Summary card ----
+	var DIET_LABELS = {DietVegetarian:'Vegetarian',DietVegan:'Vegan',DietHalal:'Halal',DietKosher:'Kosher',DietKeto:'Keto',DietPaleo:'Paleo'};
+	var RESTRICT_LABELS = {RestrictDairy:'No Dairy',RestrictEggs:'No Eggs',RestrictFish:'No Fish',RestrictHoney:'No Honey',RestrictPoultry:'No Poultry',RestrictRedmeat:'No Red Meat',RestrictShellfish:'No Shellfish'};
+	var ALLERGEN_LABELS = {AllergenPeanuts:'Peanuts',AllergenTreenuts:'Tree Nuts',AllergenWheat:'Wheat',AllergenMilk:'Milk',AllergenEggs:'Eggs',AllergenFish:'Fish',AllergenShellfish:'Shellfish',AllergenSoy:'Soy',AllergenSesame:'Sesame',AllergenGarlic:'Garlic',AllergenGluten:'Gluten',AllergenOnion:'Onion',AllergenMushroom:'Mushroom',AllergenCorn:'Corn',AllergenCoconut:'Coconut',AllergenCocoa:'Cocoa'};
+
+	function dpUpdateSummary(p) {
+		var el = document.getElementById('pna-dp-summary');
+		if (!el) return;
+		if (p.NoRestrictions) { el.textContent = 'No dietary restrictions.'; return; }
+		var parts = [];
+		Object.keys(DIET_LABELS).forEach(function(f)     { if (p[f]) parts.push(DIET_LABELS[f]); });
+		Object.keys(RESTRICT_LABELS).forEach(function(f) { if (p[f]) parts.push(RESTRICT_LABELS[f]); });
+		ALLERGEN_FIELDS.forEach(function(f) {
+			if (p[f] >= 2) parts.push(ALLERGEN_LABELS[f] + ' allergy');
+			else if (p[f] >= 1) parts.push(ALLERGEN_LABELS[f] + ' sensitivity');
+		});
+		el.textContent = parts.length ? parts.slice(0,4).join(', ') + (parts.length > 4 ? ' +' + (parts.length - 4) + ' more' : '') : 'No preferences set.';
+	}
+
+	// ---- Dirty tracking ----
+	function dpMarkDirty() {
+		if (!dpDirty) {
+			dpDirty = true;
+			var warn = document.getElementById('pn-dp-dirty-warn');
+			var btn  = document.getElementById('pn-dp-save-btn');
+			if (warn) warn.style.display = 'inline';
+			if (btn)  btn.disabled = false;
+		}
+	}
+	function dpClearDirty() {
+		dpDirty = false;
+		var warn = document.getElementById('pn-dp-dirty-warn');
+		var btn  = document.getElementById('pn-dp-save-btn');
+		if (warn) warn.style.display = 'none';
+		if (btn)  { btn.disabled = true; btn.innerHTML = '<i class="fas fa-save"></i> Save'; }
+	}
+
+	// ---- Open / close ----
+	window.dpOpen = function() {
+		var ov = document.getElementById('pn-dp-overlay');
+		if (!ov) return;
+		dpClearDirty();
+		if (dpLoaded) {
+			dpSnap = dpCollect();
+		}
+		ov.classList.add('pn-open');
+		if (!dpLoaded) {
+			$.getJSON(DP_LOAD_URL, function(r) {
+				if (r && r.status === 0 && r.prefs) {
+					dpRender(r.prefs);
+					dpUpdateSummary(r.prefs);
+					dpLoaded = true;
+					dpSnap = dpCollect();
+					dpClearDirty();
+				}
+			});
+		}
+	};
+
+	function dpClose(force) {
+		function doClose() {
+			document.getElementById('pn-dp-overlay').classList.remove('pn-open');
+			var pop = document.getElementById('dp-info-pop');
+			if (pop) pop.classList.remove('dp-pop-open');
+			if (dpSnap) { dpRender(dpSnap); dpClearDirty(); }
+		}
+		if (!force && dpDirty) {
+			pnConfirm({ title: 'Unsaved Changes', message: 'Close without saving your feast preferences?', confirmText: 'Discard', danger: true }, doClose);
+		} else {
+			doClose();
+		}
+	}
+
+	// ---- Save ----
+	function dpSave() {
+		var btn = document.getElementById('pn-dp-save-btn');
+		if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; }
+		var data = dpCollect();
+		var fd = new FormData();
+		Object.keys(data).forEach(function(k) { fd.append(k, data[k]); });
+		fetch(DP_SAVE_URL, { method: 'POST', body: fd })
+			.then(function(res) { return res.json(); })
+			.then(function(r) {
+				if (r && r.status === 0) {
+					dpSnap = data;
+					dpClearDirty();
+					dpUpdateSummary(data);
+					document.getElementById('pn-dp-overlay').classList.remove('pn-open');
+				} else {
+					if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save'; }
+				}
+			})
+			.catch(function() {
+				if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save'; }
+			});
+	}
+
+	// ---- Wire modal controls ----
+	function dpClearNoRestrictions() {
+		if (noRestSw && noRestSw.classList.contains('dp-on')) {
+			noRestSw.classList.remove('dp-on');
+			dpLockPrefs(false);
+		}
+	}
+	allInModal('.dp-toggle-sw').forEach(function(sw) {
+		if (sw.dataset.field === 'NoRestrictions') return;
+		sw.addEventListener('click', function() { dpClearNoRestrictions(); sw.classList.toggle('dp-on'); dpMarkDirty(); });
+	});
+	allInModal('.dp-al-seg').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			dpClearNoRestrictions();
+			var grp = btn.closest('.dp-al-slider');
+			if (grp) { dpSetAllergen(grp, btn.dataset.v); dpMarkDirty(); }
+		});
+	});
+
+	// No-restrictions master toggle — whole row is clickable
+	var noRestSw  = gInModal('.dp-toggle-sw[data-field="NoRestrictions"]');
+	var noRestRow = document.getElementById('dp-no-restrict-row');
+	if (noRestSw && noRestRow) {
+		noRestRow.addEventListener('click', function() {
+			var turningOn = !noRestSw.classList.contains('dp-on');
+			noRestSw.classList.toggle('dp-on', turningOn);
+			if (turningOn) {
+				allInModal('.dp-toggle-sw[data-field]').forEach(function(sw) {
+					if (sw.dataset.field !== 'ShowName' && sw.dataset.field !== 'NoRestrictions')
+						sw.classList.remove('dp-on');
+				});
+				allInModal('.dp-al-slider').forEach(function(grp) { dpSetAllergen(grp, 0); });
+			}
+			dpLockPrefs(turningOn);
+			dpMarkDirty();
+		});
+	}
+	document.getElementById('pn-dp-close-btn').addEventListener('click',  function() { dpClose(); });
+	document.getElementById('pn-dp-cancel-btn').addEventListener('click',  function() { dpClose(); });
+	document.getElementById('pn-dp-save-btn').addEventListener('click',    dpSave);
+	document.getElementById('pn-dp-overlay').addEventListener('click',     function(e) { if (e.target === this) dpClose(); });
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && document.getElementById('pn-dp-overlay').classList.contains('pn-open'))
+			dpClose();
+	});
+
+	// Info popover
+	var dpInfoPop = document.getElementById('dp-info-pop');
+	allInModal('[data-info-btn]').forEach(function(btn) {
+		btn.addEventListener('click', function(e) {
+			e.stopPropagation();
+			var rect = btn.getBoundingClientRect();
+			var isOpen = dpInfoPop.classList.contains('dp-pop-open');
+			dpInfoPop.classList.remove('dp-pop-open');
+			if (isOpen) return;
+			var top  = rect.bottom + 6;
+			var left = rect.left;
+			if (left + 295 > window.innerWidth - 10) left = window.innerWidth - 305;
+			dpInfoPop.style.top  = top  + 'px';
+			dpInfoPop.style.left = left + 'px';
+			dpInfoPop.classList.add('dp-pop-open');
+		});
+	});
+	document.addEventListener('click', function() { if (dpInfoPop) dpInfoPop.classList.remove('dp-pop-open'); });
+
+	// Pre-load on page load so summary is populated immediately
+	$.getJSON(DP_LOAD_URL, function(r) {
+		if (r && r.status === 0 && r.prefs) {
+			dpRender(r.prefs);
+			dpUpdateSummary(r.prefs);
+			dpLoaded = true;
+			dpSnap = dpCollect();
+		}
+	});
+})();
+<?php endif; ?>
 </script>
 
 <?php if ($canManageAwards): ?>

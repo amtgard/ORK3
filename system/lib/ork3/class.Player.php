@@ -3160,6 +3160,94 @@ class Player extends Ork3 {
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
 	}
 
+	public function GetDietaryPreferences($mundane_id) {
+		$mundane_id = (int)$mundane_id;
+		if (!$mundane_id) return null;
+		$sql = "SELECT * FROM " . DB_PREFIX . "mundane_dietary WHERE mundane_id = $mundane_id LIMIT 1";
+		$r = $this->db->query($sql);
+		if ($r === false || $r->size() == 0) {
+			return $this->_dietary_defaults($mundane_id);
+		}
+		$r->next();
+		return $this->_dietary_row($r);
+	}
+
+	public function SaveDietaryPreferences($mundane_id, $data) {
+		$mundane_id = (int)$mundane_id;
+		if (!$mundane_id) return false;
+		$b = function($k) use ($data) { return (int)!empty($data[$k]); };
+		$a = function($k) use ($data) { return max(0, min(2, (int)($data[$k] ?? 0))); };
+		$sql = "INSERT INTO " . DB_PREFIX . "mundane_dietary
+			(`mundane_id`, `is_anonymous`, `no_restrictions`,
+			 `diet_vegetarian`, `diet_vegan`, `diet_halal`, `diet_kosher`, `diet_keto`, `diet_paleo`,
+			 `restrict_dairy`, `restrict_eggs`, `restrict_fish`, `restrict_honey`, `restrict_poultry`, `restrict_redmeat`, `restrict_shellfish`,
+			 `allergen_milk`, `allergen_eggs`, `allergen_fish`, `allergen_shellfish`, `allergen_treenuts`, `allergen_peanuts`,
+			 `allergen_wheat`, `allergen_soy`, `allergen_sesame`, `allergen_garlic`, `allergen_gluten`, `allergen_onion`, `allergen_mushroom`,
+			 `allergen_corn`, `allergen_coconut`, `allergen_cocoa`)
+			VALUES
+			($mundane_id, {$b('IsAnonymous')}, {$b('NoRestrictions')},
+			 {$b('DietVegetarian')}, {$b('DietVegan')}, {$b('DietHalal')}, {$b('DietKosher')}, {$b('DietKeto')}, {$b('DietPaleo')},
+			 {$b('RestrictDairy')}, {$b('RestrictEggs')}, {$b('RestrictFish')}, {$b('RestrictHoney')}, {$b('RestrictPoultry')}, {$b('RestrictRedmeat')}, {$b('RestrictShellfish')},
+			 {$a('AllergenMilk')}, {$a('AllergenEggs')}, {$a('AllergenFish')}, {$a('AllergenShellfish')}, {$a('AllergenTreenuts')}, {$a('AllergenPeanuts')},
+			 {$a('AllergenWheat')}, {$a('AllergenSoy')}, {$a('AllergenSesame')}, {$a('AllergenGarlic')}, {$a('AllergenGluten')}, {$a('AllergenOnion')}, {$a('AllergenMushroom')},
+			 {$a('AllergenCorn')}, {$a('AllergenCoconut')}, {$a('AllergenCocoa')})
+			ON DUPLICATE KEY UPDATE
+			 `is_anonymous`       = {$b('IsAnonymous')},
+			 `no_restrictions`    = {$b('NoRestrictions')},
+			 `diet_vegetarian`    = {$b('DietVegetarian')},  `diet_vegan`    = {$b('DietVegan')},
+			 `diet_halal`         = {$b('DietHalal')},       `diet_kosher`   = {$b('DietKosher')},
+			 `diet_keto`          = {$b('DietKeto')},        `diet_paleo`    = {$b('DietPaleo')},
+			 `restrict_dairy`     = {$b('RestrictDairy')},   `restrict_eggs` = {$b('RestrictEggs')},
+			 `restrict_fish`      = {$b('RestrictFish')},    `restrict_honey`= {$b('RestrictHoney')},
+			 `restrict_poultry`   = {$b('RestrictPoultry')}, `restrict_redmeat`  = {$b('RestrictRedmeat')},
+			 `restrict_shellfish` = {$b('RestrictShellfish')},
+			 `allergen_milk`      = {$a('AllergenMilk')},    `allergen_eggs` = {$a('AllergenEggs')},
+			 `allergen_fish`      = {$a('AllergenFish')},    `allergen_shellfish`= {$a('AllergenShellfish')},
+			 `allergen_treenuts`  = {$a('AllergenTreenuts')},`allergen_peanuts`  = {$a('AllergenPeanuts')},
+			 `allergen_wheat`     = {$a('AllergenWheat')},   `allergen_soy`  = {$a('AllergenSoy')},
+			 `allergen_sesame`    = {$a('AllergenSesame')},  `allergen_garlic`   = {$a('AllergenGarlic')},
+			 `allergen_gluten`    = {$a('AllergenGluten')},  `allergen_onion`    = {$a('AllergenOnion')},   `allergen_mushroom` = {$a('AllergenMushroom')},
+			 `allergen_corn`      = {$a('AllergenCorn')},    `allergen_coconut`  = {$a('AllergenCoconut')},
+			 `allergen_cocoa`     = {$a('AllergenCocoa')}";
+		$this->db->Clear();
+		$this->db->Execute($sql);
+		return true;
+	}
+
+	private function _dietary_defaults($mundane_id) {
+		return [
+			'MundaneId' => (int)$mundane_id, 'IsAnonymous' => 1, 'NoRestrictions' => 0,
+			'DietVegetarian' => 0, 'DietVegan' => 0, 'DietHalal' => 0, 'DietKosher' => 0, 'DietKeto' => 0, 'DietPaleo' => 0,
+			'RestrictDairy' => 0, 'RestrictEggs' => 0, 'RestrictFish' => 0, 'RestrictHoney' => 0,
+			'RestrictPoultry' => 0, 'RestrictRedmeat' => 0, 'RestrictShellfish' => 0,
+			'AllergenMilk' => 0, 'AllergenEggs' => 0, 'AllergenFish' => 0, 'AllergenShellfish' => 0,
+			'AllergenTreenuts' => 0, 'AllergenPeanuts' => 0, 'AllergenWheat' => 0, 'AllergenSoy' => 0,
+			'AllergenSesame' => 0, 'AllergenGarlic' => 0, 'AllergenGluten' => 0, 'AllergenOnion' => 0, 'AllergenMushroom' => 0,
+			'AllergenCorn' => 0, 'AllergenCoconut' => 0, 'AllergenCocoa' => 0,
+		];
+	}
+
+	private function _dietary_row($r) {
+		return [
+			'MundaneId' => (int)$r->mundane_id, 'IsAnonymous' => (int)$r->is_anonymous, 'NoRestrictions' => (int)$r->no_restrictions,
+			'DietVegetarian' => (int)$r->diet_vegetarian, 'DietVegan'    => (int)$r->diet_vegan,
+			'DietHalal'      => (int)$r->diet_halal,      'DietKosher'   => (int)$r->diet_kosher,
+			'DietKeto'       => (int)$r->diet_keto,        'DietPaleo'   => (int)$r->diet_paleo,
+			'RestrictDairy'     => (int)$r->restrict_dairy,    'RestrictEggs'     => (int)$r->restrict_eggs,
+			'RestrictFish'      => (int)$r->restrict_fish,     'RestrictHoney'    => (int)$r->restrict_honey,
+			'RestrictPoultry'   => (int)$r->restrict_poultry,  'RestrictRedmeat'  => (int)$r->restrict_redmeat,
+			'RestrictShellfish' => (int)$r->restrict_shellfish,
+			'AllergenMilk'      => (int)$r->allergen_milk,     'AllergenEggs'     => (int)$r->allergen_eggs,
+			'AllergenFish'      => (int)$r->allergen_fish,     'AllergenShellfish'=> (int)$r->allergen_shellfish,
+			'AllergenTreenuts'  => (int)$r->allergen_treenuts, 'AllergenPeanuts'  => (int)$r->allergen_peanuts,
+			'AllergenWheat'     => (int)$r->allergen_wheat,    'AllergenSoy'      => (int)$r->allergen_soy,
+			'AllergenSesame'    => (int)$r->allergen_sesame,   'AllergenGarlic'   => (int)$r->allergen_garlic,
+			'AllergenGluten'    => (int)$r->allergen_gluten,   'AllergenOnion'    => (int)$r->allergen_onion,    'AllergenMushroom' => (int)$r->allergen_mushroom,
+			'AllergenCorn'      => (int)$r->allergen_corn,     'AllergenCoconut'  => (int)$r->allergen_coconut,
+			'AllergenCocoa'     => (int)$r->allergen_cocoa,
+		];
+	}
+
 	// Earliest valid attendance credit date at a specific park — used as a
 	// fallback for "Park Member Since" when the mundane record lacks one.
 	public function get_earliest_park_attendance_date($mundane_id, $park_id) {

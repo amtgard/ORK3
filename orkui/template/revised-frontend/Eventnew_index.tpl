@@ -142,8 +142,9 @@
 	$rsvpList      = $RsvpList ?? [];
 	$scheduleList  = $ScheduleList ?? [];
 	$scheduleCount = count($scheduleList);
-	$mealList  = $MealList ?? [];
-	$mealCount = count($mealList);
+	$mealList       = $MealList ?? [];
+	$mealCount      = count($mealList);
+	$dietarySummary = $DietarySummary ?? null;
 	$canManage           = $CanManageEvent ?? false;
 	$canManageAttendance = $CanManageAttendance ?? false;
 	$canManageSchedule   = $CanManageSchedule ?? false;
@@ -658,6 +659,36 @@ html[data-theme="dark"] .ev-signin-links-revoke {
 	border-color: #c53030 !important;
 	color: #fc8181 !important;
 }
+/* ===== Feast Dietary Summary ===== */
+.ev-ds-card{background:#f0fff4;border:1px solid #9ae6b4;border-radius:8px;padding:14px 16px;margin-top:14px}
+.ev-ds-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#276749;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.ev-ds-meta{font-size:12px;color:#2f855a;margin-bottom:10px}
+.ev-ds-section{margin-bottom:10px}
+.ev-ds-section-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#48bb78;margin-bottom:5px}
+.ev-ds-pills{display:flex;flex-wrap:wrap;gap:4px}
+.ev-ds-pill{font-size:11.5px;padding:2px 8px;border-radius:12px;background:#c6f6d5;color:#276749;border:1px solid #9ae6b4}
+.ev-ds-pill.ev-ds-pill-mild{background:#fef3c7;color:#92400e;border-color:#f6ad55}
+.ev-ds-pill.ev-ds-pill-severe{background:#fee2e2;color:#9b1c1c;border-color:#fc8181}
+.ev-ds-named{margin-top:10px;border-top:1px solid #9ae6b4;padding-top:10px}
+.ev-ds-named-hdr{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#48bb78;margin-bottom:6px}
+.ev-ds-named-row{display:flex;gap:6px;align-items:flex-start;margin-bottom:5px;font-size:12px}
+.ev-ds-named-persona{font-weight:600;color:#276749;flex-shrink:0;width:150px;overflow-wrap:break-word}
+.ev-ds-action-btn{background:rgba(255,255,255,.5);border:1px solid rgba(154,230,180,.8);border-radius:5px;padding:3px 7px;font-size:11px;color:#276749;cursor:pointer;transition:background .15s;line-height:1}
+.ev-ds-action-btn:hover{background:rgba(255,255,255,.8)}
+.ev-ds-named-details{color:#2f855a;line-height:1.4}
+html[data-theme="dark"] .ev-ds-card{background:rgba(72,187,120,.07);border-color:#276749}
+html[data-theme="dark"] .ev-ds-title{color:#68d391}
+html[data-theme="dark"] .ev-ds-meta{color:#9ae6b4}
+html[data-theme="dark"] .ev-ds-section-hdr{color:#68d391}
+html[data-theme="dark"] .ev-ds-pill{background:rgba(72,187,120,.15);color:#9ae6b4;border-color:#276749}
+html[data-theme="dark"] .ev-ds-named{border-top-color:#276749}
+html[data-theme="dark"] .ev-ds-named-hdr{color:#68d391}
+html[data-theme="dark"] .ev-ds-named-persona{color:#68d391}
+html[data-theme="dark"] .ev-ds-named-details{color:#9ae6b4}
+html[data-theme="dark"] .ev-ds-pill.ev-ds-pill-mild{background:#78350f;color:#fde68a;border-color:#a16207}
+html[data-theme="dark"] .ev-ds-pill.ev-ds-pill-severe{background:#7f1d1d;color:#fca5a5;border-color:#b91c1c}
+html[data-theme="dark"] .ev-ds-action-btn{background:rgba(72,187,120,.1);border-color:#276749;color:#68d391}
+html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 </style>
 
 <?php // ---- DRAFT BLOCKED ---- ?>
@@ -1485,6 +1516,139 @@ html[data-theme="dark"] .ev-signin-links-revoke {
 				<div class="ev-empty" id="ev-meal-empty"<?= empty($mealList) ? '' : ' style="display:none"' ?>>
 					<i class="fas fa-utensils" style="margin-right:6px"></i>No meals added yet
 				</div>
+
+				<?php if ($canManageFeast && is_array($dietarySummary)): ?>
+				<?php
+				// Aggregate dietary summary data
+				$_dsTotal        = count($dietarySummary);
+				$_dsCheckedIn    = count(array_filter($dietarySummary, fn($r) => $r['CheckedIn']));
+				$_dsRsvpOnly     = $_dsTotal - $_dsCheckedIn;
+				$_dsAllClear     = count(array_filter($dietarySummary, fn($r) => $r['HasPrefs'] && $r['NoRestrictions']));
+				$_dsWithPrefs    = array_filter($dietarySummary, fn($r) => $r['HasPrefs'] && !$r['NoRestrictions']);
+				$_dsPrefsCount   = count($_dsWithPrefs);
+				$_dsNoResponse   = $_dsTotal - $_dsPrefsCount - $_dsAllClear;
+
+				$_dsDietLabels = [
+					'DietVegetarian' => 'Vegetarian', 'DietVegan'   => 'Vegan',
+					'DietHalal'      => 'Halal',      'DietKosher'  => 'Kosher',
+					'DietKeto'       => 'Keto',       'DietPaleo'   => 'Paleo',
+				];
+				$_dsRestrictLabels = [
+					'RestrictDairy'    => 'No Dairy',    'RestrictEggs'     => 'No Eggs',
+					'RestrictFish'     => 'No Fish',     'RestrictHoney'    => 'No Honey',
+					'RestrictPoultry'  => 'No Poultry',  'RestrictRedmeat'  => 'No Red Meat',
+					'RestrictShellfish'=> 'No Shellfish',
+				];
+				$_dsAllergenLabels = [
+					'AllergenPeanuts'   => 'Peanuts',   'AllergenTreenuts'  => 'Tree Nuts',
+					'AllergenWheat'     => 'Wheat',     'AllergenMilk'      => 'Milk',
+					'AllergenEggs'      => 'Eggs',      'AllergenFish'      => 'Fish',
+					'AllergenShellfish' => 'Shellfish',  'AllergenSoy'      => 'Soy',
+					'AllergenSesame'    => 'Sesame',    'AllergenGarlic'    => 'Garlic',
+					'AllergenGluten'    => 'Gluten',    'AllergenOnion'     => 'Onion',
+					'AllergenMushroom'  => 'Mushroom',
+					'AllergenCorn'      => 'Corn',      'AllergenCoconut'   => 'Coconut',
+					'AllergenCocoa'     => 'Cocoa',
+				];
+
+				$_dsDietCounts    = [];
+				$_dsRestrictCounts = [];
+				$_dsAllergenCounts = []; // field => [mild => n, severe => n]
+				foreach ($_dsWithPrefs as $_dsRow) {
+					foreach (array_keys($_dsDietLabels) as $_f)     { if ($_dsRow[$_f]) $_dsDietCounts[$_f]     = ($_dsDietCounts[$_f]    ?? 0) + 1; }
+					foreach (array_keys($_dsRestrictLabels) as $_f) { if ($_dsRow[$_f]) $_dsRestrictCounts[$_f] = ($_dsRestrictCounts[$_f] ?? 0) + 1; }
+					foreach (array_keys($_dsAllergenLabels) as $_f) {
+						if ($_dsRow[$_f] >= 1) $_dsAllergenCounts[$_f]['mild']   = ($_dsAllergenCounts[$_f]['mild']   ?? 0) + 1;
+						if ($_dsRow[$_f] >= 2) $_dsAllergenCounts[$_f]['severe'] = ($_dsAllergenCounts[$_f]['severe'] ?? 0) + 1;
+					}
+				}
+				arsort($_dsDietCounts); arsort($_dsRestrictCounts);
+				uasort($_dsAllergenCounts, fn($a,$b) => (($b['severe']??0) + ($b['mild']??0)) - (($a['severe']??0) + ($a['mild']??0)));
+
+				$_dsNamed = array_values(array_filter($dietarySummary, fn($r) => $r['HasPrefs'] && !$r['IsAnonymous']));
+				?>
+				<div class="ev-ds-card">
+					<div class="ev-ds-title">
+						<i class="fas fa-leaf"></i> Dietary Summary
+						<span style="margin-left:auto;display:flex;gap:5px">
+							<button type="button" class="ev-ds-action-btn" onclick="evPrintDietary()" title="Print dietary summary"><i class="fas fa-print"></i></button>
+							<button type="button" class="ev-ds-action-btn" onclick="evExportDietaryCsv()" title="Download CSV"><i class="fas fa-download"></i> CSV</button>
+						</span>
+					</div>
+					<div class="ev-ds-meta">
+						<?= $_dsCheckedIn ?> checked in<?php if ($_dsRsvpOnly > 0): ?> &middot; <?= $_dsRsvpOnly ?> RSVPed only<?php endif; ?>
+						<?php if ($_dsPrefsCount > 0): ?> &middot; <?= $_dsPrefsCount ?> with restrictions<?php endif; ?>
+						<?php if ($_dsAllClear > 0): ?> &middot; <?= $_dsAllClear ?> no restrictions<?php endif; ?>
+						<?php if ($_dsNoResponse > 0): ?><span style="color:#a0aec0;font-size:11px"> &middot; <?= $_dsNoResponse ?> no preferences set</span><?php endif; ?>
+					</div>
+
+					<?php if (!empty($_dsDietCounts)): ?>
+					<div class="ev-ds-section">
+						<div class="ev-ds-section-hdr">Diet</div>
+						<div class="ev-ds-pills">
+							<?php foreach ($_dsDietCounts as $_f => $_n): ?>
+							<span class="ev-ds-pill"><?= $_n ?> <?= $_dsDietLabels[$_f] ?></span>
+							<?php endforeach; ?>
+						</div>
+					</div>
+					<?php endif; ?>
+
+					<?php if (!empty($_dsRestrictCounts)): ?>
+					<div class="ev-ds-section">
+						<div class="ev-ds-section-hdr">Won't Eat</div>
+						<div class="ev-ds-pills">
+							<?php foreach ($_dsRestrictCounts as $_f => $_n): ?>
+							<span class="ev-ds-pill"><?= $_n ?> <?= $_dsRestrictLabels[$_f] ?></span>
+							<?php endforeach; ?>
+						</div>
+					</div>
+					<?php endif; ?>
+
+					<?php if (!empty($_dsAllergenCounts)): ?>
+					<div class="ev-ds-section">
+						<div class="ev-ds-section-hdr">Allergens</div>
+						<div class="ev-ds-pills">
+							<?php foreach ($_dsAllergenCounts as $_f => $_ac):
+								$_total = ($_ac['mild'] ?? 0) + ($_ac['severe'] ?? 0);
+								$_sev   = $_ac['severe'] ?? 0;
+								$_mild  = ($_ac['mild'] ?? 0) - $_sev;
+							?>
+							<?php if ($_sev): ?><span class="ev-ds-pill ev-ds-pill-severe"><?= $_sev ?> <?= $_dsAllergenLabels[$_f] ?> (Severe)</span><?php endif; ?>
+							<?php if ($_mild): ?><span class="ev-ds-pill ev-ds-pill-mild"><?= $_mild ?> <?= $_dsAllergenLabels[$_f] ?> (Mild)</span><?php endif; ?>
+							<?php endforeach; ?>
+						</div>
+					</div>
+					<?php endif; ?>
+
+					<?php if (!empty($_dsDietCounts) || !empty($_dsRestrictCounts) || !empty($_dsAllergenCounts)): ?>
+					<?php else: ?>
+					<div style="font-size:12px;color:#a0aec0;font-style:italic">No dietary preferences recorded yet.</div>
+					<?php endif; ?>
+
+					<?php if (!empty($_dsNamed)): ?>
+					<div class="ev-ds-named">
+						<div class="ev-ds-named-hdr">Named Attendees (opted in)</div>
+						<?php foreach ($_dsNamed as $_dsp): ?>
+						<?php
+						$_dspParts = [];
+						foreach ($_dsDietLabels    as $_f => $_lbl) { if ($_dsp[$_f]) $_dspParts[] = $_lbl; }
+						foreach ($_dsRestrictLabels as $_f => $_lbl) { if ($_dsp[$_f]) $_dspParts[] = $_lbl; }
+						$_dspAl = [];
+						foreach ($_dsAllergenLabels as $_f => $_lbl) {
+							if ($_dsp[$_f] >= 2)      $_dspAl[] = $_lbl . ' (Severe)';
+							elseif ($_dsp[$_f] >= 1)  $_dspAl[] = $_lbl . ' (Mild)';
+						}
+						if (!empty($_dspAl)) $_dspParts[] = 'Allergens: ' . implode(', ', $_dspAl);
+						?>
+						<div class="ev-ds-named-row">
+							<span class="ev-ds-named-persona"><?= htmlspecialchars($_dsp['Persona']) ?></span>
+							<span class="ev-ds-named-details"><?= !empty($_dspParts) ? implode(' &middot; ', array_map('htmlspecialchars', $_dspParts)) : '<em style="color:#a0aec0">No restrictions</em>' ?></span>
+						</div>
+						<?php endforeach; ?>
+					</div>
+					<?php endif; ?>
+				</div><!-- /.ev-ds-card -->
+				<?php endif; // canManageFeast && dietarySummary ?>
 
 			</div><!-- /.ev-tab-panel (feast) -->
 
@@ -2679,8 +2843,11 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 						<div class="ev-meal-cb-group">
 							<label><input type="checkbox" class="ev-sched-dietary-cb" value="Vegetarian Option"> Vegetarian Option</label>
 							<label><input type="checkbox" class="ev-sched-dietary-cb" value="Vegan Option"> Vegan Option</label>
+							<label><input type="checkbox" class="ev-sched-dietary-cb" value="Gluten-Free Option"> Gluten-Free Option</label>
 							<label><input type="checkbox" class="ev-sched-dietary-cb" value="Kosher"> Kosher</label>
 							<label><input type="checkbox" class="ev-sched-dietary-cb" value="Halal"> Halal</label>
+							<label><input type="checkbox" class="ev-sched-dietary-cb" value="Keto"> Keto</label>
+							<label><input type="checkbox" class="ev-sched-dietary-cb" value="Paleo"> Paleo</label>
 						</div>
 					</div>
 				</div>
@@ -2695,6 +2862,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Tree Nuts"> Tree Nuts</label>
 							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Peanuts"> Peanuts</label>
 							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Wheat"> Wheat</label>
+							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Gluten"> Gluten</label>
 							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Soy"> Soy</label>
 							<label><input type="checkbox" class="ev-sched-allergen-cb" value="Sesame"> Sesame</label>
 						</div>
@@ -2943,6 +3111,76 @@ function evExportRsvpCsv() {
 		rows.push([c[0]?c[0].textContent.trim():'', c[1]?c[1].textContent.trim():'']);
 	});
 	evExportCsv(evCsvSlug() + '-rsvps.csv', ['Player','Status'], rows);
+}
+function evPrintDietary() {
+	var card = document.querySelector('.ev-ds-card');
+	if (!card) return;
+	var meta = card.querySelector('.ev-ds-meta');
+	var sub  = (EvConfig.eventDate || '') + (meta ? '  ·  ' + meta.textContent.trim() : '');
+	var html = '<h2>' + (EvConfig.eventName || 'Event') + ' — Dietary Summary</h2>';
+	if (sub) html += '<p style="font-size:12px;color:#555;margin:0 0 16px">' + sub + '</p>';
+	card.querySelectorAll('.ev-ds-section').forEach(function(sec) {
+		var hdr   = sec.querySelector('.ev-ds-section-hdr');
+		var pills = sec.querySelectorAll('.ev-ds-pill');
+		if (!hdr || !pills.length) return;
+		html += '<p style="font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.05em;color:#555;margin:12px 0 4px">' + hdr.textContent + '</p><p style="margin:0 0 8px">';
+		pills.forEach(function(p) {
+			var bg = p.classList.contains('ev-ds-pill-severe') ? '#fee2e2' : p.classList.contains('ev-ds-pill-mild') ? '#fef3c7' : '#c6f6d5';
+			var fg = p.classList.contains('ev-ds-pill-severe') ? '#9b1c1c' : p.classList.contains('ev-ds-pill-mild') ? '#92400e' : '#276749';
+			html += '<span style="display:inline-block;margin:2px 3px;padding:2px 8px;border-radius:12px;background:' + bg + ';color:' + fg + ';font-size:11.5px">' + p.textContent + '</span>';
+		});
+		html += '</p>';
+	});
+	var namedRows = card.querySelectorAll('.ev-ds-named-row');
+	if (namedRows.length) {
+		html += '<hr style="margin:12px 0;border:none;border-top:1px solid #e2e8f0"><p style="font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.05em;color:#555;margin:0 0 6px">Named Attendees (Opted In)</p>';
+		html += '<table><thead><tr><th>Name</th><th>Dietary Notes</th></tr></thead><tbody>';
+		namedRows.forEach(function(row) {
+			var name    = (row.querySelector('.ev-ds-named-persona')?.textContent || '').trim();
+			var details = (row.querySelector('.ev-ds-named-details')?.textContent || '').trim();
+			html += '<tr><td style="white-space:nowrap">' + name + '</td><td>' + details + '</td></tr>';
+		});
+		html += '</tbody></table>';
+	}
+	evPrintSection(html, 'Dietary Summary');
+}
+function evExportDietaryCsv() {
+	var card = document.querySelector('.ev-ds-card');
+	if (!card) return;
+	function esc(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }
+	var lines = [];
+
+	// ---- Summary section ----
+	var meta = card.querySelector('.ev-ds-meta');
+	if (meta) lines.push(esc(meta.textContent.trim()) + ',,');
+	lines.push('');
+	lines.push([esc('Category'), esc('Item'), esc('Count')].join(','));
+	card.querySelectorAll('.ev-ds-section').forEach(function(sec) {
+		var hdr = sec.querySelector('.ev-ds-section-hdr');
+		var cat = hdr ? hdr.textContent.trim() : '';
+		sec.querySelectorAll('.ev-ds-pill').forEach(function(p) {
+			var m = p.textContent.trim().match(/^(\d+)\s+(.+)$/);
+			if (m) lines.push([esc(cat), esc(m[2]), esc(m[1])].join(','));
+		});
+	});
+
+	// ---- Named attendees section ----
+	var namedRows = card.querySelectorAll('.ev-ds-named-row');
+	if (namedRows.length) {
+		lines.push('');
+		lines.push('');
+		lines.push([esc('Name'), esc('Dietary Notes'), esc('')].join(','));
+		namedRows.forEach(function(row) {
+			var name    = (row.querySelector('.ev-ds-named-persona')?.textContent || '').trim();
+			var details = (row.querySelector('.ev-ds-named-details')?.textContent || '').trim();
+			lines.push([esc(name), esc(details), esc('')].join(','));
+		});
+	}
+
+	var a = document.createElement('a');
+	a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
+	a.download = evCsvSlug() + '-dietary.csv';
+	a.click();
 }
 function evConfirmDeleteOccurrence(e, form) {
 	e.preventDefault();
