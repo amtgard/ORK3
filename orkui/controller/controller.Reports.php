@@ -285,9 +285,9 @@ class Controller_Reports extends Controller
 		$this->data['page_title']   = 'Court Report';
 
 		if ($park_id > 0) {
-			$this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . $park_id . '&tab=reports';
+			$this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . (int)$park_id . '&tab=reports';
 		} else {
-			$this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . $kingdom_id . '&tab=reports';
+			$this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . (int)$kingdom_id . '&tab=reports';
 		}
 	}
 
@@ -309,6 +309,10 @@ class Controller_Reports extends Controller
 		$from       = (isset($this->request->From)  && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->From))  ? $this->request->From  : '';
 		$until      = (isset($this->request->Until) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->Until)) ? $this->request->Until : '';
 		if (!$kingdom_id && !$park_id) { $kingdom_id = $report['Court']['KingdomId']; $park_id = $report['Court']['ParkId']; }
+		if (!valid_id($kingdom_id) && !valid_id($park_id)) {
+			header('Location: ' . UIR);
+			exit;
+		}
 
 		$back = UIR . 'Reports/courts&' . ($park_id > 0 ? 'ParkId=' . $park_id : 'KingdomId=' . $kingdom_id);
 		if ($park_id > 0 && $kingdom_id) $back .= '&KingdomId=' . $kingdom_id;
