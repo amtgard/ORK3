@@ -26,6 +26,7 @@ html[data-theme="dark"] .cr-back { color: #9aa6ff; }
 html[data-theme="dark"] .cr-table td { border-color: #2d3748; }
 html[data-theme="dark"] .cr-recipient a { color: #e2e8f0; }
 html[data-theme="dark"] .cr-comment { color: #cbd5e0; }
+html[data-theme="dark"] .cr-none { color: #718096; }
 html[data-theme="dark"] .cr-empty { border-color: #2d3748; color: #a0aec0; }
 </style>
 
