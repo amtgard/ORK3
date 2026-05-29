@@ -131,9 +131,10 @@ class Controller_CourtAjax extends Controller {
         $DB->Execute(
             'INSERT INTO ' . DB_PREFIX . 'court_award
              (court_id, mundane_id, kingdomaward_id, rank, recommendations_id,
-              sort_order, pass_to_local, notes)
+              sort_order, pass_to_local, notes, public_comment)
              VALUES (' . $court_id . ', ' . $mundane_id . ', ' . $kingdomaward_id . ', ' . $rank . ',
-                     ' . $rec_val . ', ' . $sort . ', ' . $pass_to_local . ', ' . $notes_val . ')'
+                     ' . $rec_val . ', ' . $sort . ', ' . $pass_to_local . ', ' . $notes_val . ',
+                     \'' . $this->esc($public_comment) . '\')'
         );
         $DB->Clear();
         $idr = $DB->DataSet('SELECT court_award_id FROM ' . DB_PREFIX . 'court_award
@@ -179,6 +180,7 @@ class Controller_CourtAjax extends Controller {
             'SortOrder'         => $sort,
             'PassToLocal'       => (bool)$pass_to_local,
             'Notes'             => $notes,
+            'PublicComment'     => $public_comment,
             'Status'            => 'planned',
             'ScrollStatus'      => 0,
             'RegaliaStatus'     => 0,
@@ -231,6 +233,7 @@ class Controller_CourtAjax extends Controller {
         $this->requireCourtAuth((int)$r->court_id);
 
         $notes            = trim($_POST['Notes']          ?? '');
+        $public_comment   = trim($_POST['PublicComment']  ?? '');
         $pass_to_local    = (int)($_POST['PassToLocal']    ?? 0) ? 1 : 0;
         $status           = trim($_POST['Status']          ?? 'planned');
         $scroll_maker_id  = (int)($_POST['ScrollMakerId']  ?? 0);
@@ -242,13 +245,14 @@ class Controller_CourtAjax extends Controller {
         $DB->Execute(
             'UPDATE ' . DB_PREFIX . 'court_award SET
              notes = \'' . $this->esc($notes) . '\',
+             public_comment = \'' . $this->esc($public_comment) . '\',
              pass_to_local = ' . $pass_to_local . ',
              status = \'' . $status . '\',
              scroll_maker_id  = ' . ($scroll_maker_id  > 0 ? $scroll_maker_id  : 'NULL') . ',
              regalia_maker_id = ' . ($regalia_maker_id > 0 ? $regalia_maker_id : 'NULL') . '
              WHERE court_award_id = ' . $court_award_id
         );
-        $this->jsonOut(['status' => 0, 'notes' => $notes, 'pass_to_local' => $pass_to_local, 'award_status' => $status]);
+        $this->jsonOut(['status' => 0, 'notes' => $notes, 'public_comment' => $public_comment, 'pass_to_local' => $pass_to_local, 'award_status' => $status]);
     }
 
     // -----------------------------------------------------------------------
