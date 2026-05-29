@@ -1018,6 +1018,9 @@ $_total_awards = count($courtAwards ?? []);
                         <div class="cp-expand-label">Internal Notes</div>
                         <textarea class="cp-notes-area" id="cp-notes-<?= (int)$aw['CourtAwardId'] ?>"
                                   placeholder="Monarchy notes (not public)…"><?= htmlspecialchars($aw['Notes']) ?></textarea>
+                        <div class="cp-expand-label" style="margin-top:10px">Public Comment</div>
+                        <textarea class="cp-notes-area" id="cp-pubcomment-<?= (int)$aw['CourtAwardId'] ?>"
+                                  placeholder="Shown on the public Court Report…"><?= htmlspecialchars($aw['PublicComment'] ?? '') ?></textarea>
                     </div>
                     <div>
                         <div class="cp-expand-label">Pass to Local</div>
@@ -1294,6 +1297,10 @@ $_total_awards = count($courtAwards ?? []);
             <div class="cp-field">
                 <label>Internal Notes</label>
                 <textarea id="cp-adhoc-notes" rows="3" placeholder="Monarchy notes (not public)…" style="width:100%;padding:8px 10px;border:1px solid #cbd5e0;border-radius:5px;font-size:14px;resize:vertical;box-sizing:border-box"></textarea>
+            </div>
+            <div class="cp-field">
+                <label>Public Comment</label>
+                <textarea id="cp-adhoc-pubcomment" rows="3" placeholder="Shown on the public Court Report…" style="width:100%;padding:8px 10px;border:1px solid #cbd5e0;border-radius:5px;font-size:14px;resize:vertical;box-sizing:border-box"></textarea>
             </div>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#4a5568;margin-bottom:12px">
                 <input type="checkbox" id="cp-adhoc-ptl" style="width:auto">
@@ -1689,6 +1696,8 @@ $_total_awards = count($courtAwards ?? []);
     // ---- Save award (notes, pass_to_local, status) ----
     window.cpSaveAward = function(caid) {
         var notes          = gid('cp-notes-' + caid).value;
+        var pubCommentEl    = gid('cp-pubcomment-' + caid);
+        var publicComment   = pubCommentEl ? pubCommentEl.value : '';
         var ptl            = gid('cp-ptl-' + caid).checked ? 1 : 0;
         var status         = gid('cp-status-' + caid).value;
         var scrollMakerEl  = gid('cp-scroll-maker-id-'  + caid);
@@ -1696,6 +1705,7 @@ $_total_awards = count($courtAwards ?? []);
         var fd     = new FormData();
         fd.append('CourtAwardId',  caid);
         fd.append('Notes',         notes);
+        fd.append('PublicComment', publicComment);
         fd.append('PassToLocal',   ptl);
         fd.append('Status',        status);
         fd.append('ScrollMakerId',  scrollMakerEl  ? (parseInt(scrollMakerEl.value,  10) || 0) : 0);
@@ -2006,6 +2016,7 @@ $_total_awards = count($courtAwards ?? []);
         gid('cp-adhoc-award').value  = '';
         gid('cp-adhoc-rank').value   = '1';
         gid('cp-adhoc-notes').value  = '';
+        gid('cp-adhoc-pubcomment').value = '';
         gid('cp-adhoc-ptl').checked  = false;
         gid('cp-adhoc-rank-wrap').style.display = 'none';
         gid('cp-adhoc-error').style.display     = 'none';
@@ -2027,6 +2038,7 @@ $_total_awards = count($courtAwards ?? []);
         var kaId      = gid('cp-adhoc-award').value;
         var rank      = gid('cp-adhoc-rank-wrap').style.display !== 'none' ? parseInt(gid('cp-adhoc-rank').value, 10) : 0;
         var notes     = gid('cp-adhoc-notes').value.trim();
+        var pubComment = gid('cp-adhoc-pubcomment').value.trim();
         var ptl       = gid('cp-adhoc-ptl').checked ? 1 : 0;
         var errEl     = gid('cp-adhoc-error');
 
@@ -2041,6 +2053,7 @@ $_total_awards = count($courtAwards ?? []);
         fd.append('Rank',           rank);
         fd.append('PassToLocal',    ptl);
         fd.append('Notes',          notes);
+        fd.append('PublicComment',  pubComment);
 
         var btn = gid('cp-adhoc-save');
         btn.disabled = true;
@@ -2091,7 +2104,7 @@ $_total_awards = count($courtAwards ?? []);
             '</div>' +
             '<div class="cp-award-row-expand" id="cp-aw-expand-' + aw.CourtAwardId + '">' +
             '<div class="cp-expand-grid">' +
-            '<div><div class="cp-expand-label">Internal Notes</div><textarea class="cp-notes-area" id="cp-notes-' + aw.CourtAwardId + '" placeholder="Monarchy notes…">' + esc(aw.Notes || '') + '</textarea></div>' +
+            '<div><div class="cp-expand-label">Internal Notes</div><textarea class="cp-notes-area" id="cp-notes-' + aw.CourtAwardId + '" placeholder="Monarchy notes…">' + esc(aw.Notes || '') + '</textarea><div class="cp-expand-label" style="margin-top:10px">Public Comment</div><textarea class="cp-notes-area" id="cp-pubcomment-' + aw.CourtAwardId + '" placeholder="Shown on the public Court Report…">' + esc(aw.PublicComment || '') + '</textarea></div>' +
             '<div><div class="cp-expand-label">Pass to Local</div><label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px"><input type="checkbox" id="cp-ptl-' + aw.CourtAwardId + '" style="width:auto"' + (aw.PassToLocal ? ' checked' : '') + '><span style="font-size:13px;color:#4a5568">Kingdom approves — Park to give</span></label>' +
             '<div style="margin-top:14px"><div class="cp-expand-label">Status</div><select id="cp-status-' + aw.CourtAwardId + '" style="width:auto;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px"><option value="planned" selected>Planned</option><option value="announced">Announced</option><option value="given">Given</option><option value="cancelled">Cancelled</option></select></div></div>' +
             '</div>' +
