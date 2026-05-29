@@ -113,6 +113,7 @@ class Controller_CourtAjax extends Controller {
         $rec_id          = (int)($_POST['RecommendationsId'] ?? 0);
         $pass_to_local   = (int)($_POST['PassToLocal']       ?? 0) ? 1 : 0;
         $notes           = trim($_POST['Notes']               ?? '');
+        $public_comment  = trim($_POST['PublicComment']       ?? '');
 
         if (!valid_id($mundane_id))      $this->jsonOut(['status' => 1, 'error' => 'Recipient required.']);
         if (!valid_id($kingdomaward_id)) $this->jsonOut(['status' => 1, 'error' => 'Award required.']);
