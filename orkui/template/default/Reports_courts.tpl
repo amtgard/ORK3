@@ -67,11 +67,11 @@ html[data-theme="dark"] .cr-empty { border-color: #2d3748; color: #a0aec0; }
 			<?php foreach ($Courts as $c): ?>
 				<?php
 					$detail = UIR . 'Reports/court&CourtId=' . (int)$c['CourtId'] . '&' . $scope_qs;
-					if ($From)  $detail .= '&From='  . htmlspecialchars($From);
-					if ($Until) $detail .= '&Until=' . htmlspecialchars($Until);
+					if ($From)  $detail .= '&From='  . rawurlencode($From);
+					if ($Until) $detail .= '&Until=' . rawurlencode($Until);
 					$court_scope = ($c['ParkId'] > 0) ? ($c['ParkName'] ?? 'Park court') : 'Kingdom court';
 				?>
-				<a class="cr-court" href="<?= $detail ?>">
+				<a class="cr-court" href="<?= htmlspecialchars($detail) ?>">
 					<div class="cr-court-top">
 						<span class="cr-court-name"><?= htmlspecialchars($c['Name']) ?></span>
 						<span class="cr-court-date"><?= $c['CourtDate'] ? date('F j, Y', strtotime($c['CourtDate'])) : 'Date TBD' ?></span>

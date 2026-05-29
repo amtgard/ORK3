@@ -22,6 +22,7 @@ $c = $Court;
 .cr-empty { text-align: center; color: #718096; padding: 40px 20px; border: 1px dashed #cbd5e0; border-radius: 8px; }
 html[data-theme="dark"] .cr-sub, html[data-theme="dark"] .cr-rank, html[data-theme="dark"] .cr-maker, html[data-theme="dark"] .cr-artisan-role { color: #a0aec0; }
 html[data-theme="dark"] .cr-table th { color: #a0aec0; border-color: #2d3748; }
+html[data-theme="dark"] .cr-back { color: #9aa6ff; }
 html[data-theme="dark"] .cr-table td { border-color: #2d3748; }
 html[data-theme="dark"] .cr-recipient a { color: #e2e8f0; }
 html[data-theme="dark"] .cr-comment { color: #cbd5e0; }
