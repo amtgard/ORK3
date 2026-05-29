@@ -14,6 +14,8 @@ class Controller_Reports extends Controller
             'attendance',
             'event_attendance',
             'suspended',
+            'courts',
+            'court',
         ];
         if (!isset($this->session->user_id) && !in_array($this->method, $public_reports)) {
             header('Location: ' . UIR . 'Login');
@@ -245,6 +247,81 @@ class Controller_Reports extends Controller
             $this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . (int)$id . '&tab=reports';
         }
     }
+
+	public function courts($params = null) {
+		$kingdom_id = isset($this->request->KingdomId) ? (int)$this->request->KingdomId : 0;
+		$park_id    = isset($this->request->ParkId)    ? (int)$this->request->ParkId    : 0;
+
+		$from  = (isset($this->request->From)  && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->From))
+			? $this->request->From  : date('Y-m-d', strtotime('-6 months'));
+		$until = (isset($this->request->Until) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->Until))
+			? $this->request->Until : date('Y-m-d');
+
+		if (!valid_id($kingdom_id) && !valid_id($park_id)) {
+			header('Location: ' . UIR);
+			exit;
+		}
+
+		global $DB;
+		$location_name = '';
+		if ($park_id > 0) {
+			$DB->Clear();
+			$r = $DB->DataSet('SELECT name, kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id . ' LIMIT 1');
+			if ($r && $r->Next()) { $location_name = $r->name; if (!$kingdom_id) $kingdom_id = (int)$r->kingdom_id; }
+		} else {
+			$DB->Clear();
+			$r = $DB->DataSet('SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id . ' LIMIT 1');
+			if ($r && $r->Next()) $location_name = $r->name;
+		}
+
+		$this->template = 'Reports_courts.tpl';
+		$this->data['Courts']       = Ork3::$Lib->court->getCourtReportList($kingdom_id, $park_id, $from, $until);
+		$this->data['ScopeType']    = $park_id > 0 ? 'park' : 'kingdom';
+		$this->data['KingdomId']    = $kingdom_id;
+		$this->data['ParkId']       = $park_id;
+		$this->data['From']         = $from;
+		$this->data['Until']        = $until;
+		$this->data['LocationName'] = $location_name;
+		$this->data['page_title']   = 'Court Report';
+
+		if ($park_id > 0) {
+			$this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . $park_id . '&tab=reports';
+		} else {
+			$this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . $kingdom_id . '&tab=reports';
+		}
+	}
+
+	public function court($params = null) {
+		$court_id = isset($this->request->CourtId) ? (int)$this->request->CourtId : 0;
+		if (!valid_id($court_id)) {
+			header('Location: ' . UIR);
+			exit;
+		}
+
+		$report = Ork3::$Lib->court->getCourtReportDetail($court_id);
+		if (!$report) {
+			header('Location: ' . UIR);
+			exit;
+		}
+
+		$kingdom_id = isset($this->request->KingdomId) ? (int)$this->request->KingdomId : 0;
+		$park_id    = isset($this->request->ParkId)    ? (int)$this->request->ParkId    : 0;
+		$from       = (isset($this->request->From)  && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->From))  ? $this->request->From  : '';
+		$until      = (isset($this->request->Until) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->request->Until)) ? $this->request->Until : '';
+		if (!$kingdom_id && !$park_id) { $kingdom_id = $report['Court']['KingdomId']; $park_id = $report['Court']['ParkId']; }
+
+		$back = UIR . 'Reports/courts&' . ($park_id > 0 ? 'ParkId=' . $park_id : 'KingdomId=' . $kingdom_id);
+		if ($park_id > 0 && $kingdom_id) $back .= '&KingdomId=' . $kingdom_id;
+		if ($from)  $back .= '&From='  . $from;
+		if ($until) $back .= '&Until=' . $until;
+
+		$this->template = 'Reports_court.tpl';
+		$this->data['Court']      = $report['Court'];
+		$this->data['Awards']     = $report['Awards'];
+		$this->data['BackUrl']    = $back;
+		$this->data['page_title'] = 'Court Report — ' . $report['Court']['Name'];
+		$this->data['menu']['reports']['url'] = $back;
+	}
 
     public function _kam($params, $template, $knights, $masters)
     {
