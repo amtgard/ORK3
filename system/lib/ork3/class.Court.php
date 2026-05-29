@@ -421,6 +421,10 @@ class Court {
         $park_id    = (int)$park_id;
 
         if ($park_id > 0) {
+            // Park scope: GivenCount counts the given awards on each court that are
+            // relevant to this park (park-owned courts → all; kingdom courts → only
+            // park-home recipients). The detail page shows the full court, so its
+            // award count can legitimately exceed a kingdom court's list GivenCount.
             $scopeJoin  = ' LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = ca.mundane_id';
             $scopeWhere = '(c.park_id = ' . $park_id . ' OR m.park_id = ' . $park_id . ')';
         } else {
@@ -481,7 +485,7 @@ class Court {
              LEFT JOIN ' . DB_PREFIX . 'event e ON e.event_id = cd.event_id
              LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = c.park_id
              LEFT JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = c.kingdom_id
-             WHERE c.court_id = ' . $court_id . ' LIMIT 1'
+             WHERE c.court_id = ' . (int)$court_id . ' LIMIT 1'
         );
         if (!$hr || !$hr->Next()) return null;
 
@@ -509,7 +513,7 @@ class Court {
              LEFT JOIN ' . DB_PREFIX . 'award a    ON a.award_id         = ka.award_id
              LEFT JOIN ' . DB_PREFIX . 'mundane sm ON sm.mundane_id      = ca.scroll_maker_id
              LEFT JOIN ' . DB_PREFIX . 'mundane rm ON rm.mundane_id      = ca.regalia_maker_id
-             WHERE ca.court_id = ' . $court_id . ' AND ca.status = \'given\'
+             WHERE ca.court_id = ' . (int)$court_id . ' AND ca.status = \'given\'
              ORDER BY ca.sort_order, ca.court_award_id'
         );
 
