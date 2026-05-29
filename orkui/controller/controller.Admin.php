@@ -2429,11 +2429,15 @@ class Controller_Admin extends Controller {
 				   JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
 				   WHERE p.active = 'Active'
 				     AND pw.fetched_at <  '$cutoff_aging'
+				     AND EXISTS (SELECT 1 FROM " . DB_PREFIX . "attendance a
+				                 WHERE a.park_id = p.park_id AND a.date >= DATE_SUB(CURDATE(), INTERVAL 60 DAY))
 				) AS stale_row,
 				(SELECT TIMESTAMPDIFF(MINUTE, MIN(pw.fetched_at), '$now_local')
 				   FROM " . DB_PREFIX . "park_weather pw
 				   JOIN " . DB_PREFIX . "park p ON p.park_id = pw.park_id
 				   WHERE p.active = 'Active'
+				     AND EXISTS (SELECT 1 FROM " . DB_PREFIX . "attendance a
+				                 WHERE a.park_id = p.park_id AND a.date >= DATE_SUB(CURDATE(), INTERVAL 60 DAY))
 				) AS oldest_min,
 				(SELECT COUNT(DISTINCT e.event_id)
 				   FROM " . DB_PREFIX . "event e
