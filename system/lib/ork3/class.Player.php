@@ -356,7 +356,8 @@ class Player extends Ork3 {
 						'ShowMundaneLast' => (int)$design->show_mundane_last,
 						'ShowEmail' => (int)$design->show_email,
 						'MilestoneConfig' => $design->milestone_config,
-						'NameFont' => $design->name_font,
+						'NameFont'   => $design->name_font,
+						'NameShadow' => (int)$design->name_shadow,
 							'BeltDisplay' => $design->belt_display,
 						'BasicFonts' => (int)$this->mundane->basic_fonts,
 						'DyslexiaFonts' => (int)$this->mundane->dyslexia_fonts,
@@ -1501,7 +1502,7 @@ class Player extends Ork3 {
 								  'photo_focus_x','photo_focus_y','photo_focus_size',
 								  'show_beltline','belt_display','pronunciation_guide',
 								  'show_mundane_first','show_mundane_last','show_email',
-								  'milestone_config','name_font'] as $_f) {
+								  'milestone_config','name_font','name_shadow'] as $_f) {
 							$_cur[$_f] = $design->{$_f};
 						}
 					}
@@ -1570,7 +1571,8 @@ class Player extends Ork3 {
 					$design->show_mundane_last = is_null($request['ShowMundaneLast']) ? ($_designExisted ? (int)$_cur['show_mundane_last'] : 0) : (int)$request['ShowMundaneLast'];
 					$design->show_email = is_null($request['ShowEmail']) ? ($_designExisted ? (int)$_cur['show_email'] : 0) : (int)$request['ShowEmail'];
 					$design->milestone_config = $_pick($request['MilestoneConfig'], 'milestone_config');
-					$design->name_font = $_pick($request['NameFont'], 'name_font');
+					$design->name_font   = $_pick($request['NameFont'], 'name_font');
+					$design->name_shadow = is_null($request['NameShadow'] ?? null) ? ($_designExisted ? (int)$_cur['name_shadow'] : 0) : (int)$request['NameShadow'];
 					$validBeltDisplays = ['white','own','none'];
 					$design->belt_display = (isset($request['BeltDisplay']) && in_array($request['BeltDisplay'], $validBeltDisplays)) ? $request['BeltDisplay'] : ($_designExisted ? $_cur['belt_display'] : 'white');
 				}

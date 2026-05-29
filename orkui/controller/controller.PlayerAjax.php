@@ -396,6 +396,7 @@ class Controller_PlayerAjax extends Controller {
 				'ShowEmail'        => isset($_POST['ShowEmail'])        ? (int)$_POST['ShowEmail']        : null,
 				'MilestoneConfig'  => isset($_POST['MilestoneConfig'])  ? $_POST['MilestoneConfig']  : null,
 				'NameFont'         => (isset($_POST['NameFont']) && in_array($_POST['NameFont'], ['','Cinzel','Cinzel Decorative','IM Fell English','UnifrakturMaguntia','Metamorphous','Uncial Antiqua','Pirata One','Almendra','Pinyon Script','Great Vibes'])) ? $_POST['NameFont'] : null,
+				'NameShadow'       => isset($_POST['NameShadow'])       ? (int)$_POST['NameShadow']       : null,
 					'BeltDisplay'      => (isset($_POST['BeltDisplay']) && in_array($_POST['BeltDisplay'], ['white','own','none'])) ? $_POST['BeltDisplay'] : null,
 					// Administrative fields — UpdatePlayer gates these behind HasAuthority,
 					// so non-officers sending them have no effect.
@@ -889,6 +890,10 @@ class Controller_PlayerAjax extends Controller {
 			$offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
 			$DB->Clear();
 			$DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET has_banner = 1, banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE mundane_id = ' . $mundane_id_target);
+			// Clear any AmtPride gradient — banner image takes precedence and the
+			// gradient would flash through before the image finishes loading.
+			$DB->Clear();
+			$DB->Execute('UPDATE ' . DB_PREFIX . 'mundane_design SET hero_gradient = NULL WHERE mundane_id = ' . $mundane_id_target);
 			// $DB->Execute() is void; the YapoMysql layer can silently swallow
 			// failures (sql_mode=STRICT etc). Verify the update landed by
 			// re-reading has_banner. If it didn't, roll back the file so we

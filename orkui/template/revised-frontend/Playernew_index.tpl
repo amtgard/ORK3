@@ -673,17 +673,17 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
    A soft directional shadow only blurs the underside of the glyphs; over a near-white flag stop the
    top/sides of white text still bleed. A tight multi-directional outline wraps every glyph in a dark
    edge so the title reads on any stop — light or dark — while keeping the flag fully visible (no overlay). */
-.pn-hero-pride .pn-persona,.pn-hero-pride .pn-hero-preview-name{text-shadow:0 0 2px rgba(0,0,0,.55),1px 1px 1px rgba(0,0,0,.5),-1px 1px 1px rgba(0,0,0,.5),1px -1px 1px rgba(0,0,0,.5),-1px -1px 1px rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.45)}
+.pn-hero-pride .pn-persona,.pn-hero-pride .pn-hero-preview-name,.pn-hero-name-shadow .pn-persona,.pn-hero-name-shadow .pn-hero-preview-name{text-shadow:0 0 2px rgba(0,0,0,.55),1px 1px 1px rgba(0,0,0,.5),-1px 1px 1px rgba(0,0,0,.5),1px -1px 1px rgba(0,0,0,.5),-1px -1px 1px rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.45)}
 html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,0,.55),1px 1px 1px rgba(0,0,0,.5),-1px 1px 1px rgba(0,0,0,.5),1px -1px 1px rgba(0,0,0,.5),-1px -1px 1px rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.45)!important}
-/* Amtpride: lift the translucent subline text so it reads over light flag stops (text-shadow inherits to children).
+/* Amtpride / name-shadow: lift the translucent subline text so it reads over light flag stops (text-shadow inherits to children).
    The breadcrumb uses self-contained .pn-crumb pills (dark bg) so it needs no pride-specific shadow. */
-.pn-hero-pride .pn-hero-subline{color:rgba(255,255,255,0.95);text-shadow:0 1px 3px rgba(0,0,0,0.6)}
-.pn-hero-pride .pn-sub-pronunciation,.pn-hero-pride .pn-sub-pronouns{color:rgba(255,255,255,0.9)}
-.pn-hero-pride .pn-sub-sep{color:rgba(255,255,255,0.85);opacity:1}
-/* Amtpride: dark translucent backing box behind the subline so it reads over light flag stops.
+.pn-hero-pride .pn-hero-subline,.pn-hero-name-shadow .pn-hero-subline{color:rgba(255,255,255,0.95);text-shadow:0 1px 3px rgba(0,0,0,0.6)}
+.pn-hero-pride .pn-sub-pronunciation,.pn-hero-pride .pn-sub-pronouns,.pn-hero-name-shadow .pn-sub-pronunciation,.pn-hero-name-shadow .pn-sub-pronouns{color:rgba(255,255,255,0.9)}
+.pn-hero-pride .pn-sub-sep,.pn-hero-name-shadow .pn-sub-sep{color:rgba(255,255,255,0.85);opacity:1}
+/* Amtpride / name-shadow: dark translucent backing box behind the subline so it reads over light flag stops.
    0.22 was too faint over a bright-yellow stop (small text needs a real panel, not a halo); 0.45
    gives the white subline a reliable dark surface on any flag while staying clearly translucent. */
-.pn-hero-pride .pn-hero-subline{display:flex;width:fit-content;align-items:center;background:rgba(0,0,0,0.45);padding:2px 9px;border-radius:6px}
+.pn-hero-pride .pn-hero-subline,.pn-hero-name-shadow .pn-hero-subline{display:flex;width:fit-content;align-items:center;background:rgba(0,0,0,0.45);padding:2px 9px;border-radius:6px}
 .pn-hero-preview-sub{font-size:12px;opacity:0.7;margin-top:4px}
 /* Design-modal preview: heraldry-overlay layers mirror the production hero so the
    Low/Med/High/Vignette buttons preview live. Driven by a preview-scoped opacity var
@@ -1075,6 +1075,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' pn-hero-vignette';
 	if ($pnCanManageBanner)            $_heroClasses .= ' pn-hero-editable';
 	if ($_pnHeroGradientKey)           $_heroClasses .= ' pn-hero-pride';
+	if (!empty($Player['NameShadow']))  $_heroClasses .= ' pn-hero-name-shadow';
 	$_bgStyle = '';
 	if ($_heroBgUrl) {
 		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
@@ -3573,6 +3574,13 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 					<div class="pn-design-hint" style="margin-bottom:8px">Choose a decorative font for your persona name in the hero header. If a user has simple or reading-friendly fonts enabled, this custom font will not be shown.</div>
 					<div class="pn-font-picker" id="pn-font-picker"></div>
 				</div>
+				<div class="pn-design-field" style="margin-top:14px">
+					<label class="pn-section-toggle-label">
+						<input type="checkbox" id="pn-name-shadow" <?= !empty($Player['NameShadow']) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+						Name shadow / outline
+						<span class="pn-tooltip-trigger" tabindex="0"><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i><span class="pn-tooltip-text">Adds a dark outline and shadow to your persona name, improving legibility over banner images or light-colored backgrounds. Applied automatically when an AmtPride gradient is active.</span></span>
+					</label>
+				</div>
 				<div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0">
 					<div class="pn-section-heading">Persona Display Controls</div>
 					<?php if ($_isRestricted): ?>
@@ -4652,6 +4660,13 @@ var PnBannerConfig = {
 		});
 	}
 	pnRenderFontPicker();
+	var nameShadowCb = gid('pn-name-shadow');
+	var heroEl = document.querySelector('.pn-hero');
+	if (nameShadowCb && heroEl) {
+		nameShadowCb.addEventListener('change', function() {
+			heroEl.classList.toggle('pn-hero-name-shadow', nameShadowCb.checked);
+		});
+	}
 	if (pnSelectedFont) { pnLoadFont(pnSelectedFont); pnApplyFont(pnSelectedFont); }
 	// Re-render after all fonts land — fonts.ready resolves too early (before downloads finish).
 	// fonts.load() per family triggers downloads and resolves only when each is paint-ready.
@@ -4894,6 +4909,8 @@ var PnBannerConfig = {
 		msConfig['newest_first'] = (newestFirstEl && newestFirstEl.checked) ? 1 : 0;
 		fd.append('MilestoneConfig', JSON.stringify(msConfig));
 			fd.append('NameFont', pnSelectedFont || '');
+
+		fd.append('NameShadow', gid('pn-name-shadow') && gid('pn-name-shadow').checked ? 1 : 0);
 
 		// Belt display (Icons tab — Knights only; radios aren't rendered for non-knights)
 		var beltRadios = document.querySelectorAll('input[name="pn-design-belt-display"]');
