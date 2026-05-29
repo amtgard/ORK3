@@ -3058,6 +3058,11 @@ html[data-theme="dark"] #pk-addday-startdate { color-scheme:dark; }
 			<p style="margin:0 0 12px;font-size:13px;line-height:1.5">
 				Banners are full-bleed across the park header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
 			</p>
+			<p style="margin:0 0 12px">
+				<a href="/assets/images/banner-template.png" download="ork-banner-template.png" style="font-size:13px;color:#4299e1;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
+					<i class="fas fa-download"></i> Download blank template (1800 &times; 240 px PNG)
+				</a>
+			</p>
 
 			<div class="pk-banner-wireframes">
 				<figure class="pk-banner-wireframe pk-banner-wf-desktop">
