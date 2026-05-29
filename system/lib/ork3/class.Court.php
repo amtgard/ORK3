@@ -143,7 +143,7 @@ class Court {
         $rs = $this->db->DataSet(
             'SELECT ca.court_award_id, ca.mundane_id, ca.kingdomaward_id, ca.rank,
                     ca.recommendations_id, ca.sort_order, ca.pass_to_local,
-                    ca.notes, ca.status, ca.scroll_status, ca.regalia_status,
+                    ca.notes, ca.public_comment, ca.status, ca.scroll_status, ca.regalia_status,
                     ca.scroll_maker_id, ca.regalia_maker_id,
                     sm.persona AS scroll_maker_persona, rm.persona AS regalia_maker_persona,
                     m.persona, p.abbreviation AS park_abbrev,
@@ -181,6 +181,7 @@ class Court {
                     'SortOrder'         => (int)$rs->sort_order,
                     'PassToLocal'       => (bool)(int)$rs->pass_to_local,
                     'Notes'             => $rs->notes ?? '',
+                    'PublicComment'     => $rs->public_comment ?? '',
                     'Status'            => $rs->status,
                     'ScrollStatus'      => (int)$rs->scroll_status,
                     'RegaliaStatus'     => (int)$rs->regalia_status,
@@ -395,4 +396,167 @@ class Court {
 
         return ['status' => 0, 'newStatus' => $nextStatus];
     }
+    // -----------------------------------------------------------------------
+    // Court Report (public, read-only) — see docs/superpowers/specs/2026-05-28-court-report-design.md
+    // -----------------------------------------------------------------------
+
+    /**
+     * Validate a Y-m-d date string; return it if valid, else null.
+     */
+    private function validDate($d) {
+        return (is_string($d) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) ? $d : null;
+    }
+
+    /**
+     * Courts in [$from_date, $until_date] (inclusive on court_date) that have at
+     * least one award with status='given'.
+     *   Kingdom report ($kingdom_id set, $park_id = 0): courts in that kingdom.
+     *   Park report ($park_id set): courts owned by the park OR any court holding a
+     *     given award whose recipient's home park is $park_id.
+     */
+    public function getCourtReportList($kingdom_id, $park_id, $from_date, $until_date) {
+        $from  = $this->validDate($from_date)  ?? date('Y-m-d', strtotime('-6 months'));
+        $until = $this->validDate($until_date) ?? date('Y-m-d');
+        $kingdom_id = (int)$kingdom_id;
+        $park_id    = (int)$park_id;
+
+        if ($park_id > 0) {
+            $scopeJoin  = ' LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = ca.mundane_id';
+            $scopeWhere = '(c.park_id = ' . $park_id . ' OR m.park_id = ' . $park_id . ')';
+        } else {
+            $scopeJoin  = '';
+            $scopeWhere = 'c.kingdom_id = ' . $kingdom_id;
+        }
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT c.court_id, c.name, c.court_date, c.park_id, c.kingdom_id,
+                    e.name AS event_name, p.name AS park_name,
+                    COUNT(DISTINCT ca.court_award_id) AS given_count
+             FROM ' . DB_PREFIX . 'court c
+             JOIN ' . DB_PREFIX . 'court_award ca
+                    ON ca.court_id = c.court_id AND ca.status = \'given\'' . $scopeJoin . '
+             LEFT JOIN ' . DB_PREFIX . 'event_calendardetail cd
+                    ON cd.event_calendardetail_id = c.event_calendardetail_id
+             LEFT JOIN ' . DB_PREFIX . 'event e ON e.event_id = cd.event_id
+             LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = c.park_id
+             WHERE c.court_date BETWEEN \'' . $from . '\' AND \'' . $until . '\'
+               AND ' . $scopeWhere . '
+             GROUP BY c.court_id
+             ORDER BY c.court_date DESC, c.court_id DESC'
+        );
+
+        $list = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $list[] = [
+                    'CourtId'    => (int)$rs->court_id,
+                    'Name'       => $rs->name,
+                    'CourtDate'  => $rs->court_date,
+                    'ParkId'     => (int)$rs->park_id,
+                    'KingdomId'  => (int)$rs->kingdom_id,
+                    'ParkName'   => $rs->park_name,
+                    'EventName'  => $rs->event_name,
+                    'GivenCount' => (int)$rs->given_count,
+                ];
+            }
+        }
+        return $list;
+    }
+
+    /**
+     * One court's header plus its status='given' awards (public fields only) with
+     * artisans batch-loaded. Returns null if the court does not exist.
+     */
+    public function getCourtReportDetail($court_id) {
+        $court_id = (int)$court_id;
+
+        $this->db->Clear();
+        $hr = $this->db->DataSet(
+            'SELECT c.court_id, c.kingdom_id, c.park_id, c.name, c.court_date,
+                    e.name AS event_name, p.name AS park_name, k.name AS kingdom_name
+             FROM ' . DB_PREFIX . 'court c
+             LEFT JOIN ' . DB_PREFIX . 'event_calendardetail cd
+                    ON cd.event_calendardetail_id = c.event_calendardetail_id
+             LEFT JOIN ' . DB_PREFIX . 'event e ON e.event_id = cd.event_id
+             LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = c.park_id
+             LEFT JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = c.kingdom_id
+             WHERE c.court_id = ' . $court_id . ' LIMIT 1'
+        );
+        if (!$hr || !$hr->Next()) return null;
+
+        $court = [
+            'CourtId'     => (int)$hr->court_id,
+            'KingdomId'   => (int)$hr->kingdom_id,
+            'ParkId'      => (int)$hr->park_id,
+            'Name'        => $hr->name,
+            'CourtDate'   => $hr->court_date,
+            'EventName'   => $hr->event_name,
+            'ParkName'    => $hr->park_name,
+            'KingdomName' => $hr->kingdom_name,
+        ];
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT ca.court_award_id, ca.mundane_id, ca.rank, ca.public_comment,
+                    m.persona, p.abbreviation AS park_abbrev,
+                    IFNULL(ka.name, a.name) AS award_name, a.is_ladder,
+                    sm.persona AS scroll_maker_persona, rm.persona AS regalia_maker_persona
+             FROM ' . DB_PREFIX . 'court_award ca
+             LEFT JOIN ' . DB_PREFIX . 'mundane m  ON m.mundane_id       = ca.mundane_id
+             LEFT JOIN ' . DB_PREFIX . 'park p     ON p.park_id          = m.park_id
+             LEFT JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ca.kingdomaward_id
+             LEFT JOIN ' . DB_PREFIX . 'award a    ON a.award_id         = ka.award_id
+             LEFT JOIN ' . DB_PREFIX . 'mundane sm ON sm.mundane_id      = ca.scroll_maker_id
+             LEFT JOIN ' . DB_PREFIX . 'mundane rm ON rm.mundane_id      = ca.regalia_maker_id
+             WHERE ca.court_id = ' . $court_id . ' AND ca.status = \'given\'
+             ORDER BY ca.sort_order, ca.court_award_id'
+        );
+
+        $awards = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $awards[(int)$rs->court_award_id] = [
+                    'CourtAwardId'        => (int)$rs->court_award_id,
+                    'MundaneId'           => (int)$rs->mundane_id,
+                    'Persona'             => $rs->persona,
+                    'ParkAbbrev'          => $rs->park_abbrev ?? '',
+                    'AwardName'           => $rs->award_name,
+                    'IsLadder'            => (bool)(int)$rs->is_ladder,
+                    'Rank'                => (int)$rs->rank,
+                    'PublicComment'       => $rs->public_comment ?? '',
+                    'ScrollMakerPersona'  => $rs->scroll_maker_persona ?? '',
+                    'RegaliaMakerPersona' => $rs->regalia_maker_persona ?? '',
+                    'Artisans'            => [],
+                ];
+            }
+        }
+
+        if (!empty($awards)) {
+            $ids = implode(',', array_keys($awards));
+            $this->db->Clear();
+            $ars = $this->db->DataSet(
+                'SELECT caa.court_award_id, caa.mundane_id, caa.contribution, m.persona
+                 FROM ' . DB_PREFIX . 'court_award_artisan caa
+                 LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = caa.mundane_id
+                 WHERE caa.court_award_id IN (' . $ids . ')
+                 ORDER BY caa.court_award_artisan_id'
+            );
+            if ($ars) {
+                while ($ars->Next()) {
+                    $cid = (int)$ars->court_award_id;
+                    if (isset($awards[$cid])) {
+                        $awards[$cid]['Artisans'][] = [
+                            'MundaneId'    => (int)$ars->mundane_id,
+                            'Persona'      => $ars->persona,
+                            'Contribution' => $ars->contribution,
+                        ];
+                    }
+                }
+            }
+        }
+
+        return ['Court' => $court, 'Awards' => array_values($awards)];
+    }
+
 }
