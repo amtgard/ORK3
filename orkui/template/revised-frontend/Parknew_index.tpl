@@ -1098,6 +1098,8 @@
 							<li><a href="<?= UIR ?>Reports/dues/Park&id=<?= $park_id ?>">Dues Paid</a></li>
 							<li><a href="<?= UIR ?>Reports/waivered/Park&id=<?= $park_id ?>">Waivered Players</a></li>
 							<li><a href="<?= UIR ?>Reports/unwaivered/Park&id=<?= $park_id ?>">Unwaivered Players</a></li>
+								<li><a href="<?= UIR ?>Reports/waivers/Park&id=<?= $park_id ?>">Digital Waivers</a></li>
+								<li><a href="<?= UIR ?>Reports/waiverhistory/Park&id=<?= $park_id ?>">Waiver Change History</a></li>
 							<li><a href="<?= UIR ?>Reports/suspended/Park&id=<?= $park_id ?>">Suspended Players</a></li>
 							<li><a href="<?= UIR ?>Reports/active_duespaid/Park&id=<?= $park_id ?>">Player Attendance</a></li>
 							<li><a href="<?= UIR ?>Reports/active_waivered_duespaid/Park&id=<?= $park_id ?>">Waivered Attendance</a></li>
@@ -1161,6 +1163,7 @@
 						<h5><i class="fas fa-cog"></i> Park</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Admin/permissions/Park/<?= $park_id ?>">Roles &amp; Permissions</a></li>
+							<li><a href="<?= UIR ?>Waiver/queue/park/<?= (int)$park_id ?>">Waiver Review Queue</a></li>
 						</ul>
 					</div>
 				</div>

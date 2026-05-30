@@ -736,6 +736,8 @@
 							<li><a href="<?= UIR ?>Reports/dues/Kingdom&id=<?= $kingdom_id ?>">Dues Paid</a></li>
 							<li><a href="<?= UIR ?>Reports/waivered/Kingdom&id=<?= $kingdom_id ?>">Waivered</a></li>
 							<li><a href="<?= UIR ?>Reports/unwaivered/Kingdom&id=<?= $kingdom_id ?>">Unwaivered</a></li>
+							<li><a href="<?= UIR ?>Reports/waivers/Kingdom&id=<?= $kingdom_id ?>">Digital Waivers</a></li>
+							<li><a href="<?= UIR ?>Reports/waiverhistory/Kingdom&id=<?= $kingdom_id ?>&scope=kingdom">Waiver Change History</a></li>
 							<li><a href="<?= UIR ?>Reports/suspended/Kingdom&id=<?= $kingdom_id ?>">Suspended</a></li>
 							<li><a href="<?= UIR ?>Reports/active_duespaid/Kingdom&id=<?= $kingdom_id ?>">Player Attendance</a></li>
 							<li><a href="<?= UIR ?>Reports/active_waivered_duespaid/Kingdom&id=<?= $kingdom_id ?>">Waivered Attendance</a></li>
@@ -833,8 +835,7 @@
 					<ul>
 						<li><a href="<?= UIR ?>Admin/permissions/Kingdom/<?= $kingdom_id ?>">Roles &amp; Permissions</a></li>
 						<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
-						<li><a href="<?= UIR ?>Waiver/builder/<?= $kingdom_id ?>/a">Manage Waivers &mdash; Rich Text</a></li>
-						<li><a href="<?= UIR ?>Waiver/builder/<?= $kingdom_id ?>/b">Manage Waivers &mdash; Markdown</a></li>
+						<li><a href="<?= UIR ?>Waiver/builder/<?= $kingdom_id ?>">Manage Waivers</a></li>
 						<li><a href="<?= UIR ?>Waiver/queue/kingdom/<?= $kingdom_id ?>">Waiver Review Queue</a></li>
 					</ul>
 				</div>
