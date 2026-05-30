@@ -21,11 +21,29 @@
 		// After ctx.scale(dpr, dpr), all drawing ops must use CSS-unit (logical)
 		// coordinates, NOT canvas.width/height (which are physical px).
 		const dpr = window.devicePixelRatio || 1;
-		const cssW = canvas.clientWidth;
-		const cssH = canvas.clientHeight;
+		let cssW = canvas.clientWidth;
+		let cssH = canvas.clientHeight;
 		canvas.width  = cssW * dpr;
 		canvas.height = cssH * dpr;
 		ctx.scale(dpr, dpr);
+
+		// Re-initialize the canvas backing store when its CSS size changes
+		// (window resize / device rotation) so strokes (stored as normalized
+		// 0..1 coords) stay correctly positioned after layout reflow.
+		function wvResize() {
+			cssW = canvas.offsetWidth || 300;
+			cssH = canvas.offsetHeight || 200;
+			canvas.width = cssW * dpr;
+			canvas.height = cssH * dpr;
+			ctx.scale(dpr, dpr);
+			redraw();
+		}
+		let _wvResizeTimer;
+		window.addEventListener('resize', function() {
+			clearTimeout(_wvResizeTimer);
+			_wvResizeTimer = setTimeout(wvResize, 150);
+		});
+		window.addEventListener('orientationchange', function() { setTimeout(wvResize, 300); });
 
 		function setMode(mode) {
 			typeInput.value = mode;

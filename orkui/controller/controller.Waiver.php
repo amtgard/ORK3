@@ -28,30 +28,26 @@ class Controller_Waiver extends Controller {
 	}
 
 	// Kingdom admin: edit both kingdom + park templates for this kingdom
-	// Route: Waiver/builder/{kingdom_id}[/{variant}]  — variant = 'a' (Trix, default) or 'b' (Markdown)
+	// Route: Waiver/builder/{kingdom_id}
 	public function builder($params = null) {
 		$parts = explode('/', (string)($params ?? ''));
 		$kingdom_id = $this->_clean_int($parts[0] ?? '');
-		$variant    = in_array($parts[1] ?? '', ['a','b'], true) ? $parts[1] : 'a';
 		$_uid = $this->_currentMundaneId();
 		if ($_uid <= 0 || (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)
 			&& !Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_EDIT))) {
 			$this->_go('Kingdom/index/' . $kingdom_id);
 			return;
 		}
-		$kk = $this->Waiver->GetActiveTemplate(['KingdomId' => $kingdom_id, 'Scope' => 'kingdom', 'Variant' => $variant]);
-		$pk = $this->Waiver->GetActiveTemplate(['KingdomId' => $kingdom_id, 'Scope' => 'park',    'Variant' => $variant]);
+		$kk = $this->Waiver->GetActiveTemplate(['KingdomId' => $kingdom_id, 'Scope' => 'kingdom']);
+		$pk = $this->Waiver->GetActiveTemplate(['KingdomId' => $kingdom_id, 'Scope' => 'park']);
 		$this->data['_wv'] = [
 			'kingdom_id'       => $kingdom_id,
-			'variant'          => $variant,
 			'kingdom_template' => (($kk['Status']['Status'] ?? 1) === 0) ? $kk['Template'] : null,
 			'park_template'    => (($pk['Status']['Status'] ?? 1) === 0) ? $pk['Template'] : null,
 			'token'            => $this->session->token,
 		];
 		$this->data['kingdom_info'] = $this->Kingdom->get_kingdom_shortinfo($kingdom_id);
-		$this->template = $variant === 'b'
-			? '../revised-frontend/Waiver_builder_b.tpl'
-			: '../revised-frontend/Waiver_builder.tpl';
+		$this->template = '../revised-frontend/Waiver_builder.tpl';
 	}
 
 	// Player: sign a kingdom/park waiver
@@ -122,14 +118,23 @@ class Controller_Waiver extends Controller {
 			'Page'     => $page,
 			'PageSize' => 10,
 		]);
+		$entity_name = '';
+		if ($scope === 'kingdom') {
+			$ki = $this->Kingdom->get_kingdom_shortinfo($id);
+			$entity_name = $ki['KingdomName'] ?? '';
+		} else {
+			$pd = $this->Park->get_park_details($id);
+			$entity_name = $pd['ParkInfo']['Name'] ?? '';
+		}
 		$this->data['_wv'] = [
-			'scope'      => $scope,
-			'entity_id'  => $id,
-			'filter'     => $filter,
-			'page'       => $page,
-			'signatures' => $r['Signatures'] ?? [],
-			'total'      => (int)($r['Total'] ?? 0),
-			'token'      => $this->session->token,
+			'scope'       => $scope,
+			'entity_id'   => $id,
+			'entity_name' => $entity_name,
+			'filter'      => $filter,
+			'page'        => $page,
+			'signatures'  => $r['Signatures'] ?? [],
+			'total'       => (int)($r['Total'] ?? 0),
+			'token'       => $this->session->token,
 		];
 		$this->template = '../revised-frontend/Waiver_queue.tpl';
 	}
@@ -146,10 +151,23 @@ class Controller_Waiver extends Controller {
 			|| Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_EDIT);
 		$player = $this->Player->fetch_player($_uid) ?: [];
 
+		$park_name = '';
+		if ((int)$sig['ParkId'] > 0) {
+			$pd = $this->Park->get_park_details((int)$sig['ParkId']);
+			$park_name = $pd['ParkInfo']['Name'] ?? '';
+		}
+		$kingdom_name = '';
+		if ((int)$sig['KingdomId'] > 0) {
+			$ki = $this->Kingdom->get_kingdom_shortinfo((int)$sig['KingdomId']);
+			$kingdom_name = $ki['KingdomName'] ?? '';
+		}
+
 		$this->data['_wv'] = [
 			'signature'       => $sig,
 			'is_officer'      => $isOfficer,
 			'is_signer'       => ((int)$sig['MundaneId'] === $_uid),
+			'park_name'       => $park_name,
+			'kingdom_name'    => $kingdom_name,
 			'token'           => $this->session->token,
 			'officer_prefill' => [
 				'PrintedName' => trim(($player['GivenName'] ?? '') . ' ' . ($player['Surname'] ?? '')),
@@ -165,16 +183,35 @@ class Controller_Waiver extends Controller {
 		if ($_uid <= 0) { $this->_go('Login/login'); return; }
 		$r = $this->Waiver->GetSignature(['Token' => $this->session->token, 'SignatureId' => $signature_id]);
 		if (($r['Status']['Status'] ?? 1) !== 0) { $this->_go('Player/index/' . $_uid); return; }
-		$this->data['_wv'] = ['signature' => $r['Signature']];
+		$sig = $r['Signature'];
+		$isSigner = ((int)$sig['MundaneId'] === $_uid);
+		$isOfficer = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$sig['KingdomId'], AUTH_EDIT)
+			|| Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$sig['ParkId'], AUTH_EDIT)
+			|| Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_EDIT);
+		if (!$isSigner && !$isOfficer) { $this->_go('Player/index/' . $_uid); return; }
+		$park_name = '';
+		if ((int)$sig['ParkId'] > 0) {
+			$pd = $this->Park->get_park_details((int)$sig['ParkId']);
+			$park_name = $pd['ParkInfo']['Name'] ?? '';
+		}
+		$kingdom_name = '';
+		if ((int)$sig['KingdomId'] > 0) {
+			$ki = $this->Kingdom->get_kingdom_shortinfo((int)$sig['KingdomId']);
+			$kingdom_name = $ki['KingdomName'] ?? '';
+		}
+		$this->data['_wv'] = [
+			'signature'    => $sig,
+			'park_name'    => $park_name,
+			'kingdom_name' => $kingdom_name,
+		];
 		$this->template = '../revised-frontend/Waiver_print.tpl';
 	}
 
 	// Kingdom admin: live preview of unsaved builder state.
-	// Route: Waiver/preview/{kingdom_id}[/{variant}] (POST). Renders the waiver as a player would see it.
+	// Route: Waiver/preview/{kingdom_id} (POST). Renders the waiver as a player would see it.
 	public function preview($params = null) {
 		$parts = explode('/', (string)($params ?? ''));
 		$kingdom_id = $this->_clean_int($parts[0] ?? '');
-		$variant    = in_array($parts[1] ?? '', ['a','b'], true) ? $parts[1] : 'a';
 		$_uid = $this->_currentMundaneId();
 		if ($_uid <= 0 || (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)
 			&& !Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_EDIT))) {
@@ -183,22 +220,11 @@ class Controller_Waiver extends Controller {
 		}
 		$scope = in_array($_POST['Scope'] ?? '', ['kingdom','park']) ? $_POST['Scope'] : 'kingdom';
 		$cf = $_POST['CustomFieldsJson'] ?? '[]';
-		// Variant B: posted fields are markdown; render to sanitized HTML for preview.
-		// Variant A: posted fields are already HTML; sanitize directly.
-		if ($variant === 'b') {
-			require_once(DIR_LIB . 'Parsedown.php');
-			$pd = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true);
-			$render = function($md) use ($pd) { return $this->Waiver->_sanitize_html($pd->text((string)$md)); };
-			$headerHtml = $render($_POST['HeaderMarkdown'] ?? '');
-			$bodyHtml   = $render($_POST['BodyMarkdown']   ?? '');
-			$footerHtml = $render($_POST['FooterMarkdown'] ?? '');
-			$minorHtml  = $render($_POST['MinorMarkdown']  ?? '');
-		} else {
-			$headerHtml = $this->Waiver->_sanitize_html((string)($_POST['HeaderHtml'] ?? ''));
-			$bodyHtml   = $this->Waiver->_sanitize_html((string)($_POST['BodyHtml']   ?? ''));
-			$footerHtml = $this->Waiver->_sanitize_html((string)($_POST['FooterHtml'] ?? ''));
-			$minorHtml  = $this->Waiver->_sanitize_html((string)($_POST['MinorHtml']  ?? ''));
-		}
+		// Posted fields are already HTML (Trix output); sanitize directly.
+		$headerHtml = $this->Waiver->SanitizeHtml((string)($_POST['HeaderHtml'] ?? ''));
+		$bodyHtml   = $this->Waiver->SanitizeHtml((string)($_POST['BodyHtml']   ?? ''));
+		$footerHtml = $this->Waiver->SanitizeHtml((string)($_POST['FooterHtml'] ?? ''));
+		$minorHtml  = $this->Waiver->SanitizeHtml((string)($_POST['MinorHtml']  ?? ''));
 		$template = [
 			'HeaderHtml'               => $headerHtml,
 			'BodyHtml'                 => $bodyHtml,

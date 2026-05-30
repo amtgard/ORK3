@@ -37,9 +37,9 @@ h1, h2, h3, h4, h5, h6 { background: transparent; border: none; padding: 0; text
 	<div class="wv-p-grid">
 		<div><strong>Legal Name:</strong> <?= htmlspecialchars($sig['MundaneFirst'] . ' ' . $sig['MundaneLast']) ?></div>
 		<div><strong>Persona:</strong> <?= htmlspecialchars($sig['PersonaName']) ?></div>
-		<div><strong>Park ID:</strong> <?= (int)$sig['ParkId'] ?></div>
-		<div><strong>Kingdom ID:</strong> <?= (int)$sig['KingdomId'] ?></div>
-		<div><strong>Signed:</strong> <?= htmlspecialchars($sig['SignedAt']) ?></div>
+		<div><strong>Park:</strong> <?= htmlspecialchars($wv['park_name'] ?? ('#' . (int)$sig['ParkId'])) ?></div>
+		<div><strong>Kingdom:</strong> <?= htmlspecialchars($wv['kingdom_name'] ?? ('#' . (int)$sig['KingdomId'])) ?></div>
+		<div><strong>Signed:</strong> <?= $sig['SignedAt'] ? htmlspecialchars(date('F j, Y', strtotime($sig['SignedAt']))) : '—' ?></div>
 		<div><strong>Template:</strong> v<?= (int)$tpl['Version'] ?> (<?= htmlspecialchars($tpl['Scope']) ?>)</div>
 	</div>
 	<?php $_sig = $sig; $_tpl = $tpl; ?>
@@ -49,7 +49,7 @@ h1, h2, h3, h4, h5, h6 { background: transparent; border: none; padding: 0; text
 		<h2>Signer Demographics</h2>
 		<dl class="wv-dl">
 			<?php if (!empty($_tpl['RequiresPreferredName'])): ?><dt>Preferred name</dt><dd><?= htmlspecialchars($_sig['PreferredName'] ?? '') ?></dd><?php endif; ?>
-			<?php if (!empty($_tpl['RequiresDob'])):           ?><dt>Date of birth</dt><dd><?= htmlspecialchars($_sig['Dob'] ?? '') ?></dd><?php endif; ?>
+			<?php if (!empty($_tpl['RequiresDob'])):           ?><dt>Date of birth</dt><dd><?= !empty($_sig['Dob']) ? htmlspecialchars(date('F j, Y', strtotime($_sig['Dob']))) : '—' ?></dd><?php endif; ?>
 			<?php if (!empty($_tpl['RequiresGender'])):        ?><dt>Gender</dt><dd><?= htmlspecialchars($_sig['Gender'] ?? '') ?></dd><?php endif; ?>
 			<?php if (!empty($_tpl['RequiresAddress'])):       ?><dt>Address</dt><dd><?= htmlspecialchars($_sig['Address'] ?? '') ?></dd><?php endif; ?>
 			<?php if (!empty($_tpl['RequiresPhone'])):         ?><dt>Phone</dt><dd><?= htmlspecialchars($_sig['Phone'] ?? '') ?></dd><?php endif; ?>
@@ -100,7 +100,7 @@ h1, h2, h3, h4, h5, h6 { background: transparent; border: none; padding: 0; text
 					<td><?= htmlspecialchars($m['LegalLast'] ?? '') ?></td>
 					<td><?= htmlspecialchars($m['PreferredName'] ?? '') ?></td>
 					<td><?= htmlspecialchars($m['PersonaName'] ?? '') ?></td>
-					<td><?= htmlspecialchars($m['Dob'] ?? '') ?></td>
+					<td><?= !empty($m['Dob']) ? htmlspecialchars(date('F j, Y', strtotime($m['Dob']))) : '—' ?></td>
 				</tr>
 			<?php endforeach; ?>
 			</tbody>
@@ -146,7 +146,7 @@ h1, h2, h3, h4, h5, h6 { background: transparent; border: none; padding: 0; text
 		<div><strong>Verified by:</strong> <?= htmlspecialchars($sig['VerifierPrintedName']) ?></div>
 		<div><strong>Persona:</strong> <?= htmlspecialchars($sig['VerifierPersonaName']) ?></div>
 		<div><strong>Office:</strong> <?= htmlspecialchars($sig['VerifierOfficeTitle']) ?></div>
-		<div><strong>Date:</strong> <?= htmlspecialchars($sig['VerifiedAt']) ?></div>
+		<div><strong>Date:</strong> <?= $sig['VerifiedAt'] ? htmlspecialchars(date('F j, Y', strtotime($sig['VerifiedAt']))) : '—' ?></div>
 	</div>
 	<div class="wv-p-section wv-p-sig">
 		<?php if ($sig['VerifierSignatureType'] === 'typed'): ?>
@@ -162,13 +162,23 @@ h1, h2, h3, h4, h5, h6 { background: transparent; border: none; padding: 0; text
 function drawSig(canvasId, dataJson) {
 	const c = document.getElementById(canvasId); if (!c) return;
 	let strokes; try { strokes = JSON.parse(dataJson); } catch(_) { return; }
+	// R16: DPR scaling for crisp rendering on retina displays. Coordinate space
+	// stays in CSS pixels (cssW/cssH); the backing store is scaled by dpr.
+	const cssW = c.clientWidth || c.width;
+	const cssH = c.clientHeight || c.height;
+	const dpr = Math.min(window.devicePixelRatio || 1, 3);
+	c.width = cssW * dpr;
+	c.height = cssH * dpr;
+	c.style.width = cssW + 'px';
+	c.style.height = cssH + 'px';
 	const ctx = c.getContext('2d');
+	ctx.scale(dpr, dpr);
 	ctx.lineCap='round'; ctx.lineJoin='round'; ctx.lineWidth=2; ctx.strokeStyle='#111';
 	strokes.forEach(s => {
 		if (!s.length) return;
 		ctx.beginPath();
-		ctx.moveTo(s[0].x * c.width, s[0].y * c.height);
-		for (let i = 1; i < s.length; i++) ctx.lineTo(s[i].x * c.width, s[i].y * c.height);
+		ctx.moveTo(s[0].x * cssW, s[0].y * cssH);
+		for (let i = 1; i < s.length; i++) ctx.lineTo(s[i].x * cssW, s[i].y * cssH);
 		ctx.stroke();
 	});
 }

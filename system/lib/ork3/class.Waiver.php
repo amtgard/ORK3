@@ -15,7 +15,6 @@ class Waiver extends Ork3 {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
 		$kingdom_id = (int)($request['KingdomId'] ?? 0);
 		$scope      = in_array($request['Scope'] ?? '', ['kingdom','park']) ? $request['Scope'] : null;
-		$variant    = in_array($request['Variant'] ?? '', ['a','b']) ? $request['Variant'] : 'a';
 		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
 		if ($kingdom_id <= 0) return ['Status' => InvalidParameter('KingdomId required')];
 		if ($scope === null)  return ['Status' => InvalidParameter('Scope invalid')];
@@ -32,10 +31,9 @@ class Waiver extends Ork3 {
 		$this->db->Clear();
 		$this->db->kingdom_id = $kingdom_id;
 		$this->db->scope      = $scope;
-		$this->db->variant    = $variant;
 		$prev = $this->db->DataSet(
 			"SELECT waiver_template_id, version FROM " . DB_PREFIX . "waiver_template
-			 WHERE kingdom_id = :kingdom_id AND scope = :scope AND variant = :variant AND is_active = 1
+			 WHERE kingdom_id = :kingdom_id AND scope = :scope AND is_active = 1
 			 ORDER BY version DESC LIMIT 1"
 		);
 		$prevId = 0; $prevVersion = 0;
@@ -44,6 +42,29 @@ class Waiver extends Ork3 {
 			$prevVersion = (int)$prev->version;
 		}
 		$nextVersion = $prevVersion > 0 ? $prevVersion + 1 : 1;
+
+		// Determine whether this is the FIRST EVER version for (kingdom, scope)
+		$this->db->Clear();
+		$this->db->kingdom_id = $kingdom_id;
+		$this->db->scope      = $scope;
+		$cntRs = $this->db->DataSet(
+			"SELECT COUNT(*) AS c FROM " . DB_PREFIX . "waiver_template
+			 WHERE kingdom_id = :kingdom_id AND scope = :scope"
+		);
+		$existing = 0;
+		if ($cntRs && $cntRs->Next()) $existing = (int)$cntRs->c;
+		$isFirst = ($existing === 0);
+
+		$versionName = trim((string)($request['VersionName'] ?? ''));
+		if ($versionName === '') $versionName = $this->_suggest_version_name($kingdom_id, $scope);
+		$versionName = mb_substr($versionName, 0, 120);
+
+		$changeReason = trim((string)($request['ChangeReason'] ?? ''));
+		if ($changeReason === '' && $isFirst) $changeReason = 'Initial publication of digital waiver.';
+		$changeReason = mb_substr($changeReason, 0, 5000);
+
+		$this->db->Clear();
+		$this->db->Execute('START TRANSACTION');
 
 		if ($prevId > 0) {
 			$this->db->Clear();
@@ -59,33 +80,10 @@ class Waiver extends Ork3 {
 		$this->template->version                   = $nextVersion;
 		$this->template->is_active                 = 1;
 		$this->template->is_enabled                = ((int)($request['IsEnabled'] ?? 0)) ? 1 : 0;
-		$this->template->variant                   = $variant;
-		if ($variant === 'b') {
-			require_once(DIR_LIB . 'Parsedown.php');
-			$pd = (new Parsedown())->setSafeMode(true)->setBreaksEnabled(true);
-			$hmd = (string)($request['HeaderMarkdown'] ?? '');
-			$bmd = (string)($request['BodyMarkdown']   ?? '');
-			$fmd = (string)($request['FooterMarkdown'] ?? '');
-			$mmd = (string)($request['MinorMarkdown']  ?? '');
-			$this->template->header_markdown = $hmd;
-			$this->template->body_markdown   = $bmd;
-			$this->template->footer_markdown = $fmd;
-			$this->template->minor_markdown  = $mmd;
-			// Render markdown -> sanitized HTML so sign/review/print pages stay variant-agnostic.
-			$this->template->header_html = $this->_sanitize_html($pd->text($hmd));
-			$this->template->body_html   = $this->_sanitize_html($pd->text($bmd));
-			$this->template->footer_html = $this->_sanitize_html($pd->text($fmd));
-			$this->template->minor_html  = $this->_sanitize_html($pd->text($mmd));
-		} else {
-			$this->template->header_html = $this->_sanitize_html((string)($request['HeaderHtml'] ?? ''));
-			$this->template->body_html   = $this->_sanitize_html((string)($request['BodyHtml']   ?? ''));
-			$this->template->footer_html = $this->_sanitize_html((string)($request['FooterHtml'] ?? ''));
-			$this->template->minor_html  = $this->_sanitize_html((string)($request['MinorHtml']  ?? ''));
-			$this->template->header_markdown = null;
-			$this->template->body_markdown   = null;
-			$this->template->footer_markdown = null;
-			$this->template->minor_markdown  = null;
-		}
+		$this->template->header_html = $this->SanitizeHtml((string)($request['HeaderHtml'] ?? ''));
+		$this->template->body_html   = $this->SanitizeHtml((string)($request['BodyHtml']   ?? ''));
+		$this->template->footer_html = $this->SanitizeHtml((string)($request['FooterHtml'] ?? ''));
+		$this->template->minor_html  = $this->SanitizeHtml((string)($request['MinorHtml']  ?? ''));
 		$this->template->requires_dob              = ((int)($request['RequiresDob']              ?? 0)) ? 1 : 0;
 		$this->template->requires_address          = ((int)($request['RequiresAddress']          ?? 0)) ? 1 : 0;
 		$this->template->requires_phone            = ((int)($request['RequiresPhone']            ?? 0)) ? 1 : 0;
@@ -98,15 +96,70 @@ class Waiver extends Ork3 {
 		$this->template->custom_fields_json        = $cfRaw;
 		$this->template->created_by_mundane_id     = $mundane_id;
 		$this->template->created_at                = date('Y-m-d H:i:s');
+		$this->template->version_name              = $versionName;
+		$this->template->change_reason             = $changeReason;
 		$this->template->save();
 
 		$newId = (int)$this->template->waiver_template_id;
-		if ($newId <= 0) return ['Status' => ProcessingError('Template save failed')];
+		if ($newId <= 0) {
+			$this->db->Clear();
+			$this->db->Execute('ROLLBACK');
+			return ['Status' => ProcessingError('Template save failed')];
+		}
+
+		$this->db->Clear();
+		$this->db->Execute('COMMIT');
 
 		return [
 			'Status'     => Success(),
 			'TemplateId' => $newId,
 			'Version'    => $nextVersion,
+		];
+	}
+
+	private function _suggest_version_name($kingdom_id, $scope) {
+		$today = date('Y-m-d');
+		$this->db->Clear();
+		$this->db->kingdom_id = (int)$kingdom_id;
+		$this->db->scope      = $scope;
+		$this->db->today      = $today;
+		$rs = $this->db->DataSet(
+			"SELECT COUNT(*) AS c FROM " . DB_PREFIX . "waiver_template
+			 WHERE kingdom_id = :kingdom_id AND scope = :scope AND DATE(created_at) = :today"
+		);
+		$count = 0;
+		if ($rs && $rs->Next()) $count = (int)$rs->c;
+		return $today . ' V' . ($count + 1);
+	}
+
+	public function GetVersionSaveDefaults($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+		$kingdom_id = (int)($request['KingdomId'] ?? 0);
+		$scope      = in_array($request['Scope'] ?? '', ['kingdom','park']) ? $request['Scope'] : null;
+		if ($mundane_id <= 0) return ['Status' => NoAuthorization()];
+		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)
+			&& !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+			return ['Status' => NoAuthorization()];
+		}
+		if ($kingdom_id <= 0) return ['Status' => InvalidParameter('KingdomId required')];
+		if ($scope === null)  return ['Status' => InvalidParameter('Scope invalid')];
+
+		$this->db->Clear();
+		$this->db->kingdom_id = $kingdom_id;
+		$this->db->scope      = $scope;
+		$cntRs = $this->db->DataSet(
+			"SELECT COUNT(*) AS c FROM " . DB_PREFIX . "waiver_template
+			 WHERE kingdom_id = :kingdom_id AND scope = :scope"
+		);
+		$existing = 0;
+		if ($cntRs && $cntRs->Next()) $existing = (int)$cntRs->c;
+		$isFirst = ($existing === 0);
+
+		return [
+			'Status'        => Success(),
+			'VersionName'   => $this->_suggest_version_name($kingdom_id, $scope),
+			'IsFirst'       => $isFirst ? 1 : 0,
+			'DefaultReason' => $isFirst ? 'Initial publication of digital waiver.' : '',
 		];
 	}
 
@@ -128,6 +181,10 @@ class Waiver extends Ork3 {
 			if (($type === 'radio' || $type === 'select')) {
 				$opts = $f['options'] ?? null;
 				if (!is_array($opts) || count($opts) < 1) return "CustomFieldsJson entry $i requires options";
+				if (count($opts) > 50) return "CustomFieldsJson entry $i has too many options (max 50)";
+				foreach ($opts as $oi => $opt) {
+					if (!is_string($opt) || strlen($opt) > 256) return "CustomFieldsJson entry $i option $oi too long (max 256 chars)";
+				}
 			}
 			$label = (string)($f['label'] ?? '');
 			if ($label === '' || strlen($label) > 512) return "CustomFieldsJson entry $i has invalid label";
@@ -144,15 +201,10 @@ class Waiver extends Ork3 {
 			'Version'                   => (int)$rs->version,
 			'IsActive'                  => (int)$rs->is_active,
 			'IsEnabled'                 => (int)$rs->is_enabled,
-			'Variant'                   => $rs->variant ?? 'a',
 			'HeaderHtml'                => $rs->header_html,
 			'BodyHtml'                  => $rs->body_html,
 			'FooterHtml'                => $rs->footer_html,
 			'MinorHtml'                 => $rs->minor_html,
-			'HeaderMarkdown'            => $rs->header_markdown,
-			'BodyMarkdown'              => $rs->body_markdown,
-			'FooterMarkdown'            => $rs->footer_markdown,
-			'MinorMarkdown'             => $rs->minor_markdown,
 			'RequiresDob'               => (int)($rs->requires_dob ?? 0),
 			'RequiresAddress'           => (int)($rs->requires_address ?? 0),
 			'RequiresPhone'             => (int)($rs->requires_phone ?? 0),
@@ -163,6 +215,8 @@ class Waiver extends Ork3 {
 			'RequiresWitness'           => (int)($rs->requires_witness ?? 0),
 			'MaxMinors'                 => (int)($rs->max_minors ?? 1),
 			'CustomFieldsJson'          => (string)($rs->custom_fields_json ?? '[]'),
+			'VersionName'               => $rs->version_name ?? '',
+			'ChangeReason'              => $rs->change_reason ?? '',
 			'CreatedAt'                 => $rs->created_at,
 		];
 	}
@@ -170,16 +224,14 @@ class Waiver extends Ork3 {
 	public function GetActiveTemplate($request) {
 		$kingdom_id = (int)($request['KingdomId'] ?? 0);
 		$scope      = in_array($request['Scope'] ?? '', ['kingdom','park']) ? $request['Scope'] : null;
-		$variant    = in_array($request['Variant'] ?? '', ['a','b']) ? $request['Variant'] : 'a';
 		if ($kingdom_id <= 0 || $scope === null) return ['Status' => InvalidParameter()];
 
 		$this->db->Clear();
 		$this->db->kingdom_id = $kingdom_id;
 		$this->db->scope      = $scope;
-		$this->db->variant    = $variant;
 		$rs = $this->db->DataSet(
 			"SELECT * FROM " . DB_PREFIX . "waiver_template
-			 WHERE kingdom_id = :kingdom_id AND scope = :scope AND variant = :variant AND is_active = 1 LIMIT 1"
+			 WHERE kingdom_id = :kingdom_id AND scope = :scope AND is_active = 1 LIMIT 1"
 		);
 		if (!$rs || !$rs->Next()) return ['Status' => ProcessingError('Template not found')];
 		return ['Status' => Success(), 'Template' => $this->_shape_template($rs)];
@@ -332,8 +384,7 @@ class Waiver extends Ork3 {
 		// Minors roster (up to template->max_minors). Additive: prior rows for this signature are replaced.
 		$minors = $request['Minors'] ?? null;
 		if (is_array($minors) && count($minors) > 0) {
-			$tpl = $this->GetTemplate(['TemplateId' => $tid]);
-			$maxMinors = (int)($tpl['Template']['MaxMinors'] ?? 1);
+			$maxMinors = (int)($t['Template']['MaxMinors'] ?? 1);
 			$this->db->Clear();
 			$this->db->waiver_signature_id = $newId;
 			$this->db->Execute("DELETE FROM " . DB_PREFIX . "waiver_signature_minor WHERE waiver_signature_id = :waiver_signature_id");
@@ -383,8 +434,8 @@ class Waiver extends Ork3 {
 			'PersonaName'                 => $rs->persona_name_snapshot,
 			'ParkId'                      => (int)$rs->park_id_snapshot,
 			'KingdomId'                   => (int)$rs->kingdom_id_snapshot,
-			'SignatureType'               => $rs->signature_type,
-			'SignatureData'               => $rs->signature_data,
+			'SignatureType'               => $rs->signature_type ?? null,
+			'SignatureData'               => $rs->signature_data ?? null,
 			'SignedAt'                    => $rs->signed_at,
 			'IsMinor'                     => (int)$rs->is_minor,
 			'MinorRepFirst'               => $rs->minor_rep_first,
@@ -403,19 +454,20 @@ class Waiver extends Ork3 {
 			'WitnessSignatureType'        => $rs->witness_signature_type ?? null,
 			'WitnessSignatureData'        => $rs->witness_signature_data ?? null,
 			'CustomResponsesJson'         => $rs->custom_responses_json ?? '{}',
-			'VerificationStatus'          => $rs->verification_status,
-			'VerifiedByMundaneId'         => (int)$rs->verified_by_mundane_id,
-			'VerifiedAt'                  => $rs->verified_at,
-			'VerifierPrintedName'         => $rs->verifier_printed_name,
-			'VerifierPersonaName'         => $rs->verifier_persona_name,
-			'VerifierOfficeTitle'         => $rs->verifier_office_title,
-			'VerifierSignatureType'       => $rs->verifier_signature_type,
-			'VerifierSignatureData'       => $rs->verifier_signature_data,
-			'VerifierNotes'               => $rs->verifier_notes,
+			'VerificationStatus'          => $rs->verification_status ?? '',
+			'VerifiedByMundaneId'         => (int)($rs->verified_by_mundane_id ?? 0),
+			'VerifiedAt'                  => $rs->verified_at ?? null,
+			'VerifierPrintedName'         => $rs->verifier_printed_name ?? '',
+			'VerifierPersonaName'         => $rs->verifier_persona_name ?? '',
+			'VerifierOfficeTitle'         => $rs->verifier_office_title ?? '',
+			'VerifierSignatureType'       => $rs->verifier_signature_type ?? null,
+			'VerifierSignatureData'       => $rs->verifier_signature_data ?? null,
+			'VerifierNotes'               => $rs->verifier_notes ?? '',
 			'VerifierIdType'              => $rs->verifier_id_type ?? '',
 			'VerifierIdNumberLast4'       => $rs->verifier_id_number_last4 ?? '',
 			'VerifierAgeBracket'          => $rs->verifier_age_bracket ?? '',
 			'VerifierScannedPaper'        => (int)($rs->verifier_scanned_paper ?? 0),
+			'TemplateScope'               => $rs->template_scope ?? '',
 		];
 	}
 
@@ -496,18 +548,29 @@ class Waiver extends Ork3 {
 
 		$fromWhere = "FROM " . DB_PREFIX . "waiver_signature s
 		              JOIN " . DB_PREFIX . "waiver_template t ON t.waiver_template_id = s.waiver_template_id
-		              WHERE $scopeCol = :entity_id AND t.scope = '$scopeName' $statusClause";
+		              WHERE $scopeCol = :entity_id AND t.scope = :scope_filter $statusClause";
 
 		$this->db->Clear();
-		$this->db->entity_id = $entity_id;
+		$this->db->entity_id    = $entity_id;
+		$this->db->scope_filter = $scopeName;
 		$rsc = $this->db->DataSet("SELECT COUNT(*) AS c $fromWhere");
 		$total = 0;
 		if ($rsc && $rsc->Next()) $total = (int)$rsc->c;
 
+		// Explicit column list: excludes signature_data and verifier_signature_data
+		// (large payloads not needed for queue listing).
+		$queueCols = "s.waiver_signature_id, s.waiver_template_id, s.mundane_id,
+		              s.mundane_first_snapshot, s.mundane_last_snapshot, s.persona_name_snapshot,
+		              s.park_id_snapshot, s.kingdom_id_snapshot, s.signed_at, s.is_minor,
+		              s.minor_rep_first, s.minor_rep_last, s.minor_rep_relationship,
+		              s.verification_status, s.verified_at, s.verifier_printed_name,
+		              s.verifier_office_title, t.scope AS template_scope";
+
 		// LIMIT / OFFSET are integer-cast values we built ourselves, safe to interpolate
 		$this->db->Clear();
-		$this->db->entity_id = $entity_id;
-		$rs = $this->db->DataSet("SELECT s.* $fromWhere ORDER BY s.signed_at DESC LIMIT $pageSize OFFSET $offset");
+		$this->db->entity_id    = $entity_id;
+		$this->db->scope_filter = $scopeName;
+		$rs = $this->db->DataSet("SELECT $queueCols $fromWhere ORDER BY s.signed_at DESC LIMIT $pageSize OFFSET $offset");
 		$out = [];
 		if ($rs) { while ($rs->Next()) { $out[] = $this->_shape_signature($rs); } }
 
@@ -579,13 +642,13 @@ class Waiver extends Ork3 {
 	 * or URL scheme not on the allowlist. Returns sanitized HTML safe for
 	 * direct rendering. Idempotent.
 	 */
-	public function _sanitize_html($html) {
+	public function SanitizeHtml($html) {
 		$html = (string)$html;
 		if ($html === '') return '';
 		if (strlen($html) > 262144) $html = substr($html, 0, 262144); // hard cap ~256KB
 
 		// Tags Trix emits + a few defensible siblings.
-		$allowedTags = ['p','div','h1','blockquote','ul','ol','li','b','strong','i','em','del','a','br','pre'];
+		$allowedTags = ['p','div','h1','h2','h3','h4','h5','h6','blockquote','ul','ol','li','b','strong','i','em','del','a','br','pre'];
 		$allowedAttrs = ['a' => ['href']];
 
 		$doc = new DOMDocument();
