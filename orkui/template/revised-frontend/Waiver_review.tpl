@@ -25,6 +25,7 @@ $of = $wv['officer_prefill'];
 .wv-review .wv-actions { display: flex; gap: 10px; margin-top: 12px; }
 .wv-review .wv-approve { background: #2b5; color: #fff; padding: 10px 18px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
 .wv-review .wv-reject  { background: #c33; color: #fff; padding: 10px 18px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+.wv-review .wv-approve[disabled], .wv-review .wv-reject[disabled] { opacity: .55; cursor: progress; }
 .wv-review .wv-verified-box { padding: 12px; background: #eef9ee; border: 1px solid #cdeac0; border-radius: 4px; font-size: 14px; }
 .wv-review .wv-rejected-box { padding: 12px; background: #fdeeee; border: 1px solid #eac0c0; border-radius: 4px; font-size: 14px; }
 .wv-review .wv-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; }
@@ -72,9 +73,9 @@ html[data-theme="dark"] .wv-review a { color: #a5b4fc; }
 		<div class="wv-playerhdr">
 			<div class="wv-fact"><strong>Legal Name:</strong> <?= htmlspecialchars($sig['MundaneFirst'] . ' ' . $sig['MundaneLast']) ?></div>
 			<div class="wv-fact"><strong>Persona:</strong> <?= htmlspecialchars($sig['PersonaName']) ?></div>
-			<div class="wv-fact"><strong>Park ID:</strong> <?= (int)$sig['ParkId'] ?></div>
-			<div class="wv-fact"><strong>Kingdom ID:</strong> <?= (int)$sig['KingdomId'] ?></div>
-			<div class="wv-fact"><strong>Signed:</strong> <?= htmlspecialchars($sig['SignedAt']) ?></div>
+			<div class="wv-fact"><strong>Park:</strong> <?= htmlspecialchars($wv['park_name'] ?? ('#' . (int)$sig['ParkId'])) ?></div>
+			<div class="wv-fact"><strong>Kingdom:</strong> <?= htmlspecialchars($wv['kingdom_name'] ?? ('#' . (int)$sig['KingdomId'])) ?></div>
+			<div class="wv-fact"><strong>Signed:</strong> <?= $sig['SignedAt'] ? htmlspecialchars(date('F j, Y g:i A', strtotime($sig['SignedAt']))) : '—' ?></div>
 			<div class="wv-fact"><strong>Template:</strong> v<?= (int)$tpl['Version'] ?> (<?= htmlspecialchars($tpl['Scope']) ?>)</div>
 		</div>
 	</div>
@@ -86,7 +87,7 @@ html[data-theme="dark"] .wv-review a { color: #a5b4fc; }
 		<h2>Signer Demographics</h2>
 		<dl class="wv-dl">
 			<?php if (!empty($_tpl['RequiresPreferredName'])): ?><dt>Preferred name</dt><dd><?= htmlspecialchars($_sig['PreferredName'] ?? '') ?></dd><?php endif; ?>
-			<?php if (!empty($_tpl['RequiresDob'])):           ?><dt>Date of birth</dt><dd><?= htmlspecialchars($_sig['Dob'] ?? '') ?></dd><?php endif; ?>
+			<?php if (!empty($_tpl['RequiresDob'])):           ?><dt>Date of birth</dt><dd><?= !empty($_sig['Dob']) ? htmlspecialchars(date('F j, Y', strtotime($_sig['Dob']))) : '—' ?></dd><?php endif; ?>
 			<?php if (!empty($_tpl['RequiresGender'])):        ?><dt>Gender</dt><dd><?= htmlspecialchars($_sig['Gender'] ?? '') ?></dd><?php endif; ?>
 			<?php if (!empty($_tpl['RequiresAddress'])):       ?><dt>Address</dt><dd><?= htmlspecialchars($_sig['Address'] ?? '') ?></dd><?php endif; ?>
 			<?php if (!empty($_tpl['RequiresPhone'])):         ?><dt>Phone</dt><dd><?= htmlspecialchars($_sig['Phone'] ?? '') ?></dd><?php endif; ?>
@@ -137,7 +138,7 @@ html[data-theme="dark"] .wv-review a { color: #a5b4fc; }
 					<td><?= htmlspecialchars($m['LegalLast'] ?? '') ?></td>
 					<td><?= htmlspecialchars($m['PreferredName'] ?? '') ?></td>
 					<td><?= htmlspecialchars($m['PersonaName'] ?? '') ?></td>
-					<td><?= htmlspecialchars($m['Dob'] ?? '') ?></td>
+					<td><?= !empty($m['Dob']) ? htmlspecialchars(date('F j, Y', strtotime($m['Dob']))) : '—' ?></td>
 				</tr>
 			<?php endforeach; ?>
 			</tbody>
@@ -241,7 +242,7 @@ html[data-theme="dark"] .wv-review a { color: #a5b4fc; }
 	<?php elseif ($sig['VerificationStatus'] === 'verified'): ?>
 	<div class="wv-section wv-verified-box">
 		<strong>&#10003; Verified</strong> by <?= htmlspecialchars($sig['VerifierPrintedName']) ?>
-		(<?= htmlspecialchars($sig['VerifierOfficeTitle']) ?>) on <?= htmlspecialchars($sig['VerifiedAt']) ?>
+		(<?= htmlspecialchars($sig['VerifierOfficeTitle']) ?>) on <?= $sig['VerifiedAt'] ? htmlspecialchars(date('F j, Y g:i A', strtotime($sig['VerifiedAt']))) : '—' ?>
 	</div>
 	<?php elseif (in_array($sig['VerificationStatus'], ['rejected','superseded'])): ?>
 	<div class="wv-section wv-rejected-box">
@@ -271,19 +272,41 @@ window.WvReviewConfig = {
 	const form = document.getElementById('wvVerifyForm');
 	const status = document.getElementById('wvVerifyStatus');
 
+	const actionButtons = form.querySelectorAll('.wv-actions button');
+
 	async function submit(action) {
+		const notes = (form.querySelector('[name=Notes]') || {}).value || '';
+		// R14: reject requires notes — guard client-side before any POST
+		if (action === 'rejected' && !notes.trim()) {
+			status.textContent = 'Notes are required when rejecting.';
+			return;
+		}
 		const fd = new FormData(form);
 		fd.append('Action', action);
 		fd.set('SignatureType', form.querySelector('.wv-sig-type').value);
 		fd.set('SignatureData', form.querySelector('.wv-sig-data').value);
 		if (!fd.get('SignatureData')) { status.textContent = 'Please sign before submitting.'; return; }
+
+		const confirmMsg = action === 'rejected'
+			? 'Reject this waiver? Notes are required and this action cannot be undone.'
+			: 'Verify this waiver? This action cannot be undone.';
+		if (!window.confirm(confirmMsg)) return;
+
 		status.textContent = 'Saving…';
-		const r = await fetch('<?= UIR ?>WaiverAjax/verifySignature', { method: 'POST', body: fd, credentials: 'same-origin' });
-		const j = await r.json();
-		if (j.status === 0) { window.location.reload(); }
-		else { status.textContent = j.error || 'Failed'; }
+		// Prevent double-submit: disable both buttons during the in-flight fetch
+		actionButtons.forEach(b => { b.disabled = true; });
+		try {
+			const r = await fetch('<?= UIR ?>WaiverAjax/verifySignature', { method: 'POST', body: fd, credentials: 'same-origin' });
+			const j = await r.json();
+			if (j.status === 0) { window.location.reload(); }
+			else { status.textContent = j.error || 'Failed'; }
+		} catch (e) {
+			status.textContent = 'Network error — please try again.';
+		} finally {
+			actionButtons.forEach(b => { b.disabled = false; });
+		}
 	}
 
-	form.querySelectorAll('.wv-actions button').forEach(b => b.addEventListener('click', () => submit(b.dataset.action)));
+	actionButtons.forEach(b => b.addEventListener('click', () => submit(b.dataset.action)));
 })();
 </script>

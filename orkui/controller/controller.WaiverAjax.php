@@ -42,15 +42,12 @@ class Controller_WaiverAjax extends Controller {
 			'Token'                    => $this->session->token,
 			'KingdomId'                => (int)($_POST['KingdomId'] ?? 0),
 			'Scope'                    => $_POST['Scope'] ?? '',
-			'Variant'                  => $_POST['Variant'] ?? 'a',
+			'VersionName'              => $_POST['VersionName']  ?? '',
+			'ChangeReason'             => $_POST['ChangeReason'] ?? '',
 			'HeaderHtml'               => $_POST['HeaderHtml'] ?? '',
 			'BodyHtml'                 => $_POST['BodyHtml']   ?? '',
 			'FooterHtml'               => $_POST['FooterHtml'] ?? '',
 			'MinorHtml'                => $_POST['MinorHtml']  ?? '',
-			'HeaderMarkdown'           => $_POST['HeaderMarkdown'] ?? '',
-			'BodyMarkdown'             => $_POST['BodyMarkdown']   ?? '',
-			'FooterMarkdown'           => $_POST['FooterMarkdown'] ?? '',
-			'MinorMarkdown'            => $_POST['MinorMarkdown']  ?? '',
 			'IsEnabled'                => (int)($_POST['IsEnabled'] ?? 0),
 			'RequiresDob'              => (int)($_POST['RequiresDob']              ?? 0),
 			'RequiresAddress'          => (int)($_POST['RequiresAddress']          ?? 0),
@@ -92,6 +89,20 @@ class Controller_WaiverAjax extends Controller {
 			'MinorRepFirst'        => $_POST['MinorRepFirst'] ?? '',
 			'MinorRepLast'         => $_POST['MinorRepLast']  ?? '',
 			'MinorRepRelationship' => $_POST['MinorRepRelationship'] ?? '',
+			'Dob'                  => $_POST['Dob'] ?? '',
+			'Address'              => $_POST['Address'] ?? '',
+			'Phone'                => $_POST['Phone'] ?? '',
+			'Email'                => $_POST['Email'] ?? '',
+			'PreferredName'        => $_POST['PreferredName'] ?? '',
+			'Gender'               => $_POST['Gender'] ?? '',
+			'EmergencyContactName'         => $_POST['EmergencyContactName'] ?? '',
+			'EmergencyContactPhone'        => $_POST['EmergencyContactPhone'] ?? '',
+			'EmergencyContactRelationship' => $_POST['EmergencyContactRelationship'] ?? '',
+			'WitnessPrintedName'   => $_POST['WitnessPrintedName'] ?? '',
+			'WitnessSignatureType' => $_POST['WitnessSignatureType'] ?? '',
+			'WitnessSignatureData' => $_POST['WitnessSignatureData'] ?? '',
+			'CustomResponsesJson'  => $_POST['CustomResponsesJson'] ?? '{}',
+			'Minors'               => $_POST['Minors'] ?? [],
 		]);
 		$this->respond($r);
 	}
@@ -108,6 +119,11 @@ class Controller_WaiverAjax extends Controller {
 			'SignatureType' => $_POST['SignatureType'] ?? '',
 			'SignatureData' => $_POST['SignatureData'] ?? '',
 			'Notes'         => $_POST['Notes'] ?? '',
+			'IdType'        => $_POST['IdType'] ?? '',
+			'IdNumber'      => $_POST['IdNumber'] ?? '',
+			'IdNumberLast4' => $_POST['IdNumberLast4'] ?? '',
+			'AgeBracket'    => $_POST['AgeBracket'] ?? '',
+			'ScannedPaper'  => (int)($_POST['ScannedPaper'] ?? 0),
 		]);
 		$this->respond($r);
 	}
@@ -123,6 +139,58 @@ class Controller_WaiverAjax extends Controller {
 			'PageSize' => (int)($_GET['page_size'] ?? $_POST['PageSize'] ?? 10),
 		]);
 		$this->respond($r);
+	}
+
+	public function versionDefaults() {
+		$this->requireLogin();
+		$kingdomId = (int)($_GET['kingdom_id'] ?? $_POST['KingdomId'] ?? 0);
+		$scope     = $_GET['scope'] ?? $_POST['Scope'] ?? '';
+		$r = $this->Waiver->GetVersionSaveDefaults([
+			'Token'     => $this->session->token,
+			'KingdomId' => $kingdomId,
+			'Scope'     => $scope,
+		]);
+		$this->respond($r, [
+			'VersionName'   => $r['VersionName']   ?? null,
+			'IsFirst'       => isset($r['IsFirst']) ? (int)$r['IsFirst'] : null,
+			'DefaultReason' => $r['DefaultReason'] ?? null,
+		]);
+	}
+
+	public function versionContent() {
+		$uid        = $this->requireLogin();
+		$templateId = (int)($_GET['template_id'] ?? $_POST['TemplateId'] ?? 0);
+		$kingdomId  = (int)($_GET['kingdom_id']  ?? $_POST['KingdomId']  ?? 0);
+		$type       = $_GET['type']     ?? $_POST['Type']     ?? '';
+		$entityId   = (int)($_GET['entity_id'] ?? $_POST['EntityId'] ?? 0);
+
+		$authType  = ($type === 'Park') ? AUTH_PARK : AUTH_KINGDOM;
+		$canEdit   = Ork3::$Lib->authorization->HasAuthority($uid, $authType, $entityId, AUTH_EDIT);
+		$isOrkAdmin = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!$canEdit && !$isOrkAdmin) {
+			$this->respond(['Status' => NoAuthorization()]);
+		}
+
+		$r = $this->Waiver->GetTemplate(['TemplateId' => $templateId]);
+		if (($r['Status']['Status'] ?? 1) !== 0) {
+			$this->respond($r);
+		}
+
+		$template = $r['Template'] ?? [];
+		if ((int)($template['KingdomId'] ?? -1) !== $kingdomId) {
+			$this->respond(['Status' => NoAuthorization()]);
+		}
+
+		$this->respond(['Status' => Success()], [
+			'VersionName'  => $template['VersionName']  ?? null,
+			'ChangeReason' => $template['ChangeReason'] ?? null,
+			'Version'      => $template['Version']      ?? null,
+			'CreatedAt'    => $template['CreatedAt']    ?? null,
+			'HeaderHtml'   => $template['HeaderHtml']   ?? null,
+			'BodyHtml'     => $template['BodyHtml']     ?? null,
+			'FooterHtml'   => $template['FooterHtml']   ?? null,
+			'MinorHtml'    => $template['MinorHtml']    ?? null,
+		]);
 	}
 }
 

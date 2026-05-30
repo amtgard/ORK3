@@ -6,6 +6,7 @@ $token = htmlspecialchars($wv['token']);
 require_once(DIR_TEMPLATE . 'revised-frontend/Waiver_signature_widget.inc.php');
 ?>
 <link href="https://fonts.googleapis.com/css2?family=Homemade+Apple&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <style>
 <?= file_get_contents(DIR_TEMPLATE . 'revised-frontend/Waiver_signature_widget.css.inc') ?>
 .wv-sign { max-width: 900px; margin: 20px auto; padding: 0 16px; background: #fff; }
@@ -56,6 +57,22 @@ html[data-theme="dark"] .wv-sign .wv-minor-row { border-color: #4a5568; backgrou
 html[data-theme="dark"] .wv-sign .wv-hint,
 html[data-theme="dark"] .wv-sign .wv-signed-date { color: #a0aec0; }
 html[data-theme="dark"] .wv-sign a { color: #a5b4fc; }
+
+/* Flatpickr calendar dark coverage (self-contained; this page does not load revised.css) */
+html[data-theme="dark"] .flatpickr-calendar { background: #1f2937; border-color: #4a5568; box-shadow: 0 4px 16px rgba(0,0,0,0.4); color: #e2e8f0; }
+html[data-theme="dark"] .flatpickr-calendar.arrowTop:before, html[data-theme="dark"] .flatpickr-calendar.arrowTop:after { border-bottom-color: #1f2937; }
+html[data-theme="dark"] .flatpickr-calendar.arrowBottom:before, html[data-theme="dark"] .flatpickr-calendar.arrowBottom:after { border-top-color: #1f2937; }
+html[data-theme="dark"] .flatpickr-months, html[data-theme="dark"] .flatpickr-month { background: #374151; color: #e2e8f0; }
+html[data-theme="dark"] .flatpickr-months .flatpickr-prev-month svg, html[data-theme="dark"] .flatpickr-months .flatpickr-next-month svg { fill: #cbd5e0; }
+html[data-theme="dark"] .flatpickr-months .flatpickr-prev-month:hover svg, html[data-theme="dark"] .flatpickr-months .flatpickr-next-month:hover svg { fill: #fff; }
+html[data-theme="dark"] .flatpickr-current-month .flatpickr-monthDropdown-months, html[data-theme="dark"] .flatpickr-current-month input.cur-year { background: #374151; color: #e2e8f0; }
+html[data-theme="dark"] .flatpickr-weekdays { background: #2d3748; }
+html[data-theme="dark"] span.flatpickr-weekday { color: #a0aec0; background: #2d3748; }
+html[data-theme="dark"] .flatpickr-day { color: #e2e8f0; }
+html[data-theme="dark"] .flatpickr-day:hover { background: #374151; border-color: #374151; }
+html[data-theme="dark"] .flatpickr-day.today { border-color: #63b3ed; }
+html[data-theme="dark"] .flatpickr-day.selected { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
+html[data-theme="dark"] .flatpickr-day.prevMonthDay, html[data-theme="dark"] .flatpickr-day.nextMonthDay, html[data-theme="dark"] .flatpickr-day.flatpickr-disabled { color: #718096; }
 </style>
 
 <?php if (!$tpl): ?>
@@ -86,7 +103,7 @@ html[data-theme="dark"] .wv-sign a { color: #a5b4fc; }
 				<div><label>Gender</label><input type="text" name="Gender" required></div>
 				<?php endif; ?>
 				<?php if (!empty($tpl['RequiresDob'])): ?>
-				<div><label>Date of birth</label><input type="date" name="Dob" required value="<?= htmlspecialchars($prefill['Dob'] ?? '') ?>"></div>
+				<div><label>Date of birth</label><input type="text" class="wv-datepicker" name="Dob" required value="<?= htmlspecialchars($prefill['Dob'] ?? '') ?>"></div>
 				<?php endif; ?>
 				<?php if (!empty($tpl['RequiresAddress'])): ?>
 				<div style="grid-column: span 2;"><label>Address</label><input type="text" name="Address" required value="<?= htmlspecialchars($prefill['Address'] ?? '') ?>"></div>
@@ -156,7 +173,7 @@ html[data-theme="dark"] .wv-sign a { color: #a5b4fc; }
 					<textarea name="<?= htmlspecialchars($name) ?>" rows="3" <?= $req ? 'data-wv-required="1"' : '' ?>></textarea>
 				<?php elseif ($type === 'date'): ?>
 					<label><?= htmlspecialchars($label) ?></label>
-					<input type="date" name="<?= htmlspecialchars($name) ?>" <?= $req ? 'data-wv-required="1"' : '' ?>>
+					<input type="text" class="wv-datepicker" name="<?= htmlspecialchars($name) ?>" <?= $req ? 'data-wv-required="1"' : '' ?>>
 				<?php else: ?>
 					<label><?= htmlspecialchars($label) ?></label>
 					<input type="text" name="<?= htmlspecialchars($name) ?>" <?= $req ? 'data-wv-required="1"' : '' ?>>
@@ -213,10 +230,19 @@ html[data-theme="dark"] .wv-sign a { color: #a5b4fc; }
 <script>
 <?= file_get_contents(DIR_TEMPLATE . 'revised-frontend/Waiver_signature_widget.js.inc') ?>
 </script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
 (function(){
 	const form = document.getElementById('wvSignForm');
 	if (!form) return;
+
+	// Human-readable date pickers (house rule): user sees "January 1, 1990",
+	// the submitted value stays YYYY-MM-DD (domain validates DOB via ISO regex).
+	function wvInitDatePicker(el) {
+		if (!el || el._wvFp || typeof flatpickr === 'undefined') return;
+		el._wvFp = flatpickr(el, { altInput: true, altFormat: 'F j, Y', dateFormat: 'Y-m-d' });
+	}
+	form.querySelectorAll('.wv-datepicker').forEach(wvInitDatePicker);
 	const isMinor = document.getElementById('wvIsMinor');
 	const minorBlock = document.getElementById('wvMinorBlock');
 	isMinor.addEventListener('change', () => minorBlock.style.display = isMinor.checked ? '' : 'none');
@@ -232,18 +258,25 @@ html[data-theme="dark"] .wv-sign a { color: #a5b4fc; }
 			'<div><label>Legal last</label><input type="text"  class="wv-minor-field" data-k="LegalLast"></div>' +
 			'<div><label>Preferred name</label><input type="text" class="wv-minor-field" data-k="PreferredName"></div>' +
 			'<div><label>Persona name</label><input type="text"   class="wv-minor-field" data-k="PersonaName"></div>' +
-			'<div><label>Date of birth</label><input type="date"  class="wv-minor-field" data-k="Dob"></div>' +
+			'<div><label>Date of birth</label><input type="text" class="wv-minor-field wv-datepicker" data-k="Dob"></div>' +
 			(idx > 0 ? '<div style="align-self:center;"><button type="button" class="wv-minor-del">Remove</button></div>' : '');
 		const del = d.querySelector('.wv-minor-del');
 		if (del) del.addEventListener('click', () => d.remove());
 		return d;
 	}
-	if (minorsList) minorsList.appendChild(makeMinorRow(0));
+	function addMinorRow(idx) {
+		const row = makeMinorRow(idx);
+		minorsList.appendChild(row);
+		// Each newly-added row gets its own working picker; re-adds after a
+		// remove work too since init is per-element (guarded by el._wvFp).
+		row.querySelectorAll('.wv-datepicker').forEach(wvInitDatePicker);
+	}
+	if (minorsList) addMinorRow(0);
 	const addBtn = document.getElementById('wvMinorsAdd');
 	if (addBtn) addBtn.addEventListener('click', () => {
 		const count = minorsList.querySelectorAll('.wv-minor-row').length;
 		if (count >= maxMinors) return;
-		minorsList.appendChild(makeMinorRow(count));
+		addMinorRow(count);
 	});
 
 	function collectMinors() {
