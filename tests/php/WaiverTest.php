@@ -546,30 +546,30 @@ class WaiverTestRunner {
 	// ============================================================================
 
 	public function test_sanitize_html_strips_script() {
-		$out = $this->waiver->_sanitize_html('<p>hi</p><script>alert(1)</script>');
+		$out = $this->waiver->SanitizeHtml('<p>hi</p><script>alert(1)</script>');
 		$this->assertTrue(strpos($out, '<script>') === false, 'script tag unwrapped');
 		$this->assertTrue(strpos($out, '<p>hi</p>') !== false, 'safe content preserved');
 	}
 
 	public function test_sanitize_html_strips_event_handlers() {
-		$out = $this->waiver->_sanitize_html('<p onclick="alert(1)">hi</p>');
+		$out = $this->waiver->SanitizeHtml('<p onclick="alert(1)">hi</p>');
 		$this->assertTrue(strpos($out, 'onclick') === false, 'onclick attribute stripped');
 		$this->assertTrue(strpos($out, '<p>hi</p>') !== false, 'tag content kept');
 	}
 
 	public function test_sanitize_html_allows_href_validates_scheme() {
-		$ok  = $this->waiver->_sanitize_html('<a href="https://example.com">x</a>');
+		$ok  = $this->waiver->SanitizeHtml('<a href="https://example.com">x</a>');
 		$this->assertTrue(strpos($ok, 'href="https://example.com"') !== false, 'https href kept');
-		$bad = $this->waiver->_sanitize_html('<a href="javascript:alert(1)">x</a>');
+		$bad = $this->waiver->SanitizeHtml('<a href="javascript:alert(1)">x</a>');
 		$this->assertTrue(strpos($bad, 'javascript:') === false, 'javascript: scheme stripped');
 	}
 
 	public function test_sanitize_html_empty_passthrough() {
-		$this->assertEq('', $this->waiver->_sanitize_html(''), 'empty stays empty');
+		$this->assertEq('', $this->waiver->SanitizeHtml(''), 'empty stays empty');
 	}
 
 	public function test_sanitize_html_preserves_lists_and_emphasis() {
-		$out = $this->waiver->_sanitize_html('<ul><li><strong>a</strong></li></ul>');
+		$out = $this->waiver->SanitizeHtml('<ul><li><strong>a</strong></li></ul>');
 		$this->assertTrue(strpos($out, '<ul>') !== false, 'ul kept');
 		$this->assertTrue(strpos($out, '<strong>a</strong>') !== false, 'strong kept');
 	}
@@ -799,6 +799,76 @@ class WaiverTestRunner {
 		$this->assertTrue(($r2['Status']['Status'] ?? 0) !== 0, 'A5 missing required custom response -> non-Success');
 	}
 
+
+	// ============================================================================
+	// True versioning: version_name + change_reason defaults + history
+	// ============================================================================
+
+	private function _wipe_kingdom_templates() {
+		$this->waiver->db->Clear();
+		$this->waiver->db->kingdom_id = $this->testKingdomId;
+		$this->waiver->db->Execute("DELETE FROM " . DB_PREFIX . "waiver_template WHERE kingdom_id = :kingdom_id");
+	}
+
+	public function test_v_first_version_defaults_name_and_reason() {
+		$this->_wipe_kingdom_templates();
+		$r = $this->waiver->SaveTemplate([
+			'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom',
+			'HeaderHtml' => '<p>h</p>', 'BodyHtml' => '<p>b</p>', 'FooterHtml' => '', 'MinorHtml' => '', 'IsEnabled' => 1,
+		]);
+		$this->assertStatus(0, $r, 'first version saved');
+		$t = $this->waiver->GetActiveTemplate(['Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$today = date('Y-m-d');
+		$this->assertEq($today . ' V1', $t['Template']['VersionName'] ?? null, 'first version name defaults to "Y-m-d V1"');
+		$this->assertEq('Initial publication of digital waiver.', $t['Template']['ChangeReason'] ?? null, 'first reason pre-filled');
+	}
+
+	public function test_v_save_defaults_endpoint_first_then_increments() {
+		$this->_wipe_kingdom_templates();
+		$today = date('Y-m-d');
+		$d0 = $this->waiver->GetVersionSaveDefaults(['Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$this->assertStatus(0, $d0, 'defaults returned');
+		$this->assertEq(1, (int)($d0['IsFirst'] ?? 0), 'IsFirst=1 with no versions');
+		$this->assertEq($today . ' V1', $d0['VersionName'] ?? null, 'suggests V1');
+		$this->assertEq('Initial publication of digital waiver.', $d0['DefaultReason'] ?? null, 'first default reason');
+		$this->waiver->SaveTemplate([
+			'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom',
+			'HeaderHtml' => '', 'BodyHtml' => '', 'FooterHtml' => '', 'MinorHtml' => '', 'IsEnabled' => 1,
+		]);
+		$d1 = $this->waiver->GetVersionSaveDefaults(['Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$this->assertEq(0, (int)($d1['IsFirst'] ?? 1), 'IsFirst=0 after first save');
+		$this->assertEq($today . ' V2', $d1['VersionName'] ?? null, 'suggests V2 same day');
+		$this->assertEq('', $d1['DefaultReason'] ?? 'x', 'no default reason after first');
+	}
+
+	public function test_v_custom_name_and_reason_persist() {
+		$this->_wipe_kingdom_templates();
+		$this->waiver->SaveTemplate([
+			'Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom',
+			'VersionName' => 'Spring 2026 Rewrite', 'ChangeReason' => 'Tightened the liability clause.',
+			'HeaderHtml' => '<p>h</p>', 'BodyHtml' => '<p>b</p>', 'FooterHtml' => '', 'MinorHtml' => '', 'IsEnabled' => 1,
+		]);
+		$t = $this->waiver->GetActiveTemplate(['Token' => $this->token, 'KingdomId' => $this->testKingdomId, 'Scope' => 'kingdom']);
+		$this->assertEq('Spring 2026 Rewrite', $t['Template']['VersionName'] ?? null, 'custom name persisted');
+		$this->assertEq('Tightened the liability clause.', $t['Template']['ChangeReason'] ?? null, 'custom reason persisted');
+	}
+
+	public function test_v_version_history_newest_first_with_reasons() {
+		$this->_wipe_kingdom_templates();
+		$this->waiver->SaveTemplate(['Token'=>$this->token,'KingdomId'=>$this->testKingdomId,'Scope'=>'kingdom','HeaderHtml'=>'','BodyHtml'=>'v1','FooterHtml'=>'','MinorHtml'=>'','IsEnabled'=>1]);
+		$this->waiver->SaveTemplate(['Token'=>$this->token,'KingdomId'=>$this->testKingdomId,'Scope'=>'kingdom','ChangeReason'=>'second pass','HeaderHtml'=>'','BodyHtml'=>'v2','FooterHtml'=>'','MinorHtml'=>'','IsEnabled'=>1]);
+		$this->waiver->SaveTemplate(['Token'=>$this->token,'KingdomId'=>$this->testKingdomId,'Scope'=>'kingdom','ChangeReason'=>'third pass','HeaderHtml'=>'','BodyHtml'=>'v3','FooterHtml'=>'','MinorHtml'=>'','IsEnabled'=>1]);
+		$rep = new WaiverReport();
+		$rows = $rep->GetVersionHistory($this->testKingdomId, 'kingdom');
+		$this->assertTrue(is_array($rows) && count($rows) >= 3, 'history returns >=3 versions');
+		$this->assertEq(3, (int)($rows[0]['Version'] ?? 0), 'newest first (v3 at top)');
+		$this->assertEq('third pass', $rows[0]['ChangeReason'] ?? null, 'newest reason shown');
+		$v1 = null;
+		foreach ($rows as $row) { if ((int)$row['Version'] === 1) { $v1 = $row; break; } }
+		$this->assertTrue($v1 !== null, 'v1 present in history');
+		$this->assertEq('Initial publication of digital waiver.', $v1['ChangeReason'] ?? null, 'v1 reason is initial publication');
+		$this->assertTrue(($rows[0]['CreatedByName'] ?? '') !== '', 'history includes author name');
+	}
 }
 
 (new WaiverTestRunner())->run();
