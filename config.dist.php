@@ -88,6 +88,11 @@ define('DUMPTRACE', false);
 define('GOOGLE_MAPS_ACCESS_API_KEY', '');
 define('SENDGRID_API_KEY', '');
 define('BEHOLD_KEY', '');
+// Cloudflare analytics — read-only token + zone tag for the weekly recap's
+// ORK Data section. Leave empty in dev/dist; fill in the real values in prod
+// config.php. If empty, the recap silently omits the platform-stats section.
+define('CF_API_TOKEN', '');
+define('CF_ZONE_ID',   '');
 
 define('IDP_CLIENT_ID', 'ORK_CLIENT_ID');
 define('IDP_CLIENT_SECRET', 'ORK_CLIENT_SECRET');

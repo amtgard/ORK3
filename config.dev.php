@@ -89,6 +89,11 @@ define('GOOGLE_MAPS_API_KEY', '');
 define('GOOGLE_MAPS_ACCESS_API_KEY', '');
 define('SENDGRID_API_KEY', '');
 define('BEHOLD_KEY', '');
+// Cloudflare analytics — keep empty in committed config.dev.php. For local
+// testing pass via docker (-e CF_API_TOKEN=… -e CF_ZONE_ID=…) — the recap
+// code falls back to getenv() when the constants are empty.
+define('CF_API_TOKEN', '');
+define('CF_ZONE_ID',   '');
 
 // INCLUDE
 require_once(DIR_LIB . 'mail.php');

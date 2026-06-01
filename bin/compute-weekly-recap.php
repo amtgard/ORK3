@@ -16,8 +16,11 @@
  *
  * Reads via Report::GetWeeklyRecap(), writes via Report::StoreWeeklyRecap().
  *
- * For the Cloudflare "ORK This Week" section, the cron needs CF_API_TOKEN and
- * CF_ZONE_ID in its environment. Add them to the crontab line or PHP-FPM env.
+ * For the Cloudflare "ORK Data" section, the recap needs CF_API_TOKEN and
+ * CF_ZONE_ID available to PHP. Either:
+ *   - define('CF_API_TOKEN', '...') and define('CF_ZONE_ID', '...') in config.php
+ *     (the established pattern, alongside SENDGRID_API_KEY, BEHOLD_KEY, etc.); or
+ *   - export them as env vars in the cron line (env-var fallback exists too).
  * If they're missing or CF errors out, PlatformStats is stored as null and the
  * template omits that section — recap still ships.
  */

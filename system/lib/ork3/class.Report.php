@@ -3620,12 +3620,17 @@ class Report  extends Ork3 {
 	}
 
 	// Fetches NA-only Cloudflare traffic totals for the week. Returns null on any
-	// failure (missing env vars, HTTP error, malformed response, timeout) so the
+	// failure (missing credentials, HTTP error, malformed response, timeout) so the
 	// rest of the recap still ships. CF retains ~30-90 days of analytics depending
 	// on plan tier — historical backfills past that horizon will get null here.
+	//
+	// Credentials: prefers PHP constants CF_API_TOKEN / CF_ZONE_ID (the established
+	// pattern in config.php, matching SENDGRID_API_KEY etc.); falls back to env
+	// vars of the same name when the constants are empty/missing — so dev can
+	// pass them via docker `-e` without editing the tracked config.dev.php.
 	private function _RecapCloudflareStats($win) {
-		$token = getenv('CF_API_TOKEN');
-		$zone  = getenv('CF_ZONE_ID');
+		$token = (defined('CF_API_TOKEN') && CF_API_TOKEN !== '') ? CF_API_TOKEN : getenv('CF_API_TOKEN');
+		$zone  = (defined('CF_ZONE_ID')   && CF_ZONE_ID   !== '') ? CF_ZONE_ID   : getenv('CF_ZONE_ID');
 		if (empty($token) || empty($zone)) return null;
 
 		// CF wants UTC ISO 8601. Convert the server-local window.
