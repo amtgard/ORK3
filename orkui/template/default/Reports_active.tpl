@@ -37,15 +37,17 @@ $scope_label = '';
 $scope_link  = '';
 $scope_icon  = 'fa-globe';
 
-if (($report_type ?? null) === 'Park' && !empty($active_players)) {
-	$first       = reset($active_players);
-	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/profile/'    . (int)($report_id ?? 0);
+// Scope label comes from the request's type+id (set by the controller),
+// not from the first result row. The Active Players SQL filters by attendance
+// kingdom but reports each player's HOME kingdom for the name column, so the
+// first row's KingdomName is unreliable as a scope marker.
+if (($report_type ?? null) === 'Park' && !empty($report_id)) {
+	$scope_label = $scope_name ?? '';
+	$scope_link  = UIR . 'Park/profile/' . (int)$report_id;
 	$scope_icon  = 'fa-tree';
-} elseif (($report_type ?? null) === 'Kingdom' && !empty($active_players)) {
-	$first       = reset($active_players);
-	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/profile/' . (int)($report_id ?? 0);
+} elseif (($report_type ?? null) === 'Kingdom' && !empty($report_id)) {
+	$scope_label = $scope_name ?? '';
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)$report_id;
 	$scope_icon  = 'fa-chess-rook';
 }
 

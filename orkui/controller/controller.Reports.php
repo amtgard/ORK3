@@ -163,7 +163,10 @@ class Controller_Reports extends Controller {
 			$this->data['page_title'] = "Park Custom Awards";
 		}
 		$this->template = 'Reports_customawards.tpl';
-		$this->data['Awards'] = $this->Reports->custom_awards(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0));
+		$this->data['Awards']      = $this->Reports->custom_awards(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0));
+		$this->data['report_type'] = $type ?? null;
+		$this->data['report_id']   = $id   ?? null;
+		$this->data['scope_name']  = $this->_resolve_scope_name($type ?? null, $id ?? null);
 	}
 
 	public function player_award_recommendations($params=null) {
@@ -215,6 +218,7 @@ class Controller_Reports extends Controller {
 		$this->data['Awards'] = $this->Reports->class_masters(array('KingdomId'=>'Kingdom'==$type?$id:0, 'ParkId'=>'Park'==$type?$id:0));
 		$this->data['report_type'] = $type ?? null;
 		$this->data['report_id']   = $id   ?? null;
+		$this->data['scope_name']  = $this->_resolve_scope_name($type ?? null, $id ?? null);
 		if (($type ?? null) === 'Park') {
 			$this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . (int)$id . '&tab=reports';
 		} elseif (($type ?? null) === 'Kingdom') {
@@ -318,6 +322,7 @@ class Controller_Reports extends Controller {
                 $kingdom_config['KingdomConfiguration']['MonthlyCreditMaximum']['Value']);
 		$this->data['report_type'] = $type;
 		$this->data['report_id']   = $this->request->id ?? null;
+		$this->data['scope_name']  = $this->_resolve_scope_name($type, $this->request->id);
 		$this->data['kingdom_att_weekly']  = $kingdom_config['KingdomConfiguration']['AttendanceWeeklyMinimum']['Value'] ?? null;
 		$this->data['kingdom_att_daily']   = $kingdom_config['KingdomConfiguration']['AttendanceDailyMinimum']['Value']  ?? null;
 		$this->data['kingdom_att_credits'] = $kingdom_config['KingdomConfiguration']['AttendanceCreditMinimum']['Value'] ?? null;
@@ -366,6 +371,24 @@ class Controller_Reports extends Controller {
 		$this->data['page_title'] ="Active Masters";
 	}
 
+    // Resolves the human-readable scope name from the request's type+id. The
+    // alternative (deriving scope from the first result row) is wrong: the
+    // Active Players SQL filters players by attendance kingdom but selects each
+    // player's home kingdom for the name column, so the first row's KingdomName
+    // can be anywhere.
+    private function _resolve_scope_name($type, $id) {
+        if (!valid_id($id)) return '';
+        if ($type === 'Kingdom') {
+            $this->load_model('Kingdom');
+            return $this->Kingdom->get_kingdom_name((int)$id);
+        }
+        if ($type === 'Park') {
+            $this->load_model('Park');
+            return $this->Park->get_park_name((int)$id);
+        }
+        return '';
+    }
+
     private function _peerage_waivered_duespaid($peerage, $type=null, $dues=true, $waivered=true) {
         $kingdom_config = $this->kingdom_config($type);
     	$this->data['activewaivereduespaid'] = true;
@@ -384,6 +407,7 @@ class Controller_Reports extends Controller {
             $peerage);
 		$this->data['report_type'] = $type;
 		$this->data['report_id']   = $this->request->id ?? null;
+		$this->data['scope_name']  = $this->_resolve_scope_name($type, $this->request->id);
 		$this->data['kingdom_att_weekly']  = $kingdom_config['KingdomConfiguration']['AttendanceWeeklyMinimum']['Value']  ?? null;
 		$this->data['kingdom_att_daily']   = $kingdom_config['KingdomConfiguration']['AttendanceDailyMinimum']['Value']   ?? null;
 		$this->data['kingdom_att_credits'] = $kingdom_config['KingdomConfiguration']['AttendanceCreditMinimum']['Value']  ?? null;
@@ -425,6 +449,7 @@ class Controller_Reports extends Controller {
 		$this->data['reeve_qualified'] = $this->Reports->reeve_qualified($kingdom_id, $park_id);
 		$this->data['ScopeType']       = $park_id ? 'park' : ($kingdom_id ? 'kingdom' : '');
 		$this->data['ScopeId']         = $park_id ?: $kingdom_id;
+		$this->data['ScopeName']       = $this->_resolve_scope_name($park_id ? 'Park' : 'Kingdom', $park_id ?: $kingdom_id);
 		$this->data['page_title']      = "Reeve Qualified";
 	}
 

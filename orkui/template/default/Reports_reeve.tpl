@@ -21,16 +21,16 @@ $scope_link  = '';
 $scope_icon  = 'fa-globe';
 $scope_noun  = 'scope';
 
-if (($ScopeType ?? '') === 'park' && !empty($reeve_qualified)) {
-	$first       = reset($reeve_qualified);
-	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/profile/'    . (int)($ScopeId ?? 0);
+// Scope label comes from the request (ScopeName set by controller), not the
+// first result row.
+if (($ScopeType ?? '') === 'park' && !empty($ScopeId)) {
+	$scope_label = $ScopeName ?? '';
+	$scope_link  = UIR . 'Park/profile/' . (int)$ScopeId;
 	$scope_icon  = 'fa-tree';
 	$scope_noun  = 'park';
-} elseif (($ScopeType ?? '') === 'kingdom' && !empty($reeve_qualified)) {
-	$first       = reset($reeve_qualified);
-	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/profile/' . (int)($ScopeId ?? 0);
+} elseif (($ScopeType ?? '') === 'kingdom' && !empty($ScopeId)) {
+	$scope_label = $ScopeName ?? '';
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)$ScopeId;
 	$scope_icon  = 'fa-chess-rook';
 	$scope_noun  = 'kingdom';
 }

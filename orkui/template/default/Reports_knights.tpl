@@ -26,16 +26,16 @@ $scope_link  = '';
 $scope_icon  = 'fa-globe';
 $scope_noun  = 'kingdom';
 
-if (isset($this->__session->park_id) && !empty($active_players)) {
-	$first       = reset($active_players);
-	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/profile/'    . (int)$this->__session->park_id;
+// Scope label comes from the request (set by controller via
+// _peerage_waivered_duespaid), not the session or the first row.
+if (($report_type ?? null) === 'Park' && !empty($report_id)) {
+	$scope_label = $scope_name ?? '';
+	$scope_link  = UIR . 'Park/profile/' . (int)$report_id;
 	$scope_icon  = 'fa-tree';
 	$scope_noun  = 'park';
-} elseif (isset($this->__session->kingdom_id) && !empty($active_players)) {
-	$first       = reset($active_players);
-	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/profile/' . (int)$this->__session->kingdom_id;
+} elseif (($report_type ?? null) === 'Kingdom' && !empty($report_id)) {
+	$scope_label = $scope_name ?? '';
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)$report_id;
 	$scope_icon  = 'fa-chess-rook';
 }
 ?>

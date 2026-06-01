@@ -21,16 +21,17 @@ $scope_link  = '';
 $scope_icon  = 'fa-globe';
 $scope_noun  = 'scope';
 
-if (($report_type ?? null) === 'Park' && !empty($Awards)) {
-	$first       = reset($Awards);
-	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/profile/'    . (int)($report_id ?? 0);
+// Scope label comes from the request (set by controller), not the first row —
+// result rows can mix kingdoms when filtering by attendance kingdom while
+// selecting home-kingdom names.
+if (($report_type ?? null) === 'Park' && !empty($report_id)) {
+	$scope_label = $scope_name ?? '';
+	$scope_link  = UIR . 'Park/profile/' . (int)$report_id;
 	$scope_icon  = 'fa-tree';
 	$scope_noun  = 'park';
-} elseif (($report_type ?? null) === 'Kingdom' && !empty($Awards)) {
-	$first       = reset($Awards);
-	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/profile/' . (int)($report_id ?? 0);
+} elseif (($report_type ?? null) === 'Kingdom' && !empty($report_id)) {
+	$scope_label = $scope_name ?? '';
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)$report_id;
 	$scope_icon  = 'fa-chess-rook';
 	$scope_noun  = 'kingdom';
 }
