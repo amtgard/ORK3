@@ -136,6 +136,8 @@
 	border-right: 1px solid var(--ork-border);
 }
 .hm-stat-item:last-child { border-right: none; }
+.hm-stat-item-link { text-decoration: none; color: inherit; transition: background 0.15s; }
+.hm-stat-item-link:hover { background: var(--ork-bg-tertiary, #edf2f7); }
 .hm-stat-value {
 	font-size: 24px;
 	font-weight: 700;
@@ -550,6 +552,12 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 		<span class="hm-stat-value">~<?= number_format($hmWeeklyAvg) ?></span>
 		<span class="hm-stat-label">Players / Week</span>
 	</div>
+	<?php if (is_array($week_recap ?? null)): ?>
+	<a class="hm-stat-item hm-stat-item-link" href="<?= UIR ?>Recap" title="Amtgard Week in Review — Week of <?= htmlspecialchars($week_recap['WeekStart']) ?>">
+		<span class="hm-stat-value">Weekly Recap <i class="fas fa-arrow-right" style="font-size:0.7em;opacity:0.7"></i></span>
+		<span class="hm-stat-label">Week of <?= htmlspecialchars(date('M j', strtotime($week_recap['WeekStart']))) ?></span>
+	</a>
+	<?php endif; ?>
 </div>
 
 <!-- =============================================

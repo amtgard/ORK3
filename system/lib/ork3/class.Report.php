@@ -3582,4 +3582,453 @@ class Report  extends Ork3 {
 		return $response;
 	}
 
+	/* ============================ Amtgard Week in Review ============================ */
+
+	// Compute the full weekly recap payload for a given week. Server-local Mon-Sun
+	// window. Defaults to the most recently completed week. Called once by the cron;
+	// page reads come from ork_weekly_recap via ReadWeeklyRecap().
+	public function GetWeeklyRecap($request = null) {
+		$win = $this->_WeeklyRecapWindow($request['WeekStart'] ?? null);
+		return array(
+			'WeekStart'        => $win['WeekStart'],
+			'WeekEnd'          => $win['WeekEnd'],
+			'Knightings'       => $this->_RecapPeerages($win, array('Knight')),
+			'Masterhoods'      => $this->_RecapPeerages($win, array('Master')),
+			'Paragons'         => $this->_RecapPeerages($win, array('Paragon')),
+			'TopEvents'        => $this->_RecapTopEvents($win, 3),
+			'TopParks'         => $this->_RecapTopParks($win, 3),
+			'NewPlayers'       => $this->_RecapNewPlayers($win),
+			'ReturningPlayers' => $this->_RecapReturningPlayers($win, 90),
+			'MilestoneEvents'  => $this->_RecapMilestoneEvents($win, 25),
+			'PlatformStats'    => $this->_RecapCloudflareStats($win),
+		);
+	}
+
+	// Read a previously-computed recap from ork_weekly_recap. Returns the decoded
+	// payload (plus ComputedAt) or null if no row exists for that week.
+	public function ReadWeeklyRecap($request = null) {
+		$win = $this->_WeeklyRecapWindow($request['WeekStart'] ?? null);
+		$sql = "SELECT computed_at, payload_json
+				FROM " . DB_PREFIX . "weekly_recap
+				WHERE week_start = :ws";
+		$r = $this->db->query($sql, array(':ws' => $win['WeekStart']));
+		if (!$r || $r->size() == 0 || !$r->next()) return null;
+		$payload = json_decode($r->payload_json, true);
+		if (!is_array($payload)) return null;
+		$payload['ComputedAt'] = $r->computed_at;
+		return $payload;
+	}
+
+	// Fetches NA-only Cloudflare traffic totals for the week. Returns null on any
+	// failure (missing env vars, HTTP error, malformed response, timeout) so the
+	// rest of the recap still ships. CF retains ~30-90 days of analytics depending
+	// on plan tier — historical backfills past that horizon will get null here.
+	private function _RecapCloudflareStats($win) {
+		$token = getenv('CF_API_TOKEN');
+		$zone  = getenv('CF_ZONE_ID');
+		if (empty($token) || empty($zone)) return null;
+
+		// CF wants UTC ISO 8601. Convert the server-local window.
+		$since = gmdate('Y-m-d\TH:i:s\Z', strtotime($win['StartDt']));
+		$until = gmdate('Y-m-d\TH:i:s\Z', strtotime($win['EndDt']));
+
+		$gql = 'query($zone:String!,$since:Time!,$until:Time!) {
+			viewer { zones(filter:{zoneTag:$zone}) {
+				totals: httpRequestsAdaptiveGroups(limit:1, filter:{datetime_geq:$since, datetime_leq:$until, clientCountryName_in:["US","CA"]}) {
+					count sum { edgeResponseBytes }
+				}
+				byCountry: httpRequestsAdaptiveGroups(limit:2, filter:{datetime_geq:$since, datetime_leq:$until, clientCountryName_in:["US","CA"]}, orderBy:[count_DESC]) {
+					count dimensions { clientCountryName }
+				}
+				cacheHit: httpRequestsAdaptiveGroups(limit:1, filter:{datetime_geq:$since, datetime_leq:$until, clientCountryName_in:["US","CA"], cacheStatus:"hit"}) {
+					count sum { edgeResponseBytes }
+				}
+			} }
+		}';
+		$json = $this->_cfGraphQL($token, $gql, array(
+			'zone' => $zone, 'since' => $since, 'until' => $until,
+		));
+		$zones = $json['data']['viewer']['zones'][0] ?? null;
+		if (!is_array($zones) || empty($zones['totals'][0])) return null;
+
+		$totals = $zones['totals'][0];
+		$cache  = $zones['cacheHit'][0] ?? array('count' => 0, 'sum' => array('edgeResponseBytes' => 0));
+		$by_country = array();
+		foreach (($zones['byCountry'] ?? array()) as $row) {
+			$by_country[$row['dimensions']['clientCountryName']] = (int)$row['count'];
+		}
+		$total_bytes  = (int)$totals['sum']['edgeResponseBytes'];
+		$cached_bytes = (int)($cache['sum']['edgeResponseBytes'] ?? 0);
+		return array(
+			'Requests'             => (int)$totals['count'],
+			'Bytes'                => $total_bytes,
+			'CacheHits'            => (int)$cache['count'],
+			'CachedBytes'          => $cached_bytes,
+			'OriginBytes'          => max(0, $total_bytes - $cached_bytes),
+			'RequestsUS'           => (int)($by_country['US'] ?? 0),
+			'RequestsCA'           => (int)($by_country['CA'] ?? 0),
+			'BlockedOrChallenged'  => $this->_cfFirewallTotal($token, $zone, $win),
+		);
+	}
+
+	// CF GraphQL POST. Returns decoded array or null on any failure.
+	private function _cfGraphQL($token, $query, $variables) {
+		$ch = curl_init('https://api.cloudflare.com/client/v4/graphql');
+		curl_setopt_array($ch, array(
+			CURLOPT_POST           => true,
+			CURLOPT_POSTFIELDS     => json_encode(array('query' => $query, 'variables' => $variables)),
+			CURLOPT_HTTPHEADER     => array(
+				'Authorization: Bearer ' . $token,
+				'Content-Type: application/json',
+			),
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_TIMEOUT        => 8,
+			CURLOPT_CONNECTTIMEOUT => 4,
+		));
+		$resp = curl_exec($ch);
+		$http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+		curl_close($ch);
+		if ($resp === false || $http !== 200) return null;
+		return json_decode($resp, true);
+	}
+
+	// Count of firewall events that actually stopped traffic: outright blocks plus
+	// challenges (managed/JS/classic). Excludes "skip", "allow", "log", and the
+	// *_solved/*_bypassed actions where the request ultimately got through.
+	//
+	// firewallEventsAdaptiveGroups has a 3-day max range per query on Pro plans,
+	// so we chunk the weekly window into three calls and sum.
+	private function _cfFirewallTotal($token, $zone, $win) {
+		$start_ts = strtotime($win['StartDt']);
+		$end_ts   = strtotime($win['EndDt']);
+		if ($end_ts <= $start_ts) return null;
+		$chunk_s  = (int)ceil(($end_ts - $start_ts) / 3);
+
+		$gql = 'query($zone:String!,$since:Time!,$until:Time!) {
+			viewer { zones(filter:{zoneTag:$zone}) {
+				fw: firewallEventsAdaptiveGroups(limit:1, filter:{datetime_geq:$since, datetime_leq:$until, action_in:["block","managed_challenge","challenge","js_challenge"]}) {
+					count
+				}
+			} }
+		}';
+
+		$total = 0;
+		for ($i = 0; $i < 3; $i++) {
+			$c_start = $start_ts + $i * $chunk_s;
+			$c_end   = min($end_ts, $c_start + $chunk_s);
+			$json = $this->_cfGraphQL($token, $gql, array(
+				'zone'  => $zone,
+				'since' => gmdate('Y-m-d\TH:i:s\Z', $c_start),
+				'until' => gmdate('Y-m-d\TH:i:s\Z', $c_end),
+			));
+			if (!is_array($json) || !isset($json['data']['viewer']['zones'][0]['fw'][0])) return null;
+			$total += (int)$json['data']['viewer']['zones'][0]['fw'][0]['count'];
+		}
+		return $total;
+	}
+
+	// Returns the most recent week_starts present in ork_weekly_recap, newest first.
+	// Used by the page to render prev/next and an archive picker.
+	public function ListRecapWeeks($limit = 26) {
+		$lim = max(1, intval($limit));
+		$sql = "SELECT week_start FROM " . DB_PREFIX . "weekly_recap
+				ORDER BY week_start DESC LIMIT $lim";
+		$r = $this->db->query($sql);
+		$out = array();
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) $out[] = $r->week_start;
+		}
+		return $out;
+	}
+
+	// Persist a computed recap. Upserts on week_start so the cron is rerun-safe.
+	// Uses PDO parameter binding because the polyfill mysql_real_escape_string()
+	// in startup.php is a no-op and the JSON payload contains user-content strings.
+	public function StoreWeeklyRecap($payload) {
+		$sql = "INSERT INTO " . DB_PREFIX . "weekly_recap (week_start, computed_at, payload_json)
+				VALUES (:ws, NOW(), :json)
+				ON DUPLICATE KEY UPDATE computed_at = NOW(), payload_json = VALUES(payload_json)";
+		return $this->db->query($sql, array(
+			':ws'   => $payload['WeekStart'],
+			':json' => json_encode($payload),
+		));
+	}
+
+	private function _WeeklyRecapWindow($week_start = null) {
+		if (empty($week_start)) {
+			// "monday this week" returns today if today is Monday, else the most recent past Monday.
+			$this_monday = strtotime('monday this week');
+			$week_start  = date('Y-m-d', strtotime('-7 days', $this_monday));
+		}
+		$week_end = date('Y-m-d', strtotime($week_start . ' +6 days'));
+		return array(
+			'WeekStart' => $week_start,
+			'WeekEnd'   => $week_end,
+			'StartDt'   => $week_start . ' 00:00:00',
+			'EndDt'     => $week_end   . ' 23:59:59',
+		);
+	}
+
+	private function _RecapPeerages($win, $peerages) {
+		$list  = "'" . implode("','", array_map('mysql_real_escape_string', $peerages)) . "'";
+		$start = mysql_real_escape_string($win['WeekStart']);
+		$end   = mysql_real_escape_string($win['WeekEnd']);
+		$sql = "SELECT ma.awards_id, ma.date, ma.mundane_id, m.persona,
+					   p.park_id, p.name AS park_name,
+					   k.kingdom_id, k.name AS kingdom_name,
+					   COALESCE(alias.peerage, a.peerage) AS peerage,
+					   COALESCE(NULLIF(ma.custom_name, ''), ka.name, alias.name, a.name) AS award_name
+				FROM " . DB_PREFIX . "awards ma
+					JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ma.mundane_id
+					LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+					LEFT JOIN " . DB_PREFIX . "award a ON a.award_id = ka.award_id
+					LEFT JOIN " . DB_PREFIX . "award alias ON alias.award_id = ma.alias_award_id
+					LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
+					LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
+				WHERE COALESCE(alias.peerage, a.peerage) IN ($list)
+				  AND ma.revoked = 0
+				  AND ma.date >= '$start' AND ma.date <= '$end'
+				ORDER BY ma.date, m.persona";
+		$r = $this->db->query($sql);
+		$out = array();
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$out[] = array(
+					'AwardsId'    => $r->awards_id,
+					'Date'        => $r->date,
+					'MundaneId'   => $r->mundane_id,
+					'Persona'     => $r->persona,
+					'AwardName'   => $r->award_name,
+					'Peerage'     => $r->peerage,
+					'ParkId'      => $r->park_id,
+					'ParkName'    => $r->park_name,
+					'KingdomId'   => $r->kingdom_id,
+					'KingdomName' => $r->kingdom_name,
+				);
+			}
+		}
+		return $out;
+	}
+
+	// Single-occurrence (calendardetail-scoped). A 3-day event contributes up to 3
+	// separate occurrences if multiple days fall in the window.
+	private function _RecapTopEvents($win, $limit = 3) {
+		$start = mysql_real_escape_string($win['StartDt']);
+		$end   = mysql_real_escape_string($win['EndDt']);
+		$limit = intval($limit);
+		$sql = "SELECT e.event_id, e.name AS event_name,
+					   e.park_id, p.name AS park_name,
+					   e.kingdom_id, k.name AS kingdom_name,
+					   d.event_calendardetail_id, d.event_start,
+					   COUNT(DISTINCT a.mundane_id) AS attendance
+				FROM " . DB_PREFIX . "event e
+					JOIN " . DB_PREFIX . "event_calendardetail d
+					  ON d.event_id = e.event_id AND d.current = 1
+					LEFT JOIN " . DB_PREFIX . "attendance a
+					  ON a.event_calendardetail_id = d.event_calendardetail_id
+					 AND a.mundane_id > 0
+					LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = e.park_id
+					LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = e.kingdom_id
+				WHERE d.event_start >= '$start' AND d.event_start <= '$end'
+				GROUP BY e.event_id, d.event_calendardetail_id
+				HAVING attendance > 0
+				ORDER BY attendance DESC, d.event_start ASC
+				LIMIT $limit";
+		$r = $this->db->query($sql);
+		$out = array();
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$out[] = array(
+					'EventId'               => $r->event_id,
+					'EventName'             => $r->event_name,
+					'EventStart'            => $r->event_start,
+					'EventCalendarDetailId' => $r->event_calendardetail_id,
+					'ParkId'                => $r->park_id,
+					'ParkName'              => $r->park_name,
+					'KingdomId'             => $r->kingdom_id,
+					'KingdomName'           => $r->kingdom_name,
+					'Attendance'            => intval($r->attendance),
+				);
+			}
+		}
+		return $out;
+	}
+
+	private function _RecapTopParks($win, $limit = 3) {
+		$start = mysql_real_escape_string($win['WeekStart']);
+		$end   = mysql_real_escape_string($win['WeekEnd']);
+		$limit = intval($limit);
+		$sql = "SELECT p.park_id, p.name AS park_name, p.has_heraldry,
+					   k.kingdom_id, k.name AS kingdom_name,
+					   COUNT(DISTINCT a.mundane_id) AS attendance
+				FROM " . DB_PREFIX . "attendance a
+					JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id
+					LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = a.kingdom_id
+				WHERE a.date >= '$start' AND a.date <= '$end'
+				  AND a.mundane_id > 0
+				  AND a.park_id > 0
+				GROUP BY p.park_id
+				ORDER BY attendance DESC, p.name ASC
+				LIMIT $limit";
+		$r = $this->db->query($sql);
+		$out = array();
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$out[] = array(
+					'ParkId'      => $r->park_id,
+					'ParkName'    => $r->park_name,
+					'HasHeraldry' => $r->has_heraldry,
+					'KingdomId'   => $r->kingdom_id,
+					'KingdomName' => $r->kingdom_name,
+					'Attendance'  => intval($r->attendance),
+				);
+			}
+		}
+		return $out;
+	}
+
+	// New player = first ever attendance falls in the window. NOT EXISTS subquery
+	// mirrors the index-friendly pattern in GetNewPlayerAttendance().
+	private function _RecapNewPlayers($win) {
+		$start = mysql_real_escape_string($win['WeekStart']);
+		$end   = mysql_real_escape_string($win['WeekEnd']);
+		$sql = "SELECT m.mundane_id, m.persona,
+					   p.park_id, p.name AS park_name,
+					   k.kingdom_id, k.name AS kingdom_name,
+					   MIN(a_in.date) AS first_date
+				FROM " . DB_PREFIX . "attendance a_in
+					JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a_in.mundane_id
+					LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = a_in.park_id
+					LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = a_in.kingdom_id
+				WHERE a_in.mundane_id > 0
+				  AND a_in.date >= '$start' AND a_in.date <= '$end'
+				  AND NOT EXISTS (
+					  SELECT 1 FROM " . DB_PREFIX . "attendance a_pre
+					  WHERE a_pre.mundane_id = a_in.mundane_id
+						AND a_pre.date < '$start'
+					  LIMIT 1
+				  )
+				GROUP BY m.mundane_id
+				ORDER BY first_date ASC, m.persona ASC";
+		$r = $this->db->query($sql);
+		$players = array();
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$players[] = array(
+					'MundaneId'   => $r->mundane_id,
+					'Persona'     => $r->persona,
+					'FirstDate'   => $r->first_date,
+					'ParkId'      => $r->park_id,
+					'ParkName'    => $r->park_name,
+					'KingdomId'   => $r->kingdom_id,
+					'KingdomName' => $r->kingdom_name,
+				);
+			}
+		}
+		return array('Count' => count($players), 'Players' => $players);
+	}
+
+	// Returning = attended this week + previous attendance was >= $gap_days before week start.
+	private function _RecapReturningPlayers($win, $gap_days = 90) {
+		$start = mysql_real_escape_string($win['WeekStart']);
+		$end   = mysql_real_escape_string($win['WeekEnd']);
+		$gap   = intval($gap_days);
+		$sql = "SELECT X.* FROM (
+				  SELECT m.mundane_id, m.persona,
+						 MIN(a_in.date) AS return_date,
+						 (SELECT MAX(a_pre.date)
+							FROM " . DB_PREFIX . "attendance a_pre
+							WHERE a_pre.mundane_id = m.mundane_id
+							  AND a_pre.date < '$start') AS last_prior_date,
+						 p.park_id, p.name AS park_name,
+						 k.kingdom_id, k.name AS kingdom_name
+				  FROM " . DB_PREFIX . "attendance a_in
+					  JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a_in.mundane_id
+					  LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = a_in.park_id
+					  LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = a_in.kingdom_id
+				  WHERE a_in.date >= '$start' AND a_in.date <= '$end'
+					AND a_in.mundane_id > 0
+				  GROUP BY m.mundane_id
+				) X
+				WHERE X.last_prior_date IS NOT NULL
+				  AND DATEDIFF(X.return_date, X.last_prior_date) >= $gap
+				ORDER BY DATEDIFF(X.return_date, X.last_prior_date) DESC, X.persona ASC";
+		$r = $this->db->query($sql);
+		$out = array();
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$days = (int) round((strtotime($r->return_date) - strtotime($r->last_prior_date)) / 86400);
+				$out[] = array(
+					'MundaneId'     => $r->mundane_id,
+					'Persona'       => $r->persona,
+					'ReturnDate'    => $r->return_date,
+					'LastPriorDate' => $r->last_prior_date,
+					'DaysAway'      => $days,
+					'ParkId'        => $r->park_id,
+					'ParkName'      => $r->park_name,
+					'KingdomId'     => $r->kingdom_id,
+					'KingdomName'   => $r->kingdom_name,
+				);
+			}
+		}
+		return $out;
+	}
+
+	// For each event occurrence in the window, count how many of the park's
+	// occurrences started on or before this one. Surface ones where that count is
+	// a multiple of $multiple. Counts occurrences (calendardetails), not distinct
+	// events, so a recurring fighter practice contributes one per week.
+	//
+	// Subquery excludes zero/placeholder event_start dates (some legacy rows have
+	// '0000-00-00') and tie-breaks on event_calendardetail_id so simultaneous
+	// occurrences get distinct numbers — otherwise some milestones get skipped.
+	private function _RecapMilestoneEvents($win, $multiple = 25) {
+		$start = mysql_real_escape_string($win['StartDt']);
+		$end   = mysql_real_escape_string($win['EndDt']);
+		$mul   = intval($multiple);
+		if ($mul <= 0) $mul = 25;
+		$sql = "SELECT * FROM (
+				  SELECT e.event_id, e.name AS event_name,
+						 e.park_id, p.name AS park_name,
+						 e.kingdom_id, k.name AS kingdom_name,
+						 d.event_calendardetail_id, d.event_start,
+						 (SELECT COUNT(*) FROM " . DB_PREFIX . "event_calendardetail d2
+						  JOIN " . DB_PREFIX . "event e2 ON e2.event_id = d2.event_id
+						  WHERE e2.park_id = e.park_id
+							AND d2.current = 1
+							AND d2.event_start > '2000-01-01'
+							AND (d2.event_start < d.event_start
+							     OR (d2.event_start = d.event_start
+							         AND d2.event_calendardetail_id <= d.event_calendardetail_id))
+						 ) AS event_number
+				  FROM " . DB_PREFIX . "event e
+					  JOIN " . DB_PREFIX . "event_calendardetail d
+						ON d.event_id = e.event_id AND d.current = 1
+					  LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = e.park_id
+					  LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = e.kingdom_id
+				  WHERE d.event_start >= '$start' AND d.event_start <= '$end'
+					AND e.park_id > 0
+				) M
+				WHERE M.event_number > 0
+				  AND M.event_number % $mul = 0
+				ORDER BY M.event_number DESC, M.event_start ASC";
+		$r = $this->db->query($sql);
+		$out = array();
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$out[] = array(
+					'EventId'     => $r->event_id,
+					'EventName'   => $r->event_name,
+					'EventStart'  => $r->event_start,
+					'EventNumber' => intval($r->event_number),
+					'ParkId'      => $r->park_id,
+					'ParkName'    => $r->park_name,
+					'KingdomId'   => $r->kingdom_id,
+					'KingdomName' => $r->kingdom_name,
+				);
+			}
+		}
+		return $out;
+	}
+
 }

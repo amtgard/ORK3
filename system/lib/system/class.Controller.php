@@ -160,6 +160,8 @@ class Controller
 		unset( $this->session->park_name );
 		$this->data[ 'Tournaments' ] = $this->Report->TournamentReport( [ 'Limit' => 15 ] );
 		$this->data[ 'ActiveKingdomSummary' ] = $this->Report->GetActiveKingdomsSummary();
+		$this->load_model( 'Recap' );
+		$this->data[ 'week_recap' ] = $this->Recap->get();
 		$eventSummary = $this->Search->Search_Event( null, null, 0, null, null, 15, null, true );
 		if (!empty($eventSummary)) {
 			global $DB;
