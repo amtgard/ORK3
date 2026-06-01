@@ -14,6 +14,12 @@
  *
  *     php bin/compute-weekly-recap.php 2026-05-25
  *
+ * Pass --skip-existing to no-op when a row for that week_start already exists
+ * (used by the backfill script — keeps re-runs cheap and protects already-
+ * captured CF stats from being overwritten with null after CF retention expires).
+ *
+ *     php bin/compute-weekly-recap.php 2026-05-25 --skip-existing
+ *
  * Reads via Report::GetWeeklyRecap(), writes via Report::StoreWeeklyRecap().
  *
  * For the Cloudflare "ORK Data" section, the recap needs CF_API_TOKEN and
@@ -29,13 +35,29 @@ require_once dirname(__DIR__) . '/startup.php';
 
 $report = Ork3::$Lib->report;
 
-$request = array();
-if (!empty($argv[1])) {
-	if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $argv[1])) {
-		fprintf(STDERR, "Invalid week_start '%s'. Expected YYYY-MM-DD.\n", $argv[1]);
+$request        = array();
+$skip_existing  = false;
+foreach (array_slice($argv, 1) as $arg) {
+	if ($arg === '--skip-existing') {
+		$skip_existing = true;
+	} elseif (preg_match('/^\d{4}-\d{2}-\d{2}$/', $arg)) {
+		$request['WeekStart'] = $arg;
+	} else {
+		fprintf(STDERR, "Invalid arg '%s'. Expected YYYY-MM-DD or --skip-existing.\n", $arg);
 		exit(1);
 	}
-	$request['WeekStart'] = $argv[1];
+}
+
+if ($skip_existing) {
+	$existing = $report->ReadWeeklyRecap($request);
+	if (is_array($existing)) {
+		fprintf(STDOUT, "[%s] week=%s — skip (already computed at %s)\n",
+			date('Y-m-d H:i:s'),
+			$existing['WeekStart'],
+			$existing['ComputedAt'] ?? '?'
+		);
+		exit(0);
+	}
 }
 
 $start = microtime(true);
