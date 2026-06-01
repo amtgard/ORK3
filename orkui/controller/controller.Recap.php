@@ -34,7 +34,7 @@ class Controller_Recap extends Controller {
 	public function index($week_start = null) {
 		$week_start = $this->_normalize_week_start($week_start);
 		$recap      = $this->Recap->get($week_start);
-		$weeks      = $this->Recap->recent_weeks(26);
+		$weeks      = $this->Recap->recent_weeks(60);
 
 		// Prev/next are the immediate neighbours in the available-weeks list.
 		$idx       = array_search($week_start, $weeks, true);
