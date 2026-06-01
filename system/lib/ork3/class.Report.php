@@ -3732,6 +3732,67 @@ class Report  extends Ork3 {
 		return $total;
 	}
 
+	// Kingdom-scoped recap. Anchors on the global recap row (so we share its
+	// PlatformStats / ComputedAt and only produce kingdom recaps for weeks the
+	// cron has already computed). Cache key includes the global ComputedAt so a
+	// fresh cron run on Monday naturally orphans every prior kingdom cache —
+	// no explicit invalidation needed.
+	public function GetWeeklyRecapForKingdom($request = null) {
+		$kingdom_id = intval($request['KingdomId'] ?? 0);
+		if ($kingdom_id <= 0) return null;
+
+		$global = $this->ReadWeeklyRecap($request);
+		if (!is_array($global) || empty($global['WeekStart'])) return null;
+		$week_start  = $global['WeekStart'];
+		$computed_at = $global['ComputedAt'] ?? '';
+
+		$call = __CLASS__ . '.' . __FUNCTION__;
+		$key  = 'k' . $kingdom_id . '.w' . $week_start . '.c' . str_replace(array(' ', ':', '-'), '', $computed_at);
+		$cached = Ork3::$Lib->ghettocache->get($call, $key, 86400);
+		if ($cached !== false) return $cached;
+
+		$win = $this->_WeeklyRecapWindow($week_start);
+		$payload = array(
+			'WeekStart'        => $win['WeekStart'],
+			'WeekEnd'          => $win['WeekEnd'],
+			'KingdomId'        => $kingdom_id,
+			'Knightings'       => $this->_RecapPeerages($win, array('Knight'),  $kingdom_id),
+			'Masterhoods'      => $this->_RecapPeerages($win, array('Master'),  $kingdom_id),
+			'Paragons'         => $this->_RecapPeerages($win, array('Paragon'), $kingdom_id),
+			'TopEvents'        => $this->_RecapTopEvents($win, 3, $kingdom_id),
+			'TopParks'         => $this->_RecapTopParks($win, 3, $kingdom_id),
+			'NewPlayers'       => $this->_RecapNewPlayers($win, $kingdom_id),
+			'ReturningPlayers' => $this->_RecapReturningPlayers($win, 90, $kingdom_id),
+			'MilestoneEvents'  => $this->_RecapMilestoneEvents($win, 25, $kingdom_id),
+			// PlatformStats stays global — CF doesn't tell us per-kingdom traffic.
+			'PlatformStats'    => $global['PlatformStats'] ?? null,
+			'ComputedAt'       => $computed_at,
+		);
+		return Ork3::$Lib->ghettocache->cache($call, $key, $payload);
+	}
+
+	// Active kingdoms for the dropdown picker, sorted by name. Tiny query, cheap
+	// to re-run per page load — wraps in ghettocache (1 hour) anyway because the
+	// list barely changes.
+	public function ListRecapKingdoms($request = null) {
+		$call = __CLASS__ . '.' . __FUNCTION__;
+		$key  = 'all';
+		$cached = Ork3::$Lib->ghettocache->get($call, $key, 3600);
+		if ($cached !== false) return $cached;
+
+		$sql = "SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom
+				WHERE active = 'Active' AND kingdom_id > 0
+				ORDER BY name";
+		$r = $this->db->query($sql);
+		$out = array();
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$out[] = array('KingdomId' => (int)$r->kingdom_id, 'Name' => $r->name);
+			}
+		}
+		return Ork3::$Lib->ghettocache->cache($call, $key, $out);
+	}
+
 	// Returns the most recent week_starts present in ork_weekly_recap, newest first.
 	// Used by the page to render prev/next and an archive picker.
 	public function ListRecapWeeks($limit = 26) {
@@ -3774,10 +3835,11 @@ class Report  extends Ork3 {
 		);
 	}
 
-	private function _RecapPeerages($win, $peerages) {
+	private function _RecapPeerages($win, $peerages, $kingdom_id = null) {
 		$list  = "'" . implode("','", array_map('mysql_real_escape_string', $peerages)) . "'";
 		$start = mysql_real_escape_string($win['WeekStart']);
 		$end   = mysql_real_escape_string($win['WeekEnd']);
+		$kid_clause = $kingdom_id ? ' AND m.kingdom_id = ' . (int)$kingdom_id : '';
 		$sql = "SELECT ma.awards_id, ma.date, ma.mundane_id, m.persona,
 					   p.park_id, p.name AS park_name,
 					   k.kingdom_id, k.name AS kingdom_name,
@@ -3793,6 +3855,7 @@ class Report  extends Ork3 {
 				WHERE COALESCE(alias.peerage, a.peerage) IN ($list)
 				  AND ma.revoked = 0
 				  AND ma.date >= '$start' AND ma.date <= '$end'
+				  $kid_clause
 				ORDER BY ma.date, m.persona";
 		$r = $this->db->query($sql);
 		$out = array();
@@ -3817,10 +3880,11 @@ class Report  extends Ork3 {
 
 	// Single-occurrence (calendardetail-scoped). A 3-day event contributes up to 3
 	// separate occurrences if multiple days fall in the window.
-	private function _RecapTopEvents($win, $limit = 3) {
+	private function _RecapTopEvents($win, $limit = 3, $kingdom_id = null) {
 		$start = mysql_real_escape_string($win['StartDt']);
 		$end   = mysql_real_escape_string($win['EndDt']);
 		$limit = intval($limit);
+		$kid_clause = $kingdom_id ? ' AND e.kingdom_id = ' . (int)$kingdom_id : '';
 		$sql = "SELECT e.event_id, e.name AS event_name,
 					   e.park_id, p.name AS park_name,
 					   e.kingdom_id, k.name AS kingdom_name,
@@ -3835,6 +3899,7 @@ class Report  extends Ork3 {
 					LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = e.park_id
 					LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = e.kingdom_id
 				WHERE d.event_start >= '$start' AND d.event_start <= '$end'
+				  $kid_clause
 				GROUP BY e.event_id, d.event_calendardetail_id
 				HAVING attendance > 0
 				ORDER BY attendance DESC, d.event_start ASC
@@ -3859,10 +3924,11 @@ class Report  extends Ork3 {
 		return $out;
 	}
 
-	private function _RecapTopParks($win, $limit = 3) {
+	private function _RecapTopParks($win, $limit = 3, $kingdom_id = null) {
 		$start = mysql_real_escape_string($win['WeekStart']);
 		$end   = mysql_real_escape_string($win['WeekEnd']);
 		$limit = intval($limit);
+		$kid_clause = $kingdom_id ? ' AND a.kingdom_id = ' . (int)$kingdom_id : '';
 		$sql = "SELECT p.park_id, p.name AS park_name, p.has_heraldry,
 					   k.kingdom_id, k.name AS kingdom_name,
 					   COUNT(DISTINCT a.mundane_id) AS attendance
@@ -3872,6 +3938,7 @@ class Report  extends Ork3 {
 				WHERE a.date >= '$start' AND a.date <= '$end'
 				  AND a.mundane_id > 0
 				  AND a.park_id > 0
+				  $kid_clause
 				GROUP BY p.park_id
 				ORDER BY attendance DESC, p.name ASC
 				LIMIT $limit";
@@ -3894,9 +3961,13 @@ class Report  extends Ork3 {
 
 	// New player = first ever attendance falls in the window. NOT EXISTS subquery
 	// mirrors the index-friendly pattern in GetNewPlayerAttendance().
-	private function _RecapNewPlayers($win) {
+	private function _RecapNewPlayers($win, $kingdom_id = null) {
 		$start = mysql_real_escape_string($win['WeekStart']);
 		$end   = mysql_real_escape_string($win['WeekEnd']);
+		// Kingdom filter applies to the in-window attendance (where they first
+		// signed in). The prior-history NOT EXISTS subquery stays global — we
+		// want "truly new players who started here", not "new to this kingdom".
+		$kid_clause = $kingdom_id ? ' AND a_in.kingdom_id = ' . (int)$kingdom_id : '';
 		$sql = "SELECT m.mundane_id, m.persona,
 					   p.park_id, p.name AS park_name,
 					   k.kingdom_id, k.name AS kingdom_name,
@@ -3907,6 +3978,7 @@ class Report  extends Ork3 {
 					LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = a_in.kingdom_id
 				WHERE a_in.mundane_id > 0
 				  AND a_in.date >= '$start' AND a_in.date <= '$end'
+				  $kid_clause
 				  AND NOT EXISTS (
 					  SELECT 1 FROM " . DB_PREFIX . "attendance a_pre
 					  WHERE a_pre.mundane_id = a_in.mundane_id
@@ -3934,10 +4006,14 @@ class Report  extends Ork3 {
 	}
 
 	// Returning = attended this week + previous attendance was >= $gap_days before week start.
-	private function _RecapReturningPlayers($win, $gap_days = 90) {
+	private function _RecapReturningPlayers($win, $gap_days = 90, $kingdom_id = null) {
 		$start = mysql_real_escape_string($win['WeekStart']);
 		$end   = mysql_real_escape_string($win['WeekEnd']);
 		$gap   = intval($gap_days);
+		// Kingdom filter applies to the in-window attendance. The "last prior
+		// attendance" subquery stays global so the gap reflects their TRUE last
+		// sign-in anywhere, not their last at this kingdom specifically.
+		$kid_clause = $kingdom_id ? ' AND a_in.kingdom_id = ' . (int)$kingdom_id : '';
 		$sql = "SELECT X.* FROM (
 				  SELECT m.mundane_id, m.persona,
 						 MIN(a_in.date) AS return_date,
@@ -3953,6 +4029,7 @@ class Report  extends Ork3 {
 					  LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = a_in.kingdom_id
 				  WHERE a_in.date >= '$start' AND a_in.date <= '$end'
 					AND a_in.mundane_id > 0
+					$kid_clause
 				  GROUP BY m.mundane_id
 				) X
 				WHERE X.last_prior_date IS NOT NULL
@@ -3987,11 +4064,12 @@ class Report  extends Ork3 {
 	// Subquery excludes zero/placeholder event_start dates (some legacy rows have
 	// '0000-00-00') and tie-breaks on event_calendardetail_id so simultaneous
 	// occurrences get distinct numbers — otherwise some milestones get skipped.
-	private function _RecapMilestoneEvents($win, $multiple = 25) {
+	private function _RecapMilestoneEvents($win, $multiple = 25, $kingdom_id = null) {
 		$start = mysql_real_escape_string($win['StartDt']);
 		$end   = mysql_real_escape_string($win['EndDt']);
 		$mul   = intval($multiple);
 		if ($mul <= 0) $mul = 25;
+		$kid_clause = $kingdom_id ? ' AND e.kingdom_id = ' . (int)$kingdom_id : '';
 		$sql = "SELECT * FROM (
 				  SELECT e.event_id, e.name AS event_name,
 						 e.park_id, p.name AS park_name,
@@ -4013,6 +4091,7 @@ class Report  extends Ork3 {
 					  LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = e.kingdom_id
 				  WHERE d.event_start >= '$start' AND d.event_start <= '$end'
 					AND e.park_id > 0
+					$kid_clause
 				) M
 				WHERE M.event_number > 0
 				  AND M.event_number % $mul = 0

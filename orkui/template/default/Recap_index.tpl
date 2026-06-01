@@ -4,7 +4,12 @@
  * run yet for this week. $week_start is the YYYY-MM-DD Monday requested.
  */
 
-$has_recap = is_array($recap) && !empty($recap['WeekStart']);
+$has_recap        = is_array($recap) && !empty($recap['WeekStart']);
+$scope_kid        = (int)($scope_kingdom_id ?? 0);
+$scope_kname      = $scope_kingdom_name ?? '';
+$is_kingdom_scope = $scope_kid > 0;
+$url_base         = $is_kingdom_scope ? 'Recap/kingdom/' . $scope_kid . '/' : 'Recap/index/';
+$url_json         = $is_kingdom_scope ? 'Recap/json_kingdom/' . $scope_kid . '/' : 'Recap/json/';
 
 // Friendly date headline. Days are named so it's obvious this is a fixed
 // Mon-Sun week (not a rolling 7 days from today, which is what most other
@@ -168,6 +173,17 @@ html[data-theme="dark"] .recap-tip-text::before { border-bottom-color: #e2e8f0; 
 .recap-foot { margin-top: 1em; font-size: 0.78em; color: #aaa; text-align: center; }
 .recap-foot a { color: #888; }
 
+.recap-scope-picker { display: flex; justify-content: center; align-items: center;
+	gap: 0.7em; margin: 0 0 1em; font-size: 0.92em; color: #555; }
+.recap-scope-picker select { padding: 0.35em 0.6em; border: 1px solid #ccc;
+	border-radius: 6px; background: #fff; font-size: 0.95em; color: #222;
+	font-family: inherit; cursor: pointer; }
+.recap-scope-picker select:hover { border-color: #999; }
+html[data-theme="dark"] .recap-scope-picker { color: #cbd5e0; }
+html[data-theme="dark"] .recap-scope-picker select {
+	background: #2d3748; color: #e2e8f0; border-color: #4a5568; }
+html[data-theme="dark"] .recap-scope-picker select:hover { border-color: #718096; }
+
 /* Dark mode — match the palette used in default.theme (#1a202c body, #2d3748 cards) */
 html[data-theme="dark"] .recap-root { color: #e2e8f0; }
 html[data-theme="dark"] .recap-hero { border-bottom-color: #4a3b1f; }
@@ -207,16 +223,36 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 <div class="recap-root">
 
 	<div class="recap-hero">
-		<div class="recap-hero-eyebrow"><i class="fas fa-trophy"></i> Amtgard Week in Review</div>
+		<div class="recap-hero-eyebrow">
+			<i class="fas fa-trophy"></i> Amtgard Week in Review
+<?php if ($is_kingdom_scope) : ?>
+			· <?=htmlspecialchars($scope_kname)?>
+<?php endif; ?>
+		</div>
 		<h1><?=htmlspecialchars($week_headline)?></h1>
 		<div class="recap-hero-sub">Weekly recaps are automatically produced early Monday mornings for the previous week.</div>
 	</div>
+
+<?php if (!empty($kingdom_list)) : ?>
+	<div class="recap-scope-picker">
+		<label for="recap-scope-select">Viewing:</label>
+		<select id="recap-scope-select" onchange="if(this.value)location.href=this.value">
+			<option value="<?=UIR ?>Recap/index/<?=urlencode($week_start)?>"<?=$is_kingdom_scope ? '' : ' selected'?>>All Kingdoms</option>
+<?php foreach ($kingdom_list as $k) :
+		$opt_url = UIR . 'Recap/kingdom/' . (int)$k['KingdomId'] . '/' . urlencode($week_start);
+		$selected = ($scope_kid === (int)$k['KingdomId']) ? ' selected' : '';
+?>
+			<option value="<?=$opt_url?>"<?=$selected?>><?=htmlspecialchars($k['Name'])?></option>
+<?php endforeach; ?>
+		</select>
+	</div>
+<?php endif; ?>
 
 <?php if (!empty($prev_week) || !empty($next_week)) : ?>
 	<div class="recap-nav">
 		<span>
 <?php   if (!empty($prev_week)) : ?>
-			<a href="<?=UIR ?>Recap/index/<?=urlencode($prev_week)?>">← Week of <?=htmlspecialchars($prev_week)?></a>
+			<a href="<?=UIR ?><?=$url_base?><?=urlencode($prev_week)?>">← Week of <?=htmlspecialchars($prev_week)?></a>
 <?php   else : ?>
 			<span class="recap-nav-mid">← (earliest)</span>
 <?php   endif; ?>
@@ -224,7 +260,7 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 		<span class="recap-nav-mid">·</span>
 		<span>
 <?php   if (!empty($next_week)) : ?>
-			<a href="<?=UIR ?>Recap/index/<?=urlencode($next_week)?>">Week of <?=htmlspecialchars($next_week)?> →</a>
+			<a href="<?=UIR ?><?=$url_base?><?=urlencode($next_week)?>">Week of <?=htmlspecialchars($next_week)?> →</a>
 <?php   else : ?>
 			<span class="recap-nav-mid">(latest) →</span>
 <?php   endif; ?>
@@ -481,7 +517,7 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 
 	<div class="recap-foot">
 		Computed <?=htmlspecialchars($recap['ComputedAt'] ?? '')?> ·
-		<a href="<?=UIR ?>Recap/json/<?=urlencode($recap['WeekStart'])?>">JSON</a>
+		<a href="<?=UIR ?><?=$url_json?><?=urlencode($recap['WeekStart'])?>">JSON</a>
 	</div>
 
 <?php endif; // $has_recap ?>
@@ -492,7 +528,7 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 <?php   foreach ($recent_weeks as $w) :
 			$is_current = ($w === ($recap['WeekStart'] ?? $week_start));
 ?>
-		<a href="<?=UIR ?>Recap/index/<?=urlencode($w)?>" class="<?=$is_current ? 'current' : ''?>"><?=htmlspecialchars($w)?></a>
+		<a href="<?=UIR ?><?=$url_base?><?=urlencode($w)?>" class="<?=$is_current ? 'current' : ''?>"><?=htmlspecialchars($w)?></a>
 <?php   endforeach; ?>
 	</div>
 <?php endif; ?>

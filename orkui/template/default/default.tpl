@@ -552,7 +552,7 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 		<span class="hm-stat-value">~<?= number_format($hmWeeklyAvg) ?></span>
 		<span class="hm-stat-label">Players / Week</span>
 	</div>
-	<?php if (is_array($week_recap ?? null)): ?>
+	<?php if (!empty($LoggedIn) && is_array($week_recap ?? null)): ?>
 	<a class="hm-stat-item hm-stat-item-link" href="<?= UIR ?>Recap" title="Amtgard Week in Review — Week of <?= htmlspecialchars($week_recap['WeekStart']) ?>">
 		<span class="hm-stat-value">Weekly Recap <i class="fas fa-arrow-right" style="font-size:0.7em;opacity:0.7"></i></span>
 		<span class="hm-stat-label">Week of <?= htmlspecialchars(date('M j', strtotime($week_recap['WeekStart']))) ?></span>

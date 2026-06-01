@@ -156,6 +156,13 @@
 		<div class="kn-stat-number" id="kn-stat-avgmo">—</div>
 		<div class="kn-stat-label">Avg / Month <span class="pk-stat-tip"><i class="fas fa-info-circle"></i><span class="pk-stat-tip-text">Distinct players per month across all parks in this Kingdom, averaged over the past 12 months. A player attending multiple parks in one month counts once.</span></span></div>
 	</div>
+	<?php if (!empty($IsLoggedIn) && is_array($week_recap ?? null)): ?>
+	<a class="kn-stat-card kn-stat-card-link" href="<?= UIR ?>Recap/kingdom/<?= (int)$kingdom_id ?>" style="text-decoration:none;color:inherit;" title="Amtgard Week in Review — Week of <?= htmlspecialchars($week_recap['WeekStart']) ?>">
+		<div class="kn-stat-icon"><i class="fas fa-trophy"></i></div>
+		<div class="kn-stat-number"><?= htmlspecialchars(date('M j', strtotime($week_recap['WeekStart']))) ?></div>
+		<div class="kn-stat-label">Weekly Recap <i class="fas fa-arrow-right" style="font-size:0.75em;opacity:0.7;margin-left:2px"></i></div>
+	</a>
+	<?php endif; ?>
 </div>
 
 <!-- =============================================
