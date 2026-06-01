@@ -32,6 +32,12 @@ $player_link = function($id, $persona) {
 	if (empty($id))      return htmlspecialchars($persona);
 	return '<a href="' . UIR . 'Player/profile/' . (int)$id . '">' . htmlspecialchars($persona) . '</a>';
 };
+$event_link = function($event_id, $detail_id, $name) {
+	if (empty($name))     return '';
+	if (empty($event_id)) return htmlspecialchars($name);
+	$url = UIR . 'Event/detail/' . (int)$event_id . (!empty($detail_id) ? '/' . (int)$detail_id : '');
+	return '<a href="' . $url . '">' . htmlspecialchars($name) . '</a>';
+};
 $where_label = function($park_html, $kingdom_html) {
 	if ($park_html && $kingdom_html) return $park_html . ' <span class="recap-muted">(' . $kingdom_html . ')</span>';
 	return $park_html ?: $kingdom_html;
@@ -241,7 +247,7 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 <?php   foreach ($recap['TopEvents'] as $i => $e) :
 			$rank   = $i + 1;
 			$where  = $where_label($park_link($e['ParkId'], $e['ParkName']), $kingdom_link($e['KingdomId'], $e['KingdomName']));
-			$ename  = htmlspecialchars($e['EventName']);
+			$ename  = $event_link($e['EventId'], $e['EventCalendarDetailId'] ?? null, $e['EventName']);
 ?>
 			<li>
 				<span class="recap-rank"><?=$rank?>.</span>
@@ -337,7 +343,7 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 			$where = $where_label($park_link($m['ParkId'], $m['ParkName']), $kingdom_link($m['KingdomId'], $m['KingdomName']));
 ?>
 			<li>
-				<strong><?=htmlspecialchars($m['EventName'])?></strong>
+				<strong><?=$event_link($m['EventId'], $m['EventCalendarDetailId'] ?? null, $m['EventName'])?></strong>
 				— <?=(int)$m['EventNumber']?><sup>th</sup> event
 <?php       if ($where) : ?> at <?=$where?><?php endif; ?>
 			</li>

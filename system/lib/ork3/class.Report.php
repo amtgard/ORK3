@@ -4022,14 +4022,15 @@ class Report  extends Ork3 {
 		if ($r !== false && $r->size() > 0) {
 			while ($r->next()) {
 				$out[] = array(
-					'EventId'     => $r->event_id,
-					'EventName'   => $r->event_name,
-					'EventStart'  => $r->event_start,
-					'EventNumber' => intval($r->event_number),
-					'ParkId'      => $r->park_id,
-					'ParkName'    => $r->park_name,
-					'KingdomId'   => $r->kingdom_id,
-					'KingdomName' => $r->kingdom_name,
+					'EventId'               => $r->event_id,
+					'EventCalendarDetailId' => $r->event_calendardetail_id,
+					'EventName'             => $r->event_name,
+					'EventStart'            => $r->event_start,
+					'EventNumber'           => intval($r->event_number),
+					'ParkId'                => $r->park_id,
+					'ParkName'              => $r->park_name,
+					'KingdomId'             => $r->kingdom_id,
+					'KingdomName'           => $r->kingdom_name,
 				);
 			}
 		}
