@@ -353,13 +353,20 @@ html[data-theme="dark"] .sr-timer.sr-timer-expired { background: var(--ork-alert
 				<label>Email <span class="sr-req">*</span></label>
 				<input type="email" name="Email" id="sr-email" placeholder="email@example.com"
 				       value="<?= htmlspecialchars($form['Email'] ?? '') ?>" required>
+				<div id="sr-email-suggestion" class="esc-suggestion" role="alert">
+					<i class="fas fa-magic"></i>
+					<span class="esc-suggestion-text">Did you mean <strong></strong>?</span>
+					<button type="button" class="esc-suggestion-use">Use it</button>
+					<button type="button" class="esc-suggestion-dismiss" aria-label="Dismiss">&times;</button>
+				</div>
 			</div>
 			<div class="sr-field">
 				<label>Username <span class="sr-req">*</span></label>
 				<input type="text" name="UserName" id="sr-username" placeholder="min. 4 characters"
 				       value="<?= htmlspecialchars($form['UserName'] ?? '') ?>" required minlength="4"
 				       autocomplete="new-password">
-				<div class="sr-field-hint" id="sr-username-hint">Default is your email address, but you can customize this if you'd like.</div>
+				<div class="sr-field-hint" id="sr-username-hint">Publicly visible on your profile — don't use your email address.</div>
+				<div class="sr-field-hint" id="sr-username-status" style="display:none"></div>
 			</div>
 			<div class="sr-field-row">
 				<div class="sr-field">
@@ -382,9 +389,11 @@ html[data-theme="dark"] .sr-timer.sr-timer-expired { background: var(--ork-alert
 	</div>
 </div>
 
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
+<script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/script/revised.js') ?>"></script>
 <script>
 (function() {
-	var emailEl    = document.getElementById('sr-email');
+	var personaEl  = document.getElementById('sr-persona');
 	var usernameEl = document.getElementById('sr-username');
 	var formEl     = document.getElementById('sr-form');
 	var userEdited = false;
@@ -396,19 +405,44 @@ html[data-theme="dark"] .sr-timer.sr-timer-expired { background: var(--ork-alert
 		});
 	}
 
-	// Auto-fill username from email
-	if (emailEl && usernameEl) {
-		emailEl.addEventListener('input', function() {
-			if (!userEdited || usernameEl.value === '' || usernameEl.value === emailEl.value.replace(/.$/, '')) {
-				usernameEl.value = emailEl.value;
+	// Auto-suggest username from persona (already publicly visible on the
+	// profile, so no new info is leaked). Username gets sanitized to ASCII
+	// alnum lowercase — emails are deliberately NOT used as the default
+	// because the username column is shown on the public profile page.
+	function sanitizeUsername(s) {
+		return String(s || '')
+			.normalize('NFD').replace(/[̀-ͯ]/g, '') // strip diacritics
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '')
+			.slice(0, 32);
+	}
+
+	// Wire up the shared username-availability helper (defined in revised.js).
+	// triggerRecheck() lets the persona→username auto-fill kick a fresh check
+	// without waiting for a real input/blur event on the username field.
+	var triggerRecheck = window.initUsernameAvailabilityCheck({
+		inputId:     'sr-username',
+		statusId:    'sr-username-status',
+		submitBtnId: 'sr-submit-btn',
+		endpointUrl: <?= json_encode(UIR . 'SelfReg/check_username/' . $token) ?>
+	});
+
+	if (personaEl && usernameEl) {
+		var syncFromPersona = function() {
+			if (!userEdited || usernameEl.value === '') {
+				usernameEl.value = sanitizeUsername(personaEl.value);
 				userEdited = false;
+				if (triggerRecheck) triggerRecheck();
 			}
-		});
-		emailEl.addEventListener('blur', function() {
-			if (!userEdited && usernameEl.value === '') {
-				usernameEl.value = emailEl.value;
-			}
-		});
+		};
+		personaEl.addEventListener('input', syncFromPersona);
+		personaEl.addEventListener('blur',  syncFromPersona);
+	}
+
+	// Email typo suggestions ("Did you mean adf@me.com?") — same shared helper
+	// the Park/Kingdom Create Player modals use.
+	if (typeof window.initEmailSpellCheck === 'function') {
+		window.initEmailSpellCheck('sr-email', 'sr-email-suggestion');
 	}
 
 	// A15: Client-side password match validation (inline error, not alert)

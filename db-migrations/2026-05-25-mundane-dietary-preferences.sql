@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS `ork_mundane_dietary` (
     `restrict_fish`      TINYINT(1) NOT NULL DEFAULT 0,
     `restrict_honey`     TINYINT(1) NOT NULL DEFAULT 0,
     `restrict_poultry`   TINYINT(1) NOT NULL DEFAULT 0,
-    `restrict_redmeat`   TINYINT(1) NOT NULL DEFAULT 0,
+    `restrict_beef`      TINYINT(1) NOT NULL DEFAULT 0,
+    `restrict_pork`      TINYINT(1) NOT NULL DEFAULT 0,
     `restrict_shellfish` TINYINT(1) NOT NULL DEFAULT 0,
     -- Allergens (0=OK, 1=Mild, 2=Severe)
     `allergen_milk`      TINYINT(1) NOT NULL DEFAULT 0,
@@ -39,11 +40,14 @@ CREATE TABLE IF NOT EXISTS `ork_mundane_dietary` (
     `allergen_mushroom`  TINYINT(1) NOT NULL DEFAULT 0,
     `allergen_corn`      TINYINT(1) NOT NULL DEFAULT 0,
     `allergen_coconut`   TINYINT(1) NOT NULL DEFAULT 0,
-    `allergen_cocoa`     TINYINT(1) NOT NULL DEFAULT 0,
+    `allergen_cocoa`      TINYINT(1) NOT NULL DEFAULT 0,
+    `allergen_nightshades` TINYINT(1) NOT NULL DEFAULT 0,
     `modified`           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`mundane_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Idempotent guard for installs where the table already existed before allergen_gluten was added.
 ALTER TABLE `ork_mundane_dietary`
-    ADD COLUMN IF NOT EXISTS `allergen_gluten` TINYINT(1) NOT NULL DEFAULT 0 AFTER `allergen_garlic`;
+    ADD COLUMN IF NOT EXISTS `allergen_gluten`      TINYINT(1) NOT NULL DEFAULT 0 AFTER `allergen_garlic`;
+ALTER TABLE `ork_mundane_dietary`
+    ADD COLUMN IF NOT EXISTS `allergen_nightshades` TINYINT(1) NOT NULL DEFAULT 0 AFTER `allergen_cocoa`;

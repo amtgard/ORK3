@@ -1761,6 +1761,9 @@ var PkBannerConfig = {
 							<button class="pk-btn pk-btn-secondary" id="pk-att-link-qr-btn" style="white-space:nowrap">
 								<i class="fas fa-qrcode"></i> QR
 							</button>
+							<button class="pk-btn" id="pk-att-link-remove-btn" style="white-space:nowrap;background:#fed7d7;border:1px solid #fc8181;color:#c53030" title="Revoke this link so it can no longer be used">
+								<i class="fas fa-trash"></i> Remove
+							</button>
 						</div>
 						<div id="pk-att-link-expires" style="margin-top:6px;font-size:11px;color:#718096"></div>
 					</div>
@@ -1815,7 +1818,7 @@ var PkBannerConfig = {
 </div>
 
 <!-- QR Code Modal -->
-<div id="pk-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9100;align-items:center;justify-content:center" onclick="if(event.target===this)pkCloseQrModal()">
+<div id="pk-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:var(--z-modal-top, 10200);align-items:center;justify-content:center" onclick="if(event.target===this)pkCloseQrModal()">
 	<div style="background:#fff;border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
 			<span style="font-weight:700;font-size:15px;color:var(--ork-text,#2d3748)"><i class="fas fa-qrcode" style="margin-right:8px;color:var(--ork-link,#2b6cb0)"></i>Scan to Sign In</span>
@@ -2133,6 +2136,7 @@ var PkBannerConfig = {
 				<div class="plr-field">
 					<label>Username <span class="plr-req">*</span></label>
 					<input type="text" id="pk-addplayer-username" placeholder="min. 4 characters" autocomplete="new-password">
+					<div class="plr-field-hint" id="pk-addplayer-username-status" style="display:none;font-size:12px;margin-top:4px"></div>
 				</div>
 				<div class="plr-field">
 					<label>Password</label>
@@ -3261,6 +3265,24 @@ $(function() {
 window.pkRecPrint = function() { if (window.pkRecDT) window.recsExportPrint(window.pkRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($park_name)) ?>'); };
 window.pkRecCsv   = function() { if (window.pkRecDT) window.recsExportCsv(window.pkRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $park_name) ?>.csv'); };
 initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
+window.pkUsernameCheck = initUsernameAvailabilityCheck({
+	inputId:     'pk-addplayer-username',
+	statusId:    'pk-addplayer-username-status',
+	submitBtnId: 'pk-addplayer-submit',
+	endpointUrl: '<?= UIR ?>PlayerAjax/check_username',
+	gateMode:    'soft'  // host form has its own required/min-length validation
+});
+// Patch the modal-open function so a stale "X is taken" doesn't linger across
+// closes. Defined in revised.js; we wrap to call reset() after the original.
+(function() {
+	var _origOpen = window.pkOpenAddPlayerModal;
+	if (typeof _origOpen !== 'function') return;
+	window.pkOpenAddPlayerModal = function() {
+		var r = _origOpen.apply(this, arguments);
+		if (window.pkUsernameCheck && window.pkUsernameCheck.reset) window.pkUsernameCheck.reset();
+		return r;
+	};
+})();
 </script>
 
 <?php if (!empty($IsLoggedIn)): ?>

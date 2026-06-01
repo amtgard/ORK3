@@ -141,6 +141,14 @@ class Model_Attendance extends Model {
 		return $this->Attendance->GetAttendanceLinks($args);
 	}
 
+	function get_existing_signin($mundane_id, $link_info) {
+		return $this->Attendance->GetExistingSignin($mundane_id, $link_info);
+	}
+
+	function update_self_signin_class($token, $attendance_id, $class_id) {
+		return $this->Attendance->UpdateSelfSigninClass(['Token' => $token, 'AttendanceId' => $attendance_id, 'ClassId' => $class_id]);
+	}
+
 	function delete_attendance_link($token, $link_id) {
 		return $this->Attendance->DeleteAttendanceLink(['Token' => $token, 'LinkId' => $link_id]);
 	}

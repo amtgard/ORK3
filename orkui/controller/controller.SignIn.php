@@ -51,14 +51,32 @@ class Controller_SignIn extends Controller {
 			return (int)($c['Active'] ?? 1) === 1;
 		});
 
-		// Handle submission
+		// Check whether the player already has a row for this link's scope
+		// (today's date at the park, or this event's calendar detail). If so,
+		// the page switches to a "change my class" flow rather than rejecting
+		// them outright.
+		$existing = $this->Attendance->get_existing_signin((int)$this->session->user_id, $link);
+
+		// Handle submission. Two paths:
+		//   - No existing row → consume the link and INSERT a new attendance row
+		//   - Existing row    → UPDATE the class on that row (no new credit)
 		if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 			$class_id = (int)($_POST['ClassId'] ?? 0);
-			$r = $this->Attendance->use_attendance_link(
-				$this->session->token,
-				$link_token,
-				$class_id
-			);
+			if ($existing) {
+				$r = $this->Attendance->update_self_signin_class(
+					$this->session->token,
+					$existing['AttendanceId'],
+					$class_id
+				);
+				$success_msg = 'Class updated. No additional credit was recorded.';
+			} else {
+				$r = $this->Attendance->use_attendance_link(
+					$this->session->token,
+					$link_token,
+					$class_id
+				);
+				$success_msg = '';
+			}
 			if ($r['Status'] == 0) {
 				header('Location: ' . UIR . 'Player/profile/' . (int)$this->session->user_id);
 				exit;
@@ -87,6 +105,7 @@ class Controller_SignIn extends Controller {
 		$this->data['classes']         = array_values($classes);
 		$this->data['last_class_id']   = $last_class_id;
 		$this->data['last_class_name'] = $last_class_name;
+		$this->data['existing']        = $existing; // null, or ['AttendanceId','ClassId','ClassName']
 		$this->template = 'SignIn_index.tpl';
 	}
 }

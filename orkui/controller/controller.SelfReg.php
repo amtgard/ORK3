@@ -102,4 +102,21 @@ class Controller_SelfReg extends Controller {
 		$this->data['link']        = $link;
 		$this->data['ttl_seconds'] = $ttl_seconds;
 	}
+
+	// Live username-availability check used by the SelfReg form. The selfreg
+	// token gates the endpoint (15-min TTL, one-time use) so this is not a
+	// general username-enumeration oracle.
+	public function check_username($token = null) {
+		header('Content-Type: application/json');
+		$token = preg_replace('/[^a-f0-9]/', '', (string)($token ?? ''));
+		$this->load_model('Player');
+		$link_result = $this->Player->validate_selfreg_link($token);
+		if ($link_result['Status'] != 0) {
+			echo json_encode(['status' => 5, 'error' => 'Invalid or expired link.']);
+			exit;
+		}
+		require_once __DIR__ . '/controller.PlayerAjax.php';
+		echo json_encode(Controller_PlayerAjax::username_check_payload($_POST['UserName'] ?? ''));
+		exit;
+	}
 }

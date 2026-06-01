@@ -1820,12 +1820,13 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 						<div class="dp-section-hdr">Won't Eat <button type="button" class="dp-info-btn" data-info-btn aria-label="About these categories">?</button></div>
 						<div class="dp-toggles">
 							<?php foreach ([
+								'RestrictBeef'      => 'Beef',
 								'RestrictDairy'     => 'Dairy',
 								'RestrictEggs'      => 'Eggs',
 								'RestrictFish'      => 'Fish',
 								'RestrictHoney'     => 'Honey',
+								'RestrictPork'      => 'Pork',
 								'RestrictPoultry'   => 'Poultry',
-								'RestrictRedmeat'   => 'Red Meat',
 								'RestrictShellfish' => 'Shellfish',
 							] as $_dpField => $_dpLabel): ?>
 							<div class="dp-toggle-row">
@@ -1844,16 +1845,17 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 						</div>
 						<div class="dp-allergens">
 							<?php foreach ([
-								'AllergenCocoa'     => 'Cocoa',
-								'AllergenCoconut'   => 'Coconut',
-								'AllergenCorn'      => 'Corn',
-								'AllergenEggs'      => 'Eggs',
-								'AllergenFish'      => 'Fish',
-								'AllergenGarlic'    => 'Garlic',
-								'AllergenGluten'    => 'Gluten',
-								'AllergenMilk'      => 'Milk',
-								'AllergenMushroom'  => 'Mushroom',
-								'AllergenOnion'     => 'Onion',
+								'AllergenCocoa'       => 'Cocoa',
+								'AllergenCoconut'     => 'Coconut',
+								'AllergenCorn'        => 'Corn',
+								'AllergenEggs'        => 'Eggs',
+								'AllergenFish'        => 'Fish',
+								'AllergenGarlic'      => 'Garlic',
+								'AllergenGluten'      => 'Gluten',
+								'AllergenMilk'        => 'Milk',
+								'AllergenMushroom'    => 'Mushroom',
+								'AllergenNightshades' => 'Nightshades',
+								'AllergenOnion'       => 'Onion',
 								'AllergenPeanuts'   => 'Peanuts',
 								'AllergenSesame'    => 'Sesame',
 								'AllergenShellfish' => 'Shellfish',
@@ -2679,6 +2681,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 			<div class="pn-acct-field">
 				<label for="pn-acct-username">Username <span class="required-indicator">*</span></label>
 				<input type="text" id="pn-acct-username" name="UserName" value="<?= htmlspecialchars($Player['UserName']) ?>" />
+					<div class="pn-acct-hint" id="pn-acct-username-status" style="display:none"></div>
 			</div>
 			<div class="pn-acct-two-col">
 				<div class="pn-acct-field">
@@ -5228,7 +5231,7 @@ pnRenderSparkline();
 
 	var ALLERGEN_FIELDS = ['AllergenPeanuts','AllergenTreenuts','AllergenWheat','AllergenMilk','AllergenEggs',
 	                       'AllergenFish','AllergenShellfish','AllergenSoy','AllergenSesame','AllergenGarlic',
-	                       'AllergenGluten','AllergenOnion','AllergenMushroom','AllergenCorn','AllergenCoconut','AllergenCocoa'];
+	                       'AllergenGluten','AllergenOnion','AllergenMushroom','AllergenCorn','AllergenCoconut','AllergenCocoa','AllergenNightshades'];
 
 	// ---- DOM helpers (scoped to modal) ----
 	function gInModal(sel) { return document.querySelector('#pn-dp-overlay ' + sel); }
@@ -5274,7 +5277,8 @@ pnRenderSparkline();
 		dpSetToggle('RestrictFish',      p.RestrictFish);
 		dpSetToggle('RestrictHoney',     p.RestrictHoney);
 		dpSetToggle('RestrictPoultry',   p.RestrictPoultry);
-		dpSetToggle('RestrictRedmeat',   p.RestrictRedmeat);
+		dpSetToggle('RestrictBeef',      p.RestrictBeef);
+		dpSetToggle('RestrictPork',      p.RestrictPork);
 		dpSetToggle('RestrictShellfish', p.RestrictShellfish);
 		ALLERGEN_FIELDS.forEach(function(f) {
 			var grp = gInModal('.dp-al-slider[data-field="' + f + '"]');
@@ -5297,7 +5301,8 @@ pnRenderSparkline();
 			RestrictFish:      dpToggleValue('RestrictFish')    ? 1 : 0,
 			RestrictHoney:     dpToggleValue('RestrictHoney')   ? 1 : 0,
 			RestrictPoultry:   dpToggleValue('RestrictPoultry') ? 1 : 0,
-			RestrictRedmeat:   dpToggleValue('RestrictRedmeat') ? 1 : 0,
+			RestrictBeef:      dpToggleValue('RestrictBeef') ? 1 : 0,
+			RestrictPork:      dpToggleValue('RestrictPork') ? 1 : 0,
 			RestrictShellfish: dpToggleValue('RestrictShellfish') ? 1 : 0,
 		};
 		ALLERGEN_FIELDS.forEach(function(f) { d[f] = dpGetAllergen(f); });
@@ -5306,8 +5311,8 @@ pnRenderSparkline();
 
 	// ---- Summary card ----
 	var DIET_LABELS = {DietVegetarian:'Vegetarian',DietVegan:'Vegan',DietHalal:'Halal',DietKosher:'Kosher',DietKeto:'Keto',DietPaleo:'Paleo'};
-	var RESTRICT_LABELS = {RestrictDairy:'No Dairy',RestrictEggs:'No Eggs',RestrictFish:'No Fish',RestrictHoney:'No Honey',RestrictPoultry:'No Poultry',RestrictRedmeat:'No Red Meat',RestrictShellfish:'No Shellfish'};
-	var ALLERGEN_LABELS = {AllergenPeanuts:'Peanuts',AllergenTreenuts:'Tree Nuts',AllergenWheat:'Wheat',AllergenMilk:'Milk',AllergenEggs:'Eggs',AllergenFish:'Fish',AllergenShellfish:'Shellfish',AllergenSoy:'Soy',AllergenSesame:'Sesame',AllergenGarlic:'Garlic',AllergenGluten:'Gluten',AllergenOnion:'Onion',AllergenMushroom:'Mushroom',AllergenCorn:'Corn',AllergenCoconut:'Coconut',AllergenCocoa:'Cocoa'};
+	var RESTRICT_LABELS = {RestrictBeef:'No Beef',RestrictDairy:'No Dairy',RestrictEggs:'No Eggs',RestrictFish:'No Fish',RestrictHoney:'No Honey',RestrictPork:'No Pork',RestrictPoultry:'No Poultry',RestrictShellfish:'No Shellfish'};
+	var ALLERGEN_LABELS = {AllergenPeanuts:'Peanuts',AllergenTreenuts:'Tree Nuts',AllergenWheat:'Wheat',AllergenMilk:'Milk',AllergenEggs:'Eggs',AllergenFish:'Fish',AllergenShellfish:'Shellfish',AllergenSoy:'Soy',AllergenSesame:'Sesame',AllergenGarlic:'Garlic',AllergenGluten:'Gluten',AllergenOnion:'Onion',AllergenMushroom:'Mushroom',AllergenCorn:'Corn',AllergenCoconut:'Coconut',AllergenCocoa:'Cocoa',AllergenNightshades:'Nightshades'};
 
 	function dpUpdateSummary(p) {
 		var el = document.getElementById('pna-dp-summary');
@@ -6020,6 +6025,7 @@ $(function() {
 						+ '<th data-sorttype="date">Date</th><th data-sorttype="text">Kingdom</th>'
 						+ '<th data-sorttype="text">Park</th><th data-sorttype="text">Event</th>'
 						+ '<th data-sorttype="text">Class</th><th data-sorttype="numeric">Credits</th>'
+						+ '<th data-sorttype="text">By</th>'
 						+ (canEditAny ? '<th style="width:52px;min-width:52px"></th>' : '')
 						+ '</tr></thead><tbody>';
 					att.forEach(function(d) {
@@ -6031,13 +6037,28 @@ $(function() {
 							: '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.Date) + '</a>';
 						var classLabel = (d.Flavor && d.Flavor.trim()) ? esc(d.Flavor) : esc(d.ClassName);
 						var canEditThis = !!(parkAuth[pid] && eid === 0);
+						// "By" cell: show the entry source. signin_link / self_reg
+						// surface as labels (not a link to the player themselves —
+						// that would be redundant and look like "John entered
+						// John's credit"). manual shows the officer's name linked.
+						var byCell;
+						if (d.EntryMethod === 'signin_link') {
+							byCell = '<em title="Player signed in via PM-issued QR / link" style="color:#666">Self via Sign-in Link</em>';
+						} else if (d.EntryMethod === 'self_reg') {
+							byCell = '<em title="Awarded on account creation" style="color:#666">Self-registration</em>';
+						} else if (parseInt(d.EnteredById) > 0 && d.EnteredBy) {
+							byCell = '<a href="' + uir + 'Player/profile/' + parseInt(d.EnteredById) + '">' + esc(d.EnteredBy) + '</a>';
+						} else {
+							byCell = '<span style="color:#aaa">—</span>';
+						}
 						html += '<tr>'
 							+ '<td class="pn-col-nowrap">' + dateLink + '</td>'
 							+ '<td><a href="' + uir + 'Kingdom/profile/' + esc(d.KingdomId) + '">' + esc(d.KingdomName) + '</a></td>'
 							+ '<td><a href="' + uir + 'Park/profile/' + pid + '">' + esc(d.ParkName) + '</a></td>'
 							+ '<td>' + (eid > 0 ? '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.EventName) + '</a>' : '') + '</td>'
 							+ '<td>' + classLabel + '</td>'
-							+ '<td class="pn-col-numeric">' + esc(d.Credits) + '</td>';
+							+ '<td class="pn-col-numeric">' + esc(d.Credits) + '</td>'
+							+ '<td>' + byCell + '</td>';
 						if (canEditAny) {
 							html += '<td class="pn-award-actions-cell">';
 							if (canEditThis) {
@@ -6336,6 +6357,29 @@ $(function() {
 	});
 });
 initEmailSpellCheck('pn-acct-email', 'pn-acct-email-suggestion');
+// Username availability check on the Update Account modal. currentValue
+// prevents the player's existing username from being flagged as "taken"
+// against their own row.
+if (typeof initUsernameAvailabilityCheck === 'function' && document.getElementById('pn-acct-username')) {
+	window.pnAcctUsernameCheck = initUsernameAvailabilityCheck({
+		inputId:      'pn-acct-username',
+		statusId:     'pn-acct-username-status',
+		submitBtnId:  'pn-acct-save',
+		endpointUrl:  '<?= UIR ?>PlayerAjax/check_username',
+		gateMode:     'soft',
+		currentValue: <?= json_encode($Player['UserName'] ?? '') ?>
+	});
+	// Reset on modal open so a stale "X is taken" from a previous edit
+	// session doesn't linger when the modal is reopened.
+	var _origPnOpenAcct = window.pnOpenAccountModal;
+	if (typeof _origPnOpenAcct === 'function') {
+		window.pnOpenAccountModal = function() {
+			var r = _origPnOpenAcct.apply(this, arguments);
+			if (window.pnAcctUsernameCheck && window.pnAcctUsernameCheck.reset) window.pnAcctUsernameCheck.reset();
+			return r;
+		};
+	}
+}
 </script>
 
 

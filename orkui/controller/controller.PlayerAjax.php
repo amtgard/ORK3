@@ -2,6 +2,39 @@
 
 class Controller_PlayerAjax extends Controller {
 
+	// Generic username-availability probe. Used by the SelfReg form, the
+	// Park/Kingdom "Create Player" modals, and profile edit so we can warn the
+	// user up-front instead of silently mangling their chosen name with a
+	// -xxxxx suffix at SelfRegister/CreatePlayer time. Requires a logged-in
+	// session — the SelfReg public path has its own token-gated equivalent
+	// in Controller_SelfReg::check_username().
+	public function check_username($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) {
+			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+			exit;
+		}
+		$candidate = trim($_POST['UserName'] ?? '');
+		echo json_encode(self::username_check_payload($candidate));
+		exit;
+	}
+
+	// Shared helper — used by check_username() above AND by
+	// Controller_SelfReg::check_username(). Same JSON contract so the JS
+	// helper (initUsernameAvailabilityCheck in revised.js) works with both.
+	public static function username_check_payload($candidate) {
+		$candidate = trim((string)$candidate);
+		if (strlen($candidate) < 4) {
+			return ['status' => 0, 'available' => false, 'reason' => 'too-short', 'username' => $candidate];
+		}
+		global $DB;
+		$DB->Clear();
+		$DB->username = $candidate;
+		$rs = $DB->DataSet('SELECT mundane_id FROM ' . DB_PREFIX . 'mundane WHERE username = :username LIMIT 1');
+		$taken = ($rs && $rs->Next());
+		return ['status' => 0, 'available' => !$taken, 'username' => $candidate];
+	}
+
 	public function park($p = null) {
 		header('Content-Type: application/json');
 		$parts   = explode('/', $p ?? '');
@@ -951,7 +984,8 @@ class Controller_PlayerAjax extends Controller {
 			'RestrictFish'      => (int)!empty($_POST['RestrictFish']),
 			'RestrictHoney'     => (int)!empty($_POST['RestrictHoney']),
 			'RestrictPoultry'   => (int)!empty($_POST['RestrictPoultry']),
-			'RestrictRedmeat'   => (int)!empty($_POST['RestrictRedmeat']),
+			'RestrictBeef'      => (int)!empty($_POST['RestrictBeef']),
+			'RestrictPork'      => (int)!empty($_POST['RestrictPork']),
 			'RestrictShellfish' => (int)!empty($_POST['RestrictShellfish']),
 			'AllergenMilk'      => max(0, min(2, (int)($_POST['AllergenMilk']      ?? 0))),
 			'AllergenEggs'      => max(0, min(2, (int)($_POST['AllergenEggs']      ?? 0))),
@@ -968,7 +1002,8 @@ class Controller_PlayerAjax extends Controller {
 			'AllergenMushroom'  => max(0, min(2, (int)($_POST['AllergenMushroom']  ?? 0))),
 			'AllergenCorn'      => max(0, min(2, (int)($_POST['AllergenCorn']      ?? 0))),
 			'AllergenCoconut'   => max(0, min(2, (int)($_POST['AllergenCoconut']   ?? 0))),
-			'AllergenCocoa'     => max(0, min(2, (int)($_POST['AllergenCocoa']     ?? 0))),
+			'AllergenCocoa'       => max(0, min(2, (int)($_POST['AllergenCocoa']       ?? 0))),
+			'AllergenNightshades' => max(0, min(2, (int)($_POST['AllergenNightshades'] ?? 0))),
 		];
 		$this->load_model('Player');
 		$this->Player->SaveDietaryPreferences($mundane_id, $data);

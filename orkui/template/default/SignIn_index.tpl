@@ -204,15 +204,46 @@ html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !importa
 			<div class="si-error"><i class="fas fa-exclamation-circle" style="margin-right:6px"></i><?= htmlspecialchars($error) ?></div>
 		<?php endif; ?>
 
-		<div class="si-meta">
-			<i class="fas fa-coins"></i><strong><?= (float)($link['Credits'] ?? 1) ?> credit<?= (float)($link['Credits'] ?? 1) != 1 ? 's' : '' ?></strong> will be recorded &nbsp;&middot;&nbsp;
-			<i class="fas fa-clock"></i> Expires <?= htmlspecialchars(date('D M j, g:i a T', strtotime($link['ExpiresAt'] ?? 'now'))) ?>
-		</div>
+		<?php
+			// $existing is set by the controller when the player already has an
+			// attendance row for this scope. We don't grant a second credit —
+			// the form is repurposed to let them change which class the
+			// already-recorded credit was for.
+			$_existing = isset($existing) && is_array($existing) ? $existing : null;
+		?>
+
+		<?php if ($_existing): ?>
+			<div class="si-meta" style="background:#fff8e1;border-left:4px solid #f59e0b;padding:10px 14px;margin-bottom:14px">
+				<i class="fas fa-info-circle" style="margin-right:6px;color:#b45309"></i>
+				You've already signed in today as <strong><?= htmlspecialchars($_existing['ClassName'] ?: 'a previous class') ?></strong>.
+				No additional credit will be recorded &mdash; you can change which class your credit was for below.
+			</div>
+		<?php else: ?>
+			<div class="si-meta">
+				<i class="fas fa-coins"></i><strong><?= (float)($link['Credits'] ?? 1) ?> credit<?= (float)($link['Credits'] ?? 1) != 1 ? 's' : '' ?></strong> will be recorded &nbsp;&middot;&nbsp;
+				<i class="fas fa-clock"></i> Expires <?= htmlspecialchars(date('D M j, g:i a T', strtotime($link['ExpiresAt'] ?? 'now'))) ?>
+			</div>
+		<?php endif; ?>
 
 		<form method="post" action="<?= UIR ?>SignIn/index/<?= htmlspecialchars($link_token) ?>" id="si-form">
-			<input type="hidden" name="ClassId" id="si-class-id-input" value="<?= $last_class_id ?>">
+			<input type="hidden" name="ClassId" id="si-class-id-input" value="<?= $_existing ? (int)$_existing['ClassId'] : $last_class_id ?>">
 
-			<?php if ($last_class_id > 0): ?>
+			<?php if ($_existing): ?>
+				<!-- Already signed in today — picker only, "Change Class" action.
+				     Pre-selects the current class so the OK button is enabled
+				     and shows what the user is about to commit (or change). -->
+				<div class="si-class-picker" id="si-class-picker" style="display:block">
+					<label for="si-class-select">Change to a different class</label>
+					<select id="si-class-select">
+						<?php foreach ($classes as $c): ?>
+							<option value="<?= (int)$c['ClassId'] ?>"<?= (int)$c['ClassId'] === (int)$_existing['ClassId'] ? ' selected' : '' ?>><?= htmlspecialchars($c['Name']) ?></option>
+						<?php endforeach; ?>
+					</select>
+					<button type="submit" class="si-btn-primary" id="si-alt-btn">
+						<i class="fas fa-sync-alt" style="margin-right:6px"></i>Change Class
+					</button>
+				</div>
+			<?php elseif ($last_class_id > 0): ?>
 				<!-- Quick sign-in with last class -->
 				<button type="submit" class="si-btn-primary" id="si-quick-btn"
 					onclick="document.getElementById('si-class-id-input').value=<?= $last_class_id ?>">

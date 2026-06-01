@@ -84,6 +84,9 @@ class Attendance  extends Ork3 {
     	$this->attendance->flavor = $request['Flavor'] ?? '';
 		$this->attendance->by_whom_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		$this->attendance->entered_at = date("Y-m-d H:i:s");
+		// Officer-keyed entry from Enter Attendance modal (Search / Recent tabs).
+		// Self-signin and self-reg paths set this column to their own value below.
+		$this->attendance->entry_method = 'manual';
 		$this->attendance->event_id = 0;
 		$this->attendance->event_calendardetail_id = 0;
 		$this->attendance->date_year = 0;
@@ -412,8 +415,11 @@ class Attendance  extends Ork3 {
 			if ($_event_start_ts !== false && $_event_start_ts > (time() + 86400)) {
 				return InvalidParameter('Check-in window not yet open.');
 			}
-			$expires_at = date('Y-m-d H:i:s', strtotime($event_end) + 86400);
-			if (strtotime($expires_at) <= time()) return InvalidParameter('This event has already ended.');
+			// Store as UTC — MySQL `NOW()` returns UTC on this server, so PHP
+			// must too or all `expires_at > NOW()` checks silently misfire by
+			// the PHP-to-MySQL timezone offset (gave links 0 effective hours).
+			$expires_at = gmdate('Y-m-d H:i:s', strtotime($event_end) + 86400);
+			if (strtotime($expires_at . ' UTC') <= time()) return InvalidParameter('This event has already ended.');
 		} elseif (valid_id($park_id)) {
 			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT))
 				return NoAuthorization();
@@ -426,7 +432,8 @@ class Attendance  extends Ork3 {
 
 		if ($expires_at === null) {
 			$hours      = min(96, max(1, (int)($request['Hours'] ?? 3)));
-			$expires_at = date('Y-m-d H:i:s', time() + $hours * 3600);
+			// UTC — see comment above.
+			$expires_at = gmdate('Y-m-d H:i:s', time() + $hours * 3600);
 		}
 
 		$token = bin2hex(random_bytes(24));
@@ -443,11 +450,11 @@ class Attendance  extends Ork3 {
 		$this->attendance_link->by_whom_id              = $mundane_id;
 		$this->attendance_link->credits                 = $credits;
 		$this->attendance_link->expires_at              = $expires_at;
-		$this->attendance_link->created_at              = date('Y-m-d H:i:s');
+		$this->attendance_link->created_at              = gmdate('Y-m-d H:i:s');
 		$this->attendance_link->save();
 
 		if (!$this->attendance_link->link_id) return InvalidParameter('Could not create link.');
-		return Success(['Token' => $token, 'ExpiresAt' => $expires_at]);
+		return Success(['Token' => $token, 'ExpiresAt' => $expires_at, 'LinkId' => (int)$this->attendance_link->link_id]);
 	}
 
 	public function GetAttendanceLinkInfo($request) {
@@ -457,7 +464,9 @@ class Attendance  extends Ork3 {
 		$this->attendance_link->clear();
 		$this->attendance_link->token = $token;
 		if (!$this->attendance_link->find()) return InvalidParameter('Link not found.');
-		if (strtotime($this->attendance_link->expires_at) <= time()) return InvalidParameter('This sign-in link has expired.');
+		// expires_at is stored as UTC (gmdate at insert time) — strtotime would
+		// otherwise interpret as PHP local TZ and mis-compare.
+		if (strtotime($this->attendance_link->expires_at . ' UTC') <= time()) return InvalidParameter('This sign-in link has expired.');
 
 		return Success([
 			'LinkId'                 => (int)$this->attendance_link->link_id,
@@ -480,7 +489,9 @@ class Attendance  extends Ork3 {
 		$this->attendance_link->clear();
 		$this->attendance_link->token = $token;
 		if (!$this->attendance_link->find()) return InvalidParameter('Link not found.');
-		if (strtotime($this->attendance_link->expires_at) <= time()) return InvalidParameter('This sign-in link has expired.');
+		// expires_at is stored as UTC (gmdate at insert time) — strtotime would
+		// otherwise interpret as PHP local TZ and mis-compare.
+		if (strtotime($this->attendance_link->expires_at . ' UTC') <= time()) return InvalidParameter('This sign-in link has expired.');
 
 		$park_id                 = (int)$this->attendance_link->park_id;
 		$kingdom_id              = (int)$this->attendance_link->kingdom_id;
@@ -509,26 +520,29 @@ class Attendance  extends Ork3 {
 			$kingdom_id = (int)($park['ParkInfo']['KingdomId'] ?? 0);
 		}
 
-		// Get player persona
+		// Get player persona. YapoResultSet doesn't pre-advance — must call
+		// Next() before field access or values are silently null.
 		$this->db->Clear();
 		$player_row = $this->db->query('SELECT persona FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id . ' LIMIT 1');
-		$persona    = ($player_row && isset($player_row->persona)) ? (string)$player_row->persona : '';
+		$persona    = ($player_row && $player_row->Next() && isset($player_row->persona)) ? (string)$player_row->persona : '';
 
-		// Check for duplicate sign-in: for events, check by event_calendardetail_id; for park, by date+park
+		// Check for duplicate sign-in: for events, check by event_calendardetail_id; for park, by date+park.
+		// Same Next() requirement as above — without it the check silently
+		// returned "no row", letting players grant themselves unlimited credits.
 		$this->db->Clear();
 		if (valid_id($event_calendardetail_id)) {
 			$check = $this->db->query(
 				'SELECT attendance_id FROM ' . DB_PREFIX . 'attendance WHERE mundane_id = ' . $mundane_id .
 				' AND event_calendardetail_id = ' . $event_calendardetail_id . ' LIMIT 1'
 			);
-			if ($check && $check->attendance_id) return InvalidParameter('You have already signed in to this event.');
+			if ($check && $check->Next() && (int)$check->attendance_id > 0) return InvalidParameter('You have already signed in to this event.');
 		} else {
 			$check = $this->db->query(
 				'SELECT attendance_id FROM ' . DB_PREFIX . 'attendance WHERE mundane_id = ' . $mundane_id .
 				" AND date = '" . $attendance_date . "' AND park_id = " . $park_id . ' AND kingdom_id = ' . $kingdom_id .
 				' AND event_id = 0 LIMIT 1'
 			);
-			if ($check && $check->attendance_id) return InvalidParameter('You have already signed in today.');
+			if ($check && $check->Next() && (int)$check->attendance_id > 0) return InvalidParameter('You have already signed in today.');
 		}
 
 		$this->attendance->clear();
@@ -543,6 +557,10 @@ class Attendance  extends Ork3 {
 		$this->attendance->flavor                   = '';
 		$this->attendance->by_whom_id               = $mundane_id;
 		$this->attendance->entered_at               = date('Y-m-d H:i:s');
+		// Self-signin via a PM-issued QR/link. The link creator's mundane_id
+		// is preserved in ork_attendance_link.by_whom_id if reports want to
+		// surface "link issued by Lacris, used by Augustus".
+		$this->attendance->entry_method             = 'signin_link';
 		$this->attendance->event_id                 = $event_id;
 		$this->attendance->event_calendardetail_id  = $event_calendardetail_id;
 		$this->attendance->date_year                = 0;
@@ -564,6 +582,123 @@ class Attendance  extends Ork3 {
 		return InvalidParameter('Could not save attendance. You may have already signed in today.');
 	}
 
+	// Used by the SignIn page to determine whether the logged-in player has
+	// already signed in for the scope (date+park or event detail) of a given
+	// attendance link. If they have, the page offers them a "change my class"
+	// flow rather than silently rejecting their second tap.
+	// Returns ['AttendanceId' => int, 'ClassId' => int, 'ClassName' => string]
+	// or null if no existing row matches.
+	public function GetExistingSignin($mundane_id, $link_info) {
+		$mundane_id              = (int)$mundane_id;
+		$park_id                 = (int)($link_info['ParkId'] ?? 0);
+		$event_id                = (int)($link_info['EventId'] ?? 0);
+		$event_calendardetail_id = (int)($link_info['EventCalendarDetailId'] ?? 0);
+
+		// Event-scoped: match by event_calendardetail_id (same logic as UseAttendanceLink dup check)
+		$this->db->Clear();
+		if (valid_id($event_calendardetail_id)) {
+			$rs = $this->db->query(
+				'SELECT a.attendance_id, a.class_id, c.name AS class_name ' .
+				'FROM ' . DB_PREFIX . 'attendance a ' .
+				'LEFT JOIN ' . DB_PREFIX . 'class c ON c.class_id = a.class_id ' .
+				'WHERE a.mundane_id = ' . $mundane_id .
+				' AND a.event_calendardetail_id = ' . $event_calendardetail_id . ' LIMIT 1'
+			);
+		} else if (valid_id($park_id)) {
+			// Don't filter on kingdom_id here: the link table stores 0 for
+			// park-scoped links, but the attendance row stores the park's
+			// parent kingdom_id (resolved at insert time). (mundane_id, date,
+			// park_id, event_id=0) is unique enough for the "did this player
+			// already sign in here today?" question.
+			$today = date('Y-m-d');
+			$rs = $this->db->query(
+				'SELECT a.attendance_id, a.class_id, c.name AS class_name ' .
+				'FROM ' . DB_PREFIX . 'attendance a ' .
+				'LEFT JOIN ' . DB_PREFIX . 'class c ON c.class_id = a.class_id ' .
+				"WHERE a.mundane_id = $mundane_id AND a.date = '$today' " .
+				"AND a.park_id = $park_id AND a.event_id = 0 LIMIT 1"
+			);
+		} else {
+			return null;
+		}
+		if ($rs && $rs->Next() && (int)$rs->attendance_id > 0) {
+			return [
+				'AttendanceId' => (int)$rs->attendance_id,
+				'ClassId'      => (int)$rs->class_id,
+				'ClassName'    => (string)$rs->class_name,
+			];
+		}
+		return null;
+	}
+
+	// Update the class on an existing self-signed attendance row. The row
+	// must belong to the caller — we re-check mundane_id in the WHERE so a
+	// stolen/leaked attendance_id can't be used to rewrite someone else's
+	// row.
+	//
+	// This is the one path in the sign-in-link flow where the data alone
+	// loses information on edit (UPDATE overwrites class_id) — so we audit
+	// before/after class so a forensic question of "what class was this
+	// originally?" can be answered after the fact. Successful insert paths
+	// don't need audit because the row IS the record.
+	public function UpdateSelfSigninClass($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($mundane_id)) return NoAuthorization('Must be logged in.');
+
+		$attendance_id = (int)($request['AttendanceId'] ?? 0);
+		$class_id      = (int)($request['ClassId'] ?? 0);
+		if (!valid_id($attendance_id)) return InvalidParameter('Invalid attendance id.');
+		if (!valid_id($class_id))      return InvalidParameter('Class is required.');
+
+		// Read the prior row to capture before-state for audit AND to verify
+		// ownership before we touch anything. The WHERE on the UPDATE would
+		// also enforce ownership, but a SELECT first lets us distinguish
+		// "not found / not yours" from "found but already that class".
+		$this->db->Clear();
+		$prior = $this->db->query(
+			'SELECT attendance_id, mundane_id, class_id, date, park_id, kingdom_id, event_id, entry_method ' .
+			'FROM ' . DB_PREFIX . 'attendance WHERE attendance_id = ' . $attendance_id . ' LIMIT 1'
+		);
+		if (!$prior || !$prior->Next() || (int)$prior->attendance_id !== $attendance_id) {
+			return InvalidParameter('Attendance row not found.');
+		}
+		if ((int)$prior->mundane_id !== $mundane_id) {
+			return NoAuthorization('You can only change your own attendance.');
+		}
+		$prior_state = [
+			'AttendanceId' => (int)$prior->attendance_id,
+			'MundaneId'    => (int)$prior->mundane_id,
+			'ClassId'      => (int)$prior->class_id,
+			'Date'         => (string)$prior->date,
+			'ParkId'       => (int)$prior->park_id,
+			'KingdomId'    => (int)$prior->kingdom_id,
+			'EventId'      => (int)$prior->event_id,
+			'EntryMethod'  => (string)$prior->entry_method,
+		];
+
+		// No-op shortcut: same class already; don't touch DB or audit log.
+		if ((int)$prior->class_id === $class_id) {
+			return Success(['AttendanceId' => $attendance_id, 'ClassId' => $class_id, 'Unchanged' => true]);
+		}
+
+		$this->db->Clear();
+		$this->db->Execute(
+			'UPDATE ' . DB_PREFIX . 'attendance SET class_id = ' . $class_id . ', flavor = \'\' ' .
+			'WHERE attendance_id = ' . $attendance_id . ' AND mundane_id = ' . $mundane_id . ' LIMIT 1'
+		);
+
+		$post_state = array_merge($prior_state, ['ClassId' => $class_id]);
+		$audit_payload = [
+			'AttendanceId' => $attendance_id,
+			'PriorClassId' => $prior_state['ClassId'],
+			'NewClassId'   => $class_id,
+			'RemoteAddr'   => $_SERVER['REMOTE_ADDR'] ?? '',
+		];
+		Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $audit_payload, 'Player', $mundane_id, $prior_state, $post_state);
+
+		return Success(['AttendanceId' => $attendance_id, 'ClassId' => $class_id]);
+	}
+
 	public function GetAttendanceLinks($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		if (!valid_id($mundane_id)) return NoAuthorization();
@@ -583,17 +718,18 @@ class Attendance  extends Ork3 {
 				}
 				if (!$ok) return NoAuthorization();
 			}
-			$where = 'event_id = ' . $event_id;
+			$where = 'al.event_id = ' . $event_id;
 		} elseif (valid_id($park_id)) {
 			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT))
 				return NoAuthorization();
-			// RW1: B3 migration converts ork_attendance_link.event_id from 0 sentinel to NULL.
-			$where = 'park_id = ' . $park_id . ' AND event_id IS NULL';
+			// Columns are aliased — both ork_attendance_link and ork_park have a
+			// park_id column, so bare `park_id` is ambiguous and fails the whole
+			// SELECT silently (modal showed "No active links" forever).
+			$where = 'al.park_id = ' . $park_id . ' AND al.event_id IS NULL';
 		} elseif (valid_id($kingdom_id)) {
 			if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT))
 				return NoAuthorization();
-			// RW1: B3 migration — event_id IS NULL replaces 0 sentinel; same for park_id (already nullable).
-			$where = 'kingdom_id = ' . $kingdom_id . ' AND (park_id = 0 OR park_id IS NULL) AND event_id IS NULL';
+			$where = 'al.kingdom_id = ' . $kingdom_id . ' AND (al.park_id = 0 OR al.park_id IS NULL) AND al.event_id IS NULL';
 		} else {
 			return InvalidParameter('ParkId, KingdomId, or EventId required.');
 		}

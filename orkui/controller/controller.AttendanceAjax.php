@@ -253,10 +253,16 @@ class Controller_AttendanceAjax extends Controller {
 				$detail     = $r['Detail'];
 				$token      = is_array($detail) ? ($detail['Token'] ?? '') : $detail;
 				$expires_at = is_array($detail) ? ($detail['ExpiresAt'] ?? null) : null;
-				$expires_ts = $expires_at ? strtotime($expires_at) : (time() + (($args['Hours'] ?? 3) * 3600));
+				// expires_at is stored as UTC — append 'UTC' so strtotime doesn't
+				// mis-parse it as PHP-local time. date() then converts back to
+				// the user's display TZ (server's local TZ for now).
+				$expires_ts = $expires_at ? strtotime($expires_at . ' UTC') : (time() + (($args['Hours'] ?? 3) * 3600));
 				$url        = HTTP_UI_REMOTE . 'index.php?Route=SignIn/index/' . $token;
 				$expires    = date('D, M j g:i a T', $expires_ts);
-				echo json_encode(['status' => 0, 'url' => $url, 'token' => $token, 'expires' => 'Expires ' . $expires]);
+				// linkId in the response so the client-side "Remove" button can
+				// hit the existing delete endpoint without a second round-trip.
+				$linkId     = is_array($detail) ? (int)($detail['LinkId'] ?? 0) : 0;
+				echo json_encode(['status' => 0, 'url' => $url, 'token' => $token, 'expires' => 'Expires ' . $expires, 'linkId' => $linkId]);
 			} else {
 				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 			}

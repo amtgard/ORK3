@@ -387,11 +387,12 @@ class Player extends Ork3 {
 
 	public function AttendanceForPlayer($request) {
 		$sql = "select 
-              a.*, c.name as class_name, 
-                ifnull(p.name, ep.name) as park_name, 
-                ifnull(k.name, ek.name) as kingdom_name, 
-                e.name as event_name, e.park_id as event_park_id, e.kingdom_id as event_kingdom_id, 
-                ep.name as event_park_name, ek.name as event_kingdom_name
+              a.*, c.name as class_name,
+                ifnull(p.name, ep.name) as park_name,
+                ifnull(k.name, ek.name) as kingdom_name,
+                e.name as event_name, e.park_id as event_park_id, e.kingdom_id as event_kingdom_id,
+                ep.name as event_park_name, ek.name as event_kingdom_name,
+                bwm.persona as by_whom_persona
 					from " . DB_PREFIX . "attendance a
 						left join " . DB_PREFIX . "park p on a.park_id = p.park_id
 						left join " . DB_PREFIX . "kingdom k on a.kingdom_id = k.kingdom_id
@@ -399,6 +400,7 @@ class Player extends Ork3 {
 						left join " . DB_PREFIX . "event e on a.event_id = e.event_id
 							left join " . DB_PREFIX . "park ep on e.park_id = ep.park_id
 							left join " . DB_PREFIX . "kingdom ek on e.kingdom_id = ek.kingdom_id
+						left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = a.by_whom_id
           where a.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "'";
     $date_start = $request['date_start'];
     if (!is_null($date_start) && strtotime($date_start)) {
@@ -422,7 +424,9 @@ class Player extends Ork3 {
 				$response['Attendance'][] = array(
 						'AttendanceId' => $r->attendance_id,
 						'EnteredById' => $r->by_whom_id,
-						'EnteredAt' => $r->entered_at,
+						'EnteredBy'   => $r->by_whom_persona,
+						'EnteredAt'   => $r->entered_at,
+						'EntryMethod' => $r->entry_method,
 						'MundaneId' => $r->mundane_id,
 						'ClassId' => $r->class_id,
 						'Date' => $r->date,
@@ -997,7 +1001,11 @@ class Player extends Ork3 {
 		// Add Color attendance credit for date of registration
 		$today = date('Y-m-d');
 		$DB->Clear();
-		$DB->Execute("INSERT INTO " . DB_PREFIX . "attendance (mundane_id, class_id, date, date_year, date_month, date_week3, date_week6, park_id, kingdom_id, event_id, event_calendardetail_id, credits, persona, flavor, note, by_whom_id, entered_at) VALUES (" . $new_mundane_id . ", 6, '" . $today . "', YEAR('" . $today . "'), MONTH('" . $today . "'), WEEK('" . $today . "', 3), WEEK('" . $today . "', 6), " . $park_id . ", " . $kingdom_id . ", 0, 0, 1.00, '" . addslashes(trim($request['Persona'])) . "', '', 'Self-registration', " . $new_mundane_id . ", '" . $now . "')");
+		// Self-registration on first-ever signup: the new player gets one
+		// attendance credit (Peasant class) as a welcome. entry_method tags
+		// the row so reports don't confusingly render "Augustus entered
+		// Augustus's first credit" — instead they show "Self-registration".
+		$DB->Execute("INSERT INTO " . DB_PREFIX . "attendance (mundane_id, class_id, date, date_year, date_month, date_week3, date_week6, park_id, kingdom_id, event_id, event_calendardetail_id, credits, persona, flavor, note, by_whom_id, entered_at, entry_method) VALUES (" . $new_mundane_id . ", 6, '" . $today . "', YEAR('" . $today . "'), MONTH('" . $today . "'), WEEK('" . $today . "', 3), WEEK('" . $today . "', 6), " . $park_id . ", " . $kingdom_id . ", 0, 0, 1.00, '" . addslashes(trim($request['Persona'])) . "', '', 'Self-registration', " . $new_mundane_id . ", '" . $now . "', 'self_reg')");
 
 		// COMMIT transaction
 		$DB->Clear();
@@ -3182,17 +3190,17 @@ class Player extends Ork3 {
 		$sql = "INSERT INTO " . DB_PREFIX . "mundane_dietary
 			(`mundane_id`, `is_anonymous`, `no_restrictions`,
 			 `diet_vegetarian`, `diet_vegan`, `diet_halal`, `diet_kosher`, `diet_keto`, `diet_paleo`,
-			 `restrict_dairy`, `restrict_eggs`, `restrict_fish`, `restrict_honey`, `restrict_poultry`, `restrict_redmeat`, `restrict_shellfish`,
+			 `restrict_dairy`, `restrict_eggs`, `restrict_fish`, `restrict_honey`, `restrict_poultry`, `restrict_beef`, `restrict_pork`, `restrict_shellfish`,
 			 `allergen_milk`, `allergen_eggs`, `allergen_fish`, `allergen_shellfish`, `allergen_treenuts`, `allergen_peanuts`,
 			 `allergen_wheat`, `allergen_soy`, `allergen_sesame`, `allergen_garlic`, `allergen_gluten`, `allergen_onion`, `allergen_mushroom`,
-			 `allergen_corn`, `allergen_coconut`, `allergen_cocoa`)
+			 `allergen_corn`, `allergen_coconut`, `allergen_cocoa`, `allergen_nightshades`)
 			VALUES
 			($mundane_id, {$b('IsAnonymous')}, {$b('NoRestrictions')},
 			 {$b('DietVegetarian')}, {$b('DietVegan')}, {$b('DietHalal')}, {$b('DietKosher')}, {$b('DietKeto')}, {$b('DietPaleo')},
-			 {$b('RestrictDairy')}, {$b('RestrictEggs')}, {$b('RestrictFish')}, {$b('RestrictHoney')}, {$b('RestrictPoultry')}, {$b('RestrictRedmeat')}, {$b('RestrictShellfish')},
+			 {$b('RestrictDairy')}, {$b('RestrictEggs')}, {$b('RestrictFish')}, {$b('RestrictHoney')}, {$b('RestrictPoultry')}, {$b('RestrictBeef')}, {$b('RestrictPork')}, {$b('RestrictShellfish')},
 			 {$a('AllergenMilk')}, {$a('AllergenEggs')}, {$a('AllergenFish')}, {$a('AllergenShellfish')}, {$a('AllergenTreenuts')}, {$a('AllergenPeanuts')},
 			 {$a('AllergenWheat')}, {$a('AllergenSoy')}, {$a('AllergenSesame')}, {$a('AllergenGarlic')}, {$a('AllergenGluten')}, {$a('AllergenOnion')}, {$a('AllergenMushroom')},
-			 {$a('AllergenCorn')}, {$a('AllergenCoconut')}, {$a('AllergenCocoa')})
+			 {$a('AllergenCorn')}, {$a('AllergenCoconut')}, {$a('AllergenCocoa')}, {$a('AllergenNightshades')})
 			ON DUPLICATE KEY UPDATE
 			 `is_anonymous`       = {$b('IsAnonymous')},
 			 `no_restrictions`    = {$b('NoRestrictions')},
@@ -3201,7 +3209,7 @@ class Player extends Ork3 {
 			 `diet_keto`          = {$b('DietKeto')},        `diet_paleo`    = {$b('DietPaleo')},
 			 `restrict_dairy`     = {$b('RestrictDairy')},   `restrict_eggs` = {$b('RestrictEggs')},
 			 `restrict_fish`      = {$b('RestrictFish')},    `restrict_honey`= {$b('RestrictHoney')},
-			 `restrict_poultry`   = {$b('RestrictPoultry')}, `restrict_redmeat`  = {$b('RestrictRedmeat')},
+			 `restrict_poultry`   = {$b('RestrictPoultry')}, `restrict_beef`     = {$b('RestrictBeef')}, `restrict_pork` = {$b('RestrictPork')},
 			 `restrict_shellfish` = {$b('RestrictShellfish')},
 			 `allergen_milk`      = {$a('AllergenMilk')},    `allergen_eggs` = {$a('AllergenEggs')},
 			 `allergen_fish`      = {$a('AllergenFish')},    `allergen_shellfish`= {$a('AllergenShellfish')},
@@ -3209,8 +3217,8 @@ class Player extends Ork3 {
 			 `allergen_wheat`     = {$a('AllergenWheat')},   `allergen_soy`  = {$a('AllergenSoy')},
 			 `allergen_sesame`    = {$a('AllergenSesame')},  `allergen_garlic`   = {$a('AllergenGarlic')},
 			 `allergen_gluten`    = {$a('AllergenGluten')},  `allergen_onion`    = {$a('AllergenOnion')},   `allergen_mushroom` = {$a('AllergenMushroom')},
-			 `allergen_corn`      = {$a('AllergenCorn')},    `allergen_coconut`  = {$a('AllergenCoconut')},
-			 `allergen_cocoa`     = {$a('AllergenCocoa')}";
+			 `allergen_corn`        = {$a('AllergenCorn')},    `allergen_coconut`    = {$a('AllergenCoconut')},
+			 `allergen_cocoa`       = {$a('AllergenCocoa')},   `allergen_nightshades`= {$a('AllergenNightshades')}";
 		$this->db->Clear();
 		$this->db->Execute($sql);
 		return true;
@@ -3221,11 +3229,11 @@ class Player extends Ork3 {
 			'MundaneId' => (int)$mundane_id, 'IsAnonymous' => 1, 'NoRestrictions' => 0,
 			'DietVegetarian' => 0, 'DietVegan' => 0, 'DietHalal' => 0, 'DietKosher' => 0, 'DietKeto' => 0, 'DietPaleo' => 0,
 			'RestrictDairy' => 0, 'RestrictEggs' => 0, 'RestrictFish' => 0, 'RestrictHoney' => 0,
-			'RestrictPoultry' => 0, 'RestrictRedmeat' => 0, 'RestrictShellfish' => 0,
+			'RestrictPoultry' => 0, 'RestrictBeef' => 0, 'RestrictPork' => 0, 'RestrictShellfish' => 0,
 			'AllergenMilk' => 0, 'AllergenEggs' => 0, 'AllergenFish' => 0, 'AllergenShellfish' => 0,
 			'AllergenTreenuts' => 0, 'AllergenPeanuts' => 0, 'AllergenWheat' => 0, 'AllergenSoy' => 0,
 			'AllergenSesame' => 0, 'AllergenGarlic' => 0, 'AllergenGluten' => 0, 'AllergenOnion' => 0, 'AllergenMushroom' => 0,
-			'AllergenCorn' => 0, 'AllergenCoconut' => 0, 'AllergenCocoa' => 0,
+			'AllergenCorn' => 0, 'AllergenCoconut' => 0, 'AllergenCocoa' => 0, 'AllergenNightshades' => 0,
 		];
 	}
 
@@ -3237,7 +3245,7 @@ class Player extends Ork3 {
 			'DietKeto'       => (int)$r->diet_keto,        'DietPaleo'   => (int)$r->diet_paleo,
 			'RestrictDairy'     => (int)$r->restrict_dairy,    'RestrictEggs'     => (int)$r->restrict_eggs,
 			'RestrictFish'      => (int)$r->restrict_fish,     'RestrictHoney'    => (int)$r->restrict_honey,
-			'RestrictPoultry'   => (int)$r->restrict_poultry,  'RestrictRedmeat'  => (int)$r->restrict_redmeat,
+			'RestrictPoultry'   => (int)$r->restrict_poultry,  'RestrictBeef'     => (int)$r->restrict_beef,     'RestrictPork' => (int)$r->restrict_pork,
 			'RestrictShellfish' => (int)$r->restrict_shellfish,
 			'AllergenMilk'      => (int)$r->allergen_milk,     'AllergenEggs'     => (int)$r->allergen_eggs,
 			'AllergenFish'      => (int)$r->allergen_fish,     'AllergenShellfish'=> (int)$r->allergen_shellfish,
@@ -3245,8 +3253,8 @@ class Player extends Ork3 {
 			'AllergenWheat'     => (int)$r->allergen_wheat,    'AllergenSoy'      => (int)$r->allergen_soy,
 			'AllergenSesame'    => (int)$r->allergen_sesame,   'AllergenGarlic'   => (int)$r->allergen_garlic,
 			'AllergenGluten'    => (int)$r->allergen_gluten,   'AllergenOnion'    => (int)$r->allergen_onion,    'AllergenMushroom' => (int)$r->allergen_mushroom,
-			'AllergenCorn'      => (int)$r->allergen_corn,     'AllergenCoconut'  => (int)$r->allergen_coconut,
-			'AllergenCocoa'     => (int)$r->allergen_cocoa,
+			'AllergenCorn'        => (int)$r->allergen_corn,        'AllergenCoconut'     => (int)$r->allergen_coconut,
+			'AllergenCocoa'       => (int)$r->allergen_cocoa,       'AllergenNightshades' => (int)$r->allergen_nightshades,
 		];
 	}
 

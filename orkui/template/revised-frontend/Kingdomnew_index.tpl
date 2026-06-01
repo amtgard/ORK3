@@ -2095,6 +2095,7 @@ var KnBannerConfig = {
 				<div class="plr-field">
 					<label>Username <span class="plr-req">*</span></label>
 					<input type="text" id="kn-addplayer-username" placeholder="min. 4 characters" autocomplete="new-password">
+					<div class="plr-field-hint" id="kn-addplayer-username-status" style="display:none;font-size:12px;margin-top:4px"></div>
 				</div>
 				<div class="plr-field">
 					<label>Password</label>
@@ -2457,7 +2458,7 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 <!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
 
 <!-- QR Code Modal -->
-<div id="kn-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9100" onclick="if(event.target===this)knCloseQrModal()">
+<div id="kn-qr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:var(--z-modal-top, 10200)" onclick="if(event.target===this)knCloseQrModal()">
 	<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;padding:28px 28px 20px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:320px;width:calc(100vw - 40px);text-align:center">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
 			<span style="font-weight:700;font-size:15px;color:#2d3748"><i class="fas fa-qrcode" style="margin-right:8px;color:#2b6cb0"></i>Scan to Sign In</span>
@@ -3156,6 +3157,22 @@ $(function() { window.knInitRecsTab(); });
 window.knRecPrint = function() { if (window.knRecDT) window.recsExportPrint(window.knRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($kingdom_name)) ?>'); };
 window.knRecCsv   = function() { if (window.knRecDT) window.recsExportCsv(window.knRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $kingdom_name) ?>.csv'); };
 initEmailSpellCheck('kn-addplayer-email', 'kn-addplayer-email-suggestion');
+window.knUsernameCheck = initUsernameAvailabilityCheck({
+	inputId:     'kn-addplayer-username',
+	statusId:    'kn-addplayer-username-status',
+	submitBtnId: 'kn-addplayer-submit',
+	endpointUrl: '<?= UIR ?>PlayerAjax/check_username',
+	gateMode:    'soft'
+});
+(function() {
+	var _origOpen = window.knOpenAddPlayerModal;
+	if (typeof _origOpen !== 'function') return;
+	window.knOpenAddPlayerModal = function() {
+		var r = _origOpen.apply(this, arguments);
+		if (window.knUsernameCheck && window.knUsernameCheck.reset) window.knUsernameCheck.reset();
+		return r;
+	};
+})();
 </script>
 
 <?php if (!empty($IsLoggedIn)): ?>

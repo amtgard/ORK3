@@ -4656,6 +4656,9 @@ $(document).ready(function() {
         buildParks();
         overlay.classList.add('kn-open');
         document.body.style.overflow = 'hidden';
+        // Drop any stale "no active links" cache so reopening the Admin modal
+        // (which hosts the Sign-in Link tab) always shows the current state.
+        if (typeof window.knResetSigninLinksCache === 'function') window.knResetSigninLinksCache();
     };
     function knCloseAdminModal() {
         var overlay = gid('kn-admin-overlay');
@@ -7882,10 +7885,19 @@ $(document).ready(function() {
         }
         evActuallyCloseEditModal();
     };
-    // Close on backdrop click
+    // Close on backdrop click — but only when the mousedown ALSO started on the
+    // backdrop. Without this guard, drag-selecting text inside a field and
+    // releasing the mouse outside the modal triggers a synthetic click on the
+    // backdrop and closes the modal mid-selection.
+    var _evBackdropDownId = null;
+    document.addEventListener('mousedown', function(e) {
+        _evBackdropDownId = (e.target && (e.target.id === 'ev-edit-modal' || e.target.id === 'ev-checkin-modal'))
+            ? e.target.id : null;
+    });
     document.addEventListener('click', function(e) {
-        if (e.target && e.target.id === 'ev-edit-modal') evCloseEditModal();
-        if (e.target && e.target.id === 'ev-checkin-modal') evCloseCheckinModal();
+        if (e.target && e.target.id === 'ev-edit-modal'    && _evBackdropDownId === 'ev-edit-modal')    evCloseEditModal();
+        if (e.target && e.target.id === 'ev-checkin-modal' && _evBackdropDownId === 'ev-checkin-modal') evCloseCheckinModal();
+        _evBackdropDownId = null;
     });
     // Close on Escape key
     document.addEventListener('keydown', function(e) {
@@ -8145,8 +8157,15 @@ $(document).ready(function() {
             document.body.style.overflow = '';
         };
 
+        // Backdrop click closes — but require the mousedown to have also started
+        // on the backdrop, so drag-selecting text out of a field doesn't close.
+        var _evStaffDownOnBackdrop = false;
+        document.addEventListener('mousedown', function(e) {
+            _evStaffDownOnBackdrop = !!(e.target && e.target.id === 'ev-staff-modal');
+        });
         document.addEventListener('click', function(e) {
-            if (e.target && e.target.id === 'ev-staff-modal') evCloseStaffModal();
+            if (e.target && e.target.id === 'ev-staff-modal' && _evStaffDownOnBackdrop) evCloseStaffModal();
+            _evStaffDownOnBackdrop = false;
         });
 
         document.addEventListener('keydown', function(e) {
@@ -8593,14 +8612,47 @@ $(document).ready(function() {
             setTimeout(function() { gid('ev-sched-title').focus(); }, 50);
         };
 
-        window.evCloseScheduleModal = function() {
+        // Dirty-tracking so a stray Escape / backdrop click can't silently
+        // discard typed content. User-driven input/change events flip the
+        // flag; the field-population in evOpenScheduleModal{,Edit} doesn't
+        // trigger these events because programmatic .value sets are silent.
+        var _evSchedDirty = false;
+        var schedModalEl  = gid('ev-schedule-modal');
+        if (schedModalEl) {
+            schedModalEl.addEventListener('input',  function() { _evSchedDirty = true; });
+            schedModalEl.addEventListener('change', function() { _evSchedDirty = true; });
+        }
+        // Reset the flag whenever the modal opens (covers both add and edit).
+        var _origEvOpenSched   = window.evOpenScheduleModal;
+        var _origEvOpenSchedEd = window.evOpenScheduleEditModal;
+        window.evOpenScheduleModal     = function() { _evSchedDirty = false; return _origEvOpenSched.apply(this, arguments); };
+        window.evOpenScheduleEditModal = function() { _evSchedDirty = false; return _origEvOpenSchedEd.apply(this, arguments); };
+
+        function _evSchedDoClose() {
+            _evSchedDirty = false;
             var modal = gid('ev-schedule-modal');
             if (modal) modal.style.display = 'none';
             document.body.style.overflow = '';
+        }
+        window.evCloseScheduleModal = function(force) {
+            if (!force && _evSchedDirty) {
+                // knConfirm is async + callback-based, so we have to defer the close.
+                // It falls back to native confirm() if kn-confirm-overlay isn't on the page.
+                knConfirm('You have unsaved changes in this schedule item. Discard them?', _evSchedDoClose, 'Discard changes?');
+                return;
+            }
+            _evSchedDoClose();
         };
 
+        // Backdrop click closes — but require the mousedown to have also started
+        // on the backdrop, so drag-selecting text out of a field doesn't close.
+        var _evSchedDownOnBackdrop = false;
+        document.addEventListener('mousedown', function(e) {
+            _evSchedDownOnBackdrop = !!(e.target && e.target.id === 'ev-schedule-modal');
+        });
         document.addEventListener('click', function(e) {
-            if (e.target && e.target.id === 'ev-schedule-modal') evCloseScheduleModal();
+            if (e.target && e.target.id === 'ev-schedule-modal' && _evSchedDownOnBackdrop) evCloseScheduleModal();
+            _evSchedDownOnBackdrop = false;
         });
 
         document.addEventListener('keydown', function(e) {
@@ -8729,7 +8781,7 @@ $(document).ready(function() {
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.status === 0 && data.schedule) {
-                    if (postAction === 'close') evCloseScheduleModal();
+                    if (postAction === 'close') evCloseScheduleModal(true);
                     var s = data.schedule;
                     // Keep the Feast tab in sync: a "Feast and Food" schedule item must
                     // surface as a meal card there (and a card must drop if an edit moved
@@ -9667,6 +9719,10 @@ $(document).ready(function() {
         gid('pk-att-overlay').classList.add('pk-att-open');
         document.body.style.overflow = 'hidden';
         pkSetDate(today);
+        // Drop any stale "no active links" cache so every modal open reflects
+        // current DB state. The reset helper lives in the sign-in-link IIFE
+        // below since that's where pkLinksLoaded is in scope.
+        if (typeof window.pkResetSigninLinksCache === 'function') window.pkResetSigninLinksCache();
     };
     window.pkCloseAttendanceModal = function() {
         gid('pk-att-overlay').classList.remove('pk-att-open');
@@ -9909,9 +9965,19 @@ $(document).ready(function() {
     // --- Close handlers ---
     gid('pk-att-close-btn').addEventListener('click', pkCloseAttendanceModal);
     gid('pk-att-done-btn').addEventListener('click',  pkCloseAttendanceModal);
-    gid('pk-att-overlay').addEventListener('click', function(e) {
-        if (e.target === this) pkCloseAttendanceModal();
-    });
+    // Backdrop click closes — but only when mousedown also started on the
+    // backdrop. Without this, drag-selecting text inside an input and
+    // releasing outside it triggers a synthetic click on the backdrop and
+    // dismisses the modal mid-selection.
+    (function() {
+        var ov = gid('pk-att-overlay');
+        var downOnSelf = false;
+        ov.addEventListener('mousedown', function(e) { downOnSelf = (e.target === this); });
+        ov.addEventListener('click', function(e) {
+            if (downOnSelf && e.target === this) pkCloseAttendanceModal();
+            downOnSelf = false;
+        });
+    })();
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && gid('pk-att-overlay').classList.contains('pk-att-open'))
             pkCloseAttendanceModal();
@@ -10071,14 +10137,54 @@ function orkOpenQrModal(overlayId, imgId, downloadId, expiresId, token, expiresT
     var dlEl   = document.getElementById(downloadId);
     var overlay = document.getElementById(overlayId);
     if (expiresId) document.getElementById(expiresId).textContent = expiresText || '';
-    imgEl.src = '';
-    dlEl.href = '#';
+    // Show a loading placeholder (1x1 transparent PNG) so we don't render the
+    // browser's "broken image" icon while the AJAX is in flight.
+    var TRANSPARENT_PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    imgEl.src = TRANSPARENT_PX;
+    imgEl.alt = 'Loading QR code…';
+    imgEl.style.opacity = '0.4';
+    // Hide download link until we have valid bytes — otherwise the user can
+    // click it and save a 0-byte file Preview can't open.
+    dlEl.removeAttribute('href');
+    dlEl.style.pointerEvents = 'none';
+    dlEl.style.opacity = '0.5';
     overlay.style.display = 'flex';
     document.body.style.overflow = 'hidden';
+
+    function showError(msg) {
+        imgEl.src    = TRANSPARENT_PX;
+        imgEl.alt    = msg;
+        imgEl.title  = msg;
+        imgEl.style.opacity = '1';
+        // Render a visible message via parent — write into a sibling if present,
+        // otherwise overlay it on the img using alt + a title.
+        var errEl = imgEl.parentNode && imgEl.parentNode.querySelector('.ork-qr-error');
+        if (!errEl) {
+            errEl = document.createElement('div');
+            errEl.className = 'ork-qr-error';
+            errEl.style.cssText = 'color:#c53030;font-size:13px;padding:60px 12px;text-align:center;background:#fff5f5;border:1px solid #fed7d7;border-radius:6px;margin:0 auto 14px;width:220px;height:220px;box-sizing:border-box;display:flex;align-items:center;justify-content:center';
+            imgEl.parentNode.insertBefore(errEl, imgEl);
+            imgEl.style.display = 'none';
+        }
+        errEl.textContent = msg;
+    }
+    function clearError() {
+        var errEl = imgEl.parentNode && imgEl.parentNode.querySelector('.ork-qr-error');
+        if (errEl) errEl.remove();
+        imgEl.style.display = '';
+    }
+
     $.get(uir + 'QR/link/' + token, function(r) {
-        if (!r || r.status !== 0) { console.error('QR error', r); return; }
+        if (!r || r.status !== 0) {
+            console.error('QR error', r);
+            showError((r && r.error) ? r.error : 'Could not generate QR code.');
+            return;
+        }
+        clearError();
         var dataUri = 'data:image/png;base64,' + r.data;
         imgEl.src = dataUri;
+        imgEl.alt = 'Sign-in QR code';
+        imgEl.style.opacity = '1';
         // Build a blob URL for the download link
         try {
             var bytes = atob(r.data);
@@ -10089,7 +10195,12 @@ function orkOpenQrModal(overlayId, imgId, downloadId, expiresId, token, expiresT
         } catch(e) {
             dlEl.href = dataUri;
         }
-    }, 'json').fail(function(xhr) { console.error('QR request failed', xhr.status, xhr.responseText); });
+        dlEl.style.pointerEvents = '';
+        dlEl.style.opacity = '';
+    }, 'json').fail(function(xhr) {
+        console.error('QR request failed', xhr.status, xhr.responseText);
+        showError('Could not reach the QR service (' + (xhr.status || 'network') + ').');
+    });
 }
 function orkCloseQrModal(overlayId) {
     var overlay = document.getElementById(overlayId);
@@ -10129,6 +10240,16 @@ $(document).ready(function() {
     var pkLinksLoaded = false;
     var pkLinksOpen   = false;
     var pkCurrentToken = '';
+    var pkCurrentLinkId = 0;
+
+    // Expose a cache invalidator so pkOpenAttendanceModal (defined in a sibling
+    // IIFE) can drop stale "no active links" results from earlier in the page
+    // lifecycle. Without this, a fetch that returned empty before any link
+    // existed sticks around forever and the user keeps seeing "No active links".
+    window.pkResetSigninLinksCache = function() {
+        pkLinksLoaded = false;
+        if (pkLinksOpen && typeof pkLoadActiveLinks === 'function') pkLoadActiveLinks();
+    };
     var pkCurrentExpires = '';
 
     window.pkCloseQrModal = function() { orkCloseQrModal('pk-qr-overlay'); };
@@ -10147,6 +10268,7 @@ $(document).ready(function() {
                 if (r && r.status === 0) {
                     pkCurrentToken   = r.token;
                     pkCurrentExpires = r.expires || '';
+                    pkCurrentLinkId  = r.linkId || 0;
                     document.getElementById('pk-att-link-url').value = r.url;
                     document.getElementById('pk-att-link-expires').textContent = r.expires;
                     document.getElementById('pk-att-link-result').style.display = '';
@@ -10180,8 +10302,49 @@ $(document).ready(function() {
     if (qrBtn) {
         qrBtn.addEventListener('click', function() {
             if (!pkCurrentToken) return;
+            // Close the Enter Attendance modal first — its overlay stacks above
+            // anything that could realistically live above it, and the QR is a
+            // standalone "show this code" surface anyway. User can reopen
+            // Enter Attendance afterward to grab the link again.
+            var att = document.getElementById('pk-att-overlay');
+            if (att) att.classList.remove('pk-att-open');
             orkOpenQrModal('pk-qr-overlay', 'pk-qr-img', 'pk-qr-download', 'pk-qr-expires',
                 pkCurrentToken, pkCurrentExpires, PkConfig.uir);
+        });
+    }
+
+    var removeBtn = document.getElementById('pk-att-link-remove-btn');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', function() {
+            if (!pkCurrentLinkId) return;
+            var doRevoke = function() {
+                removeBtn.disabled = true;
+                $.post(PkConfig.uir + 'AttendanceAjax/link/delete/' + pkCurrentLinkId, function(r) {
+                    removeBtn.disabled = false;
+                    if (r && r.status === 0) {
+                        // Clear the result panel and reset state — link no longer exists.
+                        document.getElementById('pk-att-link-result').style.display = 'none';
+                        document.getElementById('pk-att-link-url').value = '';
+                        document.getElementById('pk-att-link-expires').textContent = '';
+                        pkCurrentToken = '';
+                        pkCurrentExpires = '';
+                        pkCurrentLinkId = 0;
+                        // Invalidate the active-links cache so a re-expand re-fetches without the revoked row.
+                        if (typeof window.pkResetSigninLinksCache === 'function') window.pkResetSigninLinksCache();
+                    } else {
+                        pkAttShowFeedback((r && r.error) ? r.error : 'Could not revoke link.', false);
+                    }
+                }, 'json').fail(function() {
+                    removeBtn.disabled = false;
+                    pkAttShowFeedback('Network error revoking link.', false);
+                });
+            };
+            // Prefer the project's styled confirm; fall back to native if it isn't loaded on this page.
+            if (typeof knConfirm === 'function') {
+                knConfirm('Revoke this sign-in link? Anyone holding the URL or QR will no longer be able to sign in with it.', doRevoke, 'Revoke link?');
+            } else if (confirm('Revoke this sign-in link?')) {
+                doRevoke();
+            }
         });
     }
     document.addEventListener('keydown', function(e) {
@@ -10226,6 +10389,7 @@ $(document).ready(function() {
                     '<td style="padding:4px 6px;color:#4a5568">' + lnk.Credits + '</td>' +
                     '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
                         '<button class="pk-btn pk-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-copy"></i> Copy</button>' +
+                        '<button class="pk-btn pk-links-qr" data-token="' + lnk.Token + '" data-expires="' + expStr + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-qrcode"></i> QR</button>' +
                         '<button class="pk-btn pk-links-revoke" data-id="' + lnk.LinkId + '" style="font-size:11px;padding:2px 8px;background:#fed7d7;border-color:#fc8181;color:#c53030"><i class="fas fa-times"></i> Revoke</button>' +
                     '</td>';
                 tbody.appendChild(tr);
@@ -10237,6 +10401,19 @@ $(document).ready(function() {
                     orkCopyToClipboard(this.dataset.url, this,
                         '<i class="fas fa-check"></i> Copied!',
                         '<i class="fas fa-copy"></i> Copy');
+                });
+            });
+            // QR buttons — same flow as the generated-link QR: dismiss the
+            // attendance modal first, then open QR on its own.
+            tbody.querySelectorAll('.pk-links-qr').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var token   = this.dataset.token;
+                    var expires = this.dataset.expires;
+                    if (!token) return;
+                    var att = document.getElementById('pk-att-overlay');
+                    if (att) att.classList.remove('pk-att-open');
+                    orkOpenQrModal('pk-qr-overlay', 'pk-qr-img', 'pk-qr-download', 'pk-qr-expires',
+                        token, 'Expires ' + expires, PkConfig.uir);
                 });
             });
             // Revoke buttons
@@ -10275,6 +10452,8 @@ window.evOpenSigninLinkModal = function() {
     if (!ov) return;
     ov.classList.add('ev-open');
     document.body.style.overflow = 'hidden';
+    // Drop any stale "no active links" cache from earlier in the page lifecycle.
+    if (typeof window.evResetSigninLinksCache === 'function') window.evResetSigninLinksCache();
 };
 window.evCloseSigninLinkModal = function() {
     var ov = document.getElementById('ev-signin-link-overlay');
@@ -10300,6 +10479,13 @@ $(document).ready(function() {
     var evCurrentExpires = '';
     var evLinksLoaded    = false;
     var evLinksOpen      = false;
+
+    // Expose a cache invalidator so the open-modal handler (in a sibling
+    // scope) can drop stale "no active links" results from previous sessions.
+    window.evResetSigninLinksCache = function() {
+        evLinksLoaded = false;
+        if (evLinksOpen) evLoadActiveLinks();
+    };
 
     function evSyncGenBtn() {
         var v = parseFloat(creditsEl.value);
@@ -10354,6 +10540,9 @@ $(document).ready(function() {
     if (qrBtn) {
         qrBtn.addEventListener('click', function() {
             if (!evCurrentToken) return;
+            // Dismiss the Sign-in Link modal before showing the QR so the QR
+            // isn't stuck behind it. See the pk-att-link-qr-btn equivalent.
+            if (typeof evCloseSigninLinkModal === 'function') evCloseSigninLinkModal();
             orkOpenQrModal('ev-qr-overlay', 'ev-qr-img', 'ev-qr-download', 'ev-qr-expires',
                 evCurrentToken, evCurrentExpires, EvConfig.uir);
         });
@@ -10403,6 +10592,7 @@ $(document).ready(function() {
                     '<td style="padding:4px 6px;color:#4a5568">' + lnk.Credits + '</td>' +
                     '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
                         '<button type="button" class="ev-icon-btn ev-signin-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px"><i class="fas fa-copy"></i> Copy</button>' +
+                        '<button type="button" class="ev-icon-btn ev-signin-links-qr" data-token="' + lnk.Token + '" data-expires="' + expStr + '" style="font-size:11px;padding:2px 8px;margin-right:4px"><i class="fas fa-qrcode"></i> QR</button>' +
                         '<button type="button" class="ev-icon-btn ev-signin-links-revoke" data-id="' + lnk.LinkId + '" style="font-size:11px;padding:2px 8px;background:#fed7d7;border-color:#fc8181;color:#c53030"><i class="fas fa-times"></i> Revoke</button>' +
                     '</td>';
                 tbody.appendChild(tr);
@@ -10413,6 +10603,16 @@ $(document).ready(function() {
                     orkCopyToClipboard(this.dataset.url, this,
                         '<i class="fas fa-check"></i> Copied!',
                         '<i class="fas fa-copy"></i> Copy');
+                });
+            });
+            tbody.querySelectorAll('.ev-signin-links-qr').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var token   = this.dataset.token;
+                    var expires = this.dataset.expires;
+                    if (!token) return;
+                    if (typeof evCloseSigninLinkModal === 'function') evCloseSigninLinkModal();
+                    orkOpenQrModal('ev-qr-overlay', 'ev-qr-img', 'ev-qr-download', 'ev-qr-expires',
+                        token, 'Expires ' + expires, EvConfig.uir);
                 });
             });
             tbody.querySelectorAll('.ev-signin-links-revoke').forEach(function(btn) {
@@ -10454,6 +10654,13 @@ $(document).ready(function() {
     var knLinksOpen    = false;
     var knCurrentToken   = '';
     var knCurrentExpires = '';
+
+    // Expose a cache invalidator so the open-modal handler (in a sibling
+    // scope) can drop stale "no active links" results from previous sessions.
+    window.knResetSigninLinksCache = function() {
+        knLinksLoaded = false;
+        if (knLinksOpen && typeof knLoadActiveLinks === 'function') knLoadActiveLinks();
+    };
 
     window.knCloseQrModal = function() { orkCloseQrModal('kn-qr-overlay'); };
 
@@ -10562,6 +10769,10 @@ $(document).ready(function() {
     if (knQrBtn) {
         knQrBtn.addEventListener('click', function() {
             if (!knCurrentToken) return;
+            // Dismiss the Admin modal (which hosts the Sign-in Link tab) before
+            // showing the QR. See the pk-att-link-qr-btn equivalent.
+            var adm = document.getElementById('kn-admin-overlay');
+            if (adm) adm.classList.remove('kn-open');
             orkOpenQrModal('kn-qr-overlay', 'kn-qr-img', 'kn-qr-download', 'kn-qr-expires',
                 knCurrentToken, knCurrentExpires, KnConfig.uir);
         });
@@ -10606,6 +10817,7 @@ $(document).ready(function() {
                     '<td style="padding:4px 6px;color:#4a5568">' + lnk.Credits + '</td>' +
                     '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
                         '<button class="kn-btn kn-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-copy"></i> Copy</button>' +
+                        '<button class="kn-btn kn-links-qr" data-token="' + lnk.Token + '" data-expires="' + expStr + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-qrcode"></i> QR</button>' +
                         '<button class="kn-btn kn-links-revoke" data-id="' + lnk.LinkId + '" style="font-size:11px;padding:2px 8px;background:#fed7d7;border-color:#fc8181;color:#c53030"><i class="fas fa-times"></i> Revoke</button>' +
                     '</td>';
                 tbody.appendChild(tr);
@@ -10616,6 +10828,17 @@ $(document).ready(function() {
                     orkCopyToClipboard(this.dataset.url, this,
                         '<i class="fas fa-check"></i> Copied!',
                         '<i class="fas fa-copy"></i> Copy');
+                });
+            });
+            tbody.querySelectorAll('.kn-links-qr').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var token   = this.dataset.token;
+                    var expires = this.dataset.expires;
+                    if (!token) return;
+                    var adm = document.getElementById('kn-admin-overlay');
+                    if (adm) adm.classList.remove('kn-open');
+                    orkOpenQrModal('kn-qr-overlay', 'kn-qr-img', 'kn-qr-download', 'kn-qr-expires',
+                        token, 'Expires ' + expires, KnConfig.uir);
                 });
             });
             tbody.querySelectorAll('.kn-links-revoke').forEach(function(btn) {
@@ -10796,8 +11019,17 @@ function setupPronounPicker(cfg) {
 
         gid('kn-addplayer-close-btn').addEventListener('click', knCloseAddPlayerModal);
         gid('kn-addplayer-cancel').addEventListener('click',    knCloseAddPlayerModal);
+        // Backdrop click closes — but only when the mousedown ALSO started on
+        // the backdrop. Without this, drag-selecting text inside an input and
+        // releasing outside fires a synthetic click on the backdrop and the
+        // user loses their work.
+        var _knAddDownOnBackdrop = false;
+        gid('kn-addplayer-overlay').addEventListener('mousedown', function(e) {
+            _knAddDownOnBackdrop = (e.target === this);
+        });
         gid('kn-addplayer-overlay').addEventListener('click', function(e) {
-            if (e.target === this) knCloseAddPlayerModal();
+            if (e.target === this && _knAddDownOnBackdrop) knCloseAddPlayerModal();
+            _knAddDownOnBackdrop = false;
         });
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && gid('kn-addplayer-overlay') && gid('kn-addplayer-overlay').classList.contains('kn-addplayer-open'))
@@ -10899,8 +11131,15 @@ function setupPronounPicker(cfg) {
 
         gid('pk-addplayer-close-btn').addEventListener('click', pkCloseAddPlayerModal);
         gid('pk-addplayer-cancel').addEventListener('click',    pkCloseAddPlayerModal);
+        // Backdrop click closes — but only when the mousedown ALSO started on
+        // the backdrop (see knAddPlayer above for rationale).
+        var _pkAddDownOnBackdrop = false;
+        gid('pk-addplayer-overlay').addEventListener('mousedown', function(e) {
+            _pkAddDownOnBackdrop = (e.target === this);
+        });
         gid('pk-addplayer-overlay').addEventListener('click', function(e) {
-            if (e.target === this) pkCloseAddPlayerModal();
+            if (e.target === this && _pkAddDownOnBackdrop) pkCloseAddPlayerModal();
+            _pkAddDownOnBackdrop = false;
         });
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && gid('pk-addplayer-overlay') && gid('pk-addplayer-overlay').classList.contains('pk-addplayer-open'))
@@ -14946,6 +15185,137 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
     });
 };
 
+// ── Username availability check (reusable) ───────────────────────────────────
+// Live availability probe for any username input — used by SelfReg, the
+// Park/Kingdom "Create Player" modal, profile edit. Without this, the backend
+// silently mangles a duplicate with a "-xxxxx" suffix and the player ends up
+// with a weird name.
+//
+// opts:
+//   inputId      — id of the username <input>
+//   statusId     — id of a <div> to write the "Checking…/✓/✗" line into
+//   submitBtnId  — (optional) id of the submit <button> to gate
+//   endpointUrl  — POST URL; expects {status, available, username} JSON back
+//                  (e.g. UIR + 'PlayerAjax/check_username' for logged-in users,
+//                   or UIR + 'SelfReg/check_username/' + token for self-reg)
+//   currentValue — (optional) the username that is already saved against the
+//                  current record, so editing your own profile doesn't flag
+//                  your own name as taken.
+window.initUsernameAvailabilityCheck = function(opts) {
+    var input    = document.getElementById(opts.inputId);
+    var statusEl = document.getElementById(opts.statusId);
+    var submit   = opts.submitBtnId ? document.getElementById(opts.submitBtnId) : null;
+    var url      = opts.endpointUrl;
+    if (!input || !statusEl || !url) return;
+    var current = (opts.currentValue || '').trim().toLowerCase();
+
+    var timer    = null;
+    var inflight = null;
+    var lastResult = null; // {username, available}
+
+    function setStatus(kind, text) {
+        statusEl.style.display = text ? '' : 'none';
+        statusEl.textContent   = text || '';
+        statusEl.style.color = kind === 'ok'  ? '#2f855a'
+                             : kind === 'bad' ? '#c53030'
+                             : '';
+    }
+    // Two gating modes:
+    //   'strict' (default) — submit stays disabled until we have a confirmed
+    //       "available" result. Suited to flows where the server silently
+    //       mangles dupes (SelfRegister appends -xxxxx and proceeds), so the
+    //       client is the only thing standing between the user and a weird
+    //       username.
+    //   'soft' — only DISABLE when the name is known to be taken; leave the
+    //       button alone for empty/short/checking. Suited to flows where the
+    //       host form has its own required/min-length validation and won't
+    //       silently mangle on dupe (e.g. Park/Kingdom Create Player modal).
+    var strict = (opts.gateMode || 'strict') === 'strict';
+    function gate() {
+        if (!submit) return;
+        var v = (input.value || '').trim();
+        if (current && v.toLowerCase() === current) { submit.disabled = false; return; }
+        var hasDecision  = lastResult && lastResult.username === v;
+        var knownTaken   = v.length >= 4 && hasDecision && !lastResult.available;
+        var knownOk      = v.length >= 4 && hasDecision &&  lastResult.available;
+        if (strict) {
+            submit.disabled = !knownOk;
+        } else {
+            if (knownTaken)       submit.disabled = true;
+            else if (knownOk)     submit.disabled = false;
+            // else: leave whatever state the host form has chosen
+        }
+    }
+    function run() {
+        var v = (input.value || '').trim();
+        if (current && v.toLowerCase() === current) {
+            setStatus('', '');
+            lastResult = null;
+            gate();
+            return;
+        }
+        if (v.length < 4) {
+            setStatus('', '');
+            lastResult = null;
+            gate();
+            return;
+        }
+        if (lastResult && lastResult.username === v) {
+            setStatus(lastResult.available ? 'ok' : 'bad',
+                      lastResult.available
+                          ? '✓ Username is available'
+                          : '✗ "' + v + '" is already taken');
+            gate();
+            return;
+        }
+        setStatus('', 'Checking availability…');
+        gate();
+        if (inflight) try { inflight.abort(); } catch (e) {}
+        inflight = new AbortController();
+        var fd = new FormData(); fd.append('UserName', v);
+        fetch(url, { method: 'POST', body: fd, signal: inflight.signal,
+                     headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
+            .then(function(j) {
+                if (!j || j.status !== 0) {
+                    setStatus('', '');
+                    lastResult = null;
+                } else {
+                    lastResult = { username: j.username, available: !!j.available };
+                    setStatus(j.available ? 'ok' : 'bad',
+                              j.available
+                                  ? '✓ Username is available'
+                                  : '✗ "' + j.username + '" is already taken');
+                }
+                gate();
+            })
+            .catch(function() { /* aborted or network — leave status alone */ });
+    }
+
+    input.addEventListener('input', function() {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(run, 350);
+    });
+    input.addEventListener('blur', run);
+    if ((input.value || '').length >= 4) run();
+
+    // Return a small API so callers can drive the helper from outside:
+    //   trigger()  — force a re-check now (used by SelfReg's persona→username auto-fill)
+    //   reset()    — clear cached result and visible status (used when a host modal
+    //                closes/reopens, so stale "X is taken" doesn't linger)
+    // We keep the historical contract of returning a callable for back-compat:
+    // callers that captured the return value still get the trigger function.
+    var trigger = run;
+    trigger.reset = function() {
+        if (inflight) try { inflight.abort(); } catch (e) {}
+        if (timer) clearTimeout(timer);
+        lastResult = null;
+        setStatus('', '');
+        if (submit) submit.disabled = false; // host re-disables based on its own rules
+    };
+    return trigger;
+};
+
 /* ===========================================================
  * Deleted Recommendations panel (Park + Kingdom Recs tabs)
  * =========================================================== */
@@ -18668,7 +19038,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
         };
 
         $.post(GO_URL, {
-            Name: name, ParkId: PkConfig.parkId,
+            Name: name, KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId,
             SourceEventId: srcId, NewStart: start, NewEnd: end,
             Modules: JSON.stringify(modules), Status: status
         }, function(r) {

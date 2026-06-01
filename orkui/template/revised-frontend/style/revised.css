@@ -366,6 +366,25 @@ html[data-theme="dark"] .pn-crumb i {
 	color: #fff;
 	border: 1px solid rgba(255,255,255,0.4);
 }
+/* Banner-backed player hero: darkened-glass pills for action buttons so they
+   read on busy banner images. Matches kn/pk/ev-hero-actions treatment.
+   Scope is .pn-hero-actions only — the same .pn-btn-white/outline classes
+   are also used inside the banner edit modal, which we deliberately leave
+   in their original light-on-dark / outline look. */
+.pn-hero-has-banner .pn-hero-actions .pn-btn-white,
+.pn-hero-has-banner .pn-hero-actions .pn-btn-outline {
+	background: rgba(0,0,0,0.55);
+	color: #fff !important;
+	border: 1px solid rgba(255,255,255,0.65);
+	box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+	backdrop-filter: blur(4px);
+	-webkit-backdrop-filter: blur(4px);
+}
+.pn-hero-has-banner .pn-hero-actions .pn-btn-white:hover,
+.pn-hero-has-banner .pn-hero-actions .pn-btn-outline:hover {
+	background: rgba(0,0,0,0.72);
+	opacity: 1;
+}
 
 /* Stats Row */
 .pn-stats-row {
@@ -1905,6 +1924,21 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 .kn-btn:hover { opacity: 0.85; }
 .kn-btn-white   { background: #fff; color: var(--kn-btn-txt); }
 .kn-btn-outline { background: rgba(255,255,255,0.15); color: #fff !important; border: 1px solid rgba(255,255,255,0.4); }
+/* When a banner image backs the hero, the default 15% white background gets
+   lost in busy/ornate images (gold filigree, etc.). Bump to a darker, more
+   opaque chip + drop shadow so the buttons read on any banner. Scoped to the
+   hero-actions so the same class on the banner edit modal isn't affected. */
+.kn-hero-has-banner .kn-hero-actions .kn-btn-outline {
+	background: rgba(0,0,0,0.55);
+	border-color: rgba(255,255,255,0.65);
+	box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+	backdrop-filter: blur(4px);
+	-webkit-backdrop-filter: blur(4px);
+}
+.kn-hero-has-banner .kn-hero-actions .kn-btn-outline:hover {
+	background: rgba(0,0,0,0.72);
+	opacity: 1;
+}
 .kn-btn-primary { background: var(--kn-accent, #276749); color: #fff; }
 .kn-btn-primary:hover:not(:disabled) { opacity: 0.85; }
 .kn-btn-secondary { background: #edf2f7; color: #4a5568; }
@@ -3261,6 +3295,19 @@ html[data-theme="dark"] .kn-ac-item.kn-ac-suspended:hover, html[data-theme="dark
 .pk-btn:hover { opacity: 0.85; }
 .pk-btn-white   { background: #fff; color: var(--pk-btn-txt); }
 .pk-btn-outline { background: rgba(255,255,255,0.15); color: #fff !important; border: 1px solid rgba(255,255,255,0.4); }
+/* Banner-backed park hero: bump to a darker, more opaque chip + drop shadow
+   so the buttons read on busy banner images (matches kn-hero-actions). */
+.pk-hero-has-banner .pk-hero-actions .pk-btn-outline {
+	background: rgba(0,0,0,0.55);
+	border-color: rgba(255,255,255,0.65);
+	box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+	backdrop-filter: blur(4px);
+	-webkit-backdrop-filter: blur(4px);
+}
+.pk-hero-has-banner .pk-hero-actions .pk-btn-outline:hover {
+	background: rgba(0,0,0,0.72);
+	opacity: 1;
+}
 .pk-btn-primary { background: #2c5282; color: #fff; }
 .pk-btn-primary:hover:not(:disabled) { background: #2a4a7f; }
 .pk-btn-secondary { background: #edf2f7; color: #4a5568; }
@@ -4469,6 +4516,24 @@ html[data-theme="dark"] .ev-badge-blue { background: rgba(66,153,225,0.20); colo
 .ev-btn:hover { opacity: 0.85; }
 .ev-btn-white   { background: #fff; color: #2d3748; }
 .ev-btn-outline { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.4); }
+/* Banner-backed event hero: bump to a darker, more opaque chip + drop shadow
+   so the buttons read on busy banner images (matches kn/pk-hero-actions).
+   Also normalise the Share button (.ev-btn-white) which is intentionally
+   distinct over a default gradient but reads as out-of-family over a banner. */
+.ev-hero-has-banner .ev-hero-actions .ev-btn-outline,
+.ev-hero-has-banner .ev-hero-actions .ev-btn-white {
+	background: rgba(0,0,0,0.55);
+	color: #fff !important;
+	border: 1px solid rgba(255,255,255,0.65);
+	box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+	backdrop-filter: blur(4px);
+	-webkit-backdrop-filter: blur(4px);
+}
+.ev-hero-has-banner .ev-hero-actions .ev-btn-outline:hover,
+.ev-hero-has-banner .ev-hero-actions .ev-btn-white:hover {
+	background: rgba(0,0,0,0.72);
+	opacity: 1;
+}
 
 /* ---- Stats row ---- */
 .ev-stats-row {

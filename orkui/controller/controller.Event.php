@@ -797,7 +797,7 @@ class Controller_Event extends Controller {
 				'SELECT m.mundane_id AS MundaneId, m.persona AS Persona,
 				        IF(a.mundane_id IS NOT NULL, 1, 0) AS CheckedIn,
 				        d.is_anonymous, d.no_restrictions, d.diet_vegetarian, d.diet_vegan, d.diet_halal, d.diet_kosher, d.diet_keto, d.diet_paleo,
-				        d.restrict_dairy, d.restrict_eggs, d.restrict_fish, d.restrict_honey, d.restrict_poultry, d.restrict_redmeat, d.restrict_shellfish,
+				        d.restrict_dairy, d.restrict_eggs, d.restrict_fish, d.restrict_honey, d.restrict_poultry, d.restrict_beef, d.restrict_pork, d.restrict_shellfish,
 				        d.allergen_milk, d.allergen_eggs, d.allergen_fish, d.allergen_shellfish, d.allergen_treenuts, d.allergen_peanuts,
 				        d.allergen_wheat, d.allergen_soy, d.allergen_sesame, d.allergen_garlic, d.allergen_gluten, d.allergen_onion, d.allergen_mushroom,
 				        d.allergen_corn, d.allergen_coconut, d.allergen_cocoa
@@ -834,7 +834,8 @@ class Controller_Event extends Controller {
 						'RestrictFish'      => (int)($dsRows->restrict_fish    ?? 0),
 						'RestrictHoney'     => (int)($dsRows->restrict_honey   ?? 0),
 						'RestrictPoultry'   => (int)($dsRows->restrict_poultry ?? 0),
-						'RestrictRedmeat'   => (int)($dsRows->restrict_redmeat ?? 0),
+						'RestrictBeef'      => (int)($dsRows->restrict_beef ?? 0),
+						'RestrictPork'      => (int)($dsRows->restrict_pork ?? 0),
 						'RestrictShellfish' => (int)($dsRows->restrict_shellfish ?? 0),
 						'AllergenMilk'      => (int)($dsRows->allergen_milk    ?? 0),
 						'AllergenEggs'      => (int)($dsRows->allergen_eggs    ?? 0),

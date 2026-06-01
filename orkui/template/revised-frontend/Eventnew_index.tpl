@@ -227,7 +227,7 @@
 #ev-signin-links-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:6px; }
 #ev-signin-links-table th { color:#718096; text-align:left; padding:4px 6px; font-weight:600; }
 /* QR modal */
-#ev-qr-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9100; align-items:center; justify-content:center; }
+#ev-qr-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:var(--z-modal-top, 10200); align-items:center; justify-content:center; }
 #ev-qr-overlay .ev-qr-box { background:#fff; border-radius:12px; padding:28px 28px 20px; box-shadow:0 8px 32px rgba(0,0,0,0.22); max-width:320px; width:calc(100vw - 40px); text-align:center; }
 #ev-qr-img { width:220px; height:220px; border:1px solid #e2e8f0; border-radius:6px; display:block; margin:0 auto 14px; }
 .ev-rsvp-th-tooltip { position:relative; display:inline-block; cursor:default; }
@@ -1536,7 +1536,8 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 				$_dsRestrictLabels = [
 					'RestrictDairy'    => 'No Dairy',    'RestrictEggs'     => 'No Eggs',
 					'RestrictFish'     => 'No Fish',     'RestrictHoney'    => 'No Honey',
-					'RestrictPoultry'  => 'No Poultry',  'RestrictRedmeat'  => 'No Red Meat',
+					'RestrictBeef'     => 'No Beef',     'RestrictPork'     => 'No Pork',
+					'RestrictPoultry'  => 'No Poultry',
 					'RestrictShellfish'=> 'No Shellfish',
 				];
 				$_dsAllergenLabels = [
@@ -1546,9 +1547,9 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					'AllergenShellfish' => 'Shellfish',  'AllergenSoy'      => 'Soy',
 					'AllergenSesame'    => 'Sesame',    'AllergenGarlic'    => 'Garlic',
 					'AllergenGluten'    => 'Gluten',    'AllergenOnion'     => 'Onion',
-					'AllergenMushroom'  => 'Mushroom',
-					'AllergenCorn'      => 'Corn',      'AllergenCoconut'   => 'Coconut',
-					'AllergenCocoa'     => 'Cocoa',
+					'AllergenMushroom'    => 'Mushroom',  'AllergenNightshades' => 'Nightshades',
+					'AllergenCorn'        => 'Corn',      'AllergenCoconut'     => 'Coconut',
+					'AllergenCocoa'       => 'Cocoa',
 				];
 
 				$_dsDietCounts    = [];
@@ -2893,6 +2894,24 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 	</div>
 </div>
 <?php endif; ?>
+
+<!-- Confirmation Modal (shared knConfirm — see revised.js) -->
+<div id="kn-confirm-overlay">
+	<div class="kn-modal-box kn-confirm-box">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title" id="kn-confirm-title"><i class="fas fa-exclamation-triangle" style="margin-right:8px;color:#e53e3e"></i>Confirm</h3>
+			<button class="kn-modal-close-btn" id="kn-confirm-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="kn-modal-body">
+			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:var(--ork-text,#2d3748);line-height:1.6"></p>
+		</div>
+		<div class="kn-modal-footer" style="justify-content:flex-end;gap:10px">
+			<button class="kn-btn-ghost" id="kn-confirm-cancel-btn">Cancel</button>
+			<button class="kn-admin-save-btn kn-confirm-ok-btn" id="kn-confirm-ok-btn">Confirm</button>
+		</div>
+	</div>
+</div>
+
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 <script>
 (function() {
