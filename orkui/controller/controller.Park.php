@@ -209,10 +209,18 @@ class Controller_Park extends Controller
 			$DB->Clear();
 			$rosterResult = $DB->DataSet($rosterSql);
 			if ($rosterResult && $rosterResult->Size() > 0) {
+				// do-while is buggy without a guard — YapoMysql::DataSet doesn't
+				// auto-advance the cursor, so the first iteration sees an
+				// unloaded row (all fields null). Skip it the same way the
+				// event loop above does, otherwise a phantom mundane_id=0
+				// "No Recorded Sign-ins" entry shows up at the bottom of every
+				// park's roster.
 				do {
+					$mid = (int)$rosterResult->mundane_id;
+					if ($mid <= 0) continue;
 					$mn = ((int)$rosterResult->restricted === 0) ? trim($rosterResult->given_name . ' ' . $rosterResult->surname) : '';
 					$parkPlayers[] = [
-						'MundaneId'        => (int)$rosterResult->mundane_id,
+						'MundaneId'        => $mid,
 						'Persona'          => $rosterResult->persona,
 						'MundaneName'      => $mn,
 						'HasImage'         => (int)$rosterResult->has_image > 0,
