@@ -173,16 +173,28 @@ html[data-theme="dark"] .recap-tip-text::before { border-bottom-color: #e2e8f0; 
 .recap-foot { margin-top: 1em; font-size: 0.78em; color: #aaa; text-align: center; }
 .recap-foot a { color: #888; }
 
-.recap-scope-picker { display: flex; justify-content: center; align-items: center;
-	gap: 0.7em; margin: 0 0 1em; font-size: 0.92em; color: #555; }
+.recap-actions { display: flex; justify-content: center; align-items: center;
+	gap: 1.2em; margin: 0 0 1em; font-size: 0.92em; color: #555; flex-wrap: wrap; }
+.recap-scope-picker { display: inline-flex; align-items: center; gap: 0.5em; }
 .recap-scope-picker select { padding: 0.35em 0.6em; border: 1px solid #ccc;
 	border-radius: 6px; background: #fff; font-size: 0.95em; color: #222;
 	font-family: inherit; cursor: pointer; }
 .recap-scope-picker select:hover { border-color: #999; }
-html[data-theme="dark"] .recap-scope-picker { color: #cbd5e0; }
-html[data-theme="dark"] .recap-scope-picker select {
+.recap-share-btn { display: inline-flex; align-items: center; gap: 0.4em;
+	padding: 0.4em 0.85em; border: 1px solid #ccc; border-radius: 6px;
+	background: #fff; color: #333; font-size: 0.92em; font-family: inherit;
+	cursor: pointer; transition: background 0.15s, border-color 0.15s; min-width: 7em;
+	justify-content: center; }
+.recap-share-btn:hover { background: #f5f5f5; border-color: #999; }
+.recap-share-btn:disabled { cursor: default; }
+.recap-share-btn .fas { color: #c89b3f; }
+html[data-theme="dark"] .recap-actions { color: #cbd5e0; }
+html[data-theme="dark"] .recap-scope-picker select,
+html[data-theme="dark"] .recap-share-btn {
 	background: #2d3748; color: #e2e8f0; border-color: #4a5568; }
-html[data-theme="dark"] .recap-scope-picker select:hover { border-color: #718096; }
+html[data-theme="dark"] .recap-scope-picker select:hover,
+html[data-theme="dark"] .recap-share-btn:hover {
+	background: #374151; border-color: #718096; }
 
 /* Dark mode — match the palette used in default.theme (#1a202c body, #2d3748 cards) */
 html[data-theme="dark"] .recap-root { color: #e2e8f0; }
@@ -233,20 +245,59 @@ html[data-theme="dark"] .recap-foot a { color: #6b7280; }
 		<div class="recap-hero-sub">Weekly recaps are automatically produced early Monday mornings for the previous week.</div>
 	</div>
 
+	<div class="recap-actions">
 <?php if (!empty($kingdom_list)) : ?>
-	<div class="recap-scope-picker">
-		<label for="recap-scope-select">Viewing:</label>
-		<select id="recap-scope-select" onchange="if(this.value)location.href=this.value">
-			<option value="<?=UIR ?>Recap/index/<?=urlencode($week_start)?>"<?=$is_kingdom_scope ? '' : ' selected'?>>All Kingdoms</option>
-<?php foreach ($kingdom_list as $k) :
-		$opt_url = UIR . 'Recap/kingdom/' . (int)$k['KingdomId'] . '/' . urlencode($week_start);
-		$selected = ($scope_kid === (int)$k['KingdomId']) ? ' selected' : '';
+		<span class="recap-scope-picker">
+			<label for="recap-scope-select">Viewing:</label>
+			<select id="recap-scope-select" onchange="if(this.value)location.href=this.value">
+				<option value="<?=UIR ?>Recap/index/<?=urlencode($week_start)?>"<?=$is_kingdom_scope ? '' : ' selected'?>>All Kingdoms</option>
+<?php   foreach ($kingdom_list as $k) :
+			$opt_url = UIR . 'Recap/kingdom/' . (int)$k['KingdomId'] . '/' . urlencode($week_start);
+			$selected = ($scope_kid === (int)$k['KingdomId']) ? ' selected' : '';
 ?>
-			<option value="<?=$opt_url?>"<?=$selected?>><?=htmlspecialchars($k['Name'])?></option>
-<?php endforeach; ?>
-		</select>
-	</div>
+				<option value="<?=$opt_url?>"<?=$selected?>><?=htmlspecialchars($k['Name'])?></option>
+<?php   endforeach; ?>
+			</select>
+		</span>
 <?php endif; ?>
+		<button type="button" class="recap-share-btn" onclick="recapShare(this)">
+			<i class="fas fa-share-alt"></i> Share
+		</button>
+	</div>
+	<script>
+	function recapShare(btn) {
+		var url = window.location.href;
+		function flash(label, ok) {
+			var orig = btn.innerHTML;
+			btn.innerHTML = ok
+				? '<i class="fas fa-check"></i> ' + label
+				: '<i class="fas fa-exclamation-circle"></i> ' + label;
+			btn.disabled = true;
+			setTimeout(function(){ btn.innerHTML = orig; btn.disabled = false; }, 1400);
+		}
+		if (navigator.clipboard && navigator.clipboard.writeText) {
+			navigator.clipboard.writeText(url).then(
+				function(){ flash('Copied!', true); },
+				function(){ recapShareFallback(url, flash); }
+			);
+		} else {
+			recapShareFallback(url, flash);
+		}
+	}
+	function recapShareFallback(url, flash) {
+		// http (non-https) origins — execCommand still works on a temp textarea.
+		var ta = document.createElement('textarea');
+		ta.value = url;
+		ta.style.position = 'fixed';
+		ta.style.opacity = '0';
+		document.body.appendChild(ta);
+		ta.select();
+		var ok = false;
+		try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+		document.body.removeChild(ta);
+		flash(ok ? 'Copied!' : 'Copy failed', ok);
+	}
+	</script>
 
 <?php if (!empty($prev_week) || !empty($next_week)) : ?>
 	<div class="recap-nav">
