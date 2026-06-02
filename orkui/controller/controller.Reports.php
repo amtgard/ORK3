@@ -533,6 +533,114 @@ class Controller_Reports extends Controller {
 
 	}
 
+	public function waivers($type=null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id)) {
+			header('Location: ' . UIR);
+			exit;
+		}
+		$_authType = $type === 'Kingdom' ? AUTH_KINGDOM : AUTH_PARK;
+		$_canEdit  = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, $_authType, (int)$this->request->id, AUTH_EDIT);
+		if (!$_isOrkAdmin && !$_canEdit) {
+			header('Location: ' . UIR);
+			exit;
+		}
+
+		$entity_id = (int)$this->request->id;
+		$this->load_model('Waiver');
+
+		// Resolve entity name + back-link
+		$entity_name = '';
+		if ($type === 'Park') {
+			$this->load_model('Park');
+			$entity_name = $this->Park->get_park_name($entity_id) ?: 'Park';
+			$entity_url  = UIR . 'Park/profile/' . $entity_id;
+			$this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . $entity_id . '&tab=reports';
+		} else {
+			$this->load_model('Kingdom');
+			$entity_name = $this->Kingdom->get_kingdom_name($entity_id) ?: 'Kingdom';
+			$entity_url  = UIR . 'Kingdom/profile/' . $entity_id;
+			$this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . $entity_id . '&tab=reports';
+		}
+
+		$stats   = $this->Waiver->get_waiver_stats($type, $entity_id);
+		$players = $this->Waiver->get_waiver_player_list($type, $entity_id);
+		$monthly = $this->Waiver->get_waiver_monthly_series($type, $entity_id, 12);
+
+		// Compliance %% = verified / (verified + pending_active + unsigned)
+		$verified  = (int)($stats['verified']       ?? 0);
+		$pending   = (int)($stats['pending_active'] ?? 0);
+		$unsigned  = (int)($stats['unsigned']       ?? 0);
+		$denom     = $verified + $pending + $unsigned;
+		$stats['compliance_pct'] = $denom > 0 ? round(($verified / $denom) * 100) : 0;
+
+		$this->template = 'Reports_waivers.tpl';
+		$this->data['page_title']   = 'Digital Waivers';
+		$this->data['_wv_stats']    = $stats;
+		$this->data['_wv_players']  = $players;
+		$this->data['_wv_monthly']  = $monthly;
+		$this->data['Type']         = $type;
+		$this->data['EntityId']     = $entity_id;
+		$this->data['EntityName']   = $entity_name;
+		$this->data['EntityUrl']    = $entity_url;
+		$this->data['CanViewMundane'] = ($_isOrkAdmin || $_canEdit);
+	}
+
+	public function waiverhistory($type=null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id)) {
+			header('Location: ' . UIR);
+			exit;
+		}
+
+		// Resolve kingdom_id + scope + auth type. Templates are always keyed
+		// on kingdom_id; parks share their kingdom's park-scope chain.
+		$showToggle = false;
+		if ($type === 'Park') {
+			$_authType = AUTH_PARK;
+			$this->load_model('Park');
+			$park_info  = $this->Park->get_park_info((int)$this->request->id);
+			$kingdom_id = (int)($park_info['ParkInfo']['KingdomId'] ?? 0);
+			$scope      = 'park';
+			$showToggle = false;
+		} else {
+			$_authType  = AUTH_KINGDOM;
+			$kingdom_id = (int)$this->request->id;
+			$scope      = (isset($_GET['scope']) && in_array($_GET['scope'], array('kingdom', 'park'))) ? $_GET['scope'] : 'kingdom';
+			$showToggle = true;
+		}
+
+		$_canEdit = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, $_authType, (int)$this->request->id, AUTH_EDIT);
+		if (!$_isOrkAdmin && !$_canEdit) {
+			header('Location: ' . UIR);
+			exit;
+		}
+
+		$this->load_model('Waiver');
+		$this->load_model('Kingdom');
+		$kingdom_name = $this->Kingdom->get_kingdom_name($kingdom_id) ?: 'Kingdom';
+
+		$versions = $this->Waiver->get_waiver_version_history($kingdom_id, $scope);
+
+		if ($type === 'Park') {
+			$this->data['menu']['reports']['url'] = UIR . 'Park/profile/' . (int)$this->request->id . '&tab=reports';
+		} else {
+			$this->data['menu']['reports']['url'] = UIR . 'Kingdom/profile/' . (int)$this->request->id . '&tab=reports';
+		}
+
+		$this->template = 'Reports_waiverhistory.tpl';
+		$this->data['page_title']      = 'Waiver Change History';
+		$this->data['_wv_versions']    = $versions;
+		$this->data['KingdomId']       = $kingdom_id;
+		$this->data['Scope']           = $scope;
+		$this->data['ShowScopeToggle'] = $showToggle ? 1 : 0;
+		$this->data['Type']            = $type;
+		$this->data['EntityId']        = (int)$this->request->id;
+		$this->data['KingdomName']     = $kingdom_name;
+	}
+
 	public function suspended($type=null) {
 		$this->template = 'Reports_roster.tpl';
 		$this->data['show_suspension'] = 1;
