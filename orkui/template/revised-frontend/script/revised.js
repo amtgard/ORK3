@@ -2539,7 +2539,8 @@ function knRenderMapSidebar(loc) {
         : '<a href="' + profileUrl + '"><div class="kn-park-heraldry-placeholder"><i class="fas fa-shield-alt"></i></div></a>';
     var heroHtml = heraldryHtml
         + '<a href="' + profileUrl + '" class="kn-park-hero-name" style="text-decoration:none">' + escHtml(loc.name) + '</a>'
-        + (locLine ? '<div class="kn-park-hero-location"><i class="fas fa-map-marker-alt" style="font-size:10px"></i>' + escHtml(locLine) + '</div>' : '');
+        + (locLine ? '<div class="kn-park-hero-location"><i class="fas fa-map-marker-alt" style="font-size:10px"></i>' + escHtml(locLine) + '</div>' : '')
+        + (loc.prinz && loc.prName ? '<div class="kn-park-hero-location"><i class="fas fa-crown" style="font-size:10px"></i>Principality: ' + escHtml(loc.prName) + '</div>' : '');
 
     var bodyHtml = '';
     if (loc.dir) {
@@ -2593,10 +2594,35 @@ window.knInitMap = async function() {
         // fitBounds zoom used as-is (no pullback)
     }
 
+    // ---- Map legend (Kingdom vs Principality pin colors) ----
+    var knHasPrinz = false;
+    for (var li = 0; li < knMapLocations.length; li++) {
+        if (knMapLocations[li].prinz) { knHasPrinz = true; break; }
+    }
+    var legendCard = document.getElementById('kn-map-sidebar-card');
+    if (legendCard && !document.getElementById('kn-map-legend')) {
+        var legendEl = document.createElement('div');
+        legendEl.id = 'kn-map-legend';
+        legendEl.style.cssText = 'display:flex;flex-wrap:wrap;gap:14px;align-items:center;'
+            + 'margin-top:12px;padding:8px 10px;border-radius:6px;font-size:12px;'
+            + 'background:rgba(127,127,127,0.12);';
+        var legendHtml = '<span style="display:inline-flex;align-items:center;gap:6px">'
+            + '<span style="width:12px;height:12px;border-radius:2px;background:#8B1A1A;border:1px solid #B8860B;display:inline-block"></span>'
+            + 'Kingdom</span>';
+        if (knHasPrinz) {
+            legendHtml += '<span style="display:inline-flex;align-items:center;gap:6px">'
+                + '<span style="width:12px;height:12px;border-radius:2px;background:#2C5F8B;border:1px solid #B8860B;display:inline-block"></span>'
+                + 'Principality</span>';
+        }
+        legendEl.innerHTML = legendHtml;
+        legendCard.appendChild(legendEl);
+    }
+
     var infowindow = new google.maps.InfoWindow();
     for (var i = 0; i < knMapLocations.length; i++) {
         (function(loc) {
-            var pinGlyph = new PinElement({ scale: 0.7, background: '#8B1A1A', borderColor: '#B8860B', glyphColor: '#FFD700' });
+            var pinBg = loc.prinz ? '#2C5F8B' : '#8B1A1A';
+            var pinGlyph = new PinElement({ scale: 0.7, background: pinBg, borderColor: '#B8860B', glyphColor: '#FFD700' });
             var marker = new google.maps.marker.AdvancedMarkerElement({
                 position: new google.maps.LatLng(loc.lat, loc.lng),
                 map: map,
@@ -2819,11 +2845,15 @@ $(document).ready(function() {
         if (view === 'list') {
             $('#kn-parks-tiles').hide();
             $('#kn-parks-list-view').show();
+            $('#kn-prinz-tile-sections').hide();
+            $('#kn-prinz-tables').show();
             $('#kn-view-list').addClass('kn-view-active');
             $('#kn-view-tiles').removeClass('kn-view-active');
         } else {
             $('#kn-parks-list-view').hide();
             $('#kn-parks-tiles').show();
+            $('#kn-prinz-tables').hide();
+            $('#kn-prinz-tile-sections').show();
             $('#kn-view-tiles').addClass('kn-view-active');
             $('#kn-view-list').removeClass('kn-view-active');
         }

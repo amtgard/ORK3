@@ -8,6 +8,8 @@
 	$eventList        = is_array($event_summary) ? $event_summary : array();
 	// [TOURNAMENTS HIDDEN] $tournamentList = [];
 	$principalityList = is_array($principalities['Principalities']) ? $principalities['Principalities'] : array();
+	$prinzParks       = is_array($principality_parks ?? null) ? $principality_parks : [];
+	$prinzMapParks    = is_array($prinz_map_parks ?? null) ? $prinz_map_parks : [];
 	$officerList      = is_array($kingdom_officers['Officers']) ? $kingdom_officers['Officers'] : array();
 
 	// Aggregate attendance — weekly loaded now, monthly loaded via AJAX after page load
@@ -59,6 +61,31 @@
 			'dir'      => kn_map_markdown($p['Directions'] ?? ''),
 			'desc'     => kn_map_markdown($p['Description'] ?? ''),
 		];
+	}
+	// Principality parks — same location objects, flagged with prinz metadata
+	foreach ($prinzMapParks as $prinz) {
+		$prName = (string)($prinz['Name'] ?? '');
+		$prId   = (int)($prinz['KingdomId'] ?? 0);
+		foreach ((array)($prinz['parks'] ?? []) as $p) {
+			$loc = @json_decode(stripslashes((string)$p['Location']));
+			if (!$loc) continue;
+			$latlng = isset($loc->location) ? $loc->location : (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
+			if (!$latlng || !is_numeric($latlng->lat) || !is_numeric($latlng->lng)) continue;
+			$knMapLocations[] = [
+				'name'     => ucwords($p['Name']),
+				'lat'      => (float)$latlng->lat,
+				'lng'      => (float)$latlng->lng,
+				'id'       => (int)$p['ParkId'],
+				'city'     => htmlspecialchars(trim($p['City'] ?? '')),
+				'province' => htmlspecialchars(trim($p['Province'] ?? '')),
+				'heraldry' => $p['HasHeraldry'] ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $p['ParkId'])) : '',
+				'dir'      => kn_map_markdown($p['Directions'] ?? ''),
+				'desc'     => kn_map_markdown($p['Description'] ?? ''),
+				'prinz'    => true,
+				'prName'   => $prName,
+				'prId'     => $prId,
+			];
+		}
 	}
 ?>
 
@@ -263,12 +290,6 @@
 				<li data-kntab="map">
 					<i class="fas fa-map"></i><span class="kn-tab-label"> Map</span>
 				</li>
-				<?php if (!$IsPrinz && count($principalityList) > 0): ?>
-					<li data-kntab="principalities">
-						<i class="fas fa-shield-alt"></i><span class="kn-tab-label"> Principalities</span>
-						<span class="kn-tab-count">(<?= count($principalityList) ?>)</span>
-					</li>
-				<?php endif; ?>
 				<li data-kntab="players" id="kn-tab-btn-players">
 					<i class="fas fa-users"></i><span class="kn-tab-label"> Players</span>
 					<span class="kn-tab-count" id="kn-players-tab-count"></span>
@@ -412,7 +433,111 @@
 						</table>
 					</div>
 
-				<?php else: ?>
+				<?php endif; ?>
+
+				<!-- ===== Principalities (folded into Parks tab) ===== -->
+				<?php if (count($prinzParks) > 0): ?>
+
+					<!-- Principality tile sections (tile view) -->
+					<div id="kn-prinz-tile-sections">
+						<?php foreach ($prinzParks as $prinz): ?>
+							<?php $prId = (int)$prinz['KingdomId']; $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId)); ?>
+							<section class="kn-prinz-section" data-prinz-id="<?= $prId ?>">
+								<a class="kn-prinz-head" href="<?= UIR ?>Kingdom/profile/<?= $prId ?>">
+									<img class="kn-prinz-heraldry" loading="lazy" src="<?= $prHeraldry ?>" onerror="this.src='<?= HTTP_KINGDOM_HERALDRY ?>0000.jpg'" alt="">
+									<span class="kn-prinz-name"><?= htmlspecialchars($prinz['Name']) ?></span>
+									<i class="fas fa-external-link-alt kn-prinz-extlink"></i>
+								</a>
+								<div class="kn-park-tiles">
+									<?php foreach ((array)$prinz['parks'] as $park): ?>
+										<?php $tileHeraldry = $park['HasHeraldry'] == 1
+											? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']))
+											: HTTP_PARK_HERALDRY . '00000.jpg'; ?>
+										<a class="kn-park-tile" href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>" data-park-id="<?= (int)$park['ParkId'] ?>">
+											<div class="kn-park-tile-img-wrap">
+												<img src="<?= $tileHeraldry ?>"
+													loading="lazy"
+													onerror="this.src='<?= HTTP_PARK_HERALDRY ?>00000.jpg'"
+													alt="<?= htmlspecialchars($park['ParkName']) ?>">
+											</div>
+											<div class="kn-park-tile-body">
+												<div class="kn-park-tile-name"><?= htmlspecialchars($park['ParkName']) ?></div>
+												<div class="kn-park-tile-type"><?= htmlspecialchars(!empty($park['Title']) ? $park['Title'] : 'Park') ?></div>
+												<div class="kn-park-tile-stats">
+													<div class="kn-park-tile-stat">
+														<div class="kn-park-tile-stat-val kn-avgwk-tile"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></div>
+														<div class="kn-park-tile-stat-lbl">Avg/Wk</div>
+													</div>
+													<div class="kn-park-tile-stat">
+														<div class="kn-park-tile-stat-val kn-avgmo-tile"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></div>
+														<div class="kn-park-tile-stat-lbl">Avg/Mo</div>
+													</div>
+												</div>
+											</div>
+										</a>
+									<?php endforeach; ?>
+								</div>
+							</section>
+						<?php endforeach; ?>
+					</div>
+
+					<!-- Principality tables (list view) -->
+					<div id="kn-prinz-tables" style="display:none">
+						<?php foreach ($prinzParks as $prinz): ?>
+							<?php $prId = (int)$prinz['KingdomId']; $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId)); ?>
+							<div class="kn-prinz-table-wrap" data-prinz-id="<?= $prId ?>">
+								<a class="kn-prinz-head" href="<?= UIR ?>Kingdom/profile/<?= $prId ?>">
+									<img class="kn-prinz-heraldry" loading="lazy" src="<?= $prHeraldry ?>" onerror="this.src='<?= HTTP_KINGDOM_HERALDRY ?>0000.jpg'" alt="">
+									<span class="kn-prinz-name"><?= htmlspecialchars($prinz['Name']) ?></span>
+									<i class="fas fa-external-link-alt kn-prinz-extlink"></i>
+								</a>
+								<table class="kn-table kn-sortable">
+									<thead>
+										<tr>
+											<th data-sorttype="text">Park</th>
+											<th data-sorttype="text">Type</th>
+											<th data-sorttype="numeric" class="kn-col-numeric" title="Average distinct players per week over the past 6 months">Avg/Wk</th>
+											<th data-sorttype="numeric" class="kn-col-numeric" title="Average distinct players per month over the past 12 months">Avg/Mo</th>
+											<th data-sorttype="numeric" class="kn-col-numeric" title="Distinct players who signed in at this park in the past 12 months">Total Players</th>
+											<th data-sorttype="numeric" class="kn-col-numeric" title="Distinct players whose home park is here who signed in at this park in the past 12 months">Total Members</th>
+										</tr>
+									</thead>
+									<tbody>
+										<?php foreach ((array)$prinz['parks'] as $park): ?>
+											<tr class="kn-row-link" data-park-id="<?= (int)$park['ParkId'] ?>" onclick="window.location.href='<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>'">
+												<td class="kn-col-nowrap">
+													<img class="kn-thumb"
+														loading="lazy"
+														src="<?= $park['HasHeraldry'] == 1 ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId'])) : HTTP_PARK_HERALDRY . '00000.jpg' ?>"
+														onerror="this.src='<?= HTTP_PARK_HERALDRY ?>00000.jpg'"
+														alt="">
+													<a href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>"><?= htmlspecialchars($park['ParkName']) ?></a>
+												</td>
+												<td><?= htmlspecialchars(!empty($park['Title']) ? $park['Title'] : '') ?></td>
+												<td class="kn-col-numeric kn-avgwk-row"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></td>
+												<td class="kn-col-numeric kn-avgmo-row"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></td>
+												<td class="kn-col-numeric kn-tp-row">—</td>
+												<td class="kn-col-numeric kn-tm-row">—</td>
+											</tr>
+										<?php endforeach; ?>
+									</tbody>
+									<tfoot>
+										<tr>
+											<td colspan="2"><?= htmlspecialchars($prinz['Name']) ?> Total</td>
+											<td class="kn-col-numeric" id="kn-prinz-<?= $prId ?>-avgwk">—</td>
+											<td class="kn-col-numeric" id="kn-prinz-<?= $prId ?>-avgmo">—</td>
+											<td class="kn-col-numeric" id="kn-prinz-<?= $prId ?>-tp" title="Sum across parks (players may be counted in multiple parks)">—</td>
+											<td class="kn-col-numeric" id="kn-prinz-<?= $prId ?>-tm">—</td>
+										</tr>
+									</tfoot>
+								</table>
+							</div>
+						<?php endforeach; ?>
+					</div>
+
+				<?php endif; ?>
+
+				<?php if (count($parkList) === 0 && count($prinzParks) === 0): ?>
 					<div class="kn-empty">No parks found</div>
 				<?php endif; ?>
 			</div>
@@ -587,24 +712,6 @@
 					<div class="kn-empty">No park location data available</div>
 				<?php endif; ?>
 			</div>
-
-			<!-- Principalities Tab (only rendered if applicable) -->
-			<?php if (!$IsPrinz && count($principalityList) > 0): ?>
-				<div class="kn-tab-panel" id="kn-tab-principalities" style="display:none">
-					<?php foreach ($principalityList as $prinz): ?>
-						<div class="kn-prinz-row">
-							<img class="kn-prinz-heraldry"
-								loading="lazy"
-								src="<?= HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prinz['KingdomId'])) ?>"
-								onerror="this.src='<?= HTTP_KINGDOM_HERALDRY ?>0000.jpg'"
-								alt="">
-							<div class="kn-prinz-name">
-								<a href="<?= UIR ?>Kingdom/profile/<?= $prinz['KingdomId'] ?>"><?= htmlspecialchars($prinz['Name']) ?></a>
-							</div>
-						</div>
-					<?php endforeach; ?>
-				</div>
-			<?php endif; ?>
 
 			<!-- Reports Tab -->
 			<div class="kn-tab-panel" id="kn-tab-reports" style="display:none">
@@ -938,6 +1045,7 @@ var KnConfig = {
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	mapLocations:     <?= json_encode(array_values($knMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	principalityIds:  <?= json_encode(array_map(function($p){ return (int)$p['KingdomId']; }, $prinzParks)) ?>,
 	preloadOfficers:  <?= json_encode($PreloadOfficers ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -2027,63 +2135,98 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 	if (!kingdomId) return;
 
 	// ---- Park averages + player counts (AJAX) ----
-	fetch('<?= UIR ?>Kingdom/park_averages_json/' + kingdomId)
-		.then(function(r) { return r.json(); })
-		.then(function(data) {
-			var totalAtt = 0, totalTp = 0, totalTm = 0;
-			var wkCount = (data._kingdom && data._kingdom.wk_count) ? data._kingdom.wk_count : 26;
-			var kingdomAtt = (data._kingdom && data._kingdom.att) ? data._kingdom.att : null;
-			function knTrend(cur, prev, decimals) {
-				if (prev === undefined) return '';
-				if (cur > prev) return ' <span class="kn-trend kn-trend-up" title="Up from ' + prev.toFixed(decimals) + ' (prev period)">&#9650;</span>';
-				if (cur < prev) return ' <span class="kn-trend kn-trend-dn" title="Down from ' + prev.toFixed(decimals) + ' (prev period)">&#9660;</span>';
-				return '';
+	// Fill tile/row averages for a given park_averages_json payload.
+	// opts = { scope: Element|null (default document),
+	//          footer: {avgwk, avgmo, tp, tm} element-ids | null,
+	//          statCards: bool }
+	function knFillAverages(data, opts) {
+		opts = opts || {};
+		var scope = opts.scope || document;
+		var totalAtt = 0, totalTp = 0, totalTm = 0;
+		var wkCount = (data._kingdom && data._kingdom.wk_count) ? data._kingdom.wk_count : 26;
+		var kingdomAtt = (data._kingdom && data._kingdom.att) ? data._kingdom.att : null;
+		function knTrend(cur, prev, decimals) {
+			if (prev === undefined) return '';
+			if (cur > prev) return ' <span class="kn-trend kn-trend-up" title="Up from ' + prev.toFixed(decimals) + ' (prev period)">&#9650;</span>';
+			if (cur < prev) return ' <span class="kn-trend kn-trend-dn" title="Down from ' + prev.toFixed(decimals) + ' (prev period)">&#9660;</span>';
+			return '';
+		}
+		for (var parkId in data) {
+			if (parkId === '_kingdom') continue;
+			var att = data[parkId].att || 0, mo = data[parkId].mo || 0;
+			var tp  = data[parkId].tp  || 0, tm = data[parkId].tm  || 0;
+			var prevAtt = data[parkId].prev_att, prevMo = data[parkId].prev_mo;
+			totalAtt += att; totalTp += tp; totalTm += tm;
+			// Tile view
+			var tile = scope.querySelector('.kn-park-tile[data-park-id="' + parkId + '"]');
+			if (tile) {
+				var wkEl = tile.querySelector('.kn-avgwk-tile');
+				var moEl = tile.querySelector('.kn-avgmo-tile');
+				if (wkEl) wkEl.innerHTML = (att / wkCount).toFixed(1) + knTrend(att / wkCount, prevAtt !== undefined ? prevAtt / wkCount : undefined, 1);
+				if (moEl) moEl.innerHTML = mo.toFixed(1) + knTrend(mo, prevMo !== undefined ? prevMo : undefined, 1);
 			}
-			for (var parkId in data) {
-				if (parkId === '_kingdom') continue;
-				var att = data[parkId].att || 0, mo = data[parkId].mo || 0;
-				var tp  = data[parkId].tp  || 0, tm = data[parkId].tm  || 0;
-				var prevAtt = data[parkId].prev_att, prevMo = data[parkId].prev_mo;
-				totalAtt += att; totalTp += tp; totalTm += tm;
-				// Tile view
-				var tile = document.querySelector('.kn-park-tile[data-park-id="' + parkId + '"]');
-				if (tile) {
-					var wkEl = tile.querySelector('.kn-avgwk-tile');
-					var moEl = tile.querySelector('.kn-avgmo-tile');
-					if (wkEl) wkEl.innerHTML = (att / wkCount).toFixed(1) + knTrend(att / wkCount, prevAtt !== undefined ? prevAtt / wkCount : undefined, 1);
-					if (moEl) moEl.innerHTML = mo.toFixed(1) + knTrend(mo, prevMo !== undefined ? prevMo : undefined, 1);
-				}
-				// List view row
-				var row = document.querySelector('tr[data-park-id="' + parkId + '"]');
-				if (row) {
-					var wkTd = row.querySelector('.kn-avgwk-row');
-					var moTd = row.querySelector('.kn-avgmo-row');
-					var tpTd = row.querySelector('.kn-tp-row');
-					var tmTd = row.querySelector('.kn-tm-row');
-					if (wkTd) { wkTd.innerHTML = (att / wkCount).toFixed(2) + knTrend(att / wkCount, prevAtt !== undefined ? prevAtt / wkCount : undefined, 2); wkTd.setAttribute('data-sortval', att / wkCount); }
-					if (moTd) { moTd.innerHTML = mo.toFixed(1) + knTrend(mo, prevMo !== undefined ? prevMo : undefined, 1); moTd.setAttribute('data-sortval', mo); }
-					if (tpTd) { tpTd.textContent = tp;  tpTd.setAttribute('data-sortval', tp); }
-					if (tmTd) { tmTd.textContent = tm;  tmTd.setAttribute('data-sortval', tm); }
-				}
+			// List view row
+			var row = scope.querySelector('tr[data-park-id="' + parkId + '"]');
+			if (row) {
+				var wkTd = row.querySelector('.kn-avgwk-row');
+				var moTd = row.querySelector('.kn-avgmo-row');
+				var tpTd = row.querySelector('.kn-tp-row');
+				var tmTd = row.querySelector('.kn-tm-row');
+				if (wkTd) { wkTd.innerHTML = (att / wkCount).toFixed(2) + knTrend(att / wkCount, prevAtt !== undefined ? prevAtt / wkCount : undefined, 2); wkTd.setAttribute('data-sortval', att / wkCount); }
+				if (moTd) { moTd.innerHTML = mo.toFixed(1) + knTrend(mo, prevMo !== undefined ? prevMo : undefined, 1); moTd.setAttribute('data-sortval', mo); }
+				if (tpTd) { tpTd.textContent = tp;  tpTd.setAttribute('data-sortval', tp); }
+				if (tmTd) { tmTd.textContent = tm;  tmTd.setAttribute('data-sortval', tm); }
 			}
-			// Stat cards — use kingdom-level deduped values (avoids double-counting multi-park players)
-			var wkBase = kingdomAtt !== null ? kingdomAtt : totalAtt;
-			var moBase = (data._kingdom && data._kingdom.mo) ? data._kingdom.mo : 0;
+		}
+		// Stat cards — use kingdom-level deduped values (avoids double-counting multi-park players)
+		var wkBase = kingdomAtt !== null ? kingdomAtt : totalAtt;
+		var moBase = (data._kingdom && data._kingdom.mo) ? data._kingdom.mo : 0;
+		if (opts.statCards) {
 			var statWk = document.getElementById('kn-stat-avgwk');
 			var statMo = document.getElementById('kn-stat-avgmo');
 			if (statWk) statWk.textContent = (wkBase / wkCount).toFixed(1);
 			if (statMo) statMo.textContent = moBase.toFixed(1);
-			// Footer totals
-			var footWk = document.getElementById('kn-total-avgwk');
-			var footMo = document.getElementById('kn-total-avgmo');
-			var footTp = document.getElementById('kn-total-tp');
-			var footTm = document.getElementById('kn-total-tm');
+		}
+		// Footer totals
+		if (opts.footer) {
+			var footWk = document.getElementById(opts.footer.avgwk);
+			var footMo = document.getElementById(opts.footer.avgmo);
+			var footTp = document.getElementById(opts.footer.tp);
+			var footTm = document.getElementById(opts.footer.tm);
 			if (footWk) footWk.textContent = (wkBase / wkCount).toFixed(2);
 			if (footMo) footMo.textContent = moBase.toFixed(1);
 			if (footTp) footTp.textContent = totalTp;
 			if (footTm) footTm.textContent = totalTm;
+		}
+	}
+
+	// Kingdom's own parks (stat cards + kingdom footer)
+	fetch('<?= UIR ?>Kingdom/park_averages_json/' + kingdomId)
+		.then(function(r) { return r.json(); })
+		.then(function(data) {
+			knFillAverages(data, {
+				scope: document,
+				footer: { avgwk: 'kn-total-avgwk', avgmo: 'kn-total-avgmo', tp: 'kn-total-tp', tm: 'kn-total-tm' },
+				statCards: true
+			});
 		})
 		.catch(function(err) { console.error('Kingdom park_averages_json failed:', err); });
+
+	// Principality parks — one fetch per principality id; park ids are globally unique so
+	// document-scoped fills land on the right tiles/rows, and per-section footer ids keep totals separate.
+	var knPrinzIds = (KnConfig.principalityIds || []);
+	knPrinzIds.forEach(function(prId) {
+		fetch('<?= UIR ?>Kingdom/park_averages_json/' + prId)
+			.then(function(r) { return r.json(); })
+			.then(function(data) {
+				knFillAverages(data, {
+					scope: document,
+					footer: { avgwk: 'kn-prinz-' + prId + '-avgwk', avgmo: 'kn-prinz-' + prId + '-avgmo', tp: 'kn-prinz-' + prId + '-tp', tm: 'kn-prinz-' + prId + '-tm' },
+					statCards: false
+				});
+			})
+			.catch(function(err) { console.error('Principality park_averages_json failed (' + prId + '):', err); });
+	});
 
 	// ---- Players tab: lazy-load on first click ----
 	function knHtmlEsc(s) {

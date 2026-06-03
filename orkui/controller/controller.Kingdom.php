@@ -414,6 +414,43 @@ class Controller_Kingdom extends Controller {
 		$this->data['map_parks'] = is_array($rawParks['Parks'])
 			? array_values(array_filter($rawParks['Parks'], function($p) { return $p['Active'] == 'Active'; }))
 			: [];
+
+		// Child-principality parks for the Parks tab (tile/list) and the kingdom map.
+		// Only when this kingdom is NOT itself a principality; both keys always set.
+		$this->data['principality_parks'] = [];
+		$this->data['prinz_map_parks']    = [];
+		if (empty($this->data['IsPrinz']) && is_array($this->data['principalities']['Principalities'] ?? null)) {
+			foreach ($this->data['principalities']['Principalities'] as $pr) {
+				$prId = (int)($pr['KingdomId'] ?? 0);
+				if ($prId <= 0) continue;
+				$prName = $pr['Name'] ?? '';
+
+				$prSummary = $this->Kingdom->get_park_summary($prId);
+				$prParks   = is_array($prSummary['KingdomParkAveragesSummary'] ?? null)
+					? $prSummary['KingdomParkAveragesSummary']
+					: [];
+				if (!empty($prParks)) {
+					$this->data['principality_parks'][] = [
+						'KingdomId' => $prId,
+						'Name'      => $prName,
+						'parks'     => $prParks,
+					];
+				}
+
+				$prRawParks = $this->Kingdom->GetParks(['KingdomId' => $prId]);
+				$prMapParks = is_array($prRawParks['Parks'] ?? null)
+					? array_values(array_filter($prRawParks['Parks'], function($p) { return $p['Active'] == 'Active'; }))
+					: [];
+				if (!empty($prMapParks)) {
+					$this->data['prinz_map_parks'][] = [
+						'KingdomId' => $prId,
+						'Name'      => $prName,
+						'parks'     => $prMapParks,
+					];
+				}
+			}
+		}
+
 		$this->data['park_edit_lookup'] = [];
 		if (is_array($rawParks['Parks'])) {
 			foreach ($rawParks['Parks'] as $p) {
