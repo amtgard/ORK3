@@ -118,7 +118,7 @@ class Kingdom  extends Ork3 {
 			$ladder_clause = " and is_title = 0";
 		}
 		$sql = "select kingdomaward_id, ifnull(ka.name, a.name) as kingdom_awardname, ka.reign_limit, ka.month_limit, a.name as award_name, 
-						a.award_id, a.is_ladder, ifnull(a.is_title, ka.is_title) as is_title, ifnull(a.title_class, ka.title_class) as title_class,
+						a.award_id, a.is_ladder, ka.is_title as is_title, ka.title_class as title_class,
             a.officer_role, a.peerage
 					from " . DB_PREFIX . "kingdomaward ka
 						left join " . DB_PREFIX . "award a on ka.award_id = a.award_id and ka.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
@@ -236,7 +236,7 @@ class Kingdom  extends Ork3 {
 	}
 		
 	public function create_kingdom_awards($kingdom_id) {
-		$sql = "insert into " . DB_PREFIX . "kingdomaward (kingdom_id, award_id, name) select " . mysql_real_escape_string($kingdom_id) .", award_id, name from " . DB_PREFIX . "award";
+		$sql = "insert into " . DB_PREFIX . "kingdomaward (kingdom_id, award_id, name, is_title, title_class) select " . mysql_real_escape_string($kingdom_id) .", award_id, name, is_title, title_class from " . DB_PREFIX . "award";
 		$this->db->query($sql);
 	}
 	
