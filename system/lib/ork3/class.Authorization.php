@@ -806,7 +806,7 @@ class Authorization extends Ork3
 		// Upper-level authority check, we have to find the parents of
 		// of the subject, and check their auths
 		// !$sufficient is redundant, but I don't trust the next guy to hold the invariant
-		if (!$sufficient && $type != AUTH_KINGDOM) {
+		if (!$sufficient) {
 			switch ($type) {
 				case AUTH_PARK:
 					$park = new yapo($this->db, DB_PREFIX . 'park');
@@ -826,6 +826,17 @@ class Authorization extends Ork3
 						if ($this->HasAuthority($mundane_id, AUTH_KINGDOM, $event->kingdom_id, $role) || $this->HasAuthority($mundane_id, AUTH_PARK, $event->park_id, $role) || $event->mundane_id == $mundane_id)
 							return true;
 					}
+					break;
+				case AUTH_KINGDOM:
+					// Principalities are sub-groups of their parent kingdom: parent-kingdom
+					// officers hold the same authority over a principality (and its parks)
+					// as over the kingdom itself. Walk up the parent_kingdom_id chain.
+					$kingdom = new yapo($this->db, DB_PREFIX . 'kingdom');
+					$kingdom->clear();
+					$kingdom->kingdom_id = $id;
+					if ($kingdom->find() && valid_id($kingdom->parent_kingdom_id)
+						&& $this->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom->parent_kingdom_id, $role))
+						return true;
 					break;
 			}
 		}
