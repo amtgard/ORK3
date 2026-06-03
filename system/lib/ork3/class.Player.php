@@ -1725,6 +1725,12 @@ class Player extends Ork3 {
             return InvalidParameter();
         }
 
+        // Guard against an unresolved kingdomaward (LookupAward/LookupKingdomAward
+        // returned a zero/invalid id) — saving here would create an orphaned grant.
+        if (!valid_id($request['KingdomAwardId'])) {
+            return InvalidParameter();
+        }
+
 		if (valid_id($mundane_id)
 				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipient['ParkId'], AUTH_CREATE)) {
 			if (valid_id($request['ParkId'])) {
