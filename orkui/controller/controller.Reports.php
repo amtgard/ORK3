@@ -52,6 +52,11 @@ class Controller_Reports extends Controller {
 		$this->data['page_title'] = "Park Heraldry";
 	}
 
+	public function orkremental($action = null) {
+		$this->template = 'Reports_orkremental.tpl';
+		$this->data['page_title'] = "ORKremental";
+	}
+
 	function kingdomheraldry($request=null) {
 		$this->template = 'Reports_heraldry.tpl';
 		$this->data['Blank'] = HERALDRY_KINGDOM_DEFAULT;

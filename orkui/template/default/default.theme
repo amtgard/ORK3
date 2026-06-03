@@ -726,6 +726,10 @@ endif;
   Amtgard is a registered trademark of Amtgard International, Inc., a 501(c)(3) non-profit organization.
   &nbsp;&middot;&nbsp;
   <a href="<?=UIR?>ReleaseNotes" style="color:var(--ork-text-muted,#94a3b8);text-decoration:none;border-bottom:1px dotted var(--ork-text-muted,#94a3b8);">ORK v<?=ORK_VERSION?></a>
+<?php if (!empty($IsOwnProfile)): ?>
+  &nbsp;&middot;&nbsp;
+  <a href="<?=UIR?>Reports/orkremental" aria-label="Back to top" style="color:var(--ork-text-muted,#94a3b8);text-decoration:none;"><i class="fas fa-chevron-up"></i></a>
+<?php endif; ?>
 </footer>
 
 <script>
