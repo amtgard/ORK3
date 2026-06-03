@@ -8821,3 +8821,135 @@ html[data-theme="dark"] .pn-notes-infobox-icon { color: #63b3ed; }
   html:not([data-theme="light"]):not([data-theme="dark"]) .pn-notes-infobox a { color: #90cdf4; }
   html:not([data-theme="light"]):not([data-theme="dark"]) .pn-notes-infobox-icon { color: #63b3ed; }
 }
+
+/* =====================================================
+   Kingdom Parks tab — Principalities sub-group
+   (folded under the kingdom's own parks; tile + list views)
+   Mirrors .kn-park-tile / .kn-table look. Dark mode via
+   html[data-theme="dark"] + --ork-* theme tokens.
+   ===================================================== */
+
+/* Group label / separator — rendered with ::before so the markup
+   does not need to include a label element (avoids the global
+   h1..h6 gray-box treatment from orkui.css entirely). */
+#kn-prinz-tile-sections,
+#kn-prinz-tables {
+	margin-top: 26px;
+	padding-top: 18px;
+	border-top: 1px solid var(--ork-border, #e2e8f0);
+}
+#kn-prinz-tile-sections::before,
+#kn-prinz-tables::before {
+	content: 'Principalities';
+	display: block;
+	margin-bottom: 14px;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 1.2px;
+	color: var(--ork-text-muted, #718096);
+}
+
+/* Each principality group reads as a distinct sub-group */
+.kn-prinz-section,
+.kn-prinz-table-wrap {
+	margin-top: 22px;
+	padding-top: 4px;
+}
+.kn-prinz-section:first-of-type,
+.kn-prinz-table-wrap:first-of-type {
+	margin-top: 0;
+}
+/* subtle divider between successive principalities */
+.kn-prinz-section + .kn-prinz-section,
+.kn-prinz-table-wrap + .kn-prinz-table-wrap {
+	margin-top: 26px;
+	padding-top: 22px;
+	border-top: 1px dashed var(--ork-border, #e2e8f0);
+}
+
+/* Header row — it's a link to the principality profile */
+a.kn-prinz-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 6px;
+	margin-bottom: 12px;
+	border-radius: 6px;
+	text-decoration: none;
+	cursor: pointer;
+	transition: background 0.12s;
+}
+a.kn-prinz-head:hover {
+	background: var(--ork-bg-secondary, #f7fafc);
+}
+a.kn-prinz-head:hover .kn-prinz-name {
+	text-decoration: underline;
+}
+
+/* Principality heraldry thumbnail */
+.kn-prinz-heraldry {
+	width: 30px;
+	height: 30px;
+	flex: 0 0 auto;
+	object-fit: contain;
+	border-radius: 4px;
+	border: 1px solid var(--ork-border, #e2e8f0);
+	vertical-align: middle;
+	background: var(--ork-bg, #fff);
+}
+
+/* Principality name — small section header look */
+.kn-prinz-name {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--ork-text, #2d3748);
+	line-height: 1.2;
+}
+
+/* External-link icon — muted, signals "opens the principality page" */
+.kn-prinz-extlink {
+	margin-left: 4px;
+	font-size: 11px;
+	color: var(--ork-text-lighter, #a0aec0);
+	transition: color 0.12s;
+}
+a.kn-prinz-head:hover .kn-prinz-extlink {
+	color: var(--kn-accent-mid, #276749);
+}
+
+/* The .kn-park-tiles grid inside a section inherits the kingdom grid;
+   no override needed beyond ensuring it is not collapsed. */
+.kn-prinz-section .kn-park-tiles {
+	margin-top: 0;
+}
+
+/* ---------- DARK MODE ---------- */
+html[data-theme="dark"] #kn-prinz-tile-sections,
+html[data-theme="dark"] #kn-prinz-tables {
+	border-top-color: var(--ork-border);
+}
+html[data-theme="dark"] #kn-prinz-tile-sections::before,
+html[data-theme="dark"] #kn-prinz-tables::before {
+	color: var(--ork-text-muted);
+}
+html[data-theme="dark"] .kn-prinz-section + .kn-prinz-section,
+html[data-theme="dark"] .kn-prinz-table-wrap + .kn-prinz-table-wrap {
+	border-top-color: var(--ork-border);
+}
+html[data-theme="dark"] a.kn-prinz-head:hover {
+	background: var(--ork-bg-secondary);
+}
+html[data-theme="dark"] .kn-prinz-heraldry {
+	border-color: var(--ork-border);
+	background: var(--ork-bg-tertiary);
+}
+html[data-theme="dark"] .kn-prinz-name {
+	color: var(--ork-text);
+}
+html[data-theme="dark"] .kn-prinz-extlink {
+	color: var(--ork-text-lighter);
+}
+html[data-theme="dark"] a.kn-prinz-head:hover .kn-prinz-extlink {
+	color: var(--ork-link-bright);
+}
