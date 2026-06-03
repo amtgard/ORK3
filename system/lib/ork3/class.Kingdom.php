@@ -350,7 +350,8 @@ class Kingdom  extends Ork3 {
 			$c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'KingdomDuesTake', $request['KingdomDuesTake']);
     		$c->add_config($mundane_id, CFG_KINGDOM, 'color', $this->kingdom->kingdom_id, 'AtlasColor', 'FE7569');
 			$c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'AwardRecsPublic', '1');
-			
+			$c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'IncludePrincipalityInStatistics', '0');
+
 			$c->create_officers($this->kingdom->kingdom_id, 0);
 			
 			$c->create_park_titles($this->kingdom->kingdom_id);
@@ -390,17 +391,23 @@ class Kingdom  extends Ork3 {
 						'ParentKingdomId' => $this->kingdom->parent_kingdom_id
 					);
 			} while ($this->kingdom->next());
-		} else {
-			$result['Status'] = InvalidParameter();
 		}
 		return $result;
 	}
 	
 	public function GetParks($request) {
+		// Optional 'KingdomIds' array → WHERE p.kingdom_id IN (...). Default keeps
+		// single-'KingdomId' behavior unchanged.
+		if (isset($request['KingdomIds']) && is_array($request['KingdomIds']) && count($request['KingdomIds']) > 0) {
+			$ids = implode(',', array_map('intval', $request['KingdomIds']));
+			$kingdom_clause = "p.kingdom_id IN ($ids)";
+		} else {
+			$kingdom_clause = "p.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+		}
 		$sql = "select * 
 					from " . DB_PREFIX . "park p
 						left join " . DB_PREFIX . "parktitle pt on p.parktitle_id = pt.parktitle_id
-					where p.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
+					where $kingdom_clause
 					order by pt.class desc, p.name asc";
 		$r = $this->db->query($sql);
 		if ($r !== false && $r->size() > 0) {
@@ -409,7 +416,6 @@ class Kingdom  extends Ork3 {
 				$response['Parks'][] = array(
 						'ParkId' => $r->park_id,
 						'KingdomId' => $r->kingdom_id,
-						'ParentParkId' => $r->parent_park_id,
 						'Name' => $r->name,
 						'Abbreviation' => $r->abbreviation,
 						'Location' => $r->location,
@@ -422,8 +428,7 @@ class Kingdom  extends Ork3 {
 						'Class' => $r->class,
                         'HasHeraldry' => $r->has_heraldry,
                         'City' => $r->city,
-                        'Province' => $r->province,
-						'ParentOf' => $r->is_principality==1?Ork3::$Lib->park->GetParks(array('ParkId'=>$r->park_id, 'Stack' => array($r->park_id))):null
+                        'Province' => $r->province
 					);
 			}
 		} else {
@@ -553,6 +558,27 @@ class Kingdom  extends Ork3 {
 				if (!$this->kingdom->find()) {
 					return InvalidParameter('Parent kingdom not found.');
 				}
+				// Cycle prevention: walk the proposed parent's ancestor chain. If we
+				// reach $kingdom_id, the proposed parent is a descendant of the
+				// kingdom we are reparenting → that would create a loop. Reject it.
+				$walker  = new yapo($this->db, DB_PREFIX . 'kingdom');
+				$cursor  = $parent_id;
+				$visited = array();
+				while ($cursor > 0) {
+					if ($cursor === $kingdom_id) {
+						return InvalidParameter('A kingdom cannot be made a child of one of its own descendants.');
+					}
+					if (isset($visited[$cursor])) {
+						break; // pre-existing cycle in data — stop walking
+					}
+					$visited[$cursor] = true;
+					$walker->clear();
+					$walker->kingdom_id = $cursor;
+					if (!$walker->find()) {
+						break;
+					}
+					$cursor = (int)$walker->parent_kingdom_id;
+				}
 				$this->kingdom->clear();
 				$this->kingdom->kingdom_id = $kingdom_id;
 				$this->kingdom->find();
@@ -564,6 +590,53 @@ class Kingdom  extends Ork3 {
 			return Success();
 		}
 		return NoAuthorization();
+	}
+
+	// Active child-principality kingdom ids of $kingdomId ([] if none). Uses the
+	// same criteria as GetPrincipalities (parent_kingdom_id = $kingdomId AND
+	// active = 'Active').
+	public function GetChildPrincipalityIds($kingdomId) {
+		$kingdomId = (int)$kingdomId;
+		$ids = array();
+		if ($kingdomId <= 0) {
+			return $ids;
+		}
+		$child = new yapo($this->db, DB_PREFIX . 'kingdom');
+		$child->clear();
+		$child->parent_kingdom_id = $kingdomId;
+		$child->active = 'Active';
+		if ($child->find()) {
+			do {
+				$ids[] = (int)$child->kingdom_id;
+			} while ($child->next());
+		}
+		return $ids;
+	}
+
+	// [$kingdomId, ...child principality ids] — ALWAYS includes children.
+	// Structural scoping (parks dropdown, player search) uses THIS.
+	public function GetFamilyKingdomIds($kingdomId) {
+		$kingdomId = (int)$kingdomId;
+		return array_merge(array($kingdomId), $this->GetChildPrincipalityIds($kingdomId));
+	}
+
+	// True iff the IncludePrincipalityInStatistics config flag for $kingdomId is '1'.
+	public function StatsIncludesPrincipalities($kingdomId) {
+		$kingdomId = (int)$kingdomId;
+		$configs = Common::get_configs($kingdomId, CFG_KINGDOM);
+		return isset($configs['IncludePrincipalityInStatistics'])
+			&& (int)$configs['IncludePrincipalityInStatistics']['Value'] === 1;
+	}
+
+	// GetFamilyKingdomIds($kingdomId) when StatsIncludesPrincipalities is true AND
+	// there are children; otherwise [$kingdomId]. STATS/REPORT scoping uses THIS.
+	public function GetStatsKingdomIds($kingdomId) {
+		$kingdomId = (int)$kingdomId;
+		$children = $this->GetChildPrincipalityIds($kingdomId);
+		if (count($children) > 0 && $this->StatsIncludesPrincipalities($kingdomId)) {
+			return array_merge(array($kingdomId), $children);
+		}
+		return array($kingdomId);
 	}
 
 	public function GetOfficers($request) {

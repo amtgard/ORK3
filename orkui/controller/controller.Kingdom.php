@@ -75,6 +75,7 @@ class Controller_Kingdom extends Controller {
 		$wkStart  = date('Y-m-d', strtotime('-6 month'));
 		$wkEnd    = date('Y-m-d');
 		$wkCount  = max(1, (int)ceil((strtotime($wkEnd) - strtotime($wkStart)) / (7 * 86400)));
+		$statsKids = implode(',', array_map('intval', $this->Kingdom->GetStatsKingdomIds($kid)));
 		$weekly  = $this->Report->GetKingdomParkAverages(['KingdomId' => $kingdom_id, 'AverageMonths' => 6]);
 		$monthly = $this->Report->GetKingdomParkMonthlyAverages(['KingdomId' => $kingdom_id]);
 		$result  = array();
@@ -93,7 +94,7 @@ class Controller_Kingdom extends Controller {
 				COUNT(DISTINCT a.mundane_id) AS total_players,
 				COUNT(DISTINCT CASE WHEN m.park_id = a.park_id THEN a.mundane_id END) AS total_members
 			FROM ork_attendance a
-			INNER JOIN ork_park p  ON p.park_id  = a.park_id  AND p.kingdom_id = {$kid}
+			INNER JOIN ork_park p  ON p.park_id  = a.park_id  AND p.kingdom_id IN ({$statsKids})
 			INNER JOIN ork_mundane m ON m.mundane_id = a.mundane_id AND m.suspended = 0 AND m.active = 1
 			WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) AND a.mundane_id > 0
 			GROUP BY a.park_id";
@@ -114,7 +115,7 @@ class Controller_Kingdom extends Controller {
 		// across the whole kingdom — avoids double-counting players who attend multiple parks in one week
 		$knSql = "SELECT COUNT(*) AS katt FROM (
 				SELECT a.mundane_id FROM " . DB_PREFIX . "attendance a
-				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id = {$kid}
+				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
 				WHERE a.date >= '{$wkStart}'
 					AND a.mundane_id > 0
 				GROUP BY a.date_year, a.date_week3, a.mundane_id
@@ -130,7 +131,7 @@ class Controller_Kingdom extends Controller {
 		$knMoSql = "SELECT AVG(monthly_unique) AS kmo FROM (
 				SELECT a.date_year, a.date_month, COUNT(DISTINCT a.mundane_id) AS monthly_unique
 				FROM " . DB_PREFIX . "attendance a
-				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id = {$kid}
+				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
 				WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
 					AND a.mundane_id > 0
 				GROUP BY a.date_year, a.date_month
@@ -153,13 +154,13 @@ class Controller_Kingdom extends Controller {
 				 LEFT JOIN (
 				     SELECT a.mundane_id, a.park_id
 				     FROM ork_attendance a
-				     INNER JOIN " . DB_PREFIX . "park pk ON pk.park_id = a.park_id AND pk.kingdom_id = {$kid}
+				     INNER JOIN " . DB_PREFIX . "park pk ON pk.park_id = a.park_id AND pk.kingdom_id IN ({$statsKids})
 				     WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
 				       AND a.date <  DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
 				       AND a.mundane_id > 0
 				     GROUP BY date_year, date_week3, mundane_id, a.park_id
 				 ) mw ON p.park_id = mw.park_id
-				 WHERE p.kingdom_id = {$kid} AND p.active = 'Active'
+				 WHERE p.kingdom_id IN ({$statsKids}) AND p.active = 'Active'
 				 GROUP BY p.park_id"
 			);
 			if ($prevWkResult) {
@@ -176,7 +177,7 @@ class Controller_Kingdom extends Controller {
 				     SELECT a.date_year, a.date_month, a.park_id,
 				            COUNT(DISTINCT a.mundane_id) AS monthly_unique
 				     FROM ork_attendance a
-				     INNER JOIN ork_park p ON p.park_id = a.park_id AND p.kingdom_id = {$kid}
+				     INNER JOIN ork_park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
 				     WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
 				       AND a.date <  DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
 				       AND a.mundane_id > 0
@@ -200,6 +201,7 @@ class Controller_Kingdom extends Controller {
 	public function events_more($kingdom_id = null) {
 		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
 		$kid = (int)$kingdom_id;
+		$statsEvtKids = implode(',', array_map('intval', $this->Kingdom->GetStatsKingdomIds($kid)));
 		$window = isset($_GET['window']) ? (int)$_GET['window'] : 1;
 		if ($window < 1) $window = 1;
 		if ($window > 10) $window = 10;
@@ -217,7 +219,7 @@ class Controller_Kingdom extends Controller {
 			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
 			    AND cd.event_start >  DATE_ADD(NOW(), INTERVAL {$startMonths} MONTH)
 			    AND cd.event_start <= DATE_ADD(NOW(), INTERVAL {$endMonths} MONTH)
-			WHERE e.kingdom_id = {$kid}
+			WHERE e.kingdom_id IN ({$statsEvtKids})
 			ORDER BY cd.event_start, p.name, e.name";
 		$DB->Clear();
 		$evtResult = $DB->DataSet($evtSql);
@@ -253,7 +255,7 @@ class Controller_Kingdom extends Controller {
 			$_more = $DB->DataSet(
 				"SELECT 1 FROM ork_event_calendardetail cd
 				 JOIN ork_event e ON e.event_id = cd.event_id
-				 WHERE e.kingdom_id = {$kid}
+				 WHERE e.kingdom_id IN ({$statsEvtKids})
 				   AND cd.event_start >  DATE_ADD(NOW(), INTERVAL {$_nextStart} MONTH)
 				   AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 120 MONTH)
 				 LIMIT 1"
@@ -415,6 +417,12 @@ class Controller_Kingdom extends Controller {
 			? array_values(array_filter($rawParks['Parks'], function($p) { return $p['Active'] == 'Active'; }))
 			: [];
 
+		// Whether this kingdom has active child principalities (and is not itself one).
+		// Drives the admin 'Include Principality in Statistics' toggle visibility.
+		$this->data['HasChildPrincipalities'] = (empty($this->data['IsPrinz'])
+			&& is_array($this->data['principalities']['Principalities'] ?? null)
+			&& count($this->data['principalities']['Principalities']) > 0);
+
 		// Child-principality parks for the Parks tab (tile/list) and the kingdom map.
 		// Only when this kingdom is NOT itself a principality; both keys always set.
 		$this->data['principality_parks'] = [];
@@ -451,6 +459,22 @@ class Controller_Kingdom extends Controller {
 			}
 		}
 
+		// Hero/tab 'Parks (N)' count: roll up family park count when the stats flag is on
+		// (main parks + principality parks already gathered above). Falls back to the
+		// kingdom's own park count otherwise. Does NOT merge principality parks into the tiles.
+		$ownParkCount = is_array($this->data['park_summary']['KingdomParkAveragesSummary'] ?? null)
+			? count($this->data['park_summary']['KingdomParkAveragesSummary'])
+			: 0;
+		if (!empty($this->data['HasChildPrincipalities']) && $this->Kingdom->StatsIncludesPrincipalities($kingdom_id)) {
+			$prinzParkCount = 0;
+			foreach ($this->data['principality_parks'] as $prGroup) {
+				$prinzParkCount += is_array($prGroup['parks'] ?? null) ? count($prGroup['parks']) : 0;
+			}
+			$this->data['StatsParkCount'] = $ownParkCount + $prinzParkCount;
+		} else {
+			$this->data['StatsParkCount'] = $ownParkCount;
+		}
+
 		$this->data['park_edit_lookup'] = [];
 		if (is_array($rawParks['Parks'])) {
 			foreach ($rawParks['Parks'] as $p) {
@@ -466,6 +490,7 @@ class Controller_Kingdom extends Controller {
 
 		global $DB;
 		$kid = (int)$kingdom_id;
+		$statsEvtKids = implode(',', array_map('intval', $this->Kingdom->GetStatsKingdomIds($kid)));
 
 		$evtSql = "
 			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, p.abbreviation AS park_abbr,
@@ -485,7 +510,7 @@ class Controller_Kingdom extends Controller {
 			    FROM ork_event_rsvp
 			    GROUP BY event_calendardetail_id
 			) rsvp ON rsvp.event_calendardetail_id = cd.event_calendardetail_id
-			WHERE e.kingdom_id = {$kid}
+			WHERE e.kingdom_id IN ({$statsEvtKids})
 			ORDER BY cd.event_start, p.name, e.name";
 		$DB->Clear();
 		$evtResult    = $DB->DataSet($evtSql);
@@ -516,7 +541,7 @@ class Controller_Kingdom extends Controller {
 		$moreRes = $DB->DataSet(
 			"SELECT 1 FROM ork_event_calendardetail cd
 			 JOIN ork_event e ON e.event_id = cd.event_id
-			 WHERE e.kingdom_id = {$kid}
+			 WHERE e.kingdom_id IN ({$statsEvtKids})
 			   AND cd.event_start >  DATE_ADD(NOW(), INTERVAL 12 MONTH)
 			   AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 120 MONTH)
 			 LIMIT 1"
@@ -643,10 +668,12 @@ class Controller_Kingdom extends Controller {
 			];
 
 			$adminConfig = [];
+			$hasChildPrinz = !empty($this->data['HasChildPrincipalities']);
 			foreach ($kd['KingdomConfiguration'] ?? [] as $cfg) {
-				if (!empty($cfg['UserSetting'])) {
-					$adminConfig[] = $cfg;
-				}
+				if (empty($cfg['UserSetting'])) continue;
+				// Only surface the principality-stats toggle for kingdoms that have principalities.
+				if (($cfg['Key'] ?? '') === 'IncludePrincipalityInStatistics' && !$hasChildPrinz) continue;
+				$adminConfig[] = $cfg;
 			}
 			$this->data['AdminConfig']     = $adminConfig;
 			$this->data['AdminParkTitles'] = array_values($kd['ParkTitles'] ?? []);
@@ -716,6 +743,7 @@ class Controller_Kingdom extends Controller {
 	public function ics($kingdom_id = null) {
 		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
 		$kid = (int)$kingdom_id;
+		$statsEvtKids = implode(',', array_map('intval', $this->Kingdom->GetStatsKingdomIds($kid)));
 
 		// Kingdom name for CALNAME
 		$knName = $this->Kingdom->get_kingdom_name($kid);
@@ -735,7 +763,7 @@ class Controller_Kingdom extends Controller {
 			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
 				AND cd.event_start >= CURDATE()
 				AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
-			WHERE e.kingdom_id = {$kid}
+			WHERE e.kingdom_id IN ({$statsEvtKids})
 			ORDER BY cd.event_start ASC";
 		$DB->Clear();
 		$result = $DB->DataSet($sql);
