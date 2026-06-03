@@ -165,7 +165,7 @@
 <div class="kn-stats-row">
 	<div class="kn-stat-card kn-stat-card-link" onclick="knActivateTab('parks')">
 		<div class="kn-stat-icon"><i class="fas fa-map-marker-alt"></i></div>
-		<div class="kn-stat-number"><?= count($parkList) ?></div>
+		<div class="kn-stat-number"><?= $StatsParkCount ?? count($parkList) ?></div>
 		<div class="kn-stat-label">Parks</div>
 	</div>
 	<div class="kn-stat-card kn-stat-card-link" onclick="knActivateTab('events')">
@@ -281,7 +281,7 @@
 			<ul class="kn-tab-nav">
 				<li class="kn-tab-active" data-kntab="parks">
 					<i class="fas fa-map-marker-alt"></i><span class="kn-tab-label"> Parks</span>
-					<span class="kn-tab-count">(<?= count($parkList) ?>)</span>
+					<span class="kn-tab-count">(<?= $StatsParkCount ?? count($parkList) ?>)</span>
 				</li>
 				<li data-kntab="events">
 					<i class="fas fa-calendar-alt"></i><span class="kn-tab-label"> Events</span>

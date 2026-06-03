@@ -4495,13 +4495,14 @@ $(document).ready(function() {
 
             var lbl = document.createElement('div');
             lbl.className   = 'kn-admin-config-label';
-            var keyLabels = { 'AwardRecsPublic': 'Award Recommendations Visibility' };
+            var keyLabels = { 'AwardRecsPublic': 'Award Recommendations Visibility', 'IncludePrincipalityInStatistics': 'Include Principality in Statistics' };
             lbl.textContent = keyLabels[cfg.Key] || cfg.Key;
             var keyHints = {
                 'AttendanceWeeklyMinimum': 'Minimum distinct weeks with at least one sign-in in the last 6 months. Leave blank to not require this.',
                 'AttendanceDailyMinimum':  'Minimum distinct days with at least one sign-in in the last 6 months. Leave blank to not require this.',
                 'AttendanceCreditMinimum': 'Minimum total credits earned in the last 6 months. Leave blank to not require this.',
                 'MonthlyCreditMaximum':    'Cap on credits counted per calendar month (excess is discarded). Leave blank for no cap.',
+                'IncludePrincipalityInStatistics': 'When looking at statistics, graphs, and reports, include relevant metrics from Principality(ies) such as attendance and player counts.',
             };
             if (keyHints[cfg.Key]) {
                 var hint = document.createElement('span');
@@ -4559,6 +4560,16 @@ $(document).ready(function() {
                     else optPrivate.selected = true;
                     inp.appendChild(optPublic);
                     inp.appendChild(optPrivate);
+                } else if (cfg.Key === 'IncludePrincipalityInStatistics') {
+                    inp = document.createElement('input');
+                    inp.type = 'checkbox';
+                    inp.className = 'kn-admin-config-input';
+                    inp.checked = (String(val) === '1');
+                    // Make `.value` resolve to '1'/'0' from checked state so the existing
+                    // wireConfig collector + setconfig POST persist it unchanged.
+                    Object.defineProperty(inp, 'value', {
+                        get: function() { return this.checked ? '1' : '0'; }
+                    });
                 } else {
                     inp = document.createElement('input');
                     inp.type  = (cfg.Type === 'color')  ? 'color'

@@ -591,8 +591,8 @@ class Controller_KingdomAjax extends Controller {
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
 		} elseif ($action === 'getparks') {
-			$this->load_model('Kingdom');
-			$r = $this->Kingdom->get_park_info($kingdom_id);
+			// Always return family parks (kingdom + child principalities) for dropdowns.
+			$r = Ork3::$Lib->kingdom->GetParks(['KingdomIds' => Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id)]);
 			$parks = [];
 			foreach ($r['Parks'] ?? [] as $park) {
 				$parks[] = ['ParkId' => $park['ParkId'], 'Name' => $park['Name']];
@@ -833,7 +833,9 @@ class Controller_KingdomAjax extends Controller {
 			$kingdom_clause = '';
 			$park_clause    = '';
 		} else {
-			$kingdom_clause = "AND m.kingdom_id = {$kid}";
+			// Own-kingdom scope ALWAYS includes child principalities (family), not toggle-gated.
+			$familyIds      = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($kid)));
+			$kingdom_clause = "AND m.kingdom_id IN ({$familyIds})";
 			$park_clause    = valid_id($park_id) ? "AND m.park_id = {$park_id}" : '';
 		}
 
