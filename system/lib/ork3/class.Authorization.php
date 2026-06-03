@@ -717,7 +717,7 @@ class Authorization extends Ork3
 		return array($type, $id);
 	}
 
-	public function HasAuthority($mundane_id, $type, $id, $role)
+	public function HasAuthority($mundane_id, $type, $id, $role, $visited = array())
 	{
 		logtrace("HasAuthority", array($mundane_id, $type, $id, $role));
 
@@ -831,11 +831,17 @@ class Authorization extends Ork3
 					// Principalities are sub-groups of their parent kingdom: parent-kingdom
 					// officers hold the same authority over a principality (and its parks)
 					// as over the kingdom itself. Walk up the parent_kingdom_id chain.
+					// Guard against a corrupt/cyclic parent_kingdom_id (e.g. A->B->A or a
+					// self-parent) with a visited-set of kingdom ids plus a hard depth cap,
+					// so the recursion can never loop forever.
 					$kingdom = new yapo($this->db, DB_PREFIX . 'kingdom');
 					$kingdom->clear();
 					$kingdom->kingdom_id = $id;
+					$visited[] = (int) $id;
 					if ($kingdom->find() && valid_id($kingdom->parent_kingdom_id)
-						&& $this->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom->parent_kingdom_id, $role))
+						&& !in_array((int) $kingdom->parent_kingdom_id, $visited, true)
+						&& count($visited) < 10
+						&& $this->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom->parent_kingdom_id, $role, $visited))
 						return true;
 					break;
 			}
