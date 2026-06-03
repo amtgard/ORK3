@@ -2,6 +2,13 @@
 
 class Kingdom  extends Ork3 {
 
+	// Per-request memo caches for the principality-rollup helpers. These are read
+	// dozens of times per kingdom-scoped report page; the Kingdom lib is a single
+	// instance per request (see startup.php), so caching here is safe and avoids
+	// redundant DB hits — most notably for ordinary kingdoms that have no children.
+	private $childPrincipalityCache = array();
+	private $statsIncludesPrincipalityCache = array();
+
 	public function __construct() {
 		parent::__construct();
 		$this->kingdom = new yapo($this->db, DB_PREFIX . 'kingdom');
@@ -601,6 +608,9 @@ class Kingdom  extends Ork3 {
 		if ($kingdomId <= 0) {
 			return $ids;
 		}
+		if (isset($this->childPrincipalityCache[$kingdomId])) {
+			return $this->childPrincipalityCache[$kingdomId];
+		}
 		$child = new yapo($this->db, DB_PREFIX . 'kingdom');
 		$child->clear();
 		$child->parent_kingdom_id = $kingdomId;
@@ -610,6 +620,7 @@ class Kingdom  extends Ork3 {
 				$ids[] = (int)$child->kingdom_id;
 			} while ($child->next());
 		}
+		$this->childPrincipalityCache[$kingdomId] = $ids;
 		return $ids;
 	}
 
@@ -623,9 +634,14 @@ class Kingdom  extends Ork3 {
 	// True iff the IncludePrincipalityInStatistics config flag for $kingdomId is '1'.
 	public function StatsIncludesPrincipalities($kingdomId) {
 		$kingdomId = (int)$kingdomId;
+		if (isset($this->statsIncludesPrincipalityCache[$kingdomId])) {
+			return $this->statsIncludesPrincipalityCache[$kingdomId];
+		}
 		$configs = Common::get_configs($kingdomId, CFG_KINGDOM);
-		return isset($configs['IncludePrincipalityInStatistics'])
+		$enabled = isset($configs['IncludePrincipalityInStatistics'])
 			&& (int)$configs['IncludePrincipalityInStatistics']['Value'] === 1;
+		$this->statsIncludesPrincipalityCache[$kingdomId] = $enabled;
+		return $enabled;
 	}
 
 	// GetFamilyKingdomIds($kingdomId) when StatsIncludesPrincipalities is true AND
