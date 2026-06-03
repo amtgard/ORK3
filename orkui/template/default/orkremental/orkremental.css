@@ -1,0 +1,343 @@
+/* =====================================================================
+   ORKremental — self-contained game board stylesheet
+   ---------------------------------------------------------------------
+   EVERY selector is scoped under #orkr-root so nothing bleeds into ORK
+   chrome. The board FOLLOWS ORK's own theme (ORK sets <html data-theme=
+   "light|dark">): PK's light styles are the base, and the dark palette
+   applies under html[data-theme="dark"]. No independent in-game toggle.
+
+   Sections:
+     1. Root wrapper + heading reset + box-sizing
+     2. w3.css shim (only the classes the game actually uses, scoped)
+     3. Progress Knight styles.css (scoped) — light theme base
+     4. Progress Knight dark.css (scoped to html[data-theme="dark"])
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. Root wrapper + heading reset
+   --------------------------------------------------------------------- */
+
+/* Allow the fixed-width (1220px) PK layout to scroll horizontally inside
+   the ORK page instead of overflowing and breaking surrounding chrome. */
+#orkr-root {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    color: rgb(32, 32, 32);
+}
+
+/* w3.css (which the original game loads) applies box-sizing:border-box
+   globally. We don't load w3.css, so replicate it here — otherwise the
+   PK panels' inline widths (300px / 900px) + .w3-padding overflow the
+   1220px container and the main panel wraps below the sidebar. */
+#orkr-root,
+#orkr-root *,
+#orkr-root *::before,
+#orkr-root *::after {
+    box-sizing: border-box;
+}
+
+/* ORK's global orkui.css forces a gray box (background/border/text-shadow)
+   on ALL h1-h6. Reset every heading inside the board. */
+#orkr-root h1,
+#orkr-root h2,
+#orkr-root h3,
+#orkr-root h4,
+#orkr-root h5,
+#orkr-root h6 {
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+}
+
+/* ---------------------------------------------------------------------
+   2. w3.css shim — scoped reimplementations of ONLY the w3 classes the
+      game uses. We deliberately do NOT load the w3schools CDN.
+   --------------------------------------------------------------------- */
+
+#orkr-root .w3-button {
+    padding: 6px 12px;
+    cursor: pointer;
+    border: none;
+    display: inline-block;
+    user-select: none;
+    -webkit-user-select: none;
+    background-color: transparent;
+    color: inherit;
+    font-size: inherit;
+    font-family: inherit;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+#orkr-root .w3-button:hover {
+    background-color: rgba(0, 0, 0, 0.10);
+}
+
+#orkr-root .w3-bar-item {
+    display: inline-block;
+    padding: 8px 16px;
+}
+
+#orkr-root .w3-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+    display: table;
+}
+
+#orkr-root .w3-table td,
+#orkr-root .w3-table th {
+    padding: 8px;
+    display: table-cell;
+    text-align: left;
+    vertical-align: top;
+}
+
+#orkr-root .w3-bordered tr {
+    border-bottom: 1px solid #ccc;
+}
+
+#orkr-root .w3-border {
+    border: 1px solid #ccc;
+}
+
+#orkr-root .w3-circle {
+    border-radius: 50%;
+}
+
+#orkr-root .w3-text-gray {
+    color: #757575;
+}
+
+/* active-tab marker */
+#orkr-root .w3-blue-gray {
+    background-color: #607d8b !important;
+    color: #fff !important;
+}
+
+#orkr-root .w3-red {
+    background-color: #f44336 !important;
+    color: #fff !important;
+}
+
+#orkr-root .w3-margin {
+    margin: 16px;
+}
+
+#orkr-root .w3-margin-left {
+    margin-left: 16px;
+}
+
+#orkr-root .w3-margin-top {
+    margin-top: 16px;
+}
+
+#orkr-root .w3-padding {
+    padding: 8px 16px;
+}
+
+/* ---------------------------------------------------------------------
+   3. Progress Knight styles.css (scoped)
+   --------------------------------------------------------------------- */
+
+/* PK's "body" rule only set a background — apply it to the board root. */
+#orkr-root {
+    background-color: rgb(243, 243, 243);
+}
+
+#orkr-root .w3-bar-item {
+    width: 100px;
+    height: 40px;
+    text-align: center;
+}
+
+#orkr-root td {
+    vertical-align: middle !important;
+}
+
+#orkr-root .current {
+    background-color: orange !important;
+}
+
+#orkr-root .progress-text {
+    position: absolute;
+    top: 0px;
+    bottom: 0px;
+    padding: 5px;
+    color: white;
+}
+
+#orkr-root .progress-bar {
+    position: relative;
+    background-color: rgb(12, 101, 173);
+    cursor: pointer;
+    width: 200px;
+}
+
+#orkr-root .progress-fill {
+    height: 30px;
+    background-color: rgb(46, 148, 231);
+}
+
+#orkr-root .hidden {
+    display: none !important;
+}
+
+#orkr-root .hiddenTask {
+    display: none !important;
+}
+
+#orkr-root .button {
+    border: 1px solid black !important;
+}
+
+#orkr-root .item-button {
+    background-color: white;
+    text-align: center;
+    width: 200px;
+    height: 40px;
+    padding: 8px;
+}
+
+#orkr-root .item-button:hover {
+    cursor: pointer;
+    background-color: rgb(192, 192, 192);
+}
+
+#orkr-root button:focus {
+    outline: none;
+}
+
+#orkr-root .scroll {
+    overflow-y: auto;
+}
+
+#orkr-root .tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+#orkr-root .tooltip .tooltipText {
+    visibility: hidden;
+    width: 240px;
+    background-color: black;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 10px 0;
+
+    /* Position the tooltip */
+    position: absolute;
+    z-index: 1;
+    top: -5px;
+    left: 105%;
+
+    opacity: 0;
+    transition: opacity 0.5s;
+}
+
+#orkr-root .tooltip:hover .tooltipText {
+    visibility: visible;
+    opacity: 0.8;
+}
+
+#orkr-root .sidebar-element {
+    margin-bottom: 16px;
+}
+
+#orkr-root .slidecontainer {
+    width: 100%;
+}
+
+#orkr-root .slider {
+    -webkit-appearance: none;
+    width: 50%;
+    height: 15px;
+    border-radius: 5px;
+    background: #d3d3d3;
+    outline: none;
+    opacity: 0.7;
+    -webkit-transition: .2s;
+    transition: opacity .2s;
+}
+
+#orkr-root .slider:hover {
+    opacity: 1;
+}
+
+#orkr-root .slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    background: #4CAF50;
+    cursor: pointer;
+}
+
+#orkr-root .slider::-moz-range-thumb {
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    background: #4CAF50;
+    cursor: pointer;
+}
+
+#orkr-root .inline {
+    display: inline-block;
+}
+
+#orkr-root .panel {
+    background-color: white;
+}
+
+#orkr-root .small-margin {
+    margin-bottom: 2px;
+}
+
+/* ---------------------------------------------------------------------
+   4. Progress Knight dark.css (scoped to ORK's dark theme)
+      The board FOLLOWS ORK's own theme: ORK sets <html data-theme="dark">
+      / "light". When ORK is dark, these rules apply the PK dark palette;
+      when ORK is light, the base rules above (PK's light theme) show.
+      No independent in-game toggle — the board matches the surrounding app.
+   --------------------------------------------------------------------- */
+
+html[data-theme="dark"] #orkr-root {
+    background-color: rgb(32, 32, 32);
+    color: white;
+}
+
+html[data-theme="dark"] #orkr-root .panel {
+    background-color: rgb(46, 46, 46);
+}
+
+html[data-theme="dark"] #orkr-root .button {
+    background-color: rgb(31, 31, 31);
+    border-color: white !important;
+    color: white !important;
+}
+
+html[data-theme="dark"] #orkr-root .w3-bordered tr,
+html[data-theme="dark"] #orkr-root .w3-table-all tr {
+    border-bottom: 1px solid rgb(73, 73, 73);
+}
+
+html[data-theme="dark"] #orkr-root .w3-button:hover {
+    background-color: rgb(82, 82, 82) !important;
+    color: white !important;
+}
+
+/* In dark mode the PK item-button keeps a light fill in the original game,
+   which clashes; give it a dark-board-consistent fill for good contrast. */
+html[data-theme="dark"] #orkr-root .item-button {
+    background-color: rgb(31, 31, 31);
+    color: white;
+}
+
+html[data-theme="dark"] #orkr-root .item-button:hover {
+    background-color: rgb(82, 82, 82);
+}
