@@ -4777,7 +4777,7 @@ $(document).ready(function() {
                     TitleClass:       cc.value,
                 }, function(r) {
                     btn.disabled = false;
-                    if (r && r.status === 0) feedback('kn-admin-awards-feedback', 'Award saved!', true);
+                    if (r && r.status === 0) { knClearPending('kn-admin-body-awards'); feedback('kn-admin-awards-feedback', 'Award saved!', true); }
                     else feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Save failed.', false);
                 }, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
             });
@@ -4794,7 +4794,7 @@ $(document).ready(function() {
                 $.post(BASE_URL + 'deleteaward', { KingdomAwardId: kawId }, function(r) {
                     if (r && r.status === 0) {
                         row.parentNode && row.parentNode.removeChild(row);
-                        feedback('kn-admin-awards-feedback', 'Award deleted.', true);
+                        knClearPending('kn-admin-body-awards'); feedback('kn-admin-awards-feedback', 'Award deleted.', true);
                     } else {
                         btn.disabled = false;
                         feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Delete failed.', false);
@@ -5365,9 +5365,12 @@ $(document).ready(function() {
 
         var overlay = gid('kn-admin-overlay');
         if (overlay) {
-            overlay.addEventListener('click', function(e) {
-                if (e.target === this) knCloseAdminModal();
-            });
+            // Only close on a click that BOTH started and ended on the overlay.
+            // Without the mousedown gate, drag-selecting text in an input and
+            // releasing outside the input fires a click on the overlay and closes it.
+            var knDownOnSelf = false;
+            overlay.addEventListener('mousedown', function(e) { knDownOnSelf = (e.target === this); });
+            overlay.addEventListener('click', function(e) { if (knDownOnSelf && e.target === this) knCloseAdminModal(); });
         }
 
         document.addEventListener('keydown', function(e) {
