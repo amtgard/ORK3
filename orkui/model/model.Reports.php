@@ -47,6 +47,12 @@ class Model_Reports extends Model {
 		return false;
 	}
 
+	// Cheap count for the Kingdom profile's "Recommendations (N)" tab badge —
+	// avoids hydrating every rec just to size the list.
+	function recommended_awards_count($request) {
+		return (int)$this->Report->PlayerAwardRecommendationsCount($request);
+	}
+
 	function deleted_recommended_awards($request) {
 		$r = $this->Report->DeletedAwardRecommendations($request);
 		if (isset($r['Status']['Status']) && $r['Status']['Status'] == 0) {

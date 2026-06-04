@@ -138,6 +138,14 @@ class Controller_KingdomAjax extends Controller {
 				'KingdomId'            => $kingdom_id,
 				'KingdomConfiguration' => $configList,
 			]);
+			if ($r['Status'] == 0) {
+				// Kingdom config can change which kingdoms roll up into stats
+				// (IncludePrincipalityInStatistics) and a lot of other derived
+				// values across reports / averages / recap. Cheapest correct
+				// fix is a full memcached flush — config saves are infrequent
+				// admin actions, not worth enumerating every dependent cache key.
+				Ork3::$Lib->ghettocache->memcache->flush();
+			}
 			echo $r['Status'] == 0
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);

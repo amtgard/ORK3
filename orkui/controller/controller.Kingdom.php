@@ -277,6 +277,50 @@ class Controller_Kingdom extends Controller {
 		exit();
 	}
 
+	// Lazy-loaded body of the kingdom profile Recommendations tab. Called by JS
+	// the first time the tab is activated; returns raw HTML for the tab's inner
+	// container (NOT a full page). Auth+visibility rules mirror profile().
+	public function recommendations_panel($kingdom_id = null) {
+		session_write_close();
+		$kingdom_id = (int)preg_replace('/[^0-9]/', '', (string)$kingdom_id);
+		if ($kingdom_id <= 0) { http_response_code(400); exit; }
+		$this->load_model('Reports');
+
+		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$isOrkAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		$canManageKingdom = $isOrkAdmin
+			|| ($uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE));
+
+		$knConfigs  = Common::get_configs($kingdom_id, CFG_KINGDOM);
+		$recsPublic = isset($knConfigs['AwardRecsPublic'])
+			? (bool)(int)$knConfigs['AwardRecsPublic']['Value']
+			: true;
+
+		$AwardRecommendations = [];
+		if ($recsPublic || $canManageKingdom) {
+			$recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid]);
+			$AwardRecommendations = is_array($recs) ? $recs : [];
+		} elseif ($uid > 0) {
+			$recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid]);
+			$allRecs = is_array($recs) ? $recs : [];
+			$AwardRecommendations = array_values(array_filter($allRecs, function($r) use ($uid) {
+				return (int)$r['RecommendedById'] === $uid;
+			}));
+		} else {
+			http_response_code(403); exit;
+		}
+
+		// Variables the partial template expects in scope:
+		$IsLoggedIn       = $uid > 0;
+		$CanManageKingdom = $canManageKingdom;
+		$kingdom_name     = $this->Kingdom->get_kingdom_name($kingdom_id);
+
+		header('Content-Type: text/html; charset=utf-8');
+		header('X-Recs-Count: ' . count($AwardRecommendations)); // JS uses this for the tab badge
+		include DIR_TEMPLATE . 'revised-frontend/Kingdomnew_recommendations_panel.tpl';
+		exit();
+	}
+
 	public function players_json($kingdom_id = null) {
 		session_write_close(); // release session lock so navigation is not blocked
 		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
@@ -622,22 +666,43 @@ class Controller_Kingdom extends Controller {
 			: true;
 		$this->data['AwardRecsPublic'] = $recsPublic;
 
+		// Recommendations tab visibility is a permissions decision; the rows themselves
+		// are lazy-loaded by JS calling Controller_Kingdom::recommendations_panel().
+		// Inlining the rows here was rendering thousands of <tr>s and stalling the
+		// browser's DOMContentLoaded for 1+ second on busy kingdoms.
 		$this->data['AwardRecommendations'] = [];
+		$this->data['AwardRecommendationsCount'] = 0;
 		$canManageKingdom = $this->data['CanManageKingdom'] ?? false;
 		if ($recsPublic || $canManageKingdom) {
 			$this->data['ShowRecsTab'] = true;
-			$recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid]);
-			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
+			$this->data['AwardRecommendationsCount'] = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id]);
 		} elseif ($uid > 0) {
-			$recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid]);
-			$allRecs = is_array($recs) ? $recs : [];
-			$myRecs = array_values(array_filter($allRecs, function($r) use ($uid) {
-				return (int)$r['RecommendedById'] === $uid;
-			}));
-			$this->data['AwardRecommendations'] = $myRecs;
-			$this->data['ShowRecsTab'] = !empty($myRecs);
+			// Logged-in non-admin on a private-recs kingdom — tab is shown only if
+			// the user has their own recs. Cheap COUNT query, no row hydration.
+			$n = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id, 'RecommendedBy' => $uid]);
+			$this->data['AwardRecommendationsCount'] = $n;
+			$this->data['ShowRecsTab'] = $n > 0;
 		} else {
 			$this->data['ShowRecsTab'] = false;
+		}
+
+		// Players tab badge — cheap COUNT so the page shows "Players (N)" on first
+		// paint without waiting for players_json (which builds full rosters).
+		$_pcCacheKey = Ork3::$Lib->ghettocache->key(['KingdomId' => (int)$kingdom_id]);
+		$_pcCached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.player_count', $_pcCacheKey, 600);
+		if ($_pcCached !== false) {
+			$this->data['PlayerCount'] = (int)$_pcCached;
+		} else {
+			global $DB;
+			$_kid = (int)$kingdom_id;
+			$DB->Clear();
+			$_pcResult = $DB->DataSet("SELECT COUNT(*) AS n
+				FROM " . DB_PREFIX . "mundane m
+				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id AND p.kingdom_id = {$_kid}
+				WHERE m.suspended = 0 AND m.active = 1");
+			$_pcN = ($_pcResult && $_pcResult->Next()) ? (int)$_pcResult->n : 0;
+			$this->data['PlayerCount'] = $_pcN;
+			Ork3::$Lib->ghettocache->cache(__CLASS__ . '.player_count', $_pcCacheKey, $_pcN);
 		}
 
 		$this->data['ParkTitleId_options'] = [];
