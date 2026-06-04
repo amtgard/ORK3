@@ -2997,6 +2997,10 @@ function knBuildEventRow(e, fallbackHeraldry, uir) {
 	var nameHtml = detailHref
 		? '<a href="' + detailHref + '">' + knEscape(e.Name) + '</a>'
 		: knEscape(e.Name);
+	if (e.IsShared) {
+		var owner = e.OwningKingdomName ? (' \u00b7 ' + knEscape(e.OwningKingdomName)) : '';
+		nameHtml += ' <span class="kn-shared-pill"><i class="fas fa-share-nodes"></i> Shared' + owner + '</span>';
+	}
 	var dateHtml = e.NextDateText ? knEscape(e.NextDateText) : '<span style="color:#a0aec0">&mdash;</span>';
 	var heraldry = e.HeraldryUrl || fallbackHeraldry;
 

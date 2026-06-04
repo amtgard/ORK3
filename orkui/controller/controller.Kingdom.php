@@ -225,14 +225,21 @@ class Controller_Kingdom extends Controller
         $evtSql = "
 			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, p.abbreviation AS park_abbr,
 			       cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
+			       (e.kingdom_id NOT IN ({$statsEvtKids})) AS is_shared, ok.name AS owning_kingdom_name,
 			       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'going') AS rsvp_going,
 			       (SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND status = 'interested') AS rsvp_interested
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
+			LEFT JOIN ork_kingdom ok ON ok.kingdom_id = e.kingdom_id
 			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
 			    AND cd.event_start >  DATE_ADD(NOW(), INTERVAL {$startMonths} MONTH)
 			    AND cd.event_start <= DATE_ADD(NOW(), INTERVAL {$endMonths} MONTH)
-			WHERE e.kingdom_id IN ({$statsEvtKids})
+			WHERE (
+			        e.kingdom_id IN ({$statsEvtKids})
+			        OR (e.kingdom_id NOT IN ({$statsEvtKids})
+			            AND e.event_id IN (SELECT eks.event_id FROM ork_event_kingdom_share eks WHERE eks.kingdom_id = {$kid})
+			            AND COALESCE(e.status,'published') = 'published')
+			      )
 			ORDER BY cd.event_start, p.name, e.name";
         $DB->Clear();
         $evtResult = $DB->DataSet($evtSql);
@@ -260,6 +267,8 @@ class Controller_Kingdom extends Controller
                 'RsvpGoing'      => (int)$evtResult->rsvp_going,
                 'RsvpInterested' => (int)$evtResult->rsvp_interested,
                 'IsParkEvent'    => (int)$evtResult->park_id > 0,
+                'IsShared'       => (int)$evtResult->is_shared === 1,
+                'OwningKingdomName' => (string)($evtResult->owning_kingdom_name ?? ''),
             ];
         }
         // HasMore: not just a window cap — actually check if any events exist past this window.
@@ -270,7 +279,8 @@ class Controller_Kingdom extends Controller
             $_more = $DB->DataSet(
                 "SELECT 1 FROM ork_event_calendardetail cd
 				 JOIN ork_event e ON e.event_id = cd.event_id
-				 WHERE e.kingdom_id IN ({$statsEvtKids})
+				 WHERE (e.kingdom_id IN ({$statsEvtKids})
+				        OR e.event_id IN (SELECT eks.event_id FROM ork_event_kingdom_share eks WHERE eks.kingdom_id = {$kid}))
 				   AND cd.event_start >  DATE_ADD(NOW(), INTERVAL {$_nextStart} MONTH)
 				   AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 120 MONTH)
 				 LIMIT 1"
