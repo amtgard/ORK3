@@ -18,6 +18,19 @@ class Model_Event extends Model {
 		$r = $this->Event->CreateEvent($request);
 		return $r;
 	}
+
+	function share_event_to_kingdom($token, $event_id, $kingdom_id) {
+		return $this->Event->ShareEventToKingdom(array('Token'=>$token, 'EventId'=>$event_id, 'KingdomId'=>$kingdom_id));
+	}
+
+	function unshare_event_from_kingdom($token, $event_id, $kingdom_id) {
+		return $this->Event->UnshareEventFromKingdom(array('Token'=>$token, 'EventId'=>$event_id, 'KingdomId'=>$kingdom_id));
+	}
+
+	function get_shared_kingdoms_for_event($event_id) {
+		$r = $this->Event->GetSharedKingdomsForEvent(array('EventId'=>$event_id));
+		return $r['KingdomIds'] ?? array();
+	}
 	
 	function get_event_details($event_id) {
 		
