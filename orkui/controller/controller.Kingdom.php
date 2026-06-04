@@ -618,6 +618,7 @@ class Controller_Kingdom extends Controller
         $evtSql = "
 			SELECT e.event_id, e.name, e.park_id, e.status, e.mundane_id AS event_creator,
 			       p.name AS park_name, p.abbreviation AS park_abbr,
+			       (e.kingdom_id NOT IN ({$statsEvtKids})) AS is_shared, ok.name AS owning_kingdom_name,
 			       cd.event_start, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
 			       COALESCE(rsvp.rsvp_going, 0) AS rsvp_going,
 			       COALESCE(rsvp.rsvp_interested, 0) AS rsvp_interested,
@@ -625,6 +626,7 @@ class Controller_Kingdom extends Controller
 			       {$myRsvpSubq} AS my_rsvp
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
+			LEFT JOIN ork_kingdom ok ON ok.kingdom_id = e.kingdom_id
 			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
 			    AND cd.event_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
 			    AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
@@ -637,8 +639,12 @@ class Controller_Kingdom extends Controller
 			    GROUP BY event_calendardetail_id
 			) rsvp ON rsvp.event_calendardetail_id = cd.event_calendardetail_id
 			{$royalJoinSql}
-			WHERE e.kingdom_id IN ({$statsEvtKids})
-			  {$kn_draftClause}
+			WHERE (
+			        (e.kingdom_id IN ({$statsEvtKids}) {$kn_draftClause})
+			        OR (e.kingdom_id NOT IN ({$statsEvtKids})
+			            AND e.event_id IN (SELECT eks.event_id FROM ork_event_kingdom_share eks WHERE eks.kingdom_id = {$kid})
+			            AND COALESCE(e.status,'published') = 'published')
+			      )
 			ORDER BY cd.event_start, p.name, e.name";
         $DB->Clear();
         $evtResult    = $DB->DataSet($evtSql);
@@ -679,6 +685,8 @@ class Controller_Kingdom extends Controller
                     'MyRsvp'         => (string)($evtResult->my_rsvp ?? ''),
                     'Status'         => $row_status,
                     '_IsParkEvent' => (int)$evtResult->park_id > 0,
+                    'IsShared'     => (int)$evtResult->is_shared === 1,
+                    'OwningKingdomName' => (string)($evtResult->owning_kingdom_name ?? ''),
                 ];
             }
         }
