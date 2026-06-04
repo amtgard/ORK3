@@ -698,6 +698,43 @@ class Controller_Event extends Controller
             $_evtCreator = (int)($evtStatusRow->mundane_id ?? 0);
         }
         $this->data['EventStatus']        = $_evtStatus;
+        // Cross-kingdom sharing control: kingdoms the viewer can share this event
+        // INTO. A kingdom prerogative — derived from AUTH_KINGDOM grants in
+        // ork_authorization (park grants do NOT qualify). Excludes the owning
+        // kingdom; only offered for published events.
+        $this->data['ShareableKingdoms'] = [];
+        $_owningKingdom = (int)($info['KingdomId'] ?? 0);
+        if ($uid > 0 && $_evtStatus === 'published') {
+            $DB->Clear();
+            $_shareRows = $DB->DataSet(
+                "SELECT DISTINCT k.kingdom_id, k.name AS kingdom_name
+                 FROM " . DB_PREFIX . "authorization a
+                 JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = a.kingdom_id
+                 WHERE a.mundane_id = " . (int)$uid . "
+                   AND a.kingdom_id > 0
+                   AND a.kingdom_id <> " . $_owningKingdom . "
+                   AND a.role IN ('create','edit','admin')
+                 ORDER BY k.name"
+            );
+            $_alreadyShared = [];
+            $DB->Clear();
+            $_sh = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "event_kingdom_share WHERE event_id = " . (int)$event_id);
+            if ($_sh) {
+                while ($_sh->Next()) {
+                    $_alreadyShared[(int)$_sh->kingdom_id] = true;
+                }
+            }
+            if ($_shareRows) {
+                while ($_shareRows->Next()) {
+                    $_kid = (int)$_shareRows->kingdom_id;
+                    $this->data['ShareableKingdoms'][] = [
+                        'KingdomId'   => $_kid,
+                        'KingdomName' => (string)$_shareRows->kingdom_name,
+                        'IsShared'    => isset($_alreadyShared[$_kid]),
+                    ];
+                }
+            }
+        }
         $this->data['EventCanEditStatus'] = $this->data['CanManageEvent'];
         // Gate non-editor viewers when status is draft. Anyone with any
         // event_staff row on this event's occurrences can see it — a
