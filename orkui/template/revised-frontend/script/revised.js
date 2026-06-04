@@ -2666,6 +2666,48 @@ function knActivateTab(tab) {
     if (tab === 'events' && knCalendar) {
         knCalendar.updateSize();
     }
+    if (tab === 'recommendations') {
+        knLazyLoadRecs();
+    }
+}
+
+// Lazily fetch the Recommendations tab's inner HTML the first time the tab is
+// activated. Inlining the rows on initial page render was blocking the
+// browser's DOMContentLoaded for 1+ seconds on busy kingdoms.
+function knLazyLoadRecs() {
+    var host = document.getElementById('kn-recs-lazy');
+    if (!host) return;
+    if (host.getAttribute('data-loaded') !== '0') return; // 'loading' or '1' — skip
+    var kid = host.getAttribute('data-kid');
+    if (!kid) return;
+    host.setAttribute('data-loaded', 'loading');
+    fetch('/orkui/index.php?Route=Kingdom/recommendations_panel/' + encodeURIComponent(kid), {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'text/html' }
+    }).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var count = r.headers.get('X-Recs-Count');
+        return r.text().then(function(html) { return { html: html, count: count }; });
+    }).then(function(payload) {
+        host.innerHTML = payload.html;
+        host.setAttribute('data-loaded', '1');
+        // Tab badge: show count if non-zero.
+        var badge = document.getElementById('kn-tab-count-recs');
+        if (badge && payload.count !== null && payload.count !== '0') {
+            badge.textContent = '(' + payload.count + ')';
+            badge.style.display = '';
+        }
+        // Let other initializers (rec filters, datatables, etc.) wire up.
+        if (typeof knInitRecsTab === 'function') {
+            try { knInitRecsTab(host); } catch (e) { console.error('knInitRecsTab failed:', e); }
+        }
+        document.dispatchEvent(new CustomEvent('kn:recs-loaded', { detail: { host: host, count: payload.count } }));
+    }).catch(function(err) {
+        host.setAttribute('data-loaded', '0'); // allow retry
+        host.innerHTML = '<div class="pk-recs-empty" style="color:#fc8181">Could not load recommendations: '
+            + String(err).replace(/[<>&]/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; })
+            + ' &mdash; <a href="#" onclick="knLazyLoadRecs();return false">retry</a></div>';
+    });
 }
 
 // ---- Hero color from heraldry ----

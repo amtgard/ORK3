@@ -378,12 +378,25 @@ class Kingdom  extends Ork3 {
 				'parent_kingdom_id' => (int)$request['ParentKingdomId'],
 			]);
 			$response = Success($this->kingdom->kingdom_id);
+			$this->_flushPrincipalityCaches();
 		} else {
 			$response = NoAuthorization();
 		}
 		return $response;
 	}
-	
+
+	// Full memcache flush after any change that alters the kingdom-family tree
+	// (created / reparented / deactivated kingdoms or principalities). Lots of
+	// derived caches across averages / events / recs / recap / officer directory
+	// key off principality membership; enumerating every dependent key is
+	// whack-a-mole, and these mutations are rare admin actions so the wipe cost
+	// is acceptable.
+	private function _flushPrincipalityCaches() {
+		if (isset(Ork3::$Lib->ghettocache) && isset(Ork3::$Lib->ghettocache->memcache)) {
+			Ork3::$Lib->ghettocache->memcache->flush();
+		}
+	}
+
 	public function GetPrincipalities($request) {
 		$this->kingdom->clear();
 		$this->kingdom->parent_kingdom_id = $request['KingdomId'];
@@ -594,6 +607,7 @@ class Kingdom  extends Ork3 {
 			$this->kingdom->parent_kingdom_id = $parent_id;
 			$this->kingdom->modified = date('Y-m-d H:i:s', time());
 			$this->kingdom->save();
+			$this->_flushPrincipalityCaches();
 			return Success();
 		}
 		return NoAuthorization();
@@ -802,6 +816,7 @@ class Kingdom  extends Ork3 {
 			if ($this->kingdom->find()) {
 				$this->kingdom->active = $waffle;
 				$this->kingdom->save();
+				$this->_flushPrincipalityCaches();
 				$response = Success();
 			} else {
 				$response = InvalidParameter(NULL, 'Problem processing request.');

@@ -443,6 +443,10 @@ class Report  extends Ork3 {
 			return $this->applyViewerFlags($cache, $viewer_id);
 
 		if (valid_id($request['KingdomId'])) {
+			// Roll up principalities when the kingdom's IncludePrincipalityInStatistics
+			// flag is on. Originally pulled back because the inlined rendering was
+			// blocking DOMContentLoaded, but the tab is now lazy-loaded so the row
+			// count no longer affects initial paint.
 			$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
 			$location_clause = " AND m.kingdom_id IN ($kidList)";
 		}
@@ -684,6 +688,41 @@ class Report  extends Ork3 {
 		}
 		unset($rec);
 		return $response;
+	}
+
+	// Lightweight "how many active recs for this kingdom does this viewer see"
+	// query. Skips the heavy joins / per-row subqueries the full recommendations
+	// report runs, so it's cheap enough to call on every kingdom profile load
+	// just to render the "Recommendations (N)" tab badge.
+	public function PlayerAwardRecommendationsCount($request) {
+		$kid = (int)($request['KingdomId'] ?? 0);
+		if ($kid <= 0) return 0;
+		// Match PlayerAwardRecommendations: roll up principalities when the parent
+		// kingdom's IncludePrincipalityInStatistics flag is on, so the badge stays
+		// in sync with what the lazy-loaded panel actually shows.
+		$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kid)));
+		$key = Ork3::$Lib->ghettocache->key([
+			'KingdomIds'    => $kidList,
+			'RecommendedBy' => (int)($request['RecommendedBy'] ?? 0),
+		]);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
+			return (int)$cache;
+
+		$where = "m.kingdom_id IN ($kidList) AND (recs.deleted_by IS NULL OR recs.deleted_by = 0)";
+		if (!empty($request['RecommendedBy'])) {
+			$rb = (int)$request['RecommendedBy'];
+			$where .= " AND recs.recommended_by_id = $rb";
+		}
+		$sql = "SELECT COUNT(*) AS n
+				FROM " . DB_PREFIX . "recommendations recs
+				JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id
+				WHERE $where";
+		$r = $this->db->query($sql);
+		$n = 0;
+		if ($r !== false && $r->size() > 0 && $r->next()) {
+			$n = (int)$r->n;
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $n);
 	}
 
 	public function DeletedAwardRecommendations($request) {
