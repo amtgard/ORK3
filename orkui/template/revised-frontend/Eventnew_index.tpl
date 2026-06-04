@@ -174,6 +174,25 @@
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <style>
+.ev-share-btn { display:inline-flex; align-items:center; gap:7px; padding:7px 13px; border-radius:7px;
+	border:1px solid #c9ced6; background:#f3f5f8; color:#2d3748; font-size:13px; font-weight:600;
+	cursor:pointer; line-height:1; transition:background .15s,border-color .15s; }
+.ev-share-btn:hover { background:#e8ecf1; border-color:#aab2bd; }
+.ev-share-btn.is-shared { background:#e6f4ea; border-color:#9bd3ad; color:#1f6b3a; }
+.ev-share-wrap { position:relative; display:inline-block; }
+.ev-share-menu { position:absolute; z-index:50; top:calc(100% + 6px); left:0; min-width:220px;
+	background:#fff; border:1px solid #d4d9e0; border-radius:8px; box-shadow:0 6px 22px rgba(0,0,0,.14);
+	padding:6px; }
+.ev-share-row { display:flex; align-items:center; gap:9px; padding:8px 9px; border-radius:6px;
+	font-size:13px; color:#2d3748; cursor:pointer; }
+.ev-share-row:hover { background:#f1f4f8; }
+.ev-share-row input { width:15px; height:15px; cursor:pointer; }
+html[data-theme="dark"] .ev-share-btn { background:#2a2f37; border-color:#444b56; color:#e3e7ee; }
+html[data-theme="dark"] .ev-share-btn:hover { background:#333a44; border-color:#566070; }
+html[data-theme="dark"] .ev-share-btn.is-shared { background:#1f3a29; border-color:#2f6b45; color:#9be3b4; }
+html[data-theme="dark"] .ev-share-menu { background:#23272e; border-color:#3a414b; box-shadow:0 6px 22px rgba(0,0,0,.5); }
+html[data-theme="dark"] .ev-share-row { color:#e3e7ee; }
+html[data-theme="dark"] .ev-share-row:hover { background:#2d333c; }
 .ev-export-bar { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 10px; }
 .ev-checkin-locked { display:flex; align-items:flex-start; gap:10px; background:#fffbeb; border:1px solid #f6e05e; border-radius:7px; padding:11px 14px; margin-bottom:14px; font-size:13px; color:#744210; line-height:1.45; }
 .ev-checkin-locked i { color:#d69e2e; margin-top:1px; flex-shrink:0; }
@@ -830,6 +849,41 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 				<i class="fas fa-eye-slash"></i><span class="ev-hide-draft-label"> Hide as draft</span>
 			</button>
 			<?php endif; ?>
+				<?php if (!empty($ShareableKingdoms)): ?>
+					<?php if (count($ShareableKingdoms) === 1): $sk = $ShareableKingdoms[0]; ?>
+						<button type="button"
+							class="ev-share-btn<?= $sk['IsShared'] ? ' is-shared' : '' ?>"
+							id="ev-share-single"
+							data-event="<?= (int)$event_id ?>"
+							data-kingdom="<?= (int)$sk['KingdomId'] ?>"
+							data-shared="<?= $sk['IsShared'] ? '1' : '0' ?>"
+							data-tip="Show this event on <?= htmlspecialchars($sk['KingdomName']) ?>'s events list"
+							onclick="evToggleShare(this)">
+							<i class="fas fa-share-nodes"></i>
+							<span class="ev-share-label"><?= $sk['IsShared'] ? 'Shared with ' . htmlspecialchars($sk['KingdomName']) : 'Share with My Kingdom' ?></span>
+						</button>
+					<?php else: ?>
+						<div class="ev-share-wrap">
+							<button type="button" class="ev-share-btn" onclick="evToggleShareMenu(this)">
+								<i class="fas fa-share-nodes"></i> <span class="ev-share-label">Share with my kingdom(s)</span>
+								<i class="fas fa-caret-down" style="margin-left:6px"></i>
+							</button>
+							<div class="ev-share-menu" id="ev-share-menu" hidden>
+								<?php foreach ($ShareableKingdoms as $sk): ?>
+									<label class="ev-share-row">
+										<input type="checkbox"
+											class="ev-share-check"
+											data-event="<?= (int)$event_id ?>"
+											data-kingdom="<?= (int)$sk['KingdomId'] ?>"
+											<?= $sk['IsShared'] ? 'checked' : '' ?>
+											onchange="evToggleShare(this)">
+										<span><?= htmlspecialchars($sk['KingdomName']) ?></span>
+									</label>
+								<?php endforeach; ?>
+							</div>
+						</div>
+					<?php endif; ?>
+				<?php endif; ?>
 			<?php if ($loggedIn && !$isPastEvent): ?>
 			<form method="post" action="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>/rsvp" style="margin:0;display:inline-flex;gap:6px">
 				<button type="submit" name="status" value="going"
@@ -2382,6 +2436,47 @@ function evShareFallback(url, btn) {
 function evCopyScheduleLink(btn) {
 	if (typeof window.evWriteHash === 'function') window.evWriteHash('ev-tab-schedule');
 	evShareUrl(btn);
+}
+
+function evToggleShareMenu(btn) {
+	var menu = document.getElementById('ev-share-menu');
+	if (menu) menu.hidden = !menu.hidden;
+}
+document.addEventListener('click', function(e) {
+	var menu = document.getElementById('ev-share-menu');
+	if (menu && !menu.hidden && !e.target.closest('.ev-share-wrap')) menu.hidden = true;
+});
+function evToggleShare(el) {
+	var eventId = el.dataset.event;
+	var kingdomId = el.dataset.kingdom;
+	var isCheckbox = el.tagName === 'INPUT';
+	// For checkbox, the desired action is determined by its new checked state:
+	var doShare = isCheckbox ? el.checked : (el.dataset.shared !== '1');
+	var action = doShare ? 'share' : 'unshare';
+	var body = 'KingdomId=' + encodeURIComponent(kingdomId);
+	if (isCheckbox) el.disabled = true; else el.style.pointerEvents = 'none';
+	fetch('<?= UIR ?>EventAjax/share/' + encodeURIComponent(eventId) + '/' + action, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+		body: body
+	})
+	.then(function(r){ return r.json(); })
+	.then(function(d){
+		if (d.status !== 0) { throw new Error(d.error || 'Share failed'); }
+		if (isCheckbox) {
+			el.disabled = false;
+		} else {
+			el.dataset.shared = doShare ? '1' : '0';
+			el.classList.toggle('is-shared', doShare);
+			var lbl = el.querySelector('.ev-share-label');
+			if (lbl) lbl.textContent = doShare ? 'Shared with My Kingdom' : 'Share with My Kingdom';
+		}
+	})
+	.catch(function(err){
+		console.error('[evToggleShare]', err);
+		if (isCheckbox) { el.checked = !el.checked; el.disabled = false; }
+		else { el.style.pointerEvents = ''; }
+	});
 }
 
 function evPositionDelTooltip(wrap) {
