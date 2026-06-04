@@ -636,6 +636,65 @@ class Event  extends Ork3 {
 			return NoAuthorization();
 		}
 	}
+	// ---- Cross-kingdom event sharing -------------------------------------
+	// Sharing is a kingdom prerogative: requires AUTH_KINGDOM/edit over the
+	// TARGET kingdom (the one being shared INTO), not the event's owner. Park
+	// officers cannot share. Only published events are shareable, never the
+	// event's own owning kingdom (no-op). Display-only — never affects
+	// ownership, attendance, or reporting.
+
+	public function ShareEventToKingdom($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+		$event_id   = (int)($request['EventId'] ?? 0);
+		$kingdom_id = (int)($request['KingdomId'] ?? 0);
+		if ($mundane_id <= 0) return NoAuthorization();
+		if (!valid_id($event_id) || !valid_id($kingdom_id)) return InvalidParameter();
+
+		// Load the event: must exist, be published, and not already own this kingdom.
+		global $DB;
+		$DB->Clear();
+		$row = $DB->DataSet("SELECT kingdom_id, COALESCE(status,'published') AS status FROM " . DB_PREFIX . "event WHERE event_id = " . $event_id . " LIMIT 1");
+		if (!$row || !$row->Next()) return InvalidParameter('Event not found.');
+		$owning_kingdom = (int)$row->kingdom_id;
+		$status         = (string)$row->status;
+		if ($status !== 'published') return InvalidParameter('Only published events can be shared.');
+		if ($owning_kingdom === $kingdom_id) return InvalidParameter('Event already belongs to this kingdom.');
+
+		// Kingdom prerogative: AUTH_KINGDOM/edit over the TARGET kingdom.
+		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT))
+			return NoAuthorization();
+
+		// Idempotent insert.
+		$DB->Clear();
+		$DB->Execute("INSERT IGNORE INTO " . DB_PREFIX . "event_kingdom_share (event_id, kingdom_id, shared_by_mundane_id, created) VALUES (" . $event_id . ", " . $kingdom_id . ", " . (int)$mundane_id . ", NOW())");
+		return Success();
+	}
+
+	public function UnshareEventFromKingdom($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+		$event_id   = (int)($request['EventId'] ?? 0);
+		$kingdom_id = (int)($request['KingdomId'] ?? 0);
+		if ($mundane_id <= 0) return NoAuthorization();
+		if (!valid_id($event_id) || !valid_id($kingdom_id)) return InvalidParameter();
+		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT))
+			return NoAuthorization();
+		global $DB;
+		$DB->Clear();
+		$DB->Execute("DELETE FROM " . DB_PREFIX . "event_kingdom_share WHERE event_id = " . $event_id . " AND kingdom_id = " . $kingdom_id);
+		return Success();
+	}
+
+	public function GetSharedKingdomsForEvent($request) {
+		$event_id = (int)($request['EventId'] ?? 0);
+		if (!valid_id($event_id)) return ['Status' => InvalidParameter(), 'KingdomIds' => []];
+		global $DB;
+		$DB->Clear();
+		$rs = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "event_kingdom_share WHERE event_id = " . $event_id);
+		$ids = [];
+		if ($rs) { while ($rs->Next()) { $ids[] = (int)$rs->kingdom_id; } }
+		return ['Status' => Success(), 'KingdomIds' => $ids];
+	}
+
 }
 
 ?>
