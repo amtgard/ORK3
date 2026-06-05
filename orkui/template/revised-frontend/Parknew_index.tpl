@@ -1318,6 +1318,9 @@
 						<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
 						<button class="kn-rec-filter-btn" data-filter="snoozed">Snoozed</button>
 					</div>
+					<?php if (!empty($CanAdminPark)): ?>
+					<a class="pk-btn pk-btn-primary pk-manage-recs" href="<?= UIR ?>Recommendations/manage/park/<?= (int)$park_id ?>"><i class="fas fa-tasks"></i> Manage Recommendations</a>
+					<?php endif; ?>
 					<?php if ($IsLoggedIn): ?>
 					<button class="pk-btn pk-btn-secondary kn-rec-header-action" onclick="pkOpenRecModal()">
 						<i class="fas fa-star"></i> Recommend an Award
@@ -1436,38 +1439,6 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
 								<?php endif; ?>
 								<?php if (!empty($rec['ViewerCanSecond'])): ?>
 								<button class="rs-action-btn" data-rec="<?= (int)$rec['RecommendationsId'] ?>" data-award="<?= htmlspecialchars($rec['AwardName'] ?? '', ENT_QUOTES) ?>" data-recipient="<?= htmlspecialchars($rec['Persona'] ?? '', ENT_QUOTES) ?>" data-rstip="Second this recommendation and add your feedback."><i class="fas fa-plus"></i></button>
-								<?php endif; ?>
-								<?php if (!empty($CanAdminPark)): ?>
-								<div class="kn-rec-actions-wrap">
-									<button class="kn-rec-actions-toggle" onclick="var d=this.nextElementSibling;d.classList.toggle('open');event.stopPropagation()">Actions <i class="fas fa-caret-down"></i></button>
-									<div class="kn-rec-actions-drop">
-										<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
-											data-rec="<?= htmlspecialchars(json_encode(['RecommendationsId'=>(int)$rec['RecommendationsId'],'MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES) ?>">
-											<i class="fas fa-medal"></i> Grant
-										</button>
-										<button class="pk-rec-dismiss-btn"
-											data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
-											<i class="fas fa-times"></i> Dismiss
-										</button>
-										<button class="pk-rec-snooze-btn"
-											data-rec-id="<?= (int)$rec['RecommendationsId'] ?>"
-											data-snoozed="<?= !empty($rec['IsSnoozed']) ? '1' : '0' ?>">
-											<i class="fas <?= !empty($rec['IsSnoozed']) ? 'fa-bell' : 'fa-bell-slash' ?>"></i>
-											<?= !empty($rec['IsSnoozed']) ? 'Unsnooze' : 'Snooze' ?>
-										</button>
-										<?php if ($CanManageCourt ?? false): ?>
-										<button class="pk-rec-addcourt-btn<?= !empty($rec['IsOnCourt']) ? ' pk-rec-oncourt' : '' ?>"
-											data-rec-id="<?= (int)$rec['RecommendationsId'] ?>"
-											data-mundane-id="<?= (int)$rec['MundaneId'] ?>"
-											data-kingdomaward-id="<?= (int)$rec['KingdomAwardId'] ?>"
-											data-rank="<?= (int)$rec['Rank'] ?>"
-											data-on-court="<?= !empty($rec['IsOnCourt']) ? '1' : '0' ?>"
-											data-persona="<?= htmlspecialchars($rec['Persona']) ?>">
-											<i class="fas fa-scroll"></i> <?= !empty($rec['IsOnCourt']) ? 'On Court Plan' : 'Add to Court' ?>
-										</button>
-										<?php endif; ?>
-									</div>
-								</div>
 								<?php endif; ?>
 							</td>
 							<?php endif; ?>
@@ -2906,16 +2877,6 @@ tr:hover .pk-copy-link { opacity: 1; }
 
 <!-- Move Player Modal -->
 <style>
-.kn-rec-actions-wrap { position:relative; display:inline-block; text-align:left; }
-.kn-rec-actions-toggle { background:#edf2f7; border:1px solid #cbd5e0; color:#4a5568; border-radius:5px; padding:4px 10px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
-.kn-rec-actions-toggle:hover { background:#e2e8f0; }
-.kn-rec-actions-drop { display:none; position:absolute; right:0; top:calc(100% + 4px); background:#fff; border:1px solid #e2e8f0; border-radius:6px; box-shadow:0 4px 16px rgba(0,0,0,.12); z-index:1000; min-width:150px; overflow:hidden; }
-.kn-rec-actions-drop.open { display:block; }
-.kn-rec-actions-drop button { display:block; width:100%; text-align:left; padding:8px 14px; background:none; border:none; border-bottom:1px solid #f0f4f8; font-size:13px; cursor:pointer; color:#2d3748; white-space:nowrap; }
-.kn-rec-actions-drop button:last-child { border-bottom:none; }
-.kn-rec-actions-drop button:hover { background:#f7fafc; }
-.kn-rec-actions-drop button.pk-btn-primary { color:#276749; font-weight:700; }
-.kn-rec-actions-drop button.pk-rec-oncourt { color:#2b6cb0; }
 .pk-mp-toggle { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
 .pk-mp-toggle-btn {
 	flex:1 1 auto; min-width:130px; padding:7px 10px; border:1px solid #cbd5e0; border-radius:var(--ork-radius-md); font-size:var(--ork-font-size-sm); font-weight:var(--ork-font-weight-semibold);
@@ -3335,33 +3296,6 @@ html[data-theme="dark"] #pk-addday-startdate { color-scheme:dark; }
 </div>
 
 <?php endif; ?>
-<!-- Add to Court modal -->
-<?php if ($CanManageCourt ?? false): ?>
-<script>var PkCourtList = <?= json_encode($CourtList ?? []) ?>;</script>
-<div id="pk-addcourt-overlay" class="pk-overlay">
-	<div class="pk-modal-box" style="max-width:420px">
-		<button class="pk-modal-close-btn" id="pk-addcourt-close-btn" aria-label="Close">&times;</button>
-		<h3 class="pk-modal-title" style="margin-top:0">Add to Court</h3>
-		<p id="pk-addcourt-desc" style="margin:4px 0 12px;color:#4a5568;font-size:13px"></p>
-		<div class="pk-acct-field">
-			<label for="pk-addcourt-select">Select Court</label>
-			<select id="pk-addcourt-select" style="width:100%;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:13px">
-				<option value="">— choose a court —</option>
-				<?php foreach ($CourtList ?? [] as $court): ?>
-				<option value="<?= (int)$court['CourtId'] ?>">
-					<?= htmlspecialchars($court['Name']) ?><?= $court['CourtDate'] ? ' (' . htmlspecialchars($court['CourtDate']) . ')' : '' ?>
-				</option>
-				<?php endforeach; ?>
-			</select>
-		</div>
-		<div class="pk-form-error" id="pk-addcourt-error" style="display:none"></div>
-		<div class="pk-modal-footer">
-			<button class="pk-btn-ghost" id="pk-addcourt-cancel">Cancel</button>
-			<button class="pk-btn pk-btn-primary" id="pk-addcourt-submit" disabled>Add to Court</button>
-		</div>
-	</div>
-</div>
-<?php endif; ?>
 <!-- [TOURNAMENTS HIDDEN] add-tournament modal -->
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
 <?php if ($CanAdminPark ?? false): ?>
@@ -3581,12 +3515,6 @@ $(function() {
 			lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
 			language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' }
 		});
-// Close rec action dropdowns on outside click
-document.addEventListener('click', function(e) {
-	if (!e.target.closest('.kn-rec-actions-wrap')) {
-		document.querySelectorAll('.kn-rec-actions-drop.open').forEach(function(d) { d.classList.remove('open'); });
-	}
-});
 window.pkRecPrint = function() { if (window.pkRecDT) window.recsExportPrint(window.pkRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($park_name)) ?>'); };
 window.pkRecCsv   = function() { if (window.pkRecDT) window.recsExportCsv(window.pkRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $park_name) ?>.csv'); };
 initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');

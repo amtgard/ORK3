@@ -18,6 +18,7 @@
 			<?php else: ?>
 			<?php if (($CanManageKingdom ?? false) || !empty($ViewerHasCircle)): ?>
 			<div class="kn-rec-filter-bar">
+				<a class="kn-btn kn-btn-primary kn-manage-recs" href="<?= UIR ?>Recommendations/manage/kingdom/<?= (int)$kingdom_id ?>"><i class="fas fa-tasks"></i> Manage Recommendations</a>
 				<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="open">Open Recs</button>
 				<button class="kn-rec-filter-btn" data-filter="below">Below Rec'd</button>
 				<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
@@ -106,16 +107,6 @@
 							<?php endif; ?>
 							<?php if (!empty($rec['ViewerCanSecond'])): ?>
 							<button class="rs-action-btn" data-rec="<?= (int)$rec['RecommendationsId'] ?>" data-award="<?= htmlspecialchars($rec['AwardName'] ?? '', ENT_QUOTES) ?>" data-recipient="<?= htmlspecialchars($rec['Persona'] ?? '', ENT_QUOTES) ?>" data-rstip="Second this recommendation and add your feedback."><i class="fas fa-plus"></i></button>
-							<?php endif; ?>
-							<?php if ($CanManageKingdom ?? false): ?>
-							<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
-								data-rec="<?= htmlspecialchars(json_encode(['RecommendationsId'=>(int)$rec['RecommendationsId'],'MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''])) ?>">
-								<i class="fas fa-medal"></i> Grant
-							</button>
-							<button class="pk-rec-dismiss-btn"
-								data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
-								<i class="fas fa-times"></i> Delete
-							</button>
 							<?php endif; ?>
 						</td>
 						<?php endif; ?>
