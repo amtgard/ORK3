@@ -272,6 +272,36 @@ html[data-theme="dark"] .rm-badge-has { color: #e0c860; }
 }
 html[data-theme="dark"] [data-tip]:hover::after { background: #000; }
 
+/* Bulk action bar (Task 7) */
+.rm-bulkbar {
+    position: sticky;
+    bottom: 0;
+    z-index: 6;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 8px 10px;
+    margin-top: 6px;
+    background: var(--rm-bg2);
+    border: 1px solid var(--rm-line);
+    border-radius: 6px;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.12);
+}
+.rm-bulkbar[hidden] { display: none; }
+#rm-bulklabel { font-size: 13px; font-weight: 600; color: var(--rm-fg); margin-right: 4px; }
+.rm-bulk {
+    cursor: pointer;
+    font-size: 13px;
+    padding: 5px 10px;
+    border: 1px solid var(--rm-line);
+    border-radius: 4px;
+    background: var(--rm-bg);
+    color: var(--rm-fg);
+}
+.rm-bulk:hover { border-color: var(--rm-accent); background: var(--rm-bg2); }
+.rm-bulk-dismiss:hover { border-color: var(--rm-danger); color: var(--rm-danger); }
+
 .rm-error {
     padding: 16px;
     margin: 24px auto;
@@ -412,6 +442,14 @@ html[data-theme="dark"] [data-tip]:hover::after { background: #000; }
   </table>
   </div>
   <div class="rm-foot"><span id="rm-count"><?= count($Recommendations) ?></span> shown &middot; <span id="rm-selcount">0</span> selected</div>
+
+  <div class="rm-bulkbar" id="rm-bulkbar" hidden>
+    <span id="rm-bulklabel">0 selected</span>
+    <button type="button" class="rm-bulk rm-bulk-court">Add to Court</button>
+    <button type="button" class="rm-bulk rm-bulk-snooze">Snooze</button>
+    <button type="button" class="rm-bulk rm-bulk-dismiss">Dismiss</button>
+    <button type="button" class="rm-bulk rm-bulk-clear">Clear</button>
+  </div>
 </div>
 
 <script>
@@ -454,4 +492,130 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
         rmInsertDetail(tr2, '<div class="rm-reason-full">' + rmEsc(full ? full.textContent : '') + '</div>', 'rm-detail-reason');
     }
 });
+
+/* ---------- Task 6: filtering, sorting, chips, counts ---------- */
+var RM = { rows: function () { return Array.from(document.querySelectorAll('#rm-tbody .rm-row')); } };
+
+function rmApplyFilters() {
+    var q       = (document.getElementById('rm-search').value || '').trim().toLowerCase();
+    var elig    = document.getElementById('rm-filter-elig').value;
+    var court   = document.getElementById('rm-filter-court').value;
+    var parkSel = document.getElementById('rm-filter-park');
+    var park    = parkSel ? parkSel.value : 'all';
+    var shown = 0;
+    RM.rows().forEach(function (tr) {
+        var ok = true;
+        if (q && tr.getAttribute('data-recip').indexOf(q) === -1) ok = false;
+        if (ok && elig !== 'all') {
+            if (elig === 'snoozed') ok = tr.getAttribute('data-snoozed') === '1';
+            else ok = tr.getAttribute('data-elig') === elig;
+        }
+        if (ok && court !== 'all') {
+            var courts = []; try { courts = JSON.parse(tr.getAttribute('data-courts') || '[]'); } catch (x) {}
+            if (court === 'none') ok = courts.length === 0;
+            else if (court === 'any') ok = courts.length > 0;
+            else if (court.indexOf('court:') === 0) {
+                var cid = parseInt(court.slice(6), 10);
+                ok = courts.some(function (c) { return c.CourtId === cid; });
+            }
+        }
+        if (ok && park !== 'all') ok = tr.getAttribute('data-park') === park;
+        // hide any open detail row belonging to a now-hidden parent
+        tr.style.display = ok ? '' : 'none';
+        var dr = tr.nextElementSibling;
+        if (dr && dr.classList.contains('rm-detailrow')) dr.style.display = ok ? '' : 'none';
+        if (ok) shown++;
+    });
+    document.getElementById('rm-count').textContent = shown;
+    rmRenderChips(q, elig, court, park);
+    rmUpdateSelCount();
+}
+
+function rmRenderChips(q, elig, court, park) {
+    var chips = [];
+    if (q) chips.push(['search', '“' + q + '”']);
+    if (elig !== 'all') chips.push(['elig', document.getElementById('rm-filter-elig').selectedOptions[0].text]);
+    if (court !== 'all') chips.push(['court', document.getElementById('rm-filter-court').selectedOptions[0].text]);
+    var ps = document.getElementById('rm-filter-park');
+    if (ps && park !== 'all') chips.push(['park', ps.selectedOptions[0].text]);
+    document.getElementById('rm-chips').innerHTML = chips.map(function (c) {
+        return '<span class="rm-chip" data-clear="' + c[0] + '">' + rmEsc(c[1]) + ' ✕</span>';
+    }).join('');
+}
+
+['rm-search', 'rm-filter-elig', 'rm-filter-court', 'rm-filter-park'].forEach(function (idv) {
+    var el = document.getElementById(idv); if (el) el.addEventListener('input', rmApplyFilters);
+});
+document.getElementById('rm-chips').addEventListener('click', function (e) {
+    var chip = e.target.closest('.rm-chip'); if (!chip) return;
+    var k = chip.getAttribute('data-clear');
+    if (k === 'search') document.getElementById('rm-search').value = '';
+    if (k === 'elig')   document.getElementById('rm-filter-elig').value = 'all';
+    if (k === 'court')  document.getElementById('rm-filter-court').value = 'all';
+    if (k === 'park' && document.getElementById('rm-filter-park')) document.getElementById('rm-filter-park').value = 'all';
+    rmApplyFilters();
+});
+
+var rmSortState = { key: 'date', dir: 1 };
+function rmSort(key) {
+    rmSortState.dir = (rmSortState.key === key) ? -rmSortState.dir : 1;
+    rmSortState.key = key;
+    var tbody = document.getElementById('rm-tbody');
+    var rows = RM.rows();
+    rows.sort(function (a, b) {
+        var va, vb;
+        if (key === 'supp') { va = +a.getAttribute('data-supp'); vb = +b.getAttribute('data-supp'); }
+        else if (key === 'date') { va = a.getAttribute('data-date'); vb = b.getAttribute('data-date'); }
+        else { va = a.getAttribute('data-' + key); vb = b.getAttribute('data-' + key); }
+        if (va < vb) return -1 * rmSortState.dir;
+        if (va > vb) return  1 * rmSortState.dir;
+        return 0;
+    });
+    rows.forEach(function (tr) {
+        var dr = tr.nextElementSibling && tr.nextElementSibling.classList.contains('rm-detailrow') ? tr.nextElementSibling : null;
+        tbody.appendChild(tr); if (dr) tbody.appendChild(dr);
+    });
+    document.querySelectorAll('.rm-sortable').forEach(function (th) { th.classList.remove('rm-sort-asc', 'rm-sort-desc'); });
+    var thEl = document.querySelector('.rm-sortable[data-sort="' + key + '"]');
+    if (thEl) thEl.classList.add(rmSortState.dir === 1 ? 'rm-sort-asc' : 'rm-sort-desc');
+}
+document.querySelectorAll('.rm-sortable').forEach(function (th) {
+    th.addEventListener('click', function () { rmSort(th.getAttribute('data-sort')); });
+});
+
+/* ---------- Task 7: selection + bulk bar ---------- */
+var rmLastIdx = null;
+function rmVisibleRows() { return RM.rows().filter(function (tr) { return tr.style.display !== 'none'; }); }
+function rmSelected() { return RM.rows().filter(function (tr) { return tr.querySelector('.rm-rowsel').checked; }); }
+function rmUpdateSelCount() {
+    var n = rmSelected().length;
+    document.getElementById('rm-selcount').textContent = n;
+    var bar = document.getElementById('rm-bulkbar');
+    bar.hidden = n === 0;
+    document.getElementById('rm-bulklabel').textContent = n + ' selected';
+}
+document.getElementById('rm-tbody').addEventListener('click', function (e) {
+    var cb = e.target.closest('.rm-rowsel'); if (!cb) return;
+    var vis = rmVisibleRows();
+    var idx = vis.indexOf(cb.closest('tr'));
+    if (e.shiftKey && rmLastIdx !== null) {
+        var lo = Math.min(idx, rmLastIdx), hi = Math.max(idx, rmLastIdx);
+        for (var i = lo; i <= hi; i++) vis[i].querySelector('.rm-rowsel').checked = cb.checked;
+    }
+    rmLastIdx = idx;
+    rmUpdateSelCount();
+});
+document.getElementById('rm-selall').addEventListener('change', function () {
+    rmVisibleRows().forEach(function (tr) { tr.querySelector('.rm-rowsel').checked = this.checked; }, this);
+    rmUpdateSelCount();
+});
+document.querySelector('.rm-bulk-clear').addEventListener('click', function () {
+    RM.rows().forEach(function (tr) { tr.querySelector('.rm-rowsel').checked = false; });
+    document.getElementById('rm-selall').checked = false;
+    rmUpdateSelCount();
+});
+
+// Initial: default sort (oldest first) + sync counts/chips.
+rmSort('date');
+rmApplyFilters();
 </script>
