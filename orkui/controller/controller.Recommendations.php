@@ -55,11 +55,36 @@ class Controller_Recommendations extends Controller {
             if ($lr && $lr->Next()) $locationName = $lr->name;
         }
 
-        // Data wired in Task 3 (placeholder empties keep the page renderable now).
-        $this->data['Recommendations'] = [];
-        $this->data['CourtMap']        = [];
-        $this->data['Courts']          = [];
-        $this->data['Parks']           = [];
+        // Recommendation rows (full pending set for the scope, with seconds + notes).
+        $this->load_model('Reports');
+        $req = ['RequestedBy' => $uid, 'PlayerId' => 0];
+        if ($park_id > 0) {
+            $req['ParkId']    = $park_id;
+            $req['KingdomId'] = 0;
+        } else {
+            $req['KingdomId'] = $kingdom_id;
+            $req['ParkId']    = 0;
+        }
+        $recs = $this->Reports->recommended_awards($req);
+        if (!is_array($recs)) { $recs = []; }
+
+        // Court membership per rec (badges + court filter).
+        $courtMap = Ork3::$Lib->court->getRecommendationCourtMap($kingdom_id, $park_id);
+
+        // Courts in scope (Add-to-Court existing-court picker + specific-court filter).
+        $courts = Ork3::$Lib->court->getCourtList($kingdom_id, $park_id);
+
+        // Parks in the kingdom (kingdom-scope park filter + abbrev lookup).
+        $parks = [];
+        global $DB;
+        $DB->Clear();
+        $prs = $DB->DataSet('SELECT park_id, name, abbreviation FROM ' . DB_PREFIX . 'park WHERE kingdom_id = ' . (int)$kingdom_id . ' ORDER BY name ASC');
+        if ($prs) { while ($prs->Next()) { $parks[(int)$prs->park_id] = ['Name' => $prs->name, 'Abbrev' => $prs->abbreviation]; } }
+
+        $this->data['Recommendations'] = $recs;
+        $this->data['CourtMap']        = $courtMap;
+        $this->data['Courts']          = $courts;
+        $this->data['Parks']           = $parks;
 
         $this->data['KingdomId']    = $kingdom_id;
         $this->data['ParkId']       = $park_id;
