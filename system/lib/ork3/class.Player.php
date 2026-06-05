@@ -2929,10 +2929,14 @@ class Player extends Ork3
 		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_EDIT))
 			return NoAuthorization();
 
-		$awardRec->snoozed_by_id      = null;
-		$awardRec->snoozed_monarch_id = null;
-		$awardRec->snoozed_regent_id  = null;
-		$awardRec->save();
+		// yapo's save() skips null-valued fields (isset() guard in YapoSave), so
+		// assigning null above never cleared these columns and unsnooze silently
+		// no-op'd. Clear them with a direct UPDATE instead.
+		$this->db->query(
+			"UPDATE " . DB_PREFIX . "recommendations
+			 SET snoozed_by_id = NULL, snoozed_monarch_id = NULL, snoozed_regent_id = NULL
+			 WHERE recommendations_id = " . (int)$rec_id
+		);
 		return Success('Recommendation unsnoozed.');
 	}
 
