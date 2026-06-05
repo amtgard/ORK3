@@ -9822,7 +9822,7 @@ html[data-theme="dark"] .ev-rsvp-menu-item:hover:not([disabled]) { background: #
 	position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
 	background: #1a202c; color: #fff; font-size: 11px; line-height: 1.4;
 	padding: 6px 10px; border-radius: 4px; white-space: pre-line;
-	pointer-events: none; z-index: 500; min-width: max-content; max-width: 240px;
+	pointer-events: none; z-index: 500; width: max-content; max-width: 280px;
 	box-shadow: 0 2px 8px rgba(0,0,0,0.18);
 }
 
@@ -9838,7 +9838,7 @@ html[data-theme="dark"] .ev-rsvp-menu-item:hover:not([disabled]) { background: #
 	position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
 	background: #1a202c; color: #fff; font-size: 11px; line-height: 1.4;
 	padding: 6px 10px; border-radius: 4px; white-space: pre-line;
-	pointer-events: none; z-index: 500; min-width: max-content; max-width: 240px;
+	pointer-events: none; z-index: 500; width: max-content; max-width: 280px;
 	box-shadow: 0 2px 8px rgba(0,0,0,0.18);
 }
 html[data-theme="dark"] [data-tip]:not(.kn-officer-pill):not(.pk-officer-pill):not(.kn-draft-pill):not(.pk-draft-pill):not(.pn-acct-help-tip):hover::after {
