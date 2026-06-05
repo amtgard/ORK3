@@ -342,6 +342,115 @@ html[data-theme="dark"] .rm-toast-err { background: #3a2424; }
     background: rgba(176, 48, 48, 0.08);
     text-align: center;
 }
+
+/* Add-to-Court modal (Task 10) */
+.rm-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.45);
+}
+.rm-modal-overlay[hidden] { display: none; }
+.rm-modal {
+    --rm-line: #d8d8d8;
+    --rm-bg: #fff;
+    --rm-bg2: #f6f6f6;
+    --rm-fg: #222;
+    --rm-muted: #777;
+    --rm-accent: #2c5f8b;
+    width: 100%;
+    max-width: 440px;
+    background: var(--rm-bg);
+    color: var(--rm-fg);
+    border: 1px solid var(--rm-line);
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    padding: 18px 20px 16px;
+    box-sizing: border-box;
+}
+@media (prefers-color-scheme: dark) {
+    .rm-modal {
+        --rm-line: #3a3f47;
+        --rm-bg: #23262d;
+        --rm-bg2: #1e2127;
+        --rm-fg: #e6e6e6;
+        --rm-muted: #9aa0a8;
+        --rm-accent: #6fb0e6;
+    }
+}
+html[data-theme="dark"] .rm-modal {
+    --rm-line: #3a3f47;
+    --rm-bg: #23262d;
+    --rm-bg2: #1e2127;
+    --rm-fg: #e6e6e6;
+    --rm-muted: #9aa0a8;
+    --rm-accent: #6fb0e6;
+}
+.rm-modal-title {
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+    margin: 0 0 4px;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--rm-fg);
+}
+.rm-modal-sub { font-size: 13px; color: var(--rm-muted); margin-bottom: 12px; }
+.rm-modal-modes {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: var(--rm-fg);
+}
+.rm-modal-modes label { cursor: pointer; }
+#rm-court-existing, #rm-court-new { margin-bottom: 12px; }
+.rm-modal .rm-fsel, .rm-modal .rm-input {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 13px;
+    padding: 7px 9px;
+    border: 1px solid var(--rm-line);
+    border-radius: 4px;
+    background: var(--rm-bg);
+    color: var(--rm-fg);
+}
+.rm-modal .rm-input { margin-bottom: 8px; }
+.rm-modal .rm-input:last-child { margin-bottom: 0; }
+.rm-modal .rm-input::placeholder { color: var(--rm-muted); }
+.rm-modal .rm-empty { font-size: 13px; }
+.rm-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 4px;
+}
+.rm-btn {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 16px;
+    border-radius: 4px;
+    border: 1px solid var(--rm-line);
+}
+.rm-btn-ghost {
+    background: transparent;
+    color: var(--rm-fg);
+}
+.rm-btn-ghost:hover { background: var(--rm-bg2); border-color: var(--rm-accent); }
+.rm-btn-primary {
+    background: var(--rm-accent);
+    border-color: var(--rm-accent);
+    color: #fff;
+}
+.rm-btn-primary:hover { opacity: 0.92; }
+.rm-btn-primary:disabled { opacity: 0.55; cursor: default; }
 </style>
 
 <div class="rm-wrap">
@@ -479,6 +588,34 @@ html[data-theme="dark"] .rm-toast-err { background: #3a2424; }
     <button type="button" class="rm-bulk rm-bulk-snooze">Snooze</button>
     <button type="button" class="rm-bulk rm-bulk-dismiss">Dismiss</button>
     <button type="button" class="rm-bulk rm-bulk-clear">Clear</button>
+  </div>
+
+  <!-- Task 10: Add-to-Court modal -->
+  <div class="rm-modal-overlay" id="rm-court-overlay" hidden>
+    <div class="rm-modal">
+      <h2 class="rm-modal-title">Add to Court</h2>
+      <div class="rm-modal-sub" id="rm-court-sub"></div>
+      <div class="rm-modal-modes">
+        <label><input type="radio" name="rm-court-mode" value="existing" checked> Existing court</label>
+        <label><input type="radio" name="rm-court-mode" value="new"> Create new court</label>
+      </div>
+      <div id="rm-court-existing">
+        <select id="rm-court-select" class="rm-fsel">
+          <?php foreach ($Courts as $c) { ?>
+            <option value="<?= (int)$c['CourtId'] ?>"><?= htmlspecialchars($c['Name']) ?><?= !empty($c['CourtDate']) ? ' &mdash; ' . htmlspecialchars($c['CourtDate']) : '' ?> (<?= htmlspecialchars($c['Status']) ?>)</option>
+          <?php } ?>
+        </select>
+        <?php if (!count($Courts)) { ?><div class="rm-empty">No courts yet &mdash; create one.</div><?php } ?>
+      </div>
+      <div id="rm-court-new" hidden>
+        <input type="text" id="rm-court-name" class="rm-input" placeholder="Court name" maxlength="100">
+        <input type="text" id="rm-court-date" class="rm-input" placeholder="Court date (optional)">
+      </div>
+      <div class="rm-modal-actions">
+        <button type="button" class="rm-btn rm-btn-ghost" id="rm-court-cancel">Cancel</button>
+        <button type="button" class="rm-btn rm-btn-primary" id="rm-court-submit">Add</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -750,6 +887,152 @@ document.querySelector('.rm-bulk-dismiss').addEventListener('click', function ()
             });
         }, function (ok, fail) { return 'Dismissed ' + ok + (fail ? ', ' + fail + ' failed' : '') + '.'; });
     } });
+});
+
+/* ---------- Task 9: Grant Now (instant) ---------- */
+// Today's date as YYYY-MM-DD (the format add_player_award expects for Date).
+function rmTodayYMD() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+document.getElementById('rm-tbody').addEventListener('click', function (e) {
+    var g = e.target.closest('.rm-act-grant'); if (!g) return;
+    var tr = g.closest('tr');
+    var rec = {}; try { rec = JSON.parse(tr.getAttribute('data-rec') || '{}'); } catch (x) {}
+    tnConfirm({ title: 'Grant now?', body: 'Grant “' + (rec.Persona || '') + '” the award immediately and remove it from pending.', confirmLabel: 'Grant Now', onConfirm: function () {
+        var fd = new FormData();
+        fd.append('KingdomAwardId', rec.KingdomAwardId);
+        fd.append('GivenById', RmConfig.userId);
+        fd.append('Date', rmTodayYMD());
+        fd.append('ParkId', RmConfig.parkId || '0');
+        fd.append('KingdomId', RmConfig.kingdomId || '0');
+        fd.append('EventId', '0');
+        fd.append('Note', rec.Reason || '');
+        if (rec.Rank) fd.append('Rank', rec.Rank);
+        // Admin/player/{id}/addaward renders the full Admin page (HTML, not JSON),
+        // so success is "the request reached the server with HTTP 200" (response.ok).
+        // Only on a confirmed-OK grant do we soft-delete the rec (dismiss) + remove the row.
+        fetch(RmConfig.uir + 'Admin/player/' + rec.MundaneId + '/addaward', {
+            method: 'POST', body: fd, credentials: 'same-origin'
+        }).then(function (r) {
+            if (!r.ok) throw new Error('grant http ' + r.status);
+            var fd2 = new FormData(); fd2.append('RecommendationsId', rec.RecommendationsId);
+            return rmPost(rmRecAjaxBase('dismissrecommendation'), fd2);
+        }).then(function () {
+            rmRemoveRow(tr);
+            rmToast('Granted.');
+        }).catch(function () {
+            rmToast('Grant failed.', true);
+        });
+    } });
+});
+
+/* ---------- Task 10: Add to Court modal (single + bulk) ---------- */
+var rmCourtTargets = []; // array of rec payloads (each with ._tr) to add
+
+function rmOpenCourtModal(targets) {
+    rmCourtTargets = targets;
+    document.getElementById('rm-court-sub').textContent = targets.length === 1
+        ? 'Adding 1 recommendation.' : 'Adding ' + targets.length + ' recommendations.';
+    document.getElementById('rm-court-overlay').hidden = false;
+}
+function rmCloseCourtModal() { document.getElementById('rm-court-overlay').hidden = true; }
+document.getElementById('rm-court-cancel').addEventListener('click', rmCloseCourtModal);
+document.getElementById('rm-court-overlay').addEventListener('click', function (e) {
+    if (e.target === this) rmCloseCourtModal(); // click backdrop closes
+});
+document.querySelectorAll('input[name="rm-court-mode"]').forEach(function (r) {
+    r.addEventListener('change', function () {
+        var isNew = document.querySelector('input[name="rm-court-mode"]:checked').value === 'new';
+        document.getElementById('rm-court-new').hidden = !isNew;
+        document.getElementById('rm-court-existing').hidden = isNew;
+    });
+});
+
+// flatpickr is not loaded on this page; if it ever is, give the date a human-readable display.
+if (typeof flatpickr !== 'undefined') {
+    flatpickr('#rm-court-date', { altInput: true, altFormat: 'F j, Y', dateFormat: 'Y-m-d' });
+}
+
+// Per-row opener.
+document.getElementById('rm-tbody').addEventListener('click', function (e) {
+    var c = e.target.closest('.rm-act-court'); if (!c) return;
+    var tr = c.closest('tr');
+    var rec = {}; try { rec = JSON.parse(tr.getAttribute('data-rec') || '{}'); } catch (x) {}
+    rec._tr = tr;
+    rmOpenCourtModal([rec]);
+});
+// Bulk opener.
+document.querySelector('.rm-bulk-court').addEventListener('click', function () {
+    var targets = rmSelected().map(function (tr) {
+        var rec = {}; try { rec = JSON.parse(tr.getAttribute('data-rec') || '{}'); } catch (x) {}
+        rec._tr = tr; return rec;
+    });
+    if (targets.length) rmOpenCourtModal(targets);
+});
+
+// Refresh the Court cell badge link after a rec is added to a court.
+function rmUpdateCourtBadge(tr, courts) {
+    var td = tr.querySelector('.rm-col-court');
+    if (!courts.length) { td.innerHTML = '<span class="rm-empty">&mdash;</span>'; return; }
+    var more = courts.length > 1 ? ' <span class="rm-courtmore">+' + (courts.length - 1) + '</span>' : '';
+    td.innerHTML = '<a class="rm-courtbadge" href="' + RmConfig.uir + 'Court/detail/' + courts[0].CourtId + '">' + rmEsc(courts[0].Name) + more + '</a>';
+}
+
+// Submit: resolve a court id (create new, or use selected existing), then add_award per target.
+document.getElementById('rm-court-submit').addEventListener('click', function () {
+    var mode = document.querySelector('input[name="rm-court-mode"]:checked').value;
+    var btn = this; btn.disabled = true;
+    function withCourtId(cb) {
+        if (mode === 'new') {
+            var name = (document.getElementById('rm-court-name').value || '').trim();
+            if (!name) { rmToast('Enter a court name.', true); btn.disabled = false; return; }
+            var fd = new FormData();
+            fd.append('KingdomId', RmConfig.kingdomId);
+            fd.append('ParkId', RmConfig.parkId || '0');
+            fd.append('Name', name);
+            fd.append('CourtDate', (document.getElementById('rm-court-date').value || '').trim());
+            fd.append('EventCalendarDetailId', '0');
+            rmPost(RmConfig.uir + 'CourtAjax/create_court', fd).then(function (j) {
+                if (j.status === 0 && j.court_id) cb(j.court_id, j.name);
+                else { rmToast(j.error || 'Could not create court.', true); btn.disabled = false; }
+            }).catch(function () { rmToast('Could not create court.', true); btn.disabled = false; });
+        } else {
+            var sel = document.getElementById('rm-court-select');
+            if (!sel || !sel.value) { rmToast('Pick a court.', true); btn.disabled = false; return; }
+            cb(parseInt(sel.value, 10), sel.selectedOptions[0].text);
+        }
+    }
+    withCourtId(function (courtId, courtName) {
+        var ok = 0, skip = 0, fail = 0, i = 0;
+        (function next() {
+            if (i >= rmCourtTargets.length) {
+                rmToast('Added ' + ok + (skip ? ', ' + skip + ' already on court' : '') + (fail ? ', ' + fail + ' failed' : '') + '.', fail > 0);
+                btn.disabled = false; rmCloseCourtModal(); rmApplyFilters(); return;
+            }
+            var rec = rmCourtTargets[i++];
+            // Skip if this rec is already on the chosen court.
+            var existing = []; try { existing = JSON.parse(rec._tr.getAttribute('data-courts') || '[]'); } catch (x) {}
+            if (existing.some(function (cc) { return cc.CourtId === courtId; })) { skip++; next(); return; }
+            var fd = new FormData();
+            fd.append('CourtId', courtId);
+            fd.append('MundaneId', rec.MundaneId);
+            fd.append('KingdomAwardId', rec.KingdomAwardId);
+            fd.append('Rank', rec.Rank || 0);
+            fd.append('RecommendationsId', rec.RecommendationsId);
+            rmPost(RmConfig.uir + 'CourtAjax/add_award', fd).then(function (j) {
+                if (j.status === 0) {
+                    ok++;
+                    existing.push({ CourtId: courtId, Name: courtName, CourtDate: '', Status: 'planned' });
+                    rec._tr.setAttribute('data-courts', JSON.stringify(existing));
+                    rmUpdateCourtBadge(rec._tr, existing);
+                    var box = rec._tr.querySelector('.rm-rowsel'); if (box) box.checked = false;
+                } else fail++;
+                next();
+            }).catch(function () { fail++; next(); });
+        })();
+    });
 });
 
 // Initial: default sort (oldest first) + sync counts/chips.
