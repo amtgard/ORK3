@@ -1311,6 +1311,17 @@ class Controller_Reports extends Controller {
 		exit;
 	}
 
+	public function release_utilization($params = null) {
+		$_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		if (!$_isOrkAdmin) { header('Location: ' . UIR); exit; }
+
+		$result = $this->Reports->ReleaseFeatureUtilization();
+		$this->data['Report'] = $result;
+		$this->data['page_title'] = 'Release Feature Utilization';
+		$this->template = 'Reports_release_utilization.tpl';
+	}
+
 }
 
 ?>

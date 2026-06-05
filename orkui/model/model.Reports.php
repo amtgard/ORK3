@@ -7,6 +7,10 @@ class Model_Reports extends Model {
 		$this->Report = new APIModel('Report');
 	}
 
+	function ReleaseFeatureUtilization() {
+		return $this->Report->ReleaseFeatureUtilization();
+	}
+
 	function get_tournaments($limit=10, $kingdom_id=null, $park_id=null, $event_id=null, $event_calendardetail_id=null) {
 		return $this->Report->TournamentReport(array(
 			'KingdomId' => $kingdom_id,
