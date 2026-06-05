@@ -1449,6 +1449,15 @@ var KnConfig = {
 				</button>
 				<div class="kn-admin-panel-body" id="kn-admin-body-awards" style="display:none">
 					<div id="kn-admin-awards-feedback" class="kn-admin-feedback" style="display:none"></div>
+					<div class="kn-admin-award-search-wrap">
+						<i class="fas fa-search kn-admin-award-search-icon"></i>
+						<input type="text" id="kn-admin-award-search" class="kn-admin-award-search-input"
+							placeholder="Filter awards by name or class&hellip;" autocomplete="off">
+						<button type="button" id="kn-admin-award-search-clear" class="kn-admin-award-search-clear" title="Clear" style="display:none">&times;</button>
+					</div>
+					<div class="kn-admin-award-search-empty" id="kn-admin-award-search-empty" style="display:none">
+						No awards match this filter.
+					</div>
 					<div class="kn-admin-table-wrap"><table class="kn-admin-table kn-admin-awards-table">
 						<thead>
 							<tr>
@@ -2458,9 +2467,10 @@ window.knInitRecsTab = function() {
 		$tbl.DataTable().destroy();
 	}
 	window.knRecDT = $tbl.DataTable({
-		order: [[4, 'desc']],
+		// Columns: 0 Player · 1 Park · 2 Award · 3 Rank · 4 Rec By · 5 Date · 6 Notes · (-1 actions)
+		order: [[5, 'desc']],
 		columnDefs: [
-			{ targets: [4], type: 'date' },
+			{ targets: [5], type: 'date' },
 			<?php if ($CanManageKingdom ?? false): ?>
 			{ targets: [-1], orderable: false, searchable: false },
 			<?php endif; ?>

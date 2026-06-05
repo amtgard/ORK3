@@ -4787,6 +4787,44 @@ $(document).ready(function() {
     }
 
     // ── Section: Awards ──────────────────────────────────────
+    // Filters the rendered admin-awards table based on the search input's value.
+    // O(rows) per keystroke — fine up to a few hundred. Each row carries the
+    // pre-lowered haystack on its dataset, set in makeAwardRow().
+    function applyAdminAwardFilter() {
+        var inp = gid('kn-admin-award-search');
+        if (!inp) return;
+        var q     = inp.value.trim().toLowerCase();
+        var tbody = gid('kn-admin-awards-tbody');
+        var clear = gid('kn-admin-award-search-clear');
+        var empty = gid('kn-admin-award-search-empty');
+        if (clear) clear.style.display = q ? '' : 'none';
+        if (!tbody) return;
+        var rows = tbody.querySelectorAll('tr');
+        var visible = 0;
+        rows.forEach(function(tr) {
+            var hay  = tr.dataset.searchHaystack || '';
+            var show = !q || hay.indexOf(q) !== -1;
+            tr.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+        if (empty) empty.style.display = (q && visible === 0) ? '' : 'none';
+    }
+
+    var awardSearchWired = false;
+    function wireAwardSearch() {
+        if (awardSearchWired) return;
+        var inp   = gid('kn-admin-award-search');
+        var clear = gid('kn-admin-award-search-clear');
+        if (!inp) return;
+        awardSearchWired = true;
+        inp.addEventListener('input', applyAdminAwardFilter);
+        if (clear) clear.addEventListener('click', function() {
+            inp.value = '';
+            inp.focus();
+            applyAdminAwardFilter();
+        });
+    }
+
     var awardsBuilt = false;
     function buildAwards() {
         if (awardsBuilt) return;
@@ -4797,10 +4835,19 @@ $(document).ready(function() {
         (KnConfig.adminAwards || []).forEach(function(aw) {
             tbody.appendChild(makeAwardRow(aw));
         });
+        wireAwardSearch();
     }
 
     function makeAwardRow(aw) {
         var tr = document.createElement('tr');
+        // Cached searchable haystack for the filter input above the table —
+        // built once at render time, lower-cased, and re-read on each keystroke
+        // instead of walking the DOM for every cell.
+        tr.dataset.searchHaystack = (
+            (aw.KingdomAwardName || '') + ' ' +
+            (aw.AwardName        || '') + ' ' +
+            (aw.TitleClass       || '')
+        ).toLowerCase();
 
         function ntd(isText, val) {
             var td  = document.createElement('td');
@@ -4845,8 +4892,19 @@ $(document).ready(function() {
         var saveBtn = document.createElement('button');
         saveBtn.className   = 'kn-admin-tsave';
         saveBtn.innerHTML   = '<i class="fas fa-save"></i>';
-        saveBtn.title       = 'Save';
+        saveBtn.title       = 'No changes to save';
+        saveBtn.disabled    = true;                  // clean rows start "nothing to save"
         saveBtn.style.marginRight = '4px';
+        // Flip the save button live when any field in this row gets edited.
+        // Click on the save button itself doesn't bubble through these listeners.
+        function markDirty() {
+            saveBtn.disabled = false;
+            saveBtn.title    = 'Save';
+        }
+        [nameCell.inp, reignCell.inp, monthCell.inp, classCell.inp].forEach(function(inp) {
+            inp.addEventListener('input', markDirty);
+        });
+        titleCb.addEventListener('change', markDirty);
         (function(btn, nc, rc, mc, cb, cc, kawId) {
             btn.addEventListener('click', function() {
                 clearFeedback('kn-admin-awards-feedback');
@@ -4859,9 +4917,16 @@ $(document).ready(function() {
                     IsTitle:          cb.checked ? 1 : 0,
                     TitleClass:       cc.value,
                 }, function(r) {
-                    btn.disabled = false;
-                    if (r && r.status === 0) { knClearPending('kn-admin-body-awards'); feedback('kn-admin-awards-feedback', 'Award saved!', true); }
-                    else feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Save failed.', false);
+                    if (r && r.status === 0) {
+                        // Save succeeded — row is "clean" again, leave disabled.
+                        btn.title = 'No changes to save';
+                        knClearPending('kn-admin-body-awards');
+                        feedback('kn-admin-awards-feedback', 'Award saved!', true);
+                    } else {
+                        // Save failed — re-enable so they can retry.
+                        btn.disabled = false;
+                        feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Save failed.', false);
+                    }
                 }, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
             });
         })(saveBtn, nameCell.inp, reignCell.inp, monthCell.inp, titleCb, classCell.inp, aw.KingdomAwardId);
@@ -4872,17 +4937,18 @@ $(document).ready(function() {
         delBtn.title       = 'Delete';
         (function(btn, row, kawId, awName) {
             btn.addEventListener('click', function() {
-                if (!confirm('Delete award "' + awName + '"? This cannot be undone.')) return;
-                btn.disabled = true;
-                $.post(BASE_URL + 'deleteaward', { KingdomAwardId: kawId }, function(r) {
-                    if (r && r.status === 0) {
-                        row.parentNode && row.parentNode.removeChild(row);
-                        knClearPending('kn-admin-body-awards'); feedback('kn-admin-awards-feedback', 'Award deleted.', true);
-                    } else {
-                        btn.disabled = false;
-                        feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Delete failed.', false);
-                    }
-                }, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
+                knConfirm('Delete award "' + awName + '"? This cannot be undone.', function() {
+                    btn.disabled = true;
+                    $.post(BASE_URL + 'deleteaward', { KingdomAwardId: kawId }, function(r) {
+                        if (r && r.status === 0) {
+                            row.parentNode && row.parentNode.removeChild(row);
+                            knClearPending('kn-admin-body-awards'); feedback('kn-admin-awards-feedback', 'Award deleted.', true);
+                        } else {
+                            btn.disabled = false;
+                            feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Delete failed.', false);
+                        }
+                    }, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
+                }, 'Delete Award');
             });
         })(delBtn, tr, aw.KingdomAwardId, aw.KingdomAwardName);
 
