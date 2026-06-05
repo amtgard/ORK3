@@ -318,6 +318,45 @@ class Court {
     }
 
     // -----------------------------------------------------------------------
+    // Recommendation → court map (for Recommendations Manager)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Map of recommendation_id => list of courts it currently sits on, scoped.
+     * Used by the Recommendations Manager to show court badges and the court filter.
+     */
+    public function getRecommendationCourtMap($kingdom_id, $park_id = 0) {
+        if (!valid_id($kingdom_id)) return [];
+        $scope = 'c.kingdom_id = ' . (int)$kingdom_id;
+        if ($park_id > 0) $scope .= ' AND c.park_id = ' . (int)$park_id;
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT ca.recommendations_id AS rid, c.court_id, c.name, c.court_date, c.status
+               FROM ' . DB_PREFIX . 'court_award ca
+               JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
+              WHERE ca.recommendations_id > 0
+                AND ca.status <> \'cancelled\'
+                AND ' . $scope . '
+              ORDER BY c.court_date IS NULL, c.court_date ASC, c.court_id ASC'
+        );
+
+        $map = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $rid = (int)$rs->rid;
+                $map[$rid][] = [
+                    'CourtId'   => (int)$rs->court_id,
+                    'Name'      => $rs->name,
+                    'CourtDate' => $rs->court_date,
+                    'Status'    => $rs->status,
+                ];
+            }
+        }
+        return $map;
+    }
+
+    // -----------------------------------------------------------------------
     // Kingdom award list (for ad-hoc award modal)
     // -----------------------------------------------------------------------
 
