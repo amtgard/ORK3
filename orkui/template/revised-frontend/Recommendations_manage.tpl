@@ -67,7 +67,7 @@ html[data-theme="dark"] .rm-wrap {
 /* Filter bar */
 .rm-filterbar {
     position: sticky;
-    top: 0;
+    top: 48px; /* below the app's 48px fixed top nav */
     z-index: 5;
     display: flex;
     flex-wrap: wrap;
@@ -100,7 +100,10 @@ html[data-theme="dark"] .rm-wrap {
 .rm-chip:hover { border-color: var(--rm-accent); }
 
 /* Grid */
-.rm-gridwrap { overflow-x: auto; }
+/* NOTE: no overflow here — an overflow context would scope the sticky thead to
+   this wrapper (which never scrolls vertically) and break the frozen header on
+   window scroll. The table is full-width; very narrow viewports scroll the page. */
+.rm-gridwrap { }
 .rm-grid {
     border-collapse: collapse;
     width: 100%;
@@ -116,7 +119,7 @@ html[data-theme="dark"] .rm-wrap {
 }
 .rm-grid thead th {
     position: sticky;
-    top: 41px;
+    top: 94px; /* 48px fixed nav + 46px sticky filter bar */
     z-index: 4;
     background: var(--rm-bg2);
     font-weight: 700;
@@ -205,8 +208,10 @@ html[data-theme="dark"] .rm-badge-has { color: #e0c860; }
 .rm-courtbadge {
     display: inline-block;
     font-size: 12px;
-    color: #fff;
-    background: var(--rm-accent);
+    /* !important + fixed steel-blue bg: the app's global `a` link color
+       otherwise wins over this class, rendering light-blue-on-light-blue. */
+    color: #fff !important;
+    background: #2c5f8b;
     border-radius: 3px;
     padding: 1px 6px;
     text-decoration: none;
