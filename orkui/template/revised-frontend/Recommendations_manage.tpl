@@ -302,6 +302,36 @@ html[data-theme="dark"] [data-tip]:hover::after { background: #000; }
 .rm-bulk:hover { border-color: var(--rm-accent); background: var(--rm-bg2); }
 .rm-bulk-dismiss:hover { border-color: var(--rm-danger); color: var(--rm-danger); }
 
+/* Toast (Task 8) */
+.rm-toast {
+    position: fixed;
+    bottom: 18px;
+    right: 18px;
+    z-index: 9999;
+    max-width: 320px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #fff;
+    background: #2c3a4a;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-left: 4px solid var(--rm-accent, #2c5f8b);
+    border-radius: 5px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+    opacity: 1;
+    transition: opacity 0.4s ease;
+}
+.rm-toast-err {
+    background: #4a2c2c;
+    border-left-color: var(--rm-danger, #b03030);
+}
+.rm-toast-out { opacity: 0; }
+@media (prefers-color-scheme: dark) {
+    .rm-toast { background: #2a2f37; }
+    .rm-toast-err { background: #3a2424; }
+}
+html[data-theme="dark"] .rm-toast { background: #2a2f37; }
+html[data-theme="dark"] .rm-toast-err { background: #3a2424; }
+
 .rm-error {
     padding: 16px;
     margin: 24px auto;
@@ -451,6 +481,16 @@ html[data-theme="dark"] [data-tip]:hover::after { background: #000; }
     <button type="button" class="rm-bulk rm-bulk-clear">Clear</button>
   </div>
 </div>
+
+<script>
+window.RmConfig = {
+  uir: '<?= UIR ?>',
+  kingdomId: <?= (int)$KingdomId ?>,
+  parkId: <?= (int)$ParkId ?>,
+  context: '<?= $Context === 'park' ? 'park' : 'kingdom' ?>',
+  userId: <?= (int)$Uid ?>
+};
+</script>
 
 <script>
 // HTML-escape helper for JS-built markup.
@@ -613,6 +653,103 @@ document.querySelector('.rm-bulk-clear').addEventListener('click', function () {
     RM.rows().forEach(function (tr) { tr.querySelector('.rm-rowsel').checked = false; });
     document.getElementById('rm-selall').checked = false;
     rmUpdateSelCount();
+});
+
+/* ---------- Task 8: snooze/dismiss (row + bulk), toast, config ---------- */
+function rmToast(msg, isErr) {
+    var t = document.createElement('div');
+    t.className = 'rm-toast' + (isErr ? ' rm-toast-err' : '');
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function () { t.classList.add('rm-toast-out'); setTimeout(function () { t.remove(); }, 400); }, 2600);
+}
+// Build the snooze/dismiss endpoint base for the current scope.
+function rmRecAjaxBase(action) {
+    if (RmConfig.context === 'park')
+        return RmConfig.uir + 'ParkAjax/park/' + RmConfig.parkId + '/' + action;
+    return RmConfig.uir + 'KingdomAjax/kingdom/' + RmConfig.kingdomId + '/' + action;
+}
+function rmPost(url, fd) {
+    return fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); });
+}
+
+// Remove a row (and any open detail row) then re-sync filters/counts.
+function rmRemoveRow(tr) {
+    var dr = tr.nextElementSibling;
+    if (dr && dr.classList.contains('rm-detailrow')) dr.remove();
+    tr.remove();
+    rmApplyFilters();
+}
+
+// Per-row Snooze + Dismiss (third tbody click handler; early-returns on non-match).
+document.getElementById('rm-tbody').addEventListener('click', function (e) {
+    var sn = e.target.closest('.rm-act-snooze');
+    if (sn) {
+        var tr = sn.closest('tr');
+        var snoozed = tr.getAttribute('data-snoozed') === '1';
+        var action = snoozed ? 'unsnoozerecommendation' : 'snoozerecommendation';
+        var fd = new FormData(); fd.append('RecommendationsId', tr.getAttribute('data-rec-id'));
+        rmPost(rmRecAjaxBase(action), fd).then(function (j) {
+            if (j.status === 0) {
+                tr.setAttribute('data-snoozed', snoozed ? '0' : '1');
+                sn.textContent = snoozed ? '💤' : '🔔';
+                sn.setAttribute('data-tip', snoozed ? 'Snooze' : 'Unsnooze');
+                rmApplyFilters();
+                rmToast(snoozed ? 'Unsnoozed.' : 'Snoozed.');
+            } else rmToast(j.error || 'Failed.', true);
+        });
+        return;
+    }
+    var ds = e.target.closest('.rm-act-dismiss');
+    if (ds) {
+        var tr2 = ds.closest('tr');
+        tnConfirm({ title: 'Dismiss recommendation?', body: 'This removes the recommendation from the pending list.', confirmLabel: 'Dismiss', danger: true, onConfirm: function () {
+            var fd2 = new FormData(); fd2.append('RecommendationsId', tr2.getAttribute('data-rec-id'));
+            rmPost(rmRecAjaxBase('dismissrecommendation'), fd2).then(function (j) {
+                if (j.status === 0) { rmRemoveRow(tr2); rmToast('Dismissed.'); }
+                else rmToast(j.error || 'Failed.', true);
+            });
+        } });
+    }
+});
+
+// Bulk: run fn sequentially over rows, tally results, toast at end.
+function rmBulkSequential(rows, fn, doneMsg) {
+    var ok = 0, fail = 0, i = 0;
+    (function next() {
+        if (i >= rows.length) { rmToast(doneMsg(ok, fail), fail > 0); rmApplyFilters(); return; }
+        var tr = rows[i++];
+        fn(tr).then(function (good) { good ? ok++ : fail++; next(); });
+    })();
+}
+document.querySelector('.rm-bulk-snooze').addEventListener('click', function () {
+    var rows = rmSelected().filter(function (tr) { return tr.getAttribute('data-snoozed') !== '1'; });
+    rmBulkSequential(rows, function (tr) {
+        var fd = new FormData(); fd.append('RecommendationsId', tr.getAttribute('data-rec-id'));
+        return rmPost(rmRecAjaxBase('snoozerecommendation'), fd).then(function (j) {
+            if (j.status === 0) {
+                tr.setAttribute('data-snoozed', '1');
+                var b = tr.querySelector('.rm-act-snooze');
+                if (b) { b.textContent = '🔔'; b.setAttribute('data-tip', 'Unsnooze'); }
+                tr.querySelector('.rm-rowsel').checked = false;
+                return true;
+            }
+            return false;
+        });
+    }, function (ok, fail) { return 'Snoozed ' + ok + (fail ? ', ' + fail + ' failed' : '') + '.'; });
+    rmUpdateSelCount();
+});
+document.querySelector('.rm-bulk-dismiss').addEventListener('click', function () {
+    var rows = rmSelected();
+    tnConfirm({ title: 'Dismiss ' + rows.length + ' recommendation(s)?', body: 'They will be removed from the pending list.', confirmLabel: 'Dismiss all', danger: true, onConfirm: function () {
+        rmBulkSequential(rows, function (tr) {
+            var fd = new FormData(); fd.append('RecommendationsId', tr.getAttribute('data-rec-id'));
+            return rmPost(rmRecAjaxBase('dismissrecommendation'), fd).then(function (j) {
+                if (j.status === 0) { rmRemoveRow(tr); return true; }
+                return false;
+            });
+        }, function (ok, fail) { return 'Dismissed ' + ok + (fail ? ', ' + fail + ' failed' : '') + '.'; });
+    } });
 });
 
 // Initial: default sort (oldest first) + sync counts/chips.
