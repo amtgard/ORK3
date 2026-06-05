@@ -5580,6 +5580,18 @@ html[data-theme="dark"] .pk-stat-tip-text::after { border-top-color: #e2e8f0; }
 
 /* ---- Edit Parks panel ---- */
 .kn-admin-table-wrap { overflow-x:auto; }
+
+/* Search box above the admin awards list (purely client-side filter) */
+.kn-admin-award-search-wrap { position:relative; margin:0 0 10px; max-width:360px; }
+.kn-admin-award-search-icon { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#a0aec0; font-size:12px; pointer-events:none; }
+.kn-admin-award-search-input { width:100%; box-sizing:border-box; padding:7px 30px 7px 30px; border:1px solid #cbd5e0; border-radius:6px; background:#fff; color:#2d3748; font-size:13px; }
+.kn-admin-award-search-input:focus { outline:none; border-color:#68d391; box-shadow:0 0 0 2px rgba(104,211,145,0.15); }
+.kn-admin-award-search-clear { position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; color:#a0aec0; font-size:18px; line-height:1; cursor:pointer; padding:0 4px; }
+.kn-admin-award-search-clear:hover { color:#4a5568; }
+.kn-admin-award-search-empty { padding:8px 4px; color:#718096; font-size:12px; font-style:italic; }
+html[data-theme="dark"] .kn-admin-award-search-input { background:var(--ork-bg-secondary,#2d3748); color:var(--ork-text,#e2e8f0); border-color:var(--ork-border,#4a5568); }
+html[data-theme="dark"] .kn-admin-award-search-input:focus { border-color:#68d391; box-shadow:0 0 0 2px rgba(104,211,145,0.25); }
+html[data-theme="dark"] .kn-admin-award-search-empty { color:var(--ork-text-muted,#a0aec0); }
 .kn-admin-parks-table .kn-admin-tinput.kn-admin-park-name { min-width:140px; }
 .kn-admin-parks-table .kn-admin-tinput.kn-admin-park-abbr { width:48px; text-align:center; text-transform:uppercase; }
 .kn-admin-park-retired { opacity:0.5; }

@@ -52,6 +52,7 @@
 					<thead>
 						<tr>
 							<th>Player</th>
+							<th>Park</th>
 							<th>Award</th>
 							<th>Rank</th>
 							<th data-short="Rec. By">Recommended By</th>
@@ -66,6 +67,7 @@
 						data-rec-id="<?= (int)$rec['RecommendationsId'] ?>"
 						data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
 						<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
+						<td><?php if (!empty($rec['ParkId'])): ?><a href="<?= UIR ?>Park/profile/<?= (int)$rec['ParkId'] ?>"><?= htmlspecialchars($rec['ParkName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
 						<td><?= htmlspecialchars($rec['AwardName']) ?></td>
 						<td style="white-space:nowrap">
 							<?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?>
