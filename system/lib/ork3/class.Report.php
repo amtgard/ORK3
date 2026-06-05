@@ -4182,4 +4182,685 @@ class Report  extends Ork3 {
 		return $out;
 	}
 
+
+	/**
+	 * ReleaseFeatureUtilization
+	 *
+	 * Returns adoption / utilization metrics for recent ORK3 feature releases,
+	 * shaped as a generic releases[] -> features[] -> { kpis[], charts[] } tree
+	 * so the template renders entirely from data (future features = data-only).
+	 *
+	 * @return array See the Reports_release_utilization data contract.
+	 */
+	public function ReleaseFeatureUtilization() {
+		$p = DB_PREFIX;
+
+		// --- denominators -----------------------------------------------------
+		// Active player definition: distinct players with >=1 attendance record
+		// in the rolling 2 years (CURDATE() - 2 years .. now).
+		$activePlayers = $this->_rfuScalar(
+			"SELECT COUNT(DISTINCT mundane_id) AS c FROM `{$p}attendance` WHERE `date` >= DATE_SUB(CURDATE(), INTERVAL 2 YEAR)"
+		);
+		$playersWithDesign = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}mundane_design`"
+		);
+		$activeRecommendations = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}recommendations` WHERE deleted_at IS NULL"
+		);
+
+		// player-scoped pct helper (null when denom is 0).
+		$denom = $activePlayers;
+		$pct = function ($value) use ($denom) {
+			if ($denom <= 0) {
+				return null;
+			}
+			return round(($value / $denom) * 100, 1);
+		};
+
+		// ====================================================================
+		// RELEASE 3.5.2 — Mask
+		// ====================================================================
+
+		// --- nameplate KPIs (all from ork_mundane_design) --------------------
+		$dColorPrimary = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}mundane_design` WHERE color_primary IS NOT NULL AND color_primary <> ''"
+		);
+		$dPrefix = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}mundane_design` WHERE name_prefix IS NOT NULL AND name_prefix <> ''"
+		);
+		$dSuffix = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}mundane_design` WHERE name_suffix IS NOT NULL AND name_suffix <> ''"
+		);
+		$dGradient = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}mundane_design` WHERE hero_gradient IS NOT NULL AND hero_gradient <> ''"
+		);
+		$dFont = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}mundane_design` WHERE name_font IS NOT NULL AND name_font <> ''"
+		);
+		$dPronunciation = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}mundane_design` WHERE pronunciation_guide IS NOT NULL AND pronunciation_guide <> ''"
+		);
+		$dAbout = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}mundane_design`
+			 WHERE (about_persona IS NOT NULL AND about_persona <> '')
+			    OR (about_story IS NOT NULL AND about_story <> '')"
+		);
+
+		// nameplate breakdowns
+		$fontBreak = $this->_rfuBreakdown(
+			"SELECT name_font AS k, COUNT(*) AS c FROM `{$p}mundane_design`
+			 WHERE name_font IS NOT NULL AND name_font <> ''
+			 GROUP BY name_font ORDER BY c DESC, name_font ASC"
+		);
+		$beltBreak = $this->_rfuBreakdown(
+			"SELECT belt_display AS k, COUNT(*) AS c FROM `{$p}mundane_design`
+			 WHERE belt_display IS NOT NULL AND belt_display <> ''
+			 GROUP BY belt_display ORDER BY c DESC, belt_display ASC"
+		);
+		$gradientBreak = $this->_rfuBreakdown(
+			"SELECT hero_gradient AS k, COUNT(*) AS c FROM `{$p}mundane_design`
+			 WHERE hero_gradient IS NOT NULL AND hero_gradient <> ''
+			 GROUP BY hero_gradient ORDER BY c DESC, hero_gradient ASC"
+		);
+
+		$featNameplate = array(
+			'key'         => 'nameplate',
+			'title'       => 'Nameplate & Profile Story',
+			'description' => 'Players personalize their profile masthead with custom colors, prefixes/suffixes, fonts, pronunciation guides and a written persona.',
+			'kpis' => array(
+				$this->_rfuKpi('Custom nameplate color', $dColorPrimary, $denom, $pct($dColorPrimary), 'players with color_primary set'),
+				$this->_rfuKpi('Name prefix', $dPrefix, $denom, $pct($dPrefix), 'players with name_prefix set'),
+				$this->_rfuKpi('Name suffix', $dSuffix, $denom, $pct($dSuffix), 'players with name_suffix set'),
+				$this->_rfuKpi('Pride gradient', $dGradient, $denom, $pct($dGradient), 'players with hero_gradient set'),
+				$this->_rfuKpi('Custom font', $dFont, $denom, $pct($dFont), 'players with name_font set'),
+				$this->_rfuKpi('Pronunciation guide', $dPronunciation, $denom, $pct($dPronunciation), 'players with pronunciation_guide set'),
+				$this->_rfuKpi('Custom About text', $dAbout, $denom, $pct($dAbout), 'players with about_persona or about_story set'),
+				$this->_rfuKpi('Any design row', $playersWithDesign, $denom, $pct($playersWithDesign), 'players with a profile design record'),
+			),
+			'charts' => array(
+				$this->_rfuChartFromBreakdown('rfu-font', 'bar', 'Nameplate font adoption', $fontBreak, 'Players'),
+				$this->_rfuChartFromBreakdown('rfu-belt', 'pie', 'Belt display choice', $beltBreak, 'Players'),
+				$this->_rfuChartFromBreakdown('rfu-gradient', 'bar', 'Pride gradient adoption', $gradientBreak, 'Players'),
+			),
+		);
+
+		// --- accessibility fonts (ork_mundane) -------------------------------
+		$basicFonts = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}mundane` WHERE basic_fonts = 1"
+		);
+		$dyslexiaFonts = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}mundane` WHERE dyslexia_fonts = 1"
+		);
+		$featViewerFonts = array(
+			'key'         => 'viewer_fonts',
+			'title'       => 'Accessibility Fonts',
+			'description' => 'Readers can swap profile typography for simpler or dyslexia-friendly typefaces.',
+			'kpis' => array(
+				$this->_rfuKpi('Basic fonts enabled', $basicFonts, $denom, $pct($basicFonts), 'players with basic_fonts on'),
+				$this->_rfuKpi('Dyslexia fonts enabled', $dyslexiaFonts, $denom, $pct($dyslexiaFonts), 'players with dyslexia_fonts on'),
+			),
+			'charts' => array(),
+		);
+
+		// --- personal milestones (ork_player_milestones) ---------------------
+		$milestoneTotal = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}player_milestones`"
+		);
+		$milestoneUsers = $this->_rfuScalar(
+			"SELECT COUNT(DISTINCT mundane_id) AS c FROM `{$p}player_milestones`"
+		);
+		$milestoneAvg = ($milestoneUsers > 0) ? round($milestoneTotal / $milestoneUsers, 1) : 0;
+		$featMilestones = array(
+			'key'         => 'milestones',
+			'title'       => 'Personal Milestones',
+			'description' => 'Players pin dated, captioned milestones to their profile timeline.',
+			'kpis' => array(
+				$this->_rfuKpi('Total milestones', $milestoneTotal, null, null, 'rows in player milestones'),
+				$this->_rfuKpi('Players using milestones', $milestoneUsers, $denom, $pct($milestoneUsers), 'distinct players with a milestone'),
+				$this->_rfuKpi('Avg per adopting player', $milestoneAvg, null, null, 'milestones / adopting player'),
+			),
+			'charts' => array(),
+		);
+
+		// --- recommendation seconds (ork_recommendation_seconds) -------------
+		$secTotal = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}recommendation_seconds` WHERE deleted_at IS NULL"
+		);
+		$secRecs = $this->_rfuScalar(
+			"SELECT COUNT(DISTINCT recommendations_id) AS c FROM `{$p}recommendation_seconds` WHERE deleted_at IS NULL"
+		);
+		$secSupporters = $this->_rfuScalar(
+			"SELECT COUNT(DISTINCT supporter_mundane_id) AS c FROM `{$p}recommendation_seconds` WHERE deleted_at IS NULL"
+		);
+		$secNotes = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}recommendation_seconds` WHERE deleted_at IS NULL AND notes IS NOT NULL AND notes <> ''"
+		);
+		$secPctOfRecs = ($activeRecommendations > 0)
+			? round(($secRecs / $activeRecommendations) * 100, 1)
+			: null;
+		$featRecSeconds = array(
+			'key'         => 'rec_seconds',
+			'title'       => 'Recommendation Seconds',
+			'description' => 'Members add weight to an award recommendation by seconding it, optionally with a note.',
+			'kpis' => array(
+				$this->_rfuKpi('Active seconds', $secTotal, null, null, 'non-deleted seconds'),
+				$this->_rfuKpi('Recommendations seconded', $secRecs, null, null, 'distinct recommendations with a second'),
+				$this->_rfuKpi('Unique seconders', $secSupporters, null, null, 'distinct supporting members'),
+				$this->_rfuKpi('Seconds with a note', $secNotes, null, null, 'seconds carrying a written note'),
+				$this->_rfuKpi('Recs with >=1 second', $secRecs, $activeRecommendations, $secPctOfRecs, 'share of active recommendations seconded'),
+			),
+			'charts' => array(),
+		);
+
+		// --- recommendation activity: before vs after Mask -------------------
+		// ork_recommendations.date_recommended (active rows only). Window math per
+		// recon (see _rfuImpact); Mask released 2026-05-13.
+		$maskDate  = '2026-05-13';
+		$recImpact = $this->_rfuImpact('recommendations', 'date_recommended', $maskDate, 'deleted_at IS NULL');
+
+		$featRecActivity = array(
+			'key'         => 'rec_activity',
+			'title'       => 'Recommendation Activity (before vs after)',
+			'description' => 'Monthly award-recommendation submission rate in the 180 days before the 3.5.2 release versus the period since launch (normalized per month).',
+			'kpis' => array(
+				$this->_rfuKpi(
+					'Award recs / month',
+					round($recImpact['afterPerMonth'], 1),
+					null,
+					null,
+					'avg award recommendations per month since 3.5.2 (was ' . $recImpact['beforePerMonth'] . '/mo)',
+					$recImpact['delta'],
+					$recImpact['deltaDir']
+				),
+			),
+			'charts' => array(
+				array(
+					'id'         => 'rfu-impact-mask',
+					'type'       => 'column',
+					'title'      => 'Award recommendations / month: before vs after 3.5.2',
+					'categories' => array('Award recommendations'),
+					'series'     => array(
+						array(
+							'name' => 'Avg/mo before (180d)',
+							'data' => array(round($recImpact['beforePerMonth'], 1)),
+						),
+						array(
+							'name' => 'Avg/mo after',
+							'data' => array(round($recImpact['afterPerMonth'], 1)),
+						),
+					),
+				),
+			),
+		);
+
+		$release352 = array(
+			'version' => '3.5.2',
+			'name'    => 'Mask',
+			'date'    => '2026-05-13',
+			'blurb'   => 'Profile storytelling: custom nameplates, milestones, and recommendation seconds.',
+			'features' => array($featNameplate, $featViewerFonts, $featMilestones, $featRecSeconds, $featRecActivity),
+		);
+
+		// ====================================================================
+		// RELEASE 3.5.1 — Owl
+		// ====================================================================
+
+		// --- event RSVP (ork_event_rsvp) -------------------------------------
+		$rsvpTotal = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}event_rsvp`"
+		);
+		$rsvpUsers = $this->_rfuScalar(
+			"SELECT COUNT(DISTINCT mundane_id) AS c FROM `{$p}event_rsvp`"
+		);
+		$rsvpBreak = $this->_rfuBreakdown(
+			"SELECT status AS k, COUNT(*) AS c FROM `{$p}event_rsvp`
+			 WHERE status IS NOT NULL AND status <> ''
+			 GROUP BY status ORDER BY c DESC, status ASC"
+		);
+		$rsvpGoing = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}event_rsvp` WHERE status = 'going'"
+		);
+		$rsvpInterested = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}event_rsvp` WHERE status = 'interested'"
+		);
+
+		// --- RSVP show rate: 'going' RSVPs to PAST events (event_start <= now)
+		// that have a matching attendance sign-in at the SAME event
+		// (event_id - any instance of the event counts). Join/filter mirror the recon ground-truth.
+		$nowStr = date('Y-m-d H:i:s');
+		$nowStr = preg_replace('/[^0-9: -]/', '', $nowStr);
+		$this->db->Clear();
+		$showGoingPast = 0;
+		$showAttended  = 0;
+		$showRow = $this->db->query(
+			"SELECT COUNT(DISTINCT rsvp.rsvp_id) AS going_past,
+			        COUNT(DISTINCT CASE WHEN att.attendance_id IS NOT NULL THEN rsvp.rsvp_id END) AS going_attended
+			 FROM `{$p}event_rsvp` rsvp
+			 JOIN `{$p}event_calendardetail` cd
+			   ON rsvp.event_calendardetail_id = cd.event_calendardetail_id
+			 LEFT JOIN `{$p}attendance` att
+			   ON att.mundane_id = rsvp.mundane_id
+			  AND att.event_id = cd.event_id
+			 WHERE rsvp.status = 'going'
+			   AND cd.event_start <= '{$nowStr}'"
+		);
+		if ($showRow !== false && $showRow->next()) {
+			$showGoingPast = (int)$showRow->going_past;
+			$showAttended  = (int)$showRow->going_attended;
+		}
+		$showNoShow   = max(0, $showGoingPast - $showAttended);
+		$showRatePct  = ($showGoingPast > 0)
+			? round(100.0 * $showAttended / $showGoingPast, 2)
+			: null;
+
+		$featEventRsvp = array(
+			'key'         => 'event_rsvp',
+			'title'       => 'Event RSVP',
+			'description' => 'Players signal attendance on event pages as going or interested.',
+			'kpis' => array(
+				$this->_rfuKpi('Total RSVPs', $rsvpTotal, null, null, 'rows in event RSVP'),
+				$this->_rfuKpi('Unique RSVPers', $rsvpUsers, $denom, $pct($rsvpUsers), 'distinct players who RSVPed'),
+				$this->_rfuKpi("RSVP'd Going", $rsvpGoing, null, null, "RSVPs with status 'going'"),
+				$this->_rfuKpi("RSVP'd Interested", $rsvpInterested, null, null, "RSVPs with status 'interested'"),
+				$this->_rfuKpi(
+					'RSVP show rate',
+					$showAttended,
+					$showGoingPast,
+					$showRatePct,
+					"'going' RSVPs to past events where the player has any attendance/sign-in at that event (matched on player + event_id)",
+					null,
+					null,
+					"of 'going' RSVPs showed up"
+				),
+			),
+			'charts' => array(
+				$this->_rfuChartFromBreakdown('rfu-rsvp', 'pie', 'RSVP status', $rsvpBreak, 'RSVPs'),
+				array(
+					'id'         => 'rfu-rsvp-show',
+					'type'       => 'pie',
+					'title'      => "Attended vs no-show ('going' RSVPs)",
+					'categories' => array('Attended', 'No-show'),
+					'data'       => array($showAttended, $showNoShow),
+				),
+			),
+		);
+
+		$release351 = array(
+			'version' => '3.5.1',
+			'name'    => 'Owl',
+			'date'    => '2026-04-18',
+			'blurb'   => 'A supercharged Event RSVP tab.',
+			'features' => array($featEventRsvp),
+		);
+
+		// ====================================================================
+		// RELEASE 3.5.0 — Dragon
+		// ====================================================================
+
+		// --- custom About pages (org design tables) --------------------------
+		$aboutKingdom = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}kingdom_design` WHERE about_enabled = 1"
+		);
+		$aboutPark = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}park_design` WHERE about_enabled = 1"
+		);
+		$aboutUnit = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}unit_design` WHERE about_enabled = 1"
+		);
+		$featCustomAbout = array(
+			'key'         => 'custom_about',
+			'title'       => 'Custom About Pages',
+			'description' => 'Kingdoms, parks and units opt into a designed public About page.',
+			'kpis' => array(
+				$this->_rfuKpi('Kingdoms with About', $aboutKingdom, null, null, 'kingdom_design.about_enabled = 1'),
+				$this->_rfuKpi('Parks with About', $aboutPark, null, null, 'park_design.about_enabled = 1'),
+				$this->_rfuKpi('Units with About', $aboutUnit, null, null, 'unit_design.about_enabled = 1'),
+			),
+			'charts' => array(),
+		);
+
+		// --- heraldry adoption -----------------------------------------------
+		$playerHeraldry = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}mundane` WHERE has_heraldry = 1"
+		);
+		$eventHeraldry = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}event` WHERE has_heraldry = 1"
+		);
+		$eventBanner = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}event` WHERE has_banner = 1"
+		);
+		$featHeraldry = array(
+			'key'         => 'heraldry',
+			'title'       => 'Heraldry Adoption',
+			'description' => 'Players and events display custom heraldry and banners.',
+			'kpis' => array(
+				$this->_rfuKpi('Players with heraldry', $playerHeraldry, $denom, $pct($playerHeraldry), 'players with has_heraldry on'),
+				$this->_rfuKpi('Events with heraldry', $eventHeraldry, null, null, 'events with has_heraldry on'),
+				$this->_rfuKpi('Events with a banner', $eventBanner, null, null, 'events with has_banner on'),
+			),
+			'charts' => array(),
+		);
+
+		// --- tournament module -----------------------------------------------
+		$tourTotal = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}tournament`"
+		);
+		$bracketTotal = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}bracket`"
+		);
+		$tourStatusBreak = $this->_rfuBreakdown(
+			"SELECT status AS k, COUNT(*) AS c FROM `{$p}tournament`
+			 WHERE status IS NOT NULL AND status <> ''
+			 GROUP BY status ORDER BY c DESC, status ASC"
+		);
+		$bracketStyleBreak = $this->_rfuBreakdown(
+			"SELECT style AS k, COUNT(*) AS c FROM `{$p}bracket`
+			 WHERE style IS NOT NULL AND style <> ''
+			 GROUP BY style ORDER BY c DESC, style ASC"
+		);
+		$featTournaments = array(
+			'key'         => 'tournaments',
+			'title'       => 'Tournament Module',
+			'description' => 'Organizers run bracketed tournaments tied to events.',
+			'kpis' => array(
+				$this->_rfuKpi('Total tournaments', $tourTotal, null, null, 'rows in tournament'),
+				$this->_rfuKpi('Total brackets', $bracketTotal, null, null, 'rows in bracket'),
+			),
+			'charts' => array(
+				$this->_rfuChartFromBreakdown('rfu-tour-status', 'pie', 'Tournament status', $tourStatusBreak, 'Tournaments'),
+				$this->_rfuChartFromBreakdown('rfu-bracket-style', 'bar', 'Bracket types', $bracketStyleBreak, 'Brackets'),
+			),
+		);
+
+		// --- weekly recap ----------------------------------------------------
+		$recapWeeks = $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}weekly_recap`"
+		);
+		$featWeeklyRecap = array(
+			'key'         => 'weekly_recap',
+			'title'       => 'Weekly Recap',
+			'description' => 'Auto-generated weekly digests of kingdom activity.',
+			'kpis' => array(
+				$this->_rfuKpi('Weeks computed', $recapWeeks, null, null, 'rows in weekly recap'),
+			),
+			'charts' => array(),
+		);
+
+		// --- feature awareness (What's New) ----------------------------------
+		$awarenessBreak = $this->_rfuBreakdown(
+			"SELECT version AS k, COUNT(DISTINCT mundane_id) AS c FROM `{$p}whats_new_seen`
+			 WHERE version IS NOT NULL AND version <> ''
+			 GROUP BY version ORDER BY version DESC"
+		);
+		// latest version = max version string; its distinct-player count.
+		$latestVersion = '';
+		$latestSeen = 0;
+		foreach ($awarenessBreak as $row) {
+			if ($latestVersion === '' || strcmp($row['k'], $latestVersion) > 0) {
+				$latestVersion = $row['k'];
+				$latestSeen = (int)$row['c'];
+			}
+		}
+		$featAwareness = array(
+			'key'         => 'awareness',
+			'title'       => 'Feature Awareness (What\'s New)',
+			'description' => 'Players are shown a What\'s New modal each release; this tracks who has seen each version.',
+			'kpis' => array(
+				$this->_rfuKpi(
+					'Saw latest (' . ($latestVersion !== '' ? $latestVersion : 'n/a') . ')',
+					$latestSeen,
+					$denom,
+					$pct($latestSeen),
+					'distinct players who saw the newest What\'s New'
+				),
+			),
+			'charts' => array(
+				$this->_rfuChartFromBreakdown('rfu-awareness', 'bar', 'Players who viewed each What\'s-New version', $awarenessBreak, 'Players'),
+			),
+		);
+
+		// --- activity impact: before vs after the Dragon redesign ------------
+		// Events use ork_event_calendardetail.event_start (the scheduled date);
+		// RSVPs use ork_event_rsvp.modified. Window math per recon (see _rfuImpact).
+		$dragonDate = '2026-04-02';
+		$evtImpact  = $this->_rfuImpact('event_calendardetail', 'event_start', $dragonDate);
+		$rsvpImpact = $this->_rfuImpact('event_rsvp', 'modified', $dragonDate);
+
+		$featActivityImpact = array(
+			'key'         => 'activity_impact',
+			'title'       => 'Activity Impact (before vs after redesign)',
+			'description' => 'Monthly event-creation and RSVP rates in the 180 days before the 3.5.0 redesign versus the period since launch (normalized per month).',
+			'kpis' => array(
+				$this->_rfuKpi(
+					'Events scheduled / month',
+					round($evtImpact['afterPerMonth'], 1),
+					null,
+					null,
+					'avg events scheduled per month since 3.5.0 (was ' . $evtImpact['beforePerMonth'] . '/mo)',
+					$evtImpact['delta'],
+					$evtImpact['deltaDir']
+				),
+				$this->_rfuKpi(
+					'Event RSVPs / month',
+					round($rsvpImpact['afterPerMonth'], 1),
+					null,
+					null,
+					'avg RSVPs per month since 3.5.0 (was ' . $rsvpImpact['beforePerMonth'] . '/mo)',
+					$rsvpImpact['delta'],
+					$rsvpImpact['deltaDir']
+				),
+			),
+			'charts' => array(
+				array(
+					'id'         => 'rfu-impact-dragon',
+					'type'       => 'column',
+					'title'      => 'Monthly activity: before vs after 3.5.0',
+					'categories' => array('Events scheduled', 'Event RSVPs'),
+					'series'     => array(
+						array(
+							'name' => 'Avg/mo before (180d)',
+							'data' => array(
+								round($evtImpact['beforePerMonth'], 1),
+								round($rsvpImpact['beforePerMonth'], 1),
+							),
+						),
+						array(
+							'name' => 'Avg/mo after',
+							'data' => array(
+								round($evtImpact['afterPerMonth'], 1),
+								round($rsvpImpact['afterPerMonth'], 1),
+							),
+						),
+					),
+				),
+			),
+		);
+
+		$release350 = array(
+			'version' => '3.5.0',
+			'name'    => 'Dragon',
+			'date'    => '2026-04-02',
+			'blurb'   => 'The big redesign: new profiles, events, tournaments — plus org-level adoption signals.',
+			'features' => array(
+				$featCustomAbout,
+				$featHeraldry,
+				$featTournaments,
+				$featWeeklyRecap,
+				$featAwareness,
+				$featActivityImpact,
+			),
+		);
+
+		return array(
+			'generated_at' => date('Y-m-d H:i:s'),
+			'totals' => array(
+				'active_players'         => (int)$activePlayers,
+				'players_with_design'    => (int)$playersWithDesign,
+				'active_recommendations' => (int)$activeRecommendations,
+			),
+			'releases' => array($release352, $release351, $release350),
+		);
+	}
+
+	/**
+	 * Run a single-column scalar COUNT-style query and return it as an int.
+	 * The query MUST alias its scalar as `c`. Matches the file's $this->db
+	 * query/next idiom; Clear() first to drop stale PDO bindings.
+	 */
+	private function _rfuScalar($sql) {
+		$this->db->Clear();
+		$r = $this->db->query($sql);
+		if ($r !== false && $r->next()) {
+			return (int)$r->c;
+		}
+		return 0;
+	}
+
+	/**
+	 * Count rows of $table where its date column falls inclusively within
+	 * [$start, $end] (Y-m-d strings), with an optional extra WHERE clause.
+	 * Used for release before/after window math.
+	 */
+	private function _rfuWindowCount($table, $dateCol, $start, $end, $extraWhere = '') {
+		$p = DB_PREFIX;
+		// $start/$end are code-generated Y-m-d strings (date()/strtotime), never
+		// user input, so direct inlining matches this file's date-range idiom.
+		$start = preg_replace('/[^0-9-]/', '', $start);
+		$end   = preg_replace('/[^0-9-]/', '', $end);
+		$where = "`{$dateCol}` >= '{$start} 00:00:00'"
+			. " AND `{$dateCol}` <= '{$end} 23:59:59'";
+		if ($extraWhere !== '') {
+			$where .= ' AND ' . $extraWhere;
+		}
+		return $this->_rfuScalar(
+			"SELECT COUNT(*) AS c FROM `{$p}{$table}` WHERE {$where}"
+		);
+	}
+
+	/**
+	 * Compute a before/after per-month impact bundle for a release, matching the
+	 * recon windowDefinition exactly:
+	 *   BEFORE = [release - 180 days, release - 1 day]  -> 180 / 30.44 months
+	 *   AFTER  = [release, today]                       -> inclusive days / 30.44
+	 * Per-month rate = count / months. Delta% = round((after-before)/before*100).
+	 * Divide-by-zero guarded (delta=null, deltaDir='flat' when before rate is 0).
+	 *
+	 * @return array {beforeCount, afterCount, beforePerMonth, afterPerMonth,
+	 *                deltaPct(int|null), delta(string|null), deltaDir}
+	 */
+	private function _rfuImpact($table, $dateCol, $releaseDate, $extraWhere = '') {
+		$today  = date('Y-m-d');
+		$relTs  = strtotime($releaseDate);
+		$beforeStart = date('Y-m-d', strtotime('-180 days', $relTs));
+		$beforeEnd   = date('Y-m-d', strtotime('-1 day', $relTs));
+
+		$beforeCount = $this->_rfuWindowCount($table, $dateCol, $beforeStart, $beforeEnd, $extraWhere);
+		$afterCount  = $this->_rfuWindowCount($table, $dateCol, $releaseDate, $today, $extraWhere);
+
+		// Inclusive day spans -> month equivalents (30.44 days/month, per recon).
+		$beforeMonths = 180 / 30.44;
+		$afterDays    = (int)round((strtotime($today) - $relTs) / 86400) + 1; // inclusive
+		$afterMonths  = $afterDays / 30.44;
+
+		$beforePerMonth = ($beforeMonths > 0) ? round($beforeCount / $beforeMonths, 1) : 0.0;
+		$afterPerMonth  = ($afterMonths > 0) ? round($afterCount / $afterMonths, 1) : 0.0;
+
+		if ($beforePerMonth > 0) {
+			$deltaPct = (int)round((($afterPerMonth - $beforePerMonth) / $beforePerMonth) * 100);
+			$delta    = ($deltaPct >= 0 ? '+' : '') . $deltaPct . '%';
+			if ($afterPerMonth > $beforePerMonth) {
+				$deltaDir = 'up';
+			} elseif ($afterPerMonth < $beforePerMonth) {
+				$deltaDir = 'down';
+			} else {
+				$deltaDir = 'flat';
+			}
+		} else {
+			$deltaPct = null;
+			$delta    = null;
+			$deltaDir = 'flat';
+		}
+
+		return array(
+			'beforeCount'    => (int)$beforeCount,
+			'afterCount'     => (int)$afterCount,
+			'beforePerMonth' => $beforePerMonth,
+			'afterPerMonth'  => $afterPerMonth,
+			'deltaPct'       => $deltaPct,
+			'delta'          => $delta,
+			'deltaDir'       => $deltaDir,
+		);
+	}
+
+	/**
+	 * Run a "SELECT <label> AS k, COUNT(*) AS c ... GROUP BY ..." query and
+	 * return an ordered array of ['k' => label, 'c' => int count] rows.
+	 */
+	private function _rfuBreakdown($sql) {
+		$this->db->Clear();
+		$out = array();
+		$r = $this->db->query($sql);
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$out[] = array('k' => (string)$r->k, 'c' => (int)$r->c);
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Build one KPI tile entry for the data contract.
+	 *
+	 * @param string|null $delta    Preformatted signed percent string (e.g. '+37%'); null when N/A.
+	 * @param string|null $deltaDir 'up' | 'down' | 'flat' — drives the colored delta pill.
+	 */
+	private function _rfuKpi($label, $value, $denom, $pct, $hint, $delta = null, $deltaDir = null, $pctLabel = null, $suffix = null) {
+		$kpi = array(
+			'label'    => $label,
+			'value'    => $value,
+			'denom'    => ($denom === null) ? null : (int)$denom,
+			'pct'      => ($pct === null) ? null : $pct,
+			'hint'     => ($hint === null) ? null : $hint,
+			'delta'    => ($delta === null) ? null : (string)$delta,
+			'deltaDir' => ($deltaDir === null) ? 'flat' : $deltaDir,
+		);
+		if ($pctLabel !== null && $pctLabel !== '') {
+			$kpi['pctLabel'] = (string)$pctLabel;
+		}
+		if ($suffix !== null && $suffix !== '') {
+			$kpi['suffix'] = (string)$suffix;
+		}
+		return $kpi;
+	}
+
+	/**
+	 * Convert a breakdown array into a chart entry. Always emits a valid chart
+	 * (empty categories/data when the breakdown is empty) so the template can
+	 * render a graceful "No data yet" state.
+	 *
+	 * @param string $type 'column' | 'bar' | 'pie'
+	 */
+	private function _rfuChartFromBreakdown($id, $type, $title, $breakdown, $seriesName = 'Count') {
+		$categories = array();
+		$data = array();
+		foreach ($breakdown as $row) {
+			$categories[] = $row['k'];
+			$data[] = (int)$row['c'];
+		}
+		$chart = array(
+			'id'         => $id,
+			'type'       => $type,
+			'title'      => $title,
+			'categories' => $categories,
+		);
+		if ($type === 'pie') {
+			$chart['data'] = $data;
+		} else {
+			$chart['series'] = array(
+				array('name' => $seriesName, 'data' => $data),
+			);
+		}
+		return $chart;
+	}
+
 }
