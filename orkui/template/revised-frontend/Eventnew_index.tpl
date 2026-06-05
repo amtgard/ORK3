@@ -190,6 +190,12 @@
 html[data-theme="dark"] .ev-share-btn { background:#2a2f37; border-color:#444b56; color:#e3e7ee; }
 html[data-theme="dark"] .ev-share-btn:hover { background:#333a44; border-color:#566070; }
 html[data-theme="dark"] .ev-share-btn.is-shared { background:#1f3a29; border-color:#2f6b45; color:#9be3b4; }
+/* Already-shared: hovering reveals a red "Stop Sharing?" affordance; clicking unshares. */
+.ev-share-btn .ev-share-ic-stop, .ev-share-btn .ev-share-stop-label { display:none; }
+.ev-share-btn.is-shared:hover { background:#fdeaea; border-color:#e2a3a3; color:#b02a2a; }
+.ev-share-btn.is-shared:hover .ev-share-ic-on, .ev-share-btn.is-shared:hover .ev-share-label { display:none; }
+.ev-share-btn.is-shared:hover .ev-share-ic-stop, .ev-share-btn.is-shared:hover .ev-share-stop-label { display:inline; }
+html[data-theme="dark"] .ev-share-btn.is-shared:hover { background:#3a1f1f; border-color:#7a3a3a; color:#f3a6a6; }
 html[data-theme="dark"] .ev-share-menu { background:#23272e; border-color:#3a414b; box-shadow:0 6px 22px rgba(0,0,0,.5); }
 html[data-theme="dark"] .ev-share-row { color:#e3e7ee; }
 html[data-theme="dark"] .ev-share-row:hover { background:#2d333c; }
@@ -856,11 +862,15 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							id="ev-share-single"
 							data-event="<?= (int)$event_id ?>"
 							data-kingdom="<?= (int)$sk['KingdomId'] ?>"
+							data-kingdom-name="<?= htmlspecialchars($sk['KingdomName']) ?>"
 							data-shared="<?= $sk['IsShared'] ? '1' : '0' ?>"
-							data-tip="Show this event on <?= htmlspecialchars($sk['KingdomName']) ?>'s events list"
+							data-share-tip="Show this event on <?= htmlspecialchars($sk['KingdomName']) ?>'s events list"
+							<?php if (!$sk['IsShared']): ?>data-tip="Show this event on <?= htmlspecialchars($sk['KingdomName']) ?>'s events list"<?php endif; ?>
 							onclick="evToggleShare(this)">
-							<i class="fas fa-share-nodes"></i>
+							<i class="fas fa-share-nodes ev-share-ic-on"></i>
+							<i class="fas fa-ban ev-share-ic-stop"></i>
 							<span class="ev-share-label"><?= $sk['IsShared'] ? 'Shared with ' . htmlspecialchars($sk['KingdomName']) : 'Share with My Kingdom' ?></span>
+							<span class="ev-share-stop-label">Stop Sharing?</span>
 						</button>
 					<?php else: ?>
 						<div class="ev-share-wrap">
@@ -2468,8 +2478,14 @@ function evToggleShare(el) {
 		} else {
 			el.dataset.shared = doShare ? '1' : '0';
 			el.classList.toggle('is-shared', doShare);
+			el.style.pointerEvents = '';
 			var lbl = el.querySelector('.ev-share-label');
-			if (lbl) lbl.textContent = doShare ? 'Shared with My Kingdom' : 'Share with My Kingdom';
+			var kname = el.dataset.kingdomName || 'My Kingdom';
+			if (lbl) lbl.textContent = doShare ? ('Shared with ' + kname) : 'Share with My Kingdom';
+			// Keep the informational tip only while NOT shared; when shared the red
+			// hover state ("Stop Sharing?") already explains the click.
+			if (doShare) { el.removeAttribute('data-tip'); }
+			else if (el.dataset.shareTip) { el.setAttribute('data-tip', el.dataset.shareTip); }
 		}
 	})
 	.catch(function(err){
