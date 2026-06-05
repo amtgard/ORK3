@@ -486,10 +486,22 @@ $downtime_note  = 'ORK downtime to migrate to the Mask 3.5.2 Release';
 			}
 		});
 
-		// Close search dropdown on outside click
+		// Once the user clicks/focuses into the search, lock it open so that mousing
+		// off does NOT collapse it or blur the input. It stays open until an
+		// explicit outside click (below) or Escape.
+		$('#UniversalSearch').on('focus', function() {
+			document.getElementById('nav-search-wrap').classList.add('nav-search-open');
+			document.getElementById('nav-search-toggle').classList.add('active');
+		});
+
+		// Close the search (collapse + clear) only on an actual click OUTSIDE it.
 		$(document).on('click.searchDropdown', function(e) {
 			if (!$(e.target).closest('#nav-search-wrap').length) {
 				$('#nav-search-dropdown').removeClass('nsdd-visible').empty();
+				document.getElementById('nav-search-wrap').classList.remove('nav-search-open');
+				document.getElementById('nav-search-toggle').classList.remove('active');
+				var _inp = document.getElementById('UniversalSearch');
+				if (_inp) { _inp.value = ''; _inp.blur(); }
 			}
 		});
 	});
