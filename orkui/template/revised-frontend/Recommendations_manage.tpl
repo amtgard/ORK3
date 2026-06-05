@@ -1040,7 +1040,22 @@ document.getElementById('rm-court-submit').addEventListener('click', function ()
     });
 });
 
-// Initial: default sort (oldest first) + sync counts/chips.
+// Show the reason expander only when the reason is actually truncated.
+function rmSyncReasonExpanders() {
+    document.querySelectorAll('#rm-tbody .rm-reason-trunc').forEach(function (el) {
+        var btn = el.parentNode.querySelector('.rm-expand-reason');
+        if (!btn) return;
+        btn.style.display = (el.scrollWidth - el.clientWidth > 1) ? '' : 'none';
+    });
+}
+
+// Initial: default sort (oldest first) + sync counts/chips + expander visibility.
 rmSort('date');
 rmApplyFilters();
+rmSyncReasonExpanders();
+var rmReasonResizeT;
+window.addEventListener('resize', function () {
+    clearTimeout(rmReasonResizeT);
+    rmReasonResizeT = setTimeout(rmSyncReasonExpanders, 150);
+});
 </script>
