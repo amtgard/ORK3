@@ -5155,11 +5155,26 @@ $(function() {
 				classList.forEach(function(c) {
 					classData[c.ClassId] = { name: c.ClassName, reconciled: parseInt(c.Reconciled || 0), history: [] };
 				});
+				// Credit rule (mirror GetPlayerClasses): at most ONE class credit per
+				// calendar date, attributed to the earliest-entered (lowest AttendanceId)
+				// sign-in on that date. The raw feed can hold several sign-ins per day
+				// (multiple parks/classes); summing them all over-counted credits, which
+				// pushed the Level-6 date earlier than reality and could even report a
+				// level the player never actually reached.
+				var bestByDate = {};
 				att.forEach(function(a) {
+					if (!a.Date || a.Date === '0000-00-00') return;
 					var cid = parseInt(a.ClassId || 0);
-					if (cid && classData[cid] && a.Date && a.Date !== '0000-00-00') {
-						classData[cid].history.push({ date: a.Date, credits: parseFloat(a.Credits || 0) });
+					if (!cid) return;
+					var aid = parseInt(a.AttendanceId || 0);
+					var prev = bestByDate[a.Date];
+					if (!prev || aid < prev.aid) {
+						bestByDate[a.Date] = { aid: aid, cid: cid, date: a.Date, credits: parseFloat(a.Credits || 0) };
 					}
+				});
+				Object.keys(bestByDate).forEach(function(d) {
+					var rec = bestByDate[d];
+					if (classData[rec.cid]) classData[rec.cid].history.push({ date: rec.date, credits: rec.credits });
 				});
 
 				var newMilestones = [];
