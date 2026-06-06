@@ -361,12 +361,22 @@ class Controller_KingdomAjax extends Controller {
 			$dest_park_id = (int)($_POST['DestParkId'] ?? 0);
 			if (!valid_id($mundane_id))   { echo json_encode(['status' => 1, 'error' => 'Select a player.']);           exit; }
 			if (!valid_id($dest_park_id)) { echo json_encode(['status' => 1, 'error' => 'Select a destination park.']); exit; }
-			// Auth: look up player's current kingdom and require kingdom-level authority over it
+			// Auth: allow the move when the actor has kingdom-level authority over EITHER the
+			// player's current (source) kingdom — moving/releasing one of your own members — OR
+			// the destination park's kingdom — claiming a player into your kingdom. This mirrors
+			// Player::MovePlayer (and the Park/Player move endpoints), which authorize on
+			// destination OR source. A source-only check wrongly blocked officers from claiming
+			// players who belong to another kingdom.
 			global $DB;
 			$DB->Clear();
 			$plrKingdom = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mundane_id} LIMIT 1");
 			$player_kingdom_id = ($plrKingdom && $plrKingdom->Next()) ? (int)$plrKingdom->kingdom_id : 0;
-			if (!$player_kingdom_id || !Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT)) {
+			$DB->Clear();
+			$destKingdom = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$dest_park_id} LIMIT 1");
+			$dest_kingdom_id = ($destKingdom && $destKingdom->Next()) ? (int)$destKingdom->kingdom_id : 0;
+			$canSource = $player_kingdom_id && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT);
+			$canDest   = $dest_kingdom_id   && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $dest_kingdom_id, AUTH_EDIT);
+			if (!$canSource && !$canDest) {
 				echo json_encode(['status' => 5, 'error' => 'Not authorized to move this player.']); exit;
 			}
 			$r = $this->Player->move_player(['Token' => $this->session->token, 'MundaneId' => $mundane_id, 'ParkId' => $dest_park_id]);
@@ -605,6 +615,8 @@ class Controller_KingdomAjax extends Controller {
 			foreach ($r['Parks'] ?? [] as $park) {
 				$parks[] = ['ParkId' => $park['ParkId'], 'Name' => $park['Name']];
 			}
+			// Sort alphabetically by name so the dropdowns are easy to scan.
+			usort($parks, function ($a, $b) { return strcasecmp($a['Name'], $b['Name']); });
 			echo json_encode(['status' => 0, 'parks' => $parks]);
 		} elseif ($action === 'parktitles') {
 			$result = Ork3::$Lib->kingdom->GetKingdomParkTitles(['KingdomId' => $kingdom_id]);
