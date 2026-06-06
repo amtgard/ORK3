@@ -97,6 +97,12 @@ define('CF_ZONE_ID',   '');
 define('IDP_CLIENT_ID', 'ORK_CLIENT_ID');
 define('IDP_CLIENT_SECRET', 'ORK_CLIENT_SECRET');
 define('IDP_BASE_URL', 'https://idp.amtgard.com');
+// Server-to-server base URL for token/userinfo/link-ork-profile calls. In prod this is
+// usually the same host as IDP_BASE_URL; split only in dev for container networking.
+define('IDP_API_URL', 'https://idp.amtgard.com');
+// HS256 secret for the Login-with-Amtgard link/completion JWTs. MUST match the IDP's
+// IDP_ORK_SHARED_SECRET (>=32 chars). Generate via: openssl rand -base64 48
+define('IDP_ORK_SHARED_SECRET', '');
 
 // INCLUDE
 require_once(DIR_LIB . 'mail.php');

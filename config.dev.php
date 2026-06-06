@@ -109,3 +109,8 @@ define('IDP_BASE_URL', 'http://localhost:37080');
 define('IDP_API_URL', 'http://host.docker.internal:37080');
 define('IDP_CLIENT_ID', 'ork3_dev');
 define('IDP_CLIENT_SECRET', 'tt8TTMfSkVUf9fwCdmi8b6G6BCnwVUgB');
+// HS256 secret for the Login-with-Amtgard link/completion JWTs (/auth/connect handoff).
+// MUST match the IDP dev value byte-for-byte. The IDP currently reads this via its
+// legacy env var ORK_LINK_TOKEN_SECRET (canonical IDP_ORK_SHARED_SECRET unset there),
+// which resolves to the same value below, so the two sides interoperate.
+define('IDP_ORK_SHARED_SECRET', 'hvaP5/D62jOXBfPzOWnR4kh24moJUyc1FR0Fbxsmc3Ldv27sdrBA8MqXS5rbpiAA');
