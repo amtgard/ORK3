@@ -66,7 +66,7 @@ foreach ($_legacyRedirects as $_old => $_new) {
 }
 
 // Redirect Event/index/{id} to the kingdom event attendance report with the event name as filter
-if (preg_match('#^Event/index/(\d+)$#i', $_REQUEST['Route'], $_m)) {
+if (preg_match('#^Event/index/(\d+)#i', $_REQUEST['Route'], $_m)) {
     $_event_id = (int)$_m[1];
     $_eq = $DB->query("SELECT name, kingdom_id FROM " . DB_PREFIX . "event WHERE event_id = $_event_id LIMIT 1");
     if ($_eq && $_eq->size() > 0 && $_eq->next()) {

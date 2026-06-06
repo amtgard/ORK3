@@ -9,7 +9,7 @@ class Controller_Event extends Controller {
 		$this->load_model('Kingdom');
 
 		$params = explode('/',$id);
-		$event_id = $params[0];
+		$event_id = (int) $params[0];
 
 		$this->data['EventDetails'] = $this->Event->get_event_details($event_id);
 		if ($this->data['EventDetails']['Status']['Status'] != 0) {
@@ -32,6 +32,7 @@ class Controller_Event extends Controller {
 	}
 
 	public function index($event_id = null) {
+		$event_id = (int) $event_id;
 		$this->data['EventDetails'] = $this->Event->get_event_details($event_id);
 		if ($this->data['EventDetails']['Status']['Status'] != 0) {
 			header('Location: ' . UIR . 'Event/list');

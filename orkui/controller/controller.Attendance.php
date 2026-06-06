@@ -26,7 +26,7 @@ class Controller_Attendance extends Controller {
 		}
 		
 		$params = explode('/',$id);
-		$id = $params[0];
+		$id = (int) $params[0];
 		$this->data['menu']['attendance'] = array( 'url' => UIR."Attendance/$call/$id", 'display' => 'Attendance' );
 	
 	}
@@ -37,7 +37,7 @@ class Controller_Attendance extends Controller {
 	
 	public function kingdom($k) {
 		$params = explode('/',$k);
-		$id = $params[0];
+		$id = (int) $params[0];
 		if (count($params) > 1)
 			$action = $params[1];
 		if (count($params) > 2)
@@ -162,7 +162,7 @@ class Controller_Attendance extends Controller {
   
 	public function park($p) {
 		$params = explode('/',$p);
-		$id = $params[0];
+		$id = (int) $params[0];
 		if (count($params) > 1)
 			$action = $params[1];
 		if (count($params) > 2)
@@ -237,8 +237,8 @@ class Controller_Attendance extends Controller {
 
 	public function event($p) {
 		$params = explode('/',$p);
-		$event_id = $params[0];
-		$detail_id = $params[1];
+		$event_id = (int) $params[0];
+		$detail_id = (int) $params[1];
 		
 		if (count($params) > 2)
 			$action = $params[2];

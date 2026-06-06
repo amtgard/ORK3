@@ -567,7 +567,7 @@ class Controller_Admin extends Controller {
 
 	public function event($p) {
 		$params = explode('/',$p);
-		$event_id = $params[0];
+		$event_id = (int) $params[0];
 		if (count($params) > 1) $post = $params[1];
 
 		logtrace("index($p)", $params);
@@ -1072,7 +1072,7 @@ class Controller_Admin extends Controller {
 		$this->load_model('Pronoun');
 
 		$params = explode('/',$id);
-		$id = $params[0];
+		$id = (int) $params[0];
 		if (count($params) > 1)
 			$action = $params[1];
 		if (count($params) > 2)
