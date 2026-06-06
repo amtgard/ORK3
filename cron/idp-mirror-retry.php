@@ -35,10 +35,12 @@ foreach ($rows as $row) {
     $success = $model->linkOrkProfile($row['idp_user_id'], $row['mundane_id']);
     $status = $success ? 'synced' : 'failed';
     $DB->Clear();
+    $DB->idp_mirror_status = $status;
+    $DB->idp_user_id = $row['idp_user_id'];
+    $DB->mundane_id = (int)$row['mundane_id'];
     $DB->Execute(
-        "UPDATE " . DB_PREFIX . "idp_auth SET idp_mirror_status = ?, idp_mirror_last_attempt = NOW() " .
-        "WHERE idp_user_id = ? AND mundane_id = ?",
-        array($status, $row['idp_user_id'], (int)$row['mundane_id'])
+        "UPDATE " . DB_PREFIX . "idp_auth SET idp_mirror_status = :idp_mirror_status, idp_mirror_last_attempt = NOW() " .
+        "WHERE idp_user_id = :idp_user_id AND mundane_id = :mundane_id"
     );
     if ($success) { $ok++; } else { $fail++; }
 }

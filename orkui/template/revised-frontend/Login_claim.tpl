@@ -22,6 +22,21 @@
 .lc-tab.lc-active { color: #b22222; border-bottom-color: #b22222; font-weight: 600; }
 .lc-pane { display: none; }
 .lc-pane.lc-active { display: block; }
+
+html[data-theme="dark"] .lc-card { background: var(--ork-card-bg); box-shadow: 0 2px 12px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .lc-card h2 { color: var(--ork-text); }
+html[data-theme="dark"] .lc-card .lc-sub { color: var(--ork-text-muted); }
+html[data-theme="dark"] .lc-card label { color: var(--ork-text-secondary); }
+html[data-theme="dark"] .lc-card input[type=text],
+html[data-theme="dark"] .lc-card input[type=password] { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .lc-card input[type=text]:focus,
+html[data-theme="dark"] .lc-card input[type=password]:focus { border-color: var(--ork-link); }
+html[data-theme="dark"] .lc-card .lc-secondary { color: var(--ork-text-muted); }
+html[data-theme="dark"] .lc-card .lc-footer { color: var(--ork-text-muted); border-top-color: var(--ork-border); }
+html[data-theme="dark"] .lc-tabs { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .lc-tab { color: var(--ork-text-muted); }
+html[data-theme="dark"] .lc-card .lc-error { background: #742a2a; color: #feb2b2; }
+html[data-theme="dark"] .lc-card .lc-notice { background: #22543d; color: #c6f6d5; }
 </style>
 
 <div class="lc-card">

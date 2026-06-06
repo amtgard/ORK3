@@ -19,6 +19,8 @@ class Model_AmtgardIdp extends Model {
             'code_verifier' => $codeVerifier,
         ]));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         curl_setopt($ch, CURLOPT_REFERER, 'https://ork.amtgard.com');
         curl_setopt($ch, CURLOPT_USERAGENT, 'AmtgardIDP/1.0');
         $response = curl_exec($ch);
@@ -42,10 +44,18 @@ class Model_AmtgardIdp extends Model {
             'Accept: application/json'
         ]);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         curl_setopt($ch, CURLOPT_REFERER, 'https://ork.amtgard.com');
         curl_setopt($ch, CURLOPT_USERAGENT, 'AmtgardIDP/1.0');
         $user_response = curl_exec($ch);
+        $curl_err = curl_error($ch);
         curl_close($ch);
+
+        if ($user_response === false) {
+            error_log("Model_AmtgardIdp::fetchUserInfo failed curl_err=$curl_err");
+            return ['error' => true, 'response' => false];
+        }
 
         $user_data = json_decode($user_response, true);
         if (isset($user_data['sub'])) {

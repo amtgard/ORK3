@@ -14,11 +14,11 @@ if (empty($LoggedIn) || !empty($IdpLinked) || !empty($IdpNudgeDismissed)) {
     .idp-nudge .btn-primary:hover { background:#5d4615; }
     .idp-nudge .btn-ghost { background:transparent; color:#5b4a1f; padding:8px 12px; border-radius:4px; text-decoration:none; font-weight:500; border:1px solid transparent; cursor:pointer; font-size:.92rem; }
     .idp-nudge .btn-ghost:hover { border-color:#d8cba4; }
-    body.dark-mode .idp-nudge { background:#3a2e10; border-color:#5d4615; }
-    body.dark-mode .idp-nudge h3 { color:#f6efe2; }
-    body.dark-mode .idp-nudge p { color:#d8cba4; }
-    body.dark-mode .idp-nudge .btn-ghost { color:#d8cba4; }
-    body.dark-mode .idp-nudge .btn-ghost:hover { border-color:#7a5b1c; }
+    html[data-theme="dark"] .idp-nudge { background:#3a2e10; border-color:#5d4615; }
+    html[data-theme="dark"] .idp-nudge h3 { color:#f6efe2; }
+    html[data-theme="dark"] .idp-nudge p { color:#d8cba4; }
+    html[data-theme="dark"] .idp-nudge .btn-ghost { color:#d8cba4; }
+    html[data-theme="dark"] .idp-nudge .btn-ghost:hover { border-color:#7a5b1c; }
 </style>
 <div class="idp-nudge" role="region" aria-label="Set up Amtgard sign-in">
     <h3>Speed up next time &mdash; set up your Amtgard sign-in</h3>

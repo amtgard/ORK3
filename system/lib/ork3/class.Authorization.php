@@ -535,11 +535,15 @@ class Authorization extends Ork3
 		$expires = date('Y-m-d H:i:s', time() + 60 * 60 * 24); // 24h
 
 		$DB->Clear();
+		$DB->token = $token;
+		$DB->idp_user_id = $claim['IdpUserId'];
+		$DB->idp_email = $claim['Email'];
+		$DB->mundane_id = (int)$this->mundane->mundane_id;
+		$DB->expires_at = $expires;
 		$DB->Execute(
 			"INSERT INTO " . DB_PREFIX . "idp_claim_token " .
 			"(token, idp_user_id, idp_email, mundane_id, expires_at) " .
-			"VALUES (?, ?, ?, ?, ?)",
-			array($token, $claim['IdpUserId'], $claim['Email'], (int)$this->mundane->mundane_id, $expires)
+			"VALUES (:token, :idp_user_id, :idp_email, :mundane_id, :expires_at)"
 		);
 
 		return [
@@ -639,7 +643,6 @@ class Authorization extends Ork3
 
 	private function idpAuthorize($request)
 	{
-		error_log("AuthorizeIdp: Link found for IDP User ID: " . $request['IdpUserId']);
 		// User is already linked
 		$this->mundane->clear();
 		$this->mundane->mundane_id = $this->idp_auth->mundane_id;
@@ -655,14 +658,12 @@ class Authorization extends Ork3
 		$this->mundane->token = md5(openssl_random_pseudo_bytes(16) . microtime());
 		$this->mundane->token_expires = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
 		$this->mundane->save();
-		error_log("AuthorizeIdp: Updated mundane token.");
 
 		// Update tokens
 		$this->idp_auth->access_token = $request['AccessToken'];
 		$this->idp_auth->refresh_token = $request['RefreshToken'];
-		$this->idp_auth->expires_at = date('Y-m-d H:i:s', $request['ExpiresAt']);
+		$this->idp_auth->expires_at = !empty($request['ExpiresAt']) ? date('Y-m-d H:i:s', $request['ExpiresAt']) : null;
 		$this->idp_auth->save();
-		error_log("AuthorizeIdp: Updated IDP tokens.");
 
 		return [
 			'Status' => Success(),
@@ -675,22 +676,19 @@ class Authorization extends Ork3
 
 	private function createIdpLink($request)
 	{
-		error_log("AuthorizeIdp: Creating link for MundaneId: " . $this->mundane->mundane_id);
 		// Link found
 		$this->idp_auth->clear();
 		$this->idp_auth->mundane_id = $this->mundane->mundane_id;
 		$this->idp_auth->idp_user_id = $request['IdpUserId'];
 		$this->idp_auth->access_token = $request['AccessToken'];
 		$this->idp_auth->refresh_token = $request['RefreshToken'];
-		$this->idp_auth->expires_at = date('Y-m-d H:i:s', $request['ExpiresAt']);
+		$this->idp_auth->expires_at = !empty($request['ExpiresAt']) ? date('Y-m-d H:i:s', $request['ExpiresAt']) : null;
 		$this->idp_auth->created_at = date('Y-m-d H:i:s');
 		$this->idp_auth->save();
-		error_log("AuthorizeIdp: IDP link created.");
 
 		$this->mundane->token = md5(openssl_random_pseudo_bytes(16) . microtime());
 		$this->mundane->token_expires = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
 		$this->mundane->save();
-		error_log("AuthorizeIdp: Mundane token updated.");
 
 		return [
 			'Status' => Success(),
