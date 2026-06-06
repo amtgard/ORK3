@@ -144,6 +144,10 @@ class Controller_AdminAjax extends Controller {
 			case 'longevity':
 				echo json_encode(['longevity' => $sor->getPlayerLongevity($start, $end, $kingdom_ids)]);
 				break;
+			case 'retention':
+				// Fixed mature-cohort analysis; ignores start/end by design, respects kingdom filter.
+				echo json_encode(['retention' => $sor->getNewPlayerRetention($kingdom_ids)]);
+				break;
 			case 'awards':
 				echo json_encode(['awards' => $sor->getAwardGrants($start, $end, $kingdom_ids)]);
 				break;

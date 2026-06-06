@@ -4,6 +4,8 @@ $kingdoms     = is_array($Kingdoms ?? null) ? $Kingdoms : [];
 $prevYear     = (int)date('Y') - 1;
 $defaultStart = $prevYear . '-01-01';
 $defaultEnd   = $prevYear . '-12-31';
+$minDate      = (string)($MinDate ?? '');  // earliest attendance date (for "All Time")
+$maxDate      = (string)($MaxDate ?? '');  // latest attendance date
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=20240101">
 
@@ -40,6 +42,14 @@ $defaultEnd   = $prevYear . '-12-31';
       <label for="sor-end">End Date</label>
       <input type="date" id="sor-end" value="<?= htmlspecialchars($defaultEnd) ?>">
     </div>
+    <?php if ($minDate !== '' && $maxDate !== ''): ?>
+    <div class="sor-filter-group sor-filter-quick">
+      <label>&nbsp;</label>
+      <button type="button" id="sor-btn-all-time" class="sor-btn-sm"
+              data-min="<?= htmlspecialchars($minDate) ?>" data-max="<?= htmlspecialchars($maxDate) ?>"
+              title="Set dates to the full attendance history (<?= htmlspecialchars($minDate) ?> &ndash; <?= htmlspecialchars($maxDate) ?>)">All Time</button>
+    </div>
+    <?php endif; ?>
     <div class="sor-filter-group sor-filter-kingdoms">
       <label for="sor-kingdoms">Kingdoms <small style="font-weight:400;color:#888">(Ctrl+click to multi-select)</small></label>
       <select id="sor-kingdoms" multiple size="6">
@@ -57,6 +67,10 @@ $defaultEnd   = $prevYear . '-12-31';
   <div class="sor-filter-actions">
     <button id="sor-generate-btn" class="sor-btn-generate" onclick="sorGenerate()">
       <i class="fas fa-chart-bar"></i> Generate Report
+    </button>
+    <button id="sor-print-btn" class="sor-btn-generate sor-btn-print" onclick="window.print()" disabled
+            title="Generate the report first, then save it as a PDF">
+      <i class="fas fa-file-pdf"></i> Print / Save as PDF
     </button>
     <span id="sor-status" class="sor-status"></span>
   </div>
@@ -80,6 +94,16 @@ $defaultEnd   = $prevYear . '-12-31';
 			return opt.text.toLowerCase().indexOf('freeholds') === -1;
 		});
 	};
+	// "All Time": set the date range to the full attendance history (data-min/data-max
+	// are emitted server-side from MIN/MAX(attendance.date)).
+	window.sorAllTime = function () {
+		var btn = document.getElementById('sor-btn-all-time');
+		var s = document.getElementById('sor-start');
+		var e = document.getElementById('sor-end');
+		if (!btn || !s || !e) return;
+		if (btn.dataset.min) s.value = btn.dataset.min;
+		if (btn.dataset.max) e.value = btn.dataset.max;
+	};
 	var bind = function (id, fn) {
 		var el = document.getElementById(id);
 		if (el) el.addEventListener('click', fn);
@@ -87,6 +111,7 @@ $defaultEnd   = $prevYear . '-12-31';
 	bind('sor-btn-select-all',                  window.sorSelectAll);
 	bind('sor-btn-select-all-except-freeholds', window.sorSelectAllExceptFreeholds);
 	bind('sor-btn-clear-all',                   window.sorClearAll);
+	bind('sor-btn-all-time',                    window.sorAllTime);
 }());
 </script>
 
@@ -175,6 +200,15 @@ $defaultEnd   = $prevYear . '-12-31';
       <p class="sor-note" style="margin-top:6px">
         Longevity is measured from a player&#8217;s first-ever attendance record to the end of the report period.
         Only players active during the selected date range are included.
+      </p>
+    </div>
+
+    <!-- 4c. New-player conversion & retention (fixed mature-cohort analysis) -->
+    <div id="sor-players-retention" style="display:none;margin-bottom:20px">
+      <span class="sor-players-chart-title">Figure 3d &mdash; New Player Conversion &amp; Retention</span>
+      <div id="sor-retention-body" style="margin-top:8px"></div>
+      <p class="sor-note" style="margin-top:6px">
+        Fixed-cohort analysis: only players whose first-ever sign-in was at least 2 years before the latest data, so retention isn&#8217;t censored by recent joiners. This panel ignores the date range above (it always studies mature cohorts) but respects the kingdom filter. A &ldquo;real joiner&rdquo; is anyone with 4+ sign-in days &mdash; matching this report&#8217;s definition of 1&ndash;3 sign-ins as visitors/trial attendees. &ldquo;Still active at N&rdquo; means they actually attended within 3 months of that anniversary, not merely that their first&ndash;last span reached it.
       </p>
     </div>
 
@@ -502,7 +536,7 @@ $defaultEnd   = $prevYear . '-12-31';
 
     <!-- 3. Top kingdoms table -->
     <div class="sor-awards-table-wrap">
-      <div class="sor-awards-table-title">Top Kingdoms by Peerage Grants</div>
+      <div class="sor-awards-table-title">Kingdoms by Peerage Grants</div>
       <table class="sor-table sor-awards-table" id="sor-awards-kingdoms-table">
         <thead>
           <tr>
@@ -514,23 +548,6 @@ $defaultEnd   = $prevYear . '-12-31';
           </tr>
         </thead>
         <tbody id="sor-awards-kingdoms-tbody"></tbody>
-      </table>
-    </div>
-
-    <!-- 4. Recent grants table -->
-    <div class="sor-awards-table-wrap" style="margin-top:24px">
-      <div class="sor-awards-table-title">Recent Notable Grants</div>
-      <table class="sor-table sor-awards-table" id="sor-awards-recent-table">
-        <thead>
-          <tr>
-            <th style="text-align:left;width:110px">Date</th>
-            <th style="text-align:left">Recipient</th>
-            <th style="text-align:left">Award</th>
-            <th style="text-align:left;width:90px">Peerage</th>
-            <th style="text-align:left">Kingdom</th>
-          </tr>
-        </thead>
-        <tbody id="sor-awards-recent-tbody"></tbody>
       </table>
     </div>
 
@@ -759,6 +776,9 @@ html {
 .sor-btn-generate:hover { background: #a93226; }
 .sor-btn-generate:active { transform: scale(0.98); }
 .sor-btn-generate:disabled { background: #e2e8f0; color: #a0aec0; cursor: not-allowed; }
+/* Print / Save as PDF — distinct (blue) from the red Generate; greys out until ready. */
+.sor-btn-print { background: #2980b9; margin-left: 8px; }
+.sor-btn-print:hover:not(:disabled) { background: #1f6391; }
 
 .sor-status {
   font-size: 0.85rem;
@@ -2060,6 +2080,17 @@ html {
 </style>
 
 <style>
+/* ===== New Player Retention ===== */
+.sor-ret-grid { display:flex; flex-wrap:wrap; gap:10px; margin:8px 0; }
+.sor-ret-card { flex:1 1 130px; min-width:120px; background:#f7fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 10px; text-align:center; }
+.sor-ret-val { font-size:22px; font-weight:700; color:#2b6cb0; }
+.sor-ret-lbl { font-size:11px; color:#718096; margin-top:4px; line-height:1.3; }
+.sor-ret-sub { font-size:13px; font-weight:600; color:#4a5568; margin-top:6px; }
+html[data-theme="dark"] .sor-ret-card { background:rgba(255,255,255,0.04); border-color:var(--ork-input-border,#2d3748); }
+html[data-theme="dark"] .sor-ret-val { color:#63b3ed; }
+html[data-theme="dark"] .sor-ret-lbl { color:var(--ork-text-muted,#a0aec0); }
+html[data-theme="dark"] .sor-ret-sub { color:var(--ork-text,#e2e8f0); }
+
 /* ===== Longevity Section ===== */
 .sor-longevity-layout {
   display: flex;
@@ -2098,6 +2129,17 @@ html {
    PRINT / PDF STYLES
    ==================================================== */
 @media print {
+  /* THE fix for the blank/clipped PDF: the global theme constrains <body> to the
+     viewport height with overflow:hidden (a scroll pane). In print that clips
+     everything past the first page. Force the document to grow naturally so all
+     content flows across pages. */
+  html, body {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
   /* Print-only header */
   #sor-print-header { display: block !important; }
 
@@ -2107,6 +2149,10 @@ html {
 
   /* Hide screen-only controls */
   .sor-filter-card { display: none !important; }
+
+  /* Hide the global site nav bar (home/search/avatar) so it doesn't appear
+     atop the PDF — the report's own print header carries the title/params. */
+  #newmenu { display: none !important; }
 
   /* Force report visible regardless of generation state */
   #sor-report { display: block !important; }
@@ -2174,11 +2220,13 @@ html {
     print-color-adjust: exact !important;
   }
 
-  /* Page breaks */
+  /* Page breaks.
+     IMPORTANT: do NOT set break-inside:avoid on the section wrapper — each section
+     is taller than a printed page, and Chrome clips oversized "avoid" blocks
+     (dropping everything past the first page = the blank/2-page PDF bug). Let
+     sections flow across pages; keep only small cards/KPIs intact (below). */
   .sor-report-section {
     page-break-before: auto;
-    page-break-inside: avoid;
-    break-inside: avoid;
     margin-bottom: 20px !important;
   }
   .sor-section-divider {
@@ -4384,6 +4432,39 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
 
   var SOR_BASE_URL = '<?= UIR ?>AdminAjax/stateofamtgard/';
 
+  // renderSorRetention: new-player conversion & retention KPI panel (no chart).
+  window.renderSorRetention = function (data) {
+    var content = document.getElementById('sor-players-retention');
+    var body    = document.getElementById('sor-retention-body');
+    if (!content || !body) return;
+    var d = data && data.retention;
+    if (!d || !d.headline || !d.headline.cohort) { content.style.display = 'none'; return; }
+    var h = d.headline, rj = d.realjoiners || {};
+    function pct(v) { return (v === null || v === undefined) ? '—' : (Math.round(v * 10) / 10) + '%'; }
+    function num(v) { return (v === null || v === undefined) ? '—' : (Math.round(v * 10) / 10); }
+    function n(v)   { return (v || 0).toLocaleString(); }
+    function card(value, label) {
+      return '<div class="sor-ret-card"><div class="sor-ret-val">' + value + '</div><div class="sor-ret-lbl">' + label + '</div></div>';
+    }
+    body.innerHTML =
+        '<div class="sor-ret-grid">'
+      +   card(n(h.cohort),            'new players<br>(mature cohort)')
+      +   card(pct(h.pct_one_and_done),'one &amp; done<br>(never returned)')
+      +   card(pct(h.pct_realjoin),    'became real joiners<br>(4+ sign-ins)')
+      +   card(num(h.median_signins),  'median sign-ins<br>(per player)')
+      + '</div>'
+      + '<div class="sor-ret-sub">Among real joiners (' + n(rj.n) + '):</div>'
+      + '<div class="sor-ret-grid">'
+      +   card(pct(rj.active_1yr),              'still active<br>at 1 year')
+      +   card(pct(rj.active_2yr),              'still active<br>at 2 years')
+      +   card(num(rj.median_tenure_months) + ' mo', 'median tenure<br>(first&rarr;last)')
+      +   card(num(rj.median_active_months) + ' mo', 'median active<br>months')
+      + '</div>';
+    var pc = document.getElementById('sor-players-content');
+    if (pc) pc.style.display = '';
+    content.style.display = '';
+  };
+
   /* ----------------------------------------------------------------
      Build the query string from current filter values
   ---------------------------------------------------------------- */
@@ -4427,6 +4508,8 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
       sorSetStatus('Report complete.', 'sor-status-ok');
       var btn = document.getElementById('sor-generate-btn');
       if (btn) btn.disabled = false;
+      var pbtn = document.getElementById('sor-print-btn');
+      if (pbtn) pbtn.disabled = false; // report is ready → allow Print / Save as PDF
       sorRenderScorecard();
     }
   }
@@ -4435,13 +4518,14 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
      Fetch one section
   ---------------------------------------------------------------- */
   function sorFetch(section, qs, renderFn) {
-    _sorTotal++; // FIX F: self-counting total so it stays in sync with actual fetch count
+    // _sorTotal is set up-front from the job list in sorGenerate (the pool calls
+    // sorFetch gradually, so self-incrementing here made the "x/N" denominator grow).
     // UIR resolves to `.../index.php?Route=` (query-param routing), so the
     // section already sits inside the Route value and additional params must
     // be appended with `&`, not a fresh `?` — using `?` here puts a literal
     // `?` inside the Route value, the section won't match, and $_GET['start']
     // never populates.
-    fetch(SOR_BASE_URL + section + '&' + qs, {credentials: 'same-origin'})
+    return fetch(SOR_BASE_URL + section + '&' + qs, {credentials: 'same-origin'})
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
@@ -4456,7 +4540,7 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
         // Hide skeleton for sections that have one, so they don't hang
         var skMap = { parks: 'sor-parks-skeleton', players: 'sor-players-skeleton',
                       kingdoms: 'sor-kingdoms-skeleton', classes: 'sor-classes-skeleton',
-                      longevity: null, cohorts: null };
+                      longevity: null, cohorts: null, retention: null };
         var sk = skMap[section] && document.getElementById(skMap[section]);
         if (sk) sk.style.display = 'none';
         sorSectionDone(section);
@@ -4494,13 +4578,15 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
 
     // Reset counters and show report container
     _sorDone = 0;
-    _sorTotal = 0; // FIX F: reset, then sorFetch() increments it each call
+    _sorTotal = 0; // reset; set to the job count once the pool is built (below)
     if (_sorTimeoutHandle) { clearTimeout(_sorTimeoutHandle); _sorTimeoutHandle = null; } // FIX G
     window._sorPayloads = {}; _sorPayloads = window._sorPayloads;
     var scEl = document.getElementById('sor-scorecard');
     if (scEl) scEl.style.display = 'none';
     var btn = document.getElementById('sor-generate-btn');
     if (btn) btn.disabled = true;
+    var pbtn = document.getElementById('sor-print-btn');
+    if (pbtn) pbtn.disabled = true; // re-disable until this run completes
     sorSetStatus('Generating report…');
 
     // Show report area (sections start in skeleton state)
@@ -4542,24 +4628,46 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
     }
 
     // Fire 6 parallel requests
-    sorFetch('players',  qs, window.renderSorPlayers);
-    sorFetch('kingdoms', qs, window.renderSorKingdoms);
-    sorFetch('classes',  qs, window.renderSorClasses);
-    sorFetch('parks',    qs, window.renderSorParks);
-    sorFetch('cohorts',  qs, window.renderSorCohorts);
-    sorFetch('longevity', qs, window.renderSorLongevity);
-    sorFetch('awards',   qs, window.renderSorAwards);
+    // Run sections through a small concurrency pool instead of all-at-once.
+    // Firing 8 heavy aggregations in parallel saturated the DB on big
+    // (all-time / all-kingdom) ranges, so individually-OK queries blew past the
+    // timeout. Cap = 3, with heavy sections (classes/parks/players) interleaved
+    // among light ones so at most one heavy query runs at a time.
+    var SOR_MAX_CONCURRENCY = 3;
+    var _sorJobs = [
+      ['classes',   window.renderSorClasses],   // heavy
+      ['kingdoms',  window.renderSorKingdoms],
+      ['cohorts',   window.renderSorCohorts],
+      ['parks',     window.renderSorParks],      // heavy
+      ['longevity', window.renderSorLongevity],
+      ['retention', window.renderSorRetention],
+      ['players',   window.renderSorPlayers],    // heavy
+      ['awards',    window.renderSorAwards]
+    ];
+    _sorTotal = _sorJobs.length; // fixed denominator so the "x/N" counter doesn't grow as the pool fires
+    var _sorJobIdx = 0;
+    function _sorRunNext() {
+      if (_sorJobIdx >= _sorJobs.length) return;
+      var job = _sorJobs[_sorJobIdx++];
+      // sorFetch's .catch resolves, so the promise always settles → queue advances.
+      sorFetch(job[0], qs, job[1]).then(_sorRunNext, _sorRunNext);
+    }
+    for (var _sc = 0; _sc < SOR_MAX_CONCURRENCY && _sc < _sorJobs.length; _sc++) _sorRunNext();
 
-    // FIX G: 30-second timeout fallback. If any fetch hangs, force-finish the report
-    // with partial data and re-enable the Generate button so the user isn't stuck on Loading.
+    // FIX G: timeout fallback. If any fetch hangs, force-finish the report with
+    // partial data and re-enable the Generate button so the user isn't stuck.
+    // Raised to 120s: with the concurrency pool, a full all-time / all-kingdom
+    // run is serialized enough to legitimately take ~40-60s on a cold cache.
     _sorTimeoutHandle = setTimeout(function () {
       _sorTimeoutHandle = null;
       if (_sorDone >= _sorTotal) return; // already finished
       sorSetStatus('Some sections timed out — partial data shown.', 'sor-status-error');
       var btn = document.getElementById('sor-generate-btn');
       if (btn) btn.disabled = false;
+      var pbtn = document.getElementById('sor-print-btn');
+      if (pbtn) pbtn.disabled = false; // allow printing partial results
       try { sorRenderScorecard(); } catch (e) { /* swallow */ }
-    }, 30000);
+    }, 120000);
   };
 
   /* ----------------------------------------------------------------
@@ -4577,8 +4685,8 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
     var netP     = pd ? ((pd.new_parks_count || 0) - (pd.lost_parks_count || 0)) : null;
     var atR      = pd ? (pd.downward_trend_parks || []).length : null;
     function fK(n) {
-      n = parseInt(n, 10) || 0;
-      return n >= 1000 ? (n/1000).toFixed(1).replace(/\.0$/,'') + 'k' : n.toLocaleString('en-US');
+      // Full comma-separated counts (no "k" abbreviation) — clearer for an exec summary.
+      return (parseInt(n, 10) || 0).toLocaleString('en-US');
     }
     function kCard(lbl, val, acc, icon, sub, tip) {
       return '<div class="sor-kpi-card sor-tip-card"' + (tip ? ' data-tip="' + tip + '"' : '') + ' style="border-top-color:' + acc + '">' +
@@ -4943,33 +5051,6 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
     tbody.innerHTML = html;
   }
 
-  function sorAwardsRenderRecentTable(rows) {
-    var tbody = document.getElementById('sor-awards-recent-tbody');
-    if (!tbody) return;
-    rows = rows || [];
-    if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;padding:18px">No recent grants.</td></tr>';
-      return;
-    }
-    var html = '';
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      var recipient = sorEsc(r.player_name || '');
-      if (r.mundane_id) {
-        recipient = '<a class="sor-awards-recipient-link" href="<?= UIR ?>Player/index/' +
-                    encodeURIComponent(r.mundane_id) + '">' + recipient + '</a>';
-      }
-      html += '<tr>' +
-                '<td>' + sorAwardsFmtDate(r.date) + '</td>' +
-                '<td>' + recipient + '</td>' +
-                '<td>' + sorEsc(r.award_name || '') + '</td>' +
-                '<td>' + sorAwardsPeeragePill(r.peerage || '') + '</td>' +
-                '<td>' + sorEsc(r.kingdom_name || '') + '</td>' +
-              '</tr>';
-    }
-    tbody.innerHTML = html;
-  }
-
   window.renderSorAwards = function (data) {
     var skeleton = document.getElementById('sor-awards-skeleton');
     var content  = document.getElementById('sor-awards-content');
@@ -5004,7 +5085,6 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
       sorAwardsDrawPie('sor-awards-paragons-chart', a.paragons || [], SOR_AWARDS_PARAGON_COLORS, 'Paragons');
       sorAwardsDrawPie('sor-awards-masters-chart',  a.masters  || [], SOR_AWARDS_MASTER_COLORS,  'Masters');
       sorAwardsRenderKingdomsTable(a.top_kingdoms || []);
-      sorAwardsRenderRecentTable(a.recent || []);
     } catch (e) {
       showError('Awards render error: ' + (e && e.message ? e.message : String(e)));
       return;
