@@ -10,7 +10,7 @@ class Controller_Player extends Controller {
 		$this->load_model('Award');
 		$this->load_model('Reports');
 		$params = explode('/',$id);
-		$id = $params[0];
+		$id = (int) $params[0];
 
 		$this->data['Player'] = $this->Player->fetch_player($id);
 
@@ -275,9 +275,9 @@ class Controller_Player extends Controller {
 		$this->template = '../revised-frontend/Playernew_index.tpl';
 
 		$params    = explode('/', $id ?? '');
-		$id        = $params[0];
+		$id        = (int) $params[0];
 
-		if (!(int)$id) {
+		if (!$id) {
 			header('Location: ' . UIR);
 			exit;
 		}
