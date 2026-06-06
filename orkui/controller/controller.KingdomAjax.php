@@ -138,6 +138,14 @@ class Controller_KingdomAjax extends Controller {
 				'KingdomId'            => $kingdom_id,
 				'KingdomConfiguration' => $configList,
 			]);
+			if ($r['Status'] == 0) {
+				// Kingdom config can change which kingdoms roll up into stats
+				// (IncludePrincipalityInStatistics) and a lot of other derived
+				// values across reports / averages / recap. Cheapest correct
+				// fix is a full memcached flush — config saves are infrequent
+				// admin actions, not worth enumerating every dependent cache key.
+				Ork3::$Lib->ghettocache->memcache->flush();
+			}
 			echo $r['Status'] == 0
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
@@ -591,8 +599,8 @@ class Controller_KingdomAjax extends Controller {
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
 		} elseif ($action === 'getparks') {
-			$this->load_model('Kingdom');
-			$r = $this->Kingdom->get_park_info($kingdom_id);
+			// Always return family parks (kingdom + child principalities) for dropdowns.
+			$r = Ork3::$Lib->kingdom->GetParks(['KingdomIds' => Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id)]);
 			$parks = [];
 			foreach ($r['Parks'] ?? [] as $park) {
 				$parks[] = ['ParkId' => $park['ParkId'], 'Name' => $park['Name']];
@@ -833,7 +841,9 @@ class Controller_KingdomAjax extends Controller {
 			$kingdom_clause = '';
 			$park_clause    = '';
 		} else {
-			$kingdom_clause = "AND m.kingdom_id = {$kid}";
+			// Own-kingdom scope ALWAYS includes child principalities (family), not toggle-gated.
+			$familyIds      = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($kid)));
+			$kingdom_clause = "AND m.kingdom_id IN ({$familyIds})";
 			$park_clause    = valid_id($park_id) ? "AND m.park_id = {$park_id}" : '';
 		}
 

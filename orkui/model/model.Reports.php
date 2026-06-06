@@ -47,6 +47,12 @@ class Model_Reports extends Model {
 		return false;
 	}
 
+	// Cheap count for the Kingdom profile's "Recommendations (N)" tab badge —
+	// avoids hydrating every rec just to size the list.
+	function recommended_awards_count($request) {
+		return (int)$this->Report->PlayerAwardRecommendationsCount($request);
+	}
+
 	function deleted_recommended_awards($request) {
 		$r = $this->Report->DeletedAwardRecommendations($request);
 		if (isset($r['Status']['Status']) && $r['Status']['Status'] == 0) {
@@ -442,10 +448,22 @@ class Model_Reports extends Model {
 
 	function kingdom_officer_directory($kingdom_id = null) {
 		$r = $this->Report->KingdomOfficerDirectory(array('KingdomId' => $kingdom_id));
-		if ($r['Status']['Status'] == 0) {
-			return ['Rows' => $r['Kingdoms'], 'Mode' => $r['Mode']];
+		if (($r['Status']['Status'] ?? 1) != 0) {
+			return ['Rows' => [], 'Mode' => 'kingdoms', 'Principalities' => []];
 		}
-		return ['Rows' => [], 'Mode' => 'kingdoms'];
+		// Toggle-gated: append each active child principality's park-officer directory as a subsection.
+		$principalities = [];
+		if (valid_id($kingdom_id) && Ork3::$Lib->kingdom->StatsIncludesPrincipalities($kingdom_id)) {
+			$prList = Ork3::$Lib->kingdom->GetPrincipalities(['KingdomId' => $kingdom_id]);
+			foreach (($prList['Principalities'] ?? []) as $pr) {
+				$prId = (int)$pr['KingdomId'];
+				$dir  = $this->Report->KingdomOfficerDirectory(['KingdomId' => $prId]);
+				if (($dir['Status']['Status'] ?? 1) == 0 && !empty($dir['Kingdoms'])) {
+					$principalities[] = ['KingdomId' => $prId, 'Name' => $pr['Name'], 'Rows' => $dir['Kingdoms']];
+				}
+			}
+		}
+		return ['Rows' => $r['Kingdoms'], 'Mode' => $r['Mode'], 'Principalities' => $principalities];
 	}
 	function event_attendance($request) {
 		$r = $this->Report->EventAttendanceReport($request);

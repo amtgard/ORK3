@@ -52,6 +52,11 @@ class Controller_Reports extends Controller {
 		$this->data['page_title'] = "Park Heraldry";
 	}
 
+	public function orkremental($action = null) {
+		$this->template = 'Reports_orkremental.tpl';
+		$this->data['page_title'] = "ORKremental";
+	}
+
 	function kingdomheraldry($request=null) {
 		$this->template = 'Reports_heraldry.tpl';
 		$this->data['Blank'] = HERALDRY_KINGDOM_DEFAULT;
@@ -882,6 +887,7 @@ class Controller_Reports extends Controller {
 		$this->data['OfficerDirectory']    = $result['Rows'];
 		$this->data['OfficerDirectoryMode'] = $result['Mode'];
 		$this->data['OfficerDirectoryKingdomId'] = $kingdom_id;
+		$this->data['OfficerDirectoryPrincipalities'] = $result['Principalities'] ?? [];
 		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 		$this->data['IsOrkAdmin'] = $uid && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
 	}

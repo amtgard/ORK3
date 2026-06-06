@@ -75,6 +75,7 @@ class Controller_Kingdom extends Controller {
 		$wkStart  = date('Y-m-d', strtotime('-6 month'));
 		$wkEnd    = date('Y-m-d');
 		$wkCount  = max(1, (int)ceil((strtotime($wkEnd) - strtotime($wkStart)) / (7 * 86400)));
+		$statsKids = implode(',', array_map('intval', $this->Kingdom->GetStatsKingdomIds($kid)));
 		$weekly  = $this->Report->GetKingdomParkAverages(['KingdomId' => $kingdom_id, 'AverageMonths' => 6]);
 		$monthly = $this->Report->GetKingdomParkMonthlyAverages(['KingdomId' => $kingdom_id]);
 		$result  = array();
@@ -93,7 +94,7 @@ class Controller_Kingdom extends Controller {
 				COUNT(DISTINCT a.mundane_id) AS total_players,
 				COUNT(DISTINCT CASE WHEN m.park_id = a.park_id THEN a.mundane_id END) AS total_members
 			FROM ork_attendance a
-			INNER JOIN ork_park p  ON p.park_id  = a.park_id  AND p.kingdom_id = {$kid}
+			INNER JOIN ork_park p  ON p.park_id  = a.park_id  AND p.kingdom_id IN ({$statsKids})
 			INNER JOIN ork_mundane m ON m.mundane_id = a.mundane_id AND m.suspended = 0 AND m.active = 1
 			WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) AND a.mundane_id > 0
 			GROUP BY a.park_id";
@@ -114,7 +115,7 @@ class Controller_Kingdom extends Controller {
 		// across the whole kingdom — avoids double-counting players who attend multiple parks in one week
 		$knSql = "SELECT COUNT(*) AS katt FROM (
 				SELECT a.mundane_id FROM " . DB_PREFIX . "attendance a
-				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id = {$kid}
+				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
 				WHERE a.date >= '{$wkStart}'
 					AND a.mundane_id > 0
 				GROUP BY a.date_year, a.date_week3, a.mundane_id
@@ -130,7 +131,7 @@ class Controller_Kingdom extends Controller {
 		$knMoSql = "SELECT AVG(monthly_unique) AS kmo FROM (
 				SELECT a.date_year, a.date_month, COUNT(DISTINCT a.mundane_id) AS monthly_unique
 				FROM " . DB_PREFIX . "attendance a
-				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id = {$kid}
+				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
 				WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
 					AND a.mundane_id > 0
 				GROUP BY a.date_year, a.date_month
@@ -153,13 +154,13 @@ class Controller_Kingdom extends Controller {
 				 LEFT JOIN (
 				     SELECT a.mundane_id, a.park_id
 				     FROM ork_attendance a
-				     INNER JOIN " . DB_PREFIX . "park pk ON pk.park_id = a.park_id AND pk.kingdom_id = {$kid}
+				     INNER JOIN " . DB_PREFIX . "park pk ON pk.park_id = a.park_id AND pk.kingdom_id IN ({$statsKids})
 				     WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
 				       AND a.date <  DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
 				       AND a.mundane_id > 0
 				     GROUP BY date_year, date_week3, mundane_id, a.park_id
 				 ) mw ON p.park_id = mw.park_id
-				 WHERE p.kingdom_id = {$kid} AND p.active = 'Active'
+				 WHERE p.kingdom_id IN ({$statsKids}) AND p.active = 'Active'
 				 GROUP BY p.park_id"
 			);
 			if ($prevWkResult) {
@@ -176,7 +177,7 @@ class Controller_Kingdom extends Controller {
 				     SELECT a.date_year, a.date_month, a.park_id,
 				            COUNT(DISTINCT a.mundane_id) AS monthly_unique
 				     FROM ork_attendance a
-				     INNER JOIN ork_park p ON p.park_id = a.park_id AND p.kingdom_id = {$kid}
+				     INNER JOIN ork_park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
 				     WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
 				       AND a.date <  DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
 				       AND a.mundane_id > 0
@@ -200,6 +201,7 @@ class Controller_Kingdom extends Controller {
 	public function events_more($kingdom_id = null) {
 		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
 		$kid = (int)$kingdom_id;
+		$statsEvtKids = implode(',', array_map('intval', $this->Kingdom->GetStatsKingdomIds($kid)));
 		$window = isset($_GET['window']) ? (int)$_GET['window'] : 1;
 		if ($window < 1) $window = 1;
 		if ($window > 10) $window = 10;
@@ -217,7 +219,7 @@ class Controller_Kingdom extends Controller {
 			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
 			    AND cd.event_start >  DATE_ADD(NOW(), INTERVAL {$startMonths} MONTH)
 			    AND cd.event_start <= DATE_ADD(NOW(), INTERVAL {$endMonths} MONTH)
-			WHERE e.kingdom_id = {$kid}
+			WHERE e.kingdom_id IN ({$statsEvtKids})
 			ORDER BY cd.event_start, p.name, e.name";
 		$DB->Clear();
 		$evtResult = $DB->DataSet($evtSql);
@@ -253,7 +255,7 @@ class Controller_Kingdom extends Controller {
 			$_more = $DB->DataSet(
 				"SELECT 1 FROM ork_event_calendardetail cd
 				 JOIN ork_event e ON e.event_id = cd.event_id
-				 WHERE e.kingdom_id = {$kid}
+				 WHERE e.kingdom_id IN ({$statsEvtKids})
 				   AND cd.event_start >  DATE_ADD(NOW(), INTERVAL {$_nextStart} MONTH)
 				   AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 120 MONTH)
 				 LIMIT 1"
@@ -272,6 +274,50 @@ class Controller_Kingdom extends Controller {
 			'Uir'              => UIR,
 			'Events'           => $events,
 		]);
+		exit();
+	}
+
+	// Lazy-loaded body of the kingdom profile Recommendations tab. Called by JS
+	// the first time the tab is activated; returns raw HTML for the tab's inner
+	// container (NOT a full page). Auth+visibility rules mirror profile().
+	public function recommendations_panel($kingdom_id = null) {
+		session_write_close();
+		$kingdom_id = (int)preg_replace('/[^0-9]/', '', (string)$kingdom_id);
+		if ($kingdom_id <= 0) { http_response_code(400); exit; }
+		$this->load_model('Reports');
+
+		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+		$isOrkAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+		$canManageKingdom = $isOrkAdmin
+			|| ($uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE));
+
+		$knConfigs  = Common::get_configs($kingdom_id, CFG_KINGDOM);
+		$recsPublic = isset($knConfigs['AwardRecsPublic'])
+			? (bool)(int)$knConfigs['AwardRecsPublic']['Value']
+			: true;
+
+		$AwardRecommendations = [];
+		if ($recsPublic || $canManageKingdom) {
+			$recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid]);
+			$AwardRecommendations = is_array($recs) ? $recs : [];
+		} elseif ($uid > 0) {
+			$recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid]);
+			$allRecs = is_array($recs) ? $recs : [];
+			$AwardRecommendations = array_values(array_filter($allRecs, function($r) use ($uid) {
+				return (int)$r['RecommendedById'] === $uid;
+			}));
+		} else {
+			http_response_code(403); exit;
+		}
+
+		// Variables the partial template expects in scope:
+		$IsLoggedIn       = $uid > 0;
+		$CanManageKingdom = $canManageKingdom;
+		$kingdom_name     = $this->Kingdom->get_kingdom_name($kingdom_id);
+
+		header('Content-Type: text/html; charset=utf-8');
+		header('X-Recs-Count: ' . count($AwardRecommendations)); // JS uses this for the tab badge
+		include DIR_TEMPLATE . 'revised-frontend/Kingdomnew_recommendations_panel.tpl';
 		exit();
 	}
 
@@ -414,6 +460,65 @@ class Controller_Kingdom extends Controller {
 		$this->data['map_parks'] = is_array($rawParks['Parks'])
 			? array_values(array_filter($rawParks['Parks'], function($p) { return $p['Active'] == 'Active'; }))
 			: [];
+
+		// Whether this kingdom has active child principalities (and is not itself one).
+		// Drives the admin 'Include Principality in Statistics' toggle visibility.
+		$this->data['HasChildPrincipalities'] = (empty($this->data['IsPrinz'])
+			&& is_array($this->data['principalities']['Principalities'] ?? null)
+			&& count($this->data['principalities']['Principalities']) > 0);
+
+		// Child-principality parks for the Parks tab (tile/list) and the kingdom map.
+		// Only when this kingdom is NOT itself a principality; both keys always set.
+		$this->data['principality_parks'] = [];
+		$this->data['prinz_map_parks']    = [];
+		if (empty($this->data['IsPrinz']) && is_array($this->data['principalities']['Principalities'] ?? null)) {
+			foreach ($this->data['principalities']['Principalities'] as $pr) {
+				$prId = (int)($pr['KingdomId'] ?? 0);
+				if ($prId <= 0) continue;
+				$prName = $pr['Name'] ?? '';
+
+				$prSummary = $this->Kingdom->get_park_summary($prId);
+				$prParks   = is_array($prSummary['KingdomParkAveragesSummary'] ?? null)
+					? $prSummary['KingdomParkAveragesSummary']
+					: [];
+				if (!empty($prParks)) {
+					$this->data['principality_parks'][] = [
+						'KingdomId' => $prId,
+						'Name'      => $prName,
+						'parks'     => $prParks,
+					];
+				}
+
+				$prRawParks = $this->Kingdom->GetParks(['KingdomId' => $prId]);
+				$prMapParks = is_array($prRawParks['Parks'] ?? null)
+					? array_values(array_filter($prRawParks['Parks'], function($p) { return $p['Active'] == 'Active'; }))
+					: [];
+				if (!empty($prMapParks)) {
+					$this->data['prinz_map_parks'][] = [
+						'KingdomId' => $prId,
+						'Name'      => $prName,
+						'parks'     => $prMapParks,
+					];
+				}
+			}
+		}
+
+		// Hero/tab 'Parks (N)' count: roll up family park count when the stats flag is on
+		// (main parks + principality parks already gathered above). Falls back to the
+		// kingdom's own park count otherwise. Does NOT merge principality parks into the tiles.
+		$ownParkCount = is_array($this->data['park_summary']['KingdomParkAveragesSummary'] ?? null)
+			? count($this->data['park_summary']['KingdomParkAveragesSummary'])
+			: 0;
+		if (!empty($this->data['HasChildPrincipalities']) && $this->Kingdom->StatsIncludesPrincipalities($kingdom_id)) {
+			$prinzParkCount = 0;
+			foreach ($this->data['principality_parks'] as $prGroup) {
+				$prinzParkCount += is_array($prGroup['parks'] ?? null) ? count($prGroup['parks']) : 0;
+			}
+			$this->data['StatsParkCount'] = $ownParkCount + $prinzParkCount;
+		} else {
+			$this->data['StatsParkCount'] = $ownParkCount;
+		}
+
 		$this->data['park_edit_lookup'] = [];
 		if (is_array($rawParks['Parks'])) {
 			foreach ($rawParks['Parks'] as $p) {
@@ -429,6 +534,7 @@ class Controller_Kingdom extends Controller {
 
 		global $DB;
 		$kid = (int)$kingdom_id;
+		$statsEvtKids = implode(',', array_map('intval', $this->Kingdom->GetStatsKingdomIds($kid)));
 
 		$evtSql = "
 			SELECT e.event_id, e.name, e.park_id, p.name AS park_name, p.abbreviation AS park_abbr,
@@ -448,7 +554,7 @@ class Controller_Kingdom extends Controller {
 			    FROM ork_event_rsvp
 			    GROUP BY event_calendardetail_id
 			) rsvp ON rsvp.event_calendardetail_id = cd.event_calendardetail_id
-			WHERE e.kingdom_id = {$kid}
+			WHERE e.kingdom_id IN ({$statsEvtKids})
 			ORDER BY cd.event_start, p.name, e.name";
 		$DB->Clear();
 		$evtResult    = $DB->DataSet($evtSql);
@@ -479,7 +585,7 @@ class Controller_Kingdom extends Controller {
 		$moreRes = $DB->DataSet(
 			"SELECT 1 FROM ork_event_calendardetail cd
 			 JOIN ork_event e ON e.event_id = cd.event_id
-			 WHERE e.kingdom_id = {$kid}
+			 WHERE e.kingdom_id IN ({$statsEvtKids})
 			   AND cd.event_start >  DATE_ADD(NOW(), INTERVAL 12 MONTH)
 			   AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 120 MONTH)
 			 LIMIT 1"
@@ -560,22 +666,43 @@ class Controller_Kingdom extends Controller {
 			: true;
 		$this->data['AwardRecsPublic'] = $recsPublic;
 
+		// Recommendations tab visibility is a permissions decision; the rows themselves
+		// are lazy-loaded by JS calling Controller_Kingdom::recommendations_panel().
+		// Inlining the rows here was rendering thousands of <tr>s and stalling the
+		// browser's DOMContentLoaded for 1+ second on busy kingdoms.
 		$this->data['AwardRecommendations'] = [];
+		$this->data['AwardRecommendationsCount'] = 0;
 		$canManageKingdom = $this->data['CanManageKingdom'] ?? false;
 		if ($recsPublic || $canManageKingdom) {
 			$this->data['ShowRecsTab'] = true;
-			$recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid]);
-			$this->data['AwardRecommendations'] = is_array($recs) ? $recs : [];
+			$this->data['AwardRecommendationsCount'] = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id]);
 		} elseif ($uid > 0) {
-			$recs = $this->Reports->recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0, 'RequestedBy' => $uid]);
-			$allRecs = is_array($recs) ? $recs : [];
-			$myRecs = array_values(array_filter($allRecs, function($r) use ($uid) {
-				return (int)$r['RecommendedById'] === $uid;
-			}));
-			$this->data['AwardRecommendations'] = $myRecs;
-			$this->data['ShowRecsTab'] = !empty($myRecs);
+			// Logged-in non-admin on a private-recs kingdom — tab is shown only if
+			// the user has their own recs. Cheap COUNT query, no row hydration.
+			$n = $this->Reports->recommended_awards_count(['KingdomId' => $kingdom_id, 'RecommendedBy' => $uid]);
+			$this->data['AwardRecommendationsCount'] = $n;
+			$this->data['ShowRecsTab'] = $n > 0;
 		} else {
 			$this->data['ShowRecsTab'] = false;
+		}
+
+		// Players tab badge — cheap COUNT so the page shows "Players (N)" on first
+		// paint without waiting for players_json (which builds full rosters).
+		$_pcCacheKey = Ork3::$Lib->ghettocache->key(['KingdomId' => (int)$kingdom_id]);
+		$_pcCached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.player_count', $_pcCacheKey, 600);
+		if ($_pcCached !== false) {
+			$this->data['PlayerCount'] = (int)$_pcCached;
+		} else {
+			global $DB;
+			$_kid = (int)$kingdom_id;
+			$DB->Clear();
+			$_pcResult = $DB->DataSet("SELECT COUNT(*) AS n
+				FROM " . DB_PREFIX . "mundane m
+				INNER JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id AND p.kingdom_id = {$_kid}
+				WHERE m.suspended = 0 AND m.active = 1");
+			$_pcN = ($_pcResult && $_pcResult->Next()) ? (int)$_pcResult->n : 0;
+			$this->data['PlayerCount'] = $_pcN;
+			Ork3::$Lib->ghettocache->cache(__CLASS__ . '.player_count', $_pcCacheKey, $_pcN);
 		}
 
 		$this->data['ParkTitleId_options'] = [];
@@ -606,10 +733,12 @@ class Controller_Kingdom extends Controller {
 			];
 
 			$adminConfig = [];
+			$hasChildPrinz = !empty($this->data['HasChildPrincipalities']);
 			foreach ($kd['KingdomConfiguration'] ?? [] as $cfg) {
-				if (!empty($cfg['UserSetting'])) {
-					$adminConfig[] = $cfg;
-				}
+				if (empty($cfg['UserSetting'])) continue;
+				// Only surface the principality-stats toggle for kingdoms that have principalities.
+				if (($cfg['Key'] ?? '') === 'IncludePrincipalityInStatistics' && !$hasChildPrinz) continue;
+				$adminConfig[] = $cfg;
 			}
 			$this->data['AdminConfig']     = $adminConfig;
 			$this->data['AdminParkTitles'] = array_values($kd['ParkTitles'] ?? []);
@@ -679,6 +808,7 @@ class Controller_Kingdom extends Controller {
 	public function ics($kingdom_id = null) {
 		$kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
 		$kid = (int)$kingdom_id;
+		$statsEvtKids = implode(',', array_map('intval', $this->Kingdom->GetStatsKingdomIds($kid)));
 
 		// Kingdom name for CALNAME
 		$knName = $this->Kingdom->get_kingdom_name($kid);
@@ -698,7 +828,7 @@ class Controller_Kingdom extends Controller {
 			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
 				AND cd.event_start >= CURDATE()
 				AND cd.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
-			WHERE e.kingdom_id = {$kid}
+			WHERE e.kingdom_id IN ({$statsEvtKids})
 			ORDER BY cd.event_start ASC";
 		$DB->Clear();
 		$result = $DB->DataSet($sql);

@@ -2539,7 +2539,8 @@ function knRenderMapSidebar(loc) {
         : '<a href="' + profileUrl + '"><div class="kn-park-heraldry-placeholder"><i class="fas fa-shield-alt"></i></div></a>';
     var heroHtml = heraldryHtml
         + '<a href="' + profileUrl + '" class="kn-park-hero-name" style="text-decoration:none">' + escHtml(loc.name) + '</a>'
-        + (locLine ? '<div class="kn-park-hero-location"><i class="fas fa-map-marker-alt" style="font-size:10px"></i>' + escHtml(locLine) + '</div>' : '');
+        + (locLine ? '<div class="kn-park-hero-location"><i class="fas fa-map-marker-alt" style="font-size:10px"></i>' + escHtml(locLine) + '</div>' : '')
+        + (loc.prinz && loc.prName ? '<div class="kn-park-hero-location"><i class="fas fa-crown" style="font-size:10px"></i>Principality: ' + escHtml(loc.prName) + '</div>' : '');
 
     var bodyHtml = '';
     if (loc.dir) {
@@ -2593,10 +2594,35 @@ window.knInitMap = async function() {
         // fitBounds zoom used as-is (no pullback)
     }
 
+    // ---- Map legend (Kingdom vs Principality pin colors) ----
+    var knHasPrinz = false;
+    for (var li = 0; li < knMapLocations.length; li++) {
+        if (knMapLocations[li].prinz) { knHasPrinz = true; break; }
+    }
+    var legendCard = document.getElementById('kn-map-sidebar-card');
+    if (legendCard && !document.getElementById('kn-map-legend')) {
+        var legendEl = document.createElement('div');
+        legendEl.id = 'kn-map-legend';
+        legendEl.style.cssText = 'display:flex;flex-wrap:wrap;gap:14px;align-items:center;'
+            + 'margin-top:12px;padding:8px 10px;border-radius:6px;font-size:12px;'
+            + 'background:rgba(127,127,127,0.12);';
+        var legendHtml = '<span style="display:inline-flex;align-items:center;gap:6px">'
+            + '<span style="width:12px;height:12px;border-radius:2px;background:#8B1A1A;border:1px solid #B8860B;display:inline-block"></span>'
+            + 'Kingdom</span>';
+        if (knHasPrinz) {
+            legendHtml += '<span style="display:inline-flex;align-items:center;gap:6px">'
+                + '<span style="width:12px;height:12px;border-radius:2px;background:#2C5F8B;border:1px solid #B8860B;display:inline-block"></span>'
+                + 'Principality</span>';
+        }
+        legendEl.innerHTML = legendHtml;
+        legendCard.appendChild(legendEl);
+    }
+
     var infowindow = new google.maps.InfoWindow();
     for (var i = 0; i < knMapLocations.length; i++) {
         (function(loc) {
-            var pinGlyph = new PinElement({ scale: 0.7, background: '#8B1A1A', borderColor: '#B8860B', glyphColor: '#FFD700' });
+            var pinBg = loc.prinz ? '#2C5F8B' : '#8B1A1A';
+            var pinGlyph = new PinElement({ scale: 0.7, background: pinBg, borderColor: '#B8860B', glyphColor: '#FFD700' });
             var marker = new google.maps.marker.AdvancedMarkerElement({
                 position: new google.maps.LatLng(loc.lat, loc.lng),
                 map: map,
@@ -2640,6 +2666,48 @@ function knActivateTab(tab) {
     if (tab === 'events' && knCalendar) {
         knCalendar.updateSize();
     }
+    if (tab === 'recommendations') {
+        knLazyLoadRecs();
+    }
+}
+
+// Lazily fetch the Recommendations tab's inner HTML the first time the tab is
+// activated. Inlining the rows on initial page render was blocking the
+// browser's DOMContentLoaded for 1+ seconds on busy kingdoms.
+function knLazyLoadRecs() {
+    var host = document.getElementById('kn-recs-lazy');
+    if (!host) return;
+    if (host.getAttribute('data-loaded') !== '0') return; // 'loading' or '1' — skip
+    var kid = host.getAttribute('data-kid');
+    if (!kid) return;
+    host.setAttribute('data-loaded', 'loading');
+    fetch('/orkui/index.php?Route=Kingdom/recommendations_panel/' + encodeURIComponent(kid), {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'text/html' }
+    }).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var count = r.headers.get('X-Recs-Count');
+        return r.text().then(function(html) { return { html: html, count: count }; });
+    }).then(function(payload) {
+        host.innerHTML = payload.html;
+        host.setAttribute('data-loaded', '1');
+        // Tab badge: show count if non-zero.
+        var badge = document.getElementById('kn-tab-count-recs');
+        if (badge && payload.count !== null && payload.count !== '0') {
+            badge.textContent = '(' + payload.count + ')';
+            badge.style.display = '';
+        }
+        // Let other initializers (rec filters, datatables, etc.) wire up.
+        if (typeof knInitRecsTab === 'function') {
+            try { knInitRecsTab(host); } catch (e) { console.error('knInitRecsTab failed:', e); }
+        }
+        document.dispatchEvent(new CustomEvent('kn:recs-loaded', { detail: { host: host, count: payload.count } }));
+    }).catch(function(err) {
+        host.setAttribute('data-loaded', '0'); // allow retry
+        host.innerHTML = '<div class="pk-recs-empty" style="color:#fc8181">Could not load recommendations: '
+            + String(err).replace(/[<>&]/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; })
+            + ' &mdash; <a href="#" onclick="knLazyLoadRecs();return false">retry</a></div>';
+    });
 }
 
 // ---- Hero color from heraldry ----
@@ -2819,11 +2887,15 @@ $(document).ready(function() {
         if (view === 'list') {
             $('#kn-parks-tiles').hide();
             $('#kn-parks-list-view').show();
+            $('#kn-prinz-tile-sections').hide();
+            $('#kn-prinz-tables').show();
             $('#kn-view-list').addClass('kn-view-active');
             $('#kn-view-tiles').removeClass('kn-view-active');
         } else {
             $('#kn-parks-list-view').hide();
             $('#kn-parks-tiles').show();
+            $('#kn-prinz-tables').hide();
+            $('#kn-prinz-tile-sections').show();
             $('#kn-view-tiles').addClass('kn-view-active');
             $('#kn-view-list').removeClass('kn-view-active');
         }
@@ -4465,13 +4537,14 @@ $(document).ready(function() {
 
             var lbl = document.createElement('div');
             lbl.className   = 'kn-admin-config-label';
-            var keyLabels = { 'AwardRecsPublic': 'Award Recommendations Visibility' };
+            var keyLabels = { 'AwardRecsPublic': 'Award Recommendations Visibility', 'IncludePrincipalityInStatistics': 'Include Principality in Statistics' };
             lbl.textContent = keyLabels[cfg.Key] || cfg.Key;
             var keyHints = {
                 'AttendanceWeeklyMinimum': 'Minimum distinct weeks with at least one sign-in in the last 6 months. Leave blank to not require this.',
                 'AttendanceDailyMinimum':  'Minimum distinct days with at least one sign-in in the last 6 months. Leave blank to not require this.',
                 'AttendanceCreditMinimum': 'Minimum total credits earned in the last 6 months. Leave blank to not require this.',
                 'MonthlyCreditMaximum':    'Cap on credits counted per calendar month (excess is discarded). Leave blank for no cap.',
+                'IncludePrincipalityInStatistics': 'When looking at statistics, graphs, and reports, include relevant metrics from Principality(ies) such as attendance and player counts.',
             };
             if (keyHints[cfg.Key]) {
                 var hint = document.createElement('span');
@@ -4529,6 +4602,16 @@ $(document).ready(function() {
                     else optPrivate.selected = true;
                     inp.appendChild(optPublic);
                     inp.appendChild(optPrivate);
+                } else if (cfg.Key === 'IncludePrincipalityInStatistics') {
+                    inp = document.createElement('input');
+                    inp.type = 'checkbox';
+                    inp.className = 'kn-admin-config-input';
+                    inp.checked = (String(val) === '1');
+                    // Make `.value` resolve to '1'/'0' from checked state so the existing
+                    // wireConfig collector + setconfig POST persist it unchanged.
+                    Object.defineProperty(inp, 'value', {
+                        get: function() { return this.checked ? '1' : '0'; }
+                    });
                 } else {
                     inp = document.createElement('input');
                     inp.type  = (cfg.Type === 'color')  ? 'color'
@@ -4704,6 +4787,44 @@ $(document).ready(function() {
     }
 
     // ── Section: Awards ──────────────────────────────────────
+    // Filters the rendered admin-awards table based on the search input's value.
+    // O(rows) per keystroke — fine up to a few hundred. Each row carries the
+    // pre-lowered haystack on its dataset, set in makeAwardRow().
+    function applyAdminAwardFilter() {
+        var inp = gid('kn-admin-award-search');
+        if (!inp) return;
+        var q     = inp.value.trim().toLowerCase();
+        var tbody = gid('kn-admin-awards-tbody');
+        var clear = gid('kn-admin-award-search-clear');
+        var empty = gid('kn-admin-award-search-empty');
+        if (clear) clear.style.display = q ? '' : 'none';
+        if (!tbody) return;
+        var rows = tbody.querySelectorAll('tr');
+        var visible = 0;
+        rows.forEach(function(tr) {
+            var hay  = tr.dataset.searchHaystack || '';
+            var show = !q || hay.indexOf(q) !== -1;
+            tr.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+        if (empty) empty.style.display = (q && visible === 0) ? '' : 'none';
+    }
+
+    var awardSearchWired = false;
+    function wireAwardSearch() {
+        if (awardSearchWired) return;
+        var inp   = gid('kn-admin-award-search');
+        var clear = gid('kn-admin-award-search-clear');
+        if (!inp) return;
+        awardSearchWired = true;
+        inp.addEventListener('input', applyAdminAwardFilter);
+        if (clear) clear.addEventListener('click', function() {
+            inp.value = '';
+            inp.focus();
+            applyAdminAwardFilter();
+        });
+    }
+
     var awardsBuilt = false;
     function buildAwards() {
         if (awardsBuilt) return;
@@ -4714,10 +4835,19 @@ $(document).ready(function() {
         (KnConfig.adminAwards || []).forEach(function(aw) {
             tbody.appendChild(makeAwardRow(aw));
         });
+        wireAwardSearch();
     }
 
     function makeAwardRow(aw) {
         var tr = document.createElement('tr');
+        // Cached searchable haystack for the filter input above the table —
+        // built once at render time, lower-cased, and re-read on each keystroke
+        // instead of walking the DOM for every cell.
+        tr.dataset.searchHaystack = (
+            (aw.KingdomAwardName || '') + ' ' +
+            (aw.AwardName        || '') + ' ' +
+            (aw.TitleClass       || '')
+        ).toLowerCase();
 
         function ntd(isText, val) {
             var td  = document.createElement('td');
@@ -4762,8 +4892,19 @@ $(document).ready(function() {
         var saveBtn = document.createElement('button');
         saveBtn.className   = 'kn-admin-tsave';
         saveBtn.innerHTML   = '<i class="fas fa-save"></i>';
-        saveBtn.title       = 'Save';
+        saveBtn.title       = 'No changes to save';
+        saveBtn.disabled    = true;                  // clean rows start "nothing to save"
         saveBtn.style.marginRight = '4px';
+        // Flip the save button live when any field in this row gets edited.
+        // Click on the save button itself doesn't bubble through these listeners.
+        function markDirty() {
+            saveBtn.disabled = false;
+            saveBtn.title    = 'Save';
+        }
+        [nameCell.inp, reignCell.inp, monthCell.inp, classCell.inp].forEach(function(inp) {
+            inp.addEventListener('input', markDirty);
+        });
+        titleCb.addEventListener('change', markDirty);
         (function(btn, nc, rc, mc, cb, cc, kawId) {
             btn.addEventListener('click', function() {
                 clearFeedback('kn-admin-awards-feedback');
@@ -4776,9 +4917,16 @@ $(document).ready(function() {
                     IsTitle:          cb.checked ? 1 : 0,
                     TitleClass:       cc.value,
                 }, function(r) {
-                    btn.disabled = false;
-                    if (r && r.status === 0) feedback('kn-admin-awards-feedback', 'Award saved!', true);
-                    else feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Save failed.', false);
+                    if (r && r.status === 0) {
+                        // Save succeeded — row is "clean" again, leave disabled.
+                        btn.title = 'No changes to save';
+                        knClearPending('kn-admin-body-awards');
+                        feedback('kn-admin-awards-feedback', 'Award saved!', true);
+                    } else {
+                        // Save failed — re-enable so they can retry.
+                        btn.disabled = false;
+                        feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Save failed.', false);
+                    }
                 }, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
             });
         })(saveBtn, nameCell.inp, reignCell.inp, monthCell.inp, titleCb, classCell.inp, aw.KingdomAwardId);
@@ -4789,17 +4937,18 @@ $(document).ready(function() {
         delBtn.title       = 'Delete';
         (function(btn, row, kawId, awName) {
             btn.addEventListener('click', function() {
-                if (!confirm('Delete award "' + awName + '"? This cannot be undone.')) return;
-                btn.disabled = true;
-                $.post(BASE_URL + 'deleteaward', { KingdomAwardId: kawId }, function(r) {
-                    if (r && r.status === 0) {
-                        row.parentNode && row.parentNode.removeChild(row);
-                        feedback('kn-admin-awards-feedback', 'Award deleted.', true);
-                    } else {
-                        btn.disabled = false;
-                        feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Delete failed.', false);
-                    }
-                }, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
+                knConfirm('Delete award "' + awName + '"? This cannot be undone.', function() {
+                    btn.disabled = true;
+                    $.post(BASE_URL + 'deleteaward', { KingdomAwardId: kawId }, function(r) {
+                        if (r && r.status === 0) {
+                            row.parentNode && row.parentNode.removeChild(row);
+                            knClearPending('kn-admin-body-awards'); feedback('kn-admin-awards-feedback', 'Award deleted.', true);
+                        } else {
+                            btn.disabled = false;
+                            feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Delete failed.', false);
+                        }
+                    }, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
+                }, 'Delete Award');
             });
         })(delBtn, tr, aw.KingdomAwardId, aw.KingdomAwardName);
 
@@ -5365,9 +5514,12 @@ $(document).ready(function() {
 
         var overlay = gid('kn-admin-overlay');
         if (overlay) {
-            overlay.addEventListener('click', function(e) {
-                if (e.target === this) knCloseAdminModal();
-            });
+            // Only close on a click that BOTH started and ended on the overlay.
+            // Without the mousedown gate, drag-selecting text in an input and
+            // releasing outside the input fires a click on the overlay and closes it.
+            var knDownOnSelf = false;
+            overlay.addEventListener('mousedown', function(e) { knDownOnSelf = (e.target === this); });
+            overlay.addEventListener('click', function(e) { if (knDownOnSelf && e.target === this) knCloseAdminModal(); });
         }
 
         document.addEventListener('keydown', function(e) {

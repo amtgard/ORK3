@@ -2,6 +2,13 @@
 
 class Kingdom  extends Ork3 {
 
+	// Per-request memo caches for the principality-rollup helpers. These are read
+	// dozens of times per kingdom-scoped report page; the Kingdom lib is a single
+	// instance per request (see startup.php), so caching here is safe and avoids
+	// redundant DB hits — most notably for ordinary kingdoms that have no children.
+	private $childPrincipalityCache = array();
+	private $statsIncludesPrincipalityCache = array();
+
 	public function __construct() {
 		parent::__construct();
 		$this->kingdom = new yapo($this->db, DB_PREFIX . 'kingdom');
@@ -118,7 +125,7 @@ class Kingdom  extends Ork3 {
 			$ladder_clause = " and is_title = 0";
 		}
 		$sql = "select kingdomaward_id, ifnull(ka.name, a.name) as kingdom_awardname, ka.reign_limit, ka.month_limit, a.name as award_name, 
-						a.award_id, a.is_ladder, ifnull(a.is_title, ka.is_title) as is_title, ifnull(a.title_class, ka.title_class) as title_class,
+						a.award_id, a.is_ladder, ka.is_title as is_title, ka.title_class as title_class,
             a.officer_role, a.peerage
 					from " . DB_PREFIX . "kingdomaward ka
 						left join " . DB_PREFIX . "award a on ka.award_id = a.award_id and ka.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
@@ -236,7 +243,7 @@ class Kingdom  extends Ork3 {
 	}
 		
 	public function create_kingdom_awards($kingdom_id) {
-		$sql = "insert into " . DB_PREFIX . "kingdomaward (kingdom_id, award_id, name) select " . mysql_real_escape_string($kingdom_id) .", award_id, name from " . DB_PREFIX . "award";
+		$sql = "insert into " . DB_PREFIX . "kingdomaward (kingdom_id, award_id, name, is_title, title_class) select " . mysql_real_escape_string($kingdom_id) .", award_id, name, is_title, title_class from " . DB_PREFIX . "award";
 		$this->db->query($sql);
 	}
 	
@@ -350,7 +357,8 @@ class Kingdom  extends Ork3 {
 			$c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'KingdomDuesTake', $request['KingdomDuesTake']);
     		$c->add_config($mundane_id, CFG_KINGDOM, 'color', $this->kingdom->kingdom_id, 'AtlasColor', 'FE7569');
 			$c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'AwardRecsPublic', '1');
-			
+			$c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'IncludePrincipalityInStatistics', '0');
+
 			$c->create_officers($this->kingdom->kingdom_id, 0);
 			
 			$c->create_park_titles($this->kingdom->kingdom_id);
@@ -370,12 +378,25 @@ class Kingdom  extends Ork3 {
 				'parent_kingdom_id' => (int)$request['ParentKingdomId'],
 			]);
 			$response = Success($this->kingdom->kingdom_id);
+			$this->_flushPrincipalityCaches();
 		} else {
 			$response = NoAuthorization();
 		}
 		return $response;
 	}
-	
+
+	// Full memcache flush after any change that alters the kingdom-family tree
+	// (created / reparented / deactivated kingdoms or principalities). Lots of
+	// derived caches across averages / events / recs / recap / officer directory
+	// key off principality membership; enumerating every dependent key is
+	// whack-a-mole, and these mutations are rare admin actions so the wipe cost
+	// is acceptable.
+	private function _flushPrincipalityCaches() {
+		if (isset(Ork3::$Lib->ghettocache) && isset(Ork3::$Lib->ghettocache->memcache)) {
+			Ork3::$Lib->ghettocache->memcache->flush();
+		}
+	}
+
 	public function GetPrincipalities($request) {
 		$this->kingdom->clear();
 		$this->kingdom->parent_kingdom_id = $request['KingdomId'];
@@ -390,17 +411,23 @@ class Kingdom  extends Ork3 {
 						'ParentKingdomId' => $this->kingdom->parent_kingdom_id
 					);
 			} while ($this->kingdom->next());
-		} else {
-			$result['Status'] = InvalidParameter();
 		}
 		return $result;
 	}
 	
 	public function GetParks($request) {
+		// Optional 'KingdomIds' array → WHERE p.kingdom_id IN (...). Default keeps
+		// single-'KingdomId' behavior unchanged.
+		if (isset($request['KingdomIds']) && is_array($request['KingdomIds']) && count($request['KingdomIds']) > 0) {
+			$ids = implode(',', array_map('intval', $request['KingdomIds']));
+			$kingdom_clause = "p.kingdom_id IN ($ids)";
+		} else {
+			$kingdom_clause = "p.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+		}
 		$sql = "select * 
 					from " . DB_PREFIX . "park p
 						left join " . DB_PREFIX . "parktitle pt on p.parktitle_id = pt.parktitle_id
-					where p.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
+					where $kingdom_clause
 					order by pt.class desc, p.name asc";
 		$r = $this->db->query($sql);
 		if ($r !== false && $r->size() > 0) {
@@ -409,7 +436,6 @@ class Kingdom  extends Ork3 {
 				$response['Parks'][] = array(
 						'ParkId' => $r->park_id,
 						'KingdomId' => $r->kingdom_id,
-						'ParentParkId' => $r->parent_park_id,
 						'Name' => $r->name,
 						'Abbreviation' => $r->abbreviation,
 						'Location' => $r->location,
@@ -422,8 +448,7 @@ class Kingdom  extends Ork3 {
 						'Class' => $r->class,
                         'HasHeraldry' => $r->has_heraldry,
                         'City' => $r->city,
-                        'Province' => $r->province,
-						'ParentOf' => $r->is_principality==1?Ork3::$Lib->park->GetParks(array('ParkId'=>$r->park_id, 'Stack' => array($r->park_id))):null
+                        'Province' => $r->province
 					);
 			}
 		} else {
@@ -553,6 +578,27 @@ class Kingdom  extends Ork3 {
 				if (!$this->kingdom->find()) {
 					return InvalidParameter('Parent kingdom not found.');
 				}
+				// Cycle prevention: walk the proposed parent's ancestor chain. If we
+				// reach $kingdom_id, the proposed parent is a descendant of the
+				// kingdom we are reparenting → that would create a loop. Reject it.
+				$walker  = new yapo($this->db, DB_PREFIX . 'kingdom');
+				$cursor  = $parent_id;
+				$visited = array();
+				while ($cursor > 0) {
+					if ($cursor === $kingdom_id) {
+						return InvalidParameter('A kingdom cannot be made a child of one of its own descendants.');
+					}
+					if (isset($visited[$cursor])) {
+						break; // pre-existing cycle in data — stop walking
+					}
+					$visited[$cursor] = true;
+					$walker->clear();
+					$walker->kingdom_id = $cursor;
+					if (!$walker->find()) {
+						break;
+					}
+					$cursor = (int)$walker->parent_kingdom_id;
+				}
 				$this->kingdom->clear();
 				$this->kingdom->kingdom_id = $kingdom_id;
 				$this->kingdom->find();
@@ -561,9 +607,66 @@ class Kingdom  extends Ork3 {
 			$this->kingdom->parent_kingdom_id = $parent_id;
 			$this->kingdom->modified = date('Y-m-d H:i:s', time());
 			$this->kingdom->save();
+			$this->_flushPrincipalityCaches();
 			return Success();
 		}
 		return NoAuthorization();
+	}
+
+	// Active child-principality kingdom ids of $kingdomId ([] if none). Uses the
+	// same criteria as GetPrincipalities (parent_kingdom_id = $kingdomId AND
+	// active = 'Active').
+	public function GetChildPrincipalityIds($kingdomId) {
+		$kingdomId = (int)$kingdomId;
+		$ids = array();
+		if ($kingdomId <= 0) {
+			return $ids;
+		}
+		if (isset($this->childPrincipalityCache[$kingdomId])) {
+			return $this->childPrincipalityCache[$kingdomId];
+		}
+		$child = new yapo($this->db, DB_PREFIX . 'kingdom');
+		$child->clear();
+		$child->parent_kingdom_id = $kingdomId;
+		$child->active = 'Active';
+		if ($child->find()) {
+			do {
+				$ids[] = (int)$child->kingdom_id;
+			} while ($child->next());
+		}
+		$this->childPrincipalityCache[$kingdomId] = $ids;
+		return $ids;
+	}
+
+	// [$kingdomId, ...child principality ids] — ALWAYS includes children.
+	// Structural scoping (parks dropdown, player search) uses THIS.
+	public function GetFamilyKingdomIds($kingdomId) {
+		$kingdomId = (int)$kingdomId;
+		return array_merge(array($kingdomId), $this->GetChildPrincipalityIds($kingdomId));
+	}
+
+	// True iff the IncludePrincipalityInStatistics config flag for $kingdomId is '1'.
+	public function StatsIncludesPrincipalities($kingdomId) {
+		$kingdomId = (int)$kingdomId;
+		if (isset($this->statsIncludesPrincipalityCache[$kingdomId])) {
+			return $this->statsIncludesPrincipalityCache[$kingdomId];
+		}
+		$configs = Common::get_configs($kingdomId, CFG_KINGDOM);
+		$enabled = isset($configs['IncludePrincipalityInStatistics'])
+			&& (int)$configs['IncludePrincipalityInStatistics']['Value'] === 1;
+		$this->statsIncludesPrincipalityCache[$kingdomId] = $enabled;
+		return $enabled;
+	}
+
+	// GetFamilyKingdomIds($kingdomId) when StatsIncludesPrincipalities is true AND
+	// there are children; otherwise [$kingdomId]. STATS/REPORT scoping uses THIS.
+	public function GetStatsKingdomIds($kingdomId) {
+		$kingdomId = (int)$kingdomId;
+		$children = $this->GetChildPrincipalityIds($kingdomId);
+		if (count($children) > 0 && $this->StatsIncludesPrincipalities($kingdomId)) {
+			return array_merge(array($kingdomId), $children);
+		}
+		return array($kingdomId);
 	}
 
 	public function GetOfficers($request) {
@@ -713,6 +816,7 @@ class Kingdom  extends Ork3 {
 			if ($this->kingdom->find()) {
 				$this->kingdom->active = $waffle;
 				$this->kingdom->save();
+				$this->_flushPrincipalityCaches();
 				$response = Success();
 			} else {
 				$response = InvalidParameter(NULL, 'Problem processing request.');

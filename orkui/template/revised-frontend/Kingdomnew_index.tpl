@@ -8,6 +8,8 @@
 	$eventList        = is_array($event_summary) ? $event_summary : array();
 	// [TOURNAMENTS HIDDEN] $tournamentList = [];
 	$principalityList = is_array($principalities['Principalities']) ? $principalities['Principalities'] : array();
+	$prinzParks       = is_array($principality_parks ?? null) ? $principality_parks : [];
+	$prinzMapParks    = is_array($prinz_map_parks ?? null) ? $prinz_map_parks : [];
 	$officerList      = is_array($kingdom_officers['Officers']) ? $kingdom_officers['Officers'] : array();
 
 	// Aggregate attendance — weekly loaded now, monthly loaded via AJAX after page load
@@ -59,6 +61,31 @@
 			'dir'      => kn_map_markdown($p['Directions'] ?? ''),
 			'desc'     => kn_map_markdown($p['Description'] ?? ''),
 		];
+	}
+	// Principality parks — same location objects, flagged with prinz metadata
+	foreach ($prinzMapParks as $prinz) {
+		$prName = (string)($prinz['Name'] ?? '');
+		$prId   = (int)($prinz['KingdomId'] ?? 0);
+		foreach ((array)($prinz['parks'] ?? []) as $p) {
+			$loc = @json_decode(stripslashes((string)$p['Location']));
+			if (!$loc) continue;
+			$latlng = isset($loc->location) ? $loc->location : (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
+			if (!$latlng || !is_numeric($latlng->lat) || !is_numeric($latlng->lng)) continue;
+			$knMapLocations[] = [
+				'name'     => ucwords($p['Name']),
+				'lat'      => (float)$latlng->lat,
+				'lng'      => (float)$latlng->lng,
+				'id'       => (int)$p['ParkId'],
+				'city'     => htmlspecialchars(trim($p['City'] ?? '')),
+				'province' => htmlspecialchars(trim($p['Province'] ?? '')),
+				'heraldry' => $p['HasHeraldry'] ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $p['ParkId'])) : '',
+				'dir'      => kn_map_markdown($p['Directions'] ?? ''),
+				'desc'     => kn_map_markdown($p['Description'] ?? ''),
+				'prinz'    => true,
+				'prName'   => $prName,
+				'prId'     => $prId,
+			];
+		}
 	}
 ?>
 
@@ -138,7 +165,7 @@
 <div class="kn-stats-row">
 	<div class="kn-stat-card kn-stat-card-link" onclick="knActivateTab('parks')">
 		<div class="kn-stat-icon"><i class="fas fa-map-marker-alt"></i></div>
-		<div class="kn-stat-number"><?= count($parkList) ?></div>
+		<div class="kn-stat-number"><?= $StatsParkCount ?? count($parkList) ?></div>
 		<div class="kn-stat-label">Parks</div>
 	</div>
 	<div class="kn-stat-card kn-stat-card-link" onclick="knActivateTab('events')">
@@ -254,7 +281,7 @@
 			<ul class="kn-tab-nav">
 				<li class="kn-tab-active" data-kntab="parks">
 					<i class="fas fa-map-marker-alt"></i><span class="kn-tab-label"> Parks</span>
-					<span class="kn-tab-count">(<?= count($parkList) ?>)</span>
+					<span class="kn-tab-count">(<?= $StatsParkCount ?? count($parkList) ?>)</span>
 				</li>
 				<li data-kntab="events">
 					<i class="fas fa-calendar-alt"></i><span class="kn-tab-label"> Events</span>
@@ -263,25 +290,20 @@
 				<li data-kntab="map">
 					<i class="fas fa-map"></i><span class="kn-tab-label"> Map</span>
 				</li>
-				<?php if (!$IsPrinz && count($principalityList) > 0): ?>
-					<li data-kntab="principalities">
-						<i class="fas fa-shield-alt"></i><span class="kn-tab-label"> Principalities</span>
-						<span class="kn-tab-count">(<?= count($principalityList) ?>)</span>
-					</li>
-				<?php endif; ?>
 				<li data-kntab="players" id="kn-tab-btn-players">
 					<i class="fas fa-users"></i><span class="kn-tab-label"> Players</span>
-					<span class="kn-tab-count" id="kn-players-tab-count"></span>
+					<?php $_pcN = (int)($PlayerCount ?? 0); ?>
+					<span class="kn-tab-count" id="kn-players-tab-count"><?= $_pcN > 0 ? '(' . $_pcN . ')' : '' ?></span>
 				</li>
 				<li data-kntab="reports">
 					<i class="fas fa-chart-bar"></i><span class="kn-tab-label"> Reports</span>
 				</li>
-				<?php if ($ShowRecsTab ?? false): ?>
+				<?php if ($ShowRecsTab ?? false):
+					$_recsN = (int)($AwardRecommendationsCount ?? 0);
+				?>
 				<li data-kntab="recommendations">
 					<i class="fas fa-star"></i><span class="kn-tab-label"> Recommendations</span>
-					<?php if (!empty($AwardRecommendations)): ?>
-					<span class="kn-tab-count">(<?= count($AwardRecommendations) ?>)</span>
-					<?php endif; ?>
+					<span class="kn-tab-count" id="kn-tab-count-recs"<?= $_recsN > 0 ? '' : ' style="display:none"' ?>><?= $_recsN > 0 ? '(' . $_recsN . ')' : '' ?></span>
 				</li>
 				<?php endif; ?>
 				<?php if ($CanManageKingdom ?? false): ?>
@@ -412,7 +434,111 @@
 						</table>
 					</div>
 
-				<?php else: ?>
+				<?php endif; ?>
+
+				<!-- ===== Principalities (folded into Parks tab) ===== -->
+				<?php if (count($prinzParks) > 0): ?>
+
+					<!-- Principality tile sections (tile view) -->
+					<div id="kn-prinz-tile-sections">
+						<?php foreach ($prinzParks as $prinz): ?>
+							<?php $prId = (int)$prinz['KingdomId']; $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId)); ?>
+							<section class="kn-prinz-section" data-prinz-id="<?= $prId ?>">
+								<a class="kn-prinz-head" href="<?= UIR ?>Kingdom/profile/<?= $prId ?>">
+									<img class="kn-prinz-heraldry" loading="lazy" src="<?= $prHeraldry ?>" onerror="this.src='<?= HTTP_KINGDOM_HERALDRY ?>0000.jpg'" alt="">
+									<span class="kn-prinz-name"><?= htmlspecialchars($prinz['Name']) ?></span>
+									<i class="fas fa-external-link-alt kn-prinz-extlink"></i>
+								</a>
+								<div class="kn-park-tiles">
+									<?php foreach ((array)$prinz['parks'] as $park): ?>
+										<?php $tileHeraldry = $park['HasHeraldry'] == 1
+											? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']))
+											: HTTP_PARK_HERALDRY . '00000.jpg'; ?>
+										<a class="kn-park-tile" href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>" data-park-id="<?= (int)$park['ParkId'] ?>">
+											<div class="kn-park-tile-img-wrap">
+												<img src="<?= $tileHeraldry ?>"
+													loading="lazy"
+													onerror="this.src='<?= HTTP_PARK_HERALDRY ?>00000.jpg'"
+													alt="<?= htmlspecialchars($park['ParkName']) ?>">
+											</div>
+											<div class="kn-park-tile-body">
+												<div class="kn-park-tile-name"><?= htmlspecialchars($park['ParkName']) ?></div>
+												<div class="kn-park-tile-type"><?= htmlspecialchars(!empty($park['Title']) ? $park['Title'] : 'Park') ?></div>
+												<div class="kn-park-tile-stats">
+													<div class="kn-park-tile-stat">
+														<div class="kn-park-tile-stat-val kn-avgwk-tile"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></div>
+														<div class="kn-park-tile-stat-lbl">Avg/Wk</div>
+													</div>
+													<div class="kn-park-tile-stat">
+														<div class="kn-park-tile-stat-val kn-avgmo-tile"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></div>
+														<div class="kn-park-tile-stat-lbl">Avg/Mo</div>
+													</div>
+												</div>
+											</div>
+										</a>
+									<?php endforeach; ?>
+								</div>
+							</section>
+						<?php endforeach; ?>
+					</div>
+
+					<!-- Principality tables (list view) -->
+					<div id="kn-prinz-tables" style="display:none">
+						<?php foreach ($prinzParks as $prinz): ?>
+							<?php $prId = (int)$prinz['KingdomId']; $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId)); ?>
+							<div class="kn-prinz-table-wrap" data-prinz-id="<?= $prId ?>">
+								<a class="kn-prinz-head" href="<?= UIR ?>Kingdom/profile/<?= $prId ?>">
+									<img class="kn-prinz-heraldry" loading="lazy" src="<?= $prHeraldry ?>" onerror="this.src='<?= HTTP_KINGDOM_HERALDRY ?>0000.jpg'" alt="">
+									<span class="kn-prinz-name"><?= htmlspecialchars($prinz['Name']) ?></span>
+									<i class="fas fa-external-link-alt kn-prinz-extlink"></i>
+								</a>
+								<table class="kn-table kn-sortable">
+									<thead>
+										<tr>
+											<th data-sorttype="text">Park</th>
+											<th data-sorttype="text">Type</th>
+											<th data-sorttype="numeric" class="kn-col-numeric" title="Average distinct players per week over the past 6 months">Avg/Wk</th>
+											<th data-sorttype="numeric" class="kn-col-numeric" title="Average distinct players per month over the past 12 months">Avg/Mo</th>
+											<th data-sorttype="numeric" class="kn-col-numeric" title="Distinct players who signed in at this park in the past 12 months">Total Players</th>
+											<th data-sorttype="numeric" class="kn-col-numeric" title="Distinct players whose home park is here who signed in at this park in the past 12 months">Total Members</th>
+										</tr>
+									</thead>
+									<tbody>
+										<?php foreach ((array)$prinz['parks'] as $park): ?>
+											<tr class="kn-row-link" data-park-id="<?= (int)$park['ParkId'] ?>" onclick="window.location.href='<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>'">
+												<td class="kn-col-nowrap">
+													<img class="kn-thumb"
+														loading="lazy"
+														src="<?= $park['HasHeraldry'] == 1 ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId'])) : HTTP_PARK_HERALDRY . '00000.jpg' ?>"
+														onerror="this.src='<?= HTTP_PARK_HERALDRY ?>00000.jpg'"
+														alt="">
+													<a href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>"><?= htmlspecialchars($park['ParkName']) ?></a>
+												</td>
+												<td><?= htmlspecialchars(!empty($park['Title']) ? $park['Title'] : '') ?></td>
+												<td class="kn-col-numeric kn-avgwk-row"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></td>
+												<td class="kn-col-numeric kn-avgmo-row"><i class="fas fa-spinner fa-spin kn-stat-spinner"></i></td>
+												<td class="kn-col-numeric kn-tp-row">—</td>
+												<td class="kn-col-numeric kn-tm-row">—</td>
+											</tr>
+										<?php endforeach; ?>
+									</tbody>
+									<tfoot>
+										<tr>
+											<td colspan="2"><?= htmlspecialchars($prinz['Name']) ?> Total</td>
+											<td class="kn-col-numeric" id="kn-prinz-<?= $prId ?>-avgwk">—</td>
+											<td class="kn-col-numeric" id="kn-prinz-<?= $prId ?>-avgmo">—</td>
+											<td class="kn-col-numeric" id="kn-prinz-<?= $prId ?>-tp" title="Sum across parks (players may be counted in multiple parks)">—</td>
+											<td class="kn-col-numeric" id="kn-prinz-<?= $prId ?>-tm">—</td>
+										</tr>
+									</tfoot>
+								</table>
+							</div>
+						<?php endforeach; ?>
+					</div>
+
+				<?php endif; ?>
+
+				<?php if (count($parkList) === 0 && count($prinzParks) === 0): ?>
 					<div class="kn-empty">No parks found</div>
 				<?php endif; ?>
 			</div>
@@ -588,24 +714,6 @@
 				<?php endif; ?>
 			</div>
 
-			<!-- Principalities Tab (only rendered if applicable) -->
-			<?php if (!$IsPrinz && count($principalityList) > 0): ?>
-				<div class="kn-tab-panel" id="kn-tab-principalities" style="display:none">
-					<?php foreach ($principalityList as $prinz): ?>
-						<div class="kn-prinz-row">
-							<img class="kn-prinz-heraldry"
-								loading="lazy"
-								src="<?= HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prinz['KingdomId'])) ?>"
-								onerror="this.src='<?= HTTP_KINGDOM_HERALDRY ?>0000.jpg'"
-								alt="">
-							<div class="kn-prinz-name">
-								<a href="<?= UIR ?>Kingdom/profile/<?= $prinz['KingdomId'] ?>"><?= htmlspecialchars($prinz['Name']) ?></a>
-							</div>
-						</div>
-					<?php endforeach; ?>
-				</div>
-			<?php endif; ?>
-
 			<!-- Reports Tab -->
 			<div class="kn-tab-panel" id="kn-tab-reports" style="display:none">
 				<?php if (!$IsLoggedIn): ?>
@@ -731,155 +839,16 @@
 		</div>
 		<?php endif; ?>
 
-		<!-- Recommendations Tab -->
+		<!-- Recommendations Tab — body is lazy-loaded via Kingdom::recommendations_panel()
+		     on first tab activation. Rendering the full list inline (1k-4k <tr> rows on a
+		     busy kingdom) was blocking DOMContentLoaded for 1+ seconds. -->
 		<?php if ($ShowRecsTab ?? false): ?>
 		<div class="kn-tab-panel" id="kn-tab-recommendations" style="display:none">
-			<?php if ($IsLoggedIn): ?>
-			<div class="pk-tab-toolbar">
-				<button class="kn-btn kn-btn-secondary" onclick="knOpenRecModal()">
-					<i class="fas fa-star"></i> Recommend an Award
-				</button>
-			</div>
-			<?php endif; ?>
-			<?php if (empty($AwardRecommendations)): ?>
-			<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($kingdom_name) ?>.</div>
-			<?php else: ?>
-			<?php if ($CanManageKingdom ?? false): ?>
-			<div class="kn-rec-filter-bar">
-				<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="open">Open Recs</button>
-				<button class="kn-rec-filter-btn" data-filter="below">Below Recommended</button>
-				<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
-				<button class="kn-rec-filter-btn" data-filter="already">At or Above Recommended</button>
-				<button class="kn-rec-filter-btn" data-filter="all">All</button>
-				<span class="kn-rec-filter-info">
-					<button class="kn-rec-filter-info-btn" type="button" aria-label="Filter help"><i class="fas fa-question-circle"></i></button>
-					<div class="kn-rec-filter-popover">
-						<h4>About These Filters</h4>
-						<dl>
-							<dt>Open Recs <small style="font-weight:400;color:#718096">(default)</small></dt>
-							<dd>All pending recommendations &mdash; both rank-based and flat awards. Hides recs that have already been fulfilled.</dd>
-							<dt>Below Recommended</dt>
-							<dd>Players who haven&rsquo;t yet reached the recommended rank. The core action list &mdash; Grant these.</dd>
-							<dt>Non-Ladder</dt>
-							<dd>Includes titles such as Master, Noble, or Knight, custom awards, and other non-ranked options. Grant or Delete as appropriate.</dd>
-							<dt>At or Above Recommended</dt>
-							<dd>Players who already hold this award at or above the recommended rank. The rec has been fulfilled &mdash; Delete these to keep the list tidy.</dd>
-							<dt>All</dt>
-							<dd>Every recommendation regardless of status. Use for a full audit.</dd>
-						</dl>
-					</div>
-				</span>
-				<span class="kn-rec-export-btns">
-					<button class="kn-rec-export-btn" type="button" onclick="knRecPrint()"><i class="fas fa-print"></i> Print</button>
-					<button class="kn-rec-export-btn" type="button" onclick="knRecCsv()"><i class="fas fa-download"></i> CSV</button>
-				</span>
-			</div>
-			<?php endif; ?>
-				<div class="pk-recs-table-wrap">
-				<table id="kn-rec-table" class="pk-recs-table display">
-					<thead>
-						<tr>
-							<th>Player</th>
-							<th>Award</th>
-							<th>Rank</th>
-							<th data-short="Rec. By">Recommended By</th>
-							<th>Date</th>
-							<th>Notes</th>
-							<?php if (!empty($IsLoggedIn)): ?><th style="width:1%;white-space:nowrap"></th><?php endif; ?>
-						</tr>
-					</thead>
-					<tbody id="kn-recs-tbody">
-					<?php foreach ($AwardRecommendations as $rec): ?>
-					<tr class="pk-rec-row"
-						data-rec-id="<?= (int)$rec['RecommendationsId'] ?>"
-						data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
-						<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
-						<td><?= htmlspecialchars($rec['AwardName']) ?></td>
-						<td style="white-space:nowrap">
-							<?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?>
-							<?php if (!empty($rec['AlreadyHas'])): ?>
-							<span class="pk-rec-has-tip"
-								title="<?= (int)$rec['Rank'] > 0 ? 'Player is currently at rank ' . (int)$rec['CurrentRank'] . ' as of ' . htmlspecialchars($rec['CurrentRankDate'] ?? '') : 'Player already has this award (granted ' . htmlspecialchars($rec['CurrentRankDate'] ?? 'unknown date') . ')' ?>">
-								<i class="fas fa-info-circle"></i>
-							</span>
-							<?php endif; ?>
-						</td>
-						<td><?php if (!empty($rec['RecommendedById'])): ?><a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
-						<td><?= htmlspecialchars($rec['DateRecommended']) ?></td>
-						<td class="pk-rec-notes"><?php if (!empty($rec['Reason'])): ?><span class="pk-rec-notes-short"><?= htmlspecialchars(mb_substr($rec['Reason'], 0, 50)) ?><?php if (mb_strlen($rec['Reason']) > 50): ?><span class="pk-rec-notes-ellipsis">&hellip; <button class="pk-rec-expand-btn" type="button">[&hellip;]</button></span><span class="pk-rec-notes-full" style="display:none"><?= htmlspecialchars(mb_substr($rec['Reason'], 50)) ?> <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span><?php endif; ?></span><?php else: ?>&mdash;<?php endif; ?>
-							<?php if (!empty($rec['ViewerCanEditReason'])): ?>
-							<button class="rs-edit-reason-btn" data-rec="<?= (int)$rec['RecommendationsId'] ?>" data-reason="<?= htmlspecialchars($rec['Reason'] ?? '', ENT_QUOTES) ?>" data-award="<?= htmlspecialchars($rec['AwardName'] ?? '', ENT_QUOTES) ?>" data-rstip="Edit your reason"><i class="fas fa-pen"></i></button>
-							<?php endif; ?>
-							<?php if (!empty($rec['Seconds']) && is_array($rec['Seconds'])): ?>
-							<div class="rs-seconds">
-								<?php foreach ($rec['Seconds'] as $sec): ?>
-								<div class="rs-second"><i class="fas fa-thumbs-up" style="color:#48bb78;font-size:10px"></i><a class="rs-supporter" href="<?= UIR ?>Player/profile/<?= (int)$sec['SupporterMundaneId'] ?>"><?= htmlspecialchars($sec['SupporterName'] ?? '') ?></a><?php if (!empty($sec['Notes'])): $_sn = $sec['Notes']; ?><span class="rs-notes">&mdash; "<?php if (mb_strlen($_sn) > 50): ?><span class="pk-rec-notes-short"><?= htmlspecialchars(mb_substr($_sn, 0, 50)) ?><span class="pk-rec-notes-ellipsis">&hellip; <button class="pk-rec-expand-btn" type="button">[&hellip;]</button></span><span class="pk-rec-notes-full" style="display:none"><?= htmlspecialchars(mb_substr($_sn, 50)) ?> <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span></span><?php else: ?><?= htmlspecialchars($_sn) ?><?php endif; ?>"</span><?php else: ?><span class="rs-notes-empty">&mdash; (no comment)</span><?php endif; ?><?php $_canWithdrawSec = !empty($sec['IsMine']) || ($CanManageKingdom ?? false); if (!empty($sec['IsMine']) || $_canWithdrawSec): ?> <span class="rs-second-actions"><?php if (!empty($sec['IsMine'])): ?><button class="rs-second-edit" data-sid="<?= (int)$sec['RecommendationSecondsId'] ?>" data-notes="<?= htmlspecialchars($sec['Notes'] ?? '', ENT_QUOTES) ?>" data-rstip="Edit your notes"><i class="fas fa-pen"></i></button><?php endif; ?><?php if ($_canWithdrawSec): ?><button class="rs-second-withdraw" data-sid="<?= (int)$sec['RecommendationSecondsId'] ?>" data-supporter="<?= htmlspecialchars($sec['SupporterName'] ?? '', ENT_QUOTES) ?>" data-rstip="<?= !empty($sec['IsMine']) ? 'Withdraw your second' : 'Remove this second' ?>"><i class="fas fa-times"></i></button><?php endif; ?></span><?php endif; ?></div>
-								<?php endforeach; ?>
-							</div>
-							<?php endif; ?>
-						</td>
-						<?php if (!empty($IsLoggedIn)): ?>
-						<td class="pk-rec-actions rs-tip-right" style="white-space:nowrap;text-align:right;width:1%">
-							<?php if (!empty($rec['SecondsCount'])): $_sc = (int)$rec['SecondsCount']; ?>
-							<span class="rs-seconds-badge" data-rstip="<?= $_sc ?> supporting <?= $_sc === 1 ? 'second' : 'seconds' ?>"><i class="fas fa-thumbs-up"></i><?= $_sc ?></span>
-							<?php endif; ?>
-							<?php if (!empty($rec['ViewerCanSecond'])): ?>
-							<button class="rs-action-btn" data-rec="<?= (int)$rec['RecommendationsId'] ?>" data-award="<?= htmlspecialchars($rec['AwardName'] ?? '', ENT_QUOTES) ?>" data-recipient="<?= htmlspecialchars($rec['Persona'] ?? '', ENT_QUOTES) ?>" data-rstip="Second this recommendation and add your feedback."><i class="fas fa-plus"></i></button>
-							<?php endif; ?>
-							<?php if ($CanManageKingdom ?? false): ?>
-							<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
-								data-rec="<?= htmlspecialchars(json_encode(['RecommendationsId'=>(int)$rec['RecommendationsId'],'MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''])) ?>">
-								<i class="fas fa-medal"></i> Grant
-							</button>
-							<button class="pk-rec-dismiss-btn"
-								data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
-								<i class="fas fa-times"></i> Delete
-							</button>
-							<?php endif; ?>
-						</td>
-						<?php endif; ?>
-					</tr>
-					<?php endforeach; ?>
-					</tbody>
-				</table>
-			</div>
-			<?php endif; ?>
-			<?php if ($CanManageKingdom ?? false): ?>
-			<div class="pk-deleted-recs" id="kn-deleted-recs" data-loaded="0">
-				<button type="button" class="pk-deleted-recs-toggle" id="kn-deleted-recs-toggle" aria-expanded="false">
-					<span class="pk-deleted-recs-caret">&#9654;</span>
-					<span class="pk-deleted-recs-toggle-label">Show Deleted Recommendations</span>
-					<span class="pk-deleted-recs-count" id="kn-deleted-recs-count" style="display:none">0</span>
-				</button>
-				<div class="pk-deleted-recs-body" id="kn-deleted-recs-body" style="display:none">
-					<div class="pk-deleted-recs-loading" id="kn-deleted-recs-loading">Loading&hellip;</div>
-					<div class="pk-deleted-recs-empty" id="kn-deleted-recs-empty" style="display:none">No deleted recommendations.</div>
-					<div class="pk-deleted-recs-search-wrap" style="display:none">
-						<i class="fas fa-search"></i>
-						<input type="text" class="pk-deleted-recs-search" placeholder="Search player, award, notes, or actor&hellip;" autocomplete="off">
-					</div>
-					<div class="pk-deleted-recs-no-match" style="display:none">No deleted recommendations match your search.</div>
-					<div class="pk-deleted-recs-table-wrap" id="kn-deleted-recs-table-wrap" style="display:none">
-						<table class="pk-deleted-recs-table">
-							<thead>
-								<tr>
-									<th>Player</th>
-									<th>Award</th>
-									<th>Rank</th>
-									<th>Notes</th>
-									<th>Date Rec.</th>
-									<th>Recommended By</th>
-									<th>Deleted At</th>
-									<th>Deleted By</th>
-									<th></th>
-								</tr>
-							</thead>
-							<tbody id="kn-deleted-recs-tbody"></tbody>
-						</table>
-					</div>
+			<div id="kn-recs-lazy" data-loaded="0" data-kid="<?= (int)$kingdom_id ?>">
+				<div class="pk-recs-loading" style="padding:2em 0;text-align:center;color:#a0aec0">
+					<i class="fas fa-spinner fa-spin"></i> Loading recommendations&hellip;
 				</div>
 			</div>
-			<?php endif; ?>
 		</div>
 		<?php endif; ?>
 
@@ -938,6 +907,7 @@ var KnConfig = {
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	mapLocations:     <?= json_encode(array_values($knMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	principalityIds:  <?= json_encode(array_map(function($p){ return (int)$p['KingdomId']; }, $prinzParks)) ?>,
 	preloadOfficers:  <?= json_encode($PreloadOfficers ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	awardOptHTML:   <?= json_encode('<option value="">Select award...</option>' . ($AwardOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	officerOptHTML: <?= json_encode('<option value="">Select title...</option>' . ($OfficerOptions ?? ''), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1479,6 +1449,15 @@ var KnConfig = {
 				</button>
 				<div class="kn-admin-panel-body" id="kn-admin-body-awards" style="display:none">
 					<div id="kn-admin-awards-feedback" class="kn-admin-feedback" style="display:none"></div>
+					<div class="kn-admin-award-search-wrap">
+						<i class="fas fa-search kn-admin-award-search-icon"></i>
+						<input type="text" id="kn-admin-award-search" class="kn-admin-award-search-input"
+							placeholder="Filter awards by name or class&hellip;" autocomplete="off">
+						<button type="button" id="kn-admin-award-search-clear" class="kn-admin-award-search-clear" title="Clear" style="display:none">&times;</button>
+					</div>
+					<div class="kn-admin-award-search-empty" id="kn-admin-award-search-empty" style="display:none">
+						No awards match this filter.
+					</div>
 					<div class="kn-admin-table-wrap"><table class="kn-admin-table kn-admin-awards-table">
 						<thead>
 							<tr>
@@ -2027,63 +2006,98 @@ html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; bo
 	if (!kingdomId) return;
 
 	// ---- Park averages + player counts (AJAX) ----
-	fetch('<?= UIR ?>Kingdom/park_averages_json/' + kingdomId)
-		.then(function(r) { return r.json(); })
-		.then(function(data) {
-			var totalAtt = 0, totalTp = 0, totalTm = 0;
-			var wkCount = (data._kingdom && data._kingdom.wk_count) ? data._kingdom.wk_count : 26;
-			var kingdomAtt = (data._kingdom && data._kingdom.att) ? data._kingdom.att : null;
-			function knTrend(cur, prev, decimals) {
-				if (prev === undefined) return '';
-				if (cur > prev) return ' <span class="kn-trend kn-trend-up" title="Up from ' + prev.toFixed(decimals) + ' (prev period)">&#9650;</span>';
-				if (cur < prev) return ' <span class="kn-trend kn-trend-dn" title="Down from ' + prev.toFixed(decimals) + ' (prev period)">&#9660;</span>';
-				return '';
+	// Fill tile/row averages for a given park_averages_json payload.
+	// opts = { scope: Element|null (default document),
+	//          footer: {avgwk, avgmo, tp, tm} element-ids | null,
+	//          statCards: bool }
+	function knFillAverages(data, opts) {
+		opts = opts || {};
+		var scope = opts.scope || document;
+		var totalAtt = 0, totalTp = 0, totalTm = 0;
+		var wkCount = (data._kingdom && data._kingdom.wk_count) ? data._kingdom.wk_count : 26;
+		var kingdomAtt = (data._kingdom && data._kingdom.att) ? data._kingdom.att : null;
+		function knTrend(cur, prev, decimals) {
+			if (prev === undefined) return '';
+			if (cur > prev) return ' <span class="kn-trend kn-trend-up" title="Up from ' + prev.toFixed(decimals) + ' (prev period)">&#9650;</span>';
+			if (cur < prev) return ' <span class="kn-trend kn-trend-dn" title="Down from ' + prev.toFixed(decimals) + ' (prev period)">&#9660;</span>';
+			return '';
+		}
+		for (var parkId in data) {
+			if (parkId === '_kingdom') continue;
+			var att = data[parkId].att || 0, mo = data[parkId].mo || 0;
+			var tp  = data[parkId].tp  || 0, tm = data[parkId].tm  || 0;
+			var prevAtt = data[parkId].prev_att, prevMo = data[parkId].prev_mo;
+			totalAtt += att; totalTp += tp; totalTm += tm;
+			// Tile view
+			var tile = scope.querySelector('.kn-park-tile[data-park-id="' + parkId + '"]');
+			if (tile) {
+				var wkEl = tile.querySelector('.kn-avgwk-tile');
+				var moEl = tile.querySelector('.kn-avgmo-tile');
+				if (wkEl) wkEl.innerHTML = (att / wkCount).toFixed(1) + knTrend(att / wkCount, prevAtt !== undefined ? prevAtt / wkCount : undefined, 1);
+				if (moEl) moEl.innerHTML = mo.toFixed(1) + knTrend(mo, prevMo !== undefined ? prevMo : undefined, 1);
 			}
-			for (var parkId in data) {
-				if (parkId === '_kingdom') continue;
-				var att = data[parkId].att || 0, mo = data[parkId].mo || 0;
-				var tp  = data[parkId].tp  || 0, tm = data[parkId].tm  || 0;
-				var prevAtt = data[parkId].prev_att, prevMo = data[parkId].prev_mo;
-				totalAtt += att; totalTp += tp; totalTm += tm;
-				// Tile view
-				var tile = document.querySelector('.kn-park-tile[data-park-id="' + parkId + '"]');
-				if (tile) {
-					var wkEl = tile.querySelector('.kn-avgwk-tile');
-					var moEl = tile.querySelector('.kn-avgmo-tile');
-					if (wkEl) wkEl.innerHTML = (att / wkCount).toFixed(1) + knTrend(att / wkCount, prevAtt !== undefined ? prevAtt / wkCount : undefined, 1);
-					if (moEl) moEl.innerHTML = mo.toFixed(1) + knTrend(mo, prevMo !== undefined ? prevMo : undefined, 1);
-				}
-				// List view row
-				var row = document.querySelector('tr[data-park-id="' + parkId + '"]');
-				if (row) {
-					var wkTd = row.querySelector('.kn-avgwk-row');
-					var moTd = row.querySelector('.kn-avgmo-row');
-					var tpTd = row.querySelector('.kn-tp-row');
-					var tmTd = row.querySelector('.kn-tm-row');
-					if (wkTd) { wkTd.innerHTML = (att / wkCount).toFixed(2) + knTrend(att / wkCount, prevAtt !== undefined ? prevAtt / wkCount : undefined, 2); wkTd.setAttribute('data-sortval', att / wkCount); }
-					if (moTd) { moTd.innerHTML = mo.toFixed(1) + knTrend(mo, prevMo !== undefined ? prevMo : undefined, 1); moTd.setAttribute('data-sortval', mo); }
-					if (tpTd) { tpTd.textContent = tp;  tpTd.setAttribute('data-sortval', tp); }
-					if (tmTd) { tmTd.textContent = tm;  tmTd.setAttribute('data-sortval', tm); }
-				}
+			// List view row
+			var row = scope.querySelector('tr[data-park-id="' + parkId + '"]');
+			if (row) {
+				var wkTd = row.querySelector('.kn-avgwk-row');
+				var moTd = row.querySelector('.kn-avgmo-row');
+				var tpTd = row.querySelector('.kn-tp-row');
+				var tmTd = row.querySelector('.kn-tm-row');
+				if (wkTd) { wkTd.innerHTML = (att / wkCount).toFixed(2) + knTrend(att / wkCount, prevAtt !== undefined ? prevAtt / wkCount : undefined, 2); wkTd.setAttribute('data-sortval', att / wkCount); }
+				if (moTd) { moTd.innerHTML = mo.toFixed(1) + knTrend(mo, prevMo !== undefined ? prevMo : undefined, 1); moTd.setAttribute('data-sortval', mo); }
+				if (tpTd) { tpTd.textContent = tp;  tpTd.setAttribute('data-sortval', tp); }
+				if (tmTd) { tmTd.textContent = tm;  tmTd.setAttribute('data-sortval', tm); }
 			}
-			// Stat cards — use kingdom-level deduped values (avoids double-counting multi-park players)
-			var wkBase = kingdomAtt !== null ? kingdomAtt : totalAtt;
-			var moBase = (data._kingdom && data._kingdom.mo) ? data._kingdom.mo : 0;
+		}
+		// Stat cards — use kingdom-level deduped values (avoids double-counting multi-park players)
+		var wkBase = kingdomAtt !== null ? kingdomAtt : totalAtt;
+		var moBase = (data._kingdom && data._kingdom.mo) ? data._kingdom.mo : 0;
+		if (opts.statCards) {
 			var statWk = document.getElementById('kn-stat-avgwk');
 			var statMo = document.getElementById('kn-stat-avgmo');
 			if (statWk) statWk.textContent = (wkBase / wkCount).toFixed(1);
 			if (statMo) statMo.textContent = moBase.toFixed(1);
-			// Footer totals
-			var footWk = document.getElementById('kn-total-avgwk');
-			var footMo = document.getElementById('kn-total-avgmo');
-			var footTp = document.getElementById('kn-total-tp');
-			var footTm = document.getElementById('kn-total-tm');
+		}
+		// Footer totals
+		if (opts.footer) {
+			var footWk = document.getElementById(opts.footer.avgwk);
+			var footMo = document.getElementById(opts.footer.avgmo);
+			var footTp = document.getElementById(opts.footer.tp);
+			var footTm = document.getElementById(opts.footer.tm);
 			if (footWk) footWk.textContent = (wkBase / wkCount).toFixed(2);
 			if (footMo) footMo.textContent = moBase.toFixed(1);
 			if (footTp) footTp.textContent = totalTp;
 			if (footTm) footTm.textContent = totalTm;
+		}
+	}
+
+	// Kingdom's own parks (stat cards + kingdom footer)
+	fetch('<?= UIR ?>Kingdom/park_averages_json/' + kingdomId)
+		.then(function(r) { return r.json(); })
+		.then(function(data) {
+			knFillAverages(data, {
+				scope: document,
+				footer: { avgwk: 'kn-total-avgwk', avgmo: 'kn-total-avgmo', tp: 'kn-total-tp', tm: 'kn-total-tm' },
+				statCards: true
+			});
 		})
 		.catch(function(err) { console.error('Kingdom park_averages_json failed:', err); });
+
+	// Principality parks — one fetch per principality id; park ids are globally unique so
+	// document-scoped fills land on the right tiles/rows, and per-section footer ids keep totals separate.
+	var knPrinzIds = (KnConfig.principalityIds || []);
+	knPrinzIds.forEach(function(prId) {
+		fetch('<?= UIR ?>Kingdom/park_averages_json/' + prId)
+			.then(function(r) { return r.json(); })
+			.then(function(data) {
+				knFillAverages(data, {
+					scope: document,
+					footer: { avgwk: 'kn-prinz-' + prId + '-avgwk', avgmo: 'kn-prinz-' + prId + '-avgmo', tp: 'kn-prinz-' + prId + '-tp', tm: 'kn-prinz-' + prId + '-tm' },
+					statCards: false
+				});
+			})
+			.catch(function(err) { console.error('Principality park_averages_json failed (' + prId + '):', err); });
+	});
 
 	// ---- Players tab: lazy-load on first click ----
 	function knHtmlEsc(s) {
@@ -2444,20 +2458,42 @@ $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
 	if (filter === 'open') return rowFilter !== 'already';
 	return rowFilter === filter;
 });
-$(function() {
-	if ($('#kn-rec-table').length) {
-		window.knRecDT = $('#kn-rec-table').DataTable({
-			order: [[4, 'desc']],
-			columnDefs: [
-				{ targets: [4], type: 'date' },
-				<?php if ($CanManageKingdom ?? false): ?>
-				{ targets: [-1], orderable: false, searchable: false },
-				<?php endif; ?>
-			],
-			pageLength: 25
+// Initialise the rec-table DataTable + filter bar. Idempotent so the lazy-loader
+// can call it again after injecting the rec-tab HTML on first tab activation.
+window.knInitRecsTab = function() {
+	var $tbl = $('#kn-rec-table');
+	if (!$tbl.length) return;
+	if ($.fn.dataTable.isDataTable('#kn-rec-table')) {
+		$tbl.DataTable().destroy();
+	}
+	window.knRecDT = $tbl.DataTable({
+		// Columns: 0 Player · 1 Park · 2 Award · 3 Rank · 4 Rec By · 5 Date · 6 Notes · (-1 actions)
+		order: [[5, 'desc']],
+		columnDefs: [
+			{ targets: [5], type: 'date' },
+			<?php if ($CanManageKingdom ?? false): ?>
+			{ targets: [-1], orderable: false, searchable: false },
+			<?php endif; ?>
+		],
+		pageLength: 25
+	});
+	// Filter bar: re-bind in case the HTML is freshly injected.
+	var bar = document.querySelector('#kn-tab-recommendations .kn-rec-filter-bar');
+	if (bar && !bar.__knFilterBound) {
+		bar.__knFilterBound = true;
+		bar.addEventListener('click', function(e) {
+			var btn = e.target.closest('.kn-rec-filter-btn');
+			if (!btn) return;
+			var filter = btn.dataset.filter;
+			bar.querySelectorAll('.kn-rec-filter-btn').forEach(function(b) {
+				b.classList.toggle('kn-rec-filter-active', b.dataset.filter === filter);
+			});
+			window.knRecActiveFilter = filter;
+			if (window.knRecDT) window.knRecDT.draw();
 		});
 	}
-});
+};
+$(function() { window.knInitRecsTab(); });
 window.knRecPrint = function() { if (window.knRecDT) window.recsExportPrint(window.knRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($kingdom_name)) ?>'); };
 window.knRecCsv   = function() { if (window.knRecDT) window.recsExportCsv(window.knRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $kingdom_name) ?>.csv'); };
 initEmailSpellCheck('kn-addplayer-email', 'kn-addplayer-email-suggestion');

@@ -39,7 +39,11 @@ class Award  extends Ork3 {
             $kingdomaward->clear();
             $kingdomaward->kingdom_id = $request['KingdomId'];
             $kingdomaward->award_id = $request['AwardId'];
-            $kingdomaward->find();
+            if (!$kingdomaward->find()) {
+                // No matching kingdomaward row — return an invalid id so callers
+                // don't create an orphaned award grant against a stale id.
+                return array(0, $request['AwardId']);
+            }
 			return array($kingdomaward->kingdomaward_id, $kingdomaward->award_id);
         }
     }

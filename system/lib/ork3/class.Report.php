@@ -151,7 +151,8 @@ class Report  extends Ork3 {
 			return $cache;
 
 		if (valid_id($request['KingdomId'])) {
-			$location_clause = " and m.kingdom_id = $request[KingdomId]";
+			$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
+			$location_clause = " and m.kingdom_id IN ($kidList)";
 		} else {
 			// Kingdom-wide view: sort kingdom, then park, then persona.
 			$order = "k.name, p.name, m.persona, ";
@@ -207,6 +208,8 @@ class Report  extends Ork3 {
 		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
 			return $cache;
 
+    $kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdom_id)));
+
     $sql = "select m.mundane_id, m.persona, ducal_terms.ducal_points, kingdom_terms.kingdom_points from
               ork_mundane m
               left join 
@@ -220,7 +223,7 @@ class Report  extends Ork3 {
                       left join ork_kingdomaward ka on awards.kingdomaward_id = ka.kingdomaward_id
                       left join ork_mundane m on awards.mundane_id = m.mundane_id
                       left join ork_award a on ka.award_id = a.award_id
-                    where crown_points > 0 and m.kingdom_id = $kingdom_id and peerage = 'None'
+                    where crown_points > 0 and m.kingdom_id IN ($kidList) and peerage = 'None'
                     group by m.mundane_id, a.award_id) dterms
                   group by mundane_id, peerage) ducal_terms
                 on m.mundane_id = ducal_terms.mundane_id
@@ -235,11 +238,11 @@ class Report  extends Ork3 {
                       left join ork_kingdomaward ka on awards.kingdomaward_id = ka.kingdomaward_id
                       left join ork_mundane m on awards.mundane_id = m.mundane_id
                       left join ork_award a on ka.award_id = a.award_id
-                    where crown_points > 0 and m.kingdom_id = $kingdom_id and peerage = 'Kingdom-Level-Award'
+                    where crown_points > 0 and m.kingdom_id IN ($kidList) and peerage = 'Kingdom-Level-Award'
                     group by m.mundane_id, a.award_id) kterms
                   group by mundane_id, peerage) kingdom_terms
                 on m.mundane_id = kingdom_terms.mundane_id
-              where m.kingdom_id = $kingdom_id and (ducal_terms.mundane_id is not null or kingdom_terms.mundane_id is not null)
+              where m.kingdom_id IN ($kidList) and (ducal_terms.mundane_id is not null or kingdom_terms.mundane_id is not null)
                 and (kingdom_points >= 4 or (kingdom_points + ducal_points) >= 6 or ducal_points >= 6)
                 order by m.mundane_id";
     logtrace("CrownQualedPlayerAwards", $sql);
@@ -276,7 +279,8 @@ class Report  extends Ork3 {
 			return $cache;
 
 		if (valid_id($request['KingdomId'])) {
-			$location_clause = " and m.kingdom_id = $request[KingdomId]";
+			$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
+			$location_clause = " and m.kingdom_id IN ($kidList)";
 		} else {
 			$order = "k.name, ";
 		}
@@ -359,7 +363,8 @@ class Report  extends Ork3 {
 		$location_clause = '';
 		$order = '';
 		if (valid_id($request['KingdomId'])) {
-			$location_clause = " and m.kingdom_id = " . intval($request['KingdomId']);
+			$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
+			$location_clause = " and m.kingdom_id IN (" . $kidList . ")";
 		} else {
 			$order = "k.name, ";
 		}
@@ -438,7 +443,12 @@ class Report  extends Ork3 {
 			return $this->applyViewerFlags($cache, $viewer_id);
 
 		if (valid_id($request['KingdomId'])) {
-			$location_clause = " AND m.kingdom_id = $request[KingdomId]";
+			// Roll up principalities when the kingdom's IncludePrincipalityInStatistics
+			// flag is on. Originally pulled back because the inlined rendering was
+			// blocking DOMContentLoaded, but the tab is now lazy-loaded so the row
+			// count no longer affects initial paint.
+			$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
+			$location_clause = " AND m.kingdom_id IN ($kidList)";
 		}
 		if (valid_id($request['ParkId'])) {
 			$location_clause = " AND m.park_id = $request[ParkId]";
@@ -680,6 +690,41 @@ class Report  extends Ork3 {
 		return $response;
 	}
 
+	// Lightweight "how many active recs for this kingdom does this viewer see"
+	// query. Skips the heavy joins / per-row subqueries the full recommendations
+	// report runs, so it's cheap enough to call on every kingdom profile load
+	// just to render the "Recommendations (N)" tab badge.
+	public function PlayerAwardRecommendationsCount($request) {
+		$kid = (int)($request['KingdomId'] ?? 0);
+		if ($kid <= 0) return 0;
+		// Match PlayerAwardRecommendations: roll up principalities when the parent
+		// kingdom's IncludePrincipalityInStatistics flag is on, so the badge stays
+		// in sync with what the lazy-loaded panel actually shows.
+		$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kid)));
+		$key = Ork3::$Lib->ghettocache->key([
+			'KingdomIds'    => $kidList,
+			'RecommendedBy' => (int)($request['RecommendedBy'] ?? 0),
+		]);
+		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
+			return (int)$cache;
+
+		$where = "m.kingdom_id IN ($kidList) AND (recs.deleted_by IS NULL OR recs.deleted_by = 0)";
+		if (!empty($request['RecommendedBy'])) {
+			$rb = (int)$request['RecommendedBy'];
+			$where .= " AND recs.recommended_by_id = $rb";
+		}
+		$sql = "SELECT COUNT(*) AS n
+				FROM " . DB_PREFIX . "recommendations recs
+				JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id
+				WHERE $where";
+		$r = $this->db->query($sql);
+		$n = 0;
+		if ($r !== false && $r->size() > 0 && $r->next()) {
+			$n = (int)$r->n;
+		}
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $n);
+	}
+
 	public function DeletedAwardRecommendations($request) {
 		$key = Ork3::$Lib->ghettocache->key([
 			'KingdomId' => (int)($request['KingdomId'] ?? 0),
@@ -692,7 +737,8 @@ class Report  extends Ork3 {
 
 		$location_clause = '';
 		if (valid_id($request['KingdomId'])) {
-			$location_clause = " AND m.kingdom_id = " . (int)$request['KingdomId'];
+			$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
+			$location_clause = " AND m.kingdom_id IN (" . $kidList . ")";
 		}
 		if (valid_id($request['ParkId'])) {
 			$location_clause = " AND m.park_id = " . (int)$request['ParkId'];
@@ -766,7 +812,10 @@ class Report  extends Ork3 {
 	}
 
 	public function Guilds($request) {
-		if (valid_id($request['KingdomId'])) $where = "and k.kingdom_id = '$request[KingdomId]'";
+		if (valid_id($request['KingdomId'])) {
+			$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
+			$where = "and k.kingdom_id IN ($kidList)";
+		}
 		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";
 		if (valid_id($request['MundaneId'])) $where = "and m.mundane_id = '$request[MundaneId]'";
 
@@ -817,7 +866,10 @@ class Report  extends Ork3 {
 			return $cache;
 		$has_mundane = valid_id($request['MundaneId']);
 		if ($has_mundane) $mid = (int)$request['MundaneId'];
-		if (valid_id($request['KingdomId'])) $kingdom = " and m.kingdom_id = '$request[KingdomId]'";
+		$kidList = valid_id($request['KingdomId'])
+			? implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])))
+			: '';
+		if (valid_id($request['KingdomId'])) $kingdom = " and m.kingdom_id IN ($kidList)";
 		if (valid_id($request['ParkId'])) $park = " and m.park_id = '$request[ParkId]'";
 		if (valid_id($request['EventId'])) $event = " and e.event_id = '$request[EventId]'";
 		if (valid_id($request['IncludeCompanies'])) $companies = " or u.type = 'Company' ";
@@ -826,7 +878,7 @@ class Report  extends Ork3 {
 		if (valid_id($request['ActiveOnly'])) $active_only = " and um.active = 'Active' ";
 		// Hide retired units from listings unless explicitly requested.
 		$unit_active = valid_id($request['IncludeRetired']) ? '' : " and u.active = 'Active' ";
-		if (valid_id($request['KingdomId'])) $activity_scope = " and a.kingdom_id = '$request[KingdomId]'";
+		if (valid_id($request['KingdomId'])) $activity_scope = " and a.kingdom_id IN ($kidList)";
 		elseif (valid_id($request['ParkId'])) $activity_scope = " and a.park_id = '$request[ParkId]'";
 
 		$name_where = '';
@@ -881,7 +933,7 @@ class Report  extends Ork3 {
 			$inner_scope_where = '';
 			if (valid_id($request['KingdomId'])) {
 				$inner_scope_join  = "join " . DB_PREFIX . "mundane m on m.mundane_id = um.mundane_id";
-				$inner_scope_where = " and m.kingdom_id = '" . (int)$request['KingdomId'] . "'";
+				$inner_scope_where = " and m.kingdom_id IN ($kidList)";
 			} elseif (valid_id($request['ParkId'])) {
 				$inner_scope_join  = "join " . DB_PREFIX . "mundane m on m.mundane_id = um.mundane_id";
 				$inner_scope_where = " and m.park_id = '" . (int)$request['ParkId'] . "'";
@@ -951,9 +1003,9 @@ class Report  extends Ork3 {
 
 	public function AttendanceSummary($request) {
 		if (valid_id($request['EventId'])) $where = "where ssa.event_id = '" . mysql_real_escape_string($request['EventId']) . "'";
-		if (valid_id($request['KingdomId'])) $where = "where ssa.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+		if (valid_id($request['KingdomId'])) $where = "where ssa.kingdom_id IN (" . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId']))) . ")";
 		if (valid_id($request['ParkId'])) $where = "where ssa.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
-    	if (valid_id($request['PrincipalityId'])) $where = "where ssa.kingdom_id = '" . mysql_real_escape_string($request['PrincipalityId']) . "'";
+    	if (valid_id($request['PrincipalityId'])) $where = "where ssa.kingdom_id IN (" . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['PrincipalityId']))) . ")";
 		if ($request['NativePopulace'] && (valid_id($request['KingdomId']) || valid_id($request['ParkId']))) $where .= " and m.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
 		if ($request['Waivered']) $where = (strlen($where)>0)?" and m.waivered = 1":"where m.waivered = 1";
 		/*
@@ -1124,7 +1176,7 @@ class Report  extends Ork3 {
 						$unit_clause
 					where a.date = '" . mysql_real_escape_string($request['Date']) . "'
 				";
-		if (valid_id($request['KingdomId'])) $sql .= " and a.kingdom_id = $request[KingdomId]";
+		if (valid_id($request['KingdomId'])) $sql .= " and a.kingdom_id IN (" . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId']))) . ")";
 		if (valid_id($request['ParkId'])) $sql .= " and a.park_id = $request[ParkId]";
 		if (valid_id($request['UnitId'])) $sql .= " and a.unit_id = $request[UnitId]";
 		if (valid_id($request['MundandeId'])) $sql .= " and a.mundane_id = $request[MundaneId]";
@@ -1301,8 +1353,9 @@ class Report  extends Ork3 {
 				$order_by = "p.name";
 				break;
 			case AUTH_KINGDOM:
-				$restrict_clause[] = "k.kingdom_id = '" . mysql_real_escape_string($request['Id']) . "'";
-				$dues_restrict_clause = "and (a.kingdom_id = '" . mysql_real_escape_string($request['Id']) . "' or a.park_id = '" . mysql_real_escape_string($request['Id']) . "')";
+				$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['Id'])));
+				$restrict_clause[] = "k.kingdom_id IN ($kidList)";
+				$dues_restrict_clause = "and (a.kingdom_id IN ($kidList) or a.park_id = '" . mysql_real_escape_string($request['Id']) . "')";
 				$order_by = "k.name, p.name";
 				break;
 			case AUTH_EVENT:
@@ -1429,6 +1482,7 @@ class Report  extends Ork3 {
 		}
 
 		$escaped_kingdom_id = mysql_real_escape_string($request['KingdomId']);
+		$kidList = (int)$request['KingdomId']; // park-LIST display stays parent-only; principalities shown in their own sections + aggregates roll up elsewhere
 
 		// Only join mundane table when NativePopulace or Waivered filters are active
 		$mundane_join = (!empty($native_populace) || !empty($waivered_peeps))
@@ -1449,12 +1503,12 @@ class Report  extends Ork3 {
 									where
 										$native_populace
 										$waivered_peeps
-										a.kingdom_id = '$escaped_kingdom_id'
+										a.kingdom_id IN ($kidList)
 										and date >= '$per_period'
 										and a.mundane_id > 0
 									group by date_year, date_week3, mundane_id, a.park_id) mundanesbyweek
 								on p.park_id = mundanesbyweek.park_id
-					where p.kingdom_id = '$escaped_kingdom_id' and p.active = 'Active'
+					where p.kingdom_id IN ($kidList) and p.active = 'Active'
 					group by park_id
 					order by name";
 		logtrace('Report: GetKingdomParkAverages', array($request,$sql));
@@ -1483,6 +1537,7 @@ class Report  extends Ork3 {
 		if (strlen($request['KingdomId']) == 0) $request['KingdomId'] = '0';
 		$monthly_period = date("Y-m-d", strtotime("-1 year"));
 		$escaped_kingdom_id = mysql_real_escape_string($request['KingdomId']);
+		$kidList = (int)$request['KingdomId']; // park-LIST display stays parent-only; principalities shown in their own sections + aggregates roll up elsewhere
 
 		// AVG(distinct players per month) per park — matches the Park page hero stat formula.
 		// Divides by the number of months with actual attendance, not a fixed 12,
@@ -1492,7 +1547,7 @@ class Report  extends Ork3 {
 						SELECT a.date_year, a.date_month, a.park_id,
 						       COUNT(DISTINCT a.mundane_id) AS monthly_unique
 						FROM " . DB_PREFIX . "attendance a
-						WHERE a.kingdom_id = '$escaped_kingdom_id'
+						WHERE a.kingdom_id IN ($kidList)
 						  AND a.date > '$monthly_period'
 						  AND a.mundane_id > 0
 						GROUP BY a.date_year, a.date_month, a.park_id
@@ -1664,9 +1719,9 @@ class Report  extends Ork3 {
 	public function GetDistinctPlayerStats($request) {
 		$where = '';
 		if (valid_id($request['EventId'])) $where = "AND a.event_id = '" . mysql_real_escape_string($request['EventId']) . "'";
-		if (valid_id($request['KingdomId'])) $where = "AND a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+		if (valid_id($request['KingdomId'])) $where = "AND a.kingdom_id IN (" . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId']))) . ")";
 		if (valid_id($request['ParkId'])) $where = "AND a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
-		if (valid_id($request['PrincipalityId'])) $where = "AND a.kingdom_id = '" . mysql_real_escape_string($request['PrincipalityId']) . "'";
+		if (valid_id($request['PrincipalityId'])) $where = "AND a.kingdom_id IN (" . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['PrincipalityId']))) . ")";
 
 		$report_to = (!empty($request['ReportFromDate']) && $request['ReportFromDate'] !== date('Y-m-d'))
 			? $request['ReportFromDate'] : date('Y-m-d');
@@ -1710,9 +1765,9 @@ class Report  extends Ork3 {
 
 	public function GetMonthlyChartData($request) {
 		$where = '';
-		if (valid_id($request['KingdomId'])) $where = "AND a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+		if (valid_id($request['KingdomId'])) $where = "AND a.kingdom_id IN (" . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId']))) . ")";
 		if (valid_id($request['ParkId'])) $where = "AND a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
-		if (valid_id($request['PrincipalityId'])) $where = "AND a.kingdom_id = '" . mysql_real_escape_string($request['PrincipalityId']) . "'";
+		if (valid_id($request['PrincipalityId'])) $where = "AND a.kingdom_id IN (" . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['PrincipalityId']))) . ")";
 
 		$report_to = (!empty($request['ReportFromDate']) && $request['ReportFromDate'] !== date('Y-m-d'))
 			? $request['ReportFromDate'] : date('Y-m-d');
@@ -1779,7 +1834,8 @@ class Report  extends Ork3 {
     		    $park_comparator = " and a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "' ";
     		}
 		} else if (strlen($request['KingdomId']) > 0 && $request['KingdomId'] > 0) {
-			$location = " and m.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+			$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
+			$location = " and m.kingdom_id IN ($kidList)";
     		if (valid_id($request['ByKingdom'])) {
     		    $park_list = Ork3::$Lib->Kingdom->GetParks($request);
     		    $parks = array();
@@ -1798,7 +1854,7 @@ class Report  extends Ork3 {
 		if (valid_id($request['ParkId'])) {
 			$activity_location = " and a.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
 		} else if (strlen($request['KingdomId']) > 0 && $request['KingdomId'] > 0) {
-			$activity_location = " and a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+			$activity_location = " and a.kingdom_id IN (" . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId']))) . ")";
 		} else {
 			$activity_location = "";
 		}
@@ -1938,7 +1994,10 @@ class Report  extends Ork3 {
 
 	public function GetReeveQualified($request) {
 		$where = '';
-		if (valid_id($request['KingdomId'])) $where = "and k.kingdom_id = '$request[KingdomId]'";
+		if (valid_id($request['KingdomId'])) {
+			$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
+			$where = "and k.kingdom_id IN ($kidList)";
+		}
 		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";
 
 		$sql = "select m.persona, m.mundane_id, m.reeve_qualified_until, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, p.park_id, p.name as park_name
@@ -1976,7 +2035,10 @@ class Report  extends Ork3 {
 
 	public function GetCorporaQualified($request) {
 		$where = '';
-		if (valid_id($request['KingdomId'])) $where = "and k.kingdom_id = '$request[KingdomId]'";
+		if (valid_id($request['KingdomId'])) {
+			$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
+			$where = "and k.kingdom_id IN ($kidList)";
+		}
 		if (valid_id($request['ParkId'])) $where = "and p.park_id = '$request[ParkId]'";
 
 		$sql = "select m.persona, m.mundane_id, m.corpora_qualified_until, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, p.park_id, p.name as park_name
@@ -2125,6 +2187,7 @@ class Report  extends Ork3 {
 			return $cache;
 
 		$kingdom_id  = mysql_real_escape_string($request['KingdomId']);
+		$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
 		$start_date  = mysql_real_escape_string($request['StartDate']);
 		$end_date    = mysql_real_escape_string($request['EndDate']);
 		$period_expr = $this->_periodExpr($request['Period']);
@@ -2144,7 +2207,7 @@ class Report  extends Ork3 {
 				FROM " . DB_PREFIX . "attendance a
 					INNER JOIN " . DB_PREFIX . "park p ON a.park_id = p.park_id
 					LEFT JOIN " . DB_PREFIX . "mundane m ON a.mundane_id = m.mundane_id
-				WHERE a.kingdom_id = '$kingdom_id'
+				WHERE a.kingdom_id IN ($kidList)
 					AND a.date >= '$start_date'
 					AND a.date <= '$end_date'
 					AND a.park_id > 0
@@ -2179,7 +2242,7 @@ class Report  extends Ork3 {
 				FROM " . DB_PREFIX . "attendance a2
 					INNER JOIN " . DB_PREFIX . "park p2 ON a2.park_id = p2.park_id
 					LEFT JOIN " . DB_PREFIX . "mundane m2 ON a2.mundane_id = m2.mundane_id
-				WHERE a2.kingdom_id = '$kingdom_id'
+				WHERE a2.kingdom_id IN ($kidList)
 					AND a2.date >= '$start_date'
 					AND a2.date <= '$end_date'
 					AND a2.park_id > 0
@@ -2206,7 +2269,7 @@ class Report  extends Ork3 {
 						INNER JOIN " . DB_PREFIX . "park p ON a.park_id = p.park_id
 						INNER JOIN " . DB_PREFIX . "mundane m ON a.mundane_id = m.mundane_id
 							AND m.park_id = a.park_id
-					WHERE a.kingdom_id = '$kingdom_id'
+					WHERE a.kingdom_id IN ($kidList)
 						AND a.date >= '$start_date'
 						AND a.date <= '$end_date'
 						AND a.park_id > 0
@@ -2252,6 +2315,7 @@ class Report  extends Ork3 {
 			return $cache;
 
 		$kingdom_id     = intval($request['KingdomId']);
+		$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
 		$park_id        = intval($request['ParkId']);
 		$start_date     = mysql_real_escape_string($request['StartDate']);
 		$end_date       = mysql_real_escape_string($request['EndDate']);
@@ -2261,21 +2325,21 @@ class Report  extends Ork3 {
 		if ($park_id > 0) {
 			$scope_where = "AND fp.park_id = $park_id";
 		} else {
-			$scope_where = "AND pk.kingdom_id = $kingdom_id";
+			$scope_where = "AND pk.kingdom_id IN ($kidList)";
 		}
 
 		// Park scope applied to the outer parks table in the summary query.
 		if ($park_id > 0) {
 			$park_scope_where = "AND p.park_id = $park_id";
 		} else {
-			$park_scope_where = "AND p.kingdom_id = $kingdom_id";
+			$park_scope_where = "AND p.kingdom_id IN ($kidList)";
 		}
 
 		// Visit counts: only count visits at parks within the target kingdom during the range.
 		if ($park_id > 0) {
 			$visit_scope = "AND a_range.park_id = $park_id";
 		} else {
-			$visit_scope = "AND a_range.kingdom_id = $kingdom_id";
+			$visit_scope = "AND a_range.kingdom_id IN ($kidList)";
 		}
 
 		// Summary query: all active parks with new player stats; parks with no new players show zeros.
@@ -2496,6 +2560,7 @@ class Report  extends Ork3 {
 
 		$park_id    = mysql_real_escape_string($request['ParkId']);
 		$kingdom_id = mysql_real_escape_string($request['KingdomId']);
+		$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
 		$start_date = mysql_real_escape_string($request['StartDate']);
 		$end_date   = mysql_real_escape_string($request['EndDate']);
 		$min_signins = intval($request['MinimumSignIns']);
@@ -2511,7 +2576,7 @@ class Report  extends Ork3 {
 				FROM " . DB_PREFIX . "attendance a2" .
 				($local_only ? " INNER JOIN " . DB_PREFIX . "mundane m2 ON a2.mundane_id = m2.mundane_id AND m2.park_id = '$park_id'" : "") . "
 				WHERE a2.park_id = '$park_id'
-					AND a2.kingdom_id = '$kingdom_id'
+					AND a2.kingdom_id IN ($kidList)
 					AND a2.date >= '$start_date'
 					AND a2.date <= '$end_date'
 					AND a2.mundane_id > 0
@@ -2535,7 +2600,7 @@ class Report  extends Ork3 {
 						AND d.revoked != 1
 						AND (d.dues_for_life = 1 OR d.dues_until >= CURDATE())
 				WHERE a.park_id = '$park_id'
-					AND a.kingdom_id = '$kingdom_id'
+					AND a.kingdom_id IN ($kidList)
 					AND a.date >= '$start_date'
 					AND a.date <= '$end_date'
 					AND a.mundane_id > 0
@@ -2932,6 +2997,7 @@ class Report  extends Ork3 {
 		}
 
 		// Knights for the dropdown — kingdom-scoped so the selector stays useful.
+		$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdom_id)));
 		$knights_sql = "SELECT DISTINCT
 				m.mundane_id,
 				m.persona
@@ -2940,7 +3006,7 @@ class Report  extends Ork3 {
 				LEFT JOIN " . DB_PREFIX . "award alias ON alias.award_id = ma.alias_award_id
 				JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ma.mundane_id
 			WHERE COALESCE(alias.peerage, a.peerage) = 'Knight'
-				AND m.kingdom_id = $kingdom_id
+				AND m.kingdom_id IN ($kidList)
 				AND (ma.revoked = 0 OR ma.revoked IS NULL)
 			ORDER BY m.persona";
 
@@ -3002,7 +3068,7 @@ class Report  extends Ork3 {
 		if (valid_id($request['ParkId'])) {
 			$location = " and m.park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
 		} else if (valid_id($request['KingdomId'])) {
-			$location = " and m.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+			$location = " and m.kingdom_id IN (" . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId']))) . ")";
 		} else {
 			return array('Status' => InvalidParameter());
 		}
@@ -3545,7 +3611,7 @@ class Report  extends Ork3 {
 
 	public function GetInactiveParks($request) {
 		$kingdom_id = valid_id($request['KingdomId'] ?? 0) ? (int)$request['KingdomId'] : 0;
-		$kingdom_clause = $kingdom_id ? " AND p.kingdom_id = $kingdom_id" : '';
+		$kingdom_clause = $kingdom_id ? " AND p.kingdom_id IN (" . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdom_id))) . ")" : '';
 
 		$sql = "
 			SELECT p.park_id, p.name AS park_name, p.active, p.modified,
@@ -3839,7 +3905,7 @@ class Report  extends Ork3 {
 		$list  = "'" . implode("','", array_map('mysql_real_escape_string', $peerages)) . "'";
 		$start = mysql_real_escape_string($win['WeekStart']);
 		$end   = mysql_real_escape_string($win['WeekEnd']);
-		$kid_clause = $kingdom_id ? ' AND m.kingdom_id = ' . (int)$kingdom_id : '';
+		$kid_clause = $kingdom_id ? ' AND m.kingdom_id IN (' . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdom_id))) . ')' : '';
 		$sql = "SELECT ma.awards_id, ma.date, ma.mundane_id, m.persona,
 					   p.park_id, p.name AS park_name,
 					   k.kingdom_id, k.name AS kingdom_name,
@@ -3884,7 +3950,7 @@ class Report  extends Ork3 {
 		$start = mysql_real_escape_string($win['StartDt']);
 		$end   = mysql_real_escape_string($win['EndDt']);
 		$limit = intval($limit);
-		$kid_clause = $kingdom_id ? ' AND e.kingdom_id = ' . (int)$kingdom_id : '';
+		$kid_clause = $kingdom_id ? ' AND e.kingdom_id IN (' . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdom_id))) . ')' : '';
 		$sql = "SELECT e.event_id, e.name AS event_name,
 					   e.park_id, p.name AS park_name,
 					   e.kingdom_id, k.name AS kingdom_name,
@@ -3928,7 +3994,7 @@ class Report  extends Ork3 {
 		$start = mysql_real_escape_string($win['WeekStart']);
 		$end   = mysql_real_escape_string($win['WeekEnd']);
 		$limit = intval($limit);
-		$kid_clause = $kingdom_id ? ' AND a.kingdom_id = ' . (int)$kingdom_id : '';
+		$kid_clause = $kingdom_id ? ' AND a.kingdom_id IN (' . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdom_id))) . ')' : '';
 		$sql = "SELECT p.park_id, p.name AS park_name, p.has_heraldry,
 					   k.kingdom_id, k.name AS kingdom_name,
 					   COUNT(DISTINCT a.mundane_id) AS attendance
@@ -3967,7 +4033,7 @@ class Report  extends Ork3 {
 		// Kingdom filter applies to the in-window attendance (where they first
 		// signed in). The prior-history NOT EXISTS subquery stays global — we
 		// want "truly new players who started here", not "new to this kingdom".
-		$kid_clause = $kingdom_id ? ' AND a_in.kingdom_id = ' . (int)$kingdom_id : '';
+		$kid_clause = $kingdom_id ? ' AND a_in.kingdom_id IN (' . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdom_id))) . ')' : '';
 		$sql = "SELECT m.mundane_id, m.persona,
 					   p.park_id, p.name AS park_name,
 					   k.kingdom_id, k.name AS kingdom_name,
@@ -4013,7 +4079,7 @@ class Report  extends Ork3 {
 		// Kingdom filter applies to the in-window attendance. The "last prior
 		// attendance" subquery stays global so the gap reflects their TRUE last
 		// sign-in anywhere, not their last at this kingdom specifically.
-		$kid_clause = $kingdom_id ? ' AND a_in.kingdom_id = ' . (int)$kingdom_id : '';
+		$kid_clause = $kingdom_id ? ' AND a_in.kingdom_id IN (' . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdom_id))) . ')' : '';
 		$sql = "SELECT X.* FROM (
 				  SELECT m.mundane_id, m.persona,
 						 MIN(a_in.date) AS return_date,
@@ -4069,7 +4135,7 @@ class Report  extends Ork3 {
 		$end   = mysql_real_escape_string($win['EndDt']);
 		$mul   = intval($multiple);
 		if ($mul <= 0) $mul = 25;
-		$kid_clause = $kingdom_id ? ' AND e.kingdom_id = ' . (int)$kingdom_id : '';
+		$kid_clause = $kingdom_id ? ' AND e.kingdom_id IN (' . implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kingdom_id))) . ')' : '';
 		$sql = "SELECT * FROM (
 				  SELECT e.event_id, e.name AS event_name,
 						 e.park_id, p.name AS park_name,
