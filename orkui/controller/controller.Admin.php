@@ -2654,6 +2654,9 @@ class Controller_Admin extends Controller {
 			$this->data['MinDate'] = (string)$_rng->mn;
 			$this->data['MaxDate'] = (string)$_rng->mx;
 		}
+		// 12-month cap on the reporting window in production (server-crash guard);
+		// 0 = unlimited for local/dev. Mirrors the hard limit in AdminAjax::stateofamtgard.
+		$this->data['RangeLimitMonths'] = (getenv('ENVIRONMENT') === 'DEV') ? 0 : 12;
 		$this->data['page_title'] = 'State of Amtgard Report';
 		$this->template = '../revised-frontend/StateOfAmtgard_index.tpl';
 	}

@@ -117,6 +117,19 @@ class Controller_AdminAjax extends Controller {
 			exit;
 		}
 
+		// Cap the reporting window at 12 months in production to protect the server
+		// from multi-year scans that can exhaust the DB. Local/dev (ENVIRONMENT=DEV)
+		// is unrestricted, matching the env gate used for the Server Health load test.
+		$limit_months = (getenv('ENVIRONMENT') === 'DEV') ? 0 : 12;
+		if ($limit_months > 0) {
+			$max_end = (new DateTime($start))->modify('+' . $limit_months . ' months')->format('Y-m-d');
+			if ($end > $max_end) {
+				http_response_code(400);
+				echo json_encode(['error' => 'The reporting window cannot exceed ' . $limit_months . ' months. Please narrow the date range.']);
+				exit;
+			}
+		}
+
 		$raw_kingdoms = isset($_GET['kingdoms']) && is_array($_GET['kingdoms']) ? $_GET['kingdoms'] : [];
 		// Reject 0/negative and absurd IDs (real kingdom_ids fit well under 100000).
 		$kingdom_ids = array_values(array_filter(
