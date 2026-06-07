@@ -11109,7 +11109,7 @@ window.pnCloseUnitCreateModal = function() {
             } else {
                 kid = KnConfig.kingdomId; scope = 'own';                     // within/out: locked to this kingdom
             }
-            return PSEARCH_BASE + kid + '&scope=' + scope + '&include_inactive=1'
+            return PSEARCH_BASE + kid + '&scope=' + scope + '&include_inactive=1&include_suspended=1'
                 + (sel.parkId ? '&park_id=' + sel.parkId : '')
                 + '&q=' + encodeURIComponent(term);
         }
@@ -11123,8 +11123,9 @@ window.pnCloseUnitCreateModal = function() {
                     el.innerHTML = (data && data.length)
                         ? data.map(function(p) {
                             var inactive = p.Active === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
-                            return '<div class="kn-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                                + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>' + inactive + '</div>';
+                            var suspended = p.Suspended === 1 ? ' <span style="margin-left:6px;background:#c53030;color:#fff;font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px">suspended</span>' : '';
+                            return '<div class="kn-ac-item' + (p.Suspended === 1 ? ' kn-ac-suspended' : '') + '" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+                                + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>' + suspended + inactive + '</div>';
                         }).join('')
                         : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
                     el.classList.add('kn-ac-open');
@@ -11489,8 +11490,8 @@ window.pnCloseUnitCreateModal = function() {
     if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
     var MOVE_URL        = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/moveplayer';
-    var PSEARCH_EXCLUDE = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=exclude&include_inactive=1&q=';
-    var PSEARCH_OWN     = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=own&include_inactive=1&q=';
+    var PSEARCH_EXCLUDE = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=exclude&include_inactive=1&include_suspended=1&q=';
+    var PSEARCH_OWN     = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=own&include_inactive=1&include_suspended=1&q=';
     var KPSEARCH_BASE   = PkConfig.uir + 'KingdomAjax/playersearch/';
 
     var pkPlayerCascade = null, pkDestCascade = null;
@@ -11583,7 +11584,7 @@ window.pnCloseUnitCreateModal = function() {
         if (mpMode === 'in') {
             var sel = pkPlayerCascade ? pkPlayerCascade.get() : { kingdomId: 0, parkId: 0 };
             if (sel.kingdomId) {
-                return KPSEARCH_BASE + sel.kingdomId + '&scope=own&include_inactive=1'
+                return KPSEARCH_BASE + sel.kingdomId + '&scope=own&include_inactive=1&include_suspended=1'
                     + (sel.parkId ? '&park_id=' + sel.parkId : '') + '&q=' + encodeURIComponent(term);
             }
             return PSEARCH_EXCLUDE + encodeURIComponent(term);
@@ -11646,10 +11647,17 @@ window.pnCloseUnitCreateModal = function() {
                             results.forEach(function(player) {
                                 var item = document.createElement('div');
                                 item.className = 'pk-ac-item';
+                                if (player.Suspended === 1) item.classList.add('pk-ac-suspended');
                                 var abbr = (player.PAbbr && player.KAbbr)
                                     ? ' — ' + player.PAbbr + ' (' + player.KAbbr + ')'
                                     : (player.ParkName ? ' — ' + player.ParkName : '');
                                 item.textContent = player.Persona + abbr;
+                                if (player.Suspended === 1) {
+                                    var sbadge = document.createElement('span');
+                                    sbadge.textContent = 'suspended';
+                                    sbadge.style.cssText = 'margin-left:6px;background:#c53030;color:#fff;font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px';
+                                    item.appendChild(sbadge);
+                                }
                                 if (player.Active === 0) {
                                     var badge = document.createElement('span');
                                     badge.textContent = ' inactive';

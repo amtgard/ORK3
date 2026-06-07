@@ -11,7 +11,7 @@ class Controller_Award extends Controller
 		$this->load_model('Park');
 		$this->load_model('Kingdom');
 		$params = explode('/', $id);
-		$id = $params[0];
+		$id = (int) $params[0];
 
 		switch ($call) {
 			case 'park':
@@ -47,7 +47,7 @@ class Controller_Award extends Controller
 	private function handle_award_route($id, $type)
 	{
 		$params = explode('/', $id);
-		$id = $params[0];
+		$id = (int) $params[0];
 		$action = null;
 
 		if (count($params) > 1) {

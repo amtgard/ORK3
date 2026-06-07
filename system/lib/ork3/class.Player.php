@@ -628,7 +628,7 @@ class Player extends Ork3 {
 				$this->mundane->surname = $request['Surname'];
 				$this->mundane->other_name = $request['OtherName'];
 				$this->mundane->username = trim($request['UserName']);
-				$this->mundane->persona = $request['Persona'];
+				$this->mundane->persona = trim($request['Persona']);
 				$this->mundane->email = $request['Email'];
 				$this->mundane->park_id = $request['ParkId'];
 				$this->mundane->kingdom_id = $park->kingdom_id;
@@ -1182,7 +1182,7 @@ class Player extends Ork3 {
 						return InvalidParameter('Persona', ProfanityFilter::ERROR_MESSAGE);
 					}
 				}
-				$this->mundane->persona = is_null($request['Persona'])?$this->mundane->persona:$request['Persona'];
+				$this->mundane->persona = is_null($request['Persona'])?$this->mundane->persona:trim($request['Persona']);
 				$this->mundane->pronoun_id = is_null($request['PronounId'])?$this->mundane->pronoun_id:$request['PronounId'];
 				$this->mundane->pronoun_custom = is_null($request['PronounCustom'])?$this->mundane->pronoun_custom:$request['PronounCustom'];
 
