@@ -12831,9 +12831,15 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
     function wirePanel(panelId, listUrl, restoreUrl) {
         var panel = document.getElementById(panelId);
         if (!panel) return;
+        // Guard against double-wiring. The kingdom panel is lazy-loaded
+        // (see kn:recs-loaded handler below) — we want one call from there
+        // and a no-op from DOMContentLoaded. Without this, the click handler
+        // attaches twice and the toggle opens-and-closes in the same click.
+        if (panel.dataset.wired === '1') return;
         var toggle = panel.querySelector('.pk-deleted-recs-toggle');
         var body   = panel.querySelector('.pk-deleted-recs-body');
         if (!toggle || !body) return;
+        panel.dataset.wired = '1';
 
         toggle.addEventListener('click', function () {
             var open = panel.classList.toggle('pk-deleted-open');
@@ -12936,11 +12942,17 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
             );
         }
         if (typeof KnConfig !== 'undefined' && KnConfig.kingdomId) {
-            wirePanel(
-                'kn-deleted-recs',
-                KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/deletedrecommendations',
-                KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/restorerecommendation'
-            );
+            // The Kingdom recommendations panel — which contains the
+            // kn-deleted-recs markup — is lazy-loaded via Kingdom::
+            // recommendations_panel after the user opens the Recs tab. Call
+            // wirePanel here for the lucky case where it's already in the
+            // DOM, and again on `kn:recs-loaded` once the markup arrives.
+            var knListUrl    = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/deletedrecommendations';
+            var knRestoreUrl = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/restorerecommendation';
+            wirePanel('kn-deleted-recs', knListUrl, knRestoreUrl);
+            document.addEventListener('kn:recs-loaded', function () {
+                wirePanel('kn-deleted-recs', knListUrl, knRestoreUrl);
+            });
         }
     });
 })();
