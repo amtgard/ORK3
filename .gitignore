@@ -28,6 +28,7 @@ system/lib/phpqrcode/*
 cache
 .idea
 vendor
+.php-cs-fixer.cache
 .svn
 ork_history.sql
 Google Maps API Key

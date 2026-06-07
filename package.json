@@ -13,6 +13,7 @@
     "esbuild": "^0.28.0"
   },
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "postinstall": "mkdir -p orkui/template/default/script/js/fullcalendar && cp node_modules/@fullcalendar/core/index.global.min.js orkui/template/default/script/js/fullcalendar/core.global.min.js && cp node_modules/@fullcalendar/daygrid/index.global.min.js orkui/template/default/script/js/fullcalendar/daygrid.global.min.js && cp node_modules/@fullcalendar/interaction/index.global.min.js orkui/template/default/script/js/fullcalendar/interaction.global.min.js && npx esbuild node_modules/@zootools/email-spell-checker/dist/index.js --bundle --format=iife --global-name=EmailSpellChecker --minify --outfile=orkui/template/revised-frontend/script/email-spell-checker.min.js",
     "copy-fullcalendar": "mkdir -p orkui/template/default/script/js/fullcalendar && cp node_modules/@fullcalendar/core/index.global.min.js orkui/template/default/script/js/fullcalendar/core.global.min.js && cp node_modules/@fullcalendar/daygrid/index.global.min.js orkui/template/default/script/js/fullcalendar/daygrid.global.min.js && cp node_modules/@fullcalendar/interaction/index.global.min.js orkui/template/default/script/js/fullcalendar/interaction.global.min.js",
     "build-email-spell-checker": "npx esbuild node_modules/@zootools/email-spell-checker/dist/index.js --bundle --format=iife --global-name=EmailSpellChecker --minify --outfile=orkui/template/revised-frontend/script/email-spell-checker.min.js"

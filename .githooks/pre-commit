@@ -1,0 +1,85 @@
+#!/bin/sh
+#
+# ORK3 shared pre-commit hook (versioned; activated via core.hooksPath=.githooks).
+#
+# Does two things:
+#   1. Keeps the local-only class.Authorization.php (login-bypass override) out of every commit.
+#   2. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer.phar,
+#      then re-stages them. Only files that are FULLY staged are touched — a file with both
+#      staged and unstaged changes is skipped, so unstaged hunks are never swept into the commit.
+#
+# It never blocks a commit because of the formatter (missing php / fixer errors only warn).
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT" || exit 0
+
+# ---------------------------------------------------------------------------
+# 1. Never let class.Authorization.php content slip into a commit.
+#    (Allow its removal from tracking via `git rm --cached`.)
+# ---------------------------------------------------------------------------
+AUTH_FILE="system/lib/ork3/class.Authorization.php"
+if git diff --cached --name-only | grep -q "$AUTH_FILE"; then
+    if git diff --cached --name-only --diff-filter=D | grep -q "$AUTH_FILE"; then
+        echo "ℹ️  class.Authorization.php is being removed from tracking — allowed."
+    else
+        git reset -q HEAD "$AUTH_FILE"
+        echo "⚠️  class.Authorization.php was unstaged automatically — it is excluded from all commits."
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 2. PSR-12 auto-format staged PHP files (boy-scout: only what you touch).
+# ---------------------------------------------------------------------------
+PHAR="tools/php-cs-fixer.phar"
+CONFIG=".php-cs-fixer.dist.php"
+
+# Find a PHP runtime; if none, skip formatting silently-ish (do not block the commit).
+PHP_BIN=$(command -v php 2>/dev/null)
+if [ -z "$PHP_BIN" ] || [ ! -f "$PHAR" ]; then
+    [ -z "$PHP_BIN" ] && echo "ℹ️  php not found on PATH — skipping auto-format (commit continues)."
+    [ ! -f "$PHAR" ]  && echo "ℹ️  $PHAR missing — run 'npm install' or see tools/README.md (commit continues)."
+    exit 0
+fi
+
+# Staged, added/copied/modified .php files (NUL-safe), excluding the auth override.
+STAGED_PHP=$(git diff --cached --name-only --diff-filter=ACM -- '*.php' | grep -v "^$AUTH_FILE$")
+[ -z "$STAGED_PHP" ] && exit 0
+
+# Keep only files that are fully staged (no lingering unstaged changes).
+TO_FIX=""
+SKIPPED=""
+OLDIFS=$IFS
+IFS='
+'
+for f in $STAGED_PHP; do
+    [ -f "$f" ] || continue
+    if git diff --name-only -- "$f" | grep -q .; then
+        SKIPPED="$SKIPPED $f"          # partially staged → leave it alone
+    else
+        TO_FIX="$TO_FIX
+$f"
+    fi
+done
+IFS=$OLDIFS
+
+if [ -n "$SKIPPED" ]; then
+    echo "ℹ️  Skipped auto-format (partially staged — fix & stage manually):$SKIPPED"
+fi
+
+# Trim leading newline; bail if nothing left to format.
+TO_FIX=$(printf '%s' "$TO_FIX" | sed '/^$/d')
+[ -z "$TO_FIX" ] && exit 0
+
+# Run the fixer on just those files. setUnsupportedPhpVersionAllowed handles newer PHP.
+echo "$TO_FIX" | tr '\n' '\0' | \
+    xargs -0 "$PHP_BIN" "$PHAR" fix --config="$CONFIG" --quiet --using-cache=yes
+FIX_STATUS=$?
+
+if [ "$FIX_STATUS" -ne 0 ]; then
+    echo "⚠️  php-cs-fixer exited $FIX_STATUS — committing your files as-is (no auto-format applied)."
+    exit 0
+fi
+
+# Re-stage anything the fixer rewrote (no-op for unchanged files).
+echo "$TO_FIX" | tr '\n' '\0' | xargs -0 git add --
+exit 0
