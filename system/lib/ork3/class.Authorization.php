@@ -481,7 +481,7 @@ class Authorization extends Ork3
 		// Reuse the existing password verification path.
 		$auth = $this->Authorize(['UserName' => $username, 'Password' => $password, 'Token' => null]);
 		if (!isset($auth['Status']) || $auth['Status']['Status'] !== 0) {
-			return ['Status' => NoAuthorization("Username or password incorrect")];
+			return ['Status' => NoAuthorization(null, "Username or password incorrect")];
 		}
 
 		$mundaneId = $auth['UserId'];
@@ -490,7 +490,7 @@ class Authorization extends Ork3
 		$this->idp_auth->clear();
 		$this->idp_auth->mundane_id = $mundaneId;
 		if ($this->idp_auth->find() && $this->idp_auth->idp_user_id !== $claim['IdpUserId']) {
-			return ['Status' => NoAuthorization("This ORK profile is already linked to another Amtgard account. Contact support if you need to transfer it.")];
+			return ['Status' => NoAuthorization(null, "This ORK profile is already linked to another Amtgard account. Contact support if you need to transfer it.")];
 		}
 
 		// Build the request shape createIdpLink expects.
@@ -564,7 +564,7 @@ class Authorization extends Ork3
 		global $DB;
 		$token = trim((string)$token);
 		if (strlen($token) !== 64) {
-			return ['Status' => NoAuthorization("That link isn't valid.")];
+			return ['Status' => NoAuthorization(null, "That link isn't valid.")];
 		}
 
 		$DB->Clear();
@@ -573,22 +573,22 @@ class Authorization extends Ork3
 			array($token)
 		);
 		if (!is_array($rows) || count($rows) === 0) {
-			return ['Status' => NoAuthorization("That link isn't valid.")];
+			return ['Status' => NoAuthorization(null, "That link isn't valid.")];
 		}
 		$row = $rows[0];
 
 		if (!is_null($row['consumed_at'])) {
-			return ['Status' => NoAuthorization("That link has already been used.")];
+			return ['Status' => NoAuthorization(null, "That link has already been used.")];
 		}
 		if (strtotime($row['expires_at']) < time()) {
-			return ['Status' => NoAuthorization("That link has expired. Start over from the login page.")];
+			return ['Status' => NoAuthorization(null, "That link has expired. Start over from the login page.")];
 		}
 
 		// Refuse if this ORK profile is already linked to a different IDP id.
 		$this->idp_auth->clear();
 		$this->idp_auth->mundane_id = (int)$row['mundane_id'];
 		if ($this->idp_auth->find() && $this->idp_auth->idp_user_id !== $row['idp_user_id']) {
-			return ['Status' => NoAuthorization("This ORK profile is already linked to another Amtgard account.")];
+			return ['Status' => NoAuthorization(null, "This ORK profile is already linked to another Amtgard account.")];
 		}
 
 		// Mark consumed BEFORE finalizing so concurrent uses fail fast.
@@ -604,7 +604,7 @@ class Authorization extends Ork3
 			array($token)
 		);
 		if (!is_array($check) || count($check) === 0 || is_null($check[0]['consumed_at'])) {
-			return ['Status' => NoAuthorization("That link has already been used.")];
+			return ['Status' => NoAuthorization(null, "That link has already been used.")];
 		}
 
 		// Build createIdpLink request shape. We don't have access/refresh
@@ -652,7 +652,7 @@ class Authorization extends Ork3
 		}
 
 		if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
-			return ['Status' => NoAuthorization('Your access to the ORK has been restricted.')];
+			return ['Status' => NoAuthorization(null, 'Your access to the ORK has been restricted.')];
 		}
 
 		$this->mundane->token = md5(openssl_random_pseudo_bytes(16) . microtime());

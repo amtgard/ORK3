@@ -464,7 +464,7 @@ html[data-theme="dark"] .lg-session-notice { background: #1a365d; border-color: 
 			</form>
 			<div class="lg-links">
 				<a href="<?= UIR ?>Login/forgotpassword"><i class="fas fa-key" style="margin-right:4px;opacity:0.6"></i>Forgot your password?</a>
-				<a href="#" id="lc-different-account" style="margin-left:12px"><i class="fas fa-user-times" style="margin-right:4px;opacity:0.6"></i>Sign in with a different account</a>
+				<a href="#" id="lc-different-account"><i class="fas fa-user-times" style="margin-right:4px;opacity:0.6"></i>Sign in with a different account</a>
 			</div>
 		</details>
 
@@ -476,7 +476,7 @@ html[data-theme="dark"] .lg-session-notice { background: #1a365d; border-color: 
 
 		<div class="lg-no-account">
 			<i class="fas fa-info-circle"></i>
-			<strong>Don't have an account?</strong> Your local park's officers can create one for you as you start participating.
+			<strong>Don't have an ORK account?</strong> Your local park's officers can create one for you as you start participating.
 			Reach out to your park officers to get started.
 		</div>
 	</div>
