@@ -4790,6 +4790,34 @@ $(document).ready(function() {
     // Filters the rendered admin-awards table based on the search input's value.
     // O(rows) per keystroke — fine up to a few hundred. Each row carries the
     // pre-lowered haystack on its dataset, set in makeAwardRow().
+    // Duplicate-name guard: soft, override-able warning before saving an award whose
+    // name collides with an existing one (normalized: case- and whitespace-insensitive).
+    function knNormalizeAwardName(s) {
+        return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    }
+    function knFindAwardNameCollision(name, excludeKawId) {
+        var norm = knNormalizeAwardName(name);
+        if (!norm) return null;
+        var list = (window.KnConfig && KnConfig.adminAwards) || [];
+        var ex = parseInt(excludeKawId || 0, 10);
+        for (var i = 0; i < list.length; i++) {
+            if (ex && parseInt(list[i].KingdomAwardId, 10) === ex) continue;
+            if (knNormalizeAwardName(list[i].KingdomAwardName) === norm) return list[i].KingdomAwardName;
+        }
+        return null;
+    }
+    function knGuardDuplicateName(name, excludeKawId, proceed) {
+        var existing = knFindAwardNameCollision(name, excludeKawId);
+        if (!existing) { proceed(); return; }
+        knConfirm(
+            'It looks like you already have an award called "' + existing + '" in your awards list. ' +
+            'Did you mean to set an alias of it, or create a different award? Duplicate awards can cause ' +
+            'data-integrity issues, so we don\'t recommend saving this. Continue anyway?',
+            proceed,
+            'Possible Duplicate Award'
+        );
+    }
+
     function applyAdminAwardFilter() {
         var inp = gid('kn-admin-award-search');
         if (!inp) return;
@@ -4801,11 +4829,21 @@ $(document).ready(function() {
         if (!tbody) return;
         var rows = tbody.querySelectorAll('tr');
         var visible = 0;
+        var groupVisible = {};
         rows.forEach(function(tr) {
+            if (tr.dataset.groupHeader) return;
             var hay  = tr.dataset.searchHaystack || '';
             var show = !q || hay.indexOf(q) !== -1;
             tr.style.display = show ? '' : 'none';
-            if (show) visible++;
+            if (show) {
+                visible++;
+                var g = tr.dataset.group || '';
+                groupVisible[g] = (groupVisible[g] || 0) + 1;
+            }
+        });
+        rows.forEach(function(tr) {
+            if (!tr.dataset.groupHeader) return;
+            tr.style.display = (groupVisible[tr.dataset.group] > 0) ? '' : 'none';
         });
         if (empty) empty.style.display = (q && visible === 0) ? '' : 'none';
     }
@@ -4825,6 +4863,28 @@ $(document).ready(function() {
         });
     }
 
+    function classifyAdminAward(aw) {
+        var awardId = parseInt(aw.AwardId || 0, 10);
+        var sysName = String(aw.AwardName || '').trim();
+        var knName  = String(aw.KingdomAwardName || '').trim();
+        if (awardId === 94) return 'specific';
+        if (sysName === '')  return 'specific';
+        if (sysName === knName) return 'standard';
+        return 'alias';
+    }
+
+    function makeAwardGroupHeader(label, count, key) {
+        var tr = document.createElement('tr');
+        tr.className = 'kn-admin-award-group';
+        tr.dataset.groupHeader = '1';
+        tr.dataset.group = key;
+        var td = document.createElement('td');
+        td.colSpan = 6;
+        td.textContent = label + ' (' + count + ')';
+        tr.appendChild(td);
+        return tr;
+    }
+
     var awardsBuilt = false;
     function buildAwards() {
         if (awardsBuilt) return;
@@ -4832,8 +4892,27 @@ $(document).ready(function() {
         var tbody = gid('kn-admin-awards-tbody');
         if (!tbody) return;
         tbody.innerHTML = '';
+        var groups = { standard: [], alias: [], specific: [] };
         (KnConfig.adminAwards || []).forEach(function(aw) {
-            tbody.appendChild(makeAwardRow(aw));
+            groups[classifyAdminAward(aw)].push(aw);
+        });
+        var orgName = String(KnConfig.kingdomName || 'Kingdom');
+        [
+            { key: 'standard', label: 'System Standard Awards' },
+            { key: 'alias',    label: 'Aliases of System Awards' },
+            { key: 'specific', label: orgName + ' \u2014 Specific Awards' }
+        ].forEach(function(sec) {
+            var list = groups[sec.key];
+            if (!list.length) return;
+            list.sort(function(a, b) {
+                return String(a.KingdomAwardName || '').localeCompare(String(b.KingdomAwardName || ''));
+            });
+            tbody.appendChild(makeAwardGroupHeader(sec.label, list.length, sec.key));
+            list.forEach(function(aw) {
+                var tr = makeAwardRow(aw);
+                tr.dataset.group = sec.key;
+                tbody.appendChild(tr);
+            });
         });
         wireAwardSearch();
     }
@@ -4908,7 +4987,8 @@ $(document).ready(function() {
         (function(btn, nc, rc, mc, cb, cc, kawId) {
             btn.addEventListener('click', function() {
                 clearFeedback('kn-admin-awards-feedback');
-                btn.disabled = true;
+                knGuardDuplicateName(nc.value.trim(), kawId, function() {
+                    btn.disabled = true;
                 $.post(BASE_URL + 'setaward', {
                     KingdomAwardId:   kawId,
                     KingdomAwardName: nc.value.trim(),
@@ -4928,6 +5008,7 @@ $(document).ready(function() {
                         feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Save failed.', false);
                     }
                 }, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
+                    });
             });
         })(saveBtn, nameCell.inp, reignCell.inp, monthCell.inp, titleCb, classCell.inp, aw.KingdomAwardId);
 
@@ -5120,6 +5201,7 @@ $(document).ready(function() {
                 if (!awardId) { feedback('kn-admin-awards-feedback', 'Please select a system award.', false); return; }
                 if (!name)    { feedback('kn-admin-awards-feedback', 'Award name is required.', false); return; }
 
+                knGuardDuplicateName(name, 0, function() {
                 saveNewBtn.disabled = true;
                 $.post(BASE_URL + 'setaward', {
                     KingdomAwardId:   0,
@@ -5138,6 +5220,7 @@ $(document).ready(function() {
                         feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Create failed.', false);
                     }
                 }, 'json').fail(function() { saveNewBtn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
+                });
             });
         }
 
@@ -5171,6 +5254,7 @@ $(document).ready(function() {
 
                 if (!name) { feedback('kn-admin-awards-feedback', 'Award name is required.', false); return; }
 
+                knGuardDuplicateName(name, 0, function() {
                 saveCustomBtn.disabled = true;
                 $.post(BASE_URL + 'setaward', {
                     KingdomAwardId:   0,
@@ -5189,6 +5273,7 @@ $(document).ready(function() {
                         feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Create failed.', false);
                     }
                 }, 'json').fail(function() { saveCustomBtn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
+                });
             });
         }
     }
@@ -12746,9 +12831,15 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
     function wirePanel(panelId, listUrl, restoreUrl) {
         var panel = document.getElementById(panelId);
         if (!panel) return;
+        // Guard against double-wiring. The kingdom panel is lazy-loaded
+        // (see kn:recs-loaded handler below) — we want one call from there
+        // and a no-op from DOMContentLoaded. Without this, the click handler
+        // attaches twice and the toggle opens-and-closes in the same click.
+        if (panel.dataset.wired === '1') return;
         var toggle = panel.querySelector('.pk-deleted-recs-toggle');
         var body   = panel.querySelector('.pk-deleted-recs-body');
         if (!toggle || !body) return;
+        panel.dataset.wired = '1';
 
         toggle.addEventListener('click', function () {
             var open = panel.classList.toggle('pk-deleted-open');
@@ -12851,11 +12942,17 @@ window.initEmailSpellCheck = function(inputId, suggestionId) {
             );
         }
         if (typeof KnConfig !== 'undefined' && KnConfig.kingdomId) {
-            wirePanel(
-                'kn-deleted-recs',
-                KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/deletedrecommendations',
-                KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/restorerecommendation'
-            );
+            // The Kingdom recommendations panel — which contains the
+            // kn-deleted-recs markup — is lazy-loaded via Kingdom::
+            // recommendations_panel after the user opens the Recs tab. Call
+            // wirePanel here for the lucky case where it's already in the
+            // DOM, and again on `kn:recs-loaded` once the markup arrives.
+            var knListUrl    = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/deletedrecommendations';
+            var knRestoreUrl = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/restorerecommendation';
+            wirePanel('kn-deleted-recs', knListUrl, knRestoreUrl);
+            document.addEventListener('kn:recs-loaded', function () {
+                wirePanel('kn-deleted-recs', knListUrl, knRestoreUrl);
+            });
         }
     });
 })();

@@ -6,6 +6,7 @@ $defaultStart = $prevYear . '-01-01';
 $defaultEnd   = $prevYear . '-12-31';
 $minDate      = (string)($MinDate ?? '');  // earliest attendance date (for "All Time")
 $maxDate      = (string)($MaxDate ?? '');  // latest attendance date
+$rangeLimitMonths = (int)($RangeLimitMonths ?? 0);  // 12 in production, 0 = unlimited (local/dev)
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=20240101">
 
@@ -42,7 +43,7 @@ $maxDate      = (string)($MaxDate ?? '');  // latest attendance date
       <label for="sor-end">End Date</label>
       <input type="date" id="sor-end" value="<?= htmlspecialchars($defaultEnd) ?>">
     </div>
-    <?php if ($minDate !== '' && $maxDate !== ''): ?>
+    <?php if ($minDate !== '' && $maxDate !== '' && $rangeLimitMonths === 0): ?>
     <div class="sor-filter-group sor-filter-quick">
       <label>&nbsp;</label>
       <button type="button" id="sor-btn-all-time" class="sor-btn-sm"
@@ -79,6 +80,8 @@ $maxDate      = (string)($MaxDate ?? '');  // latest attendance date
 <!-- Kingdom multi-select helpers — isolated script so any error in the
      main orchestrator IIFE cannot prevent these buttons from working. -->
 <script>
+// Max reporting-window span enforced in production (server-crash guard); 0 = unlimited (local/dev).
+window.SOR_RANGE_LIMIT_MONTHS = <?= (int)$rangeLimitMonths ?>;
 (function () {
 	function sorKingdomSelect(predicate) {
 		var sel = document.getElementById('sor-kingdoms');
@@ -4561,6 +4564,18 @@ html[data-theme="dark"] .sor-awards-skeleton-pie {
     if (start > end) {
       sorSetStatus('Start date must be before end date.', 'sor-status-error');
       return;
+    }
+
+    // Mirror the server's 12-month cap (production only). Computed via calendar-month
+    // math so it matches PHP's strtotime('+12 months'); 0 = unlimited (local/dev).
+    var limitMonths = (typeof window.SOR_RANGE_LIMIT_MONTHS === 'number') ? window.SOR_RANGE_LIMIT_MONTHS : 0;
+    if (limitMonths > 0) {
+      var _sd = new Date(start + 'T00:00:00');
+      var _maxEnd = new Date(_sd.getFullYear(), _sd.getMonth() + limitMonths, _sd.getDate());
+      if (new Date(end + 'T00:00:00') > _maxEnd) {
+        sorSetStatus('The reporting window cannot exceed ' + limitMonths + ' months. Please narrow the date range.', 'sor-status-error');
+        return;
+      }
     }
 
     // Check at least one kingdom selected

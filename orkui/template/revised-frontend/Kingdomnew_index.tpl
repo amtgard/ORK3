@@ -2456,6 +2456,11 @@ $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
 	var row = settings.aoData[dataIndex].nTr;
 	var rowFilter = row ? row.getAttribute('data-filter') : '';
 	if (filter === 'open') return rowFilter !== 'already';
+	if (filter === 'mycircles') {
+		if (rowFilter === 'already') return false;
+		var aid = parseInt(row.getAttribute('data-award-id') || '0', 10);
+		return (window.knRecCircleAwardIds || []).indexOf(aid) !== -1;
+	}
 	return rowFilter === filter;
 });
 // Initialise the rec-table DataTable + filter bar. Idempotent so the lazy-loader
@@ -2463,6 +2468,7 @@ $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
 window.knInitRecsTab = function() {
 	var $tbl = $('#kn-rec-table');
 	if (!$tbl.length) return;
+	window.knRecCircleAwardIds = (function() { try { return JSON.parse($tbl.attr('data-circle-ids') || '[]'); } catch (e) { return []; } })();
 	if ($.fn.dataTable.isDataTable('#kn-rec-table')) {
 		$tbl.DataTable().destroy();
 	}

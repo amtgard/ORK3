@@ -315,6 +315,11 @@ class Controller_Kingdom extends Controller {
 		$CanManageKingdom = $canManageKingdom;
 		$kingdom_name     = $this->Kingdom->get_kingdom_name($kingdom_id);
 
+		// "My Circles" filter: the viewer's peerage voting circle, as a set of award_ids.
+		// Empty for non-peers (the button is then not rendered).
+		$ViewerCircleAwardIds = $uid > 0 ? Ork3::$Lib->player->GetCircleAwardIds($uid) : array();
+		$ViewerHasCircle      = !empty($ViewerCircleAwardIds);
+
 		header('Content-Type: text/html; charset=utf-8');
 		header('X-Recs-Count: ' . count($AwardRecommendations)); // JS uses this for the tab badge
 		include DIR_TEMPLATE . 'revised-frontend/Kingdomnew_recommendations_panel.tpl';

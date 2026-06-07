@@ -515,6 +515,40 @@ class Player extends Ork3 {
 		return $response;
 	}
 
+	// Peerage voting "circles" the given player belongs to, expressed as a set of
+	// award_ids. Knighthoods vote as ONE group: holding any knighthood (award_id in
+	// 17,18,19,20,245) puts all five in the circle. Paragons vote in SEPARATE
+	// per-type circles: each Paragon held adds only that exact award_id. Masters are
+	// intentionally excluded. Returns [] when the player holds no knighthood/paragon.
+	public function GetCircleAwardIds($mundane_id) {
+		$mundane_id = (int)$mundane_id;
+		if ($mundane_id <= 0) return array();
+		$knightSet = array(17, 18, 19, 20, 245);
+		$sql = "select distinct a.award_id, a.peerage
+				from " . DB_PREFIX . "awards aw
+				join " . DB_PREFIX . "kingdomaward ka on ka.kingdomaward_id = aw.kingdomaward_id
+				join " . DB_PREFIX . "award a on a.award_id = ka.award_id
+				where aw.mundane_id = " . $mundane_id . "
+				  and (a.peerage = 'Paragon' or a.award_id in (" . implode(',', $knightSet) . "))";
+		$r = $this->db->query($sql);
+		$set = array();
+		$hasKnight = false;
+		if ($r !== false && $r->size() > 0) {
+			while ($r->next()) {
+				$aid = (int)$r->award_id;
+				if (in_array($aid, $knightSet, true)) {
+					$hasKnight = true;
+				} elseif ($r->peerage === 'Paragon') {
+					$set[$aid] = true;
+				}
+			}
+		}
+		if ($hasKnight) {
+			foreach ($knightSet as $k) $set[$k] = true;
+		}
+		return array_values(array_map('intval', array_keys($set)));
+	}
+
 	public function GetPlayerClasses($request) {
 		// Cold-cache the dedupe-by-date subquery costs ~185ms for the busiest player
 		// in the DB (1500+ attendance rows). Memcache to convert most loads to ~1ms.
