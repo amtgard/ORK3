@@ -319,6 +319,11 @@ class Controller_Park extends Controller
 			$this->data['ShowRecsTab'] = false;
 		}
 
+		// "My Circles" filter: the viewer's peerage voting circle, as a set of award_ids.
+		// Empty for non-peers (the button is then not rendered).
+		$this->data['ViewerCircleAwardIds'] = $uid > 0 ? Ork3::$Lib->player->GetCircleAwardIds($uid) : array();
+		$this->data['ViewerHasCircle']      = !empty($this->data['ViewerCircleAwardIds']);
+
 		$this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();
 		$this->data['PronounOptionsCreate'] = $this->Pronoun->fetch_pronoun_option_list(null);
 	}

@@ -1171,13 +1171,16 @@
 				<?php if (empty($AwardRecommendations)): ?>
 				<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($park_name) ?>.</div>
 				<?php else: ?>
-				<?php if (!empty($CanAdminPark)): ?>
+				<?php if (!empty($CanAdminPark) || !empty($ViewerHasCircle)): ?>
 				<div class="kn-rec-filter-bar">
 					<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="open">Open Recs</button>
-					<button class="kn-rec-filter-btn" data-filter="below">Below Recommended</button>
+					<button class="kn-rec-filter-btn" data-filter="below">Below Rec'd</button>
 					<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
-					<button class="kn-rec-filter-btn" data-filter="already">At or Above Recommended</button>
+					<button class="kn-rec-filter-btn" data-filter="already">At or Above Rec'd</button>
 					<button class="kn-rec-filter-btn" data-filter="all">All</button>
+					<?php if (!empty($ViewerHasCircle)): ?>
+					<button class="kn-rec-filter-btn" data-filter="mycircles"><i class="fas fa-users"></i> My Circles</button>
+					<?php endif; ?>
 					<span class="kn-rec-filter-info">
 						<button class="kn-rec-filter-info-btn" type="button" aria-label="Filter help"><i class="fas fa-question-circle"></i></button>
 						<div class="kn-rec-filter-popover">
@@ -1185,14 +1188,18 @@
 							<dl>
 								<dt>Open Recs <small style="font-weight:400;color:#718096">(default)</small></dt>
 								<dd>All pending recommendations &mdash; both rank-based and flat awards. Hides recs that have already been fulfilled.</dd>
-								<dt>Below Recommended</dt>
+								<dt>Below Rec'd</dt>
 								<dd>Players who haven&rsquo;t yet reached the recommended rank. The core action list &mdash; Grant these.</dd>
 								<dt>Non-Ladder</dt>
 								<dd>Includes titles such as Master, Noble, or Knight, custom awards, and other non-ranked options. Grant or Delete as appropriate.</dd>
-								<dt>At or Above Recommended</dt>
+								<dt>At or Above Rec'd</dt>
 								<dd>Players who already hold this award at or above the recommended rank. The rec has been fulfilled &mdash; Delete these to keep the list tidy.</dd>
 								<dt>All</dt>
 								<dd>Every recommendation regardless of status. Use for a full audit.</dd>
+								<?php if (!empty($ViewerHasCircle)): ?>
+								<dt>My Circles</dt>
+								<dd>Open recommendations your peerage circle votes on &mdash; all knighthood recs (knights vote as a group) plus recs for each Paragon you hold.</dd>
+								<?php endif; ?>
 							</dl>
 						</div>
 					</span>
@@ -1203,7 +1210,7 @@
 				</div>
 				<?php endif; ?>
 				<div class="pk-recs-table-wrap">
-					<table id="pk-rec-table" class="pk-recs-table display">
+					<table id="pk-rec-table" class="pk-recs-table display" data-circle-ids="<?= htmlspecialchars(json_encode($ViewerCircleAwardIds ?? array())) ?>">
 						<thead>
 							<tr>
 								<th>Player</th>
@@ -1218,7 +1225,7 @@
 						<tbody id="pk-recs-tbody">
 						<?php foreach ($AwardRecommendations as $rec): ?>
 						<tr class="pk-rec-row"
-							data-rec-id="<?= (int)$rec['RecommendationsId'] ?>"
+							data-rec-id="<?= (int)$rec['RecommendationsId'] ?>" data-award-id="<?= (int)$rec['AwardId'] ?>"
 							data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 							<td><?= htmlspecialchars($rec['AwardName']) ?></td>
@@ -2304,6 +2311,7 @@ html[data-theme="dark"] .pk-wx-warning { background:#450a0a; color:#fca5a5; bord
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
 window.pkRecActiveFilter = 'open';
+window.pkRecCircleAwardIds = <?= json_encode($ViewerCircleAwardIds ?? array()) ?>;
 $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
 	if (settings.nTable.id !== 'pk-rec-table') return true;
 	var filter = window.pkRecActiveFilter || 'all';
@@ -2311,6 +2319,11 @@ $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
 	var row = settings.aoData[dataIndex].nTr;
 	var rowFilter = row ? row.getAttribute('data-filter') : '';
 	if (filter === 'open') return rowFilter !== 'already';
+	if (filter === 'mycircles') {
+		if (rowFilter === 'already') return false;
+		var aid = parseInt(row.getAttribute('data-award-id') || '0', 10);
+		return (window.pkRecCircleAwardIds || []).indexOf(aid) !== -1;
+	}
 	return rowFilter === filter;
 });
 $(function() {
