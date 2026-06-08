@@ -10,4 +10,6 @@ set -e
 cd "$(git rev-parse --show-toplevel)"
 git config core.hooksPath .githooks
 echo "✅ git hooks activated (core.hooksPath = .githooks)."
-echo "   PHP files you commit will be auto-formatted to PSR-12 via tools/php-cs-fixer.phar."
+echo "   • PHP files you commit are auto-formatted to PSR-12 via tools/php-cs-fixer.phar."
+echo "   • CSS/JS files you commit have leading tabs normalized to spaces via bin/normalize-leading-tabs.sh."
+echo "   (Only fully-staged files are touched; partially-staged files are skipped.)"

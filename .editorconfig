@@ -1,0 +1,31 @@
+# EditorConfig — https://editorconfig.org
+# Declares the repo's indentation style so editors stop emitting hard tabs.
+# Enforced on commit for PHP (php-cs-fixer) and CSS/JS (bin/normalize-leading-tabs.sh).
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Source we actively normalize. 4-space matches PSR-12 (PHP) and the existing
+# revised.css / revised.js indentation.
+[*.{php,css,js,tpl}]
+indent_style = space
+indent_size = 4
+
+# Markup / data files keep 2-space by convention.
+[*.{json,yml,yaml,html,xml}]
+indent_size = 2
+
+# Never reformat vendored or generated bundles.
+[*.min.{css,js}]
+trim_trailing_whitespace = false
+insert_final_newline = false
+
+# Makefiles require real tabs.
+[{Makefile,makefile,*.mk}]
+indent_style = tab
