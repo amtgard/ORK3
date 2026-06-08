@@ -1624,8 +1624,9 @@ table.tablesorter tbody tr.normal-row td {
 
 /* =====================================================
    DARK MODE OVERRIDES
-   Applied via html[data-theme="dark"] (manual toggle)
-   or html[data-theme="dark"] #theme_container {
+   Applied via html[data-theme="dark"] (manual toggle).
+   ===================================================== */
+html[data-theme="dark"] #theme_container {
 	background-color: #1a202c;
 }
 html[data-theme="dark"] a {
@@ -1634,11 +1635,6 @@ html[data-theme="dark"] a {
 html[data-theme="dark"] a:hover {
 	color: #90cdf4;
 }
-html[data-theme="dark"] h1,
-html[data-theme="dark"] h2,
-html[data-theme="dark"] h3,
-html[data-theme="dark"] h4,
-html[data-theme="dark"] h5,
 html[data-theme="dark"] h1,
 html[data-theme="dark"] h2,
 html[data-theme="dark"] h3,
