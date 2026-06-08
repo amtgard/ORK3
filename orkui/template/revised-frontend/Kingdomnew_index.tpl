@@ -2481,7 +2481,8 @@ window.knInitRecsTab = function() {
 			{ targets: [-1], orderable: false, searchable: false },
 			<?php endif; ?>
 		],
-		pageLength: 25
+		pageLength: 25,
+		scrollX: true
 	});
 	// Filter bar: re-bind in case the HTML is freshly injected.
 	var bar = document.querySelector('#kn-tab-recommendations .kn-rec-filter-bar');

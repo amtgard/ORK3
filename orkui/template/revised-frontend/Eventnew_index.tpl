@@ -1351,7 +1351,8 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 				{ targets: [-1], orderable: false, searchable: false }
 <?php endif; ?>
 			],
-			pageLength: 25
+			pageLength: 25,
+			scrollX: true
 		});
 		window._evAttDt = _evAttDt;
 	}
