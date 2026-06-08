@@ -52,12 +52,14 @@
 	--ork-shadow-focus:      0 0 0 2px rgba(49,130,206,0.12);
 
 	/* ----- Z-Index Scale ------------------------------------------------ */
+	/* Modal layers sit ABOVE the fixed top nav (--ork-z-nav: 9999); otherwise
+	   on short viewports a centered modal slides behind the nav band. */
 	--z-dropdown:        300;
 	--z-tooltip:         500;
-	--z-modal-backdrop: 1040;
-	--z-modal:          1100;
-	--z-modal-top:      1200;
-	--z-help-overlay:   1300;
+	--z-modal-backdrop: 10040;
+	--z-modal:          10100;
+	--z-modal-top:      10200;
+	--z-help-overlay:   10300;
 	--ork-z-nav:        9999;   /* #newmenu in orkui.css */
 	--ork-z-nav-dropdown: 10000; /* nav avatar/resources dropdown menu */
 	--ork-z-nav-overlay: 10001; /* nav search dropdown */

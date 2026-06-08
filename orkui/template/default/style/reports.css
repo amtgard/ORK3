@@ -183,8 +183,8 @@
 	width          : 15px;
 	height         : 15px;
 	border-radius  : 50%;
-	background     : #e2e8f0;
-	color          : #718096;
+	background     : var(--rp-border);
+	color          : var(--rp-text-muted);
 	font-size      : 9px;
 	font-weight    : 700;
 	cursor         : default;
@@ -253,12 +253,12 @@
 	border: 1px solid #cbd5e0;
 	border-radius: 20px;
 	background: #fff;
-	color: #4a5568;
+	color: var(--rp-text-body);
 	cursor: pointer;
 	white-space: nowrap;
 	transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-.rp-view-btn:hover { border-color: #a0aec0; background: #f7fafc; }
+.rp-view-btn:hover { border-color: var(--rp-text-hint); background: var(--rp-bg-light); }
 .rp-view-btn-active { background: #4338ca; color: #fff; border-color: #4338ca; }
 .rp-view-btn-active:hover { background: #3730a3; border-color: #3730a3; }
 
@@ -383,7 +383,7 @@
 
 .rp-filter-pill:hover:not(.active) {
 	background  : var(--rp-bg-light);
-	border-color: #a0aec0;
+	border-color: var(--rp-text-hint);
 	color       : var(--rp-text-body);
 }
 
@@ -1154,10 +1154,6 @@ html[data-theme="dark"] .rp-charts-row > div[id] {
   border: 1px solid var(--ork-border, #4a5568);
   border-radius: 8px;
 }
-html[data-theme="dark"] .highcharts-container {
-  background: transparent !important;
-}
-
 /* =====================================================
    DARK MODE — Beltline DataTable
    ===================================================== */

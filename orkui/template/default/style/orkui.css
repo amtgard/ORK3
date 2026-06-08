@@ -947,12 +947,12 @@ p {
 .nsdd-loading { padding: 12px 16px; color: var(--ork-text-muted); font-size: 13px; text-align: center; }
 .nsdd-empty { padding: 14px 16px; color: var(--ork-text-hint); font-size: 13px; font-style: italic; text-align: center; }
 .nsdd-section-header { padding: 8px 16px 3px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--ork-text-hint); }
-.nsdd-item { display: flex; align-items: center; gap: 10px; padding: 7px 16px; text-decoration: none; color: #2d3748; transition: background 0.1s; outline: none; }
+.nsdd-item { display: flex; align-items: center; gap: 10px; padding: 7px 16px; text-decoration: none; color: var(--ork-text); transition: background 0.1s; outline: none; }
 .nsdd-item:hover { background: var(--ork-surface-hover); text-decoration: none; color: #2d3748; }
 .nsdd-item:focus { background: #dbeafe; color: #1e40af; text-decoration: none; outline: none; border-left: 3px solid #4299e1; padding-left: 13px; }
 .nsdd-item-icon { width: 18px; text-align: center; color: var(--ork-text-hint); font-size: 12px; flex-shrink: 0; }
 .nsdd-item-content { flex: 1; min-width: 0; }
-.nsdd-item-label { font-size: 13px; color: #2d3748; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nsdd-item-label { font-size: 13px; color: var(--ork-text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nsdd-item-sub { font-size: 11px; color: var(--ork-text-hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 .nsdd-no-value { color: var(--ork-text-hint); font-style: italic; }
 .nsdd-divider { border-top: 1px solid #f0f4f8; margin: 4px 0; }
@@ -1048,7 +1048,7 @@ p {
     align-items: center;
     gap: 10px;
     padding: 9px 16px;
-    color: #2d3748 !important;
+    color: var(--ork-text) !important;
     font-size: 13px;
     transition: background 0.12s;
     text-decoration: none;
@@ -1969,25 +1969,21 @@ html[data-theme="dark"] .heraldry-item {
 /* =====================================================
    DARK MODE — Search pages (sr-*, se-*)
    ===================================================== */
-html[data-theme="dark"] .sr-search-card,
-html[data-theme="dark"] .se-search-card {
+html[data-theme="dark"] .sr-search-card {
   background: var(--ork-card-bg);
   border-color: var(--ork-border);
 }
 html[data-theme="dark"] .sr-search-input,
-html[data-theme="dark"] .se-search-input,
 html[data-theme="dark"] .su-search-input {
   background: var(--ork-input-bg);
   border-color: var(--ork-input-border);
   color: var(--ork-text);
 }
-html[data-theme="dark"] .sr-results-card,
-html[data-theme="dark"] .se-results-card {
+html[data-theme="dark"] .sr-results-card {
   background: var(--ork-card-bg);
   border-color: var(--ork-border);
 }
-html[data-theme="dark"] .sr-results-header,
-html[data-theme="dark"] .se-results-header {
+html[data-theme="dark"] .sr-results-header {
   background: var(--ork-bg-secondary);
   border-color: var(--ork-border);
   color: var(--ork-text);
@@ -1996,31 +1992,20 @@ html[data-theme="dark"] .sr-table thead tr,
 html[data-theme="dark"] .se-table thead tr {
   background: var(--ork-bg-secondary);
 }
-html[data-theme="dark"] .sr-table th,
-html[data-theme="dark"] .se-table th {
+html[data-theme="dark"] .sr-table th {
   color: var(--ork-text-muted);
   border-color: var(--ork-border);
 }
-html[data-theme="dark"] .sr-table td,
-html[data-theme="dark"] .se-table td {
+html[data-theme="dark"] .sr-table td {
   color: var(--ork-text-secondary);
   border-color: var(--ork-border);
 }
-html[data-theme="dark"] .sr-table tbody tr:hover,
-html[data-theme="dark"] .se-table tbody tr:hover {
+html[data-theme="dark"] .sr-table tbody tr:hover {
   background: var(--ork-bg-secondary);
 }
 html[data-theme="dark"] .sr-row-banned {
   background: var(--ork-badge-red-bg);
   color: var(--ork-badge-red-text);
-}
-html[data-theme="dark"] .se-date-badge {
-  background: var(--ork-badge-blue-bg);
-  color: var(--ork-badge-blue-text);
-}
-html[data-theme="dark"] .se-date-past {
-  background: var(--ork-bg-tertiary);
-  color: var(--ork-text-muted);
 }
 
 /* =====================================================
@@ -2235,37 +2220,29 @@ html[data-theme="dark"] .info-container h3:hover:after {
 /* =====================================================
    DARK MODE — Search page text elements (sr-*, se-*)
    ===================================================== */
-html[data-theme="dark"] .sr-header-title,
-html[data-theme="dark"] .se-header-title {
+html[data-theme="dark"] .sr-header-title {
   color: var(--ork-text);
 }
-html[data-theme="dark"] .sr-header-sub,
-html[data-theme="dark"] .se-header-sub {
+html[data-theme="dark"] .sr-header-sub {
   color: var(--ork-text-muted);
 }
-html[data-theme="dark"] .sr-search-label,
-html[data-theme="dark"] .se-search-label {
+html[data-theme="dark"] .sr-search-label {
   color: var(--ork-text-secondary);
 }
-html[data-theme="dark"] .sr-search-label i,
-html[data-theme="dark"] .se-search-label i {
+html[data-theme="dark"] .sr-search-label i {
   color: #63b3ed;
 }
-html[data-theme="dark"] .sr-results-title,
-html[data-theme="dark"] .se-results-title {
+html[data-theme="dark"] .sr-results-title {
   color: var(--ork-text);
 }
-html[data-theme="dark"] .sr-results-title i,
-html[data-theme="dark"] .se-results-title i {
+html[data-theme="dark"] .sr-results-title i {
   color: #63b3ed;
 }
-html[data-theme="dark"] .sr-results-count,
-html[data-theme="dark"] .se-results-count {
+html[data-theme="dark"] .sr-results-count {
   background: var(--ork-bg-tertiary);
   color: var(--ork-text-muted);
 }
-html[data-theme="dark"] .sr-player-name,
-html[data-theme="dark"] .se-event-name {
+html[data-theme="dark"] .sr-player-name {
   color: var(--ork-text);
 }
 html[data-theme="dark"] .sr-row-inactive td {
@@ -2284,23 +2261,17 @@ html[data-theme="dark"] .sr-row-banned td {
 html[data-theme="dark"] .sr-row-banned:hover td {
   background: rgba(245,101,101,0.25);
 }
-html[data-theme="dark"] .sr-empty,
-html[data-theme="dark"] .se-empty {
+html[data-theme="dark"] .sr-empty {
   color: var(--ork-text-muted);
 }
-html[data-theme="dark"] .sr-empty i,
-html[data-theme="dark"] .se-empty i {
-  color: var(--ork-text-muted);
-}
-html[data-theme="dark"] .se-all-toggle {
+html[data-theme="dark"] .sr-empty i {
   color: var(--ork-text-muted);
 }
 html[data-theme="dark"] .sr-header-icon,
 html[data-theme="dark"] .se-header-icon {
   background: #2c5282;
 }
-html[data-theme="dark"] .sr-search-hint,
-html[data-theme="dark"] .se-search-hint {
+html[data-theme="dark"] .sr-search-hint {
   color: var(--ork-text-muted);
 }
 html[data-theme="dark"] .sr-search-icon,
