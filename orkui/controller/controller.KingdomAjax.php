@@ -821,22 +821,25 @@ class Controller_KingdomAjax extends Controller
                 $did       = (int)$evtResult->detail_id;
                 $evKid   = (int)$evtResult->kingdom_id;
                 $rsvpRaw = (string)($evtResult->royal_rsvps ?? '');
-                $rsvpSet = $rsvpRaw !== '' ? array_flip(array_map('intval', explode(',', $rsvpRaw))) : [];
-                $royal = [];
-                if ($kingdomMonarchId && isset($rsvpSet[$kingdomMonarchId])) {
-                    $royal['km'] = true;
-                }
-                if ($kingdomRegentId  && isset($rsvpSet[$kingdomRegentId])) {
-                    $royal['kr'] = true;
-                }
-                if ($evKid !== $kid && isset($familyRoyals[$evKid])) {
-                    $pmId = $familyRoyals[$evKid]['monarch'];
-                    $prId = $familyRoyals[$evKid]['regent'];
-                    if ($pmId && isset($rsvpSet[$pmId])) {
-                        $royal['pm'] = true;
+                $royal   = [];
+                // Only an event with at least one royal RSVP can carry a crown — skip the rest otherwise.
+                if ($rsvpRaw !== '') {
+                    $rsvpSet = array_flip(array_map('intval', explode(',', $rsvpRaw)));
+                    if ($kingdomMonarchId && isset($rsvpSet[$kingdomMonarchId])) {
+                        $royal['km'] = true;
                     }
-                    if ($prId && isset($rsvpSet[$prId])) {
-                        $royal['pr'] = true;
+                    if ($kingdomRegentId && isset($rsvpSet[$kingdomRegentId])) {
+                        $royal['kr'] = true;
+                    }
+                    if ($evKid !== $kid && isset($familyRoyals[$evKid])) {
+                        $pmId = $familyRoyals[$evKid]['monarch'];
+                        $prId = $familyRoyals[$evKid]['regent'];
+                        if ($pmId && isset($rsvpSet[$pmId])) {
+                            $royal['pm'] = true;
+                        }
+                        if ($prId && isset($rsvpSet[$prId])) {
+                            $royal['pr'] = true;
+                        }
                     }
                 }
                 $ev = [
