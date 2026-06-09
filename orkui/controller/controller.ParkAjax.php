@@ -66,6 +66,10 @@ class Controller_ParkAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Time is required.']);
                 exit;
             }
+            if ($recurrence === 'every-x-weeks' && !strlen(trim($_POST['StartDate'] ?? ''))) {
+                echo json_encode(['status' => 1, 'error' => 'A start date is required for the "every X weeks" cadence.']);
+                exit;
+            }
             $online = (($_POST['Online'] ?? '0') === '1') ? 1 : 0;
             $altLoc = (!$online && (($_POST['AlternateLocation'] ?? '0') === '1')) ? 1 : 0;
             $r = $this->Park->add_park_day([
@@ -107,6 +111,10 @@ class Controller_ParkAjax extends Controller
             }
             if (!strlen($time)) {
                 echo json_encode(['status' => 1, 'error' => 'Time is required.']);
+                exit;
+            }
+            if ($recurrence === 'every-x-weeks' && !strlen(trim($_POST['StartDate'] ?? ''))) {
+                echo json_encode(['status' => 1, 'error' => 'A start date is required for the "every X weeks" cadence.']);
                 exit;
             }
             $online = (($_POST['Online'] ?? '0') === '1') ? 1 : 0;

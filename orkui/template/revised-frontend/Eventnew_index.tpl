@@ -3378,7 +3378,7 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 			document.getElementById('ev-wx-temps').innerHTML = hi + '/' + hiC + '°' +
 				(lo != null ? ' <span style="font-size:11px;color:var(--ork-text-muted,#718096)">L ' + lo + '/' + loC + '°</span>' : '') +
 				(w.precip_inches != null && w.precip_inches >= 0.1
-					? '<div style="font-size:11px;color:var(--ork-text-muted,#718096);margin-top:2px">' + w.precip_inches.toFixed(2) + '" / ' + Math.round(w.precip_inches * 25.4) + ' mm rain</div>'
+					? '<div style="font-size:11px;color:var(--ork-text-muted,#718096);margin-top:2px">' + Number(w.precip_inches).toFixed(2) + '" / ' + Math.round(Number(w.precip_inches) * 25.4) + ' mm rain</div>'
 					: '');
 			document.getElementById('ev-wx-label').innerHTML = 'Historical' +
 				' <a href="https://open-meteo.com/" target="_blank" rel="noopener"' +
