@@ -2162,6 +2162,13 @@ var KnBannerConfig = {
 .kn-royal-monarch { color: #b7791f; }
 .kn-royal-regent  { color: #718096; }
 
+/* Calendar royal-presence crowns — distinct per level (kingdom vs principality) and role */
+.kn-cal-royal-crown { font-size: 0.85em; }
+.kn-cal-royal-crown.kn-crown-km { color: #b7791f; }  /* kingdom monarch — gold */
+.kn-cal-royal-crown.kn-crown-kr { color: #a0aec0; }  /* kingdom regent — silver */
+.kn-cal-royal-crown.kn-crown-pm { color: #2c5f8b; }  /* principality monarch — steel blue (matches Pr map pins) */
+.kn-cal-royal-crown.kn-crown-pr { color: #7ba0c4; }  /* principality regent — light steel */
+
 /* ---- Copy-link icon ---- */
 .kn-copy-link {
 	display: inline-flex; align-items: center; justify-content: center;
@@ -2292,6 +2299,10 @@ html[data-theme="dark"] [data-tip]::after { background: #1a202c; color: #f7fafc;
 html[data-theme="dark"] [data-tip]::before { border-top-color: #1a202c; }
 html[data-theme="dark"] .kn-royal-monarch { color: #f6ad55; }
 html[data-theme="dark"] .kn-royal-regent  { color: #cbd5e0; }
+html[data-theme="dark"] .kn-cal-royal-crown.kn-crown-km { color: #f6ad55; }
+html[data-theme="dark"] .kn-cal-royal-crown.kn-crown-kr { color: #cbd5e0; }
+html[data-theme="dark"] .kn-cal-royal-crown.kn-crown-pm { color: #63b3ed; }
+html[data-theme="dark"] .kn-cal-royal-crown.kn-crown-pr { color: #90cdf4; }
 html[data-theme="dark"] .kn-copy-link { color: var(--ork-text-muted); }
 html[data-theme="dark"] .kn-copy-link:hover { color: #63b3ed; }
 html[data-theme="dark"] .kn-copy-link.kn-copied::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }

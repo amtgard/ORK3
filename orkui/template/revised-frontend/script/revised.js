@@ -2511,16 +2511,23 @@ function knRenderCalendar() {
         },
         eventDidMount: function(info) {
             var rp = info.event.extendedProps && info.event.extendedProps.royalPresence;
-            if (!rp) return;
-            var tip = rp === 'both'    ? 'Monarch & Regent in Attendance'
-                    : rp === 'monarch' ? 'Monarch in Attendance'
-                    :                    'Regent in Attendance';
-            var crown = document.createElement('span');
-            crown.className = 'kn-cal-royal-crown';
-            crown.setAttribute('data-tip', tip);
-            crown.innerHTML = ' <i class="fas fa-crown"></i>';
+            if (!rp || typeof rp !== 'object') return;
             var titleEl = info.el.querySelector('.fc-event-title');
-            if (titleEl) titleEl.appendChild(crown);
+            if (!titleEl) return;
+            // Up to 4 distinct royals: km/kr = kingdom monarch/regent (up), pm/pr = principality (down).
+            [
+                { k: 'km', cls: 'kn-crown-km', tip: 'Kingdom Monarch in Attendance' },
+                { k: 'kr', cls: 'kn-crown-kr', tip: 'Kingdom Regent in Attendance' },
+                { k: 'pm', cls: 'kn-crown-pm', tip: 'Principality Monarch in Attendance' },
+                { k: 'pr', cls: 'kn-crown-pr', tip: 'Principality Regent in Attendance' }
+            ].forEach(function (r) {
+                if (!rp[r.k]) return;
+                var crown = document.createElement('span');
+                crown.className = 'kn-cal-royal-crown ' + r.cls;
+                crown.setAttribute('data-tip', r.tip);
+                crown.innerHTML = ' <i class="fas fa-crown"></i>';
+                titleEl.appendChild(crown);
+            });
         },
         dayCellDidMount: function(info) {
             if (typeof KnConfig === 'undefined' || !KnConfig.loggedIn) return;

@@ -1,767 +1,876 @@
 <?php
 
-class Controller_KingdomAjax extends Controller {
+class Controller_KingdomAjax extends Controller
+{
+    public function kingdom($p = null)
+    {
+        header('Content-Type: application/json');
+        $parts      = explode('/', $p ?? '');
+        $kingdom_id = (int)preg_replace('/[^0-9]/', '', $parts[0] ?? '');
+        $action     = $parts[1] ?? '';
 
-	public function kingdom($p = null) {
-		header('Content-Type: application/json');
-		$parts      = explode('/', $p ?? '');
-		$kingdom_id = (int)preg_replace('/[^0-9]/', '', $parts[0] ?? '');
-		$action     = $parts[1] ?? '';
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
 
-		if (!isset($this->session->user_id)) {
-			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
-			exit;
-		}
+        if (!valid_id($kingdom_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid kingdom ID']);
+            exit;
+        }
 
-		if (!valid_id($kingdom_id)) {
-			echo json_encode(['status' => 1, 'error' => 'Invalid kingdom ID']);
-			exit;
-		}
+        if ($action === 'setofficers') {
+            $this->load_model('Kingdom');
 
-		if ($action === 'setofficers') {
-			$this->load_model('Kingdom');
+            // Collect officer assignments: any POST key ending in "Id" with a valid int value
+            $officers = [];
+            foreach ($_POST as $key => $val) {
+                if (preg_match('/^(.+)Id$/', $key, $m) && valid_id((int)$val)) {
+                    $role = str_replace('_', ' ', $m[1]);
+                    $officers[$role] = ['MundaneId' => (int)$val, 'Role' => $role];
+                }
+            }
 
-			// Collect officer assignments: any POST key ending in "Id" with a valid int value
-			$officers = [];
-			foreach ($_POST as $key => $val) {
-				if (preg_match('/^(.+)Id$/', $key, $m) && valid_id((int)$val)) {
-					$role = str_replace('_', ' ', $m[1]);
-					$officers[$role] = ['MundaneId' => (int)$val, 'Role' => $role];
-				}
-			}
+            if (empty($officers)) {
+                echo json_encode(['status' => 1, 'error' => 'No officer assignments provided.']);
+                exit;
+            }
 
-			if (empty($officers)) {
-				echo json_encode(['status' => 1, 'error' => 'No officer assignments provided.']);
-				exit;
-			}
+            $results = $this->Kingdom->set_officers($this->session->token, $kingdom_id, $officers);
+            $errors  = [];
+            foreach ($results as $r) {
+                if (isset($r['Status']) && $r['Status'] != 0) {
+                    $errors[] = ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '');
+                }
+            }
 
-			$results = $this->Kingdom->set_officers($this->session->token, $kingdom_id, $officers);
-			$errors  = [];
-			foreach ($results as $r) {
-				if (isset($r['Status']) && $r['Status'] != 0) {
-					$errors[] = ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '');
-				}
-			}
+            if ($errors) {
+                echo json_encode(['status' => 1, 'error' => implode('; ', $errors)]);
+            } else {
+                echo json_encode(['status' => 0]);
+            }
 
-			if ($errors) {
-				echo json_encode(['status' => 1, 'error' => implode('; ', $errors)]);
-			} else {
-				echo json_encode(['status' => 0]);
-			}
+        } elseif ($action === 'vacateofficer') {
+            $this->load_model('Kingdom');
+            $role = trim($_POST['Role'] ?? '');
 
-		} elseif ($action === 'vacateofficer') {
-			$this->load_model('Kingdom');
-			$role = trim($_POST['Role'] ?? '');
+            if (!strlen($role)) {
+                echo json_encode(['status' => 1, 'error' => 'Role is required.']);
+                exit;
+            }
 
-			if (!strlen($role)) {
-				echo json_encode(['status' => 1, 'error' => 'Role is required.']);
-				exit;
-			}
+            $r = $this->Kingdom->vacate_officer($kingdom_id, $role, $this->session->token);
+            if (!isset($r['Status']) || $r['Status'] == 0) {
+                echo json_encode(['status' => 0]);
+            } else {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            }
 
-			$r = $this->Kingdom->vacate_officer($kingdom_id, $role, $this->session->token);
-			if (!isset($r['Status']) || $r['Status'] == 0) {
-				echo json_encode(['status' => 0]);
-			} else {
-				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
-			}
+        } elseif ($action === 'setstatus') {
+            if (!Ork3::$Lib->authorization->HasAuthority((int)$this->session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+                echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
+                exit;
+            }
+            $this->load_model('Kingdom');
+            $active = trim($_POST['Active'] ?? '') === 'Active' ? 'Active' : 'Retired';
+            $r = $active === 'Active'
+                ? $this->Kingdom->RestoreKingdom(['Token' => $this->session->token, 'KingdomId' => $kingdom_id])
+                : $this->Kingdom->RetireKingdom(['Token'  => $this->session->token, 'KingdomId' => $kingdom_id]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0, 'active' => $active])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'setstatus') {
-			if (!Ork3::$Lib->authorization->HasAuthority((int)$this->session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
-				echo json_encode(['status' => 5, 'error' => 'Unauthorized']); exit;
-			}
-			$this->load_model('Kingdom');
-			$active = trim($_POST['Active'] ?? '') === 'Active' ? 'Active' : 'Retired';
-			$r = $active === 'Active'
-				? $this->Kingdom->RestoreKingdom(['Token' => $this->session->token, 'KingdomId' => $kingdom_id])
-				: $this->Kingdom->RetireKingdom(['Token'  => $this->session->token, 'KingdomId' => $kingdom_id]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0, 'active' => $active])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'setdetails') {
+            $this->load_model('Kingdom');
+            $name = trim($_POST['Name'] ?? '');
+            $abbr = preg_replace('/[^A-Za-z0-9]/', '', trim($_POST['Abbreviation'] ?? ''));
 
-		} elseif ($action === 'setdetails') {
-			$this->load_model('Kingdom');
-			$name = trim($_POST['Name'] ?? '');
-			$abbr = preg_replace('/[^A-Za-z0-9]/', '', trim($_POST['Abbreviation'] ?? ''));
+            if (!strlen($name)) {
+                echo json_encode(['status' => 1, 'error' => 'Kingdom name is required.']);
+                exit;
+            }
+            if (!strlen($abbr)) {
+                echo json_encode(['status' => 1, 'error' => 'Abbreviation is required.']);
+                exit;
+            }
 
-			if (!strlen($name)) {
-				echo json_encode(['status' => 1, 'error' => 'Kingdom name is required.']);
-				exit;
-			}
-			if (!strlen($abbr)) {
-				echo json_encode(['status' => 1, 'error' => 'Abbreviation is required.']);
-				exit;
-			}
+            $request = [
+                'Token'        => $this->session->token,
+                'KingdomId'    => $kingdom_id,
+                'Name'         => $name,
+                'Abbreviation' => $abbr,
+                'Description'  => trim($_POST['Description'] ?? ''),
+                'Url'          => trim($_POST['Url'] ?? ''),
+            ];
 
-			$request = [
-				'Token'        => $this->session->token,
-				'KingdomId'    => $kingdom_id,
-				'Name'         => $name,
-				'Abbreviation' => $abbr,
-				'Description'  => trim($_POST['Description'] ?? ''),
-				'Url'          => trim($_POST['Url'] ?? ''),
-			];
+            if (!empty($_FILES['Heraldry']['tmp_name']) && is_uploaded_file($_FILES['Heraldry']['tmp_name'])) {
+                $allowed = ['image/png', 'image/jpeg', 'image/gif'];
+                if (in_array($_FILES['Heraldry']['type'], $allowed)) {
+                    $request['Heraldry']         = base64_encode(file_get_contents($_FILES['Heraldry']['tmp_name']));
+                    $request['HeraldryMimeType'] = $_FILES['Heraldry']['type'];
+                }
+            }
 
-			if (!empty($_FILES['Heraldry']['tmp_name']) && is_uploaded_file($_FILES['Heraldry']['tmp_name'])) {
-				$allowed = ['image/png', 'image/jpeg', 'image/gif'];
-				if (in_array($_FILES['Heraldry']['type'], $allowed)) {
-					$request['Heraldry']         = base64_encode(file_get_contents($_FILES['Heraldry']['tmp_name']));
-					$request['HeraldryMimeType'] = $_FILES['Heraldry']['type'];
-				}
-			}
+            $r = $this->Kingdom->set_kingdom_details($request);
+            echo $r['Status'] == 0
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-			$r = $this->Kingdom->set_kingdom_details($request);
-			echo $r['Status'] == 0
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'setconfig') {
+            $this->load_model('Kingdom');
+            $configs = $_POST['Config'] ?? [];
 
-		} elseif ($action === 'setconfig') {
-			$this->load_model('Kingdom');
-			$configs = $_POST['Config'] ?? [];
+            if (!is_array($configs) || empty($configs)) {
+                echo json_encode(['status' => 1, 'error' => 'No configuration data provided.']);
+                exit;
+            }
 
-			if (!is_array($configs) || empty($configs)) {
-				echo json_encode(['status' => 1, 'error' => 'No configuration data provided.']);
-				exit;
-			}
+            $configList = [];
+            foreach ($configs as $configId => $value) {
+                $configList[] = [
+                    'Action'          => CFG_EDIT,
+                    'ConfigurationId' => (int)$configId,
+                    'Key'             => null,
+                    'Value'           => (is_string($value) && trim($value) === '') ? null : $value,
+                ];
+            }
 
-			$configList = [];
-			foreach ($configs as $configId => $value) {
-				$configList[] = [
-					'Action'          => CFG_EDIT,
-					'ConfigurationId' => (int)$configId,
-					'Key'             => null,
-					'Value'           => (is_string($value) && trim($value) === '') ? null : $value,
-				];
-			}
+            $r = $this->Kingdom->set_kingdom_details([
+                'Token'                => $this->session->token,
+                'KingdomId'            => $kingdom_id,
+                'KingdomConfiguration' => $configList,
+            ]);
+            if ($r['Status'] == 0) {
+                // Kingdom config can change which kingdoms roll up into stats
+                // (IncludePrincipalityInStatistics) and a lot of other derived
+                // values across reports / averages / recap. Cheapest correct
+                // fix is a full memcached flush — config saves are infrequent
+                // admin actions, not worth enumerating every dependent cache key.
+                Ork3::$Lib->ghettocache->memcache->flush();
+            }
+            echo $r['Status'] == 0
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-			$r = $this->Kingdom->set_kingdom_details([
-				'Token'                => $this->session->token,
-				'KingdomId'            => $kingdom_id,
-				'KingdomConfiguration' => $configList,
-			]);
-			if ($r['Status'] == 0) {
-				// Kingdom config can change which kingdoms roll up into stats
-				// (IncludePrincipalityInStatistics) and a lot of other derived
-				// values across reports / averages / recap. Cheapest correct
-				// fix is a full memcached flush — config saves are infrequent
-				// admin actions, not worth enumerating every dependent cache key.
-				Ork3::$Lib->ghettocache->memcache->flush();
-			}
-			echo $r['Status'] == 0
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'setparktitles') {
+            $this->load_model('Kingdom');
+            $titles  = $_POST['Title']             ?? [];
+            $classes = $_POST['Class']             ?? [];
+            $minAtts = $_POST['MinimumAttendance'] ?? [];
+            $minCuts = $_POST['MinimumCutoff']     ?? [];
+            $periods = $_POST['Period']            ?? [];
+            $lengths = $_POST['Length']            ?? [];
 
-		} elseif ($action === 'setparktitles') {
-			$this->load_model('Kingdom');
-			$titles  = $_POST['Title']             ?? [];
-			$classes = $_POST['Class']             ?? [];
-			$minAtts = $_POST['MinimumAttendance'] ?? [];
-			$minCuts = $_POST['MinimumCutoff']     ?? [];
-			$periods = $_POST['Period']            ?? [];
-			$lengths = $_POST['Length']            ?? [];
+            $edits = [];
+            foreach ($titles as $id => $title) {
+                $title = trim($title);
+                if ($id === 'New' && !strlen($title)) {
+                    continue;
+                }
+                $edits[] = [
+                    'Action'            => ($id === 'New') ? CFG_ADD : CFG_EDIT,
+                    'ParkTitleId'       => ($id === 'New') ? 0 : (int)$id,
+                    'Title'             => $title,
+                    'Class'             => (int)($classes[$id] ?? 0),
+                    'MinimumAttendance' => (int)($minAtts[$id] ?? 0),
+                    'MinimumCutoff'     => (int)($minCuts[$id] ?? 0),
+                    'Period'            => $periods[$id]         ?? 'month',
+                    'PeriodLength'      => (int)($lengths[$id]  ?? 1),
+                ];
+            }
 
-			$edits = [];
-			foreach ($titles as $id => $title) {
-				$title = trim($title);
-				if ($id === 'New' && !strlen($title)) continue;
-				$edits[] = [
-					'Action'            => ($id === 'New') ? CFG_ADD : CFG_EDIT,
-					'ParkTitleId'       => ($id === 'New') ? 0 : (int)$id,
-					'Title'             => $title,
-					'Class'             => (int)($classes[$id] ?? 0),
-					'MinimumAttendance' => (int)($minAtts[$id] ?? 0),
-					'MinimumCutoff'     => (int)($minCuts[$id] ?? 0),
-					'Period'            => $periods[$id]         ?? 'month',
-					'PeriodLength'      => (int)($lengths[$id]  ?? 1),
-				];
-			}
+            if (empty($edits)) {
+                echo json_encode(['status' => 1, 'error' => 'No park title data provided.']);
+                exit;
+            }
 
-			if (empty($edits)) {
-				echo json_encode(['status' => 1, 'error' => 'No park title data provided.']);
-				exit;
-			}
+            $r = $this->Kingdom->set_kingdom_parktitles([
+                'Token'      => $this->session->token,
+                'KingdomId'  => $kingdom_id,
+                'ParkTitles' => $edits,
+            ]);
+            echo $r['Status'] == 0
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-			$r = $this->Kingdom->set_kingdom_parktitles([
-				'Token'      => $this->session->token,
-				'KingdomId'  => $kingdom_id,
-				'ParkTitles' => $edits,
-			]);
-			echo $r['Status'] == 0
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'deletetitle') {
+            $this->load_model('Kingdom');
+            $titleId = (int)($_POST['ParkTitleId'] ?? 0);
 
-		} elseif ($action === 'deletetitle') {
-			$this->load_model('Kingdom');
-			$titleId = (int)($_POST['ParkTitleId'] ?? 0);
+            if (!valid_id($titleId)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid park title ID.']);
+                exit;
+            }
 
-			if (!valid_id($titleId)) {
-				echo json_encode(['status' => 1, 'error' => 'Invalid park title ID.']);
-				exit;
-			}
+            $r = $this->Kingdom->set_kingdom_parktitles([
+                'Token'      => $this->session->token,
+                'KingdomId'  => $kingdom_id,
+                'ParkTitles' => [['Action' => CFG_REMOVE, 'ParkTitleId' => $titleId]],
+            ]);
+            echo $r['Status'] == 0
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-			$r = $this->Kingdom->set_kingdom_parktitles([
-				'Token'      => $this->session->token,
-				'KingdomId'  => $kingdom_id,
-				'ParkTitles' => [['Action' => CFG_REMOVE, 'ParkTitleId' => $titleId]],
-			]);
-			echo $r['Status'] == 0
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'setaward') {
+            $this->load_model('Kingdom');
+            $kawId   = (int)($_POST['KingdomAwardId']  ?? 0);
+            $name    = trim($_POST['KingdomAwardName'] ?? '');
+            $reign   = (int)($_POST['ReignLimit']      ?? 0);
+            $month   = (int)($_POST['MonthLimit']      ?? 0);
+            $isTitle = (int)($_POST['IsTitle']         ?? 0);
+            $tClass  = (int)($_POST['TitleClass']      ?? 0);
 
-		} elseif ($action === 'setaward') {
-			$this->load_model('Kingdom');
-			$kawId   = (int)($_POST['KingdomAwardId']  ?? 0);
-			$name    = trim($_POST['KingdomAwardName'] ?? '');
-			$reign   = (int)($_POST['ReignLimit']      ?? 0);
-			$month   = (int)($_POST['MonthLimit']      ?? 0);
-			$isTitle = (int)($_POST['IsTitle']         ?? 0);
-			$tClass  = (int)($_POST['TitleClass']      ?? 0);
+            if (!strlen($name)) {
+                echo json_encode(['status' => 1, 'error' => 'Award name is required.']);
+                exit;
+            }
 
-			if (!strlen($name)) {
-				echo json_encode(['status' => 1, 'error' => 'Award name is required.']);
-				exit;
-			}
+            if ($kawId > 0) {
+                $r = $this->Kingdom->EditAward([
+                    'Token'          => $this->session->token,
+                    'KingdomId'      => $kingdom_id,
+                    'KingdomAwardId' => $kawId,
+                    'Name'           => $name,
+                    'ReignLimit'     => $reign,
+                    'MonthLimit'     => $month,
+                    'IsTitle'        => $isTitle,
+                    'TitleClass'     => $tClass,
+                ]);
+            } else {
+                $awardId = (int)($_POST['AwardId'] ?? 0);
+                $r = $this->Kingdom->CreateAward([
+                    'Token'      => $this->session->token,
+                    'KingdomId'  => $kingdom_id,
+                    'AwardId'    => $awardId,
+                    'Name'       => $name,
+                    'ReignLimit' => $reign,
+                    'MonthLimit' => $month,
+                    'IsTitle'    => $isTitle,
+                    'TitleClass' => $tClass,
+                ]);
+            }
 
-			if ($kawId > 0) {
-				$r = $this->Kingdom->EditAward([
-					'Token'          => $this->session->token,
-					'KingdomId'      => $kingdom_id,
-					'KingdomAwardId' => $kawId,
-					'Name'           => $name,
-					'ReignLimit'     => $reign,
-					'MonthLimit'     => $month,
-					'IsTitle'        => $isTitle,
-					'TitleClass'     => $tClass,
-				]);
-			} else {
-				$awardId = (int)($_POST['AwardId'] ?? 0);
-				$r = $this->Kingdom->CreateAward([
-					'Token'      => $this->session->token,
-					'KingdomId'  => $kingdom_id,
-					'AwardId'    => $awardId,
-					'Name'       => $name,
-					'ReignLimit' => $reign,
-					'MonthLimit' => $month,
-					'IsTitle'    => $isTitle,
-					'TitleClass' => $tClass,
-				]);
-			}
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-			echo (!isset($r['Status']) || $r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'updateparks') {
+            $this->load_model('Kingdom');
+            $parks = json_decode($_POST['ParksJson'] ?? '[]', true);
 
-		} elseif ($action === 'updateparks') {
-			$this->load_model('Kingdom');
-			$parks = json_decode($_POST['ParksJson'] ?? '[]', true);
+            if (!is_array($parks) || empty($parks)) {
+                echo json_encode(['status' => 1, 'error' => 'No park data provided.']);
+                exit;
+            }
 
-			if (!is_array($parks) || empty($parks)) {
-				echo json_encode(['status' => 1, 'error' => 'No park data provided.']);
-				exit;
-			}
+            $request = [];
+            foreach ($parks as $park) {
+                $park_id = (int)($park['ParkId'] ?? 0);
+                if (!valid_id($park_id)) {
+                    continue;
+                }
+                $request[] = [
+                    'ParkId'      => $park_id,
+                    'ParkName'    => trim($park['ParkName']    ?? ''),
+                    'ParkTitleId' => (int)($park['ParkTitle']  ?? 0),
+                    'Abbreviation' => strtoupper(trim($park['Abbreviation'] ?? '')),
+                    'Active'      => !empty($park['Active']) ? 'Active' : 'Retired',
+                ];
+            }
 
-			$request = [];
-			foreach ($parks as $park) {
-				$park_id = (int)($park['ParkId'] ?? 0);
-				if (!valid_id($park_id)) continue;
-				$request[] = [
-					'ParkId'      => $park_id,
-					'ParkName'    => trim($park['ParkName']    ?? ''),
-					'ParkTitleId' => (int)($park['ParkTitle']  ?? 0),
-					'Abbreviation'=> strtoupper(trim($park['Abbreviation'] ?? '')),
-					'Active'      => !empty($park['Active']) ? 'Active' : 'Retired',
-				];
-			}
+            if (empty($request)) {
+                echo json_encode(['status' => 1, 'error' => 'No valid parks to update.']);
+                exit;
+            }
 
-			if (empty($request)) {
-				echo json_encode(['status' => 1, 'error' => 'No valid parks to update.']);
-				exit;
-			}
+            $results = $this->Kingdom->update_parks($this->session->token, $request);
+            $errors  = [];
+            foreach ((array)$results as $r) {
+                if (isset($r['Status']) && $r['Status'] == 5) {
+                    echo json_encode(['status' => 5, 'error' => 'Session expired.']);
+                    exit;
+                }
+                if (isset($r['Status']) && $r['Status'] != 0) {
+                    $errors[] = ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '');
+                }
+            }
 
-			$results = $this->Kingdom->update_parks($this->session->token, $request);
-			$errors  = [];
-			foreach ((array)$results as $r) {
-				if (isset($r['Status']) && $r['Status'] == 5) {
-					echo json_encode(['status' => 5, 'error' => 'Session expired.']);
-					exit;
-				}
-				if (isset($r['Status']) && $r['Status'] != 0) {
-					$errors[] = ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '');
-				}
-			}
+            if ($errors) {
+                echo json_encode(['status' => 1, 'error' => implode('; ', $errors)]);
+            } else {
+                echo json_encode(['status' => 0]);
+            }
 
-			if ($errors) {
-				echo json_encode(['status' => 1, 'error' => implode('; ', $errors)]);
-			} else {
-				echo json_encode(['status' => 0]);
-			}
+        } elseif ($action === 'resetwaivers') {
+            $this->load_model('Player');
+            $r = $this->Player->reset_waivers([
+                'Token'     => $this->session->token,
+                'KingdomId' => $kingdom_id,
+            ]);
+            if ($r['Status'] == 5) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+            } elseif ($r['Status'] != 0) {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            } else {
+                echo json_encode(['status' => 0, 'message' => $r['Detail'] ?? 'Waivers reset.']);
+            }
 
-	} elseif ($action === 'resetwaivers') {
-			$this->load_model('Player');
-			$r = $this->Player->reset_waivers([
-				'Token'     => $this->session->token,
-				'KingdomId' => $kingdom_id,
-			]);
-			if ($r['Status'] == 5) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
-			} elseif ($r['Status'] != 0) {
-				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
-			} else {
-				echo json_encode(['status' => 0, 'message' => $r['Detail'] ?? 'Waivers reset.']);
-			}
+        } elseif ($action === 'deleteaward') {
+            $this->load_model('Kingdom');
+            $kawId = (int)($_POST['KingdomAwardId'] ?? 0);
 
-	} elseif ($action === 'deleteaward') {
-			$this->load_model('Kingdom');
-			$kawId = (int)($_POST['KingdomAwardId'] ?? 0);
+            if (!valid_id($kawId)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid award ID.']);
+                exit;
+            }
 
-			if (!valid_id($kawId)) {
-				echo json_encode(['status' => 1, 'error' => 'Invalid award ID.']);
-				exit;
-			}
+            $this->Kingdom->RemoveAward([
+                'Token'          => $this->session->token,
+                'KingdomId'      => $kingdom_id,
+                'KingdomAwardId' => $kawId,
+            ]);
+            echo json_encode(['status' => 0]);
 
-			$this->Kingdom->RemoveAward([
-				'Token'          => $this->session->token,
-				'KingdomId'      => $kingdom_id,
-				'KingdomAwardId' => $kawId,
-			]);
-			echo json_encode(['status' => 0]);
+        } elseif ($action === 'setheraldry') {
+            $this->load_model('Kingdom');
+            if (empty($_FILES['Heraldry']['tmp_name']) || !is_uploaded_file($_FILES['Heraldry']['tmp_name'])) {
+                echo json_encode(['status' => 1, 'error' => 'No image file received.']);
+                exit;
+            }
+            $allowed = ['image/png', 'image/jpeg', 'image/gif'];
+            if (!in_array($_FILES['Heraldry']['type'], $allowed)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid image type. Use PNG, JPG, or GIF.']);
+                exit;
+            }
+            $r = $this->Kingdom->set_kingdom_heraldry([
+                'Token'            => $this->session->token,
+                'KingdomId'        => $kingdom_id,
+                'Heraldry'         => base64_encode(file_get_contents($_FILES['Heraldry']['tmp_name'])),
+                'HeraldryMimeType' => $_FILES['Heraldry']['type'],
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'setheraldry') {
-			$this->load_model('Kingdom');
-			if (empty($_FILES['Heraldry']['tmp_name']) || !is_uploaded_file($_FILES['Heraldry']['tmp_name'])) {
-				echo json_encode(['status' => 1, 'error' => 'No image file received.']); exit;
-			}
-			$allowed = ['image/png', 'image/jpeg', 'image/gif'];
-			if (!in_array($_FILES['Heraldry']['type'], $allowed)) {
-				echo json_encode(['status' => 1, 'error' => 'Invalid image type. Use PNG, JPG, or GIF.']); exit;
-			}
-			$r = $this->Kingdom->set_kingdom_heraldry([
-				'Token'            => $this->session->token,
-				'KingdomId'        => $kingdom_id,
-				'Heraldry'         => base64_encode(file_get_contents($_FILES['Heraldry']['tmp_name'])),
-				'HeraldryMimeType' => $_FILES['Heraldry']['type'],
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'removeheraldry') {
+            $this->load_model('Kingdom');
+            $r = $this->Kingdom->remove_kingdom_heraldry([
+                'Token'     => $this->session->token,
+                'KingdomId' => $kingdom_id,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-	} elseif ($action === 'removeheraldry') {
-			$this->load_model('Kingdom');
-			$r = $this->Kingdom->remove_kingdom_heraldry([
-				'Token'     => $this->session->token,
-				'KingdomId' => $kingdom_id,
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'moveplayer') {
+            $uid = (int)$this->session->user_id;
+            $this->load_model('Player');
+            $mundane_id   = (int)($_POST['MundaneId']  ?? 0);
+            $dest_park_id = (int)($_POST['DestParkId'] ?? 0);
+            if (!valid_id($mundane_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Select a player.']);
+                exit;
+            }
+            if (!valid_id($dest_park_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Select a destination park.']);
+                exit;
+            }
+            // Auth: allow the move when the actor has kingdom-level authority over EITHER the
+            // player's current (source) kingdom — moving/releasing one of your own members — OR
+            // the destination park's kingdom — claiming a player into your kingdom. This mirrors
+            // Player::MovePlayer (and the Park/Player move endpoints), which authorize on
+            // destination OR source. A source-only check wrongly blocked officers from claiming
+            // players who belong to another kingdom.
+            global $DB;
+            $DB->Clear();
+            $plrKingdom = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mundane_id} LIMIT 1");
+            $player_kingdom_id = ($plrKingdom && $plrKingdom->Next()) ? (int)$plrKingdom->kingdom_id : 0;
+            $DB->Clear();
+            $destKingdom = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$dest_park_id} LIMIT 1");
+            $dest_kingdom_id = ($destKingdom && $destKingdom->Next()) ? (int)$destKingdom->kingdom_id : 0;
+            $canSource = $player_kingdom_id && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT);
+            $canDest   = $dest_kingdom_id   && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $dest_kingdom_id, AUTH_EDIT);
+            if (!$canSource && !$canDest) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized to move this player.']);
+                exit;
+            }
+            $r = $this->Player->move_player(['Token' => $this->session->token, 'MundaneId' => $mundane_id, 'ParkId' => $dest_park_id]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0, 'parkId' => $dest_park_id])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-	} elseif ($action === 'moveplayer') {
-			$uid = (int)$this->session->user_id;
-			$this->load_model('Player');
-			$mundane_id   = (int)($_POST['MundaneId']  ?? 0);
-			$dest_park_id = (int)($_POST['DestParkId'] ?? 0);
-			if (!valid_id($mundane_id))   { echo json_encode(['status' => 1, 'error' => 'Select a player.']);           exit; }
-			if (!valid_id($dest_park_id)) { echo json_encode(['status' => 1, 'error' => 'Select a destination park.']); exit; }
-			// Auth: allow the move when the actor has kingdom-level authority over EITHER the
-			// player's current (source) kingdom — moving/releasing one of your own members — OR
-			// the destination park's kingdom — claiming a player into your kingdom. This mirrors
-			// Player::MovePlayer (and the Park/Player move endpoints), which authorize on
-			// destination OR source. A source-only check wrongly blocked officers from claiming
-			// players who belong to another kingdom.
-			global $DB;
-			$DB->Clear();
-			$plrKingdom = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mundane_id} LIMIT 1");
-			$player_kingdom_id = ($plrKingdom && $plrKingdom->Next()) ? (int)$plrKingdom->kingdom_id : 0;
-			$DB->Clear();
-			$destKingdom = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$dest_park_id} LIMIT 1");
-			$dest_kingdom_id = ($destKingdom && $destKingdom->Next()) ? (int)$destKingdom->kingdom_id : 0;
-			$canSource = $player_kingdom_id && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT);
-			$canDest   = $dest_kingdom_id   && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $dest_kingdom_id, AUTH_EDIT);
-			if (!$canSource && !$canDest) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized to move this player.']); exit;
-			}
-			$r = $this->Player->move_player(['Token' => $this->session->token, 'MundaneId' => $mundane_id, 'ParkId' => $dest_park_id]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0, 'parkId' => $dest_park_id])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'checkparkabbr') {
+            $park_id = (int)($_POST['ParkId'] ?? 0);
+            if (!valid_id($park_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Missing park ID.']);
+                exit;
+            }
+            global $DB;
+            $DB->Clear();
+            $rs = $DB->DataSet("SELECT abbreviation FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} LIMIT 1");
+            if (!$rs || !$rs->Next()) {
+                echo json_encode(['status' => 1, 'error' => 'Park not found.']);
+                exit;
+            }
+            $abbr = strtoupper($rs->abbreviation);
+            $DB->Clear();
+            $abbrEsc = mysql_real_escape_string($abbr);
+            $rs2 = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "park WHERE kingdom_id = {$kingdom_id} AND abbreviation = '{$abbrEsc}' AND park_id != {$park_id} AND active = 'Active' LIMIT 1");
+            $taken = ($rs2 && $rs2->Next());
+            echo json_encode(['status' => 0, 'abbr' => $abbr, 'taken' => $taken, 'conflictName' => $taken ? $rs2->name : '']);
+            exit;
 
-		} elseif ($action === 'checkparkabbr') {
-			$park_id = (int)($_POST['ParkId'] ?? 0);
-			if (!valid_id($park_id)) { echo json_encode(['status' => 1, 'error' => 'Missing park ID.']); exit; }
-			global $DB;
-			$DB->Clear();
-			$rs = $DB->DataSet("SELECT abbreviation FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} LIMIT 1");
-			if (!$rs || !$rs->Next()) { echo json_encode(['status' => 1, 'error' => 'Park not found.']); exit; }
-			$abbr = strtoupper($rs->abbreviation);
-			$DB->Clear();
-			$abbrEsc = mysql_real_escape_string($abbr);
-			$rs2 = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "park WHERE kingdom_id = {$kingdom_id} AND abbreviation = '{$abbrEsc}' AND park_id != {$park_id} AND active = 'Active' LIMIT 1");
-			$taken = ($rs2 && $rs2->Next());
-			echo json_encode(['status' => 0, 'abbr' => $abbr, 'taken' => $taken, 'conflictName' => $taken ? $rs2->name : '']);
-			exit;
+        } elseif ($action === 'claimpark') {
+            $this->load_model('Park');
+            $park_id         = (int)($_POST['ParkId']        ?? 0);
+            $dest_kingdom_id = (int)($_POST['DestKingdomId'] ?? $kingdom_id);
+            if (!valid_id($park_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Select a park.']);
+                exit;
+            }
+            if (!valid_id($dest_kingdom_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Destination kingdom is required.']);
+                exit;
+            }
+            $new_abbr = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
+            $r = $this->Park->TransferPark(['Token' => $this->session->token, 'ParkId' => $park_id, 'KingdomId' => $dest_kingdom_id, 'Abbreviation' => $new_abbr]);
+            if ($r['Status'] == 0) {
+                $bustKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $dest_kingdom_id]);
+                Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkAverages', $bustKey);
+                Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkMonthlyAverages', $bustKey);
+                echo json_encode(['status' => 0]);
+            } else {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            }
 
-		} elseif ($action === 'claimpark') {
-			$this->load_model('Park');
-			$park_id         = (int)($_POST['ParkId']        ?? 0);
-			$dest_kingdom_id = (int)($_POST['DestKingdomId'] ?? $kingdom_id);
-			if (!valid_id($park_id))         { echo json_encode(['status' => 1, 'error' => 'Select a park.']);                    exit; }
-			if (!valid_id($dest_kingdom_id)) { echo json_encode(['status' => 1, 'error' => 'Destination kingdom is required.']); exit; }
-			$new_abbr = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
-			$r = $this->Park->TransferPark(['Token' => $this->session->token, 'ParkId' => $park_id, 'KingdomId' => $dest_kingdom_id, 'Abbreviation' => $new_abbr]);
-			if ($r['Status'] == 0) {
-				$bustKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $dest_kingdom_id]);
-				Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkAverages',        $bustKey);
-				Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkMonthlyAverages', $bustKey);
-				echo json_encode(['status' => 0]);
-			} else {
-				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
-			}
+        } elseif ($action === 'addrecommendation') {
+            if (!isset($this->session->user_id)) {
+                echo json_encode(['status' => 1, 'error' => 'You must be logged in to submit a recommendation.']);
+                exit;
+            }
+            $this->load_model('Player');
+            $mundane_id = (int)($_POST['MundaneId']       ?? 0);
+            $award_id   = (int)($_POST['KingdomAwardId']  ?? 0);
+            $rank       = (int)($_POST['Rank']            ?? 0);
+            $reason     = trim($_POST['Reason']           ?? '');
+            if (!valid_id($mundane_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Please select a player.']);
+                exit;
+            }
+            if (!valid_id($award_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Please select an award.']);
+                exit;
+            }
+            if (!$reason) {
+                echo json_encode(['status' => 1, 'error' => 'Please enter a reason.']);
+                exit;
+            }
+            $r = $this->Player->add_player_recommendation([
+                'Token'          => $this->session->token,
+                'MundaneId'      => $mundane_id,
+                'KingdomAwardId' => $award_id,
+                'Rank'           => $rank > 0 ? $rank : null,
+                'GivenById'      => $this->session->user_id,
+                'Reason'         => $reason,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'addrecommendation') {
-			if (!isset($this->session->user_id)) { echo json_encode(['status' => 1, 'error' => 'You must be logged in to submit a recommendation.']); exit; }
-			$this->load_model('Player');
-			$mundane_id = (int)($_POST['MundaneId']       ?? 0);
-			$award_id   = (int)($_POST['KingdomAwardId']  ?? 0);
-			$rank       = (int)($_POST['Rank']            ?? 0);
-			$reason     = trim($_POST['Reason']           ?? '');
-			if (!valid_id($mundane_id)) { echo json_encode(['status' => 1, 'error' => 'Please select a player.']); exit; }
-			if (!valid_id($award_id))   { echo json_encode(['status' => 1, 'error' => 'Please select an award.']); exit; }
-			if (!$reason)               { echo json_encode(['status' => 1, 'error' => 'Please enter a reason.']); exit; }
-			$r = $this->Player->add_player_recommendation([
-				'Token'          => $this->session->token,
-				'MundaneId'      => $mundane_id,
-				'KingdomAwardId' => $award_id,
-				'Rank'           => $rank > 0 ? $rank : null,
-				'GivenById'      => $this->session->user_id,
-				'Reason'         => $reason,
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'dismissrecommendation') {
+            $this->load_model('Player');
+            $rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+            if (!valid_id($rec_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']);
+                exit;
+            }
+            $r = $this->Player->delete_player_recommendation([
+                'Token'             => $this->session->token,
+                'RecommendationsId' => $rec_id,
+                'RequestedBy'       => $this->session->user_id,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'dismissrecommendation') {
-			$this->load_model('Player');
-			$rec_id = (int)($_POST['RecommendationsId'] ?? 0);
-			if (!valid_id($rec_id)) { echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']); exit; }
-			$r = $this->Player->delete_player_recommendation([
-				'Token'             => $this->session->token,
-				'RecommendationsId' => $rec_id,
-				'RequestedBy'       => $this->session->user_id,
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'deletedrecommendations') {
+            $uid = (int)$this->session->user_id;
+            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $this->load_model('Reports');
+            $recs = $this->Reports->deleted_recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0]);
+            echo json_encode(['status' => 0, 'recommendations' => is_array($recs) ? array_values($recs) : []]);
 
-		} elseif ($action === 'deletedrecommendations') {
-			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
-			}
-			$this->load_model('Reports');
-			$recs = $this->Reports->deleted_recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0]);
-			echo json_encode(['status' => 0, 'recommendations' => is_array($recs) ? array_values($recs) : []]);
+        } elseif ($action === 'restorerecommendation') {
+            $uid = (int)$this->session->user_id;
+            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $this->load_model('Player');
+            $rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+            if (!valid_id($rec_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']);
+                exit;
+            }
+            $r = $this->Player->restore_player_recommendation([
+                'Token'             => $this->session->token,
+                'RecommendationsId' => $rec_id,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'restorerecommendation') {
-			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
-			}
-			$this->load_model('Player');
-			$rec_id = (int)($_POST['RecommendationsId'] ?? 0);
-			if (!valid_id($rec_id)) { echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']); exit; }
-			$r = $this->Player->restore_player_recommendation([
-				'Token'             => $this->session->token,
-				'RecommendationsId' => $rec_id,
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
-
-		} elseif ($action === 'geteventtemplates') {
-			global $DB;
-			$kid = $kingdom_id;
-			$sql = "SELECT e.event_id, e.name, p.park_id, p.name AS park_name
+        } elseif ($action === 'geteventtemplates') {
+            global $DB;
+            $kid = $kingdom_id;
+            $sql = "SELECT e.event_id, e.name, p.park_id, p.name AS park_name
 			        FROM ork_event e
 			        LEFT JOIN ork_park p ON p.park_id = e.park_id
 			        WHERE e.kingdom_id = $kid ORDER BY e.name";
-			$rs        = $DB->DataSet($sql);
-			$templates = [];
-			if ($rs && $rs->Size() > 0) {
-				while ($rs->Next()) {
-					$templates[] = [
-						'EventId'  => (int)$rs->event_id,
-						'Name'     => $rs->name,
-						'ParkId'   => (int)$rs->park_id,
-						'ParkName' => $rs->park_name ?? '',
-					];
-				}
-			}
-			echo json_encode(['status' => 0, 'templates' => $templates]);
+            $rs        = $DB->DataSet($sql);
+            $templates = [];
+            if ($rs && $rs->Size() > 0) {
+                while ($rs->Next()) {
+                    $templates[] = [
+                        'EventId'  => (int)$rs->event_id,
+                        'Name'     => $rs->name,
+                        'ParkId'   => (int)$rs->park_id,
+                        'ParkName' => $rs->park_name ?? '',
+                    ];
+                }
+            }
+            echo json_encode(['status' => 0, 'templates' => $templates]);
 
-		} elseif ($action === 'createtournament') {
-			$this->load_model('Tournament');
-			$name   = trim($_POST['Name']        ?? '');
-			$when   = trim($_POST['When']        ?? '');
-			$desc   = trim($_POST['Description'] ?? '');
-			$url    = trim($_POST['Url']         ?? '');
-			$pid    = (int)($_POST['ParkId']                ?? 0);
-			$ecd_id = (int)($_POST['EventCalendarDetailId'] ?? 0);
+        } elseif ($action === 'createtournament') {
+            $this->load_model('Tournament');
+            $name   = trim($_POST['Name']        ?? '');
+            $when   = trim($_POST['When']        ?? '');
+            $desc   = trim($_POST['Description'] ?? '');
+            $url    = trim($_POST['Url']         ?? '');
+            $pid    = (int)($_POST['ParkId']                ?? 0);
+            $ecd_id = (int)($_POST['EventCalendarDetailId'] ?? 0);
 
-			if (!strlen($name)) {
-				echo json_encode(['status' => 1, 'error' => 'Tournament name is required.']); exit;
-			}
-			if (!strlen($when)) {
-				echo json_encode(['status' => 1, 'error' => 'Tournament date is required.']); exit;
-			}
+            if (!strlen($name)) {
+                echo json_encode(['status' => 1, 'error' => 'Tournament name is required.']);
+                exit;
+            }
+            if (!strlen($when)) {
+                echo json_encode(['status' => 1, 'error' => 'Tournament date is required.']);
+                exit;
+            }
 
-			$r = $this->Tournament->create_tournament([
-				'Token'                 => $this->session->token,
-				'Name'                  => $name,
-				'Description'           => $desc,
-				'Url'                   => $url,
-				'When'                  => $when,
-				'KingdomId'             => $kingdom_id,
-				'ParkId'                => $pid,
-				'EventCalendarDetailId' => $ecd_id,
-			]);
-			echo (!isset($r['Status']) || $r['Status'] == 0)
-				? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            $r = $this->Tournament->create_tournament([
+                'Token'                 => $this->session->token,
+                'Name'                  => $name,
+                'Description'           => $desc,
+                'Url'                   => $url,
+                'When'                  => $when,
+                'KingdomId'             => $kingdom_id,
+                'ParkId'                => $pid,
+                'EventCalendarDetailId' => $ecd_id,
+            ]);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'deletetournament') {
-			$this->load_model('Tournament');
-			$tournament_id = (int)($_POST['TournamentId'] ?? 0);
-			if (!valid_id($tournament_id)) {
-				echo json_encode(['status' => 1, 'error' => 'Invalid tournament ID.']); exit;
-			}
-			$r = $this->Tournament->delete_tournament([
-				'Token'        => $this->session->token,
-				'TournamentId' => $tournament_id,
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'deletetournament') {
+            $this->load_model('Tournament');
+            $tournament_id = (int)($_POST['TournamentId'] ?? 0);
+            if (!valid_id($tournament_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid tournament ID.']);
+                exit;
+            }
+            $r = $this->Tournament->delete_tournament([
+                'Token'        => $this->session->token,
+                'TournamentId' => $tournament_id,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-				} elseif ($action === 'setrecsvisibility') {
-			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
-			}
-			$value = (int)($_POST['Value'] ?? 1) ? '1' : '0';
-			global $DB;
-			$kid = (int)$kingdom_id;
-			$DB->Clear();
-			$existing = $DB->DataSet("SELECT configuration_id FROM " . DB_PREFIX . "configuration WHERE type='Kingdom' AND id=$kid AND `key`='AwardRecsPublic' LIMIT 1");
-			if ($existing && $existing->Next()) {
-				$cid = (int)$existing->configuration_id;
-				$DB->Clear();
-				$DB->Execute("UPDATE " . DB_PREFIX . "configuration SET value='" . json_encode($value) . "', modified=NOW() WHERE configuration_id=$cid");
-			} else {
-				$DB->Clear();
-				$DB->Execute("INSERT INTO " . DB_PREFIX . "configuration (type, var_type, id, `key`, value, user_setting, allowed_values, modified) VALUES ('Kingdom', 'fixed', $kid, 'AwardRecsPublic', '" . json_encode($value) . "', 1, 'null', NOW())");
-			}
-			echo json_encode(['status' => 0]);
+        } elseif ($action === 'setrecsvisibility') {
+            $uid = (int)$this->session->user_id;
+            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $value = (int)($_POST['Value'] ?? 1) ? '1' : '0';
+            global $DB;
+            $kid = (int)$kingdom_id;
+            $DB->Clear();
+            $existing = $DB->DataSet("SELECT configuration_id FROM " . DB_PREFIX . "configuration WHERE type='Kingdom' AND id=$kid AND `key`='AwardRecsPublic' LIMIT 1");
+            if ($existing && $existing->Next()) {
+                $cid = (int)$existing->configuration_id;
+                $DB->Clear();
+                $DB->Execute("UPDATE " . DB_PREFIX . "configuration SET value='" . json_encode($value) . "', modified=NOW() WHERE configuration_id=$cid");
+            } else {
+                $DB->Clear();
+                $DB->Execute("INSERT INTO " . DB_PREFIX . "configuration (type, var_type, id, `key`, value, user_setting, allowed_values, modified) VALUES ('Kingdom', 'fixed', $kid, 'AwardRecsPublic', '" . json_encode($value) . "', 1, 'null', NOW())");
+            }
+            echo json_encode(['status' => 0]);
 
-		} elseif ($action === 'addauth') {
-			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
-			}
-			$mid  = (int)($_POST['MundaneId'] ?? 0);
-			// Scoped grants only accept create / edit. The legacy 'admin' role at
-			// kingdom scope is no longer granted from the UI — system-wide admin
-			// is managed on its own page and only ever issued unscoped.
-			$role = in_array($_POST['Role'] ?? '', ['create','edit']) ? $_POST['Role'] : 'create';
-			if (!$mid) { echo json_encode(['status' => 1, 'error' => 'Invalid player.']); exit; }
-			global $DB;
-			$DB->Clear();
-			$DB->Execute("INSERT INTO ork_authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
+        } elseif ($action === 'addauth') {
+            $uid = (int)$this->session->user_id;
+            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $mid  = (int)($_POST['MundaneId'] ?? 0);
+            // Scoped grants only accept create / edit. The legacy 'admin' role at
+            // kingdom scope is no longer granted from the UI — system-wide admin
+            // is managed on its own page and only ever issued unscoped.
+            $role = in_array($_POST['Role'] ?? '', ['create','edit']) ? $_POST['Role'] : 'create';
+            if (!$mid) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid player.']);
+                exit;
+            }
+            global $DB;
+            $DB->Clear();
+            $DB->Execute("INSERT INTO ork_authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
 				VALUES ({$mid}, 0, {$kingdom_id}, 0, 0, '{$role}', NOW())");
-			$DB->Clear();
-			$rs = $DB->DataSet("SELECT a.authorization_id, m.persona FROM ork_authorization a
+            $DB->Clear();
+            $rs = $DB->DataSet("SELECT a.authorization_id, m.persona FROM ork_authorization a
 				LEFT JOIN ork_mundane m ON m.mundane_id = a.mundane_id
 				WHERE a.mundane_id = {$mid} AND a.kingdom_id = {$kingdom_id}
 				ORDER BY a.authorization_id DESC LIMIT 1");
-			$authId = 0; $persona = '';
-			if ($rs && $rs->Next()) { $authId = (int)$rs->authorization_id; $persona = $rs->persona; }
-			Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_KINGDOM, 'Id' => $kingdom_id, 'Role' => $role], 'Player', $mid, null, [
-				'authorization_id' => $authId,
-				'mundane_id'       => $mid,
-				'park_id'          => 0,
-				'kingdom_id'       => (int)$kingdom_id,
-				'event_id'         => 0,
-				'unit_id'          => 0,
-				'role'             => $role,
-			]);
-			echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
+            $authId = 0;
+            $persona = '';
+            if ($rs && $rs->Next()) {
+                $authId = (int)$rs->authorization_id;
+                $persona = $rs->persona;
+            }
+            Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_KINGDOM, 'Id' => $kingdom_id, 'Role' => $role], 'Player', $mid, null, [
+                'authorization_id' => $authId,
+                'mundane_id'       => $mid,
+                'park_id'          => 0,
+                'kingdom_id'       => (int)$kingdom_id,
+                'event_id'         => 0,
+                'unit_id'          => 0,
+                'role'             => $role,
+            ]);
+            echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
 
-		} elseif ($action === 'removeauth') {
-			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
-			}
-			$this->load_model('Authorization');
-			$r = $this->Authorization->del_auth([
-				'Token'           => $this->session->token,
-				'AuthorizationId' => (int)($_POST['AuthorizationId'] ?? 0),
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'removeauth') {
+            $uid = (int)$this->session->user_id;
+            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $this->load_model('Authorization');
+            $r = $this->Authorization->del_auth([
+                'Token'           => $this->session->token,
+                'AuthorizationId' => (int)($_POST['AuthorizationId'] ?? 0),
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'getparks') {
-			// Always return family parks (kingdom + child principalities) for dropdowns.
-			$r = Ork3::$Lib->kingdom->GetParks(['KingdomIds' => Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id)]);
-			$parks = [];
-			foreach ($r['Parks'] ?? [] as $park) {
-				$parks[] = ['ParkId' => $park['ParkId'], 'Name' => $park['Name']];
-			}
-			// Sort alphabetically by name so the dropdowns are easy to scan.
-			usort($parks, function ($a, $b) { return strcasecmp($a['Name'], $b['Name']); });
-			echo json_encode(['status' => 0, 'parks' => $parks]);
-		} elseif ($action === 'parktitles') {
-			$result = Ork3::$Lib->kingdom->GetKingdomParkTitles(['KingdomId' => $kingdom_id]);
-			$titles = [];
-			foreach ($result['ParkTitles'] ?? [] as $pt) {
-				$titles[] = ['ParkTitleId' => (int)$pt['ParkTitleId'], 'Title' => $pt['Title']];
-			}
-			echo json_encode(['status' => 0, 'titles' => $titles]);
+        } elseif ($action === 'getparks') {
+            // Always return family parks (kingdom + child principalities) for dropdowns.
+            $r = Ork3::$Lib->kingdom->GetParks(['KingdomIds' => Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id)]);
+            $parks = [];
+            foreach ($r['Parks'] ?? [] as $park) {
+                $parks[] = ['ParkId' => $park['ParkId'], 'Name' => $park['Name']];
+            }
+            // Sort alphabetically by name so the dropdowns are easy to scan.
+            usort($parks, function ($a, $b) {
+                return strcasecmp($a['Name'], $b['Name']);
+            });
+            echo json_encode(['status' => 0, 'parks' => $parks]);
+        } elseif ($action === 'parktitles') {
+            $result = Ork3::$Lib->kingdom->GetKingdomParkTitles(['KingdomId' => $kingdom_id]);
+            $titles = [];
+            foreach ($result['ParkTitles'] ?? [] as $pt) {
+                $titles[] = ['ParkTitleId' => (int)$pt['ParkTitleId'], 'Title' => $pt['Title']];
+            }
+            echo json_encode(['status' => 0, 'titles' => $titles]);
 
-		} elseif ($action === 'setparent') {
-		$uid = (int)($this->session->user_id ?? 0);
-		if (!$uid || !Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
-			echo json_encode(['status' => 5, 'error' => 'Unauthorized']); exit;
-		}
-		$this->load_model('Kingdom');
-		$parentId = (int)($_POST['ParentKingdomId'] ?? 0);
-		$r = $this->Kingdom->set_kingdom_parent([
-			'Token'           => $this->session->token,
-			'KingdomId'       => $kingdom_id,
-			'ParentKingdomId' => $parentId,
-		]);
-		echo ($r['Status'] == 0)
-			? json_encode(['status' => 0])
-			: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'setparent') {
+            $uid = (int)($this->session->user_id ?? 0);
+            if (!$uid || !Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+                echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
+                exit;
+            }
+            $this->load_model('Kingdom');
+            $parentId = (int)($_POST['ParentKingdomId'] ?? 0);
+            $r = $this->Kingdom->set_kingdom_parent([
+                'Token'           => $this->session->token,
+                'KingdomId'       => $kingdom_id,
+                'ParentKingdomId' => $parentId,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-	} elseif ($action === 'checkabbr') {
-			$abbr      = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
-			$excludeId = (int)($_POST['ExcludeKingdomId'] ?? 0);
-			if (!strlen($abbr)) { echo json_encode(['status' => 0, 'taken' => false]); exit; }
-			global $DB;
-			$DB->Clear();
-			$excludeClause = $excludeId > 0 ? " AND kingdom_id != {$excludeId}" : '';
-			$rs = $DB->DataSet("SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$abbr}'{$excludeClause} LIMIT 1");
-			echo ($rs && $rs->Next())
-				? json_encode(['status' => 0, 'taken' => true,  'name' => $rs->name])
-				: json_encode(['status' => 0, 'taken' => false]);
+        } elseif ($action === 'checkabbr') {
+            $abbr      = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
+            $excludeId = (int)($_POST['ExcludeKingdomId'] ?? 0);
+            if (!strlen($abbr)) {
+                echo json_encode(['status' => 0, 'taken' => false]);
+                exit;
+            }
+            global $DB;
+            $DB->Clear();
+            $excludeClause = $excludeId > 0 ? " AND kingdom_id != {$excludeId}" : '';
+            $rs = $DB->DataSet("SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$abbr}'{$excludeClause} LIMIT 1");
+            echo ($rs && $rs->Next())
+                ? json_encode(['status' => 0, 'taken' => true,  'name' => $rs->name])
+                : json_encode(['status' => 0, 'taken' => false]);
 
-		} else {
-			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
-		}
-		exit;
-	}
+        } else {
+            echo json_encode(['status' => 1, 'error' => 'Unknown action']);
+        }
+        exit;
+    }
 
-	public function calendar($p = null) {
-		header('Content-Type: application/json');
-		$kingdom_id = (int)preg_replace('/[^0-9]/', '', $p ?? '');
+    public function calendar($p = null)
+    {
+        header('Content-Type: application/json');
+        $kingdom_id = (int)preg_replace('/[^0-9]/', '', $p ?? '');
 
-		if (!valid_id($kingdom_id)) {
-			echo json_encode(['status' => 1, 'error' => 'Invalid kingdom ID']);
-			exit;
-		}
+        if (!valid_id($kingdom_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid kingdom ID']);
+            exit;
+        }
 
-		$start = preg_replace('/[^0-9\-]/', '', substr($_GET['start'] ?? '', 0, 10));
-		$end   = preg_replace('/[^0-9\-]/', '', substr($_GET['end']   ?? '', 0, 10));
+        $start = preg_replace('/[^0-9\-]/', '', substr($_GET['start'] ?? '', 0, 10));
+        $end   = preg_replace('/[^0-9\-]/', '', substr($_GET['end']   ?? '', 0, 10));
 
-		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) {
-			echo json_encode(['status' => 1, 'error' => 'Invalid date range']);
-			exit;
-		}
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid date range']);
+            exit;
+        }
 
-		$kid    = (int)$kingdom_id;
-		global $DB;
-		$events = [];
+        $kid    = (int)$kingdom_id;
+        global $DB;
+        $events = [];
+        $this->load_model('Kingdom');
+        // G1: scope events to family kingdoms (parent + principalities when flag on), matching profile().
+        $statsEvtKids = implode(',', array_map('intval', $this->Kingdom->GetStatsKingdomIds($kid)));
 
-		// Fetch Monarch/Regent mundane IDs for royal-attendance detection.
-		// A11: ORDER BY officer_id DESC LIMIT 1 per role so the most-recent record wins
-		// (prior query was last-wins on iteration order, which is arbitrary in MySQL).
-		$monarchId = 0; $regentId = 0;
-		$DB->Clear();
-		$mRes = $DB->DataSet("SELECT mundane_id FROM ork_officer WHERE kingdom_id = {$kid} AND park_id = 0 AND role = 'Monarch' AND mundane_id > 0 ORDER BY officer_id DESC LIMIT 1");
-		if ($mRes && $mRes->Next()) $monarchId = (int)$mRes->mundane_id;
-		$DB->Clear();
-		$rRes = $DB->DataSet("SELECT mundane_id FROM ork_officer WHERE kingdom_id = {$kid} AND park_id = 0 AND role = 'Regent' AND mundane_id > 0 ORDER BY officer_id DESC LIMIT 1");
-		if ($rRes && $rRes->Next()) $regentId = (int)$rRes->mundane_id;
-		$monarchSubq = $monarchId > 0
-			? "(SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND mundane_id = {$monarchId})"
-			: "0";
-		$regentSubq = $regentId > 0
-			? "(SELECT COUNT(*) FROM ork_event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND mundane_id = {$regentId})"
-			: "0";
-		$kn_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-		$kn_isAdmin = ($kn_uid > 0) ? Ork3::$Lib->authorization->HasAuthority($kn_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
-		$kn_draftClause = $kn_isAdmin ? '' : ($kn_uid > 0 ? "AND (e.status = 'published' OR e.mundane_id = {$kn_uid})" : "AND e.status = 'published'");
+        // Royal-attendance detection across the family (parent kingdom + principalities, "up and down").
+        // Most-recent Monarch + Regent per family kingdom.
+        $familyRoyals = []; // kingdom_id => ['monarch'=>id, 'regent'=>id]
+        $allRoyalIds  = [];
+        $DB->Clear();
+        $royRes = $DB->DataSet("SELECT o.kingdom_id, o.role, o.mundane_id FROM ork_officer o
+			INNER JOIN (SELECT kingdom_id, role, MAX(officer_id) AS max_oid FROM ork_officer
+			            WHERE kingdom_id IN ({$statsEvtKids}) AND park_id = 0 AND role IN ('Monarch','Regent') AND mundane_id > 0
+			            GROUP BY kingdom_id, role) latest ON latest.max_oid = o.officer_id");
+        if ($royRes) {
+            while ($royRes->Next()) {
+                $rk = (int)$royRes->kingdom_id;
+                $rid = (int)$royRes->mundane_id;
+                if (!isset($familyRoyals[$rk])) {
+                    $familyRoyals[$rk] = ['monarch' => 0, 'regent' => 0];
+                }
+                $familyRoyals[$rk][$royRes->role === 'Monarch' ? 'monarch' : 'regent'] = $rid;
+                if ($rid > 0) {
+                    $allRoyalIds[$rid] = true;
+                }
+            }
+        }
+        $kingdomMonarchId = $familyRoyals[$kid]['monarch'] ?? 0;
+        $kingdomRegentId  = $familyRoyals[$kid]['regent'] ?? 0;
+        // Pre-aggregating LEFT JOIN: per detail, the set of family-royal mundane_ids who RSVP'd.
+        if (!empty($allRoyalIds)) {
+            $royalIdList     = implode(',', array_map('intval', array_keys($allRoyalIds)));
+            $royalSelectCols = 'royal.royal_rsvps AS royal_rsvps';
+            $royalJoinSql    = "LEFT JOIN (SELECT event_calendardetail_id, GROUP_CONCAT(mundane_id) AS royal_rsvps FROM ork_event_rsvp WHERE mundane_id IN ({$royalIdList}) GROUP BY event_calendardetail_id) royal ON royal.event_calendardetail_id = cd.event_calendardetail_id";
+        } else {
+            $royalSelectCols = 'NULL AS royal_rsvps';
+            $royalJoinSql    = '';
+        }
+        $kn_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $kn_isAdmin = ($kn_uid > 0) ? Ork3::$Lib->authorization->HasAuthority($kn_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
+        $kn_draftClause = $kn_isAdmin ? '' : ($kn_uid > 0 ? "AND (e.status = 'published' OR e.mundane_id = {$kn_uid})" : "AND e.status = 'published'");
 
-		// Events in range (all calendar-detail occurrences within window)
-		$DB->Clear();
-		$evtSql = "
-			SELECT e.event_id, e.name, e.park_id, e.status, e.mundane_id AS event_creator,
+        // Events in range (all calendar-detail occurrences within window)
+        $evtSql = "
+			SELECT e.event_id, e.name, e.park_id, e.kingdom_id, e.status, e.mundane_id AS event_creator,
 			       p.abbreviation AS park_abbr,
 			       cd.event_start, cd.event_end, cd.event_calendardetail_id AS detail_id,
-			       {$monarchSubq} AS monarch_rsvp,
-			       {$regentSubq} AS regent_rsvp
+			       {$royalSelectCols}
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
 			INNER JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
-			WHERE e.kingdom_id = {$kid}
+			{$royalJoinSql}
+			WHERE e.kingdom_id IN ({$statsEvtKids})
 			  AND cd.event_start >= '{$start}'
 			  AND cd.event_start < '{$end}'
 			  {$kn_draftClause}
 			ORDER BY cd.event_start";
-		$DB->Clear();
-		$evtResult = $DB->DataSet($evtSql);
-		if ($evtResult && $evtResult->Size() > 0) {
-			while ($evtResult->Next()) {
-				$evStatus = (string)($evtResult->status ?? 'published');
-				// Per-row draft check (covers AUTH_EVENT/AUTH_EDIT users beyond simple creator/admin filter above)
-				if ($evStatus !== 'published' && !$kn_isAdmin && (int)$evtResult->event_creator !== $kn_uid) {
-					$canEditRow = ($kn_uid > 0) && Ork3::$Lib->authorization->HasAuthority($kn_uid, AUTH_EVENT, (int)$evtResult->event_id, AUTH_EDIT);
-					if (!$canEditRow) continue;
-				}
-				$isPark    = (int)$evtResult->park_id > 0;
-				$abbr      = ($isPark && $evtResult->park_abbr) ? $evtResult->park_abbr . ': ' : '';
-				$eid       = (int)$evtResult->event_id;
-				$did       = (int)$evtResult->detail_id;
-				$mRsvp     = (int)$evtResult->monarch_rsvp;
-				$rRsvp     = (int)$evtResult->regent_rsvp;
-				$ev = [
-					'title' => $abbr . $evtResult->name,
-					'start' => $evtResult->event_start,
-					'url'   => $did ? UIR . "Event/detail/{$eid}/{$did}" : '',
-					'color' => $isPark ? '#6b46c1' : '#0891b2',
-					'type'  => $isPark ? 'park-event' : 'kingdom-event',
-					'extendedProps' => [
-						'eventId'  => $eid,
-						'detailId' => $did,
-						'isDraft'  => $evStatus === 'draft',
-					],
-				];
-				// A10: FullCalendar strips unrecognized top-level keys — royalPresence MUST live in extendedProps
-				if (!isset($ev['extendedProps']) || !is_array($ev['extendedProps'])) $ev['extendedProps'] = [];
-				if ($mRsvp && $rRsvp)  $ev['extendedProps']['royalPresence'] = 'both';
-				elseif ($mRsvp)        $ev['extendedProps']['royalPresence'] = 'monarch';
-				elseif ($rRsvp)        $ev['extendedProps']['royalPresence'] = 'regent';
-				$endRaw = $evtResult->event_end ?? '';
-				if ($endRaw && substr($endRaw, 0, 10) > substr($evtResult->event_start, 0, 10)) {
-					$endDt = new DateTime(substr($endRaw, 0, 10));
-					$endDt->modify('+1 day');
-					$ev['end'] = $endDt->format('Y-m-d');
-				}
-				$events[] = $ev;
-			}
-		}
+        $DB->Clear();
+        $evtResult = $DB->DataSet($evtSql);
+        if ($evtResult && $evtResult->Size() > 0) {
+            while ($evtResult->Next()) {
+                $evStatus = (string)($evtResult->status ?? 'published');
+                // Per-row draft check (covers AUTH_EVENT/AUTH_EDIT users beyond simple creator/admin filter above)
+                if ($evStatus !== 'published' && !$kn_isAdmin && (int)$evtResult->event_creator !== $kn_uid) {
+                    $canEditRow = ($kn_uid > 0) && Ork3::$Lib->authorization->HasAuthority($kn_uid, AUTH_EVENT, (int)$evtResult->event_id, AUTH_EDIT);
+                    if (!$canEditRow) {
+                        continue;
+                    }
+                }
+                $isPark    = (int)$evtResult->park_id > 0;
+                $abbr      = ($isPark && $evtResult->park_abbr) ? $evtResult->park_abbr . ': ' : '';
+                $eid       = (int)$evtResult->event_id;
+                $did       = (int)$evtResult->detail_id;
+                $evKid   = (int)$evtResult->kingdom_id;
+                $rsvpRaw = (string)($evtResult->royal_rsvps ?? '');
+                $rsvpSet = $rsvpRaw !== '' ? array_flip(array_map('intval', explode(',', $rsvpRaw))) : [];
+                $royal = [];
+                if ($kingdomMonarchId && isset($rsvpSet[$kingdomMonarchId])) {
+                    $royal['km'] = true;
+                }
+                if ($kingdomRegentId  && isset($rsvpSet[$kingdomRegentId])) {
+                    $royal['kr'] = true;
+                }
+                if ($evKid !== $kid && isset($familyRoyals[$evKid])) {
+                    $pmId = $familyRoyals[$evKid]['monarch'];
+                    $prId = $familyRoyals[$evKid]['regent'];
+                    if ($pmId && isset($rsvpSet[$pmId])) {
+                        $royal['pm'] = true;
+                    }
+                    if ($prId && isset($rsvpSet[$prId])) {
+                        $royal['pr'] = true;
+                    }
+                }
+                $ev = [
+                    'title' => $abbr . $evtResult->name,
+                    'start' => $evtResult->event_start,
+                    'url'   => $did ? UIR . "Event/detail/{$eid}/{$did}" : '',
+                    'color' => $isPark ? '#6b46c1' : '#0891b2',
+                    'type'  => $isPark ? 'park-event' : 'kingdom-event',
+                    'extendedProps' => [
+                        'eventId'  => $eid,
+                        'detailId' => $did,
+                        'isDraft'  => $evStatus === 'draft',
+                    ],
+                ];
+                // A10: FullCalendar strips unrecognized top-level keys — royalPresence MUST live in extendedProps.
+                // Object with up to 4 flags: km/kr (kingdom monarch/regent), pm/pr (principality monarch/regent).
+                if (!empty($royal)) {
+                    if (!isset($ev['extendedProps']) || !is_array($ev['extendedProps'])) {
+                        $ev['extendedProps'] = [];
+                    }
+                    $ev['extendedProps']['royalPresence'] = $royal;
+                }
+                $endRaw = $evtResult->event_end ?? '';
+                if ($endRaw && substr($endRaw, 0, 10) > substr($evtResult->event_start, 0, 10)) {
+                    $endDt = new DateTime(substr($endRaw, 0, 10));
+                    $endDt->modify('+1 day');
+                    $ev['end'] = $endDt->format('Y-m-d');
+                }
+                $events[] = $ev;
+            }
+        }
 
-		// Calendar items (kingdom- or park-scoped) overlapping the range
-		$ciSql = "
+        // Calendar items (kingdom- or park-scoped) overlapping the range
+        $ciSql = "
 			SELECT ci.calendar_item_id, ci.name, ci.description, ci.all_day,
 			       ci.event_start, ci.event_end, ci.park_id, ci.kingdom_id,
 			       p.abbreviation AS park_abbr
@@ -771,192 +880,213 @@ class Controller_KingdomAjax extends Controller {
 			  AND ci.event_start < '{$end}'
 			  AND ci.event_end   >= '{$start}'
 			ORDER BY ci.event_start";
-		$DB->Clear();
-		$ciResult = $DB->DataSet($ciSql);
-		if ($ciResult && $ciResult->Size() > 0) {
-			while ($ciResult->Next()) {
-				$isPark = (int)$ciResult->park_id > 0;
-				$abbr   = ($isPark && $ciResult->park_abbr) ? $ciResult->park_abbr . ': ' : '';
-				$allDay = (int)$ciResult->all_day === 1;
-				$ev = [
-					'title'         => $abbr . $ciResult->name,
-					'start'         => $allDay ? substr($ciResult->event_start, 0, 10) : $ciResult->event_start,
-					'color'         => '#64748b',
-					'type'          => 'calendar-item',
-					'allDay'        => $allDay,
-					'extendedProps' => [
-						'calendarItemId' => (int)$ciResult->calendar_item_id,
-						'description'    => (string)$ciResult->description,
-						'parkId'         => (int)$ciResult->park_id,
-						'kingdomId'      => (int)$ciResult->kingdom_id,
-						'parkAbbr'       => $ciResult->park_abbr ?? '',
-						'rawStart'       => $ciResult->event_start,
-						'rawEnd'         => $ciResult->event_end,
-					],
-				];
-				// Multi-day: emit an exclusive end for FullCalendar (next day after the end date for all-day).
-				$startDate = substr($ciResult->event_start, 0, 10);
-				$endDate   = substr($ciResult->event_end,   0, 10);
-				if ($endDate > $startDate) {
-					$endDt = new DateTime($endDate);
-					if ($allDay) $endDt->modify('+1 day');
-					$ev['end'] = $allDay ? $endDt->format('Y-m-d') : $ciResult->event_end;
-				} elseif (!$allDay) {
-					$ev['end'] = $ciResult->event_end;
-				}
-				$events[] = $ev;
-			}
-		}
+        $DB->Clear();
+        $ciResult = $DB->DataSet($ciSql);
+        if ($ciResult && $ciResult->Size() > 0) {
+            while ($ciResult->Next()) {
+                $isPark = (int)$ciResult->park_id > 0;
+                $abbr   = ($isPark && $ciResult->park_abbr) ? $ciResult->park_abbr . ': ' : '';
+                $allDay = (int)$ciResult->all_day === 1;
+                $ev = [
+                    'title'         => $abbr . $ciResult->name,
+                    'start'         => $allDay ? substr($ciResult->event_start, 0, 10) : $ciResult->event_start,
+                    'color'         => '#64748b',
+                    'type'          => 'calendar-item',
+                    'allDay'        => $allDay,
+                    'extendedProps' => [
+                        'calendarItemId' => (int)$ciResult->calendar_item_id,
+                        'description'    => (string)$ciResult->description,
+                        'parkId'         => (int)$ciResult->park_id,
+                        'kingdomId'      => (int)$ciResult->kingdom_id,
+                        'parkAbbr'       => $ciResult->park_abbr ?? '',
+                        'rawStart'       => $ciResult->event_start,
+                        'rawEnd'         => $ciResult->event_end,
+                    ],
+                ];
+                // Multi-day: emit an exclusive end for FullCalendar (next day after the end date for all-day).
+                $startDate = substr($ciResult->event_start, 0, 10);
+                $endDate   = substr($ciResult->event_end, 0, 10);
+                if ($endDate > $startDate) {
+                    $endDt = new DateTime($endDate);
+                    if ($allDay) {
+                        $endDt->modify('+1 day');
+                    }
+                    $ev['end'] = $allDay ? $endDt->format('Y-m-d') : $ciResult->event_end;
+                } elseif (!$allDay) {
+                    $ev['end'] = $ciResult->event_end;
+                }
+                $events[] = $ev;
+            }
+        }
 
-		// Park day recurrences expanded for the requested range
-		$pdSql = "
+        // Park day recurrences expanded for the requested range
+        $pdSql = "
 			SELECT pd.park_id, pd.recurrence, pd.week_day, pd.week_of_month,
 			       pd.month_day, pd.start_date, pd.week_interval, pd.time, pd.purpose, p.abbreviation AS park_abbr
 			FROM ork_parkday pd
 			JOIN ork_park p ON p.park_id = pd.park_id
 			WHERE p.kingdom_id = {$kid} AND p.active = 'Active'";
-		$pdResult = $DB->DataSet($pdSql);
-		if ($pdResult && $pdResult->Size() > 0) {
-			$dayNames   = ['Sunday'=>0,'Monday'=>1,'Tuesday'=>2,'Wednesday'=>3,'Thursday'=>4,'Friday'=>5,'Saturday'=>6];
-			$rangeStart = new DateTime($start);
-			$rangeEnd   = new DateTime($end);
-			while ($pdResult->Next()) {
-				switch ($pdResult->purpose) {
-					case 'fighter-practice': $purposeLabel = 'Fighter Practice'; break;
-					case 'arts-day':         $purposeLabel = 'A&S Day'; break;
-					case 'park-day':         $purposeLabel = 'Park Day'; break;
-					default:                 $purposeLabel = ucwords(str_replace('-', ' ', $pdResult->purpose));
-				}
-				$abbr    = $pdResult->park_abbr ? $pdResult->park_abbr . ': ' : '';
-				$title   = $abbr . $purposeLabel;
-				$url     = UIR . 'Park/profile/' . (int)$pdResult->park_id;
-				$timeStr = ($pdResult->time && $pdResult->time !== '00:00:00') ? 'T' . $pdResult->time : '';
-				$rec     = $pdResult->recurrence;
+        $DB->Clear();
+        $pdResult = $DB->DataSet($pdSql);
+        if ($pdResult && $pdResult->Size() > 0) {
+            $dayNames   = ['Sunday' => 0,'Monday' => 1,'Tuesday' => 2,'Wednesday' => 3,'Thursday' => 4,'Friday' => 5,'Saturday' => 6];
+            $rangeStart = new DateTime($start);
+            $rangeEnd   = new DateTime($end);
+            while ($pdResult->Next()) {
+                switch ($pdResult->purpose) {
+                    case 'fighter-practice': $purposeLabel = 'Fighter Practice';
+                        break;
+                    case 'arts-day':         $purposeLabel = 'A&S Day';
+                        break;
+                    case 'park-day':         $purposeLabel = 'Park Day';
+                        break;
+                    default:                 $purposeLabel = ucwords(str_replace('-', ' ', $pdResult->purpose));
+                }
+                $abbr    = $pdResult->park_abbr ? $pdResult->park_abbr . ': ' : '';
+                $title   = $abbr . $purposeLabel;
+                $url     = UIR . 'Park/profile/' . (int)$pdResult->park_id;
+                $timeStr = ($pdResult->time && $pdResult->time !== '00:00:00') ? 'T' . $pdResult->time : '';
+                $rec     = $pdResult->recurrence;
 
-				if ($rec === 'weekly') {
-					$targetWd = $dayNames[$pdResult->week_day] ?? -1;
-					if ($targetWd < 0) continue;
-					$cur = clone $rangeStart;
-					while ((int)$cur->format('w') !== $targetWd) { $cur->modify('+1 day'); }
-					while ($cur < $rangeEnd) {
-						$events[] = ['title'=>$title,'start'=>$cur->format('Y-m-d').$timeStr,'url'=>$url,'color'=>'#b7791f','type'=>'park-day'];
-						$cur->modify('+7 days');
-					}
-				} elseif ($rec === 'week-of-month') {
-					$targetWd = $dayNames[$pdResult->week_day] ?? -1;
-					$nth = (int)$pdResult->week_of_month;
-					if ($targetWd < 0 || $nth < 1) continue;
-					$curMonth = clone $rangeStart;
-					$curMonth->modify('first day of this month');
-					while ($curMonth < $rangeEnd) {
-						$cnt = 0; $cur = clone $curMonth;
-						$mn  = (int)$curMonth->format('n');
-						while ((int)$cur->format('n') === $mn) {
-							if ((int)$cur->format('w') === $targetWd && ++$cnt === $nth) {
-								if ($cur >= $rangeStart && $cur < $rangeEnd) {
-									$events[] = ['title'=>$title,'start'=>$cur->format('Y-m-d').$timeStr,'url'=>$url,'color'=>'#b7791f','type'=>'park-day'];
-								}
-								break;
-							}
-							$cur->modify('+1 day');
-						}
-						$curMonth->modify('first day of next month');
-					}
-				} elseif ($rec === 'monthly') {
-					$dayNum = (int)$pdResult->month_day;
-					if ($dayNum < 1) continue;
-					$curMonth = clone $rangeStart;
-					$curMonth->modify('first day of this month');
-					while ($curMonth < $rangeEnd) {
-						$mEnd = clone $curMonth; $mEnd->modify('last day of this month');
-						$d    = min($dayNum, (int)$mEnd->format('d'));
-						$cur  = new DateTime($curMonth->format('Y-m-') . sprintf('%02d', $d));
-						if ($cur >= $rangeStart && $cur < $rangeEnd) {
-							$events[] = ['title'=>$title,'start'=>$cur->format('Y-m-d').$timeStr,'url'=>$url,'color'=>'#b7791f','type'=>'park-day'];
-						}
-						$curMonth->modify('first day of next month');
-					}
-				} elseif ($rec === 'every-x-weeks') {
-					$occs = Park::ExpandEveryXWeeks($pdResult->start_date, (int)$pdResult->week_interval, $rangeStart, $rangeEnd);
-					foreach ($occs as $occ) {
-						$events[] = ['title'=>$title,'start'=>$occ.$timeStr,'url'=>$url,'color'=>'#b7791f','type'=>'park-day'];
-					}
-				}
-			}
-		}
+                if ($rec === 'weekly') {
+                    $targetWd = $dayNames[$pdResult->week_day] ?? -1;
+                    if ($targetWd < 0) {
+                        continue;
+                    }
+                    $cur = clone $rangeStart;
+                    while ((int)$cur->format('w') !== $targetWd) {
+                        $cur->modify('+1 day');
+                    }
+                    while ($cur < $rangeEnd) {
+                        $events[] = ['title' => $title,'start' => $cur->format('Y-m-d').$timeStr,'url' => $url,'color' => '#b7791f','type' => 'park-day'];
+                        $cur->modify('+7 days');
+                    }
+                } elseif ($rec === 'week-of-month') {
+                    $targetWd = $dayNames[$pdResult->week_day] ?? -1;
+                    $nth = (int)$pdResult->week_of_month;
+                    if ($targetWd < 0 || $nth < 1) {
+                        continue;
+                    }
+                    $curMonth = clone $rangeStart;
+                    $curMonth->modify('first day of this month');
+                    while ($curMonth < $rangeEnd) {
+                        $cnt = 0;
+                        $cur = clone $curMonth;
+                        $mn  = (int)$curMonth->format('n');
+                        while ((int)$cur->format('n') === $mn) {
+                            if ((int)$cur->format('w') === $targetWd && ++$cnt === $nth) {
+                                if ($cur >= $rangeStart && $cur < $rangeEnd) {
+                                    $events[] = ['title' => $title,'start' => $cur->format('Y-m-d').$timeStr,'url' => $url,'color' => '#b7791f','type' => 'park-day'];
+                                }
+                                break;
+                            }
+                            $cur->modify('+1 day');
+                        }
+                        $curMonth->modify('first day of next month');
+                    }
+                } elseif ($rec === 'monthly') {
+                    $dayNum = (int)$pdResult->month_day;
+                    if ($dayNum < 1) {
+                        continue;
+                    }
+                    $curMonth = clone $rangeStart;
+                    $curMonth->modify('first day of this month');
+                    while ($curMonth < $rangeEnd) {
+                        $mEnd = clone $curMonth;
+                        $mEnd->modify('last day of this month');
+                        $d    = min($dayNum, (int)$mEnd->format('d'));
+                        $cur  = new DateTime($curMonth->format('Y-m-') . sprintf('%02d', $d));
+                        if ($cur >= $rangeStart && $cur < $rangeEnd) {
+                            $events[] = ['title' => $title,'start' => $cur->format('Y-m-d').$timeStr,'url' => $url,'color' => '#b7791f','type' => 'park-day'];
+                        }
+                        $curMonth->modify('first day of next month');
+                    }
+                } elseif ($rec === 'every-x-weeks') {
+                    $occs = Park::ExpandEveryXWeeks($pdResult->start_date, (int)$pdResult->week_interval, $rangeStart, $rangeEnd);
+                    foreach ($occs as $occ) {
+                        $events[] = ['title' => $title,'start' => $occ.$timeStr,'url' => $url,'color' => '#b7791f','type' => 'park-day'];
+                    }
+                }
+            }
+        }
 
-		echo json_encode(['status' => 0, 'events' => $events]);
-		exit;
-	}
+        echo json_encode(['status' => 0, 'events' => $events]);
+        exit;
+    }
 
-	public function playersearch($p = null) {
-		header('Content-Type: application/json');
+    public function playersearch($p = null)
+    {
+        header('Content-Type: application/json');
 
-		if (!isset($this->session->user_id)) {
-			echo json_encode([]);
-			exit;
-		}
+        if (!isset($this->session->user_id)) {
+            echo json_encode([]);
+            exit;
+        }
 
-		$kingdom_id = (int)preg_replace('/[^0-9]/', '', $p ?? '');
-		$scope_check = trim($_GET['scope'] ?? 'own');
-		// kingdom_id=0 is valid for scope=all (global search with no kingdom context)
-		if (!valid_id($kingdom_id) && $scope_check !== 'all') {
-			echo json_encode([]);
-			exit;
-		}
+        $kingdom_id = (int)preg_replace('/[^0-9]/', '', $p ?? '');
+        $scope_check = trim($_GET['scope'] ?? 'own');
+        // kingdom_id=0 is valid for scope=all (global search with no kingdom context)
+        if (!valid_id($kingdom_id) && $scope_check !== 'all') {
+            echo json_encode([]);
+            exit;
+        }
 
-		$q                = trim($_GET['q']               ?? '');
-		$scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude'
-		$park_id          = (int)($_GET['park_id']        ?? 0);
-		$include_inactive  = !empty($_GET['include_inactive']);
-		$include_suspended = !empty($_GET['include_suspended']);
-		if (strlen($q) < 2) {
-			echo json_encode([]);
-			exit;
-		}
+        $q                = trim($_GET['q']               ?? '');
+        $scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude'
+        $park_id          = (int)($_GET['park_id']        ?? 0);
+        $include_inactive  = !empty($_GET['include_inactive']);
+        $include_suspended = !empty($_GET['include_suspended']);
+        if (strlen($q) < 2) {
+            echo json_encode([]);
+            exit;
+        }
 
-		global $DB;
-		$kid  = $kingdom_id;
+        global $DB;
+        $kid  = $kingdom_id;
 
-		// Parse optional "KD:PK search term" prefix to scope results by abbreviation.
-		// When matched, the prefix overrides the scope-based kingdom/park filter entirely.
-		$filterKid = 0;
-		$filterPid = 0;
-		$searchQ   = $q;
-		if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\\*)?\\s+(.+)$/i', $q, $m)) {
-			$kAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[1]);
-			$rs = $DB->DataSet("SELECT kingdom_id FROM ork_kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
-			if ($rs->Next()) { $filterKid = (int)$rs->kingdom_id; }
-			if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
-				$pAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[2]);
-				$rs = $DB->DataSet("SELECT park_id FROM ork_park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
-				if ($rs->Next()) { $filterPid = (int)$rs->park_id; }
-			}
-			$searchQ = trim($m[3]);
-		}
+        // Parse optional "KD:PK search term" prefix to scope results by abbreviation.
+        // When matched, the prefix overrides the scope-based kingdom/park filter entirely.
+        $filterKid = 0;
+        $filterPid = 0;
+        $searchQ   = $q;
+        if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\\*)?\\s+(.+)$/i', $q, $m)) {
+            $kAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[1]);
+            $rs = $DB->DataSet("SELECT kingdom_id FROM ork_kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
+            if ($rs->Next()) {
+                $filterKid = (int)$rs->kingdom_id;
+            }
+            if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
+                $pAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[2]);
+                $rs = $DB->DataSet("SELECT park_id FROM ork_park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
+                if ($rs->Next()) {
+                    $filterPid = (int)$rs->park_id;
+                }
+            }
+            $searchQ = trim($m[3]);
+        }
 
-		$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $searchQ);
+        $term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $searchQ);
 
-		if ($filterPid > 0) {
-			$kingdom_clause = '';
-			$park_clause    = "AND m.park_id = {$filterPid}";
-		} elseif ($filterKid > 0) {
-			$kingdom_clause = "AND m.kingdom_id = {$filterKid}";
-			$park_clause    = '';
-		} elseif ($scope === 'exclude') {
-			$kingdom_clause = "AND m.kingdom_id != {$kid}";
-			$park_clause    = valid_id($park_id) ? "AND m.park_id = {$park_id}" : '';
-		} elseif ($scope === 'all') {
-			$kingdom_clause = '';
-			$park_clause    = '';
-		} else {
-			// Own-kingdom scope ALWAYS includes child principalities (family), not toggle-gated.
-			$familyIds      = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($kid)));
-			$kingdom_clause = "AND m.kingdom_id IN ({$familyIds})";
-			$park_clause    = valid_id($park_id) ? "AND m.park_id = {$park_id}" : '';
-		}
+        if ($filterPid > 0) {
+            $kingdom_clause = '';
+            $park_clause    = "AND m.park_id = {$filterPid}";
+        } elseif ($filterKid > 0) {
+            $kingdom_clause = "AND m.kingdom_id = {$filterKid}";
+            $park_clause    = '';
+        } elseif ($scope === 'exclude') {
+            $kingdom_clause = "AND m.kingdom_id != {$kid}";
+            $park_clause    = valid_id($park_id) ? "AND m.park_id = {$park_id}" : '';
+        } elseif ($scope === 'all') {
+            $kingdom_clause = '';
+            $park_clause    = '';
+        } else {
+            // Own-kingdom scope ALWAYS includes child principalities (family), not toggle-gated.
+            $familyIds      = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($kid)));
+            $kingdom_clause = "AND m.kingdom_id IN ({$familyIds})";
+            $park_clause    = valid_id($park_id) ? "AND m.park_id = {$park_id}" : '';
+        }
 
-		$sql = "
+        $sql = "
 			SELECT m.mundane_id, m.persona, p.park_id, k.kingdom_id,
 			       k.name AS kingdom_name, p.name AS park_name,
 			       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
@@ -966,7 +1096,7 @@ class Controller_KingdomAjax extends Controller {
 			LEFT JOIN ork_park p ON p.park_id = m.park_id
 			WHERE LENGTH(m.persona) > 0
 			  " . ($include_suspended ? "" : "AND m.suspended = 0") . "
-			  " . ($include_inactive  ? "" : "AND m.active = 1")    . "
+			  " . ($include_inactive ? "" : "AND m.active = 1")    . "
 			  {$kingdom_clause}
 			  {$park_clause}
 			  AND (m.persona LIKE '%{$term}%'
@@ -976,234 +1106,258 @@ class Controller_KingdomAjax extends Controller {
 			ORDER BY m.suspended ASC, m.active DESC, CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END, m.persona
 			LIMIT 15";
 
-		$DB->Clear();
-		$rs      = $DB->DataSet($sql);
-		$results = [];
-		while ($rs->Next()) {
-			$results[] = [
-				'MundaneId'   => (int)$rs->mundane_id,
-				'Persona'     => $rs->persona,
-				'KingdomId'   => (int)$rs->kingdom_id,
-				'ParkId'      => (int)$rs->park_id,
-				'KingdomName' => $rs->kingdom_name,
-				'ParkName'    => $rs->park_name,
-				'KAbbr'       => $rs->k_abbr,
-				'PAbbr'       => $rs->p_abbr,
-				'Suspended'   => (int)$rs->suspended,
-				'Active'      => (int)$rs->active,
-			];
-		}
+        $DB->Clear();
+        $rs      = $DB->DataSet($sql);
+        $results = [];
+        while ($rs->Next()) {
+            $results[] = [
+                'MundaneId'   => (int)$rs->mundane_id,
+                'Persona'     => $rs->persona,
+                'KingdomId'   => (int)$rs->kingdom_id,
+                'ParkId'      => (int)$rs->park_id,
+                'KingdomName' => $rs->kingdom_name,
+                'ParkName'    => $rs->park_name,
+                'KAbbr'       => $rs->k_abbr,
+                'PAbbr'       => $rs->p_abbr,
+                'Suspended'   => (int)$rs->suspended,
+                'Active'      => (int)$rs->active,
+            ];
+        }
 
-		echo json_encode($results);
-		exit;
-	}
+        echo json_encode($results);
+        exit;
+    }
 
-	/* Active kingdoms (sorted by name) for the Move Player cascade dropdowns,
-	   shared by the Kingdom/Park/Player/Admin Move Player modals. */
-	public function getkingdoms($p = null) {
-		header('Content-Type: application/json');
-		if (!isset($this->session->user_id)) { echo json_encode([]); exit; }
-		$r = Ork3::$Lib->kingdom->GetKingdoms(array());
-		$kingdoms = [];
-		foreach ($r['Kingdoms'] ?? [] as $k) {
-			$kingdoms[] = ['KingdomId' => (int)$k['KingdomId'], 'KingdomName' => $k['KingdomName'], 'Abbreviation' => $k['Abbreviation']];
-		}
-		usort($kingdoms, function($a, $b) { return strcasecmp($a['KingdomName'] ?? '', $b['KingdomName'] ?? ''); });
-		echo json_encode(['status' => 0, 'kingdoms' => $kingdoms]);
-		exit;
-	}
+    /* Active kingdoms (sorted by name) for the Move Player cascade dropdowns,
+       shared by the Kingdom/Park/Player/Admin Move Player modals. */
+    public function getkingdoms($p = null)
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode([]);
+            exit;
+        }
+        $r = Ork3::$Lib->kingdom->GetKingdoms(array());
+        $kingdoms = [];
+        foreach ($r['Kingdoms'] ?? [] as $k) {
+            $kingdoms[] = ['KingdomId' => (int)$k['KingdomId'], 'KingdomName' => $k['KingdomName'], 'Abbreviation' => $k['Abbreviation']];
+        }
+        usort($kingdoms, function ($a, $b) {
+            return strcasecmp($a['KingdomName'] ?? '', $b['KingdomName'] ?? '');
+        });
+        echo json_encode(['status' => 0, 'kingdoms' => $kingdoms]);
+        exit;
+    }
 
-	public function suspendplayer($p = null) {
-		header('Content-Type: application/json');
-		if (!isset($this->session->user_id)) {
-			echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit;
-		}
-		$uid = (int)$this->session->user_id;
-		$mid = (int)($_POST['MundaneId'] ?? 0);
-		if (!$mid) { echo json_encode(['status' => 1, 'error' => 'Select a player.']); exit; }
+    public function suspendplayer($p = null)
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        $uid = (int)$this->session->user_id;
+        $mid = (int)($_POST['MundaneId'] ?? 0);
+        if (!$mid) {
+            echo json_encode(['status' => 1, 'error' => 'Select a player.']);
+            exit;
+        }
 
-		// Determine the player's kingdom so we can check auth
-		global $DB;
-		$rs = $DB->DataSet("SELECT kingdom_id, suspended_by_id, suspended FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mid} LIMIT 1");
-		if (!$rs || !$rs->Next()) { echo json_encode(['status' => 1, 'error' => 'Player not found.']); exit; }
-		$player_kingdom_id        = (int)$rs->kingdom_id;
-		$existing_suspended_by_id = (int)$rs->suspended_by_id;
-		$is_currently_suspended   = (bool)$rs->suspended;
+        // Determine the player's kingdom so we can check auth
+        global $DB;
+        $rs = $DB->DataSet("SELECT kingdom_id, suspended_by_id, suspended FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mid} LIMIT 1");
+        if (!$rs || !$rs->Next()) {
+            echo json_encode(['status' => 1, 'error' => 'Player not found.']);
+            exit;
+        }
+        $player_kingdom_id        = (int)$rs->kingdom_id;
+        $existing_suspended_by_id = (int)$rs->suspended_by_id;
+        $is_currently_suspended   = (bool)$rs->suspended;
 
-		$isAdmin = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
-		$isKingdomEditor = valid_id($player_kingdom_id)
-			&& Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT);
-		if (!$isAdmin && !$isKingdomEditor) {
-			echo json_encode(['status' => 5, 'error' => 'Unauthorized']); exit;
-		}
+        $isAdmin = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $isKingdomEditor = valid_id($player_kingdom_id)
+            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT);
+        if (!$isAdmin && !$isKingdomEditor) {
+            echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
+            exit;
+        }
 
-		$suspended  = (int)($_POST['Suspended']  ?? 1);
-		$byId       = (int)($_POST['SuspendedById'] ?? 0);
-		$at         = trim($_POST['SuspendedAt']    ?? '');
-		$until      = trim($_POST['SuspendedUntil'] ?? '');
-		$reason     = trim($_POST['Suspension']    ?? '');
-		$propagates = (int)($_POST['SuspensionPropagates'] ?? 0);
-		// New suspension → use current user; edit → preserve existing suspendator (or null if never recorded)
-		$resolvedById = $byId ?: ($is_currently_suspended ? ($existing_suspended_by_id ?: null) : $uid);
-		$this->load_model('Player');
-		$r = $this->Player->suspend_player([
-			'Token'                => $this->session->token,
-			'MundaneId'            => $mid,
-			'Suspended'            => (bool)$suspended,
-			'SuspendedById'        => $resolvedById,
-			'SuspendedAt'          => $at,
-			'SuspendedUntil'       => $until,
-			'Suspension'           => $reason,
-			'SuspensionPropagates' => $propagates,
-		]);
-		echo ($r === null || (isset($r['Status']) && $r['Status'] == 0))
-			? json_encode(['status' => 0])
-			: json_encode(['status' => $r['Status'] ?? 1, 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
-		exit;
-	}
+        $suspended  = (int)($_POST['Suspended']  ?? 1);
+        $byId       = (int)($_POST['SuspendedById'] ?? 0);
+        $at         = trim($_POST['SuspendedAt']    ?? '');
+        $until      = trim($_POST['SuspendedUntil'] ?? '');
+        $reason     = trim($_POST['Suspension']    ?? '');
+        $propagates = (int)($_POST['SuspensionPropagates'] ?? 0);
+        // New suspension → use current user; edit → preserve existing suspendator (or null if never recorded)
+        $resolvedById = $byId ?: ($is_currently_suspended ? ($existing_suspended_by_id ?: null) : $uid);
+        $this->load_model('Player');
+        $r = $this->Player->suspend_player([
+            'Token'                => $this->session->token,
+            'MundaneId'            => $mid,
+            'Suspended'            => (bool)$suspended,
+            'SuspendedById'        => $resolvedById,
+            'SuspendedAt'          => $at,
+            'SuspendedUntil'       => $until,
+            'Suspension'           => $reason,
+            'SuspensionPropagates' => $propagates,
+        ]);
+        echo ($r === null || (isset($r['Status']) && $r['Status'] == 0))
+            ? json_encode(['status' => 0])
+            : json_encode(['status' => $r['Status'] ?? 1, 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        exit;
+    }
 
-	public function banner($p = null) {
-		header('Content-Type: application/json');
+    public function banner($p = null)
+    {
+        header('Content-Type: application/json');
 
-		if (!isset($this->session->user_id)) {
-			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
-			exit;
-		}
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
 
-		$params   = explode('/', $p ?? '');
-		$kingdom_id = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
-		$action   = $params[1] ?? '';
+        $params   = explode('/', $p ?? '');
+        $kingdom_id = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $action   = $params[1] ?? '';
 
-		if (!valid_id($kingdom_id)) {
-			echo json_encode(['status' => 1, 'error' => 'Invalid Kingdom ID.']);
-			exit;
-		}
+        if (!valid_id($kingdom_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid Kingdom ID.']);
+            exit;
+        }
 
-		$uid = (int)$this->session->user_id;
-		// Banner management requires AUTH_EDIT (aligned with Park/Player banner endpoints and design spec).
-		$canEdit = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT);
-		if (!$canEdit) {
-			echo json_encode(['status' => 5, 'error' => 'Not authorized to manage this kingdom\'s banner.']);
-			exit;
-		}
+        $uid = (int)$this->session->user_id;
+        // Banner management requires AUTH_EDIT (aligned with Park/Player banner endpoints and design spec).
+        $canEdit = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT);
+        if (!$canEdit) {
+            echo json_encode(['status' => 5, 'error' => 'Not authorized to manage this kingdom\'s banner.']);
+            exit;
+        }
 
-		global $DB;
+        global $DB;
 
-		if ($action === 'remove') {
-			$DB->Clear();
-			// Reset display toggles AND framing offsets to defaults so a future
-			// upload starts fresh instead of inheriting the removed banner's
-			// config.
-			$DB->Execute('UPDATE ' . DB_PREFIX . 'kingdom SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1, banner_offset_x = 50, banner_offset_y = 50 WHERE kingdom_id = ' . $kingdom_id);
-			// I4 fix: verify the UPDATE landed before deleting the file.
-			// If the DB update silently failed and we delete the file, the
-			// banner column stays 1 but the file is gone -> broken banner.
-			$DB->Clear();
-			$removeCheck = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id);
-			if (!$removeCheck || !$removeCheck->Next() || (int)$removeCheck->has_banner !== 0) {
-				echo json_encode(['status' => 1, 'error' => 'Could not clear banner flag in database. Please try again.']);
-				exit;
-			}
-			$base = DIR_KINGDOM_BANNER . sprintf('%04d', $kingdom_id);
-			if (file_exists($base . '.jpg')) unlink($base . '.jpg');
-			if (file_exists($base . '.png')) unlink($base . '.png');
-			echo json_encode(['status' => 0]);
-			exit;
-		}
+        if ($action === 'remove') {
+            $DB->Clear();
+            // Reset display toggles AND framing offsets to defaults so a future
+            // upload starts fresh instead of inheriting the removed banner's
+            // config.
+            $DB->Execute('UPDATE ' . DB_PREFIX . 'kingdom SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1, banner_offset_x = 50, banner_offset_y = 50 WHERE kingdom_id = ' . $kingdom_id);
+            // I4 fix: verify the UPDATE landed before deleting the file.
+            // If the DB update silently failed and we delete the file, the
+            // banner column stays 1 but the file is gone -> broken banner.
+            $DB->Clear();
+            $removeCheck = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id);
+            if (!$removeCheck || !$removeCheck->Next() || (int)$removeCheck->has_banner !== 0) {
+                echo json_encode(['status' => 1, 'error' => 'Could not clear banner flag in database. Please try again.']);
+                exit;
+            }
+            $base = DIR_KINGDOM_BANNER . sprintf('%04d', $kingdom_id);
+            if (file_exists($base . '.jpg')) {
+                unlink($base . '.jpg');
+            }
+            if (file_exists($base . '.png')) {
+                unlink($base . '.png');
+            }
+            echo json_encode(['status' => 0]);
+            exit;
+        }
 
-		if ($action === 'config') {
-			// Refuse silent no-ops: config only meaningful with a banner present.
-			$DB->Clear();
-			$row = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id);
-			if (!$row || !$row->Next() || (int)$row->has_banner !== 1) {
-				echo json_encode(['status' => 1, 'error' => 'Upload a banner first before saving settings.']);
-				exit;
-			}
-			$showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
-			$vignette = !empty($_POST['Vignette']) ? 1 : 0;
-			$offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
-			$offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
-			$DB->Clear();
-			$DB->Execute('UPDATE ' . DB_PREFIX . 'kingdom SET banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE kingdom_id = ' . $kingdom_id);
-			// Verify the UPDATE landed (mirrors the verify pattern in update/remove
-			// branches). $DB->Execute() is void and YapoMysql can silently swallow
-			// failures (sql_mode=STRICT etc), so re-read banner_offset_x and
-			// compare against the submitted value.
-			$DB->Clear();
-			$verify = $DB->DataSet('SELECT banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id);
-			if (!$verify || !$verify->Next()
-				|| (int)$verify->banner_show_logo !== $showLogo
-				|| (int)$verify->banner_vignette  !== $vignette
-				|| (int)$verify->banner_offset_x  !== $offX
-				|| (int)$verify->banner_offset_y  !== $offY) {
-				echo json_encode(['status' => 1, 'error' => 'Could not save banner settings. Please try again.']);
-				exit;
-			}
-			echo json_encode(['status' => 0]);
-			exit;
-		}
+        if ($action === 'config') {
+            // Refuse silent no-ops: config only meaningful with a banner present.
+            $DB->Clear();
+            $row = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id);
+            if (!$row || !$row->Next() || (int)$row->has_banner !== 1) {
+                echo json_encode(['status' => 1, 'error' => 'Upload a banner first before saving settings.']);
+                exit;
+            }
+            $showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
+            $vignette = !empty($_POST['Vignette']) ? 1 : 0;
+            $offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
+            $offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
+            $DB->Clear();
+            $DB->Execute('UPDATE ' . DB_PREFIX . 'kingdom SET banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE kingdom_id = ' . $kingdom_id);
+            // Verify the UPDATE landed (mirrors the verify pattern in update/remove
+            // branches). $DB->Execute() is void and YapoMysql can silently swallow
+            // failures (sql_mode=STRICT etc), so re-read banner_offset_x and
+            // compare against the submitted value.
+            $DB->Clear();
+            $verify = $DB->DataSet('SELECT banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id);
+            if (!$verify || !$verify->Next()
+                || (int)$verify->banner_show_logo !== $showLogo
+                || (int)$verify->banner_vignette  !== $vignette
+                || (int)$verify->banner_offset_x  !== $offX
+                || (int)$verify->banner_offset_y  !== $offY) {
+                echo json_encode(['status' => 1, 'error' => 'Could not save banner settings. Please try again.']);
+                exit;
+            }
+            echo json_encode(['status' => 0]);
+            exit;
+        }
 
-		if ($action === 'update') {
-			if (empty($_FILES['Banner']['tmp_name'])) {
-				echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
-				exit;
-			}
-			// I2 fix: validate the upload came via a real HTTP file upload (prevents spoofing).
-			if (!is_uploaded_file($_FILES['Banner']['tmp_name'])) {
-				echo json_encode(['status' => 1, 'error' => 'Invalid upload.']);
-				exit;
-			}
-			// I5 fix: server-side file size check (JS resize can be bypassed via curl).
-			if (($_FILES['Banner']['size'] ?? 0) > 1024 * 1024) {
-				echo json_encode(['status' => 1, 'error' => 'File too large (max 1 MB).']);
-				exit;
-			}
-			$tmp  = $_FILES['Banner']['tmp_name'];
-			// I3 fix: use exif_imagetype() (magic-byte check) instead of the
-			// browser-supplied MIME type, which is trivially spoofable.
-			$detectedType = exif_imagetype($tmp);
-			if ($detectedType !== IMAGETYPE_JPEG && $detectedType !== IMAGETYPE_PNG) {
-				echo json_encode(['status' => 1, 'error' => 'Only JPEG and PNG images are supported.']);
-				exit;
-			}
-			$mime = ($detectedType === IMAGETYPE_PNG) ? 'image/png' : 'image/jpeg';
-			if (!is_dir(DIR_KINGDOM_BANNER)) {
-				@mkdir(DIR_KINGDOM_BANNER, 0775, true);
-			}
-			$ext  = ($mime === 'image/png') ? 'png' : 'jpg';
-			$base = DIR_KINGDOM_BANNER . sprintf('%04d', $kingdom_id);
-			// Delete any previous banner files (both extensions) before saving
-			// the new one so we never leave the old image behind when the host
-			// switches images. resolve_image_ext picks whichever survives.
-			if (file_exists($base . '.jpg')) @unlink($base . '.jpg');
-			if (file_exists($base . '.png')) @unlink($base . '.png');
-			if (!@move_uploaded_file($tmp, $base . '.' . $ext)) {
-				echo json_encode(['status' => 1, 'error' => 'Could not save uploaded file.']);
-				exit;
-			}
-			$showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
-			$vignette = !empty($_POST['Vignette']) ? 1 : 0;
-			$offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
-			$offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
-			$DB->Clear();
-			$DB->Execute('UPDATE ' . DB_PREFIX . 'kingdom SET has_banner = 1, banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE kingdom_id = ' . $kingdom_id);
-			// $DB->Execute() is void; the YapoMysql layer can silently swallow
-			// failures (sql_mode=STRICT etc). Verify the update landed by
-			// re-reading has_banner. If it didn't, roll back the file so we
-			// don't leave an orphan whose flag is still 0.
-			$DB->Clear();
-			$verify = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id);
-			if (!$verify || !$verify->Next() || (int)$verify->has_banner !== 1) {
-				@unlink($base . '.' . $ext);
-				echo json_encode(['status' => 1, 'error' => 'Saved file but could not update the database. Please try again.']);
-				exit;
-			}
-			echo json_encode(['status' => 0]);
-			exit;
-		}
+        if ($action === 'update') {
+            if (empty($_FILES['Banner']['tmp_name'])) {
+                echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
+                exit;
+            }
+            // I2 fix: validate the upload came via a real HTTP file upload (prevents spoofing).
+            if (!is_uploaded_file($_FILES['Banner']['tmp_name'])) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid upload.']);
+                exit;
+            }
+            // I5 fix: server-side file size check (JS resize can be bypassed via curl).
+            if (($_FILES['Banner']['size'] ?? 0) > 1024 * 1024) {
+                echo json_encode(['status' => 1, 'error' => 'File too large (max 1 MB).']);
+                exit;
+            }
+            $tmp  = $_FILES['Banner']['tmp_name'];
+            // I3 fix: use exif_imagetype() (magic-byte check) instead of the
+            // browser-supplied MIME type, which is trivially spoofable.
+            $detectedType = exif_imagetype($tmp);
+            if ($detectedType !== IMAGETYPE_JPEG && $detectedType !== IMAGETYPE_PNG) {
+                echo json_encode(['status' => 1, 'error' => 'Only JPEG and PNG images are supported.']);
+                exit;
+            }
+            $mime = ($detectedType === IMAGETYPE_PNG) ? 'image/png' : 'image/jpeg';
+            if (!is_dir(DIR_KINGDOM_BANNER)) {
+                @mkdir(DIR_KINGDOM_BANNER, 0775, true);
+            }
+            $ext  = ($mime === 'image/png') ? 'png' : 'jpg';
+            $base = DIR_KINGDOM_BANNER . sprintf('%04d', $kingdom_id);
+            // Delete any previous banner files (both extensions) before saving
+            // the new one so we never leave the old image behind when the host
+            // switches images. resolve_image_ext picks whichever survives.
+            if (file_exists($base . '.jpg')) {
+                @unlink($base . '.jpg');
+            }
+            if (file_exists($base . '.png')) {
+                @unlink($base . '.png');
+            }
+            if (!@move_uploaded_file($tmp, $base . '.' . $ext)) {
+                echo json_encode(['status' => 1, 'error' => 'Could not save uploaded file.']);
+                exit;
+            }
+            $showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
+            $vignette = !empty($_POST['Vignette']) ? 1 : 0;
+            $offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
+            $offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
+            $DB->Clear();
+            $DB->Execute('UPDATE ' . DB_PREFIX . 'kingdom SET has_banner = 1, banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE kingdom_id = ' . $kingdom_id);
+            // $DB->Execute() is void; the YapoMysql layer can silently swallow
+            // failures (sql_mode=STRICT etc). Verify the update landed by
+            // re-reading has_banner. If it didn't, roll back the file so we
+            // don't leave an orphan whose flag is still 0.
+            $DB->Clear();
+            $verify = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id);
+            if (!$verify || !$verify->Next() || (int)$verify->has_banner !== 1) {
+                @unlink($base . '.' . $ext);
+                echo json_encode(['status' => 1, 'error' => 'Saved file but could not update the database. Please try again.']);
+                exit;
+            }
+            echo json_encode(['status' => 0]);
+            exit;
+        }
 
-		echo json_encode(['status' => 1, 'error' => 'Unknown action.']);
-		exit;
-	}
+        echo json_encode(['status' => 1, 'error' => 'Unknown action.']);
+        exit;
+    }
 
 }
