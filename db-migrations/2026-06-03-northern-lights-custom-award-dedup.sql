@@ -19,8 +19,9 @@
 --   award_id 94), then delete the orphaned 3556 entry so it can't be used again.
 --
 -- BEFORE RUNNING
---   1. Take the backup export: 2026-06-03-northern-lights-custom-award-legacy-export.tsv
---      (regenerate from PROD immediately before applying -- see header of that file).
+--   1. Take a backup with mariadb-dump --no-create-info (see PR runbook for the
+--      exact commands). DO NOT omit --no-create-info or the backup will DROP+CREATE
+--      the table on restore and wipe everything not in the --where= slice.
 --   2. Keep the rollback script handy: 2026-06-03-northern-lights-custom-award-dedup-rollback.sql
 --
 -- SAFETY
@@ -37,9 +38,12 @@ SET @good := (SELECT kingdomaward_id FROM ork_kingdomaward
               LIMIT 1);
 
 -- ---- BEFORE (review) ----
+-- The ID anchor (3463) is the load-bearing check; absolute counts drift upward
+-- each week as Northern Lights keeps filing awards on the orphan. As of
+-- 2026-06-10 prod shows 361/188 (was 346/181 when this migration was authored).
 SELECT @good AS good_kingdomaward_id;                      -- expect 3463
-SELECT COUNT(*)              AS orphaned_awardings_before, -- expect 346
-       COUNT(DISTINCT mundane_id) AS members              -- expect 181
+SELECT COUNT(*)              AS orphaned_awardings_before, -- expect a positive count (361 on 2026-06-10)
+       COUNT(DISTINCT mundane_id) AS members              -- (188 on 2026-06-10)
   FROM ork_awards WHERE kingdomaward_id = 3556 AND award_id = 187;
 
 START TRANSACTION;
