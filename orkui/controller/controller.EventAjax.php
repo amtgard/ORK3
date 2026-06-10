@@ -1,338 +1,332 @@
 <?php
 
-class Controller_EventAjax extends Controller {
+class Controller_EventAjax extends Controller
+{
+    public function create($p = null)
+    {
+        header('Content-Type: application/json');
 
-	public function create($p = null) {
-		header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
 
-		if (!isset($this->session->user_id)) {
-			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
-			exit;
-		}
+        $this->load_model('Event');
+        $name       = trim($_POST['Name']       ?? '');
+        $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
+        $park_id    = (int)($_POST['ParkId']    ?? 0);
 
-		$this->load_model('Event');
-		$name       = trim($_POST['Name']       ?? '');
-		$kingdom_id = (int)($_POST['KingdomId'] ?? 0);
-		$park_id    = (int)($_POST['ParkId']    ?? 0);
+        if (!strlen($name)) {
+            echo json_encode(['status' => 1, 'error' => 'Event name is required.']);
+            exit;
+        }
+        if (!valid_id($kingdom_id) && !valid_id($park_id)) {
+            echo json_encode(['status' => 1, 'error' => 'A kingdom or park is required.']);
+            exit;
+        }
 
-		if (!strlen($name)) {
-			echo json_encode(['status' => 1, 'error' => 'Event name is required.']);
-			exit;
-		}
-		if (!valid_id($kingdom_id) && !valid_id($park_id)) {
-			echo json_encode(['status' => 1, 'error' => 'A kingdom or park is required.']);
-			exit;
-		}
+        $r = $this->Event->create_event(
+            $this->session->token,
+            $kingdom_id,
+            $park_id,
+            0,
+            0,
+            $name
+        );
 
-		$r = $this->Event->create_event(
-			$this->session->token,
-			$kingdom_id,
-			$park_id,
-			0,
-			0,
-			$name
-		);
+        if ($r['Status'] == 0) {
+            echo json_encode(['status' => 0, 'eventId' => (int)($r['Detail'] ?? 0)]);
+        } else {
+            echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        }
+        exit;
+    }
 
-		if ($r['Status'] == 0) {
-			echo json_encode(['status' => 0, 'eventId' => (int)($r['Detail'] ?? 0)]);
-		} else {
-			echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
-		}
-		exit;
-	}
+    public function add_attendance($p = null)
+    {
+        header('Content-Type: application/json');
 
-	public function add_attendance($p = null) {
-		header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
 
-		if (!isset($this->session->user_id)) {
-			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
-			exit;
-		}
+        $this->load_model('Attendance');
 
-		$this->load_model('Attendance');
+        $params    = explode('/', $p ?? '');
+        $event_id  = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $detail_id = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
 
-		$params    = explode( '/', $p ?? '' );
-		$event_id  = (int)preg_replace( '/[^0-9]/', '', $params[0] ?? '' );
-		$detail_id = (int)preg_replace( '/[^0-9]/', '', $params[1] ?? '' );
+        if (!valid_id($event_id) || !valid_id($detail_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
+            exit;
+        }
 
-		if (!valid_id($event_id) || !valid_id($detail_id)) {
-			echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
-			exit;
-		}
+        $uid = (int)$this->session->user_id;
+        if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+            echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
+            exit;
+        }
 
-		$uid = (int)$this->session->user_id;
-		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
-			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
-			exit;
-		}
+        if (!valid_id($_POST['MundaneId'] ?? 0)) {
+            echo json_encode(['status' => 1, 'error' => 'A player must be selected.']);
+            exit;
+        }
 
-		if (!valid_id($_POST['MundaneId'] ?? 0)) {
-			echo json_encode(['status' => 1, 'error' => 'A player must be selected.']);
-			exit;
-		}
+        if (!valid_id($_POST['ClassId'] ?? 0)) {
+            echo json_encode(['status' => 1, 'error' => 'A class must be selected.']);
+            exit;
+        }
 
-		if (!valid_id($_POST['ClassId'] ?? 0)) {
-			echo json_encode(['status' => 1, 'error' => 'A class must be selected.']);
-			exit;
-		}
+        $detail = $this->Attendance->get_eventdetail_info($detail_id);
 
-		$detail = $this->Attendance->get_eventdetail_info($detail_id);
+        $eventStartTs = $detail['EventStart'] ? strtotime($detail['EventStart']) : 0;
+        if ($eventStartTs && time() < $eventStartTs - 86400) {
+            $openLabel = date('D, M j, Y \\a\\t g:i A T', $eventStartTs - 86400);
+            echo json_encode(['status' => 1, 'error' => 'Sign-ins for this event can be processed starting on ' . $openLabel . '.']);
+            exit;
+        }
 
-		$eventStartTs = $detail['EventStart'] ? strtotime($detail['EventStart']) : 0;
-		if ($eventStartTs && time() < $eventStartTs - 86400) {
-			$openLabel = date('D, M j, Y \\a\\t g:i A T', $eventStartTs - 86400);
-			echo json_encode(['status' => 1, 'error' => 'Sign-ins for this event can be processed starting on ' . $openLabel . '.']);
-			exit;
-		}
+        $r = $this->Attendance->add_attendance(
+            $this->session->token,
+            $_POST['AttendanceDate'] ?? date('Y-m-d'),
+            valid_id($detail['AtParkId']) ? $detail['AtParkId'] : null,
+            $detail_id,
+            $_POST['MundaneId'] ?? 0,
+            $_POST['ClassId'] ?? 0,
+            $_POST['Credits'] ?? 1
+        );
 
-		$r = $this->Attendance->add_attendance(
-			$this->session->token,
-			$_POST['AttendanceDate'] ?? date('Y-m-d'),
-			valid_id($detail['AtParkId']) ? $detail['AtParkId'] : null,
-			$detail_id,
-			$_POST['MundaneId'] ?? 0,
-			$_POST['ClassId'] ?? 0,
-			$_POST['Credits'] ?? 1
-		);
+        if ($r['Status'] == 0) {
+            global $DB;
+            $aid = (int)$r['Detail'];
+            $DB->Clear();
+            $row = $DB->DataSet("SELECT a.attendance_id AS AttendanceId, a.mundane_id AS MundaneId, m.persona AS Persona, m.kingdom_id AS KingdomId, k.name AS KingdomName, k.abbreviation AS KAbbr, m.park_id AS ParkId, p.name AS ParkName, p.abbreviation AS PAbbr, c.name AS ClassName, a.credits AS Credits FROM ork_attendance a LEFT JOIN ork_mundane m ON m.mundane_id = a.mundane_id LEFT JOIN ork_park p ON p.park_id = m.park_id LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id LEFT JOIN ork_class c ON c.class_id = a.class_id WHERE a.attendance_id = $aid");
+            if ($row && $row->Size() > 0 && $row->Next()) {
+                echo json_encode(['status' => 0, 'attendance' => [
+                    'AttendanceId' => $row->AttendanceId,
+                    'MundaneId'    => $row->MundaneId,
+                    'Persona'      => $row->Persona,
+                    'KingdomId'    => $row->KingdomId,
+                    'KingdomName'  => $row->KingdomName,
+                    'KAbbr'        => $row->KAbbr,
+                    'ParkId'       => $row->ParkId,
+                    'ParkName'     => $row->ParkName,
+                    'PAbbr'        => $row->PAbbr,
+                    'ClassName'    => $row->ClassName,
+                    'Credits'      => $row->Credits,
+                    'ClassId'      => (int)($_POST['ClassId'] ?? 0),
+                    'Date'         => $_POST['AttendanceDate'] ?? date('Y-m-d'),
+                ]]);
+            } else {
+                echo json_encode(['status' => 0, 'attendance' => null]);
+            }
+        } else {
+            echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        }
+        exit;
+    }
 
-		if ($r['Status'] == 0) {
-			global $DB;
-			$aid = (int)$r['Detail'];
-			$DB->Clear();
-			$row = $DB->DataSet("SELECT a.attendance_id AS AttendanceId, a.mundane_id AS MundaneId, m.persona AS Persona, m.kingdom_id AS KingdomId, k.name AS KingdomName, k.abbreviation AS KAbbr, m.park_id AS ParkId, p.name AS ParkName, p.abbreviation AS PAbbr, c.name AS ClassName, a.credits AS Credits FROM ork_attendance a LEFT JOIN ork_mundane m ON m.mundane_id = a.mundane_id LEFT JOIN ork_park p ON p.park_id = m.park_id LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id LEFT JOIN ork_class c ON c.class_id = a.class_id WHERE a.attendance_id = $aid");
-			if ($row && $row->Size() > 0 && $row->Next()) {
-				echo json_encode(['status' => 0, 'attendance' => [
-					'AttendanceId' => $row->AttendanceId,
-					'MundaneId'    => $row->MundaneId,
-					'Persona'      => $row->Persona,
-					'KingdomId'    => $row->KingdomId,
-					'KingdomName'  => $row->KingdomName,
-					'KAbbr'        => $row->KAbbr,
-					'ParkId'       => $row->ParkId,
-					'ParkName'     => $row->ParkName,
-					'PAbbr'        => $row->PAbbr,
-					'ClassName'    => $row->ClassName,
-					'Credits'      => $row->Credits,
-					'ClassId'      => (int)($_POST['ClassId'] ?? 0),
-					'Date'         => $_POST['AttendanceDate'] ?? date('Y-m-d'),
-				]]);
-			} else {
-				echo json_encode(['status' => 0, 'attendance' => null]);
-			}
-		} else {
-			echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
-		}
-		exit;
-	}
+    public function delete_rsvp($p = null)
+    {
+        header('Content-Type: application/json');
 
-	public function delete_rsvp($p = null) {
-		header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
 
-		if (!isset($this->session->user_id)) {
-			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
-			exit;
-		}
+        $params     = explode('/', $p ?? '');
+        $event_id   = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $detail_id  = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
+        $mundane_id = (int)($_POST['MundaneId'] ?? 0);
 
-		$params     = explode('/', $p ?? '');
-		$event_id   = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
-		$detail_id  = (int)preg_replace('/[^0-9]/', '', $params[1] ?? '');
-		$mundane_id = (int)($_POST['MundaneId'] ?? 0);
+        if (!valid_id($event_id) || !valid_id($detail_id) || !valid_id($mundane_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid parameters.']);
+            exit;
+        }
 
-		if (!valid_id($event_id) || !valid_id($detail_id) || !valid_id($mundane_id)) {
-			echo json_encode(['status' => 1, 'error' => 'Invalid parameters.']);
-			exit;
-		}
+        $uid = (int)$this->session->user_id;
+        if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
+            echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
+            exit;
+        }
 
-		$uid = (int)$this->session->user_id;
-		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT)) {
-			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
-			exit;
-		}
+        $this->load_model('Event');
+        $this->Event->remove_rsvp($detail_id, $mundane_id);
+        echo json_encode(['status' => 0]);
+        exit;
+    }
 
-		$this->load_model('Event');
-		$this->Event->remove_rsvp($detail_id, $mundane_id);
-		echo json_encode(['status' => 0]);
-		exit;
-	}
+    public function cancel($p = null)
+    {
+        header('Content-Type: application/json');
 
-	public function cancel($p = null) {
-		header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
 
-		if (!isset($this->session->user_id)) {
-			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
-			exit;
-		}
+        $event_id = (int)($_POST['EventId'] ?? 0);
 
-		$event_id = (int)($_POST['EventId'] ?? 0);
+        if (!valid_id($event_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
+            exit;
+        }
 
-		if (!valid_id($event_id)) {
-			echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
-			exit;
-		}
+        $uid = (int)$this->session->user_id;
+        if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+            echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
+            exit;
+        }
 
-		$uid = (int)$this->session->user_id;
-		if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
-			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
-			exit;
-		}
+        $this->load_model('Event');
+        $r = $this->Event->delete_event($this->session->token, $event_id);
 
-		$this->load_model('Event');
-		$r = $this->Event->delete_event($this->session->token, $event_id);
+        if (isset($r['Status']) && $r['Status'] == 0) {
+            echo json_encode(['status' => 0]);
+        } else {
+            echo json_encode(['status' => $r['Status'] ?? 1, 'error' => $r['Detail'] ?? 'Could not cancel event.']);
+        }
+        exit;
+    }
 
-		if (isset($r['Status']) && $r['Status'] == 0) {
-			echo json_encode(['status' => 0]);
-		} else {
-			echo json_encode(['status' => $r['Status'] ?? 1, 'error' => $r['Detail'] ?? 'Could not cancel event.']);
-		}
-		exit;
-	}
+    public function auth($p = null)
+    {
+        header('Content-Type: application/json');
 
-	public function auth($p = null) {
-		header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
 
-		if (!isset($this->session->user_id)) {
-			echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit;
-		}
+        $params   = explode('/', $p ?? '');
+        $event_id = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $action   = $params[1] ?? '';
 
-		$params   = explode('/', $p ?? '');
-		$event_id = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
-		$action   = $params[1] ?? '';
+        if (!valid_id($event_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
+            exit;
+        }
 
-		if (!valid_id($event_id)) {
-			echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']); exit;
-		}
+        $uid = (int)$this->session->user_id;
 
-		$uid = (int)$this->session->user_id;
-
-		if ($action === 'playersearch') {
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
-				echo json_encode([]); exit;
-			}
-			$q = trim($_GET['q'] ?? '');
-			if (strlen($q) < 2) { echo json_encode([]); exit; }
-
-			// Look up event's park + kingdom to centre the ranking rings
-			global $DB;
-			$DB->Clear();
-			$evRow       = $DB->DataSet("SELECT park_id, kingdom_id FROM " . DB_PREFIX . "event WHERE event_id = {$event_id} LIMIT 1");
-			$evParkId    = ($evRow && $evRow->Next()) ? (int)$evRow->park_id    : 0;
-			$evKingdomId = $evParkId                  ? (int)$evRow->kingdom_id : 0;
-
-			$svc     = new SearchService();
-			$results = $svc->RankedPlayers(
-				$q,
-				$evParkId    ?: null,
-				$evKingdomId ?: null,
-				null,
-				null,
-				null,
-				15,
-				$this->session->token ?? null
-			);
-
-			echo json_encode($results);
-		} elseif ($action === 'addauth') {
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
-			}
-			$mid  = (int)($_POST['MundaneId'] ?? 0);
-			$role = in_array($_POST['Role'] ?? '', ['create', 'edit']) ? $_POST['Role'] : 'create';
-			if (!$mid) { echo json_encode(['status' => 1, 'error' => 'Invalid player.']); exit; }
-			global $DB;
-			$DB->Clear();
-			$DB->Execute("INSERT INTO " . DB_PREFIX . "authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
+        if ($action === 'addauth') {
+            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $mid  = (int)($_POST['MundaneId'] ?? 0);
+            $role = in_array($_POST['Role'] ?? '', ['create', 'edit']) ? $_POST['Role'] : 'create';
+            if (!$mid) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid player.']);
+                exit;
+            }
+            global $DB;
+            $DB->Clear();
+            $DB->Execute("INSERT INTO " . DB_PREFIX . "authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
 				VALUES ({$mid}, 0, 0, {$event_id}, 0, '{$role}', NOW())");
-			$DB->Clear();
-			$rs = $DB->DataSet("SELECT a.authorization_id, m.persona FROM " . DB_PREFIX . "authorization a
+            $DB->Clear();
+            $rs = $DB->DataSet("SELECT a.authorization_id, m.persona FROM " . DB_PREFIX . "authorization a
 				LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id
 				WHERE a.mundane_id = {$mid} AND a.event_id = {$event_id}
 				ORDER BY a.authorization_id DESC LIMIT 1");
-			$authId = 0; $persona = '';
-			if ($rs && $rs->Next()) { $authId = (int)$rs->authorization_id; $persona = $rs->persona; }
-			Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_EVENT, 'Id' => $event_id, 'Role' => $role], 'Player', $mid, null, [
-				'authorization_id' => $authId,
-				'mundane_id'       => $mid,
-				'park_id'          => 0,
-				'kingdom_id'       => 0,
-				'event_id'         => (int)$event_id,
-				'unit_id'          => 0,
-				'role'             => $role,
-			]);
-			echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
+            $authId = 0;
+            $persona = '';
+            if ($rs && $rs->Next()) {
+                $authId = (int)$rs->authorization_id;
+                $persona = $rs->persona;
+            }
+            Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_EVENT, 'Id' => $event_id, 'Role' => $role], 'Player', $mid, null, [
+                'authorization_id' => $authId,
+                'mundane_id'       => $mid,
+                'park_id'          => 0,
+                'kingdom_id'       => 0,
+                'event_id'         => (int)$event_id,
+                'unit_id'          => 0,
+                'role'             => $role,
+            ]);
+            echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
 
-		} elseif ($action === 'removeauth') {
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
-			}
-			$this->load_model('Authorization');
-			$r = $this->Authorization->del_auth([
-				'Token'           => $this->session->token,
-				'AuthorizationId' => (int)($_POST['AuthorizationId'] ?? 0),
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'removeauth') {
+            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $this->load_model('Authorization');
+            $r = $this->Authorization->del_auth([
+                'Token'           => $this->session->token,
+                'AuthorizationId' => (int)($_POST['AuthorizationId'] ?? 0),
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} else {
-			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
-		}
-		exit;
-	}
+        } else {
+            echo json_encode(['status' => 1, 'error' => 'Unknown action']);
+        }
+        exit;
+    }
 
-	public function heraldry($p = null) {
-		header('Content-Type: application/json');
+    public function heraldry($p = null)
+    {
+        header('Content-Type: application/json');
 
-		if (!isset($this->session->user_id)) {
-			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
-			exit;
-		}
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
 
-		$params   = explode('/', $p ?? '');
-		$event_id = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
-		$action   = $params[1] ?? '';
+        $params   = explode('/', $p ?? '');
+        $event_id = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $action   = $params[1] ?? '';
 
-		if (!valid_id($event_id)) {
-			echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
-			exit;
-		}
+        if (!valid_id($event_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid Event ID.']);
+            exit;
+        }
 
-		if (!Ork3::$Lib->authorization->HasAuthority((int)$this->session->user_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
-			echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
-			exit;
-		}
+        if (!Ork3::$Lib->authorization->HasAuthority((int)$this->session->user_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+            echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
+            exit;
+        }
 
-		if ($action === 'remove') {
-			global $DB;
-			$DB->Execute('UPDATE ' . DB_PREFIX . 'event SET has_heraldry = 0 WHERE event_id = ' . $event_id);
-			$base = DIR_EVENT_HERALDRY . sprintf('%05d', $event_id);
-			if (file_exists($base . '.jpg')) unlink($base . '.jpg');
-			if (file_exists($base . '.png')) unlink($base . '.png');
-			echo json_encode(['status' => 0]);
-			exit;
-		}
+        if ($action === 'remove') {
+            global $DB;
+            $DB->Execute('UPDATE ' . DB_PREFIX . 'event SET has_heraldry = 0 WHERE event_id = ' . $event_id);
+            $base = DIR_EVENT_HERALDRY . sprintf('%05d', $event_id);
+            if (file_exists($base . '.jpg')) {
+                unlink($base . '.jpg');
+            }
+            if (file_exists($base . '.png')) {
+                unlink($base . '.png');
+            }
+            echo json_encode(['status' => 0]);
+            exit;
+        }
 
-		if ($action === 'update') {
-			if (empty($_FILES['Heraldry']['tmp_name'])) {
-				echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
-				exit;
-			}
-			$tmp  = $_FILES['Heraldry']['tmp_name'];
-			$mime = $_FILES['Heraldry']['type'] ?? 'image/jpeg';
-			$r = Ork3::$Lib->heraldry->SetEventHeraldry([
-				'Token'            => $this->session->token,
-				'EventId'          => $event_id,
-				'Heraldry'         => base64_encode(file_get_contents($tmp)),
-				'HeraldryMimeType' => $mime,
-			]);
-			if (isset($r['Status']) && $r['Status'] == 0) {
-				echo json_encode(['status' => 0]);
-			} else {
-				echo json_encode(['status' => 1, 'error' => $r['Error'] ?? 'Upload failed.']);
-			}
-			exit;
-		}
+        if ($action === 'update') {
+            if (empty($_FILES['Heraldry']['tmp_name'])) {
+                echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
+                exit;
+            }
+            $tmp  = $_FILES['Heraldry']['tmp_name'];
+            $mime = $_FILES['Heraldry']['type'] ?? 'image/jpeg';
+            $r = Ork3::$Lib->heraldry->SetEventHeraldry([
+                'Token'            => $this->session->token,
+                'EventId'          => $event_id,
+                'Heraldry'         => base64_encode(file_get_contents($tmp)),
+                'HeraldryMimeType' => $mime,
+            ]);
+            if (isset($r['Status']) && $r['Status'] == 0) {
+                echo json_encode(['status' => 0]);
+            } else {
+                echo json_encode(['status' => 1, 'error' => $r['Error'] ?? 'Upload failed.']);
+            }
+            exit;
+        }
 
-		echo json_encode(['status' => 1, 'error' => 'Unknown action.']);
-		exit;
-	}
+        echo json_encode(['status' => 1, 'error' => 'Unknown action.']);
+        exit;
+    }
 }

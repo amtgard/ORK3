@@ -4,13 +4,49 @@
 .ops-ac-item{ padding:7px 11px; cursor:pointer; font-size:13px; color:#2d3748; }
 .ops-ac-item:hover, .ops-ac-item.ops-ac-active{ background:#ebf2fb; }
 .ops-ac-loc{ color:#a0aec0; font-size:11px; }
-.ops-ac-badge{ color:#c53030; font-size:10px; font-weight:600; margin-left:4px; }
-.ops-ac-empty{ padding:9px 11px; color:#a0aec0; font-size:12px; }
+/* Status badges — visually distinct so a benign "Inactive" never reads as an alarming "Banned". */
+.ops-ac-badge{ font-size:10px; font-weight:700; margin-left:5px; text-transform:uppercase; letter-spacing:.02em; }
+.ops-ac-badge.ops-ac-inactive{ color:#718096; }
+.ops-ac-badge.ops-ac-suspended{ color:#b7791f; }
+.ops-ac-badge.ops-ac-banned{ color:#c53030; }
+.ops-ac-row-inactive{ opacity:.72; }
+.ops-ac-row-banned{ background:rgba(197,48,48,.05); }
+.ops-ac-row-banned.ops-ac-active, .ops-ac-row-banned:hover{ background:rgba(197,48,48,.12); }
+.ops-ac-empty, .ops-ac-hint, .ops-ac-loading, .ops-ac-error{ padding:9px 11px; font-size:12px; }
+.ops-ac-empty, .ops-ac-hint{ color:#a0aec0; }
+.ops-ac-loading{ color:#718096; font-style:italic; }
+.ops-ac-error{ color:#c53030; }
+.ops-ac-more{ padding:8px 11px; cursor:pointer; font-size:12px; font-weight:600; color:#3182ce;
+  border-top:1px solid #e2e8f0; text-align:center; }
+.ops-ac-more:hover, .ops-ac-more.ops-ac-active{ background:#ebf2fb; }
+/* Footer: split "Load more… | …or Advanced Search" (or full-width Advanced Search). */
+.ops-ac-foot{ display:flex; border-top:1px solid #e2e8f0; }
+.ops-ac-foot .ops-ac-more{ flex:1; border-top:none; }
+.ops-ac-adv{ flex:1; text-align:center; padding:8px 11px; font-size:12px; font-weight:600;
+  color:#3182ce; text-decoration:none; cursor:pointer; border-left:1px solid #e2e8f0; }
+.ops-ac-adv:hover{ background:#ebf2fb; }
+.ops-ac-adv-full{ border-left:none; }
+/* Screen-reader-only live region. */
+.ops-ac-sr{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+  clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
 /* Dark mode — matches app selector: html[data-theme="dark"] (confirmed via grep in orkui.css) */
 html[data-theme="dark"] .ops-ac-results{ background:#2d3748; border-color:#4a5568; }
 html[data-theme="dark"] .ops-ac-item{ color:#e2e8f0; }
 html[data-theme="dark"] .ops-ac-item:hover,
 html[data-theme="dark"] .ops-ac-item.ops-ac-active{ background:#3b4960; }
 html[data-theme="dark"] .ops-ac-loc{ color:#718096; }
-html[data-theme="dark"] .ops-ac-empty{ color:#718096; }
-html[data-theme="dark"] .ops-ac-badge{ color:#fc8181; }
+html[data-theme="dark"] .ops-ac-empty, html[data-theme="dark"] .ops-ac-hint{ color:#718096; }
+html[data-theme="dark"] .ops-ac-loading{ color:#a0aec0; }
+html[data-theme="dark"] .ops-ac-badge.ops-ac-inactive{ color:#a0aec0; }
+html[data-theme="dark"] .ops-ac-badge.ops-ac-suspended{ color:#f6ad55; }
+html[data-theme="dark"] .ops-ac-badge.ops-ac-banned{ color:#fc8181; }
+html[data-theme="dark"] .ops-ac-error{ color:#fc8181; }
+html[data-theme="dark"] .ops-ac-row-banned{ background:rgba(252,129,129,.07); }
+html[data-theme="dark"] .ops-ac-row-banned.ops-ac-active,
+html[data-theme="dark"] .ops-ac-row-banned:hover{ background:rgba(252,129,129,.16); }
+html[data-theme="dark"] .ops-ac-more{ color:#63b3ed; border-top-color:#4a5568; }
+html[data-theme="dark"] .ops-ac-more:hover, html[data-theme="dark"] .ops-ac-more.ops-ac-active{ background:#3b4960; }
+html[data-theme="dark"] .ops-ac-foot{ border-top-color:#4a5568; }
+html[data-theme="dark"] .ops-ac-adv{ color:#63b3ed; border-left-color:#4a5568; }
+html[data-theme="dark"] .ops-ac-adv:hover{ background:#3b4960; }
