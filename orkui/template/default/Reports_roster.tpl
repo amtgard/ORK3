@@ -589,7 +589,8 @@ $(function() {
 	// Suspended By autocomplete for edit modal
 	OrkPlayerSearch.attach(document.getElementById('es-by-text'), {
 		uir: '<?=UIR ?>',
-		kingdomId: <?= (int)$_scopeId ?>,
+		parkId:    <?= $_scopeType === 'park'    ? (int)$_scopeId : 0 ?>,
+		kingdomId: <?= $_scopeType === 'kingdom' ? (int)$_scopeId : 0 ?>,
 		onSelect: function(player) {
 			document.getElementById('es-by-id').value = player ? player.MundaneId : '';
 		},

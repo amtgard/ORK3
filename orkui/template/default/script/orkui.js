@@ -14178,39 +14178,6 @@ $(function() {
 			});
 		}
 	});
-	$( "#PlayerSearch" ).autocomplete({
-		source: function( request, response ) {
-			$.getJSON(
-				"../orkservice/Search/SearchService.php",
-				{
-					Action: 'Search/Player',
-					type: 'all',
-					search: request.term,
-					limit: 6
-				},
-				function( data ) {
-					var suggestions = [];
-					$.each(data, function(i, val) {
-						suggestions.push({label: (val.Persona.length>0?val.Persona:"<i>No Persona</i>") + " (" + val.KAbbr + ":" + val.PAbbr + ")", value: val.MundaneId });
-					});
-					response(suggestions);
-				}
-			);
-		},
-		focus: function( event, ui ) {
-			return showLabel('#PlayerSearch', ui);
-		},
-		delay: 1000,
-		minLength: 3,
-		select: function (e, ui) {
-			showLabel('#PlayerSearch', ui);
-			document.location.href = '?Route=Player/profile/' + ui.item.value;
-			return false;
-		}
-	});
-	$( "#PlayerSearch" ).keydown( function () {
-        $('#PlayerSearch').autocomplete('option', 'delay', Math.max(100, 900 / ($('#PlayerSearch').val().length + 1)) );
-    });
 	$('form').submit(function() {
 		var go = true;
 		$(this).find('.required-field').each(function(k, field) {

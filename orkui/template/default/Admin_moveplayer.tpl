@@ -52,7 +52,7 @@
 			delay: 500,
 			select: function (e, ui) {
 				showLabel('#ParkName', ui);
-				$('#ParkId').val(ui.item.value);
+				$('#ParkId').val(ui.item.value); if (window.OrkPlayerSearch) OrkPlayerSearch.reattach(document.getElementById('PlayerName'), { parkId: parseInt(ui.item.value, 10) || 0 });
 				return false;
 			}
 		});

@@ -84,8 +84,8 @@
 			},
 			change: function (e, ui) {
 				if (ui.item == null) {
-					showLabel('#GivenBy',null);
-					$('#MundaneId').val(null);
+					/* GivenAt is the location field — never clear the player (recipient) fields. */
+					/* (copy-paste cruft removed: recipient #MundaneId preserved) */
 				}
 				return false;
 			}

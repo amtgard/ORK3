@@ -7626,7 +7626,6 @@ $(document).ready(function() {
 
     var ADD_URL    = PkConfig.uir + 'AttendanceAjax/park/' + PkConfig.parkId + '/add';
     var GETDAY_URL = PkConfig.uir + 'AttendanceAjax/park/' + PkConfig.parkId + '/getday';
-    var SEARCH_URL = PkConfig.httpService + 'Search/SearchService.php';
 
     // MundaneIds already entered for the selected date
     var pkAttEntered = {};
@@ -8152,7 +8151,8 @@ $(document).ready(function() {
             document.querySelectorAll('#pk-att-overlay .pk-att-tab-panel').forEach(function(p) { p.style.display = 'none'; });
             tab.classList.add('pk-att-tab-active');
             gid(tab.dataset.panel).style.display = '';
-            $('#pk-att-player-name').autocomplete('close');
+            var nameInput = gid('pk-att-player-name');
+            if (nameInput && nameInput._opsHandle) nameInput._opsHandle.close();
             if (tab.dataset.panel === 'pk-att-panel-recent') pkBuildQuickAddRows();
         });
     });
@@ -8199,6 +8199,15 @@ $(document).ready(function() {
         'kingdom': 'Search within your kingdom\u2026',
         'global':  'Search by name or KD:PK\u2026'
     };
+    function pkAttScopeOpts(scope) {
+        if (scope === 'park') {
+            return { restrictTo: 'park', parkId: PkConfig.parkId, kingdomId: PkConfig.kingdomId };
+        } else if (scope === 'kingdom') {
+            return { restrictTo: 'kingdom', kingdomId: PkConfig.kingdomId, parkId: 0 };
+        }
+        // global: keep park/kingdom as ranking centre, no hard restrict
+        return { restrictTo: '', parkId: PkConfig.parkId, kingdomId: PkConfig.kingdomId };
+    }
     function pkSetScope(scope) {
         pkAttScope = scope;
         ['park', 'kingdom', 'global'].forEach(function(s) {
@@ -8208,8 +8217,9 @@ $(document).ready(function() {
         var input = gid('pk-att-player-name');
         if (input) {
             input.placeholder = pkScopePlaceholders[scope];
-            if (input.value.trim().length >= 2) {
-                $(input).autocomplete('search', input.value);
+            if (input._opsAttached) {
+                OrkPlayerSearch.reattach(input, pkAttScopeOpts(scope));
+                if (input._opsHandle) input._opsHandle.refresh();
             }
         }
     }
@@ -8231,133 +8241,31 @@ $(document).ready(function() {
             pkCloseAttendanceModal();
     });
 
-    // --- Player autocomplete (grouped: park → kingdom → other, excluding already-entered) ---
-    function pkAttAbbr(v) {
-        return (v.KAbbr && v.PAbbr) ? v.KAbbr + ':' + v.PAbbr : (v.ParkName || '');
-    }
+    // --- Player search (OrkPlayerSearch, scoped by the park/kingdom/global toggle) ---
     // Tracks whether the currently selected player in the search field is inactive.
     // When true, clicking Add triggers a reactivation confirm dialog before submit.
     var pkAttSelectedInactive = false;
 
-    function pkAttMakeItem(v) {
-        return {
-            label: v.Persona + ' \u2014 ' + pkAttAbbr(v),
-            name: v.Persona,
-            value: v.MundaneId,
-            suspended: !!(v.PenaltyBox || v.Suspended),
-            inactive: (typeof v.Active !== 'undefined') ? (parseInt(v.Active, 10) === 0) : false
-        };
-    }
-    var pkAttAC = $('#pk-att-player-name').autocomplete({
-        source: function(req, res) {
-            var s = req.term;
-            function splitToItems(list, seen) {
-                var active = [], inactive = [];
-                $.each(list || [], function(i, v) {
-                    var mid = parseInt(v.MundaneId, 10);
-                    if (pkAttEntered[mid]) return;
-                    if (seen && seen[mid]) return;
-                    if (seen) seen[mid] = true;
-                    var item = pkAttMakeItem(v);
-                    if (item.inactive) inactive.push(item); else active.push(item);
-                });
-                return { active: active, inactive: inactive };
-            }
-            function assemble(groups, inactiveItems) {
-                var sep = { label: '', name: '', value: null, separator: true };
-                var items = [];
-                groups.forEach(function(g) {
-                    if (!g || !g.length) return;
-                    if (items.length) items.push(sep);
-                    items = items.concat(g);
-                });
-                if (inactiveItems && inactiveItems.length) {
-                    if (items.length) items.push(sep);
-                    items = items.concat(inactiveItems);
-                }
-                return items;
-            }
-            if (pkAttScope === 'park') {
-                $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, park_id: PkConfig.parkId, limit: 12 })
-                    .done(function(r) {
-                        var split = splitToItems(r);
-                        res(assemble([split.active], split.inactive));
-                    });
-            } else if (pkAttScope === 'kingdom') {
-                $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, kingdom_id: PkConfig.kingdomId, limit: 12 })
-                    .done(function(r) {
-                        var split = splitToItems(r);
-                        res(assemble([split.active], split.inactive));
-                    });
-            } else {
-                $.when(
-                    $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, park_id: PkConfig.parkId, limit: 8 }),
-                    $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, kingdom_id: PkConfig.kingdomId, limit: 8 }),
-                    $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, limit: 8 })
-                ).done(function(parkRes, kingRes, allRes) {
-                    var seen = {};
-                    var parkSplit  = splitToItems(parkRes[0],  seen);
-                    var kingSplit  = splitToItems(kingRes[0],  seen);
-                    var otherSplit = splitToItems(allRes[0],   seen);
-                    var inactiveAll = parkSplit.inactive
-                        .concat(kingSplit.inactive)
-                        .concat(otherSplit.inactive);
-                    res(assemble([parkSplit.active, kingSplit.active, otherSplit.active], inactiveAll));
-                });
-            }
-        },
-        focus: function(e, ui) { if (!ui.item.value) return false; $('#pk-att-player-name').val(ui.item.name); return false; },
-        select: function(e, ui) {
-            if (!ui.item.value) return false;
-            $('#pk-att-player-name').val(ui.item.name);
-            $('#pk-att-player-id').val(ui.item.value);
-            pkAttSelectedInactive = !!ui.item.inactive;
+    OrkPlayerSearch.attach(gid('pk-att-player-name'), Object.assign({
+        uir: PkConfig.uir,
+        excludeIds: function() { return Object.keys(pkAttEntered).map(Number); },
+        onSelect: function(player) {
+            gid('pk-att-player-id').value = player.MundaneId;
+            pkAttSelectedInactive = (player.Active === 0);
             // Pre-fill class from last class map
-            var lastCls = pkLastClass[parseInt(ui.item.value, 10)];
+            var lastCls = pkLastClass[parseInt(player.MundaneId, 10)];
             if (lastCls) {
                 pkBuildClassOptions();
                 gid('pk-att-class-select').value = String(lastCls);
             }
             pkAttUpdateAddBtn();
-            return false;
         },
-        change: function(e, ui) {
-            if (!ui.item) {
-                $('#pk-att-player-id').val('');
-                pkAttSelectedInactive = false;
-                pkAttUpdateAddBtn();
-            }
-            return false;
-        },
-        delay: 250, minLength: 2,
-    });
-    $('#pk-att-player-name').on('input', function() {
-        if (!$(this).val()) {
-            pkAttAC.autocomplete('close');
-            $('#pk-att-player-id').val('');
+        onClear: function() {
+            gid('pk-att-player-id').value = '';
             pkAttSelectedInactive = false;
             pkAttUpdateAddBtn();
         }
-    });
-    pkAttAC.data('autocomplete')._renderItem = function(ul, item) {
-        if (item.separator) {
-            return $('<li class="pk-att-ac-sep">').appendTo(ul);
-        }
-        var a = $('<a>');
-        if (item.inactive) {
-            a.addClass('pk-att-ac-inactive').html(
-                $('<span>').text(item.label).html() +
-                '<span class="pk-att-ac-inactive-badge">inactive</span>'
-            );
-        } else if (item.suspended) {
-            a.addClass('pk-att-ac-suspended').html(
-                '<i class="fas fa-ban" style="margin-right:5px;font-size:11px"></i>' + $('<span>').text(item.label).html()
-            );
-        } else {
-            a.text(item.label);
-        }
-        return $('<li></li>').data('item.autocomplete', item).append(a).appendTo(ul);
-    };
+    }, pkAttScopeOpts(pkAttScope)));
 
     // Capture-phase click interceptor on the Add button: if the selected player
     // is inactive, confirm before the regular submit handler fires. The backend
@@ -10776,9 +10684,6 @@ window.pnCloseUnitCreateModal = function() {
     if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
 
     var MOVE_URL    = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/moveplayer';
-    var PSEARCH_URL = KnConfig.uir + 'KingdomAjax/playersearch/' + KnConfig.kingdomId;
-    var PSEARCH_BASE = KnConfig.uir + 'KingdomAjax/playersearch/';
-    var PARK_URL    = KnConfig.httpService + 'Search/SearchService.php';
 
     // Modes: 'in' | 'within' | 'out'
     var knmpMode = 'in';
@@ -10804,6 +10709,49 @@ window.pnCloseUnitCreateModal = function() {
         var hasPark   = !!gid('kn-moveplayer-park-id').value;
         var btn = gid('kn-moveplayer-submit');
         if (btn) btn.disabled = !(hasPlayer && hasPark);
+    }
+
+    // Build OrkPlayerSearch opts from the current mode + source-player cascade selection.
+    function knmpPlayerOpts() {
+        var sel = knmpPlayerCascade ? knmpPlayerCascade.get() : { kingdomId: 0, parkId: 0 };
+        if (knmpMode === 'in') {
+            // Source player comes from OUTSIDE this kingdom.
+            if (sel.kingdomId) {
+                // A specific other kingdom (optionally narrowed to a park) was chosen.
+                var inOpts = {
+                    restrictTo: '',
+                    restrictKingdomIds: [Number(sel.kingdomId)],
+                    kingdomId: Number(sel.kingdomId),
+                    excludeKingdomId: KnConfig.kingdomId,
+                    parkId: 0
+                };
+                if (sel.parkId) inOpts.parkId = Number(sel.parkId);
+                return inOpts;
+            }
+            // No cascade kingdom: everyone except this kingdom.
+            return {
+                restrictTo: '',
+                excludeKingdomId: KnConfig.kingdomId,
+                restrictKingdomIds: null,
+                kingdomId: KnConfig.kingdomId,
+                parkId: 0
+            };
+        }
+        // within / out: locked to THIS kingdom.
+        return {
+            restrictTo: 'kingdom',
+            kingdomId: KnConfig.kingdomId,
+            parkId: 0,
+            restrictKingdomIds: null,
+            excludeKingdomId: null
+        };
+    }
+    function knmpReattachPlayerSearch() {
+        var input = gid('kn-moveplayer-player-name');
+        if (input && input._opsAttached) {
+            OrkPlayerSearch.reattach(input, knmpPlayerOpts());
+            if (input._opsHandle) input._opsHandle.refresh();
+        }
     }
 
     function setMode(mode) {
@@ -10832,7 +10780,7 @@ window.pnCloseUnitCreateModal = function() {
         playerInput.value = '';
         gid('kn-moveplayer-player-id').value = '';
         gid('kn-moveplayer-park-id').value   = '';
-        gid('kn-moveplayer-player-results').classList.remove('kn-ac-open');
+        if (playerInput._opsHandle) playerInput._opsHandle.close();
         gid('kn-moveplayer-feedback').style.display = 'none';
         // Source-player cascade: free for 'in' (search other kingdoms), locked to
         // the current kingdom for 'within'/'out' (park dropdown stays usable).
@@ -10846,6 +10794,7 @@ window.pnCloseUnitCreateModal = function() {
             if (mode === 'out') knmpDestCascade.reset();
             else knmpDestCascade.lockTo(KnConfig.kingdomId, KnConfig.kingdomName);
         }
+        knmpReattachPlayerSearch();
         knmpCheckSubmit();
     }
 
@@ -10857,8 +10806,6 @@ window.pnCloseUnitCreateModal = function() {
         document.body.style.overflow = 'hidden';
         setTimeout(function() { gid('kn-moveplayer-player-name').focus(); }, 50);
     };
-
-    var mpPlayerTimer, mpParkTimer;
 
     $(document).ready(function() {
         if (!gid('kn-moveplayer-overlay')) return;
@@ -10883,7 +10830,7 @@ window.pnCloseUnitCreateModal = function() {
             uir: KnConfig.uir,
             kingdomSel: gid('kn-mp-pfilter-kingdom'),
             parkSel: gid('kn-mp-pfilter-park'),
-            onChange: function() { knmpDoPlayerSearch(); }
+            onChange: function() { knmpReattachPlayerSearch(); }
         });
         knmpDestCascade = MpCascade.wire({
             uir: KnConfig.uir,
@@ -10901,55 +10848,18 @@ window.pnCloseUnitCreateModal = function() {
             }
         });
 
-        // Player autocomplete (scoped by mode + cascade filter)
-        function knmpPlayerUrl(term) {
-            var sel = knmpPlayerCascade ? knmpPlayerCascade.get() : { kingdomId: 0, parkId: 0 };
-            var kid, scope;
-            if (knmpMode === 'in') {
-                if (sel.kingdomId) { kid = sel.kingdomId; scope = 'own'; }   // a specific other kingdom
-                else { kid = KnConfig.kingdomId; scope = 'exclude'; }        // all kingdoms except this one
-            } else {
-                kid = KnConfig.kingdomId; scope = 'own';                     // within/out: locked to this kingdom
+        // Player search via OrkPlayerSearch (scoped by mode + cascade filter).
+        OrkPlayerSearch.attach(gid('kn-moveplayer-player-name'), Object.assign({
+            uir: KnConfig.uir,
+            onSelect: function(player) {
+                gid('kn-moveplayer-player-id').value = player.MundaneId;
+                knmpCheckSubmit();
+            },
+            onClear: function() {
+                gid('kn-moveplayer-player-id').value = '';
+                knmpCheckSubmit();
             }
-            return PSEARCH_BASE + kid + '&scope=' + scope + '&include_inactive=1&include_suspended=1'
-                + (sel.parkId ? '&park_id=' + sel.parkId : '')
-                + '&q=' + encodeURIComponent(term);
-        }
-        function knmpDoPlayerSearch() {
-            var term = gid('kn-moveplayer-player-name').value.trim();
-            var el = gid('kn-moveplayer-player-results');
-            if (term.length < 2) { el.classList.remove('kn-ac-open'); return; }
-            fetch(knmpPlayerUrl(term))
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    el.innerHTML = (data && data.length)
-                        ? data.map(function(p) {
-                            var inactive = p.Active === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
-                            var suspended = p.Suspended === 1 ? ' <span style="margin-left:6px;background:#c53030;color:#fff;font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px">suspended</span>' : '';
-                            return '<div class="kn-ac-item' + (p.Suspended === 1 ? ' kn-ac-suspended' : '') + '" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                                + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>' + suspended + inactive + '</div>';
-                        }).join('')
-                        : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
-                    el.classList.add('kn-ac-open');
-                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
-        }
-        gid('kn-moveplayer-player-name').addEventListener('input', function() {
-            gid('kn-moveplayer-player-id').value = '';
-            clearTimeout(mpPlayerTimer);
-            mpPlayerTimer = setTimeout(knmpDoPlayerSearch, AUTOCOMPLETE_DEBOUNCE_MS);
-        });
-        gid('kn-moveplayer-player-results').addEventListener('click', function(e) {
-            var item = e.target.closest('.kn-ac-item[data-id]');
-            if (!item) return;
-            gid('kn-moveplayer-player-name').value = decodeURIComponent(item.dataset.name);
-            gid('kn-moveplayer-player-id').value   = item.dataset.id;
-            this.classList.remove('kn-ac-open');
-            knmpCheckSubmit();
-        });
-        gid('kn-moveplayer-player-name').addEventListener('input', function() {
-            if (!this.value.trim()) { gid('kn-moveplayer-player-id').value = ''; knmpCheckSubmit(); }
-        });
-        setupAcKeyNav(gid('kn-moveplayer-player-name'), gid('kn-moveplayer-player-results'), '.kn-ac-item[data-id]', 'kn-ac-focused', function(item) { item.click(); });
+        }, knmpPlayerOpts()));
 
         // Destination park is chosen via the Kingdom -> Park cascade (knmpDestCascade) — no free-text park search.
 
@@ -11070,6 +10980,7 @@ window.pnCloseUnitCreateModal = function() {
         OrkPlayerSearch.attach(keepInput, {
             kingdomId:  KnConfig.kingdomId,
             uir:        KnConfig.uir,
+            restrictTo: 'kingdom',
             excludeIds: function() { return [parseInt(removeIdEl.value) || 0]; },
             onSelect:   function(player) {
                 keepIdEl.value = player.MundaneId;
@@ -11087,6 +10998,7 @@ window.pnCloseUnitCreateModal = function() {
         OrkPlayerSearch.attach(removeInput, {
             kingdomId:  KnConfig.kingdomId,
             uir:        KnConfig.uir,
+            restrictTo: 'kingdom',
             excludeIds: function() { return [parseInt(keepIdEl.value) || 0]; },
             onSelect:   function(player) {
                 removeIdEl.value = player.MundaneId;
@@ -11271,13 +11183,10 @@ window.pnCloseUnitCreateModal = function() {
     if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
     var MOVE_URL        = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/moveplayer';
-    var PSEARCH_EXCLUDE = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=exclude&include_inactive=1&include_suspended=1&q=';
-    var PSEARCH_OWN     = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=own&include_inactive=1&include_suspended=1&q=';
-    var KPSEARCH_BASE   = PkConfig.uir + 'KingdomAjax/playersearch/';
 
     var pkPlayerCascade = null, pkDestCascade = null;
     var mpPlayerId = 0, mpParkId = 0;
-    var mpPlayerTimer = null, mpParkTimer = null;
+    var mpParkTimer = null;
     var mpMode = 'in'; // 'in' = Transfer Into Your Park, 'out' = Transfer to New Park
 
     function gid(id) { return document.getElementById(id); }
@@ -11318,7 +11227,7 @@ window.pnCloseUnitCreateModal = function() {
         mpPlayerId = 0;
         if (playerInput) playerInput.value = '';
         gid('pk-moveplayer-player-id').value = '';
-        closeDropdown('pk-moveplayer-player-results');
+        if (playerInput && playerInput._opsHandle) playerInput._opsHandle.close();
 
         var fb = gid('pk-moveplayer-feedback');
         if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
@@ -11348,6 +11257,7 @@ window.pnCloseUnitCreateModal = function() {
             // Destination is a new park anywhere: free cascade to pick it.
             if (pkDestCascade) pkDestCascade.reset();
         }
+        pkmpReattachPlayerSearch();
         pkmpCheckSubmit();
     }
 
@@ -11358,19 +11268,47 @@ window.pnCloseUnitCreateModal = function() {
         overlay.classList.add('pk-open');
     };
 
-    // Build the player-search URL from mode + cascade filter. For 'in', a chosen
-    // source kingdom routes through KingdomAjax (kingdom-scoped); with no kingdom
+    // Build OrkPlayerSearch opts from mode + cascade filter. For 'in', a chosen
+    // source kingdom restricts to that kingdom (optionally a park); with no kingdom
     // it falls back to 'everyone not already in this park'. 'out' = this park's members.
-    function pkmpPlayerUrl(term) {
+    function pkmpPlayerOpts() {
         if (mpMode === 'in') {
             var sel = pkPlayerCascade ? pkPlayerCascade.get() : { kingdomId: 0, parkId: 0 };
             if (sel.kingdomId) {
-                return KPSEARCH_BASE + sel.kingdomId + '&scope=own&include_inactive=1&include_suspended=1'
-                    + (sel.parkId ? '&park_id=' + sel.parkId : '') + '&q=' + encodeURIComponent(term);
+                var inOpts = {
+                    restrictTo: '',
+                    restrictKingdomIds: [Number(sel.kingdomId)],
+                    kingdomId: Number(sel.kingdomId),
+                    excludeParkId: PkConfig.parkId,
+                    parkId: 0
+                };
+                if (sel.parkId) inOpts.parkId = Number(sel.parkId);
+                return inOpts;
             }
-            return PSEARCH_EXCLUDE + encodeURIComponent(term);
+            // Everyone not already in this park.
+            return {
+                restrictTo: '',
+                restrictKingdomIds: null,
+                excludeParkId: PkConfig.parkId,
+                parkId: PkConfig.parkId,
+                kingdomId: PkConfig.kingdomId
+            };
         }
-        return PSEARCH_OWN + encodeURIComponent(term);
+        // 'out': members of THIS park.
+        return {
+            restrictTo: 'park',
+            parkId: PkConfig.parkId,
+            kingdomId: PkConfig.kingdomId,
+            restrictKingdomIds: null,
+            excludeParkId: null
+        };
+    }
+    function pkmpReattachPlayerSearch() {
+        var input = gid('pk-moveplayer-player-name');
+        if (input && input._opsAttached) {
+            OrkPlayerSearch.reattach(input, pkmpPlayerOpts());
+            if (input._opsHandle) input._opsHandle.refresh();
+        }
     }
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -11385,10 +11323,7 @@ window.pnCloseUnitCreateModal = function() {
                 uir: PkConfig.uir,
                 kingdomSel: gid('pk-mp-pfilter-kingdom'),
                 parkSel: gid('pk-mp-pfilter-park'),
-                onChange: function() {
-                    var inp = gid('pk-moveplayer-player-name');
-                    if (inp && inp.value.trim().length >= 2) inp.dispatchEvent(new Event('input'));
-                }
+                onChange: function() { pkmpReattachPlayerSearch(); }
             });
         }
         if (gid('pk-mp-dfilter-kingdom')) {
@@ -11410,66 +11345,22 @@ window.pnCloseUnitCreateModal = function() {
             });
         }
 
-        // Player autocomplete
+        // Player search via OrkPlayerSearch (scoped by mode + cascade filter).
         var playerInput = gid('pk-moveplayer-player-name');
         if (playerInput) {
-            playerInput.addEventListener('input', function() {
-                clearTimeout(mpPlayerTimer);
-                mpPlayerId = 0;
-                gid('pk-moveplayer-player-id').value = '';
-                pkmpCheckSubmit();
-                var term = this.value.trim();
-                if (term.length < 2) { closeDropdown('pk-moveplayer-player-results'); return; }
-                var searchUrl = pkmpPlayerUrl(term);
-                mpPlayerTimer = setTimeout(function() {
-                    fetch(searchUrl)
-                        .then(function(r) { return r.json(); })
-                        .then(function(results) {
-                            var res = gid('pk-moveplayer-player-results');
-                            if (!res) return;
-                            res.innerHTML = '';
-                            if (!results || !results.length) { res.classList.remove('pk-ac-open'); return; }
-                            results.forEach(function(player) {
-                                var item = document.createElement('div');
-                                item.className = 'pk-ac-item';
-                                if (player.Suspended === 1) item.classList.add('pk-ac-suspended');
-                                var abbr = (player.PAbbr && player.KAbbr)
-                                    ? ' — ' + player.PAbbr + ' (' + player.KAbbr + ')'
-                                    : (player.ParkName ? ' — ' + player.ParkName : '');
-                                item.textContent = player.Persona + abbr;
-                                if (player.Suspended === 1) {
-                                    var sbadge = document.createElement('span');
-                                    sbadge.textContent = 'suspended';
-                                    sbadge.style.cssText = 'margin-left:6px;background:#c53030;color:#fff;font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px';
-                                    item.appendChild(sbadge);
-                                }
-                                if (player.Active === 0) {
-                                    var badge = document.createElement('span');
-                                    badge.textContent = ' inactive';
-                                    badge.style.cssText = 'color:#e53e3e;font-size:10px;font-weight:600';
-                                    item.appendChild(badge);
-                                }
-                                item.addEventListener('mousedown', function(e) {
-                                    e.preventDefault();
-                                    mpPlayerId = player.MundaneId;
-                                    gid('pk-moveplayer-player-name').value = player.Persona;
-                                    gid('pk-moveplayer-player-id').value = player.MundaneId;
-                                    closeDropdown('pk-moveplayer-player-results');
-                                    pkmpCheckSubmit();
-                                });
-                                res.appendChild(item);
-                            });
-                            res.classList.add('pk-ac-open');
-                        })
-                        .catch(function() { closeDropdown('pk-moveplayer-player-results'); });
-                }, 280);
-            });
-            playerInput.addEventListener('blur', function() {
-                setTimeout(function() { closeDropdown('pk-moveplayer-player-results'); }, 200);
-            });
-            setupAcKeyNav(playerInput, gid('pk-moveplayer-player-results'), '.pk-ac-item', 'pk-ac-focused', function(item) {
-                item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-            });
+            OrkPlayerSearch.attach(playerInput, Object.assign({
+                uir: PkConfig.uir,
+                onSelect: function(player) {
+                    mpPlayerId = player.MundaneId;
+                    gid('pk-moveplayer-player-id').value = player.MundaneId;
+                    pkmpCheckSubmit();
+                },
+                onClear: function() {
+                    mpPlayerId = 0;
+                    gid('pk-moveplayer-player-id').value = '';
+                    pkmpCheckSubmit();
+                }
+            }, pkmpPlayerOpts()));
         }
 
         // Park autocomplete (Transfer to New Park mode only)

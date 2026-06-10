@@ -30,7 +30,7 @@
 			delay: 250,
 			select: function (e, ui) {
 				showLabel('#KingdomName', ui);
-				$('#KingdomId').val(ui.item.value);
+				$('#KingdomId').val(ui.item.value); if (window.OrkPlayerSearch) OrkPlayerSearch.reattach(document.getElementById('PlayerName'), { kingdomId: parseInt(ui.item.value, 10) || 0, parkId: 0 });
 				return false;
 			},
 			change: function (e, ui) {
@@ -71,7 +71,7 @@
 			delay: 250,
 			select: function (e, ui) {
 				showLabel('#ParkName', ui);
-				$('#ParkId').val(ui.item.value);
+				$('#ParkId').val(ui.item.value); if (window.OrkPlayerSearch) OrkPlayerSearch.reattach(document.getElementById('PlayerName'), { parkId: parseInt(ui.item.value, 10) || 0, kingdomId: parseInt($('#KingdomId').val(), 10) || 0 });
 				return false;
 			},
 			change: function (e, ui) {
