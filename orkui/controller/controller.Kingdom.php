@@ -455,8 +455,8 @@ class Controller_Kingdom extends Controller {
 		$this->data['CustomTitleAliasOptions'] = $this->Award->fetch_custom_title_alias_options();
 		$preloadOfficers = [];
 		foreach ($this->data['kingdom_officers']['Officers'] ?? [] as $o) {
-			if (in_array($o['OfficerRole'], ['Monarch', 'Regent']) && (int)$o['MundaneId'] > 0)
-				$preloadOfficers[] = ['MundaneId' => $o['MundaneId'], 'Persona' => $o['Persona'], 'Role' => $o['OfficerRole']];
+			if (in_array(strtolower($o['OfficerRole']), ['monarch', 'regent']) && (int)$o['MundaneId'] > 0)
+				$preloadOfficers[] = ['MundaneId' => $o['MundaneId'], 'Persona' => $o['Persona'], 'Role' => ucwords(str_replace('_', ' ', $o['OfficerRole']))];
 		}
 		$this->data['PreloadOfficers']     = $preloadOfficers;
 		// [TOURNAMENTS HIDDEN] $this->data['kingdom_tournaments'] = [];

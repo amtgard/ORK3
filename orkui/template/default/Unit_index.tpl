@@ -814,21 +814,15 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 		<form method="post" action="<?=htmlspecialchars($_base_url)?>">
 			<input type="hidden" name="Action" value="add_member">
 			<div class="pn-modal-body">
-				<div class="pn-acct-field un-filter-field">
-					<label>Filter players by</label>
-					<select class="un-filter-kingdom" id="un-am-filter-kingdom"><?=$_kingdom_options?></select>
-					<select class="un-filter-park" id="un-am-filter-park" style="display:none;"><option value="">All Parks</option></select>
-				</div>
 				<div class="pn-acct-field">
 					<label>Player</label>
 					<div class="pn-award-search-bar un-player-search" id="un-am-wrap">
 						<input type="text" class="pn-award-search-input" id="un-am-input"
 							placeholder="Search any player — all kingdoms…"
 							autocomplete="off">
-						<div class="un-ac-results" id="un-am-results"></div>
 					</div>
 					<input type="hidden" name="MundaneId" id="un-am-mundane-id">
-					<div class="un-field-hint">Searches all players across every kingdom and park. Use the filter above to narrow to a kingdom or park (or type a <code>GP: name</code> / <code>BS:IK name</code> prefix).</div>
+					<div class="un-field-hint">Searches all players across every kingdom and park.</div>
 				</div>
 				<div class="pn-acct-field">
 					<label>Role</label>
@@ -917,21 +911,15 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 				</div>
 				<div class="un-mg-or-divider">or search any player</div>
 <?php endif; ?>
-				<div class="pn-acct-field un-filter-field">
-					<label>Filter players by</label>
-					<select class="un-filter-kingdom" id="un-mg-filter-kingdom"><?=$_kingdom_options?></select>
-					<select class="un-filter-park" id="un-mg-filter-park" style="display:none;"><option value="">All Parks</option></select>
-				</div>
 				<div class="pn-acct-field">
 					<label>Player</label>
 					<div class="pn-award-search-bar un-player-search" id="un-mg-wrap">
 						<input type="text" class="pn-award-search-input" id="un-mg-input"
 							placeholder="Search any player — all kingdoms…"
 							autocomplete="off">
-						<div class="un-ac-results" id="un-mg-results"></div>
 					</div>
 					<input type="hidden" name="MundaneId" id="un-mg-mundane-id">
-					<div class="un-field-hint">Searches all players across every kingdom and park. Use the filter above to narrow to a kingdom or park (or type a <code>GP: name</code> / <code>BS:IK name</code> prefix).</div>
+					<div class="un-field-hint">Searches all players across every kingdom and park.</div>
 					<div class="un-field-hint">Managers can edit unit details and manage members.</div>
 				</div>
 			</div>
@@ -1048,17 +1036,18 @@ function unOpenModal(id) {
 	var el = document.getElementById(id);
 	if (el) el.classList.add('pn-open');
 	var searchMap = {
-		'un-modal-add-member':  { input: 'un-am-input', results: 'un-am-results', hidden: 'un-am-mundane-id' },
-		'un-modal-add-manager': { input: 'un-mg-input', results: 'un-mg-results', hidden: 'un-mg-mundane-id' }
+		'un-modal-add-member':  { input: 'un-am-input', hidden: 'un-am-mundane-id' },
+		'un-modal-add-manager': { input: 'un-mg-input', hidden: 'un-mg-mundane-id' }
 	};
 	var s = searchMap[id];
 	if (s) {
 		var $i = document.getElementById(s.input),
-		    $r = document.getElementById(s.results),
 		    $h = document.getElementById(s.hidden);
-		if ($i) $i.value = '';
+		if ($i) {
+			$i.value = '';
+			if ($i._opsHandle) $i._opsHandle.close();  // close the OrkPlayerSearch dropdown
+		}
 		if ($h) $h.value = '';
-		if ($r) { $r.innerHTML = ''; $r.classList.remove('un-ac-open'); }
 	}
 }
 function unCloseModal(id) {
@@ -1219,191 +1208,34 @@ function unOpenEditMember(unitMundaneId, role, title) {
 <?php endif; /* end $_can_edit JS */ ?>
 
 <?php if ($_can_edit || $_show_addmgr): ?>
-/* ── Player search factory ──────────────────────────────── */
-var UN_PSEARCH_BASE = '<?=UIR?>KingdomAjax/playersearch/';
+/* ── Player search (GLOBAL/unscoped — documented exception: cross-kingdom &
+   cross-park unit adds; never restrictTo). Uses the shared OrkPlayerSearch
+   component; page context is passed only as a RANKING centre. ─────────────── */
 var UN_SCOPE_KID  = <?=(int)($ScopeKingdomId ?? 0)?>;
 var UN_SCOPE_PID  = <?=(int)($ScopeParkId ?? 0)?>;
 var UN_UIR        = '<?=UIR?>';
 var UN_MEMBER_IDS = <?=json_encode(array_values(array_map(function($m){ return (int)$m['MundaneId']; }, $_members)))?>;
-var UN_MEMBER_SET = {}; UN_MEMBER_IDS.forEach(function(id){ UN_MEMBER_SET[id] = true; });
 
-function initPlayerSearch(cfg) {
-	/* cfg: { inputId, resultsId, hiddenId, parkId, kingdomId, kingdomSelId, parkSelId } */
-	var $input   = document.getElementById(cfg.inputId);
-	var $results = document.getElementById(cfg.resultsId);
-	var $hidden  = document.getElementById(cfg.hiddenId);
-	var $kSel    = cfg.kingdomSelId ? document.getElementById(cfg.kingdomSelId) : null;
-	var $pSel    = cfg.parkSelId    ? document.getElementById(cfg.parkSelId)    : null;
-	var debounce, focusIdx = -1, searchSeq = 0;
-	var seen = {};
-	/* "Filter players by" selection (0 = All). When a kingdom is chosen the
-	   search is scoped to it (and optionally a park) instead of going global. */
-	var filterKingdom = null, filterPark = null;
-
-	function closeResults() {
-		$results.classList.remove('un-ac-open');
-		$results.innerHTML = '';
-		focusIdx = -1;
-	}
-
-	function selectPlayer(id, label) {
-		$hidden.value  = id;
-		$input.value   = label;
-		closeResults();
-	}
-
-	function buildItem(player, groupClass) {
-		var id    = player.MundaneId;
-		var label = player.Persona;
-		var scope = (player.KAbbr && player.PAbbr) ? player.KAbbr + ':' + player.PAbbr : (player.KAbbr || '');
-		var el    = document.createElement('div');
-		el.className   = 'un-ac-item' + (groupClass ? ' ' + groupClass : '');
-		el.dataset.id  = id;
-		el.dataset.lbl = label;
-		var nameSpan = document.createElement('span');
-		nameSpan.textContent = label;
-		el.appendChild(nameSpan);
-		if (scope) {
-			var scopeSpan = document.createElement('span');
-			scopeSpan.className   = 'un-ac-scope';
-			scopeSpan.textContent = scope;
-			el.appendChild(scopeSpan);
-		}
-		el.addEventListener('mousedown', function (e) {
-			e.preventDefault();
-			selectPlayer(id, label + (scope ? ' (' + scope + ')' : ''));
-		});
-		return el;
-	}
-
-	function addGroup(label, players) {
-		var unseen = (players || []).filter(function (p) { return !seen[p.MundaneId]; });
-		if (!unseen.length) return;
-		var hdr = document.createElement('div');
-		hdr.className   = 'un-ac-group-label';
-		hdr.textContent = label;
-		$results.appendChild(hdr);
-		unseen.forEach(function (p) {
-			seen[p.MundaneId] = true;
-			$results.appendChild(buildItem(p, ''));
-		});
-	}
-
-	function runSearch(term) {
-		var kid  = filterKingdom > 0 ? filterKingdom : (cfg.kingdomId || 0);
-		var pid  = filterPark > 0 ? filterPark : 0;
-		var base = UN_PSEARCH_BASE + kid;
-		var q    = '&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
-		// Show home park tier when browsing all kingdoms or the user's own kingdom.
-		var useHomePark = cfg.parkId && (filterKingdom === 0 || filterKingdom === cfg.kingdomId);
-		var groups;
-		if (kid === 0 || /^[a-z0-9]{2,3}:[a-z0-9*]{0,3}\s+\S/i.test(term)) {
-			groups = [ { label: 'All Players', url: UN_PSEARCH_BASE + '0&scope=all' + q } ];
-		} else if (pid > 0) {
-			groups = [ { label: 'In Park', url: base + '&scope=own&park_id=' + pid + q } ];
-		} else {
-			groups = [];
-			if (useHomePark) groups.push({ label: 'In Park', url: base + '&scope=own&park_id=' + cfg.parkId + q });
-			groups.push({ label: 'In Kingdom', url: base + '&scope=own' + q });
-			if (filterKingdom === 0) groups.push({ label: 'All Players', url: base + '&scope=exclude' + q });
-		}
-		var mySeq = ++searchSeq;
-		Promise.all(groups.map(function (g) {
-			return fetch(g.url).then(function (r) { return r.json(); }).catch(function () { return []; });
-		})).then(function (resArr) {
-			if (mySeq !== searchSeq) return; // a newer keystroke superseded this response
-			seen = Object.assign({}, UN_MEMBER_SET);
-			$results.innerHTML = '';
-			$hidden.value = '';
-			groups.forEach(function (g, i) { addGroup(g.label, resArr[i] || []); });
-			if (!$results.children.length) {
-				var empty = document.createElement('div');
-				empty.className   = 'un-ac-empty';
-				empty.textContent = 'No players found.';
-				$results.appendChild(empty);
-			}
-			focusIdx = -1;
-			$results.classList.add('un-ac-open');
-		});
-	}
-
-	$input.addEventListener('input', function () {
-		var term = this.value.trim();
-		$hidden.value = '';
-		clearTimeout(debounce);
-		if (term.length < 2) { closeResults(); return; }
-		debounce = setTimeout(function () { runSearch(term); }, 300);
-	});
-
-	$input.addEventListener('keydown', function (e) {
-		var items = $results.querySelectorAll('.un-ac-item');
-		if (!items.length) return;
-		if (e.key === 'ArrowDown') {
-			e.preventDefault();
-			if (focusIdx >= 0) items[focusIdx].classList.remove('un-ac-focused');
-			focusIdx = Math.min(focusIdx + 1, items.length - 1);
-			items[focusIdx].classList.add('un-ac-focused');
-			items[focusIdx].scrollIntoView({ block: 'nearest' });
-		} else if (e.key === 'ArrowUp') {
-			e.preventDefault();
-			if (focusIdx >= 0) items[focusIdx].classList.remove('un-ac-focused');
-			focusIdx = Math.max(focusIdx - 1, 0);
-			items[focusIdx].classList.add('un-ac-focused');
-			items[focusIdx].scrollIntoView({ block: 'nearest' });
-		} else if (e.key === 'Enter') {
-			e.preventDefault();
-			if (focusIdx >= 0 && items[focusIdx]) items[focusIdx].dispatchEvent(new MouseEvent('mousedown'));
-		} else if (e.key === 'Escape') {
-			closeResults();
-		}
-	});
-
-	function rerun() {
-		var term = $input.value.trim();
-		if (term.length >= 2) runSearch(term); else closeResults();
-	}
-
-	if ($kSel) {
-		filterKingdom = parseInt($kSel.value, 10) || 0;
-		$kSel.addEventListener('change', function () {
-			filterKingdom = parseInt(this.value, 10) || 0;
-			filterPark = 0;
-			if ($pSel) {
-				$pSel.innerHTML = '<option value="">All Parks</option>';
-				if (filterKingdom) {
-					$pSel.style.display = '';
-					fetch(UN_UIR + 'KingdomAjax/kingdom/' + filterKingdom + '/getparks')
-						.then(function (r) { return r.json(); })
-						.then(function (d) {
-							(d.parks || []).forEach(function (pk) {
-								var o = document.createElement('option');
-								o.value = pk.ParkId; o.textContent = pk.Name;
-								$pSel.appendChild(o);
-							});
-						})
-						.catch(function () { /* leave park filter as All Parks on error */ });
-				} else {
-					$pSel.style.display = 'none';
-				}
-			}
-			rerun();
-		});
-	}
-	if ($pSel) {
-		$pSel.addEventListener('change', function () {
-			filterPark = parseInt(this.value, 10) || 0;
-			rerun();
-		});
-	}
-
-	$input.addEventListener('blur', function () {
-		setTimeout(closeResults, 150);
+/* Attach the shared component to a unit add-search input. Global/unscoped:
+   no restrictTo, no restrictKingdomIds — only ranking-centre ids. Excludes
+   current unit members so they can't be re-added. */
+function unAttachPlayerSearch(inputId, hiddenId) {
+	var $input  = document.getElementById(inputId);
+	var $hidden = document.getElementById(hiddenId);
+	if (!$input || !$hidden || !window.OrkPlayerSearch) return;
+	OrkPlayerSearch.attach($input, {
+		parkId:    UN_SCOPE_PID || undefined,    // ranking centre only — NOT a scope
+		kingdomId: UN_SCOPE_KID || undefined,    // ranking centre only — NOT a scope
+		uir:       UN_UIR,
+		excludeIds: function () { return UN_MEMBER_IDS; },
+		onSelect: function (player) { $hidden.value = player.MundaneId; },
+		onClear:  function () { $hidden.value = ''; }
 	});
 }
 
 /* Initialise search widgets per available modal */
 <?php if ($_can_edit): ?>
-initPlayerSearch({ inputId: 'un-am-input', resultsId: 'un-am-results', hiddenId: 'un-am-mundane-id', parkId: UN_SCOPE_PID, kingdomId: UN_SCOPE_KID, kingdomSelId: 'un-am-filter-kingdom', parkSelId: 'un-am-filter-park' });
+unAttachPlayerSearch('un-am-input', 'un-am-mundane-id');
 document.getElementById('un-modal-add-member').addEventListener('transitionend', function () {
 	if (!this.classList.contains('pn-open')) {
 		document.getElementById('un-am-input').value = '';
@@ -1412,7 +1244,7 @@ document.getElementById('un-modal-add-member').addEventListener('transitionend',
 });
 <?php endif; ?>
 <?php if ($_show_addmgr): ?>
-initPlayerSearch({ inputId: 'un-mg-input', resultsId: 'un-mg-results', hiddenId: 'un-mg-mundane-id', parkId: UN_SCOPE_PID, kingdomId: UN_SCOPE_KID, kingdomSelId: 'un-mg-filter-kingdom', parkSelId: 'un-mg-filter-park' });
+unAttachPlayerSearch('un-mg-input', 'un-mg-mundane-id');
 document.getElementById('un-modal-add-manager').addEventListener('transitionend', function () {
 	if (!this.classList.contains('pn-open')) {
 		document.getElementById('un-mg-input').value = '';

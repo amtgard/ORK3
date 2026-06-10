@@ -6585,7 +6585,12 @@ html, body {
        Profile / theme toggle) off the right edge. iOS clamps fixed elements to
        the visual viewport so it doesn't show there. Clamping here keeps the
        fixed nav pinned to the device width on every platform. */
-    overflow-x: hidden;
+    /* clip — NOT hidden. `overflow-x: hidden` makes the browser compute `overflow-y`
+       as `auto` (CSS spec), which turned <body> (height:100%) into its own vertical
+       scroll container on tall pages → a duplicate scrollbar beside the window's.
+       `clip` clamps horizontal overflow (keeps the Android fixed-bar fix above)
+       without establishing a scroll container or coupling overflow-y. */
+    overflow-x: clip;
     max-width: 100%;
 }
 body {

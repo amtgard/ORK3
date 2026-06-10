@@ -52,38 +52,17 @@
 			delay: 500,
 			select: function (e, ui) {
 				showLabel('#ParkName', ui);
-				$('#ParkId').val(ui.item.value);
+				$('#ParkId').val(ui.item.value); if (window.OrkPlayerSearch) OrkPlayerSearch.reattach(document.getElementById('PlayerName'), { parkId: parseInt(ui.item.value, 10) || 0 });
 				return false;
 			}
 		});
-		$( "#PlayerName" ).autocomplete({
-			source: function( request, response ) {
-				park_id = $('#SrcParkId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						park_id: park_id.length>0?park_id:null
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')', value: val.MundaneId });
-						});
-						response(suggestions);
-					}
-				);
+		OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+			uir: '<?=UIR ?>',
+			onSelect: function(p) {
+				document.getElementById('MundaneId').value = p.MundaneId;
 			},
-			focus: function( event, ui ) {
-				return showLabel('#PlayerName', ui);
-			}, 
-			delay: 500,
-			select: function (e, ui) {
-				showLabel('#PlayerName', ui);
-				$('#MundaneId').val(ui.item.value);
-				return false;
+			onClear: function() {
+				document.getElementById('MundaneId').value = '';
 			}
 		});
 	});

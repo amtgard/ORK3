@@ -525,7 +525,6 @@ $(function() {
 			<div style="position:relative">
 				<input type="text" id="es-by-text" autocomplete="off" placeholder="Leave blank to keep existing"
 					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em">
-				<div id="es-by-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #cbd5e0;border-top:none;border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
 			</div>
 			<input type="hidden" id="es-by-id">
 		</div>
@@ -569,7 +568,6 @@ $(function() {
 <script>
 (function() {
 	var _suspUrl    = '<?= $_isOrkAdmin ? UIR . 'Admin/ajax/suspendplayer' : UIR . 'KingdomAjax/suspendplayer' ?>';
-	var _searchUrl  = '<?= UIR ?>KingdomAjax/playersearch/<?= (int)$_scopeId ?>&scope=all';
 	var _fpFrom, _fpUntil;
 
 	_fpFrom  = flatpickr('#es-from',  { dateFormat: 'Y-m-d' });
@@ -589,58 +587,17 @@ $(function() {
 	}
 
 	// Suspended By autocomplete for edit modal
-	(function() {
-		var timer = null;
-		var textEl    = document.getElementById('es-by-text');
-		var hiddenEl  = document.getElementById('es-by-id');
-		var resultsEl = document.getElementById('es-by-results');
-
-		function getItems() { return Array.from(resultsEl.querySelectorAll('[data-ac-item]')); }
-		function highlight(items, idx) {
-			items.forEach(function(el, i) { el.style.background = i === idx ? '#ebf4ff' : ''; });
+	OrkPlayerSearch.attach(document.getElementById('es-by-text'), {
+		uir: '<?=UIR ?>',
+		parkId:    <?= $_scopeType === 'park'    ? (int)$_scopeId : 0 ?>,
+		kingdomId: <?= $_scopeType === 'kingdom' ? (int)$_scopeId : 0 ?>,
+		onSelect: function(player) {
+			document.getElementById('es-by-id').value = player ? player.MundaneId : '';
+		},
+		onClear: function() {
+			document.getElementById('es-by-id').value = '';
 		}
-		function select(p) {
-			textEl.value   = p.Persona;
-			hiddenEl.value = p.MundaneId;
-			resultsEl.style.display = 'none';
-		}
-		textEl.addEventListener('input', function() {
-			var q = this.value.trim();
-			hiddenEl.value = '';
-			clearTimeout(timer);
-			if (q.length < 2) { resultsEl.style.display = 'none'; return; }
-			timer = setTimeout(function() {
-				fetch(_searchUrl + '&q=' + encodeURIComponent(q))
-					.then(function(r) { return r.json(); })
-					.then(function(data) {
-						resultsEl.innerHTML = '';
-						if (!data.length) { resultsEl.style.display = 'none'; return; }
-						data.forEach(function(p) {
-							var div = document.createElement('div');
-							div.setAttribute('data-ac-item', '1');
-							div.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:.92em;border-bottom:1px solid #f0f0f0';
-							div.textContent = p.Persona + (p.ParkName ? ' — ' + p.ParkName : '');
-							div.addEventListener('mousedown', function(e) { e.preventDefault(); });
-							div.addEventListener('click', function() { select(p); });
-							resultsEl.appendChild(div);
-						});
-						resultsEl.style.display = 'block';
-					});
-			}, 200);
-		});
-		textEl.addEventListener('keydown', function(e) {
-			var items = getItems();
-			if (!items.length) return;
-			var cur = items.findIndex(function(el) { return el.style.background !== ''; });
-			if (e.key === 'ArrowDown') { e.preventDefault(); var n = cur < items.length-1 ? cur+1 : 0; highlight(items,n); items[n].scrollIntoView({block:'nearest'}); }
-			else if (e.key === 'ArrowUp') { e.preventDefault(); var p = cur > 0 ? cur-1 : items.length-1; highlight(items,p); items[p].scrollIntoView({block:'nearest'}); }
-			else if (e.key === 'Enter')   { if (cur >= 0) { e.preventDefault(); items[cur].click(); } }
-			else if (e.key === 'Escape')  { resultsEl.style.display = 'none'; }
-		});
-		textEl.addEventListener('blur', function() {
-			setTimeout(function() { resultsEl.style.display = 'none'; }, 150);
-		});
-	})();
+	});
 
 	function openEditOverlay(data) {
 		document.getElementById('es-player-name').textContent = data.persona;
@@ -766,7 +723,6 @@ $(function() {
 			<div style="position:relative">
 				<input type="text" id="sp-player-text" autocomplete="off" placeholder="Search by persona or name…"
 					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em">
-				<div id="sp-player-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #cbd5e0;border-top:none;border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
 			</div>
 			<input type="hidden" id="sp-player-id">
 		</div>
@@ -776,7 +732,6 @@ $(function() {
 			<div style="position:relative">
 				<input type="text" id="sp-by-text" autocomplete="off" placeholder="Default: you (leave blank to use your account)"
 					style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.95em">
-				<div id="sp-by-results" style="display:none;position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #cbd5e0;border-top:none;border-radius:0 0 6px 6px;z-index:10;max-height:180px;overflow-y:auto"></div>
 			</div>
 			<input type="hidden" id="sp-by-id">
 		</div>
@@ -820,10 +775,8 @@ $(function() {
 <script>
 (function() {
 	var _kingdomId  = <?= (int)$_scopeId ?>;
-	var _suspendatorId = <?= (int)$this->__session->user_id ?>;
 	var _suspUrl    = '<?= $_isOrkAdmin ? UIR . 'Admin/ajax/suspendplayer' : UIR . 'KingdomAjax/suspendplayer' ?>';
 	var _parksUrl   = '<?= UIR ?>KingdomAjax/kingdom/' + _kingdomId + '/getparks';
-	var _searchUrl  = '<?= UIR ?>KingdomAjax/playersearch/' + _kingdomId;
 	var _parksLoaded = false;
 	var _fpFrom, _fpUntil;
 
@@ -882,103 +835,43 @@ $(function() {
 			});
 	}
 
-	// Clear player when park changes
+	// Player search — re-attach with parkId whenever the park dropdown changes
+	function spAttachPlayerSearch() {
+		var parkId = parseInt(document.getElementById('sp-park').value, 10) || 0;
+		OrkPlayerSearch.reattach(document.getElementById('sp-player-text'), {
+			uir: '<?=UIR ?>',
+			kingdomId: <?= (int)$_scopeId ?>,
+			parkId: parkId || undefined,
+			onSelect: function(player) {
+				document.getElementById('sp-player-id').value = player ? player.MundaneId : '';
+				updateSubmitBtn();
+			},
+			onClear: function() {
+				document.getElementById('sp-player-id').value = '';
+				updateSubmitBtn();
+			}
+		});
+	}
+	spAttachPlayerSearch();
+
+	// Clear player and re-scope search when park changes
 	document.getElementById('sp-park').addEventListener('change', function() {
 		document.getElementById('sp-player-text').value = '';
 		document.getElementById('sp-player-id').value   = '';
-		document.getElementById('sp-player-results').style.display = 'none';
-	});
-
-	// Shared autocomplete helper
-	function spAc(opts) {
-		// opts: textId, hiddenId, resultsId, getUrl, onSelect, extraParams
-		var textEl    = document.getElementById(opts.textId);
-		var hiddenEl  = document.getElementById(opts.hiddenId);
-		var resultsEl = document.getElementById(opts.resultsId);
-		var timer = null;
-
-		function getItems() {
-			return Array.from(resultsEl.querySelectorAll('[data-ac-item]'));
-		}
-		function highlight(items, idx) {
-			items.forEach(function(el, i) {
-				el.style.background = i === idx ? '#ebf4ff' : '';
-			});
-		}
-		function select(p) {
-			textEl.value   = p.Persona;
-			hiddenEl.value = p.MundaneId;
-			resultsEl.style.display = 'none';
-			if (opts.onSelect) opts.onSelect(p);
-		}
-
-		textEl.addEventListener('input', function() {
-			var q = this.value.trim();
-			hiddenEl.value = '';
-			if (opts.onSelect) opts.onSelect(null);
-			clearTimeout(timer);
-			if (q.length < 2) { resultsEl.style.display = 'none'; return; }
-			timer = setTimeout(function() {
-				var url = opts.getUrl() + '&q=' + encodeURIComponent(q);
-				fetch(url)
-					.then(function(r) { return r.json(); })
-					.then(function(data) {
-						resultsEl.innerHTML = '';
-						if (!data.length) { resultsEl.style.display = 'none'; return; }
-						data.forEach(function(p) {
-							var div = document.createElement('div');
-							div.setAttribute('data-ac-item', '1');
-							div.style.cssText = 'padding:7px 10px;cursor:pointer;font-size:.92em;border-bottom:1px solid #f0f0f0';
-							div.textContent = p.Persona + (p.ParkName ? ' — ' + p.ParkName : '');
-							div.addEventListener('mousedown', function(e) { e.preventDefault(); });
-							div.addEventListener('click', function() { select(p); });
-							resultsEl.appendChild(div);
-						});
-						resultsEl.style.display = 'block';
-					});
-			}, 200);
-		});
-
-		textEl.addEventListener('keydown', function(e) {
-			var items = getItems();
-			if (!items.length) return;
-			var cur = items.findIndex(function(el) { return el.style.background !== ''; });
-			if (e.key === 'ArrowDown') {
-				e.preventDefault();
-				var next = cur < items.length - 1 ? cur + 1 : 0;
-				highlight(items, next);
-				items[next].scrollIntoView({ block: 'nearest' });
-			} else if (e.key === 'ArrowUp') {
-				e.preventDefault();
-				var prev = cur > 0 ? cur - 1 : items.length - 1;
-				highlight(items, prev);
-				items[prev].scrollIntoView({ block: 'nearest' });
-			} else if (e.key === 'Enter') {
-				if (cur >= 0) { e.preventDefault(); items[cur].click(); }
-			} else if (e.key === 'Escape') {
-				resultsEl.style.display = 'none';
-			}
-		});
-
-		textEl.addEventListener('blur', function() {
-			setTimeout(function() { resultsEl.style.display = 'none'; }, 150);
-		});
-	}
-
-	// Player search
-	spAc({
-		textId: 'sp-player-text', hiddenId: 'sp-player-id', resultsId: 'sp-player-results',
-		getUrl: function() {
-			var parkId = document.getElementById('sp-park').value;
-			return _searchUrl + (parkId ? '&park_id=' + encodeURIComponent(parkId) : '');
-		},
-		onSelect: function() { updateSubmitBtn(); }
+		updateSubmitBtn();
+		spAttachPlayerSearch();
 	});
 
 	// Suspended By search
-	spAc({
-		textId: 'sp-by-text', hiddenId: 'sp-by-id', resultsId: 'sp-by-results',
-		getUrl: function() { return _searchUrl + '&scope=all'; }
+	OrkPlayerSearch.attach(document.getElementById('sp-by-text'), {
+		uir: '<?=UIR ?>',
+		kingdomId: <?= (int)$_scopeId ?>,
+		onSelect: function(player) {
+			document.getElementById('sp-by-id').value = player ? player.MundaneId : '';
+		},
+		onClear: function() {
+			document.getElementById('sp-by-id').value = '';
+		}
 	});
 
 	// Open / close

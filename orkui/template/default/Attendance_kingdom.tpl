@@ -462,8 +462,8 @@ $(function() {
 		},
 		focus:  function(e, ui) { return showLabel('#KingdomName', ui); },
 		delay:  250,
-		select: function(e, ui) { showLabel('#KingdomName', ui); $('#KingdomId').val(ui.item.value); return false; },
-		change: function(e, ui) { if (!ui.item) { showLabel('#KingdomName', null); $('#KingdomId').val(null); } return false; },
+		select: function(e, ui) { showLabel('#KingdomName', ui); $('#KingdomId').val(ui.item.value); attRescopePlayer(); return false; },
+		change: function(e, ui) { if (!ui.item) { showLabel('#KingdomName', null); $('#KingdomId').val(null); attRescopePlayer(); } return false; },
 		minLength: 0
 	}).focus(function() { if (!this.value) $(this).trigger('keydown.autocomplete'); });
 
@@ -479,29 +479,20 @@ $(function() {
 		},
 		focus:  function(e, ui) { return showLabel('#ParkName', ui); },
 		delay:  250,
-		select: function(e, ui) { showLabel('#ParkName', ui); $('#ParkId').val(ui.item.value); return false; },
-		change: function(e, ui) { if (!ui.item) { showLabel('#ParkName', null); $('#ParkId').val(null); } return false; }
+		select: function(e, ui) { showLabel('#ParkName', ui); $('#ParkId').val(ui.item.value); attRescopePlayer(); return false; },
+		change: function(e, ui) { if (!ui.item) { showLabel('#ParkName', null); $('#ParkId').val(null); attRescopePlayer(); } return false; }
 	}).focus(function() { if (!this.value) $(this).trigger('keydown.autocomplete'); });
 
 	/* ── Player autocomplete ─────────────────────────── */
-	$('#PlayerName').autocomplete({
-		source: function(request, response) {
-			$.getJSON('<?=HTTP_SERVICE?>Search/SearchService.php', {
-				Action: 'Search/Player', type: 'all', search: request.term,
-				kingdom_id: $('#KingdomId').val(), limit: 15
-			}, function(data) {
-				response($.map(data, function(v) { return { label: v.Persona, value: v.MundaneId + '|' + v.PenaltyBox }; }));
-			});
-		},
-		focus:  function(e, ui) { return showLabel('#PlayerName', ui); },
-		delay:  250,
-		select: function(e, ui) {
-			showLabel('#PlayerName', ui);
-			$('#MundaneId').val(ui.item.value.split('|')[0]);
-			return false;
-		},
-		change: function(e, ui) { if (!ui.item) { showLabel('#PlayerName', null); $('#MundaneId').val(null); } return false; }
-	}).focus(function() { if (!this.value) $(this).trigger('keydown.autocomplete'); });
+	OrkPlayerSearch.attach(document.getElementById('PlayerName'), {
+		uir: '<?=UIR ?>',
+		kingdomId: parseInt($('#KingdomId').val()) || <?=intval($kid) ?>,
+		parkId:    parseInt($('#ParkId').val())    || 0,
+		onSelect: function(p) { document.getElementById('MundaneId').value = p.MundaneId; },
+		onClear:  function()  { document.getElementById('MundaneId').value = '';           }
+	});
+	/* Keep the player search scope tracking the selected kingdom/park (rank nearest-first). */
+	function attRescopePlayer(){ OrkPlayerSearch.reattach(document.getElementById('PlayerName'), { kingdomId: parseInt($('#KingdomId').val()) || <?=intval($kid) ?>, parkId: parseInt($('#ParkId').val()) || 0 }); }
 <?php endif; ?>
 
 	/* ── Chart collapse toggle ──────────────────────── */

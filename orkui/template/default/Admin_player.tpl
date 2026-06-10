@@ -498,63 +498,19 @@
 			if (this.value == "")
 				$(this).trigger('keydown.autocomplete');
 		});
-		var givenBySelected = false;
-		var preloadedOfficers = [
-<?php if (is_array($PreloadOfficers)) foreach ($PreloadOfficers as $officer) : ?>
-			{label: <?=json_encode($officer['Persona'] . ' (' . $officer['Role'] . ')') ?>, value: <?=intval($officer['MundaneId']) ?>},
-<?php endforeach; ?>
-		];
-		$( "#GivenBy" ).autocomplete({
-			minLength: 0,
-			source: function( request, response ) {
-				if (request.term === '') {
-					response(preloadedOfficers.concat([{label: '...or start typing to search.', value: -1}]));
-					return;
-				}
-				park_id = $('#ParkId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Player',
-						type: 'all',
-						search: request.term,
-						limit: 6
-						<?php // ,kingdom_id: ($('#AwardId').val()>=74||$('#AwardId').val()<=77)?0:<?=$KingdomId ?>
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona + ' (' + val.KAbbr + ':' + val.PAbbr + ')', value: val.MundaneId });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				if (ui.item.value === -1) return false;
-				return showLabel('#GivenBy', ui);
-			},
-			delay: 250,
-			select: function (e, ui) {
-				if (ui.item.value === -1) return false;
-				showLabel('#GivenBy', ui);
-				$('#GivenById').val(ui.item.value);
-				givenBySelected = true;
+		OrkPlayerSearch.attach(document.getElementById('GivenBy'), {
+			uir: '<?=UIR ?>',
+			kingdomId: <?=intval($KingdomId) ?>,
+			includeInactive: true,
+			includeSuspended: true,
+			onSelect: function(p) {
+				document.getElementById('GivenById').value = p.MundaneId;
 				checkRequiredFields();
-				return false;
 			},
-			change: function (e, ui) {
-				if (!givenBySelected) {
-					showLabel('#GivenBy',null);
-					$('#GivenById').val('');
-				}
-				givenBySelected = false;
+			onClear: function() {
+				document.getElementById('GivenById').value = '';
 				checkRequiredFields();
-				return false;
 			}
-		}).focus(function() {
-			if (this.value == "")
-				$(this).trigger('keydown.autocomplete');
 		});
 		checkRequiredFields();
 	});

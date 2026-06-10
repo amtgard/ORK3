@@ -473,7 +473,6 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 				</div>
 				<input type="text" id="cp-mp-player-name" autocomplete="off" placeholder="Search all players…">
 				<input type="hidden" id="cp-mp-player-id">
-				<div class="kn-ac-results" id="cp-mp-player-results"></div>
 			</div>
 			<div class="cp-field cp-field-ac" style="margin-top:12px">
 				<label>New Home Park <span style="color:#e53e3e">*</span></label>
@@ -942,32 +941,6 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 			}));
 		}).catch(function(){cb([]);});
 	}
-	function cpSearchPlayersGlobal(q, cb, includeInactive) {
-		var url = UIR + 'SearchAjax/universal&focus=player&q=' + encodeURIComponent(q) + (includeInactive ? '&inactive=1' : '');
-		fetch(url).then(function(r){return r.json();}).then(function(d) {
-			cb((d.players || []).map(function(p) {
-				var inactive = p.active === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
-				return {
-					id: p.id, label: p.name,
-					html: cpEsc(p.name) + ' <span style="color:#a0aec0;font-size:11px">(' + cpEsc(p.abbr) + ' · ' + cpEsc(p.park) + ')</span>' + inactive,
-				};
-			}));
-		}).catch(function(){cb([]);});
-	}
-	// Move Player cascade: kingdom-scoped player search (consistent with the
-	// other Move Player modals). revised.js/MpCascade is not loaded on the admin
-	// page, so this is a small self-contained version using the shared endpoints.
-	function cpSearchPlayersInKingdom(q, kingdomId, parkId, cb) {
-		var url = UIR + 'KingdomAjax/playersearch/' + kingdomId + '&scope=own&include_inactive=1'
-			+ (parkId ? '&park_id=' + parkId : '') + '&q=' + encodeURIComponent(q);
-		fetch(url).then(function(r){return r.json();}).then(function(d) {
-			cb((d || []).map(function(p) {
-				var inactive = p.Active === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
-				return { id: p.MundaneId, label: p.Persona,
-					html: cpEsc(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + cpEsc(p.KAbbr||'') + ' · ' + cpEsc(p.ParkName||'') + ')</span>' + inactive };
-			}));
-		}).catch(function(){cb([]);});
-	}
 	var cpKingdomsCache = null;
 	function cpLoadKingdoms(cb) {
 		if (cpKingdomsCache) { cb(cpKingdomsCache); return; }
@@ -1050,17 +1023,42 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 		document.getElementById('cp-mp-submit').disabled = !(pid && pkid);
 	}
 	var cpMpPlayerCascade = null, cpMpDestCascade = null;
-	cpAc({ inputId:'cp-mp-player-name', hiddenId:'cp-mp-player-id', resultsId:'cp-mp-player-results',
-		fetchFn: function(q, cb) {
-			var sel = cpMpPlayerCascade ? cpMpPlayerCascade.get() : { kingdomId:0, parkId:0 };
-			if (sel.kingdomId) cpSearchPlayersInKingdom(q, sel.kingdomId, sel.parkId, cb);
-			else cpSearchPlayersGlobal(q, cb, true);
-		}, onSelect: cpMpCheck, onClear: cpMpCheck });
+	// Global admin tool: default no centre (global ranking). The Kingdom -> Park
+	// cascade below is a FILTER (labelled "Filter players by kingdom/park"): a chosen
+	// park hard-restricts to that park; a chosen kingdom hard-restricts to that kingdom's
+	// family. Cleared cascade => global again. Built by cpMpPlayerScopeOpts().
+	function cpMpPlayerScopeOpts() {
+		var sel = cpMpPlayerCascade ? cpMpPlayerCascade.get() : { kingdomId: 0, parkId: 0 };
+		var opts = {
+			uir: UIR,
+			parkId: 0, kingdomId: 0, restrictTo: '',
+			onSelect: function(p) { document.getElementById('cp-mp-player-id').value = p.MundaneId; cpMpCheck(); },
+			onClear:  function()  { document.getElementById('cp-mp-player-id').value = ''; cpMpCheck(); }
+		};
+		if (sel.parkId) {
+			opts.parkId = sel.parkId; opts.kingdomId = sel.kingdomId || 0; opts.restrictTo = 'park';
+		} else if (sel.kingdomId) {
+			opts.kingdomId = sel.kingdomId; opts.restrictTo = 'kingdom';
+		}
+		return opts;
+	}
+	OrkPlayerSearch.attach(document.getElementById('cp-mp-player-name'), {
+		uir: UIR,
+		onSelect: function(p) {
+			document.getElementById('cp-mp-player-id').value = p.MundaneId;
+			cpMpCheck();
+		},
+		onClear: function() {
+			document.getElementById('cp-mp-player-id').value = '';
+			cpMpCheck();
+		}
+	});
 	// Destination park is chosen via the Kingdom -> Park cascade below — no free-text park search.
 	// Cascade filters (Kingdom -> Park) for the player and destination searches
 	cpMpPlayerCascade = cpWireCascade('cp-mp-pfilter-kingdom', 'cp-mp-pfilter-park', function() {
-		var inp = document.getElementById('cp-mp-player-name');
-		if (inp && inp.value.trim().length >= 2) inp.dispatchEvent(new Event('input'));
+		var cpMpInput = document.getElementById('cp-mp-player-name');
+		OrkPlayerSearch.reattach(cpMpInput, cpMpPlayerScopeOpts());
+		if (cpMpInput._opsHandle) cpMpInput._opsHandle.refresh();
 	});
 	cpMpDestCascade = cpWireCascade('cp-mp-dfilter-kingdom', 'cp-mp-dfilter-park', function() {
 		var sel = cpMpDestCascade.get();
@@ -1093,8 +1091,32 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 		var remove = document.getElementById('cp-mgp-remove-id').value;
 		document.getElementById('cp-mgp-submit').disabled = !(keep && remove);
 	}
-	cpAc({ inputId:'cp-mgp-keep-name',   hiddenId:'cp-mgp-keep-id',   resultsId:'cp-mgp-keep-results',   fetchFn:function(q,cb){cpSearchPlayersGlobal(q,cb,true);}, onSelect:cpMgpCheck, onClear:cpMgpCheck });
-	cpAc({ inputId:'cp-mgp-remove-name', hiddenId:'cp-mgp-remove-id', resultsId:'cp-mgp-remove-results', fetchFn:function(q,cb){cpSearchPlayersGlobal(q,cb,true);}, onSelect:cpMgpCheck, onClear:cpMgpCheck });
+	OrkPlayerSearch.attach(document.getElementById('cp-mgp-keep-name'), {
+		uir: UIR,
+		includeInactive: true,
+		excludeIds: function() { return [ parseInt(document.getElementById('cp-mgp-remove-id').value) || 0 ]; },
+		onSelect: function(p) {
+			document.getElementById('cp-mgp-keep-id').value = p.MundaneId;
+			cpMgpCheck();
+		},
+		onClear: function() {
+			document.getElementById('cp-mgp-keep-id').value = '';
+			cpMgpCheck();
+		}
+	});
+	OrkPlayerSearch.attach(document.getElementById('cp-mgp-remove-name'), {
+		uir: UIR,
+		includeInactive: true,
+		excludeIds: function() { return [ parseInt(document.getElementById('cp-mgp-keep-id').value) || 0 ]; },
+		onSelect: function(p) {
+			document.getElementById('cp-mgp-remove-id').value = p.MundaneId;
+			cpMgpCheck();
+		},
+		onClear: function() {
+			document.getElementById('cp-mgp-remove-id').value = '';
+			cpMgpCheck();
+		}
+	});
 	document.getElementById('cp-mgp-submit').addEventListener('click', function() {
 		var keepId   = document.getElementById('cp-mgp-keep-id').value;
 		var removeId = document.getElementById('cp-mgp-remove-id').value;

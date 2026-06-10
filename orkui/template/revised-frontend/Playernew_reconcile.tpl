@@ -397,35 +397,21 @@ var RcConfig = {
 
 	// ── Wire a row ──────────────────────────────────────────────────────────
 	function wireRow(row) {
-		// Given By
+		// Given By — OrkPlayerSearch (global, ranked by kingdom center; includes inactive+suspended for historical attribution)
 		var gbText = row.querySelector('.rc-field-givenby-text');
 		var gbId   = row.querySelector('.rc-field-givenby-id');
-		var gbDrop = row.querySelector('.rc-givenby-results');
 		if (gbText) {
-			gbText.addEventListener('input', function() {
-				gbId.value = '';
-				var q = gbText.value.trim();
-				if (q.length < 2) { gbDrop.style.display = 'none'; return; }
-				acSearch(q, function(data) {
-					var items = data.players || [];
-					if (!items.length) { gbDrop.style.display = 'none'; return; }
-					gbDrop.innerHTML = items.map(function(p) {
-						return '<div class="rc-ac-item" data-id="' + p.id + '" data-name="' + escH(p.name) + '">'
-							+ escH(p.name)
-							+ (p.active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
-							+ (p.park ? '<div class="rc-ac-item-sub">' + escH(p.park) + '</div>' : '')
-							+ '</div>';
-					}).join('');
-					gbDrop.style.display = 'block';
-					gbDrop.querySelectorAll('.rc-ac-item').forEach(function(item) {
-						item.addEventListener('mousedown', function(e) {
-							e.preventDefault();
-							gbText.value = item.dataset.name;
-							gbId.value   = item.dataset.id;
-							gbDrop.style.display = 'none';
-						});
-					});
-				});
+			OrkPlayerSearch.attach(gbText, {
+				kingdomId:        RcConfig.kingdomId,
+				uir:              RcConfig.uir,
+				includeInactive:  true,
+				includeSuspended: true,
+				onSelect: function(player) {
+					gbId.value = player.MundaneId;
+				},
+				onClear: function() {
+					gbId.value = '';
+				}
 			});
 		}
 
