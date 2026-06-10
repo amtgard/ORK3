@@ -19,12 +19,6 @@ $_autoRun        = (trimlen($_prefillQ) > 0 || $_prefillKId > 0 || $_prefillPId 
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/reports.css')?>">
 
 <style>
-/* Kill the duplicate scrollbar: the theme's `html, body { height:100%; overflow-x:hidden }`
-   forces overflow-y to compute as `auto`, turning the fixed-height body into its own scroll
-   container on top of the window — two scrollbars on a tall page. Let the body grow with its
-   content so only the window scrolls. (Page-scoped: applies only while this page is rendered.) */
-html, body { height: auto !important; min-height: 100%; }
-
 /* ── Advanced Search page-specific (as-*) ───────────────────── */
 .as-filter-bar {
 	background      : var(--rp-card-bg, #fff);
