@@ -192,7 +192,7 @@ html[data-theme="dark"] .rm-badge-has { color: #e0c860; }
     white-space: nowrap;
     vertical-align: bottom;
 }
-.rm-expand-reason, .rm-supp-chip {
+.rm-expand-reason, .rm-supp-chip, .rm-expand-members {
     cursor: pointer;
     font-size: 12px;
     padding: 1px 6px;
@@ -202,7 +202,7 @@ html[data-theme="dark"] .rm-badge-has { color: #e0c860; }
     background: var(--rm-bg);
     color: var(--rm-fg);
 }
-.rm-expand-reason:hover, .rm-supp-chip:hover { border-color: var(--rm-accent); }
+.rm-expand-reason:hover, .rm-supp-chip:hover, .rm-expand-members:hover { border-color: var(--rm-accent); }
 
 /* Court badge */
 .rm-courtbadge {
@@ -513,70 +513,88 @@ html[data-theme="dark"] .rm-modal {
       </tr>
     </thead>
     <tbody id="rm-tbody">
-    <?php foreach ($Recommendations as $rec) {
-        $rid     = (int)$rec['RecommendationsId'];
-        $isLad   = ((int)($rec['Rank'] ?? 0)) > 0;
-        $cur     = isset($rec['CurrentRank']) ? (int)$rec['CurrentRank'] : null;
-        $elig    = !$isLad ? 'nonladder' : (($cur !== null && $cur < (int)$rec['Rank']) ? 'below' : 'ator');
-        $snoozed = !empty($rec['IsSnoozed']) ? 1 : 0;
-        $courts  = $CourtMap[$rid] ?? [];
-        $seconds = $rec['Seconds'] ?? [];
-        $pid     = (int)($rec['ParkId'] ?? 0);
+    <?php foreach ($Groups as $group) {
+        $gMid    = (int)$group['MundaneId'];
+        $gKaid   = (int)$group['KingdomAwardId'];
+        $gRank   = (int)$group['Rank'];
+        $isLad   = $gRank > 0;
+        $cur     = $group['CurrentRank'];
+        $elig    = !$isLad ? 'nonladder' : (($cur !== null && $cur < $gRank) ? 'below' : 'ator');
+        $snoozed = !empty($group['IsSnoozed']) ? 1 : 0;
+        $pid     = (int)$group['ParkId'];
         $abbrev  = $Parks[$pid]['Abbrev'] ?? '';
-        $courtJson = htmlspecialchars(json_encode($courts), ENT_QUOTES);
-        $secondsJson = htmlspecialchars(json_encode(array_map(function ($s) {
-            return ['Name' => $s['SupporterName'] ?? '', 'Notes' => $s['Notes'] ?? ''];
-        }, $seconds)), ENT_QUOTES);
-        // Payload for Grant Now / Add to Court (Tasks 8-9)
-        $recPayload = htmlspecialchars(json_encode([
-            'RecommendationsId' => $rid,
-            'MundaneId'         => (int)$rec['MundaneId'],
-            'Persona'           => $rec['Persona'] ?? '',
-            'KingdomAwardId'    => (int)$rec['KingdomAwardId'],
-            'Rank'              => (int)($rec['Rank'] ?? 0),
-            'Reason'            => $rec['Reason'] ?? '',
+        $memberIds = $group['MemberRecIds'];
+        $memberCount = count($memberIds);
+        $support = (int)$group['SupportCount'];
+        // Court membership = union of any member's courts (CourtMap is keyed by rec id).
+        $gcourts = [];
+        foreach ($memberIds as $mid2) { foreach (($CourtMap[$mid2] ?? []) as $c) { $gcourts[$c['CourtAwardId']] = $c; } }
+        $gcourts = array_values($gcourts);
+        $courtJson = htmlspecialchars(json_encode($gcourts), ENT_QUOTES);
+        // Member detail (recommender + reason + that member's seconds) for the expand.
+        $membersFull = array_map(function ($m) {
+            return [
+                'By'      => $m['RecommendedByName'] ?? (!empty($m['IsAnonymous']) ? 'Anonymous' : ''),
+                'Date'    => $m['DateRecommended'] ?? '',
+                'Reason'  => $m['Reason'] ?? '',
+                'Seconds' => array_map(function ($s) {
+                    return ['Name' => $s['SupporterName'] ?? '', 'Notes' => $s['Notes'] ?? ''];
+                }, $m['Seconds'] ?? []),
+            ];
+        }, $group['Members']);
+        $membersFullJson = htmlspecialchars(json_encode($membersFull), ENT_QUOTES);
+        // Group action payload (grant keys on recipient/award/rank; RepRecId for Add-to-Court).
+        $gpayload = htmlspecialchars(json_encode([
+            'MundaneId'      => $gMid,
+            'KingdomAwardId' => $gKaid,
+            'Rank'           => $gRank,
+            'Persona'        => $group['Persona'] ?? '',
+            'RepRecId'       => (int)$group['RepRecId'],
+            'Reason'         => $membersFull[0]['Reason'] ?? '',
         ]), ENT_QUOTES);
+        $membersJson = htmlspecialchars(json_encode($memberIds), ENT_QUOTES);
     ?>
-      <tr class="rm-row" data-rec-id="<?= $rid ?>" data-elig="<?= $elig ?>" data-snoozed="<?= $snoozed ?>"
+      <tr class="rm-row" data-elig="<?= $elig ?>" data-snoozed="<?= $snoozed ?>"
           data-park="<?= $pid ?>" data-courts='<?= $courtJson ?>'
-          data-recip="<?= htmlspecialchars(strtolower($rec['Persona'] ?? ''), ENT_QUOTES) ?>"
-          data-award="<?= htmlspecialchars(strtolower($rec['AwardName'] ?? ''), ENT_QUOTES) ?>"
-          data-date="<?= htmlspecialchars($rec['DateRecommended'] ?? '', ENT_QUOTES) ?>"
-          data-supp="<?= (int)($rec['SecondsCount'] ?? count($seconds)) ?>"
-          data-rec='<?= $recPayload ?>'
-          data-seconds='<?= $secondsJson ?>'>
+          data-recip="<?= htmlspecialchars(strtolower($group['Persona'] ?? ''), ENT_QUOTES) ?>"
+          data-award="<?= htmlspecialchars(strtolower($group['AwardName'] ?? ''), ENT_QUOTES) ?>"
+          data-date="<?= htmlspecialchars($group['OldestDate'] ?? '', ENT_QUOTES) ?>"
+          data-supp="<?= $support ?>"
+          data-rec='<?= $gpayload ?>'
+          data-members='<?= $membersJson ?>'
+          data-membersfull='<?= $membersFullJson ?>'>
         <td class="rm-col-sel"><input type="checkbox" class="rm-rowsel"></td>
         <td class="rm-col-recip">
-          <a href="<?= UIR ?>Playernew/index/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona'] ?? '') ?></a>
+          <a href="<?= UIR ?>Playernew/index/<?= $gMid ?>"><?= htmlspecialchars($group['Persona'] ?? '') ?></a>
           <?php if ($abbrev) { ?><span class="rm-park"><?= htmlspecialchars($abbrev) ?></span><?php } ?>
         </td>
         <td class="rm-col-award">
-          <?= htmlspecialchars($rec['AwardName'] ?? '') ?>
-          <?php if ($isLad) { ?><span class="rm-rank">Rank <?= (int)$rec['Rank'] ?></span><?php } else { ?><span class="rm-rank rm-nonladder">non-ladder</span><?php } ?>
-          <?php if (!empty($rec['AlreadyHas'])) { ?><span class="rm-badge rm-badge-has">already has</span><?php } ?>
+          <?= htmlspecialchars($group['AwardName'] ?? '') ?>
+          <?php if ($isLad) { ?><span class="rm-rank">Rank <?= $gRank ?></span><?php } else { ?><span class="rm-rank rm-nonladder">non-ladder</span><?php } ?>
+          <?php if (!empty($group['AlreadyHas'])) { ?><span class="rm-badge rm-badge-has">already has</span><?php } ?>
           <?php if ($elig === 'below') { ?><span class="rm-badge rm-badge-below">below rec.</span><?php } ?>
         </td>
         <td class="rm-col-rec">
-          <span class="rm-by"><?= htmlspecialchars($rec['RecommendedByName'] ?? (!empty($rec['IsAnonymous']) ? 'Anonymous' : '')) ?></span>
-          <span class="rm-date"><?= htmlspecialchars($rec['DateRecommended'] ?? '') ?></span>
-          <span class="rm-age"><?= (int)($rec['AgeDays'] ?? 0) ?>d</span>
+          <span class="rm-date"><?= htmlspecialchars($group['OldestDate'] ?? '') ?></span>
+          <span class="rm-age"><?= (int)$group['OldestAgeDays'] ?>d</span>
+          <?php if ($memberCount > 1) { ?><span class="rm-by"><?= $memberCount ?> recommenders</span><?php } else { ?><span class="rm-by"><?= htmlspecialchars($membersFull[0]['By'] ?? '') ?></span><?php } ?>
         </td>
         <td class="rm-col-reason">
-          <?php $reason = trim($rec['Reason'] ?? ''); if ($reason === '') { ?>
+          <?php $r0 = trim($membersFull[0]['Reason'] ?? ''); if ($r0 === '') { ?>
             <span class="rm-empty">&mdash;</span>
           <?php } else { ?>
-            <span class="rm-reason-trunc"><?= htmlspecialchars($reason) ?></span>
-            <button type="button" class="rm-expand-reason" data-tip="Show full reason">&#9656;</button>
+            <span class="rm-reason-trunc"><?= htmlspecialchars($r0) ?></span>
+            <button type="button" class="rm-expand-members" data-tip="Show all recommendations">&#9656;</button>
           <?php } ?>
         </td>
         <td class="rm-col-supp">
-          <?php $sc = (int)($rec['SecondsCount'] ?? count($seconds)); if ($sc > 0) { ?>
-            <button type="button" class="rm-supp-chip" data-tip="Show seconds">+<?= $sc ?> &#9656;</button>
+          <?php if ($support > 0) { ?>
+            <button type="button" class="rm-supp-chip rm-expand-members" data-tip="Show supporters">+<?= $support ?> &#9656;</button>
           <?php } else { ?><span class="rm-empty">0</span><?php } ?>
         </td>
         <td class="rm-col-court">
-          <?php if (count($courts)) { $c0 = $courts[0]; ?>
-            <a class="rm-courtbadge" href="<?= UIR ?>Court/detail/<?= (int)$c0['CourtId'] ?>"><?= htmlspecialchars($c0['Name']) ?><?php if (count($courts) > 1) { ?> <span class="rm-courtmore">+<?= count($courts) - 1 ?></span><?php } ?></a>
+          <?php if (count($gcourts)) { $c0 = $gcourts[0]; ?>
+            <a class="rm-courtbadge" href="<?= UIR ?>Court/detail/<?= (int)$c0['CourtId'] ?>"><?= htmlspecialchars($c0['Name']) ?><?php if (count($gcourts) > 1) { ?> <span class="rm-courtmore">+<?= count($gcourts) - 1 ?></span><?php } ?></a>
           <?php } else { ?><span class="rm-empty">&mdash;</span><?php } ?>
         </td>
         <td class="rm-col-act">
@@ -590,7 +608,7 @@ html[data-theme="dark"] .rm-modal {
     </tbody>
   </table>
   </div>
-  <div class="rm-foot"><span id="rm-count"><?= count($Recommendations) ?></span> shown &middot; <span id="rm-selcount">0</span> selected</div>
+  <div class="rm-foot"><span id="rm-count"><?= count($Groups) ?></span> shown &middot; <span id="rm-selcount">0</span> selected</div>
 
   <div class="rm-bulkbar" id="rm-bulkbar" hidden>
     <span id="rm-bulklabel">0 selected</span>
@@ -673,25 +691,30 @@ function rmInsertDetail(tr, html, cls) {
     tr.parentNode.insertBefore(dr, tr.nextSibling);
 }
 
+// Member expand: list every recommendation in the cluster (recommender + reason
+// + that member's seconds), built from data-membersfull. Reuses rmInsertDetail's
+// toggle-on/off behavior.
 document.getElementById('rm-tbody').addEventListener('click', function (e) {
-    var chip = e.target.closest('.rm-supp-chip');
-    if (chip) {
-        var tr = chip.closest('tr');
-        var secs = [];
-        try { secs = JSON.parse(tr.getAttribute('data-seconds') || '[]'); } catch (x) {}
-        var html = '<ul class="rm-seclist">' + secs.map(function (s) {
-            var note = s.Notes ? rmEsc(s.Notes) : '<em class="rm-empty">(no note)</em>';
-            return '<li>↳ ' + rmEsc(s.Name) + ' — ' + note + '</li>';
-        }).join('') + '</ul>';
-        rmInsertDetail(tr, html, 'rm-detail-supp');
-        return;
-    }
-    var rex = e.target.closest('.rm-expand-reason');
-    if (rex) {
-        var tr2 = rex.closest('tr');
-        var full = tr2.querySelector('.rm-reason-trunc');
-        rmInsertDetail(tr2, '<div class="rm-reason-full">' + rmEsc(full ? full.textContent : '') + '</div>', 'rm-detail-reason');
-    }
+    var btn = e.target.closest('.rm-expand-members'); if (!btn) return;
+    var tr = btn.closest('tr');
+    var members = []; try { members = JSON.parse(tr.getAttribute('data-membersfull') || '[]'); } catch (x) {}
+    var html = '<ul class="rm-seclist">';
+    members.forEach(function (m) {
+        var who = m.By ? rmEsc(m.By) : '(unknown)';
+        var when = m.Date ? ' <span class="rm-age">' + rmEsc(m.Date) + '</span>' : '';
+        html += '<li><strong>' + who + '</strong>' + when +
+                (m.Reason ? '<div class="rm-reason-full">' + rmEsc(m.Reason) + '</div>' : '');
+        if (m.Seconds && m.Seconds.length) {
+            html += '<ul class="rm-seclist">';
+            m.Seconds.forEach(function (s) {
+                html += '<li>↳ ' + rmEsc(s.Name || '') + (s.Notes ? ' — ' + rmEsc(s.Notes) : ' <em class="rm-empty">(no note)</em>') + '</li>';
+            });
+            html += '</ul>';
+        }
+        html += '</li>';
+    });
+    html += '</ul>';
+    rmInsertDetail(tr, html, 'rm-detail-members');
 });
 
 /* ---------- Task 6: filtering, sorting, chips, counts ---------- */
@@ -842,34 +865,43 @@ function rmRemoveRow(tr) {
     rmApplyFilters();
 }
 
+// Read the member rec ids for a group row.
+function rmMemberIds(tr) {
+    var ids = []; try { ids = JSON.parse(tr.getAttribute('data-members') || '[]'); } catch (x) {}
+    return ids;
+}
+
 // Per-row Snooze + Dismiss (third tbody click handler; early-returns on non-match).
+// Both loop every member rec id in the cluster.
 document.getElementById('rm-tbody').addEventListener('click', function (e) {
     var sn = e.target.closest('.rm-act-snooze');
     if (sn) {
         var tr = sn.closest('tr');
         var snoozed = tr.getAttribute('data-snoozed') === '1';
         var action = snoozed ? 'unsnoozerecommendation' : 'snoozerecommendation';
-        var fd = new FormData(); fd.append('RecommendationsId', tr.getAttribute('data-rec-id'));
-        rmPost(rmRecAjaxBase(action), fd).then(function (j) {
-            if (j.status === 0) {
-                tr.setAttribute('data-snoozed', snoozed ? '0' : '1');
-                sn.textContent = snoozed ? '💤' : '🔔';
-                sn.setAttribute('data-tip', snoozed ? 'Snooze' : 'Unsnooze');
-                rmApplyFilters();
-                rmToast(snoozed ? 'Unsnoozed.' : 'Snoozed.');
-            } else rmToast(j.error || 'Failed.', true);
-        });
+        var ids = rmMemberIds(tr);
+        Promise.all(ids.map(function (id) {
+            var fd = new FormData(); fd.append('RecommendationsId', id);
+            return rmPost(rmRecAjaxBase(action), fd);
+        })).then(function () {
+            tr.setAttribute('data-snoozed', snoozed ? '0' : '1');
+            sn.textContent = snoozed ? '💤' : '🔔';
+            sn.setAttribute('data-tip', snoozed ? 'Snooze' : 'Unsnooze');
+            rmApplyFilters();
+            rmToast(snoozed ? 'Unsnoozed.' : 'Snoozed.');
+        }).catch(function () { rmToast('Failed.', true); });
         return;
     }
     var ds = e.target.closest('.rm-act-dismiss');
     if (ds) {
         var tr2 = ds.closest('tr');
-        tnConfirm({ title: 'Dismiss recommendation?', body: 'This removes the recommendation from the pending list.', confirmLabel: 'Dismiss', danger: true, onConfirm: function () {
-            var fd2 = new FormData(); fd2.append('RecommendationsId', tr2.getAttribute('data-rec-id'));
-            rmPost(rmRecAjaxBase('dismissrecommendation'), fd2).then(function (j) {
-                if (j.status === 0) { rmRemoveRow(tr2); rmToast('Dismissed.'); }
-                else rmToast(j.error || 'Failed.', true);
-            });
+        tnConfirm({ title: 'Dismiss recommendation?', body: 'This removes the recommendation(s) from the pending list.', confirmLabel: 'Dismiss', danger: true, onConfirm: function () {
+            var ids = rmMemberIds(tr2);
+            Promise.all(ids.map(function (id) {
+                var fd = new FormData(); fd.append('RecommendationsId', id);
+                return rmPost(rmRecAjaxBase('dismissrecommendation'), fd);
+            })).then(function () { rmRemoveRow(tr2); rmToast('Dismissed.'); })
+              .catch(function () { rmToast('Failed.', true); });
         } });
     }
 });
@@ -886,17 +918,17 @@ function rmBulkSequential(rows, fn, doneMsg) {
 document.querySelector('.rm-bulk-snooze').addEventListener('click', function () {
     var rows = rmSelected().filter(function (tr) { return tr.getAttribute('data-snoozed') !== '1'; });
     rmBulkSequential(rows, function (tr) {
-        var fd = new FormData(); fd.append('RecommendationsId', tr.getAttribute('data-rec-id'));
-        return rmPost(rmRecAjaxBase('snoozerecommendation'), fd).then(function (j) {
-            if (j.status === 0) {
-                tr.setAttribute('data-snoozed', '1');
-                var b = tr.querySelector('.rm-act-snooze');
-                if (b) { b.textContent = '🔔'; b.setAttribute('data-tip', 'Unsnooze'); }
-                tr.querySelector('.rm-rowsel').checked = false;
-                return true;
-            }
-            return false;
-        });
+        var ids = rmMemberIds(tr);
+        return Promise.all(ids.map(function (id) {
+            var fd = new FormData(); fd.append('RecommendationsId', id);
+            return rmPost(rmRecAjaxBase('snoozerecommendation'), fd);
+        })).then(function () {
+            tr.setAttribute('data-snoozed', '1');
+            var b = tr.querySelector('.rm-act-snooze');
+            if (b) { b.textContent = '🔔'; b.setAttribute('data-tip', 'Unsnooze'); }
+            tr.querySelector('.rm-rowsel').checked = false;
+            return true;
+        }).catch(function () { return false; });
     }, function (ok, fail) { return 'Snoozed ' + ok + (fail ? ', ' + fail + ' failed' : '') + '.'; });
     rmUpdateSelCount();
 });
@@ -904,11 +936,12 @@ document.querySelector('.rm-bulk-dismiss').addEventListener('click', function ()
     var rows = rmSelected();
     tnConfirm({ title: 'Dismiss ' + rows.length + ' recommendation(s)?', body: 'They will be removed from the pending list.', confirmLabel: 'Dismiss all', danger: true, onConfirm: function () {
         rmBulkSequential(rows, function (tr) {
-            var fd = new FormData(); fd.append('RecommendationsId', tr.getAttribute('data-rec-id'));
-            return rmPost(rmRecAjaxBase('dismissrecommendation'), fd).then(function (j) {
-                if (j.status === 0) { rmRemoveRow(tr); return true; }
-                return false;
-            });
+            var ids = rmMemberIds(tr);
+            return Promise.all(ids.map(function (id) {
+                var fd = new FormData(); fd.append('RecommendationsId', id);
+                return rmPost(rmRecAjaxBase('dismissrecommendation'), fd);
+            })).then(function () { rmRemoveRow(tr); return true; })
+              .catch(function () { return false; });
         }, function (ok, fail) { return 'Dismissed ' + ok + (fail ? ', ' + fail + ' failed' : '') + '.'; });
     } });
 });
@@ -942,10 +975,13 @@ function rmDoGrant(rec, tr, courtStep) {
         if (!r.ok) throw new Error('grant http ' + r.status);
         return courtStep ? courtStep() : null;
     }).then(function () {
+        // Resolve the whole cluster (recipient/award/rank): soft-deletes every
+        // parallel rec + notifies each advocate, server-side.
         var fd2 = new FormData();
-        fd2.append('RecommendationsId', rec.RecommendationsId);
-        fd2.append('Granted', '1');
-        return rmPost(rmRecAjaxBase('dismissrecommendation'), fd2);
+        fd2.append('MundaneId', rec.MundaneId);
+        fd2.append('KingdomAwardId', rec.KingdomAwardId);
+        fd2.append('Rank', rec.Rank || 0);
+        return rmPost(rmRecAjaxBase('resolverecommendationcluster'), fd2);
     }).then(function () {
         rmRemoveRow(tr);
         rmToast('Granted.');
@@ -1042,11 +1078,12 @@ if (typeof flatpickr !== 'undefined') {
     flatpickr('#rm-court-date', { altInput: true, altFormat: 'F j, Y', dateFormat: 'Y-m-d' });
 }
 
-// Per-row opener.
+// Per-row opener. One court award per group, keyed on the group's representative rec.
 document.getElementById('rm-tbody').addEventListener('click', function (e) {
     var c = e.target.closest('.rm-act-court'); if (!c) return;
     var tr = c.closest('tr');
     var rec = {}; try { rec = JSON.parse(tr.getAttribute('data-rec') || '{}'); } catch (x) {}
+    rec.RecommendationsId = rec.RepRecId;
     rec._tr = tr;
     rmOpenCourtModal([rec]);
 });
@@ -1054,6 +1091,7 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
 document.querySelector('.rm-bulk-court').addEventListener('click', function () {
     var targets = rmSelected().map(function (tr) {
         var rec = {}; try { rec = JSON.parse(tr.getAttribute('data-rec') || '{}'); } catch (x) {}
+        rec.RecommendationsId = rec.RepRecId;
         rec._tr = tr; return rec;
     });
     if (targets.length) rmOpenCourtModal(targets);
@@ -1122,12 +1160,16 @@ document.getElementById('rm-court-submit').addEventListener('click', function ()
     });
 });
 
-// Show the reason expander only when the reason is actually truncated.
+// Show the reason-cell expander when the reason is truncated OR the cluster has
+// more than one member (so "show all recommendations" is always reachable).
 function rmSyncReasonExpanders() {
     document.querySelectorAll('#rm-tbody .rm-reason-trunc').forEach(function (el) {
-        var btn = el.parentNode.querySelector('.rm-expand-reason');
+        var btn = el.parentNode.querySelector('.rm-expand-members');
         if (!btn) return;
-        btn.style.display = (el.scrollWidth - el.clientWidth > 1) ? '' : 'none';
+        var tr = el.closest('tr');
+        var members = []; try { members = JSON.parse(tr.getAttribute('data-membersfull') || '[]'); } catch (x) {}
+        var truncated = (el.scrollWidth - el.clientWidth > 1);
+        btn.style.display = (truncated || members.length > 1) ? '' : 'none';
     });
 }
 
