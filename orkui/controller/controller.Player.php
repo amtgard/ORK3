@@ -307,11 +307,9 @@ class Controller_Player extends Controller
 
         // My Amtgard dashboard notifications (own profile only). Load the snapshot for
         // this render (unread highlight intact), then mark read so the next visit is clean.
-        $this->data['Notifications']      = [];
-        $this->data['NotificationUnread'] = 0;
+        $this->data['Notifications'] = [];
         if ($uid > 0 && $uid === (int)$id) {
-            $this->data['Notifications']      = Ork3::$Lib->notification->GetForUser($uid, 20);
-            $this->data['NotificationUnread'] = Ork3::$Lib->notification->CountUnread($uid);
+            $this->data['Notifications'] = Ork3::$Lib->notification->GetForUser($uid, 20);
             Ork3::$Lib->notification->MarkAllRead($uid);
         }
 

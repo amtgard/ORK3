@@ -5649,7 +5649,7 @@ function pnaDismissNotif(nid) {
             }
         });
 }
-function pnaDismissAllNotifs() {
+function pnaDoDismissAllNotifs() {
     fetch('<?= UIR ?>PlayerAjax/dismiss_all_notifications', { method: 'POST', credentials: 'same-origin' })
         .then(function (r) { return r.json(); })
         .then(function (j) {
@@ -5658,6 +5658,13 @@ function pnaDismissAllNotifs() {
                 if (c) c.remove();
             }
         });
+}
+function pnaDismissAllNotifs() {
+    if (typeof tnConfirm === 'function') {
+        tnConfirm({ title: 'Clear all notifications?', body: 'This cannot be undone.', confirmLabel: 'Clear all', danger: true, onConfirm: pnaDoDismissAllNotifs });
+    } else {
+        pnaDoDismissAllNotifs();
+    }
 }
 </script>
 
