@@ -2990,15 +2990,48 @@ class Player extends Ork3
 				return InvalidParameter('There was a problem with the request.');
 			}
 		} else {
-			return NoAuthorization();
+				return NoAuthorization();
 		}
 	}
 
-    public function RestoreAwardRecommendation($request)
-    {
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
-            return NoAuthorization();
-        }
+	// Resolve every live recommendation in a (recipient, kingdomaward, rank) cluster
+	// as "granted": each member runs through DeleteAwardRecommendation(Granted=1), which
+	// notifies that rec's advocates BEFORE soft-deleting it and cascading its seconds.
+	// Used by the Manager group-grant and CourtAjax::grant_award. No-ops on an empty cluster.
+	public function ResolveRecommendationCluster($request) {
+		$mundane_id = (int)($request['MundaneId'] ?? 0);
+		$ka_id      = (int)($request['KingdomAwardId'] ?? 0);
+		$rank       = (int)($request['Rank'] ?? 0);
+		if (!valid_id($mundane_id) || !valid_id($ka_id)) {
+			return ['Status' => 0, 'Resolved' => 0];
+		}
+		$this->db->Clear();
+		$rs = $this->db->DataSet(
+			'SELECT recommendations_id FROM ' . DB_PREFIX . 'recommendations
+			  WHERE mundane_id = ' . $mundane_id . '
+			    AND kingdomaward_id = ' . $ka_id . '
+			    AND rank = ' . $rank . '
+			    AND deleted_at IS NULL'
+		);
+		$ids = [];
+		if ($rs) { while ($rs->Next()) { $ids[] = (int)$rs->recommendations_id; } }
+
+		$resolved = 0;
+		foreach ($ids as $rid) {
+			$r = $this->DeleteAwardRecommendation([
+				'Token'             => $request['Token'] ?? '',
+				'RecommendationsId' => $rid,
+				'RequestedBy'       => (int)($request['RequestedBy'] ?? 0),
+				'Granted'           => 1,
+			]);
+			if (!empty($r['Status'])) { $resolved++; }
+		}
+		return ['Status' => 0, 'Resolved' => $resolved];
+	}
+
+	public function RestoreAwardRecommendation($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
 
         if (!valid_id($request['RecommendationsId'])) {
             return InvalidParameter('There was a problem with the request.');

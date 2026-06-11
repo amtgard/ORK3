@@ -206,6 +206,10 @@ class Model_Player extends Model {
 		return $this->Player->DeleteAwardRecommendation($request);
 	}
 
+	function resolve_player_recommendation_cluster($request) {
+		return $this->Player->ResolveRecommendationCluster($request);
+	}
+
 	function restore_player_recommendation($request) {
 		return $this->Player->RestoreAwardRecommendation($request);
 	}
