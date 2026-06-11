@@ -68,6 +68,57 @@ class Controller_Recommendations extends Controller {
         $recs = $this->Reports->recommended_awards($req);
         if (!is_array($recs)) { $recs = []; }
 
+        // Group parallel recommendations by (recipient, kingdomaward, rank). Non-destructive:
+        // the underlying rec rows are untouched; the grid renders one row per cluster.
+        $groups = [];
+        foreach ($recs as $rec) {
+            $mid = (int)($rec['MundaneId'] ?? 0);
+            $kaid = (int)($rec['KingdomAwardId'] ?? 0);
+            $rank = (int)($rec['Rank'] ?? 0);
+            $key = $mid . ':' . $kaid . ':' . $rank;
+            if (!isset($groups[$key])) {
+                $groups[$key] = [
+                    'MundaneId'      => $mid,
+                    'KingdomAwardId' => $kaid,
+                    'Rank'           => $rank,
+                    'Persona'        => $rec['Persona'] ?? '',
+                    'AwardName'      => $rec['AwardName'] ?? '',
+                    'ParkId'         => (int)($rec['ParkId'] ?? 0),
+                    'AlreadyHas'     => !empty($rec['AlreadyHas']),
+                    'CurrentRank'    => isset($rec['CurrentRank']) ? (int)$rec['CurrentRank'] : null,
+                    'Members'        => [],
+                    'MemberRecIds'   => [],
+                    'OldestAgeDays'  => 0,
+                    'OldestDate'     => $rec['DateRecommended'] ?? '',
+                    'RepRecId'       => (int)($rec['RecommendationsId'] ?? 0),
+                    '_advocates'     => [],
+                    '_allSnoozed'    => true,
+                ];
+            }
+            $g = &$groups[$key];
+            $g['Members'][]      = $rec;
+            $g['MemberRecIds'][] = (int)($rec['RecommendationsId'] ?? 0);
+            $age = (int)($rec['AgeDays'] ?? 0);
+            if ($age >= $g['OldestAgeDays']) {
+                $g['OldestAgeDays'] = $age;
+                $g['OldestDate']    = $rec['DateRecommended'] ?? '';
+                $g['RepRecId']      = (int)($rec['RecommendationsId'] ?? 0); // oldest = representative
+            }
+            if (!empty($rec['RecommendedById'])) { $g['_advocates'][(int)$rec['RecommendedById']] = true; }
+            foreach (($rec['Seconds'] ?? []) as $s) {
+                if (!empty($s['SupporterMundaneId'])) { $g['_advocates'][(int)$s['SupporterMundaneId']] = true; }
+            }
+            if (empty($rec['IsSnoozed'])) { $g['_allSnoozed'] = false; }
+            unset($g);
+        }
+        foreach ($groups as $k => $g) {
+            unset($g['_advocates'][$g['MundaneId']]); // a self-rec advocate never counts
+            $groups[$k]['SupportCount'] = count($g['_advocates']);
+            $groups[$k]['IsSnoozed']    = $g['_allSnoozed']; // cluster snoozed only if every member is
+            unset($groups[$k]['_advocates'], $groups[$k]['_allSnoozed']);
+        }
+        $this->data['Groups'] = array_values($groups);
+
         // Court membership per rec (badges + court filter).
         $courtMap = Ork3::$Lib->court->getRecommendationCourtMap($kingdom_id, $park_id);
 
