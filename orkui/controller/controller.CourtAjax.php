@@ -447,8 +447,13 @@ class Controller_CourtAjax extends Controller {
             "UPDATE " . DB_PREFIX . "court_award SET status = 'given' WHERE court_award_id = " . $court_award_id
         );
 
-        // Soft-delete the linked recommendation
+        // Notify the recommender + seconders BEFORE soft-deleting the recommendation
+        // (the seconds query needs them still live). Non-blocking: never fail the grant.
         if ((int)$ca->recommendations_id > 0) {
+            try {
+                Ork3::$Lib->notification->notifyRecommendationGranted((int)$ca->recommendations_id, $uid);
+            } catch (\Throwable $e) { /* notifications are best-effort */ }
+
             $DB->Clear();
             $DB->Execute(
                 'UPDATE ' . DB_PREFIX . 'recommendations
