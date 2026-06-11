@@ -87,6 +87,8 @@ html[data-theme="dark"] .rm-wrap {
 }
 .rm-search { min-width: 200px; }
 .rm-search::placeholder { color: var(--rm-muted); }
+.rm-fcheck { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--rm-fg); cursor: pointer; }
+.rm-fcheck input { margin: 0; }
 .rm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .rm-chip {
     cursor: pointer;
@@ -176,6 +178,10 @@ thead .rm-col-sel { text-align: center; }
 .rm-badge-has { color: #8a6d00; background: rgba(240, 200, 0, 0.14); border-color: rgba(240, 200, 0, 0.4); }
 .rm-badge-below { color: var(--rm-danger); background: rgba(176, 48, 48, 0.10); border-color: rgba(176, 48, 48, 0.35); }
 html[data-theme="dark"] .rm-badge-has { color: #e0c860; }
+.rm-badge-passlocal { color: #2c5f8b; background: rgba(44, 95, 139, 0.12); border-color: rgba(44, 95, 139, 0.4); }
+html[data-theme="dark"] .rm-badge-passlocal { color: #6fb0e6; }
+.rm-act-passlocal.rm-act-active { background: var(--rm-accent); color: #fff; border-color: var(--rm-accent); }
+.rm-row[data-passlocal="1"] { box-shadow: inset 3px 0 0 var(--rm-accent); }
 
 /* Recommended cell */
 .rm-by { display: block; }
@@ -495,6 +501,7 @@ html[data-theme="dark"] .rm-modal {
       <?php } ?>
     </select>
     <?php } ?>
+    <label class="rm-fcheck"><input type="checkbox" id="rm-filter-passlocal"> Passed to local</label>
     <div id="rm-chips" class="rm-chips"></div>
   </div>
 
@@ -555,6 +562,7 @@ html[data-theme="dark"] .rm-modal {
         $membersJson = htmlspecialchars(json_encode($memberIds), ENT_QUOTES);
     ?>
       <tr class="rm-row" data-elig="<?= $elig ?>" data-snoozed="<?= $snoozed ?>"
+          data-passlocal="<?= !empty($group['PassedToLocal']) ? 1 : 0 ?>"
           data-park="<?= $pid ?>" data-courts='<?= $courtJson ?>'
           data-recip="<?= htmlspecialchars(strtolower($group['Persona'] ?? ''), ENT_QUOTES) ?>"
           data-award="<?= htmlspecialchars(strtolower($group['AwardName'] ?? ''), ENT_QUOTES) ?>"
@@ -572,6 +580,7 @@ html[data-theme="dark"] .rm-modal {
           <?= htmlspecialchars($group['AwardName'] ?? '') ?>
           <?php if ($isLad) { ?><span class="rm-rank">Rank <?= $gRank ?></span><?php } else { ?><span class="rm-rank rm-nonladder">non-ladder</span><?php } ?>
           <?php if (!empty($group['AlreadyHas'])) { ?><span class="rm-badge rm-badge-has">already has</span><?php } ?>
+          <?php if (!empty($group['PassedToLocal'])) { ?><span class="rm-badge rm-badge-passlocal" data-tip="Passed to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php } ?>
           <?php if ($elig === 'below') { ?><span class="rm-badge rm-badge-below">below rec.</span><?php } ?>
         </td>
         <td class="rm-col-rec">
@@ -601,7 +610,8 @@ html[data-theme="dark"] .rm-modal {
           <button type="button" class="rm-act rm-act-grant"  data-tip="Grant now">&#9889;</button>
           <button type="button" class="rm-act rm-act-court"  data-tip="Add to court">&#65291;</button>
           <button type="button" class="rm-act rm-act-snooze" data-tip="<?= $snoozed ? 'Unsnooze' : 'Snooze' ?>"><?= $snoozed ? '&#128276;' : '&#128164;' ?></button>
-          <button type="button" class="rm-act rm-act-dismiss" data-tip="Dismiss">&#10005;</button>
+          <?php if (($Context ?? '') === 'kingdom') { ?><button type="button" class="rm-act rm-act-passlocal<?= !empty($group['PassedToLocal']) ? ' rm-act-active' : '' ?>" data-tip="For recommendations at a higher level than the park can provide, you are granting authority for that park to award at this level."><i class="fas fa-arrow-down"></i></button><?php } ?>
+          <button type="button" class="rm-act rm-act-dismiss" data-tip="Already given out previously? No plans to award this? You can dismiss this rec.">&#10005;</button>
         </td>
       </tr>
     <?php } ?>
@@ -614,7 +624,8 @@ html[data-theme="dark"] .rm-modal {
     <span id="rm-bulklabel">0 selected</span>
     <button type="button" class="rm-bulk rm-bulk-court">Add to Court</button>
     <button type="button" class="rm-bulk rm-bulk-snooze">Snooze</button>
-    <button type="button" class="rm-bulk rm-bulk-dismiss">Dismiss</button>
+    <?php if (($Context ?? '') === 'kingdom') { ?><button type="button" class="rm-bulk rm-bulk-passlocal" data-tip="For recommendations at a higher level than the park can provide, you are granting authority for that park to award at this level.">Pass down</button><?php } ?>
+    <button type="button" class="rm-bulk rm-bulk-dismiss" data-tip="Already given out previously? No plans to award this? You can dismiss this rec.">Dismiss</button>
     <button type="button" class="rm-bulk rm-bulk-clear">Clear</button>
   </div>
 
@@ -744,6 +755,7 @@ function rmApplyFilters() {
             }
         }
         if (ok && park !== 'all') ok = tr.getAttribute('data-park') === park;
+        if (ok && document.getElementById('rm-filter-passlocal').checked && tr.getAttribute('data-passlocal') !== '1') ok = false;
         // hide any open detail row belonging to a now-hidden parent
         tr.style.display = ok ? '' : 'none';
         var dr = tr.nextElementSibling;
@@ -762,6 +774,7 @@ function rmRenderChips(q, elig, court, park) {
     if (court !== 'all') chips.push(['court', document.getElementById('rm-filter-court').selectedOptions[0].text]);
     var ps = document.getElementById('rm-filter-park');
     if (ps && park !== 'all') chips.push(['park', ps.selectedOptions[0].text]);
+    if (document.getElementById('rm-filter-passlocal').checked) chips.push(['passlocal', 'Passed to local']);
     document.getElementById('rm-chips').innerHTML = chips.map(function (c) {
         return '<span class="rm-chip" data-clear="' + c[0] + '">' + rmEsc(c[1]) + ' ✕</span>';
     }).join('');
@@ -770,6 +783,7 @@ function rmRenderChips(q, elig, court, park) {
 ['rm-search', 'rm-filter-elig', 'rm-filter-court', 'rm-filter-park'].forEach(function (idv) {
     var el = document.getElementById(idv); if (el) el.addEventListener('input', rmApplyFilters);
 });
+document.getElementById('rm-filter-passlocal').addEventListener('change', rmApplyFilters);
 document.getElementById('rm-chips').addEventListener('click', function (e) {
     var chip = e.target.closest('.rm-chip'); if (!chip) return;
     var k = chip.getAttribute('data-clear');
@@ -777,6 +791,7 @@ document.getElementById('rm-chips').addEventListener('click', function (e) {
     if (k === 'elig')   document.getElementById('rm-filter-elig').value = 'all';
     if (k === 'court')  document.getElementById('rm-filter-court').value = 'all';
     if (k === 'park' && document.getElementById('rm-filter-park')) document.getElementById('rm-filter-park').value = 'all';
+    if (k === 'passlocal') document.getElementById('rm-filter-passlocal').checked = false;
     rmApplyFilters();
 });
 
@@ -909,6 +924,35 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
     }
 });
 
+// Per-row Pass-to-local toggle (kingdom scope only; button only rendered there).
+// Loops every member rec id in the cluster, mirroring the snooze handler.
+document.getElementById('rm-tbody').addEventListener('click', function (e) {
+    var pl = e.target.closest('.rm-act-passlocal'); if (!pl) return;
+    var tr = pl.closest('tr');
+    var passed = tr.getAttribute('data-passlocal') === '1';
+    var ids = rmMemberIds(tr);
+    if (!ids.length) { rmToast('No recommendations found.', true); return; }
+    Promise.all(ids.map(function (id) {
+        var fd = new FormData(); fd.append('RecommendationsId', id); fd.append('Passed', passed ? '0' : '1');
+        return rmPost(rmRecAjaxBase('passtolocalrecommendation'), fd);
+    })).then(function () {
+        tr.setAttribute('data-passlocal', passed ? '0' : '1');
+        pl.classList.toggle('rm-act-active', !passed);
+        // toggle the Award-cell badge
+        var awardCell = tr.querySelector('.rm-col-award');
+        var existing = awardCell ? awardCell.querySelector('.rm-badge-passlocal') : null;
+        if (!passed && awardCell && !existing) {
+            var b = document.createElement('span');
+            b.className = 'rm-badge rm-badge-passlocal';
+            b.setAttribute('data-tip', 'Passed to the local park to award.');
+            b.innerHTML = '<i class="fas fa-arrow-down"></i> passed to local';
+            awardCell.appendChild(b);
+        } else if (passed && existing) { existing.remove(); }
+        rmApplyFilters();
+        rmToast(passed ? 'Pass-to-local removed.' : 'Passed to local.');
+    }).catch(function () { rmToast('Update failed.', true); });
+});
+
 // Bulk: run fn sequentially over rows, tally results, toast at end.
 function rmBulkSequential(rows, fn, doneMsg) {
     var ok = 0, fail = 0, i = 0;
@@ -935,6 +979,35 @@ document.querySelector('.rm-bulk-snooze').addEventListener('click', function () 
     }, function (ok, fail) { return 'Snoozed ' + ok + (fail ? ', ' + fail + ' failed' : '') + '.'; });
     rmUpdateSelCount();
 });
+// Bulk Pass down (kingdom scope only; button absent in park scope).
+(function () {
+    var btn = document.querySelector('.rm-bulk-passlocal'); if (!btn) return;
+    btn.addEventListener('click', function () {
+        var rows = rmSelected().filter(function (tr) { return tr.getAttribute('data-passlocal') !== '1'; });
+        rmBulkSequential(rows, function (tr) {
+            var ids = rmMemberIds(tr);
+            return Promise.all(ids.map(function (id) {
+                var fd = new FormData(); fd.append('RecommendationsId', id); fd.append('Passed', '1');
+                return rmPost(rmRecAjaxBase('passtolocalrecommendation'), fd);
+            })).then(function () {
+                tr.setAttribute('data-passlocal', '1');
+                var pl = tr.querySelector('.rm-act-passlocal');
+                if (pl) pl.classList.add('rm-act-active');
+                var awardCell = tr.querySelector('.rm-col-award');
+                if (awardCell && !awardCell.querySelector('.rm-badge-passlocal')) {
+                    var b = document.createElement('span');
+                    b.className = 'rm-badge rm-badge-passlocal';
+                    b.setAttribute('data-tip', 'Passed to the local park to award.');
+                    b.innerHTML = '<i class="fas fa-arrow-down"></i> passed to local';
+                    awardCell.appendChild(b);
+                }
+                tr.querySelector('.rm-rowsel').checked = false;
+                return true;
+            }).catch(function () { return false; });
+        }, function (ok, fail) { return 'Passed ' + ok + (fail ? ', ' + fail + ' failed' : '') + ' to local.'; });
+        rmUpdateSelCount();
+    });
+})();
 document.querySelector('.rm-bulk-dismiss').addEventListener('click', function () {
     var rows = rmSelected();
     tnConfirm({ title: 'Dismiss ' + rows.length + ' recommendation(s)?', body: 'They will be removed from the pending list.', confirmLabel: 'Dismiss all', danger: true, onConfirm: function () {
