@@ -244,19 +244,74 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 .cp-sb-toggle-btn.active { background: #2c5282; border-color: #2c5282; color: #fff; }
 .cp-sb-toggle-btn.active:hover { background: #2a4a7f; }
 @media (max-width: 800px) { .cp-body { flex-direction: column; } .cp-sidebar { width: 100%; } }
+/* ---- Court Script preview modal ---- */
+.cp-script-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.5); display: flex; align-items: flex-start; justify-content: center; padding: 30px 16px; overflow: auto; }
+.cp-script-overlay[hidden] { display: none; }
+.cp-script-modal { background: #fff; color: #1a202c; width: 100%; max-width: 760px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,.3); overflow: hidden; }
+.cp-script-chrome { padding: 18px 22px; border-bottom: 1px solid #e2e8f0; }
+.cp-script-titlebar { text-align: center; margin-bottom: 12px; }
+.cp-script-h1 { font-size: 22px; font-weight: 700; margin: 0; background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; color: #1a202c; }
+.cp-script-date { color: #718096; margin: 4px 0 0; font-size: 13px; }
+.cp-script-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cp-script-density { display: inline-flex; border: 1px solid #cbd5e0; border-radius: 6px; overflow: hidden; }
+.cp-script-density button { border: none; background: #fff; color: #4a5568; font-size: 13px; font-weight: 600; padding: 6px 14px; cursor: pointer; }
+.cp-script-density button + button { border-left: 1px solid #cbd5e0; }
+.cp-script-density button.active { background: #2c5282; color: #fff; }
+.cp-script-actions { display: flex; gap: 8px; }
+.cp-script-body { padding: 20px 24px; font-family: Georgia, serif; max-height: 60vh; overflow: auto; }
+.cp-script-empty { color: #718096; text-align: center; padding: 20px; }
+/* compact density */
+.cp-script-compact { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cp-script-compact td { padding: 5px 8px 5px 0; vertical-align: top; border-bottom: 1px solid #eee; line-height: 1.35; }
+.cp-script-num { color: #a0aec0; font-size: 11px; width: 26px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cp-script-check { width: 22px; font-size: 16px; line-height: 1; }
+.cp-script-recip { font-weight: 700; white-space: nowrap; width: 38%; }
+.cp-script-award { color: #2d3748; }
+.cp-script-park { color: #718096; font-weight: 400; font-size: 11px; margin-left: 4px; }
+.cp-script-ptl { color: #b7791f; font-size: 11px; font-style: italic; }
+/* citation density */
+.cp-script-cite { padding: 10px 0; border-bottom: 1px solid #eee; }
+.cp-script-cite-head { font-size: 14px; line-height: 1.4; }
+.cp-script-cite-num { color: #a0aec0; font-size: 12px; }
+.cp-script-cite-recip { font-weight: 700; }
+.cp-script-cite-award { color: #2d3748; }
+.cp-script-cite-text { margin-top: 4px; color: #2d3748; line-height: 1.5; }
+.cp-script-cite-artisans { margin-top: 4px; color: #4a5568; font-size: 13px; }
+.cp-script-cite-artisans strong { color: #2d3748; }
+/* dark mode (on-screen preview only) */
+html[data-theme="dark"] .cp-script-modal { background: #161b22; color: #e2e8f0; }
+html[data-theme="dark"] .cp-script-chrome { border-color: #2d3748; }
+html[data-theme="dark"] .cp-script-h1 { color: #e2e8f0; }
+html[data-theme="dark"] .cp-script-density { border-color: #2d3748; }
+html[data-theme="dark"] .cp-script-density button { background: #1f2733; color: #cbd5e0; }
+html[data-theme="dark"] .cp-script-density button + button { border-color: #2d3748; }
+html[data-theme="dark"] .cp-script-density button.active { background: #2b6cb0; color: #fff; }
+html[data-theme="dark"] .cp-script-compact td,
+html[data-theme="dark"] .cp-script-cite { border-color: #2d3748; }
+html[data-theme="dark"] .cp-script-recip,
+html[data-theme="dark"] .cp-script-award,
+html[data-theme="dark"] .cp-script-cite-recip,
+html[data-theme="dark"] .cp-script-cite-award,
+html[data-theme="dark"] .cp-script-cite-text { color: #e2e8f0; }
+html[data-theme="dark"] .cp-script-cite-artisans { color: #a0aec0; }
+/* print: show only the rendered script body, force light, avoid page breaks mid-entry */
 @media print {
-    body > *:not(#cp-script-overlay) { display: none !important; }
-    #cp-script-overlay { display: block !important; font-family: Georgia, serif; padding: 16px 24px; }
+    body.cp-script-open > *:not(#cp-script-overlay) { display: none !important; }
+    body.cp-script-open #cp-script-overlay { position: static; display: block !important; background: #fff; padding: 0; overflow: visible; }
+    body.cp-script-open #cp-script-overlay .cp-script-modal { max-width: none; width: auto; margin: 0; box-shadow: none; border-radius: 0; background: #fff; color: #000; }
+    body.cp-script-open .cp-script-controls { display: none !important; }
+    body.cp-script-open .cp-script-chrome { border-bottom: 2px solid #333; padding: 0 0 10px; }
+    body.cp-script-open .cp-script-body { max-height: none; overflow: visible; padding: 14px 0 0; color: #000; }
+    body.cp-script-open .cp-script-cite,
+    body.cp-script-open .cp-script-compact tr { break-inside: avoid; }
+    body.cp-script-open .cp-script-h1,
+    body.cp-script-open .cp-script-recip,
+    body.cp-script-open .cp-script-award,
+    body.cp-script-open .cp-script-cite-recip,
+    body.cp-script-open .cp-script-cite-award,
+    body.cp-script-open .cp-script-cite-text { color: #000; }
+    @page { margin: 0.6in; }
 }
-#cp-script-overlay { display: none; }
-.cp-script-header { text-align: center; margin-bottom: 14px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-.cp-script-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.cp-script-table td { padding: 4px 8px 4px 0; vertical-align: top; border-bottom: 1px solid #eee; line-height: 1.35; }
-.cp-script-table td:first-child { color: #aaa; font-size: 10px; width: 24px; white-space: nowrap; padding-right: 6px; }
-.cp-script-td-name { font-weight: 700; font-size: 13px; white-space: nowrap; width: 18%; }
-.cp-script-td-award { color: #2d3748; width: 20%; }
-.cp-script-td-rec { color: #4a5568; font-style: italic; }
-.cp-script-td-rec strong { font-style: normal; color: #2d3748; }
 
 .cp-status-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:13px; color:#4a5568; background:#f7fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 14px; margin-bottom:14px; }
 .cp-status-sep { color:#cbd5e0; }
