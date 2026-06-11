@@ -93,6 +93,7 @@ class Controller_Recommendations extends Controller {
                     'RepRecId'       => (int)($rec['RecommendationsId'] ?? 0),
                     '_advocates'     => [],
                     '_allSnoozed'    => true,
+                    '_allPassed'     => true,
                 ];
             }
             $g = &$groups[$key];
@@ -109,13 +110,15 @@ class Controller_Recommendations extends Controller {
                 if (!empty($s['SupporterMundaneId'])) { $g['_advocates'][(int)$s['SupporterMundaneId']] = true; }
             }
             if (empty($rec['IsSnoozed'])) { $g['_allSnoozed'] = false; }
+            if (empty($rec['PassedToLocal'])) { $g['_allPassed'] = false; }
             unset($g);
         }
         foreach ($groups as $k => $g) {
             unset($g['_advocates'][$g['MundaneId']]); // a self-rec advocate never counts
             $groups[$k]['SupportCount'] = count($g['_advocates']);
             $groups[$k]['IsSnoozed']    = $g['_allSnoozed']; // cluster snoozed only if every member is
-            unset($groups[$k]['_advocates'], $groups[$k]['_allSnoozed']);
+            $groups[$k]['PassedToLocal'] = $g['_allPassed'];
+            unset($groups[$k]['_advocates'], $groups[$k]['_allSnoozed'], $groups[$k]['_allPassed']);
         }
         $this->data['Groups'] = array_values($groups);
 
