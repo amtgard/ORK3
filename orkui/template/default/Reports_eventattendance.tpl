@@ -193,6 +193,7 @@ html[data-theme="dark"] .rp-main table.dataTable tbody tr.even > td { background
 			orderClasses: false,
 			pageLength: 25,
 			dom: 'lfrtip',
+			scrollX: true,
 			buttons: [
 				{ extend: 'csv',   text: 'Export CSV' },
 				{ extend: 'print', text: 'Print' }

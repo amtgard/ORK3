@@ -112,6 +112,7 @@ $(function () {
 	}
 	$('#ik-table').DataTable({
 		dom: 'lfrtip',
+		scrollX: true,
 		pageLength: 50,
 		order: [[0, 'asc']],
 		columnDefs: [

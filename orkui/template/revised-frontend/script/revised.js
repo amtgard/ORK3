@@ -5960,6 +5960,11 @@ function pkActivateTab(tab) {
     if (tab === 'events' && pkCalendar) {
         pkCalendar.updateSize();
     }
+    // scrollX-enabled DataTables measure 0-width columns while their panel is hidden;
+    // recompute now that the recommendations panel is visible.
+    if (tab === 'recommendations' && window.pkRecDT) {
+        window.pkRecDT.columns.adjust();
+    }
 }
 
 // ---- Pagination helpers ----

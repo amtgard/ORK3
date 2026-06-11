@@ -224,6 +224,7 @@ $(function() {
 
 	var table = $('#dues-report-table').DataTable({
 		dom: 'Blfrtip',
+		scrollX: true,
 		buttons: [
 			{ extend: 'csv',   filename: 'Dues Paid List', exportOptions: { columns: ':visible' } },
 			{ extend: 'print', exportOptions: { columns: ':visible' } }

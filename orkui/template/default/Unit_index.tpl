@@ -1025,6 +1025,7 @@ $(function () {
 	if ($('#un-roster-table').length) {
 		$('#un-roster-table').DataTable({
 			dom         : 'lfrtip',
+			scrollX: true,
 			orderClasses: false,
 			buttons     : [
 				{ extend: 'csv',   filename: '<?=addslashes($_name)?>-roster', exportOptions: { columns: ':not(:last-child)' } },

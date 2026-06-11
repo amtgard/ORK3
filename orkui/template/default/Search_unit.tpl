@@ -356,6 +356,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 				table = $('#su-table').DataTable({
 					data      : rows,
 					dom       : 'lfrtip',
+					scrollX: true,
 					pageLength: 25,
 					order     : [[1, 'asc']],
 					columnDefs: [
