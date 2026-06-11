@@ -218,6 +218,33 @@ class Controller_CourtAjax extends Controller {
     }
 
     // -----------------------------------------------------------------------
+    // Status-only update (no field clobbering, unlike update_award). Used by the
+    // Recommendations Manager's Grant Now flow to mark an already-on-court award
+    // 'given' when the officer chooses "Grant & Leave on Court", which prevents a
+    // later double-grant at court (grant_award guards against re-granting 'given').
+    public function set_award_status($p = null) {
+        $court_award_id = (int)($_POST['CourtAwardId'] ?? 0);
+        $status         = trim($_POST['Status'] ?? '');
+        $allowed        = ['planned', 'announced', 'given', 'cancelled'];
+        if (!valid_id($court_award_id)) $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
+        if (!in_array($status, $allowed)) $this->jsonOut(['status' => 1, 'error' => 'Invalid status.']);
+
+        global $DB;
+        $DB->Clear();
+        $r = $DB->DataSet('SELECT court_id FROM ' . DB_PREFIX . 'court_award
+                            WHERE court_award_id = ' . $court_award_id . ' LIMIT 1');
+        if (!$r || !$r->Next()) $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
+
+        $this->requireCourtAuth((int)$r->court_id);
+
+        $DB->Clear();
+        $DB->Execute('UPDATE ' . DB_PREFIX . 'court_award SET status = \'' . $status . '\'
+                       WHERE court_award_id = ' . $court_award_id);
+
+        $this->jsonOut(['status' => 0, 'award_status' => $status]);
+    }
+
+    // -----------------------------------------------------------------------
     // update_award
     // POST: CourtAwardId, Notes, PassToLocal, Status
     // -----------------------------------------------------------------------

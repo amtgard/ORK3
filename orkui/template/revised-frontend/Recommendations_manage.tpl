@@ -436,6 +436,11 @@ html[data-theme="dark"] .rm-modal {
     gap: 10px;
     margin-top: 4px;
 }
+.rm-modal-actions-stack {
+    flex-direction: column;
+    align-items: stretch;
+}
+.rm-modal-actions-stack .rm-btn { text-align: center; }
 .rm-btn {
     cursor: pointer;
     font-size: 13px;
@@ -619,6 +624,20 @@ html[data-theme="dark"] .rm-modal {
       <div class="rm-modal-actions">
         <button type="button" class="rm-btn rm-btn-ghost" id="rm-court-cancel">Cancel</button>
         <button type="button" class="rm-btn rm-btn-primary" id="rm-court-submit">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grant Now when the rec is already on a court: let the officer decide what
+       happens to the planned court award (avoids a silent double-grant). -->
+  <div class="rm-modal-overlay" id="rm-grantcourt-overlay" hidden>
+    <div class="rm-modal">
+      <h2 class="rm-modal-title">Already on a court</h2>
+      <div class="rm-modal-sub" id="rm-grantcourt-sub"></div>
+      <div class="rm-modal-actions rm-modal-actions-stack">
+        <button type="button" class="rm-btn rm-btn-primary" id="rm-gc-remove">Grant &amp; Remove from Court</button>
+        <button type="button" class="rm-btn rm-btn-primary" id="rm-gc-leave">Grant &amp; Leave on Court</button>
+        <button type="button" class="rm-btn rm-btn-ghost" id="rm-gc-back">Go Back</button>
       </div>
     </div>
   </div>
@@ -901,36 +920,97 @@ function rmTodayYMD() {
     function p(n) { return (n < 10 ? '0' : '') + n; }
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
+// Core grant: write the award, optionally run a court-reconciliation step, then
+// soft-delete the rec and drop the row. `courtStep` (optional) returns a Promise
+// that settles the linked court award(s) before we dismiss the rec.
+function rmDoGrant(rec, tr, courtStep) {
+    var fd = new FormData();
+    fd.append('KingdomAwardId', rec.KingdomAwardId);
+    fd.append('GivenById', RmConfig.userId);
+    fd.append('Date', rmTodayYMD());
+    fd.append('ParkId', RmConfig.parkId || '0');
+    fd.append('KingdomId', RmConfig.kingdomId || '0');
+    fd.append('EventId', '0');
+    fd.append('Note', rec.Reason || '');
+    if (rec.Rank) fd.append('Rank', rec.Rank);
+    // Admin/player/{id}/addaward renders the full Admin page (HTML, not JSON),
+    // so success is "the request reached the server with HTTP 200" (response.ok).
+    // Only on a confirmed-OK grant do we touch the court awards + dismiss the rec.
+    return fetch(RmConfig.uir + 'Admin/player/' + rec.MundaneId + '/addaward', {
+        method: 'POST', body: fd, credentials: 'same-origin'
+    }).then(function (r) {
+        if (!r.ok) throw new Error('grant http ' + r.status);
+        return courtStep ? courtStep() : null;
+    }).then(function () {
+        var fd2 = new FormData(); fd2.append('RecommendationsId', rec.RecommendationsId);
+        return rmPost(rmRecAjaxBase('dismissrecommendation'), fd2);
+    }).then(function () {
+        rmRemoveRow(tr);
+        rmToast('Granted.');
+    }).catch(function () {
+        rmToast('Grant failed.', true);
+    });
+}
 document.getElementById('rm-tbody').addEventListener('click', function (e) {
     var g = e.target.closest('.rm-act-grant'); if (!g) return;
     var tr = g.closest('tr');
     var rec = {}; try { rec = JSON.parse(tr.getAttribute('data-rec') || '{}'); } catch (x) {}
+    var courts = []; try { courts = JSON.parse(tr.getAttribute('data-courts') || '[]'); } catch (x) {}
+    if (courts && courts.length) {
+        // Already on a court → let the officer decide what happens to that planned award.
+        rmOpenGrantCourtModal(rec, tr, courts);
+        return;
+    }
     tnConfirm({ title: 'Grant now?', body: 'Grant “' + (rec.Persona || '') + '” the award immediately and remove it from pending.', confirmLabel: 'Grant Now', onConfirm: function () {
-        var fd = new FormData();
-        fd.append('KingdomAwardId', rec.KingdomAwardId);
-        fd.append('GivenById', RmConfig.userId);
-        fd.append('Date', rmTodayYMD());
-        fd.append('ParkId', RmConfig.parkId || '0');
-        fd.append('KingdomId', RmConfig.kingdomId || '0');
-        fd.append('EventId', '0');
-        fd.append('Note', rec.Reason || '');
-        if (rec.Rank) fd.append('Rank', rec.Rank);
-        // Admin/player/{id}/addaward renders the full Admin page (HTML, not JSON),
-        // so success is "the request reached the server with HTTP 200" (response.ok).
-        // Only on a confirmed-OK grant do we soft-delete the rec (dismiss) + remove the row.
-        fetch(RmConfig.uir + 'Admin/player/' + rec.MundaneId + '/addaward', {
-            method: 'POST', body: fd, credentials: 'same-origin'
-        }).then(function (r) {
-            if (!r.ok) throw new Error('grant http ' + r.status);
-            var fd2 = new FormData(); fd2.append('RecommendationsId', rec.RecommendationsId);
-            return rmPost(rmRecAjaxBase('dismissrecommendation'), fd2);
-        }).then(function () {
-            rmRemoveRow(tr);
-            rmToast('Granted.');
-        }).catch(function () {
-            rmToast('Grant failed.', true);
-        });
+        rmDoGrant(rec, tr, null);
     } });
+});
+
+/* ---------- Task 9b: Grant Now when already on a court ---------- */
+var rmGrantCourtCtx = null;
+function rmOpenGrantCourtModal(rec, tr, courts) {
+    rmGrantCourtCtx = { rec: rec, tr: tr, courts: courts };
+    var names = courts.map(function (c) {
+        return c.Name + (c.CourtDate ? ' (' + c.CourtDate + ')' : '');
+    }).join(', ');
+    document.getElementById('rm-grantcourt-sub').textContent =
+        '“' + (rec.Persona || '') + '” is already on ' +
+        (courts.length === 1 ? 'court: ' : courts.length + ' courts: ') + names +
+        '. Grant the award now and…';
+    document.getElementById('rm-grantcourt-overlay').hidden = false;
+}
+function rmCloseGrantCourtModal() {
+    document.getElementById('rm-grantcourt-overlay').hidden = true;
+    rmGrantCourtCtx = null;
+}
+document.getElementById('rm-gc-back').addEventListener('click', rmCloseGrantCourtModal);
+document.getElementById('rm-grantcourt-overlay').addEventListener('click', function (e) {
+    if (e.target === this) rmCloseGrantCourtModal(); // click backdrop closes
+});
+// Grant & Remove from Court: delete the planned court award(s) entirely.
+document.getElementById('rm-gc-remove').addEventListener('click', function () {
+    if (!rmGrantCourtCtx) return;
+    var ctx = rmGrantCourtCtx; rmCloseGrantCourtModal();
+    rmDoGrant(ctx.rec, ctx.tr, function () {
+        return Promise.all(ctx.courts.map(function (c) {
+            var fd = new FormData(); fd.append('CourtAwardId', c.CourtAwardId);
+            return rmPost(RmConfig.uir + 'CourtAjax/remove_award', fd);
+        }));
+    });
+});
+// Grant & Leave on Court: mark the court award(s) 'given' so the herald still sees
+// it on the court order but it can't be re-granted (grant_award guards 'given').
+document.getElementById('rm-gc-leave').addEventListener('click', function () {
+    if (!rmGrantCourtCtx) return;
+    var ctx = rmGrantCourtCtx; rmCloseGrantCourtModal();
+    rmDoGrant(ctx.rec, ctx.tr, function () {
+        return Promise.all(ctx.courts.map(function (c) {
+            var fd = new FormData();
+            fd.append('CourtAwardId', c.CourtAwardId);
+            fd.append('Status', 'given');
+            return rmPost(RmConfig.uir + 'CourtAjax/set_award_status', fd);
+        }));
+    });
 });
 
 /* ---------- Task 10: Add to Court modal (single + bulk) ---------- */

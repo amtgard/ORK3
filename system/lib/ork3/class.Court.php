@@ -332,7 +332,7 @@ class Court {
 
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT ca.recommendations_id AS rid, c.court_id, c.name, c.court_date, c.status
+            'SELECT ca.recommendations_id AS rid, ca.court_award_id, c.court_id, c.name, c.court_date, c.status
                FROM ' . DB_PREFIX . 'court_award ca
                JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
               WHERE ca.recommendations_id > 0
@@ -346,10 +346,11 @@ class Court {
             while ($rs->Next()) {
                 $rid = (int)$rs->rid;
                 $map[$rid][] = [
-                    'CourtId'   => (int)$rs->court_id,
-                    'Name'      => $rs->name,
-                    'CourtDate' => $rs->court_date,
-                    'Status'    => $rs->status,
+                    'CourtId'      => (int)$rs->court_id,
+                    'CourtAwardId' => (int)$rs->court_award_id,
+                    'Name'         => $rs->name,
+                    'CourtDate'    => $rs->court_date,
+                    'Status'       => $rs->status,
                 ];
             }
         }
