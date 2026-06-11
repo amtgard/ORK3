@@ -1997,22 +1997,30 @@ $_total_awards = count($courtAwards ?? []);
     window.cpCloseRecModal = function() { gid('cp-rec-modal').style.display = 'none'; };
 
     window.cpDismissRec = function(btn, recId) {
-        if (!confirm('Dismiss this recommendation? This cannot be undone.')) return;
         var row = document.getElementById('cp-rec-' + recId);
-        var fd = new FormData();
-        fd.append('RecommendationsId', recId);
-        fetch(uir + 'KingdomAjax/kingdom/' + kidId + '/dismissrecommendation', { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
-                if (d.status === 0) {
-                    if (row) {
-                        row.classList.add('dismissing');
-                        setTimeout(function() { row.remove(); cpRmFilter(); }, 320);
+        function doDismiss() {
+            var fd = new FormData();
+            fd.append('RecommendationsId', recId);
+            fetch(uir + 'KingdomAjax/kingdom/' + kidId + '/dismissrecommendation', { method: 'POST', body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.status === 0) {
+                        if (row) {
+                            row.classList.add('dismissing');
+                            setTimeout(function() { row.remove(); cpRmFilter(); }, 320);
+                        }
+                    } else {
+                        alert(d.error || 'Failed to dismiss recommendation.');
                     }
-                } else {
-                    alert(d.error || 'Failed to dismiss recommendation.');
-                }
-            });
+                });
+        }
+        // Prefer the in-product confirm modal (project convention); fall back to native
+        // confirm only if tnConfirm isn't loaded on this page.
+        if (typeof tnConfirm === 'function') {
+            tnConfirm({ title: 'Dismiss recommendation?', body: 'Already given out previously? No plans to award this? You can dismiss this rec.', confirmLabel: 'Dismiss', danger: true, onConfirm: doDismiss });
+        } else if (confirm('Dismiss this recommendation? This cannot be undone.')) {
+            doDismiss();
+        }
     };
 
     window.cpToggleRec = function(el) {
