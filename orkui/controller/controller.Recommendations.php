@@ -92,6 +92,7 @@ class Controller_Recommendations extends Controller {
                     'OldestDate'     => $rec['DateRecommended'] ?? '',
                     'RepRecId'       => (int)($rec['RecommendationsId'] ?? 0),
                     '_advocates'     => [],
+                    '_hasNamedRec'   => false,
                     '_allSnoozed'    => true,
                     '_allPassed'     => true,
                 ];
@@ -105,7 +106,7 @@ class Controller_Recommendations extends Controller {
                 $g['OldestDate']    = $rec['DateRecommended'] ?? '';
                 $g['RepRecId']      = (int)($rec['RecommendationsId'] ?? 0); // oldest = representative
             }
-            if (!empty($rec['RecommendedById'])) { $g['_advocates'][(int)$rec['RecommendedById']] = true; }
+            if (!empty($rec['RecommendedById'])) { $g['_advocates'][(int)$rec['RecommendedById']] = true; $g['_hasNamedRec'] = true; }
             foreach (($rec['Seconds'] ?? []) as $s) {
                 if (!empty($s['SupporterMundaneId'])) { $g['_advocates'][(int)$s['SupporterMundaneId']] = true; }
             }
@@ -115,10 +116,13 @@ class Controller_Recommendations extends Controller {
         }
         foreach ($groups as $k => $g) {
             unset($g['_advocates'][$g['MundaneId']]); // a self-rec advocate never counts
-            $groups[$k]['SupportCount'] = count($g['_advocates']);
+            // Support = ADDITIONAL backers only; don't count the initial recommender as +1.
+            // (Subtract one for the original rec when the cluster has a named recommender;
+            // anonymous recommenders aren't in _advocates, so don't subtract for them.)
+            $groups[$k]['SupportCount'] = max(0, count($g['_advocates']) - ($g['_hasNamedRec'] ? 1 : 0));
             $groups[$k]['IsSnoozed']    = $g['_allSnoozed']; // cluster snoozed only if every member is
             $groups[$k]['PassedToLocal'] = $g['_allPassed'];
-            unset($groups[$k]['_advocates'], $groups[$k]['_allSnoozed'], $groups[$k]['_allPassed']);
+            unset($groups[$k]['_advocates'], $groups[$k]['_hasNamedRec'], $groups[$k]['_allSnoozed'], $groups[$k]['_allPassed']);
         }
         $this->data['Groups'] = array_values($groups);
 

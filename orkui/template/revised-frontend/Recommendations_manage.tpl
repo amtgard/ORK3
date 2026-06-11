@@ -182,6 +182,32 @@ html[data-theme="dark"] .rm-badge-has { color: #e0c860; }
 html[data-theme="dark"] .rm-badge-passlocal { color: #6fb0e6; }
 .rm-act-passlocal.rm-act-active { background: var(--rm-accent); color: #fff; border-color: var(--rm-accent); }
 .rm-row[data-passlocal="1"] { box-shadow: inset 3px 0 0 var(--rm-accent); }
+/* Pass-down tooltip: rich (bold title line + body) — data-tip can't bold/format,
+   so this button uses a child tooltip span shown on hover. Right-anchored so it
+   never clips off the right edge. */
+.rm-act-passlocal { position: relative; }
+.rm-passlocal-tip {
+    display: none;
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 4px);
+    width: max-content;
+    max-width: 240px;
+    background: #222;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.35;
+    text-align: left;
+    padding: 5px 8px;
+    border-radius: 4px;
+    white-space: normal;
+    z-index: 50;
+    pointer-events: none;
+}
+.rm-act-passlocal:hover .rm-passlocal-tip { display: block; }
+.rm-passlocal-tip strong { display: block; font-weight: 700; margin-bottom: 3px; }
+html[data-theme="dark"] .rm-passlocal-tip { background: #000; }
 
 /* Recommended cell */
 .rm-by { display: block; }
@@ -623,7 +649,7 @@ html[data-theme="dark"] .rm-modal {
           <button type="button" class="rm-act rm-act-grant"  data-tip="Grant now">&#9889;</button>
           <button type="button" class="rm-act rm-act-court"  data-tip="Add to court">&#65291;</button>
           <button type="button" class="rm-act rm-act-snooze" data-tip="<?= $snoozed ? 'Unsnooze' : 'Snooze' ?>"><?= $snoozed ? '&#128276;' : '&#128164;' ?></button>
-          <?php if (($Context ?? '') === 'kingdom') { ?><button type="button" class="rm-act rm-act-passlocal<?= !empty($group['PassedToLocal']) ? ' rm-act-active' : '' ?>" data-tip="For recommendations at a higher level than the park can provide, you are granting authority for that park to award at this level."><i class="fas fa-arrow-down"></i></button><?php } ?>
+          <?php if (($Context ?? '') === 'kingdom') { ?><button type="button" class="rm-act rm-act-passlocal<?= !empty($group['PassedToLocal']) ? ' rm-act-active' : '' ?>"><i class="fas fa-arrow-down"></i><span class="rm-passlocal-tip"><strong>Send to Local Park</strong>For recommendations at a higher level than the park can provide, you are granting authority for that park to award at this level.</span></button><?php } ?>
           <button type="button" class="rm-act rm-act-dismiss" data-tip="Already given out previously? No plans to award this? You can dismiss this rec.">&#10005;</button>
         </td>
       </tr>
