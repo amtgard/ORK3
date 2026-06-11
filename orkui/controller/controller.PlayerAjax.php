@@ -762,28 +762,37 @@ class Controller_PlayerAjax extends Controller
         exit;
     }
 
-    public function edit_second_notes($p = null)
-    {
-        header('Content-Type: application/json');
-        if (!isset($this->session->user_id)) {
-            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
-            exit;
-        }
-        $sid = (int)($p ?? 0);
-        if (!valid_id($sid)) {
-            echo json_encode(['status' => 1, 'error' => 'Invalid second']);
-            exit;
-        }
-        $notes = isset($_POST['notes']) ? (string)$_POST['notes'] : '';
-        $this->load_model('Player');
-        $r = $this->Player->EditSecondNotes([
-            'Token' => $this->session->token,
-            'RecommendationSecondsId' => $sid,
-            'Notes' => $notes,
-        ]);
-        echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '', 'detail' => $r['Detail'] ?? '']);
-        exit;
-    }
+	public function dismiss_notification($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) { echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit; }
+		$nid = (int)($_POST['NotificationId'] ?? $p ?? 0);
+		if (!valid_id($nid)) { echo json_encode(['status' => 1, 'error' => 'Invalid notification']); exit; }
+		Ork3::$Lib->notification->Dismiss($nid, (int)$this->session->user_id);
+		echo json_encode(['status' => 0]); exit;
+	}
+
+	public function dismiss_all_notifications($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) { echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit; }
+		Ork3::$Lib->notification->DismissAll((int)$this->session->user_id);
+		echo json_encode(['status' => 0]); exit;
+	}
+
+	public function edit_second_notes($p = null) {
+		header('Content-Type: application/json');
+		if (!isset($this->session->user_id)) { echo json_encode(['status' => 5, 'error' => 'Not logged in']); exit; }
+		$sid = (int)($p ?? 0);
+		if (!valid_id($sid)) { echo json_encode(['status' => 1, 'error' => 'Invalid second']); exit; }
+		$notes = isset($_POST['notes']) ? (string)$_POST['notes'] : '';
+		$this->load_model('Player');
+		$r = $this->Player->EditSecondNotes([
+			'Token' => $this->session->token,
+			'RecommendationSecondsId' => $sid,
+			'Notes' => $notes,
+		]);
+		echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '', 'detail' => $r['Detail'] ?? '']);
+		exit;
+	}
 
     public function withdraw_second($p = null)
     {
