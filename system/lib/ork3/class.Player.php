@@ -2940,6 +2940,46 @@ class Player extends Ork3
 		return Success('Recommendation unsnoozed.');
 	}
 
+	// Pass-to-local toggle: a kingdom/principality officer delegates this recommendation to
+	// the recipient's home park to award (intent signal). Authority: AUTH_KINGDOM over the
+	// recipient's kingdom (the principality-auth traversal also lets a parent-kingdom officer
+	// through). Raw UPDATE (not yapo) so we can null the by/at columns on un-pass.
+	public function SetRecommendationPassedToLocal($request) {
+		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
+			return NoAuthorization();
+
+		$rec_id = (int)($request['RecommendationsId'] ?? 0);
+		if (!$rec_id) return InvalidParameter();
+		$passed = !empty($request['Passed']) ? 1 : 0;
+
+		$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+		$awardRec->clear();
+		$awardRec->recommendations_id = $rec_id;
+		if (!$awardRec->find()) return InvalidParameter('Recommendation not found.');
+
+		$recipientInfo = $this->player_info($awardRec->mundane_id);
+		$kingdom_id = (int)($recipientInfo['KingdomId'] ?? 0);
+		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE))
+			return NoAuthorization();
+
+		$this->db->Clear();
+		if ($passed) {
+			$this->db->query("UPDATE " . DB_PREFIX . "recommendations
+				SET passed_to_local = 1, passed_to_local_by = " . (int)$mundane_id . ", passed_to_local_at = NOW()
+				WHERE recommendations_id = " . $rec_id);
+		} else {
+			$this->db->query("UPDATE " . DB_PREFIX . "recommendations
+				SET passed_to_local = 0, passed_to_local_by = NULL, passed_to_local_at = NULL
+				WHERE recommendations_id = " . $rec_id);
+		}
+
+		$this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
+		if (isset(Ork3::$Lib->dangeraudit)) {
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, ['passed_to_local' => $passed]);
+		}
+		return Success('Recommendation pass-to-local updated.');
+	}
+
 	public function DeleteAwardRecommendation($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
 			return NoAuthorization();

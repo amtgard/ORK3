@@ -222,6 +222,10 @@ class Model_Player extends Model {
 		return $this->Player->UnsnoozeAwardRecommendation($request);
 	}
 
+	function set_recommendation_passed_to_local($request) {
+		return $this->Player->SetRecommendationPassedToLocal($request);
+	}
+
 	function remove_heraldry($request) {
 		return $this->Player->RemoveHeraldry($request);
 	}
