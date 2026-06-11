@@ -447,29 +447,20 @@ class Controller_CourtAjax extends Controller {
             "UPDATE " . DB_PREFIX . "court_award SET status = 'given' WHERE court_award_id = " . $court_award_id
         );
 
-        // Notify the recommender + seconders BEFORE soft-deleting the recommendation
-        // (the seconds query needs them still live). Non-blocking: never fail the grant.
-        if ((int)$ca->recommendations_id > 0) {
-            try {
-                Ork3::$Lib->notification->notifyRecommendationGranted((int)$ca->recommendations_id, $uid);
-            } catch (\Throwable $e) { /* notifications are best-effort */ }
-
-            $DB->Clear();
-            $DB->Execute(
-                'UPDATE ' . DB_PREFIX . 'recommendations
-                 SET deleted_by = ' . $uid . ', deleted_at = NOW()
-                 WHERE recommendations_id = ' . (int)$ca->recommendations_id
-            );
-            // Cascade the soft-delete to the rec's seconds (mirrors
-            // class.Player::DeleteAwardRecommendation) so no orphaned live seconds remain.
-            $DB->Clear();
-            $DB->Execute(
-                'UPDATE ' . DB_PREFIX . 'recommendation_seconds
-                 SET deleted_by = ' . $uid . ', deleted_at = NOW()
-                 WHERE recommendations_id = ' . (int)$ca->recommendations_id . '
-                   AND deleted_at IS NULL'
-            );
-        }
+        // Resolve the whole recommendation cluster for the granted award
+        // (recipient + award + rank): soft-deletes every parallel rec and notifies
+        // each advocate, via the shared resolver. No-ops when there are no live recs.
+        // Non-blocking: a resolver/notify failure must never fail the grant.
+        try {
+            $this->load_model('Player');
+            $this->Player->resolve_player_recommendation_cluster([
+                'Token'          => $this->session->token,
+                'MundaneId'      => (int)$ca->mundane_id,
+                'KingdomAwardId' => (int)$ca->kingdomaward_id,
+                'Rank'           => (int)$ca->rank,
+                'RequestedBy'    => $uid,
+            ]);
+        } catch (\Throwable $e) { /* recommendation cleanup is best-effort */ }
 
         $this->jsonOut(['status' => 0]);
     }
