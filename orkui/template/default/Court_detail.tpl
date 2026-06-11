@@ -912,11 +912,9 @@ $_total_awards = count($courtAwards ?? []);
             </button>
         </div>
         <?php endif; ?>
-        <?php if (in_array($courtSt, ['published', 'complete'])): ?>
         <button class="cp-btn cp-btn-outline" id="cp-script-btn" onclick="cpOpenScript()">
             <i class="fas fa-scroll"></i> Court Script
         </button>
-        <?php endif; ?>
     </div>
 
     <!-- Spreadsheet toolbar -->
