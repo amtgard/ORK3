@@ -506,18 +506,22 @@ class Controller_KingdomAjax extends Controller
             $recs = $this->Reports->deleted_recommended_awards(['KingdomId' => $kingdom_id, 'ParkId' => 0, 'PlayerId' => 0]);
             echo json_encode(['status' => 0, 'recommendations' => is_array($recs) ? array_values($recs) : []]);
 
-        } elseif ($action === 'resolverecommendationcluster') {
-            $this->load_model('Player');
-            $r = $this->Player->resolve_player_recommendation_cluster([
-                'Token'          => $this->session->token,
-                'MundaneId'      => (int)($_POST['MundaneId']      ?? 0),
-                'KingdomAwardId' => (int)($_POST['KingdomAwardId'] ?? 0),
-                'Rank'           => (int)($_POST['Rank']           ?? 0),
-                'RequestedBy'    => $this->session->user_id,
-            ]);
-            echo ($r['Status'] == 0)
-                ? json_encode(['status' => 0, 'resolved' => (int)($r['Resolved'] ?? 0)])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+		} elseif ($action === 'resolverecommendationcluster') {
+			$uid = (int)$this->session->user_id;
+			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
+			}
+			$this->load_model('Player');
+			$r = $this->Player->resolve_player_recommendation_cluster([
+				'Token'          => $this->session->token,
+				'MundaneId'      => (int)($_POST['MundaneId']      ?? 0),
+				'KingdomAwardId' => (int)($_POST['KingdomAwardId'] ?? 0),
+				'Rank'           => (int)($_POST['Rank']           ?? 0),
+				'RequestedBy'    => $this->session->user_id,
+			]);
+			echo ($r['Status'] == 0)
+				? json_encode(['status' => 0, 'resolved' => (int)($r['Resolved'] ?? 0)])
+				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
         } elseif ($action === 'restorerecommendation') {
             $uid = (int)$this->session->user_id;

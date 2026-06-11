@@ -795,10 +795,11 @@ function rmSort(key) {
         if (va > vb) return  1 * rmSortState.dir;
         return 0;
     });
-    rows.forEach(function (tr) {
+    var rmSortPairs = rows.map(function (tr) {
         var dr = tr.nextElementSibling && tr.nextElementSibling.classList.contains('rm-detailrow') ? tr.nextElementSibling : null;
-        tbody.appendChild(tr); if (dr) tbody.appendChild(dr);
+        return { tr: tr, dr: dr };
     });
+    rmSortPairs.forEach(function (p) { tbody.appendChild(p.tr); if (p.dr) tbody.appendChild(p.dr); });
     document.querySelectorAll('.rm-sortable').forEach(function (th) { th.classList.remove('rm-sort-asc', 'rm-sort-desc'); });
     var thEl = document.querySelector('.rm-sortable[data-sort="' + key + '"]');
     if (thEl) thEl.classList.add(rmSortState.dir === 1 ? 'rm-sort-asc' : 'rm-sort-desc');
@@ -880,6 +881,7 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
         var snoozed = tr.getAttribute('data-snoozed') === '1';
         var action = snoozed ? 'unsnoozerecommendation' : 'snoozerecommendation';
         var ids = rmMemberIds(tr);
+        if (!ids.length) { rmToast('No recommendations found.', true); return; }
         Promise.all(ids.map(function (id) {
             var fd = new FormData(); fd.append('RecommendationsId', id);
             return rmPost(rmRecAjaxBase(action), fd);
@@ -897,6 +899,7 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
         var tr2 = ds.closest('tr');
         tnConfirm({ title: 'Dismiss recommendation?', body: 'This removes the recommendation(s) from the pending list.', confirmLabel: 'Dismiss', danger: true, onConfirm: function () {
             var ids = rmMemberIds(tr2);
+            if (!ids.length) { rmToast('No recommendations found.', true); return; }
             Promise.all(ids.map(function (id) {
                 var fd = new FormData(); fd.append('RecommendationsId', id);
                 return rmPost(rmRecAjaxBase('dismissrecommendation'), fd);

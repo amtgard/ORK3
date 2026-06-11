@@ -3024,7 +3024,7 @@ class Player extends Ork3
 				'RequestedBy'       => (int)($request['RequestedBy'] ?? 0),
 				'Granted'           => 1,
 			]);
-			if (!empty($r['Status'])) { $resolved++; }
+			if ((int)($r['Status'] ?? 1) === 0) { $resolved++; }
 		}
 		return ['Status' => 0, 'Resolved' => $resolved];
 	}
