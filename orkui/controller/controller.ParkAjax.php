@@ -394,6 +394,7 @@ class Controller_ParkAjax extends Controller
 				'Token'             => $this->session->token,
 				'RecommendationsId' => $rec_id,
 				'RequestedBy'       => $this->session->user_id,
+				'Granted'           => !empty($_POST['Granted']) ? 1 : 0,
 			]);
 			echo ($r['Status'] == 0)
 				? json_encode(['status' => 0])

@@ -942,7 +942,9 @@ function rmDoGrant(rec, tr, courtStep) {
         if (!r.ok) throw new Error('grant http ' + r.status);
         return courtStep ? courtStep() : null;
     }).then(function () {
-        var fd2 = new FormData(); fd2.append('RecommendationsId', rec.RecommendationsId);
+        var fd2 = new FormData();
+        fd2.append('RecommendationsId', rec.RecommendationsId);
+        fd2.append('Granted', '1');
         return rmPost(rmRecAjaxBase('dismissrecommendation'), fd2);
     }).then(function () {
         rmRemoveRow(tr);
