@@ -296,6 +296,8 @@ html[data-theme="dark"] .cp-script-cite-text { color: #e2e8f0; }
 html[data-theme="dark"] .cp-script-cite-artisans { color: #a0aec0; }
 /* print: show only the rendered script body, force light, avoid page breaks mid-entry */
 @media print {
+    html { color-scheme: light; }
+    body.cp-script-open { background: #fff !important; color-scheme: light; }
     body.cp-script-open > *:not(#cp-script-overlay) { display: none !important; }
     body.cp-script-open #cp-script-overlay { position: static; display: block !important; background: #fff; padding: 0; overflow: visible; }
     body.cp-script-open #cp-script-overlay .cp-script-modal { max-width: none; width: auto; margin: 0; box-shadow: none; border-radius: 0; background: #fff; color: #000; }
@@ -1823,6 +1825,8 @@ $_total_awards = count($courtAwards ?? []);
                     var actionsEl = row.querySelector('.cp-grant-actions');
                     if (actionsEl) actionsEl.innerHTML = '<span style="font-size:12px;color:#276749;font-weight:700"><i class="fas fa-check-circle"></i> Granted</span>';
                 }
+                var ga = courtAwards.find(function(a){ return String(a.CourtAwardId) === String(caid); });
+                if (ga) ga.Status = 'given';
                 cpRefreshProgress();
             } else {
                 alert(d.error || 'Could not grant award.');
@@ -1843,6 +1847,8 @@ $_total_awards = count($courtAwards ?? []);
                     var actionsEl = row.querySelector('.cp-grant-actions');
                     if (actionsEl) actionsEl.innerHTML = '<span style="font-size:12px;color:#a0aec0;font-weight:700"><i class="fas fa-forward"></i> Skipped</span>';
                 }
+                var sa = courtAwards.find(function(a){ return String(a.CourtAwardId) === String(caid); });
+                if (sa) sa.Status = 'cancelled';
                 cpRefreshProgress();
             } else {
                 alert(d.error || 'Could not skip award.');
@@ -2324,6 +2330,7 @@ $_total_awards = count($courtAwards ?? []);
             ['cp-rec-modal','cp-adhoc-modal','cp-artisan-modal'].forEach(function(id) {
                 var el = gid(id); if (el) el.style.display = 'none';
             });
+            var cpso = gid('cp-script-overlay'); if (cpso && !cpso.hidden) cpCloseScript();
         }
     });
 })();
