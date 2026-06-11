@@ -2412,12 +2412,24 @@ window.cpApplyHeroColor = function(img) {
     }
 </script>
 
-<div id="cp-script-overlay">
-    <div class="cp-script-header">
-        <h1 id="cp-script-title" style="background:transparent;border:none;padding:0;border-radius:0;text-shadow:none"></h1>
-        <p id="cp-script-date" style="color:#718096;margin:4px 0 0"></p>
+<div id="cp-script-overlay" class="cp-script-overlay" hidden onclick="if(event.target===this)cpCloseScript()">
+    <div class="cp-script-modal">
+        <div class="cp-script-chrome">
+            <div class="cp-script-titlebar">
+                <h1 id="cp-script-title" class="cp-script-h1"></h1>
+                <p id="cp-script-date" class="cp-script-date"></p>
+            </div>
+            <div class="cp-script-controls">
+                <div class="cp-script-density" role="group" aria-label="Script density">
+                    <button type="button" data-density="compact" class="active" onclick="cpSetScriptDensity('compact')">Compact</button>
+                    <button type="button" data-density="citation" onclick="cpSetScriptDensity('citation')">Citation</button>
+                </div>
+                <div class="cp-script-actions">
+                    <button type="button" class="cp-btn cp-btn-outline cp-btn-sm" onclick="cpCloseScript()">Close</button>
+                    <button type="button" class="cp-btn cp-btn-primary cp-btn-sm" onclick="cpPrintScript()">Print</button>
+                </div>
+            </div>
+        </div>
+        <div id="cp-script-body" class="cp-script-body"></div>
     </div>
-    <table class="cp-script-table">
-        <tbody id="cp-script-awards"></tbody>
-    </table>
 </div>
