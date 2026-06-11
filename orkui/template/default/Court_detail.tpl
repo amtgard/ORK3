@@ -173,6 +173,9 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 .cp-rm-trash { position: absolute; top: 6px; right: 8px; background: none; border: none; color: #fed7d7; cursor: pointer; font-size: 13px; padding: 3px 5px; border-radius: 4px; opacity: 0; transition: opacity .15s, color .15s; }
 .cp-rm-row:hover .cp-rm-trash { opacity: 1; }
 .cp-rm-trash:hover { color: #e53e3e; background: #fff5f5; }
+.cp-rm-trash[data-tip] { position: absolute; }
+.cp-rm-trash[data-tip]:hover::after { content: attr(data-tip); position: absolute; top: 100%; right: 0; margin-top: 4px; width: 200px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 50; pointer-events: none; }
+html[data-theme="dark"] .cp-rm-trash[data-tip]:hover::after { background: #000; }
 .cp-rm-row.dismissing { opacity: 0; transition: opacity .3s; }
 .cp-rm-add-count { font-size: 12px; color: #718096; align-self: center; margin-right: 4px; }
 .cp-rm-controls { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
@@ -1258,7 +1261,7 @@ $_total_awards = count($courtAwards ?? []);
                      data-on-other-court="<?= $isOnOther ? '1' : '0' ?>"
                      onclick="<?= $disabled ? '' : 'cpToggleRec(this)' ?>">
                     <?php if (!$disabled): ?>
-                    <button class="cp-rm-trash" title="Dismiss recommendation" onclick="event.stopPropagation();cpDismissRec(this,<?= (int)$rec['RecommendationsId'] ?>)"><i class="fas fa-trash-alt"></i></button>
+                    <button class="cp-rm-trash" data-tip="Already given out previously? No plans to award this? You can dismiss this rec." aria-label="Dismiss" onclick="event.stopPropagation();cpDismissRec(this,<?= (int)$rec['RecommendationsId'] ?>)"><i class="fas fa-trash-alt"></i></button>
                     <?php endif; ?>
                     <div class="cp-rm-avatar" style="background:<?= $avatarBg ?>"><?= htmlspecialchars($initial) ?></div>
                     <div class="cp-rm-main">
