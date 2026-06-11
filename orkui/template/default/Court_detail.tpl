@@ -2360,10 +2360,79 @@ window.cpApplyHeroColor = function(img) {
 
 
     // ---- Court Script ----
+    var cpScriptDensity = 'compact';
+
+    function cpScriptActiveAwards() {
+        return (window.courtAwards || []).filter(function (a) { return a.Status !== 'cancelled'; });
+    }
+    function cpScriptAwardLabel(a) {
+        var s = esc(a.AwardName || '');
+        if (a.IsLadder && a.Rank) s += ' (Rank ' + a.Rank + ')';
+        return s;
+    }
+    function cpScriptRecipient(a) {
+        var s = esc(a.Persona || '');
+        if (a.ParkAbbrev) s += ' <span class="cp-script-park">' + esc(a.ParkAbbrev) + '</span>';
+        return s;
+    }
+    function cpScriptPtlMark(a) {
+        return a.PassToLocal ? ' <span class="cp-script-ptl">(pass to local)</span>' : '';
+    }
+    function cpScriptArtisans(a) {
+        var parts = [];
+        if (a.ScrollMakerPersona)  parts.push(esc(a.ScrollMakerPersona) + ' (scroll)');
+        if (a.RegaliaMakerPersona) parts.push(esc(a.RegaliaMakerPersona) + ' (regalia)');
+        (a.Artisans || []).forEach(function (art) {
+            var p = esc(art.Persona || '');
+            if (art.Contribution) p += ' (' + esc(art.Contribution) + ')';
+            if (p) parts.push(p);
+        });
+        return parts.join(', ');
+    }
+    function cpScriptCompact(awards) {
+        if (!awards.length) return '<p class="cp-script-empty">No awards to present.</p>';
+        var rows = awards.map(function (a, i) {
+            return '<tr>' +
+                '<td class="cp-script-num">' + (i + 1) + '</td>' +
+                '<td class="cp-script-check">' + (a.Status === 'given' ? '☑' : '☐') + '</td>' +
+                '<td class="cp-script-recip">' + cpScriptRecipient(a) + '</td>' +
+                '<td class="cp-script-award">' + cpScriptAwardLabel(a) + cpScriptPtlMark(a) + '</td>' +
+                '</tr>';
+        }).join('');
+        return '<table class="cp-script-compact"><tbody>' + rows + '</tbody></table>';
+    }
+    function cpScriptCitation(awards) {
+        if (!awards.length) return '<p class="cp-script-empty">No awards to present.</p>';
+        return awards.map(function (a, i) {
+            var html = '<div class="cp-script-cite">' +
+                '<div class="cp-script-cite-head">' +
+                    '<span class="cp-script-cite-num">' + (i + 1) + '.</span> ' +
+                    '<span class="cp-script-cite-recip">' + cpScriptRecipient(a) + '</span> ' +
+                    '<span class="cp-script-cite-award">' + cpScriptAwardLabel(a) + cpScriptPtlMark(a) + '</span>' +
+                '</div>';
+            if (a.PublicComment) html += '<div class="cp-script-cite-text">' + esc(a.PublicComment) + '</div>';
+            var art = cpScriptArtisans(a);
+            if (art) html += '<div class="cp-script-cite-artisans"><strong>Artisans to thank:</strong> ' + art + '</div>';
+            html += '</div>';
+            return html;
+        }).join('');
+    }
+    function cpRenderScript(density) {
+        var body = document.getElementById('cp-script-body');
+        if (!body) return;
+        var awards = cpScriptActiveAwards();
+        body.innerHTML = (density === 'citation') ? cpScriptCitation(awards) : cpScriptCompact(awards);
+    }
+    function cpSetScriptDensity(d) {
+        cpScriptDensity = (d === 'citation') ? 'citation' : 'compact';
+        document.querySelectorAll('.cp-script-density button').forEach(function (b) {
+            b.classList.toggle('active', b.getAttribute('data-density') === cpScriptDensity);
+        });
+        cpRenderScript(cpScriptDensity);
+    }
     function cpOpenScript() {
         var overlay = document.getElementById('cp-script-overlay');
         if (!overlay) return;
-        // Title and date
         var titleEl = document.getElementById('cp-script-title');
         var dateEl  = document.getElementById('cp-script-date');
         if (titleEl) titleEl.textContent = courtMeta.name || 'Court';
@@ -2375,39 +2444,19 @@ window.cpApplyHeroColor = function(img) {
                 dateEl.textContent = '';
             }
         }
-        // Build award entries
-        var awardsEl = document.getElementById('cp-script-awards');
-        if (awardsEl) {
-            awardsEl.innerHTML = '';
-            var active = courtAwards.filter(function(a) { return a.Status !== 'cancelled'; });
-            active.forEach(function(a, i) {
-                var awardLabel = a.AwardName || '';
-                if (a.Rank) awardLabel += ' (Rank ' + a.Rank + ')';
-                var recText = '';
-                if (a.RecReason) {
-                    recText = a.RecByPersona
-                        ? '<strong>From ' + esc(a.RecByPersona) + ':</strong> ' + esc(a.RecReason)
-                        : esc(a.RecReason);
-                } else if (a.Notes) {
-                    recText = esc(a.Notes);
-                }
-                var row = document.createElement('tr');
-                row.innerHTML =
-                    '<td>' + (i + 1) + '</td>' +
-                    '<td class="cp-script-td-name">' + esc(a.Persona || '') + '</td>' +
-                    '<td class="cp-script-td-award">' + esc(awardLabel) + '</td>' +
-                    '<td class="cp-script-td-rec">' + recText + '</td>';
-                awardsEl.appendChild(row);
-            });
-        }
-        // Move overlay to be a direct child of <body> so the print CSS selector
-        // (body > *:not(#cp-script-overlay)) can correctly hide everything else
-        // while showing the overlay. Then use afterprint to clean up.
+        cpRenderScript(cpScriptDensity);
+        // Move overlay to be a direct child of <body> so the print selector
+        // (body.cp-script-open > *:not(#cp-script-overlay)) hides everything else.
         document.body.appendChild(overlay);
-        window.addEventListener('afterprint', function onAfterPrint() {
-            window.removeEventListener('afterprint', onAfterPrint);
-            overlay.style.display = 'none';
-        });
+        document.body.classList.add('cp-script-open');
+        overlay.hidden = false;
+    }
+    function cpCloseScript() {
+        var overlay = document.getElementById('cp-script-overlay');
+        if (overlay) overlay.hidden = true;
+        document.body.classList.remove('cp-script-open');
+    }
+    function cpPrintScript() {
         window.print();
     }
 </script>
