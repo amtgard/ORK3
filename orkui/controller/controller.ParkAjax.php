@@ -400,6 +400,19 @@ class Controller_ParkAjax extends Controller
 				? json_encode(['status' => 0])
 				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+        } elseif ($action === 'resolverecommendationcluster') {
+            $this->load_model('Player');
+            $r = $this->Player->resolve_player_recommendation_cluster([
+                'Token'          => $this->session->token,
+                'MundaneId'      => (int)($_POST['MundaneId']      ?? 0),
+                'KingdomAwardId' => (int)($_POST['KingdomAwardId'] ?? 0),
+                'Rank'           => (int)($_POST['Rank']           ?? 0),
+                'RequestedBy'    => $this->session->user_id,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0, 'resolved' => (int)($r['Resolved'] ?? 0)])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
         } elseif ($action === 'deletedrecommendations') {
             $uid = (int)$this->session->user_id;
             if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
