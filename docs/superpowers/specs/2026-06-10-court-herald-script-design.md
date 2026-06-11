@@ -2,29 +2,36 @@
 
 **Date:** 2026-06-10
 **Branch:** `feature/court-planner`
-**Status:** Approved design, pending spec review
+**Status:** Approved design (revised after discovering the existing Court Script), pending spec review
 
 ## Summary
 
-A **printable court order / herald script** for actually *running* a court. The Court
-Planner lets officers plan a court, and the public Court Report shows what was given
-afterward — but there is nothing for the live ceremony in between. This adds a dedicated,
-print-optimized view of a court's awards in presentation order, with a per-court density
-toggle (compact checklist vs. full citation blocks), reachable from the planner.
+Upgrade the Court Planner's existing **"Court Script"** print feature into a proper herald
+script with a per-court **density toggle** (compact checklist vs. full citation blocks) and
+the right content (public comment + artisans, not internal notes/reason).
+
+The Court Planner already ships a basic "Court Script" button (`cpOpenScript()` +
+`#cp-script-overlay` in `Court_detail.tpl`) that prints a fixed table of awards using the
+recommendation **reason**/**notes**. That is the wrong content per this design's decisions,
+has no density choice, prints internal notes (a privacy leak), and is only available once the
+court is published/complete. This work **enhances that existing feature in place** rather than
+building a parallel print route.
 
 This is the **print-first v1** of the broader "run the court" thread. A live on-screen
 presentation mode (advance one award at a time, mark-given as you go) is a deliberate
-follow-up that will reuse this view's controller data-load path.
+follow-up.
 
 ## Goals
 
-- Give the herald/operator a clean sheet to read from at court, on paper, with zero signal.
-- Two densities, chosen per court at print time:
+- Two densities, chosen per court at print time, with an on-screen preview to proofread before
+  printing:
   - **Compact** — a tight checklist (many awards per page), tick-as-given.
-  - **Citation** — per-award blocks the herald reads aloud, including the public comment
-    and the artisans to thank.
+  - **Citation** — per-award blocks the herald reads aloud: the **public comment** and the
+    **artisans to thank**.
 - Print cleanly to 8.5×11 regardless of the app's dark-mode state.
-- Establish the controller seam the future live-presentation mode will reuse.
+- Stop printing internal `notes` and the recommendation `reason` (the current behavior).
+- Make the script available in any court status (including draft), so a herald can print the
+  order before the court is published.
 
 ## Non-Goals (YAGNI for v1)
 
@@ -33,148 +40,139 @@ follow-up that will reuse this view's controller data-load path.
 - Recipient mundane/legal names.
 - Recommender credit / the recommendation reason text.
 - Server-side PDF generation.
-- Reordering or any mutation from the print view (read-only).
+- A separate `Court/print/{id}` route, controller action, template, or query (the original
+  draft of this spec proposed these; rejected after finding the existing in-page Court Script,
+  which already has every field it needs client-side).
 
-## Access & Scope
+## Why enhance in place (not a new route)
 
-- **Route:** `Court/print/{court_id}`.
-- **Authority:** gated by `Court::canManage($uid, $kingdomId, $parkId)` — the same authority
-  as the planner. This is an **operator tool, not public**: the public Court Report
-  (`Reports/courts`) already covers after-the-fact viewing. Unauthorized users are bounced.
-- **Scope:** works for both kingdom courts (`park_id = 0`) and park courts, resolved from the
-  loaded court record exactly as the planner does.
+`Court_detail.tpl:1365` already emits the full `getCourtAwards()` result to the client as
+`window.courtAwards`, including `Persona`, `ParkAbbrev`, `AwardName`, `IsLadder`, `Rank`,
+`PublicComment`, `ScrollMakerPersona`, `RegaliaMakerPersona`, `Artisans[]` (persona +
+contribution), `PassToLocal`, `Status`, and `SortOrder`. The script is built client-side from
+this array. Therefore **no backend change is required** — no controller action, no new query,
+no new template, no schema change. All work is contained in `Court_detail.tpl`.
 
-## Architecture
+## Scope
 
-Deliberately small; reuses existing tested reads. No new query, no schema change.
+- **One file:** `orkui/template/default/Court_detail.tpl`.
+- **No backend changes.** `getCourtAwards()` already returns everything needed and the planner
+  already emits it to JS.
 
-- **Controller:** new `print()` action in `orkui/controller/controller.Court.php`.
-  - Resolves the court via `Ork3::$Lib->court->getCourtDetail($court_id)`.
-  - Authority check via `Court::canManage` (bounce on failure, matching `list()`/`detail()`).
-  - Loads awards via `Ork3::$Lib->court->getCourtAwards($court_id)` — already returns every
-    field needed (`Persona`, `ParkAbbrev`, `AwardName`, `IsLadder`, `Rank`, `PublicComment`,
-    `ScrollMakerPersona`, `RegaliaMakerPersona`, `Artisans[]` (persona + contribution),
-    `SortOrder`, `Status`, `PassToLocal`).
-  - Resolves the heraldry/location name the same way `list()` does (prefer park heraldry,
-    fall back to kingdom).
-  - Renders `Court_print.tpl`.
-- **Template:** new `orkui/template/default/Court_print.tpl` (alongside the other
-  `Court_*.tpl` planner templates). Standalone, print-optimized. All CSS prefixed `cp-`
-  (court-print); CSS + JS inlined per project convention.
-- **Model:** none — DB work stays in `system/lib/ork3/class.Court.php`, which already exposes
-  the needed reads.
+## What changes in `Court_detail.tpl`
 
-## What Prints
+### 1. "Court Script" button availability
+Currently the button is rendered only when `in_array($courtSt, ['published','complete'])`
+(around line 916). Move it out of that gate so it renders for **all** court statuses
+(`draft`, `published`, `complete`). It stays inside the `canManage`-gated planner page, so no
+extra auth is needed.
 
-- All awards with `status <> 'cancelled'`, in the planner's `sort_order` (the exact order
-  `getCourtAwards()` already returns).
-- Each award shows its presentation number (1-based, by sort order).
-- **Pass-to-local** awards print with a small "(pass to local)" marker so the herald knows
-  the award was kingdom-approved for the park to bestow.
-- No status-based filtering beyond excluding cancelled; an already-`given` award still prints
-  (in compact mode its checkbox can be pre-ticked for clarity — see below).
+### 2. Overlay becomes a visible preview modal
+Today `#cp-script-overlay` is `display:none` on screen and only appears via `@media print`.
+Convert it into an on-screen **preview modal** shown when the button is clicked, containing:
+- A header: court name + human-readable date (reuse the existing title/date logic).
+- A **density segmented toggle**: `Compact | Citation` (default **Compact**). Re-renders the
+  body on change; remembers the last choice for the session (simple JS variable, no
+  persistence needed).
+- The rendered **script body** (`#cp-script-body`) for the active density.
+- Actions: **Print** (`window.print()`) and **Close**.
 
-## Template: `Court_print.tpl`
+The modal chrome (toggle, action buttons, backdrop) is hidden under `@media print`; only the
+script body prints.
 
-### On-screen chrome (hidden in `@media print`)
-- A **density toggle**: Compact ↔ Citation (radio or segmented control, `cp-` styled,
-  dark-mode compatible). Default: **Compact**.
-- A **Print** button (calls `window.print()`).
-- Both controls live in a `cp-toolbar` that is `display: none` under `@media print`.
-
-### Header (prints on every page via running header where supported)
-- Kingdom/park heraldry (or `fa-gavel` fallback), court name, human-readable date
-  (never raw ISO), event name when linked.
-
-### Compact mode (`cp-compact`)
-A tight table, many rows per page:
+### 3. Compact density (`cp-script-compact`)
+A tight checklist table over `courtAwards.filter(a => a.Status !== 'cancelled')` in array order
+(already `sort_order`):
 
 | Col | Content |
 |---|---|
-| # | presentation number |
-| Recipient | persona + park abbrev |
-| Award | award name + rank (only when `IsLadder`) |
-| ☐ | empty checkbox to tick when given (pre-ticked if `Status = 'given'`) |
+| # | 1-based presentation number |
+| ☐ | checkbox; rendered checked when `a.Status === 'given'` |
+| Recipient | `a.Persona` + `a.ParkAbbrev` (when set) |
+| Award | `a.AwardName` + ` (Rank N)` only when `a.IsLadder` and `a.Rank` |
 
-`font-variant-numeric: tabular-nums` on the number column.
+Pass-to-local awards (`a.PassToLocal`) append a small "(pass to local)" marker after the award.
 
-### Citation mode (`cp-citation`)
-One block per award:
-- **Recipient** persona (+ park abbrev), prominent.
-- **Award** name + rank (rank only when ladder).
-- **Citation** — the award's `PublicComment`, rendered as the read-aloud line. Omitted
-  cleanly when empty.
-- **Artisans to thank** — a single line assembled from, when present: scroll maker
-  (`ScrollMakerPersona`), regalia maker (`RegaliaMakerPersona`), and each `Artisans[]` entry
-  (persona, with contribution in parentheses when set). Omitted entirely when there are none.
-- Pass-to-local marker when `PassToLocal`.
+### 4. Citation density (`cp-script-citation`)
+One block per non-cancelled award, in order:
+- **Recipient** — `a.Persona` (+ `a.ParkAbbrev` when set), prominent.
+- **Award** — `a.AwardName` + ` (Rank N)` only when ladder.
+- **Citation** — `a.PublicComment`, rendered as the read-aloud line. Omitted cleanly when
+  empty. (Do **not** fall back to `RecReason` or `Notes`.)
+- **Artisans to thank** — a single line assembled, when present, from: `a.ScrollMakerPersona`
+  (labelled "scroll"), `a.RegaliaMakerPersona` (labelled "regalia"), and each `a.Artisans[]`
+  entry (`Persona`, with `Contribution` in parentheses when set). Omitted entirely when there
+  are none.
+- Pass-to-local marker when `a.PassToLocal`.
 
-### Footer
-- Generated-on date (human-readable) and page numbers via print CSS
-  (`@page` / running footer where supported; a static footer line otherwise).
+All dynamic strings pass through the existing `esc()` helper used by `cpOpenScript()`.
 
-### Print CSS
-- `@media print`: force white background / black text on all `cp-` surfaces (never inherit
-  dark mode), hide `cp-toolbar`, avoid breaking an award block across a page
-  (`break-inside: avoid` on citation blocks and compact rows), set sensible 8.5×11 margins.
-- On-screen (`@media screen`): dark-mode compatible per the project checklist — heading
-  resets (orkui.css h1–h6 pill leak), readable muted text, no inline `color:` that breaks in
-  dark mode.
+### 5. Remove reason/notes from the printed output
+Delete the `RecReason` / `RecByPersona` / `Notes` rendering currently in `cpOpenScript()`.
+Internal notes must never print; the citation is `PublicComment` only.
 
-## Entry Point
+## Print & Dark-Mode CSS
 
-A **"Print Court Order"** action on the planner, `Court_detail.tpl`:
-- `canManage`-gated (it renders only inside the already-gated planner page, so no extra
-  server check is needed, but the button is omitted if the planner ever renders read-only).
-- Opens `Court/print/{court_id}` in a new browser tab (`target="_blank"`).
-- Placed in the planner hero/action area near Publish / Mark Complete.
+- **Print (`@media print`):** keep the existing `body > *:not(#cp-script-overlay)
+  { display:none }` approach. Within the overlay, hide the modal chrome (toggle + action
+  buttons + backdrop), show only `#cp-script-body`, force white background / black text, set
+  `break-inside: avoid` on citation blocks and compact rows, and sensible 8.5×11 margins.
+- **On-screen (`@media screen`):** the preview modal is dark-mode compatible per the project
+  checklist — heading resets (orkui.css h1–h6 pill leak), readable muted text, segmented
+  toggle styling for light + dark, backdrop. The planner already defines dark-mode rules for
+  its `cp-` surfaces; follow the same `html[data-theme="dark"] .cp-script-*` pattern.
 
 ## Data Flow
 
-1. `controller.Court::print($court_id)` → `getCourtDetail` → `canManage` gate.
-2. `getCourtAwards($court_id)` → award rows (already sorted, already carrying every needed
-   field).
-3. Template renders both density layouts inline; the toggle shows/hides via CSS class on a
-   wrapper (no AJAX, no reload). Print uses whichever density is active.
+1. Operator clicks **Court Script** on the planner (any status).
+2. `cpOpenScript()` opens the preview modal and renders the active density from
+   `window.courtAwards` (no AJAX).
+3. Toggling density re-renders `#cp-script-body` from the same array.
+4. **Print** invokes `window.print()`; print CSS shows only the script body.
 
-## Error Handling
+## Error / Empty States
 
-- Missing/invalid court → bounce or "court not found" page, matching `detail()`'s behavior.
-- Unauthorized → bounced by the `canManage` gate (same as the rest of the planner).
-- Empty court (no non-cancelled awards) → a clear "No awards to present" empty state rather
-  than a blank sheet.
+- Empty court (no non-cancelled awards) → the modal body shows a clear "No awards to present"
+  message rather than an empty sheet.
+- The button is always available to `canManage` users; a draft court simply prints its current
+  planned order.
 
 ## Testing
 
-- **Authority:** non-authorized user is bounced from `Court/print/{id}` (kingdom + park
-  scope); the planner button is absent when not authorized.
-- **Data parity:** printed rows match `getCourtAwards()` for the court, in `sort_order`,
-  excluding cancelled; pass-to-local marker matches `PassToLocal`.
-- **Citation contents:** public comment renders as the citation; artisans line assembles
-  scroll maker + regalia maker + contributors and is omitted when none; empty public comment
-  omits the citation line.
-- **Compact contents:** checkbox column present; ladder rank shown only for ladder awards;
-  already-given rows pre-ticked.
-- **Print fidelity:** prints white-on-black-free at 8.5×11; toolbar hidden in print; award
-  blocks don't split across pages; toggle drives which density prints.
-- **Dark mode:** on-screen walk of toolbar, toggle, headings, citation blocks, compact table
-  per the dark-mode checklist; verify print still forces light.
-- **Conventions:** `.tpl` is plain PHP (no Smarty); human-readable dates (no raw ISO);
-  no native `title` tooltips; CSS prefixed `cp-`.
+- **Content:** citation blocks show `PublicComment` and the assembled artisans line; no
+  `RecReason`/`Notes` appears anywhere in the output; empty public comment omits the citation
+  line; an award with no makers/contributors omits the artisans line.
+- **Compact:** checkbox column present; checked when `Status==='given'`; ladder rank shown
+  only for ladder awards; pass-to-local marker present when flagged.
+- **Density toggle:** switching Compact ↔ Citation re-renders; the active density is what
+  prints.
+- **Availability:** the Court Script button renders for a draft court (previously hidden).
+- **Print fidelity:** prints white-on-black-free at 8.5×11; modal chrome hidden in print;
+  blocks/rows don't split across pages.
+- **Dark mode:** on-screen walk of the preview modal, toggle, headings, citation blocks,
+  compact table per the dark-mode checklist; print still forces light.
+- **Conventions:** `.tpl` is plain PHP (no Smarty); human-readable dates (no raw ISO); no
+  native `title` tooltips on new controls; existing `cp-` prefix retained.
 
 ## Build Sequence
 
-1. `controller.Court::print()` action (auth + loads + render).
-2. `Court_print.tpl` — header, both density layouts, toggle, print CSS, empty state.
-3. "Print Court Order" button on `Court_detail.tpl`.
-4. Verification (curl the route where the court schema exists; print/dark-mode walk-through).
+1. Un-gate the Court Script button (render in all statuses).
+2. Convert `#cp-script-overlay` into a preview modal with header + density toggle + Print/Close
+   + `#cp-script-body`; add on-screen + dark-mode CSS.
+3. Rewrite `cpOpenScript()` to render the active density; add `cpRenderScript(density)` with
+   the compact and citation builders; remove reason/notes rendering.
+4. Update `@media print` CSS to show only `#cp-script-body` and hide modal chrome; add
+   `break-inside: avoid` + light-force.
+5. Empty-state handling.
+6. Verification (browser print + dark-mode walk on an environment where the court schema
+   exists; lint the template).
 
 ## Notes / Risks
 
 - Local dev cannot fully exercise this: the local `ork` DB does not have the court tables
-  applied (court migrations are not present locally). Verify on an environment where the
-  court schema exists; otherwise rely on lint + inspection + the public-endpoint pattern.
-- Running headers/footers with real page numbers vary by browser print engine; the design
-  degrades gracefully to a static footer line if `@page` counters aren't honored.
-- This view is the data seam for the deferred **live presentation mode**; keep the
-  controller load path clean so that mode can reuse it without refactoring.
+  applied. Verify on an environment where the court schema exists; otherwise rely on lint +
+  inspection.
+- Removing `RecReason`/`Notes` from the script is an intentional behavior change (the current
+  script prints internal notes, a privacy leak) aligned with this design's content decisions.
+- This preview modal is a natural starting point for the deferred **live presentation mode**;
+  keep `cpRenderScript()` data-driven so that mode can reuse it.
