@@ -272,14 +272,27 @@ html[data-theme="dark"] .rm-badge-passlocal { color: #6fb0e6; }
     left: 50%;
     bottom: calc(100% + 4px);
     transform: translateX(-50%);
-    white-space: nowrap;
+    /* wrap long tooltips instead of running off-screen: compact for short text
+       (max-content), wraps once it would exceed max-width. */
+    white-space: normal;
+    width: max-content;
+    max-width: 240px;
+    line-height: 1.3;
+    text-align: left;
     background: #222;
     color: #fff;
     font-size: 11px;
-    padding: 3px 6px;
+    padding: 4px 7px;
     border-radius: 4px;
     z-index: 50;
     pointer-events: none;
+}
+/* Actions-column buttons sit at the right edge — anchor their tooltip to the
+   button's right so a wrapped tooltip extends leftward and never clips off-screen. */
+.rm-col-act [data-tip]:hover::after {
+    left: auto;
+    right: 0;
+    transform: none;
 }
 html[data-theme="dark"] [data-tip]:hover::after { background: #000; }
 
