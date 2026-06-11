@@ -507,6 +507,9 @@ class Report extends Ork3
 			recs.deleted_by,
 			recs.snoozed_monarch_id,
 			recs.snoozed_regent_id,
+			recs.passed_to_local,
+			recs.passed_to_local_by,
+			recs.passed_to_local_at,
 			(SELECT COALESCE(MAX(CASE WHEN role='Monarch' THEN mundane_id END), 0) FROM " . DB_PREFIX . "officer WHERE park_id = m.park_id) AS current_monarch_id,
 			(SELECT COALESCE(MAX(CASE WHEN role='Regent'  THEN mundane_id END), 0) FROM " . DB_PREFIX . "officer WHERE park_id = m.park_id) AS current_regent_id,
 			(SELECT COUNT(*) FROM " . DB_PREFIX . "court_award ca WHERE ca.recommendations_id = recs.recommendations_id AND ca.status != 'cancelled') AS on_court_count,
@@ -668,6 +671,9 @@ class Report extends Ork3
 					'IsSnoozed' => $isSnoozed,
 					'IsOnCourt' => $row->on_court_count > 0,
 					'AgeDays'   => $ageDays,
+					'PassedToLocal'   => (int)$row->passed_to_local === 1,
+					'PassedToLocalBy' => $row->passed_to_local_by ? (int)$row->passed_to_local_by : null,
+					'PassedToLocalAt' => $row->passed_to_local_at,
 				);
 			}
 
