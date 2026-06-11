@@ -1386,9 +1386,10 @@
 						<tr class="pk-rec-row"
 							data-rec-id="<?= (int)$rec['RecommendationsId'] ?>" data-award-id="<?= (int)$rec['AwardId'] ?>"
 							data-snoozed="<?= !empty($rec['IsSnoozed']) ? '1' : '0' ?>"
+							data-passlocal="<?= !empty($rec['PassedToLocal']) ? '1' : '0' ?>"
 							data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
-							<td><?= htmlspecialchars(preg_replace('/^Order of(?:\\s+the)?\\s+/i', '', $rec['AwardName'])) ?></td>
+							<td><?= htmlspecialchars(preg_replace('/^Order of(?:\\s+the)?\\s+/i', '', $rec['AwardName'])) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="pk-rec-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?></td>
 							<td style="white-space:nowrap">
 								<?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?>
 								<?php if (!empty($rec['AlreadyHas'])): ?>
@@ -1504,6 +1505,10 @@ else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age
 			.kn-rec-age-yellow { background:#fefcbf; color:#744210; }
 			.kn-rec-age-orange { background:#fed7aa; color:#7b341e; }
 			.kn-rec-age-red    { background:#fed7d7; color:#742a2a; }
+			.pk-rec-passlocal { display:inline-block; margin-left:6px; font-size:11px; color:#2c5f8b; border:1px solid rgba(44,95,139,.4); border-radius:3px; padding:0 5px; white-space:nowrap; }
+			html[data-theme="dark"] .pk-rec-passlocal { color:#6fb0e6; border-color:rgba(111,176,230,.4); }
+			.pk-rec-passlocal[data-tip] { position:relative; }
+			.pk-rec-passlocal[data-tip]:hover::after { content:attr(data-tip); position:absolute; left:0; top:calc(100% + 4px); white-space:normal; width:220px; background:#1a202c; color:#fff; font-size:11px; padding:6px 8px; border-radius:4px; z-index:50; }
 			</style>
 			<div class="pk-cp-toolbar">
 				<span style="font-size:13px;color:#718096"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
