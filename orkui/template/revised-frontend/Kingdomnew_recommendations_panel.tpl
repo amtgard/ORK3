@@ -6,6 +6,10 @@
  * Expects $AwardRecommendations, $IsLoggedIn, $CanManageKingdom, $kingdom_name,
  * $kingdom_id to be in scope.
  */ ?>
+			<style>
+			.rm-inline-passlocal { display:inline-block; margin-left:6px; font-size:11px; color:#2c5f8b; border:1px solid rgba(44,95,139,.4); border-radius:3px; padding:0 5px; }
+			html[data-theme="dark"] .rm-inline-passlocal { color:#6fb0e6; }
+			</style>
 			<?php if ($IsLoggedIn): ?>
 			<div class="pk-tab-toolbar">
 				<button class="kn-btn kn-btn-secondary" onclick="knOpenRecModal()">
@@ -76,7 +80,7 @@
 						data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
 						<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 						<td><?php if (!empty($rec['ParkId'])): ?><a href="<?= UIR ?>Park/profile/<?= (int)$rec['ParkId'] ?>"><?= htmlspecialchars($rec['ParkName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
-						<td><?= htmlspecialchars($rec['AwardName']) ?></td>
+						<td><?= htmlspecialchars($rec['AwardName']) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="rm-inline-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?></td>
 						<td style="white-space:nowrap">
 							<?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?>
 							<?php if (!empty($rec['AlreadyHas'])): ?>
