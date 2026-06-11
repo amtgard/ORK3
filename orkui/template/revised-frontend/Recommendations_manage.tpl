@@ -1111,7 +1111,7 @@ document.getElementById('rm-court-submit').addEventListener('click', function ()
             rmPost(RmConfig.uir + 'CourtAjax/add_award', fd).then(function (j) {
                 if (j.status === 0) {
                     ok++;
-                    existing.push({ CourtId: courtId, Name: courtName, CourtDate: '', Status: 'draft' });
+                    existing.push({ CourtId: courtId, CourtAwardId: (j.award && j.award.CourtAwardId) || 0, Name: courtName, CourtDate: '', Status: 'draft' });
                     rec._tr.setAttribute('data-courts', JSON.stringify(existing));
                     rmUpdateCourtBadge(rec._tr, existing);
                     var box = rec._tr.querySelector('.rm-rowsel'); if (box) box.checked = false;

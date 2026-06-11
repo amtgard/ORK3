@@ -460,6 +460,15 @@ class Controller_CourtAjax extends Controller {
                  SET deleted_by = ' . $uid . ', deleted_at = NOW()
                  WHERE recommendations_id = ' . (int)$ca->recommendations_id
             );
+            // Cascade the soft-delete to the rec's seconds (mirrors
+            // class.Player::DeleteAwardRecommendation) so no orphaned live seconds remain.
+            $DB->Clear();
+            $DB->Execute(
+                'UPDATE ' . DB_PREFIX . 'recommendation_seconds
+                 SET deleted_by = ' . $uid . ', deleted_at = NOW()
+                 WHERE recommendations_id = ' . (int)$ca->recommendations_id . '
+                   AND deleted_at IS NULL'
+            );
         }
 
         $this->jsonOut(['status' => 0]);
