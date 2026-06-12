@@ -21,7 +21,7 @@
 		</div>
 		<div>
 			<span></span>
-			<span><input type='submit' value='Edit <?=$IsPrinz?'Principality':'Kingdom' ?>' name='EditKingdom' /></span>
+			<span><input type='submit' value='Edit <?=$IsPrinz?($OrgUnitLabel ?? 'Principality'):'Kingdom' ?>' name='EditKingdom' /></span>
 		</div>
 	</form>
 </div>
@@ -102,7 +102,7 @@
 				<tr>
 					<th>Park Title</th>
 					<th>Park Class</th>
-					<th>Principality</th>
+					<th><?= htmlspecialchars($OrgUnitLabel ?? "Principality") ?></th>
 					<th>Minimum</th>
 					<th>Cutoff</th>
 					<th>Term</th>

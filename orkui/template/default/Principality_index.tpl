@@ -52,9 +52,9 @@
 			Awards
 			<ul>
 				<li><a href='<?=UIR ?>Reports/knights_and_masters&PrincipalityId=<?=$principality_id ?>'>Knights and Masters</a></li>
-				<li><a href='<?=UIR ?>Reports/player_awards&Ladder=8&PrincipalityId=<?=$principality_id ?>'>Principality-level Awards</a></li>
+				<li><a href='<?=UIR ?>Reports/player_awards&Ladder=8&PrincipalityId=<?=$principality_id ?>'><?= htmlspecialchars($OrgUnitLabel ?? 'Principality') ?>-level Awards</a></li>
 				<li><a href='<?=UIR ?>Reports/class_masters&&PrincipalityId=<?=$principality_id ?>'>Class Masters/Paragons</a></li>
-				<li><a href='<?=UIR ?>Reports/guilds&PrincipalityId=<?=$principality_id ?>'>Principality Guilds</a></li>
+				<li><a href='<?=UIR ?>Reports/guilds&PrincipalityId=<?=$principality_id ?>'><?= htmlspecialchars($OrgUnitLabel ?? 'Principality') ?> Guilds</a></li>
 			</ul>
 		</li>
 		<li>
@@ -71,8 +71,8 @@
 		<li>
 			Heraldry
 			<ul>
-				<li><a href='<?=UIR ?>Reports/parkheraldry/<?=$principality_id ?>'>Principality Heraldry, Parks</a></li>
-				<li><a href='<?=UIR ?>Reports/playerheraldry/<?=$principality_id ?>'>Principality Heraldry, Players</a></li>
+				<li><a href='<?=UIR ?>Reports/parkheraldry/<?=$principality_id ?>'><?= htmlspecialchars($OrgUnitLabel ?? 'Principality') ?> Heraldry, Parks</a></li>
+				<li><a href='<?=UIR ?>Reports/playerheraldry/<?=$principality_id ?>'><?= htmlspecialchars($OrgUnitLabel ?? 'Principality') ?> Heraldry, Players</a></li>
 			</ul>
 		</li>
 		<li><a href='<?=UIR ?>Unit/unitlist&PrincipalityId=<?=$principality_id ?>'>Companies and Households</a></li>
