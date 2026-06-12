@@ -441,11 +441,8 @@
 				<!-- ===== Principalities (folded into Parks tab) ===== -->
 				<?php if (count($prinzParks) > 0): ?>
 
-					<!-- Child-org grouping divider (visible in BOTH tile and list view) -->
-					<h4 class="kn-bare-heading kn-prinz-group-head"><i class="fas fa-sitemap"></i><?= htmlspecialchars($ChildOrgUnitLabelPlural ?? 'Principalities') ?></h4>
-
 					<!-- Principality tile sections (tile view) -->
-					<div id="kn-prinz-tile-sections">
+					<div id="kn-prinz-tile-sections" style="--prinz-group-label:'<?= htmlspecialchars($ChildOrgUnitLabelPlural ?? 'Principalities', ENT_QUOTES) ?>'">
 						<?php foreach ($prinzParks as $prinz): ?>
 							<?php $prId = (int)$prinz['KingdomId']; $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId)); ?>
 							<section class="kn-prinz-section" data-prinz-id="<?= $prId ?>">
@@ -488,7 +485,7 @@
 					</div>
 
 					<!-- Principality tables (list view) -->
-					<div id="kn-prinz-tables" style="display:none">
+					<div id="kn-prinz-tables" style="--prinz-group-label:'<?= htmlspecialchars($ChildOrgUnitLabelPlural ?? 'Principalities', ENT_QUOTES) ?>';display:none">
 						<?php foreach ($prinzParks as $prinz): ?>
 							<?php $prId = (int)$prinz['KingdomId']; $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId)); ?>
 							<div class="kn-prinz-table-wrap" data-prinz-id="<?= $prId ?>">
@@ -1889,20 +1886,6 @@ html[data-theme="dark"] .kn-sidebar { background: var(--ork-bg-secondary); borde
 .kn-btn-danger { background: #c53030; color: #fff; border-color: #c53030; }
 html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; border-color: #fc8181; }
 
-/* Parks-tab child-org grouping divider (e.g. "Principalities" / "Grand Duchies").
-   Inherits the safe h-tag resets from .kn-bare-heading (transparent bg, no border);
-   uses theme variables so it is dark-mode compatible. */
-.kn-prinz-group-head {
-	margin: 22px 0 10px;
-	font-size: 15px;
-	font-weight: 700;
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	border-bottom: 1px solid var(--ork-border, #e2e8f0) !important;
-	padding-bottom: 6px !important;
-}
-.kn-prinz-group-head i { color: var(--ork-text-muted, #a0aec0); }
 
 /* ============================================================
    </style>
