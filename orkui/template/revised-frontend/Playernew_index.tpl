@@ -6113,7 +6113,7 @@ function pnOpenTestChooser() {
 	});
 	reportSubmit.addEventListener('click', function() {
 		var reason = reportReason.value;
-		if (!reason) { alert('Please select a reason.'); return; }
+		if (!reason) { showError('Please select a reason.'); return; }
 		var fd = new FormData();
 		fd.append('QuestionId', reportBtn.dataset.questionId);
 		fd.append('Reason', reason);
@@ -6141,21 +6141,22 @@ function pnOpenTestChooser() {
 	});
 
 	submitBtn.addEventListener('click', function() {
-		if (!confirm('Submit your test? This cannot be undone.')) return;
-		questionView.style.display = 'none';
-		showLoading(true);
-		var fd = new FormData();
-		fd.append('KingdomId', currentKingdom);
-		fd.append('TestType',  currentType);
-		fd.append('Answers',   JSON.stringify(answers));
-		fetch(PnConfig.uir + 'QualTestAjax/submittest', { method: 'POST', body: fd })
-			.then(function(r) { return r.json(); })
-			.then(function(j) {
-				showLoading(false);
-				if (j.status !== 0) { showError(j.error || 'Error submitting test.'); questionView.style.display = 'block'; return; }
-				showResult(j);
-			})
-			.catch(function() { showLoading(false); showError('Network error. Please try again.'); questionView.style.display = 'block'; });
+		pnConfirm({ title: 'Submit Test', message: 'Submit your test? This cannot be undone.', confirmText: 'Submit', danger: false }, function() {
+			questionView.style.display = 'none';
+			showLoading(true);
+			var fd = new FormData();
+			fd.append('KingdomId', currentKingdom);
+			fd.append('TestType',  currentType);
+			fd.append('Answers',   JSON.stringify(answers));
+			fetch(PnConfig.uir + 'QualTestAjax/submittest', { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(j) {
+					showLoading(false);
+					if (j.status !== 0) { showError(j.error || 'Error submitting test.'); questionView.style.display = 'block'; return; }
+					showResult(j);
+				})
+				.catch(function() { showLoading(false); showError('Network error. Please try again.'); questionView.style.display = 'block'; });
+		});
 	});
 
 	function animateScore(target, duration) {
@@ -6245,23 +6246,24 @@ function pnOpenTestChooser() {
 
 	document.querySelectorAll('.pn-qt-reset-retakes-btn').forEach(function(btn) {
 		btn.addEventListener('click', function() {
-			if (!confirm('Reset retake count for this player on this test?')) return;
-			var fd = new FormData();
-			fd.append('KingdomId', btn.dataset.kingdom);
-			fd.append('PlayerId',  btn.dataset.player);
-			fd.append('TestType',  btn.dataset.type);
-			fetch(PnConfig.uir + 'QualTestAjax/resetplayerretakes', { method: 'POST', body: fd })
-				.then(function(r) { return r.json(); })
-				.then(function(j) {
-					if (j.status === 0) {
-						// Swap warning back to take button if present
-						var card = btn.closest('.pn-qt-card');
-						var warn = card && card.querySelector('.pn-qt-retake-warning');
-						if (warn) warn.style.display = 'none';
-						btn.textContent = '\u2713 Done';
-						setTimeout(function() { location.reload(); }, 1200);
-					} else { alert(j.error || 'Error resetting retakes.'); }
-				});
+			pnConfirm({ title: 'Reset Retake Count', message: 'Reset retake count for this player on this test?', confirmText: 'Reset', danger: true }, function() {
+				var fd = new FormData();
+				fd.append('KingdomId', btn.dataset.kingdom);
+				fd.append('PlayerId',  btn.dataset.player);
+				fd.append('TestType',  btn.dataset.type);
+				fetch(PnConfig.uir + 'QualTestAjax/resetplayerretakes', { method: 'POST', body: fd })
+					.then(function(r) { return r.json(); })
+					.then(function(j) {
+						if (j.status === 0) {
+							// Swap warning back to take button if present
+							var card = btn.closest('.pn-qt-card');
+							var warn = card && card.querySelector('.pn-qt-retake-warning');
+							if (warn) warn.style.display = 'none';
+							btn.textContent = '\u2713 Done';
+							setTimeout(function() { location.reload(); }, 1200);
+						} else { showError(j.error || 'Error resetting retakes.'); }
+					});
+			});
 		});
 	});
 

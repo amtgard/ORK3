@@ -8048,6 +8048,9 @@ html[data-theme="dark"] .kn-admin-config-label { color: var(--ork-text-secondary
 html[data-theme="dark"] .kn-admin-config-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
 html[data-theme="dark"] .kn-admin-config-input:focus { border-color: #90cdf4; }
 html[data-theme="dark"] .kn-admin-config-sublabel { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-toggle-wrap { border-color: var(--ork-input-border); }
+html[data-theme="dark"] .kn-toggle-btn { background: var(--ork-input-bg); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-toggle-btn:first-child { border-right-color: var(--ork-input-border); }
 /* Add Award / Add Kingdom-Specific Award forms */
 /* Operations section */
 html[data-theme="dark"] .kn-admin-ops-info strong { color: var(--ork-text); }

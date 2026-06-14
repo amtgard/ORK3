@@ -1,10 +1,11 @@
 <?php
 
-class QualTest {
-
+class QualTest
+{
     private $db;
 
-    public function __construct() {
+    public function __construct()
+    {
         global $DB;
         $this->db = $DB;
     }
@@ -17,11 +18,15 @@ class QualTest {
      * Returns true if $uid may manage qualification tests for this kingdom.
      * Grants access to: kingdom editors and officers with role Monarch/Regent/Prime Minister.
      */
-    public function canManage($uid, $kingdom_id) {
-        if ($uid <= 0 || !valid_id($kingdom_id)) return false;
+    public function canManage($uid, $kingdom_id)
+    {
+        if ($uid <= 0 || !valid_id($kingdom_id)) {
+            return false;
+        }
 
-        if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT))
+        if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
             return true;
+        }
 
         $this->db->Clear();
         $r = $this->db->DataSet(
@@ -32,7 +37,9 @@ class QualTest {
                AND role IN (\'Monarch\',\'Regent\',\'Prime Minister\')
              LIMIT 1'
         );
-        if ($r && $r->Next()) return true;
+        if ($r && $r->Next()) {
+            return true;
+        }
 
         // Test manager list
         $this->db->Clear();
@@ -42,7 +49,9 @@ class QualTest {
                AND mundane_id = ' . (int)$uid . '
              LIMIT 1'
         );
-        if ($m && $m->Next()) return true;
+        if ($m && $m->Next()) {
+            return true;
+        }
 
         return false;
     }
@@ -55,7 +64,8 @@ class QualTest {
      * Return all test managers for a kingdom.
      * Returns array of ['MundaneId' => int, 'Name' => string, 'AddedAt' => string]
      */
-    public function getManagers($kingdom_id) {
+    public function getManagers($kingdom_id)
+    {
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT qm.qual_manager_id, qm.mundane_id, qm.added_at,
@@ -82,10 +92,13 @@ class QualTest {
     /**
      * Add a test manager for a kingdom. Silently ignores duplicates.
      */
-    public function addManager($kingdom_id, $mundane_id) {
+    public function addManager($kingdom_id, $mundane_id)
+    {
         $kingdom_id = (int)$kingdom_id;
         $mundane_id = (int)$mundane_id;
-        if (!$kingdom_id || !$mundane_id) return false;
+        if (!$kingdom_id || !$mundane_id) {
+            return false;
+        }
         $this->db->Clear();
         $this->db->Execute(
             'INSERT IGNORE INTO ' . DB_PREFIX . 'qual_manager
@@ -98,7 +111,8 @@ class QualTest {
     /**
      * Remove a test manager from a kingdom.
      */
-    public function removeManager($kingdom_id, $mundane_id) {
+    public function removeManager($kingdom_id, $mundane_id)
+    {
         $kingdom_id = (int)$kingdom_id;
         $mundane_id = (int)$mundane_id;
         $this->db->Clear();
@@ -117,7 +131,8 @@ class QualTest {
     /**
      * Fetch test config for a kingdom+type. Returns defaults if not set.
      */
-    public function getConfig($kingdom_id, $test_type) {
+    public function getConfig($kingdom_id, $test_type)
+    {
         $test_type = $this->sanitizeType($test_type);
         $this->db->Clear();
         $rs = $this->db->DataSet(
@@ -136,7 +151,7 @@ class QualTest {
                 'ValidDays'     => (int)$rs->valid_days,
                 'ValidUntil'    => $rs->valid_until ?? null,
                 'MaxRetakes'    => (int)$rs->max_retakes,
-                'ShareQuestions'=> (int)$rs->share_questions,
+                'ShareQuestions' => (int)$rs->share_questions,
                 'Instructions'  => $rs->instructions ?? null,
                 'RulesVersion'  => $rs->rules_version ?? '',
                 'ShowCorrectOnIncorrect' => (int)$rs->show_correct_on_incorrect,
@@ -151,7 +166,7 @@ class QualTest {
             'ValidDays'     => 365,
             'ValidUntil'    => null,
             'MaxRetakes'    => 0,
-            'ShareQuestions'=> 0,
+            'ShareQuestions' => 0,
             'Instructions'  => null,
             'RulesVersion'  => '',
             'ShowCorrectOnIncorrect' => 0,
@@ -161,7 +176,8 @@ class QualTest {
     /**
      * Upsert test config for a kingdom+type.
      */
-    public function saveConfig($kingdom_id, $test_type, $question_count, $pass_percent, $valid_days, $valid_until = null, $max_retakes = 0, $share_questions = 0, $instructions = null, $rules_version = null, $show_correct_on_incorrect = 0) {
+    public function saveConfig($kingdom_id, $test_type, $question_count, $pass_percent, $valid_days, $valid_until = null, $max_retakes = 0, $share_questions = 0, $instructions = null, $rules_version = null, $show_correct_on_incorrect = 0)
+    {
         $test_type      = $this->sanitizeType($test_type);
         $kingdom_id     = (int)$kingdom_id;
         $question_count = max(1, (int)$question_count);
@@ -227,7 +243,8 @@ class QualTest {
     /**
      * All questions for a kingdom+type (admin listing, all statuses).
      */
-    public function getAllQuestions($kingdom_id, $test_type) {
+    public function getAllQuestions($kingdom_id, $test_type)
+    {
         $test_type = $this->sanitizeType($test_type);
         $this->db->Clear();
         $rs = $this->db->DataSet(
@@ -271,14 +288,17 @@ class QualTest {
     /**
      * Single question + answers (for admin edit form).
      */
-    public function getQuestion($question_id) {
+    public function getQuestion($question_id)
+    {
         $question_id = (int)$question_id;
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT * FROM ' . DB_PREFIX . 'qual_question
              WHERE qual_question_id = ' . $question_id . ' LIMIT 1'
         );
-        if (!$rs || !$rs->Next()) return null;
+        if (!$rs || !$rs->Next()) {
+            return null;
+        }
 
         $q = [
             'QualQuestionId' => (int)$rs->qual_question_id,
@@ -312,21 +332,31 @@ class QualTest {
      * $data: ['KingdomId', 'TestType', 'QuestionText', 'Answers' => [['AnswerText', 'IsCorrect'], ...]]
      * $question_id: 0 for new, >0 to update.
      */
-    public function saveQuestion($question_id, $data) {
+    public function saveQuestion($question_id, $data)
+    {
         $question_id   = (int)$question_id;
         $kingdom_id    = (int)($data['KingdomId'] ?? 0);
         $test_type     = $this->sanitizeType($data['TestType'] ?? '');
         $question_text = trim($data['QuestionText'] ?? '');
         $answers       = is_array($data['Answers']) ? $data['Answers'] : [];
 
-        if (!$question_text || !$test_type || !valid_id($kingdom_id)) return 0;
-        if (count($answers) < 2) return 0;
+        if (!$question_text || !$test_type || !valid_id($kingdom_id)) {
+            return 0;
+        }
+        if (count($answers) < 2) {
+            return 0;
+        }
 
         $has_correct = false;
         foreach ($answers as $a) {
-            if (!empty($a['IsCorrect'])) { $has_correct = true; break; }
+            if (!empty($a['IsCorrect'])) {
+                $has_correct = true;
+                break;
+            }
         }
-        if (!$has_correct) return 0;
+        if (!$has_correct) {
+            return 0;
+        }
 
         if ($question_id > 0) {
             $this->db->Clear();
@@ -336,7 +366,7 @@ class QualTest {
                  WHERE qual_question_id = ' . $question_id
             );
         } else {
-            $created_by = 0;
+            $created_by = (int)($data['CreatedBy'] ?? 0);
             $this->db->Clear();
             $this->db->Execute(
                 'INSERT INTO ' . DB_PREFIX . 'qual_question
@@ -350,24 +380,59 @@ class QualTest {
             }
         }
 
-        if ($question_id <= 0) return 0;
+        if ($question_id <= 0) {
+            return 0;
+        }
 
-        // Replace all answers
+        // Count how many answers we expect to insert (non-empty text) so we can
+        // verify the loop completed fully before committing.
+        $expected = 0;
+        foreach ($answers as $a) {
+            if (trim($a['AnswerText'] ?? '') !== '') {
+                $expected++;
+            }
+        }
+
+        // Replace all answers atomically: a partial answer set would still pass
+        // the count>=2 active check, so the DELETE + INSERT loop must be
+        // all-or-nothing.
+        $this->db->Clear();
+        $this->db->Execute('START TRANSACTION');
+
         $this->db->Clear();
         $this->db->Execute(
             'DELETE FROM ' . DB_PREFIX . 'qual_answer WHERE qual_question_id = ' . $question_id
         );
+
+        $inserted = 0;
         foreach ($answers as $a) {
             $text       = trim($a['AnswerText'] ?? '');
             $is_correct = empty($a['IsCorrect']) ? 0 : 1;
-            if (!$text) continue;
+            if (!$text) {
+                continue;
+            }
             $this->db->Clear();
-            $this->db->Execute(
+            $ok = $this->db->Execute(
                 'INSERT INTO ' . DB_PREFIX . 'qual_answer
                  (qual_question_id, answer_text, is_correct)
                  VALUES (' . $question_id . ', \'' . $this->esc($text) . '\', ' . $is_correct . ')'
             );
+            if ($ok === false) {
+                $this->db->Clear();
+                $this->db->Execute('ROLLBACK');
+                return 0;
+            }
+            $inserted++;
         }
+
+        if ($inserted < $expected) {
+            $this->db->Clear();
+            $this->db->Execute('ROLLBACK');
+            return 0;
+        }
+
+        $this->db->Clear();
+        $this->db->Execute('COMMIT');
 
         return $question_id;
     }
@@ -375,7 +440,8 @@ class QualTest {
     /**
      * Set question status (active or archived).
      */
-    public function setQuestionStatus($question_id, $status) {
+    public function setQuestionStatus($question_id, $status)
+    {
         $status = ($status === 'archived') ? 'archived' : 'active';
         $this->db->Clear();
         $this->db->Execute(
@@ -394,7 +460,20 @@ class QualTest {
      * Get $limit random active questions with shuffled answers (no is_correct flag).
      * Returns null if not enough active questions exist.
      */
-    public function getQuestionsForTest($kingdom_id, $test_type, $limit) {
+    public function getQuestionsForTest($kingdom_id, $test_type, $limit)
+    {
+        return $this->_loadQuestionsAndAnswers($kingdom_id, $test_type, $limit, false);
+    }
+
+    /**
+     * Shared loader for the player test path and the admin preview path.
+     * Returns $limit random active questions with shuffled answers, or null if
+     * not enough active questions exist. When $includeCorrect is true the answer
+     * rows carry the is_correct flag (admin preview); otherwise it is stripped
+     * (player payload).
+     */
+    private function _loadQuestionsAndAnswers($kingdom_id, $test_type, $limit, $includeCorrect = false)
+    {
         $test_type = $this->sanitizeType($test_type);
         $limit     = max(1, (int)$limit);
 
@@ -423,13 +502,16 @@ class QualTest {
             }
         }
 
-        if (count($questions) < $limit) return null;
+        if (count($questions) < $limit) {
+            return null;
+        }
 
-        // Load answers, strip is_correct from public payload
+        // Only select is_correct when the caller needs it (admin preview).
+        $correct_col = $includeCorrect ? ', is_correct' : '';
         $ids_str = implode(',', $qids);
         $this->db->Clear();
         $ars = $this->db->DataSet(
-            'SELECT qual_answer_id, qual_question_id, answer_text
+            'SELECT qual_answer_id, qual_question_id, answer_text' . $correct_col . '
              FROM ' . DB_PREFIX . 'qual_answer
              WHERE qual_question_id IN (' . $ids_str . ')
              ORDER BY RAND()'
@@ -438,10 +520,14 @@ class QualTest {
             while ($ars->Next()) {
                 $qid = (int)$ars->qual_question_id;
                 if (isset($questions[$qid])) {
-                    $questions[$qid]['Answers'][] = [
+                    $answer = [
                         'QualAnswerId' => (int)$ars->qual_answer_id,
                         'AnswerText'   => $ars->answer_text,
                     ];
+                    if ($includeCorrect) {
+                        $answer['IsCorrect'] = (bool)(int)$ars->is_correct;
+                    }
+                    $questions[$qid]['Answers'][] = $answer;
                 }
             }
         }
@@ -453,8 +539,11 @@ class QualTest {
      * Get correct answer IDs for a set of question IDs (server-side scoring).
      * Returns array: [question_id => correct_answer_id, ...]
      */
-    public function getCorrectAnswers($question_ids, $kingdom_id = 0, $test_type = '') {
-        if (empty($question_ids)) return [];
+    public function getCorrectAnswers($question_ids, $kingdom_id = 0, $test_type = '')
+    {
+        if (empty($question_ids)) {
+            return [];
+        }
         $ids_str    = implode(',', array_map('intval', $question_ids));
         $test_type  = $this->sanitizeType($test_type);
         // JOIN through qual_question to verify kingdom + type ownership
@@ -468,6 +557,12 @@ class QualTest {
              JOIN ' . DB_PREFIX . 'qual_question q ON q.qual_question_id = a.qual_question_id
              WHERE a.qual_question_id IN (' . $ids_str . ')
                AND a.is_correct = 1
+               AND a.qual_answer_id = (
+                   SELECT MIN(a2.qual_answer_id)
+                   FROM ' . DB_PREFIX . 'qual_answer a2
+                   WHERE a2.qual_question_id = a.qual_question_id
+                     AND a2.is_correct = 1
+               )
                ' . $where_kq
         );
         $map = [];
@@ -485,12 +580,15 @@ class QualTest {
      * $submitted:   [question_id => submitted_answer_id]
      * Returns ['score_percent' => int, 'correct' => int, 'total' => int]
      */
-    public function scoreTest($correct_map, $submitted) {
+    public function scoreTest($correct_map, $submitted)
+    {
         $total   = count($correct_map);
         $correct = 0;
         foreach ($correct_map as $qid => $correct_aid) {
             $given = isset($submitted[$qid]) ? (int)$submitted[$qid] : 0;
-            if ($given === (int)$correct_aid) $correct++;
+            if ($given === (int)$correct_aid) {
+                $correct++;
+            }
         }
         $percent = $total > 0 ? (int)round(($correct / $total) * 100) : 0;
         return ['score_percent' => $percent, 'correct' => $correct, 'total' => $total];
@@ -501,26 +599,35 @@ class QualTest {
      * $correct_map: [question_id => correct_answer_id]
      * $submitted:   [question_id => submitted_answer_id]
      */
-    public function recordQuestionStats($correct_map, $submitted) {
+    public function recordQuestionStats($correct_map, $submitted)
+    {
+        $rows = [];
         foreach ($correct_map as $qid => $correct_aid) {
-            $qid        = (int)$qid;
+            $qid         = (int)$qid;
             $was_correct = (isset($submitted[$qid]) && (int)$submitted[$qid] === (int)$correct_aid) ? 1 : 0;
-            $this->db->Clear();
-            $this->db->Execute(
-                'INSERT INTO ' . DB_PREFIX . 'qual_question_stat
-                 (qual_question_id, times_answered, times_correct)
-                 VALUES (' . $qid . ', 1, ' . $was_correct . ')
-                 ON DUPLICATE KEY UPDATE
-                   times_answered = times_answered + 1,
-                   times_correct  = times_correct  + ' . $was_correct
-            );
+            $rows[] = '(' . $qid . ', 1, ' . $was_correct . ')';
         }
+        if (empty($rows)) {
+            return;
+        }
+
+        // Single multi-row upsert instead of one round-trip per question.
+        $this->db->Clear();
+        $this->db->Execute(
+            'INSERT INTO ' . DB_PREFIX . 'qual_question_stat
+             (qual_question_id, times_answered, times_correct)
+             VALUES ' . implode(', ', $rows) . '
+             ON DUPLICATE KEY UPDATE
+               times_answered = times_answered + VALUES(times_answered),
+               times_correct  = times_correct  + VALUES(times_correct)'
+        );
     }
 
     /**
      * Record (or update) a player's passing result.
      */
-    public function recordResult($player_id, $kingdom_id, $test_type, $score_percent, $valid_days, $valid_until = null) {
+    public function recordResult($player_id, $kingdom_id, $test_type, $score_percent, $valid_days, $valid_until = null)
+    {
         $player_id     = (int)$player_id;
         $kingdom_id    = (int)$kingdom_id;
         $test_type     = $this->sanitizeType($test_type);
@@ -567,7 +674,8 @@ class QualTest {
     /**
      * Reset the success-rate counters for a single question.
      */
-    public function resetQuestionStats($question_id) {
+    public function resetQuestionStats($question_id)
+    {
         $this->db->Clear();
         $this->db->Execute(
             'DELETE FROM ' . DB_PREFIX . 'qual_question_stat WHERE qual_question_id = ' . (int)$question_id
@@ -579,7 +687,8 @@ class QualTest {
      * Write qualification outcome back to ork_mundane so the player sidebar card stays current.
      * Called after every test submission (pass or non-pass after expiry).
      */
-    public function syncMundaneQual($player_id, $test_type, $expires_date) {
+    public function syncMundaneQual($player_id, $test_type, $expires_date)
+    {
         $player_id = (int)$player_id;
         $test_type = $this->sanitizeType($test_type);
         if ($test_type === 'reeve') {
@@ -603,12 +712,17 @@ class QualTest {
      * Get all test results for a player in a kingdom.
      * Returns array keyed by test_type.
      */
-    public function getPlayerResults($player_id, $kingdom_id) {
+    public function getPlayerResults($player_id, $kingdom_id)
+    {
         $player_id  = (int)$player_id;
         $kingdom_id = (int)$kingdom_id;
+        // Compute expiry authoritatively in SQL (NOW() shares the DB session TZ
+        // with the stored expires_at) to avoid PHP-local-vs-time() skew.
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT * FROM ' . DB_PREFIX . 'qual_result
+            'SELECT qual_result_id, test_type, score_percent, passed_at, expires_at,
+                    (expires_at <= NOW()) AS is_expired
+             FROM ' . DB_PREFIX . 'qual_result
              WHERE player_id = ' . $player_id . '
                AND kingdom_id = ' . $kingdom_id
         );
@@ -621,7 +735,7 @@ class QualTest {
                     'ScorePercent' => (int)$rs->score_percent,
                     'PassedAt'     => $rs->passed_at,
                     'ExpiresAt'    => $rs->expires_at,
-                    'Expired'      => strtotime($rs->expires_at) < time(),
+                    'Expired'      => (bool)(int)$rs->is_expired,
                     'RetakeCount'  => 0,
                 ];
             }
@@ -657,7 +771,8 @@ class QualTest {
     /**
      * Count active questions for a kingdom+type.
      */
-    public function countActiveQuestions($kingdom_id, $test_type) {
+    public function countActiveQuestions($kingdom_id, $test_type)
+    {
         $test_type = $this->sanitizeType($test_type);
         $this->db->Clear();
         $rs = $this->db->DataSet(
@@ -666,7 +781,9 @@ class QualTest {
                AND test_type = \'' . $test_type . '\'
                AND status = \'active\''
         );
-        if ($rs && $rs->Next()) return (int)$rs->cnt;
+        if ($rs && $rs->Next()) {
+            return (int)$rs->cnt;
+        }
         return 0;
     }
 
@@ -679,8 +796,27 @@ class QualTest {
      * excluding the given kingdom's own questions.
      * Returns array of questions each with KingdomName + Answers (no is_correct exposed).
      */
-    public function getLibraryQuestions($excluding_kingdom_id) {
+    public function getLibraryQuestions($excluding_kingdom_id)
+    {
         $excluding_kingdom_id = (int)$excluding_kingdom_id;
+
+        // Load the destination kingdom's active question texts once so we can
+        // dedup in PHP, avoiding a per-row correlated subquery against the
+        // un-indexable TEXT column.
+        $own_texts = [];
+        $this->db->Clear();
+        $ors = $this->db->DataSet(
+            'SELECT question_text FROM ' . DB_PREFIX . 'qual_question
+             WHERE kingdom_id = ' . $excluding_kingdom_id . '
+               AND test_type = \'reeve\'
+               AND status = \'active\''
+        );
+        if ($ors) {
+            while ($ors->Next()) {
+                $own_texts[$ors->question_text] = true;
+            }
+        }
+
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT q.qual_question_id, q.question_text, q.kingdom_id,
@@ -692,18 +828,17 @@ class QualTest {
              WHERE q.kingdom_id != ' . $excluding_kingdom_id . '
                AND q.test_type = \'reeve\'
                AND q.status = \'active\'
-               AND NOT EXISTS (
-                   SELECT 1 FROM ' . DB_PREFIX . 'qual_question own
-                   WHERE own.kingdom_id = ' . $excluding_kingdom_id . '
-                     AND own.question_text = q.question_text
-                     AND own.status = \'active\'
-               )
-             ORDER BY k.name ASC, q.qual_question_id ASC'
+             ORDER BY k.name ASC, q.qual_question_id ASC
+             LIMIT 500'
         );
         $questions = [];
         $qids      = [];
         if ($rs) {
             while ($rs->Next()) {
+                // Drop library rows whose text already exists in the destination.
+                if (isset($own_texts[$rs->question_text])) {
+                    continue;
+                }
                 $qid = (int)$rs->qual_question_id;
                 $qids[] = $qid;
                 $questions[$qid] = [
@@ -743,7 +878,8 @@ class QualTest {
      * Copy a question (and its answers) from another kingdom into $dest_kingdom_id.
      * Returns the new question_id, or 0 on failure.
      */
-    public function copyQuestionToKingdom($source_question_id, $dest_kingdom_id, $created_by = 0) {
+    public function copyQuestionToKingdom($source_question_id, $dest_kingdom_id, $created_by = 0)
+    {
         $source_question_id = (int)$source_question_id;
         $dest_kingdom_id    = (int)$dest_kingdom_id;
 
@@ -756,15 +892,21 @@ class QualTest {
                AND q.test_type = \'reeve\'
              ORDER BY a_list.qual_answer_id'
         );
-        if (!$rs) return 0;
+        if (!$rs) {
+            return 0;
+        }
 
         $question_text = null;
         $answers       = [];
         while ($rs->Next()) {
-            if ($question_text === null) $question_text = $rs->question_text;
+            if ($question_text === null) {
+                $question_text = $rs->question_text;
+            }
             $answers[] = ['text' => $rs->answer_text, 'correct' => (int)$rs->is_correct];
         }
-        if (!$question_text || count($answers) < 2) return 0;
+        if (!$question_text || count($answers) < 2) {
+            return 0;
+        }
 
         $this->db->Clear();
         $this->db->Execute(
@@ -774,7 +916,9 @@ class QualTest {
         );
         $this->db->Clear();
         $ir = $this->db->DataSet('SELECT LAST_INSERT_ID() AS new_id');
-        if (!$ir || !$ir->Next() || (int)$ir->new_id <= 0) return 0;
+        if (!$ir || !$ir->Next() || (int)$ir->new_id <= 0) {
+            return 0;
+        }
         $new_qid = (int)$ir->new_id;
 
         foreach ($answers as $a) {
@@ -795,7 +939,8 @@ class QualTest {
     /**
      * Increment retake counter for a player (called on every submission).
      */
-    public function incrementRetakeCount($player_id, $kingdom_id, $test_type) {
+    public function incrementRetakeCount($player_id, $kingdom_id, $test_type)
+    {
         $test_type = $this->sanitizeType($test_type);
         $this->db->Clear();
         $this->db->Execute(
@@ -808,7 +953,8 @@ class QualTest {
     /**
      * Get retake count for a single player+kingdom+type.
      */
-    public function getRetakeCount($player_id, $kingdom_id, $test_type) {
+    public function getRetakeCount($player_id, $kingdom_id, $test_type)
+    {
         $test_type = $this->sanitizeType($test_type);
         $this->db->Clear();
         $rs = $this->db->DataSet(
@@ -818,14 +964,17 @@ class QualTest {
             . ' AND test_type = \'' . $test_type . '\''
             . ' LIMIT 1'
         );
-        if ($rs && $rs->Next()) return (int)$rs->retake_count;
+        if ($rs && $rs->Next()) {
+            return (int)$rs->retake_count;
+        }
         return 0;
     }
 
     /**
      * Reset retake counter for a single player.
      */
-    public function resetPlayerRetakes($player_id, $kingdom_id, $test_type) {
+    public function resetPlayerRetakes($player_id, $kingdom_id, $test_type)
+    {
         $test_type = $this->sanitizeType($test_type);
         $this->db->Clear();
         $this->db->Execute(
@@ -839,7 +988,8 @@ class QualTest {
     /**
      * Reset retake counters for all players in a kingdom+type.
      */
-    public function resetAllRetakes($kingdom_id, $test_type) {
+    public function resetAllRetakes($kingdom_id, $test_type)
+    {
         $test_type = $this->sanitizeType($test_type);
         $this->db->Clear();
         $this->db->Execute(
@@ -857,9 +1007,12 @@ class QualTest {
      * Record a player's report against a question.
      * $reason: 'wording' | 'correct' | 'outdated' | 'other'
      */
-    public function reportQuestion($question_id, $player_id, $reason) {
+    public function reportQuestion($question_id, $player_id, $reason)
+    {
         $valid = ['wording', 'correct', 'outdated', 'other'];
-        if (!in_array($reason, $valid, true)) return false;
+        if (!in_array($reason, $valid, true)) {
+            return false;
+        }
         $this->db->Clear();
         $this->db->Execute(
             'INSERT INTO ' . DB_PREFIX . 'qual_report
@@ -873,7 +1026,8 @@ class QualTest {
      * Get report count breakdown for a single question.
      * Returns ['total' => int, 'wording' => int, 'correct' => int, 'outdated' => int, 'other' => int]
      */
-    public function getReportCounts($question_id) {
+    public function getReportCounts($question_id)
+    {
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT reason, COUNT(*) AS cnt
@@ -897,7 +1051,8 @@ class QualTest {
     /**
      * Delete all reports for a question (call after archiving or editing to clear the flag).
      */
-    public function clearReports($question_id) {
+    public function clearReports($question_id)
+    {
         $this->db->Clear();
         $this->db->Execute(
             'DELETE FROM ' . DB_PREFIX . 'qual_report WHERE qual_question_id = ' . (int)$question_id
@@ -913,7 +1068,8 @@ class QualTest {
      * Get all test completions for a kingdom+type, ordered most recent first.
      * Returns array of rows with: PassedAt, Persona, ParkName, ParkId, MundaneId, ScorePercent, ExpiresAt, PassPercent, FlagCount
      */
-    public function getTestResults($kingdom_id, $test_type) {
+    public function getTestResults($kingdom_id, $test_type)
+    {
         $kingdom_id = (int)$kingdom_id;
         $test_type  = $this->sanitizeType($test_type);
 
@@ -955,7 +1111,8 @@ class QualTest {
      * Get summary stats for a kingdom+type test report header.
      * Returns: ActiveQualified, ActivePlayers, PassRate6Mo, ActiveQuestions, FlaggedQuestions
      */
-    public function getTestReportStats($kingdom_id, $test_type) {
+    public function getTestReportStats($kingdom_id, $test_type)
+    {
         $kingdom_id = (int)$kingdom_id;
         $test_type  = $this->sanitizeType($test_type);
         $now = date('Y-m-d H:i:s');
@@ -1040,59 +1197,9 @@ class QualTest {
     /**
      * Like getQuestionsForTest but INCLUDES is_correct flags (admin preview).
      */
-    public function getQuestionsForPreview($kingdom_id, $test_type, $limit) {
-        $test_type = $this->sanitizeType($test_type);
-        $limit     = max(1, (int)$limit);
-
-        $this->db->Clear();
-        $rs = $this->db->DataSet(
-            'SELECT qual_question_id, question_text
-             FROM ' . DB_PREFIX . 'qual_question
-             WHERE kingdom_id = ' . (int)$kingdom_id . '
-               AND test_type = \'' . $test_type . '\'
-               AND status = \'active\'
-             ORDER BY RAND()
-             LIMIT ' . $limit
-        );
-
-        $questions = [];
-        $qids      = [];
-        if ($rs) {
-            while ($rs->Next()) {
-                $qid = (int)$rs->qual_question_id;
-                $qids[] = $qid;
-                $questions[$qid] = [
-                    'QualQuestionId' => $qid,
-                    'QuestionText'   => $rs->question_text,
-                    'Answers'        => [],
-                ];
-            }
-        }
-
-        if (count($questions) < $limit) return null;
-
-        $ids_str = implode(',', $qids);
-        $this->db->Clear();
-        $ars = $this->db->DataSet(
-            'SELECT qual_answer_id, qual_question_id, answer_text, is_correct
-             FROM ' . DB_PREFIX . 'qual_answer
-             WHERE qual_question_id IN (' . $ids_str . ')
-             ORDER BY RAND()'
-        );
-        if ($ars) {
-            while ($ars->Next()) {
-                $qid = (int)$ars->qual_question_id;
-                if (isset($questions[$qid])) {
-                    $questions[$qid]['Answers'][] = [
-                        'QualAnswerId' => (int)$ars->qual_answer_id,
-                        'AnswerText'   => $ars->answer_text,
-                        'IsCorrect'    => (bool)(int)$ars->is_correct,
-                    ];
-                }
-            }
-        }
-
-        return array_values($questions);
+    public function getQuestionsForPreview($kingdom_id, $test_type, $limit)
+    {
+        return $this->_loadQuestionsAndAnswers($kingdom_id, $test_type, $limit, true);
     }
 
     // -----------------------------------------------------------------------
@@ -1103,13 +1210,18 @@ class QualTest {
      * Clone a question + answers within the same kingdom.
      * Always creates the clone as 'active' status.
      */
-    public function duplicateQuestion($question_id, $kingdom_id) {
+    public function duplicateQuestion($question_id, $kingdom_id)
+    {
         $question_id = (int)$question_id;
         $kingdom_id  = (int)$kingdom_id;
 
         $q = $this->getQuestion($question_id);
-        if (!$q || (int)$q['KingdomId'] !== $kingdom_id) return 0;
-        if (count($q['Answers']) < 2) return 0;
+        if (!$q || (int)$q['KingdomId'] !== $kingdom_id) {
+            return 0;
+        }
+        if (count($q['Answers']) < 2) {
+            return 0;
+        }
 
         $new_text  = 'Copy of ' . $q['QuestionText'];
         $test_type = $this->sanitizeType($q['TestType']);
@@ -1122,7 +1234,9 @@ class QualTest {
         );
         $this->db->Clear();
         $ir = $this->db->DataSet('SELECT LAST_INSERT_ID() AS new_id');
-        if (!$ir || !$ir->Next() || (int)$ir->new_id <= 0) return 0;
+        if (!$ir || !$ir->Next() || (int)$ir->new_id <= 0) {
+            return 0;
+        }
         $new_qid = (int)$ir->new_id;
 
         foreach ($q['Answers'] as $a) {
@@ -1141,10 +1255,13 @@ class QualTest {
      * Bulk-update question status for a set of IDs (verified against kingdom).
      * Returns count of updated rows, or false if any IDs don't belong to the kingdom.
      */
-    public function setQuestionStatusBatch($kingdom_id, $question_ids, $status) {
+    public function setQuestionStatusBatch($kingdom_id, $question_ids, $status)
+    {
         $kingdom_id = (int)$kingdom_id;
         $status = ($status === 'archived') ? 'archived' : 'active';
-        if (empty($question_ids)) return 0;
+        if (empty($question_ids)) {
+            return 0;
+        }
 
         $id_list = implode(',', array_map('intval', $question_ids));
 
@@ -1162,7 +1279,9 @@ class QualTest {
             }
         }
 
-        if (count($verified_ids) !== count($question_ids)) return false;
+        if (count($verified_ids) !== count($question_ids)) {
+            return false;
+        }
 
         $safe_list = implode(',', $verified_ids);
         $this->db->Clear();
@@ -1184,12 +1303,15 @@ class QualTest {
      * Import multiple questions at once. Max 200 per batch.
      * Returns ['imported' => int, 'errors' => [['index' => int, 'error' => string]]]
      */
-    public function saveQuestionBatch($kingdom_id, $test_type, $questions_array) {
+    public function saveQuestionBatch($kingdom_id, $test_type, $questions_array, $created_by = 0)
+    {
         $kingdom_id = (int)$kingdom_id;
         $test_type  = $this->sanitizeType($test_type);
+        $created_by = (int)$created_by;
         $imported   = 0;
         $errors     = [];
 
+        // Hard cap at 200 questions per batch to avoid max_execution_time blowups.
         if (count($questions_array) > 200) {
             return ['imported' => 0, 'errors' => [['index' => 0, 'error' => 'Maximum 200 questions per batch.']]];
         }
@@ -1206,9 +1328,13 @@ class QualTest {
             $has_correct   = false;
             foreach ($answers as $a) {
                 $atext = trim($a['AnswerText'] ?? '');
-                if (!$atext) continue;
+                if (!$atext) {
+                    continue;
+                }
                 $is_correct = !empty($a['IsCorrect']) ? 1 : 0;
-                if ($is_correct) $has_correct = true;
+                if ($is_correct) {
+                    $has_correct = true;
+                }
                 $clean_answers[] = ['AnswerText' => $atext, 'IsCorrect' => $is_correct];
             }
 
@@ -1226,6 +1352,7 @@ class QualTest {
                 'TestType'     => $test_type,
                 'QuestionText' => $text,
                 'Answers'      => $clean_answers,
+                'CreatedBy'    => $created_by,
             ]);
 
             if ($saved > 0) {
@@ -1238,15 +1365,17 @@ class QualTest {
         return ['imported' => $imported, 'errors' => $errors];
     }
 
-        // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
-    private function sanitizeType($type) {
+    private function sanitizeType($type)
+    {
         return ($type === 'corpora') ? 'corpora' : 'reeve';
     }
 
-    private function esc($v) {
+    private function esc($v)
+    {
         return str_replace(["'", '\\'], ["''", '\\\\'], $v);
     }
 }

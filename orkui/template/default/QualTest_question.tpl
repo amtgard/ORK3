@@ -55,6 +55,10 @@
 .qt-quick-pill { display: inline-block; padding: 4px 14px; border-radius: 16px; font-size: 0.8rem; font-weight: 600;
                  cursor: pointer; border: 1px solid #cbd5e0; background: #f7fafc; color: #4a5568; transition: all 0.15s; }
 .qt-quick-pill:hover { background: #ebf4ff; border-color: #90cdf4; color: #2b6cb0; }
+/* ── Tooltips (data-tip; replaces native title=) ── */
+[data-tip] { position: relative; }
+[data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #2d3748; color: #fff; font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: 4px; white-space: normal; width: max-content; max-width: 240px; pointer-events: none; opacity: 0; transition: opacity 0.1s; z-index: 100; }
+[data-tip]:hover::after { opacity: 1; }
 
 /* ── Dark mode ────────────────────────────────────────── */
 html[data-theme="dark"] .qt-nav-link {
@@ -182,11 +186,11 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 							<?php foreach ($answers as $i => $a): ?>
 							<li class="qt-answer-row">
 								<input type="radio" name="IsCorrect" value="<?= $i ?>"
-								       <?= ($i === $correctIdx) ? 'checked' : '' ?> title="Correct answer">
+								       <?= ($i === $correctIdx) ? 'checked' : '' ?> data-tip="Correct answer">
 								<input type="text" name="AnswerText[]"
 								       value="<?= htmlspecialchars($a['AnswerText']) ?>"
 								       placeholder="Answer <?= $i + 1 ?>">
-								<button type="button" class="qt-remove-btn" title="Remove">&times;</button>
+								<button type="button" class="qt-remove-btn" data-tip="Remove">&times;</button>
 							</li>
 							<?php endforeach; ?>
 						</ul>
@@ -195,7 +199,7 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 
 					<div class="qt-form-actions">
 						<button type="submit" class="qt-submit-btn" data-action="return">
-							<i class="fas fa-save"></i> <?= $isEdit ? 'Save and Return' : 'Save and Return' ?>
+							<i class="fas fa-save"></i> <?= 'Save and Return' ?>
 						</button>
 						<?php if (!$isEdit): ?>
 						<button type="submit" class="qt-submit-btn qt-submit-btn-ghost" data-action="another">
@@ -240,9 +244,9 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 		var idx = list.querySelectorAll('li').length;
 		var li  = document.createElement('li');
 		li.className = 'qt-answer-row';
-		li.innerHTML = '<input type="radio" name="IsCorrect" value="' + idx + '" title="Correct answer">'
+		li.innerHTML = '<input type="radio" name="IsCorrect" value="' + idx + '" data-tip="Correct answer">'
 		             + '<input type="text" name="AnswerText[]" placeholder="Answer ' + (idx + 1) + '">'
-		             + '<button type="button" class="qt-remove-btn" title="Remove">&times;</button>';
+		             + '<button type="button" class="qt-remove-btn" data-tip="Remove">&times;</button>';
 		attachRemove(li.querySelector('.qt-remove-btn'));
 		list.appendChild(li);
 	});
@@ -255,9 +259,9 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 			vals.forEach(function(text, i) {
 				var li = document.createElement('li');
 				li.className = 'qt-answer-row';
-				li.innerHTML = '<input type="radio" name="IsCorrect" value="' + i + '" title="Correct answer">'
+				li.innerHTML = '<input type="radio" name="IsCorrect" value="' + i + '" data-tip="Correct answer">'
 				             + '<input type="text" name="AnswerText[]" value="' + text + '" placeholder="Answer ' + (i + 1) + '">'
-				             + '<button type="button" class="qt-remove-btn" title="Remove">&times;</button>';
+				             + '<button type="button" class="qt-remove-btn" data-tip="Remove">&times;</button>';
 				attachRemove(li.querySelector('.qt-remove-btn'));
 				list.appendChild(li);
 			});

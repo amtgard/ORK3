@@ -44,8 +44,10 @@
 .qt-flag-btn { background: none; border: none; cursor: pointer; color: #e53e3e; font-size: 1rem; padding: 0 2px; line-height: 1; }
 .qt-flag-btn:hover { color: #9b2c2c; }
 [data-tip] { position: relative; }
-[data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #2d3748; color: #fff; font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: 4px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.1s; z-index: 100; }
+[data-tip]::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #2d3748; color: #fff; font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: 4px; white-space: normal; width: max-content; max-width: 240px; pointer-events: none; opacity: 0; transition: opacity 0.1s; z-index: 100; }
 [data-tip]:hover::after { opacity: 1; }
+/* Right-anchor tips in the Actions column so they don't clip off-screen */
+.qt-actions-cell [data-tip]::after { left: auto; right: 0; transform: none; }
 .qt-lib-question { border:1px solid #e2e8f0; border-radius:6px; padding:12px 14px; margin-bottom:10px; }
 .qt-lib-question-hdr { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
 .qt-lib-question-text { font-size:0.88rem; font-weight:600; color:#2d3748; flex:1; }
@@ -104,6 +106,21 @@
 .qt-preview-btn-secondary:hover { background:#cbd5e0; }
 .qt-preview-btn-draw { background:#2b6cb0; color:#fff; }
 .qt-preview-btn-draw:hover { background:#2c5282; }
+
+/* ── In-product confirm/alert modal (replaces native confirm/alert) ── */
+.qt-confirm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9500; align-items:center; justify-content:center; }
+.qt-confirm-overlay.qt-open { display:flex; }
+.qt-confirm-modal { background:#fff; border-radius:8px; padding:22px 24px; min-width:300px; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
+.qt-confirm-title { margin:0 0 10px; font-size:1rem; font-weight:700; color:#2d3748; }
+.qt-confirm-body { font-size:0.9rem; color:#4a5568; line-height:1.5; margin-bottom:18px; }
+.qt-confirm-footer { display:flex; gap:10px; justify-content:flex-end; }
+.qt-confirm-btn { padding:7px 16px; border-radius:5px; font-size:0.85rem; font-weight:600; cursor:pointer; border:none; }
+.qt-confirm-cancel { background:#e2e8f0; color:#2d3748; }
+.qt-confirm-cancel:hover { background:#cbd5e0; }
+.qt-confirm-ok { background:#2b6cb0; color:#fff; }
+.qt-confirm-ok:hover { background:#2c5282; }
+.qt-confirm-ok.qt-confirm-danger { background:#e53e3e; }
+.qt-confirm-ok.qt-confirm-danger:hover { background:#c53030; }
 
 /* ── Dark mode ────────────────────────────────────────── */
 html[data-theme="dark"] .qt-nav-link {
@@ -197,6 +214,11 @@ html[data-theme="dark"] .qt-preview-answer { color: var(--ork-text-secondary, #c
 html[data-theme="dark"] .qt-preview-correct { background: #22543d; color: #9ae6b4; }
 html[data-theme="dark"] .qt-preview-btn-secondary { background: #4a5568; color: #e2e8f0; }
 html[data-theme="dark"] .qt-preview-btn-secondary:hover { background: #718096; }
+html[data-theme="dark"] .qt-confirm-modal { background: var(--ork-bg-secondary, #2d3748); }
+html[data-theme="dark"] .qt-confirm-title { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .qt-confirm-body { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .qt-confirm-cancel { background: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 </style>
 
 <div class="rp-root">
@@ -293,7 +315,7 @@ html[data-theme="dark"] .qt-preview-btn-secondary:hover { background: #718096; }
 			<table id="qt-active-table" class="dataTable" style="width:100%">
 				<thead>
 					<tr>
-						<th class="qt-bulk-cb-th"><input type="checkbox" class="qt-bulk-cb" id="qt-active-select-all" title="Select all on this page"></th>
+						<th class="qt-bulk-cb-th"><input type="checkbox" class="qt-bulk-cb" id="qt-active-select-all" data-tip="Select all on this page"></th>
 						<th>Question</th>
 						<th>Answers</th>
 						<th>% Success</th>
@@ -380,7 +402,7 @@ html[data-theme="dark"] .qt-preview-btn-secondary:hover { background: #718096; }
 			<table id="qt-archived-table" class="dataTable" style="width:100%">
 				<thead>
 					<tr>
-						<th class="qt-bulk-cb-th"><input type="checkbox" class="qt-bulk-cb" id="qt-archived-select-all" title="Select all on this page"></th>
+						<th class="qt-bulk-cb-th"><input type="checkbox" class="qt-bulk-cb" id="qt-archived-select-all" data-tip="Select all on this page"></th>
 						<th>Question</th>
 						<th>Answers</th>
 						<th>% Success</th>
@@ -550,8 +572,47 @@ B) Dickens</div>
 	</div>
 </div>
 
+<!-- In-product confirm/alert modal -->
+<div class="qt-confirm-overlay" id="qt-confirm-overlay">
+	<div class="qt-confirm-modal">
+		<h4 class="qt-confirm-title" id="qt-confirm-title"></h4>
+		<div class="qt-confirm-body" id="qt-confirm-body"></div>
+		<div class="qt-confirm-footer">
+			<button type="button" class="qt-confirm-btn qt-confirm-cancel" id="qt-confirm-cancel">Cancel</button>
+			<button type="button" class="qt-confirm-btn qt-confirm-ok" id="qt-confirm-ok">OK</button>
+		</div>
+	</div>
+</div>
+
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
+// In-product replacement for native confirm()/alert().
+// qtConfirm({title, body, confirmLabel, danger, okOnly, onConfirm})
+var qtConfirm = (function() {
+	var overlay  = document.getElementById('qt-confirm-overlay');
+	var titleEl  = document.getElementById('qt-confirm-title');
+	var bodyEl   = document.getElementById('qt-confirm-body');
+	var cancelEl = document.getElementById('qt-confirm-cancel');
+	var okEl     = document.getElementById('qt-confirm-ok');
+	var pending  = null;
+	function close() { overlay.classList.remove('qt-open'); pending = null; }
+	okEl.addEventListener('click', function() { var cb = pending; close(); if (cb) cb(); });
+	cancelEl.addEventListener('click', close);
+	overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+	return function(opts) {
+		opts = opts || {};
+		titleEl.textContent = opts.title || 'Please Confirm';
+		bodyEl.textContent  = opts.body || '';
+		okEl.textContent    = opts.confirmLabel || (opts.okOnly ? 'OK' : 'Confirm');
+		okEl.classList.toggle('qt-confirm-danger', !!opts.danger);
+		cancelEl.style.display = opts.okOnly ? 'none' : '';
+		pending = typeof opts.onConfirm === 'function' ? opts.onConfirm : null;
+		overlay.classList.add('qt-open');
+	};
+})();
+// Convenience inline error (replaces native alert in fetch error paths)
+function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); }
+
 $(function() {
 	var dtOpts = { pageLength: 25, order: [[4, 'desc']], columnDefs: [{ orderable: false, targets: [0, 5] }] };
 	var activeTable = null, archivedTable = null;
@@ -651,17 +712,24 @@ $(function() {
 	function doBulkStatus(ids, status) {
 		if (!ids.length) return;
 		var label = status === 'archived' ? 'archive' : 'restore';
-		if (!confirm(label.charAt(0).toUpperCase() + label.slice(1) + ' ' + ids.length + ' question(s)?')) return;
-		var fd = new FormData();
-		fd.append('KingdomId', '<?= (int)$KingdomId ?>');
-		fd.append('QuestionIds', JSON.stringify(ids));
-		fd.append('Status', status);
-		fetch('<?= UIR ?>QualTestAjax/bulkstatus', { method: 'POST', body: fd })
-			.then(function(r) { return r.json(); })
-			.then(function(j) {
-				if (j.status === 0) window.location.reload();
-				else alert(j.error || 'Error updating status.');
-			});
+		qtConfirm({
+			title: label.charAt(0).toUpperCase() + label.slice(1) + ' Questions',
+			body: label.charAt(0).toUpperCase() + label.slice(1) + ' ' + ids.length + ' question(s)?',
+			confirmLabel: label.charAt(0).toUpperCase() + label.slice(1),
+			danger: status === 'archived',
+			onConfirm: function() {
+				var fd = new FormData();
+				fd.append('KingdomId', '<?= (int)$KingdomId ?>');
+				fd.append('QuestionIds', JSON.stringify(ids));
+				fd.append('Status', status);
+				fetch('<?= UIR ?>QualTestAjax/bulkstatus', { method: 'POST', body: fd })
+					.then(function(r) { return r.json(); })
+					.then(function(j) {
+						if (j.status === 0) window.location.reload();
+						else qtAlert(j.error || 'Error updating status.');
+					});
+			}
+		});
 	}
 
 	bulkArchive.addEventListener('click', function() { doBulkStatus([...activeSelected], 'archived'); });
@@ -672,52 +740,72 @@ $(function() {
 		btn.addEventListener('click', function() {
 			var newStatus = btn.dataset.status;
 			var label = newStatus === 'archived' ? 'archive' : 'restore';
-			if (!confirm('Are you sure you want to ' + label + ' this question?')) return;
-			var fd = new FormData();
-			fd.append('KingdomId',  btn.dataset.kingdom);
-			fd.append('QuestionId', btn.dataset.id);
-			fd.append('Status',     newStatus);
-			fetch('<?= UIR ?>QualTestAjax/setstatus', { method: 'POST', body: fd })
-				.then(function(r) { return r.json(); })
-				.then(function(j) {
-					if (j.status === 0) { window.location.reload(); }
-					else { alert(j.error || 'Error updating status.'); }
-				});
+			qtConfirm({
+				title: label.charAt(0).toUpperCase() + label.slice(1) + ' Question',
+				body: 'Are you sure you want to ' + label + ' this question?',
+				confirmLabel: label.charAt(0).toUpperCase() + label.slice(1),
+				danger: newStatus === 'archived',
+				onConfirm: function() {
+					var fd = new FormData();
+					fd.append('KingdomId',  btn.dataset.kingdom);
+					fd.append('QuestionId', btn.dataset.id);
+					fd.append('Status',     newStatus);
+					fetch('<?= UIR ?>QualTestAjax/setstatus', { method: 'POST', body: fd })
+						.then(function(r) { return r.json(); })
+						.then(function(j) {
+							if (j.status === 0) { window.location.reload(); }
+							else { qtAlert(j.error || 'Error updating status.'); }
+						});
+				}
+			});
 		});
 	});
 
 	// ----- Reset stats -----
 	document.querySelectorAll('.qt-reset-btn').forEach(function(btn) {
 		btn.addEventListener('click', function() {
-			if (!confirm('Reset Success Rate for this Question?')) return;
-			var row = btn.closest('tr');
-			var fd = new FormData();
-			fd.append('KingdomId',  btn.dataset.kingdom);
-			fd.append('QuestionId', btn.dataset.id);
-			fetch('<?= UIR ?>QualTestAjax/resetstats', { method: 'POST', body: fd })
-				.then(function(r) { return r.json(); })
-				.then(function(j) {
-					if (j.status !== 0) { alert(j.error || 'Error resetting stats.'); return; }
-					var cells = row.querySelectorAll('td');
-					if (cells[3]) cells[3].innerHTML = '<span class="qt-success-badge qt-success-none">\u2014</span>';
-				});
+			qtConfirm({
+				title: 'Reset Success Rate',
+				body: 'Reset Success Rate for this Question?',
+				confirmLabel: 'Reset',
+				danger: true,
+				onConfirm: function() {
+					var row = btn.closest('tr');
+					var fd = new FormData();
+					fd.append('KingdomId',  btn.dataset.kingdom);
+					fd.append('QuestionId', btn.dataset.id);
+					fetch('<?= UIR ?>QualTestAjax/resetstats', { method: 'POST', body: fd })
+						.then(function(r) { return r.json(); })
+						.then(function(j) {
+							if (j.status !== 0) { qtAlert(j.error || 'Error resetting stats.'); return; }
+							var cells = row.querySelectorAll('td');
+							if (cells[3]) cells[3].innerHTML = '<span class="qt-success-badge qt-success-none">\u2014</span>';
+						});
+				}
+			});
 		});
 	});
 
 	// ----- Duplicate -----
 	document.querySelectorAll('.qt-dup-btn').forEach(function(btn) {
 		btn.addEventListener('click', function() {
-			if (!confirm('Duplicate this question?')) return;
-			btn.disabled = true;
-			var fd = new FormData();
-			fd.append('KingdomId',  btn.dataset.kingdom);
-			fd.append('QuestionId', btn.dataset.id);
-			fetch('<?= UIR ?>QualTestAjax/duplicatequestion', { method: 'POST', body: fd })
-				.then(function(r) { return r.json(); })
-				.then(function(j) {
-					if (j.status === 0) window.location = '<?= UIR ?>QualTest/question/edit/' + j.new_question_id;
-					else { alert(j.error || 'Error duplicating question.'); btn.disabled = false; }
-				});
+			qtConfirm({
+				title: 'Duplicate Question',
+				body: 'Duplicate this question?',
+				confirmLabel: 'Duplicate',
+				onConfirm: function() {
+					btn.disabled = true;
+					var fd = new FormData();
+					fd.append('KingdomId',  btn.dataset.kingdom);
+					fd.append('QuestionId', btn.dataset.id);
+					fetch('<?= UIR ?>QualTestAjax/duplicatequestion', { method: 'POST', body: fd })
+						.then(function(r) { return r.json(); })
+						.then(function(j) {
+							if (j.status === 0) window.location = '<?= UIR ?>QualTest/question/edit/' + j.new_question_id;
+							else { qtAlert(j.error || 'Error duplicating question.'); btn.disabled = false; }
+						});
+				}
+			});
 		});
 	});
 });
@@ -905,6 +993,7 @@ $(function() {
 	var searchWrapEl = document.getElementById('qt-library-search-wrap');
 	var loaded     = false;
 	var allQuestions = [];
+	var addedCount = 0;
 
 	function escH(s) {
 		return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -937,7 +1026,7 @@ $(function() {
 				fetch('<?= UIR ?>QualTestAjax/copyfromlibrary', { method: 'POST', body: fd })
 					.then(function(r) { return r.json(); })
 					.then(function(j) {
-						if (j.status !== 0) { alert(j.error || 'Error adding question.'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-plus"></i> Add'; return; }
+						if (j.status !== 0) { qtAlert(j.error || 'Error adding question.'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-plus"></i> Add'; return; }
 						btn.innerHTML = '<i class="fas fa-check"></i> Added';
 						btn.style.background = '#276749';
 						addedCount++;
@@ -975,7 +1064,6 @@ $(function() {
 		renderList(filtered);
 	});
 
-	var addedCount = 0;
 	function closeLibrary() {
 		overlay.classList.remove('qt-open');
 		if (addedCount > 0) { window.location.reload(); }
@@ -1035,34 +1123,48 @@ $(function() {
 	overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.classList.remove('qt-open'); });
 
 	clearBtn.addEventListener('click', function() {
-		if (!confirm('Clear all flags for this question?')) return;
-		clearBtn.disabled = true;
-		var fd = new FormData();
-		fd.append('KingdomId',  currentKid);
-		fd.append('QuestionId', currentQid);
-		fetch('<?= UIR ?>QualTestAjax/clearreports', { method: 'POST', body: fd })
-			.then(function(r) { return r.json(); })
-			.then(function(j) {
-				if (j.status !== 0) { alert(j.error || 'Error clearing flags.'); clearBtn.disabled = false; return; }
-				window.location.reload();
-			});
+		qtConfirm({
+			title: 'Clear Flags',
+			body: 'Clear all flags for this question?',
+			confirmLabel: 'Clear Flags',
+			danger: true,
+			onConfirm: function() {
+				clearBtn.disabled = true;
+				var fd = new FormData();
+				fd.append('KingdomId',  currentKid);
+				fd.append('QuestionId', currentQid);
+				fetch('<?= UIR ?>QualTestAjax/clearreports', { method: 'POST', body: fd })
+					.then(function(r) { return r.json(); })
+					.then(function(j) {
+						if (j.status !== 0) { qtAlert(j.error || 'Error clearing flags.'); clearBtn.disabled = false; return; }
+						window.location.reload();
+					});
+			}
+		});
 	});
 
 	archiveBtn.addEventListener('click', function() {
-		if (!confirm('Archive this question and clear its reports?')) return;
-		var fd = new FormData();
-		fd.append('KingdomId',  currentKid);
-		fd.append('QuestionId', currentQid);
-		fd.append('Status', 'archived');
-		fetch('<?= UIR ?>QualTestAjax/setstatus', { method: 'POST', body: fd })
-			.then(function(r) { return r.json(); })
-			.then(function(j) {
-				if (j.status !== 0) { alert(j.error || 'Error archiving.'); return; }
-				var fd2 = new FormData();
-				fd2.append('KingdomId',  currentKid);
-				fd2.append('QuestionId', currentQid);
-				fetch('<?= UIR ?>QualTestAjax/clearreports', { method: 'POST', body: fd2 })
-					.finally(function() { window.location.reload(); });
+		qtConfirm({
+			title: 'Archive Question',
+			body: 'Archive this question and clear its reports?',
+			confirmLabel: 'Archive',
+			danger: true,
+			onConfirm: function() {
+				var fd = new FormData();
+				fd.append('KingdomId',  currentKid);
+				fd.append('QuestionId', currentQid);
+				fd.append('Status', 'archived');
+				fetch('<?= UIR ?>QualTestAjax/setstatus', { method: 'POST', body: fd })
+					.then(function(r) { return r.json(); })
+						.then(function(j) {
+							if (j.status !== 0) { qtAlert(j.error || 'Error archiving.'); return; }
+							var fd2 = new FormData();
+							fd2.append('KingdomId',  currentKid);
+							fd2.append('QuestionId', currentQid);
+							fetch('<?= UIR ?>QualTestAjax/clearreports', { method: 'POST', body: fd2 })
+								.finally(function() { window.location.reload(); });
+						});
+				}
 			});
 	});
 })();

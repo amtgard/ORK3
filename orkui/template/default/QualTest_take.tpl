@@ -724,6 +724,23 @@ html[data-theme="dark"] .qt-report-select {
 	color: var(--ork-text, #e2e8f0);
 }
 html[data-theme="dark"] .qt-loading { color: var(--ork-text-muted, #a0aec0); }
+/* ── In-product confirm modal (replaces native confirm) ── */
+.qt-confirm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9500; align-items:center; justify-content:center; }
+.qt-confirm-overlay.qt-open { display:flex; }
+.qt-confirm-modal { background:#fff; border-radius:8px; padding:22px 24px; min-width:300px; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
+.qt-confirm-title { margin:0 0 10px; font-size:1rem; font-weight:700; color:#2d3748; }
+.qt-confirm-body { font-size:0.9rem; color:#4a5568; line-height:1.5; margin-bottom:18px; }
+.qt-confirm-footer { display:flex; gap:10px; justify-content:flex-end; }
+.qt-confirm-btn { padding:7px 16px; border-radius:5px; font-size:0.85rem; font-weight:600; cursor:pointer; border:none; }
+.qt-confirm-cancel { background:#e2e8f0; color:#2d3748; }
+.qt-confirm-cancel:hover { background:#cbd5e0; }
+.qt-confirm-ok { background:#2b6cb0; color:#fff; }
+.qt-confirm-ok:hover { background:#2c5282; }
+html[data-theme="dark"] .qt-confirm-modal { background: var(--ork-bg-secondary, #2d3748); }
+html[data-theme="dark"] .qt-confirm-title { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .qt-confirm-body { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .qt-confirm-cancel { background: #4a5568; color: #e2e8f0; }
+html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 </style>
 
 <div class="rp-root">
@@ -978,10 +995,43 @@ html[data-theme="dark"] .qt-loading { color: var(--ork-text-muted, #a0aec0); }
 
 </div><!-- /.rp-root -->
 
+<!-- In-product confirm modal -->
+<div class="qt-confirm-overlay" id="qt-confirm-overlay">
+	<div class="qt-confirm-modal">
+		<h4 class="qt-confirm-title" id="qt-confirm-title"></h4>
+		<div class="qt-confirm-body" id="qt-confirm-body"></div>
+		<div class="qt-confirm-footer">
+			<button type="button" class="qt-confirm-btn qt-confirm-cancel" id="qt-confirm-cancel">Cancel</button>
+			<button type="button" class="qt-confirm-btn qt-confirm-ok" id="qt-confirm-ok">Confirm</button>
+		</div>
+	</div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 <script>
 (function() {
 	var BASE_URL    = '<?= UIR ?>';
+	// In-product replacement for native confirm() — qtConfirm({title, body, confirmLabel, onConfirm})
+	var qtConfirm = (function() {
+		var overlay  = document.getElementById('qt-confirm-overlay');
+		var titleEl  = document.getElementById('qt-confirm-title');
+		var bodyEl   = document.getElementById('qt-confirm-body');
+		var cancelEl = document.getElementById('qt-confirm-cancel');
+		var okEl     = document.getElementById('qt-confirm-ok');
+		var pending  = null;
+		function close() { overlay.classList.remove('qt-open'); pending = null; }
+		okEl.addEventListener('click', function() { var cb = pending; close(); if (cb) cb(); });
+		cancelEl.addEventListener('click', close);
+		overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+		return function(opts) {
+			opts = opts || {};
+			titleEl.textContent = opts.title || 'Please Confirm';
+			bodyEl.textContent  = opts.body || '';
+			okEl.textContent    = opts.confirmLabel || 'Confirm';
+			pending = typeof opts.onConfirm === 'function' ? opts.onConfirm : null;
+			overlay.classList.add('qt-open');
+		};
+	})();
 	var KINGDOM_ID  = <?= (int)$KingdomId ?>;
 	var TEST_TYPE   = '<?= htmlspecialchars($TestType, ENT_QUOTES) ?>';
 	var TEST_LABEL  = '<?= htmlspecialchars($TestLabel, ENT_QUOTES) ?>';
@@ -1329,7 +1379,7 @@ html[data-theme="dark"] .qt-loading { color: var(--ork-text-muted, #a0aec0); }
 	});
 	reportSubmit.addEventListener('click', function() {
 		var reason = reportReason.value;
-		if (!reason) { alert('Please select a reason.'); return; }
+		if (!reason) { showError('Please select a reason.'); return; }
 		var fd = new FormData();
 		fd.append('QuestionId', reportBtn.dataset.questionId);
 		fd.append('Reason', reason);
@@ -1359,30 +1409,36 @@ html[data-theme="dark"] .qt-loading { color: var(--ork-text-muted, #a0aec0); }
 
 	// Submit test
 	submitBtn.addEventListener('click', function() {
-		if (!confirm('Submit your test? This cannot be undone.')) return;
-		showView(null);
-		showLoading(true);
-		showError('');
-		var fd = new FormData();
-		fd.append('KingdomId', KINGDOM_ID);
-		fd.append('TestType',  TEST_TYPE);
-		fd.append('Answers',   JSON.stringify(answers));
-		fetch(BASE_URL + 'QualTestAjax/submittest', { method: 'POST', body: fd })
-			.then(function(r) { return r.json(); })
-			.then(function(j) {
-				showLoading(false);
-				if (j.status !== 0) {
-					showView('question');
-					showError(j.error || 'Error submitting test.');
-					return;
-				}
-				showResult(j);
-			})
-			.catch(function() {
-				showLoading(false);
-				showView('question');
-				showError('Network error. Please try again.');
-			});
+		qtConfirm({
+			title: 'Submit Test',
+			body: 'Submit your test? This cannot be undone.',
+			confirmLabel: 'Submit',
+			onConfirm: function() {
+				showView(null);
+				showLoading(true);
+				showError('');
+				var fd = new FormData();
+				fd.append('KingdomId', KINGDOM_ID);
+				fd.append('TestType',  TEST_TYPE);
+				fd.append('Answers',   JSON.stringify(answers));
+				fetch(BASE_URL + 'QualTestAjax/submittest', { method: 'POST', body: fd })
+					.then(function(r) { return r.json(); })
+					.then(function(j) {
+						showLoading(false);
+						if (j.status !== 0) {
+							showView('question');
+							showError(j.error || 'Error submitting test.');
+							return;
+						}
+						showResult(j);
+					})
+					.catch(function() {
+						showLoading(false);
+						showView('question');
+						showError('Network error. Please try again.');
+					});
+			}
+		});
 	});
 
 	// Animated score counter using requestAnimationFrame
