@@ -353,15 +353,9 @@
 					<span class="kn-tab-count" id="kn-tab-count-recs"<?= $_recsN > 0 ? '' : ' style="display:none"' ?>><?= $_recsN > 0 ? '(' . $_recsN . ')' : '' ?></span>
 				</li>
 				<?php endif; ?>
-				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
+				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests) || ($CanManageCourt ?? false)): ?>
 				<li data-kntab="admin">
 					<i class="fas fa-cog"></i><span class="kn-tab-label"> Admin Tasks</span>
-				</li>
-				<?php endif; ?>
-				<?php if ($CanManageCourt ?? false): ?>
-				<li data-kntab="court">
-					<i class="fas fa-gavel"></i><span class="kn-tab-label"> Court Planner</span>
-					<?php if (!empty($CourtList)): ?><span class="kn-tab-count">(<?= count($CourtList) ?>)</span><?php endif; ?>
 				</li>
 				<?php endif; ?>
 			</ul>
@@ -913,9 +907,10 @@
 				</div>
 			</div>
 
-		<!-- Admin Tab -->
-		<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
+		<!-- Admin Tab (now also hosts Court Planner as a collapsible subsection) -->
+		<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests) || ($CanManageCourt ?? false)): ?>
 		<div class="kn-tab-panel" id="kn-tab-admin" style="display:none">
+			<?php if ($CanManageKingdom ?? false): ?>
 			<div class="kn-report-cols">
 				<?php if ($CanManageKingdom ?? false): ?>
 				<div class="kn-report-group">
@@ -964,26 +959,17 @@
 				</div>
 				<?php endif; ?>
 			</div>
-		</div>
-		<?php endif; ?>
+			<?php endif; ?>
 
-		<!-- Recommendations Tab — body is lazy-loaded via Kingdom::recommendations_panel()
-		     on first tab activation. Rendering the full list inline (1k-4k <tr> rows on a
-		     busy kingdom) was blocking DOMContentLoaded for 1+ seconds. -->
-		<?php if ($ShowRecsTab ?? false): ?>
-		<div class="kn-tab-panel" id="kn-tab-recommendations" style="display:none">
-			<div id="kn-recs-lazy" data-loaded="0" data-kid="<?= (int)$kingdom_id ?>">
-				<div class="pk-recs-loading" style="padding:2em 0;text-align:center;color:#a0aec0">
-					<i class="fas fa-spinner fa-spin"></i> Loading recommendations&hellip;
-				</div>
-			</div>
-		</div>
-		<?php endif; ?>
-
-
-		<!-- Court Planner Tab -->
-		<?php if ($CanManageCourt ?? false): ?>
-		<div class="kn-tab-panel" id="kn-tab-court" style="display:none">
+			<!-- Court Planner subsection (relocated from former top-level tab) -->
+			<?php if ($CanManageCourt ?? false): ?>
+			<?php $_cpOpen = !empty($CourtList); ?>
+			<div class="kn-cp-section<?= $_cpOpen ? ' kn-cp-open' : '' ?>" id="kn-cp-section">
+				<button type="button" class="kn-cp-header" onclick="knCpToggleSection()" aria-expanded="<?= $_cpOpen ? 'true' : 'false' ?>">
+					<span class="kn-cp-header-title"><i class="fas fa-gavel"></i> Court Planner<?php if (!empty($CourtList)): ?> <span class="kn-cp-header-count">(<?= count($CourtList) ?>)</span><?php endif; ?></span>
+					<i class="fas fa-chevron-down kn-cp-chevron"></i>
+				</button>
+				<div class="kn-cp-body" id="kn-cp-body"<?= $_cpOpen ? '' : ' style="display:none"' ?>>
 			<style>
 			.kn-cp-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
 			.kn-cp-court-card { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:14px 18px; margin-bottom:10px; display:flex; align-items:center; gap:14px; transition:box-shadow .15s; }
@@ -1003,6 +989,26 @@
 			.kn-rec-age-yellow { background:#fefcbf; color:#744210; }
 			.kn-rec-age-orange { background:#fed7aa; color:#7b341e; }
 			.kn-rec-age-red    { background:#fed7d7; color:#742a2a; }
+			/* Collapsible subsection chrome (relocated court) */
+			.kn-cp-section { border-top:1px solid #e2e8f0; margin-top:24px; padding-top:4px; }
+			.kn-cp-header { display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; cursor:pointer; padding:10px 4px; font-size:15px; font-weight:700; color:#2d3748; text-align:left; }
+			.kn-cp-header:hover { color:#1a202c; }
+			.kn-cp-header-title i.fa-gavel { margin-right:8px; color:#4a5568; }
+			.kn-cp-header-count { font-weight:600; color:#718096; font-size:13px; }
+			.kn-cp-chevron { transition:transform .15s; color:#a0aec0; }
+			.kn-cp-section.kn-cp-open .kn-cp-chevron { transform:rotate(180deg); }
+			.kn-cp-body { padding-top:8px; }
+			html[data-theme="dark"] .kn-cp-section { border-top-color:#2d3748; }
+			html[data-theme="dark"] .kn-cp-header { color:#e2e8f0; }
+			html[data-theme="dark"] .kn-cp-header:hover { color:#fff; }
+			html[data-theme="dark"] .kn-cp-header-title i.fa-gavel { color:#a0aec0; }
+			html[data-theme="dark"] .kn-cp-court-card { background:#1a202c; border-color:#2d3748; }
+			html[data-theme="dark"] .kn-cp-court-name { color:#e2e8f0; }
+			html[data-theme="dark"] .kn-cp-court-meta { color:#a0aec0; }
+			html[data-theme="dark"] .kn-cp-badge-count { background:#2d3748; color:#cbd5e0; }
+			html[data-theme="dark"] .kn-cp-btn-link { border-color:#4a5568; color:#cbd5e0; }
+			html[data-theme="dark"] .kn-cp-btn-link:hover { background:#2d3748; color:#fff; }
+			html[data-theme="dark"] .kn-cp-empty { border-color:#2d3748; color:#a0aec0; }
 			</style>
 			<div class="kn-cp-toolbar">
 				<span style="font-size:13px;color:#718096"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
@@ -1095,6 +1101,16 @@
 				var uir       = '<?= UIR ?>';
 				var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;
 
+				window.knCpToggleSection = function() {
+					var sec = document.getElementById('kn-cp-section');
+					var body = document.getElementById('kn-cp-body');
+					if (!sec || !body) return;
+					var open = sec.classList.toggle('kn-cp-open');
+					body.style.display = open ? '' : 'none';
+					var hdr = sec.querySelector('.kn-cp-header');
+					if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
+				};
+
 				window.knCpOnEventChange = function(sel, dateId) {
 					var opt = sel.options[sel.selectedIndex];
 					var start = opt ? opt.getAttribute('data-start') : '';
@@ -1151,8 +1167,25 @@
 				document.addEventListener('keydown', function(e) { if (e.key === 'Escape') knCpCloseNewCourt(); });
 			})();
 			</script>
+				</div>
+			</div>
+			<?php endif; ?>
 		</div>
 		<?php endif; ?>
+
+		<!-- Recommendations Tab — body is lazy-loaded via Kingdom::recommendations_panel()
+		     on first tab activation. Rendering the full list inline (1k-4k <tr> rows on a
+		     busy kingdom) was blocking DOMContentLoaded for 1+ seconds. -->
+		<?php if ($ShowRecsTab ?? false): ?>
+		<div class="kn-tab-panel" id="kn-tab-recommendations" style="display:none">
+			<div id="kn-recs-lazy" data-loaded="0" data-kid="<?= (int)$kingdom_id ?>">
+				<div class="pk-recs-loading" style="padding:2em 0;text-align:center;color:#a0aec0">
+					<i class="fas fa-spinner fa-spin"></i> Loading recommendations&hellip;
+				</div>
+			</div>
+		</div>
+		<?php endif; ?>
+
 
 		<!-- Players Tab -->
 		<div class="kn-tab-panel" id="kn-tab-players" style="display:none">
