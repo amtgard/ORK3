@@ -114,6 +114,11 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 .cp-expand-label { font-size: 11px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
 .cp-expand-val { font-size: 13px; color: #2d3748; }
 .cp-notes-area { width: 100%; border: 1px solid #cbd5e0; border-radius: 5px; padding: 7px 10px; font-size: 13px; resize: vertical; min-height: 60px; box-sizing: border-box; }
+.cp-pc-label-row { display: flex; align-items: center; gap: 8px; }
+.cp-rec-hint-btn { background: none; border: none; padding: 0; cursor: pointer; font-size: 12px; color: #3182ce; line-height: 1; }
+.cp-rec-hint-btn:hover { text-decoration: underline; }
+.cp-pubcomment-wrap { position: relative; }
+.cp-rec-hint { position: absolute; top: 1px; left: 1px; right: 1px; padding: 7px 10px; font-size: 13px; line-height: 1.35; color: #718096; font-style: italic; white-space: normal; overflow: hidden; pointer-events: none; box-sizing: border-box; max-height: calc(100% - 2px); }
 .cp-artisan-row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 4px; }
 .cp-expand-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
 
@@ -758,6 +763,8 @@ html[data-theme="dark"] .cp-expand-label { color: #a0aec0; }
 html[data-theme="dark"] .cp-expand-val   { color: #e2e8f0; }
 html[data-theme="dark"] .cp-notes-area   { background: #1f2733; border-color: #2d3748; color: #e2e8f0; }
 html[data-theme="dark"] .cp-notes-area::placeholder { color: #4a5568; }
+html[data-theme="dark"] .cp-rec-hint { color: #a0aec0; }
+html[data-theme="dark"] .cp-rec-hint-btn { color: #63b3ed; }
 html[data-theme="dark"] .cp-artisan-row { color: #cbd5e0; }
 html[data-theme="dark"] .cp-maker-ac    { background: #1f2733 !important; border-color: #2d3748 !important; color: #e2e8f0 !important; }
 html[data-theme="dark"] .cp-maker-ac::placeholder { color: #4a5568; }
@@ -1077,9 +1084,26 @@ $_total_awards = count($courtAwards ?? []);
                         <div class="cp-expand-label">Internal Notes</div>
                         <textarea class="cp-notes-area" id="cp-notes-<?= (int)$aw['CourtAwardId'] ?>"
                                   placeholder="Monarchy notes (not public)…"><?= htmlspecialchars($aw['Notes']) ?></textarea>
-                        <div class="cp-expand-label" style="margin-top:10px">Public Comment</div>
-                        <textarea class="cp-notes-area" id="cp-pubcomment-<?= (int)$aw['CourtAwardId'] ?>"
-                                  placeholder="Shown on the public Court Report…"><?= htmlspecialchars($aw['PublicComment'] ?? '') ?></textarea>
+                        <?php
+                        $pcRecReason = $aw['RecReason'] ?? '';
+                        $pcSaved     = $aw['PublicComment'] ?? '';
+                        $pcTriggered = $pcRecReason !== '' && $pcSaved === '';
+                        $pcCaid      = (int)$aw['CourtAwardId'];
+                        ?>
+                        <div class="cp-pc-label-row" style="margin-top:10px">
+                            <span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>
+                            <?php if ($pcTriggered): ?>
+                            <button type="button" class="cp-rec-hint-btn" onclick="cpRecHintAction(<?= $pcCaid ?>,'start')">(Start from Rec)</button>
+                            <button type="button" class="cp-rec-hint-btn" onclick="cpRecHintAction(<?= $pcCaid ?>,'clear')">(Clear)</button>
+                            <?php endif; ?>
+                        </div>
+                        <div class="cp-pubcomment-wrap" id="cp-pcwrap-<?= $pcCaid ?>" data-rec-engaged="0">
+                            <textarea class="cp-notes-area" id="cp-pubcomment-<?= $pcCaid ?>"
+                                      placeholder="Shown on the public Court Report…"<?= $pcTriggered ? ' onfocus="cpRecHintFocus(' . $pcCaid . ')"' : '' ?>><?= htmlspecialchars($pcSaved) ?></textarea>
+                            <?php if ($pcTriggered): ?>
+                            <div class="cp-rec-hint" id="cp-rec-hint-<?= $pcCaid ?>"><?= htmlspecialchars($pcRecReason) ?></div>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div>
                         <div class="cp-expand-label">Pass to Local</div>
@@ -1814,6 +1838,57 @@ $_total_awards = count($courtAwards ?? []);
         });
     };
 
+    // ---- Public Comment: rec-reason helper text ----
+    function cpPubCommentFieldHtml(caid, recReason, publicComment) {
+        recReason     = recReason || '';
+        publicComment = publicComment || '';
+        var triggered = recReason !== '' && publicComment === '';
+        var buttons = triggered
+            ? '<button type="button" class="cp-rec-hint-btn" onclick="cpRecHintAction(' + caid + ',\'start\')">(Start from Rec)</button>' +
+              '<button type="button" class="cp-rec-hint-btn" onclick="cpRecHintAction(' + caid + ',\'clear\')">(Clear)</button>'
+            : '';
+        var taFocus = triggered ? ' onfocus="cpRecHintFocus(' + caid + ')"' : '';
+        var hint = triggered
+            ? '<div class="cp-rec-hint" id="cp-rec-hint-' + caid + '">' + esc(recReason) + '</div>'
+            : '';
+        return '<div class="cp-pc-label-row" style="margin-top:10px"><span class="cp-expand-label" style="margin-bottom:0">Public Comment</span>' + buttons + '</div>' +
+            '<div class="cp-pubcomment-wrap" id="cp-pcwrap-' + caid + '" data-rec-engaged="0">' +
+            '<textarea class="cp-notes-area" id="cp-pubcomment-' + caid + '" placeholder="Shown on the public Court Report…"' + taFocus + '>' + esc(publicComment) + '</textarea>' +
+            hint + '</div>';
+    }
+
+    function cpRecHintEngage(caid) {
+        var wrap = gid('cp-pcwrap-' + caid);
+        var hint = gid('cp-rec-hint-' + caid);
+        if (wrap) wrap.dataset.recEngaged = '1';
+        if (hint) hint.style.display = 'none';
+    }
+
+    window.cpRecHintFocus = function(caid) {
+        var wrap = gid('cp-pcwrap-' + caid);
+        if (!wrap || wrap.dataset.recEngaged === '1') return;
+        var ta   = gid('cp-pubcomment-' + caid);
+        var hint = gid('cp-rec-hint-' + caid);
+        if (ta && hint && !ta.value) ta.value = hint.textContent;
+        cpRecHintEngage(caid);
+    };
+
+    window.cpRecHintAction = function(caid, action) {
+        var ta   = gid('cp-pubcomment-' + caid);
+        var hint = gid('cp-rec-hint-' + caid);
+        if (!ta) return;
+        if (action === 'start') {
+            if (hint) ta.value = hint.textContent;
+            cpRecHintEngage(caid);
+            ta.focus();
+            ta.setSelectionRange(ta.value.length, ta.value.length);
+        } else if (action === 'clear') {
+            cpRecHintEngage(caid);
+            ta.value = '';
+            ta.focus();
+        }
+    };
+
     // ---- Grant / Skip (published mode) ----
     window.cpGrantAward = function(caid) {
         var row = gid('cp-aw-' + caid);
@@ -2175,7 +2250,7 @@ $_total_awards = count($courtAwards ?? []);
             '</div>' +
             '<div class="cp-award-row-expand" id="cp-aw-expand-' + aw.CourtAwardId + '">' +
             '<div class="cp-expand-grid">' +
-            '<div><div class="cp-expand-label">Internal Notes</div><textarea class="cp-notes-area" id="cp-notes-' + aw.CourtAwardId + '" placeholder="Monarchy notes…">' + esc(aw.Notes || '') + '</textarea><div class="cp-expand-label" style="margin-top:10px">Public Comment</div><textarea class="cp-notes-area" id="cp-pubcomment-' + aw.CourtAwardId + '" placeholder="Shown on the public Court Report…">' + esc(aw.PublicComment || '') + '</textarea></div>' +
+            '<div><div class="cp-expand-label">Internal Notes</div><textarea class="cp-notes-area" id="cp-notes-' + aw.CourtAwardId + '" placeholder="Monarchy notes…">' + esc(aw.Notes || '') + '</textarea>' + cpPubCommentFieldHtml(aw.CourtAwardId, aw.RecReason, aw.PublicComment) + '</div>' +
             '<div><div class="cp-expand-label">Pass to Local</div><label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px"><input type="checkbox" id="cp-ptl-' + aw.CourtAwardId + '" style="width:auto"' + (aw.PassToLocal ? ' checked' : '') + '><span style="font-size:13px;color:#4a5568">Kingdom approves — Park to give</span></label>' +
             '<div style="margin-top:14px"><div class="cp-expand-label">Status</div><select id="cp-status-' + aw.CourtAwardId + '" style="width:auto;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px"><option value="planned" selected>Planned</option><option value="announced">Announced</option><option value="given">Given</option><option value="cancelled">Cancelled</option></select></div></div>' +
             '</div>' +
