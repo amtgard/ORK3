@@ -167,6 +167,13 @@ class Controller_CourtAjax extends Controller {
             $is_title    = (bool)(int)$info->is_title;
         }
 
+        $rec_reason = '';
+        if ($rec_id) {
+            $DB->Clear();
+            $rr = $DB->DataSet('SELECT reason FROM ' . DB_PREFIX . 'recommendations WHERE recommendations_id = ' . (int)$rec_id . ' LIMIT 1');
+            if ($rr && $rr->Next()) $rec_reason = $rr->reason ?? '';
+        }
+
         $this->jsonOut(['status' => 0, 'award' => [
             'CourtAwardId'      => $court_award_id,
             'MundaneId'         => $mundane_id,
@@ -182,6 +189,7 @@ class Controller_CourtAjax extends Controller {
             'PassToLocal'       => (bool)$pass_to_local,
             'Notes'             => $notes,
             'PublicComment'     => $public_comment,
+            'RecReason'         => $rec_reason,
             'Status'            => 'planned',
             'ScrollStatus'      => 0,
             'RegaliaStatus'     => 0,
