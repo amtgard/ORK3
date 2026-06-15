@@ -1860,6 +1860,12 @@ $_total_awards = count($courtAwards ?? []);
     function cpRecHintEngage(caid) {
         var wrap = gid('cp-pcwrap-' + caid);
         var hint = gid('cp-rec-hint-' + caid);
+        var ta   = gid('cp-pubcomment-' + caid);
+        var labelRow = wrap ? wrap.previousElementSibling : null;
+        if (labelRow && labelRow.classList.contains('cp-pc-label-row')) {
+            labelRow.querySelectorAll('.cp-rec-hint-btn').forEach(function(b) { b.style.display = 'none'; });
+        }
+        if (ta) ta.removeAttribute('onfocus');
         if (wrap) wrap.dataset.recEngaged = '1';
         if (hint) hint.style.display = 'none';
     }
