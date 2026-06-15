@@ -22,9 +22,10 @@ $nextSt    = $statusFlow[$courtSt] ?? null;
 $nextLabel = ['draft' => 'Publish', 'published' => 'Mark Complete'];
 
 // Context back-link
+// Court Planner now lives as a subsection inside the Admin Tasks tab (?tab=admin).
 $backUrl = ($court['ParkId'] ?? 0) > 0
-    ? UIR . 'Park/profile/' . $court['ParkId'] . '?tab=court'
-    : UIR . 'Kingdom/profile/' . $court['KingdomId'] . '?tab=court';
+    ? UIR . 'Park/profile/' . $court['ParkId'] . '?tab=admin'
+    : UIR . 'Kingdom/profile/' . $court['KingdomId'] . '?tab=admin';
 $backLabel = ($court['ParkId'] ?? 0) > 0
     ? ($court['ParkName'] ?? 'Park') . ' Courts'
     : ($court['KingdomName'] ?? 'Kingdom') . ' Courts';
