@@ -78,8 +78,10 @@
 	.wn-item-title { font-weight:600; color:#2d3748; font-size:14px; }
 	.wn-item-body { color:#4a5568; font-size:13px; line-height:1.5; margin-top:2px; }
 	.wn-footer { display:flex; align-items:center; justify-content:center; gap:12px; }
-	.wn-all-versions { background:none; color:#4299e1; border:1px solid #4299e1; border-radius:7px; padding:10px 20px; font-size:15px; cursor:pointer; font-family:inherit; text-decoration:none; display:inline-flex; align-items:center; }
-	.wn-all-versions:hover { background:#ebf8ff; }
+	.wn-all-versions { background:#38a169; color:#fff; border:1px solid #38a169; border-radius:7px; padding:10px 20px; font-size:15px; cursor:pointer; font-family:inherit; text-decoration:none; display:inline-flex; align-items:center; animation:wnGlowPulse 2.2s ease-in-out infinite; }
+	.wn-all-versions:hover { background:#2f855a; border-color:#2f855a; }
+	@keyframes wnGlowPulse { 0%, 100% { box-shadow:0 0 0 0 rgba(56,161,105,0.40); } 50% { box-shadow:0 0 14px 3px rgba(56,161,105,0.55); } }
+	@media (prefers-reduced-motion: reduce) { .wn-all-versions { animation:none; } }
 	.wn-dismiss { background:#4299e1; color:#fff; border:none; border-radius:7px; padding:10px 32px; font-size:15px; cursor:pointer; font-family:inherit; }
 	.wn-dismiss:hover { background:#3182ce; }
 
@@ -90,8 +92,10 @@
 	html[data-theme="dark"] .wn-item-title { color: #e2e8f0; }
 	html[data-theme="dark"] .wn-item-body { color: #cbd5e0; }
 	html[data-theme="dark"] .wn-subtitle { color: #a0aec0; }
-	html[data-theme="dark"] .wn-all-versions { border-color: #63b3ed; color: #63b3ed; }
-	html[data-theme="dark"] .wn-all-versions:hover { background: #374151; }
+	html[data-theme="dark"] .wn-all-versions { background: #38a169; border-color: #38a169; color: #fff; }
+	html[data-theme="dark"] .wn-all-versions:hover { background: #2f855a; border-color: #2f855a; }
+	html[data-theme="dark"] .wn-all-versions { animation:wnGlowPulseDark 2.2s ease-in-out infinite; }
+	@keyframes wnGlowPulseDark { 0%, 100% { box-shadow:0 0 0 0 rgba(72,187,120,0.45); } 50% { box-shadow:0 0 16px 4px rgba(72,187,120,0.65); } }
 	
 	/* Dark mode toggle button */
 	.nav-theme-toggle {
