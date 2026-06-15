@@ -1005,6 +1005,7 @@
 			html[data-theme="dark"] .kn-cp-court-card { background:#1a202c; border-color:#2d3748; }
 			html[data-theme="dark"] .kn-cp-court-name { color:#e2e8f0; }
 			html[data-theme="dark"] .kn-cp-court-meta { color:#a0aec0; }
+			html[data-theme="dark"] .kn-cp-court-date { color:#a0aec0; }
 			html[data-theme="dark"] .kn-cp-badge-count { background:#2d3748; color:#cbd5e0; }
 			html[data-theme="dark"] .kn-cp-btn-link { border-color:#4a5568; color:#cbd5e0; }
 			html[data-theme="dark"] .kn-cp-btn-link:hover { background:#2d3748; color:#fff; }
