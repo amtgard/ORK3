@@ -26,11 +26,8 @@ class Controller_Recommendations extends Controller {
         $kingdom_id = 0;
         $park_id    = 0;
         if ($context === 'park') {
-            $park_id = $id;
-            global $DB;
-            $DB->Clear();
-            $pr = $DB->DataSet('SELECT kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id . ' LIMIT 1');
-            if ($pr && $pr->Next()) $kingdom_id = (int)$pr->kingdom_id;
+            $park_id    = $id;
+            $kingdom_id = (int)Ork3::$Lib->park->GetParkKingdomId($park_id);
         } else {
             $kingdom_id = $id;
         }
@@ -42,36 +39,33 @@ class Controller_Recommendations extends Controller {
             return;
         }
 
-        // Location name
+        // Location name (DB lives in the lib short-info getters).
         $locationName = '';
-        global $DB;
         if ($park_id > 0) {
-            $DB->Clear();
-            $lr = $DB->DataSet('SELECT name FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id . ' LIMIT 1');
-            if ($lr && $lr->Next()) $locationName = $lr->name;
+            $pi = Ork3::$Lib->park->GetParkShortInfo(['ParkId' => $park_id]);
+            $locationName = $pi['ParkInfo']['ParkName'] ?? '';
         } else {
-            $DB->Clear();
-            $lr = $DB->DataSet('SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id . ' LIMIT 1');
-            if ($lr && $lr->Next()) $locationName = $lr->name;
+            $ki = Ork3::$Lib->kingdom->GetKingdomShortInfo(['KingdomId' => $kingdom_id]);
+            $locationName = $ki['KingdomInfo']['KingdomName'] ?? '';
         }
 
-        // Recommendation rows (full pending set for the scope, with seconds + notes).
+        // First 500-row batch for the scope (server-side filtered/sorted/paged).
+        // Defaults mirror the recs-tab pills: eligibility 'open', sort by date desc.
         $this->load_model('Reports');
-        $req = ['RequestedBy' => $uid, 'PlayerId' => 0];
-        if ($park_id > 0) {
-            $req['ParkId']    = $park_id;
-            $req['KingdomId'] = 0;
-        } else {
-            $req['KingdomId'] = $kingdom_id;
-            $req['ParkId']    = 0;
-        }
-        $recs = $this->Reports->recommended_awards($req);
-        if (!is_array($recs)) { $recs = []; }
-
-        // Group parallel recommendations by (recipient, kingdomaward, rank). Non-destructive:
-        // the underlying rec rows are untouched; the grid renders one row per cluster.
-        // Cluster-grouping is the shared Report::groupRecommendations() transform.
-        $this->data['Groups'] = $this->Reports->group_recommendations($recs);
+        $page = $this->Reports->recommended_awards_page([
+            'RequestedBy' => $uid,
+            'KingdomId'   => $park_id > 0 ? 0 : $kingdom_id,
+            'ParkId'      => $park_id,
+            'Eligibility' => 'open',
+            'SortKey'     => 'date',
+            'SortDir'     => 'desc',
+            'Limit'       => 500,
+            'Offset'      => 0,
+        ]);
+        $this->data['Groups']     = $page['Groups'];
+        $this->data['Total']      = (int)$page['Total'];
+        $this->data['HasMore']    = (bool)$page['HasMore'];
+        $this->data['NextOffset'] = (int)$page['NextOffset'];
 
         // Court membership per rec (badges + court filter).
         $courtMap = Ork3::$Lib->court->getRecommendationCourtMap($kingdom_id, $park_id);
@@ -79,17 +73,10 @@ class Controller_Recommendations extends Controller {
         // Courts in scope (Add-to-Court existing-court picker + specific-court filter).
         $courts = Ork3::$Lib->court->getCourtList($kingdom_id, $park_id);
 
-        // Parks in the kingdom (kingdom-scope park filter + abbrev lookup).
-        $parks = [];
-        global $DB;
-        $DB->Clear();
-        $prs = $DB->DataSet('SELECT park_id, name, abbreviation FROM ' . DB_PREFIX . 'park WHERE kingdom_id = ' . (int)$kingdom_id . ' ORDER BY name ASC');
-        if ($prs) { while ($prs->Next()) { $parks[(int)$prs->park_id] = ['Name' => $prs->name, 'Abbrev' => $prs->abbreviation]; } }
-
-        $this->data['Recommendations'] = $recs;
-        $this->data['CourtMap']        = $courtMap;
-        $this->data['Courts']          = $courts;
-        $this->data['Parks']           = $parks;
+        $this->data['CourtMap'] = $courtMap;
+        $this->data['Courts']   = $courts;
+        // Parks in the kingdom (kingdom-scope park filter + abbrev lookup); DB in lib.
+        $this->data['Parks']    = $this->rmParkMap($kingdom_id);
 
         $this->data['KingdomId']    = $kingdom_id;
         $this->data['ParkId']       = $park_id;

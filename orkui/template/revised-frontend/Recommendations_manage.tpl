@@ -509,7 +509,7 @@ html[data-theme="dark"] .rm-modal {
   </div>
   <div class="rp-context">
     <i class="fas fa-info-circle rp-context-icon"></i>
-    <span>Review, grant, dismiss, snooze, pass-down, and schedule award recommendations for <strong><?= htmlspecialchars($LocationName) ?></strong> &mdash; <?= count($Recommendations) ?> pending.</span>
+    <span>Review, grant, dismiss, snooze, pass-down, and schedule award recommendations for <strong><?= htmlspecialchars($LocationName) ?></strong> &mdash; <?= (int)($Total ?? 0) ?> pending.</span>
   </div>
 
   <div class="rm-filterbar" id="rm-filterbar">
@@ -560,7 +560,7 @@ html[data-theme="dark"] .rm-modal {
     </tbody>
   </table>
   </div>
-  <div class="rm-foot"><span id="rm-count"><?= count($Groups) ?></span> shown &middot; <span id="rm-selcount">0</span> selected</div>
+  <div class="rm-foot">Showing <span id="rm-count"><?= count($Groups) ?></span> of <span id="rm-total"><?= (int)($Total ?? 0) ?></span> &middot; <span id="rm-selcount">0</span> selected</div>
 
   <div class="rm-bulkbar" id="rm-bulkbar" hidden>
     <span id="rm-bulklabel">0 selected</span>
@@ -621,7 +621,11 @@ window.RmConfig = {
   kingdomId: <?= (int)$KingdomId ?>,
   parkId: <?= (int)$ParkId ?>,
   context: '<?= $Context === 'park' ? 'park' : 'kingdom' ?>',
-  userId: <?= (int)$Uid ?>
+  userId: <?= (int)$Uid ?>,
+  rowsUrl:    '<?= UIR ?>Recommendations/rows/<?= $Context ?>/<?= $Context === 'park' ? (int)$ParkId : (int)$KingdomId ?>',
+  total:      <?= (int)($Total ?? 0) ?>,
+  hasMore:    <?= !empty($HasMore) ? 'true' : 'false' ?>,
+  nextOffset: <?= (int)($NextOffset ?? 0) ?>
 };
 </script>
 
