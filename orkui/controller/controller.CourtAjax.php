@@ -241,7 +241,7 @@ class Controller_CourtAjax extends Controller {
 
         global $DB;
         $DB->Clear();
-        $r = $DB->DataSet('SELECT court_id, recommendations_id, mundane_id
+        $r = $DB->DataSet('SELECT court_id, recommendations_id
                             FROM ' . DB_PREFIX . 'court_award
                             WHERE court_award_id = ' . $court_award_id . ' LIMIT 1');
         if (!$r || !$r->Next()) {
