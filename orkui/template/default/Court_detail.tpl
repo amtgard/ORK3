@@ -1904,7 +1904,7 @@ $_total_awards = count($courtAwards ?? []);
         }
         if (typeof tnConfirm === 'function') {
             tnConfirm({ title: 'Send to local park?', body: body, confirmLabel: 'Send to Local', danger: true, onConfirm: doSend });
-        } else {
+        } else if (confirm('Send to local park? This removes the award from this Court and sends it to the recipient\'s local park.')) {
             doSend();
         }
     };
