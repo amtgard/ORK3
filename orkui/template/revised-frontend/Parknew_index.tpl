@@ -1336,7 +1336,7 @@
 			/* Delegated-by-the-Kingdom pinned section (officer-only, to-schedule list) */
 			.pk-delegated { border:1px solid rgba(44,95,139,.4); background:rgba(44,95,139,.07); border-radius:8px; padding:12px 16px; margin-bottom:16px; }
 			.pk-delegated-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-			.pk-delegated-title { margin:0; font-size:14px; font-weight:700; color:#2c5f8b; display:flex; align-items:center; gap:8px; }
+			.pk-delegated-title { margin:0; font-size:14px; font-weight:700; color:#2c5f8b !important; display:flex; align-items:center; gap:8px; }
 			.pk-delegated-title i { color:#2c5f8b; }
 			.pk-delegated-count { font-weight:600; color:#718096; }
 			.pk-delegated-help { font-size:12px; color:#718096; margin:6px 0 10px; }
@@ -1346,7 +1346,7 @@
 			.pk-delegated-sep { color:#cbd5e0; }
 			.pk-delegated-award { color:#4a5568; }
 			html[data-theme="dark"] .pk-delegated { border-color:rgba(111,176,230,.4); background:rgba(111,176,230,.08); }
-			html[data-theme="dark"] .pk-delegated-title { color:#6fb0e6; }
+			html[data-theme="dark"] .pk-delegated-title { color:#6fb0e6 !important; }
 			html[data-theme="dark"] .pk-delegated-title i { color:#6fb0e6; }
 			html[data-theme="dark"] .pk-delegated-count { color:#a0aec0; }
 			html[data-theme="dark"] .pk-delegated-help { color:#a0aec0; }
