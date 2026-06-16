@@ -257,6 +257,8 @@ html[data-theme="dark"] .rm-passlocal-tip { background: #000; }
 .rm-act:hover { border-color: var(--rm-accent); background: var(--rm-bg2); }
 .rm-act-dismiss:hover { border-color: var(--rm-danger); }
 
+.rm-loading { text-align:center; padding:14px; color:var(--rm-muted); font-size:13px; }
+
 /* Footer */
 .rm-foot {
     padding: 8px 4px;
@@ -515,10 +517,11 @@ html[data-theme="dark"] .rm-modal {
   <div class="rm-filterbar" id="rm-filterbar">
     <input type="search" id="rm-search" class="rm-search" placeholder="Search recipient&hellip;" autocomplete="off">
     <select id="rm-filter-elig" class="rm-fsel">
-      <option value="all">All eligibility</option>
-      <option value="below">Below recommended</option>
-      <option value="ator">At/above recommended</option>
-      <option value="nonladder">Non-ladder</option>
+      <option value="open" selected>Open Recs</option>
+      <option value="below">Below Rec&rsquo;d</option>
+      <option value="nonladder">Non-Ladder</option>
+      <option value="ator">At or Above Rec&rsquo;d</option>
+      <option value="all">All</option>
       <option value="snoozed">Snoozed</option>
     </select>
     <select id="rm-filter-court" class="rm-fsel">
@@ -560,6 +563,8 @@ html[data-theme="dark"] .rm-modal {
     </tbody>
   </table>
   </div>
+  <div id="rm-loading" class="rm-loading" style="display:none">Loading&hellip;</div>
+  <div id="rm-sentinel" style="height:1px"></div>
   <div class="rm-foot">Showing <span id="rm-count"><?= count($Groups) ?></span> of <span id="rm-total"><?= (int)($Total ?? 0) ?></span> &middot; <span id="rm-selcount">0</span> selected</div>
 
   <div class="rm-bulkbar" id="rm-bulkbar" hidden>
@@ -675,106 +680,93 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
     rmInsertDetail(tr, html, 'rm-detail-members');
 });
 
-/* ---------- Task 6: filtering, sorting, chips, counts ---------- */
+/* ---------- Server-side filter/sort + infinite-scroll lazy batches ---------- */
 var RM = { rows: function () { return Array.from(document.querySelectorAll('#rm-tbody .rm-row')); } };
 
-function rmApplyFilters() {
-    var q       = (document.getElementById('rm-search').value || '').trim().toLowerCase();
-    var elig    = document.getElementById('rm-filter-elig').value;
-    var court   = document.getElementById('rm-filter-court').value;
-    var parkSel = document.getElementById('rm-filter-park');
-    var park    = parkSel ? parkSel.value : 'all';
-    var shown = 0;
-    RM.rows().forEach(function (tr) {
-        var ok = true;
-        if (q && tr.getAttribute('data-recip').indexOf(q) === -1) ok = false;
-        if (ok && elig !== 'all') {
-            if (elig === 'snoozed') ok = tr.getAttribute('data-snoozed') === '1';
-            else ok = tr.getAttribute('data-elig') === elig;
-        }
-        if (ok && court !== 'all') {
-            var courts = []; try { courts = JSON.parse(tr.getAttribute('data-courts') || '[]'); } catch (x) {}
-            if (court === 'none') ok = courts.length === 0;
-            else if (court === 'any') ok = courts.length > 0;
-            else if (court.indexOf('court:') === 0) {
-                var cid = parseInt(court.slice(6), 10);
-                ok = courts.some(function (c) { return c.CourtId === cid; });
-            }
-        }
-        if (ok && park !== 'all') ok = tr.getAttribute('data-park') === park;
-        if (ok && document.getElementById('rm-filter-passlocal').checked && tr.getAttribute('data-passlocal') !== '1') ok = false;
-        // hide any open detail row belonging to a now-hidden parent
-        tr.style.display = ok ? '' : 'none';
-        var dr = tr.nextElementSibling;
-        if (dr && dr.classList.contains('rm-detailrow')) dr.style.display = ok ? '' : 'none';
-        if (ok) shown++;
-    });
-    document.getElementById('rm-count').textContent = shown;
-    rmRenderChips(q, elig, court, park);
-    rmUpdateSelCount();
+var rmState = {
+	search: '', elig: 'open', court: 'all', park: 'all', passlocal: false,
+	sort: 'date', dir: 'desc',
+	offset: RmConfig.nextOffset || 0, total: RmConfig.total || 0,
+	hasMore: !!RmConfig.hasMore, loading: false, seen: {}
+};
+function rmReadFilters() {
+	rmState.search = (document.getElementById('rm-search').value || '').trim();
+	rmState.elig   = document.getElementById('rm-filter-elig').value;
+	rmState.court  = document.getElementById('rm-filter-court').value;
+	var pk = document.getElementById('rm-filter-park'); rmState.park = pk ? pk.value : 'all';
+	rmState.passlocal = document.getElementById('rm-filter-passlocal').checked;
 }
-
-function rmRenderChips(q, elig, court, park) {
-    var chips = [];
-    if (q) chips.push(['search', '“' + q + '”']);
-    if (elig !== 'all') chips.push(['elig', document.getElementById('rm-filter-elig').selectedOptions[0].text]);
-    if (court !== 'all') chips.push(['court', document.getElementById('rm-filter-court').selectedOptions[0].text]);
-    var ps = document.getElementById('rm-filter-park');
-    if (ps && park !== 'all') chips.push(['park', ps.selectedOptions[0].text]);
-    if (document.getElementById('rm-filter-passlocal').checked) chips.push(['passlocal', 'Passed to local']);
-    document.getElementById('rm-chips').innerHTML = chips.map(function (c) {
-        return '<span class="rm-chip" data-clear="' + c[0] + '">' + rmEsc(c[1]) + ' ✕</span>';
-    }).join('');
+function rmRowKey(tr) { return tr.getAttribute('data-rec-cluster') || tr.getAttribute('data-rec-id'); }
+function rmIndexSeen() { rmState.seen = {}; RM.rows().forEach(function (tr) { rmState.seen[rmRowKey(tr)] = true; }); }
+function rmFetch(reset) {
+	if (rmState.loading) return;
+	rmState.loading = true;
+	if (reset) { rmState.offset = 0; }
+	var q = new URLSearchParams({
+		search: rmState.search, elig: rmState.elig, court: rmState.court,
+		park: rmState.park, passlocal: rmState.passlocal ? '1' : '', sort: rmState.sort,
+		dir: rmState.dir, offset: String(rmState.offset)
+	});
+	var tbody = document.getElementById('rm-tbody');
+	document.getElementById('rm-loading').style.display = '';
+	fetch(RmConfig.rowsUrl + (RmConfig.rowsUrl.indexOf('?') >= 0 ? '&' : '?') + q.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+		.then(function (r) { return r.json(); })
+		.then(function (d) {
+			if (reset) { tbody.innerHTML = ''; rmState.seen = {}; }
+			var tmp = document.createElement('tbody'); tmp.innerHTML = d.html;
+			Array.prototype.slice.call(tmp.children).forEach(function (tr) {
+				if (!tr.classList || !tr.classList.contains('rm-row')) { tbody.appendChild(tr); return; }
+				var k = rmRowKey(tr);
+				if (k && rmState.seen[k]) return;
+				if (k) rmState.seen[k] = true;
+				tbody.appendChild(tr);
+			});
+			rmState.offset  = d.offset;
+			rmState.total   = d.total;
+			rmState.hasMore = d.hasMore;
+			document.getElementById('rm-count').textContent = RM.rows().length;
+			document.getElementById('rm-total').textContent = d.total;
+			if (typeof rmUpdateSelCount === 'function') rmUpdateSelCount();
+			if (typeof rmSyncReasonExpanders === 'function') rmSyncReasonExpanders();
+		})
+		.catch(function () { if (typeof rmToast === 'function') rmToast('Failed to load.', true); })
+		.finally(function () {
+			rmState.loading = false;
+			document.getElementById('rm-loading').style.display = 'none';
+		});
 }
-
+function rmAfterRowRemoved() {
+	document.getElementById('rm-count').textContent = RM.rows().length;
+	if (rmState.total > 0) { rmState.total -= 1; document.getElementById('rm-total').textContent = rmState.total; }
+	if (typeof rmUpdateSelCount === 'function') rmUpdateSelCount();
+}
+rmIndexSeen();
+// filter inputs (debounced search) -> reset fetch
+var rmDeb;
 ['rm-search', 'rm-filter-elig', 'rm-filter-court', 'rm-filter-park'].forEach(function (idv) {
-    var el = document.getElementById(idv); if (el) el.addEventListener('input', rmApplyFilters);
+	var el = document.getElementById(idv); if (!el) return;
+	el.addEventListener('input', function () { rmReadFilters(); clearTimeout(rmDeb); rmDeb = setTimeout(function () { rmFetch(true); }, 250); });
+	el.addEventListener('change', function () { rmReadFilters(); clearTimeout(rmDeb); rmFetch(true); });
 });
-document.getElementById('rm-filter-passlocal').addEventListener('change', rmApplyFilters);
-document.getElementById('rm-chips').addEventListener('click', function (e) {
-    var chip = e.target.closest('.rm-chip'); if (!chip) return;
-    var k = chip.getAttribute('data-clear');
-    if (k === 'search') document.getElementById('rm-search').value = '';
-    if (k === 'elig')   document.getElementById('rm-filter-elig').value = 'all';
-    if (k === 'court')  document.getElementById('rm-filter-court').value = 'all';
-    if (k === 'park' && document.getElementById('rm-filter-park')) document.getElementById('rm-filter-park').value = 'all';
-    if (k === 'passlocal') document.getElementById('rm-filter-passlocal').checked = false;
-    rmApplyFilters();
-});
-
-var rmSortState = { key: 'date', dir: 1 };
-function rmSort(key) {
-    rmSortState.dir = (rmSortState.key === key) ? -rmSortState.dir : 1;
-    rmSortState.key = key;
-    var tbody = document.getElementById('rm-tbody');
-    var rows = RM.rows();
-    rows.sort(function (a, b) {
-        var va, vb;
-        if (key === 'supp') { va = +a.getAttribute('data-supp'); vb = +b.getAttribute('data-supp'); }
-        else if (key === 'date') { va = a.getAttribute('data-date'); vb = b.getAttribute('data-date'); }
-        else { va = a.getAttribute('data-' + key); vb = b.getAttribute('data-' + key); }
-        if (va < vb) return -1 * rmSortState.dir;
-        if (va > vb) return  1 * rmSortState.dir;
-        // Same award -> subsort by ladder rank, following the sort direction.
-        if (key === 'award') {
-            var ra = +a.getAttribute('data-rank') || 0;
-            var rb = +b.getAttribute('data-rank') || 0;
-            if (ra !== rb) return (ra - rb) * rmSortState.dir;
-        }
-        return 0;
-    });
-    var rmSortPairs = rows.map(function (tr) {
-        var dr = tr.nextElementSibling && tr.nextElementSibling.classList.contains('rm-detailrow') ? tr.nextElementSibling : null;
-        return { tr: tr, dr: dr };
-    });
-    rmSortPairs.forEach(function (p) { tbody.appendChild(p.tr); if (p.dr) tbody.appendChild(p.dr); });
-    document.querySelectorAll('.rm-sortable').forEach(function (th) { th.classList.remove('rm-sort-asc', 'rm-sort-desc'); });
-    var thEl = document.querySelector('.rm-sortable[data-sort="' + key + '"]');
-    if (thEl) thEl.classList.add(rmSortState.dir === 1 ? 'rm-sort-asc' : 'rm-sort-desc');
-}
+var rmPl = document.getElementById('rm-filter-passlocal'); if (rmPl) rmPl.addEventListener('change', function () { rmReadFilters(); rmFetch(true); });
+// sort headers -> set sort + reset fetch
 document.querySelectorAll('.rm-sortable').forEach(function (th) {
-    th.addEventListener('click', function () { rmSort(th.getAttribute('data-sort')); });
+	th.addEventListener('click', function () {
+		var key = th.getAttribute('data-sort');
+		if (rmState.sort === key) rmState.dir = (rmState.dir === 'asc') ? 'desc' : 'asc';
+		else { rmState.sort = key; rmState.dir = (key === 'date') ? 'desc' : 'asc'; }
+		document.querySelectorAll('.rm-sortable').forEach(function (t) { t.classList.remove('rm-sort-asc', 'rm-sort-desc'); });
+		th.classList.add(rmState.dir === 'asc' ? 'rm-sort-asc' : 'rm-sort-desc');
+		rmFetch(true);
+	});
 });
+// infinite scroll
+if ('IntersectionObserver' in window) {
+	var rmObs = new IntersectionObserver(function (entries) {
+		if (entries[0].isIntersecting && rmState.hasMore && !rmState.loading) rmFetch(false);
+	}, { rootMargin: '400px' });
+	var rmSent = document.getElementById('rm-sentinel'); if (rmSent) rmObs.observe(rmSent);
+}
 
 /* ---------- Task 7: selection + bulk bar ---------- */
 var rmLastIdx = null;
@@ -831,7 +823,7 @@ function rmRemoveRow(tr) {
     var dr = tr.nextElementSibling;
     if (dr && dr.classList.contains('rm-detailrow')) dr.remove();
     tr.remove();
-    rmApplyFilters();
+    rmAfterRowRemoved();
 }
 
 // Read the member rec ids for a group row.
@@ -857,7 +849,7 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
             tr.setAttribute('data-snoozed', snoozed ? '0' : '1');
             sn.textContent = snoozed ? '💤' : '🔔';
             sn.setAttribute('data-tip', snoozed ? 'Snooze' : 'Unsnooze');
-            rmApplyFilters();
+            rmFetch(true);
             rmToast(snoozed ? 'Unsnoozed.' : 'Snoozed.');
         }).catch(function () { rmToast('Failed.', true); });
         return;
@@ -901,7 +893,7 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
             b.innerHTML = '<i class="fas fa-arrow-down"></i> passed to local';
             awardCell.appendChild(b);
         } else if (passed && existing) { existing.remove(); }
-        rmApplyFilters();
+        rmFetch(true);
         rmToast(passed ? 'Pass-to-local removed.' : 'Passed to local.');
     }).catch(function () { rmToast('Update failed.', true); });
 });
@@ -910,7 +902,7 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
 function rmBulkSequential(rows, fn, doneMsg) {
     var ok = 0, fail = 0, i = 0;
     (function next() {
-        if (i >= rows.length) { rmToast(doneMsg(ok, fail), fail > 0); rmApplyFilters(); return; }
+        if (i >= rows.length) { rmToast(doneMsg(ok, fail), fail > 0); rmFetch(true); return; }
         var tr = rows[i++];
         fn(tr).then(function (good) { good ? ok++ : fail++; next(); });
     })();
@@ -1163,7 +1155,7 @@ document.getElementById('rm-court-submit').addEventListener('click', function ()
         (function next() {
             if (i >= rmCourtTargets.length) {
                 rmToast('Added ' + ok + (skip ? ', ' + skip + ' already on court' : '') + (fail ? ', ' + fail + ' failed' : '') + '.', fail > 0);
-                btn.disabled = false; rmCloseCourtModal(); rmApplyFilters(); return;
+                btn.disabled = false; rmCloseCourtModal(); rmFetch(true); return;
             }
             var rec = rmCourtTargets[i++];
             // Skip if this rec is already on the chosen court.
@@ -1202,18 +1194,24 @@ function rmSyncReasonExpanders() {
     });
 }
 
-// Initial: default sort (oldest first) + sync counts/chips + expander visibility.
-rmSort('date');
+// Initial: the server already rendered the first batch sorted by date desc — just
+// reflect that in the sort-header indicator and seed the filter state from the inputs.
+(function () {
+    var th = document.querySelector('.rm-sortable[data-sort="date"]');
+    if (th) th.classList.add('rm-sort-desc');
+})();
 // Pre-apply the "Passed to local" filter when arrived via ?passlocal=1
 // (e.g. from the park profile "Delegated by the Kingdom" section's Manage link).
 (function () {
     var params = new URLSearchParams(window.location.search);
-    if (params.get('passlocal') === '1') {
-        var pl = document.getElementById('rm-filter-passlocal');
-        if (pl) pl.checked = true;
+    var pl = document.getElementById('rm-filter-passlocal');
+    rmReadFilters();
+    if (params.get('passlocal') === '1' && pl) {
+        pl.checked = true;
+        rmReadFilters();
+        rmFetch(true); // re-query server-side with the pass-to-local filter applied
     }
 })();
-rmApplyFilters();
 rmSyncReasonExpanders();
 var rmReasonResizeT;
 window.addEventListener('resize', function () {

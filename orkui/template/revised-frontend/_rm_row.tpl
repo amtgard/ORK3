@@ -39,7 +39,7 @@
         ]), ENT_QUOTES);
         $membersJson = htmlspecialchars(json_encode($memberIds), ENT_QUOTES);
     ?>
-      <tr class="rm-row" data-elig="<?= $elig ?>" data-snoozed="<?= $snoozed ?>"
+      <tr class="rm-row" data-rec-cluster="<?= (int)$group['MundaneId'] ?>:<?= (int)$group['KingdomAwardId'] ?>:<?= (int)$group['Rank'] ?>" data-elig="<?= $elig ?>" data-snoozed="<?= $snoozed ?>"
           data-passlocal="<?= !empty($group['PassedToLocal']) ? 1 : 0 ?>"
           data-park="<?= $pid ?>" data-courts='<?= $courtJson ?>'
           data-recip="<?= htmlspecialchars(strtolower($group['Persona'] ?? ''), ENT_QUOTES) ?>"
