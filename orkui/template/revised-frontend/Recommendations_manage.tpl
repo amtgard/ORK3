@@ -158,6 +158,8 @@ thead .rm-col-sel { text-align: center; }
     border-radius: 3px;
     padding: 0 4px;
 }
+a.rm-park { text-decoration: none; cursor: pointer; }
+a.rm-park:hover { color: var(--rm-accent); border-color: var(--rm-accent); }
 
 /* Award cell */
 .rm-rank {
@@ -613,7 +615,7 @@ html[data-theme="dark"] .rm-modal {
         <td class="rm-col-sel"><input type="checkbox" class="rm-rowsel"></td>
         <td class="rm-col-recip">
           <a href="<?= UIR ?>Playernew/index/<?= $gMid ?>"><?= htmlspecialchars($group['Persona'] ?? '') ?></a>
-          <?php if ($abbrev) { ?><span class="rm-park"><?= htmlspecialchars($abbrev) ?></span><?php } ?>
+          <?php if ($abbrev) { ?><a class="rm-park" href="<?= UIR ?>Park/profile/<?= $pid ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($abbrev) ?></a><?php } ?>
         </td>
         <td class="rm-col-award">
           <?= htmlspecialchars($group['AwardName'] ?? '') ?>
