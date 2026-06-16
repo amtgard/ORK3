@@ -455,8 +455,67 @@ class Report extends Ork3
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
     }
 
-    public function PlayerAwardRecommendations($request)
-    {
+	/**
+	 * Collapse parallel recommendations into one row per (recipient, kingdomaward, rank)
+	 * cluster. Pure transform of the row array returned by PlayerAwardRecommendations.
+	 * Returns array_values of the grouped rows (same shape the Manager template expects).
+	 */
+	public function groupRecommendations($recs) {
+		$groups = [];
+		foreach ((array)$recs as $rec) {
+			$mid  = (int)($rec['MundaneId'] ?? 0);
+			$kaid = (int)($rec['KingdomAwardId'] ?? 0);
+			$rank = (int)($rec['Rank'] ?? 0);
+			$key  = $mid . ':' . $kaid . ':' . $rank;
+			if (!isset($groups[$key])) {
+				$groups[$key] = [
+					'MundaneId'      => $mid,
+					'KingdomAwardId' => $kaid,
+					'Rank'           => $rank,
+					'Persona'        => $rec['Persona'] ?? '',
+					'AwardName'      => $rec['AwardName'] ?? '',
+					'ParkId'         => (int)($rec['ParkId'] ?? 0),
+					'AlreadyHas'     => !empty($rec['AlreadyHas']),
+					'CurrentRank'    => isset($rec['CurrentRank']) ? (int)$rec['CurrentRank'] : null,
+					'Members'        => [],
+					'MemberRecIds'   => [],
+					'OldestAgeDays'  => 0,
+					'OldestDate'     => $rec['DateRecommended'] ?? '',
+					'RepRecId'       => (int)($rec['RecommendationsId'] ?? 0),
+					'_advocates'     => [],
+					'_hasNamedRec'   => false,
+					'_allSnoozed'    => true,
+					'_allPassed'     => true,
+				];
+			}
+			$g = &$groups[$key];
+			$g['Members'][]      = $rec;
+			$g['MemberRecIds'][] = (int)($rec['RecommendationsId'] ?? 0);
+			$age = (int)($rec['AgeDays'] ?? 0);
+			if ($age >= $g['OldestAgeDays']) {
+				$g['OldestAgeDays'] = $age;
+				$g['OldestDate']    = $rec['DateRecommended'] ?? '';
+				$g['RepRecId']      = (int)($rec['RecommendationsId'] ?? 0);
+			}
+			if (!empty($rec['RecommendedById'])) { $g['_advocates'][(int)$rec['RecommendedById']] = true; $g['_hasNamedRec'] = true; }
+			foreach (($rec['Seconds'] ?? []) as $s) {
+				if (!empty($s['SupporterMundaneId'])) { $g['_advocates'][(int)$s['SupporterMundaneId']] = true; }
+			}
+			if (empty($rec['IsSnoozed'])) { $g['_allSnoozed'] = false; }
+			if (empty($rec['PassedToLocal'])) { $g['_allPassed'] = false; }
+			unset($g);
+		}
+		foreach ($groups as $k => $g) {
+			unset($g['_advocates'][$g['MundaneId']]);
+			$groups[$k]['SupportCount']  = max(0, count($g['_advocates']) - ($g['_hasNamedRec'] ? 1 : 0));
+			$groups[$k]['IsSnoozed']     = $g['_allSnoozed'];
+			$groups[$k]['PassedToLocal'] = $g['_allPassed'];
+			unset($groups[$k]['_advocates'], $groups[$k]['_hasNamedRec'], $groups[$k]['_allSnoozed'], $groups[$k]['_allPassed']);
+		}
+		return array_values($groups);
+	}
+
+	public function PlayerAwardRecommendations($request) {
 
         // Cache keyed to the player being viewed — shared across all viewers.
         // Viewer-specific flags (ViewerCanSecond, ViewerCanEditReason, IsMine) are

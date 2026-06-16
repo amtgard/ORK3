@@ -58,12 +58,17 @@ class Model_Reports extends Model
         return false;
     }
 
-    // Cheap count for the Kingdom profile's "Recommendations (N)" tab badge —
-    // avoids hydrating every rec just to size the list.
-    public function recommended_awards_count($request)
-    {
-        return (int)$this->Report->PlayerAwardRecommendationsCount($request);
-    }
+	// Collapse parallel recommendations into one row per (recipient, kingdomaward, rank)
+	// cluster. Thin passthrough to the shared transform in class.Report.php.
+	function group_recommendations($recs) {
+		return $this->Report->groupRecommendations($recs);
+	}
+
+	// Cheap count for the Kingdom profile's "Recommendations (N)" tab badge —
+	// avoids hydrating every rec just to size the list.
+	function recommended_awards_count($request) {
+		return (int)$this->Report->PlayerAwardRecommendationsCount($request);
+	}
 
     public function deleted_recommended_awards($request)
     {
