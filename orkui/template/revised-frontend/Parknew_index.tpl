@@ -1345,6 +1345,8 @@
 			.pk-delegated-item a { font-weight:600; }
 			.pk-delegated-sep { color:#cbd5e0; }
 			.pk-delegated-award { color:#4a5568; }
+			.pk-delegated-rank { color:#4a5568; }
+			.pk-delegated-approved { margin-left:auto; color:#718096; font-size:12px; }
 			html[data-theme="dark"] .pk-delegated { border-color:rgba(111,176,230,.4); background:rgba(111,176,230,.08); }
 			html[data-theme="dark"] .pk-delegated-title { color:#6fb0e6 !important; }
 			html[data-theme="dark"] .pk-delegated-title i { color:#6fb0e6; }
@@ -1352,6 +1354,8 @@
 			html[data-theme="dark"] .pk-delegated-help { color:#a0aec0; }
 			html[data-theme="dark"] .pk-delegated-item { color:#e2e8f0; }
 			html[data-theme="dark"] .pk-delegated-award { color:#cbd5e0; }
+			html[data-theme="dark"] .pk-delegated-rank { color:#cbd5e0; }
+			html[data-theme="dark"] .pk-delegated-approved { color:#a0aec0; }
 			html[data-theme="dark"] .pk-delegated-sep { color:#4a5568; }
 			/* Collapsible subsection chrome (relocated court) */
 			.pk-cp-section { border-top:1px solid #e2e8f0; margin-top:24px; padding-top:4px; }
@@ -1561,6 +1565,8 @@
 							<a href="<?= UIR ?>Player/profile/<?= (int)$dr['MundaneId'] ?>"><?= htmlspecialchars($dr['Persona']) ?></a>
 							<span class="pk-delegated-sep">&middot;</span>
 							<span class="pk-delegated-award"><?= htmlspecialchars(preg_replace('/^Order of(?:\s+the)?\s+/i', '', $dr['AwardName'])) ?></span>
+							<?php if ((int)$dr['Rank'] > 0): ?><span class="pk-delegated-rank">Rank <?= (int)$dr['Rank'] ?></span><?php endif; ?>
+							<?php if (!empty($dr['PassedToLocalAt'])): ?><span class="pk-delegated-approved">Approved on: <?= htmlspecialchars(date('F j, Y', strtotime($dr['PassedToLocalAt']))) ?></span><?php endif; ?>
 						</li>
 						<?php endforeach; ?>
 					</ul>
