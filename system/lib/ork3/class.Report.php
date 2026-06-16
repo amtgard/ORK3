@@ -869,7 +869,7 @@ class Report extends Ork3
 			while ($pr->next()) { $clusters[] = [(int)$pr->mundane_id, (int)$pr->kingdomaward_id, (int)$pr->rk]; }
 		}
 		if (empty($clusters)) {
-			return ['Groups' => [], 'Total' => $total, 'HasMore' => false];
+			return ['Groups' => [], 'Total' => $total, 'HasMore' => false, 'NextOffset' => $offset];
 		}
 
 		$orParts = [];
@@ -916,8 +916,9 @@ class Report extends Ork3
 			return ($pos[$kx] ?? 1000000000) <=> ($pos[$ky] ?? 1000000000);
 		});
 
-		$hasMore = ($offset + count($clusters)) < $total;
-		return ['Groups' => $groups, 'Total' => $total, 'HasMore' => $hasMore];
+		$nextOffset = $offset + count($clusters);   // advance by SQL page size, not post-filtered count
+		$hasMore = $nextOffset < $total;
+		return ['Groups' => $groups, 'Total' => $total, 'HasMore' => $hasMore, 'NextOffset' => $nextOffset];
 	}
 
 	// Compute viewer-specific flags on top of a cached (viewer-agnostic) recommendations
