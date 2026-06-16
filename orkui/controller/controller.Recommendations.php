@@ -97,4 +97,87 @@ class Controller_Recommendations extends Controller {
         $this->data['LocationName'] = $locationName;
         $this->data['Uid']          = $uid;
     }
+
+    // Route: ?Route=Recommendations/rows/kingdom/{id} or /rows/park/{id}  (GET: filters/sort/offset)
+    // Returns one 500-row JSON batch of rendered <tr class="rm-row"> partials.
+    public function rows($context = null, $id = null) {
+        if ($id === null && $context !== null && strpos($context, '/') !== false) {
+            $parts   = explode('/', $context, 2);
+            $context = $parts[0];
+            $id      = $parts[1] ?? '';
+        }
+        $id      = (int)preg_replace('/[^0-9]/', '', $id ?? '');
+        $context = ($context === 'park') ? 'park' : 'kingdom';
+        $uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+
+        $kingdom_id = 0;
+        $park_id    = 0;
+        if ($context === 'park') {
+            $park_id    = $id;
+            $kingdom_id = (int)Ork3::$Lib->park->GetParkKingdomId($park_id);
+        } else {
+            $kingdom_id = $id;
+        }
+
+        header('Content-Type: application/json');
+        if (!valid_id($kingdom_id) || !Ork3::$Lib->court->canManage($uid, $kingdom_id, $park_id)) {
+            http_response_code(403);
+            echo json_encode(['error' => 'forbidden']);
+            exit;
+        }
+
+        $req = [
+            'RequestedBy' => $uid,
+            'KingdomId'   => $park_id > 0 ? 0 : $kingdom_id,
+            'ParkId'      => $park_id,
+            'Search'      => (string)($_GET['search'] ?? ''),
+            'Eligibility' => (string)($_GET['elig'] ?? 'open'),
+            'Court'       => (string)($_GET['court'] ?? 'all'),
+            'Park'        => (string)($_GET['park'] ?? 'all'),
+            'PassLocal'   => !empty($_GET['passlocal']),
+            'SortKey'     => (string)($_GET['sort'] ?? 'date'),
+            'SortDir'     => (string)($_GET['dir'] ?? 'desc'),
+            'Limit'       => 500,
+            'Offset'      => max(0, (int)($_GET['offset'] ?? 0)),
+        ];
+
+        $this->load_model('Reports');
+        $page = $this->Reports->recommended_awards_page($req);
+
+        $CourtMap = Ork3::$Lib->court->getRecommendationCourtMap($kingdom_id, $park_id);
+        $Parks    = $this->rmParkMap($kingdom_id);
+        $Context  = $context;
+
+        $html = '';
+        foreach ($page['Groups'] as $group) {
+            ob_start();
+            include DIR_TEMPLATE . 'revised-frontend/_rm_row.tpl';
+            $html .= ob_get_clean();
+        }
+        echo json_encode([
+            'html'    => $html,
+            'total'   => (int)$page['Total'],
+            'hasMore' => (bool)$page['HasMore'],
+            'offset'  => (int)$page['NextOffset'],
+        ]);
+        exit;
+    }
+
+    // Park map for the kingdom-scope filter + row abbrev. DB lives in the lib
+    // (Kingdom::GetParks); this only reshapes the result.
+    private function rmParkMap($kingdom_id) {
+        $map = [];
+        $res = Ork3::$Lib->kingdom->GetParks(['KingdomId' => (int)$kingdom_id]);
+        $rows = (isset($res['Parks']) && is_array($res['Parks'])) ? $res['Parks'] : [];
+        foreach ($rows as $p) {
+            $pid = (int)($p['ParkId'] ?? $p['park_id'] ?? 0);
+            if ($pid) {
+                $map[$pid] = [
+                    'Name'   => $p['Name'] ?? $p['name'] ?? '',
+                    'Abbrev' => $p['Abbreviation'] ?? $p['abbreviation'] ?? $p['Abbrev'] ?? '',
+                ];
+            }
+        }
+        return $map;
+    }
 }

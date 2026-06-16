@@ -828,10 +828,16 @@ class Report extends Ork3
 
 		$whereSql = $where ? (' AND ' . implode(' AND ', $where)) : '';
 
-		$supportSub = "(SELECT COUNT(DISTINCT adv) FROM ("
-			. "  SELECT recommended_by_id AS adv FROM " . DB_PREFIX . "recommendations r2 WHERE r2.mundane_id = recs.mundane_id AND r2.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r2.rank,0)=COALESCE(recs.rank,0) AND r2.recommended_by_id IS NOT NULL AND (r2.deleted_by IS NULL OR r2.deleted_by=0)"
-			. "  UNION SELECT s.supporter_mundane_id AS adv FROM " . DB_PREFIX . "recommendation_seconds s JOIN " . DB_PREFIX . "recommendations r3 ON r3.recommendations_id = s.recommendations_id WHERE r3.mundane_id = recs.mundane_id AND r3.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r3.rank,0)=COALESCE(recs.rank,0) AND s.deleted_at IS NULL"
-			. ") adv_t WHERE adv <> recs.mundane_id)";
+		// Advocate count for the 'supp' sort tiebreaker only (the displayed SupportCount is
+		// computed authoritatively in PHP by groupRecommendations()). MariaDB cannot correlate
+		// the outer `recs` alias through a derived table (UNION-in-FROM → "Unknown column
+		// recs.mundane_id"), so count distinct recommenders + distinct seconders as two
+		// single-level correlated subqueries summed, each excluding the recipient.
+		$supportSub = "("
+			. "(SELECT COUNT(DISTINCT r2.recommended_by_id) FROM " . DB_PREFIX . "recommendations r2 WHERE r2.mundane_id = recs.mundane_id AND r2.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r2.rank,0)=COALESCE(recs.rank,0) AND r2.recommended_by_id IS NOT NULL AND r2.recommended_by_id <> recs.mundane_id AND (r2.deleted_by IS NULL OR r2.deleted_by=0))"
+			. " + "
+			. "(SELECT COUNT(DISTINCT s.supporter_mundane_id) FROM " . DB_PREFIX . "recommendation_seconds s JOIN " . DB_PREFIX . "recommendations r3 ON r3.recommendations_id = s.recommendations_id WHERE r3.mundane_id = recs.mundane_id AND r3.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r3.rank,0)=COALESCE(recs.rank,0) AND s.supporter_mundane_id <> recs.mundane_id AND s.deleted_at IS NULL)"
+			. ")";
 
 		$dir = (strtolower((string)($request['SortDir'] ?? 'desc')) === 'asc') ? 'ASC' : 'DESC';
 		switch ((string)($request['SortKey'] ?? 'date')) {

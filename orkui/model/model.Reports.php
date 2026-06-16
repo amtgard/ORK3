@@ -64,6 +64,12 @@ class Model_Reports extends Model
 		return $this->Report->groupRecommendations($recs);
 	}
 
+	// One 500-row paged batch of grouped Recommendations-Manager rows.
+	// Thin passthrough to the shared paging query in class.Report.php.
+	function recommended_awards_page($request) {
+		return $this->Report->PlayerAwardRecommendationsPage($request);
+	}
+
 	// Cheap count for the Kingdom profile's "Recommendations (N)" tab badge —
 	// avoids hydrating every rec just to size the list.
 	function recommended_awards_count($request) {
