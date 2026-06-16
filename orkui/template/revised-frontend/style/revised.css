@@ -126,6 +126,13 @@ html[data-theme="dark"] .kn-btn-primary:hover:not(:disabled),
 html[data-theme="dark"] .pk-btn-primary:hover:not(:disabled) {
   background: #3182ce;
 }
+/* "Manage Recommendations" is an <a> styled as a button; beat the global
+   dark-mode link color (html[data-theme="dark"] #theme_container a -> cyan)
+   so its text stays white. */
+html[data-theme="dark"] .pk-manage-recs,
+html[data-theme="dark"] .kn-manage-recs,
+html[data-theme="dark"] .pk-manage-recs:hover,
+html[data-theme="dark"] .kn-manage-recs:hover { color: #fff !important; }
 html[data-theme="dark"] .pn-btn-secondary,
 html[data-theme="dark"] .kn-btn-secondary,
 html[data-theme="dark"] .pk-btn-secondary {

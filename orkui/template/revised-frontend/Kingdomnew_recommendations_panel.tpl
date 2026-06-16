@@ -24,9 +24,9 @@
 			<div class="kn-rec-filter-bar">
 				<a class="kn-btn kn-btn-primary kn-manage-recs" href="<?= UIR ?>Recommendations/manage/kingdom/<?= (int)$kingdom_id ?>"><i class="fas fa-tasks"></i> Manage Recommendations</a>
 				<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="open">Open Recs</button>
-				<button class="kn-rec-filter-btn" data-filter="below">Below Rec'd</button>
+				<button class="kn-rec-filter-btn" data-filter="below">Below Rec&rsquo;d</button>
 				<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
-				<button class="kn-rec-filter-btn" data-filter="already">At or Above Rec'd</button>
+				<button class="kn-rec-filter-btn" data-filter="already">At or Above Rec&rsquo;d</button>
 				<button class="kn-rec-filter-btn" data-filter="all">All</button>
 				<?php if (!empty($ViewerHasCircle)): ?>
 				<button class="kn-rec-filter-btn" data-filter="mycircles"><i class="fas fa-users"></i> My Circles</button>
