@@ -1290,6 +1290,15 @@ function rmSyncReasonExpanders() {
 
 // Initial: default sort (oldest first) + sync counts/chips + expander visibility.
 rmSort('date');
+// Pre-apply the "Passed to local" filter when arrived via ?passlocal=1
+// (e.g. from the park profile "Delegated by the Kingdom" section's Manage link).
+(function () {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('passlocal') === '1') {
+        var pl = document.getElementById('rm-filter-passlocal');
+        if (pl) pl.checked = true;
+    }
+})();
 rmApplyFilters();
 rmSyncReasonExpanders();
 var rmReasonResizeT;
