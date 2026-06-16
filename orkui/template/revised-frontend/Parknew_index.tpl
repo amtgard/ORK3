@@ -1357,6 +1357,9 @@
 			html[data-theme="dark"] .pk-delegated-rank { color:#cbd5e0; }
 			html[data-theme="dark"] .pk-delegated-approved { color:#a0aec0; }
 			html[data-theme="dark"] .pk-delegated-sep { color:#4a5568; }
+			.pk-delegated-toggle { display:flex; align-items:center; gap:10px; background:none; border:none; cursor:pointer; padding:0; text-align:left; flex:1; min-width:0; }
+			.pk-delegated-chevron { color:#a0aec0; flex-shrink:0; }
+			.pk-delegated-body { padding-top:2px; }
 			/* Collapsible subsection chrome (relocated court) */
 			.pk-cp-section { border-top:1px solid #e2e8f0; margin-top:24px; padding-top:4px; }
 			.pk-cp-header { display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; cursor:pointer; padding:10px 4px; font-size:15px; font-weight:700; color:#2d3748; text-align:left; }
@@ -1481,6 +1484,18 @@
 					if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
 				};
 
+				window.pkDelegatedToggle = function() {
+					var sec = document.getElementById('pk-delegated');
+					var body = document.getElementById('pk-delegated-body');
+					if (!sec || !body) return;
+					var open = sec.classList.toggle('pk-delegated-open');
+					body.style.display = open ? '' : 'none';
+					var hdr = sec.querySelector('.pk-delegated-toggle');
+					if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
+					var ico = sec.querySelector('.pk-delegated-chevron');
+					if (ico) { ico.classList.toggle('fa-chevron-up', open); ico.classList.toggle('fa-chevron-down', !open); }
+				};
+
 				window.pkCpOnEventChange = function(sel, dateId) {
 					var opt = sel.options[sel.selectedIndex];
 					var start = opt ? opt.getAttribute('data-start') : '';
@@ -1553,11 +1568,15 @@
 					}));
 				?>
 				<?php if (!empty($pkDelegated)): ?>
-				<div class="pk-delegated">
+				<div class="pk-delegated pk-delegated-open" id="pk-delegated">
 					<div class="pk-delegated-head">
-						<h4 class="kn-bare-heading pk-delegated-title"><i class="fas fa-arrow-down"></i> Delegated by the Kingdom &mdash; to schedule <span class="pk-delegated-count">(<?= count($pkDelegated) ?>)</span></h4>
+						<button type="button" class="pk-delegated-toggle" onclick="pkDelegatedToggle()" aria-expanded="true">
+							<span class="pk-delegated-title"><i class="fas fa-arrow-down"></i> Delegated by the Kingdom &mdash; to schedule <span class="pk-delegated-count">(<?= count($pkDelegated) ?>)</span></span>
+							<i class="fas fa-chevron-up pk-delegated-chevron"></i>
+						</button>
 						<a class="pk-btn pk-btn-secondary pk-delegated-manage" href="<?= UIR ?>Recommendations/manage/park/<?= (int)$park_id ?>?passlocal=1">Manage <i class="fas fa-arrow-right"></i></a>
 					</div>
+					<div class="pk-delegated-body" id="pk-delegated-body">
 					<div class="pk-delegated-help">The kingdom granted your park authority to give these. Schedule them into a court.</div>
 					<ul class="pk-delegated-list">
 						<?php foreach ($pkDelegated as $dr): ?>
@@ -1570,6 +1589,7 @@
 						</li>
 						<?php endforeach; ?>
 					</ul>
+				</div>
 				</div>
 				<?php endif; ?>
 				<?php endif; ?>
