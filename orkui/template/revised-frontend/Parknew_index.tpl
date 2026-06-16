@@ -252,6 +252,7 @@
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/rank-pill.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/rank-pill.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/ork-datatables.css?v=<?= filemtime(__DIR__ . '/style/ork-datatables.css') ?>">
 
@@ -1666,7 +1667,7 @@
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 							<td><?= htmlspecialchars(preg_replace('/^Order of(?:\\s+the)?\\s+/i', '', $rec['AwardName'])) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="pk-rec-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?></td>
 							<td style="white-space:nowrap">
-								<?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?>
+								<?php if ((int)$rec['Rank'] > 0): ?><span class="ladder-rank" data-lvl="<?= min((int)$rec['Rank'], 10) ?>"><?= (int)$rec['Rank'] ?></span><?php else: ?>&mdash;<?php endif; ?>
 								<?php if (!empty($rec['AlreadyHas'])): ?>
 								<span class="pk-rec-has-tip"
 									title="<?= (int)$rec['Rank'] > 0 ? 'Player is currently at rank ' . (int)$rec['CurrentRank'] . ' as of ' . htmlspecialchars($rec['CurrentRankDate'] ?? '') : 'Player already has this award (granted ' . htmlspecialchars($rec['CurrentRankDate'] ?? 'unknown date') . ')' ?>">

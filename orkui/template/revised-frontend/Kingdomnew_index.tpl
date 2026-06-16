@@ -110,6 +110,7 @@
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/rank-pill.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/rank-pill.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/ork-datatables.css?v=<?= filemtime(__DIR__ . '/style/ork-datatables.css') ?>">
 

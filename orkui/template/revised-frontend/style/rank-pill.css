@@ -1,0 +1,65 @@
+/* ============================================================
+   ORK3 — Ladder Award Rank Pill  (.ladder-rank)
+
+   ONE shared component for ladder-award rank indicators across
+   every surface that shows recommendations / planned awards:
+   Recommendations Manager, Park & Kingdom recs tabs, Court planning.
+
+   Usage:
+     <span class="ladder-rank" data-lvl="5">Rank 5</span>   (label form)
+     <span class="ladder-rank" data-lvl="5">5</span>        (number form)
+
+   data-lvl is the ladder rank CLAMPED to 1..10 (min(rank,10)).
+   Non-ladder / rank 0 awards do NOT get a pill (render plain).
+
+   Colour ramp — a single COOL SPECTRUM, light blue -> deep magenta,
+   running through indigo, violet and purple. Deliberately NO green
+   and NO red, to avoid any "green = approved / red = rejected" read;
+   rank is a neutral magnitude, not a verdict.
+     1-3  blues (palest -> sky)
+     4    blue · 5 indigo · 6 indigo-violet · 7 violet · 8 purple
+     9    magenta · 10 deep magenta
+   Filled pills in both themes; light blues use dark text, the
+   saturated hues use white text, dark-mode backgrounds are tuned a
+   step brighter so they stay high-contrast on a dark page.
+   ============================================================ */
+
+.ladder-rank {
+	display        : inline-flex;
+	align-items    : center;
+	justify-content: center;
+	padding        : 1px 8px;
+	border-radius  : 10px;
+	font-size      : 11px;
+	font-weight    : 700;
+	line-height    : 1.6;
+	letter-spacing : .2px;
+	white-space    : nowrap;
+	border         : 1px solid rgba(0, 0, 0, 0.10);
+	vertical-align : middle;
+}
+
+/* ── Light mode ──────────────────────────────────────────── */
+.ladder-rank[data-lvl="1"]  { background:#cfe2ff; color:#1e3a8a; }
+.ladder-rank[data-lvl="2"]  { background:#93c5fd; color:#0c2d6b; }
+.ladder-rank[data-lvl="3"]  { background:#60a5fa; color:#0a2647; }
+.ladder-rank[data-lvl="4"]  { background:#2563eb; color:#ffffff; }
+.ladder-rank[data-lvl="5"]  { background:#4f46e5; color:#ffffff; }
+.ladder-rank[data-lvl="6"]  { background:#6d28d9; color:#ffffff; }
+.ladder-rank[data-lvl="7"]  { background:#7c3aed; color:#ffffff; }
+.ladder-rank[data-lvl="8"]  { background:#9333ea; color:#ffffff; }
+.ladder-rank[data-lvl="9"]  { background:#a21caf; color:#ffffff; }
+.ladder-rank[data-lvl="10"] { background:#86198f; color:#ffffff; }
+
+/* ── Dark mode ───────────────────────────────────────────── */
+html[data-theme="dark"] .ladder-rank { border-color: rgba(255, 255, 255, 0.14); }
+html[data-theme="dark"] .ladder-rank[data-lvl="1"]  { background:#cfe2ff; color:#16335f; }
+html[data-theme="dark"] .ladder-rank[data-lvl="2"]  { background:#93c5fd; color:#0c2d6b; }
+html[data-theme="dark"] .ladder-rank[data-lvl="3"]  { background:#60a5fa; color:#0a2647; }
+html[data-theme="dark"] .ladder-rank[data-lvl="4"]  { background:#3b82f6; color:#ffffff; }
+html[data-theme="dark"] .ladder-rank[data-lvl="5"]  { background:#6366f1; color:#ffffff; }
+html[data-theme="dark"] .ladder-rank[data-lvl="6"]  { background:#8257e6; color:#ffffff; }
+html[data-theme="dark"] .ladder-rank[data-lvl="7"]  { background:#9061f0; color:#ffffff; }
+html[data-theme="dark"] .ladder-rank[data-lvl="8"]  { background:#a855f7; color:#ffffff; }
+html[data-theme="dark"] .ladder-rank[data-lvl="9"]  { background:#c33cd4; color:#ffffff; }
+html[data-theme="dark"] .ladder-rank[data-lvl="10"] { background:#a21caf; color:#ffffff; }

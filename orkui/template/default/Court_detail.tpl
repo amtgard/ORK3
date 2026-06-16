@@ -30,6 +30,7 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
     ? ($court['ParkName'] ?? 'Park') . ' Courts'
     : ($court['KingdomName'] ?? 'Kingdom') . ' Courts';
 ?>
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/rank-pill.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/rank-pill.css') ?>">
 <style>
 .cp-page { padding: 0 16px 24px; font-family: inherit; }
 .cp-back { color: rgba(255,255,255,.8); font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
@@ -1058,7 +1059,7 @@ $_total_awards = count($courtAwards ?? []);
                 </div>
                 <div class="cp-cell cp-cell-award">
                     <span class="cp-award-name-text"><?= htmlspecialchars($aw['AwardName']) ?></span>
-                    <?php if ($aw['IsLadder'] && $aw['Rank'] > 0): ?><span class="cp-award-rank">Rank <?= (int)$aw['Rank'] ?></span><?php endif; ?>
+                    <?php if ($aw['IsLadder'] && $aw['Rank'] > 0): ?><span class="ladder-rank cp-award-rank" data-lvl="<?= min((int)$aw['Rank'], 10) ?>">Rank <?= (int)$aw['Rank'] ?></span><?php endif; ?>
                 </div>
                 <div class="cp-cell cp-cell-type">
                     <span class="<?= $typeClass ?>"><?= $typeLabel ?></span>
@@ -2298,7 +2299,7 @@ $_total_awards = count($courtAwards ?? []);
         if (empty) empty.remove();
         var ptlBadge = aw.PassToLocal ? '<span class="cp-flag-local" title="Pass to Local"><i class="fas fa-arrow-down"></i></span>' : '';
         var recBadge = aw.RecommendationsId ? '<span class="cp-flag-rec" data-tip="Added from a recommendation."><i class="fas fa-star"></i></span>' : '';
-        var rankStr  = (aw.IsLadder && aw.Rank > 0) ? '<span class="cp-award-rank">Rank ' + aw.Rank + '</span>' : '';
+        var rankStr  = (aw.IsLadder && aw.Rank > 0) ? '<span class="ladder-rank cp-award-rank" data-lvl="' + Math.min(aw.Rank, 10) + '">Rank ' + aw.Rank + '</span>' : '';
         var noteBtn  = aw.Notes ? '<button class="cp-note-btn" data-note="' + esc(aw.Notes) + '" onclick="event.stopPropagation();cpShowNote(this)" title="View note"><i class="fas fa-comment-alt"></i></button>' : '';
         var typeClass = aw.IsTitle ? 'cp-type-title' : (aw.IsLadder ? 'cp-type-ladder' : 'cp-type-award');
         var typeLabel = aw.IsTitle ? 'Title' : (aw.IsLadder ? 'Ladder' : 'Award');

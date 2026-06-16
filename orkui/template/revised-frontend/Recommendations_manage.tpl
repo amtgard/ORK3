@@ -486,6 +486,7 @@ html[data-theme="dark"] .rm-modal {
 </style>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?= filemtime(DIR_TEMPLATE . 'default/style/reports.css') ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/rank-pill.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/rank-pill.css') ?>">
 
 <div class="rp-root">
 <div class="rm-wrap">
@@ -603,6 +604,7 @@ html[data-theme="dark"] .rm-modal {
           data-award="<?= htmlspecialchars(strtolower($group['AwardName'] ?? ''), ENT_QUOTES) ?>"
           data-date="<?= htmlspecialchars($group['OldestDate'] ?? '', ENT_QUOTES) ?>"
           data-supp="<?= $support ?>"
+          data-rank="<?= $gRank ?>"
           data-rec='<?= $gpayload ?>'
           data-members='<?= $membersJson ?>'
           data-membersfull='<?= $membersFullJson ?>'>
@@ -613,7 +615,7 @@ html[data-theme="dark"] .rm-modal {
         </td>
         <td class="rm-col-award">
           <?= htmlspecialchars($group['AwardName'] ?? '') ?>
-          <?php if ($isLad) { ?><span class="rm-rank">Rank <?= $gRank ?></span><?php } else { ?><span class="rm-rank rm-nonladder">non-ladder</span><?php } ?>
+          <?php if ($isLad) { ?><span class="ladder-rank" data-lvl="<?= min($gRank, 10) ?>" style="margin-left:6px">Rank <?= $gRank ?></span><?php } else { ?><span class="rm-rank rm-nonladder">non-ladder</span><?php } ?>
           <?php if (!empty($group['AlreadyHas'])) { ?><span class="rm-badge rm-badge-has">already has</span><?php } ?>
           <?php if (!empty($group['PassedToLocal'])) { ?><span class="rm-badge rm-badge-passlocal" data-tip="Passed to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php } ?>
           <?php if ($elig === 'below') { ?><span class="rm-badge rm-badge-below">below rec.</span><?php } ?>
@@ -844,6 +846,12 @@ function rmSort(key) {
         else { va = a.getAttribute('data-' + key); vb = b.getAttribute('data-' + key); }
         if (va < vb) return -1 * rmSortState.dir;
         if (va > vb) return  1 * rmSortState.dir;
+        // Same award -> subsort by ladder rank, following the sort direction.
+        if (key === 'award') {
+            var ra = +a.getAttribute('data-rank') || 0;
+            var rb = +b.getAttribute('data-rank') || 0;
+            if (ra !== rb) return (ra - rb) * rmSortState.dir;
+        }
         return 0;
     });
     var rmSortPairs = rows.map(function (tr) {
