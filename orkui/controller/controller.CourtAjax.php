@@ -226,6 +226,55 @@ class Controller_CourtAjax extends Controller {
     }
 
     // -----------------------------------------------------------------------
+    // pass_award_to_local
+    // POST: CourtAwardId
+    // Kingdom/principality-side action: hand a rec-backed award down to the
+    // recipient's local park (sets recommendations.passed_to_local via the shared
+    // pipe) and remove it from this court. Pipe runs first; delete only on success.
+    // -----------------------------------------------------------------------
+    public function pass_award_to_local($p = null)
+    {
+        $court_award_id = (int)($_POST['CourtAwardId'] ?? 0);
+        if (!valid_id($court_award_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
+        }
+
+        global $DB;
+        $DB->Clear();
+        $r = $DB->DataSet('SELECT court_id, recommendations_id, mundane_id
+                            FROM ' . DB_PREFIX . 'court_award
+                            WHERE court_award_id = ' . $court_award_id . ' LIMIT 1');
+        if (!$r || !$r->Next()) {
+            $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
+        }
+        $court_id = (int)$r->court_id;
+        $rec_id   = (int)$r->recommendations_id;
+
+        $this->requireCourtAuth($court_id);
+
+        if (!$rec_id) {
+            $this->jsonOut(['status' => 1, 'error' => 'This award is not from a recommendation, so it cannot be passed to local.']);
+        }
+
+        $this->load_model('Player');
+        $res = $this->Player->set_recommendation_passed_to_local([
+            'Token'             => $this->session->token,
+            'RecommendationsId' => $rec_id,
+            'Passed'            => 1,
+        ]);
+        if (($res['Status'] ?? 1) != 0) {
+            $this->jsonOut(['status' => 3, 'error' => 'Could not pass this award to local: ' . ($res['Error'] ?? 'Not authorized.')]);
+        }
+
+        $DB->Clear();
+        $DB->Execute('DELETE FROM ' . DB_PREFIX . 'court_award_artisan WHERE court_award_id = ' . $court_award_id);
+        $DB->Clear();
+        $DB->Execute('DELETE FROM ' . DB_PREFIX . 'court_award WHERE court_award_id = ' . $court_award_id);
+
+        $this->jsonOut(['status' => 0]);
+    }
+
+    // -----------------------------------------------------------------------
     // Status-only update (no field clobbering, unlike update_award). Used by the
     // Recommendations Manager's Grant Now flow to mark an already-on-court award
     // 'given' when the officer chooses "Grant & Leave on Court", which prevents a
