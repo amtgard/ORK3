@@ -20,17 +20,6 @@
     box-sizing: border-box;
     color: var(--rm-fg);
 }
-@media (prefers-color-scheme: dark) {
-    .rm-wrap {
-        --rm-line: #3a3f47;
-        --rm-bg: #1e2127;
-        --rm-bg2: #23262d;
-        --rm-fg: #e6e6e6;
-        --rm-muted: #9aa0a8;
-        --rm-accent: #6fb0e6;
-        --rm-danger: #e07070;
-    }
-}
 html[data-theme="dark"] .rm-wrap {
     --rm-line: #3a3f47;
     --rm-bg: #1e2127;
@@ -377,10 +366,6 @@ html[data-theme="dark"] [data-tip]:hover::after { background: #000; }
     border-left-color: var(--rm-danger, #b03030);
 }
 .rm-toast-out { opacity: 0; }
-@media (prefers-color-scheme: dark) {
-    .rm-toast { background: #2a2f37; }
-    .rm-toast-err { background: #3a2424; }
-}
 html[data-theme="dark"] .rm-toast { background: #2a2f37; }
 html[data-theme="dark"] .rm-toast-err { background: #3a2424; }
 
@@ -423,16 +408,6 @@ html[data-theme="dark"] .rm-toast-err { background: #3a2424; }
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
     padding: 18px 20px 16px;
     box-sizing: border-box;
-}
-@media (prefers-color-scheme: dark) {
-    .rm-modal {
-        --rm-line: #3a3f47;
-        --rm-bg: #23262d;
-        --rm-bg2: #1e2127;
-        --rm-fg: #e6e6e6;
-        --rm-muted: #9aa0a8;
-        --rm-accent: #6fb0e6;
-    }
 }
 html[data-theme="dark"] .rm-modal {
     --rm-line: #3a3f47;
@@ -510,11 +485,30 @@ html[data-theme="dark"] .rm-modal {
 .rm-btn-primary:disabled { opacity: 0.55; cursor: default; }
 </style>
 
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?= filemtime(DIR_TEMPLATE . 'default/style/reports.css') ?>">
+
+<div class="rp-root">
 <div class="rm-wrap">
-  <div class="rm-hero">
-    <a class="rm-back" href="<?= htmlspecialchars($backUrl) ?>">&larr; Back to <?= htmlspecialchars($LocationName) ?></a>
-    <h1 class="rm-title">Recommendations Manager</h1>
-    <div class="rm-sub"><?= htmlspecialchars($LocationName) ?> &middot; <?= count($Recommendations) ?> pending</div>
+  <div class="rp-header">
+    <div class="rp-header-left">
+      <div class="rp-header-icon-title">
+        <i class="fas fa-star rp-header-icon"></i>
+        <h1 class="rp-header-title">Recommendations Manager</h1>
+      </div>
+      <div class="rp-header-scope">
+        <a class="rp-scope-chip" href="<?= htmlspecialchars($backUrl) ?>">
+          <i class="fas fa-<?= $ParkId > 0 ? 'map-marker-alt' : 'crown' ?>"></i>
+          <span class="rp-scope-chip-label"><?= $ParkId > 0 ? 'Park' : 'Kingdom' ?>:</span> <?= htmlspecialchars($LocationName) ?>
+        </a>
+      </div>
+    </div>
+    <div class="rp-header-actions">
+      <a class="rp-btn-ghost" href="<?= htmlspecialchars($backUrl) ?>"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+  </div>
+  <div class="rp-context">
+    <i class="fas fa-info-circle rp-context-icon"></i>
+    <span>Review, grant, dismiss, snooze, pass-down, and schedule award recommendations for <strong><?= htmlspecialchars($LocationName) ?></strong> &mdash; <?= count($Recommendations) ?> pending.</span>
   </div>
 
   <div class="rm-filterbar" id="rm-filterbar">
@@ -711,6 +705,7 @@ html[data-theme="dark"] .rm-modal {
       </div>
     </div>
   </div>
+</div>
 </div>
 
 <script>
