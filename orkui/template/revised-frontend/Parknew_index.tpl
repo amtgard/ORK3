@@ -1333,6 +1333,26 @@
 			html[data-theme="dark"] .pk-rec-passlocal { color:#6fb0e6; border-color:rgba(111,176,230,.4); }
 			.pk-rec-passlocal[data-tip] { position:relative; }
 			.pk-rec-passlocal[data-tip]:hover::after { content:attr(data-tip); position:absolute; left:0; top:calc(100% + 4px); white-space:normal; width:220px; background:#1a202c; color:#fff; font-size:11px; padding:6px 8px; border-radius:4px; z-index:50; }
+			/* Delegated-by-the-Kingdom pinned section (officer-only, to-schedule list) */
+			.pk-delegated { border:1px solid rgba(44,95,139,.4); background:rgba(44,95,139,.07); border-radius:8px; padding:12px 16px; margin-bottom:16px; }
+			.pk-delegated-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+			.pk-delegated-title { margin:0; font-size:14px; font-weight:700; color:#2c5f8b; display:flex; align-items:center; gap:8px; }
+			.pk-delegated-title i { color:#2c5f8b; }
+			.pk-delegated-count { font-weight:600; color:#718096; }
+			.pk-delegated-help { font-size:12px; color:#718096; margin:6px 0 10px; }
+			.pk-delegated-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+			.pk-delegated-item { font-size:13px; color:#2d3748; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+			.pk-delegated-item a { font-weight:600; }
+			.pk-delegated-sep { color:#cbd5e0; }
+			.pk-delegated-award { color:#4a5568; }
+			html[data-theme="dark"] .pk-delegated { border-color:rgba(111,176,230,.4); background:rgba(111,176,230,.08); }
+			html[data-theme="dark"] .pk-delegated-title { color:#6fb0e6; }
+			html[data-theme="dark"] .pk-delegated-title i { color:#6fb0e6; }
+			html[data-theme="dark"] .pk-delegated-count { color:#a0aec0; }
+			html[data-theme="dark"] .pk-delegated-help { color:#a0aec0; }
+			html[data-theme="dark"] .pk-delegated-item { color:#e2e8f0; }
+			html[data-theme="dark"] .pk-delegated-award { color:#cbd5e0; }
+			html[data-theme="dark"] .pk-delegated-sep { color:#4a5568; }
 			/* Collapsible subsection chrome (relocated court) */
 			.pk-cp-section { border-top:1px solid #e2e8f0; margin-top:24px; padding-top:4px; }
 			.pk-cp-header { display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; cursor:pointer; padding:10px 4px; font-size:15px; font-weight:700; color:#2d3748; text-align:left; }
@@ -1523,6 +1543,30 @@
 			<!-- Recommendations Tab -->
 			<?php if (!empty($ShowRecsTab)): ?>
 			<div class="pk-tab-panel" id="pk-tab-recommendations" style="display:none">
+				<?php if (!empty($CanAdminPark)):
+					$pkDelegated = array_values(array_filter($AwardRecommendations ?? [], function ($r) {
+						return !empty($r['PassedToLocal']) && empty($r['IsOnCourt']);
+					}));
+				?>
+				<?php if (!empty($pkDelegated)): ?>
+				<div class="pk-delegated">
+					<div class="pk-delegated-head">
+						<h4 class="kn-bare-heading pk-delegated-title"><i class="fas fa-arrow-down"></i> Delegated by the Kingdom &mdash; to schedule <span class="pk-delegated-count">(<?= count($pkDelegated) ?>)</span></h4>
+						<a class="pk-btn pk-btn-secondary pk-delegated-manage" href="<?= UIR ?>Recommendations/manage/park/<?= (int)$park_id ?>?passlocal=1">Manage <i class="fas fa-arrow-right"></i></a>
+					</div>
+					<div class="pk-delegated-help">The kingdom granted your park authority to give these. Schedule them into a court.</div>
+					<ul class="pk-delegated-list">
+						<?php foreach ($pkDelegated as $dr): ?>
+						<li class="pk-delegated-item">
+							<a href="<?= UIR ?>Player/profile/<?= (int)$dr['MundaneId'] ?>"><?= htmlspecialchars($dr['Persona']) ?></a>
+							<span class="pk-delegated-sep">&middot;</span>
+							<span class="pk-delegated-award"><?= htmlspecialchars(preg_replace('/^Order of(?:\s+the)?\s+/i', '', $dr['AwardName'])) ?></span>
+						</li>
+						<?php endforeach; ?>
+					</ul>
+				</div>
+				<?php endif; ?>
+				<?php endif; ?>
 				<div class="kn-rec-header-row">
 					<div class="kn-rec-header-left">
 						<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="all">All</button>
