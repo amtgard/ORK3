@@ -12,16 +12,16 @@
    data-lvl is the ladder rank CLAMPED to 1..10 (min(rank,10)).
    Non-ladder / rank 0 awards do NOT get a pill (render plain).
 
-   Colour ramp — a single COOL SPECTRUM, light blue -> deep magenta,
-   running through indigo, violet and purple. Deliberately NO green
-   and NO red, to avoid any "green = approved / red = rejected" read;
-   rank is a neutral magnitude, not a verdict.
-     1-3  blues (palest -> sky)
-     4    blue · 5 indigo · 6 indigo-violet · 7 violet · 8 purple
-     9    magenta · 10 deep magenta
-   Filled pills in both themes; light blues use dark text, the
-   saturated hues use white text, dark-mode backgrounds are tuned a
-   step brighter so they stay high-contrast on a dark page.
+   Colour ramp — a DISTINCT cool->warm temperature sweep so adjacent
+   ranks are easy to tell apart:
+     1 teal · 2 sky · 3 blue · 4 indigo · 5 violet ·
+     6 purple · 7 magenta · 8 rose · 9 orange · 10 gold
+   Deliberately NO deep green and NO deep red, so rank reads as a
+   magnitude and never as a "green = approved / red = rejected" verdict.
+   (teal / gold / orange are fair game — just not true green/red.)
+   Filled pills in both themes; light/warm hues use dark text, the
+   saturated mids use white text; dark mode is tuned a step brighter so
+   pills stay high-contrast on a dark page.
    ============================================================ */
 
 .ladder-rank {
@@ -40,26 +40,26 @@
 }
 
 /* ── Light mode ──────────────────────────────────────────── */
-.ladder-rank[data-lvl="1"]  { background:#cfe2ff; color:#1e3a8a; }
-.ladder-rank[data-lvl="2"]  { background:#93c5fd; color:#0c2d6b; }
-.ladder-rank[data-lvl="3"]  { background:#60a5fa; color:#0a2647; }
-.ladder-rank[data-lvl="4"]  { background:#2563eb; color:#ffffff; }
-.ladder-rank[data-lvl="5"]  { background:#4f46e5; color:#ffffff; }
-.ladder-rank[data-lvl="6"]  { background:#6d28d9; color:#ffffff; }
-.ladder-rank[data-lvl="7"]  { background:#7c3aed; color:#ffffff; }
-.ladder-rank[data-lvl="8"]  { background:#9333ea; color:#ffffff; }
-.ladder-rank[data-lvl="9"]  { background:#a21caf; color:#ffffff; }
-.ladder-rank[data-lvl="10"] { background:#86198f; color:#ffffff; }
+.ladder-rank[data-lvl="1"]  { background:#0d9488; color:#ffffff; }  /* teal    */
+.ladder-rank[data-lvl="2"]  { background:#38bdf8; color:#06354d; }  /* sky     */
+.ladder-rank[data-lvl="3"]  { background:#2563eb; color:#ffffff; }  /* blue    */
+.ladder-rank[data-lvl="4"]  { background:#4f46e5; color:#ffffff; }  /* indigo  */
+.ladder-rank[data-lvl="5"]  { background:#7c3aed; color:#ffffff; }  /* violet  */
+.ladder-rank[data-lvl="6"]  { background:#9333ea; color:#ffffff; }  /* purple  */
+.ladder-rank[data-lvl="7"]  { background:#c026d3; color:#ffffff; }  /* magenta */
+.ladder-rank[data-lvl="8"]  { background:#db2777; color:#ffffff; }  /* rose    */
+.ladder-rank[data-lvl="9"]  { background:#ea580c; color:#ffffff; }  /* orange  */
+.ladder-rank[data-lvl="10"] { background:#f5b30b; color:#3f2d00; }  /* gold    */
 
 /* ── Dark mode ───────────────────────────────────────────── */
 html[data-theme="dark"] .ladder-rank { border-color: rgba(255, 255, 255, 0.14); }
-html[data-theme="dark"] .ladder-rank[data-lvl="1"]  { background:#cfe2ff; color:#16335f; }
-html[data-theme="dark"] .ladder-rank[data-lvl="2"]  { background:#93c5fd; color:#0c2d6b; }
-html[data-theme="dark"] .ladder-rank[data-lvl="3"]  { background:#60a5fa; color:#0a2647; }
-html[data-theme="dark"] .ladder-rank[data-lvl="4"]  { background:#3b82f6; color:#ffffff; }
-html[data-theme="dark"] .ladder-rank[data-lvl="5"]  { background:#6366f1; color:#ffffff; }
-html[data-theme="dark"] .ladder-rank[data-lvl="6"]  { background:#8257e6; color:#ffffff; }
-html[data-theme="dark"] .ladder-rank[data-lvl="7"]  { background:#9061f0; color:#ffffff; }
-html[data-theme="dark"] .ladder-rank[data-lvl="8"]  { background:#a855f7; color:#ffffff; }
-html[data-theme="dark"] .ladder-rank[data-lvl="9"]  { background:#c33cd4; color:#ffffff; }
-html[data-theme="dark"] .ladder-rank[data-lvl="10"] { background:#a21caf; color:#ffffff; }
+html[data-theme="dark"] .ladder-rank[data-lvl="1"]  { background:#2dd4bf; color:#04302b; }  /* teal    */
+html[data-theme="dark"] .ladder-rank[data-lvl="2"]  { background:#7dd3fc; color:#06354d; }  /* sky     */
+html[data-theme="dark"] .ladder-rank[data-lvl="3"]  { background:#3b82f6; color:#ffffff; }  /* blue    */
+html[data-theme="dark"] .ladder-rank[data-lvl="4"]  { background:#6366f1; color:#ffffff; }  /* indigo  */
+html[data-theme="dark"] .ladder-rank[data-lvl="5"]  { background:#8b5cf6; color:#ffffff; }  /* violet  */
+html[data-theme="dark"] .ladder-rank[data-lvl="6"]  { background:#a855f7; color:#ffffff; }  /* purple  */
+html[data-theme="dark"] .ladder-rank[data-lvl="7"]  { background:#d946ef; color:#ffffff; }  /* magenta */
+html[data-theme="dark"] .ladder-rank[data-lvl="8"]  { background:#ec4899; color:#ffffff; }  /* rose    */
+html[data-theme="dark"] .ladder-rank[data-lvl="9"]  { background:#fb923c; color:#3d1c00; }  /* orange  */
+html[data-theme="dark"] .ladder-rank[data-lvl="10"] { background:#fbbf24; color:#422f00; }  /* gold    */
