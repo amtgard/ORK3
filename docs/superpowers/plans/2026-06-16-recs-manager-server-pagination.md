@@ -456,7 +456,7 @@ Add to `Controller_Recommendations` (mirror `manage()`'s context/auth parsing). 
 			'html'    => $html,
 			'total'   => (int)$page['Total'],
 			'hasMore' => (bool)$page['HasMore'],
-			'offset'  => $req['Offset'] + count($page['Groups']),
+			'offset'  => (int)$page['NextOffset'], // advance by SQL page size (NOT count(Groups)) so scroll terminates correctly
 		]);
 		exit;
 	}
