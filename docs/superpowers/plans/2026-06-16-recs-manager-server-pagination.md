@@ -13,6 +13,15 @@
 ---
 
 ## Conventions (project rules)
+- **DB-layer separation (REQUIRED — user directive):** ALL DB queries live in `system/lib/ork3/`
+  classes (`class.Report.php`, `class.Court.php`, `class.Park.php`, `class.Kingdom.php`). The
+  controller (`controller.Recommendations.php`) and `model.Reports.php` stay **thin** — **NO raw
+  `$DB->DataSet(...)` / `$DB->query(...)` in the controller**. Use existing lib accessors:
+  `Ork3::$Lib->court->canManage/getRecommendationCourtMap/getCourtList`,
+  `Ork3::$Lib->park->GetParkKingdomId($pid)` (park→kingdom), `Ork3::$Lib->kingdom->GetParks(...)`
+  and `class.Park.php`/`class.Kingdom.php` short-info getters for names/park-lists. If a needed
+  query has no lib method, ADD one to the appropriate `system/lib/ork3/class.*.php` (DB stays in
+  the lib layer) — do not inline it in the controller. Grep return shapes before using.
 - `.tpl` is plain PHP. Tab-indented templates → use Python `replace` for multi-line edits, Edit for unique single lines.
 - `$DB->Clear()` before raw Execute/DataSet. Read flag config with `(int)Value===1` where relevant.
 - Dark mode via `html[data-theme="dark"]`; `data-tip` not native `title`; no native confirm/alert.
@@ -406,11 +415,9 @@ Add to `Controller_Recommendations` (mirror `manage()`'s context/auth parsing). 
 		$uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
 		$kingdom_id = 0; $park_id = 0;
-		global $DB;
 		if ($context === 'park') {
-			$park_id = $id; $DB->Clear();
-			$pr = $DB->DataSet('SELECT kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id . ' LIMIT 1');
-			if ($pr && $pr->Next()) $kingdom_id = (int)$pr->kingdom_id;
+			$park_id    = $id;
+			$kingdom_id = (int)Ork3::$Lib->park->GetParkKingdomId($park_id); // lib resolves park->kingdom (no raw DB)
 		} else { $kingdom_id = $id; }
 
 		header('Content-Type: application/json');
@@ -434,11 +441,9 @@ Add to `Controller_Recommendations` (mirror `manage()`'s context/auth parsing). 
 		];
 		$page = Ork3::$Lib->report->PlayerAwardRecommendationsPage($req);
 
-		// Render rows via the shared partial.
+		// Render rows via the shared partial. All DB via lib; controller only reshapes.
 		$CourtMap  = Ork3::$Lib->court->getRecommendationCourtMap($kingdom_id, $park_id);
-		$Parks     = []; $DB->Clear();
-		$prs = $DB->DataSet('SELECT park_id, name, abbreviation FROM ' . DB_PREFIX . 'park WHERE kingdom_id = ' . (int)$kingdom_id . ' ORDER BY name ASC');
-		if ($prs) { while ($prs->Next()) { $Parks[(int)$prs->park_id] = ['Name' => $prs->name, 'Abbrev' => $prs->abbreviation]; } }
+		$Parks     = $this->rmParkMap($kingdom_id); // see helper below (lib-backed; no raw DB here)
 		$Context = $context; $ParkId = $park_id; $KingdomId = $kingdom_id;
 
 		$html = '';
@@ -456,9 +461,32 @@ Add to `Controller_Recommendations` (mirror `manage()`'s context/auth parsing). 
 		exit;
 	}
 ```
+Also add this private helper to the controller (lib-backed park map — DB stays in the lib; this only reshapes):
+```php
+	// Park map for the kingdom-scope filter + row abbrev. The DB query lives in class.Kingdom.php
+	// (GetParks); this controller helper only reshapes into [park_id => ['Name','Abbrev']].
+	private function rmParkMap($kingdom_id) {
+		$map  = [];
+		$rows = Ork3::$Lib->kingdom->GetParks(['KingdomId' => (int)$kingdom_id]); // GREP its return shape first
+		foreach ((array)$rows as $p) {
+			$pid = (int)($p['ParkId'] ?? $p['park_id'] ?? 0);
+			if ($pid) $map[$pid] = [
+				'Name'   => $p['Name'] ?? $p['name'] ?? '',
+				'Abbrev' => $p['Abbreviation'] ?? $p['abbreviation'] ?? $p['Abbrev'] ?? '',
+			];
+		}
+		return $map;
+	}
+```
 Notes:
+- **DB-layer rule:** the endpoint must contain NO raw `$DB->DataSet`/`$DB->query`. Park→kingdom uses
+  `Ork3::$Lib->park->GetParkKingdomId()`; the park map uses `Ork3::$Lib->kingdom->GetParks()` (via
+  `rmParkMap`); court data uses the existing `Ork3::$Lib->court->...`. **Grep the exact return shape**
+  of `class.Park.php::GetParkKingdomId` and `class.Kingdom.php::GetParks` and adapt the key names. If
+  `GetParks` does NOT include the park abbreviation, add a small lib method to `class.Kingdom.php` (or
+  `class.Park.php`) that returns id/name/abbreviation — keep the query in the lib layer.
 - Confirm the include path to `_rm_row.tpl` resolves from the controller (`dirname(__DIR__) . '/template/revised-frontend/_rm_row.tpl'` assumes controller is in `orkui/controller/`; adjust to the real template root — grep how other controllers locate templates, or reuse `DIR_TEMPLATE` if defined: `DIR_TEMPLATE . 'revised-frontend/_rm_row.tpl'`).
-- Confirm `Ork3::$Lib->report->` is the correct accessor (same one used in Task 1); if the project uses `$this->Reports->` model passthrough, add a `recommended_awards_page($req)` passthrough in `model.Reports.php` and call that instead.
+- Report method accessor: per Task 1 this project uses a `model.Reports.php` passthrough. Add a `recommended_awards_page($req)` passthrough (`return $this->Report->PlayerAwardRecommendationsPage($req);`) and call `$this->Reports->recommended_awards_page($req)` from `manage()`/`rows()` — OR call `Ork3::$Lib->report->PlayerAwardRecommendationsPage()` if (and only if) that accessor exists. Match whatever Task 1 used.
 
 - [ ] **Step 2: Lint**
 ```bash
@@ -497,9 +525,9 @@ git commit -m "Recs Manager: add Recommendations/rows JSON endpoint for paged ba
 
 - [ ] **Step 1: Switch `manage()` to the page method (first batch)**
 
-Replace the full-set fetch + grouping in `manage()` (the `$recs = $this->Reports->recommended_awards($req); … $this->data['Groups'] = …` block, post-Task-1) with a first-batch call using the defaults (eligibility `open`, sort `date` desc, offset 0):
+Replace the full-set fetch + grouping in `manage()` (the `$recs = $this->Reports->recommended_awards($req); … $this->data['Groups'] = …` block, post-Task-1) with a first-batch call using the defaults (eligibility `open`, sort `date` desc, offset 0), via the **model passthrough** (add `recommended_awards_page($req)` to `model.Reports.php` → `return $this->Report->PlayerAwardRecommendationsPage($req);`):
 ```php
-		$page = Ork3::$Lib->report->PlayerAwardRecommendationsPage([
+		$page = $this->Reports->recommended_awards_page([
 			'RequestedBy' => $uid,
 			'KingdomId'   => $park_id > 0 ? 0 : $kingdom_id,
 			'ParkId'      => $park_id,
@@ -509,12 +537,21 @@ Replace the full-set fetch + grouping in `manage()` (the `$recs = $this->Reports
 			'Limit'       => 500,
 			'Offset'      => 0,
 		]);
-		$this->data['Groups']   = $page['Groups'];
-		$this->data['Total']    = (int)$page['Total'];
-		$this->data['HasMore']  = (bool)$page['HasMore'];
+		$this->data['Groups']     = $page['Groups'];
+		$this->data['Total']      = (int)$page['Total'];
+		$this->data['HasMore']    = (bool)$page['HasMore'];
 		$this->data['NextOffset'] = count($page['Groups']);
 ```
-Remove the now-unused `$this->data['Recommendations'] = $recs;` (or set it to `[]`). Keep `$CourtMap`, `$Courts`, `$Parks` as-is.
+Remove the now-unused `$this->data['Recommendations'] = $recs;` (or set it to `[]`). Keep `$CourtMap`, `$Courts` as-is.
+
+**Also (DB-layer cleanup — user directive): replace `manage()`'s remaining raw `$DB` calls with lib accessors**, matching the endpoint:
+- park→kingdom resolution (`SELECT kingdom_id FROM …park…`) → `Ork3::$Lib->park->GetParkKingdomId($park_id)`.
+- location name (`SELECT name FROM …park/kingdom…`) → a lib short-info getter
+  (`class.Park.php::GetParkShortInfo` / `class.Kingdom.php::GetKingdomShortInfo` — grep return shape,
+  extract the name).
+- park list (`SELECT park_id,name,abbreviation FROM …park WHERE kingdom_id…`) → `$this->data['Parks'] =
+  $this->rmParkMap($kingdom_id);` (the helper added in Task 4).
+After this, `manage()` must contain NO raw `$DB->DataSet`/`$DB->query` (grep the method to confirm).
 
 - [ ] **Step 2: Template — count display + config**
 
