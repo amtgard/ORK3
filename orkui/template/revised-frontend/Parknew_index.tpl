@@ -1567,28 +1567,19 @@
 				</div>
 				<?php endif; ?>
 				<?php endif; ?>
-				<div class="kn-rec-header-row">
-					<div class="kn-rec-header-left">
-						<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="all">All</button>
-						<button class="kn-rec-filter-btn" data-filter="below">Below Recommended</button>
-						<button class="kn-rec-filter-btn" data-filter="already">At or Above Recommended</button>
-						<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
-						<button class="kn-rec-filter-btn" data-filter="snoozed">Snoozed</button>
-					</div>
-					<?php if (!empty($CanAdminPark)): ?>
-					<a class="pk-btn pk-btn-primary pk-manage-recs" href="<?= UIR ?>Recommendations/manage/park/<?= (int)$park_id ?>"><i class="fas fa-tasks"></i> Manage Recommendations</a>
-					<?php endif; ?>
-					<?php if ($IsLoggedIn): ?>
+				<?php if ($IsLoggedIn): ?>
+				<div class="pk-tab-toolbar">
 					<button class="pk-btn pk-btn-secondary kn-rec-header-action" onclick="pkOpenRecModal()">
 						<i class="fas fa-star"></i> Recommend an Award
 					</button>
-					<?php endif; ?>
 				</div>
+				<?php endif; ?>
 				<?php if (empty($AwardRecommendations)): ?>
 				<div class="pk-recs-empty">There are no open award recommendations for <?= htmlspecialchars($park_name) ?>.</div>
 				<?php else: ?>
 				<?php if (!empty($CanAdminPark) || !empty($ViewerHasCircle)): ?>
 				<div class="kn-rec-filter-bar">
+					<a class="pk-btn pk-btn-primary pk-manage-recs" href="<?= UIR ?>Recommendations/manage/park/<?= (int)$park_id ?>"><i class="fas fa-tasks"></i> Manage Recommendations</a>
 					<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="open">Open Recs</button>
 					<button class="kn-rec-filter-btn" data-filter="below">Below Rec'd</button>
 					<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
@@ -1597,6 +1588,7 @@
 					<?php if (!empty($ViewerHasCircle)): ?>
 					<button class="kn-rec-filter-btn" data-filter="mycircles"><i class="fas fa-users"></i> My Circles</button>
 					<?php endif; ?>
+					<button class="kn-rec-filter-btn" data-filter="snoozed">Snoozed</button>
 					<span class="kn-rec-filter-info">
 						<button class="kn-rec-filter-info-btn" type="button" aria-label="Filter help"><i class="fas fa-question-circle"></i></button>
 						<div class="kn-rec-filter-popover">

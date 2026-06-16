@@ -16328,6 +16328,9 @@ window.recsExportPrint = function(dt, title) {
                 visible = snoozed;
             } else if (filter === 'all') {
                 visible = !snoozed;
+            } else if (filter === 'open') {
+                // Open Recs: all pending, hide already-fulfilled ("already") rows.
+                visible = !snoozed && row.dataset.filter !== 'already';
             } else {
                 visible = !snoozed && row.dataset.filter === filter;
             }
