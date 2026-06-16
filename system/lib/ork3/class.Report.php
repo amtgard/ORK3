@@ -517,18 +517,19 @@ class Report extends Ork3
 
 	public function PlayerAwardRecommendations($request) {
 
-        // Cache keyed to the player being viewed — shared across all viewers.
-        // Viewer-specific flags (ViewerCanSecond, ViewerCanEditReason, IsMine) are
-        // computed after the cache hit so one bust clears the data for everyone.
-        $viewer_id = (int)($request['RequestedBy'] ?? 0);
-        $key = Ork3::$Lib->ghettocache->key([
-            'KingdomId' => (int)($request['KingdomId'] ?? 0),
-            'ParkId'    => (int)($request['ParkId']    ?? 0),
-            'PlayerId'  => (int)($request['PlayerId']  ?? 0),
-        ]);
-        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false) {
-            return $this->applyViewerFlags($cache, $viewer_id);
-        }
+		// Cache keyed to the player being viewed — shared across all viewers.
+		// Viewer-specific flags (ViewerCanSecond, ViewerCanEditReason, IsMine) are
+		// computed after the cache hit so one bust clears the data for everyone.
+		$viewer_id = (int)($request['RequestedBy'] ?? 0);
+		$recIdList = isset($request['RecommendationsIdIn']) ? (array)$request['RecommendationsIdIn'] : null;
+		$skipCache = !empty($request['SkipCache']) || $recIdList !== null;
+		$key = Ork3::$Lib->ghettocache->key([
+			'KingdomId' => (int)($request['KingdomId'] ?? 0),
+			'ParkId'    => (int)($request['ParkId']    ?? 0),
+			'PlayerId'  => (int)($request['PlayerId']  ?? 0),
+		]);
+		if (!$skipCache && ($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 300)) !== false)
+			return $this->applyViewerFlags($cache, $viewer_id);
 
         if (valid_id($request['KingdomId'])) {
             // Roll up principalities when the kingdom's IncludePrincipalityInStatistics
@@ -545,7 +546,13 @@ class Report extends Ork3
             $location_clause = " AND recs.mundane_id = $request[PlayerId]";
         }
 
-        $sql = "select
+		$idClause = '';
+		if ($recIdList !== null) {
+			$ids = array_filter(array_map('intval', $recIdList));
+			$idClause = empty($ids) ? ' AND 1=0 ' : ' AND recs.recommendations_id IN (' . implode(',', $ids) . ') ';
+		}
+
+		$sql = "select
 			a.peerage, ifnull(ka.name, a.name) as award_name,
 			a.is_ladder as a_is_ladder,
 			a.is_title  as a_is_title,
@@ -594,6 +601,7 @@ class Report extends Ork3
 			WHERE (recs.deleted_by IS NULL OR recs.deleted_by = 0)
 			  AND m.active = 1 AND (m.suspended IS NULL OR m.suspended = 0)
 			  $location_clause
+			  $idClause
 			order by m.persona, a.name, recs.rank, m.persona";
 		$r = $this->db->query($sql);
 		$response = array();
@@ -750,22 +758,173 @@ class Report extends Ork3
             }
             unset($rec);
 
-            $response['Status'] = Success();
-        } else {
-            $response['Status'] = InvalidParameter();
-        }
-        $cached = Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
-        return $this->applyViewerFlags($cached, $viewer_id);
-    }
+			$response['Status'] = Success();
+		} else {
+			$response['Status'] = InvalidParameter();
+		}
+		if ($skipCache) { $cached = $response; }
+		else { $cached = Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response); }
+		return $this->applyViewerFlags($cached, $viewer_id);
+	}
 
-    // Compute viewer-specific flags on top of a cached (viewer-agnostic) recommendations
-    // response. IsMine and ViewerCanEditReason need no DB queries. ViewerCanSecond needs
-    // two lightweight IN-list lookups.
-    private function applyViewerFlags(array $response, int $viewer_id): array
-    {
-        if ($viewer_id <= 0 || empty($response['AwardRecommendations'])) {
-            return $response;
-        }
+	/**
+	 * One 500-row (cluster) page of Manager recommendations, fully server-side
+	 * filtered/sorted. Never selects the full set. Returns:
+	 *   ['Groups' => [...≤Limit grouped rows...], 'Total' => int, 'HasMore' => bool]
+	 */
+	public function PlayerAwardRecommendationsPage($request) {
+		$limit  = max(1, (int)($request['Limit']  ?? 500));
+		$offset = max(0, (int)($request['Offset'] ?? 0));
+
+		$scope = '';
+		if (valid_id($request['KingdomId'] ?? 0)) {
+			$kidList = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($request['KingdomId'])));
+			$scope = " AND m.kingdom_id IN ($kidList)";
+		} elseif (valid_id($request['ParkId'] ?? 0)) {
+			$scope = ' AND m.park_id = ' . (int)$request['ParkId'];
+		}
+
+		$where = [];
+		$search = trim((string)($request['Search'] ?? ''));
+		if ($search !== '') {
+			$where[] = "m.persona LIKE '%" . addslashes($search) . "%'";
+		}
+		if (($request['Park'] ?? 'all') !== 'all' && valid_id($request['Park'] ?? 0)) {
+			$where[] = 'm.park_id = ' . (int)$request['Park'];
+		}
+		if (!empty($request['PassLocal'])) {
+			$where[] = 'recs.passed_to_local = 1';
+		}
+		$court = (string)($request['Court'] ?? 'all');
+		if ($court === 'none')      $where[] = '(SELECT COUNT(*) FROM ' . DB_PREFIX . "court_award ca WHERE ca.recommendations_id = recs.recommendations_id AND ca.status != 'cancelled') = 0";
+		elseif ($court === 'any')   $where[] = '(SELECT COUNT(*) FROM ' . DB_PREFIX . "court_award ca WHERE ca.recommendations_id = recs.recommendations_id AND ca.status != 'cancelled') > 0";
+		elseif (strpos($court, 'court:') === 0) {
+			$cid = (int)substr($court, 6);
+			$where[] = 'EXISTS (SELECT 1 FROM ' . DB_PREFIX . "court_award ca WHERE ca.recommendations_id = recs.recommendations_id AND ca.court_id = $cid AND ca.status != 'cancelled')";
+		}
+		$snoozedExpr = "(recs.snoozed_monarch_id IS NOT NULL"
+			. " AND recs.snoozed_monarch_id = (SELECT COALESCE(MAX(CASE WHEN role='Monarch' THEN mundane_id END),0) FROM " . DB_PREFIX . "officer WHERE park_id = m.park_id)"
+			. " AND recs.snoozed_regent_id  = (SELECT COALESCE(MAX(CASE WHEN role='Regent'  THEN mundane_id END),0) FROM " . DB_PREFIX . "officer WHERE park_id = m.park_id))";
+		$alreadyExpr = "((SELECT COUNT(*) FROM " . DB_PREFIX . "awards oa WHERE oa.mundane_id = recs.mundane_id AND oa.kingdomaward_id = ka.kingdomaward_id AND oa.rank >= COALESCE(recs.rank,0)) > 0"
+			. " OR (SELECT COUNT(*) FROM " . DB_PREFIX . "awards oa2 WHERE oa2.mundane_id = recs.mundane_id AND oa2.award_id = recs.award_id AND oa2.rank >= COALESCE(recs.rank,0)) > 0)";
+		$customExpr = '(a.is_ladder = 0 AND a.is_title = 0)';
+
+		$elig = (string)($request['Eligibility'] ?? 'open');
+		if ($elig === 'snoozed') {
+			$where[] = $snoozedExpr;
+		} elseif ($elig === 'nonladder') {
+			$where[] = 'COALESCE(recs.rank,0) = 0';
+			$where[] = "NOT $snoozedExpr";
+		} elseif ($elig === 'ator') {
+			$where[] = "NOT $customExpr AND $alreadyExpr";
+			$where[] = "NOT $snoozedExpr";
+		} elseif ($elig === 'below') {
+			$where[] = "(COALESCE(recs.rank,0) > 0) AND ($customExpr OR NOT $alreadyExpr)";
+			$where[] = "NOT $snoozedExpr";
+		} elseif ($elig === 'open') {
+			$where[] = "($customExpr OR NOT $alreadyExpr)";
+			$where[] = "NOT $snoozedExpr";
+		}
+
+		$whereSql = $where ? (' AND ' . implode(' AND ', $where)) : '';
+
+		$supportSub = "(SELECT COUNT(DISTINCT adv) FROM ("
+			. "  SELECT recommended_by_id AS adv FROM " . DB_PREFIX . "recommendations r2 WHERE r2.mundane_id = recs.mundane_id AND r2.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r2.rank,0)=COALESCE(recs.rank,0) AND r2.recommended_by_id IS NOT NULL AND (r2.deleted_by IS NULL OR r2.deleted_by=0)"
+			. "  UNION SELECT s.supporter_mundane_id AS adv FROM " . DB_PREFIX . "recommendation_seconds s JOIN " . DB_PREFIX . "recommendations r3 ON r3.recommendations_id = s.recommendations_id WHERE r3.mundane_id = recs.mundane_id AND r3.kingdomaward_id = recs.kingdomaward_id AND COALESCE(r3.rank,0)=COALESCE(recs.rank,0) AND s.deleted_at IS NULL"
+			. ") adv_t WHERE adv <> recs.mundane_id)";
+
+		$dir = (strtolower((string)($request['SortDir'] ?? 'desc')) === 'asc') ? 'ASC' : 'DESC';
+		switch ((string)($request['SortKey'] ?? 'date')) {
+			case 'recip': $order = "m.persona $dir, award_name ASC, COALESCE(recs.rank,0) ASC"; break;
+			case 'award': $order = "award_name $dir, COALESCE(recs.rank,0) $dir, m.persona ASC"; break;
+			case 'supp':  $order = "support_count $dir, MIN(recs.date_recommended) DESC"; break;
+			case 'date':
+			default:      $order = "MIN(recs.date_recommended) $dir, m.persona ASC"; break;
+		}
+
+		$base = " FROM " . DB_PREFIX . "recommendations recs"
+			. " LEFT JOIN " . DB_PREFIX . "kingdomaward ka ON ka.kingdomaward_id = recs.kingdomaward_id"
+			. " LEFT JOIN " . DB_PREFIX . "award a ON a.award_id = ka.award_id"
+			. " LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id"
+			. " WHERE (recs.deleted_by IS NULL OR recs.deleted_by = 0)"
+			. " AND m.active = 1 AND (m.suspended IS NULL OR m.suspended = 0)"
+			. $scope . $whereSql;
+
+		$this->db->Clear();
+		$cnt = $this->db->query("SELECT COUNT(*) AS n FROM (SELECT recs.mundane_id $base GROUP BY recs.mundane_id, recs.kingdomaward_id, COALESCE(recs.rank,0)) t");
+		$total = ($cnt !== false && $cnt->next()) ? (int)$cnt->n : 0;
+
+		$this->db->Clear();
+		$pageSql = "SELECT recs.mundane_id, recs.kingdomaward_id, COALESCE(recs.rank,0) AS rk,"
+			. " MIN(ifnull(ka.name, a.name)) AS award_name, MIN(recs.date_recommended) AS oldest,"
+			. " $supportSub AS support_count,"
+			. " MIN(recs.recommendations_id) AS any_rec_id"
+			. " $base"
+			. " GROUP BY recs.mundane_id, recs.kingdomaward_id, COALESCE(recs.rank,0)"
+			. " ORDER BY $order"
+			. " LIMIT " . (int)$limit . " OFFSET " . (int)$offset;
+		$pr = $this->db->query($pageSql);
+		$clusters = [];
+		if ($pr !== false) {
+			while ($pr->next()) { $clusters[] = [(int)$pr->mundane_id, (int)$pr->kingdomaward_id, (int)$pr->rk]; }
+		}
+		if (empty($clusters)) {
+			return ['Groups' => [], 'Total' => $total, 'HasMore' => false];
+		}
+
+		$orParts = [];
+		foreach ($clusters as $c) {
+			$orParts[] = '(recs.mundane_id = ' . $c[0] . ' AND recs.kingdomaward_id = ' . $c[1] . ' AND COALESCE(recs.rank,0) = ' . $c[2] . ')';
+		}
+		$this->db->Clear();
+		$ir = $this->db->query("SELECT recs.recommendations_id FROM " . DB_PREFIX . "recommendations recs LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = recs.mundane_id WHERE (recs.deleted_by IS NULL OR recs.deleted_by = 0) AND (" . implode(' OR ', $orParts) . ")");
+		$pageRecIds = [];
+		if ($ir !== false) { while ($ir->next()) { $pageRecIds[] = (int)$ir->recommendations_id; } }
+
+		$hyd = $this->PlayerAwardRecommendations([
+			'KingdomId'   => (int)($request['KingdomId'] ?? 0),
+			'ParkId'      => (int)($request['ParkId'] ?? 0),
+			'PlayerId'    => 0,
+			'RequestedBy' => (int)($request['RequestedBy'] ?? 0),
+			'RecommendationsIdIn' => $pageRecIds,
+			'SkipCache'   => true,
+		]);
+		$rows = is_array($hyd) && isset($hyd['AwardRecommendations']) ? $hyd['AwardRecommendations'] : [];
+
+		$groups = $this->groupRecommendations($rows);
+
+		$groups = array_values(array_filter($groups, function ($g) use ($elig) {
+			$already = !empty($g['AlreadyHas']);
+			$snoozed = !empty($g['IsSnoozed']);
+			$rank    = (int)$g['Rank'];
+			switch ($elig) {
+				case 'all':       return true;
+				case 'snoozed':   return $snoozed;
+				case 'nonladder': return $rank === 0 && !$snoozed;
+				case 'ator':      return $already && !$snoozed;
+				case 'below':     return $rank > 0 && !$already && !$snoozed;
+				case 'open':
+				default:          return !$already && !$snoozed;
+			}
+		}));
+
+		$pos = [];
+		foreach ($clusters as $i => $c) { $pos[$c[0] . ':' . $c[1] . ':' . $c[2]] = $i; }
+		usort($groups, function ($x, $y) use ($pos) {
+			$kx = $x['MundaneId'] . ':' . $x['KingdomAwardId'] . ':' . $x['Rank'];
+			$ky = $y['MundaneId'] . ':' . $y['KingdomAwardId'] . ':' . $y['Rank'];
+			return ($pos[$kx] ?? 1000000000) <=> ($pos[$ky] ?? 1000000000);
+		});
+
+		$hasMore = ($offset + count($clusters)) < $total;
+		return ['Groups' => $groups, 'Total' => $total, 'HasMore' => $hasMore];
+	}
+
+	// Compute viewer-specific flags on top of a cached (viewer-agnostic) recommendations
+	// response. IsMine and ViewerCanEditReason need no DB queries. ViewerCanSecond needs
+	// two lightweight IN-list lookups.
+	private function applyViewerFlags(array $response, int $viewer_id): array {
+		if ($viewer_id <= 0 || empty($response['AwardRecommendations'])) return $response;
 
         $rec_ids  = array_map(function ($r) {
             return (int)$r['RecommendationsId'];
