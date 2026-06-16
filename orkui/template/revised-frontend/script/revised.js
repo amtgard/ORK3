@@ -16328,9 +16328,6 @@ window.recsExportPrint = function(dt, title) {
                 visible = snoozed;
             } else if (filter === 'all') {
                 visible = !snoozed;
-            } else if (filter === 'open') {
-                // Open Recs: all pending, hide already-fulfilled ("already") rows.
-                visible = !snoozed && row.dataset.filter !== 'already';
             } else {
                 visible = !snoozed && row.dataset.filter === filter;
             }
@@ -16342,6 +16339,9 @@ window.recsExportPrint = function(dt, title) {
     }
 
     container.addEventListener('click', function(e) {
+        // When a recs DataTable is present it owns filtering (via ext.search);
+        // this style.display fallback would fight it, so stand down.
+        if (window.pkRecDT || window.knRecDT) return;
         var btn = e.target.closest('.kn-rec-filter-btn[data-filter]');
         if (btn) applyFilter(btn.dataset.filter);
     });

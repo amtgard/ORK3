@@ -3550,6 +3550,7 @@ html[data-theme="dark"] #pk-addday-startdate { color-scheme:dark; }
 <?php endif; ?>
 
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 
 <script>
 function pkCopyEventLink(el) {
@@ -3591,9 +3592,11 @@ $(function() {
 			lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
 			language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' }
 		});
-window.pkRecPrint = function() { if (window.pkRecDT) window.recsExportPrint(window.pkRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($park_name)) ?>'); };
+	}
+	window.pkRecPrint = function() { if (window.pkRecDT) window.recsExportPrint(window.pkRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($park_name)) ?>'); };
 window.pkRecCsv   = function() { if (window.pkRecDT) window.recsExportCsv(window.pkRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $park_name) ?>.csv'); };
-initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
+	initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
+});
 window.pkUsernameCheck = initUsernameAvailabilityCheck({
 	inputId:     'pk-addplayer-username',
 	statusId:    'pk-addplayer-username-status',
