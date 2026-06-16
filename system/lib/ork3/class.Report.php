@@ -805,8 +805,23 @@ class Report extends Ork3
 		$snoozedExpr = "(recs.snoozed_monarch_id IS NOT NULL"
 			. " AND recs.snoozed_monarch_id = (SELECT COALESCE(MAX(CASE WHEN role='Monarch' THEN mundane_id END),0) FROM " . DB_PREFIX . "officer WHERE park_id = m.park_id)"
 			. " AND recs.snoozed_regent_id  = (SELECT COALESCE(MAX(CASE WHEN role='Regent'  THEN mundane_id END),0) FROM " . DB_PREFIX . "officer WHERE park_id = m.park_id))";
+		// Master-peerage coverage: holding a Master/peerage award covers its ladder. Mirror the
+		// PHP AlreadyHas refinement (Award::GetLadderMasterMap) in SQL so the page count is EXACT
+		// (no over-count of open/ator, no short batches).
+		$lmRows = [];
+		foreach (Award::GetLadderMasterMap() as $ladderAwardId => $lmInfo) {
+			foreach ((array)($lmInfo['MasterAwardIds'] ?? []) as $mAid) {
+				$lmRows[] = 'SELECT ' . (int)$ladderAwardId . ' AS la, ' . (int)$mAid . ' AS ma';
+			}
+		}
+		$masterCoverExpr = $lmRows
+			? "EXISTS (SELECT 1 FROM (" . implode(' UNION ALL ', $lmRows) . ") lmx"
+				. " JOIN " . DB_PREFIX . "awards mo ON mo.mundane_id = recs.mundane_id AND mo.award_id = lmx.ma"
+				. " WHERE lmx.la = IF(IFNULL(ka.award_id,0)=0, recs.award_id, ka.award_id))"
+			: '0';
 		$alreadyExpr = "((SELECT COUNT(*) FROM " . DB_PREFIX . "awards oa WHERE oa.mundane_id = recs.mundane_id AND oa.kingdomaward_id = ka.kingdomaward_id AND oa.rank >= COALESCE(recs.rank,0)) > 0"
-			. " OR (SELECT COUNT(*) FROM " . DB_PREFIX . "awards oa2 WHERE oa2.mundane_id = recs.mundane_id AND oa2.award_id = recs.award_id AND oa2.rank >= COALESCE(recs.rank,0)) > 0)";
+			. " OR (SELECT COUNT(*) FROM " . DB_PREFIX . "awards oa2 WHERE oa2.mundane_id = recs.mundane_id AND oa2.award_id = recs.award_id AND oa2.rank >= COALESCE(recs.rank,0)) > 0"
+			. " OR " . $masterCoverExpr . ")";
 		$customExpr = '(a.is_ladder = 0 AND a.is_title = 0)';
 
 		$elig = (string)($request['Eligibility'] ?? 'open');
