@@ -182,6 +182,12 @@ $backLabel = ($court['ParkId'] ?? 0) > 0
 .cp-rm-trash[data-tip] { position: absolute; }
 .cp-rm-trash[data-tip]:hover::after { content: attr(data-tip); position: absolute; top: 100%; right: 0; margin-top: 4px; width: 200px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 50; pointer-events: none; }
 html[data-theme="dark"] .cp-rm-trash[data-tip]:hover::after { background: #000; }
+.cp-flag-rec[data-tip] { position: relative; }
+.cp-flag-rec[data-tip]:hover::after { content: attr(data-tip); position: absolute; top: 100%; right: 0; margin-top: 4px; width: max-content; max-width: 200px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 50; pointer-events: none; }
+html[data-theme="dark"] .cp-flag-rec[data-tip]:hover::after { background: #000; }
+.cp-send-local-btn { position: relative; }
+.cp-send-local-btn[data-tip]:hover::after { content: attr(data-tip); position: absolute; top: 100%; left: 0; margin-top: 4px; width: max-content; max-width: 240px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 50; pointer-events: none; }
+html[data-theme="dark"] .cp-send-local-btn[data-tip]:hover::after { background: #000; }
 .cp-rm-row.dismissing { opacity: 0; transition: opacity .3s; }
 .cp-rm-add-count { font-size: 12px; color: #718096; align-self: center; margin-right: 4px; }
 .cp-rm-controls { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
@@ -1059,7 +1065,7 @@ $_total_awards = count($courtAwards ?? []);
                 </div>
                 <div class="cp-cell cp-cell-flags cp-award-flags">
                     <?php if ($aw['PassToLocal']): ?><span class="cp-flag-local" title="Pass to Local"><i class="fas fa-arrow-down"></i></span><?php endif; ?>
-                    <?php if ($aw['RecommendationsId']): ?><span class="cp-flag-rec" title="From Recommendation"><i class="fas fa-star"></i></span><?php endif; ?>
+                    <?php if ($aw['RecommendationsId']): ?><span class="cp-flag-rec" data-tip="Added from a recommendation."><i class="fas fa-star"></i></span><?php endif; ?>
                 </div>
                 <div class="cp-cell cp-cell-scroll">
                     <span class="cp-tracking-icon" title="Needs Scroll" data-type="scroll" data-status="<?= $aw['ScrollStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'scroll', this)"><i class="fas fa-print"></i></span>
@@ -1106,13 +1112,22 @@ $_total_awards = count($courtAwards ?? []);
                         </div>
                     </div>
                     <div>
-                        <div class="cp-expand-label">Pass to Local</div>
-                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px">
-                            <input type="checkbox" id="cp-ptl-<?= (int)$aw['CourtAwardId'] ?>"
-                                   <?= $aw['PassToLocal'] ? 'checked' : '' ?>
-                                   style="width:auto">
-                            <span style="font-size:13px;color:#4a5568">Kingdom approves — Park to give</span>
-                        </label>
+                        <?php if (($court['ParkId'] ?? 0) == 0): ?>
+                            <?php if ($aw['RecommendationsId']): ?>
+                            <div class="cp-expand-label">Pass to Local</div>
+                            <button type="button" class="cp-btn-sm cp-btn-outline cp-send-local-btn" style="margin-top:4px"
+                                    data-tip="Would you rather this award be given by their local park? Click here to remove from this Court and send to the local monarchy."
+                                    onclick="cpSendToLocal(<?= (int)$aw['CourtAwardId'] ?>)"><i class="fas fa-arrow-down"></i> Send to Local Park</button>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <div class="cp-expand-label">Pass to Local</div>
+                            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px">
+                                <input type="checkbox" id="cp-ptl-<?= (int)$aw['CourtAwardId'] ?>"
+                                       <?= $aw['PassToLocal'] ? 'checked' : '' ?>
+                                       style="width:auto">
+                                <span style="font-size:13px;color:#4a5568">Kingdom approves — Park to give</span>
+                            </label>
+                        <?php endif; ?>
                         <div style="margin-top:14px">
                             <div class="cp-expand-label">Status</div>
                             <select id="cp-status-<?= (int)$aw['CourtAwardId'] ?>" style="width:auto;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px">
@@ -1443,6 +1458,7 @@ $_total_awards = count($courtAwards ?? []);
 (function() {
     var uir      = '<?= UIR ?>';
     var courtId     = <?= (int)($court['CourtId'] ?? 0) ?>;
+    var courtIsKingdom = <?= ($court['ParkId'] ?? 0) == 0 ? 'true' : 'false' ?>;
     var kidId       = <?= (int)($court['KingdomId'] ?? 0) ?>;
     var courtStatus = <?= json_encode($court['Status'] ?? 'draft') ?>;
     var courtAwards = window.courtAwards = <?= json_encode($courtAwards) ?>;
@@ -1781,7 +1797,8 @@ $_total_awards = count($courtAwards ?? []);
         var notes          = gid('cp-notes-' + caid).value;
         var pubCommentEl    = gid('cp-pubcomment-' + caid);
         var publicComment   = pubCommentEl ? pubCommentEl.value : '';
-        var ptl            = gid('cp-ptl-' + caid).checked ? 1 : 0;
+        var ptlEl          = gid('cp-ptl-' + caid);
+        var ptl            = ptlEl ? (ptlEl.checked ? 1 : 0) : 0;
         var status         = gid('cp-status-' + caid).value;
         var scrollMakerEl  = gid('cp-scroll-maker-id-'  + caid);
         var regaliaMakerEl = gid('cp-regalia-maker-id-' + caid);
@@ -1836,6 +1853,60 @@ $_total_awards = count($courtAwards ?? []);
                 alert(d.error || 'Could not save.');
             }
         });
+    };
+
+    // ---- Pass to Local control + Send-to-Local action (kingdom/principality courts) ----
+    function cpPtlControlHtml(caid, recId, passToLocal) {
+        if (courtIsKingdom) {
+            if (!recId) return '';
+            return '<div class="cp-expand-label">Pass to Local</div>' +
+                '<button type="button" class="cp-btn-sm cp-btn-outline cp-send-local-btn" style="margin-top:4px" ' +
+                'data-tip="Would you rather this award be given by their local park? Click here to remove from this Court and send to the local monarchy." ' +
+                'onclick="cpSendToLocal(' + caid + ')"><i class="fas fa-arrow-down"></i> Send to Local Park</button>';
+        }
+        return '<div class="cp-expand-label">Pass to Local</div>' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px">' +
+            '<input type="checkbox" id="cp-ptl-' + caid + '" style="width:auto"' + (passToLocal ? ' checked' : '') + '>' +
+            '<span style="font-size:13px;color:#4a5568">Kingdom approves — Park to give</span></label>';
+    }
+
+    function cpRemoveAwardRow(caid) {
+        var row = gid('cp-aw-' + caid);
+        if (row) row.remove();
+        var remaining = document.querySelectorAll('#cp-award-list .cp-award-row').length;
+        if (remaining === 0 && !gid('cp-award-empty')) {
+            var list = gid('cp-award-list');
+            var empty = document.createElement('div');
+            empty.className = 'cp-award-empty';
+            empty.id = 'cp-award-empty';
+            empty.innerHTML = '<i class="fas fa-award" style="font-size:28px;opacity:.3;margin-bottom:10px;display:block"></i>No awards planned yet.';
+            list.appendChild(empty);
+        }
+        var cnt = gid('cp-award-count');
+        if (cnt) cnt.textContent = '(' + remaining + ')';
+        if (typeof cpRenumberRows === 'function') cpRenumberRows();
+    }
+
+    window.cpSendToLocal = function(caid) {
+        var body = 'Would you rather this award be given by their local park? This removes it from this Court and sends it to the local monarchy.';
+        function doSend() {
+            var fd = new FormData();
+            fd.append('CourtAwardId', caid);
+            post('CourtAjax/pass_award_to_local', fd).then(function(d) {
+                if (d.status === 0) {
+                    cpRemoveAwardRow(caid);
+                } else {
+                    var msg = d.error || 'Could not send to local.';
+                    if (typeof tnConfirm === 'function') tnConfirm({ title: 'Could not send to local', body: msg, confirmLabel: 'OK' });
+                    else alert(msg);
+                }
+            });
+        }
+        if (typeof tnConfirm === 'function') {
+            tnConfirm({ title: 'Send to local park?', body: body, confirmLabel: 'Send to Local', danger: true, onConfirm: doSend });
+        } else {
+            doSend();
+        }
     };
 
     // ---- Public Comment: rec-reason helper text ----
@@ -2226,7 +2297,7 @@ $_total_awards = count($courtAwards ?? []);
         var empty = gid('cp-award-empty');
         if (empty) empty.remove();
         var ptlBadge = aw.PassToLocal ? '<span class="cp-flag-local" title="Pass to Local"><i class="fas fa-arrow-down"></i></span>' : '';
-        var recBadge = aw.RecommendationsId ? '<span class="cp-flag-rec" title="From Recommendation"><i class="fas fa-star"></i></span>' : '';
+        var recBadge = aw.RecommendationsId ? '<span class="cp-flag-rec" data-tip="Added from a recommendation."><i class="fas fa-star"></i></span>' : '';
         var rankStr  = (aw.IsLadder && aw.Rank > 0) ? '<span class="cp-award-rank">Rank ' + aw.Rank + '</span>' : '';
         var noteBtn  = aw.Notes ? '<button class="cp-note-btn" data-note="' + esc(aw.Notes) + '" onclick="event.stopPropagation();cpShowNote(this)" title="View note"><i class="fas fa-comment-alt"></i></button>' : '';
         var typeClass = aw.IsTitle ? 'cp-type-title' : (aw.IsLadder ? 'cp-type-ladder' : 'cp-type-award');
@@ -2257,7 +2328,7 @@ $_total_awards = count($courtAwards ?? []);
             '<div class="cp-award-row-expand" id="cp-aw-expand-' + aw.CourtAwardId + '">' +
             '<div class="cp-expand-grid">' +
             '<div><div class="cp-expand-label">Internal Notes</div><textarea class="cp-notes-area" id="cp-notes-' + aw.CourtAwardId + '" placeholder="Monarchy notes…">' + esc(aw.Notes || '') + '</textarea>' + cpPubCommentFieldHtml(aw.CourtAwardId, aw.RecReason, aw.PublicComment) + '</div>' +
-            '<div><div class="cp-expand-label">Pass to Local</div><label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px"><input type="checkbox" id="cp-ptl-' + aw.CourtAwardId + '" style="width:auto"' + (aw.PassToLocal ? ' checked' : '') + '><span style="font-size:13px;color:#4a5568">Kingdom approves — Park to give</span></label>' +
+            '<div>' + cpPtlControlHtml(aw.CourtAwardId, aw.RecommendationsId, aw.PassToLocal) +
             '<div style="margin-top:14px"><div class="cp-expand-label">Status</div><select id="cp-status-' + aw.CourtAwardId + '" style="width:auto;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px"><option value="planned" selected>Planned</option><option value="announced">Announced</option><option value="given">Given</option><option value="cancelled">Cancelled</option></select></div></div>' +
             '</div>' +
             '<div class="cp-expand-grid" style="margin-top:8px">' +
