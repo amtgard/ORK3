@@ -9395,29 +9395,33 @@ html[data-theme="dark"] .dataTables_empty {
   background: var(--ork-card-bg) !important;
 }
 
-/* ── Park recs DataTable dark mode ───────────────────────────────────── */
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable thead th,
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable thead td {
+/* ── Park/Kingdom recs table dark mode ───────────────────────────────────
+   Scoped to .pk-recs-table (always present), NOT table.dataTable: these recs
+   tables are NOT DataTables (no DataTable() init), so a table.dataTable scope
+   never matched and dark mode fell back to the light thead/hover/td styles. */
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table thead th,
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table thead td {
   background: var(--ork-bg-secondary) !important;
   color: var(--ork-text-muted) !important;
   border-color: var(--ork-border) !important;
 }
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr {
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody tr {
   background: var(--ork-card-bg) !important;
 }
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr:hover td,
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr.odd:hover td,
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr.even:hover td {
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody tr:hover,
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody tr:hover td,
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody tr.odd:hover td,
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody tr.even:hover td {
   background: var(--ork-bg-tertiary) !important;
 }
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody td {
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody td {
   color: var(--ork-text-secondary) !important;
   border-color: var(--ork-border) !important;
 }
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr.odd td {
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody tr.odd td {
   background: var(--ork-card-bg) !important;
 }
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr.even td {
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody tr.even td {
   background: var(--ork-bg-secondary) !important;
 }
 html[data-theme="dark"] .pk-recs-table-wrap .dataTables_wrapper .dataTables_length,
