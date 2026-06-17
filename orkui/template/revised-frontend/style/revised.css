@@ -6132,7 +6132,7 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 @media (max-width: 768px) {
 	.pk-recs-table th[data-short] { font-size: 0; }
 	.pk-recs-table th[data-short]::after { content: attr(data-short); font-size: 11px; }
-	.pk-rec-actions { white-space: normal; display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
+	.pk-rec-actions { white-space: normal; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
 	.pk-rec-actions button { margin-right: 0; }
 	.pk-rec-expand-btn { padding: 2px 6px; min-height: 24px; }
 }
