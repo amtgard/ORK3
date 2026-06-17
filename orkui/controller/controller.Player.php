@@ -745,8 +745,9 @@ class Controller_Player extends Controller
         $__awards = is_array($this->data['Details']['Awards']) ? $this->data['Details']['Awards'] : [];
         $__classes = is_array($this->data['Details']['Classes']) ? $this->data['Details']['Classes'] : [];
 
-        // 1. First Sign-In — use PlayerSinceDate (already computed via MIN(date)
-        // query at controller line ~358); no full-attendance scan needed.
+        // 1. First Sign-In — use the resolved PlayerSinceDate (admin override if set,
+        // else computed MIN(date) via Player::get_player_since_date); the milestone
+        // intentionally follows the override per the feature design.
         $__earliestDate = $this->data['Player']['PlayerSinceDate'] ?? null;
         if ($__earliestDate && $__earliestDate !== '0000-00-00' && $__earliestDate !== '1970-01-01') {
             $__milestones[] = ['type' => 'first_signin', 'date' => $__earliestDate, 'icon' => 'fa-door-open', 'description' => 'First sign-in at Amtgard'];
