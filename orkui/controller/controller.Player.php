@@ -213,7 +213,8 @@ class Controller_Player extends Controller
             exit;
         }
         $this->data['Player']['LastSignInDate']   = $this->Player->get_latest_attendance_date($id);
-        $this->data['Player']['PlayerSinceDate']  = $this->Player->get_earliest_attendance_date($id);
+        $this->data['Player']['PlayerSinceDate']     = $this->Player->get_player_since_date($id);
+        $this->data['Player']['PlayerSinceComputed'] = $this->Player->get_earliest_attendance_date($id);
         // Fallback Park Member Since to earliest attendance at the member park
         // when the mundane record has no stored date (legacy imports, older accounts).
         $_pms = $this->data['Player']['ParkMemberSince'] ?? null;
@@ -369,7 +370,8 @@ class Controller_Player extends Controller
         $this->data['AwardOptions']  = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
         $this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
         $this->data['Player']['LastSignInDate']  = $this->Player->get_latest_attendance_date($id);
-        $this->data['Player']['PlayerSinceDate'] = $this->Player->get_earliest_attendance_date($id);
+        $this->data['Player']['PlayerSinceDate']     = $this->Player->get_player_since_date($id);
+        $this->data['Player']['PlayerSinceComputed'] = $this->Player->get_earliest_attendance_date($id);
 
         // Custom Title alias dropdown data
         $this->data['CustomAwardId'] = 94;
