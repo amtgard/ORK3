@@ -314,6 +314,31 @@ html[data-theme="dark"] .rm-passlocal-tip { background: #000; }
     transform: none;
 }
 html[data-theme="dark"] [data-tip]:hover::after { background: #000; }
+/* Snooze button uses a rich tooltip (bold title + description) rather than the
+   plain data-tip; mirrors .rm-passlocal-tip and right-anchors so it never clips. */
+.rm-act-snooze { position: relative; }
+.rm-snooze-tip {
+    display: none;
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 4px);
+    width: max-content;
+    max-width: 240px;
+    background: #222;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.35;
+    text-align: left;
+    padding: 5px 8px;
+    border-radius: 4px;
+    white-space: normal;
+    z-index: 50;
+    pointer-events: none;
+}
+.rm-act-snooze:hover .rm-snooze-tip { display: block; }
+.rm-snooze-tip strong { display: block; font-weight: 700; margin-bottom: 3px; }
+html[data-theme="dark"] .rm-snooze-tip { background: #000; }
 
 /* Bulk action bar (Task 7) */
 .rm-bulkbar {
@@ -847,8 +872,8 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
             return rmPost(rmRecAjaxBase(action), fd);
         })).then(function () {
             tr.setAttribute('data-snoozed', snoozed ? '0' : '1');
-            sn.textContent = snoozed ? '💤' : '🔔';
-            sn.setAttribute('data-tip', snoozed ? 'Snooze' : 'Unsnooze');
+            var sIco = sn.querySelector('.rm-snooze-ico') || sn;
+            sIco.textContent = snoozed ? '💤' : '🔔';
             rmFetch(true);
             rmToast(snoozed ? 'Unsnoozed.' : 'Snoozed.');
         }).catch(function () { rmToast('Failed.', true); });

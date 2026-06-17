@@ -88,7 +88,7 @@
         <td class="rm-col-act">
           <button type="button" class="rm-act rm-act-grant"  data-tip="Grant now">&#9889;</button>
           <button type="button" class="rm-act rm-act-court"  data-tip="Add to court">&#65291;</button>
-          <button type="button" class="rm-act rm-act-snooze" data-tip="<?= $snoozed ? 'Unsnooze' : 'Snooze' ?>"><?= $snoozed ? '&#128276;' : '&#128164;' ?></button>
+          <button type="button" class="rm-act rm-act-snooze"><span class="rm-snooze-ico"><?= $snoozed ? '&#128276;' : '&#128164;' ?></span><span class="rm-snooze-tip"><?php if ($snoozed) { ?><strong>Unsnooze</strong>Restore this recommendation to the active list.<?php } else { ?><strong>Snooze to Next Monarchy</strong>Temporarily dismiss this recommendation until either the Monarch or Regent officer at this level changes.<?php } ?></span></button>
           <?php if (($Context ?? '') === 'kingdom') { ?><button type="button" class="rm-act rm-act-passlocal<?= !empty($group['PassedToLocal']) ? ' rm-act-active' : '' ?>"><i class="fas fa-arrow-down"></i><span class="rm-passlocal-tip"><strong>Send to Local Park</strong>For recommendations at a higher level than the park can provide, you are granting authority for that park to award at this level.</span></button><?php } ?>
           <button type="button" class="rm-act rm-act-dismiss" data-tip="Already given out previously? No plans to award this? You can dismiss this rec.">&#10005;</button>
         </td>
