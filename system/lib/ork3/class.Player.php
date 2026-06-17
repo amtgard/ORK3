@@ -1453,16 +1453,25 @@ class Player extends Ork3
                     $this->mundane->active = is_null($request['Active']) ? $this->mundane->active : ($request['Active'] ? 1 : 0);
                 }
                 if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
-                    $pms = $request['ParkMemberSince'];
-                    $this->mundane->park_member_since = is_null($pms) ? $this->mundane->park_member_since : (($pms === '' || $pms === '0000-00-00') ? null : $pms);
                     // yapo's YapoSave skips null-assigned fields (isset() guard), so
-                    // assigning null here would silently leave the prior override in place
-                    // and the field could never be cleared. Write the zero-date explicitly
-                    // to clear; get_player_since_date treats '0000-00-00' the same as NULL
-                    // (→ computed fallback). See feedback_yapo_null_update_skip.
+                    // assigning null to clear a column silently leaves the prior value in
+                    // place. Write the zero-date '0000-00-00' to clear instead — both the
+                    // "Park Member Since" fallback (controller.Player) and
+                    // get_player_since_date() treat '0000-00-00' the same as NULL.
+                    // See feedback_yapo_null_update_skip.
+                    $pms = $request['ParkMemberSince'];
+                    if (!is_null($pms)) {
+                        $this->mundane->park_member_since = ($pms === '' || $pms === '0000-00-00') ? '0000-00-00' : $pms;
+                    }
+                    // Validate the override server-side (the type=date input is the only
+                    // client guard); store the zero-date for empty/invalid input so we never
+                    // persist a garbage or impossible date.
                     $pso = $request['PlayerSinceOverride'] ?? null;
                     if (!is_null($pso)) {
-                        $this->mundane->player_since_override = ($pso === '' || $pso === '0000-00-00') ? '0000-00-00' : $pso;
+                        $valid = $pso !== '' && $pso !== '0000-00-00'
+                            && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $pso, $m)
+                            && checkdate((int)$m[2], (int)$m[3], (int)$m[1]);
+                        $this->mundane->player_since_override = $valid ? $pso : '0000-00-00';
                     }
                 }
                 if (strlen($request['Heraldry'])) {
