@@ -1455,8 +1455,15 @@ class Player extends Ork3
                 if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
                     $pms = $request['ParkMemberSince'];
                     $this->mundane->park_member_since = is_null($pms) ? $this->mundane->park_member_since : (($pms === '' || $pms === '0000-00-00') ? null : $pms);
+                    // yapo's YapoSave skips null-assigned fields (isset() guard), so
+                    // assigning null here would silently leave the prior override in place
+                    // and the field could never be cleared. Write the zero-date explicitly
+                    // to clear; get_player_since_date treats '0000-00-00' the same as NULL
+                    // (→ computed fallback). See feedback_yapo_null_update_skip.
                     $pso = $request['PlayerSinceOverride'] ?? null;
-                    $this->mundane->player_since_override = is_null($pso) ? $this->mundane->player_since_override : (($pso === '' || $pso === '0000-00-00') ? null : $pso);
+                    if (!is_null($pso)) {
+                        $this->mundane->player_since_override = ($pso === '' || $pso === '0000-00-00') ? '0000-00-00' : $pso;
+                    }
                 }
                 if (strlen($request['Heraldry'])) {
                     Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
