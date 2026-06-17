@@ -2534,6 +2534,12 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<label for="pn-acct-member-since">Park Member Since</label>
 				<input type="date" id="pn-acct-member-since" name="ParkMemberSince" value="<?= htmlspecialchars(($Player['ParkMemberSince'] ?? '') === '0000-00-00' ? '' : ($Player['ParkMemberSince'] ?? '')) ?>" />
 			</div>
+
+			<div class="pn-acct-field">
+				<label for="pn-acct-player-since">Player Since (override)</label>
+				<input type="date" id="pn-acct-player-since" name="PlayerSinceOverride" value="<?= htmlspecialchars(($Player['PlayerSinceOverride'] ?? '') === '0000-00-00' ? '' : ($Player['PlayerSinceOverride'] ?? '')) ?>" />
+				<div class="pn-acct-hint">Current first sign-in: <?= !empty($Player['PlayerSinceComputed']) ? htmlspecialchars(date('F j, Y', strtotime($Player['PlayerSinceComputed']))) : 'N/A' ?></div>
+			</div>
 			<?php endif; ?>
 		</div>
 

@@ -213,7 +213,8 @@ class Controller_Player extends Controller
             exit;
         }
         $this->data['Player']['LastSignInDate']   = $this->Player->get_latest_attendance_date($id);
-        $this->data['Player']['PlayerSinceDate']  = $this->Player->get_earliest_attendance_date($id);
+        $this->data['Player']['PlayerSinceDate']     = $this->Player->get_player_since_date($id);
+        $this->data['Player']['PlayerSinceComputed'] = $this->Player->get_earliest_attendance_date($id);
         // Fallback Park Member Since to earliest attendance at the member park
         // when the mundane record has no stored date (legacy imports, older accounts).
         $_pms = $this->data['Player']['ParkMemberSince'] ?? null;
@@ -369,7 +370,8 @@ class Controller_Player extends Controller
         $this->data['AwardOptions']  = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
         $this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
         $this->data['Player']['LastSignInDate']  = $this->Player->get_latest_attendance_date($id);
-        $this->data['Player']['PlayerSinceDate'] = $this->Player->get_earliest_attendance_date($id);
+        $this->data['Player']['PlayerSinceDate']     = $this->Player->get_player_since_date($id);
+        $this->data['Player']['PlayerSinceComputed'] = $this->Player->get_earliest_attendance_date($id);
 
         // Custom Title alias dropdown data
         $this->data['CustomAwardId'] = 94;
@@ -743,8 +745,9 @@ class Controller_Player extends Controller
         $__awards = is_array($this->data['Details']['Awards']) ? $this->data['Details']['Awards'] : [];
         $__classes = is_array($this->data['Details']['Classes']) ? $this->data['Details']['Classes'] : [];
 
-        // 1. First Sign-In — use PlayerSinceDate (already computed via MIN(date)
-        // query at controller line ~358); no full-attendance scan needed.
+        // 1. First Sign-In — use the resolved PlayerSinceDate (admin override if set,
+        // else computed MIN(date) via Player::get_player_since_date); the milestone
+        // intentionally follows the override per the feature design.
         $__earliestDate = $this->data['Player']['PlayerSinceDate'] ?? null;
         if ($__earliestDate && $__earliestDate !== '0000-00-00' && $__earliestDate !== '1970-01-01') {
             $__milestones[] = ['type' => 'first_signin', 'date' => $__earliestDate, 'icon' => 'fa-door-open', 'description' => 'First sign-in at Amtgard'];
