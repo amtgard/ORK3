@@ -12,8 +12,8 @@ class Unit extends Ork3 {
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) === 0) {
             return NoAuthorization();
         }
-        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['FromUnitId'], AUTH_CREATE)
-            || !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['ToUnitId'], AUTH_CREATE)) {
+        if (!Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'unit.edit', 'unit', $request['FromUnitId'], AUTH_CREATE)
+            || !Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'unit.edit', 'unit', $request['ToUnitId'], AUTH_CREATE)) {
             return NoAuthorization();
         }
 
@@ -61,8 +61,8 @@ class Unit extends Ork3 {
 		if (!$mundane) return NoAuthorization();
 
     	if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-			&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_CREATE)
-			    || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) )) {
+			&& (Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'unit.convert', 'unit', $request['UnitId'], AUTH_CREATE)
+			    || Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'unit.convert', 'kingdom', $mundane['KingdomId'], AUTH_EDIT) )) {
 
             $this->unit->clear();
             $this->unit->unit_id = $request['UnitId'];
@@ -83,8 +83,8 @@ class Unit extends Ork3 {
 		if (!$mundane) return NoAuthorization();
 
     	if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-			&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_CREATE)
-			    || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) )) {
+			&& (Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'unit.convert', 'unit', $request['UnitId'], AUTH_CREATE)
+			    || Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'unit.convert', 'kingdom', $mundane['KingdomId'], AUTH_EDIT) )) {
 
             $this->unit->clear();
             $this->unit->unit_id = $request['UnitId'];
@@ -117,7 +117,7 @@ class Unit extends Ork3 {
             list($kingdom_id, $request['AwardId']) = Ork3::$Lib->award->LookupKingdomAward(array('KingdomAwardId' => $request['KingdomAwardId']));
         }
 		if (valid_id($mundane_id)
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $authorizer['ParkId'], AUTH_EDIT)) {
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $authorizer['ParkId'], AUTH_EDIT)) {
             $given_by = null;
             if (valid_id($request['GivenById'])) {
                 $given_by = $this->GetPlayer(array('MundaneId' => $request['GivenById']));
@@ -187,7 +187,7 @@ class Unit extends Ork3 {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 		$mundane = $mundane_id > 0 ? Ork3::$Lib->player->player_info($request['Token']) : null;
 		if ($mundane_id > 0
-				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_CREATE)
+				&& (Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'unit.member.manage', 'unit', $request['UnitId'], AUTH_CREATE)
 				    || ($mundane && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT)))) {
 			logtrace("AddMember", $request);
 			return $this->add_member_h($request);
@@ -201,7 +201,7 @@ class Unit extends Ork3 {
 		if (valid_id($request['UnitMundaneId']) && $this->members->find()) {
 			$unit_id = $this->members->unit_id;
 			if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-					&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE)) {
+					&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'unit.member.manage', 'unit', $unit_id, AUTH_CREATE)) {
 				$this->members->clear();
 				$this->members->unit_mundane_id = $request['UnitMundaneId'];
 				$this->members->find();
@@ -230,7 +230,7 @@ class Unit extends Ork3 {
 	    list($member_id, $unit_id) = $this->_translate_unitmundane($request['UnitMundaneId']);
 	    logtrace('Retire Member:', array($member_id, $unit_id));
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE)
+				&& (Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'unit.member.manage', 'unit', $unit_id, AUTH_CREATE)
 					|| $mundane_id == $member_id)) {
 			$this->members->clear();
 			$this->members->unit_mundane_id = $request['UnitMundaneId'];
@@ -257,7 +257,7 @@ class Unit extends Ork3 {
 
 	public function RemoveMember($request) {
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_CREATE)) {
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'unit.member.manage', 'unit', $request['UnitId'], AUTH_CREATE)) {
 			$this->members->clear();
 			$this->members->unit_mundane_id = $request['UnitMundaneId'];
 			if (!$this->members->find()) {
@@ -341,7 +341,7 @@ class Unit extends Ork3 {
 	public function SetUnit($request) {
 		logtrace("SetUnit()", $request);
 		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $request['UnitId'], AUTH_CREATE)) {
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'unit.edit', 'unit', $request['UnitId'], AUTH_CREATE)) {
 			logtrace("SetUnit() :Secure",null);
 			$this->unit->clear();
 			$this->unit->unit_id = $request['UnitId'];

@@ -4,7 +4,7 @@
 	$_rcPlayerId  = (int)($Player['MundaneId'] ?? 0);
 	$_rcParkId    = (int)($Player['ParkId'] ?? 0);
 	$canEditAdmin = isset($canEditAdmin) ? (bool)$canEditAdmin
-	              : ($_rcUid > 0 && Ork3::$Lib->authorization->HasAuthority($_rcUid, AUTH_PARK, $_rcParkId, AUTH_EDIT));
+	              : ($_rcUid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($_rcUid, 'park.reconcile_credits', 'park', $_rcParkId, AUTH_EDIT));
 	$_isOwnProfile = $_rcUid === $_rcPlayerId;
 	if (!$canEditAdmin && !$_isOwnProfile) {
 		header('Location: ' . UIR . 'Player/profile/' . $_rcPlayerId);

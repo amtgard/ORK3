@@ -1,3 +1,16 @@
+/* Shared: position a fixed kn-ac-results dropdown under its input (modal-safe). */
+if (typeof window.tnFixedAcPosition !== 'function') {
+  window.tnFixedAcPosition = function (input, dropdown) {
+    if (!input || !dropdown) return;
+    var r = input.getBoundingClientRect();
+    dropdown.style.position = 'fixed';
+    dropdown.style.top = (r.bottom + 2) + 'px';
+    dropdown.style.left = r.left + 'px';
+    dropdown.style.width = r.width + 'px';
+    dropdown.style.zIndex = '10001';
+  };
+}
+
 /* ============================================================
    Rank pill painter — shared by every "add award" / "recommend"
    surface (player / kingdom / park). Given the player's held rank
@@ -4105,7 +4118,12 @@ $(document).ready(function() {
 (function() {
     if (typeof KnConfig === 'undefined' || !KnConfig.canManage) return;
 
-    var OFFICER_ROLES = ['Monarch', 'Regent', 'Prime Minister', 'Champion', 'GMR'];
+    // OFFICER_ROLES derived from the embedded officerList: each entry keys on the
+    // stable canonical_key (matching), renders DisplayTitle (display). No display
+    // string ever drives officer logic.
+    var OFFICER_ROLES = (KnConfig.officerList || []).map(function(o) {
+        return { key: o.CanonicalKey || o.OfficerRole, label: o.DisplayTitle || o.OfficerRole };
+    });
     var SET_URL    = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/setofficers';
     var VACATE_URL = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/vacateofficer';
     var SEARCH_URL = KnConfig.httpService + 'Search/SearchService.php';
@@ -4115,7 +4133,7 @@ $(document).ready(function() {
 
     function buildOfficerMap() {
         var map = {};
-        (KnConfig.officerList || []).forEach(function(o) { map[o.OfficerRole] = o; });
+        (KnConfig.officerList || []).forEach(function(o) { map[o.CanonicalKey || o.OfficerRole] = o; });
         return map;
     }
 
@@ -4154,9 +4172,9 @@ $(document).ready(function() {
         var officerMap = buildOfficerMap();
         if (rowsBuilt) {
             // Refresh current holder values without rebuilding DOM
-            OFFICER_ROLES.forEach(function(role) {
-                var slug    = roleSlug(role);
-                var o       = officerMap[role];
+            OFFICER_ROLES.forEach(function(entry) {
+                var slug    = roleSlug(entry.key);
+                var o       = officerMap[entry.key];
                 var nameEl  = gid('kn-editoff-name-' + slug);
                 var idEl    = gid('kn-editoff-id-'   + slug);
                 var vacBtn  = gid('kn-editoff-vacate-' + slug);
@@ -4173,9 +4191,10 @@ $(document).ready(function() {
         if (!container) return;
         container.innerHTML = '';
 
-        OFFICER_ROLES.forEach(function(role) {
-            var slug     = roleSlug(role);
-            var o        = officerMap[role];
+        OFFICER_ROLES.forEach(function(entry) {
+            var role     = entry.key;
+            var slug     = roleSlug(entry.key);
+            var o        = officerMap[entry.key];
             var occupied = o && o.MundaneId > 0;
 
             var row = document.createElement('div');
@@ -4184,7 +4203,7 @@ $(document).ready(function() {
             // Role label
             var label = document.createElement('div');
             label.className = 'kn-editoff-role-label';
-            label.textContent = role;
+            label.textContent = entry.label;
             row.appendChild(label);
 
             // Player wrap (autocomplete input + hidden id)
@@ -4214,11 +4233,11 @@ $(document).ready(function() {
             vacateBtn.className = 'kn-editoff-vacate-btn';
             vacateBtn.textContent       = 'Vacate';
             vacateBtn.style.display     = occupied ? '' : 'none';
-            (function(r, btn, ni, hi) {
+            (function(r, rLabel, btn, ni, hi) {
                 btn.addEventListener('click', function() {
                     pnConfirm({
                         title: 'Vacate Position?',
-                        message: 'Remove the current ' + r + '?',
+                        message: 'Remove the current ' + rLabel + '?',
                         confirmText: 'Vacate',
                         danger: true
                     }, function() {
@@ -4232,9 +4251,9 @@ $(document).ready(function() {
                                 btn.disabled      = false;
                                 btn.textContent   = 'Vacate';
                                 (KnConfig.officerList || []).forEach(function(off) {
-                                    if (off.OfficerRole === r) { off.MundaneId = 0; off.Persona = ''; }
+                                    if ((off.CanonicalKey || off.OfficerRole) === r) { off.MundaneId = 0; off.Persona = ''; }
                                 });
-                                showFeedback(r + ' vacated.', true);
+                                showFeedback(rLabel + ' vacated.', true);
                             } else {
                                 btn.disabled    = false;
                                 btn.textContent = 'Vacate';
@@ -4247,7 +4266,7 @@ $(document).ready(function() {
                         });
                     });
                 });
-            })(role, vacateBtn, nameInput, hiddenInput);
+            })(entry.key, entry.label, vacateBtn, nameInput, hiddenInput);
             row.appendChild(vacateBtn);
 
             container.appendChild(row);
@@ -4283,10 +4302,10 @@ $(document).ready(function() {
             submitBtn.addEventListener('click', function() {
                 var data   = {};
                 var hasAny = false;
-                OFFICER_ROLES.forEach(function(role) {
-                    var idEl = gid('kn-editoff-id-' + roleSlug(role));
+                OFFICER_ROLES.forEach(function(entry) {
+                    var idEl = gid('kn-editoff-id-' + roleSlug(entry.key));
                     var mid  = idEl ? parseInt(idEl.value, 10) : 0;
-                    if (mid > 0) { data[roleSlug(role) + 'Id'] = mid; hasAny = true; }
+                    if (mid > 0) { data[roleSlug(entry.key) + 'Id'] = mid; hasAny = true; }
                 });
                 if (!hasAny) { showFeedback('No officers selected. Use Vacate to remove officers.', false); return; }
                 submitBtn.disabled = true;
@@ -9474,7 +9493,11 @@ function setupPronounPicker(cfg) {
 (function() {
     if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
-    var OFFICER_ROLES = ['Monarch', 'Regent', 'Prime Minister', 'Champion', 'GMR'];
+    // OFFICER_ROLES derived from the embedded officerList: each entry keys on the
+    // stable canonical_key (matching), renders DisplayTitle (display).
+    var OFFICER_ROLES = (PkConfig.officerList || []).map(function(o) {
+        return { key: o.CanonicalKey || o.OfficerRole, label: o.DisplayTitle || o.OfficerRole };
+    });
     var SET_URL    = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/setofficers';
     var VACATE_URL = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/vacateofficer';
     var SEARCH_URL = PkConfig.httpService + 'Search/SearchService.php';
@@ -9484,7 +9507,7 @@ function setupPronounPicker(cfg) {
 
     function buildOfficerMap() {
         var map = {};
-        (PkConfig.officerList || []).forEach(function(o) { map[o.OfficerRole] = o; });
+        (PkConfig.officerList || []).forEach(function(o) { map[o.CanonicalKey || o.OfficerRole] = o; });
         return map;
     }
 
@@ -9520,9 +9543,9 @@ function setupPronounPicker(cfg) {
     function buildRows() {
         var officerMap = buildOfficerMap();
         if (rowsBuilt) {
-            OFFICER_ROLES.forEach(function(role) {
-                var slug   = roleSlug(role);
-                var o      = officerMap[role];
+            OFFICER_ROLES.forEach(function(entry) {
+                var slug   = roleSlug(entry.key);
+                var o      = officerMap[entry.key];
                 var nameEl = gid('pk-editoff-name-' + slug);
                 var idEl   = gid('pk-editoff-id-'   + slug);
                 var vacBtn = gid('pk-editoff-vacate-' + slug);
@@ -9539,9 +9562,10 @@ function setupPronounPicker(cfg) {
         if (!container) return;
         container.innerHTML = '';
 
-        OFFICER_ROLES.forEach(function(role) {
-            var slug     = roleSlug(role);
-            var o        = officerMap[role];
+        OFFICER_ROLES.forEach(function(entry) {
+            var role     = entry.key;
+            var slug     = roleSlug(entry.key);
+            var o        = officerMap[entry.key];
             var occupied = o && o.MundaneId > 0;
 
             var row = document.createElement('div');
@@ -9549,7 +9573,7 @@ function setupPronounPicker(cfg) {
 
             var label = document.createElement('div');
             label.className   = 'pk-editoff-role-label';
-            label.textContent = role;
+            label.textContent = entry.label;
             row.appendChild(label);
 
             var wrap = document.createElement('div');
@@ -9577,11 +9601,11 @@ function setupPronounPicker(cfg) {
             vacateBtn.className     = 'pk-editoff-vacate-btn';
             vacateBtn.textContent   = 'Vacate';
             vacateBtn.style.display = occupied ? '' : 'none';
-            (function(r, btn, ni, hi) {
+            (function(r, rLabel, btn, ni, hi) {
                 btn.addEventListener('click', function() {
                     pnConfirm({
                         title: 'Vacate Position?',
-                        message: 'Remove the current ' + r + '?',
+                        message: 'Remove the current ' + rLabel + '?',
                         confirmText: 'Vacate',
                         danger: true
                     }, function() {
@@ -9594,9 +9618,9 @@ function setupPronounPicker(cfg) {
                                 btn.disabled      = false;
                                 btn.textContent   = 'Vacate';
                                 (PkConfig.officerList || []).forEach(function(off) {
-                                    if (off.OfficerRole === r) { off.MundaneId = 0; off.Persona = ''; }
+                                    if ((off.CanonicalKey || off.OfficerRole) === r) { off.MundaneId = 0; off.Persona = ''; }
                                 });
-                                showFeedback(r + ' vacated.', true);
+                                showFeedback(rLabel + ' vacated.', true);
                             } else {
                                 btn.disabled    = false;
                                 btn.textContent = 'Vacate';
@@ -9609,7 +9633,7 @@ function setupPronounPicker(cfg) {
                         });
                     });
                 });
-            })(role, vacateBtn, nameInput, hiddenInput);
+            })(entry.key, entry.label, vacateBtn, nameInput, hiddenInput);
             row.appendChild(vacateBtn);
 
             container.appendChild(row);
@@ -9641,10 +9665,10 @@ function setupPronounPicker(cfg) {
             submitBtn.addEventListener('click', function() {
                 var data   = {};
                 var hasAny = false;
-                OFFICER_ROLES.forEach(function(role) {
-                    var idEl = gid('pk-editoff-id-' + roleSlug(role));
+                OFFICER_ROLES.forEach(function(entry) {
+                    var idEl = gid('pk-editoff-id-' + roleSlug(entry.key));
                     var mid  = idEl ? parseInt(idEl.value, 10) : 0;
-                    if (mid > 0) { data[roleSlug(role) + 'Id'] = mid; hasAny = true; }
+                    if (mid > 0) { data[roleSlug(entry.key) + 'Id'] = mid; hasAny = true; }
                 });
                 if (!hasAny) { showFeedback('No officers selected. Use Vacate to remove officers.', false); return; }
                 submitBtn.disabled = true;

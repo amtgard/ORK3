@@ -8,12 +8,12 @@
 	$can_delete_recommendation = false;
 	if($this->__session->user_id) {
 		if (isset($this->__session->park_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $this->__session->park_id, AUTH_CREATE)) {
+			if (Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'player.edit', 'park', $this->__session->park_id, AUTH_CREATE)) {
 				$can_delete_recommendation = true;
 			}
 		}
 		if (!$can_delete_recommendation && isset($this->__session->kingdom_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $this->__session->kingdom_id, AUTH_CREATE)) {
+			if (Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'kingdom.details.edit', 'kingdom', $this->__session->kingdom_id, AUTH_CREATE)) {
 				$can_delete_recommendation = true;
 			}
 		}
@@ -66,8 +66,8 @@
 
 	// Auth helpers
 	$isOwnProfile  = isset($this->__session->user_id) && (int)$this->__session->user_id === (int)$Player['MundaneId'];
-	$canEditAdmin  = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT);
-	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_CREATE);
+	$canEditAdmin  = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'player.edit', 'park', $Player['ParkId'], AUTH_EDIT);
+	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'player.award.manage', 'park', $Player['ParkId'], AUTH_CREATE);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
@@ -1057,7 +1057,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<span id="pn-voting-badge" style="display:none;" class="pn-badge pn-badge-blue"><i class="fas fa-vote-yea"></i> Voting Eligible<span id="pn-voting-badge-sub" class="pn-badge-sub" style="display:none;"></span></span>
 				<?php if (!empty($OfficerRoles)): ?>
 					<?php foreach ($OfficerRoles as $office): ?>
-						<span class="pn-badge pn-badge-gold"><i class="fas fa-crown"></i> <?= htmlspecialchars($office['entity_type']) ?> <?= htmlspecialchars($office['role']) ?></span>
+						<span class="pn-badge pn-badge-gold"><i class="fas fa-crown"></i> <?= htmlspecialchars($office['entity_type']) ?> <?= htmlspecialchars($office['DisplayTitle'] ?? $office['role']) ?></span>
 					<?php endforeach; ?>
 				<?php endif; ?>
 				<?php if (!empty($AdminGrants)): ?>
@@ -1483,7 +1483,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							<div class="pna-card-title"><i class="fas fa-crown"></i> Current Offices</div>
 							<?php foreach ($OfficerRoles as $_or): ?>
 							<div class="pna-officer-row">
-								<span class="pna-officer-title"><?= htmlspecialchars($_or['entity_type'] . ' ' . $_or['role']) ?></span>
+								<span class="pna-officer-title"><?= htmlspecialchars($_or['entity_type'] . ' ' . ($_or['DisplayTitle'] ?? $_or['role'])) ?></span>
 								<span class="pna-officer-entity"><?= htmlspecialchars($_or['entity_name'] ?? '') ?></span>
 							</div>
 							<?php endforeach; ?>

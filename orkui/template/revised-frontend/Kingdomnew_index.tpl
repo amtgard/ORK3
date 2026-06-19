@@ -28,8 +28,9 @@
 	// Extract Monarch & Regent for hero display
 	$monarch = null; $regent = null;
 	foreach ($officerList as $o) {
-		if ($o['OfficerRole'] === 'Monarch') $monarch = $o;
-		if ($o['OfficerRole'] === 'Regent')  $regent  = $o;
+		$_ck = $o['CanonicalKey'] ?? $o['OfficerRole'] ?? '';
+		if ($_ck === 'monarch') $monarch = $o;
+		if ($_ck === 'regent')  $regent  = $o;
 	}
 
 	// Players loaded via AJAX (players_json) — not available at render time
@@ -150,9 +151,9 @@
 				<i class="fas fa-map"></i> Map
 			</a>
 			<?php if ($CanManageKingdom ?? false): ?>
-			<button class="kn-btn kn-btn-outline" onclick="knOpenAdminModal()">
+			<a class="kn-btn kn-btn-outline" href="<?= UIR ?>Admin/kingdom/<?= (int)($kingdom_id ?? 0) ?>">
 				<i class="fas fa-cog"></i> Admin
-			</button>
+			</a>
 			<?php endif; ?>
 		</div>
 
@@ -214,7 +215,7 @@
 			<ul class="kn-officer-list">
 				<?php foreach ($officerList as $o): ?>
 				<li>
-					<span class="kn-officer-role"><?= htmlspecialchars($o['OfficerRole']) ?></span>
+					<span class="kn-officer-role"><?= htmlspecialchars($o['DisplayTitle'] ?? $o['OfficerRole']) ?></span>
 					<span class="kn-officer-name">
 						<?php if (!empty($o['MundaneId']) && $o['MundaneId'] > 0): ?>
 							<a href="<?= UIR ?>Player/profile/<?= $o['MundaneId'] ?>"><?= htmlspecialchars($o['Persona']) ?></a>
@@ -297,6 +298,9 @@
 				</li>
 				<li data-kntab="reports">
 					<i class="fas fa-chart-bar"></i><span class="kn-tab-label"> Reports</span>
+				</li>
+				<li data-kntab="officerhistory">
+					<i class="fas fa-history"></i><span class="kn-tab-label"> Officer History</span>
 				</li>
 				<?php if ($ShowRecsTab ?? false):
 					$_recsN = (int)($AwardRecommendationsCount ?? 0);
@@ -815,6 +819,48 @@
 				</div>
 			</div>
 
+		<!-- Officer History Tab -->
+		<div class="kn-tab-panel" id="kn-tab-officerhistory" style="display:none">
+			<div class="kn-oh-toolbar">
+				<select id="kn-oh-role-filter" class="kn-oh-filter-select" onchange="knLoadOfficerHistory()">
+					<option value="">All Roles</option>
+					<option value="Monarch">Monarch</option>
+					<option value="Regent">Regent</option>
+					<option value="Prime Minister">Prime Minister</option>
+					<option value="Champion">Champion</option>
+					<option value="GMR">GMR</option>
+				</select>
+				<?php if ($CanEditKingdom ?? false): ?>
+				<button class="kn-btn kn-btn-secondary" onclick="knOpenOhBackfillModal()">
+					<i class="fas fa-plus"></i> Add Historical Record
+				</button>
+				<?php endif; ?>
+			</div>
+			<div id="kn-oh-loading" style="text-align:center;padding:24px;color:#a0aec0;display:none">
+				<i class="fas fa-spinner fa-spin"></i> Loading officer history...
+			</div>
+			<div id="kn-oh-empty" style="text-align:center;padding:32px 16px;color:#a0aec0;display:none">
+				No officer history records found.
+			</div>
+			<table class="kn-oh-table" id="kn-oh-table" style="display:none">
+				<thead>
+					<tr>
+						<th>Role</th>
+						<th>Persona</th>
+						<th>Start Date</th>
+						<th>End Date</th>
+						<th>Notes</th>
+						<?php if ($CanEditKingdom ?? false): ?>
+						<th style="width:40px"></th>
+						<?php endif; ?>
+					</tr>
+				</thead>
+				<tbody id="kn-oh-tbody"></tbody>
+			</table>
+		</div>
+
+
+
 		<!-- Admin Tab -->
 		<?php if ($CanManageKingdom ?? false): ?>
 		<div class="kn-tab-panel" id="kn-tab-admin" style="display:none">
@@ -890,6 +936,124 @@
 
 </div><!-- /kn-layout -->
 
+<!-- Officer History Backfill Modal -->
+<?php if ($CanEditKingdom ?? false): ?>
+<div id="kn-oh-backfill-overlay" style="display:none;position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-history" style="margin-right:8px;color:#2b6cb0"></i>Add Officer History Record</h3>
+			<button class="kn-modal-close-btn" onclick="knCloseOhBackfillModal()">&times;</button>
+		</div>
+		<div class="kn-modal-body" style="overflow:visible">
+			<div class="kn-form-error" id="kn-oh-bf-error"></div>
+			<div id="kn-oh-bf-success" class="kn-oh-bf-success" style="display:none">
+				<i class="fas fa-check-circle"></i> Record added successfully!
+			</div>
+
+			<div class="kn-acct-field" style="position:relative">
+				<label>Player <span style="color:#e53e3e">*</span></label>
+				<input type="text" id="kn-oh-bf-player-text" placeholder="Search by persona..." autocomplete="off" />
+				<input type="hidden" id="kn-oh-bf-player-id" value="" />
+				<div class="kn-ac-results" id="kn-oh-bf-player-results" style="position:fixed"></div>
+			</div>
+
+			<div class="kn-acct-field">
+				<label>Role <span style="color:#e53e3e">*</span></label>
+				<select id="kn-oh-bf-role">
+					<option value="">Select role...</option>
+					<option value="Monarch">Monarch</option>
+					<option value="Regent">Regent</option>
+					<option value="Prime Minister">Prime Minister</option>
+					<option value="Champion">Champion</option>
+					<option value="GMR">GMR</option>
+				</select>
+			</div>
+
+			<div style="display:flex;gap:12px">
+				<div class="kn-acct-field" style="flex:1">
+					<label>Start Date <span style="color:#e53e3e">*</span></label>
+					<input type="date" id="kn-oh-bf-start" />
+				</div>
+				<div class="kn-acct-field" style="flex:1">
+					<label>End Date</label>
+					<input type="date" id="kn-oh-bf-end" />
+				</div>
+			</div>
+
+			<div class="kn-acct-field">
+				<label>Notes <span style="color:#a0aec0;font-weight:400">(optional)</span></label>
+				<textarea id="kn-oh-bf-notes" rows="2" maxlength="500" placeholder="e.g. Reign 42, appointed mid-term..."></textarea>
+			</div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="kn-btn kn-btn-secondary" onclick="knCloseOhBackfillModal()">Cancel</button>
+			<button class="kn-btn kn-btn-primary" id="kn-oh-bf-save-btn" onclick="knSaveOhBackfill()">
+				<i class="fas fa-save" style="margin-right:4px"></i> Save Record
+			</button>
+		</div>
+	</div>
+</div>
+<!-- Officer History Edit Modal -->
+<?php if ($CanEditKingdom ?? false): ?>
+<div id="kn-oh-edit-overlay" style="display:none;position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center">
+	<div class="kn-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title"><i class="fas fa-pencil-alt" style="margin-right:8px;color:#2b6cb0"></i>Edit Officer History Record</h3>
+			<button class="kn-modal-close-btn" onclick="knCloseOhEditModal()">&times;</button>
+		</div>
+		<div class="kn-modal-body">
+			<div class="kn-form-error" id="kn-oh-ed-error"></div>
+			<div id="kn-oh-ed-success" class="kn-oh-bf-success" style="display:none">
+				<i class="fas fa-check-circle"></i> Record updated successfully!
+			</div>
+			<input type="hidden" id="kn-oh-ed-id" value="" />
+
+			<div class="kn-acct-field">
+				<label>Player</label>
+				<input type="text" id="kn-oh-ed-player" disabled style="background:#f7fafc;color:#718096;cursor:not-allowed" />
+			</div>
+
+			<div class="kn-acct-field">
+				<label>Role <span style="color:#e53e3e">*</span></label>
+				<select id="kn-oh-ed-role">
+					<option value="Monarch">Monarch</option>
+					<option value="Regent">Regent</option>
+					<option value="Prime Minister">Prime Minister</option>
+					<option value="Champion">Champion</option>
+					<option value="GMR">GMR</option>
+				</select>
+			</div>
+
+			<div style="display:flex;gap:12px">
+				<div class="kn-acct-field" style="flex:1">
+					<label>Start Date <span style="color:#e53e3e">*</span></label>
+					<input type="date" id="kn-oh-ed-start" />
+				</div>
+				<div class="kn-acct-field" style="flex:1">
+					<label>End Date</label>
+					<input type="date" id="kn-oh-ed-end" />
+				</div>
+			</div>
+
+			<div class="kn-acct-field">
+				<label>Notes <span style="color:#a0aec0;font-weight:400">(optional)</span></label>
+				<textarea id="kn-oh-ed-notes" rows="2" maxlength="500"></textarea>
+			</div>
+		</div>
+		<div class="kn-modal-footer">
+			<button class="kn-btn kn-btn-secondary" onclick="knCloseOhEditModal()">Cancel</button>
+			<button class="kn-btn kn-btn-primary" id="kn-oh-ed-save-btn" onclick="knSaveOhEdit()">
+				<i class="fas fa-save" style="margin-right:4px"></i> Save Changes
+			</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<?php endif; ?>
+
+
+
 <!-- =============================================
      JavaScript
      ============================================= -->
@@ -901,11 +1065,12 @@ var KnConfig = {
 	kingdomName:      <?= json_encode($kingdom_name ?? '') ?>,
 	canEdit:          <?= !empty($CanEditKingdom)   ? 'true' : 'false' ?>,
 	canManage:        <?= !empty($CanManageKingdom) ? 'true' : 'false' ?>,
+	canManageOfficers: <?= !empty($can_manage_officer_positions) ? 'true' : 'false' ?>,
 	canAddPark:       <?= !empty($CanAddPark) ? 'true' : 'false' ?>,
 	loggedIn:         <?= !empty($IsLoggedIn) ? 'true' : 'false' ?>,
 	parkTitleOptions: <?= json_encode($ParkTitleId_options ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	parkEditLookup:   <?= json_encode($CanManageKingdom ? array_values($park_edit_lookup ?? []) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
-	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
+	officerList:      <?= json_encode($CanManageKingdom ? array_map(function($o) { return ['OfficerRole' => $o['OfficerRole'], 'CanonicalKey' => $o['CanonicalKey'] ?? $o['OfficerRole'], 'DisplayTitle' => $o['DisplayTitle'] ?? $o['OfficerRole'], 'MundaneId' => (int)$o['MundaneId'], 'Persona' => $o['Persona']]; }, $officerList) : [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	mapLocations:     <?= json_encode(array_values($knMapLocations ?? []), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
 	principalityIds:  <?= json_encode(array_map(function($p){ return (int)$p['KingdomId']; }, $prinzParks)) ?>,
 	preloadOfficers:  <?= json_encode($PreloadOfficers ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>,
@@ -1882,8 +2047,134 @@ html[data-theme="dark"] .kn-sidebar { background: var(--ork-bg-secondary); borde
 .kn-btn-danger { background: #c53030; color: #fff; border-color: #c53030; }
 html[data-theme="dark"] .kn-btn-danger { background: #fc8181; color: #1a202c; border-color: #fc8181; }
 
-/* ============================================================
-   </style>
+/* Officer History Tab */
+.kn-oh-toolbar {
+	display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;
+}
+.kn-oh-filter-select {
+	padding:6px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px;
+	color:#4a5568; background:#fff; cursor:pointer;
+}
+.kn-oh-table {
+	width:100%; border-collapse:collapse; font-size:13px;
+}
+.kn-oh-table thead th {
+	background:#f7fafc; border-bottom:2px solid #e2e8f0; padding:8px 10px;
+	text-align:left; font-weight:600; color:#4a5568; font-size:12px;
+	text-transform:uppercase; letter-spacing:.03em;
+}
+.kn-oh-table tbody tr { border-bottom:1px solid #edf2f7; }
+.kn-oh-table tbody tr:hover { background:#f7fafc; }
+.kn-oh-table tbody td { padding:8px 10px; color:#2d3748; vertical-align:middle; }
+.kn-oh-table .kn-oh-role-badge {
+	display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px;
+	font-weight:600; background:#ebf4ff; color:#2b6cb0;
+}
+.kn-oh-table .kn-oh-current { background:#c6f6d5; color:#276749; }
+.kn-oh-del-btn {
+	background:none; border:none; color:#e53e3e; cursor:pointer; font-size:14px;
+	padding:4px; border-radius:4px; opacity:0.6; transition:opacity 0.15s;
+}
+.kn-oh-del-btn:hover { opacity:1; background:#fed7d7; }
+.kn-oh-edit-btn {
+	background:none; border:none; color:#3182ce; cursor:pointer; font-size:14px;
+	padding:4px; border-radius:4px; opacity:0.6; transition:opacity 0.15s; margin-right:2px;
+}
+.kn-oh-edit-btn:hover { opacity:1; background:#ebf8ff; }
+.kn-oh-notes-text { font-size:11px; color:#718096; font-style:italic; max-width:200px; }
+.kn-oh-bf-success {
+	background:#c6f6d5; color:#276749; padding:10px 14px; border-radius:6px;
+	font-size:13px; margin-bottom:12px; text-align:center;
+}
+/* Officer History Backfill Modal */
+#kn-oh-backfill-overlay .kn-modal-box {
+	background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3);
+	max-height:90vh; display:flex; flex-direction:column;
+}
+#kn-oh-backfill-overlay .kn-modal-header {
+	display:flex; align-items:center; justify-content:space-between;
+	padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0;
+}
+#kn-oh-backfill-overlay .kn-modal-title {
+	font-size:16px; font-weight:700; color:#2d3748; margin:0;
+	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
+}
+#kn-oh-backfill-overlay .kn-modal-close-btn {
+	background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; padding:0 4px;
+}
+#kn-oh-backfill-overlay .kn-modal-close-btn:hover { color:#4a5568; }
+#kn-oh-backfill-overlay .kn-modal-body {
+	padding:20px; overflow-y:auto; flex:1;
+}
+#kn-oh-backfill-overlay .kn-modal-footer {
+	padding:14px 20px; border-top:1px solid #e2e8f0;
+	display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-shrink:0;
+}
+#kn-oh-backfill-overlay .kn-acct-field { position:relative; margin-bottom:14px; }
+#kn-oh-backfill-overlay .kn-acct-field label {
+	display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:4px;
+}
+#kn-oh-backfill-overlay .kn-acct-field input[type=text],
+#kn-oh-backfill-overlay .kn-acct-field input[type=date],
+#kn-oh-backfill-overlay .kn-acct-field select,
+#kn-oh-backfill-overlay .kn-acct-field textarea {
+	width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px;
+	font-size:14px; color:#2d3748; background:#fff; box-sizing:border-box;
+}
+#kn-oh-backfill-overlay .kn-acct-field input:focus,
+#kn-oh-backfill-overlay .kn-acct-field select:focus,
+#kn-oh-backfill-overlay .kn-acct-field textarea:focus {
+	outline:none; border-color:#3182ce; box-shadow:0 0 0 2px rgba(49,130,206,0.12);
+}
+#kn-oh-edit-overlay .kn-modal-box {
+	background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3);
+	max-height:90vh; display:flex; flex-direction:column;
+}
+#kn-oh-edit-overlay .kn-modal-header {
+	display:flex; align-items:center; justify-content:space-between;
+	padding:16px 20px; border-bottom:1px solid #e2e8f0; flex-shrink:0;
+}
+#kn-oh-edit-overlay .kn-modal-title {
+	font-size:16px; font-weight:700; color:#2d3748; margin:0;
+	background:transparent; border:none; padding:0; border-radius:0; text-shadow:none;
+}
+#kn-oh-edit-overlay .kn-modal-close-btn {
+	background:none; border:none; font-size:22px; color:#a0aec0; cursor:pointer; padding:0 4px;
+}
+#kn-oh-edit-overlay .kn-modal-close-btn:hover { color:#4a5568; }
+#kn-oh-edit-overlay .kn-modal-body {
+	padding:20px; overflow-y:auto; flex:1;
+}
+#kn-oh-edit-overlay .kn-modal-footer {
+	padding:14px 20px; border-top:1px solid #e2e8f0;
+	display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-shrink:0;
+}
+#kn-oh-edit-overlay .kn-acct-field { position:relative; margin-bottom:14px; }
+#kn-oh-edit-overlay .kn-acct-field label {
+	display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:4px;
+}
+#kn-oh-edit-overlay .kn-acct-field input[type=text],
+#kn-oh-edit-overlay .kn-acct-field input[type=date],
+#kn-oh-edit-overlay .kn-acct-field select,
+#kn-oh-edit-overlay .kn-acct-field textarea {
+	width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px;
+	font-size:14px; color:#2d3748; background:#fff; box-sizing:border-box;
+}
+#kn-oh-edit-overlay .kn-acct-field input:focus,
+#kn-oh-edit-overlay .kn-acct-field select:focus,
+#kn-oh-edit-overlay .kn-acct-field textarea:focus {
+	outline:none; border-color:#3182ce; box-shadow:0 0 0 2px rgba(49,130,206,0.12);
+}
+#kn-oh-edit-overlay .kn-form-error {
+	display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
+	padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px;
+}
+#kn-oh-backfill-overlay .kn-form-error {
+	display:none; background:#fff5f5; border:1px solid #fed7d7; border-radius:6px;
+	padding:8px 12px; margin-bottom:12px; color:#c53030; font-size:13px;
+}
+
+</style>
 <div id="kn-moveplayer-overlay">
 	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
 		<div class="kn-modal-header">
@@ -2504,7 +2795,301 @@ $(function() { window.knInitRecsTab(); });
 window.knRecPrint = function() { if (window.knRecDT) window.recsExportPrint(window.knRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($kingdom_name)) ?>'); };
 window.knRecCsv   = function() { if (window.knRecDT) window.recsExportCsv(window.knRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $kingdom_name) ?>.csv'); };
 initEmailSpellCheck('kn-addplayer-email', 'kn-addplayer-email-suggestion');
+
+// =============================================
+// Officer History Tab
+// =============================================
+var knOhLoaded = false;
+var knOhData   = [];
+
+function knLoadOfficerHistory() {
+    var role = document.getElementById('kn-oh-role-filter').value;
+    var url  = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/officerhistory';
+    if (role) url += '?Role=' + encodeURIComponent(role);
+
+    document.getElementById('kn-oh-loading').style.display = '';
+    document.getElementById('kn-oh-table').style.display = 'none';
+    document.getElementById('kn-oh-empty').style.display = 'none';
+
+    $.getJSON(url, function(resp) {
+        document.getElementById('kn-oh-loading').style.display = 'none';
+        if (resp.status !== 0) { return; }
+        knOhData = resp.history || [];
+        knRenderOhTable(knOhData);
+    }).fail(function() {
+        document.getElementById('kn-oh-loading').style.display = 'none';
+        document.getElementById('kn-oh-empty').style.display = '';
+        document.getElementById('kn-oh-empty').textContent = 'Failed to load officer history.';
+    });
+}
+
+function knRenderOhTable(data) {
+    var tbody = document.getElementById('kn-oh-tbody');
+    var table = document.getElementById('kn-oh-table');
+    var empty = document.getElementById('kn-oh-empty');
+    tbody.innerHTML = '';
+
+    if (!data || data.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = '';
+        empty.textContent = 'No officer history records found.';
+        return;
+    }
+
+    table.style.display = '';
+    empty.style.display = 'none';
+    var canEdit = KnConfig.canEdit;
+
+    for (var i = 0; i < data.length; i++) {
+        var h = data[i];
+        var tr = document.createElement('tr');
+        var isCurrent = !h.EndDate;
+        var roleBadge = '<span class="kn-oh-role-badge' + (isCurrent ? ' kn-oh-current' : '') + '">' +
+                        knHtmlEsc(h.Role) + (isCurrent ? ' (current)' : '') + '</span>';
+
+        var persona = h.MundaneId > 0
+            ? (isCurrent ? '<i class="fas fa-crown" style="color:#d69e2e;margin-right:4px" title="Current officer"></i>' : '') +
+              '<a href="' + KnConfig.uir + 'Player/profile/' + h.MundaneId + '">' + knHtmlEsc(h.Persona || 'Unknown') + '</a>'
+            : '<em style="color:#a0aec0">Vacant</em>';
+
+        var startStr = h.StartDate ? knFormatDate(h.StartDate) : '';
+        var endStr   = h.EndDate   ? knFormatDate(h.EndDate)   : (isCurrent ? '<em style="color:#38a169">Present</em>' : '');
+        var notes    = h.Notes ? '<span class="kn-oh-notes-text">' + knHtmlEsc(h.Notes) + '</span>' : '';
+
+        var delCell = '';
+        if (canEdit) {
+            delCell = '<td style="white-space:nowrap">' +
+                '<button class="kn-oh-edit-btn" onclick="knOpenOhEditModal(' + i + ')" title="Edit record"><i class="fas fa-pencil-alt"></i></button>' +
+                '<button class="kn-oh-del-btn" onclick="knDeleteOhRecord(' + h.OfficerHistoryId + ')" title="Delete record"><i class="fas fa-trash-alt"></i></button>' +
+                '</td>';
+        }
+
+        tr.innerHTML = '<td>' + roleBadge + '</td>' +
+                        '<td>' + persona + '</td>' +
+                        '<td>' + startStr + '</td>' +
+                        '<td>' + endStr + '</td>' +
+                        '<td>' + notes + '</td>' +
+                        delCell;
+        tbody.appendChild(tr);
+    }
+}
+
+function knFormatDate(dateStr) {
+    if (!dateStr) return '';
+    var d = new Date(dateStr + 'T00:00:00');
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+}
+
+function knHtmlEsc(s) {
+    if (!s) return '';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(s));
+    return div.innerHTML;
+}
+
+function knDeleteOhRecord(ohid) {
+    if (!confirm('Delete this officer history record?')) return;
+    $.post(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/deleteofficerhistory',
+        { OfficerHistoryId: ohid },
+        function(resp) {
+            if (resp.status === 0) {
+                knLoadOfficerHistory();
+            } else {
+                alert(resp.error || 'Failed to delete record.');
+            }
+        }, 'json'
+    ).fail(function() { alert('Network error.'); });
+}
+
+// Backfill modal
+function knOpenOhBackfillModal() {
+    var overlay = document.getElementById('kn-oh-backfill-overlay');
+    overlay.style.display = 'flex';
+    document.getElementById('kn-oh-bf-error').textContent = '';
+    document.getElementById('kn-oh-bf-error').style.display = 'none';
+    document.getElementById('kn-oh-bf-success').style.display = 'none';
+    document.getElementById('kn-oh-bf-player-text').value = '';
+    document.getElementById('kn-oh-bf-player-id').value = '';
+    document.getElementById('kn-oh-bf-role').value = '';
+    document.getElementById('kn-oh-bf-start').value = '';
+    document.getElementById('kn-oh-bf-end').value = '';
+    document.getElementById('kn-oh-bf-notes').value = '';
+}
+
+function knCloseOhBackfillModal() {
+    document.getElementById('kn-oh-backfill-overlay').style.display = 'none';
+    var results = document.getElementById('kn-oh-bf-player-results');
+    results.innerHTML = '';
+    results.classList.remove('kn-ac-open');
+}
+
+function knSaveOhBackfill() {
+    var mid   = document.getElementById('kn-oh-bf-player-id').value;
+    var role  = document.getElementById('kn-oh-bf-role').value;
+    var start = document.getElementById('kn-oh-bf-start').value;
+    var end   = document.getElementById('kn-oh-bf-end').value;
+    var notes = document.getElementById('kn-oh-bf-notes').value;
+    var errEl = document.getElementById('kn-oh-bf-error');
+
+    if (!mid)   { errEl.textContent = 'Please select a player.';  errEl.style.display = ''; return; }
+    if (!role)  { errEl.textContent = 'Role is required.';         errEl.style.display = ''; return; }
+    if (!start) { errEl.textContent = 'Start date is required.';   errEl.style.display = ''; return; }
+    errEl.style.display = 'none';
+
+    var btn = document.getElementById('kn-oh-bf-save-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+    $.post(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/addofficerhistory',
+        { MundaneId: mid, Role: role, StartDate: start, EndDate: end, Notes: notes },
+        function(resp) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Record';
+            if (resp.status === 0) {
+                document.getElementById('kn-oh-bf-success').style.display = '';
+                setTimeout(function() {
+                    knCloseOhBackfillModal();
+                    knLoadOfficerHistory();
+                }, 800);
+            } else {
+                errEl.textContent = resp.error || 'Failed to save record.';
+                errEl.style.display = '';
+            }
+        }, 'json'
+    ).fail(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Record';
+        errEl.textContent = 'Network error.';
+        errEl.style.display = '';
+    });
+}
+
+// Edit modal
+function knOpenOhEditModal(idx) {
+    var h = knOhData[idx];
+    if (!h) return;
+    var overlay = document.getElementById('kn-oh-edit-overlay');
+    overlay.style.display = 'flex';
+    document.getElementById('kn-oh-ed-error').textContent = '';
+    document.getElementById('kn-oh-ed-error').style.display = 'none';
+    document.getElementById('kn-oh-ed-success').style.display = 'none';
+    document.getElementById('kn-oh-ed-id').value = h.OfficerHistoryId;
+    document.getElementById('kn-oh-ed-player').value = h.Persona || h.UserName || '(unknown)';
+    document.getElementById('kn-oh-ed-role').value = h.Role;
+    document.getElementById('kn-oh-ed-start').value = h.StartDate || '';
+    document.getElementById('kn-oh-ed-end').value = h.EndDate || '';
+    document.getElementById('kn-oh-ed-notes').value = h.Notes || '';
+}
+
+function knCloseOhEditModal() {
+    document.getElementById('kn-oh-edit-overlay').style.display = 'none';
+}
+
+function knSaveOhEdit() {
+    var ohid  = document.getElementById('kn-oh-ed-id').value;
+    var role  = document.getElementById('kn-oh-ed-role').value;
+    var start = document.getElementById('kn-oh-ed-start').value;
+    var end   = document.getElementById('kn-oh-ed-end').value;
+    var notes = document.getElementById('kn-oh-ed-notes').value;
+    var errEl = document.getElementById('kn-oh-ed-error');
+
+    if (!role)  { errEl.textContent = 'Role is required.';       errEl.style.display = ''; return; }
+    if (!start) { errEl.textContent = 'Start date is required.'; errEl.style.display = ''; return; }
+    errEl.style.display = 'none';
+
+    var btn = document.getElementById('kn-oh-ed-save-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+    $.post(KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/editofficerhistory',
+        { OfficerHistoryId: ohid, Role: role, StartDate: start, EndDate: end, Notes: notes },
+        function(resp) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Changes';
+            if (resp.status === 0) {
+                document.getElementById('kn-oh-ed-success').style.display = '';
+                setTimeout(function() {
+                    knCloseOhEditModal();
+                    knLoadOfficerHistory();
+                }, 800);
+            } else {
+                errEl.textContent = resp.error || 'Failed to save changes.';
+                errEl.style.display = '';
+            }
+        }, 'json'
+    ).fail(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save" style="margin-right:4px"></i> Save Changes';
+        errEl.textContent = 'Network error.';
+        errEl.style.display = '';
+    });
+}
+
+// Player autocomplete for backfill modal
+(function() {
+    var input   = document.getElementById('kn-oh-bf-player-text');
+    var hidden  = document.getElementById('kn-oh-bf-player-id');
+    var results = document.getElementById('kn-oh-bf-player-results');
+    if (!input) return;
+    var debounce;
+
+    input.addEventListener('input', function() {
+        clearTimeout(debounce);
+        hidden.value = '';
+        var q = input.value.trim();
+        if (q.length < 2) { results.innerHTML = ''; results.classList.remove('kn-ac-open'); return; }
+        debounce = setTimeout(function() {
+            var url = KnConfig.uir + 'KingdomAjax/playersearch/' + KnConfig.kingdomId + '&q=' + encodeURIComponent(q) + '&scope=own&include_inactive=1';
+            $.getJSON(url, function(data) {
+                results.innerHTML = '';
+                if (!data || data.length === 0) {
+                    results.innerHTML = '<div class="kn-ac-item kn-ac-empty">No results</div>';
+                    if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
+                    results.classList.add('kn-ac-open');
+                    return;
+                }
+                for (var i = 0; i < data.length; i++) {
+                    var d = data[i];
+                    var el = document.createElement('div');
+                    el.className = 'kn-ac-item';
+                    el.setAttribute('data-id', d.MundaneId);
+                    el.innerHTML = knHtmlEsc(d.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + knHtmlEsc((d.KAbbr||'') + ':' + (d.PAbbr||'')) + ')</span>';
+                    el.addEventListener('click', (function(dd) {
+                        return function() {
+                            input.value = dd.Persona;
+                            hidden.value = dd.MundaneId;
+                            results.innerHTML = '';
+                            results.classList.remove('kn-ac-open');
+                        };
+                    })(d));
+                    results.appendChild(el);
+                }
+                if (typeof tnFixedAcPosition === 'function') tnFixedAcPosition(input, results);
+                results.classList.add('kn-ac-open');
+            });
+        }, 250);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!results.contains(e.target) && e.target !== input) {
+            results.innerHTML = '';
+            results.classList.remove('kn-ac-open');
+        }
+    });
+})();
+
+// Hook into tab activation to lazy-load officer history
+var _origKnActivateTab = typeof knActivateTab === 'function' ? knActivateTab : null;
+// We can't override knActivateTab before revised.js loads, so use a MutationObserver or just hook via the tab click
+$(document).on('click', '.kn-tab-nav li[data-kntab="officerhistory"]', function() {
+    if (!knOhLoaded) {
+        knOhLoaded = true;
+        knLoadOfficerHistory();
+    }
+});
 </script>
+
 
 <?php if (!empty($IsLoggedIn)): ?>
 <script>

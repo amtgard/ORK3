@@ -849,6 +849,47 @@ class Authorization extends Ork3
 		return $sufficient;
 	}
 
+	/**
+	 * Check if a user has a specific RBAC permission at a scope.
+	 * Convenience method that delegates to RBACService::HasPermission().
+	 *
+	 * @param int    $mundane_id     User ID
+	 * @param string $permission_key Permission key, e.g. 'kingdom.award.create'
+	 * @param string $scope_type     One of: 'kingdom', 'park', 'event', 'unit'
+	 * @param int    $scope_id       The ID of the scoped entity
+	 * @return bool
+	 */
+	public function HasPermission($mundane_id, $permission_key, $scope_type, $scope_id)
+	{
+		return Ork3::$Lib->rbacservice->HasPermission($mundane_id, $permission_key, $scope_type, $scope_id);
+	}
+
+	/**
+	 * Bridge method for migration: returns true if the user has the RBAC permission
+	 * OR the legacy HasAuthority check passes. Use this during the transition period
+	 * so that both old auth records AND new RBAC role assignments grant access.
+	 *
+	 * @param int    $mundane_id     User ID
+	 * @param string $permission_key RBAC permission key
+	 * @param string $scope_type     Scope type for RBAC check
+	 * @param int    $scope_id       Scope entity ID
+	 * @param string $legacy_role    Legacy auth role for HasAuthority (AUTH_CREATE or AUTH_EDIT)
+	 * @return bool
+	 */
+	public function HasPermissionOrAuthority($mundane_id, $permission_key, $scope_type, $scope_id, $legacy_role)
+	{
+		// Map RBAC scope_type to legacy AUTH_* type constant
+		$legacy_type = AUTH_PARK;
+		switch ($scope_type) {
+			case 'kingdom': $legacy_type = AUTH_KINGDOM; break;
+			case 'park':    $legacy_type = AUTH_PARK;    break;
+			case 'event':   $legacy_type = AUTH_EVENT;   break;
+			case 'unit':    $legacy_type = AUTH_UNIT;    break;
+		}
+		return $this->HasPermission($mundane_id, $permission_key, $scope_type, $scope_id)
+		    || $this->HasAuthority($mundane_id, $legacy_type, $scope_id, $legacy_role);
+	}
+
 	public function IsAuthorized_h($token)
 	{
 		if (isset($_SESSION['is_authorized_mundane_id']))

@@ -147,7 +147,7 @@ class Park extends Ork3
 	public function AddParkDay( $request )
 	{
 		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
-			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT )
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority( $mundane_id, 'park.parkday.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT )
 		) {
 			$this->parkday->clear();
 			$this->parkday->park_id = $request[ 'ParkId' ];
@@ -230,7 +230,7 @@ class Park extends Ork3
 		}
 		$park_id = $this->parkday->park_id;
 		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
-			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $park_id, AUTH_EDIT )
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority( $mundane_id, 'park.parkday.manage', 'park', $park_id, AUTH_EDIT )
 		) {
 			// Snapshot the parkday before mutations so the audit log can show a diff.
 			$_audit_prior = [
@@ -324,7 +324,7 @@ class Park extends Ork3
 			return InvalidParameter();
 		}
 		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
-			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $park_id, AUTH_EDIT )
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority( $mundane_id, 'park.parkday.manage', 'park', $park_id, AUTH_EDIT )
 		) {
 			$_audit_prior = [
 				'parkday_id'         => (int)$this->parkday->parkday_id,
@@ -382,55 +382,13 @@ class Park extends Ork3
 	{
 		$park_id = mysql_real_escape_string($request['ParkId']);
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-		$is_authorized = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park_id, AUTH_EDIT);
+		$is_authorized = Ork3::$Lib->authorization->HasPermissionOrAuthority($mundane_id, 'park.officer.set', 'park', $park_id, AUTH_EDIT);
 
-		$sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.mundane_id as m_mundane_id, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id
-					from " . DB_PREFIX . "officer o
-						left join " . DB_PREFIX . "mundane m on o.mundane_id = m.mundane_id
-						left join " . DB_PREFIX . "authorization a on a.authorization_id = o.authorization_id
-							left join " . DB_PREFIX . "park p on a.park_id = p.park_id
-							left join " . DB_PREFIX . "kingdom k on a.kingdom_id = k.kingdom_id
-							left join " . DB_PREFIX . "event e on a.event_id = e.event_id
-							left join " . DB_PREFIX . "unit u on a.unit_id = u.unit_id
-				where o.park_id = '" . $park_id . "' and o.kingdom_id > 0
-				order by FIELD(o.role, 'Monarch', 'Regent', 'Prime Minister', 'Champion', 'GMR'), o.role
-			";
-		$r = $this->db->query( $sql );
-		$response = [ ];
-		$response[ 'Officers' ] = [ ];
-		if ( $r !== false && $r->size() > 0 ) {
-			$response[ 'Status' ] = Success();
-			while ( $r->next() ) {
-				$fetchprivate = true;
-				if ($mundane_id > 0 && $is_authorized) {
-					$fetchprivate = false;
-				}
-				$response[ 'Officers' ][] = [
-					'AuthorizationId' => $r->authorization_id,
-					'MundaneId'       => $r->m_mundane_id,
-					'ParkId'          => $r->park_id,
-					'KingdomId'       => $r->kingdom_id,
-					'EventId'         => $r->event_id,
-					'UnitId'          => $r->unit_id,
-					'Role'            => $r->role,
-					'ParkName'        => $r->park_name,
-					'KingdomName'     => $r->kingdom_name,
-					'EventName'       => $r->event_name,
-					'UnitName'        => $r->unit_name,
-					'Restricted'      => $r->restricted,
-					'UserName'        => $r->username,
-					'GivenName'       => $fetchprivate?"":$r->given_name,
-					'Surname'         => $fetchprivate?"":$r->surname,
-					'Persona'         => $r->persona,
-					'OfficerId'       => $r->officer_id,
-					'OfficerRole'     => $r->officer_role,
-				];
-			}
-			$response[ 'Status' ] = Success();
-		} else {
-			$response[ 'Status' ] = InvalidParameter();
-		}
-		return $response;
+		// Park-level officers: scope to this park within a real kingdom, and
+		// resolve title aliases against each row's own kingdom (al.kingdom_id = o.kingdom_id).
+		$aliasKingdomExpr = "o.kingdom_id";
+		$whereClause = "o.park_id = '" . $park_id . "' and o.kingdom_id > 0";
+		return Kingdom::buildOfficerRows($this->db, $aliasKingdomExpr, $whereClause, $mundane_id, $is_authorized);
 	}
 
 	public function GetParkKingdomId( $pid )
@@ -783,7 +741,7 @@ class Park extends Ork3
 		$this->park->park_id = $request[ 'ParkId' ];
 		if ( $this->park->find() ) {
 			if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
-				&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT )
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority( $mundane_id, 'park.details.edit', 'park', $request[ 'ParkId' ], AUTH_EDIT )
 			) {
 				// Snapshot prior park state for the audit log before any field changes.
 				$_audit_prior = [
@@ -804,7 +762,7 @@ class Park extends Ork3
 				$this->log->Write( 'Park', $mundane_id, LOG_EDIT, $request );
 				$this->park->modified = date( "Y-m-d H:i:s", time() );
 
-				if ( Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_KINGDOM, $this->park->kingdom_id, AUTH_EDIT ) ) {
+				if ( Ork3::$Lib->authorization->HasPermissionOrAuthority( $mundane_id, 'park.details.edit', 'kingdom', $this->park->kingdom_id, AUTH_EDIT ) ) {
 					$this->park->name = trimlen( $request[ 'Name' ] ) == 0 ? $this->park->name : $request[ 'Name' ];
 					$this->park->abbreviation = trimlen( $request[ 'Abbreviation' ] ) == 0 ? strtoupper($this->park->abbreviation) : strtoupper($request[ 'Abbreviation' ]);
 					$parktitle = new yapo( $this->db, DB_PREFIX . 'parktitle' );
@@ -912,7 +870,7 @@ class Park extends Ork3
 		// Check for Principality Details, and create auths for Principality concurrently
 		$response = [ ];
 		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
-			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT )
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority( $mundane_id, 'park.officer.set', 'park', $request[ 'ParkId' ], AUTH_EDIT )
 		) {
 			if (!isset($request['KingdomId'])) {
 				if (!isset($request['ParkId'])) {
@@ -925,14 +883,18 @@ class Park extends Ork3
 			// Look up the current officer first so we can suppress the audit when
 			// the UI re-submits an unchanged assignment (the Bellhollow form fires
 			// SetOfficer once per role on every save).
+			$_positionId = Ork3::$Lib->officerposition->ResolvePositionId((int)$kingdomId, $request[ 'Role' ]);
+			$_canonicalKey = Ork3::$Lib->officerposition->ResolveCanonicalKey((int)$kingdomId, $request[ 'Role' ]);
+
 			$_priorOfficer = new yapo( $this->db, DB_PREFIX . 'officer' );
 			$_priorOfficer->clear();
 			$_priorOfficer->park_id = (int)$request[ 'ParkId' ];
-			$_priorOfficer->role    = $request[ 'Role' ];
+			if ( $_positionId > 0 ) { $_priorOfficer->position_id = $_positionId; }
+			else { $_priorOfficer->role = $request[ 'Role' ]; }
 			$_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
 
 			$c = new Common();
-			$c->set_officer( $kingdomId, $request[ 'ParkId' ], $request[ 'MundaneId' ], $request[ 'Role' ] );
+			$c->set_officer( $kingdomId, $request[ 'ParkId' ], $request[ 'MundaneId' ], $_canonicalKey, 0, $mundane_id, $_positionId );
 
 			if ( $_priorMundaneId !== (int)$request[ 'MundaneId' ] ) {
 				$_audit_req = $request;
@@ -957,7 +919,7 @@ class Park extends Ork3
 	{
 		$response = [ ];
 		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
-			&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_PARK, $request[ 'ParkId' ], AUTH_EDIT )
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority( $mundane_id, 'park.officer.vacate', 'park', $request[ 'ParkId' ], AUTH_EDIT )
 		) {
 			$kingdomId = $this->GetParkKingdomId( $request[ 'ParkId' ] );
 			$_priorOfficer = new yapo( $this->db, DB_PREFIX . 'officer' );
@@ -967,7 +929,7 @@ class Park extends Ork3
 			$_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
 
 			$c = new Common();
-			$c->set_officer( $kingdomId, $request[ 'ParkId' ], 0, $request[ 'Role' ] );
+			$c->set_officer( $kingdomId, $request[ 'ParkId' ], 0, $request[ 'Role' ], 0, $mundane_id );
 
 			if ( $_priorMundaneId > 0 ) {
 				$_audit_req = $request;
@@ -981,6 +943,150 @@ class Park extends Ork3
 					]
 				);
 			}
+		} else {
+			$response = NoAuthorization();
+		}
+		return $response;
+	}
+
+	public function GetOfficerHistory( $request )
+	{
+		$park_id = (int)$request[ 'ParkId' ];
+		$role_filter = isset( $request[ 'Role' ] ) && strlen( trim( $request[ 'Role' ] ) ) > 0 ? trim( $request[ 'Role' ] ) : null;
+
+		// Look up the kingdom_id for this park
+		$kingdom_id = (int)$this->GetParkKingdomId( $park_id );
+
+		$sql = "SELECT oh.officer_history_id, oh.kingdom_id, oh.park_id, oh.mundane_id, oh.role,
+		                oh.start_date, oh.end_date, oh.changed_by, oh.notes, oh.created_at,
+		                m.persona, m.username,
+		                cb.persona AS changed_by_persona
+		         FROM " . DB_PREFIX . "officer_history oh
+		         LEFT JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = oh.mundane_id
+		         LEFT JOIN " . DB_PREFIX . "mundane cb ON cb.mundane_id = oh.changed_by
+		         WHERE oh.park_id = " . $park_id . " AND oh.kingdom_id = " . $kingdom_id;
+
+		if ( $role_filter !== null ) {
+			$sql .= " AND oh.role = '" . mysql_real_escape_string( $role_filter ) . "'";
+		}
+
+		$sql .= " ORDER BY oh.role, oh.start_date DESC, oh.officer_history_id DESC";
+
+		$r = $this->db->query( $sql );
+		$response = [ 'Status' => Success(), 'History' => [ ] ];
+		if ( $r !== false && $r->size() > 0 ) {
+			while ( $r->next() ) {
+				$response[ 'History' ][] = [
+					'OfficerHistoryId' => (int)$r->officer_history_id,
+					'KingdomId'        => (int)$r->kingdom_id,
+					'ParkId'           => (int)$r->park_id,
+					'MundaneId'        => (int)$r->mundane_id,
+					'Role'             => $r->role,
+					'StartDate'        => $r->start_date,
+					'EndDate'          => $r->end_date,
+					'ChangedBy'        => (int)$r->changed_by,
+					'ChangedByPersona' => $r->changed_by_persona ?? '',
+					'Notes'            => $r->notes ?? '',
+					'Persona'          => $r->persona ?? '',
+					'UserName'         => $r->username ?? '',
+				];
+			}
+		}
+		return $response;
+	}
+
+	public function AddOfficerHistory( $request )
+	{
+		$response = [ ];
+		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority( $mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT )
+		) {
+			$pid       = (int)$request[ 'ParkId' ];
+			$kid       = (int)$this->GetParkKingdomId( $pid );
+			$mid       = (int)$request[ 'MundaneId' ];
+			$role_esc  = mysql_real_escape_string( trim( $request[ 'Role' ] ) );
+			$start     = mysql_real_escape_string( trim( $request[ 'StartDate' ] ?? '' ) );
+			$end       = isset( $request[ 'EndDate' ] ) && strlen( trim( $request[ 'EndDate' ] ) ) > 0
+			             ? "'" . mysql_real_escape_string( trim( $request[ 'EndDate' ] ) ) . "'" : 'NULL';
+			$notes_raw = isset( $request[ 'Notes' ] ) ? trim( $request[ 'Notes' ] ) : '';
+			$notes     = strlen( $notes_raw ) > 0
+			             ? "'" . mysql_real_escape_string( $notes_raw ) . "'" : 'NULL';
+
+			if ( $mid <= 0 || strlen( $role_esc ) === 0 || strlen( $start ) === 0 ) {
+				return InvalidParameter( null, 'MundaneId, Role, and StartDate are required.' );
+			}
+
+			global $DB;
+			$DB->Clear();
+			$DB->Execute(
+				"INSERT INTO " . DB_PREFIX . "officer_history
+				 (kingdom_id, park_id, mundane_id, role, start_date, end_date, changed_by, notes, created_at)
+				 VALUES (" . $kid . ", " . $pid . ", " . $mid . ", '" . $role_esc . "', '" . $start . "', " . $end . ", " . (int)$mundane_id . ", " . $notes . ", NOW())"
+			);
+			$response = Success();
+		} else {
+			$response = NoAuthorization();
+		}
+		return $response;
+	}
+
+
+	public function EditOfficerHistory( $request )
+	{
+		$response = [ ];
+		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority( $mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT )
+		) {
+			$ohid      = (int)$request[ 'OfficerHistoryId' ];
+			$pid       = (int)$request[ 'ParkId' ];
+			$role_esc  = mysql_real_escape_string( trim( $request[ 'Role' ] ) );
+			$start     = mysql_real_escape_string( trim( $request[ 'StartDate' ] ?? '' ) );
+			$end       = isset( $request[ 'EndDate' ] ) && strlen( trim( $request[ 'EndDate' ] ) ) > 0
+			             ? "'" . mysql_real_escape_string( trim( $request[ 'EndDate' ] ) ) . "'" : 'NULL';
+			$notes_raw = isset( $request[ 'Notes' ] ) ? trim( $request[ 'Notes' ] ) : '';
+			$notes     = strlen( $notes_raw ) > 0
+			             ? "'" . mysql_real_escape_string( $notes_raw ) . "'" : 'NULL';
+
+			if ( $ohid <= 0 || strlen( $role_esc ) === 0 || strlen( $start ) === 0 ) {
+				return InvalidParameter( null, 'OfficerHistoryId, Role, and StartDate are required.' );
+			}
+
+			global $DB;
+			$DB->Clear();
+			$DB->Execute(
+				"UPDATE " . DB_PREFIX . "officer_history
+				 SET role = '" . $role_esc . "', start_date = '" . $start . "', end_date = " . $end . ", notes = " . $notes . "
+				 WHERE officer_history_id = " . $ohid . "
+				   AND park_id = " . $pid
+			);
+			$response = Success();
+		} else {
+			$response = NoAuthorization();
+		}
+		return $response;
+	}
+
+	public function DeleteOfficerHistory( $request )
+	{
+		$response = [ ];
+		if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
+			&& Ork3::$Lib->authorization->HasPermissionOrAuthority( $mundane_id, 'park.officer_history.manage', 'park', $request[ 'ParkId' ], AUTH_EDIT )
+		) {
+			$ohid = (int)$request[ 'OfficerHistoryId' ];
+			$pid  = (int)$request[ 'ParkId' ];
+
+			if ( $ohid <= 0 ) {
+				return InvalidParameter( null, 'OfficerHistoryId is required.' );
+			}
+
+			global $DB;
+			$DB->Clear();
+			$DB->Execute(
+				"DELETE FROM " . DB_PREFIX . "officer_history
+				 WHERE officer_history_id = " . $ohid . "
+				   AND park_id = " . $pid
+			);
+			$response = Success();
 		} else {
 			$response = NoAuthorization();
 		}
@@ -1004,7 +1110,7 @@ class Park extends Ork3
 		$this->park->park_id = $request[ 'ParkId' ];
 		if ( $this->park->find() ) {
 			if ( ( $mundane_id = Ork3::$Lib->authorization->IsAuthorized( $request[ 'Token' ] ) ) > 0
-				&& Ork3::$Lib->authorization->HasAuthority( $mundane_id, AUTH_KINGDOM, $this->park->kingdom_id, AUTH_EDIT )
+				&& Ork3::$Lib->authorization->HasPermissionOrAuthority( $mundane_id, 'kingdom.park.retire', 'kingdom', $this->park->kingdom_id, AUTH_EDIT )
 			) {
 				$_prior_active = $this->park->active;
 				$this->log->Write( 'Park', $mundane_id, 'Active' == $waffle ? LOG_RESTORE : LOG_RETIRE, $request );

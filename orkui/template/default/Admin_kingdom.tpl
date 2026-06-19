@@ -36,7 +36,7 @@
 		<li><a href='<?=UIR ?>Admin/downloadkingdom/<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Download <?=$IsPrinz?'Principality':'Kingdom' ?> Dataset</a></li>
 		<li><a href='<?=UIR ?>Tournament/create&KingdomId=<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Create Tournament</a></li>	</ul>
 </div>
-<?php if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $KingdomInfo['KingdomId'], AUTH_EDIT)) : ?>
+<?php if (Ork3::$Lib->authorization->HasPermissionOrAuthority($this->__session->user_id, 'kingdom.details.edit', 'kingdom', $KingdomInfo['KingdomId'], AUTH_EDIT)) : ?>
 <div class='info-container'>
 	<h3><?=$KingdomInfo['KingdomName'] ?> Reports</h3>
 	<ul>

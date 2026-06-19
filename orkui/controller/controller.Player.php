@@ -23,7 +23,7 @@ class Controller_Player extends Controller
             $this->session->kingdom_name = $park_info['KingdomInfo']['KingdomName'];
         }
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
+        if ($_uid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($_uid, 'player.edit', 'park', (int)$this->session->park_id, AUTH_EDIT)) {
             $this->data['menu']['admin'] = array( 'url' => UIR.'Admin/player/'.$id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
         }
         $this->data['menulist']['admin'] = array(
@@ -234,7 +234,7 @@ class Controller_Player extends Controller
         $this->data['AllDues'] = $this->Player->get_dues($id, 0, false);
         $this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1, 'Lightweight' => 1 ));
         $this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$id", 'display' => $this->data['Player']['Persona'] );
-        $canEdit    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+        $canEdit    = $uid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'player.edit', 'park', (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
         if ($canEdit) {
             $this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
         }
@@ -396,7 +396,7 @@ class Controller_Player extends Controller
         $this->data['Dues']          = $this->Player->get_dues($id, 1, true);
         $this->data['AllDues']       = [];  // loaded via AJAX when dues modal opens
         $this->data['Units']         = $this->Unit->get_unit_list(['MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1, 'Lightweight' => 1]);
-        $canEdit    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+        $canEdit    = $uid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'player.edit', 'park', (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
         $knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
         $recsPublic = isset($knConfigs['AwardRecsPublic']) ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
         $this->data['ShowRecsTab']          = $recsPublic || $canEdit;
@@ -407,27 +407,34 @@ class Controller_Player extends Controller
 
         global $DB;
         $DB->Clear();
-        $officerSql   = "SELECT o.role, o.park_id,
+        $officerSql   = "SELECT o.role, o.park_id, o.position_id,
+			op.canonical_key AS canonical_key,
+			IF(op.kingdom_id = 0, IF(al.title_alias IS NOT NULL AND al.title_alias != '', al.title_alias, op.title), IF(op.title_alias != '', op.title_alias, op.title)) AS display_title,
 			CASE WHEN o.park_id > 0 THEN IFNULL(pt.title, 'Park')
 			     WHEN k.parent_kingdom_id > 0 THEN 'Principality'
 			     ELSE 'Kingdom' END AS entity_type,
 			CASE WHEN o.park_id > 0 THEN p.name ELSE k.name END AS entity_name
 			FROM ork_officer o
+			LEFT JOIN ork_officer_position op ON op.position_id = o.position_id
+			LEFT JOIN ork_officer_position_alias al ON al.kingdom_id = o.kingdom_id AND al.canonical_key = op.canonical_key
 			LEFT JOIN ork_kingdom k ON o.kingdom_id = k.kingdom_id
 			LEFT JOIN ork_park p ON o.park_id = p.park_id AND o.park_id > 0
 			LEFT JOIN ork_parktitle pt ON p.parktitle_id = pt.parktitle_id
 			WHERE o.mundane_id = " . (int)$id . "
 			  AND k.active = 'Active'
 			  AND (o.park_id = 0 OR p.active = 'Active')
-			ORDER BY o.park_id DESC, o.role";
+			  AND (op.retired_at IS NULL OR op.position_id IS NULL)
+			ORDER BY o.park_id DESC, op.classification, op.sort_order";
         $officerResult = $DB->DataSet($officerSql);
         $officerRoles  = [];
         if ($officerResult->Size() > 0) {
             while ($officerResult->Next()) {
                 $officerRoles[] = [
-                    'role'        => $officerResult->role,
-                    'entity_type' => $officerResult->entity_type,
-                    'entity_name' => $officerResult->entity_name,
+                    'role'          => $officerResult->role,
+                    'canonical_key' => $officerResult->canonical_key !== null ? $officerResult->canonical_key : $officerResult->role,
+                    'DisplayTitle'  => $officerResult->display_title !== null ? $officerResult->display_title : $officerResult->role,
+                    'entity_type'   => $officerResult->entity_type,
+                    'entity_name'   => $officerResult->entity_name,
                 ];
             }
         }
@@ -915,7 +922,7 @@ class Controller_Player extends Controller
         $this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 
         $playerParkId = (int)($this->data['Player']['ParkId'] ?? 0);
-        $canEditAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $playerParkId, AUTH_EDIT);
+        $canEditAdmin = $uid > 0 && Ork3::$Lib->authorization->HasPermissionOrAuthority($uid, 'park.reconcile_credits', 'park', $playerParkId, AUTH_EDIT);
         $isOwnProfile = $uid === $id;
         if (!$canEditAdmin && !$isOwnProfile) {
             header('Location: ' . UIR . "Player/profile/$id");
