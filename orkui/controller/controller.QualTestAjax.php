@@ -364,14 +364,11 @@ class Controller_QualTestAjax extends Controller
         }
 
         // Verify the mundane exists
-        global $DB;
-        $DB->Clear();
-        $mr = $DB->DataSet('SELECT mundane_id, name FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id . ' LIMIT 1');
-        if (!$mr || !$mr->Next()) {
+        $name = Ork3::$Lib->qualtest->getMundaneName($mundane_id);
+        if ($name === null) {
             $this->jsonOut(['status' => 1, 'error' => 'Persona not found.']);
         }
 
-        $name = $mr->name;
         Ork3::$Lib->qualtest->addManager($kingdom_id, $mundane_id);
 
         $this->jsonOut(['status' => 0, 'mundane_id' => $mundane_id, 'name' => $name]);

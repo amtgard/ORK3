@@ -90,6 +90,45 @@ class QualTest
     }
 
     /**
+     * Return a kingdom's display name, or '' if not found.
+     */
+    public function getKingdomName($kingdom_id)
+    {
+        $kingdom_id = (int)$kingdom_id;
+        if (!$kingdom_id) {
+            return '';
+        }
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id . ' LIMIT 1'
+        );
+        if ($r && $r->Next()) {
+            return $r->name;
+        }
+        return '';
+    }
+
+    /**
+     * Return a mundane's name, or null if not found (so callers can distinguish
+     * "not found" from "found").
+     */
+    public function getMundaneName($mundane_id)
+    {
+        $mundane_id = (int)$mundane_id;
+        if (!$mundane_id) {
+            return null;
+        }
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT name FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id . ' LIMIT 1'
+        );
+        if ($r && $r->Next()) {
+            return $r->name;
+        }
+        return null;
+    }
+
+    /**
      * Add a test manager for a kingdom. Silently ignores duplicates.
      */
     public function addManager($kingdom_id, $mundane_id)

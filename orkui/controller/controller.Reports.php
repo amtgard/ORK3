@@ -539,9 +539,6 @@ class Controller_Reports extends Controller
             $this->data['page_title'] = 'Access Denied';
             return;
         }
-        global $DB;
-        $DB->Clear();
-        $kr = $DB->DataSet('SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id . ' LIMIT 1');
         $this->data['results']      = Ork3::$Lib->qualtest->getTestResults($kingdom_id, $test_type);
         $this->data['stats']        = Ork3::$Lib->qualtest->getTestReportStats($kingdom_id, $test_type);
         $this->data['ScopeType']    = 'kingdom';
@@ -549,7 +546,7 @@ class Controller_Reports extends Controller
         $this->data['TestType']     = $test_type;
         $this->data['test_label']   = $test_label;
         $this->data['test_icon']    = $test_icon;
-        $this->data['KingdomName']  = ($kr && $kr->Next()) ? $kr->name : '';
+        $this->data['KingdomName']  = Ork3::$Lib->qualtest->getKingdomName($kingdom_id);
         $this->data['page_title']   = $page_title;
     }
 
