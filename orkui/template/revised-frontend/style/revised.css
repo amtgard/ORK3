@@ -9723,7 +9723,17 @@ html[data-theme="dark"] .pk-emod-draft-btn { background: #2d3748; color: #fde68a
  * ============================================================ */
 
 /* ── Popover layout (tight, intentional) ─────────────────────── */
-/* Compress Google's default InfoWindow inner padding so our content controls rhythm. */
+/* Compress Google's default InfoWindow inner padding so our content controls rhythm.
+   Also collapse the various min-heights Google bakes into its wrappers — without
+   these, the InfoWindow reserves ~150px of empty space below our popover content
+   (Google measures the wrap pre-RSVP-render, then doesn't shrink). */
+.gm-style .gm-style-iw,
+.gm-style .gm-style-iw-c,
+.gm-style .gm-style-iw-d,
+.gm-style .gm-style-iw-ch {
+	min-height: 0 !important;
+	min-width:  0 !important;
+}
 .gm-style .gm-style-iw-c { padding: 0 !important; }
 .gm-style .gm-style-iw-d { padding: 0 !important; max-height: none !important; overflow: visible !important; }
 

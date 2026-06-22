@@ -16489,16 +16489,13 @@ window.evSetEventStatus = function(eventId, status, btn) {
         'interested': { html: '<i class="fas fa-star"></i> Interested <i class="fas fa-caret-down"></i>',      cls: 'rsvp-interested' }
     };
 
-    function renderRsvpButton(span, prefix) {
-        var detailId    = parseInt(span.getAttribute('data-detail') || '0', 10);
-        var goingCnt    = parseInt(span.getAttribute('data-going') || '0', 10);
-        var interestCnt = parseInt(span.getAttribute('data-interested') || '0', 10);
-        var mine        = span.getAttribute('data-mine') || '';
-        if (!detailId) return;
-
+    // Build the inner HTML for an RSVP wrap span based on going/interested counts
+    // and the viewer's own RSVP state. Pulled out so the Google Maps InfoWindow
+    // can render the final button shape on first paint (Google measures content
+    // when the InfoWindow opens and won't shrink later if we inject content via
+    // setTimeout — was leaving ~80px of empty space below the popover).
+    function rsvpButtonInnerHtml(goingCnt, interestCnt, mine) {
         var lbl = RSVP_LABELS[mine] || RSVP_LABELS[''];
-        // No inline menu — opened menu lives in a single body-attached portal element.
-        // Counts: hide entirely when both 0; otherwise label inline.
         var countsHtml = '';
         if (goingCnt > 0 || interestCnt > 0) {
             var parts = [];
@@ -16506,9 +16503,16 @@ window.evSetEventStatus = function(eventId, status, btn) {
             if (interestCnt > 0) parts.push('<span class="ev-rsvp-count-interest">' + interestCnt + ' interested</span>');
             countsHtml = '<span class="ev-rsvp-counts">' + parts.join('<span class="ev-rsvp-count-sep">·</span>') + '</span>';
         }
-        span.innerHTML = ''
-            + '<span class="ev-rsvp-btn ev-rsvp-' + lbl.cls + '" tabindex="0">' + lbl.html + '</span>'
-            + countsHtml;
+        return '<span class="ev-rsvp-btn ev-rsvp-' + lbl.cls + '" tabindex="0">' + lbl.html + '</span>' + countsHtml;
+    }
+
+    function renderRsvpButton(span, prefix) {
+        var detailId    = parseInt(span.getAttribute('data-detail') || '0', 10);
+        var goingCnt    = parseInt(span.getAttribute('data-going') || '0', 10);
+        var interestCnt = parseInt(span.getAttribute('data-interested') || '0', 10);
+        var mine        = span.getAttribute('data-mine') || '';
+        if (!detailId) return;
+        span.innerHTML = rsvpButtonInnerHtml(goingCnt, interestCnt, mine);
     }
 
     // ---- Single shared portal menu (lazy-init) ----
@@ -16568,6 +16572,25 @@ window.evSetEventStatus = function(eventId, status, btn) {
         rsvpActivePrefix = null;
     }
 
+    // Sync the matching event-map location object so a future InfoWindow open
+    // rebuilds popoverHtml() with fresh values instead of the original page-load
+    // snapshot. Without this, changing RSVP, closing the InfoWindow, and opening
+    // it again shows the pre-change RSVP state.
+    function syncMapLocAfterRsvp(prefix, detailId, myStatus, goingCount, interestedCount) {
+        var arr = (prefix === 'kn') ? window.knEventMapLocations
+                : (prefix === 'pk') ? window.pkEventMapLocations
+                : null;
+        if (!Array.isArray(arr)) return;
+        for (var i = 0; i < arr.length; i++) {
+            if ((arr[i].event_calendardetail_id | 0) === detailId) {
+                arr[i].my_rsvp    = myStatus || '';
+                arr[i].going      = goingCount     | 0;
+                arr[i].interested = interestedCount | 0;
+                break;
+            }
+        }
+    }
+
     function commitRsvp(wrap, prefix, status) {
         var detailId = parseInt(wrap.getAttribute('data-detail') || '0', 10);
         var url = status ? (UIR + 'EventRsvpAjax/set') : (UIR + 'EventRsvpAjax/withdraw');
@@ -16581,6 +16604,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
                 wrap.setAttribute('data-going',      r.going_count || 0);
                 wrap.setAttribute('data-interested', r.interested_count || 0);
                 renderRsvpButton(wrap, prefix);
+                syncMapLocAfterRsvp(prefix, detailId, r.my_status, r.going_count, r.interested_count);
             } else {
                 alert((r && r.error) || 'Failed to update RSVP.');
             }
@@ -16646,11 +16670,16 @@ window.evSetEventStatus = function(eventId, status, btn) {
     }
 
     function popoverHtml(loc) {
+        // Pre-render the RSVP button's inner HTML rather than leaving the wrap span
+        // empty for a deferred fill. Google InfoWindow measures content on open and
+        // doesn't shrink afterward — a deferred fill leaves ~80px empty below.
         var rsvpHtml = loc.event_calendardetail_id
             ? '<span class="kn-rsvp-wrap" data-detail="' + loc.event_calendardetail_id
               + '" data-going="' + (loc.going || 0)
               + '" data-interested="' + (loc.interested || 0)
-              + '" data-mine="' + (loc.my_rsvp || '') + '"></span>'
+              + '" data-mine="' + (loc.my_rsvp || '') + '">'
+              + rsvpButtonInnerHtml((loc.going || 0), (loc.interested || 0), (loc.my_rsvp || ''))
+              + '</span>'
             : '';
         var metaParts = [
             '<span class="ev-map-popover-meta-date">' + escapeHtml(loc.date_label || loc.date) + '</span>'
@@ -16679,6 +16708,28 @@ window.evSetEventStatus = function(eventId, status, btn) {
         });
     }
 
+    // Teardrop pin with a small calendar visible inside — reads as "location of an
+    // event" rather than the generic star we used to render. Color flips to gray
+    // when the event is a draft.
+    function eventPinSvg(color) {
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">'
+            + '<path d="M14 0 C6.27 0 0 6.27 0 14 C0 24.5 14 36 14 36 S28 24.5 28 14 C28 6.27 21.73 0 14 0 z" fill="' + color + '" stroke="#fff" stroke-width="1.5"/>'
+            + '<rect x="7" y="9" width="14" height="11" rx="1" fill="#fff"/>'
+            + '<rect x="7" y="9" width="14" height="3" fill="' + color + '"/>'
+            + '<rect x="10" y="7" width="2" height="4" fill="' + color + '"/>'
+            + '<rect x="16" y="7" width="2" height="4" fill="' + color + '"/>'
+            + '<circle cx="14" cy="16" r="2" fill="' + color + '"/>'
+            + '</svg>';
+    }
+
+    function eventPinIcon(color) {
+        return {
+            url: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(eventPinSvg(color)),
+            scaledSize: new google.maps.Size(28, 36),
+            anchor: new google.maps.Point(14, 36)
+        };
+    }
+
     function buildEventMap(prefix, locations) {
         var elId = prefix + '-events-map';
         var el = document.getElementById(elId);
@@ -16698,11 +16749,7 @@ window.evSetEventStatus = function(eventId, status, btn) {
             bounds.extend(pos);
             var m = new google.maps.Marker({
                 position: pos, map: map, title: loc.name,
-                icon: {
-                    path: 'M -10,-3 L -3,-3 0,-12 3,-3 10,-3 4,3 6,12 0,7 -6,12 -4,3 z',
-                    fillColor: loc.is_draft ? '#a0aec0' : '#dd6b20', fillOpacity: 1,
-                    strokeColor: '#fff', strokeWeight: 1, scale: 1.4
-                }
+                icon: eventPinIcon(loc.is_draft ? '#a0aec0' : '#dd6b20')
             });
             m.addListener('click', function() {
                 infow.setContent(popoverHtml(loc));
@@ -16756,11 +16803,31 @@ window.evSetEventStatus = function(eventId, status, btn) {
         ensureGoogleMaps(function() {
             var locs = getEventLocations(prefix);
             buildEventMap(prefix, locs);
-            // Footer "no location" line
+
+            // Footer: legend (what the pin colors mean) + summary of what's
+            // shown / hidden, so the picture matches the filter buttons above
+            // (calendar items and park days are intentionally not mapped).
+            var shownCount = (locs || []).length;
             var noLocCount = (prefix === 'kn') ? (window.knEventMapNoLocCount || 0) : (window.pkEventMapNoLocCount || 0);
             var footer = document.getElementById(prefix + '-events-map-footer');
-            if (footer && noLocCount > 0) {
-                footer.textContent = noLocCount + ' event' + (noLocCount === 1 ? '' : 's') + ' in this window have no map location.';
+            if (footer) {
+                var pinImg = function(color) {
+                    return '<img src="data:image/svg+xml;charset=utf-8,'
+                        + encodeURIComponent(eventPinSvg(color))
+                        + '" alt="" style="height:18px;width:14px;vertical-align:-4px;margin-right:3px">';
+                };
+                var parts = [
+                    '<span>' + pinImg('#dd6b20') + 'Event</span>',
+                    '<span>' + pinImg('#a0aec0') + 'Draft</span>',
+                ];
+                parts.push('<span><strong>' + shownCount + '</strong> shown</span>');
+                if (noLocCount > 0) {
+                    parts.push('<span><strong>' + noLocCount + '</strong> without location</span>');
+                }
+                parts.push('<span style="color:#a0aec0;font-style:italic">Calendar items &amp; park days are not mapped</span>');
+                footer.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:8px 12px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;color:#4a5568">'
+                    + parts.join('<span style="color:#cbd5e0">·</span>')
+                    + '</div>';
                 footer.style.display = '';
             }
         });
