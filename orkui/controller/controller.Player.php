@@ -928,23 +928,32 @@ class Controller_Player extends Controller
         }
 
         // Qualification test results — use the viewed player's home kingdom, not the session context
-        $playerKingdomId = (int)($this->data['Player']['KingdomId'] ?? $this->session->kingdom_id);
-        $this->data['QualResults']   = Ork3::$Lib->qualtest->getPlayerResults((int)$id, $playerKingdomId);
-        $this->data['QualKingdomId'] = $playerKingdomId;
-        $this->data['QualCanManage'] = $canEdit || Ork3::$Lib->qualtest->canManage($uid, $playerKingdomId);
-        $this->data['QualConfigs']   = [
-            'reeve'   => Ork3::$Lib->qualtest->getConfig($playerKingdomId, 'reeve'),
-            'corpora' => Ork3::$Lib->qualtest->getConfig($playerKingdomId, 'corpora'),
-        ];
-        $this->data['QualPlayerId']  = (int)$id;
-
-        $playerKnConfigs = Common::get_configs($playerKingdomId, CFG_KINGDOM);
-        $this->data['QualTestReeveEnabled'] = isset($playerKnConfigs['QualTestReeveEnabled'])
+        $playerKingdomId    = (int)($this->data['Player']['KingdomId'] ?? $this->session->kingdom_id);
+        $playerKnConfigs    = Common::get_configs($playerKingdomId, CFG_KINGDOM);
+        $qualReeveEnabled   = isset($playerKnConfigs['QualTestReeveEnabled'])
             ? (bool)(int)$playerKnConfigs['QualTestReeveEnabled']['Value']
             : false;
-        $this->data['QualTestCorporaEnabled'] = isset($playerKnConfigs['QualTestCorporaEnabled'])
+        $qualCorporaEnabled = isset($playerKnConfigs['QualTestCorporaEnabled'])
             ? (bool)(int)$playerKnConfigs['QualTestCorporaEnabled']['Value']
             : false;
+
+        $this->data['QualTestReeveEnabled']   = $qualReeveEnabled;
+        $this->data['QualTestCorporaEnabled'] = $qualCorporaEnabled;
+        $this->data['QualKingdomId']          = $playerKingdomId;
+        $this->data['QualPlayerId']           = (int)$id;
+
+        if ($qualReeveEnabled || $qualCorporaEnabled) {
+            $this->data['QualResults']   = Ork3::$Lib->qualtest->getPlayerResults((int)$id, $playerKingdomId);
+            $this->data['QualCanManage'] = $canEdit || Ork3::$Lib->qualtest->canManage($uid, $playerKingdomId);
+            $this->data['QualConfigs']   = [
+                'reeve'   => $qualReeveEnabled ? Ork3::$Lib->qualtest->getConfig($playerKingdomId, 'reeve') : null,
+                'corpora' => $qualCorporaEnabled ? Ork3::$Lib->qualtest->getConfig($playerKingdomId, 'corpora') : null,
+            ];
+        } else {
+            $this->data['QualResults']   = [];
+            $this->data['QualCanManage'] = false;
+            $this->data['QualConfigs']   = ['reeve' => null, 'corpora' => null];
+        }
     }
 
 

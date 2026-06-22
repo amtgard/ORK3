@@ -59,6 +59,10 @@ if (($ScopeType ?? '') === 'kingdom' && !empty($ScopeId)) {
 .rp-expired-row td a {
 	color: #a0aec0 !important;
 }
+html[data-theme="dark"] .rp-expired-row td,
+html[data-theme="dark"] .rp-expired-row td a {
+	color: var(--ork-text-muted, #a0aec0) !important;
+}
 </style>
 
 <div class="rp-root">
@@ -175,7 +179,7 @@ if (($ScopeType ?? '') === 'kingdom' && !empty($ScopeId)) {
 					<td data-order="<?=htmlspecialchars($row['PassedAt'])?>"><?=date('M j, Y', strtotime($row['PassedAt']))?></td>
 					<td><a href="<?=UIR?>Player/profile/<?=$row['MundaneId']?>"><?=htmlspecialchars($row['Persona'] ?: 'No Persona')?></a></td>
 					<td><?php if ($row['ParkId']): ?><a href="<?=UIR?>Park/profile/<?=$row['ParkId']?>"><?=htmlspecialchars($row['ParkName'])?></a><?php else: ?>—<?php endif; ?></td>
-					<td data-order="<?=$row['ScorePercent']?>"><?=$row['ScorePercent']?>%<?php if ($passed): ?><span class="rp-pass-badge">Pass</span><?php else: ?><span class="rp-fail-badge">Fail</span><?php endif; ?></td>
+					<td data-order="<?=htmlspecialchars($row['ScorePercent'])?>"><?=$row['ScorePercent']?>%<?php if ($passed): ?><span class="rp-pass-badge">Pass</span><?php else: ?><span class="rp-fail-badge">Fail</span><?php endif; ?></td>
 					<td data-order="<?=htmlspecialchars($row['ExpiresAt'])?>"><?=$passed ? date('M j, Y', strtotime($row['ExpiresAt'])) : '—'?></td>
 				</tr>
 <?php endforeach; ?>

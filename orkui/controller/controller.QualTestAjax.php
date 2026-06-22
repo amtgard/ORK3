@@ -35,11 +35,6 @@ class Controller_QualTestAjax extends Controller
         return $uid;
     }
 
-    private function esc($v)
-    {
-        return str_replace(["'", '\\'], ["''", '\\\\'], $v);
-    }
-
     private function requireTestEnabled($kingdom_id, $test_type)
     {
         $key = ($test_type === 'corpora') ? 'QualTestCorporaEnabled' : 'QualTestReeveEnabled';
@@ -345,6 +340,12 @@ class Controller_QualTestAjax extends Controller
         if (!valid_id($player_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid player.']);
         }
+        // IDOR guard: confirm the target player belongs to this kingdom
+        // before allowing a cross-kingdom admin to reset their retakes.
+        $player_info = Ork3::$Lib->player->player_info($player_id);
+        if (!$player_info || (int)$player_info['KingdomId'] !== $kingdom_id) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid player.']);
+        }
         Ork3::$Lib->qualtest->resetPlayerRetakes($player_id, $kingdom_id, $test_type);
         $this->jsonOut(['status' => 0]);
     }
@@ -506,14 +507,6 @@ class Controller_QualTestAjax extends Controller
 
         $config      = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);
 
-        // Retake limit check (mirror gettest) — prevent qualifying past the cap
-        if ($config['MaxRetakes'] > 0) {
-            $taken = Ork3::$Lib->qualtest->getRetakeCount($uid, $kingdom_id, $test_type);
-            if ($taken >= $config['MaxRetakes']) {
-                $this->jsonOut(['status' => 1, 'error' => 'You may not retake this test again. Please reach out to your local monarchy for further instructions.']);
-            }
-        }
-
         $correct_map = Ork3::$Lib->qualtest->getCorrectAnswers(array_keys($submitted), $kingdom_id, $test_type);
 
         // Verify the question IDs belong to this kingdom+type to prevent spoofing
@@ -521,9 +514,14 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid question set.']);
         }
 
+        // Atomically consume a retake slot — prevents TOCTOU races and ensures
+        // tampered/stale question sets (caught above) never burn a legitimate slot.
+        if (!Ork3::$Lib->qualtest->tryConsumeRetake($uid, $kingdom_id, $test_type, (int)$config['MaxRetakes'])) {
+            $this->jsonOut(['status' => 1, 'error' => 'You may not retake this test again. Please reach out to your local monarchy for further instructions.']);
+        }
+
         $result  = Ork3::$Lib->qualtest->scoreTest($correct_map, $submitted);
         Ork3::$Lib->qualtest->recordQuestionStats($correct_map, $submitted);
-        Ork3::$Lib->qualtest->incrementRetakeCount($uid, $kingdom_id, $test_type);
         $passed  = $result['score_percent'] >= $config['PassPercent'];
         $expires = null;
 

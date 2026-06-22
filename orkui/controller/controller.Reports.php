@@ -531,6 +531,7 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_test_results.tpl';
         $kingdom_id = ($type == 'Kingdom' && valid_id($this->request->id)) ? (int)$this->request->id : null;
         if (!$kingdom_id) {
+            $this->data['Error'] = 'Invalid kingdom.';
             return;
         }
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;

@@ -244,34 +244,24 @@ class QualTest
         $rv_sql = ($rv !== '') ? "'" . $this->esc($rv) . "'" : 'NULL';
         $show_correct = $show_correct_on_incorrect ? 1 : 0;
 
+        // Atomic upsert on the unique (kingdom_id, test_type) key — one round-trip,
+        // no SELECT-then-write race.
         $this->db->Clear();
-        $exists = $this->db->DataSet(
-            'SELECT qual_config_id FROM ' . DB_PREFIX . 'qual_config
-             WHERE kingdom_id = ' . $kingdom_id . ' AND test_type = \'' . $test_type . '\' LIMIT 1'
+        $this->db->Execute(
+            'INSERT INTO ' . DB_PREFIX . 'qual_config
+             (kingdom_id, test_type, question_count, pass_percent, valid_days, valid_until, max_retakes, share_questions, instructions, rules_version, show_correct_on_incorrect)
+             VALUES (' . $kingdom_id . ', \'' . $test_type . '\', ' . $question_count . ', ' . $pass_percent . ', ' . $valid_days . ', ' . $until_sql . ', ' . $max_retakes . ', ' . $share_questions . ', ' . $instructions_sql . ', ' . $rv_sql . ', ' . $show_correct . ')
+             ON DUPLICATE KEY UPDATE
+               question_count = VALUES(question_count),
+               pass_percent   = VALUES(pass_percent),
+               valid_days     = VALUES(valid_days),
+               valid_until    = VALUES(valid_until),
+               max_retakes    = VALUES(max_retakes),
+               share_questions= VALUES(share_questions),
+               instructions   = VALUES(instructions),
+               rules_version  = VALUES(rules_version),
+               show_correct_on_incorrect = VALUES(show_correct_on_incorrect)'
         );
-        if ($exists && $exists->Next()) {
-            $this->db->Clear();
-            $this->db->Execute(
-                'UPDATE ' . DB_PREFIX . 'qual_config
-                 SET question_count = ' . $question_count . ',
-                     pass_percent   = ' . $pass_percent . ',
-                     valid_days     = ' . $valid_days . ',
-                     valid_until    = ' . $until_sql . ',
-                     max_retakes    = ' . $max_retakes . ',
-                     share_questions= ' . $share_questions . ',
-                     instructions   = ' . $instructions_sql . ',
-                     rules_version  = ' . $rv_sql . ',
-                     show_correct_on_incorrect = ' . $show_correct . '
-                 WHERE kingdom_id = ' . $kingdom_id . ' AND test_type = \'' . $test_type . '\''
-            );
-        } else {
-            $this->db->Clear();
-            $this->db->Execute(
-                'INSERT INTO ' . DB_PREFIX . 'qual_config
-                 (kingdom_id, test_type, question_count, pass_percent, valid_days, valid_until, max_retakes, share_questions, instructions, rules_version, show_correct_on_incorrect)
-                 VALUES (' . $kingdom_id . ', \'' . $test_type . '\', ' . $question_count . ', ' . $pass_percent . ', ' . $valid_days . ', ' . $until_sql . ', ' . $max_retakes . ', ' . $share_questions . ', ' . $instructions_sql . ', ' . $rv_sql . ', ' . $show_correct . ')'
-            );
-        }
         return true;
     }
 
@@ -397,6 +387,14 @@ class QualTest
             return 0;
         }
 
+        // The ENTIRE write is atomic: for a new question its INSERT, and for any
+        // question the answer DELETE + single multi-row INSERT, all commit together.
+        // A failure (or a fatal/timeout) rolls back the question row too, so a
+        // half-written question with no answers can never persist and pollute the
+        // active pool.
+        $this->db->Clear();
+        $this->db->Execute('START TRANSACTION');
+
         if ($question_id > 0) {
             $this->db->Clear();
             $this->db->Execute(
@@ -417,58 +415,49 @@ class QualTest
             if ($ir && $ir->Next()) {
                 $question_id = (int)$ir->new_id;
             }
-        }
-
-        if ($question_id <= 0) {
-            return 0;
-        }
-
-        // Count how many answers we expect to insert (non-empty text) so we can
-        // verify the loop completed fully before committing.
-        $expected = 0;
-        foreach ($answers as $a) {
-            if (trim($a['AnswerText'] ?? '') !== '') {
-                $expected++;
+            if ($question_id <= 0) {
+                $this->db->Clear();
+                $this->db->Execute('ROLLBACK');
+                return 0;
             }
         }
-
-        // Replace all answers atomically: a partial answer set would still pass
-        // the count>=2 active check, so the DELETE + INSERT loop must be
-        // all-or-nothing.
-        $this->db->Clear();
-        $this->db->Execute('START TRANSACTION');
 
         $this->db->Clear();
         $this->db->Execute(
             'DELETE FROM ' . DB_PREFIX . 'qual_answer WHERE qual_question_id = ' . $question_id
         );
 
-        $inserted = 0;
+        // Build the answer rows from non-empty-text answers. A single multi-row
+        // INSERT is statement-level all-or-nothing, so no per-row failure check is
+        // needed (the Yapo Execute() can't signal one anyway).
+        $rows            = [];
+        $has_correct_row = false;
         foreach ($answers as $a) {
-            $text       = trim($a['AnswerText'] ?? '');
-            $is_correct = empty($a['IsCorrect']) ? 0 : 1;
-            if (!$text) {
+            $text = trim($a['AnswerText'] ?? '');
+            if ($text === '') {
                 continue;
             }
-            $this->db->Clear();
-            $ok = $this->db->Execute(
-                'INSERT INTO ' . DB_PREFIX . 'qual_answer
-                 (qual_question_id, answer_text, is_correct)
-                 VALUES (' . $question_id . ', \'' . $this->esc($text) . '\', ' . $is_correct . ')'
-            );
-            if ($ok === false) {
-                $this->db->Clear();
-                $this->db->Execute('ROLLBACK');
-                return 0;
+            $is_correct = empty($a['IsCorrect']) ? 0 : 1;
+            if ($is_correct) {
+                $has_correct_row = true;
             }
-            $inserted++;
+            $rows[] = '(' . $question_id . ', \'' . $this->esc($text) . '\', ' . $is_correct . ')';
         }
 
-        if ($inserted < $expected) {
+        // A valid question needs >= 2 non-empty answers AND a correct one among
+        // them (guards against a correct answer whose text was left blank). If not,
+        // abandon the whole write rather than persist a broken question.
+        if (count($rows) < 2 || !$has_correct_row) {
             $this->db->Clear();
             $this->db->Execute('ROLLBACK');
             return 0;
         }
+
+        $this->db->Clear();
+        $this->db->Execute(
+            'INSERT INTO ' . DB_PREFIX . 'qual_answer (qual_question_id, answer_text, is_correct)
+             VALUES ' . implode(', ', $rows)
+        );
 
         $this->db->Clear();
         $this->db->Execute('COMMIT');
@@ -545,16 +534,18 @@ class QualTest
             return null;
         }
 
-        // Only select is_correct when the caller needs it (admin preview).
-        $correct_col = $includeCorrect ? ', is_correct' : '';
+        // Always fetch is_correct internally so we can guarantee every served
+        // question has >= 2 answers and at least one correct option; the flag is
+        // only EXPOSED to the caller on the admin preview path ($includeCorrect).
         $ids_str = implode(',', $qids);
         $this->db->Clear();
         $ars = $this->db->DataSet(
-            'SELECT qual_answer_id, qual_question_id, answer_text' . $correct_col . '
+            'SELECT qual_answer_id, qual_question_id, answer_text, is_correct
              FROM ' . DB_PREFIX . 'qual_answer
              WHERE qual_question_id IN (' . $ids_str . ')
              ORDER BY RAND()'
         );
+        $has_correct = [];
         if ($ars) {
             while ($ars->Next()) {
                 $qid = (int)$ars->qual_question_id;
@@ -563,12 +554,30 @@ class QualTest
                         'QualAnswerId' => (int)$ars->qual_answer_id,
                         'AnswerText'   => $ars->answer_text,
                     ];
+                    if ((int)$ars->is_correct === 1) {
+                        $has_correct[$qid] = true;
+                    }
                     if ($includeCorrect) {
                         $answer['IsCorrect'] = (bool)(int)$ars->is_correct;
                     }
                     $questions[$qid]['Answers'][] = $answer;
                 }
             }
+        }
+
+        // Drop any question missing answers or a correct option — a corrupted
+        // question must never reach a live test (it would render with no choices
+        // and soft-lock the quiz, and checkanswer/scoring would have no key).
+        foreach ($questions as $qid => $q) {
+            if (count($q['Answers']) < 2 || empty($has_correct[$qid])) {
+                unset($questions[$qid]);
+            }
+        }
+
+        // If pruning dropped us below the requested count, treat it as
+        // "not enough valid questions" rather than serving a short/broken test.
+        if (count($questions) < $limit) {
+            return null;
         }
 
         return array_values($questions);
@@ -589,20 +598,18 @@ class QualTest
         $where_kq = $kingdom_id > 0
             ? 'AND q.kingdom_id = ' . (int)$kingdom_id . ' AND q.test_type = \'' . $test_type . '\''
             : '';
+        // One aggregation scan: the first (lowest-id) correct answer per question.
+        // Replaces a per-row correlated MIN subquery; the returned map shape
+        // (question_id => correct_answer_id) is identical.
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT a.qual_question_id, a.qual_answer_id
+            'SELECT a.qual_question_id, MIN(a.qual_answer_id) AS qual_answer_id
              FROM ' . DB_PREFIX . 'qual_answer a
              JOIN ' . DB_PREFIX . 'qual_question q ON q.qual_question_id = a.qual_question_id
              WHERE a.qual_question_id IN (' . $ids_str . ')
                AND a.is_correct = 1
-               AND a.qual_answer_id = (
-                   SELECT MIN(a2.qual_answer_id)
-                   FROM ' . DB_PREFIX . 'qual_answer a2
-                   WHERE a2.qual_question_id = a.qual_question_id
-                     AND a2.is_correct = 1
-               )
-               ' . $where_kq
+               ' . $where_kq . '
+             GROUP BY a.qual_question_id'
         );
         $map = [];
         if ($rs) {
@@ -672,42 +679,40 @@ class QualTest
         $test_type     = $this->sanitizeType($test_type);
         $score_percent = (int)$score_percent;
 
-        // Use valid_until (fixed date) if provided and valid, otherwise roll forward from valid_days
+        // Compute the expiry IN SQL so the stored value shares MySQL's clock with
+        // the NOW() it is later compared against (avoids PHP-host vs DB-host skew).
+        // valid_until (a fixed date) takes precedence; otherwise roll forward from valid_days.
         if ($valid_until && preg_match('/^\d{4}-\d{2}-\d{2}$/', $valid_until)) {
-            $expires = date('Y-m-d H:i:s', strtotime($valid_until . ' 23:59:59'));
+            $expires_sql = '\'' . $valid_until . ' 23:59:59\'';
         } else {
-            $valid_days = max(1, (int)$valid_days);
-            $expires    = date('Y-m-d H:i:s', strtotime('+' . $valid_days . ' days'));
+            $valid_days  = max(1, (int)$valid_days);
+            $expires_sql = 'DATE_ADD(NOW(), INTERVAL ' . $valid_days . ' DAY)';
         }
 
+        // Atomic upsert on the unique (player_id, kingdom_id, test_type) key — no
+        // SELECT-then-write race, and a duplicate submission cannot create a second row.
         $this->db->Clear();
-        $exists = $this->db->DataSet(
-            'SELECT qual_result_id FROM ' . DB_PREFIX . 'qual_result
+        $this->db->Execute(
+            'INSERT INTO ' . DB_PREFIX . 'qual_result
+             (player_id, kingdom_id, test_type, score_percent, passed_at, expires_at)
+             VALUES (' . $player_id . ', ' . $kingdom_id . ', \'' . $test_type . '\', ' . $score_percent . ', NOW(), ' . $expires_sql . ')
+             ON DUPLICATE KEY UPDATE
+               score_percent = VALUES(score_percent),
+               passed_at     = NOW(),
+               expires_at    = VALUES(expires_at)'
+        );
+
+        // Read the stored expiry back so the caller (syncMundaneQual + the AJAX
+        // response) reports exactly what the DB persisted.
+        $this->db->Clear();
+        $er = $this->db->DataSet(
+            'SELECT expires_at FROM ' . DB_PREFIX . 'qual_result
              WHERE player_id = ' . $player_id . '
                AND kingdom_id = ' . $kingdom_id . '
                AND test_type = \'' . $test_type . '\'
              LIMIT 1'
         );
-        if ($exists && $exists->Next()) {
-            $this->db->Clear();
-            $this->db->Execute(
-                'UPDATE ' . DB_PREFIX . 'qual_result
-                 SET score_percent = ' . $score_percent . ',
-                     passed_at     = NOW(),
-                     expires_at    = \'' . $expires . '\'
-                 WHERE player_id = ' . $player_id . '
-                   AND kingdom_id = ' . $kingdom_id . '
-                   AND test_type = \'' . $test_type . '\''
-            );
-        } else {
-            $this->db->Clear();
-            $this->db->Execute(
-                'INSERT INTO ' . DB_PREFIX . 'qual_result
-                 (player_id, kingdom_id, test_type, score_percent, passed_at, expires_at)
-                 VALUES (' . $player_id . ', ' . $kingdom_id . ', \'' . $test_type . '\', ' . $score_percent . ', NOW(), \'' . $expires . '\')'
-            );
-        }
-        return $expires;
+        return ($er && $er->Next()) ? $er->expires_at : null;
     }
 
     /**
@@ -724,7 +729,10 @@ class QualTest
 
     /**
      * Write qualification outcome back to ork_mundane so the player sidebar card stays current.
-     * Called after every test submission (pass or non-pass after expiry).
+     * Called ONLY on a passing submission — it sets the qualified flag and the
+     * expiry date. Stale/expired qualifications are determined at read time by
+     * comparing expires_at to NOW() (see getPlayerResults), not by clearing this
+     * flag, so there is intentionally no un-qualify path here.
      */
     public function syncMundaneQual($player_id, $test_type, $expires_date)
     {
@@ -833,7 +841,9 @@ class QualTest
     /**
      * Return all active reeve questions from kingdoms that have opted in,
      * excluding the given kingdom's own questions.
-     * Returns array of questions each with KingdomName + Answers (no is_correct exposed).
+     * Returns array of questions each with KingdomName + Answers. The correct-answer
+     * flag is deliberately NOT selected or returned — the shared library must never
+     * leak another kingdom's answer key to opted-in admins browsing it.
      */
     public function getLibraryQuestions($excluding_kingdom_id)
     {
@@ -893,7 +903,7 @@ class QualTest
             $ids_str = implode(',', $qids);
             $this->db->Clear();
             $ars = $this->db->DataSet(
-                'SELECT qual_question_id, answer_text, is_correct
+                'SELECT qual_question_id, answer_text
                  FROM ' . DB_PREFIX . 'qual_answer
                  WHERE qual_question_id IN (' . $ids_str . ')
                  ORDER BY qual_answer_id'
@@ -904,7 +914,6 @@ class QualTest
                     if (isset($questions[$qid])) {
                         $questions[$qid]['Answers'][] = [
                             'AnswerText' => $ars->answer_text,
-                            'IsCorrect'  => (bool)(int)$ars->is_correct,
                         ];
                     }
                 }
@@ -947,6 +956,11 @@ class QualTest
             return 0;
         }
 
+        // Question + all answers commit together: a failed answer insert rolls back
+        // the question too, so a copy can never leave an answerless orphan.
+        $this->db->Clear();
+        $this->db->Execute('START TRANSACTION');
+
         $this->db->Clear();
         $this->db->Execute(
             'INSERT INTO ' . DB_PREFIX . 'qual_question
@@ -956,18 +970,25 @@ class QualTest
         $this->db->Clear();
         $ir = $this->db->DataSet('SELECT LAST_INSERT_ID() AS new_id');
         if (!$ir || !$ir->Next() || (int)$ir->new_id <= 0) {
+            $this->db->Clear();
+            $this->db->Execute('ROLLBACK');
             return 0;
         }
         $new_qid = (int)$ir->new_id;
 
+        // Single multi-row insert for all answers.
+        $rows = [];
         foreach ($answers as $a) {
-            $this->db->Clear();
-            $this->db->Execute(
-                'INSERT INTO ' . DB_PREFIX . 'qual_answer
-                 (qual_question_id, answer_text, is_correct)
-                 VALUES (' . $new_qid . ', \'' . $this->esc($a['text']) . '\', ' . $a['correct'] . ')'
-            );
+            $rows[] = '(' . $new_qid . ', \'' . $this->esc($a['text']) . '\', ' . (int)$a['correct'] . ')';
         }
+        $this->db->Clear();
+        $this->db->Execute(
+            'INSERT INTO ' . DB_PREFIX . 'qual_answer (qual_question_id, answer_text, is_correct)
+             VALUES ' . implode(', ', $rows)
+        );
+
+        $this->db->Clear();
+        $this->db->Execute('COMMIT');
         return $new_qid;
     }
 
@@ -987,6 +1008,45 @@ class QualTest
             . ' VALUES (' . (int)$player_id . ', ' . (int)$kingdom_id . ', \'' . $test_type . '\', 1)'
             . ' ON DUPLICATE KEY UPDATE retake_count = retake_count + 1'
         );
+    }
+
+    /**
+     * Atomically consume one retake/attempt slot for a player+kingdom+type.
+     * Returns true if a slot was consumed (player was under the cap, or the cap is
+     * unlimited when $max_retakes <= 0), false if the player is already at the cap.
+     *
+     * Race safety: the DB-side IF(...) guarantees retake_count can never be pushed
+     * past $max_retakes even under concurrent submissions, so a player can never
+     * accumulate attempts beyond the cap. (The Yapo DB layer does not expose
+     * affected-row counts, so the at-cap case is rejected by a cheap pre-read; the
+     * authoritative cap is enforced atomically in SQL.)
+     */
+    public function tryConsumeRetake($player_id, $kingdom_id, $test_type, $max_retakes)
+    {
+        $player_id   = (int)$player_id;
+        $kingdom_id  = (int)$kingdom_id;
+        $test_type   = $this->sanitizeType($test_type);
+        $max_retakes = (int)$max_retakes;
+
+        // Unlimited: just bump the counter and allow.
+        if ($max_retakes <= 0) {
+            $this->incrementRetakeCount($player_id, $kingdom_id, $test_type);
+            return true;
+        }
+
+        // Already at the cap: reject without writing.
+        if ($this->getRetakeCount($player_id, $kingdom_id, $test_type) >= $max_retakes) {
+            return false;
+        }
+
+        // Under the cap: atomic, cap-enforcing increment (never exceeds $max_retakes).
+        $this->db->Clear();
+        $this->db->Execute(
+            'INSERT INTO ' . DB_PREFIX . 'qual_retake (player_id, kingdom_id, test_type, retake_count)'
+            . ' VALUES (' . $player_id . ', ' . $kingdom_id . ', \'' . $test_type . '\', 1)'
+            . ' ON DUPLICATE KEY UPDATE retake_count = IF(retake_count < ' . $max_retakes . ', retake_count + 1, retake_count)'
+        );
+        return true;
     }
 
     /**
@@ -1125,7 +1185,8 @@ class QualTest
                     ON cfg.kingdom_id = r.kingdom_id AND cfg.test_type = r.test_type
              WHERE r.kingdom_id = ' . $kingdom_id . '
                AND r.test_type = \'' . $test_type . '\'
-             ORDER BY r.passed_at DESC'
+             ORDER BY r.passed_at DESC
+             LIMIT 2000'
         );
 
         $rows = [];
@@ -1265,6 +1326,11 @@ class QualTest
         $new_text  = 'Copy of ' . $q['QuestionText'];
         $test_type = $this->sanitizeType($q['TestType']);
 
+        // Question + all answers commit together so a clone can never leave an
+        // answerless orphan in the active pool.
+        $this->db->Clear();
+        $this->db->Execute('START TRANSACTION');
+
         $this->db->Clear();
         $this->db->Execute(
             'INSERT INTO ' . DB_PREFIX . 'qual_question
@@ -1274,19 +1340,25 @@ class QualTest
         $this->db->Clear();
         $ir = $this->db->DataSet('SELECT LAST_INSERT_ID() AS new_id');
         if (!$ir || !$ir->Next() || (int)$ir->new_id <= 0) {
+            $this->db->Clear();
+            $this->db->Execute('ROLLBACK');
             return 0;
         }
         $new_qid = (int)$ir->new_id;
 
+        // Single multi-row insert for all answers.
+        $rows = [];
         foreach ($q['Answers'] as $a) {
-            $this->db->Clear();
-            $this->db->Execute(
-                'INSERT INTO ' . DB_PREFIX . 'qual_answer
-                 (qual_question_id, answer_text, is_correct)
-                 VALUES (' . $new_qid . ', \'' . $this->esc($a['AnswerText']) . '\', ' . ((int)(bool)$a['IsCorrect']) . ')'
-            );
+            $rows[] = '(' . $new_qid . ', \'' . $this->esc($a['AnswerText']) . '\', ' . ((int)(bool)$a['IsCorrect']) . ')';
         }
+        $this->db->Clear();
+        $this->db->Execute(
+            'INSERT INTO ' . DB_PREFIX . 'qual_answer (qual_question_id, answer_text, is_correct)
+             VALUES ' . implode(', ', $rows)
+        );
 
+        $this->db->Clear();
+        $this->db->Execute('COMMIT');
         return $new_qid;
     }
 

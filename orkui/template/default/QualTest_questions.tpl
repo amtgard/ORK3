@@ -259,7 +259,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			<?= count($activeQs) ?> active question<?= count($activeQs) !== 1 ? 's' : '' ?> &mdash;
 			test draws <?= (int)$Config['QuestionCount'] ?> at random,
 			requires <?= (int)$Config['PassPercent'] ?>% to pass,
-			valid for <?= (int)$Config['ValidDays'] ?> days.
+			<?php if (!empty($Config['ValidUntil'])): ?>valid until <?= htmlspecialchars(date('F j, Y', strtotime($Config['ValidUntil']))) ?>.<?php else: ?>valid for <?= (int)$Config['ValidDays'] ?> days.<?php endif; ?>
 		</span>
 	</div>
 
@@ -287,7 +287,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				<div class="rp-filter-card-body" style="font-size:13px;line-height:1.7;color:var(--rp-text-body);">
 					<div><strong><?= (int)$Config['QuestionCount'] ?></strong> questions per test</div>
 					<div><strong><?= (int)$Config['PassPercent'] ?>%</strong> required to pass</div>
-					<div><strong><?= (int)$Config['ValidDays'] ?></strong> days validity</div>
+					<?php if (!empty($Config['ValidUntil'])): ?><div><strong><?= htmlspecialchars(date('F j, Y', strtotime($Config['ValidUntil']))) ?></strong> expiry date</div><?php else: ?><div><strong><?= (int)$Config['ValidDays'] ?></strong> days validity</div><?php endif; ?>
 					<div style="margin-top:8px;">
 						<a href="<?= UIR ?>QualTest/manage/<?= $KingdomId ?>" style="font-size:12px;color:#2b6cb0;">
 							<i class="fas fa-edit"></i> Edit settings
@@ -873,8 +873,6 @@ $(function() {
 	var parsedQuestions = [];
 	var importedCount = 0;
 
-	function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-
 	function parseQuestions(raw) {
 		var blocks = raw.split(/\n\s*\n/).map(function(b) { return b.trim(); }).filter(Boolean);
 		var questions = [], errors = [];
@@ -995,17 +993,12 @@ $(function() {
 	var allQuestions = [];
 	var addedCount = 0;
 
-	function escH(s) {
-		return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-	}
-
 	function renderList(questions) {
 		if (!questions.length) { listEl.innerHTML = '<div style="text-align:center;padding:16px;color:#718096;">No matches.</div>'; return; }
 		listEl.innerHTML = questions.map(function(q) {
+			// The shared library never exposes which answer is correct — list texts only.
 			var answers = q.Answers.map(function(a) {
-				return '<div class="qt-lib-answer' + (a.IsCorrect ? ' qt-lib-correct' : '') + '">'
-					+ (a.IsCorrect ? '<i class="fas fa-check" style="margin-right:4px;"></i>' : '&bull; ')
-					+ escH(a.AnswerText) + '</div>';
+				return '<div class="qt-lib-answer">&bull; ' + escH(a.AnswerText) + '</div>';
 			}).join('');
 			return '<div class="qt-lib-question" data-qid="' + q.QualQuestionId + '">'
 				+ '<div class="qt-lib-question-hdr">'
