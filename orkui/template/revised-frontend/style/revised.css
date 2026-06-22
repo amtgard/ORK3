@@ -9688,6 +9688,22 @@ html[data-theme="dark"] [data-tip]:not(.kn-officer-pill):not(.pk-officer-pill):n
 	background: #f7fafc; color: #1a202c;
 }
 
+/* Officer-only / Locals-only checkbox tooltips inside the calendar-item edit
+   modal: the modal box has overflow:hidden, so the generic centered tooltip
+   (min-width:max-content + translateX(-50%)) extends past the modal and gets
+   clipped on both sides. Force wrapping, cap width, anchor left so the tip
+   stays inside the modal. !important is needed because the generic
+   [data-tip]:not(...):not(...):not(...):not(...):not(...) rule has higher
+   specificity than a plain class selector. */
+.kn-emod-check-label[data-tip]:hover::after,
+.pk-emod-check-label[data-tip]:hover::after {
+	min-width: 0 !important;
+	max-width: 280px !important;
+	white-space: normal !important;
+	left: 0 !important;
+	transform: none !important;
+}
+
 /* Kingdomnew Save-as-draft button */
 .kn-emod-draft-btn,
 .pk-emod-draft-btn {

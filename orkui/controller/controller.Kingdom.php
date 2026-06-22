@@ -918,6 +918,24 @@ class Controller_Kingdom extends Controller
         $this->data['IsOrkAdmin'] = $uid > 0
             && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
 
+        // Park-level officers (within this kingdom) need the calendar-item edit
+        // modal rendered too so they can edit park-level calendar items via the
+        // kingdom calendar view. Without this, clicking Edit closes the view
+        // overlay and nothing opens (getElementById('kn-event-modal') is null).
+        // Create buttons elsewhere on the page stay gated by CanManageKingdom.
+        $this->data['CanManageAnyParkInKingdom'] = false;
+        if ($uid > 0 && !$this->data['CanManageKingdom']) {
+            global $DB;
+            $DB->Clear();
+            $_aprs = $DB->DataSet("SELECT 1 FROM " . DB_PREFIX . "authorization a
+                JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.active = 'Active'
+                WHERE a.mundane_id = " . (int)$uid . "
+                  AND a.role = '" . AUTH_CREATE . "'
+                  AND p.kingdom_id = " . (int)$kingdom_id . "
+                LIMIT 1");
+            $this->data['CanManageAnyParkInKingdom'] = ($_aprs && $_aprs->Size() > 0 && $_aprs->Next());
+        }
+
         $knConfigs  = Common::get_configs($kingdom_id, CFG_KINGDOM);
         $recsPublic = isset($knConfigs['AwardRecsPublic'])
             ? (bool)(int)$knConfigs['AwardRecsPublic']['Value']

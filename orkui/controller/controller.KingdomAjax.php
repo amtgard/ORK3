@@ -745,6 +745,7 @@ class Controller_KingdomAjax extends Controller
         }
 
         $kid    = (int)$kingdom_id;
+        $kn_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         global $DB;
         $events = [];
         $this->load_model('Kingdom');
@@ -872,10 +873,15 @@ class Controller_KingdomAjax extends Controller
             }
         }
 
-        // Calendar items (kingdom- or park-scoped) overlapping the range
+        // Calendar items (kingdom- or park-scoped) overlapping the range.
+        // is_officer_only / is_locals_only must be filtered via CalendarItem::CanSee
+        // before emitting — otherwise officer-only items leak to any kingdom-calendar
+        // viewer regardless of role (matches the filter already applied in the page-
+        // render path at controller.Kingdom.php).
         $ciSql = "
 			SELECT ci.calendar_item_id, ci.name, ci.description, ci.all_day,
 			       ci.event_start, ci.event_end, ci.park_id, ci.kingdom_id,
+			       ci.is_officer_only, ci.is_locals_only,
 			       p.abbreviation AS park_abbr
 			FROM " . DB_PREFIX . "calendar_item ci
 			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = ci.park_id
@@ -887,6 +893,11 @@ class Controller_KingdomAjax extends Controller
         $ciResult = $DB->DataSet($ciSql);
         if ($ciResult && $ciResult->Size() > 0) {
             while ($ciResult->Next()) {
+                $ci_isOfficerOnly = (int)$ciResult->is_officer_only;
+                $ci_isLocalsOnly  = (int)$ciResult->is_locals_only;
+                if (!CalendarItem::CanSee($kn_uid, (int)$ciResult->kingdom_id, (int)$ciResult->park_id, $ci_isOfficerOnly, $ci_isLocalsOnly)) {
+                    continue;
+                }
                 $isPark = (int)$ciResult->park_id > 0;
                 $abbr   = ($isPark && $ciResult->park_abbr) ? $ciResult->park_abbr . ': ' : '';
                 $allDay = (int)$ciResult->all_day === 1;
