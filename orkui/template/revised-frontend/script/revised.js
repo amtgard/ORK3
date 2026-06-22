@@ -28,6 +28,43 @@ function tnRankPillInner(prefix, r) {
 }
 if (typeof window !== 'undefined') { window.tnRankPaint = tnRankPaint; window.tnRankPillInner = tnRankPillInner; }
 
+/* ============================================================
+   Viewport-safe positioner for position:fixed autocomplete dropdowns.
+   Anchors `el` to `inputEl`, but (a) clamps width + left so the list
+   never overflows the right/left edge, (b) flips the list ABOVE the
+   input when there isn't enough room below (mobile, top-aligned event
+   modals), and (c) caps max-height + enables scroll so long result
+   lists never run off-screen. Desktop behaviour is unchanged in the
+   common case (plenty of room below).
+   ============================================================ */
+function tnPositionAcFixed(inputEl, el, opts) {
+    if (!inputEl || !el) return;
+    opts = opts || {};
+    var rect   = inputEl.getBoundingClientRect();
+    var vw     = window.innerWidth;
+    var vh     = window.innerHeight;
+    var w      = Math.min(rect.width || opts.width || 300, vw - 16);
+    el.style.width = w + 'px';
+    el.style.left  = Math.max(8, Math.min(rect.left, vw - w - 8)) + 'px';
+    el.style.right = 'auto';
+
+    var spaceBelow = vh - rect.bottom;
+    var spaceAbove = rect.top;
+    var flipAbove  = spaceBelow < 200 && spaceAbove > spaceBelow;
+    var avail      = flipAbove ? spaceAbove : spaceBelow;
+
+    if (flipAbove) {
+        el.style.top    = 'auto';
+        el.style.bottom = (vh - rect.top + 2) + 'px';
+    } else {
+        el.style.bottom = 'auto';
+        el.style.top    = (rect.bottom + 2) + 'px';
+    }
+    el.style.maxHeight = Math.max(140, avail - 12) + 'px';
+    el.style.overflowY = 'auto';
+}
+if (typeof window !== 'undefined') { window.tnPositionAcFixed = tnPositionAcFixed; }
+
 /* ===========================
    HTML escape helper
    =========================== */
@@ -6594,10 +6631,7 @@ $(document).ready(function() {
     function gid(id) { return document.getElementById(id); }
 
     function pkFixedAcPosition(inputEl, dropdownEl) {
-        var rect = inputEl.getBoundingClientRect();
-        dropdownEl.style.top   = (rect.bottom + 2) + 'px';
-        dropdownEl.style.left  = rect.left + 'px';
-        dropdownEl.style.width = rect.width + 'px';
+        tnPositionAcFixed(inputEl, dropdownEl);
     }
 
     function checkRequired() {
@@ -7694,9 +7728,7 @@ $(document).ready(function() {
 
         function evPnPosition() {
             if (!evPnInput || !evPnResults) return;
-            var r = evPnInput.getBoundingClientRect();
-            evPnResults.style.top  = (r.bottom + 2) + 'px';
-            evPnResults.style.left = r.left + 'px';
+            tnPositionAcFixed(evPnInput, evPnResults);
         }
 
         function evPnOpen() {
@@ -8194,10 +8226,7 @@ $(document).ready(function() {
 
         function evStaffPositionAc() {
             if (!staffNameEl || !staffAcEl) return;
-            var r = staffNameEl.getBoundingClientRect();
-            staffAcEl.style.top   = (r.bottom + 2) + 'px';
-            staffAcEl.style.left  = r.left + 'px';
-            staffAcEl.style.width = r.width + 'px';
+            tnPositionAcFixed(staffNameEl, staffAcEl);
         }
 
         function evStaffRenderAc(results) {
@@ -8491,10 +8520,7 @@ $(document).ready(function() {
             leadAcEl.className      = 'kn-ac-results';
 
             function evLeadPositionAc() {
-                var r = leadInputEl.getBoundingClientRect();
-                leadAcEl.style.top   = (r.bottom + 2) + 'px';
-                leadAcEl.style.left  = r.left + 'px';
-                leadAcEl.style.width = r.width + 'px';
+                tnPositionAcFixed(leadInputEl, leadAcEl);
             }
 
             function evLeadRenderAc(results) {
@@ -8971,6 +8997,33 @@ $(document).ready(function() {
                 var primActive = primPill ? primPill.classList.contains('ev-sched-pill-active') : true;
                 var secActive  = secPill  ? secPill.classList.contains('ev-sched-pill-active')  : false;
                 row.style.display = (primActive || secActive) ? '' : 'none';
+            });
+            // Grid view shares these pills: hide/show the toggled category's column too.
+            evApplyGridFilter();
+        };
+
+        // Grid filter: hide the column (header + body) of any category whose pill is
+        // inactive, then reflow --ev-grid-cols so the remaining columns fill the width.
+        // Categories with no pill (not present that day) stay visible.
+        window.evApplyGridFilter = function() {
+            var pills = document.querySelectorAll('#ev-sched-filters .ev-sched-pill');
+            if (!pills.length) return;
+            var active = {};
+            pills.forEach(function(p) {
+                active[p.getAttribute('data-cat')] = p.classList.contains('ev-sched-pill-active');
+            });
+            document.querySelectorAll('.ev-grid-day').forEach(function(day) {
+                var visible = 0;
+                day.querySelectorAll('.ev-grid-cat-head[data-category]').forEach(function(head) {
+                    var show = active[head.getAttribute('data-category')] !== false;
+                    head.style.display = show ? '' : 'none';
+                    if (show) visible++;
+                });
+                day.querySelectorAll('.ev-grid-col[data-category]').forEach(function(col) {
+                    col.style.display = (active[col.getAttribute('data-category')] !== false) ? '' : 'none';
+                });
+                var inner = day.querySelector('.ev-grid-inner');
+                if (inner) inner.style.setProperty('--ev-grid-cols', Math.max(1, visible));
             });
         };
 
@@ -10692,12 +10745,9 @@ $(document).ready(function() {
                         }).join('')
                         : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
                     // Position fixed so dropdown escapes the scrolling admin panel body
-                    var rect = parkNameEl.getBoundingClientRect();
                     parkAcEl.style.position = 'fixed';
-                    parkAcEl.style.top  = (rect.bottom) + 'px';
-                    parkAcEl.style.left = rect.left + 'px';
-                    parkAcEl.style.width = rect.width + 'px';
                     parkAcEl.style.zIndex = '9999';
+                    tnPositionAcFixed(parkNameEl, parkAcEl);
                     parkAcEl.classList.add('kn-ac-open');
                 });
             }, AUTOCOMPLETE_DEBOUNCE_MS || 220);
@@ -18655,13 +18705,9 @@ window.evSetEventStatus = function(eventId, status, btn) {
         var input = gid('kn-cfe-search');
         var box   = gid('kn-cfe-results');
         if (!input || !box) return;
-        var r = input.getBoundingClientRect();
         box.style.position = 'fixed';
-        box.style.top      = (r.bottom + 4) + 'px';
-        box.style.left     = r.left + 'px';
-        box.style.right    = 'auto';
-        box.style.width    = r.width + 'px';
         box.style.zIndex   = '10000';
+        tnPositionAcFixed(input, box);
     }
     function knCfeBindReposition() {
         if (_knCfeReposBound) return;
@@ -18927,13 +18973,9 @@ window.evSetEventStatus = function(eventId, status, btn) {
         var input = gid('pk-cfe-search');
         var box   = gid('pk-cfe-results');
         if (!input || !box) return;
-        var r = input.getBoundingClientRect();
         box.style.position = 'fixed';
-        box.style.top      = (r.bottom + 4) + 'px';
-        box.style.left     = r.left + 'px';
-        box.style.right    = 'auto';
-        box.style.width    = r.width + 'px';
         box.style.zIndex   = '10000';
+        tnPositionAcFixed(input, box);
     }
     function pkCfeBindReposition() {
         if (_pkCfeReposBound) return;

@@ -333,7 +333,7 @@ html[data-theme="dark"] .ev-rsvp-th-tip { background: var(--ork-text, #e2e8f0); 
 
 /* Attendance player-search scoped autocomplete */
 .ev-att-form .ev-pn-field { position: relative; }
-.ev-att-form #ev-PlayerName-results { position: fixed; top: 0; left: 0; right: auto; width: 320px; max-height: 360px; margin: 0; }
+.ev-att-form #ev-PlayerName-results { position: fixed; top: 0; left: 0; right: auto; width: min(320px, calc(100vw - 24px)); max-height: 360px; margin: 0; }
 .ev-ac-section { padding: 4px 10px; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--ork-text-muted); background: var(--ork-surface-light); text-transform: uppercase; border-bottom: 1px solid var(--ork-border); }
 .ev-ac-empty { padding: 8px 12px; font-size: 13px; color: var(--ork-text-hint); cursor: default; }
 html[data-theme="dark"] .ev-ac-section { color: var(--ork-text-muted); background: var(--ork-bg-secondary); border-bottom-color: var(--ork-border); }
@@ -837,9 +837,16 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 	<div class="ev-stat-card">
 		<div class="ev-stat-icon"><i class="fas fa-calendar-alt"></i></div>
 		<div class="ev-stat-value" style="font-size:15px;padding-top:3px">
-			<?= $startLabel ?: '<span style="color:#a0aec0">TBD</span>' ?>
+			<?php if ($eventStart): ?>
+				<?= $startLabel ?>
+				<?php if ($endLabel && $endLabel !== $startLabel): ?>
+				<div class="ev-stat-subvalue"><i class="fas fa-arrow-right" style="font-size:9px;opacity:.55;margin-right:3px"></i><?= $endLabel ?></div>
+				<?php endif; ?>
+			<?php else: ?>
+				<span style="color:#a0aec0">TBD</span>
+			<?php endif; ?>
 		</div>
-		<div class="ev-stat-label">Date</div>
+		<div class="ev-stat-label"><?= ($endLabel && $endLabel !== $startLabel) ? 'Dates' : 'Date' ?></div>
 	</div>
 	<div class="ev-stat-card">
 		<div class="ev-stat-icon"><i class="fas fa-clock"></i></div>
@@ -849,22 +856,34 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 		<div class="ev-stat-label">Starts At</div>
 	</div>
 	<?php $hasMapTab = (bool)($locationDisplay ?: $locationFallback); ?>
-	<?php if (!$locationDisplay && $mapUrl): ?>
-	<a href="<?= htmlspecialchars($mapUrl) ?>" target="_blank" class="ev-stat-card ev-stat-card-link" style="cursor:pointer;text-decoration:none;color:inherit">
-		<div class="ev-stat-icon"><i class="fas fa-map-marker-alt"></i></div>
-		<div class="ev-stat-value" style="font-size:14px;padding-top:3px;color:#4a90d9"><?= htmlspecialchars($mapUrlName ?: 'View Map') ?></div>
-		<div class="ev-stat-label">Location</div>
-	</a>
-	<?php else: ?>
-	<div class="ev-stat-card<?= $hasMapTab ? ' ev-stat-card-link' : '' ?>"<?= $hasMapTab ? ' onclick="evShowTab(document.querySelector(\'[data-tab=ev-tab-map]\'),\'ev-tab-map\')" data-tip="View map"' : '' ?> style="<?= $hasMapTab ? 'cursor:pointer' : '' ?>">
+	<?php $_dispLoc = $locationDisplay ?: $locationFallback; ?>
+	<div class="ev-stat-card ev-stat-card-location">
 		<div class="ev-stat-icon"><i class="fas fa-map-marker-alt"></i></div>
 		<div class="ev-stat-value" style="font-size:14px;padding-top:3px">
-			<?php $_dispLoc = $locationDisplay ?: $locationFallback; ?>
 			<?= $_dispLoc ? htmlspecialchars($_dispLoc) : '<span style="color:#a0aec0">TBD</span>' ?>
 		</div>
 		<div class="ev-stat-label">Location</div>
+		<?php if ($hasMapTab || $mapLink || ($mapUrl && $mapUrlName)): ?>
+		<div class="ev-stat-actions">
+			<?php if ($hasMapTab): ?>
+			<button type="button" class="ev-stat-action" onclick="evShowTab(document.querySelector('[data-tab=ev-tab-map]'),'ev-tab-map')" data-tip="View the embedded map">
+				<i class="fas fa-map-marked-alt"></i> Map
+			</button>
+			<?php endif; ?>
+			<?php $_mapHref = $mapLink ?: ($mapQueryAddress ? 'https://maps.google.com/maps?q=' . urlencode($mapQueryAddress) : ''); ?>
+			<?php if ($_mapHref): ?>
+			<a href="<?= htmlspecialchars($_mapHref) ?>" target="_blank" rel="noopener" class="ev-stat-action" data-tip="Open in Google Maps">
+				<i class="fas fa-map"></i> Google Maps
+			</a>
+			<?php endif; ?>
+			<?php if ($mapUrl && $mapUrlName): ?>
+			<a href="<?= htmlspecialchars($mapUrl) ?>" target="_blank" rel="noopener" class="ev-stat-action" data-tip="<?= htmlspecialchars($mapUrlName) ?>">
+				<i class="fas fa-map-signs"></i> <?= htmlspecialchars($mapUrlName) ?>
+			</a>
+			<?php endif; ?>
+		</div>
+		<?php endif; ?>
 	</div>
-	<?php endif; ?>
 	<div class="ev-stat-card">
 		<div class="ev-stat-icon"><i class="fas fa-users"></i></div>
 		<div class="ev-stat-value"><?= !$isPastEvent ? $rsvpCount : $attendeeCount ?></div>
@@ -983,107 +1002,6 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 
 <?php // ---- LAYOUT ---- ?>
 <div class="ev-layout">
-
-	<?php // ---- SIDEBAR ---- ?>
-	<div class="ev-sidebar">
-
-		<?php if ($canManage): ?>
-		<div class="ev-heraldry-edit-wrap" onclick="evOpenImgModal()" data-tip="Change logo">
-			<img class="ev-heraldry-large"
-				src="<?= htmlspecialchars($heraldryUrl) ?>"
-				onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
-				alt="">
-			<div class="ev-heraldry-edit-overlay"><i class="fas fa-camera ev-heraldry-edit-icon"></i></div>
-		</div>
-		<?php else: ?>
-		<img class="ev-heraldry-large"
-			src="<?= htmlspecialchars($heraldryUrl) ?>"
-			onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
-			alt="">
-		<?php endif; ?>
-
-		<?php // Event Dates card ?>
-		<div class="ev-card">
-			<h4><i class="fas fa-calendar" style="margin-right:5px"></i>Event Dates</h4>
-			<?php if ($eventStart): ?>
-			<div class="ev-detail-row">
-				<span class="ev-detail-label">Start</span>
-				<span class="ev-detail-value"><?= date('M j, Y', strtotime($eventStart)) ?></span>
-			</div>
-			<div class="ev-detail-row">
-				<span class="ev-detail-label">Time</span>
-				<span class="ev-detail-value"><?= date('g:i A', strtotime($eventStart)) ?></span>
-			</div>
-			<?php endif; ?>
-			<?php if ($eventEnd): ?>
-			<div class="ev-detail-row">
-				<span class="ev-detail-label">End</span>
-				<span class="ev-detail-value"><?= date('M j, Y', strtotime($eventEnd)) ?></span>
-			</div>
-			<?php endif; ?>
-			<?php if ($durationLabel): ?>
-			<div class="ev-detail-row">
-				<span class="ev-detail-label">Duration</span>
-				<span class="ev-detail-value"><?= $durationLabel ?></span>
-			</div>
-			<?php endif; ?>
-		</div>
-
-		<?php
-			$_showAddress  = $address  ?: $atParkAddress;
-			$_showCity     = $city     ?: $atParkCity;
-			$_showProvince = $province ?: $atParkProvince;
-			$_fromPark     = !($address || $city || $province) && ($atParkCity || $atParkProvince || $atParkAddress);
-		?>
-		<?php if ($locationDisplay || $locationFallback || $mapLink): ?>
-		<?php // Location card ?>
-		<div class="ev-card">
-			<h4><i class="fas fa-map-marker-alt" style="margin-right:5px"></i>Location<?php if ($_fromPark): ?> <span style="font-size:11px;font-weight:400;color:#718096;margin-left:4px">(park address)</span><?php endif; ?></h4>
-			<?php if ($_showAddress): ?>
-			<div class="ev-detail-row">
-				<span class="ev-detail-label">Address</span>
-				<span class="ev-detail-value"><?= htmlspecialchars($_showAddress) ?></span>
-			</div>
-			<?php endif; ?>
-			<?php if ($_showCity): ?>
-			<div class="ev-detail-row">
-				<span class="ev-detail-label">City</span>
-				<span class="ev-detail-value"><?= htmlspecialchars($_showCity) ?></span>
-			</div>
-			<?php endif; ?>
-			<?php if ($_showProvince): ?>
-			<div class="ev-detail-row">
-				<span class="ev-detail-label">Region</span>
-				<span class="ev-detail-value"><?= htmlspecialchars($_showProvince) ?></span>
-			</div>
-			<?php endif; ?>
-			<?php if ($postalCode): ?>
-			<div class="ev-detail-row">
-				<span class="ev-detail-label">Postal Code</span>
-				<span class="ev-detail-value"><?= htmlspecialchars($postalCode) ?></span>
-			</div>
-			<?php endif; ?>
-			<?php if ($country): ?>
-			<div class="ev-detail-row">
-				<span class="ev-detail-label">Country</span>
-				<span class="ev-detail-value"><?= htmlspecialchars($country) ?></span>
-			</div>
-			<?php endif; ?>
-			<?php if ($mapLink): ?>
-			<a href="<?= htmlspecialchars($mapLink) ?>" target="_blank" class="ev-map-btn">
-				<i class="fas fa-map"></i> Google Maps
-			</a>
-			<?php endif; ?>
-			<?php if ($mapUrl && $mapUrlName): ?>
-			<a href="<?= htmlspecialchars($mapUrl) ?>" target="_blank" class="ev-map-btn" style="margin-top:6px;background:#f0fff4;border-color:#9ae6b4;">
-				<i class="fas fa-map-signs"></i> <?= htmlspecialchars($mapUrlName) ?>
-			</a>
-			<?php endif; ?>
-		</div>
-		<?php endif; ?>
-
-
-	</div><!-- /.ev-sidebar -->
 
 	<?php // ---- MAIN CONTENT ---- ?>
 	<div class="ev-main">
@@ -1327,33 +1245,49 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 				}
 				if (empty($activeCats)) continue;
 
-				// Overlap lane assignment per category
-				$laneMap = []; // [scheduleId => ['lane'=>i,'lanes'=>n]]
+				// Overlap layout per category: split each column into clusters of
+				// transitively-overlapping items, size lanes per cluster, and let each
+				// item expand rightward into free space. A non-overlapping item renders
+				// full-width even when the column overlaps elsewhere.
+				$laneMap = []; // [cName][scheduleId => ['left'=>%, 'width'=>%]]
 				foreach ($activeCats as $cName) {
 					$items = $catBuckets[$cName];
-					usort($items, function($a,$b){ return $a['start'] <=> $b['start']; });
-					$laneEnds = [];
-					$assigns = [];
-					foreach ($items as $entry) {
-						$placed = false;
-						foreach ($laneEnds as $li => $laneEnd) {
-							if ($laneEnd <= $entry['start']) {
-								$laneEnds[$li] = $entry['end'];
-								$assigns[] = ['entry' => $entry, 'lane' => $li];
-								$placed = true;
-								break;
+					usort($items, function($a,$b){ return ($a['start'] <=> $b['start']) ?: ($a['end'] <=> $b['end']); });
+					$placeCluster = function($cluster) use (&$laneMap, $cName) {
+						// Greedy column assignment within the cluster.
+						$colEnds = [];
+						foreach ($cluster as &$ent) {
+							$ent['col'] = null;
+							foreach ($colEnds as $ci => $cEnd) {
+								if ($cEnd <= $ent['start']) { $colEnds[$ci] = $ent['end']; $ent['col'] = $ci; break; }
 							}
+							if ($ent['col'] === null) { $colEnds[] = $ent['end']; $ent['col'] = count($colEnds) - 1; }
 						}
-						if (!$placed) {
-							$laneEnds[] = $entry['end'];
-							$assigns[]  = ['entry' => $entry, 'lane' => count($laneEnds) - 1];
+						unset($ent);
+						$clusterCols = max(1, count($colEnds));
+						// Expand each item across columns to its right until one holds a conflict.
+						foreach ($cluster as $ent) {
+							$span = 1;
+							for ($c = $ent['col'] + 1; $c < $clusterCols; $c++) {
+								$blocked = false;
+								foreach ($cluster as $other) {
+									if ($other['col'] === $c && $other['start'] < $ent['end'] && $other['end'] > $ent['start']) { $blocked = true; break; }
+								}
+								if ($blocked) break;
+								$span++;
+							}
+							$sid = (int)$ent['item']['EventScheduleId'];
+							$laneMap[$cName][$sid] = ['left' => ($ent['col'] / $clusterCols) * 100, 'width' => ($span / $clusterCols) * 100];
 						}
+					};
+					$cluster = [];
+					$clusterEnd = null;
+					foreach ($items as $entry) {
+						if ($cluster && $entry['start'] >= $clusterEnd) { $placeCluster($cluster); $cluster = []; $clusterEnd = null; }
+						$cluster[] = $entry;
+						$clusterEnd = ($clusterEnd === null) ? $entry['end'] : max($clusterEnd, $entry['end']);
 					}
-					$total = max(1, count($laneEnds));
-					foreach ($assigns as $a) {
-						$sid = (int)$a['entry']['item']['EventScheduleId'];
-						$laneMap[$cName][$sid] = ['lane' => $a['lane'], 'lanes' => $total];
-					}
+					if ($cluster) $placeCluster($cluster);
 					$catBuckets[$cName] = $items; // sorted
 				}
 
@@ -1400,10 +1334,8 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 										$durM   = max(30, ($entry['end'] - $entry['start']) / 60);
 										$topPx  = ($startM / 30) * 28;
 										$hPx    = max(28, ($durM / 30) * 28);
-										$lane   = $laneMap[$cName][$sid]['lane']  ?? 0;
-										$lanes  = $laneMap[$cName][$sid]['lanes'] ?? 1;
-										$leftPct  = ($lanes > 1) ? ($lane / $lanes) * 100 : 0;
-										$widthPct = ($lanes > 1) ? (100 / $lanes) : 100;
+										$leftPct  = $laneMap[$cName][$sid]['left']  ?? 0;
+										$widthPct = $laneMap[$cName][$sid]['width'] ?? 100;
 										$secCat    = $it['SecondaryCategory'] ?? '';
 										$secCfg    = $secCat ? ($evSchedCategories[$secCat] ?? null) : null;
 										$hasMenu   = ($cName === 'Feast and Food' || $secCat === 'Feast and Food') && !empty($it['Menu']);
@@ -3941,7 +3873,73 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 @media (max-width: 700px) {
 	#ev-schedule-grid-container { display:none !important; }
 	#ev-schedule-container      { display:block !important; }
-	.ev-grid-view-toolbar       { display:none !important; }
+	/* Keep the toolbar (and its Add Schedule Item button) reachable; only hide
+	   the List/Grid toggle since the grid view is suppressed on mobile. */
+	.ev-grid-view-toolbar       { justify-content:flex-start; flex-wrap:wrap; }
+	.ev-grid-view-toggle        { display:none !important; }
+	.ev-grid-view-toolbar .ev-submit-btn { padding:9px 16px; min-height:40px; }
+	.ev-sched-pill { padding:9px 13px; min-height:40px; }
+}
+
+/* ── Mobile: stacked-card layout for the forced schedule LIST view ── */
+@media (max-width: 768px) {
+	.ev-sched-table,
+	.ev-sched-table tbody,
+	.ev-sched-table tr,
+	.ev-sched-table td { display:block; width:auto; }
+	.ev-sched-table { table-layout:auto !important; }
+	.ev-sched-table thead { display:none; }
+	.ev-sched-table colgroup { display:none; }
+	.ev-sched-table tr {
+		padding:10px 12px; margin-bottom:12px; border-radius:8px;
+		border:1px solid var(--ork-border, #e2e8f0);
+		border-left:4px solid rgba(0,0,0,0.18);
+		box-shadow:0 1px 3px rgba(0,0,0,0.08);
+	}
+	.ev-sched-table td {
+		display:flex; justify-content:space-between; gap:10px;
+		padding:3px 0; white-space:normal !important; text-align:left;
+		border:none;
+	}
+	.ev-sched-table td::before {
+		flex-shrink:0; font-size:10px; font-weight:700;
+		letter-spacing:.04em; text-transform:uppercase;
+		color:var(--ork-text-muted, #718096);
+	}
+	.ev-sched-table td:nth-of-type(1)::before { content:"Start"; }
+	.ev-sched-table td:nth-of-type(2)::before { content:"End"; }
+	.ev-sched-table td:nth-of-type(3)::before { content:"Title"; }
+	.ev-sched-table td:nth-of-type(4)::before { content:"Location"; }
+	.ev-sched-table td:nth-of-type(5)::before { content:"Lead(s)"; }
+	.ev-sched-table td:nth-of-type(6)::before { content:"Description"; }
+	.ev-sched-table td.ev-del-cell {
+		width:auto; justify-content:flex-end; gap:6px; padding-top:8px;
+	}
+	.ev-sched-table td.ev-del-cell::before { content:none; }
+	.ev-sched-table td.ev-del-cell .ev-edit-link,
+	.ev-sched-table td.ev-del-cell .ev-del-link {
+		min-width:40px; min-height:40px; display:inline-flex;
+		align-items:center; justify-content:center;
+	}
+	html[data-theme="dark"] .ev-sched-table tr {
+		border-color:var(--ork-border);
+		border-left-color:rgba(255,255,255,0.22);
+	}
+	html[data-theme="dark"] .ev-sched-table td::before { color:var(--ork-text-muted); }
+	html[data-theme="dark"] .ev-sched-table .ev-edit-link { color:#cbd5e0 !important; }
+
+	/* Banner/image modal mobile fit */
+	.ev-img-overlay { align-items:flex-start; overflow:auto; }
+	.ev-img-modal {
+		width:min(520px, 96vw); max-height:calc(100vh - 32px);
+		overflow:auto; margin:16px 0;
+	}
+	.ev-banner-position-wrap { min-height:120px !important; }
+
+	/* Attendance add-form responsive field widths */
+	.ev-att-form #ev-PlayerName { width:100% !important; max-width:240px; }
+	.ev-att-form #ev-ClassId { width:100% !important; max-width:160px; }
+	.ev-att-form #ev-Credits { width:70px !important; }
 }
 </style>
 <script>
