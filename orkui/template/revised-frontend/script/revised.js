@@ -16494,8 +16494,10 @@ window.evSetEventStatus = function(eventId, status, btn) {
     // can render the final button shape on first paint (Google measures content
     // when the InfoWindow opens and won't shrink later if we inject content via
     // setTimeout — was leaving ~80px of empty space below the popover).
+    //
+    // Anonymous viewers get just the counts (informational): no RSVP button,
+    // since clicking it would only redirect to login.
     function rsvpButtonInnerHtml(goingCnt, interestCnt, mine) {
-        var lbl = RSVP_LABELS[mine] || RSVP_LABELS[''];
         var countsHtml = '';
         if (goingCnt > 0 || interestCnt > 0) {
             var parts = [];
@@ -16503,6 +16505,8 @@ window.evSetEventStatus = function(eventId, status, btn) {
             if (interestCnt > 0) parts.push('<span class="ev-rsvp-count-interest">' + interestCnt + ' interested</span>');
             countsHtml = '<span class="ev-rsvp-counts">' + parts.join('<span class="ev-rsvp-count-sep">·</span>') + '</span>';
         }
+        if (!Cfg.loggedIn) return countsHtml;
+        var lbl = RSVP_LABELS[mine] || RSVP_LABELS[''];
         return '<span class="ev-rsvp-btn ev-rsvp-' + lbl.cls + '" tabindex="0">' + lbl.html + '</span>' + countsHtml;
     }
 
