@@ -222,6 +222,9 @@ foreach ($catalog as $c) {
         blocks:  <?= json_encode($blocks, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
         catalog: <?= json_encode($catalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
         labels:  <?= json_encode($catalogLabels, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+        // Page-type presets: type → starter block set ({type,enabled,source,fields}).
+        // Used to seed the block list when creating a NEW page of a given type.
+        pageTypes: <?= json_encode($pageTypes, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
         canEdit:    <?= $canEdit ? 'true' : 'false' ?>,
         canPublish: <?= $canPublish ? 'true' : 'false' ?>
     };
@@ -285,23 +288,38 @@ foreach ($catalog as $c) {
      * per-field inputs write directly back into the model on input.
      * ================================================ */
 
-    var model = (STATE.blocks || []).map(function (b) {
+    // Normalize a raw block (from server state OR a preset) into the model shape.
+    function normBlock(b) {
         return {
             type:    String(b.type || ''),
             enabled: (b.enabled === undefined ? true : !!b.enabled),
             source:  (b.source === 'dynamic' ? 'dynamic' : 'authored'),
-            fields:  (b.fields && typeof b.fields === 'object') ? b.fields : {}
+            fields:  (b.fields && typeof b.fields === 'object') ? JSON.parse(JSON.stringify(b.fields)) : {}
         };
-    });
+    }
+
+    var model = (STATE.blocks || []).map(normBlock);
 
     function labelFor(type) {
         return STATE.labels[type] || type;
     }
 
+    // Look up a page-type preset's starter block set by type key.
+    function presetBlocksFor(type) {
+        var pts = STATE.pageTypes || [];
+        for (var i = 0; i < pts.length; i++) {
+            if (pts[i] && pts[i].type === type && Array.isArray(pts[i].blocks)) {
+                return pts[i].blocks;
+            }
+        }
+        return null;
+    }
+
     // Which types get friendly forms (everything else → JSON fallback).
     var FRIENDLY = {
         rich_text: 1, richtext: 1, image: 1, hero_carousel: 1,
-        card_grid: 1, cta_band: 1, heading: 1, quote: 1
+        card_grid: 1, cta_band: 1, heading: 1, quote: 1,
+        gallery: 1, video_embed: 1, file_download: 1, accordion: 1
     };
 
     /* ---- short human summary for the block card header ---- */
@@ -323,6 +341,14 @@ foreach ($catalog as $c) {
                 return strip(f.text || f.heading || '');
             case 'quote':
                 return strip(f.text || f.quote || '');
+            case 'gallery':
+                return ((f.images || []).length) + ' image(s)';
+            case 'video_embed':
+                return (f.provider || 'youtube') + (f.video_id || f.url ? ' · ' + strip(f.video_id || f.url) : ' · no video');
+            case 'file_download':
+                return ((f.files || []).length) + ' file(s)';
+            case 'accordion':
+                return ((f.items || []).length) + ' item(s)';
             default:
                 return 'custom fields (JSON)';
         }
@@ -407,6 +433,25 @@ foreach ($catalog as $c) {
         });
         if (block.fields[key] == null) { block.fields[key] = dflt; }
         sel.addEventListener('change', function () { block.fields[key] = sel.value; markDirty(); });
+        wrap.appendChild(sel);
+        return wrap;
+    }
+
+    // select field whose stored value is a NUMBER (e.g. heading.level,
+    // gallery.columns) — the partials read these as ints, so we coerce.
+    function fieldNumSelect(block, key, label, options, dflt) {
+        var wrap = el('div', 'cms-field');
+        wrap.appendChild(el('label', 'cms-label', esc(label)));
+        var sel = el('select', 'cms-select');
+        var current = (block.fields[key] != null) ? Number(block.fields[key]) : dflt;
+        options.forEach(function (o) {
+            var op = el('option');
+            op.value = String(o.value); op.textContent = o.label;
+            if (current === o.value) { op.selected = true; }
+            sel.appendChild(op);
+        });
+        block.fields[key] = current;
+        sel.addEventListener('change', function () { block.fields[key] = Number(sel.value); markDirty(); });
         wrap.appendChild(sel);
         return wrap;
     }
@@ -560,6 +605,18 @@ foreach ($catalog as $c) {
         wrap.appendChild(inp);
         return wrap;
     }
+    // textarea bound to an arbitrary object[key] (sub-items, e.g. accordion answer)
+    function textBoundArea(obj, key, label, ph) {
+        var wrap = el('div', 'cms-field');
+        wrap.style.marginBottom = '8px';
+        wrap.appendChild(el('label', 'cms-label', esc(label)));
+        var ta = el('textarea', 'cms-textarea');
+        if (ph) { ta.placeholder = ph; }
+        ta.value = obj[key] != null ? obj[key] : '';
+        ta.addEventListener('input', function () { obj[key] = ta.value; markDirty(); });
+        wrap.appendChild(ta);
+        return wrap;
+    }
     function selectBound(obj, key, label, options, dflt) {
         var wrap = el('div', 'cms-field');
         wrap.style.marginBottom = '8px';
@@ -667,14 +724,75 @@ foreach ($catalog as $c) {
 
         if (t === 'heading') {
             body.appendChild(fieldText(block, 'text', 'Heading text'));
-            body.appendChild(fieldSelect(block, 'level', 'Level',
-                [{ value: 'h2', label: 'H2' }, { value: 'h3', label: 'H3' }, { value: 'h4', label: 'H4' }], 'h2'));
+            // NB: heading.tpl reads `level` as an INT (2..4) and `align`
+            // (left|center|right). fieldNumSelect stores the numeric value.
+            body.appendChild(fieldNumSelect(block, 'level', 'Level',
+                [{ value: 2, label: 'H2' }, { value: 3, label: 'H3' }, { value: 4, label: 'H4' }], 2));
+            body.appendChild(fieldSelect(block, 'align', 'Alignment',
+                [{ value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }], 'left'));
             return body;
         }
 
         if (t === 'quote') {
             body.appendChild(fieldText(block, 'text', 'Quote text', { textarea: true }));
             body.appendChild(fieldText(block, 'cite', 'Attribution'));
+            return body;
+        }
+
+        if (t === 'gallery') {
+            // gallery.tpl: images[] media refs, columns 2..4 (default 3), caption?
+            body.appendChild(el('div', 'cms-label', 'Images'));
+            body.appendChild(repeater(block, 'images', 'Image', {}, function (img, i) {
+                // Each repeater item IS the media-ref object; bind the picker to
+                // the array slot so the chosen ref replaces the whole entry.
+                return imageBound(block.fields.images, i, 'Image');
+            }));
+            body.appendChild(fieldNumSelect(block, 'columns', 'Columns',
+                [{ value: 2, label: '2' }, { value: 3, label: '3' }, { value: 4, label: '4' }], 3));
+            body.appendChild(fieldText(block, 'caption', 'Caption', { placeholder: 'Optional gallery caption' }));
+            return body;
+        }
+
+        if (t === 'video_embed') {
+            // video_embed.tpl: provider (youtube|vimeo), video_id OR url, caption?
+            body.appendChild(fieldSelect(block, 'provider', 'Provider',
+                [{ value: 'youtube', label: 'YouTube' }, { value: 'vimeo', label: 'Vimeo' }], 'youtube'));
+            body.appendChild(fieldText(block, 'url', 'Video URL', { placeholder: 'Paste the watch/share URL' }));
+            body.appendChild(fieldText(block, 'video_id', 'Video ID (optional)', { placeholder: 'Used if no URL given' }));
+            body.appendChild(fieldText(block, 'caption', 'Caption', { placeholder: 'Optional caption' }));
+            return body;
+        }
+
+        if (t === 'file_download') {
+            // file_download.tpl: files[] of {title, description?, url, filetype?, size_label?}
+            body.appendChild(el('div', 'cms-label', 'Files'));
+            body.appendChild(repeater(block, 'files', 'File',
+                { title: '', description: '', url: '', filetype: '', size_label: '' },
+                function (file) {
+                    var box = el('div', null);
+                    box.appendChild(textBound(file, 'title', 'Title'));
+                    box.appendChild(textBound(file, 'url', 'Link (URL)', 'https://…'));
+                    box.appendChild(textBound(file, 'description', 'Description (optional)'));
+                    var g = el('div', 'cms-grid2');
+                    g.appendChild(textBound(file, 'filetype', 'File type (e.g. PDF)'));
+                    g.appendChild(textBound(file, 'size_label', 'Size label (e.g. 2.4 MB)'));
+                    box.appendChild(g);
+                    return box;
+                }));
+            return body;
+        }
+
+        if (t === 'accordion') {
+            // accordion.tpl: items[] each {q, a}
+            body.appendChild(el('div', 'cms-label', 'Items'));
+            body.appendChild(repeater(block, 'items', 'Item',
+                { q: '', a: '' },
+                function (item) {
+                    var box = el('div', null);
+                    box.appendChild(textBound(item, 'q', 'Question'));
+                    box.appendChild(textBoundArea(item, 'a', 'Answer'));
+                    return box;
+                }));
             return body;
         }
 
@@ -927,7 +1045,40 @@ foreach ($catalog as $c) {
         markDirty();
     });
     slugInput.addEventListener('input', function () { slugTouched = true; markDirty(); });
-    typeInput.addEventListener('change', markDirty);
+
+    // Seed the block list from a page-type preset's starter block set.
+    function seedFromPreset(type) {
+        var preset = presetBlocksFor(type);
+        if (!preset) { return; }
+        model = preset.map(normBlock);
+        renderList();
+        markDirty();
+    }
+
+    // On a NEW page, switching the type re-seeds the starter blocks — but only
+    // when the user hasn't authored content yet (avoid clobbering real work).
+    // "Empty" = every block still has no meaningful field values.
+    function blockHasContent(b) {
+        var f = b.fields || {};
+        return Object.keys(f).some(function (k) {
+            var v = f[k];
+            if (v == null) { return false; }
+            if (typeof v === 'string') { return v.trim() !== ''; }
+            if (Array.isArray(v)) { return v.length > 0; }
+            if (typeof v === 'object') { return Object.keys(v).length > 0; }
+            return !!v;
+        });
+    }
+    function modelIsPristine() {
+        return model.every(function (b) { return !blockHasContent(b); });
+    }
+
+    typeInput.addEventListener('change', function () {
+        if (STATE.isNew && modelIsPristine()) {
+            seedFromPreset(typeInput.value);
+        }
+        markDirty();
+    });
     metaInput.addEventListener('input', markDirty);
 
     /* ================= save flow ================= */
@@ -1072,6 +1223,14 @@ foreach ($catalog as $c) {
     }
 
     /* ================= boot ================= */
+    // For a brand-new page that arrived with no blocks, pre-populate the block
+    // list from the selected page-type's preset starter set.
+    if (STATE.isNew && model.length === 0) {
+        var seeded = presetBlocksFor(typeInput.value);
+        if (seeded && seeded.length) {
+            model = seeded.map(normBlock);
+        }
+    }
     renderList();
 })();
 </script>

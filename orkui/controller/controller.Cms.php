@@ -288,17 +288,105 @@ class Controller_Cms extends Controller
      * Page-type presets (editor hint → starting block set). Mirrors the spec's
      * "Page types are editor presets" decision.
      *
-     * Each entry: ['type','label','blocks'=>[default block types]].
+     * Each entry: ['type','label','blocks'=>[<starter block objects>]], where a
+     * starter block is a fully-formed block: ['type','enabled','source','fields'].
+     * The editor seeds the block list from these when CREATING a new page of the
+     * given type (and re-seeds when the type is switched on an empty new page).
+     * `fields` carry sensible empty defaults matching each block's partial keys.
      */
     private function _pageTypes()
     {
         return array(
-            array('type' => 'composed', 'label' => 'Composed / Landing', 'blocks' => array('hero_carousel', 'card_grid', 'cta_band')),
-            array('type' => 'article',  'label' => 'Article / Text',      'blocks' => array('heading', 'rich_text')),
-            array('type' => 'media',    'label' => 'Media / Gallery',     'blocks' => array('heading', 'gallery')),
-            array('type' => 'resource', 'label' => 'Resource / Document', 'blocks' => array('heading', 'file_download')),
-            array('type' => 'blog_index', 'label' => 'Blog Index',        'blocks' => array('heading', 'blog_feed')),
-            array('type' => 'dynamic',  'label' => 'Dynamic Data',        'blocks' => array('stat_ticker')),
+            array(
+                'type'   => 'composed',
+                'label'  => 'Composed / Landing',
+                'blocks' => array(
+                    $this->_starter('hero_carousel'),
+                    $this->_starter('rich_text'),
+                    $this->_starter('cta_band'),
+                ),
+            ),
+            array(
+                'type'   => 'article',
+                'label'  => 'Article / Text',
+                'blocks' => array(
+                    $this->_starter('heading'),
+                    $this->_starter('rich_text'),
+                ),
+            ),
+            array(
+                'type'   => 'media',
+                'label'  => 'Media / Gallery',
+                'blocks' => array(
+                    $this->_starter('heading'),
+                    $this->_starter('gallery'),
+                ),
+            ),
+            array(
+                'type'   => 'resource',
+                'label'  => 'Resource / Document',
+                'blocks' => array(
+                    $this->_starter('heading'),
+                    $this->_starter('file_download'),
+                ),
+            ),
+            array(
+                'type'   => 'blog_index',
+                'label'  => 'Blog Index',
+                'blocks' => array(
+                    $this->_starter('heading'),
+                ),
+            ),
+            array(
+                'type'   => 'dynamic',
+                'label'  => 'Dynamic Data',
+                'blocks' => array(
+                    $this->_starter('kingdoms_teaser'),
+                ),
+            ),
+        );
+    }
+
+    /**
+     * Build one starter block for a preset: a fully-formed block object with
+     * sensible empty field defaults matching that block type's partial keys.
+     *
+     * @return array{type:string,enabled:int,source:string,fields:array}
+     */
+    private function _starter($type)
+    {
+        // Dynamic blocks (pull data at render time) are flagged source=dynamic.
+        $dynamicTypes = array(
+            'member_bar'      => true,
+            'events_feed'     => true,
+            'kingdoms_teaser' => true,
+            'stat_ticker'     => true,
+            'tournaments_feed' => true,
+            'recap_highlight' => true,
+            'blog_feed'       => true,
+        );
+
+        // Empty field defaults keyed to each partial's consumed fields.
+        $defaults = array(
+            'hero_carousel'   => array('autoplay_ms' => '', 'logo' => array(), 'slides' => array(), 'ctas' => array()),
+            'rich_text'       => array('kicker' => '', 'heading' => '', 'body' => '', 'align' => 'left', 'cta' => array('label' => '', 'href' => '')),
+            'cta_band'        => array('heading' => '', 'subcopy' => '', 'logo' => array(), 'ctas' => array(), 'links' => ''),
+            'card_grid'       => array('kicker' => '', 'heading' => '', 'subheading' => '', 'cards' => array()),
+            'heading'         => array('text' => '', 'level' => 2, 'align' => 'left'),
+            'gallery'         => array('images' => array(), 'columns' => 3, 'caption' => ''),
+            'file_download'   => array('files' => array()),
+            'video_embed'     => array('provider' => 'youtube', 'video_id' => '', 'url' => '', 'caption' => ''),
+            'accordion'       => array('items' => array()),
+            'quote'           => array('text' => '', 'cite' => ''),
+            'image'           => array('image' => array(), 'caption' => '', 'href' => '', 'align' => 'center', 'max_width' => ''),
+            'kingdoms_teaser' => array(),
+        );
+
+        return array(
+            'type'    => $type,
+            'enabled' => 1,
+            'source'  => isset($dynamicTypes[$type]) ? 'dynamic' : 'authored',
+            'fields'  => isset($defaults[$type]) ? $defaults[$type] : array(),
         );
     }
 }
