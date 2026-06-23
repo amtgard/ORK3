@@ -76,6 +76,19 @@
     text-decoration: none;
 }
 
+/* Gold buttons are <a> tags; the global `#theme_container a` (ID specificity)
+   forces link-blue text in dark mode. Override with matching specificity so the
+   label stays white + legible on the gold. */
+#theme_container a.fd-btn-gold,
+#theme_container a.fd-btn-gold:hover,
+#theme_container a.fd-nav-cta,
+#theme_container a.fd-nav-cta:hover,
+#theme_container a.fd-btn-ghost,
+#theme_container a.fd-btn-ghost:hover {
+    color: #fff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .45);
+}
+
 .fd-btn-ghost {
     display: inline-block;
     border: 1.5px solid rgba(255, 255, 255, .6);

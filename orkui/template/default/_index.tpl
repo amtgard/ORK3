@@ -9,7 +9,7 @@ $fdDir    = DIR_TEMPLATE . 'default/frontdoor/';
 $fdBlockDir = $fdDir . 'blocks/';
 $fdAssetBase = HTTP_TEMPLATE . 'default/frontdoor/';
 ?>
-<link rel="stylesheet" href="<?= $fdAssetBase ?>css/frontdoor.css">
+<link rel="stylesheet" href="<?= $fdAssetBase ?>css/frontdoor.css?v=<?= @filemtime( $fdDir . 'css/frontdoor.css' ) ?>">
 
 <div class="fd-page">
 <?php
