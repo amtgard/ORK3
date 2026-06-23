@@ -42,6 +42,26 @@ class Model_CmsPage extends Model
         return $this->CmsPage->CreatePage($data);
     }
 
+    public function get_page($pageId)
+    {
+        return $this->CmsPage->GetPage($pageId);
+    }
+
+    public function update_page($pageId, $data)
+    {
+        return $this->CmsPage->UpdatePage($pageId, $data);
+    }
+
+    public function set_status($pageId, $status, $updatedBy = 0)
+    {
+        return $this->CmsPage->SetStatus($pageId, $status, $updatedBy);
+    }
+
+    public function delete_page($pageId)
+    {
+        return $this->CmsPage->DeletePage($pageId);
+    }
+
     public function replace_blocks($ownerType, $ownerId, $blocksArray)
     {
         return $this->CmsPage->ReplaceBlocks($ownerType, $ownerId, $blocksArray);

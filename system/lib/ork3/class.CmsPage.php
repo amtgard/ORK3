@@ -181,6 +181,190 @@ class CmsPage extends Ork3
     }
 
     /**
+     * Fetch a single page row by primary key (admin/editor surfaces — any
+     * status, any scope). Returns the raw column map, or null when not found.
+     *
+     * @param int $pageId
+     * @return array|null associative page row, or null
+     */
+    public function GetPage($pageId)
+    {
+        global $DB;
+
+        $pageId = (int)$pageId;
+        if ($pageId <= 0) {
+            return null;
+        }
+
+        $DB->Clear();
+        $DB->page_id = $pageId;
+        return $this->_firstRow($DB->DataSet(
+            'SELECT * FROM ' . DB_PREFIX . 'cms_page WHERE page_id = :page_id LIMIT 1'
+        ));
+    }
+
+    /**
+     * Update an existing page's editable meta. Only the provided keys are
+     * written (title, slug, type, meta_description, hero_media_id, status,
+     * published_at, scope_type, scope_id, updated_by). updated_at is always
+     * stamped. Returns true when a valid id was supplied and the UPDATE ran.
+     *
+     * @param int   $pageId
+     * @param array $data subset of editable columns
+     * @return bool
+     */
+    public function UpdatePage($pageId, $data)
+    {
+        global $DB;
+
+        $pageId = (int)$pageId;
+        if ($pageId <= 0 || !is_array($data)) {
+            return false;
+        }
+
+        // Whitelist of editable columns + their normalizers.
+        $set    = array();
+        $DB->Clear();
+
+        if (array_key_exists('title', $data)) {
+            $set[] = 'title = :title';
+            $DB->title = (string)$data['title'];
+        }
+        if (array_key_exists('slug', $data)) {
+            $set[] = 'slug = :slug';
+            $DB->slug = (string)$data['slug'];
+        }
+        if (array_key_exists('type', $data)) {
+            $set[] = 'type = :type';
+            $DB->type = (string)$data['type'];
+        }
+        if (array_key_exists('meta_description', $data)) {
+            $set[] = 'meta_description = :meta_description';
+            $DB->meta_description = ($data['meta_description'] === null) ? null : (string)$data['meta_description'];
+        }
+        if (array_key_exists('hero_media_id', $data)) {
+            $set[] = 'hero_media_id = :hero_media_id';
+            $DB->hero_media_id = ($data['hero_media_id'] === null || $data['hero_media_id'] === '')
+                ? null : (int)$data['hero_media_id'];
+        }
+        if (array_key_exists('status', $data)) {
+            $status = ((string)$data['status'] === 'published') ? 'published' : 'draft';
+            $set[] = 'status = :status';
+            $DB->status = $status;
+        }
+        if (array_key_exists('published_at', $data)) {
+            $set[] = 'published_at = :published_at';
+            $DB->published_at = ($data['published_at'] === null || $data['published_at'] === '')
+                ? null : (string)$data['published_at'];
+        }
+        if (array_key_exists('scope_type', $data)) {
+            $set[] = 'scope_type = :scope_type';
+            $DB->scope_type = $this->_normalizeScopeType($data['scope_type']);
+        }
+        if (array_key_exists('scope_id', $data)) {
+            $set[] = 'scope_id = :scope_id';
+            $DB->scope_id = (int)$data['scope_id'];
+        }
+
+        // Always bump the updater + timestamp.
+        $set[] = 'updated_at = :updated_at';
+        $DB->updated_at = date('Y-m-d H:i:s');
+        if (array_key_exists('updated_by', $data)) {
+            $set[] = 'updated_by = :updated_by';
+            $DB->updated_by = ($data['updated_by'] === null || $data['updated_by'] === '')
+                ? null : (int)$data['updated_by'];
+        }
+
+        if (count($set) === 0) {
+            return false;
+        }
+
+        $DB->page_id = $pageId;
+        $DB->Execute(
+            'UPDATE ' . DB_PREFIX . 'cms_page SET ' . implode(', ', $set)
+            . ' WHERE page_id = :page_id'
+        );
+
+        return true;
+    }
+
+    /**
+     * Set a page's publish status, stamping/clearing published_at. Publishing
+     * stamps published_at (now) only when it is currently empty; unpublishing
+     * leaves the historical stamp intact (so re-publish can preserve it).
+     *
+     * @param int    $pageId
+     * @param string $status    'published' | 'draft'
+     * @param int    $updatedBy mundane_id of the actor (0 to skip)
+     * @return bool
+     */
+    public function SetStatus($pageId, $status, $updatedBy = 0)
+    {
+        $pageId = (int)$pageId;
+        if ($pageId <= 0) {
+            return false;
+        }
+        $status = ((string)$status === 'published') ? 'published' : 'draft';
+
+        $data = array('status' => $status);
+        if ((int)$updatedBy > 0) {
+            $data['updated_by'] = (int)$updatedBy;
+        }
+
+        if ($status === 'published') {
+            // Stamp published_at only if not already set.
+            $row = $this->GetPage($pageId);
+            if ($row !== null && empty($row['published_at'])) {
+                $data['published_at'] = date('Y-m-d H:i:s');
+            }
+        }
+
+        return $this->UpdatePage($pageId, $data);
+    }
+
+    /**
+     * Delete a page and ALL of its blocks. Refuses to delete a system page
+     * (is_system=1). Returns true when the page existed and was removed.
+     *
+     * @param int $pageId
+     * @return bool
+     */
+    public function DeletePage($pageId)
+    {
+        global $DB;
+
+        $pageId = (int)$pageId;
+        if ($pageId <= 0) {
+            return false;
+        }
+
+        $row = $this->GetPage($pageId);
+        if ($row === null) {
+            return false;
+        }
+        if (!empty($row['is_system'])) {
+            // System pages (e.g. the home page) are protected.
+            return false;
+        }
+
+        // Remove the page's blocks first, then the page row.
+        $DB->Clear();
+        $DB->owner_id = $pageId;
+        $DB->Execute(
+            'DELETE FROM ' . DB_PREFIX . 'cms_block'
+            . " WHERE owner_type = 'page' AND owner_id = :owner_id"
+        );
+
+        $DB->Clear();
+        $DB->page_id = $pageId;
+        $DB->Execute(
+            'DELETE FROM ' . DB_PREFIX . 'cms_page WHERE page_id = :page_id'
+        );
+
+        return true;
+    }
+
+    /**
      * Replace ALL blocks for an owner: delete the existing set, then insert the
      * supplied ordered block array. Each block accepts the renderer shape
      * (type, enabled, order/ordering, source, fields) — fields is json_encoded.

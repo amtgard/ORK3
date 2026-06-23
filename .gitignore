@@ -46,3 +46,7 @@ config.tmpprod.php
 .vscode/
 # Superpowers brainstorming companion (local-only)
 .superpowers/
+
+# CMS media uploads (runtime; keep dir via .gitkeep)
+assets/cms-media/*
+!assets/cms-media/.gitkeep
