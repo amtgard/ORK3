@@ -8,6 +8,9 @@
  */
 chdir('/var/www/ork.amtgard.com/orkui');
 define('DONOTWEBSERVICE', true);
+if (empty($_SERVER['HTTP_HOST'])) {
+    $_SERVER['HTTP_HOST'] = 'localhost:19080';
+}
 ob_start();
 require('/var/www/ork.amtgard.com/startup.php');
 ob_end_clean();
