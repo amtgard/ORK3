@@ -180,7 +180,8 @@ items live in the `marketing_nav` block's `items[]` — i.e. CMS-editable later.
   `amtgard-logo.avif` + `.png` fallback). Resize/compress (≤ ~250 KB, ~1600px).
   Sources: `~/Downloads/amt-img-*.jpg`, `~/Downloads/amtgardlogo.avif`. These are
   the default media refs; a future media library supersedes them.
-- **Assumption:** user-supplied imagery is cleared for use.
+- **Licensing:** confirmed by the owner — necessary releases are in hand for the
+  photos and logo to be brought into the repo and used.
 
 ### Front-door CSS/JS
 
