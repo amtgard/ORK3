@@ -1,5 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap');
+
 /* ============================================================================
  * cms-admin.css — CMS admin page-list + block editor + media-picker modal.
+ *
+ * "Royal Scriptorium" admin theme: navy + gold accent. The generic blue accent
+ * is re-pointed to gold throughout the admin (primary button, active tab, focus
+ * rings, selected states). MedievalSharp is the display font for titles only.
  *
  * All classes prefixed `cms-`. Dark mode via html[data-theme="dark"] (we reuse
  * the global --ork-* variables so most surfaces theme automatically; explicit
@@ -8,6 +14,12 @@
  * ========================================================================== */
 
 .cms-wrap {
+    /* Royal Scriptorium accent tokens, scoped to the admin shell */
+    --cms-gold: #f0b429;
+    --cms-gold-deep: #caa23a;
+    --cms-navy: #0b1120;
+    --cms-navy2: #121a30;
+
     max-width: 1180px;
     margin: 0 auto;
     padding: 18px 16px 60px;
@@ -25,8 +37,10 @@
 }
 .cms-topbar h1.cms-title,
 .cms-title {
-    font-size: 24px;
+    font-family: 'MedievalSharp', 'Open Sans', system-ui, sans-serif;
+    font-size: 26px;
     font-weight: 700;
+    letter-spacing: .01em;
     margin: 0;
     /* reset the global h1-h6 gray pill */
     background: transparent;
@@ -37,6 +51,42 @@
     color: var(--ork-text);
 }
 .cms-spacer { flex: 1 1 auto; }
+
+/* ---- Masthead (heraldic mark + wordmark + subtitle) --------------------- */
+.cms-masthead {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 4px 0 2px;
+}
+.cms-masthead-mark {
+    color: var(--cms-gold, #f0b429);
+    font-size: 24px;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+.cms-masthead-word {
+    font-family: 'MedievalSharp', 'Open Sans', system-ui, sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: .01em;
+    line-height: 1.1;
+    color: var(--ork-text);
+    /* reset the global h1-h6 gray pill in case it lands on a heading */
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+}
+.cms-masthead-sub {
+    color: var(--ork-text-muted);
+    font-size: 13px;
+    line-height: 1.3;
+    flex: 1 1 100%;
+    margin-top: -2px;
+}
 
 .cms-btn {
     display: inline-flex;
@@ -59,11 +109,18 @@
 .cms-btn:disabled,
 .cms-btn[disabled] { opacity: .5; cursor: not-allowed; }
 .cms-btn-primary {
-    background: var(--ork-link);
-    border-color: var(--ork-link);
-    color: #fff;
+    background: linear-gradient(180deg, var(--cms-gold, #f0b429), #e0a420);
+    border-color: var(--cms-gold-deep, #caa23a);
+    color: #1a1205 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .35);
 }
-.cms-btn-primary:hover { background: var(--ork-link-bright); }
+.cms-btn-primary:hover { background: linear-gradient(180deg, #f6c14a, var(--cms-gold, #f0b429)); }
+/* Harden against #theme_container a dark-mode link colour winning over the
+   button label when a "New" button is rendered as an <a> (real bug). */
+#theme_container a.cms-btn-primary,
+a.cms-btn-primary,
+a.cms-btn-primary:visited,
+a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-btn-ghost {
     background: transparent;
     border-color: var(--ork-border-dark);
@@ -126,8 +183,8 @@
 .cms-select:focus,
 .cms-textarea:focus {
     outline: none;
-    border-color: var(--ork-link-bright);
-    box-shadow: 0 0 0 3px rgba(66, 153, 225, .22);
+    border-color: var(--cms-gold, #f0b429);
+    box-shadow: 0 0 0 3px rgba(240, 180, 41, .35);
 }
 .cms-field { margin-bottom: 14px; }
 .cms-label {
@@ -180,6 +237,7 @@
     background: var(--ork-bg);
     border-color: var(--ork-border-dark);
     border-bottom: 1px solid var(--ork-bg);
+    box-shadow: inset 0 3px 0 var(--cms-gold, #f0b429);
 }
 
 .cms-table-wrap {
@@ -219,9 +277,28 @@
     justify-content: flex-end;
 }
 .cms-empty {
-    padding: 40px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 48px 20px;
     text-align: center;
     color: var(--ork-text-muted);
+}
+.cms-empty-icon {
+    color: var(--cms-gold, #f0b429);
+    font-size: 44px;
+    line-height: 1;
+    opacity: .9;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .15));
+}
+.cms-empty-copy {
+    font-size: 14px;
+    max-width: 420px;
+    line-height: 1.5;
+}
+.cms-empty-cta {
+    margin-top: 4px;
 }
 
 /* New-page type chooser (in a modal) */
@@ -240,7 +317,7 @@
     color: var(--ork-text);
     transition: border-color .12s, background .12s;
 }
-.cms-typecard:hover { border-color: var(--ork-link-bright); background: var(--ork-bg-tertiary); }
+.cms-typecard:hover { border-color: var(--cms-gold, #f0b429); background: var(--ork-bg-tertiary); }
 .cms-typecard strong { display: block; font-size: 14px; margin-bottom: 3px; }
 .cms-typecard span { font-size: 12px; color: var(--ork-text-muted); }
 
@@ -306,7 +383,7 @@
 }
 .cms-block-card.cms-block-disabled { opacity: .62; }
 .cms-block-card.cms-dragging { opacity: .4; }
-.cms-block-card.cms-drag-over { border-color: var(--ork-link-bright); box-shadow: 0 0 0 2px rgba(66,153,225,.3); }
+.cms-block-card.cms-drag-over { border-color: var(--cms-gold, #f0b429); box-shadow: 0 0 0 2px rgba(240, 180, 41, .4); }
 .cms-block-head {
     display: flex;
     align-items: center;
@@ -379,7 +456,7 @@
     content: ""; position: absolute; height: 15px; width: 15px;
     left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform .15s;
 }
-.cms-switch input:checked + .cms-slider { background: var(--ork-link); }
+.cms-switch input:checked + .cms-slider { background: var(--cms-gold, #f0b429); }
 .cms-switch input:checked + .cms-slider::before { transform: translateX(17px); }
 
 /* repeating sub-item lists (slides, cards, ctas) */
@@ -504,8 +581,8 @@
     background: var(--ork-bg-secondary);
     transition: border-color .12s, transform .08s;
 }
-.cms-media-tile:hover { border-color: var(--ork-link-bright); transform: translateY(-1px); }
-.cms-media-tile.cms-selected { border-color: var(--ork-link); box-shadow: 0 0 0 2px rgba(66,153,225,.35); }
+.cms-media-tile:hover { border-color: var(--cms-gold-deep, #caa23a); transform: translateY(-1px); }
+.cms-media-tile.cms-selected { border-color: var(--cms-gold, #f0b429); box-shadow: 0 0 0 2px rgba(240, 180, 41, .45); }
 .cms-media-tile img {
     width: 100%; height: 92px; object-fit: cover; display: block; background: var(--ork-bg-tertiary);
 }
@@ -524,7 +601,7 @@
     margin-bottom: 16px;
     font-size: 13px;
 }
-.cms-upload-drop.cms-drag-active { border-color: var(--ork-link-bright); background: var(--ork-bg-tertiary); }
+.cms-upload-drop.cms-drag-active { border-color: var(--cms-gold, #f0b429); background: var(--ork-bg-tertiary); }
 .cms-upload-drop input[type=file] { display: none; }
 
 /* ============================================================================
@@ -570,7 +647,10 @@
  * ========================================================================== */
 
 html[data-theme="dark"] .cms-toast { background: #f0f2f5; color: #1a202c; }
-html[data-theme="dark"] .cms-btn-primary { color: #fff; }
+/* Gold primary button keeps DARK ink in both themes */
+html[data-theme="dark"] .cms-btn-primary,
+html[data-theme="dark"] #theme_container a.cms-btn-primary,
+html[data-theme="dark"] a.cms-btn-primary { color: #1a1205 !important; }
 html[data-theme="dark"] .cms-switch .cms-slider::before { background: #e2e8f0; }
 html[data-theme="dark"] .cms-modal { box-shadow: 0 20px 60px rgba(0, 0, 0, .6); }
 

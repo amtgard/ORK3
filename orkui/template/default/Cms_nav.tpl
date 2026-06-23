@@ -56,6 +56,12 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
         'page' => 'Page', 'post' => 'Post', 'url' => 'URL', 'dynamic' => 'Route',
     );
     $ltl = isset($linkTypeLabel[$linkType]) ? $linkTypeLabel[$linkType] : ucfirst($linkType);
+    $linkTypeIcon = array(
+        'url' => 'fa-globe', 'page' => 'fa-file', 'post' => 'fa-newspaper', 'dynamic' => 'fa-route',
+    );
+    $lti = isset($linkTypeIcon[$linkType]) ? $linkTypeIcon[$linkType] : 'fa-link';
+    // Suppress a bare "#" target — there's nothing meaningful to show.
+    $showTarget = ($tlabel !== '' && $tlabel !== '#');
     ?>
     <div class="cms-block-card<?= $enabled ? '' : ' cms-block-disabled' ?> cms-nav-item"
          data-nav-id="<?= $navId ?>"
@@ -69,22 +75,24 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
          data-parent-id="<?= isset($item['parent_id']) && $item['parent_id'] !== null ? (int)$item['parent_id'] : 0 ?>">
         <div class="cms-block-head">
             <div class="cms-block-type">
+                <i class="fas <?= $h($lti) ?> cms-nav-typeicon" aria-hidden="true" data-tip="<?= $h($ltl) ?>"></i>
                 <span class="cms-nav-label"><?= $h($label !== '' ? $label : '(untitled)') ?></span>
-                <span class="cms-block-typekey"><?= $h($ltl) ?></span>
             </div>
-            <span class="cms-block-summary cms-nav-target"><?= $tlabel !== '' ? $h($tlabel) : '—' ?></span>
+            <?php if ($showTarget): ?>
+                <span class="cms-block-summary cms-nav-target"><?= $h($tlabel) ?></span>
+            <?php endif; ?>
             <?php if (!$enabled): ?>
                 <span class="cms-badge cms-badge-draft" style="margin-left:6px;">Hidden</span>
             <?php endif; ?>
             <?php if ($canManage): ?>
             <div class="cms-block-tools">
-                <button type="button" class="cms-icon-btn" data-act="up" title="Move up" data-tip="Move up"><i class="fas fa-arrow-up"></i></button>
-                <button type="button" class="cms-icon-btn" data-act="down" title="Move down" data-tip="Move down"><i class="fas fa-arrow-down"></i></button>
+                <button type="button" class="cms-icon-btn" data-act="up" data-tip="Move up"><i class="fas fa-arrow-up"></i></button>
+                <button type="button" class="cms-icon-btn" data-act="down" data-tip="Move down"><i class="fas fa-arrow-down"></i></button>
                 <?php if (!$isChild): ?>
-                    <button type="button" class="cms-icon-btn" data-act="addchild" title="Add sub-item" data-tip="Add sub-item"><i class="fas fa-level-down-alt"></i></button>
+                    <button type="button" class="cms-icon-btn" data-act="addchild" data-tip="Add sub-item"><i class="fas fa-level-down-alt"></i></button>
                 <?php endif; ?>
-                <button type="button" class="cms-icon-btn" data-act="edit" title="Edit" data-tip="Edit"><i class="fas fa-pen"></i></button>
-                <button type="button" class="cms-icon-btn cms-icon-danger" data-act="delete" title="Delete" data-tip="Delete"><i class="fas fa-trash"></i></button>
+                <button type="button" class="cms-icon-btn" data-act="edit" data-tip="Edit"><i class="fas fa-pen"></i></button>
+                <button type="button" class="cms-icon-btn cms-icon-danger" data-act="delete" data-tip="Delete"><i class="fas fa-trash"></i></button>
             </div>
             <?php endif; ?>
         </div>
@@ -99,6 +107,8 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
 .cms-nav-item { margin-bottom: 8px; }
 .cms-nav-children { margin: 4px 0 12px 28px; border-left: 2px solid var(--ork-border); padding-left: 12px; }
 .cms-nav-children .cms-nav-item { margin-bottom: 6px; }
+.cms-block-type { display: flex; align-items: center; gap: 8px; }
+.cms-nav-typeicon { color: var(--cms-gold, #f0b429); font-size: 13px; width: 16px; text-align: center; flex: 0 0 auto; }
 .cms-nav-label { font-weight: 600; color: var(--ork-text); }
 .cms-nav-target { color: var(--ork-text-muted); font-size: 12.5px; margin-left: auto; padding: 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
 .cms-nav-empty-children { font-size: 12px; color: var(--ork-text-muted); padding: 2px 0 6px 28px; }
@@ -108,7 +118,11 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
 <div class="cms-wrap">
 
     <div class="cms-topbar">
-        <h1 class="cms-title">Content Management</h1>
+        <div class="cms-masthead">
+            <span class="cms-masthead-mark">⚜</span>
+            <h1 class="cms-masthead-word cms-title">The Scriptorium</h1>
+            <div class="cms-masthead-sub">Site Content · Navigation</div>
+        </div>
         <span class="cms-spacer"></span>
         <?php if ($canManage): ?>
             <button type="button" class="cms-btn cms-btn-primary" id="cmsNavAddBtn">
@@ -135,7 +149,13 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
     <div id="cmsNavTree">
         <?php if (empty($top)): ?>
             <div class="cms-empty">
-                No navigation items yet.<?php if ($canManage): ?> Use <strong>Add Item</strong> to create one.<?php endif; ?>
+                <div class="cms-empty-icon">⚜</div>
+                <div class="cms-empty-copy">No paths laid. Chart the front gate.</div>
+                <?php if ($canManage): ?>
+                    <button type="button" class="cms-btn cms-btn-primary cms-empty-cta" id="cmsNavAddBtnEmpty">
+                        <i class="fas fa-plus"></i> Add Item
+                    </button>
+                <?php endif; ?>
             </div>
         <?php else: ?>
             <?php foreach ($top as $item):
@@ -386,6 +406,8 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
 
     var addBtn = document.getElementById('cmsNavAddBtn');
     if (addBtn) { addBtn.addEventListener('click', function () { openAdd(0); }); }
+    var addBtnEmpty = document.getElementById('cmsNavAddBtnEmpty');
+    if (addBtnEmpty) { addBtnEmpty.addEventListener('click', function () { openAdd(0); }); }
 
     /* ---- Save ---- */
     var saveBtn = document.getElementById('cmsNavSave');

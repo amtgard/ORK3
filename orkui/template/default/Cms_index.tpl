@@ -46,7 +46,13 @@ $h = function ($v) {
 <div class="cms-wrap">
 
     <div class="cms-topbar">
-        <h1 class="cms-title">Content Management</h1>
+        <div class="cms-masthead">
+            <i class="fas fa-feather-alt cms-masthead-mark"></i>
+            <div>
+                <div class="cms-masthead-word cms-title">The Scriptorium</div>
+                <div class="cms-masthead-sub">Site Content · Pages</div>
+            </div>
+        </div>
         <span class="cms-spacer"></span>
         <?php if ($canCreate): ?>
             <button type="button" class="cms-btn cms-btn-primary" id="cmsNewPageBtn">
@@ -89,7 +95,6 @@ $h = function ($v) {
                     <th>Title</th>
                     <th>Type</th>
                     <th>Status</th>
-                    <th>Scope</th>
                     <th>Updated</th>
                     <th style="text-align:right;">Actions</th>
                 </tr>
@@ -97,9 +102,15 @@ $h = function ($v) {
             <tbody>
                 <?php if (empty($pages)): ?>
                     <tr>
-                        <td colspan="6">
+                        <td colspan="5">
                             <div class="cms-empty">
-                                No pages yet.<?php if ($canCreate): ?> Use <strong>New Page</strong> to create one.<?php endif; ?>
+                                <div class="cms-empty-icon">⚜</div>
+                                <div class="cms-empty-copy">No pages yet. Start your first scroll.</div>
+                                <?php if ($canCreate): ?>
+                                    <button type="button" class="cms-btn cms-btn-primary cms-empty-cta" id="cmsNewPageEmptyBtn">
+                                        <i class="fas fa-plus"></i> New Page
+                                    </button>
+                                <?php endif; ?>
                             </div>
                         </td>
                     </tr>
@@ -111,7 +122,6 @@ $h = function ($v) {
                         $type      = (string)($p['type'] ?? 'composed');
                         $status    = (string)($p['status'] ?? 'draft');
                         $isSystem  = !empty($p['is_system']);
-                        $scopeType = (string)($p['scope_type'] ?? 'global');
                         $updated   = (string)($p['updated_at'] ?? '');
                         $typeLabel = isset($typeLabels[$type]) ? $typeLabels[$type] : ucfirst($type);
                         $isPub     = ($status === 'published');
@@ -130,7 +140,6 @@ $h = function ($v) {
                                 <?= $isPub ? 'Published' : 'Draft' ?>
                             </span>
                         </td>
-                        <td data-label="Scope"><span class="cms-badge cms-badge-scope"><?= $h($scopeType) ?></span></td>
                         <td data-label="Updated" class="cms-muted"><?= $h($updatedFmt) ?></td>
                         <td data-label="Actions">
                             <div class="cms-row-actions">
@@ -242,10 +251,12 @@ $h = function ($v) {
     });
 
     /* ---- New Page ---- */
-    var newBtn = document.getElementById('cmsNewPageBtn');
     var newModal = document.getElementById('cmsNewModal');
-    if (newBtn && newModal) {
-        newBtn.addEventListener('click', function () { openModal(newModal); });
+    if (newModal) {
+        ['cmsNewPageBtn', 'cmsNewPageEmptyBtn'].forEach(function (id) {
+            var b = document.getElementById(id);
+            if (b) { b.addEventListener('click', function () { openModal(newModal); }); }
+        });
     }
 
     /* ---- POST helper ---- */

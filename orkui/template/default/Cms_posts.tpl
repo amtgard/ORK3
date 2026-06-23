@@ -32,12 +32,16 @@ $h = function ($v) {
 <div class="cms-wrap">
 
     <div class="cms-topbar">
-        <h1 class="cms-title">Content Management</h1>
+        <div class="cms-masthead">
+            <span class="cms-masthead-mark">&#9884;</span>
+            <h1 class="cms-masthead-word cms-title">The Scriptorium</h1>
+            <div class="cms-masthead-sub">Site Content &middot; Posts</div>
+        </div>
         <span class="cms-spacer"></span>
         <?php if ($canCreate): ?>
-            <a class="cms-btn cms-btn-primary" href="<?= UIR ?>Cms/editpost/new">
+            <button type="button" class="cms-btn cms-btn-primary" id="cmsNewPostBtn">
                 <i class="fas fa-plus"></i> New Post
-            </a>
+            </button>
         <?php endif; ?>
     </div>
 
@@ -87,7 +91,13 @@ $h = function ($v) {
                     <tr>
                         <td colspan="6">
                             <div class="cms-empty">
-                                No posts<?= $tagF !== '' ? ' with that tag' : '' ?> yet.<?php if ($canCreate && $tagF === ''): ?> Use <strong>New Post</strong> to write one.<?php endif; ?>
+                                <div class="cms-empty-icon">&#9884;</div>
+                                <div class="cms-empty-copy">No tales told yet.<?= $tagF !== '' ? ' (none with that tag)' : '' ?></div>
+                                <?php if ($canCreate): ?>
+                                    <button type="button" class="cms-btn cms-btn-primary cms-empty-cta" id="cmsNewPostBtnEmpty">
+                                        <i class="fas fa-plus"></i> New Post
+                                    </button>
+                                <?php endif; ?>
                             </div>
                         </td>
                     </tr>
@@ -213,6 +223,13 @@ $h = function ($v) {
             document.querySelectorAll('.cms-modal-overlay.cms-open').forEach(closeModal);
         }
     });
+
+    /* ---- New Post (navigate to the post editor) ---- */
+    function goNewPost() { window.location.href = UIR + 'Cms/editpost/new'; }
+    var newPostBtn = document.getElementById('cmsNewPostBtn');
+    if (newPostBtn) { newPostBtn.addEventListener('click', goNewPost); }
+    var newPostBtnEmpty = document.getElementById('cmsNewPostBtnEmpty');
+    if (newPostBtnEmpty) { newPostBtnEmpty.addEventListener('click', goNewPost); }
 
     /* ---- POST helper ---- */
     function post(endpoint, params) {
