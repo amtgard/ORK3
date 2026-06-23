@@ -25,6 +25,7 @@ $post    = isset($Post) && is_array($Post) ? $Post : array();
 $blocks  = isset($Blocks) && is_array($Blocks) ? $Blocks : array();
 $isNew   = !empty($IsNew);
 $catalog = isset($BlockCatalog) && is_array($BlockCatalog) ? $BlockCatalog : array();
+$blockAllow = isset($BlockAllow) && is_array($BlockAllow) ? $BlockAllow : array();
 $caps    = isset($Caps) && is_array($Caps) ? $Caps : array();
 $heroRef = (isset($HeroRef) && is_array($HeroRef)) ? $HeroRef : null;
 
@@ -487,6 +488,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
             catalog:   <?= json_encode($catalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             labels:    <?= json_encode($catalogLabels, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             pageTypes: [],
+            blockAllow: <?= json_encode($blockAllow, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            pageType:  'post',
             canEdit:   STATE.canEdit,
             onDirty:   markDirty
         });

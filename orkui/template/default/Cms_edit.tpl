@@ -19,6 +19,7 @@ $page    = isset($Page) && is_array($Page) ? $Page : array();
 $blocks  = isset($Blocks) && is_array($Blocks) ? $Blocks : array();
 $isNew   = !empty($IsNew);
 $catalog = isset($BlockCatalog) && is_array($BlockCatalog) ? $BlockCatalog : array();
+$blockAllow = isset($BlockAllow) && is_array($BlockAllow) ? $BlockAllow : array();
 $caps    = isset($Caps) && is_array($Caps) ? $Caps : array();
 
 // Page-type enum the meta form offers (mirror controller _pageTypes()).
@@ -241,6 +242,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     // On a NEW page, switching the type re-seeds the starter blocks — but only
     // when the user hasn't authored content yet (avoid clobbering real work).
     typeInput.addEventListener('change', function () {
+        if (BE && BE.setPageType) { BE.setPageType(typeInput.value); }
         if (STATE.isNew && BE && BE.isPristine()) {
             BE.seedFromPreset(typeInput.value);
         }
@@ -453,6 +455,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
             catalog:   <?= json_encode($catalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             labels:    <?= json_encode($catalogLabels, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             pageTypes: <?= json_encode($pageTypes, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            blockAllow: <?= json_encode($blockAllow, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            pageType:  typeInput ? typeInput.value : <?= json_encode($pType) ?>,
             canEdit:   STATE.canEdit,
             onDirty:   markDirty
         });

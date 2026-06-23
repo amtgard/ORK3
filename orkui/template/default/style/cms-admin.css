@@ -594,6 +594,28 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     font-size: 13px;
 }
 
+/* "Show all blocks" / "Show only suited" toggle in the Add-block chooser */
+.cms-addshowall {
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px solid var(--ork-border);
+    text-align: center;
+}
+.cms-link-btn {
+    background: none;
+    border: 0;
+    padding: 4px 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ork-text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.cms-link-btn:hover { color: var(--cms-gold, #f0b429); text-decoration: underline; }
+.cms-link-btn i { font-size: 11px; }
+
 /* Tile layout: icon chip + text column */
 .cms-typecard {
     display: flex;

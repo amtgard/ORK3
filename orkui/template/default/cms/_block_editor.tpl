@@ -74,6 +74,9 @@ $beHeading   = isset($beHeading) ? (string)$beHeading : 'Blocks';
                 <input type="text" class="cms-input" id="cmsAddSearch" placeholder="Search blocks…" autocomplete="off">
             </div>
             <div id="cmsAddGroups"></div>
+            <div class="cms-addshowall" id="cmsAddShowAllWrap" style="display:none;">
+                <button type="button" class="cms-link-btn" id="cmsAddShowAll"></button>
+            </div>
             <div class="cms-typegrid-empty" id="cmsAddNoMatch" style="display:none;">No blocks match your search.</div>
         </div>
     </div>
@@ -138,6 +141,9 @@ window.CmsBlockEditor = (function () {
     var catalog = [];
     var labels = {};
     var pageTypes = [];
+    var blockAllow = {};        // page-type key -> [allowed block types]
+    var pageType = '';          // current page type ('post' for blog bodies)
+    var showAllBlocks = false;  // chooser "Show all blocks" toggle state
     var canEdit = false;
     var onDirty = function () {};
 
@@ -1275,7 +1281,7 @@ window.CmsBlockEditor = (function () {
     /* ================= Add block ================= *
      * The chooser is searchable + grouped + icon'd, and can insert a new block
      * at a specific index (insertAt). insertAt === null → append at the end. */
-    var addModal, addGroupsEl, addSearchEl, addNoMatchEl;
+    var addModal, addGroupsEl, addSearchEl, addNoMatchEl, addShowAllWrap, addShowAllBtn;
     var addInsertAt = null;   // index to splice at, or null to append
 
     // Stable group order for the chooser sections.
@@ -1322,15 +1328,36 @@ window.CmsBlockEditor = (function () {
         return cardBtn;
     }
 
+    // The set of block types sensible for the current page type. Empty/unknown
+    // → allow everything (no scoping). Universal blocks are part of each list.
+    function allowedTypeSet() {
+        var arr = (blockAllow && blockAllow[pageType]) ? blockAllow[pageType] : null;
+        if (!arr || !arr.length) { return null; } // null → no restriction
+        var set = {};
+        arr.forEach(function (t) { set[t] = true; });
+        return set;
+    }
+
     function renderAddChooser(filter) {
         addGroupsEl.innerHTML = '';
         var q = (filter || '').trim().toLowerCase();
-        var list = (catalog || []).filter(function (c) {
-            // skip catalog entries the controller marked non-addable (e.g. legacy 'richtext')
-            if (c.addable === false) { return false; }
-            if (!q) { return true; }
-            return String(c.label || '').toLowerCase().indexOf(q) !== -1
-                || String(c.type || '').toLowerCase().indexOf(q) !== -1;
+
+        // All addable catalog entries (legacy/non-addable always excluded).
+        var addable = (catalog || []).filter(function (c) { return c.addable !== false; });
+
+        // Scope to the page type unless searching or "Show all" is on. When the
+        // user is typing a query we search across ALL blocks so anything is
+        // findable; the scope only governs the default browse view.
+        var allowed = allowedTypeSet();
+        var scoped = allowed && !q && !showAllBlocks;
+        var hiddenCount = 0;
+        var list = addable.filter(function (c) {
+            if (q) {
+                return String(c.label || '').toLowerCase().indexOf(q) !== -1
+                    || String(c.type || '').toLowerCase().indexOf(q) !== -1;
+            }
+            if (scoped && !allowed[c.type]) { hiddenCount++; return false; }
+            return true;
         });
 
         // bucket by group, preserving GROUP_ORDER then any extras alphabetically
@@ -1361,10 +1388,24 @@ window.CmsBlockEditor = (function () {
         });
 
         addNoMatchEl.style.display = any ? 'none' : '';
+
+        // "Show all blocks" affordance — only when scoping actually hid some and
+        // we're not searching. Re-render expanded (or re-scoped) on click.
+        if (addShowAllWrap && addShowAllBtn) {
+            if (!q && allowed && (showAllBlocks || hiddenCount > 0)) {
+                addShowAllWrap.style.display = '';
+                addShowAllBtn.innerHTML = showAllBlocks
+                    ? '<i class="fas fa-chevron-up"></i> Show only blocks suited to this page'
+                    : '<i class="fas fa-chevron-down"></i> Show all blocks (' + hiddenCount + ' more)';
+            } else {
+                addShowAllWrap.style.display = 'none';
+            }
+        }
     }
 
     function openAddChooser(insertAt) {
         addInsertAt = (insertAt === undefined) ? null : insertAt;
+        showAllBlocks = false; // always reopen in scoped view
         if (addSearchEl) { addSearchEl.value = ''; }
         renderAddChooser('');
         openModal(addModal);
@@ -1372,13 +1413,22 @@ window.CmsBlockEditor = (function () {
     }
 
     function wireAddBlock() {
-        addModal     = document.getElementById('cmsAddModal');
-        addGroupsEl  = document.getElementById('cmsAddGroups');
-        addSearchEl  = document.getElementById('cmsAddSearch');
-        addNoMatchEl = document.getElementById('cmsAddNoMatch');
+        addModal       = document.getElementById('cmsAddModal');
+        addGroupsEl    = document.getElementById('cmsAddGroups');
+        addSearchEl    = document.getElementById('cmsAddSearch');
+        addNoMatchEl   = document.getElementById('cmsAddNoMatch');
+        addShowAllWrap = document.getElementById('cmsAddShowAllWrap');
+        addShowAllBtn  = document.getElementById('cmsAddShowAll');
         var addBtn      = document.getElementById('cmsAddBlockBtn');
         var addBtnEmpty = document.getElementById('cmsAddBlockBtnEmpty');
         if (!addModal || !addGroupsEl) { return; }
+
+        if (addShowAllBtn) {
+            addShowAllBtn.addEventListener('click', function () {
+                showAllBlocks = !showAllBlocks;
+                renderAddChooser(addSearchEl ? addSearchEl.value : '');
+            });
+        }
 
         if (addBtn)      { addBtn.addEventListener('click', function () { openAddChooser(null); }); }
         if (addBtnEmpty) { addBtnEmpty.addEventListener('click', function () { openAddChooser(null); }); }
@@ -1498,6 +1548,8 @@ window.CmsBlockEditor = (function () {
         catalog   = Array.isArray(opts.catalog) ? opts.catalog : [];
         labels    = (opts.labels && typeof opts.labels === 'object') ? opts.labels : {};
         pageTypes = Array.isArray(opts.pageTypes) ? opts.pageTypes : [];
+        blockAllow = (opts.blockAllow && typeof opts.blockAllow === 'object') ? opts.blockAllow : {};
+        pageType  = (typeof opts.pageType === 'string') ? opts.pageType : '';
         canEdit   = !!opts.canEdit;
         if (typeof opts.onDirty === 'function') { onDirty = opts.onDirty; }
         if (opts.ajaxUrl) { AJAX = opts.ajaxUrl; }
@@ -1538,6 +1590,9 @@ window.CmsBlockEditor = (function () {
                     fields:  b.fields || {}
                 };
             });
+        },
+        setPageType: function (type) {
+            pageType = (typeof type === 'string') ? type : '';
         },
         seedFromPreset: function (type) {
             var preset = presetBlocksFor(type);

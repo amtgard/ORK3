@@ -262,6 +262,7 @@ class Controller_Cms extends Controller
         $this->data['IsNew']        = $isNew;
         $this->data['BlockCatalog'] = $this->_blockCatalog();
         $this->data['PageTypes']    = $this->_pageTypes();
+        $this->data['BlockAllow']   = $this->_blockAllow();
         $this->data['Caps']         = $this->_capFlags($uid);
     }
 
@@ -461,6 +462,7 @@ class Controller_Cms extends Controller
         $this->data['IsNew']        = $isNew;
         $this->data['HeroRef']      = $heroRef;
         $this->data['BlockCatalog'] = $this->_blockCatalog();
+        $this->data['BlockAllow']   = $this->_blockAllow();
         $this->data['Caps']         = $this->_capFlags($uid);
     }
 
@@ -598,7 +600,7 @@ class Controller_Cms extends Controller
         // label, while the editor's Add-block chooser skips it (no new blocks).
         $known = array(
             // Shipped front-door blocks.
-            'marketing_nav'   => array('Marketing Nav',      'Layout',   false, 'fa-bars',          'Top navigation bar with logo, menu links, and login / call-to-action buttons.'),
+            'marketing_nav'   => array('Marketing Nav',      'Layout',   false, 'fa-bars',          'Top navigation bar with logo, menu links, and login / call-to-action buttons. Rendered automatically as site chrome — not added per page.', false),
             'member_bar'      => array('Member Bar',         'Layout',   true,  'fa-user-shield',   'Logged-in welcome strip with quick links to the viewer’s kingdom, Live Attendance, and Member Tools. Hidden from signed-out visitors.'),
             'hero_carousel'   => array('Hero Carousel',      'Hero',     false, 'fa-images',        'Full-width rotating hero with slides, logo, and call-to-action buttons.'),
             'richtext'        => array('Rich Text (legacy)', 'Content',  false, 'fa-align-left',    'Legacy rich-text block. Prefer the newer Rich Text block for new pages.', false),
@@ -701,6 +703,7 @@ class Controller_Cms extends Controller
                 'label'  => $labels['blog_index'],
                 'blocks' => array(
                     $this->_starter('heading'),
+                    $this->_starter('blog_feed'),
                 ),
             ),
             array(
@@ -711,6 +714,55 @@ class Controller_Cms extends Controller
                 ),
             ),
         );
+    }
+
+    /**
+     * Which block types are SENSIBLE to add on each page type (and on blog post
+     * bodies, keyed 'post'). The editor surfaces these in the Add-block chooser
+     * by default; everything else is reachable behind a "Show all blocks" toggle.
+     * This only governs the chooser — blocks already placed on a page keep
+     * rendering and stay editable regardless of this list.
+     *
+     * A handful of blocks are universal (sensible on any page); each type then
+     * adds its own thematic extras. `composed` (the landing-page type) is the
+     * kitchen sink — it gets every addable block, so it is computed from the
+     * catalog rather than enumerated here.
+     *
+     * @return array<string,array<int,string>> page-type key => allowed block types
+     */
+    private function _blockAllow()
+    {
+        // Sensible on any page: structure + plain content + a single image.
+        $universal = array('heading', 'rich_text', 'image', 'divider', 'spacer', 'quote', 'raw_html');
+
+        $extra = array(
+            // Text/article: long-form content + inline media + supporting layout.
+            'article'    => array('accordion', 'table', 'file_download', 'video_embed', 'gallery', 'columns'),
+            // Media/gallery: image-led blocks.
+            'media'      => array('gallery', 'photo_mosaic', 'video_embed', 'card_grid'),
+            // Resource/document: downloads + tabular/structured reference.
+            'resource'   => array('file_download', 'table', 'accordion', 'columns'),
+            // Blog index: the live post feed, with an optional call-to-action.
+            'blog_index' => array('blog_feed', 'cta_band'),
+            // Dynamic data: every live feed, plus framing blocks.
+            'dynamic'    => array('events_feed', 'kingdoms_teaser', 'blog_feed', 'stat_ticker', 'tournaments_feed', 'recap_highlight', 'member_bar', 'card_grid', 'cta_band'),
+            // Blog post bodies behave like articles.
+            'post'       => array('accordion', 'table', 'file_download', 'video_embed', 'gallery', 'columns'),
+        );
+
+        // composed = all addable block types (the full landing-page kit).
+        $composed = array();
+        foreach ($this->_blockCatalog() as $c) {
+            if (!empty($c['addable'])) {
+                $composed[] = $c['type'];
+            }
+        }
+
+        $allow = array('composed' => $composed);
+        foreach ($extra as $type => $types) {
+            $allow[$type] = array_values(array_unique(array_merge($universal, $types)));
+        }
+        return $allow;
     }
 
     /**
