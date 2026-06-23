@@ -54,7 +54,9 @@ class Controller
             $_uid_check = (int)$this->session->user_id;
             $_tok_check = $this->session->token;
             $_rs = $DB->DataSet("SELECT token FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$_uid_check} LIMIT 1");
-            if (!$_rs || !$_rs->Next() || $_rs->token !== $_tok_check) {
+            // $_rs === false means the query itself failed (transient DB error).
+            // Only destroy the session when the query succeeded AND the token is absent or mismatched.
+            if ($_rs !== false && (!$_rs->Next() || $_rs->token !== $_tok_check)) {
                 $_returnRoute = trim($_GET['Route'] ?? '');
                 unset($_SESSION['is_authorized_mundane_id']);
                 session_unset();
@@ -90,13 +92,15 @@ class Controller
         if ($_uid > 0) {
             $this->load_model('CmsAuth');
             if (isset($this->CmsAuth)) {
-                $_cmsScope = ['type' => 'global', 'id' => 0];
-                foreach (['page.create', 'page.edit', 'nav.manage', 'media.manage'] as $_cmsCap) {
-                    if ($this->CmsAuth->cms_can($_uid, $_cmsCap, $_cmsScope)) {
-                        $this->data['CanManageCms'] = true;
-                        break;
-                    }
-                }
+                // One capability probe (not a loop): every CMS role from
+                // contributor up holds page.create, and super-admins short-circuit
+                // inside cms_can — so a single check answers "can this user reach
+                // the CMS admin?" without N grant/auth queries on every request.
+                $this->data['CanManageCms'] = (bool) $this->CmsAuth->cms_can(
+                    $_uid,
+                    'page.create',
+                    ['type' => 'global', 'id' => 0]
+                );
             }
         }
 
@@ -160,7 +164,7 @@ class Controller
 				 INNER JOIN ork_kingdom k ON k.kingdom_id = p.kingdom_id
 				 WHERE m.mundane_id = {$uid} LIMIT 1"
             );
-            if ($hkRow && $hkRow->Size() > 0 && $hkRow->Next()) {
+            if ($hkRow && $hkRow->Next()) {
                 $this->data['UserKingdomId']       = (int) $hkRow->kingdom_id;
                 $this->data['UserParentKingdomId'] = (int) $hkRow->parent_kingdom_id;
             } else {

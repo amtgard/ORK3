@@ -225,7 +225,7 @@ class CmsSanitizer
 
             // URL attributes: enforce safe schemes.
             if (($tag === 'a' && $lname === 'href') || ($tag === 'img' && $lname === 'src')) {
-                if (!self::isSafeUrl($value)) {
+                if (!self::IsSafeUrl($value)) {
                     $el->removeAttribute($name);
                 }
             }
@@ -248,22 +248,27 @@ class CmsSanitizer
      * URL scheme allowlist: http(s), mailto, and relative / root-relative
      * (incl. /assets) URLs. javascript:, data:, vbscript:, file:, etc. are
      * rejected. data: is rejected ENTIRELY (no data:image exception) per
-     * the security contract.
+     * the security contract. Protocol-relative (//) is also rejected.
      *
-     * @return bool true if the URL is safe to keep
+     * Public so controllers can call CmsSanitizer::IsSafeUrl() at the trust
+     * boundary before persisting user-supplied URLs. Also called internally
+     * from filterAttributes().
+     *
+     * @return bool true if the URL is safe to keep / store
      */
-    private static function isSafeUrl($url)
+    public static function IsSafeUrl($url)
     {
         $url = trim($url);
         if ($url === '') {
             return false;
         }
 
-        // Strip HTML/control whitespace that can hide a scheme, e.g.
-        // "java\tscript:" or "java\nscript:". Browsers ignore these
-        // inside a scheme, so we must too before testing.
-        $stripped = preg_replace('/[\x00-\x20\x7f]+/', '', $url);
-        $stripped = str_replace("\xc2\xa0", '', $stripped); // NBSP
+        // Strip ALL Unicode whitespace/control characters that can hide a
+        // scheme, e.g. "java\tscript:" or scheme prefixed with U+2000.
+        // Using \pZ (separators) + \pC (other controls, incl. \x00-\x1f,
+        // \x7f, NBSP U+00A0, etc.) with the /u flag covers every bypass
+        // that ASCII-only stripping misses.
+        $stripped = preg_replace('/[\pZ\pC]+/u', '', $url);
 
         $lower = strtolower($stripped);
 
@@ -276,9 +281,14 @@ class CmsSanitizer
             }
         }
 
-        // Allow root-relative / relative / anchor / query-only URLs (no
-        // scheme present). A leading '//' is protocol-relative → allowed
-        // (resolves to http(s)).
+        // Protocol-relative URLs (leading "//") are NOT allowed: they resolve
+        // to an attacker-controlled host in http and https contexts alike.
+        if (strlen($lower) >= 2 && $lower[0] === '/' && $lower[1] === '/') {
+            return false;
+        }
+
+        // Allow root-relative (/) relative (.) anchor (#) or query-only (?)
+        // paths — none of these contain a scheme so they are safe.
         if ($lower[0] === '/' || $lower[0] === '#' || $lower[0] === '?' || $lower[0] === '.') {
             return true;
         }

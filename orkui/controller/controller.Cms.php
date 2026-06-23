@@ -20,6 +20,13 @@ class Controller_Cms extends Controller
     /** v2 scope: org-wide. */
     private static $SCOPE = array('type' => 'global', 'id' => 0);
 
+    /**
+     * Per-request capability cache: ['is_super' => bool, 'caps' => string[]].
+     * Keyed by uid so a single request can't bleed between users.
+     * @var array
+     */
+    private $_capCache = array();
+
     public function __construct($call = null, $action = null)
     {
         parent::__construct($call, $action);
@@ -318,23 +325,18 @@ class Controller_Cms extends Controller
 
     /**
      * True when the user holds at least one CMS capability at global scope
-     * (covers super-admin via cms_can short-circuit).
+     * (covers super-admin via _resolveCapabilities short-circuit).
      */
     private function _hasAnyCmsCapability($uid)
     {
         if ($uid <= 0) {
             return false;
         }
-        $caps = array(
-            'page.create', 'page.edit_own', 'page.edit', 'page.publish',
-            'page.delete', 'media.manage', 'nav.manage', 'roles.manage',
-        );
-        foreach ($caps as $cap) {
-            if ($this->CmsAuth->cms_can($uid, $cap, self::$SCOPE)) {
-                return true;
-            }
+        $resolved = $this->_resolveCapabilities($uid);
+        if ($resolved['is_super']) {
+            return true;
         }
-        return false;
+        return !empty($resolved['caps']);
     }
 
     /**
@@ -342,15 +344,52 @@ class Controller_Cms extends Controller
      */
     private function _capFlags($uid)
     {
+        $resolved = $this->_resolveCapabilities($uid);
+        $isSuper  = $resolved['is_super'];
+        $caps     = $resolved['caps'];
         return array(
-            'create'  => $this->CmsAuth->cms_can($uid, 'page.create', self::$SCOPE),
-            'edit'    => $this->CmsAuth->cms_can($uid, 'page.edit', self::$SCOPE),
-            'publish' => $this->CmsAuth->cms_can($uid, 'page.publish', self::$SCOPE),
-            'delete'  => $this->CmsAuth->cms_can($uid, 'page.delete', self::$SCOPE),
-            'media'   => $this->CmsAuth->cms_can($uid, 'media.manage', self::$SCOPE),
-            'nav'     => $this->CmsAuth->cms_can($uid, 'nav.manage', self::$SCOPE),
-            'roles'   => $this->CmsAuth->cms_can($uid, 'roles.manage', self::$SCOPE),
+            'create'  => $isSuper || in_array('page.create', $caps, true),
+            'edit'    => $isSuper || in_array('page.edit', $caps, true),
+            'publish' => $isSuper || in_array('page.publish', $caps, true),
+            'delete'  => $isSuper || in_array('page.delete', $caps, true),
+            'media'   => $isSuper || in_array('media.manage', $caps, true),
+            'nav'     => $isSuper || in_array('nav.manage', $caps, true),
+            'roles'   => $isSuper || in_array('roles.manage', $caps, true),
         );
+    }
+
+    /**
+     * Resolve a user's CMS capabilities ONCE per request (cached by uid).
+     *
+     * Issues exactly 2 DB queries total (1 IsSuperAdmin + 1 GetUserGrants),
+     * versus the prior O(N) loop that fired up to ~24 queries (8 caps ×
+     * IsSuperAdmin + GetUserGrants each). All callers do in_array() in memory.
+     *
+     * Big-O: O(G × R) per request, G = grant rows, R = roles/caps (both tiny,
+     * single-digit in practice); previously O(N) DB round-trips where N = caps.
+     *
+     * @param int $uid mundane_id
+     * @return array{is_super:bool, caps:string[]}
+     */
+    private function _resolveCapabilities($uid)
+    {
+        $uid = (int)$uid;
+        if (isset($this->_capCache[$uid])) {
+            return $this->_capCache[$uid];
+        }
+
+        // One HasAuthority query (super-admin short-circuit).
+        $isSuper = ($uid > 0) && (bool)$this->CmsAuth->IsSuperAdmin($uid);
+
+        // One GetUserGrants query + in-memory role expansion.
+        // Skip for super-admins — they pass every cap already.
+        $caps = ($uid > 0 && !$isSuper)
+            ? $this->CmsAuth->get_user_capabilities($uid, self::$SCOPE)
+            : array();
+
+        $resolved = array('is_super' => $isSuper, 'caps' => $caps);
+        $this->_capCache[$uid] = $resolved;
+        return $resolved;
     }
 
     /**

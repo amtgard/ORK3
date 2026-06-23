@@ -118,9 +118,22 @@ class Controller_Blog extends Controller
 
     /**
      * RSS 2.0 feed of the latest published posts. Emits XML directly and exits.
+     *
+     * The feed is keyed on a static scope tuple and cached for 300 s so that
+     * RSS aggregators polling every few minutes hit memcache instead of the DB.
+     * Hot path: O(1) cache lookup → early-exit; miss → O(N) list_posts (N=20).
      */
     public function rss($action = null)
     {
+        $gc       = Ork3::$Lib->ghettocache;
+        $cacheKey = $gc->key(['scope_type' => 'global', 'scope_id' => 0, 'limit' => self::RSS_LIMIT]);
+        $cached   = $gc->get(__CLASS__ . '.rss_xml', $cacheKey, 300);
+        if ($cached !== false) {
+            header('Content-Type: application/rss+xml; charset=utf-8');
+            echo $cached;
+            exit;
+        }
+
         $this->load_model('CmsPost');
 
         $result = $this->CmsPost->list_posts(array(
@@ -131,7 +144,6 @@ class Controller_Blog extends Controller
         ));
         $rows = isset($result['rows']) && is_array($result['rows']) ? $result['rows'] : array();
 
-        $base       = defined('HTTP_UI') ? HTTP_UI : '';
         $indexLink  = UIR . 'Blog/index';
         $selfLink   = UIR . 'Blog/rss';
         $buildDate  = date('r');
@@ -183,6 +195,8 @@ class Controller_Blog extends Controller
 
         $xml .= "</channel>\n";
         $xml .= "</rss>\n";
+
+        $gc->cache(__CLASS__ . '.rss_xml', $cacheKey, $xml);
 
         header('Content-Type: application/rss+xml; charset=utf-8');
         echo $xml;

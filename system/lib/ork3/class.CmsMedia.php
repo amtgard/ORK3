@@ -23,7 +23,7 @@
  * class.CmsPage.php / class.CmsAuth.php.
  *************************************************************************/
 
-class CmsMedia extends Ork3
+class CmsMedia extends CmsBase
 {
     /** Hard upload ceiling: 8 MB of decoded image bytes. */
     private static $MAX_BYTES = 8388608; // 8 * 1024 * 1024
@@ -556,8 +556,10 @@ class CmsMedia extends Ork3
         if ($realRoot === false) {
             return false;
         }
-        if ($realDir === false || strncmp($realDir, $realRoot, strlen($realRoot)) !== 0) {
-            return false; // outside the media tree — refuse
+        $realRootSlash = $realRoot . '/';
+        if ($realDir === false
+            || ($realDir !== $realRoot && strncmp($realDir, $realRootSlash, strlen($realRootSlash)) !== 0)) {
+            return false; // outside the media tree — refuse (separator-anchored)
         }
 
         if (is_file($disk)) {
@@ -618,54 +620,4 @@ class CmsMedia extends Ork3
         }
     }
 
-    /* ------------------------------------------------------------------ *
-     * Internal: result-set + scope helpers (mirror class.CmsPage.php)
-     * ------------------------------------------------------------------ */
-
-    /**
-     * First result row as an assoc array, or null. Drives off Next()'s
-     * boolean + the captured field set; never trusts Size().
-     */
-    private function _firstRow($r)
-    {
-        foreach ($this->_eachRow($r) as $row) {
-            return $row;
-        }
-        return null;
-    }
-
-    /**
-     * Yield each result row as an assoc array. Emits the pre-fetched first
-     * row (if present) then advances with Next(); never trusts Size().
-     */
-    private function _eachRow($r)
-    {
-        $rows = array();
-        if ($r === false || $r === null) {
-            return $rows;
-        }
-        $first = $r->CurrentFieldSet();
-        if (!empty($first)) {
-            $rows[] = $first;
-        }
-        while ($r->Next()) {
-            $row = $r->CurrentFieldSet();
-            if (!empty($row)) {
-                $rows[] = $row;
-            }
-        }
-        return $rows;
-    }
-
-    /**
-     * Clamp an arbitrary scope-type string to the supported enum.
-     */
-    private function _normalizeScopeType($scopeType)
-    {
-        $scopeType = (string)$scopeType;
-        if ($scopeType === 'kingdom' || $scopeType === 'park') {
-            return $scopeType;
-        }
-        return 'global';
-    }
 }

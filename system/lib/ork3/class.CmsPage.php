@@ -13,7 +13,7 @@
  * a :field placeholder) so nothing is concatenated unescaped.
  *************************************************************************/
 
-class CmsPage extends Ork3
+class CmsPage extends CmsBase
 {
     public function __construct()
     {
@@ -163,6 +163,21 @@ class CmsPage extends Ork3
             $cols['published_at'] = $now;
         }
 
+        // Guard against duplicate (scope_type, scope_id, slug) BEFORE inserting.
+        // lastInsertId() is unreliable on dup-key under ERRMODE_WARNING — a stale
+        // id would let ReplaceBlocks silently overwrite a different page's blocks.
+        $DB->Clear();
+        $DB->slug       = $cols['slug'];
+        $DB->scope_type = $cols['scope_type'];
+        $DB->scope_id   = $cols['scope_id'];
+        $existing = $this->_firstRow($DB->DataSet(
+            'SELECT page_id FROM ' . DB_PREFIX . 'cms_page'
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND slug = :slug LIMIT 1'
+        ));
+        if ($existing !== null) {
+            return 0;   // slug already in use — signal collision to caller
+        }
+
         $names = array_keys($cols);
         $placeholders = array();
         foreach ($names as $n) {
@@ -177,7 +192,17 @@ class CmsPage extends Ork3
         }
         $DB->Execute($sql);
 
-        return (int)$DB->GetLastInsertId();
+        // Read back by the unique tuple instead of trusting GetLastInsertId().
+        $DB->Clear();
+        $DB->slug       = $cols['slug'];
+        $DB->scope_type = $cols['scope_type'];
+        $DB->scope_id   = $cols['scope_id'];
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT page_id FROM ' . DB_PREFIX . 'cms_page'
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND slug = :slug LIMIT 1'
+        ));
+
+        return $row ? (int)$row['page_id'] : 0;
     }
 
     /**
@@ -382,6 +407,12 @@ class CmsPage extends Ork3
         $ownerType = ($ownerType === 'post') ? 'post' : 'page';
         $ownerId = (int)$ownerId;
 
+        // Wrap DELETE + INSERT loop in a transaction so a mid-loop INSERT failure
+        // cannot leave a partial block set (deleted old blocks, only some new ones
+        // written). On failure ROLLBACK and return -1 to signal the partial write.
+        $DB->Clear();
+        $DB->Execute('START TRANSACTION');
+
         // Wipe existing blocks for this owner.
         $DB->Clear();
         $DB->owner_type = $ownerType;
@@ -392,6 +423,8 @@ class CmsPage extends Ork3
         );
 
         if (!is_array($blocksArray) || count($blocksArray) === 0) {
+            $DB->Clear();
+            $DB->Execute('COMMIT');
             return 0;
         }
 
@@ -432,15 +465,25 @@ class CmsPage extends Ork3
             $DB->enabled = $enabled;
             $DB->source = $source;
             $DB->fields_json = $fieldsJson;
-            $DB->Execute(
+            $ok = $DB->Execute(
                 'INSERT INTO ' . DB_PREFIX . 'cms_block'
                 . ' (owner_type, owner_id, type, ordering, enabled, source, fields_json)'
                 . ' VALUES (:owner_type, :owner_id, :type, :ordering, :enabled, :source, :fields_json)'
             );
 
+            if ($ok === false) {
+                // INSERT failed — undo everything and signal the caller.
+                $DB->Clear();
+                $DB->Execute('ROLLBACK');
+                return -1;
+            }
+
             $inserted++;
             $i++;
         }
+
+        $DB->Clear();
+        $DB->Execute('COMMIT');
 
         return $inserted;
     }
@@ -506,58 +549,4 @@ class CmsPage extends Ork3
         return $out;
     }
 
-    /**
-     * Return the first row of a result set as an assoc array, or null.
-     *
-     * YapoDb::DataSet() pre-advances to the first row, but that pre-fetch is
-     * unreliable on PDO's unbuffered MySQL cursor (and Size()/rowCount() lies
-     * for SELECTs). So we drive everything off Next()'s boolean and the
-     * captured field set — matching the file-wide `$r->next()` idiom.
-     */
-    private function _firstRow($r)
-    {
-        foreach ($this->_eachRow($r) as $row) {
-            return $row;
-        }
-        return null;
-    }
-
-    /**
-     * Yield each result row as an assoc array. Emits the pre-fetched first row
-     * (if present) then advances with Next(); never trusts Size().
-     *
-     * @return array list of assoc rows (materialized; small result sets)
-     */
-    private function _eachRow($r)
-    {
-        $rows = array();
-        if ($r === false || $r === null) {
-            return $rows;
-        }
-        // DataSet() pre-fetched row 1 into the field set; capture it if real.
-        $first = $r->CurrentFieldSet();
-        if (!empty($first)) {
-            $rows[] = $first;
-        }
-        // Advance through the remainder.
-        while ($r->Next()) {
-            $row = $r->CurrentFieldSet();
-            if (!empty($row)) {
-                $rows[] = $row;
-            }
-        }
-        return $rows;
-    }
-
-    /**
-     * Clamp an arbitrary scope-type string to the supported enum.
-     */
-    private function _normalizeScopeType($scopeType)
-    {
-        $scopeType = (string)$scopeType;
-        if ($scopeType === 'kingdom' || $scopeType === 'park') {
-            return $scopeType;
-        }
-        return 'global';
-    }
 }

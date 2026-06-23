@@ -25,7 +25,7 @@
  * off Next() via _firstRow/_eachRow (Size() is unreliable on PDO).
  *************************************************************************/
 
-class CmsNav extends Ork3
+class CmsNav extends CmsBase
 {
     /** Column widths from ork_cms_nav_item (clamp authored input). */
     public const MENU_MAXLEN  = 40;
@@ -326,7 +326,15 @@ class CmsNav extends Ork3
             return false;
         }
 
+        // Wrap all per-item UPDATEs in one transaction: O(N) round-trips become
+        // one atomic, pipelined batch (typical menus: 5–20 items → negligible
+        // overhead, but the hot-path is the N×(Clear+prepare+execute) sequence
+        // which becomes a single server-side commit flush).
+        $DB->Clear();
+        $DB->Execute('START TRANSACTION');
+
         $idx = 0;
+        $ok = true;
         foreach ($orderedItems as $entry) {
             if (!is_array($entry) || !isset($entry['nav_id'])) {
                 $idx++;
@@ -358,6 +366,14 @@ class CmsNav extends Ork3
             );
 
             $idx++;
+        }
+
+        $DB->Clear();
+        if ($ok) {
+            $DB->Execute('COMMIT');
+        } else {
+            $DB->Execute('ROLLBACK');
+            return false;
         }
 
         return true;
@@ -580,48 +596,4 @@ class CmsNav extends Ork3
         return $url;
     }
 
-    /** Clamp an arbitrary scope-type string to the supported enum. */
-    private function _normalizeScopeType($scopeType)
-    {
-        $scopeType = (string)$scopeType;
-        if ($scopeType === 'kingdom' || $scopeType === 'park') {
-            return $scopeType;
-        }
-        return 'global';
-    }
-
-    /**
-     * Return the first row of a result set as an assoc array, or null.
-     * (Mirrors CmsPage/CmsPost: drive off Next(), never trust Size().)
-     */
-    private function _firstRow($r)
-    {
-        foreach ($this->_eachRow($r) as $row) {
-            return $row;
-        }
-        return null;
-    }
-
-    /**
-     * Yield each result row as an assoc array. Emits the pre-fetched first row
-     * (if present) then advances with Next(); never trusts Size().
-     */
-    private function _eachRow($r)
-    {
-        $rows = array();
-        if ($r === false || $r === null) {
-            return $rows;
-        }
-        $first = $r->CurrentFieldSet();
-        if (!empty($first)) {
-            $rows[] = $first;
-        }
-        while ($r->Next()) {
-            $row = $r->CurrentFieldSet();
-            if (!empty($row)) {
-                $rows[] = $row;
-            }
-        }
-        return $rows;
-    }
 }

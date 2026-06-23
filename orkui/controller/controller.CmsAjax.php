@@ -378,11 +378,23 @@ class Controller_CmsAjax extends Controller
                 if ($url === '') {
                     $this->_fail('Enter a URL for this link.');
                 }
+                // Prevent persistent XSS: reject javascript:, data:, protocol-
+                // relative, and any other unsafe scheme before storing.
+                if (!CmsSanitizer::IsSafeUrl($url)) {
+                    $this->_fail('Invalid or unsafe URL.');
+                }
                 break;
             case 'dynamic':
                 $url = trim((string)($_POST['url'] ?? ''));
                 if ($url === '') {
                     $this->_fail('Enter an internal route (e.g. Directory/index).');
+                }
+                // Dynamic values are internal route keys (e.g. "Directory/index").
+                // A bare route has no scheme and is always safe. Only reject if it
+                // carries an explicit scheme that is not http/https (a bare path
+                // containing no colon has no scheme at all, so it passes IsSafeUrl).
+                if (!CmsSanitizer::IsSafeUrl($url)) {
+                    $this->_fail('Invalid or unsafe URL.');
                 }
                 break;
         }
@@ -641,11 +653,7 @@ class Controller_CmsAjax extends Controller
                 continue;
             }
             $fields = (isset($block['fields']) && is_array($block['fields'])) ? $block['fields'] : array();
-            foreach ($fields as $key => $val) {
-                if (is_string($val) && in_array($key, self::$HTML_FIELDS, true)) {
-                    $fields[$key] = $this->CmsSanitizer->clean($val);
-                }
-            }
+            $fields = $this->_sanitizeFields($fields);
             $out[] = array(
                 'type'    => (string)$block['type'],
                 'enabled' => array_key_exists('enabled', $block) ? (int)(bool)$block['enabled'] : 1,
@@ -656,6 +664,27 @@ class Controller_CmsAjax extends Controller
             );
         }
         return $out;
+    }
+
+    /**
+     * Recursively walk a block-fields array and sanitize any string value
+     * whose key is in $HTML_FIELDS. Descends into nested arrays (accordion
+     * items, column sub-blocks, etc.) so authored HTML at any depth is cleaned.
+     *
+     * @param array $fields raw fields array (may be nested)
+     * @return array the same structure with HTML fields sanitized
+     */
+    private function _sanitizeFields(array $fields)
+    {
+        foreach ($fields as $key => $val) {
+            if (is_array($val)) {
+                // Nested sub-structure (e.g. accordion items array or columns).
+                $fields[$key] = $this->_sanitizeFields($val);
+            } elseif (is_string($val) && in_array($key, self::$HTML_FIELDS, true)) {
+                $fields[$key] = $this->CmsSanitizer->clean($val);
+            }
+        }
+        return $fields;
     }
 
     /**

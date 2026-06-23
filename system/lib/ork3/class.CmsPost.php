@@ -16,7 +16,7 @@
  * _firstRow/_eachRow helpers (Size() is unreliable on PDO unbuffered).
  *************************************************************************/
 
-class CmsPost extends Ork3
+class CmsPost extends CmsBase
 {
     /** @var CmsPage|null lazily-instantiated block delegate */
     private $_pageLib = null;
@@ -165,8 +165,32 @@ class CmsPost extends Ork3
         }
         $rows = array();
         foreach ($this->_eachRow($DB->DataSet($sql)) as $row) {
-            $row['tags'] = $this->GetTags((int)$row['post_id']);
             $rows[] = $row;
+        }
+
+        // Bulk-fetch tags for all materialized posts in ONE query (avoids N+1).
+        if (!empty($rows)) {
+            $postIds = array();
+            foreach ($rows as $r) {
+                $postIds[] = (int)$r['post_id'];
+            }
+            $inList = implode(',', $postIds);
+            $DB->Clear();
+            $tagsByPost = array();
+            foreach ($this->_eachRow($DB->DataSet(
+                'SELECT pt.post_id, t.name, t.slug FROM ' . DB_PREFIX . 'cms_post_tag pt'
+                . ' JOIN ' . DB_PREFIX . 'cms_tag t ON t.tag_id = pt.tag_id'
+                . ' WHERE pt.post_id IN (' . $inList . ')'
+                . ' ORDER BY t.name ASC'
+            )) as $tr) {
+                $pid = (int)$tr['post_id'];
+                $tagsByPost[$pid][] = array('name' => $tr['name'], 'slug' => $tr['slug']);
+            }
+            foreach ($rows as &$row) {
+                $pid = (int)$row['post_id'];
+                $row['tags'] = isset($tagsByPost[$pid]) ? $tagsByPost[$pid] : array();
+            }
+            unset($row);
         }
 
         return array('rows' => $rows, 'total' => $total);
@@ -216,13 +240,37 @@ class CmsPost extends Ork3
         $sql = 'INSERT INTO ' . DB_PREFIX . 'cms_post (`' . implode('`, `', $names) . '`)'
             . ' VALUES (' . implode(', ', $placeholders) . ')';
 
+        // Pre-check for duplicate (scope_type, scope_id, slug) to avoid the
+        // stale-lastInsertId hazard under PDO ERRMODE_WARNING.
+        $DB->Clear();
+        $DB->chk_slug       = $cols['slug'];
+        $DB->chk_scope_type = $cols['scope_type'];
+        $DB->chk_scope_id   = (int)$cols['scope_id'];
+        $dup = $this->_firstRow($DB->DataSet(
+            'SELECT post_id FROM ' . DB_PREFIX . 'cms_post'
+            . ' WHERE slug = :chk_slug AND scope_type = :chk_scope_type AND scope_id = :chk_scope_id LIMIT 1'
+        ));
+        if ($dup !== null) {
+            return 0;
+        }
+
         $DB->Clear();
         foreach ($cols as $field => $value) {
             $DB->$field = $value;
         }
         $DB->Execute($sql);
 
-        return (int)$DB->GetLastInsertId();
+        // Authoritative read-back by the unique tuple (lastInsertId unreliable
+        // under PDO ERRMODE_WARNING on duplicate key).
+        $DB->Clear();
+        $DB->rb_slug       = $cols['slug'];
+        $DB->rb_scope_type = $cols['scope_type'];
+        $DB->rb_scope_id   = (int)$cols['scope_id'];
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT post_id FROM ' . DB_PREFIX . 'cms_post'
+            . ' WHERE slug = :rb_slug AND scope_type = :rb_scope_type AND scope_id = :rb_scope_id LIMIT 1'
+        ));
+        return ($row !== null && isset($row['post_id'])) ? (int)$row['post_id'] : 0;
     }
 
     /**
@@ -553,26 +601,24 @@ class CmsPost extends Ork3
             return (int)$existing['tag_id'];
         }
 
-        // Insert new.
+        // INSERT IGNORE is a no-op on duplicate slug; we always resolve the id
+        // via read-back so lastInsertId() stale-value from a prior successful
+        // insert can never leak to a second tag in the same SetTags loop.
         $DB->Clear();
         $DB->name = $name;
         $DB->slug = $slug;
         $DB->Execute(
-            'INSERT INTO ' . DB_PREFIX . 'cms_tag (name, slug)'
+            'INSERT IGNORE INTO ' . DB_PREFIX . 'cms_tag (name, slug)'
             . ' VALUES (:name, :slug)'
         );
-        $newId = (int)$DB->GetLastInsertId();
-        if ($newId > 0) {
-            return $newId;
-        }
 
-        // Race fallback: re-read by slug.
+        // Authoritative read-back by slug (same pattern as CmsAuth::GrantRole).
         $DB->Clear();
         $DB->slug = $slug;
-        $again = $this->_firstRow($DB->DataSet(
+        $row = $this->_firstRow($DB->DataSet(
             'SELECT tag_id FROM ' . DB_PREFIX . 'cms_tag WHERE slug = :slug LIMIT 1'
         ));
-        return ($again !== null && isset($again['tag_id'])) ? (int)$again['tag_id'] : 0;
+        return ($row !== null && isset($row['tag_id'])) ? (int)$row['tag_id'] : 0;
     }
 
     /**
@@ -598,50 +644,4 @@ class CmsPost extends Ork3
         return $text;
     }
 
-    /**
-     * Return the first row of a result set as an assoc array, or null.
-     * (Mirrors CmsPage: drive off Next(), never trust Size().)
-     */
-    private function _firstRow($r)
-    {
-        foreach ($this->_eachRow($r) as $row) {
-            return $row;
-        }
-        return null;
-    }
-
-    /**
-     * Yield each result row as an assoc array. Emits the pre-fetched first row
-     * (if present) then advances with Next(); never trusts Size().
-     */
-    private function _eachRow($r)
-    {
-        $rows = array();
-        if ($r === false || $r === null) {
-            return $rows;
-        }
-        $first = $r->CurrentFieldSet();
-        if (!empty($first)) {
-            $rows[] = $first;
-        }
-        while ($r->Next()) {
-            $row = $r->CurrentFieldSet();
-            if (!empty($row)) {
-                $rows[] = $row;
-            }
-        }
-        return $rows;
-    }
-
-    /**
-     * Clamp an arbitrary scope-type string to the supported enum.
-     */
-    private function _normalizeScopeType($scopeType)
-    {
-        $scopeType = (string)$scopeType;
-        if ($scopeType === 'kingdom' || $scopeType === 'park') {
-            return $scopeType;
-        }
-        return 'global';
-    }
 }

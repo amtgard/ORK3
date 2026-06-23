@@ -1,5 +1,8 @@
 <?php
 
+// CmsBase sorts after CmsAuth alphabetically in scandir(); force-load it first.
+require_once __DIR__ . '/class.CmsBase.php';
+
 /*************************************************************************
  * CmsAuth — RBAC layer for the CMS (Hybrid RBAC + scope bridge).
  *
@@ -21,7 +24,7 @@
  * class.CmsPage.php.
  *************************************************************************/
 
-class CmsAuth extends Ork3
+class CmsAuth extends CmsBase
 {
     /** Allowed roles, lowest → highest privilege. */
     private static $ROLES = array('contributor', 'author', 'editor', 'publisher', 'admin');
@@ -219,7 +222,7 @@ class CmsAuth extends Ork3
         $scopeType = $this->_normalizeScopeType(isset($scope['type']) ? $scope['type'] : 'global');
         $scopeId   = isset($scope['id']) ? (int)$scope['id'] : 0;
 
-        if (($scopeType === 'kingdom' || $scopeType === 'park') && $scopeId > 0) {
+        if (($scopeType === 'kingdom' || $scopeType === 'park') && $scopeId > 0 && is_object(Ork3::$Lib->authorization)) {
             $authType = ($scopeType === 'kingdom') ? AUTH_KINGDOM : AUTH_PARK;
             $authRole = in_array($capability, self::$ADMIN_BRIDGE_CAPS, true) ? AUTH_ADMIN : AUTH_EDIT;
             if (Ork3::$Lib->authorization->HasAuthority($uid, $authType, $scopeId, $authRole)) {
@@ -240,7 +243,7 @@ class CmsAuth extends Ork3
     public function IsSuperAdmin($uid)
     {
         $uid = (int)$uid;
-        if ($uid <= 0) {
+        if ($uid <= 0 || !is_object(Ork3::$Lib->authorization)) {
             return false;
         }
         return (bool)Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
@@ -379,54 +382,4 @@ class CmsAuth extends Ork3
         return $out;
     }
 
-    /* ------------------------------------------------------------------ *
-     * Internal helpers (mirrors class.CmsPage.php)
-     * ------------------------------------------------------------------ */
-
-    /**
-     * First result row as an assoc array, or null. Drives off Next()'s
-     * boolean + the captured field set; never trusts Size().
-     */
-    private function _firstRow($r)
-    {
-        foreach ($this->_eachRow($r) as $row) {
-            return $row;
-        }
-        return null;
-    }
-
-    /**
-     * Yield each result row as an assoc array. Emits the pre-fetched first
-     * row (if present) then advances with Next(); never trusts Size().
-     */
-    private function _eachRow($r)
-    {
-        $rows = array();
-        if ($r === false || $r === null) {
-            return $rows;
-        }
-        $first = $r->CurrentFieldSet();
-        if (!empty($first)) {
-            $rows[] = $first;
-        }
-        while ($r->Next()) {
-            $row = $r->CurrentFieldSet();
-            if (!empty($row)) {
-                $rows[] = $row;
-            }
-        }
-        return $rows;
-    }
-
-    /**
-     * Clamp an arbitrary scope-type string to the supported enum.
-     */
-    private function _normalizeScopeType($scopeType)
-    {
-        $scopeType = (string)$scopeType;
-        if ($scopeType === 'kingdom' || $scopeType === 'park') {
-            return $scopeType;
-        }
-        return 'global';
-    }
 }
