@@ -84,6 +84,22 @@ class Controller
             $DB->Clear();
         }
 
+        // CMS admin access flag for the user drop-down ("Manage Site Pages").
+        // True for any holder of a CMS capability at global scope (and super-admins).
+        $this->data['CanManageCms'] = false;
+        if ($_uid > 0) {
+            $this->load_model('CmsAuth');
+            if (isset($this->CmsAuth)) {
+                $_cmsScope = ['type' => 'global', 'id' => 0];
+                foreach (['page.create', 'page.edit', 'nav.manage', 'media.manage'] as $_cmsCap) {
+                    if ($this->CmsAuth->cms_can($_uid, $_cmsCap, $_cmsScope)) {
+                        $this->data['CanManageCms'] = true;
+                        break;
+                    }
+                }
+            }
+        }
+
         $this->data[ 'controller_title' ] = get_class($this);
         $this->data[ 'path' ] = [ get_class($this), $method ];
 
