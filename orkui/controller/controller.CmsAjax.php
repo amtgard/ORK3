@@ -34,6 +34,7 @@ class Controller_CmsAjax extends Controller
         parent::__construct($call, $action);
         $this->load_model('CmsAuth');
         $this->load_model('CmsPage');
+        $this->load_model('CmsPost');
     }
 
     /* ------------------------------------------------------------------ *
@@ -172,6 +173,161 @@ class Controller_CmsAjax extends Controller
         }
 
         $this->_ok(array('page_id' => $pageId, 'deleted' => true));
+    }
+
+    /* ================================================================== *
+     * BLOG POSTS — reuse the page.* caps + the polymorphic block store
+     * (owner_type='post'). Mirrors the page handlers' envelope/_begin/_require.
+     * ================================================================== */
+
+    /* ------------------------------------------------------------------ *
+     * savepost — create/update post meta + replace body blocks
+     * ------------------------------------------------------------------ */
+
+    public function savepost($action = null)
+    {
+        $uid = $this->_begin();
+
+        $postId = (int)($_POST['post_id'] ?? 0);
+        $isNew  = ($postId <= 0);
+        $needed = $isNew ? 'page.create' : 'page.edit';
+        $this->_require($uid, $needed);
+
+        // ---- Post meta ----
+        $title   = trim((string)($_POST['title'] ?? ''));
+        $slug    = $this->_slugify((string)($_POST['slug'] ?? ''), $title);
+        $excerpt = trim((string)($_POST['excerpt'] ?? ''));
+
+        if ($title === '') {
+            $this->_fail('A post title is required.');
+        }
+        if ($slug === '') {
+            $this->_fail('A post slug is required.');
+        }
+
+        // ---- Body blocks (posted as a JSON array string; HTML fields sanitized) ----
+        $blocks = $this->_parseBlocks($_POST['blocks'] ?? null);
+
+        $meta = array(
+            'title'      => $title,
+            'slug'       => $slug,
+            'excerpt'    => ($excerpt === '' ? null : $excerpt),
+            'updated_by' => $uid,
+        );
+
+        if (array_key_exists('hero_media_id', $_POST)) {
+            $hero = (int)$_POST['hero_media_id'];
+            $meta['hero_media_id'] = ($hero > 0) ? $hero : null;
+        }
+
+        if ($isNew) {
+            $meta['author_id']  = $uid;
+            $meta['created_by'] = $uid;
+            $meta['status']     = 'draft';
+            $meta['scope_type'] = 'global';
+            $meta['scope_id']   = 0;
+            $postId = (int)$this->CmsPost->create_post($meta);
+            if ($postId <= 0) {
+                $this->_fail('Could not create the post (the slug may already be in use).');
+            }
+        } else {
+            $existing = $this->CmsPost->get_post($postId);
+            if (empty($existing)) {
+                $this->_fail('Post not found.', 4);
+            }
+            $this->CmsPost->update_post($postId, $meta);
+        }
+
+        // Tags arrive as a comma-separated string.
+        $tagsRaw = (string)($_POST['tags'] ?? '');
+        $tagNames = array();
+        foreach (explode(',', $tagsRaw) as $name) {
+            $name = trim($name);
+            if ($name !== '') {
+                $tagNames[] = $name;
+            }
+        }
+        $this->CmsPost->set_tags($postId, $tagNames);
+
+        // Body blocks live in the shared polymorphic store under owner_type='post'.
+        $count = (int)$this->CmsPage->replace_blocks('post', $postId, $blocks);
+
+        // Echo back the resolved tag set (slugified/deduped) for the editor.
+        $tags = $this->CmsPost->get_tags($postId);
+
+        $this->_ok(array(
+            'post_id'     => $postId,
+            'slug'        => $slug,
+            'block_count' => $count,
+            'is_new'      => $isNew,
+            'tags'        => $tags,
+            'saved_at'    => date('c'),
+        ));
+    }
+
+    /* ------------------------------------------------------------------ *
+     * publishpost / unpublishpost
+     * ------------------------------------------------------------------ */
+
+    public function publishpost($action = null)
+    {
+        $uid = $this->_begin();
+        $this->_require($uid, 'page.publish');
+
+        $postId = (int)($_POST['post_id'] ?? 0);
+        if ($postId <= 0 || empty($this->CmsPost->get_post($postId))) {
+            $this->_fail('Post not found.', 4);
+        }
+
+        $this->CmsPost->set_status($postId, 'published', $uid);
+        $row = $this->CmsPost->get_post($postId);
+
+        $this->_ok(array(
+            'post_id'      => $postId,
+            'status'       => 'published',
+            'published_at' => isset($row['published_at']) ? $row['published_at'] : null,
+        ));
+    }
+
+    public function unpublishpost($action = null)
+    {
+        $uid = $this->_begin();
+        $this->_require($uid, 'page.publish');
+
+        $postId = (int)($_POST['post_id'] ?? 0);
+        if ($postId <= 0 || empty($this->CmsPost->get_post($postId))) {
+            $this->_fail('Post not found.', 4);
+        }
+
+        $this->CmsPost->set_status($postId, 'draft', $uid);
+
+        $this->_ok(array(
+            'post_id' => $postId,
+            'status'  => 'draft',
+        ));
+    }
+
+    /* ------------------------------------------------------------------ *
+     * deletepost
+     * ------------------------------------------------------------------ */
+
+    public function deletepost($action = null)
+    {
+        $uid = $this->_begin();
+        $this->_require($uid, 'page.delete');
+
+        $postId = (int)($_POST['post_id'] ?? 0);
+        $row    = $this->CmsPost->get_post($postId);
+        if ($postId <= 0 || empty($row)) {
+            $this->_fail('Post not found.', 4);
+        }
+
+        $deleted = (bool)$this->CmsPost->delete_post($postId);
+        if (!$deleted) {
+            $this->_fail('Could not delete the post.');
+        }
+
+        $this->_ok(array('post_id' => $postId, 'deleted' => true));
     }
 
     /* ------------------------------------------------------------------ *

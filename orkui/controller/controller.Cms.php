@@ -27,6 +27,7 @@ class Controller_Cms extends Controller
         unset($this->data['menu']['kingdom'], $this->data['menu']['park']);
         $this->load_model('CmsAuth');
         $this->load_model('CmsPage');
+        $this->load_model('CmsPost');
     }
 
     /* ------------------------------------------------------------------ *
@@ -158,6 +159,120 @@ class Controller_Cms extends Controller
         $this->data['FrontDoor']   = $this->CmsPage->get_page_blocks((int)$page['page_id']);
         $this->data['PreviewPage'] = $page;
         $this->data['page_title']  = 'Preview: ' . $page['title'];
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Blog posts — list
+     * ------------------------------------------------------------------ */
+
+    public function posts($action = null)
+    {
+        $uid = $this->_uid();
+        // Same gate as the page list: visible to anyone holding ANY CMS capability.
+        if (!$this->_hasAnyCmsCapability($uid)) {
+            return $this->_denyRedirect();
+        }
+
+        $this->template = 'Cms_posts.tpl';
+        $this->data['page_title'] = 'Blog Posts';
+
+        $opts = array('includeDrafts' => true, 'scope_type' => 'global', 'scope_id' => 0);
+        $tag = trim((string)($_GET['tag'] ?? ''));
+        if ($tag !== '') {
+            $opts['tag'] = $tag;
+        }
+
+        $result = $this->CmsPost->list_posts($opts);
+        $rows   = (is_array($result) && isset($result['rows']) && is_array($result['rows'])) ? $result['rows'] : array();
+
+        $this->data['Posts']     = $rows;
+        $this->data['TagFilter'] = $tag;
+        $this->data['AllTags']   = $this->CmsPost->list_all_tags();
+        $this->data['Caps']      = $this->_capFlags($uid);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Blog posts — editor
+     * ------------------------------------------------------------------ */
+
+    public function editpost($id = null)
+    {
+        if (func_num_args() === 0) {
+            return parent::view();
+        }
+
+        $uid    = $this->_uid();
+        $id     = (string)$id;
+        $isNew  = ($id === 'new' || $id === '' || $id === '0');
+        $needed = $isNew ? 'page.create' : 'page.edit';
+
+        if (!$this->CmsAuth->cms_can($uid, $needed, self::$SCOPE)) {
+            return $this->_denyRedirect();
+        }
+
+        $this->template = 'Cms_editpost.tpl';
+
+        if ($isNew) {
+            $post = array(
+                'post_id'       => 0,
+                'slug'          => '',
+                'title'         => '',
+                'excerpt'       => '',
+                'status'        => 'draft',
+                'published_at'  => null,
+                'hero_media_id' => null,
+                'author_id'     => $uid,
+                'author_name'   => '',
+                'scope_type'    => 'global',
+                'scope_id'      => 0,
+                'tags'          => array(),
+            );
+            $blocks = array();
+            $heroRef = null;
+            $this->data['page_title'] = 'New Post';
+        } else {
+            $post = $this->CmsPost->get_post((int)$id);
+            if (empty($post)) {
+                // No such post — fall back to the post list with a message.
+                $this->template = 'Cms_posts.tpl';
+                $this->data['page_title'] = 'Blog Posts';
+                $listed = $this->CmsPost->list_posts(array('includeDrafts' => true));
+                $this->data['Posts']     = (is_array($listed) && isset($listed['rows'])) ? $listed['rows'] : array();
+                $this->data['TagFilter'] = '';
+                $this->data['AllTags']   = $this->CmsPost->list_all_tags();
+                $this->data['Caps']      = $this->_capFlags($uid);
+                $this->data['Message']   = 'Post not found.';
+                return;
+            }
+            $blocks  = $this->CmsPost->get_post_blocks((int)$post['post_id']);
+            $heroRef = $this->_heroRef($post);
+            $this->data['page_title'] = 'Edit: ' . $post['title'];
+        }
+
+        $this->data['Post']         = $post;
+        $this->data['Blocks']       = $blocks;
+        $this->data['IsNew']        = $isNew;
+        $this->data['HeroRef']      = $heroRef;
+        $this->data['BlockCatalog'] = $this->_blockCatalog();
+        $this->data['Caps']         = $this->_capFlags($uid);
+    }
+
+    /**
+     * Resolve a post's hero image (hero_media_id) to a media-ref the editor's
+     * image picker understands, or null when none is set / cannot be resolved.
+     */
+    private function _heroRef($post)
+    {
+        $mediaId = isset($post['hero_media_id']) ? (int)$post['hero_media_id'] : 0;
+        if ($mediaId <= 0) {
+            return null;
+        }
+        $this->load_model('CmsMedia');
+        $row = $this->CmsMedia->get_media($mediaId);
+        if (empty($row)) {
+            return null;
+        }
+        return $this->CmsMedia->to_media_ref($row);
     }
 
     /* ------------------------------------------------------------------ *

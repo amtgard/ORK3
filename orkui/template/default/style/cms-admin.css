@@ -152,6 +152,36 @@
 .cms-filters .cms-input { max-width: 280px; }
 .cms-filters .cms-select { max-width: 180px; }
 
+/* ---- Pages / Posts tabs ------------------------------------------------- */
+.cms-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--ork-border-dark);
+}
+.cms-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 9px 16px;
+    color: var(--ork-text-muted);
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 7px 7px 0 0;
+    margin-bottom: -1px;
+    transition: color .12s, background .12s, border-color .12s;
+}
+.cms-tab:hover { color: var(--ork-text); background: var(--ork-bg-secondary); }
+.cms-tab-active {
+    color: var(--ork-text);
+    background: var(--ork-bg);
+    border-color: var(--ork-border-dark);
+    border-bottom: 1px solid var(--ork-bg);
+}
+
 .cms-table-wrap {
     border: 1px solid var(--ork-border);
     border-radius: 10px;

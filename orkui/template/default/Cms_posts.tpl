@@ -1,36 +1,22 @@
 <?php
 /**
- * Cms_index.tpl — CMS page list. PLAIN PHP (extract()+include), NEVER Smarty.
+ * Cms_posts.tpl — CMS blog-post list. PLAIN PHP (extract()+include), NEVER Smarty.
  *
- * Receives (from Controller_Cms::index):
- *   $Pages        list of ['page_id','slug','type','title','status','updated_at', ...]
- *   $Search       current search string
- *   $StatusFilter '', 'draft', or 'published'
- *   $Caps         ['create','edit','publish','delete','media','nav','roles' => bool]
- *   $PageTypes    (optional) list of ['type','label','blocks'] for the New-Page chooser
- *   $Message      (optional) flash/notice string
+ * Receives (from Controller_Cms::posts):
+ *   $Posts      list of post rows (post_id, slug, title, excerpt, status,
+ *               published_at, updated_at, author_name, tags=>[['name','slug'],...])
+ *   $TagFilter  current tag-slug filter ('' = none)
+ *   $AllTags    list of ['tag_id','name','slug','post_count']
+ *   $Caps       ['create','edit','publish','delete','media','nav','roles' => bool]
+ *   $Message    (optional) flash/notice string
  *   UIR, HTTP_TEMPLATE (constants)
  */
 
-$pages   = isset($Pages) && is_array($Pages) ? $Pages : array();
+$posts   = isset($Posts) && is_array($Posts) ? $Posts : array();
 $caps    = isset($Caps) && is_array($Caps) ? $Caps : array();
-$search  = isset($Search) ? (string)$Search : '';
-$statusF = isset($StatusFilter) ? (string)$StatusFilter : '';
+$tagF    = isset($TagFilter) ? (string)$TagFilter : '';
+$allTags = isset($AllTags) && is_array($AllTags) ? $AllTags : array();
 $message = isset($Message) ? (string)$Message : '';
-
-// Page-type label lookup for the table + the New-Page chooser.
-$pageTypes = isset($PageTypes) && is_array($PageTypes) ? $PageTypes : array(
-    array('type' => 'composed',   'label' => 'Composed / Landing'),
-    array('type' => 'article',    'label' => 'Article / Text'),
-    array('type' => 'media',      'label' => 'Media / Gallery'),
-    array('type' => 'resource',   'label' => 'Resource / Document'),
-    array('type' => 'blog_index', 'label' => 'Blog Index'),
-    array('type' => 'dynamic',    'label' => 'Dynamic Data'),
-);
-$typeLabels = array();
-foreach ($pageTypes as $pt) {
-    $typeLabels[$pt['type']] = $pt['label'];
-}
 
 $canCreate  = !empty($caps['create']);
 $canEdit    = !empty($caps['edit']);
@@ -49,106 +35,116 @@ $h = function ($v) {
         <h1 class="cms-title">Content Management</h1>
         <span class="cms-spacer"></span>
         <?php if ($canCreate): ?>
-            <button type="button" class="cms-btn cms-btn-primary" id="cmsNewPageBtn">
-                <i class="fas fa-plus"></i> New Page
-            </button>
+            <a class="cms-btn cms-btn-primary" href="<?= UIR ?>Cms/editpost/new">
+                <i class="fas fa-plus"></i> New Post
+            </a>
         <?php endif; ?>
     </div>
 
     <?php /* ---- Pages / Posts tabs ---- */ ?>
     <div class="cms-tabs">
-        <a class="cms-tab cms-tab-active" href="<?= UIR ?>Cms/index"><i class="fas fa-file-alt"></i> Pages</a>
-        <a class="cms-tab" href="<?= UIR ?>Cms/posts"><i class="fas fa-newspaper"></i> Posts</a>
+        <a class="cms-tab" href="<?= UIR ?>Cms/index"><i class="fas fa-file-alt"></i> Pages</a>
+        <a class="cms-tab cms-tab-active" href="<?= UIR ?>Cms/posts"><i class="fas fa-newspaper"></i> Posts</a>
     </div>
 
     <?php if ($message !== ''): ?>
         <div class="cms-notice"><?= $h($message) ?></div>
     <?php endif; ?>
 
-    <form class="cms-filters" method="get" action="<?= UIR ?>Cms/index">
-        <input type="hidden" name="Route" value="Cms/index">
-        <input type="text" name="q" class="cms-input" placeholder="Search title or slug…" value="<?= $h($search) ?>">
-        <select name="status" class="cms-select" onchange="this.form.submit()">
-            <option value=""<?= $statusF === '' ? ' selected' : '' ?>>All statuses</option>
-            <option value="published"<?= $statusF === 'published' ? ' selected' : '' ?>>Published</option>
-            <option value="draft"<?= $statusF === 'draft' ? ' selected' : '' ?>>Draft</option>
-        </select>
-        <button type="submit" class="cms-btn"><i class="fas fa-search"></i> Filter</button>
-        <?php if ($search !== '' || $statusF !== ''): ?>
-            <a class="cms-btn cms-btn-ghost" href="<?= UIR ?>Cms/index">Clear</a>
-        <?php endif; ?>
-    </form>
+    <?php if (!empty($allTags)): ?>
+    <div class="cms-filters" style="flex-wrap:wrap;">
+        <span class="cms-muted" style="font-size:13px;align-self:center;">Filter by tag:</span>
+        <a class="cms-btn cms-btn-sm<?= $tagF === '' ? ' cms-btn-primary' : ' cms-btn-ghost' ?>" href="<?= UIR ?>Cms/posts">All</a>
+        <?php foreach ($allTags as $t):
+            $tslug = (string)($t['slug'] ?? '');
+            $tname = (string)($t['name'] ?? '');
+            $tcnt  = (int)($t['post_count'] ?? 0);
+            $active = ($tslug !== '' && $tslug === $tagF);
+        ?>
+            <a class="cms-btn cms-btn-sm<?= $active ? ' cms-btn-primary' : ' cms-btn-ghost' ?>"
+               href="<?= UIR ?>Cms/posts&tag=<?= $h($tslug) ?>"><?= $h($tname) ?> <span class="cms-muted">(<?= $tcnt ?>)</span></a>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
 
     <div class="cms-table-wrap">
         <table class="cms-table">
             <thead>
                 <tr>
                     <th>Title</th>
-                    <th>Type</th>
                     <th>Status</th>
-                    <th>Scope</th>
-                    <th>Updated</th>
+                    <th>Author</th>
+                    <th>Date</th>
+                    <th>Tags</th>
                     <th style="text-align:right;">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                <?php if (empty($pages)): ?>
+                <?php if (empty($posts)): ?>
                     <tr>
                         <td colspan="6">
                             <div class="cms-empty">
-                                No pages yet.<?php if ($canCreate): ?> Use <strong>New Page</strong> to create one.<?php endif; ?>
+                                No posts<?= $tagF !== '' ? ' with that tag' : '' ?> yet.<?php if ($canCreate && $tagF === ''): ?> Use <strong>New Post</strong> to write one.<?php endif; ?>
                             </div>
                         </td>
                     </tr>
                 <?php else: ?>
-                    <?php foreach ($pages as $p):
-                        $pid       = (int)($p['page_id'] ?? 0);
+                    <?php foreach ($posts as $p):
+                        $pid       = (int)($p['post_id'] ?? 0);
                         $title     = (string)($p['title'] ?? '(untitled)');
                         $slug      = (string)($p['slug'] ?? '');
-                        $type      = (string)($p['type'] ?? 'composed');
                         $status    = (string)($p['status'] ?? 'draft');
-                        $isSystem  = !empty($p['is_system']);
-                        $scopeType = (string)($p['scope_type'] ?? 'global');
+                        $author    = trim((string)($p['author_name'] ?? ''));
+                        $pubAt     = (string)($p['published_at'] ?? '');
                         $updated   = (string)($p['updated_at'] ?? '');
-                        $typeLabel = isset($typeLabels[$type]) ? $typeLabels[$type] : ucfirst($type);
+                        $tags      = (isset($p['tags']) && is_array($p['tags'])) ? $p['tags'] : array();
                         $isPub     = ($status === 'published');
-                        $updatedFmt = $updated !== '' ? date('M j, Y g:i A', strtotime($updated)) : '—';
+                        $dateSrc   = $isPub && $pubAt !== '' ? $pubAt : $updated;
+                        $dateFmt   = $dateSrc !== '' ? date('M j, Y g:i A', strtotime($dateSrc)) : '—';
                     ?>
-                    <tr data-page-id="<?= $pid ?>" data-system="<?= $isSystem ? 1 : 0 ?>">
+                    <tr data-post-id="<?= $pid ?>">
                         <td data-label="Title">
-                            <div class="cms-pg-title"><?= $h($title) ?>
-                                <?php if ($isSystem): ?><span class="cms-badge cms-badge-system" style="margin-left:6px;">System</span><?php endif; ?>
-                            </div>
+                            <div class="cms-pg-title"><?= $h($title) ?></div>
                             <?php if ($slug !== ''): ?><div class="cms-pg-slug">/<?= $h($slug) ?></div><?php endif; ?>
                         </td>
-                        <td data-label="Type"><?= $h($typeLabel) ?></td>
                         <td data-label="Status">
                             <span class="cms-badge cms-badge-<?= $isPub ? 'published' : 'draft' ?>" data-status-badge>
                                 <?= $isPub ? 'Published' : 'Draft' ?>
                             </span>
                         </td>
-                        <td data-label="Scope"><span class="cms-badge cms-badge-scope"><?= $h($scopeType) ?></span></td>
-                        <td data-label="Updated" class="cms-muted"><?= $h($updatedFmt) ?></td>
+                        <td data-label="Author" class="cms-muted"><?= $author !== '' ? $h($author) : '—' ?></td>
+                        <td data-label="Date" class="cms-muted"><?= $h($dateFmt) ?></td>
+                        <td data-label="Tags">
+                            <?php if (empty($tags)): ?>
+                                <span class="cms-muted">—</span>
+                            <?php else: ?>
+                                <?php foreach ($tags as $tg): ?>
+                                    <span class="cms-badge cms-badge-scope"><?= $h((string)($tg['name'] ?? '')) ?></span>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </td>
                         <td data-label="Actions">
                             <div class="cms-row-actions">
                                 <?php if ($canEdit || $canCreate): ?>
-                                    <a class="cms-btn cms-btn-sm" href="<?= UIR ?>Cms/edit/<?= $pid ?>"><i class="fas fa-pen"></i> Edit</a>
+                                    <a class="cms-btn cms-btn-sm" href="<?= UIR ?>Cms/editpost/<?= $pid ?>"><i class="fas fa-pen"></i> Edit</a>
                                 <?php endif; ?>
-                                <a class="cms-btn cms-btn-sm cms-btn-ghost" href="<?= UIR ?>Cms/preview/<?= $pid ?>" target="_blank"><i class="fas fa-eye"></i> Preview</a>
+                                <?php if ($slug !== ''): ?>
+                                    <a class="cms-btn cms-btn-sm cms-btn-ghost" href="<?= UIR ?>Blog/post/<?= $h($slug) ?>" target="_blank"><i class="fas fa-eye"></i> Preview</a>
+                                <?php endif; ?>
                                 <?php if ($canPublish): ?>
                                     <button type="button"
                                             class="cms-btn cms-btn-sm cms-btn-ghost"
                                             data-pubtoggle
-                                            data-page-id="<?= $pid ?>"
+                                            data-post-id="<?= $pid ?>"
                                             data-status="<?= $isPub ? 'published' : 'draft' ?>">
                                         <?php if ($isPub): ?><i class="fas fa-eye-slash"></i> Unpublish<?php else: ?><i class="fas fa-globe"></i> Publish<?php endif; ?>
                                     </button>
                                 <?php endif; ?>
-                                <?php if ($canDelete && !$isSystem): ?>
+                                <?php if ($canDelete): ?>
                                     <button type="button"
                                             class="cms-btn cms-btn-sm cms-btn-danger"
                                             data-delete
-                                            data-page-id="<?= $pid ?>"
+                                            data-post-id="<?= $pid ?>"
                                             data-title="<?= $h($title) ?>">
                                         <i class="fas fa-trash"></i> Delete
                                     </button>
@@ -162,29 +158,6 @@ $h = function ($v) {
         </table>
     </div>
 </div>
-
-<?php /* ---- New-Page type chooser modal ---- */ ?>
-<?php if ($canCreate): ?>
-<div class="cms-modal-overlay" id="cmsNewModal">
-    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Choose a page type">
-        <div class="cms-modal-head">
-            <h3>Create a page</h3>
-            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
-        </div>
-        <div class="cms-modal-body">
-            <p class="cms-muted" style="margin-top:0;font-size:13px;">Pick a starting layout. You can add or remove any block afterward.</p>
-            <div class="cms-typegrid">
-                <?php foreach ($pageTypes as $pt): ?>
-                    <a class="cms-typecard" href="<?= UIR ?>Cms/edit/new&type=<?= $h($pt['type']) ?>">
-                        <strong><?= $h($pt['label']) ?></strong>
-                        <span><?= $h($pt['type']) ?></span>
-                    </a>
-                <?php endforeach; ?>
-            </div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
 
 <?php /* ---- Confirm modal (Delete) ---- */ ?>
 <div class="cms-modal-overlay" id="cmsConfirmModal">
@@ -238,13 +211,6 @@ $h = function ($v) {
         }
     });
 
-    /* ---- New Page ---- */
-    var newBtn = document.getElementById('cmsNewPageBtn');
-    var newModal = document.getElementById('cmsNewModal');
-    if (newBtn && newModal) {
-        newBtn.addEventListener('click', function () { openModal(newModal); });
-    }
-
     /* ---- POST helper ---- */
     function post(endpoint, params) {
         var body = new URLSearchParams();
@@ -260,12 +226,12 @@ $h = function ($v) {
     /* ---- Publish / Unpublish ---- */
     document.querySelectorAll('[data-pubtoggle]').forEach(function (btn) {
         btn.addEventListener('click', function () {
-            var pid = btn.getAttribute('data-page-id');
+            var pid = btn.getAttribute('data-post-id');
             var cur = btn.getAttribute('data-status');
             var publishing = (cur !== 'published');
-            var endpoint = publishing ? 'publish' : 'unpublish';
+            var endpoint = publishing ? 'publishpost' : 'unpublishpost';
             btn.disabled = true;
-            post(endpoint, { page_id: pid }).then(function (res) {
+            post(endpoint, { post_id: pid }).then(function (res) {
                 btn.disabled = false;
                 if (!res || !res.ok) { toast((res && res.error) || 'Action failed.', 'error'); return; }
                 var nowPub = (res.status === 'published');
@@ -279,7 +245,7 @@ $h = function ($v) {
                     badge.className = 'cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
                     badge.textContent = nowPub ? 'Published' : 'Draft';
                 }
-                toast(nowPub ? 'Page published.' : 'Page unpublished.', 'ok');
+                toast(nowPub ? 'Post published.' : 'Post unpublished.', 'ok');
             }).catch(function () { btn.disabled = false; toast('Network error.', 'error'); });
         });
     });
@@ -291,10 +257,10 @@ $h = function ($v) {
     var pendingDeleteId = null;
     document.querySelectorAll('[data-delete]').forEach(function (btn) {
         btn.addEventListener('click', function () {
-            pendingDeleteId = btn.getAttribute('data-page-id');
-            var title = btn.getAttribute('data-title') || 'this page';
+            pendingDeleteId = btn.getAttribute('data-post-id');
+            var title = btn.getAttribute('data-title') || 'this post';
             if (confirmBody) {
-                confirmBody.textContent = 'Delete "' + title + '"? This removes the page and all of its blocks. This cannot be undone.';
+                confirmBody.textContent = 'Delete "' + title + '"? This removes the post and all of its content blocks. This cannot be undone.';
             }
             openModal(confirmModal);
         });
@@ -303,14 +269,14 @@ $h = function ($v) {
         confirmOk.addEventListener('click', function () {
             if (!pendingDeleteId) { return; }
             confirmOk.disabled = true;
-            post('deletepage', { page_id: pendingDeleteId }).then(function (res) {
+            post('deletepost', { post_id: pendingDeleteId }).then(function (res) {
                 confirmOk.disabled = false;
                 closeModal(confirmModal);
                 if (!res || !res.ok) { toast((res && res.error) || 'Delete failed.', 'error'); return; }
-                var row = document.querySelector('tr[data-page-id="' + pendingDeleteId + '"]');
+                var row = document.querySelector('tr[data-post-id="' + pendingDeleteId + '"]');
                 if (row) { row.parentNode.removeChild(row); }
                 pendingDeleteId = null;
-                toast('Page deleted.', 'ok');
+                toast('Post deleted.', 'ok');
             }).catch(function () { confirmOk.disabled = false; toast('Network error.', 'error'); });
         });
     }

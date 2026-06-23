@@ -1,58 +1,60 @@
 <?php
 /**
- * Cms_edit.tpl — CMS block editor. PLAIN PHP (extract()+include), NEVER Smarty.
+ * Cms_editpost.tpl — CMS blog-post editor. PLAIN PHP (extract()+include), NEVER Smarty.
  *
- * Receives (from Controller_Cms::edit):
- *   $Page         ['page_id','slug','type','title','status','published_at',
- *                  'hero_media_id','meta_description','is_system','scope_type','scope_id']
+ * Reuses the SHARED block-body editor (cms/_block_editor.tpl) — the SAME engine
+ * the page editor uses — for the post BODY, and adds a post-specific META form
+ * (title→auto-slug, excerpt, hero image via the shared media picker, tags as a
+ * comma input, status + Save/Publish/Delete). Saves via CmsAjax/savepost.
+ *
+ * Receives (from Controller_Cms::editpost):
+ *   $Post         ['post_id','slug','title','excerpt','status','published_at',
+ *                  'hero_media_id','author_id','author_name','scope_type',
+ *                  'scope_id','tags'=>[['name','slug'],...]]
  *   $Blocks       list of ['id','type','enabled','order','source','fields'=>[...]]
  *   $IsNew        bool
+ *   $HeroRef      media-ref ['media_id','src','thumb','alt',...] or null
  *   $BlockCatalog list of ['type','label','group','dynamic','available']
- *   $PageTypes    list of ['type','label','blocks'=>[default block types]]
  *   $Caps         ['create','edit','publish','delete','media','nav','roles' => bool]
  *   UIR, HTTP_TEMPLATE (constants)
  *
- * Posts to CmsAjax: savepage, publish, unpublish, deletepage, mediaupload, medialist.
+ * Posts to CmsAjax: savepost, publishpost, unpublishpost, deletepost, mediaupload, medialist.
  */
 
-$page    = isset($Page) && is_array($Page) ? $Page : array();
+$post    = isset($Post) && is_array($Post) ? $Post : array();
 $blocks  = isset($Blocks) && is_array($Blocks) ? $Blocks : array();
 $isNew   = !empty($IsNew);
 $catalog = isset($BlockCatalog) && is_array($BlockCatalog) ? $BlockCatalog : array();
 $caps    = isset($Caps) && is_array($Caps) ? $Caps : array();
+$heroRef = (isset($HeroRef) && is_array($HeroRef)) ? $HeroRef : null;
 
-// Page-type enum the meta form offers (mirror controller _pageTypes()).
-$pageTypes = isset($PageTypes) && is_array($PageTypes) ? $PageTypes : array(
-    array('type' => 'composed',   'label' => 'Composed / Landing'),
-    array('type' => 'article',    'label' => 'Article / Text'),
-    array('type' => 'media',      'label' => 'Media / Gallery'),
-    array('type' => 'resource',   'label' => 'Resource / Document'),
-    array('type' => 'blog_index', 'label' => 'Blog Index'),
-    array('type' => 'dynamic',    'label' => 'Dynamic Data'),
-);
+$postId      = (int)($post['post_id'] ?? 0);
+$pTitle      = (string)($post['title'] ?? '');
+$pSlug       = (string)($post['slug'] ?? '');
+$pExcerpt    = (string)($post['excerpt'] ?? '');
+$pStatus     = (string)($post['status'] ?? 'draft');
+$pAuthor     = trim((string)($post['author_name'] ?? ''));
+$isPublished = ($pStatus === 'published');
 
-// A "type=" hint may arrive on the New-page URL — seed the meta form's type.
-$urlType = isset($_GET['type']) ? trim((string)$_GET['type']) : '';
-
-$pageId       = (int)($page['page_id'] ?? 0);
-$pTitle       = (string)($page['title'] ?? '');
-$pSlug        = (string)($page['slug'] ?? '');
-$pType        = $urlType !== '' ? $urlType : (string)($page['type'] ?? 'composed');
-$pMeta        = (string)($page['meta_description'] ?? '');
-$pStatus      = (string)($page['status'] ?? 'draft');
-$pIsSystem    = !empty($page['is_system']);
-$isPublished  = ($pStatus === 'published');
+$tags = (isset($post['tags']) && is_array($post['tags'])) ? $post['tags'] : array();
+$tagNames = array();
+foreach ($tags as $tg) {
+    $n = trim((string)($tg['name'] ?? ''));
+    if ($n !== '') {
+        $tagNames[] = $n;
+    }
+}
+$tagStr = implode(', ', $tagNames);
 
 $canEdit    = !empty($caps['edit']) || !empty($caps['create']);
 $canPublish = !empty($caps['publish']);
-$canDelete  = !empty($caps['delete']) && !$pIsSystem && !$isNew;
+$canDelete  = !empty($caps['delete']) && !$isNew;
 
 $h = function ($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 };
 
-// Catalog used by JS for labels + the Add-block chooser (only `available` blocks
-// are offered for adding, but we keep a full label map for any existing block).
+// Catalog label map (for the shared engine).
 $catalogLabels = array();
 foreach ($catalog as $c) {
     $catalogLabels[$c['type']] = $c['label'];
@@ -63,8 +65,8 @@ foreach ($catalog as $c) {
 <div class="cms-wrap">
 
     <div class="cms-topbar">
-        <a class="cms-btn cms-btn-ghost cms-btn-sm" href="<?= UIR ?>Cms/index"><i class="fas fa-arrow-left"></i> Pages</a>
-        <h1 class="cms-title"><?= $isNew ? 'New Page' : $h('Edit: ' . $pTitle) ?></h1>
+        <a class="cms-btn cms-btn-ghost cms-btn-sm" href="<?= UIR ?>Cms/posts"><i class="fas fa-arrow-left"></i> Posts</a>
+        <h1 class="cms-title"><?= $isNew ? 'New Post' : $h('Edit: ' . $pTitle) ?></h1>
         <span class="cms-spacer"></span>
     </div>
 
@@ -72,48 +74,66 @@ foreach ($catalog as $c) {
 
         <?php /* ---- Meta panel ---- */ ?>
         <div class="cms-meta-panel">
-            <h2>Page settings</h2>
+            <h2>Post settings</h2>
 
             <div class="cms-status-row">
                 Status:
                 <span class="cms-badge cms-badge-<?= $isPublished ? 'published' : 'draft' ?>" id="cmsStatusBadge">
                     <?= $isPublished ? 'Published' : 'Draft' ?>
                 </span>
-                <?php if ($pIsSystem): ?><span class="cms-badge cms-badge-system">System</span><?php endif; ?>
             </div>
+
+            <?php if ($pAuthor !== ''): ?>
+            <div class="cms-help" style="margin-top:-4px;margin-bottom:10px;">By <?= $h($pAuthor) ?></div>
+            <?php endif; ?>
 
             <div class="cms-field">
                 <label class="cms-label" for="cmsTitle">Title</label>
-                <input type="text" class="cms-input" id="cmsTitle" value="<?= $h($pTitle) ?>" placeholder="Page title">
+                <input type="text" class="cms-input" id="cmsTitle" value="<?= $h($pTitle) ?>" placeholder="Post title">
             </div>
 
             <div class="cms-field">
                 <label class="cms-label" for="cmsSlug">Slug</label>
-                <input type="text" class="cms-input" id="cmsSlug" value="<?= $h($pSlug) ?>" placeholder="page-slug">
+                <input type="text" class="cms-input" id="cmsSlug" value="<?= $h($pSlug) ?>" placeholder="post-slug">
                 <div class="cms-help">URL path. Auto-filled from the title until you edit it.</div>
             </div>
 
             <div class="cms-field">
-                <label class="cms-label" for="cmsType">Type</label>
-                <select class="cms-select" id="cmsType">
-                    <?php foreach ($pageTypes as $pt):
-                        $sel = ((string)$pt['type'] === $pType) ? ' selected' : '';
-                    ?>
-                        <option value="<?= $h($pt['type']) ?>"<?= $sel ?>><?= $h($pt['label']) ?></option>
-                    <?php endforeach; ?>
-                </select>
+                <label class="cms-label" for="cmsExcerpt">Excerpt</label>
+                <textarea class="cms-textarea" id="cmsExcerpt" placeholder="Short summary shown in lists and previews." style="min-height:70px;"><?= $h($pExcerpt) ?></textarea>
             </div>
 
             <div class="cms-field">
-                <label class="cms-label" for="cmsMeta">Meta description</label>
-                <textarea class="cms-textarea" id="cmsMeta" placeholder="Short summary for search engines." style="min-height:70px;"><?= $h($pMeta) ?></textarea>
+                <label class="cms-label">Hero image</label>
+                <div class="cms-media-field" id="cmsHeroField">
+                    <?php if ($heroRef && !empty($heroRef['thumb'])): ?>
+                        <img class="cms-media-thumb" id="cmsHeroThumb" src="<?= $h($heroRef['thumb'] ?: $heroRef['src']) ?>" alt="">
+                    <?php else: ?>
+                        <div class="cms-media-thumb cms-empty-thumb" id="cmsHeroThumb"><i class="fas fa-image"></i></div>
+                    <?php endif; ?>
+                    <div class="cms-media-meta">
+                        <div class="cms-media-name" id="cmsHeroName">
+                            <?php if ($heroRef): ?><?= $h($heroRef['alt'] ?? 'Selected image') ?><?php else: ?><span class="cms-muted">No image selected</span><?php endif; ?>
+                        </div>
+                        <div style="margin-top:6px;">
+                            <button type="button" class="cms-btn cms-btn-sm" id="cmsHeroChoose"><i class="fas fa-image"></i> Choose image</button>
+                            <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsHeroClear" style="margin-left:6px;<?= $heroRef ? '' : 'display:none;' ?>">Clear</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cms-field">
+                <label class="cms-label" for="cmsTags">Tags</label>
+                <input type="text" class="cms-input" id="cmsTags" value="<?= $h($tagStr) ?>" placeholder="news, events, tournament">
+                <div class="cms-help">Comma-separated. New tags are created automatically.</div>
             </div>
 
             <div class="cms-action-row">
                 <?php if ($canEdit): ?>
                     <button type="button" class="cms-btn cms-btn-primary" id="cmsSaveBtn"><i class="fas fa-save"></i> Save</button>
                 <?php endif; ?>
-                <a class="cms-btn cms-btn-ghost" id="cmsPreviewBtn" href="<?= $pageId > 0 ? UIR . 'Cms/preview/' . $pageId : '#' ?>" target="_blank" rel="noopener"><i class="fas fa-eye"></i> Preview</a>
+                <a class="cms-btn cms-btn-ghost" id="cmsPreviewBtn" href="<?= ($pSlug !== '') ? UIR . 'Blog/post/' . $h($pSlug) : '#' ?>" target="_blank" rel="noopener"><i class="fas fa-eye"></i> Preview</a>
             </div>
 
             <?php if ($canPublish): ?>
@@ -126,7 +146,7 @@ foreach ($catalog as $c) {
 
             <?php if ($canDelete): ?>
             <div class="cms-action-row">
-                <button type="button" class="cms-btn cms-btn-danger" id="cmsDeleteBtn"><i class="fas fa-trash"></i> Delete page</button>
+                <button type="button" class="cms-btn cms-btn-danger" id="cmsDeleteBtn"><i class="fas fa-trash"></i> Delete post</button>
             </div>
             <?php endif; ?>
 
@@ -134,13 +154,13 @@ foreach ($catalog as $c) {
         </div>
 
         <?php
-        /* ---- Blocks column + modals + block engine: SHARED partial ---- */
+        /* ---- Body blocks + modals + block engine: SHARED partial ---- */
         $beBlocks    = $blocks;
         $beCatalog   = $catalog;
         $beLabels    = $catalogLabels;
-        $bePageTypes = $pageTypes;
+        $bePageTypes = array(); // posts have no page-type presets
         $beCanEdit   = $canEdit;
-        $beHeading   = 'Blocks';
+        $beHeading   = 'Post body';
         include DIR_TEMPLATE . 'default/cms/_block_editor.tpl';
         ?>
 
@@ -151,24 +171,25 @@ foreach ($catalog as $c) {
 (function () {
     'use strict';
 
-    var UIR  = <?= json_encode(UIR) ?>;
+    var UIR = <?= json_encode(UIR) ?>;
 
-    // Server state injected safely. The block engine lives in the shared
-    // cms/_block_editor.tpl partial; this script owns the page META form +
-    // the save / publish / delete flow, wiring into window.CmsBlockEditor.
     var STATE = {
-        pageId:  <?= (int)$pageId ?>,
+        postId:  <?= (int)$postId ?>,
         isNew:   <?= $isNew ? 'true' : 'false' ?>,
+        heroId:  <?= (int)($post['hero_media_id'] ?? 0) ?>,
         canEdit:    <?= $canEdit ? 'true' : 'false' ?>,
         canPublish: <?= $canPublish ? 'true' : 'false' ?>
     };
 
     var BE = window.CmsBlockEditor;
 
-    /* ---- toast (delegate to the shared engine) ---- */
+    function esc(v) {
+        return String(v == null ? '' : v)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
     function toast(msg, kind) { if (BE) { BE.toast(msg, kind); } }
 
-    /* ---- POST helper ---- */
     function post(endpoint, params) {
         var body = new URLSearchParams();
         Object.keys(params).forEach(function (k) { body.append(k, params[k]); });
@@ -180,11 +201,11 @@ foreach ($catalog as $c) {
         }).then(function (r) { return r.json(); });
     }
 
-    /* ================= meta form helpers ================= */
+    /* ================= meta form ================= */
     var titleInput = document.getElementById('cmsTitle');
     var slugInput  = document.getElementById('cmsSlug');
-    var typeInput  = document.getElementById('cmsType');
-    var metaInput  = document.getElementById('cmsMeta');
+    var excerptInput = document.getElementById('cmsExcerpt');
+    var tagsInput  = document.getElementById('cmsTags');
     var savedHint  = document.getElementById('cmsSavedHint');
     var statusBadge = document.getElementById('cmsStatusBadge');
     var slugTouched = (slugInput.value.trim() !== '');
@@ -198,16 +219,43 @@ foreach ($catalog as $c) {
         markDirty();
     });
     slugInput.addEventListener('input', function () { slugTouched = true; markDirty(); });
+    excerptInput.addEventListener('input', markDirty);
+    tagsInput.addEventListener('input', markDirty);
 
-    // On a NEW page, switching the type re-seeds the starter blocks — but only
-    // when the user hasn't authored content yet (avoid clobbering real work).
-    typeInput.addEventListener('change', function () {
-        if (STATE.isNew && BE && BE.isPristine()) {
-            BE.seedFromPreset(typeInput.value);
+    /* ================= hero image (shared media picker) ================= */
+    var heroThumb  = document.getElementById('cmsHeroThumb');
+    var heroName   = document.getElementById('cmsHeroName');
+    var heroChoose = document.getElementById('cmsHeroChoose');
+    var heroClear  = document.getElementById('cmsHeroClear');
+
+    function setHero(ref) {
+        STATE.heroId = (ref && ref.media_id) ? Number(ref.media_id) : 0;
+        var fresh;
+        if (ref && (ref.thumb || ref.src)) {
+            fresh = document.createElement('img');
+            fresh.className = 'cms-media-thumb';
+            fresh.src = ref.thumb || ref.src;
+            fresh.alt = '';
+        } else {
+            fresh = document.createElement('div');
+            fresh.className = 'cms-media-thumb cms-empty-thumb';
+            fresh.innerHTML = '<i class="fas fa-image"></i>';
         }
+        fresh.id = 'cmsHeroThumb';
+        heroThumb.parentNode.replaceChild(fresh, heroThumb);
+        heroThumb = fresh;
+        heroName.innerHTML = ref ? esc(ref.alt || 'Selected image') : '<span class="cms-muted">No image selected</span>';
+        heroClear.style.display = ref ? '' : 'none';
         markDirty();
-    });
-    metaInput.addEventListener('input', markDirty);
+    }
+    if (heroChoose && BE) {
+        heroChoose.addEventListener('click', function () {
+            BE.pickMedia(function (ref) { setHero(ref); });
+        });
+    }
+    if (heroClear) {
+        heroClear.addEventListener('click', function () { setHero(null); });
+    }
 
     /* ================= save flow ================= */
     var saveBtn = document.getElementById('cmsSaveBtn');
@@ -228,10 +276,9 @@ foreach ($catalog as $c) {
         if (saving || !STATE.canEdit || !BE) { return; }
         var title = titleInput.value.trim();
         if (title === '') {
-            if (!isAuto) { toast('A page title is required.', 'error'); }
+            if (!isAuto) { toast('A post title is required.', 'error'); }
             return;
         }
-        // a JSON-fallback block with broken JSON blocks save
         if (BE.hasJsonError()) {
             if (!isAuto) { toast('Fix the invalid JSON in a block before saving.', 'error'); }
             return;
@@ -243,15 +290,16 @@ foreach ($catalog as $c) {
         if (savedHint) { savedHint.innerHTML = '<span class="cms-spin"></span> Saving…'; }
 
         var params = {
-            page_id: STATE.pageId,
+            post_id: STATE.postId,
             title: title,
             slug: slugInput.value.trim(),
-            type: typeInput.value,
-            meta_description: metaInput.value.trim(),
+            excerpt: excerptInput.value.trim(),
+            hero_media_id: STATE.heroId || 0,
+            tags: tagsInput.value,
             blocks: JSON.stringify(BE.serialize())
         };
 
-        post('savepage', params).then(function (res) {
+        post('savepost', params).then(function (res) {
             saving = false;
             if (saveBtn) { saveBtn.disabled = false; }
             if (!res || !res.ok) {
@@ -260,15 +308,17 @@ foreach ($catalog as $c) {
                 return;
             }
             dirty = false;
-            // capture id for a freshly-created page so later saves are updates
-            if (res.is_new && res.page_id) {
-                STATE.pageId = res.page_id;
+            if (res.is_new && res.post_id) {
+                STATE.postId = res.post_id;
                 STATE.isNew = false;
-                params_pageId_synced();
+                postIdSynced();
             }
             if (res.slug) { slugInput.value = res.slug; slugTouched = true; }
+            if (res.tags && Array.isArray(res.tags)) {
+                tagsInput.value = res.tags.map(function (t) { return t.name; }).join(', ');
+            }
             if (savedHint) { savedHint.textContent = 'Saved ' + new Date().toLocaleTimeString(); }
-            toast('Page saved.', 'ok');
+            toast('Post saved.', 'ok');
         }).catch(function () {
             saving = false;
             if (saveBtn) { saveBtn.disabled = false; }
@@ -277,14 +327,14 @@ foreach ($catalog as $c) {
         });
     }
 
-    // After a new page gets its id, enable Preview/Publish and update URL.
-    function params_pageId_synced() {
+    // After a new post gets its id, enable Preview/Publish and update URL.
+    function postIdSynced() {
         var prev = document.getElementById('cmsPreviewBtn');
-        if (prev) { prev.href = UIR + 'Cms/preview/' + STATE.pageId; }
+        if (prev && slugInput.value.trim() !== '') { prev.href = UIR + 'Blog/post/' + slugInput.value.trim(); }
         var pub = document.getElementById('cmsPubBtn');
         if (pub) { pub.disabled = false; }
         try {
-            history.replaceState(null, '', UIR + 'Cms/edit/' + STATE.pageId);
+            history.replaceState(null, '', UIR + 'Cms/editpost/' + STATE.postId);
         } catch (e) {}
     }
 
@@ -292,7 +342,6 @@ foreach ($catalog as $c) {
         saveBtn.addEventListener('click', function () { doSave(false); });
     }
 
-    // Warn on unload with unsaved changes.
     window.addEventListener('beforeunload', function (e) {
         if (dirty) { e.preventDefault(); e.returnValue = ''; }
     });
@@ -301,10 +350,10 @@ foreach ($catalog as $c) {
     var pubBtn = document.getElementById('cmsPubBtn');
     if (pubBtn) {
         pubBtn.addEventListener('click', function () {
-            if (STATE.pageId <= 0) { toast('Save the page first.', 'error'); return; }
+            if (STATE.postId <= 0) { toast('Save the post first.', 'error'); return; }
             var publishing = (pubBtn.getAttribute('data-status') !== 'published');
             pubBtn.disabled = true;
-            post(publishing ? 'publish' : 'unpublish', { page_id: STATE.pageId }).then(function (res) {
+            post(publishing ? 'publishpost' : 'unpublishpost', { post_id: STATE.postId }).then(function (res) {
                 pubBtn.disabled = false;
                 if (!res || !res.ok) { toast((res && res.error) || 'Action failed.', 'error'); return; }
                 var nowPub = (res.status === 'published');
@@ -314,24 +363,24 @@ foreach ($catalog as $c) {
                     statusBadge.className = 'cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
                     statusBadge.textContent = nowPub ? 'Published' : 'Draft';
                 }
-                toast(nowPub ? 'Page published.' : 'Page unpublished.', 'ok');
+                toast(nowPub ? 'Post published.' : 'Post unpublished.', 'ok');
             }).catch(function () { pubBtn.disabled = false; toast('Network error.', 'error'); });
         });
     }
 
-    /* ================= delete page ================= */
+    /* ================= delete post ================= */
     var deleteBtn = document.getElementById('cmsDeleteBtn');
     if (deleteBtn && BE) {
         deleteBtn.addEventListener('click', function () {
-            BE.confirmDialog('Delete page', 'Delete this page and all of its blocks? This cannot be undone.', 'Delete', function () {
+            BE.confirmDialog('Delete post', 'Delete this post and all of its content blocks? This cannot be undone.', 'Delete', function () {
                 var okEl = BE.confirmOkEl();
                 if (okEl) { okEl.disabled = true; }
-                post('deletepage', { page_id: STATE.pageId }).then(function (res) {
+                post('deletepost', { post_id: STATE.postId }).then(function (res) {
                     if (okEl) { okEl.disabled = false; }
                     BE.closeConfirm();
                     if (!res || !res.ok) { toast((res && res.error) || 'Delete failed.', 'error'); return; }
                     dirty = false;
-                    window.location.href = UIR + 'Cms/index';
+                    window.location.href = UIR + 'Cms/posts';
                 }).catch(function () { if (okEl) { okEl.disabled = false; } toast('Network error.', 'error'); });
             });
         });
@@ -343,14 +392,10 @@ foreach ($catalog as $c) {
             blocks:    <?= json_encode($blocks, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             catalog:   <?= json_encode($catalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             labels:    <?= json_encode($catalogLabels, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
-            pageTypes: <?= json_encode($pageTypes, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            pageTypes: [],
             canEdit:   STATE.canEdit,
             onDirty:   markDirty
         });
-        // For a brand-new page that arrived with no blocks, seed from the type preset.
-        if (STATE.isNew && BE.isEmpty()) {
-            BE.seedFromPreset(typeInput.value);
-        }
     }
 })();
 </script>
