@@ -1,6 +1,6 @@
 <?php
 /**
- * Cms_media.tpl — Royal Scriptorium media library.
+ * Cms_media.tpl — CMS media library.
  * PLAIN PHP (extract()+include), NEVER Smarty. Use <?php ?>/<?= ?> only.
  *
  * Receives (from Controller_Cms::media):
@@ -47,7 +47,7 @@ $h = function ($v) {
 <?php
 /* ---- CMS shell setup (persistent rail + masthead) ---- */
 $cmsActive  = 'media';
-$cmsTitle   = 'The Scriptorium';
+$cmsTitle   = 'Media';
 $cmsSub     = 'Media Library';
 $cmsActions = '<button type="button" class="cms-btn cms-btn-primary" id="cmsMediaUploadBtn"><i class="fas fa-cloud-upload-alt"></i> Upload</button>';
 include __DIR__ . '/cms/_shell_top.tpl';

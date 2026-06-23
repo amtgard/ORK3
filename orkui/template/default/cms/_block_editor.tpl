@@ -53,8 +53,8 @@ $beHeading   = isset($beHeading) ? (string)$beHeading : 'Blocks';
     <div id="cmsBlockList"></div>
 
     <div class="cms-empty" id="cmsBlockEmpty" style="display:none;border:1px dashed var(--ork-border-dark);border-radius:10px;">
-        <div class="cms-empty-icon"><i class="fas fa-feather-alt"></i></div>
-        <div class="cms-empty-copy">This scroll is blank — begin the tale.</div>
+        <div class="cms-empty-icon"><i class="fas fa-layer-group"></i></div>
+        <div class="cms-empty-copy">No blocks yet. Add your first block.</div>
         <div class="cms-empty-cta">
             <button type="button" class="cms-btn cms-btn-primary cms-btn-sm" id="cmsAddBlockBtnEmpty"><i class="fas fa-plus"></i> Add block</button>
         </div>

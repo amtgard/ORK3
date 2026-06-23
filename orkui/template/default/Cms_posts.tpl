@@ -33,7 +33,7 @@ $h = function ($v) {
 <?php
 /* ---- CMS shell setup (persistent rail + masthead) ---- */
 $cmsActive  = 'posts';
-$cmsTitle   = 'The Scriptorium';
+$cmsTitle   = 'Posts';
 $cmsSub     = 'Posts';
 $cmsActions = $canCreate
     ? '<button type="button" class="cms-btn cms-btn-primary" id="cmsNewPostBtn"><i class="fas fa-plus"></i> New Post</button>'
@@ -95,8 +95,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     <tr>
                         <td colspan="7">
                             <div class="cms-empty">
-                                <div class="cms-empty-icon">&#9884;</div>
-                                <div class="cms-empty-copy">No tales told yet.<?= $tagF !== '' ? ' (none with that tag)' : '' ?></div>
+                                <div class="cms-empty-icon"><i class="fas fa-newspaper"></i></div>
+                                <div class="cms-empty-copy">No posts yet.<?= $tagF !== '' ? ' (none with that tag)' : '' ?></div>
                                 <?php if ($canCreate): ?>
                                     <button type="button" class="cms-btn cms-btn-primary cms-empty-cta" id="cmsNewPostBtnEmpty">
                                         <i class="fas fa-plus"></i> New Post

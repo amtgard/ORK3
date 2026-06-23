@@ -1,11 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap');
 
 /* ============================================================================
  * cms-admin.css — CMS admin page-list + block editor + media-picker modal.
  *
- * "Royal Scriptorium" admin theme: navy + gold accent. The generic blue accent
+ * CMS admin theme: navy + gold brand accent. The generic blue accent
  * is re-pointed to gold throughout the admin (primary button, active tab, focus
- * rings, selected states). MedievalSharp is the display font for titles only.
+ * rings, selected states).
  *
  * All classes prefixed `cms-`. Dark mode via html[data-theme="dark"] (we reuse
  * the global --ork-* variables so most surfaces theme automatically; explicit
@@ -14,7 +13,7 @@
  * ========================================================================== */
 
 .cms-wrap {
-    /* Royal Scriptorium accent tokens, scoped to the admin shell */
+    /* Admin brand accent tokens, scoped to the admin shell */
     --cms-gold: #f0b429;
     --cms-gold-deep: #caa23a;
     --cms-navy: #0b1120;
@@ -37,7 +36,7 @@
 }
 .cms-topbar h1.cms-title,
 .cms-title {
-    font-family: 'MedievalSharp', 'Open Sans', system-ui, sans-serif;
+    font-family: 'Open Sans', system-ui, sans-serif;
     font-size: 26px;
     font-weight: 700;
     letter-spacing: .01em;
@@ -67,7 +66,7 @@
     flex: 0 0 auto;
 }
 .cms-masthead-word {
-    font-family: 'MedievalSharp', 'Open Sans', system-ui, sans-serif;
+    font-family: 'Open Sans', system-ui, sans-serif;
     font-size: 26px;
     font-weight: 700;
     letter-spacing: .01em;
@@ -142,7 +141,7 @@
     flex: 0 0 auto;
 }
 .cms-rail-word {
-    font-family: 'MedievalSharp', 'Open Sans', system-ui, sans-serif;
+    font-family: 'Open Sans', system-ui, sans-serif;
     font-size: 20px;
     font-weight: 700;
     letter-spacing: .01em;
@@ -208,7 +207,7 @@
 }
 .cms-shell-masthead-text { flex: 1 1 auto; min-width: 0; }
 .cms-shell-title {
-    font-family: 'MedievalSharp', 'Open Sans', system-ui, sans-serif;
+    font-family: 'Open Sans', system-ui, sans-serif;
     font-size: 28px;
     font-weight: 700;
     letter-spacing: .01em;
@@ -1109,7 +1108,7 @@ html[data-theme="dark"] .cms-switch .cms-slider::before { background: #e2e8f0; }
 html[data-theme="dark"] .cms-modal { box-shadow: 0 20px 60px rgba(0, 0, 0, .6); }
 
 /* ============================================================================
- * DataTables — theme the controls to match Royal Scriptorium + .cms-table
+ * DataTables — theme the controls to match the admin theme + .cms-table
  * (Pages list / Posts list). Neutralize DataTables' default light CSS so it
  * never clashes with the dark theme.
  * ========================================================================== */

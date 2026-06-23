@@ -67,7 +67,7 @@ foreach ($catalog as $c) {
 $cmsActive  = 'posts';
 $cmsTitle   = $isNew ? 'New Post' : 'Edit: ' . $pTitle;
 $cmsCrumbs  = array(
-    array('label' => 'The Scriptorium', 'href' => UIR . 'Cms/dashboard'),
+    array('label' => 'Content', 'href' => UIR . 'Cms/dashboard'),
     array('label' => 'Posts',           'href' => UIR . 'Cms/posts'),
     array('label' => $isNew ? 'New Post' : $pTitle),
 );
@@ -175,7 +175,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 </div>
                 <span class="cms-spacer"></span>
                 <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewRefresh" data-tip="Refresh preview"><i class="fas fa-rotate-right"></i></button>
-                <a class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewOpen" href="<?= ($pSlug !== '') ? UIR . 'Blog/post/' . $h($pSlug) : '#' ?>" target="_blank" rel="noopener" data-tip="Open in new tab"><i class="fas fa-arrow-up-right-from-square"></i></a>
+                <a class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewOpen" href="<?= ($pSlug !== '') ? UIR . 'Blog/post/' . $h($pSlug) : '#' ?>" target="_blank" rel="noopener" data-tip="Open in new tab"><i class="fas fa-external-link-alt"></i></a>
                 <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-preview-close" id="cmsPreviewClose" data-tip="Close preview"><i class="fas fa-times"></i></button>
             </div>
             <div class="cms-preview-note cms-muted">Drafts preview once published; published posts preview live.</div>

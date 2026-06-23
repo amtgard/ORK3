@@ -1,6 +1,6 @@
 <?php
 /**
- * Cms_dashboard.tpl — Royal Scriptorium CMS landing / overview.
+ * Cms_dashboard.tpl — CMS landing / overview.
  * PLAIN PHP (extract()+include), NEVER Smarty. Use <?php ?>/<?= ?> only.
  *
  * Receives (from Controller_Cms::dashboard):
@@ -51,7 +51,7 @@ $h = function ($v) {
 <style>
 /* ---- Dashboard-only styling (reuses cms- tokens; dark-mode via vars) ---- */
 .cms-dash-greet {
-    font-family: 'MedievalSharp', Georgia, serif;
+    font-family: inherit;
     font-size: 22px;
     color: var(--cms-gold, #f0b429);
     margin: 0 0 4px;
@@ -134,15 +134,15 @@ html[data-theme="dark"] .cms-dash-livelink:hover { color: var(--cms-gold, #f0b42
 <?php
 /* ---- CMS shell setup (persistent rail + masthead) ---- */
 $cmsActive  = 'dashboard';
-$cmsTitle   = 'The Scriptorium';
-$cmsSub     = 'Your hall of pages, posts, and lore';
+$cmsTitle   = 'Dashboard';
+$cmsSub     = 'Overview of your site content';
 $cmsActions = '';
 include __DIR__ . '/cms/_shell_top.tpl';
 ?>
 
     <div class="cms-dash-block">
-        <h2 class="cms-dash-greet"><?= $h($greet) ?>, scribe.</h2>
-        <p class="cms-dash-lede">Pick up where you left off, or begin a fresh scroll below.</p>
+        <h2 class="cms-dash-greet"><?= $h($greet) ?>.</h2>
+        <p class="cms-dash-lede">Pick up where you left off, or create something new below.</p>
     </div>
 
     <?php if ($canCreate): ?>
@@ -150,14 +150,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
         <h3 class="cms-dash-section-title">Quick create</h3>
         <div class="cms-quick-row">
             <a class="cms-quick-card" id="cmsDashNewPage" href="<?= UIR ?>Cms/edit/new" role="button">
-                <span class="cms-quick-ico"><i class="fas fa-file-circle-plus"></i></span>
+                <span class="cms-quick-ico"><i class="fas fa-file-alt"></i></span>
                 <span class="cms-quick-text">
                     <strong>New Page</strong>
                     <span>Compose a landing or content page</span>
                 </span>
             </a>
             <a class="cms-quick-card" href="<?= UIR ?>Cms/editpost/new" role="button">
-                <span class="cms-quick-ico"><i class="fas fa-feather-pointed"></i></span>
+                <span class="cms-quick-ico"><i class="fas fa-plus"></i></span>
                 <span class="cms-quick-text">
                     <strong>New Post</strong>
                     <span>Pen a blog entry or announcement</span>
@@ -180,7 +180,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             </a>
             <div class="cms-stat-tile cms-stat-tile-drafts">
                 <div class="cms-stat-num"><?= $statDrafts ?></div>
-                <div class="cms-stat-lbl"><i class="fas fa-pen-ruler"></i> Draft<?= $statDrafts === 1 ? '' : 's' ?> in progress</div>
+                <div class="cms-stat-lbl"><i class="fas fa-pencil-ruler"></i> Draft<?= $statDrafts === 1 ? '' : 's' ?> in progress</div>
             </div>
         </div>
     </div>
@@ -189,7 +189,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         <h3 class="cms-dash-section-title">Continue editing</h3>
         <?php if (empty($recent)): ?>
             <div class="cms-empty">
-                <div class="cms-empty-icon">&#9884;</div>
+                <div class="cms-empty-icon"><i class="fas fa-file-alt"></i></div>
                 <div class="cms-empty-copy">Nothing penned yet. Your recent work will appear here.</div>
                 <?php if ($canCreate): ?>
                     <a class="cms-btn cms-btn-primary cms-empty-cta" href="<?= UIR ?>Cms/edit/new"><i class="fas fa-plus"></i> New Page</a>
@@ -228,7 +228,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     <div class="cms-dash-block">
         <a class="cms-dash-livelink" href="<?= UIR ?>" target="_blank" rel="noopener">
-            <i class="fas fa-arrow-up-right-from-square"></i> View live site
+            <i class="fas fa-external-link-alt"></i> View live site
         </a>
     </div>
 

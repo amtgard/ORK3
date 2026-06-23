@@ -47,7 +47,7 @@ $h = function ($v) {
 <?php
 /* ---- CMS shell setup (persistent rail + masthead) ---- */
 $cmsActive  = 'pages';
-$cmsTitle   = 'The Scriptorium';
+$cmsTitle   = 'Pages';
 $cmsSub     = 'Pages';
 $cmsActions = $canCreate
     ? '<button type="button" class="cms-btn cms-btn-primary" id="cmsNewPageBtn"><i class="fas fa-plus"></i> New Page</button>'
@@ -100,8 +100,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     <tr>
                         <td colspan="6">
                             <div class="cms-empty">
-                                <div class="cms-empty-icon">⚜</div>
-                                <div class="cms-empty-copy">No pages yet. Start your first scroll.</div>
+                                <div class="cms-empty-icon"><i class="fas fa-file-alt"></i></div>
+                                <div class="cms-empty-copy">No pages yet.</div>
                                 <?php if ($canCreate): ?>
                                     <button type="button" class="cms-btn cms-btn-primary cms-empty-cta" id="cmsNewPageEmptyBtn">
                                         <i class="fas fa-plus"></i> New Page

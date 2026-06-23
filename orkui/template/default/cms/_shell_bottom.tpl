@@ -1,6 +1,6 @@
 <?php
 /**
- * cms/_shell_bottom.tpl — Royal Scriptorium CMS shell (close).
+ * cms/_shell_bottom.tpl — CMS admin shell (close).
  * PLAIN PHP (extract()+include), NEVER Smarty.
  *
  * Closes the .cms-shell-body / .cms-main / .cms-shell elements opened by

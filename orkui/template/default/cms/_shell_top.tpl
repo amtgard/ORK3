@@ -1,6 +1,6 @@
 <?php
 /**
- * cms/_shell_top.tpl — Royal Scriptorium CMS shell (open).
+ * cms/_shell_top.tpl — CMS admin shell (open).
  * PLAIN PHP (extract()+include), NEVER Smarty. Use <?php ?>/<?= ?> only.
  *
  * Renders the persistent left rail + masthead workspace chrome that wraps every
@@ -12,7 +12,7 @@
  *   $cmsActive  string  which rail item is highlighted:
  *                       'pages'|'posts'|'nav'  (any other value, e.g. 'edit',
  *                       highlights nothing — leaf surfaces).
- *   $cmsTitle   string  masthead display title (MedievalSharp). Default 'The Scriptorium'.
+ *   $cmsTitle   string  masthead display title. Default 'Content'.
  *   $cmsSub     string  optional subtitle under the title.
  *   $cmsCrumbs  array   optional breadcrumb: list of ['label'=>..,'href'=>?..].
  *                       The last crumb (or any without href) renders as plain text.
@@ -26,7 +26,7 @@
  */
 
 $cmsActive  = isset($cmsActive) ? (string)$cmsActive : '';
-$cmsTitle   = isset($cmsTitle) && $cmsTitle !== '' ? (string)$cmsTitle : 'The Scriptorium';
+$cmsTitle   = isset($cmsTitle) && $cmsTitle !== '' ? (string)$cmsTitle : 'Content';
 $cmsSub     = isset($cmsSub) ? (string)$cmsSub : '';
 $cmsCrumbs  = isset($cmsCrumbs) && is_array($cmsCrumbs) ? $cmsCrumbs : array();
 $cmsActions = isset($cmsActions) ? (string)$cmsActions : '';
@@ -39,7 +39,7 @@ $shH = function ($v) {
 // Rail items: [key, label, href, icon, show?]. `show` defaults to true.
 // Only surfaces with a real controller action are listed.
 $shRail = array(
-    array('dashboard', 'Dashboard',  UIR . 'Cms/dashboard', 'fa-gauge-high', true),
+    array('dashboard', 'Dashboard',  UIR . 'Cms/dashboard', 'fa-tachometer-alt', true),
     array('pages',     'Pages',      UIR . 'Cms/index',     'fa-file-alt',   true),
     array('posts',     'Posts',      UIR . 'Cms/posts',     'fa-newspaper',  true),
     array('media',     'Media',      UIR . 'Cms/media',     'fa-images',     !empty($shCaps['media'])),
@@ -48,10 +48,10 @@ $shRail = array(
 ?>
 <div class="cms-shell">
 
-    <aside class="cms-rail" aria-label="Scriptorium navigation">
+    <aside class="cms-rail" aria-label="Content management navigation">
         <div class="cms-rail-brand">
-            <i class="fas fa-feather-alt cms-rail-mark" aria-hidden="true"></i>
-            <span class="cms-rail-word">Scriptorium</span>
+            <i class="fas fa-folder-open cms-rail-mark" aria-hidden="true"></i>
+            <span class="cms-rail-word">Content</span>
         </div>
 
         <nav class="cms-rail-nav">
@@ -71,7 +71,7 @@ $shRail = array(
             <div class="cms-rail-divider" role="separator"></div>
 
             <a class="cms-rail-item cms-rail-item-quiet" href="<?= $shH(UIR) ?>" target="_blank" rel="noopener">
-                <i class="fas fa-arrow-up-right-from-square cms-rail-icon" aria-hidden="true"></i>
+                <i class="fas fa-external-link-alt cms-rail-icon" aria-hidden="true"></i>
                 <span class="cms-rail-label">View live site</span>
             </a>
         </nav>

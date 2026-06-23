@@ -39,7 +39,7 @@ class Controller_Cms extends Controller
     }
 
     /* ------------------------------------------------------------------ *
-     * Dashboard — Scriptorium landing / overview
+     * Dashboard — CMS landing / overview
      * ------------------------------------------------------------------ */
 
     public function dashboard($action = null)
@@ -51,7 +51,7 @@ class Controller_Cms extends Controller
         }
 
         $this->template = 'Cms_dashboard.tpl';
-        $this->data['page_title'] = 'The Scriptorium';
+        $this->data['page_title'] = 'Content Management';
 
         // ---- Pages overview (list_pages is already ORDER BY updated_at DESC) ----
         $pages = $this->CmsPage->list_pages(array());

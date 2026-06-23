@@ -118,7 +118,7 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
 <?php
 /* ---- CMS shell setup (persistent rail + masthead) ---- */
 $cmsActive  = 'nav';
-$cmsTitle   = 'The Scriptorium';
+$cmsTitle   = 'Navigation';
 $cmsSub     = 'Navigation';
 $cmsActions = $canManage
     ? '<button type="button" class="cms-btn cms-btn-primary" id="cmsNavAddBtn"><i class="fas fa-plus"></i> Add Item</button>'
@@ -138,8 +138,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
     <div id="cmsNavTree">
         <?php if (empty($top)): ?>
             <div class="cms-empty">
-                <div class="cms-empty-icon">⚜</div>
-                <div class="cms-empty-copy">No paths laid. Chart the front gate.</div>
+                <div class="cms-empty-icon"><i class="fas fa-bars"></i></div>
+                <div class="cms-empty-copy">No navigation items yet.</div>
                 <?php if ($canManage): ?>
                     <button type="button" class="cms-btn cms-btn-primary cms-empty-cta" id="cmsNavAddBtnEmpty">
                         <i class="fas fa-plus"></i> Add Item
