@@ -29,13 +29,7 @@ $ctas       = $blockFields['ctas']        ?? [];
 ?>
 <div class="fd-carousel" data-autoplay="<?= $autoplayMs ?>">
 
-    <?php if (!empty($logo['src'])): ?>
-    <img
-        src="<?= htmlspecialchars($logo['src'], ENT_QUOTES, 'UTF-8') ?>"
-        alt="<?= htmlspecialchars($logo['alt'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-        style="position:absolute;top:24px;left:56px;height:48px;z-index:4;filter:drop-shadow(0 2px 8px rgba(0,0,0,.6))"
-    >
-    <?php endif; ?>
+    <?php /* Logo intentionally omitted here — the marketing nav above already shows it. */ ?>
 
     <?php foreach ($slides as $idx => $slide):
         $isFirst   = ($idx === 0);
