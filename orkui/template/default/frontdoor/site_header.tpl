@@ -22,9 +22,12 @@
  * The render path does not change — only the menu/settings resolver gains scope.
  */
 $siteLogoBase = HTTP_TEMPLATE . 'default/img/frontdoor/';
+$siteUir      = defined('UIR') ? UIR : 'index.php?Route=';
 $blockFields = [
     'logo'  => ['key' => 'logo', 'src' => $siteLogoBase . 'amtgard-logo.png', 'alt' => 'Amtgard'],
-    'cta'   => ['label' => 'Find a Chapter', 'href' => '#'],
-    'login' => ['label' => 'Record Keeper', 'href' => '#'],
+    // Find a Chapter -> the chapter directory (Atlas); Record Keeper -> the ORK
+    // proper (the Kingdoms Directory). Internal routes resolve through UIR.
+    'cta'   => ['label' => 'Find a Chapter', 'href' => $siteUir . 'Atlas'],
+    'login' => ['label' => 'Record Keeper', 'href' => $siteUir . 'Directory'],
 ];
 include DIR_TEMPLATE . 'default/frontdoor/blocks/marketing_nav.tpl';

@@ -14,6 +14,12 @@ class Model_FrontDoor extends Model
         $img = HTTP_TEMPLATE . 'default/img/frontdoor/';
         $logo = ['key' => 'logo', 'src' => $img . 'amtgard-logo.png', 'alt' => 'Amtgard'];
 
+        // Internal route base. Internal nav links resolve through UIR so they are
+        // host-correct; external links point at the live amtgard.com pages until
+        // those sections exist as CMS pages. (This is the fallback / seed source;
+        // the live menu lives in the editable CmsNav 'marketing' store.)
+        $uir = defined('UIR') ? UIR : 'index.php?Route=';
+
         $blocks = [];
 
         $blocks[] = [
@@ -21,26 +27,26 @@ class Model_FrontDoor extends Model
             'fields' => [
                 'logo' => $logo,
                 'items' => [
-                    ['label' => 'Home', 'href' => '#'],
-                    ['label' => 'About', 'href' => '#', 'children' => [
-                        ['label' => 'Mission', 'href' => '#'], ['label' => 'Staff', 'href' => '#'], ['label' => 'Volunteers', 'href' => '#'],
+                    ['label' => 'Home', 'href' => $uir],
+                    ['label' => 'About', 'href' => $uir . 'Page/view/about', 'children' => [
+                        ['label' => 'Mission', 'href' => 'https://www.amtgard.com/mission'], ['label' => 'Staff', 'href' => 'https://www.amtgard.com/staff'], ['label' => 'Volunteers', 'href' => 'https://www.amtgard.com/volunteers'],
                     ]],
-                    ['label' => 'Join', 'href' => '#', 'children' => [
-                        ['label' => 'Learn the Basics', 'href' => '#'], ['label' => 'Find a Chapter', 'href' => '#'], ['label' => 'Start a Chapter', 'href' => '#'],
+                    ['label' => 'Join', 'href' => $uir . 'Page/view/join', 'children' => [
+                        ['label' => 'Learn the Basics', 'href' => 'https://www.amtgard.com/learn-the-basics'], ['label' => 'Find a Chapter', 'href' => $uir . 'Atlas'], ['label' => 'Start a Chapter', 'href' => 'https://www.amtgard.com/start-a-chapter'],
                     ]],
-                    ['label' => 'AI Programs', 'href' => '#', 'children' => [
-                        ['label' => 'Food Fight', 'href' => '#'], ['label' => 'Olympiad', 'href' => '#'],
+                    ['label' => 'AI Programs', 'href' => 'https://www.amtgard.com/programs', 'children' => [
+                        ['label' => 'Food Fight', 'href' => 'https://www.amtgard.com/foodfight'], ['label' => 'Olympiad', 'href' => 'https://www.amtgard.com/olympiad'],
                     ]],
-                    ['label' => 'Media', 'href' => '#', 'children' => [
-                        ['label' => 'Galleries', 'href' => '#'], ['label' => 'Writing', 'href' => '#'],
+                    ['label' => 'Media', 'href' => $uir . 'Page/view/media-gallery', 'children' => [
+                        ['label' => 'Galleries', 'href' => $uir . 'Page/view/media-gallery'], ['label' => 'Writing', 'href' => $uir . 'Blog/index'],
                     ]],
-                    ['label' => 'Official Resources', 'href' => '#', 'children' => [
-                        ['label' => 'Documents', 'href' => '#'],
+                    ['label' => 'Official Resources', 'href' => 'https://www.amtgard.com/resources', 'children' => [
+                        ['label' => 'Documents', 'href' => 'https://www.amtgard.com/documents'],
                     ]],
                     ['label' => 'Merch', 'href' => 'https://www.redbubble.com/people/amtgardmarket/shop'],
                 ],
-                'cta' => ['label' => 'Find a Chapter', 'href' => '#'],
-                'login' => ['label' => 'Record Keeper', 'href' => '#'],
+                'cta' => ['label' => 'Find a Chapter', 'href' => $uir . 'Atlas'],
+                'login' => ['label' => 'Record Keeper', 'href' => $uir . 'Directory'],
             ],
         ];
 
