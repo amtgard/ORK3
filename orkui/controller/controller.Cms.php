@@ -420,37 +420,41 @@ class Controller_Cms extends Controller
      */
     private function _blockCatalog()
     {
-        // Human labels + grouping + whether the block pulls dynamic data.
+        // Human labels + grouping + whether the block pulls dynamic data +
+        // a Font Awesome icon + a one-line description. For DYNAMIC blocks the
+        // description is also surfaced as the body of the editor's info card
+        // (it states what the block shows live).
+        // Tuple: [label, group, dynamic, icon, description].
         $known = array(
             // Shipped front-door blocks.
-            'marketing_nav'   => array('Marketing Nav',     'Layout',   false),
-            'member_bar'      => array('Member Bar',        'Layout',   true),
-            'hero_carousel'   => array('Hero Carousel',     'Hero',     false),
-            'richtext'        => array('Rich Text (legacy)', 'Content',  false),
-            'card_grid'       => array('Card Grid',         'Content',  false),
-            'steps'           => array('Steps / How-To',    'Content',  false),
-            'events_feed'     => array('Events Feed',       'Dynamic',  true),
-            'photo_mosaic'    => array('Photo Mosaic',      'Media',    false),
-            'kingdoms_teaser' => array('Kingdoms Teaser',   'Dynamic',  true),
-            'cta_band'        => array('Call-to-Action Band', 'Content', false),
+            'marketing_nav'   => array('Marketing Nav',      'Layout',   false, 'fa-bars',          'Top navigation bar with logo, menu links, and login / call-to-action buttons.'),
+            'member_bar'      => array('Member Bar',         'Layout',   true,  'fa-user-shield',   'Logged-in welcome strip with quick links to the viewer’s kingdom, Live Attendance, and Member Tools. Hidden from signed-out visitors.'),
+            'hero_carousel'   => array('Hero Carousel',      'Hero',     false, 'fa-images',        'Full-width rotating hero with slides, logo, and call-to-action buttons.'),
+            'richtext'        => array('Rich Text (legacy)', 'Content',  false, 'fa-align-left',    'Legacy rich-text block. Prefer the newer Rich Text block for new pages.'),
+            'card_grid'       => array('Card Grid',          'Content',  false, 'fa-th-large',      'Grid of cards, each with an image/icon, title, blurb, and link.'),
+            'steps'           => array('Steps / How-To',     'Content',  false, 'fa-list-ol',       'Numbered steps in a row — great for “How to join” style guides.'),
+            'events_feed'     => array('Events Feed',        'Dynamic',  true,  'fa-calendar-day',  'Shows the soonest upcoming events live across the org, as date cards linking to each event.'),
+            'photo_mosaic'    => array('Photo Mosaic',       'Media',    false, 'fa-icons',         'Asymmetric photo collage (first image large) with a caption tile.'),
+            'kingdoms_teaser' => array('Kingdoms Teaser',    'Dynamic',  true,  'fa-crown',         'Live grid of active parent kingdoms with heraldry, linking to each kingdom profile.'),
+            'cta_band'        => array('Call-to-Action Band', 'Content', false, 'fa-bullhorn',      'Banner with a heading, subcopy, optional logo, and call-to-action buttons.'),
             // New CMS block types from the spec (Phase 4 partials).
-            'rich_text'       => array('Rich Text',         'Content',  false),
-            'heading'         => array('Heading',           'Content',  false),
-            'divider'         => array('Divider',           'Layout',   false),
-            'spacer'          => array('Spacer',            'Layout',   false),
-            'accordion'       => array('Accordion',         'Content',  false),
-            'quote'           => array('Quote',             'Content',  false),
-            'table'           => array('Table',             'Content',  false),
-            'image'           => array('Image',             'Media',    false),
-            'gallery'         => array('Gallery',           'Media',    false),
-            'video_embed'     => array('Video Embed',       'Media',    false),
-            'file_download'   => array('File Download',     'Content',  false),
-            'columns'         => array('Columns',           'Layout',   false),
-            'raw_html'        => array('Raw HTML',          'Advanced', false),
-            'stat_ticker'     => array('Stat Ticker',       'Dynamic',  true),
-            'tournaments_feed' => array('Tournaments Feed', 'Dynamic',  true),
-            'recap_highlight' => array('Recap Highlight',   'Dynamic',  true),
-            'blog_feed'       => array('Blog Feed',         'Dynamic',  true),
+            'rich_text'       => array('Rich Text',          'Content',  false, 'fa-paragraph',     'Heading + formatted body text with an optional call-to-action.'),
+            'heading'         => array('Heading',            'Content',  false, 'fa-heading',       'A standalone section heading (H2–H4) with alignment.'),
+            'divider'         => array('Divider',            'Layout',   false, 'fa-grip-lines',    'A thin horizontal rule to separate sections.'),
+            'spacer'          => array('Spacer',             'Layout',   false, 'fa-arrows-alt-v',  'Vertical whitespace between blocks.'),
+            'accordion'       => array('Accordion',          'Content',  false, 'fa-chevron-circle-down', 'Expandable question / answer (FAQ) items.'),
+            'quote'           => array('Quote',              'Content',  false, 'fa-quote-right',   'A pull-quote with an optional attribution.'),
+            'table'           => array('Table',              'Content',  false, 'fa-table',         'A simple data table with an optional caption and header row.'),
+            'image'           => array('Image',              'Media',    false, 'fa-image',         'A single image with an optional caption and link.'),
+            'gallery'         => array('Gallery',            'Media',    false, 'fa-photo-video',   'A multi-column grid of images.'),
+            'video_embed'     => array('Video Embed',        'Media',    false, 'fa-play-circle',   'An embedded YouTube or Vimeo video.'),
+            'file_download'   => array('File Download',      'Content',  false, 'fa-file-download', 'A list of downloadable files with titles and metadata.'),
+            'columns'         => array('Columns',            'Layout',   false, 'fa-columns',       'Multiple side-by-side columns, each holding its own blocks.'),
+            'raw_html'        => array('Raw HTML',           'Advanced', false, 'fa-code',          'Custom HTML, sanitized on save.'),
+            'stat_ticker'     => array('Stat Ticker',        'Dynamic',  true,  'fa-chart-line',    'Live headline statistics across the org.'),
+            'tournaments_feed' => array('Tournaments Feed',  'Dynamic',  true,  'fa-trophy',        'Live list of recent or upcoming tournaments.'),
+            'recap_highlight' => array('Recap Highlight',    'Dynamic',  true,  'fa-newspaper',     'Live highlight from the latest event recap.'),
+            'blog_feed'       => array('Blog Feed',          'Dynamic',  true,  'fa-rss',           'Shows the latest published blog posts live as linked cards. Optionally filtered to a single tag.'),
         );
 
         $blockDir = DIR_TEMPLATE . 'default/frontdoor/blocks/';
@@ -460,11 +464,13 @@ class Controller_Cms extends Controller
             $partial   = $blockDir . preg_replace('/[^a-z_]/', '', $type) . '.tpl';
             $available = file_exists($partial);
             $catalog[] = array(
-                'type'      => $type,
-                'label'     => $meta[0],
-                'group'     => $meta[1],
-                'dynamic'   => (bool)$meta[2],
-                'available' => $available,
+                'type'        => $type,
+                'label'       => $meta[0],
+                'group'       => $meta[1],
+                'dynamic'     => (bool)$meta[2],
+                'icon'        => $meta[3],
+                'description' => $meta[4],
+                'available'   => $available,
             );
         }
         return $catalog;
@@ -565,7 +571,20 @@ class Controller_Cms extends Controller
             'accordion'       => array('items' => array()),
             'quote'           => array('text' => '', 'cite' => ''),
             'image'           => array('image' => array(), 'caption' => '', 'href' => '', 'align' => 'center', 'max_width' => ''),
-            'kingdoms_teaser' => array(),
+            // Newly friendly authored types (defaults match each partial's keys).
+            'steps'           => array('kicker' => '', 'heading' => '', 'band' => 'light', 'cta' => array('label' => '', 'href' => ''), 'steps' => array()),
+            'photo_mosaic'    => array('caption' => '', 'images' => array()),
+            'divider'         => array('style' => 'line'),
+            'spacer'          => array('size' => 'md'),
+            'table'           => array('caption' => '', 'header_first_row' => 1, 'rows' => array()),
+            'raw_html'        => array('html' => ''),
+            'marketing_nav'   => array('logo' => array(), 'cta' => array('label' => '', 'href' => ''), 'login' => array('label' => '', 'href' => '')),
+            'columns'         => array('columns' => array()),
+            // Dynamic blocks (sourced live) — only their genuine knobs.
+            'kingdoms_teaser' => array('kicker' => '', 'heading' => '', 'limit' => 12, 'more_href' => ''),
+            'events_feed'     => array('kicker' => '', 'heading' => '', 'limit' => 3, 'more_href' => ''),
+            'blog_feed'       => array('heading' => '', 'limit' => 3, 'tag' => ''),
+            'member_bar'      => array(),
         );
 
         return array(

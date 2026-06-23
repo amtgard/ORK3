@@ -53,19 +53,28 @@ $beHeading   = isset($beHeading) ? (string)$beHeading : 'Blocks';
     <div id="cmsBlockList"></div>
 
     <div class="cms-empty" id="cmsBlockEmpty" style="display:none;border:1px dashed var(--ork-border-dark);border-radius:10px;">
-        No blocks yet. Use <strong>Add block</strong> to build the body.
+        <div class="cms-empty-icon"><i class="fas fa-feather-alt"></i></div>
+        <div class="cms-empty-copy">This scroll is blank — begin the tale.</div>
+        <div class="cms-empty-cta">
+            <button type="button" class="cms-btn cms-btn-primary cms-btn-sm" id="cmsAddBlockBtnEmpty"><i class="fas fa-plus"></i> Add block</button>
+        </div>
     </div>
 </div>
 
 <?php /* ---- Add-block chooser modal ---- */ ?>
 <div class="cms-modal-overlay" id="cmsAddModal">
-    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Add a block">
+    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Choose a block">
         <div class="cms-modal-head">
-            <h3>Add a block</h3>
+            <h3>Choose a block</h3>
             <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
         </div>
         <div class="cms-modal-body">
-            <div class="cms-typegrid" id="cmsAddGrid"></div>
+            <div class="cms-typesearch">
+                <i class="fas fa-search"></i>
+                <input type="text" class="cms-input" id="cmsAddSearch" placeholder="Search blocks…" autocomplete="off">
+            </div>
+            <div id="cmsAddGroups"></div>
+            <div class="cms-typegrid-empty" id="cmsAddNoMatch" style="display:none;">No blocks match your search.</div>
         </div>
     </div>
 </div>
@@ -241,6 +250,31 @@ window.CmsBlockEditor = (function () {
                 return ((f.files || []).length) + ' file(s)';
             case 'accordion':
                 return ((f.items || []).length) + ' item(s)';
+            case 'steps':
+                return (f.heading ? strip(f.heading) + ' — ' : '') + ((f.steps || []).length) + ' step(s)';
+            case 'photo_mosaic':
+                return ((f.images || []).length) + ' image(s)';
+            case 'table':
+                return ((f.rows || []).length) + ' row(s)';
+            case 'divider':
+                return f.style || 'line';
+            case 'spacer':
+                return f.size || 'md';
+            case 'raw_html':
+                return f.html ? 'HTML set' : 'no HTML';
+            case 'marketing_nav':
+                return (f.cta && f.cta.label) ? strip(f.cta.label) : 'logo + buttons';
+            case 'kingdoms_teaser':
+            case 'events_feed':
+            case 'blog_feed':
+                return 'live · ' + strip(f.heading || '') || 'live data';
+            case 'member_bar':
+            case 'stat_ticker':
+            case 'tournaments_feed':
+            case 'recap_highlight':
+                return 'live data';
+            case 'columns':
+                return ((f.columns || []).length) + ' column(s)';
             default:
                 return 'custom fields (JSON)';
         }
@@ -513,6 +547,283 @@ window.CmsBlockEditor = (function () {
         return fieldImage({ fields: obj }, obj, key, label);
     }
 
+    /* ---- bound primitive helpers used by the schema renderer ---- */
+    function numberBound(obj, key, label, ph) {
+        var wrap = el('div', 'cms-field');
+        wrap.appendChild(el('label', 'cms-label', esc(label)));
+        var inp = el('input', 'cms-input'); inp.type = 'number';
+        if (ph) { inp.placeholder = ph; }
+        inp.value = (obj[key] != null && obj[key] !== '') ? obj[key] : '';
+        inp.addEventListener('input', function () {
+            obj[key] = inp.value === '' ? '' : Number(inp.value);
+            markDirty();
+        });
+        wrap.appendChild(inp);
+        return wrap;
+    }
+
+    /* ================= declarative block-schema registry =================
+     * Each entry is a list of field specs the generic renderer walks:
+     *   { key, type, label, help?, placeholder?, options?, of? }
+     * Supported field `type`s (all reuse the existing helpers below):
+     *   'text'      single-line input
+     *   'textarea'  multi-line input
+     *   'mono'      monospace multi-line input (raw_html, table rows)
+     *   'richtext'  TinyMCE editor
+     *   'select'    dropdown (needs options:[{value,label}])
+     *   'bool'      Yes/No dropdown (stored as 1/0)
+     *   'number'    numeric input
+     *   'url'       single-line input (semantic alias of text)
+     *   'image'     media-library picker
+     *   'group'     a small object of sub-fields (of:[specs]) → obj[key]={…}
+     *   'repeater'  repeating list (of:[specs] for object items, or one image spec)
+     *   'note'      static info paragraph (no data) — { html }
+     * The renderer is buildBlockBody()'s default path; bespoke forms (hero,
+     * card_grid, etc.) remain hand-built and take precedence over a schema. */
+    var BLOCK_SCHEMA = {
+        marketing_nav: [
+            { key: 'logo', type: 'image', label: 'Logo' },
+            { key: 'cta', type: 'group', label: 'Call-to-action button', of: [
+                { key: 'label', type: 'text', label: 'Label', placeholder: 'e.g. Find a Park' },
+                { key: 'href', type: 'url', label: 'Link (href)', placeholder: 'https://…' }
+            ] },
+            { key: 'login', type: 'group', label: 'Login button', of: [
+                { key: 'label', type: 'text', label: 'Label', placeholder: 'e.g. Sign in' },
+                { key: 'href', type: 'url', label: 'Link (href)', placeholder: 'https://…' }
+            ] },
+            { type: 'note', html: 'Menu links are managed in the <a href="' + esc(UIR) + 'Cms/nav">Navigation tab</a>. This block only controls the logo and the buttons above.' }
+        ],
+        steps: [
+            { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' },
+            { key: 'heading', type: 'text', label: 'Heading' },
+            { key: 'band', type: 'select', label: 'Background band', options: [
+                { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark (navy)' }
+            ] },
+            { key: 'cta', type: 'group', label: 'Optional call-to-action', of: [
+                { key: 'label', type: 'text', label: 'CTA label' },
+                { key: 'href', type: 'url', label: 'CTA link', placeholder: 'https://…' }
+            ] },
+            { key: 'steps', type: 'repeater', label: 'Steps', singular: 'Step', of: [
+                { key: 'n', type: 'number', label: 'Number', placeholder: 'e.g. 1' },
+                { key: 'title', type: 'text', label: 'Title' },
+                { key: 'body', type: 'textarea', label: 'Body' }
+            ] }
+        ],
+        photo_mosaic: [
+            { key: 'caption', type: 'text', label: 'Caption', help: 'Shown on the navy caption tile (first 4 images are laid out as a mosaic).' },
+            { key: 'images', type: 'repeater', label: 'Images', singular: 'Image', of: '__image__' }
+        ],
+        divider: [
+            { key: 'style', type: 'select', label: 'Style', options: [
+                { value: 'line', label: 'Line' }, { value: 'dots', label: 'Dotted' }
+            ] }
+        ],
+        spacer: [
+            { key: 'size', type: 'select', label: 'Size', options: [
+                { value: 'sm', label: 'Small' }, { value: 'md', label: 'Medium' }, { value: 'lg', label: 'Large' }
+            ] }
+        ],
+        table: [
+            { key: 'caption', type: 'text', label: 'Caption', placeholder: 'Optional table caption' },
+            { key: 'header_first_row', type: 'bool', label: 'First row is a header' },
+            { key: 'rows', type: 'table_rows', label: 'Rows',
+              help: 'One row per line. Separate cells with a vertical bar  |  — e.g.  Name | Rank | Kingdom' }
+        ],
+        raw_html: [
+            { key: 'html', type: 'mono', label: 'HTML', help: 'Sanitized on save — unsafe tags/attributes are stripped.' }
+        ],
+        kingdoms_teaser: [
+            { key: 'heading', type: 'text', label: 'Heading' },
+            { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' },
+            { key: 'limit', type: 'number', label: 'Max kingdoms shown', placeholder: '12' },
+            { key: 'more_href', type: 'url', label: '“Browse all” link', placeholder: 'https://…' }
+        ],
+        events_feed: [
+            { key: 'heading', type: 'text', label: 'Heading' },
+            { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' },
+            { key: 'limit', type: 'number', label: 'Max events shown', placeholder: '3' },
+            { key: 'more_href', type: 'url', label: '“All events” link', placeholder: 'https://…' }
+        ],
+        blog_feed: [
+            { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Latest News' },
+            { key: 'limit', type: 'number', label: 'Max posts shown', placeholder: '3' },
+            { key: 'tag', type: 'text', label: 'Filter by tag (optional)', placeholder: 'Leave blank for all posts' }
+        ],
+        member_bar: []  // pure info card; no knobs
+    };
+
+    /* dynamic block types render an info card (icon + description) above any knobs */
+    var DYNAMIC_TYPES = {
+        member_bar: true, kingdoms_teaser: true, events_feed: true, blog_feed: true,
+        stat_ticker: true, tournaments_feed: true, recap_highlight: true
+    };
+
+    function catalogEntry(type) {
+        for (var i = 0; i < (catalog || []).length; i++) {
+            if (catalog[i] && catalog[i].type === type) { return catalog[i]; }
+        }
+        return null;
+    }
+
+    /* ---- info card for dynamic blocks (icon + one-line live description) ---- */
+    function dynamicInfoCard(type) {
+        var ent = catalogEntry(type) || {};
+        var icon = ent.icon || 'fa-bolt';
+        var desc = ent.description || 'This block pulls live data when the page is viewed.';
+        var card = el('div', 'cms-dyninfo');
+        card.appendChild(el('div', 'cms-dyninfo-icon', '<i class="fas ' + esc(icon) + '"></i>'));
+        var txt = el('div', 'cms-dyninfo-text');
+        txt.appendChild(el('div', 'cms-dyninfo-title', '<i class="fas fa-bolt"></i> Live block'));
+        txt.appendChild(el('div', 'cms-dyninfo-body', esc(desc)));
+        card.appendChild(txt);
+        return card;
+    }
+
+    /* ---- table rows editor: textarea, one row/line, cells split on " | " ---- */
+    function tableRowsField(block, spec) {
+        var wrap = el('div', 'cms-field');
+        wrap.appendChild(el('label', 'cms-label', esc(spec.label || 'Rows')));
+        var ta = el('textarea', 'cms-textarea');
+        ta.style.minHeight = '140px';
+        ta.style.fontFamily = 'ui-monospace, Menlo, Consolas, monospace';
+        ta.placeholder = 'Name | Rank | Kingdom\nSir Robin | Knight | Aramoor';
+        // model rows (array of arrays) → text
+        var rows = Array.isArray(block.fields[spec.key]) ? block.fields[spec.key] : [];
+        ta.value = rows.map(function (r) {
+            return (Array.isArray(r) ? r : []).map(function (c) { return String(c == null ? '' : c); }).join(' | ');
+        }).join('\n');
+        ta.addEventListener('input', function () {
+            var lines = ta.value.split('\n');
+            var out = [];
+            lines.forEach(function (line) {
+                if (line.trim() === '') { return; }
+                out.push(line.split('|').map(function (c) { return c.trim(); }));
+            });
+            block.fields[spec.key] = out;
+            markDirty();
+        });
+        wrap.appendChild(ta);
+        if (spec.help) { wrap.appendChild(el('div', 'cms-help', spec.help)); }
+        return wrap;
+    }
+
+    /* ---- one schema field → DOM, bound to `obj` (block.fields or a group obj) --- */
+    function renderSchemaField(block, obj, spec) {
+        var node;
+        switch (spec.type) {
+            case 'note':
+                node = el('div', 'cms-note');
+                node.innerHTML = '<i class="fas fa-info-circle"></i> <span>' + (spec.html || '') + '</span>';
+                return node;
+
+            case 'image':
+                return imageBound(obj, spec.key, spec.label);
+
+            case 'richtext':
+                return fieldRich({ fields: obj }, spec.key, spec.label);
+
+            case 'textarea':
+                node = textBoundArea(obj, spec.key, spec.label, spec.placeholder);
+                break;
+
+            case 'mono': {
+                node = el('div', 'cms-field');
+                node.appendChild(el('label', 'cms-label', esc(spec.label)));
+                var mta = el('textarea', 'cms-textarea');
+                mta.style.minHeight = '180px';
+                mta.style.fontFamily = 'ui-monospace, Menlo, Consolas, monospace';
+                if (spec.placeholder) { mta.placeholder = spec.placeholder; }
+                mta.value = obj[spec.key] != null ? obj[spec.key] : '';
+                mta.addEventListener('input', function () { obj[spec.key] = mta.value; markDirty(); });
+                node.appendChild(mta);
+                break;
+            }
+
+            case 'select':
+                node = selectBound(obj, spec.key, spec.label, spec.options,
+                    (spec.options && spec.options.length) ? spec.options[0].value : '');
+                break;
+
+            case 'bool': {
+                var boolOpts = [{ value: '1', label: 'Yes' }, { value: '0', label: 'No' }];
+                node = el('div', 'cms-field');
+                node.appendChild(el('label', 'cms-label', esc(spec.label)));
+                var bsel = el('select', 'cms-select');
+                var cur = (obj[spec.key] === undefined) ? 1 : (obj[spec.key] ? 1 : 0);
+                boolOpts.forEach(function (o) {
+                    var op = el('option'); op.value = o.value; op.textContent = o.label;
+                    if (String(cur) === o.value) { op.selected = true; }
+                    bsel.appendChild(op);
+                });
+                obj[spec.key] = cur;
+                bsel.addEventListener('change', function () { obj[spec.key] = Number(bsel.value); markDirty(); });
+                node.appendChild(bsel);
+                break;
+            }
+
+            case 'number':
+                node = numberBound(obj, spec.key, spec.label, spec.placeholder);
+                break;
+
+            case 'table_rows':
+                return tableRowsField({ fields: obj }, spec);
+
+            case 'group': {
+                if (!obj[spec.key] || typeof obj[spec.key] !== 'object' || Array.isArray(obj[spec.key])) {
+                    obj[spec.key] = {};
+                }
+                var gwrap = el('div', 'cms-group');
+                gwrap.appendChild(el('div', 'cms-label', esc(spec.label)));
+                var inner = el('div', 'cms-group-body');
+                (spec.of || []).forEach(function (sub) {
+                    inner.appendChild(renderSchemaField(block, obj[spec.key], sub));
+                });
+                gwrap.appendChild(inner);
+                node = gwrap;
+                break;
+            }
+
+            case 'repeater': {
+                var groupWrap = el('div', null);
+                groupWrap.appendChild(el('div', 'cms-label', esc(spec.label)));
+                if (spec.of === '__image__') {
+                    // repeater of images: each item is a media-ref object
+                    groupWrap.appendChild(repeater(block, spec.key, spec.singular || 'Image', {}, function (item, i) {
+                        return imageBound(block.fields[spec.key], i, spec.singular || 'Image');
+                    }));
+                } else {
+                    var blank = {};
+                    (spec.of || []).forEach(function (sub) { blank[sub.key] = (sub.type === 'number') ? '' : ''; });
+                    groupWrap.appendChild(repeater(block, spec.key, spec.singular || 'Item', blank, function (item) {
+                        var ibox = el('div', null);
+                        (spec.of || []).forEach(function (sub) {
+                            ibox.appendChild(renderSchemaField(block, item, sub));
+                        });
+                        return ibox;
+                    }));
+                }
+                node = groupWrap;
+                break;
+            }
+
+            case 'url':
+            case 'text':
+            default:
+                node = textBound(obj, spec.key, spec.label, spec.placeholder);
+                break;
+        }
+        if (spec.help && node) { node.appendChild(el('div', 'cms-help', spec.help)); }
+        return node;
+    }
+
+    /* ---- generic schema renderer: walk a schema, emit a friendly form ---- */
+    function renderSchemaForm(schema, block, mount) {
+        (schema || []).forEach(function (spec) {
+            mount.appendChild(renderSchemaField(block, block.fields, spec));
+        });
+        return mount;
+    }
+
     /* ---- build the body form for one block ---- */
     function buildBlockBody(block) {
         var body = el('div', null);
@@ -663,9 +974,51 @@ window.CmsBlockEditor = (function () {
             return body;
         }
 
-        // ----- JSON fallback for any other type -----
+        // ----- DYNAMIC blocks: live info card + any genuine knobs -----
+        if (DYNAMIC_TYPES[t]) {
+            body.appendChild(dynamicInfoCard(t));
+            if (BLOCK_SCHEMA[t] && BLOCK_SCHEMA[t].length) {
+                renderSchemaForm(BLOCK_SCHEMA[t], block, body);
+            }
+            return body;
+        }
+
+        // ----- Schema-driven friendly form (authored blocks w/ a schema) -----
+        if (BLOCK_SCHEMA[t]) {
+            renderSchemaForm(BLOCK_SCHEMA[t], block, body);
+            return body;
+        }
+
+        // ----- columns: nested-block editing is genuinely hard → advanced JSON -----
+        if (t === 'columns') {
+            body.appendChild(jsonField(block, 'Columns — advanced',
+                'Each column is a list of blocks. Nested-block editing isn’t available here yet — edit the column structure as JSON. Parsed on save; invalid JSON keeps the last valid value.'));
+            return body;
+        }
+
+        // ----- LAST-RESORT JSON fallback (unknown / not-yet-shipped types) -----
+        body.appendChild(jsonField(block, 'Fields (JSON)',
+            'This block type has no friendly form yet — edit its fields as JSON. It is parsed on save; invalid JSON keeps the last valid value.'));
+        return body;
+    }
+
+    /* ---- toggle a block card's error state + quiet inline message ---- *
+     * Finds the rendered card for this block and reflects block._jsonError
+     * without a full rerender (keeps the textarea focus + caret intact). */
+    function reflectBlockError(block) {
+        var idx = model.indexOf(block);
+        if (idx < 0 || !listEl) { return; }
+        var cards = listEl.querySelectorAll('.cms-block-card');
+        var card = cards[idx];
+        if (!card) { return; }
+        card.classList.toggle('cms-block-error', !!block._jsonError);
+        if (card._errMsg) { card._errMsg.style.display = block._jsonError ? '' : 'none'; }
+    }
+
+    /* ---- shared JSON editor field (columns-advanced + last-resort fallback) ---- */
+    function jsonField(block, label, help) {
         var wrap = el('div', 'cms-field');
-        wrap.appendChild(el('label', 'cms-label', 'Fields (JSON)'));
+        wrap.appendChild(el('label', 'cms-label', label));
         var ta = el('textarea', 'cms-textarea');
         ta.style.minHeight = '160px';
         ta.style.fontFamily = 'ui-monospace, Menlo, Consolas, monospace';
@@ -677,17 +1030,37 @@ window.CmsBlockEditor = (function () {
                     block.fields = parsed;
                     ta.style.borderColor = '';
                     block._jsonError = false;
+                } else {
+                    throw new Error('not an object');
                 }
             } catch (err) {
                 ta.style.borderColor = 'var(--ork-badge-red-text)';
                 block._jsonError = true;
             }
+            reflectBlockError(block);
             markDirty();
         });
         wrap.appendChild(ta);
-        wrap.appendChild(el('div', 'cms-help', 'This block type has no friendly form yet — edit its fields as JSON. It is parsed on save; invalid JSON keeps the last valid value.'));
-        body.appendChild(wrap);
-        return body;
+        wrap.appendChild(el('div', 'cms-help', help));
+        return wrap;
+    }
+
+    /* ---- icon for a block type (from the catalog) ---- */
+    function iconFor(type) {
+        var ent = catalogEntry(type);
+        return (ent && ent.icon) ? ent.icon : 'fa-cube';
+    }
+
+    /* ---- a thin hover-reveal "+" inserter zone that opens the chooser at idx --- */
+    function inserterZone(idx) {
+        var zone = el('div', 'cms-inserter');
+        zone.setAttribute('data-tip', 'Insert a block here');
+        var btn = el('button', 'cms-inserter-btn', '<i class="fas fa-plus"></i>');
+        btn.type = 'button';
+        btn.setAttribute('aria-label', 'Insert a block here');
+        btn.addEventListener('click', function () { openAddChooser(idx); });
+        zone.appendChild(btn);
+        return zone;
     }
 
     /* ---- render the whole block list ---- */
@@ -696,12 +1069,23 @@ window.CmsBlockEditor = (function () {
         listEl.innerHTML = '';
         emptyEl.style.display = model.length ? 'none' : '';
 
+        if (model.length) { listEl.appendChild(inserterZone(0)); }
+
         model.forEach(function (block, idx) {
-            var card = el('div', 'cms-block-card' + (block.enabled ? '' : ' cms-block-disabled'));
+            var card = el('div', 'cms-block-card' + (block.enabled ? '' : ' cms-block-disabled') + (block._jsonError ? ' cms-block-error' : ''));
+            // draggable is enabled only while the drag handle is pressed (wireDrag),
+            // so text selection inside field inputs never starts a card drag.
+            card.setAttribute('draggable', 'false');
 
             var head = el('div', 'cms-block-head');
+
+            var handle = el('span', 'cms-drag-handle', '<i class="fas fa-grip-vertical"></i>');
+            handle.setAttribute('data-tip', 'Drag to reorder');
+            head.appendChild(handle);
+
             var collapseBtn = iconBtn('fa-chevron-down', 'Collapse / expand', false);
             head.appendChild(collapseBtn);
+            head.appendChild(el('span', 'cms-block-icon', '<i class="fas ' + esc(iconFor(block.type)) + '"></i>'));
             head.appendChild(el('span', 'cms-block-type', esc(labelFor(block.type))));
             head.appendChild(el('span', 'cms-block-typekey', esc(block.type)));
             head.appendChild(el('span', 'cms-block-summary', esc(summarize(block))));
@@ -711,6 +1095,9 @@ window.CmsBlockEditor = (function () {
             var down = iconBtn('fa-arrow-down', 'Move down', idx === model.length - 1);
             up.addEventListener('click', function () { swap(model, idx, idx - 1); renderList(); markDirty(); });
             down.addEventListener('click', function () { swap(model, idx, idx + 1); renderList(); markDirty(); });
+
+            var dup = iconBtn('fa-clone', 'Duplicate block', false);
+            dup.addEventListener('click', function () { duplicateBlock(idx); });
 
             var sw = el('label', 'cms-switch');
             var cb = el('input'); cb.type = 'checkbox'; cb.checked = block.enabled;
@@ -727,12 +1114,18 @@ window.CmsBlockEditor = (function () {
 
             tools.appendChild(up);
             tools.appendChild(down);
+            tools.appendChild(dup);
             tools.appendChild(sw);
             tools.appendChild(del);
             head.appendChild(tools);
             card.appendChild(head);
 
             var body = el('div', 'cms-block-body');
+            // quiet inline error message (shown only when this block blocks autosave)
+            var errMsg = el('div', 'cms-block-error-msg', '<i class="fas fa-exclamation-triangle"></i> <span>This block has invalid input and won’t be saved until it’s fixed.</span>');
+            errMsg.style.display = block._jsonError ? '' : 'none';
+            card._errMsg = errMsg;
+            body.appendChild(errMsg);
             body.appendChild(buildBlockBody(block));
             card.appendChild(body);
 
@@ -742,10 +1135,66 @@ window.CmsBlockEditor = (function () {
                 if (icon) { icon.className = body.classList.contains('cms-collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down'; }
             });
 
+            wireDrag(card, handle, idx);
+
             listEl.appendChild(card);
+            listEl.appendChild(inserterZone(idx + 1));
         });
 
         listEl.querySelectorAll('textarea[data-tiny]').forEach(function (ta) { initTiny(ta); });
+    }
+
+    /* ================= HTML5 drag-and-drop reorder ================= */
+    var dragFromIdx = null;
+    function wireDrag(card, handle, idx) {
+        // Only the handle initiates a drag (keeps text selection in field inputs).
+        handle.addEventListener('mousedown', function () { card.setAttribute('draggable', 'true'); });
+        handle.addEventListener('mouseup', function () { card.setAttribute('draggable', 'false'); });
+        card.addEventListener('dragstart', function (e) {
+            dragFromIdx = idx;
+            card.classList.add('cms-dragging');
+            try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(idx)); } catch (err) {}
+        });
+        card.addEventListener('dragend', function () {
+            card.classList.remove('cms-dragging');
+            card.setAttribute('draggable', 'false');
+            listEl.querySelectorAll('.cms-drag-over').forEach(function (n) { n.classList.remove('cms-drag-over'); });
+            dragFromIdx = null;
+        });
+        card.addEventListener('dragover', function (e) {
+            if (dragFromIdx === null) { return; }
+            e.preventDefault();
+            try { e.dataTransfer.dropEffect = 'move'; } catch (err) {}
+            card.classList.add('cms-drag-over');
+        });
+        card.addEventListener('dragleave', function () { card.classList.remove('cms-drag-over'); });
+        card.addEventListener('drop', function (e) {
+            e.preventDefault();
+            card.classList.remove('cms-drag-over');
+            if (dragFromIdx === null || dragFromIdx === idx) { return; }
+            var moved = model.splice(dragFromIdx, 1)[0];
+            var dest = (dragFromIdx < idx) ? idx - 1 : idx;
+            model.splice(dest, 0, moved);
+            dragFromIdx = null;
+            renderList();
+            markDirty();
+        });
+    }
+
+    /* ---- duplicate a block (deep copy of its fields) at idx+1 ---- */
+    function duplicateBlock(idx) {
+        var src = model[idx];
+        if (!src) { return; }
+        var copy = {
+            type:    src.type,
+            enabled: src.enabled,
+            source:  src.source,
+            fields:  JSON.parse(JSON.stringify(src.fields || {}))
+        };
+        model.splice(idx + 1, 0, copy);
+        renderList();
+        markDirty();
+        toast('Block duplicated.', 'ok');
     }
 
     /* ---- confirm modal (delete block; also reused by host for delete page/post) ---- */
@@ -770,39 +1219,118 @@ window.CmsBlockEditor = (function () {
         });
     }
 
-    /* ================= Add block ================= */
-    function wireAddBlock() {
-        var addModal = document.getElementById('cmsAddModal');
-        var addGrid = document.getElementById('cmsAddGrid');
-        var addBtn = document.getElementById('cmsAddBlockBtn');
-        if (!addBtn || !addModal || !addGrid) { return; }
-        addBtn.addEventListener('click', function () {
-            addGrid.innerHTML = '';
-            (catalog || []).forEach(function (c) {
-                if (!c.available) { return; }
-                var cardBtn = el('button', 'cms-typecard');
-                cardBtn.type = 'button';
-                cardBtn.innerHTML = '<strong>' + esc(c.label) + '</strong><span>' + esc(c.group) + (c.dynamic ? ' · dynamic' : '') + '</span>';
-                cardBtn.addEventListener('click', function () {
-                    model.push({
-                        type: c.type,
-                        enabled: true,
-                        source: c.dynamic ? 'dynamic' : 'authored',
-                        fields: {}
-                    });
-                    closeModal(addModal);
-                    renderList();
-                    markDirty();
-                    var cards = listEl.querySelectorAll('.cms-block-card');
-                    if (cards.length) { cards[cards.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-                });
-                addGrid.appendChild(cardBtn);
-            });
-            if (!addGrid.children.length) {
-                addGrid.appendChild(el('div', 'cms-media-empty', 'No block types available.'));
-            }
-            openModal(addModal);
+    /* ================= Add block ================= *
+     * The chooser is searchable + grouped + icon'd, and can insert a new block
+     * at a specific index (insertAt). insertAt === null → append at the end. */
+    var addModal, addGroupsEl, addSearchEl, addNoMatchEl;
+    var addInsertAt = null;   // index to splice at, or null to append
+
+    // Stable group order for the chooser sections.
+    var GROUP_ORDER = ['Layout', 'Content', 'Media', 'Dynamic', 'Advanced'];
+
+    function insertNewBlock(c) {
+        var nb = {
+            type: c.type,
+            enabled: true,
+            source: c.dynamic ? 'dynamic' : 'authored',
+            fields: {}
+        };
+        if (addInsertAt === null || addInsertAt < 0 || addInsertAt > model.length) {
+            model.push(nb);
+        } else {
+            model.splice(addInsertAt, 0, nb);
+        }
+        closeModal(addModal);
+        renderList();
+        markDirty();
+        // scroll the newly-added card into view
+        var cards = listEl.querySelectorAll('.cms-block-card');
+        var pos = (addInsertAt === null) ? cards.length - 1 : addInsertAt;
+        if (cards[pos]) { cards[pos].scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    }
+
+    function typeCard(c) {
+        var cardBtn = el('button', 'cms-typecard' + (c.available ? '' : ' cms-typecard-disabled'));
+        cardBtn.type = 'button';
+        if (!c.available) { cardBtn.disabled = true; }
+        var icoHtml = '<span class="cms-typecard-icon"><i class="fas ' + esc(c.icon || 'fa-cube') + '"></i></span>';
+        var badge = c.available
+            ? (c.dynamic ? '<span class="cms-typecard-badge cms-badge-dynamic">live</span>' : '')
+            : '<span class="cms-typecard-badge cms-badge-soon">coming soon</span>';
+        cardBtn.innerHTML =
+            icoHtml +
+            '<span class="cms-typecard-text">' +
+                '<strong>' + esc(c.label) + badge + '</strong>' +
+                '<span class="cms-typecard-key">' + esc(c.type) + '</span>' +
+            '</span>';
+        if (c.available) {
+            cardBtn.addEventListener('click', function () { insertNewBlock(c); });
+        }
+        return cardBtn;
+    }
+
+    function renderAddChooser(filter) {
+        addGroupsEl.innerHTML = '';
+        var q = (filter || '').trim().toLowerCase();
+        var list = (catalog || []).filter(function (c) {
+            if (!q) { return true; }
+            return String(c.label || '').toLowerCase().indexOf(q) !== -1
+                || String(c.type || '').toLowerCase().indexOf(q) !== -1;
         });
+
+        // bucket by group, preserving GROUP_ORDER then any extras alphabetically
+        var buckets = {};
+        list.forEach(function (c) {
+            var g = c.group || 'Other';
+            (buckets[g] = buckets[g] || []).push(c);
+        });
+        var groups = Object.keys(buckets).sort(function (a, b) {
+            var ia = GROUP_ORDER.indexOf(a), ib = GROUP_ORDER.indexOf(b);
+            if (ia === -1 && ib === -1) { return a.localeCompare(b); }
+            if (ia === -1) { return 1; }
+            if (ib === -1) { return -1; }
+            return ia - ib;
+        });
+
+        var any = false;
+        groups.forEach(function (g) {
+            var items = buckets[g];
+            if (!items.length) { return; }
+            any = true;
+            var sec = el('div', 'cms-typegroup');
+            sec.appendChild(el('div', 'cms-typegroup-title', esc(g)));
+            var grid = el('div', 'cms-typegrid');
+            items.forEach(function (c) { grid.appendChild(typeCard(c)); });
+            sec.appendChild(grid);
+            addGroupsEl.appendChild(sec);
+        });
+
+        addNoMatchEl.style.display = any ? 'none' : '';
+    }
+
+    function openAddChooser(insertAt) {
+        addInsertAt = (insertAt === undefined) ? null : insertAt;
+        if (addSearchEl) { addSearchEl.value = ''; }
+        renderAddChooser('');
+        openModal(addModal);
+        if (addSearchEl) { setTimeout(function () { addSearchEl.focus(); }, 30); }
+    }
+
+    function wireAddBlock() {
+        addModal     = document.getElementById('cmsAddModal');
+        addGroupsEl  = document.getElementById('cmsAddGroups');
+        addSearchEl  = document.getElementById('cmsAddSearch');
+        addNoMatchEl = document.getElementById('cmsAddNoMatch');
+        var addBtn      = document.getElementById('cmsAddBlockBtn');
+        var addBtnEmpty = document.getElementById('cmsAddBlockBtnEmpty');
+        if (!addModal || !addGroupsEl) { return; }
+
+        if (addBtn)      { addBtn.addEventListener('click', function () { openAddChooser(null); }); }
+        if (addBtnEmpty) { addBtnEmpty.addEventListener('click', function () { openAddChooser(null); }); }
+        if (addSearchEl) {
+            addSearchEl.addEventListener('input', function () { renderAddChooser(addSearchEl.value); });
+            addSearchEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); } });
+        }
     }
 
     /* ================= Media picker ================= */
