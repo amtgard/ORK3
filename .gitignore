@@ -44,3 +44,5 @@ ork.zip
 config.tmpprod.php
 .DS_Store
 .vscode/
+# Superpowers brainstorming companion (local-only)
+.superpowers/
