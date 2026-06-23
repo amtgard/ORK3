@@ -271,16 +271,16 @@ Find, near the end of `index()` (after `$this->data['EventSummary'] = $eventSumm
 			global $DB;
 			$DB->Clear();
 			$_vid = (int) $this->session->user_id;
-			$_vn = $DB->DataSet( "SELECT persona_name, first_name FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$_vid} LIMIT 1" );
+			$_vn = $DB->DataSet( "SELECT persona, given_name FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$_vid} LIMIT 1" );
 			if ( $_vn && $_vn->Next() ) {
-				$this->data[ 'ViewerName' ] = trim( $_vn->persona_name ) !== '' ? $_vn->persona_name : $_vn->first_name;
+				$this->data[ 'ViewerName' ] = trim( (string) $_vn->persona ) !== '' ? $_vn->persona : $_vn->given_name;
 			}
 			$DB->Clear();
 		}
 ```
 
-> NOTE for implementer: confirm the column names on `ork_mundane` (`persona_name`, `first_name`). If different, adjust the SELECT. Verify with:
-> `docker exec ork3-php8-app sh -c "mariadb -uork -psecret ork -e 'DESCRIBE ork_mundane' | grep -iE 'name'"`
+> Column names confirmed against `ork_mundane`: display name is `persona` (fall back
+> to `given_name`). Other name columns are `surname`, `other_name`, `username`.
 
 - [ ] **Step 2: Lint**
 
