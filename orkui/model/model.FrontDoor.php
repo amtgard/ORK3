@@ -81,12 +81,12 @@ class Model_FrontDoor extends Model
                 'kicker' => 'There\'s a place for you', 'heading' => 'Find Your Path',
                 'subheading' => 'However you like to play, Amtgard has a role for you.',
                 'cards' => [
-                    ['image' => ['key' => 'hero-1', 'src' => $img . 'hero-1.jpg', 'alt' => ''], 'icon' => '⚔', 'title' => 'The Warrior', 'blurb' => 'Sword, shield, and the front line', 'href' => '#'],
-                    ['image' => ['key' => 'hero-2', 'src' => $img . 'hero-2.jpg', 'alt' => ''], 'icon' => '🏹', 'title' => 'The Archer', 'blurb' => 'Ranged skill and battlefield control', 'href' => '#'],
-                    ['image' => ['key' => 'hero-5', 'src' => $img . 'hero-5.jpg', 'alt' => ''], 'icon' => '✨', 'title' => 'The Caster', 'blurb' => 'Spells, healing, and the magic classes', 'href' => '#'],
-                    ['image' => ['key' => 'hero-6', 'src' => $img . 'hero-6.jpg', 'alt' => ''], 'icon' => '🎨', 'title' => 'The Artisan', 'blurb' => 'Garb, armor, and craft (A&S)', 'href' => '#'],
-                    ['image' => ['key' => 'hero-3', 'src' => $img . 'hero-3.jpg', 'alt' => ''], 'icon' => '🐉', 'title' => 'The Monster', 'blurb' => 'Quests, role-play, and the wilds', 'href' => '#'],
-                    ['image' => ['key' => 'hero-8', 'src' => $img . 'hero-8.jpg', 'alt' => ''], 'icon' => '👑', 'title' => 'The Leader', 'blurb' => 'Reeving, office, and running the realm', 'href' => '#'],
+                    ['image' => ['key' => 'hero-1', 'src' => $img . 'hero-1.jpg', 'alt' => ''], 'icon' => 'fa-shield-alt', 'title' => 'The Warrior', 'blurb' => 'Sword, shield, and the front line', 'href' => '#'],
+                    ['image' => ['key' => 'hero-2', 'src' => $img . 'hero-2.jpg', 'alt' => ''], 'icon' => 'fa-bullseye', 'title' => 'The Archer', 'blurb' => 'Ranged skill and battlefield control', 'href' => '#'],
+                    ['image' => ['key' => 'hero-5', 'src' => $img . 'hero-5.jpg', 'alt' => ''], 'icon' => 'fa-hat-wizard', 'title' => 'The Caster', 'blurb' => 'Spells, healing, and the magic classes', 'href' => '#'],
+                    ['image' => ['key' => 'hero-6', 'src' => $img . 'hero-6.jpg', 'alt' => ''], 'icon' => 'fa-palette', 'title' => 'The Artisan', 'blurb' => 'Garb, armor, and craft (A&S)', 'href' => '#'],
+                    ['image' => ['key' => 'hero-3', 'src' => $img . 'hero-3.jpg', 'alt' => ''], 'icon' => 'fa-dragon', 'title' => 'The Monster', 'blurb' => 'Quests, role-play, and the wilds', 'href' => '#'],
+                    ['image' => ['key' => 'hero-8', 'src' => $img . 'hero-8.jpg', 'alt' => ''], 'icon' => 'fa-crown', 'title' => 'The Leader', 'blurb' => 'Reeving, office, and running the realm', 'href' => '#'],
                 ],
             ],
         ];

@@ -19,10 +19,10 @@ if (empty($LoggedIn)) {
     <span style="flex:1;"></span>
     <?php if ((int)$UserKingdomId > 0): ?>
         <a href="<?= htmlspecialchars(UIR . 'Kingdom/profile/' . (int)$UserKingdomId, ENT_QUOTES) ?>"
-           style="color:#cdd7ee;text-decoration:none;">&#9876; My Kingdom</a>
+           style="color:#cdd7ee;text-decoration:none;"><i class="fas fa-crown" style="color:var(--gold);margin-right:5px;"></i>My Kingdom</a>
     <?php endif; ?>
     <a href="<?= htmlspecialchars(UIR . 'Live', ENT_QUOTES) ?>"
-       style="color:#cdd7ee;text-decoration:none;">&#128225; Live Attendance</a>
+       style="color:#cdd7ee;text-decoration:none;"><i class="fas fa-broadcast-tower" style="color:var(--gold);margin-right:5px;"></i>Live Attendance</a>
     <a href="<?= htmlspecialchars(UIR . 'Admin', ENT_QUOTES) ?>"
-       style="color:#cdd7ee;text-decoration:none;">&#128295; Member Tools</a>
+       style="color:#cdd7ee;text-decoration:none;"><i class="fas fa-tools" style="color:var(--gold);margin-right:5px;"></i>Member Tools</a>
 </div>

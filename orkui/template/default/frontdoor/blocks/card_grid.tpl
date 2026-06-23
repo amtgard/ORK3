@@ -48,7 +48,7 @@ $cards      = $blockFields['cards']      ?? [];
                     <div class="fd-path-scrim"></div>
                     <div class="fd-path-label">
                         <div class="fd-serif" style="font-size:22px;">
-                            <?= htmlspecialchars($icon, ENT_QUOTES) ?>
+                            <?php if (!empty($icon)): ?><i class="fas <?= htmlspecialchars($icon, ENT_QUOTES) ?>" style="margin-right:7px;color:var(--gold);"></i><?php endif; ?>
                             <?= htmlspecialchars($title, ENT_QUOTES) ?>
                         </div>
                         <?php if (!empty($blurb)): ?>
