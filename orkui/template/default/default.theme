@@ -220,7 +220,7 @@
 	.ork-help-empty { color: #718096; font-size: 13px; text-align: center; padding: 24px 0; }
 	</style>
 </head>
-	<body<?php if (!empty($ViewerDyslexiaFonts)) echo ' class="ork-dyslexia-font"'; ?>>
+	<body class="<?= !empty($ViewerDyslexiaFonts) ? 'ork-dyslexia-font ' : '' ?><?= !empty($IsFrontDoor) ? 'fd-home' : '' ?>">
 		<!-- Google Tag Manager (noscript) -->
 		<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5HZHGSLT"
 		height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
@@ -373,6 +373,7 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 					<a href='https://discord.gg/YTS82nxnsh' target='_blank'><i class='fab fa-discord'></i> Amtgard ORK Discord</a>
 					<?php endif; ?>
 					<a href='https://play.amtgard.com/' target='_blank'><i class='fas fa-map-marker-alt'></i> Find a Chapter</a>
+					<a href='<?=UIR?>Directory/index'><i class='fas fa-crown'></i> Kingdoms Directory</a>
 					<div class='nav-dropdown-divider'></div>
 					<a href='#' onclick="navInfoDialog('New Documentation Coming Soon!');return false;"><i class='fas fa-book'></i> ORK Documentation</a>
 				</div>
