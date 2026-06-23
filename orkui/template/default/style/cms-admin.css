@@ -882,6 +882,275 @@ html[data-theme="dark"] .cms-switch .cms-slider::before { background: #e2e8f0; }
 html[data-theme="dark"] .cms-modal { box-shadow: 0 20px 60px rgba(0, 0, 0, .6); }
 
 /* ============================================================================
+ * DataTables — theme the controls to match Royal Scriptorium + .cms-table
+ * (Pages list / Posts list). Neutralize DataTables' default light CSS so it
+ * never clashes with the dark theme.
+ * ========================================================================== */
+
+/* The DataTables wrapper sits inside .cms-table-wrap; give the controls room. */
+.cms-table-wrap .dataTables_wrapper {
+    padding: 12px 14px 4px;
+    color: var(--ork-text);
+    font-size: 13px;
+}
+/* Search box + page-length live above the table. */
+.cms-table-wrap .dataTables_length,
+.cms-table-wrap .dataTables_filter {
+    margin-bottom: 10px;
+}
+.cms-table-wrap .dataTables_filter { text-align: right; }
+.cms-table-wrap .dataTables_length label,
+.cms-table-wrap .dataTables_filter label {
+    color: var(--ork-text-secondary);
+    font-weight: 600;
+    font-size: 12.5px;
+}
+/* Inputs / selects — reuse the cms-input look. */
+.cms-table-wrap .dataTables_length select,
+.cms-table-wrap .dataTables_filter input {
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 9px;
+    margin: 0 6px;
+    border-radius: 7px;
+    border: 1px solid var(--ork-input-border);
+    background: var(--ork-input-bg);
+    color: var(--ork-text);
+    box-sizing: border-box;
+}
+.cms-table-wrap .dataTables_filter input { min-width: 200px; }
+.cms-table-wrap .dataTables_length select:focus,
+.cms-table-wrap .dataTables_filter input:focus {
+    outline: none;
+    border-color: var(--cms-gold, #f0b429);
+    box-shadow: 0 0 0 3px rgba(240, 180, 41, .35);
+}
+/* The DataTables-managed table keeps the .cms-table look; kill DT borders. */
+.cms-table-wrap table.cms-table.dataTable {
+    border-collapse: collapse;
+    margin: 0;
+    border: none;
+}
+.cms-table-wrap table.cms-table.dataTable thead th {
+    border-bottom: 1px solid var(--ork-border);
+}
+/* Sort indicators — gold-tinted, no clashing default background images. */
+.cms-table-wrap table.cms-table.dataTable thead th.sorting,
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_asc,
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_desc {
+    cursor: pointer;
+    position: relative;
+}
+.cms-table-wrap table.cms-table.dataTable thead th.sorting:after,
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_asc:after,
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_desc:after {
+    content: "\2195"; /* up-down arrow */
+    margin-left: 6px;
+    opacity: .35;
+    font-size: 11px;
+}
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_asc:after { content: "\2191"; opacity: .9; color: var(--cms-gold, #f0b429); }
+.cms-table-wrap table.cms-table.dataTable thead th.sorting_desc:after { content: "\2193"; opacity: .9; color: var(--cms-gold, #f0b429); }
+/* Remove DataTables' default PNG sprite background on sortable headers. */
+.cms-table-wrap table.cms-table.dataTable thead .sorting,
+.cms-table-wrap table.cms-table.dataTable thead .sorting_asc,
+.cms-table-wrap table.cms-table.dataTable thead .sorting_desc,
+.cms-table-wrap table.cms-table.dataTable thead .sorting_asc_disabled,
+.cms-table-wrap table.cms-table.dataTable thead .sorting_desc_disabled {
+    background-image: none;
+}
+/* Info text + pager. */
+.cms-table-wrap .dataTables_info {
+    color: var(--ork-text-muted);
+    padding-top: 10px;
+    font-size: 12.5px;
+}
+.cms-table-wrap .dataTables_paginate {
+    padding-top: 8px;
+}
+.cms-table-wrap .dataTables_paginate .paginate_button {
+    box-sizing: border-box;
+    padding: 5px 11px !important;
+    margin-left: 4px;
+    border-radius: 7px;
+    border: 1px solid var(--ork-border) !important;
+    background: var(--ork-card-bg) !important;
+    color: var(--ork-text) !important;
+    cursor: pointer;
+}
+.cms-table-wrap .dataTables_paginate .paginate_button:hover {
+    background: var(--ork-bg-secondary) !important;
+    border-color: var(--ork-border-dark) !important;
+    color: var(--ork-text) !important;
+}
+.cms-table-wrap .dataTables_paginate .paginate_button.current,
+.cms-table-wrap .dataTables_paginate .paginate_button.current:hover {
+    background: linear-gradient(180deg, var(--cms-gold, #f0b429), #e0a420) !important;
+    border-color: var(--cms-gold-deep, #caa23a) !important;
+    color: #1a1205 !important;
+    font-weight: 700;
+}
+.cms-table-wrap .dataTables_paginate .paginate_button.disabled,
+.cms-table-wrap .dataTables_paginate .paginate_button.disabled:hover {
+    opacity: .4;
+    cursor: not-allowed;
+    background: var(--ork-card-bg) !important;
+    color: var(--ork-text-muted) !important;
+}
+
+/* ---- Dark mode (html[data-theme="dark"]) ---- */
+html[data-theme="dark"] .cms-table-wrap .dataTables_length select,
+html[data-theme="dark"] .cms-table-wrap .dataTables_filter input {
+    background: var(--ork-input-bg);
+    color: var(--ork-text);
+    border-color: var(--ork-input-border);
+}
+html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button {
+    background: var(--ork-card-bg) !important;
+    color: var(--ork-text) !important;
+    border-color: var(--ork-border) !important;
+}
+html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button:hover {
+    background: var(--ork-bg-secondary) !important;
+}
+html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button.current,
+html[data-theme="dark"] .cms-table-wrap .dataTables_paginate .paginate_button.current:hover {
+    color: #1a1205 !important;
+}
+/* DataTables sets inline odd/even row striping; let the .cms-table hover win. */
+.cms-table-wrap table.cms-table.dataTable tbody tr,
+.cms-table-wrap table.cms-table.dataTable.stripe tbody tr.odd,
+.cms-table-wrap table.cms-table.dataTable.display tbody tr.odd {
+    background: transparent;
+}
+.cms-table-wrap table.cms-table.dataTable tbody tr:hover {
+    background: var(--ork-bg-secondary);
+}
+
+/* ============================================================================
+ * Bulk-select bar + checkbox column + row-action overflow menu
+ * ========================================================================== */
+
+/* Leading checkbox column — keep tight + centered, no wrap. */
+.cms-table th.cms-check-col,
+.cms-table td.cms-check-col {
+    width: 34px;
+    text-align: center;
+    padding-left: 12px;
+    padding-right: 4px;
+}
+.cms-check {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--cms-gold, #f0b429);
+    vertical-align: middle;
+}
+
+/* Bulk-action bar — hidden until ≥1 row selected. */
+.cms-bulkbar {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--cms-gold-deep, #caa23a);
+    border-left: 3px solid var(--cms-gold, #f0b429);
+    border-radius: 9px;
+    background: var(--ork-bg-secondary);
+}
+.cms-bulkbar.cms-open { display: flex; }
+.cms-bulkbar.cms-busy { opacity: .6; pointer-events: none; }
+.cms-bulkbar-count {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ork-text);
+}
+.cms-bulkbar-count i { color: var(--cms-gold-deep, #caa23a); margin-right: 6px; }
+.cms-bulkbar-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-left: auto;
+}
+
+/* Row-action overflow menu (⋯) — lightweight dark-themed dropdown. */
+.cms-overflow {
+    position: relative;
+    display: inline-block;
+}
+.cms-overflow-btn {
+    border: 1px solid var(--ork-border-dark);
+    background: transparent;
+    color: var(--ork-text-secondary);
+    width: 30px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.cms-overflow-btn:hover,
+.cms-overflow-btn:focus-visible {
+    background: var(--ork-bg-tertiary);
+    color: var(--ork-text);
+    outline: none;
+}
+.cms-overflow-menu {
+    display: none;
+    /* JS positions this as position:fixed (left/top set inline) when opened, so it
+     * escapes the .cms-table-wrap overflow:hidden clip and flips upward near the
+     * viewport bottom — matches the project's tnFixedAcPosition pattern. */
+    position: fixed;
+    z-index: 1200;
+    min-width: 168px;
+    padding: 5px;
+    border: 1px solid var(--ork-border);
+    border-radius: 9px;
+    background: var(--ork-card-bg);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .28);
+}
+.cms-overflow.cms-open .cms-overflow-menu { display: block; }
+.cms-overflow-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 11px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ork-text);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.cms-overflow-item:hover,
+.cms-overflow-item:focus-visible {
+    background: var(--ork-bg-secondary);
+    outline: none;
+}
+.cms-overflow-item i { width: 15px; text-align: center; color: var(--ork-text-muted); }
+.cms-overflow-item.cms-overflow-danger { color: var(--ork-badge-red-text); }
+.cms-overflow-item.cms-overflow-danger i { color: var(--ork-badge-red-text); }
+.cms-overflow-item.cms-overflow-danger:hover,
+.cms-overflow-item.cms-overflow-danger:focus-visible { background: var(--ork-badge-red-bg); }
+.cms-overflow-sep { height: 1px; background: var(--ork-border); margin: 5px 4px; }
+
+html[data-theme="dark"] .cms-overflow-menu { box-shadow: 0 12px 32px rgba(0, 0, 0, .55); }
+
+/* The primary Edit button + the overflow trigger live in the row-actions cluster. */
+.cms-row-actions .cms-overflow { margin-left: 2px; }
+
+/* ============================================================================
  * Responsive — stack on mobile
  * ========================================================================== */
 
@@ -900,4 +1169,5 @@ html[data-theme="dark"] .cms-modal { box-shadow: 0 20px 60px rgba(0, 0, 0, .6); 
     .cms-row-actions { justify-content: flex-start; }
     .cms-filters .cms-input,
     .cms-filters .cms-select { max-width: none; flex: 1 1 100%; }
+    .cms-bulkbar-actions { margin-left: 0; width: 100%; }
 }
