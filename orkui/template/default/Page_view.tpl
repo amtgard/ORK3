@@ -13,11 +13,13 @@ $fdBlocks    = isset( $FrontDoor ) && is_array( $FrontDoor ) ? $FrontDoor : [];
 
 <?php if ( ! empty( $Message ) && empty( $fdBlocks ) ) : ?>
 <div class="fd-page">
+<?php include $fdDir . 'site_header.tpl'; ?>
 	<p style="padding:2rem;text-align:center;"><?= htmlspecialchars( (string) $Message ) ?></p>
 </div>
 <?php else : ?>
 <div class="fd-page">
+<?php include $fdDir . 'site_header.tpl'; ?>
 <?php include $fdDir . 'render_blocks.tpl'; ?>
 </div>
-<script src="<?= $fdAssetBase ?>js/frontdoor.js"></script>
 <?php endif; ?>
+<script src="<?= $fdAssetBase ?>js/frontdoor.js"></script>

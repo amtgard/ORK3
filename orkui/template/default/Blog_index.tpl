@@ -106,6 +106,7 @@ html[data-theme="dark"] .blog-pager-info { color: #9aa6bd; }
 </style>
 
 <div class="fd-page">
+<?php include $fdDir . 'site_header.tpl'; ?>
 <div class="blog-wrap">
     <div class="blog-head">
         <h1 class="blog-title fd-serif">Amtgard News</h1>
@@ -180,3 +181,4 @@ html[data-theme="dark"] .blog-pager-info { color: #9aa6bd; }
     <?php endif; ?>
 </div>
 </div>
+<script src="<?= $fdAssetBase ?>js/frontdoor.js"></script>

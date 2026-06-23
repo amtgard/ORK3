@@ -59,6 +59,7 @@ html[data-theme="dark"] .blogp-empty { color: #9aa6bd; }
 </style>
 
 <div class="fd-page">
+<?php include $fdDir . 'site_header.tpl'; ?>
 <?php if (!$therePost): ?>
     <div class="blogp-wrap">
         <a class="blogp-back" href="<?= UIR ?>Blog/index"><i class="fas fa-arrow-left"></i> Back to all posts</a>
@@ -116,7 +117,6 @@ html[data-theme="dark"] .blogp-empty { color: #9aa6bd; }
     <div class="blogp-footer">
         <a class="blogp-back" href="<?= UIR ?>Blog/index"><i class="fas fa-arrow-left"></i> Back to all posts</a>
     </div>
-
-    <script src="<?= $fdAssetBase ?>js/frontdoor.js"></script>
 <?php endif; ?>
 </div>
+<script src="<?= $fdAssetBase ?>js/frontdoor.js"></script>
