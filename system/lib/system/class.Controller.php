@@ -186,13 +186,28 @@ class Controller
         }
         $this->data[ 'EventSummary' ] = $eventSummary;
 
-        // ---- Front door (v1 content-model landing) ----
-        $this->load_model('FrontDoor');
+        // ---- Front door (now CMS-backed, with hardcoded defaults as fallback) ----
+        // Prefer the CMS-managed `home` system page when it exists and has blocks;
+        // otherwise fall back to the hardcoded Model_FrontDoor defaults so the front
+        // door always renders even before the home page is seeded.
         $this->data[ 'IsFrontDoor' ] = true;
-        $this->data[ 'FrontDoor' ] = $this->FrontDoor->GetContent([
-            'logged_in'  => (bool) $this->data['LoggedIn'],
-            'kingdom_id' => (int) ($this->data['UserKingdomId'] ?? 0),
-        ]);
+        $frontDoorBlocks = null;
+        $this->load_model('CmsPage');
+        $home = $this->CmsPage->get_home_page();
+        if (!empty($home) && !empty($home['page_id'])) {
+            $homeBlocks = $this->CmsPage->get_page_blocks((int) $home['page_id']);
+            if (!empty($homeBlocks)) {
+                $frontDoorBlocks = $homeBlocks;
+            }
+        }
+        if ($frontDoorBlocks === null) {
+            $this->load_model('FrontDoor');
+            $frontDoorBlocks = $this->FrontDoor->GetContent([
+                'logged_in'  => (bool) $this->data['LoggedIn'],
+                'kingdom_id' => (int) ($this->data['UserKingdomId'] ?? 0),
+            ]);
+        }
+        $this->data[ 'FrontDoor' ] = $frontDoorBlocks;
 
         // Display name for the member bar (logged-in only)
         $this->data[ 'ViewerName' ] = '';
