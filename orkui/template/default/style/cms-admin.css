@@ -176,6 +176,11 @@
     border-left-color: var(--cms-gold, #f0b429);
     color: var(--cms-gold, #f0b429);
 }
+.cms-rail-item:focus-visible {
+    outline: none;
+    background: rgba(255, 255, 255, .08);
+    box-shadow: 0 0 0 2px var(--cms-gold);
+}
 .cms-rail-icon {
     flex: 0 0 auto;
     width: 18px;
@@ -361,6 +366,15 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-btn-danger:hover { filter: brightness(.96); }
 .cms-btn-sm { padding: 5px 10px; font-size: 12.5px; border-radius: 6px; }
 .cms-btn i { font-size: .92em; }
+
+/* Keyboard a11y: shared gold focus ring on all CMS buttons. */
+.cms-icon-btn:focus-visible,
+.cms-btn:focus-visible,
+.cms-devbtn:focus-visible,
+.cms-modal-close:focus-visible {
+    outline: 2px solid var(--cms-gold);
+    outline-offset: 2px;
+}
 
 .cms-badge {
     display: inline-block;
@@ -1046,6 +1060,8 @@ html[data-theme="dark"] .cms-note a { color: var(--cms-gold, #f0b429); }
 .cms-media-empty { padding: 30px; text-align: center; color: var(--ork-text-muted); grid-column: 1 / -1; }
 
 .cms-upload-drop {
+    display: block;
+    box-sizing: border-box;
     border: 2px dashed var(--ork-border-dark);
     border-radius: 9px;
     padding: 18px;

@@ -34,7 +34,7 @@ $h = function ($v) {
 /* ---- CMS shell setup (persistent rail + masthead) ---- */
 $cmsActive  = 'posts';
 $cmsTitle   = 'Posts';
-$cmsSub     = 'Posts';
+$cmsSub     = 'News and announcements';
 $cmsActions = $canCreate
     ? '<button type="button" class="cms-btn cms-btn-primary" id="cmsNewPostBtn"><i class="fas fa-plus"></i> New Post</button>'
     : '';
@@ -62,6 +62,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
     <?php endif; ?>
 
     <?php if (!empty($posts)): ?>
+    <div class="cms-filters">
+        <select id="cmsStatusFilter" class="cms-select" aria-label="Filter by status">
+            <option value="">All statuses</option>
+            <option value="Published">Published</option>
+            <option value="Draft">Draft</option>
+        </select>
+    </div>
+
     <?php /* ---- Bulk-action bar (revealed when ≥1 row checked) ---- */ ?>
     <div class="cms-bulkbar" id="cmsBulkBar" role="region" aria-label="Bulk actions">
         <span class="cms-bulkbar-count" id="cmsBulkCount"><i class="fas fa-check-square"></i>0 selected</span>
@@ -81,13 +89,13 @@ include __DIR__ . '/cms/_shell_top.tpl';
         <table class="cms-table" id="cms-posts-table">
             <thead>
                 <tr>
-                    <th class="cms-check-col"><input type="checkbox" class="cms-check" id="cmsCheckAll" aria-label="Select all posts on this page"></th>
-                    <th>Title</th>
-                    <th>Status</th>
-                    <th>Author</th>
-                    <th>Date</th>
-                    <th>Tags</th>
-                    <th style="text-align:right;">Actions</th>
+                    <th scope="col" class="cms-check-col"><input type="checkbox" class="cms-check" id="cmsCheckAll" aria-label="Select all posts on this page"></th>
+                    <th scope="col">Title</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Author</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Tags</th>
+                    <th scope="col" style="text-align:right;">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -154,9 +162,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                                         <i class="fas fa-ellipsis-h"></i>
                                     </button>
                                     <div class="cms-overflow-menu" role="menu">
-                                        <?php if ($slug !== ''): ?>
-                                            <a class="cms-overflow-item" role="menuitem" href="<?= UIR ?>Blog/post/<?= $h($slug) ?>" target="_blank"><i class="fas fa-eye"></i> Preview</a>
-                                        <?php endif; ?>
+                                        <a class="cms-overflow-item" role="menuitem" href="<?= UIR ?>Cms/previewpost/<?= $pid ?>" target="_blank"><i class="fas fa-eye"></i> Preview</a>
                                         <?php if ($canPublish): ?>
                                             <button type="button" class="cms-overflow-item" role="menuitem"
                                                     data-pubtoggle
@@ -204,7 +210,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     </div>
 </div>
 
-<div class="cms-toast" id="cmsToast"></div>
+<div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
@@ -228,6 +234,15 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 { targets: [6], orderable: false, searchable: false } // Actions
             ]
         });
+        var statusSel = document.getElementById('cmsStatusFilter');
+        if (statusSel) {
+            statusSel.addEventListener('change', function () {
+                // Status column (index 2 for posts). "Published"/"Draft" don't overlap,
+                // so a plain (non-regex, non-smart) contains match is safe and survives
+                // the badge cell's surrounding whitespace.
+                dt.column(2).search(statusSel.value, false, false).draw();
+            });
+        }
         // On page/search/filter redraw, the select-all reflects only the visible page.
         dt.on('draw', function () { syncSelectAll(); refreshBulkBar(); });
     }

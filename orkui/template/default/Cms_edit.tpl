@@ -69,7 +69,7 @@ foreach ($catalog as $c) {
 $cmsActive  = 'pages';
 $cmsTitle   = $isNew ? 'New Page' : 'Edit: ' . $pTitle;
 $cmsCrumbs  = array(
-    array('label' => 'Content', 'href' => UIR . 'Cms/dashboard'),
+    array('label' => 'Dashboard', 'href' => UIR . 'Cms/dashboard'),
     array('label' => 'Pages',           'href' => UIR . 'Cms/index'),
     array('label' => $isNew ? 'New Page' : $pTitle),
 );
@@ -103,10 +103,10 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     <?php if ($isFrontDoor): ?>
     <div class="cms-frontdoor-banner" role="note">
-        <span class="cms-frontdoor-mark"><i class="fas fa-fort-awesome"></i></span>
+        <span class="cms-frontdoor-mark"><i class="fas fa-home"></i></span>
         <div class="cms-frontdoor-text">
             <strong>You're editing the public Front Door.</strong>
-            <span>These blocks render as the cinematic landing visitors see first.</span>
+            <span>These blocks render as the public landing page visitors see first.</span>
         </div>
     </div>
     <?php endif; ?>
@@ -168,10 +168,10 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 <span class="cms-preview-pane-title"><i class="fas fa-eye"></i> Preview</span>
                 <div class="cms-preview-devtoggle" role="group" aria-label="Preview width">
                     <button type="button" class="cms-devbtn cms-devbtn-active" data-device="desktop" data-tip="Desktop width"><i class="fas fa-desktop"></i></button>
-                    <button type="button" class="cms-devbtn" data-device="mobile" data-tip="Mobile width"><i class="fas fa-mobile-screen"></i></button>
+                    <button type="button" class="cms-devbtn" data-device="mobile" data-tip="Mobile width"><i class="fas fa-mobile-alt"></i></button>
                 </div>
                 <span class="cms-spacer"></span>
-                <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewRefresh" data-tip="Refresh preview"><i class="fas fa-rotate-right"></i></button>
+                <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewRefresh" data-tip="Refresh preview"><i class="fas fa-redo"></i></button>
                 <a class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewOpen" href="<?= $pageId > 0 ? UIR . 'Cms/preview/' . $pageId : '#' ?>" target="_blank" rel="noopener" data-tip="Open in new tab"><i class="fas fa-external-link-alt"></i></a>
                 <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-preview-close" id="cmsPreviewClose" data-tip="Close preview"><i class="fas fa-times"></i></button>
             </div>
@@ -313,7 +313,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
         }).catch(function () {
             saving = false;
             if (saveBtn) { saveBtn.disabled = false; }
-            if (savedHint) { savedHint.textContent = ''; }
+            dirty = true;
+            if (savedHint) { savedHint.textContent = 'Unsaved changes…'; savedHint.className = 'cms-editbar-hint'; }
             toast('Network error.', 'error');
         });
     }

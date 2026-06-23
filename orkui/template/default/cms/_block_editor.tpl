@@ -167,9 +167,38 @@ window.CmsBlockEditor = (function () {
         toastTimer = setTimeout(function () { toastEl.className = 'cms-toast'; }, 3200);
     }
 
-    /* ---- modal helpers ---- */
-    function openModal(elx) { if (elx) { elx.classList.add('cms-open'); } }
-    function closeModal(elx) { if (elx) { elx.classList.remove('cms-open'); } }
+    /* ---- modal helpers + shared focus trap ----
+     * On open we remember the element that triggered the modal, move focus into
+     * the dialog (search field / first focusable), and trap Tab cycling inside.
+     * On close we restore focus to the trigger. Esc-close is handled below. */
+    var FOCUSABLE = 'a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])';
+
+    function focusablesIn(elx) {
+        return Array.prototype.filter.call(
+            elx.querySelectorAll(FOCUSABLE),
+            function (n) { return n.offsetWidth || n.offsetHeight || n.getClientRects().length; }
+        );
+    }
+
+    function openModal(elx) {
+        if (!elx) { return; }
+        elx._returnFocus = (document.activeElement && document.activeElement !== document.body)
+            ? document.activeElement : null;
+        elx.classList.add('cms-open');
+        // Move focus into the dialog: prefer a search input, else the first focusable.
+        setTimeout(function () {
+            var search = elx.querySelector('input[type="text"], input:not([type])');
+            var first = search || focusablesIn(elx)[0];
+            if (first) { try { first.focus(); } catch (e) {} }
+        }, 30);
+    }
+    function closeModal(elx) {
+        if (!elx) { return; }
+        elx.classList.remove('cms-open');
+        var rf = elx._returnFocus;
+        elx._returnFocus = null;
+        if (rf && document.contains(rf)) { try { rf.focus(); } catch (e) {} }
+    }
     document.addEventListener('click', function (e) {
         var closer = e.target.closest('[data-close-modal]');
         if (closer) { closeModal(closer.closest('.cms-modal-overlay')); return; }
@@ -180,6 +209,20 @@ window.CmsBlockEditor = (function () {
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
             document.querySelectorAll('.cms-modal-overlay.cms-open').forEach(closeModal);
+            return;
+        }
+        if (e.key !== 'Tab') { return; }
+        // Trap Tab inside the topmost open modal.
+        var open = document.querySelector('.cms-modal-overlay.cms-open');
+        if (!open) { return; }
+        var items = focusablesIn(open);
+        if (!items.length) { e.preventDefault(); return; }
+        var firstEl = items[0], lastEl = items[items.length - 1];
+        var active = document.activeElement;
+        if (e.shiftKey) {
+            if (active === firstEl || !open.contains(active)) { e.preventDefault(); lastEl.focus(); }
+        } else {
+            if (active === lastEl || !open.contains(active)) { e.preventDefault(); firstEl.focus(); }
         }
     });
 
@@ -266,8 +309,10 @@ window.CmsBlockEditor = (function () {
                 return (f.cta && f.cta.label) ? strip(f.cta.label) : 'logo + buttons';
             case 'kingdoms_teaser':
             case 'events_feed':
-            case 'blog_feed':
-                return 'live · ' + strip(f.heading || '') || 'live data';
+            case 'blog_feed': {
+                var hd = strip(f.heading || '');
+                return hd ? ('live · ' + hd) : 'live data';
+            }
             case 'member_bar':
             case 'stat_ticker':
             case 'tournaments_feed':
@@ -444,7 +489,7 @@ window.CmsBlockEditor = (function () {
         return wrap;
     }
 
-    function repeater(block, key, singular, blank, itemRender) {
+    function repeater(block, key, singular, blank, itemRender, addLabel) {
         if (!Array.isArray(block.fields[key])) { block.fields[key] = []; }
         var arr = block.fields[key];
         var wrap = el('div', 'cms-subitems');
@@ -468,7 +513,7 @@ window.CmsBlockEditor = (function () {
                 box.appendChild(itemRender(item, i));
                 wrap.appendChild(box);
             });
-            var add = el('button', 'cms-btn cms-btn-sm', '<i class="fas fa-plus"></i> Add ' + esc(singular.toLowerCase()));
+            var add = el('button', 'cms-btn cms-btn-sm', '<i class="fas fa-plus"></i> ' + esc(addLabel || ('Add ' + singular)));
             add.type = 'button';
             add.addEventListener('click', function () {
                 arr.push(JSON.parse(JSON.stringify(blank)));
@@ -489,6 +534,7 @@ window.CmsBlockEditor = (function () {
         var b = el('button', 'cms-icon-btn' + (danger ? ' cms-icon-danger' : ''), '<i class="fas ' + icon + '"></i>');
         b.type = 'button';
         b.setAttribute('data-tip', tip);
+        if (tip) { b.setAttribute('aria-label', tip); }
         if (disabled) { b.disabled = true; }
         return b;
     }
@@ -627,7 +673,7 @@ window.CmsBlockEditor = (function () {
             { key: 'caption', type: 'text', label: 'Caption', placeholder: 'Optional table caption' },
             { key: 'header_first_row', type: 'bool', label: 'First row is a header' },
             { key: 'rows', type: 'table_rows', label: 'Rows',
-              help: 'One row per line. Separate cells with a vertical bar  |  — e.g.  Name | Rank | Kingdom' }
+              help: 'One row per line. Separate cells with a vertical bar  |  — e.g.  Column A | Column B | Column C' }
         ],
         raw_html: [
             { key: 'html', type: 'mono', label: 'HTML', help: 'Sanitized on save — unsafe tags/attributes are stripped.' }
@@ -686,7 +732,7 @@ window.CmsBlockEditor = (function () {
         var ta = el('textarea', 'cms-textarea');
         ta.style.minHeight = '140px';
         ta.style.fontFamily = 'ui-monospace, Menlo, Consolas, monospace';
-        ta.placeholder = 'Name | Rank | Kingdom\nSir Robin | Knight | Aramoor';
+        ta.placeholder = 'Column A | Column B | Column C\nRow 1 cell | Row 1 cell | Row 1 cell';
         // model rows (array of arrays) → text
         var rows = Array.isArray(block.fields[spec.key]) ? block.fields[spec.key] : [];
         ta.value = rows.map(function (r) {
@@ -886,7 +932,7 @@ window.CmsBlockEditor = (function () {
                     var box = el('div', null);
                     box.appendChild(imageBound(card, 'image', 'Card image'));
                     var g = el('div', 'cms-grid2');
-                    g.appendChild(textBound(card, 'icon', 'Icon (Font Awesome class, e.g. fa-shield)'));
+                    g.appendChild(textBound(card, 'icon', 'Icon (Font Awesome class, e.g. fa-shield-alt)'));
                     g.appendChild(textBound(card, 'href', 'Link (href)'));
                     box.appendChild(g);
                     box.appendChild(textBound(card, 'title', 'Title'));
@@ -1101,9 +1147,16 @@ window.CmsBlockEditor = (function () {
 
             var sw = el('label', 'cms-switch');
             var cb = el('input'); cb.type = 'checkbox'; cb.checked = block.enabled;
+            function syncSwitchAria() {
+                cb.setAttribute('aria-label', cb.checked
+                    ? 'Block enabled, click to disable'
+                    : 'Block disabled, click to enable');
+            }
+            syncSwitchAria();
             cb.addEventListener('change', function () {
                 block.enabled = cb.checked;
                 card.classList.toggle('cms-block-disabled', !block.enabled);
+                syncSwitchAria();
                 markDirty();
             });
             sw.appendChild(cb);
@@ -1273,6 +1326,8 @@ window.CmsBlockEditor = (function () {
         addGroupsEl.innerHTML = '';
         var q = (filter || '').trim().toLowerCase();
         var list = (catalog || []).filter(function (c) {
+            // skip catalog entries the controller marked non-addable (e.g. legacy 'richtext')
+            if (c.addable === false) { return false; }
             if (!q) { return true; }
             return String(c.label || '').toLowerCase().indexOf(q) !== -1
                 || String(c.type || '').toLowerCase().indexOf(q) !== -1;
@@ -1329,7 +1384,17 @@ window.CmsBlockEditor = (function () {
         if (addBtnEmpty) { addBtnEmpty.addEventListener('click', function () { openAddChooser(null); }); }
         if (addSearchEl) {
             addSearchEl.addEventListener('input', function () { renderAddChooser(addSearchEl.value); });
-            addSearchEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); } });
+            addSearchEl.addEventListener('keydown', function (e) {
+                if (e.key !== 'Enter') { return; }
+                e.preventDefault();
+                // Pickable cards are the enabled (available + addable) type cards.
+                var pickable = addGroupsEl.querySelectorAll('.cms-typecard:not(:disabled)');
+                if (pickable.length === 1) {
+                    pickable[0].click();           // exactly one match → pick it
+                } else if (pickable.length > 1) {
+                    pickable[0].focus();           // many → move keyboard focus to the first
+                }
+            });
         }
     }
 

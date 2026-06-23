@@ -113,8 +113,29 @@ class Controller_Cms extends Controller
             'post_drafts' => $postDrafts,
             'drafts'      => $pageDrafts + $postDrafts,
         );
-        $this->data['PageTypes'] = $this->_pageTypes();
-        $this->data['Caps']      = $this->_capFlags($uid);
+        $this->data['PageTypes']  = $this->_pageTypes();
+        $this->data['TypeLabels'] = $this->_typeLabels();
+        $this->data['Caps']       = $this->_capFlags($uid);
+        $this->data['Greet']      = $this->_greeting();
+    }
+
+    /**
+     * Plain time-of-day greeting for the dashboard masthead. No archaic/flavor
+     * copy — this is a straightforward internal CMS.
+     */
+    private function _greeting()
+    {
+        $hr = (int)date('G');
+        if ($hr < 5) {
+            return 'Good evening';
+        }
+        if ($hr < 12) {
+            return 'Good morning';
+        }
+        if ($hr < 17) {
+            return 'Good afternoon';
+        }
+        return 'Good evening';
     }
 
     /* ------------------------------------------------------------------ *
@@ -171,6 +192,10 @@ class Controller_Cms extends Controller
         $this->data['Pages']      = $this->CmsPage->list_pages($filters);
         $this->data['Search']     = $search;
         $this->data['StatusFilter'] = $status;
+
+        // Full human label map for the Type column (covers types not present in
+        // PageTypes, e.g. legacy/system page types). Unknown keys → ucwords.
+        $this->data['TypeLabels'] = $this->_typeLabels();
 
         // Capability flags the list UI uses to show/hide actions.
         $this->data['Caps'] = $this->_capFlags($uid);
@@ -272,6 +297,44 @@ class Controller_Cms extends Controller
         $this->data['FrontDoor']   = $this->CmsPage->get_page_blocks((int)$page['page_id']);
         $this->data['PreviewPage'] = $page;
         $this->data['page_title']  = 'Preview: ' . $page['title'];
+    }
+
+    /**
+     * Draft preview for a POST. Mirrors preview() but renders a post's CURRENT
+     * (draft) blocks via the shared Cms_preview.tpl renderer so unpublished
+     * drafts can be reviewed without hitting the public route (which 404s on
+     * drafts). PreviewPage carries source='postrow' so the renderer frames it
+     * as a post row rather than a page.
+     */
+    public function previewpost($id = null)
+    {
+        if (func_num_args() === 0) {
+            return parent::view();
+        }
+
+        $uid = $this->_uid();
+        if (!$this->CmsAuth->cms_can($uid, 'page.edit', self::$SCOPE)) {
+            return $this->_denyRedirect();
+        }
+
+        $this->template = 'Cms_preview.tpl';
+        $this->data['IsFrontDoor'] = false;
+        $this->data['no_index']    = true;
+
+        $post = $this->CmsPost->get_post((int)$id);
+        if (empty($post)) {
+            $this->data['Message']     = 'Post not found.';
+            $this->data['page_title']  = 'Preview — not found';
+            $this->data['FrontDoor']   = array();
+            $this->data['PreviewPage'] = null;
+            return;
+        }
+
+        // Preview renders the post's CURRENT (draft) blocks via the shared renderer.
+        $this->data['FrontDoor']   = $this->CmsPost->get_post_blocks((int)$post['post_id']);
+        $this->data['PreviewPage'] = $post;
+        $this->data['PreviewKind'] = 'postrow';
+        $this->data['page_title']  = 'Preview: ' . $post['title'];
     }
 
     /* ------------------------------------------------------------------ *
@@ -529,13 +592,16 @@ class Controller_Cms extends Controller
         // a Font Awesome icon + a one-line description. For DYNAMIC blocks the
         // description is also surfaced as the body of the editor's info card
         // (it states what the block shows live).
-        // Tuple: [label, group, dynamic, icon, description].
+        // Tuple: [label, group, dynamic, icon, description, addable?].
+        // `addable` (6th element, optional) defaults to true when omitted. A
+        // false value keeps the entry so EXISTING placed blocks still resolve a
+        // label, while the editor's Add-block chooser skips it (no new blocks).
         $known = array(
             // Shipped front-door blocks.
             'marketing_nav'   => array('Marketing Nav',      'Layout',   false, 'fa-bars',          'Top navigation bar with logo, menu links, and login / call-to-action buttons.'),
             'member_bar'      => array('Member Bar',         'Layout',   true,  'fa-user-shield',   'Logged-in welcome strip with quick links to the viewer’s kingdom, Live Attendance, and Member Tools. Hidden from signed-out visitors.'),
             'hero_carousel'   => array('Hero Carousel',      'Hero',     false, 'fa-images',        'Full-width rotating hero with slides, logo, and call-to-action buttons.'),
-            'richtext'        => array('Rich Text (legacy)', 'Content',  false, 'fa-align-left',    'Legacy rich-text block. Prefer the newer Rich Text block for new pages.'),
+            'richtext'        => array('Rich Text (legacy)', 'Content',  false, 'fa-align-left',    'Legacy rich-text block. Prefer the newer Rich Text block for new pages.', false),
             'card_grid'       => array('Card Grid',          'Content',  false, 'fa-th-large',      'Grid of cards, each with an image/icon, title, blurb, and link.'),
             'steps'           => array('Steps / How-To',     'Content',  false, 'fa-list-ol',       'Numbered steps in a row — great for “How to join” style guides.'),
             'events_feed'     => array('Events Feed',        'Dynamic',  true,  'fa-calendar-day',  'Shows the soonest upcoming events live across the org, as date cards linking to each event.'),
@@ -576,6 +642,8 @@ class Controller_Cms extends Controller
                 'icon'        => $meta[3],
                 'description' => $meta[4],
                 'available'   => $available,
+                // 6th tuple element is the addable flag; default true when absent.
+                'addable'     => !isset($meta[5]) ? true : (bool)$meta[5],
             );
         }
         return $catalog;
@@ -593,10 +661,11 @@ class Controller_Cms extends Controller
      */
     private function _pageTypes()
     {
+        $labels = $this->_typeLabels();
         return array(
             array(
                 'type'   => 'composed',
-                'label'  => 'Composed / Landing',
+                'label'  => $labels['composed'],
                 'blocks' => array(
                     $this->_starter('hero_carousel'),
                     $this->_starter('rich_text'),
@@ -605,7 +674,7 @@ class Controller_Cms extends Controller
             ),
             array(
                 'type'   => 'article',
-                'label'  => 'Article / Text',
+                'label'  => $labels['article'],
                 'blocks' => array(
                     $this->_starter('heading'),
                     $this->_starter('rich_text'),
@@ -613,7 +682,7 @@ class Controller_Cms extends Controller
             ),
             array(
                 'type'   => 'media',
-                'label'  => 'Media / Gallery',
+                'label'  => $labels['media'],
                 'blocks' => array(
                     $this->_starter('heading'),
                     $this->_starter('gallery'),
@@ -621,7 +690,7 @@ class Controller_Cms extends Controller
             ),
             array(
                 'type'   => 'resource',
-                'label'  => 'Resource / Document',
+                'label'  => $labels['resource'],
                 'blocks' => array(
                     $this->_starter('heading'),
                     $this->_starter('file_download'),
@@ -629,19 +698,53 @@ class Controller_Cms extends Controller
             ),
             array(
                 'type'   => 'blog_index',
-                'label'  => 'Blog Index',
+                'label'  => $labels['blog_index'],
                 'blocks' => array(
                     $this->_starter('heading'),
                 ),
             ),
             array(
                 'type'   => 'dynamic',
-                'label'  => 'Dynamic Data',
+                'label'  => $labels['dynamic'],
                 'blocks' => array(
                     $this->_starter('kingdoms_teaser'),
                 ),
             ),
         );
+    }
+
+    /**
+     * Human label map for page `type` keys, used by both the Type column and the
+     * type chooser. Unknown keys should fall back to ucfirst() at the call site;
+     * use _typeLabel() to apply that fallback consistently.
+     *
+     * @return array<string,string>
+     */
+    private function _typeLabels()
+    {
+        return array(
+            'composed'   => 'Composed / Landing',
+            'article'    => 'Article / Text',
+            'media'      => 'Media / Gallery',
+            'resource'   => 'Resource / Document',
+            'blog_index' => 'Blog Index',
+            'dynamic'    => 'Dynamic Data',
+        );
+    }
+
+    /**
+     * Resolve a single page `type` key to its human label, falling back to a
+     * de-underscored ucwords() form for unknown keys (e.g. "blog_index" with no
+     * map entry → "Blog Index" rather than "Blog_index").
+     */
+    private function _typeLabel($type)
+    {
+        $type   = (string)$type;
+        $labels = $this->_typeLabels();
+        if (isset($labels[$type])) {
+            return $labels[$type];
+        }
+        return ucwords(str_replace('_', ' ', $type));
     }
 
     /**

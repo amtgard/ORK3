@@ -119,7 +119,7 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
 /* ---- CMS shell setup (persistent rail + masthead) ---- */
 $cmsActive  = 'nav';
 $cmsTitle   = 'Navigation';
-$cmsSub     = 'Navigation';
+$cmsSub     = 'Public site menu';
 $cmsActions = $canManage
     ? '<button type="button" class="cms-btn cms-btn-primary" id="cmsNavAddBtn"><i class="fas fa-plus"></i> Add Item</button>'
     : '';
@@ -281,7 +281,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 </div>
 <?php endif; ?>
 
-<div class="cms-toast" id="cmsToast"></div>
+<div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <?php if ($canManage): ?>
 <script>
@@ -364,6 +364,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
         fRoute.value = '';
         fParentSel.value = '0';
         fEnabled.checked = true;
+        // Re-enable every parent option that a prior edit may have hidden.
+        Array.prototype.forEach.call(fParentSel.options, function (opt) {
+            opt.disabled = false;
+            opt.hidden = false;
+        });
         syncPickers();
     }
 
@@ -380,6 +385,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
     function openEditFromCard(card) {
         resetForm();
         fId.value     = card.getAttribute('data-nav-id') || '0';
+        // An item can't be its own parent — exclude its own option.
+        var ownId = card.getAttribute('data-nav-id') || '0';
+        Array.prototype.forEach.call(fParentSel.options, function (opt) {
+            if (opt.value === ownId && ownId !== '0') {
+                opt.disabled = true;
+                opt.hidden = true;
+            }
+        });
         fLabel.value  = card.getAttribute('data-label') || '';
         fType.value   = card.getAttribute('data-link-type') || 'page';
         fPage.value   = card.getAttribute('data-page-id') || '0';
@@ -498,14 +511,39 @@ include __DIR__ . '/cms/_shell_top.tpl';
             while (next && !matchesMovable(next, isChild)) { next = next.nextElementSibling; }
             if (next) { container.insertBefore(next, movable); }
         }
+        refreshMoveArrows();
         persistOrder();
     }
     function matchesMovable(el, isChild) {
         return isChild ? el.classList.contains('cms-nav-item') : el.classList.contains('cms-nav-group');
     }
 
-    // Walk the rendered tree → ordered [{nav_id,parent_id,ordering}] and save.
-    function persistOrder() {
+    // Disable the first item's "up" arrow and the last item's "down" arrow in
+    // every sibling group, so end-of-list clicks aren't dead.
+    function refreshMoveArrows() {
+        // Top-level groups are the reorderable units at the root.
+        var topGroups = document.querySelectorAll('#cmsNavTree > .cms-nav-group');
+        setEndArrows(Array.prototype.map.call(topGroups, function (g) {
+            return g.querySelector(':scope > .cms-nav-item');
+        }));
+        // Each top-level group's children form their own sibling list.
+        document.querySelectorAll('#cmsNavTree .cms-nav-children').forEach(function (box) {
+            var kids = box.querySelectorAll(':scope > .cms-nav-item');
+            setEndArrows(Array.prototype.slice.call(kids));
+        });
+    }
+    function setEndArrows(cards) {
+        cards = cards.filter(function (c) { return !!c; });
+        cards.forEach(function (card, i) {
+            var up = card.querySelector('[data-act="up"]');
+            var down = card.querySelector('[data-act="down"]');
+            if (up) { up.disabled = (i === 0); }
+            if (down) { down.disabled = (i === cards.length - 1); }
+        });
+    }
+
+    // Walk the rendered tree → ordered [{nav_id,parent_id,ordering}].
+    function collectOrder() {
         var items = [];
         var groups = document.querySelectorAll('#cmsNavTree .cms-nav-group');
         var topOrder = 0;
@@ -522,13 +560,25 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 childOrder += 10;
             });
         });
-        post('reordernav', { menu: MENU, items: JSON.stringify(items) }).then(function (res) {
-            if (!res || !res.ok) { toast((res && res.error) || 'Reorder failed.', 'error'); return; }
-            toast('Order saved.', 'ok');
-        }).catch(function () { toast('Network error.', 'error'); });
+        return items;
+    }
+
+    // Debounce the save so a burst of arrow clicks → one POST + one toast.
+    var reorderTimer = null;
+    function persistOrder() {
+        clearTimeout(reorderTimer);
+        reorderTimer = setTimeout(function () {
+            var items = collectOrder();
+            post('reordernav', { menu: MENU, items: JSON.stringify(items) }).then(function (res) {
+                if (!res || !res.ok) { toast((res && res.error) || 'Reorder failed.', 'error'); return; }
+                toast('Order saved.', 'ok');
+                refreshMoveArrows();
+            }).catch(function () { toast('Network error.', 'error'); });
+        }, 500);
     }
 
     syncPickers();
+    refreshMoveArrows();
 })();
 </script>
 <?php endif; ?>

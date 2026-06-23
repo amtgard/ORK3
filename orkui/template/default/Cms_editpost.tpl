@@ -67,7 +67,7 @@ foreach ($catalog as $c) {
 $cmsActive  = 'posts';
 $cmsTitle   = $isNew ? 'New Post' : 'Edit: ' . $pTitle;
 $cmsCrumbs  = array(
-    array('label' => 'Content', 'href' => UIR . 'Cms/dashboard'),
+    array('label' => 'Dashboard', 'href' => UIR . 'Cms/dashboard'),
     array('label' => 'Posts',           'href' => UIR . 'Cms/posts'),
     array('label' => $isNew ? 'New Post' : $pTitle),
 );
@@ -93,7 +93,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     <?php if ($isPublished): ?><i class="fas fa-eye-slash"></i> Unpublish<?php else: ?><i class="fas fa-globe"></i> Publish<?php endif; ?>
                 </button>
             <?php endif; ?>
-            <button type="button" class="cms-btn cms-btn-ghost cms-btn-sm" id="cmsPreviewToggle"<?= ($pSlug !== '') ? '' : ' disabled data-needsave="1" data-tip="Save the post first to preview it."' ?>>
+            <button type="button" class="cms-btn cms-btn-ghost cms-btn-sm" id="cmsPreviewToggle"<?= $postId > 0 ? '' : ' disabled data-needsave="1" data-tip="Save the post first to preview it."' ?>>
                 <i class="fas fa-eye"></i> Preview
             </button>
         </div>
@@ -171,14 +171,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 <span class="cms-preview-pane-title"><i class="fas fa-eye"></i> Preview</span>
                 <div class="cms-preview-devtoggle" role="group" aria-label="Preview width">
                     <button type="button" class="cms-devbtn cms-devbtn-active" data-device="desktop" data-tip="Desktop width"><i class="fas fa-desktop"></i></button>
-                    <button type="button" class="cms-devbtn" data-device="mobile" data-tip="Mobile width"><i class="fas fa-mobile-screen"></i></button>
+                    <button type="button" class="cms-devbtn" data-device="mobile" data-tip="Mobile width"><i class="fas fa-mobile-alt"></i></button>
                 </div>
                 <span class="cms-spacer"></span>
-                <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewRefresh" data-tip="Refresh preview"><i class="fas fa-rotate-right"></i></button>
-                <a class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewOpen" href="<?= ($pSlug !== '') ? UIR . 'Blog/post/' . $h($pSlug) : '#' ?>" target="_blank" rel="noopener" data-tip="Open in new tab"><i class="fas fa-external-link-alt"></i></a>
+                <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewRefresh" data-tip="Refresh preview"><i class="fas fa-redo"></i></button>
+                <a class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewOpen" href="<?= $postId > 0 ? UIR . 'Cms/previewpost/' . $postId : '#' ?>" target="_blank" rel="noopener" data-tip="Open in new tab"><i class="fas fa-external-link-alt"></i></a>
                 <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-preview-close" id="cmsPreviewClose" data-tip="Close preview"><i class="fas fa-times"></i></button>
             </div>
-            <div class="cms-preview-note cms-muted">Drafts preview once published; published posts preview live.</div>
+            <div class="cms-preview-note cms-muted">Preview shows the current draft.</div>
             <div class="cms-preview-pane-body">
                 <div class="cms-preview-frame-wrap" id="cmsPreviewFrameWrap" data-device="desktop">
                     <iframe class="cms-preview-iframe" id="cmsPreviewIframe" title="Post preview" src="about:blank"></iframe>
@@ -348,7 +348,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
         }).catch(function () {
             saving = false;
             if (saveBtn) { saveBtn.disabled = false; }
-            if (savedHint) { savedHint.textContent = ''; }
+            dirty = true;
+            if (savedHint) { savedHint.textContent = 'Unsaved changes…'; savedHint.className = 'cms-editbar-hint'; }
             toast('Network error.', 'error');
         });
     }
@@ -361,12 +362,12 @@ include __DIR__ . '/cms/_shell_top.tpl';
             history.replaceState(null, '', UIR + 'Cms/editpost/' + STATE.postId);
         } catch (e) {}
     }
-    // Once the post has a slug, the preview becomes possible.
+    // Once the post is saved (has an id), the draft preview becomes possible.
     function previewSlugSynced() {
-        var hasSlug = (STATE.slug && STATE.slug.trim() !== '');
+        if (STATE.postId <= 0) { return; }
         var openLink = document.getElementById('cmsPreviewOpen');
-        if (openLink && hasSlug) { openLink.href = UIR + 'Blog/post/' + STATE.slug.trim(); }
-        if (previewToggle && hasSlug) {
+        if (openLink) { openLink.href = UIR + 'Cms/previewpost/' + STATE.postId; }
+        if (previewToggle) {
             previewToggle.disabled = false;
             previewToggle.removeAttribute('data-needsave');
             previewToggle.removeAttribute('data-tip');
@@ -432,24 +433,23 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var editorGrid    = document.getElementById('cmsEditorGrid');
     var previewLoaded = false;
 
-    function hasSlug() { return STATE.slug && STATE.slug.trim() !== ''; }
     function previewUrl() {
-        return UIR + 'Blog/post/' + STATE.slug.trim() + '?_t=' + Date.now();
+        return UIR + 'Cms/previewpost/' + STATE.postId + '?_t=' + Date.now();
     }
     function previewOpen() { return previewPane && previewPane.classList.contains('cms-preview-open'); }
 
     function loadPreview() {
-        if (!hasSlug() || !previewIframe) { return; }
+        if (STATE.postId <= 0 || !previewIframe) { return; }
         previewIframe.src = previewUrl();
         previewLoaded = true;
     }
     function refreshPreview() {
-        if (!hasSlug() || !previewIframe) { return; }
+        if (STATE.postId <= 0 || !previewIframe) { return; }
         if (previewOpen() || previewLoaded) { loadPreview(); }
     }
 
     function openPreview() {
-        if (!hasSlug()) { toast('Save the post first to preview it.', 'error'); return; }
+        if (STATE.postId <= 0) { toast('Save the post first to preview it.', 'error'); return; }
         if (previewPane) { previewPane.classList.add('cms-preview-open'); previewPane.setAttribute('aria-hidden', 'false'); }
         if (editorGrid) { editorGrid.classList.add('cms-preview-active'); }
         if (previewToggle) { previewToggle.classList.add('cms-btn-active'); }

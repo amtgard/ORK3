@@ -42,22 +42,20 @@ $h = function ($v) {
 }
 .cms-media-card-alt { font-size: 12px; color: var(--ork-text-muted); margin-top: 3px; min-height: 1em; }
 .cms-media-card-alt.cms-media-noalt { font-style: italic; }
+/* Upload drop-zone sits below the library; slimmer than the primary surface */
+.cms-upload-drop-slim { margin-top: 16px; padding: 14px; }
 </style>
 
 <?php
 /* ---- CMS shell setup (persistent rail + masthead) ---- */
 $cmsActive  = 'media';
 $cmsTitle   = 'Media';
-$cmsSub     = 'Media Library';
-$cmsActions = '<button type="button" class="cms-btn cms-btn-primary" id="cmsMediaUploadBtn"><i class="fas fa-cloud-upload-alt"></i> Upload</button>';
+$cmsSub     = 'Images used across your pages';
+$cmsActions = !empty($caps['media'])
+    ? '<button type="button" class="cms-btn cms-btn-primary" id="cmsMediaUploadBtn"><i class="fas fa-cloud-upload-alt"></i> Upload</button>'
+    : '';
 include __DIR__ . '/cms/_shell_top.tpl';
 ?>
-
-    <label class="cms-upload-drop" id="cmsUploadDrop">
-        <i class="fas fa-cloud-upload-alt" style="font-size:20px;"></i>
-        <div style="margin-top:6px;">Click or drop an image to upload (JPG, PNG, GIF, WebP — max 8MB)</div>
-        <input type="file" id="cmsUploadInput" accept="image/jpeg,image/png,image/gif,image/webp">
-    </label>
 
     <div class="cms-filters">
         <input type="text" class="cms-input" id="cmsMediaSearch" placeholder="Search media…" value="<?= $h($search) ?>">
@@ -67,9 +65,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
     <div id="cmsMediaArea">
         <?php if (empty($media)): ?>
             <div class="cms-empty">
-                <div class="cms-empty-icon">&#9670;</div>
+                <div class="cms-empty-icon"><i class="fas fa-images"></i></div>
                 <div class="cms-empty-copy">
-                    <?= $search !== '' ? 'No media matched your search.' : 'The library is empty. Upload your first image above.' ?>
+                    <?= $search !== '' ? 'No media matched your search.' : 'The library is empty. Upload your first image below.' ?>
                 </div>
             </div>
         <?php else: ?>
@@ -95,6 +93,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
             </div>
         <?php endif; ?>
     </div>
+
+    <?php if (!empty($caps['media'])): ?>
+        <label class="cms-upload-drop cms-upload-drop-slim" id="cmsUploadDrop">
+            <i class="fas fa-cloud-upload-alt" style="font-size:18px;"></i>
+            <div style="margin-top:4px;">Click or drop an image to upload (JPG, PNG, GIF, WebP — max 8MB)</div>
+            <input type="file" id="cmsUploadInput" accept="image/jpeg,image/png,image/gif,image/webp">
+        </label>
+    <?php endif; ?>
 
 <?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
 
@@ -141,9 +147,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
     function renderGrid(items) {
         if (!items || !items.length) {
             var q = (searchEl && searchEl.value.trim()) || '';
-            area.innerHTML = '<div class="cms-empty"><div class="cms-empty-icon">&#9670;</div>' +
+            area.innerHTML = '<div class="cms-empty"><div class="cms-empty-icon"><i class="fas fa-images"></i></div>' +
                 '<div class="cms-empty-copy">' +
-                (q ? 'No media matched your search.' : 'The library is empty. Upload your first image above.') +
+                (q ? 'No media matched your search.' : 'The library is empty. Upload your first image below.') +
                 '</div></div>';
             return;
         }

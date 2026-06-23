@@ -33,11 +33,11 @@ $statDrafts = (int)($stats['drafts'] ?? 0);
 // Calm time-of-day greeting.
 $hr = (int)date('G');
 if ($hr < 5) {
-    $greet = 'Burning the midnight oil';
+    $greet = 'Good evening';
 } elseif ($hr < 12) {
-    $greet = 'Good morrow';
+    $greet = 'Good morning';
 } elseif ($hr < 17) {
-    $greet = 'Good day';
+    $greet = 'Good afternoon';
 } else {
     $greet = 'Good evening';
 }
@@ -153,14 +153,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 <span class="cms-quick-ico"><i class="fas fa-file-alt"></i></span>
                 <span class="cms-quick-text">
                     <strong>New Page</strong>
-                    <span>Compose a landing or content page</span>
+                    <span>Create a landing or content page</span>
                 </span>
             </a>
             <a class="cms-quick-card" href="<?= UIR ?>Cms/editpost/new" role="button">
                 <span class="cms-quick-ico"><i class="fas fa-plus"></i></span>
                 <span class="cms-quick-text">
                     <strong>New Post</strong>
-                    <span>Pen a blog entry or announcement</span>
+                    <span>Write a blog post or announcement</span>
                 </span>
             </a>
         </div>
@@ -178,10 +178,10 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 <div class="cms-stat-num"><?= $statPosts ?></div>
                 <div class="cms-stat-lbl"><i class="fas fa-newspaper"></i> Post<?= $statPosts === 1 ? '' : 's' ?></div>
             </a>
-            <div class="cms-stat-tile cms-stat-tile-drafts">
+            <a class="cms-stat-tile cms-stat-tile-drafts" href="<?= UIR ?>Cms/index&status=draft">
                 <div class="cms-stat-num"><?= $statDrafts ?></div>
                 <div class="cms-stat-lbl"><i class="fas fa-pencil-ruler"></i> Draft<?= $statDrafts === 1 ? '' : 's' ?> in progress</div>
-            </div>
+            </a>
         </div>
     </div>
 
@@ -190,7 +190,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         <?php if (empty($recent)): ?>
             <div class="cms-empty">
                 <div class="cms-empty-icon"><i class="fas fa-file-alt"></i></div>
-                <div class="cms-empty-copy">Nothing penned yet. Your recent work will appear here.</div>
+                <div class="cms-empty-copy">Nothing here yet — your recent edits will appear here.</div>
                 <?php if ($canCreate): ?>
                     <a class="cms-btn cms-btn-primary cms-empty-cta" href="<?= UIR ?>Cms/edit/new"><i class="fas fa-plus"></i> New Page</a>
                 <?php endif; ?>

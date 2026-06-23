@@ -27,9 +27,13 @@ $pageTypes = isset($PageTypes) && is_array($PageTypes) ? $PageTypes : array(
     array('type' => 'blog_index', 'label' => 'Blog Index'),
     array('type' => 'dynamic',    'label' => 'Dynamic Data'),
 );
-$typeLabels = array();
+// Prefer the controller's full human-label map (covers legacy/system types not
+// in the New-Page chooser); fall back to deriving labels from $pageTypes.
+$typeLabels = isset($TypeLabels) && is_array($TypeLabels) ? $TypeLabels : array();
 foreach ($pageTypes as $pt) {
-    $typeLabels[$pt['type']] = $pt['label'];
+    if (!isset($typeLabels[$pt['type']])) {
+        $typeLabels[$pt['type']] = $pt['label'];
+    }
 }
 
 $canCreate  = !empty($caps['create']);
@@ -48,7 +52,7 @@ $h = function ($v) {
 /* ---- CMS shell setup (persistent rail + masthead) ---- */
 $cmsActive  = 'pages';
 $cmsTitle   = 'Pages';
-$cmsSub     = 'Pages';
+$cmsSub     = 'Static pages on your public site';
 $cmsActions = $canCreate
     ? '<button type="button" class="cms-btn cms-btn-primary" id="cmsNewPageBtn"><i class="fas fa-plus"></i> New Page</button>'
     : '';
@@ -63,8 +67,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
     <div class="cms-filters">
         <select id="cmsStatusFilter" class="cms-select" aria-label="Filter by status">
             <option value="">All statuses</option>
-            <option value="Published">Published</option>
-            <option value="Draft">Draft</option>
+            <option value="Published"<?= $statusF === 'published' ? ' selected' : '' ?>>Published</option>
+            <option value="Draft"<?= $statusF === 'draft' ? ' selected' : '' ?>>Draft</option>
         </select>
     </div>
 
@@ -87,12 +91,12 @@ include __DIR__ . '/cms/_shell_top.tpl';
         <table class="cms-table" id="cms-pages-table">
             <thead>
                 <tr>
-                    <th class="cms-check-col"><input type="checkbox" class="cms-check" id="cmsCheckAll" aria-label="Select all pages on this page"></th>
-                    <th>Title</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Updated</th>
-                    <th style="text-align:right;">Actions</th>
+                    <th scope="col" class="cms-check-col"><input type="checkbox" class="cms-check" id="cmsCheckAll" aria-label="Select all pages on this page"></th>
+                    <th scope="col">Title</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Updated</th>
+                    <th scope="col" style="text-align:right;">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -119,7 +123,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                         $status    = (string)($p['status'] ?? 'draft');
                         $isSystem  = !empty($p['is_system']);
                         $updated   = (string)($p['updated_at'] ?? '');
-                        $typeLabel = isset($typeLabels[$type]) ? $typeLabels[$type] : ucfirst($type);
+                        $typeLabel = isset($typeLabels[$type]) ? $typeLabels[$type] : ucwords(str_replace('_', ' ', $type));
                         $isPub     = ($status === 'published');
                         $updatedFmt = $updated !== '' ? date('M j, Y g:i A', strtotime($updated)) : '—';
                     ?>
@@ -222,7 +226,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     </div>
 </div>
 
-<div class="cms-toast" id="cmsToast"></div>
+<div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script>
