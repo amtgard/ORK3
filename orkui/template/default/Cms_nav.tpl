@@ -115,27 +115,16 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
 .cms-nav-addchild-row { margin: 0 0 16px 28px; }
 </style>
 
-<div class="cms-wrap">
-
-    <div class="cms-topbar">
-        <div class="cms-masthead">
-            <span class="cms-masthead-mark">⚜</span>
-            <h1 class="cms-masthead-word cms-title">The Scriptorium</h1>
-            <div class="cms-masthead-sub">Site Content · Navigation</div>
-        </div>
-        <span class="cms-spacer"></span>
-        <?php if ($canManage): ?>
-            <button type="button" class="cms-btn cms-btn-primary" id="cmsNavAddBtn">
-                <i class="fas fa-plus"></i> Add Item
-            </button>
-        <?php endif; ?>
-    </div>
-
-    <div class="cms-tabs">
-        <a class="cms-tab" href="<?= UIR ?>Cms/index"><i class="fas fa-file-alt"></i> Pages</a>
-        <a class="cms-tab" href="<?= UIR ?>Cms/posts"><i class="fas fa-newspaper"></i> Posts</a>
-        <a class="cms-tab cms-tab-active" href="<?= UIR ?>Cms/nav"><i class="fas fa-bars"></i> Navigation</a>
-    </div>
+<?php
+/* ---- CMS shell setup (persistent rail + masthead) ---- */
+$cmsActive  = 'nav';
+$cmsTitle   = 'The Scriptorium';
+$cmsSub     = 'Navigation';
+$cmsActions = $canManage
+    ? '<button type="button" class="cms-btn cms-btn-primary" id="cmsNavAddBtn"><i class="fas fa-plus"></i> Add Item</button>'
+    : '';
+include __DIR__ . '/cms/_shell_top.tpl';
+?>
 
     <?php if ($message !== ''): ?>
         <div class="cms-notice"><?= $h($message) ?></div>
@@ -173,7 +162,8 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
             <?php endforeach; ?>
         <?php endif; ?>
     </div>
-</div>
+
+<?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
 
 <?php /* ---- Edit / Add item modal ---- */ ?>
 <?php if ($canManage): ?>

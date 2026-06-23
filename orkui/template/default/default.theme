@@ -417,7 +417,7 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 				<div class='nav-dropdown-menu'>
 					<a href='<?=UIR?>Player/profile/<?=$__navUid?>'><i class='fas fa-user'></i> View Profile</a>
 <?php if (!empty($CanManageCms)): ?>
-					<a href='<?=UIR?>Cms/index'><i class='fas fa-file-alt'></i> Manage Site Pages</a>
+					<a href='<?=UIR?>Cms/dashboard'><i class='fas fa-file-alt'></i> Manage Site Pages</a>
 <?php endif; ?>
 <?php if (Ork3::$Lib->authorization->HasAuthority($__navUid, AUTH_ADMIN, 0, AUTH_ADMIN)): ?>
 					<div class='nav-dropdown-divider'></div>

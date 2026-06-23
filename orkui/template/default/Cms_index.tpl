@@ -44,32 +44,16 @@ $h = function ($v) {
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
-<div class="cms-wrap">
-
-    <div class="cms-topbar">
-        <div class="cms-masthead">
-            <i class="fas fa-feather-alt cms-masthead-mark"></i>
-            <div>
-                <div class="cms-masthead-word cms-title">The Scriptorium</div>
-                <div class="cms-masthead-sub">Site Content · Pages</div>
-            </div>
-        </div>
-        <span class="cms-spacer"></span>
-        <?php if ($canCreate): ?>
-            <button type="button" class="cms-btn cms-btn-primary" id="cmsNewPageBtn">
-                <i class="fas fa-plus"></i> New Page
-            </button>
-        <?php endif; ?>
-    </div>
-
-    <?php /* ---- Pages / Posts tabs ---- */ ?>
-    <div class="cms-tabs">
-        <a class="cms-tab cms-tab-active" href="<?= UIR ?>Cms/index"><i class="fas fa-file-alt"></i> Pages</a>
-        <a class="cms-tab" href="<?= UIR ?>Cms/posts"><i class="fas fa-newspaper"></i> Posts</a>
-        <?php if (!empty($caps['nav'])): ?>
-            <a class="cms-tab" href="<?= UIR ?>Cms/nav"><i class="fas fa-bars"></i> Navigation</a>
-        <?php endif; ?>
-    </div>
+<?php
+/* ---- CMS shell setup (persistent rail + masthead) ---- */
+$cmsActive  = 'pages';
+$cmsTitle   = 'The Scriptorium';
+$cmsSub     = 'Pages';
+$cmsActions = $canCreate
+    ? '<button type="button" class="cms-btn cms-btn-primary" id="cmsNewPageBtn"><i class="fas fa-plus"></i> New Page</button>'
+    : '';
+include __DIR__ . '/cms/_shell_top.tpl';
+?>
 
     <?php if ($message !== ''): ?>
         <div class="cms-notice"><?= $h($message) ?></div>
@@ -195,7 +179,8 @@ $h = function ($v) {
             </tbody>
         </table>
     </div>
-</div>
+
+<?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
 
 <?php /* ---- New-Page type chooser modal ---- */ ?>
 <?php if ($canCreate): ?>

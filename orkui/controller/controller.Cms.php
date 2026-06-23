@@ -39,6 +39,111 @@ class Controller_Cms extends Controller
     }
 
     /* ------------------------------------------------------------------ *
+     * Dashboard — Scriptorium landing / overview
+     * ------------------------------------------------------------------ */
+
+    public function dashboard($action = null)
+    {
+        $uid = $this->_uid();
+        // The dashboard is visible to anyone holding ANY CMS capability (or super-admin).
+        if (!$this->_hasAnyCmsCapability($uid)) {
+            return $this->_denyRedirect();
+        }
+
+        $this->template = 'Cms_dashboard.tpl';
+        $this->data['page_title'] = 'The Scriptorium';
+
+        // ---- Pages overview (list_pages is already ORDER BY updated_at DESC) ----
+        $pages = $this->CmsPage->list_pages(array());
+        $pages = is_array($pages) ? $pages : array();
+
+        $pageCount  = count($pages);
+        $pageDrafts = 0;
+        foreach ($pages as $p) {
+            if ((string)($p['status'] ?? 'draft') !== 'published') {
+                $pageDrafts++;
+            }
+        }
+
+        // ---- Posts overview ----
+        $postsRes = $this->CmsPost->list_posts(array('includeDrafts' => true, 'scope_type' => 'global', 'scope_id' => 0));
+        $posts    = (is_array($postsRes) && isset($postsRes['rows']) && is_array($postsRes['rows'])) ? $postsRes['rows'] : array();
+
+        $postCount  = count($posts);
+        $postDrafts = 0;
+        foreach ($posts as $p) {
+            if ((string)($p['status'] ?? 'draft') !== 'published') {
+                $postDrafts++;
+            }
+        }
+
+        // ---- "Continue editing": merge newest pages + posts by updated_at, take ~6 ----
+        $recent = array();
+        foreach (array_slice($pages, 0, 6) as $p) {
+            $recent[] = array(
+                'kind'       => 'page',
+                'id'         => (int)($p['page_id'] ?? 0),
+                'title'      => (string)($p['title'] ?? '(untitled)'),
+                'status'     => (string)($p['status'] ?? 'draft'),
+                'updated_at' => (string)($p['updated_at'] ?? ''),
+                'edit_href'  => UIR . 'Cms/edit/' . (int)($p['page_id'] ?? 0),
+            );
+        }
+        foreach (array_slice($posts, 0, 6) as $p) {
+            $recent[] = array(
+                'kind'       => 'post',
+                'id'         => (int)($p['post_id'] ?? 0),
+                'title'      => (string)($p['title'] ?? '(untitled)'),
+                'status'     => (string)($p['status'] ?? 'draft'),
+                'updated_at' => (string)($p['updated_at'] ?? ''),
+                'edit_href'  => UIR . 'Cms/editpost/' . (int)($p['post_id'] ?? 0),
+            );
+        }
+        // Newest-first across both kinds; keep the 6 most recently touched.
+        usort($recent, function ($a, $b) {
+            return strcmp((string)$b['updated_at'], (string)$a['updated_at']);
+        });
+        $recent = array_slice($recent, 0, 6);
+
+        $this->data['Recent'] = $recent;
+        $this->data['Stats']  = array(
+            'pages'       => $pageCount,
+            'posts'       => $postCount,
+            'page_drafts' => $pageDrafts,
+            'post_drafts' => $postDrafts,
+            'drafts'      => $pageDrafts + $postDrafts,
+        );
+        $this->data['PageTypes'] = $this->_pageTypes();
+        $this->data['Caps']      = $this->_capFlags($uid);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Media library
+     * ------------------------------------------------------------------ */
+
+    public function media($action = null)
+    {
+        $uid = $this->_uid();
+        $caps = $this->_capFlags($uid);
+        // Media management is its own capability (super-admins pass via _capFlags).
+        if (empty($caps['media'])) {
+            return $this->_denyRedirect();
+        }
+
+        $this->load_model('CmsMedia');
+
+        $this->template = 'Cms_media.tpl';
+        $this->data['page_title'] = 'Media Library';
+
+        $search = trim((string)($_GET['q'] ?? ''));
+
+        $media = $this->CmsMedia->list_media(self::$SCOPE, 200, ($search === '' ? null : $search));
+        $this->data['Media']  = is_array($media) ? $media : array();
+        $this->data['Search'] = $search;
+        $this->data['Caps']   = $caps;
+    }
+
+    /* ------------------------------------------------------------------ *
      * Page list
      * ------------------------------------------------------------------ */
 

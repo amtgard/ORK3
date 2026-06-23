@@ -88,6 +88,233 @@
     margin-top: -2px;
 }
 
+/* ============================================================================
+ * CMS Shell — persistent left rail + masthead workspace.
+ *
+ * Sits inside the global ORK app chrome (default.theme header/footer); the shell
+ * owns the admin workspace. The accent tokens are scoped to .cms-shell here
+ * (the legacy .cms-wrap still carries its own copy for non-shell surfaces).
+ * ========================================================================== */
+
+.cms-shell {
+    --cms-gold: #f0b429;
+    --cms-gold-deep: #caa23a;
+    --cms-navy: #0b1120;
+    --cms-navy2: #121a30;
+
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 16px 16px 60px;
+    color: var(--ork-text);
+}
+
+/* ---- Left rail --------------------------------------------------------- */
+.cms-rail {
+    flex: 0 0 220px;
+    width: 220px;
+    align-self: flex-start;
+    position: sticky;
+    top: 14px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px 12px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, var(--cms-navy2, #121a30), var(--cms-navy, #0b1120));
+    border: 1px solid rgba(240, 180, 41, .22);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .03);
+}
+.cms-rail-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 4px 8px 12px;
+    border-bottom: 1px solid rgba(240, 180, 41, .18);
+}
+.cms-rail-mark {
+    color: var(--cms-gold, #f0b429);
+    font-size: 20px;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+.cms-rail-word {
+    font-family: 'MedievalSharp', 'Open Sans', system-ui, sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: .01em;
+    line-height: 1.1;
+    color: var(--cms-gold, #f0b429);
+}
+.cms-rail-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.cms-rail-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border-left: 3px solid transparent;
+    color: rgba(226, 232, 240, .82);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.2;
+    transition: background .12s, color .12s, border-color .12s;
+}
+.cms-rail-item:hover {
+    background: rgba(255, 255, 255, .06);
+    color: #fff;
+}
+.cms-rail-item.active {
+    background: rgba(240, 180, 41, .12);
+    border-left-color: var(--cms-gold, #f0b429);
+    color: var(--cms-gold, #f0b429);
+}
+.cms-rail-icon {
+    flex: 0 0 auto;
+    width: 18px;
+    text-align: center;
+    font-size: 15px;
+}
+.cms-rail-item.active .cms-rail-icon { color: var(--cms-gold, #f0b429); }
+.cms-rail-label { min-width: 0; }
+.cms-rail-item-quiet { color: rgba(226, 232, 240, .6); font-weight: 500; }
+.cms-rail-item-quiet:hover { color: #fff; }
+.cms-rail-divider {
+    height: 1px;
+    margin: 6px 8px;
+    background: rgba(240, 180, 41, .18);
+}
+
+/* ---- Main workspace ---------------------------------------------------- */
+.cms-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 0 0 26px;
+}
+.cms-shell-masthead {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+.cms-shell-masthead-text { flex: 1 1 auto; min-width: 0; }
+.cms-shell-title {
+    font-family: 'MedievalSharp', 'Open Sans', system-ui, sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: .01em;
+    line-height: 1.1;
+    margin: 0;
+    /* reset the global h1-h6 gray pill */
+    background: transparent;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+    text-shadow: none;
+    color: var(--ork-text);
+}
+.cms-shell-sub {
+    color: var(--ork-text-muted);
+    font-size: 14px;
+    line-height: 1.3;
+    margin-top: 3px;
+}
+.cms-shell-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
+.cms-shell-body { min-width: 0; }
+
+/* ---- Breadcrumb -------------------------------------------------------- */
+.cms-crumbs {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 12.5px;
+    margin-bottom: 6px;
+}
+.cms-crumb { color: var(--ork-text-muted); text-decoration: none; }
+.cms-crumb[href]:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
+.cms-crumb-current { color: var(--ork-text-secondary); font-weight: 600; }
+.cms-crumb-sep { color: var(--ork-text-lighter); }
+
+html[data-theme="dark"] .cms-crumb[href]:hover { color: var(--cms-gold, #f0b429); }
+
+/* ---- Responsive: collapse the rail to a top horizontal bar ------------- */
+@media (max-width: 900px) {
+    .cms-shell {
+        flex-direction: column;
+        padding: 12px 12px 48px;
+    }
+    .cms-rail {
+        flex: 1 1 auto;
+        width: auto;
+        position: static;
+        top: auto;
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 10px;
+        margin-bottom: 16px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .cms-rail-brand {
+        padding: 0 10px 0 4px;
+        margin-right: 4px;
+        border-bottom: none;
+        border-right: 1px solid rgba(240, 180, 41, .18);
+        flex: 0 0 auto;
+    }
+    .cms-rail-nav {
+        flex-direction: row;
+        gap: 4px;
+    }
+    .cms-rail-item {
+        flex: 0 0 auto;
+        border-left: none;
+        border-bottom: 3px solid transparent;
+        padding: 7px 11px;
+        white-space: nowrap;
+    }
+    .cms-rail-item.active {
+        border-left-color: transparent;
+        border-bottom-color: var(--cms-gold, #f0b429);
+    }
+    .cms-rail-divider {
+        width: 1px;
+        height: 22px;
+        margin: 0 4px;
+    }
+    .cms-main {
+        padding-left: 0;
+    }
+}
+
+/* Narrow phones: icon-only rail (labels hidden) to keep it on one line. */
+@media (max-width: 560px) {
+    .cms-rail-word { display: none; }
+    .cms-rail-brand { padding: 0 8px 0 4px; }
+    .cms-rail-item .cms-rail-label { display: none; }
+    .cms-rail-item-quiet .cms-rail-label { display: none; }
+    .cms-rail-item { padding: 8px 10px; }
+    .cms-rail-icon { font-size: 16px; }
+    .cms-shell-actions { margin-left: 0; width: 100%; }
+}
+
 .cms-btn {
     display: inline-flex;
     align-items: center;
@@ -1151,12 +1378,212 @@ html[data-theme="dark"] .cms-overflow-menu { box-shadow: 0 12px 32px rgba(0, 0, 
 .cms-row-actions .cms-overflow { margin-left: 2px; }
 
 /* ============================================================================
+ * Editor — sticky action bar (Save / Publish / Preview, always visible)
+ * ========================================================================== */
+
+.cms-editbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin: 0 0 16px;
+    padding: 10px 14px;
+    border: 1px solid var(--ork-border-dark);
+    border-radius: 10px;
+    background: linear-gradient(180deg, var(--cms-navy2, #121a30), var(--cms-navy, #0b1120));
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .18);
+}
+.cms-editbar-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.cms-editbar-author { color: rgba(255, 255, 255, .7); font-size: 12.5px; }
+.cms-editbar-hint {
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, .62);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cms-editbar-hint .cms-spin { border-top-color: var(--cms-gold, #f0b429); }
+.cms-editbar-hint-dirty { color: var(--cms-gold, #f0b429); }
+.cms-editbar-hint-saved { color: #8be8a8; }
+.cms-editbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+/* Ghost buttons sit on the navy bar — lighten their text/border for contrast. */
+.cms-editbar .cms-btn-ghost {
+    border-color: rgba(255, 255, 255, .22);
+    color: rgba(255, 255, 255, .9);
+    background: rgba(255, 255, 255, .04);
+}
+.cms-editbar .cms-btn-ghost:hover {
+    background: rgba(255, 255, 255, .12);
+    color: #fff;
+}
+.cms-editbar .cms-btn-active {
+    border-color: var(--cms-gold, #f0b429);
+    color: var(--cms-gold, #f0b429);
+    background: rgba(240, 180, 41, .12);
+}
+
+/* ============================================================================
+ * Editor — front-door identity banner
+ * ========================================================================== */
+
+.cms-frontdoor-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 0 0 16px;
+    padding: 12px 16px;
+    border: 1px solid var(--cms-gold-deep, #caa23a);
+    border-left-width: 4px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(240, 180, 41, .14), rgba(240, 180, 41, .06));
+}
+.cms-frontdoor-mark {
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    background: linear-gradient(180deg, var(--cms-gold, #f0b429), #e0a420);
+    color: #1a1205;
+}
+.cms-frontdoor-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cms-frontdoor-text strong { color: var(--ork-text); font-size: 14px; }
+.cms-frontdoor-text span { color: var(--ork-text-muted); font-size: 12.5px; }
+html[data-theme="dark"] .cms-frontdoor-text strong { color: var(--cms-gold, #f0b429); }
+
+/* ============================================================================
+ * Editor — in-context preview pane
+ * ========================================================================== */
+
+/* The grid gains a 3rd track only when the pane is open. */
+.cms-editor-haspreview.cms-preview-active {
+    grid-template-columns: 320px 1fr minmax(360px, 0.95fr);
+}
+.cms-preview-pane {
+    display: none;
+    position: sticky;
+    top: 64px;
+    align-self: start;
+    max-height: calc(100vh - 84px);
+    border: 1px solid var(--ork-border-dark);
+    border-radius: 12px;
+    background: var(--ork-card-bg);
+    overflow: hidden;
+    flex-direction: column;
+}
+.cms-editor-haspreview.cms-preview-active .cms-preview-pane.cms-preview-open {
+    display: flex;
+}
+.cms-preview-pane-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--ork-border);
+    background: var(--ork-bg-secondary);
+}
+.cms-preview-pane-title {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--ork-text);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.cms-preview-pane-title i { color: var(--cms-gold-deep, #caa23a); }
+.cms-preview-devtoggle {
+    display: inline-flex;
+    border: 1px solid var(--ork-border-dark);
+    border-radius: 7px;
+    overflow: hidden;
+    margin-left: 6px;
+}
+.cms-devbtn {
+    border: none;
+    background: var(--ork-bg);
+    color: var(--ork-text-muted);
+    padding: 5px 9px;
+    font-size: 12.5px;
+    cursor: pointer;
+    line-height: 1;
+}
+.cms-devbtn + .cms-devbtn { border-left: 1px solid var(--ork-border-dark); }
+.cms-devbtn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
+.cms-devbtn-active {
+    background: var(--cms-gold, #f0b429);
+    color: #1a1205;
+}
+.cms-preview-note {
+    font-size: 11.5px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--ork-border);
+    background: var(--ork-bg);
+}
+.cms-preview-pane-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    background: var(--ork-bg-tertiary);
+    display: flex;
+    justify-content: center;
+}
+.cms-preview-frame-wrap {
+    width: 100%;
+    height: 100%;
+    min-height: 460px;
+    transition: max-width .18s ease;
+}
+.cms-preview-frame-wrap[data-device="mobile"] {
+    max-width: 390px;
+    box-shadow: 0 0 0 1px var(--ork-border-dark);
+}
+.cms-preview-iframe {
+    width: 100%;
+    height: 100%;
+    min-height: 460px;
+    border: 0;
+    background: #fff;
+    display: block;
+}
+
+/* ============================================================================
  * Responsive — stack on mobile
  * ========================================================================== */
 
+@media (max-width: 1100px) {
+    /* Preview pane drops below the editor instead of a 3rd column. */
+    .cms-editor-haspreview.cms-preview-active {
+        grid-template-columns: 320px 1fr;
+    }
+    .cms-editor-haspreview.cms-preview-active .cms-preview-pane.cms-preview-open {
+        grid-column: 1 / -1;
+        position: static;
+        max-height: 70vh;
+    }
+}
 @media (max-width: 860px) {
     .cms-editor { grid-template-columns: 1fr; }
+    .cms-editor-haspreview.cms-preview-active { grid-template-columns: 1fr; }
     .cms-meta-panel { position: static; }
+    .cms-editbar-actions { width: 100%; margin-left: 0; }
+    .cms-editbar-status { flex: 1 1 100%; }
 }
 @media (max-width: 620px) {
     .cms-grid2 { grid-template-columns: 1fr; }

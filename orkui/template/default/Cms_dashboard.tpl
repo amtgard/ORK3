@@ -1,0 +1,290 @@
+<?php
+/**
+ * Cms_dashboard.tpl — Royal Scriptorium CMS landing / overview.
+ * PLAIN PHP (extract()+include), NEVER Smarty. Use <?php ?>/<?= ?> only.
+ *
+ * Receives (from Controller_Cms::dashboard):
+ *   $Recent     list of ['kind'=>'page'|'post','id','title','status','updated_at','edit_href']
+ *   $Stats      ['pages','posts','page_drafts','post_drafts','drafts' => int]
+ *   $PageTypes  list of ['type','label'] for the New-Page chooser
+ *   $Caps       ['create','edit','publish','delete','media','nav','roles' => bool]
+ *   UIR, HTTP_TEMPLATE (constants)
+ */
+
+$recent = isset($Recent) && is_array($Recent) ? $Recent : array();
+$stats  = isset($Stats) && is_array($Stats) ? $Stats : array();
+$caps   = isset($Caps) && is_array($Caps) ? $Caps : array();
+
+$pageTypes = isset($PageTypes) && is_array($PageTypes) ? $PageTypes : array(
+    array('type' => 'composed',   'label' => 'Composed / Landing'),
+    array('type' => 'article',    'label' => 'Article / Text'),
+    array('type' => 'media',      'label' => 'Media / Gallery'),
+    array('type' => 'resource',   'label' => 'Resource / Document'),
+    array('type' => 'blog_index', 'label' => 'Blog Index'),
+    array('type' => 'dynamic',    'label' => 'Dynamic Data'),
+);
+
+$canCreate = !empty($caps['create']);
+
+$statPages  = (int)($stats['pages'] ?? 0);
+$statPosts  = (int)($stats['posts'] ?? 0);
+$statDrafts = (int)($stats['drafts'] ?? 0);
+
+// Calm time-of-day greeting.
+$hr = (int)date('G');
+if ($hr < 5) {
+    $greet = 'Burning the midnight oil';
+} elseif ($hr < 12) {
+    $greet = 'Good morrow';
+} elseif ($hr < 17) {
+    $greet = 'Good day';
+} else {
+    $greet = 'Good evening';
+}
+
+$h = function ($v) {
+    return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+};
+?>
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
+
+<style>
+/* ---- Dashboard-only styling (reuses cms- tokens; dark-mode via vars) ---- */
+.cms-dash-greet {
+    font-family: 'MedievalSharp', Georgia, serif;
+    font-size: 22px;
+    color: var(--cms-gold, #f0b429);
+    margin: 0 0 4px;
+    background: transparent; border: none; padding: 0; border-radius: 0;
+    text-shadow: none;
+}
+.cms-dash-lede { color: var(--ork-text-muted); font-size: 14px; margin: 0 0 22px; }
+
+.cms-dash-section-title {
+    font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--ork-text-muted); font-weight: 700; margin: 0 0 12px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+.cms-dash-block { margin-bottom: 30px; }
+
+/* Quick-create cards */
+.cms-quick-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;
+}
+.cms-quick-card {
+    display: flex; align-items: center; gap: 14px;
+    border: 1px solid var(--ork-border-dark); border-radius: 11px;
+    background: var(--ork-bg-secondary); padding: 16px 18px;
+    text-decoration: none; color: var(--ork-text);
+    transition: border-color .12s, transform .08s, box-shadow .12s; cursor: pointer;
+}
+.cms-quick-card:hover {
+    border-color: var(--cms-gold, #f0b429); transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
+}
+.cms-quick-ico {
+    flex: 0 0 auto; width: 42px; height: 42px; border-radius: 10px;
+    display: grid; place-items: center; font-size: 18px;
+    background: linear-gradient(180deg, var(--cms-gold, #f0b429), #e0a420); color: #1a1205;
+}
+.cms-quick-text strong { display: block; font-size: 15px; }
+.cms-quick-text span { font-size: 12.5px; color: var(--ork-text-muted); }
+
+/* Stat tiles */
+.cms-stat-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px;
+}
+.cms-stat-tile {
+    border: 1px solid var(--ork-border); border-radius: 11px;
+    background: var(--ork-bg-secondary); padding: 16px 18px;
+    text-decoration: none; color: var(--ork-text); display: block;
+    transition: border-color .12s;
+}
+a.cms-stat-tile:hover { border-color: var(--cms-gold-deep, #caa23a); }
+.cms-stat-num { font-size: 28px; font-weight: 800; line-height: 1; color: var(--ork-text); }
+.cms-stat-lbl { font-size: 12.5px; color: var(--ork-text-muted); margin-top: 6px; }
+.cms-stat-tile-drafts .cms-stat-num { color: var(--cms-gold-deep, #caa23a); }
+
+/* Continue-editing list */
+.cms-recent-list { display: flex; flex-direction: column; border: 1px solid var(--ork-border); border-radius: 11px; overflow: hidden; }
+.cms-recent-item {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+    border-bottom: 1px solid var(--ork-border); background: var(--ork-bg);
+}
+.cms-recent-item:last-child { border-bottom: none; }
+.cms-recent-item:hover { background: var(--ork-bg-secondary); }
+.cms-recent-kind {
+    flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+    background: var(--ork-bg-tertiary); color: var(--ork-text-muted); font-size: 13px;
+}
+.cms-recent-main { flex: 1 1 auto; min-width: 0; }
+.cms-recent-title { font-weight: 600; color: var(--ork-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cms-recent-meta { font-size: 12px; color: var(--ork-text-muted); }
+.cms-recent-actions { flex: 0 0 auto; }
+
+.cms-dash-livelink { display: inline-flex; align-items: center; gap: 7px; color: var(--ork-text-muted); text-decoration: none; font-size: 13.5px; }
+.cms-dash-livelink:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
+html[data-theme="dark"] .cms-dash-livelink:hover { color: var(--cms-gold, #f0b429); }
+
+@media (max-width: 560px) {
+    .cms-recent-actions .cms-btn-label { display: none; }
+}
+</style>
+
+<?php
+/* ---- CMS shell setup (persistent rail + masthead) ---- */
+$cmsActive  = 'dashboard';
+$cmsTitle   = 'The Scriptorium';
+$cmsSub     = 'Your hall of pages, posts, and lore';
+$cmsActions = '';
+include __DIR__ . '/cms/_shell_top.tpl';
+?>
+
+    <div class="cms-dash-block">
+        <h2 class="cms-dash-greet"><?= $h($greet) ?>, scribe.</h2>
+        <p class="cms-dash-lede">Pick up where you left off, or begin a fresh scroll below.</p>
+    </div>
+
+    <?php if ($canCreate): ?>
+    <div class="cms-dash-block">
+        <h3 class="cms-dash-section-title">Quick create</h3>
+        <div class="cms-quick-row">
+            <a class="cms-quick-card" id="cmsDashNewPage" href="<?= UIR ?>Cms/edit/new" role="button">
+                <span class="cms-quick-ico"><i class="fas fa-file-circle-plus"></i></span>
+                <span class="cms-quick-text">
+                    <strong>New Page</strong>
+                    <span>Compose a landing or content page</span>
+                </span>
+            </a>
+            <a class="cms-quick-card" href="<?= UIR ?>Cms/editpost/new" role="button">
+                <span class="cms-quick-ico"><i class="fas fa-feather-pointed"></i></span>
+                <span class="cms-quick-text">
+                    <strong>New Post</strong>
+                    <span>Pen a blog entry or announcement</span>
+                </span>
+            </a>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <div class="cms-dash-block">
+        <h3 class="cms-dash-section-title">At a glance</h3>
+        <div class="cms-stat-row">
+            <a class="cms-stat-tile" href="<?= UIR ?>Cms/index">
+                <div class="cms-stat-num"><?= $statPages ?></div>
+                <div class="cms-stat-lbl"><i class="fas fa-file-alt"></i> Page<?= $statPages === 1 ? '' : 's' ?></div>
+            </a>
+            <a class="cms-stat-tile" href="<?= UIR ?>Cms/posts">
+                <div class="cms-stat-num"><?= $statPosts ?></div>
+                <div class="cms-stat-lbl"><i class="fas fa-newspaper"></i> Post<?= $statPosts === 1 ? '' : 's' ?></div>
+            </a>
+            <div class="cms-stat-tile cms-stat-tile-drafts">
+                <div class="cms-stat-num"><?= $statDrafts ?></div>
+                <div class="cms-stat-lbl"><i class="fas fa-pen-ruler"></i> Draft<?= $statDrafts === 1 ? '' : 's' ?> in progress</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="cms-dash-block">
+        <h3 class="cms-dash-section-title">Continue editing</h3>
+        <?php if (empty($recent)): ?>
+            <div class="cms-empty">
+                <div class="cms-empty-icon">&#9884;</div>
+                <div class="cms-empty-copy">Nothing penned yet. Your recent work will appear here.</div>
+                <?php if ($canCreate): ?>
+                    <a class="cms-btn cms-btn-primary cms-empty-cta" href="<?= UIR ?>Cms/edit/new"><i class="fas fa-plus"></i> New Page</a>
+                <?php endif; ?>
+            </div>
+        <?php else: ?>
+            <div class="cms-recent-list">
+                <?php foreach ($recent as $r):
+                    $isPage  = (($r['kind'] ?? 'page') === 'page');
+                    $title   = (string)($r['title'] ?? '(untitled)');
+                    $status  = (string)($r['status'] ?? 'draft');
+                    $isPub   = ($status === 'published');
+                    $href    = (string)($r['edit_href'] ?? '#');
+                    $updated = (string)($r['updated_at'] ?? '');
+                    $when    = $updated !== '' ? date('M j, Y g:i A', strtotime($updated)) : '—';
+                ?>
+                    <div class="cms-recent-item">
+                        <span class="cms-recent-kind" data-tip="<?= $isPage ? 'Page' : 'Post' ?>">
+                            <i class="fas <?= $isPage ? 'fa-file-alt' : 'fa-newspaper' ?>"></i>
+                        </span>
+                        <div class="cms-recent-main">
+                            <div class="cms-recent-title"><?= $h($title) ?></div>
+                            <div class="cms-recent-meta">
+                                <span class="cms-badge cms-badge-<?= $isPub ? 'published' : 'draft' ?>"><?= $isPub ? 'Published' : 'Draft' ?></span>
+                                &nbsp;Updated <?= $h($when) ?>
+                            </div>
+                        </div>
+                        <div class="cms-recent-actions">
+                            <a class="cms-btn cms-btn-sm" href="<?= $h($href) ?>"><i class="fas fa-pen"></i> <span class="cms-btn-label">Edit</span></a>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <div class="cms-dash-block">
+        <a class="cms-dash-livelink" href="<?= UIR ?>" target="_blank" rel="noopener">
+            <i class="fas fa-arrow-up-right-from-square"></i> View live site
+        </a>
+    </div>
+
+<?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
+
+<?php /* ---- New-Page type chooser modal (mirrors the Pages list) ---- */ ?>
+<?php if ($canCreate): ?>
+<div class="cms-modal-overlay" id="cmsNewModal">
+    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Choose a page type">
+        <div class="cms-modal-head">
+            <h3>Create a page</h3>
+            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
+        </div>
+        <div class="cms-modal-body">
+            <p class="cms-muted" style="margin-top:0;font-size:13px;">Pick a starting layout. You can add or remove any block afterward.</p>
+            <div class="cms-typegrid">
+                <?php foreach ($pageTypes as $pt): ?>
+                    <a class="cms-typecard" href="<?= UIR ?>Cms/edit/new&type=<?= $h($pt['type']) ?>">
+                        <strong><?= $h($pt['label']) ?></strong>
+                        <span><?= $h($pt['type']) ?></span>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<script>
+(function () {
+    'use strict';
+    <?php if ($canCreate): ?>
+    /* The New Page quick-card opens the type chooser (falls through to its href
+       if JS is unavailable). */
+    var newModal = document.getElementById('cmsNewModal');
+    var newPageCard = document.getElementById('cmsDashNewPage');
+    function openModal(el) { if (el) { el.classList.add('cms-open'); } }
+    function closeModal(el) { if (el) { el.classList.remove('cms-open'); } }
+    if (newPageCard && newModal) {
+        newPageCard.addEventListener('click', function (e) {
+            e.preventDefault();
+            openModal(newModal);
+        });
+    }
+    document.addEventListener('click', function (e) {
+        var closer = e.target.closest('[data-close-modal]');
+        if (closer) { closeModal(closer.closest('.cms-modal-overlay')); return; }
+        if (e.target.classList && e.target.classList.contains('cms-modal-overlay')) {
+            closeModal(e.target);
+        }
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.cms-modal-overlay.cms-open').forEach(closeModal);
+        }
+    });
+    <?php endif; ?>
+})();
+</script>

@@ -43,6 +43,10 @@ $pStatus      = (string)($page['status'] ?? 'draft');
 $pIsSystem    = !empty($page['is_system']);
 $isPublished  = ($pStatus === 'published');
 
+// The system/front-door page (is_system, or slug 'home') renders as the public
+// cinematic landing — flag it so the editor shows an identity banner.
+$isFrontDoor  = ($pIsSystem || strtolower($pSlug) === 'home');
+
 $canEdit    = !empty($caps['edit']) || !empty($caps['create']);
 $canPublish = !empty($caps['publish']);
 $canDelete  = !empty($caps['delete']) && !$pIsSystem && !$isNew;
@@ -60,27 +64,58 @@ foreach ($catalog as $c) {
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 
-<div class="cms-wrap">
+<?php
+/* ---- CMS shell setup (persistent rail + masthead) ---- */
+$cmsActive  = 'pages';
+$cmsTitle   = $isNew ? 'New Page' : 'Edit: ' . $pTitle;
+$cmsCrumbs  = array(
+    array('label' => 'The Scriptorium', 'href' => UIR . 'Cms/dashboard'),
+    array('label' => 'Pages',           'href' => UIR . 'Cms/index'),
+    array('label' => $isNew ? 'New Page' : $pTitle),
+);
+$cmsActions = '';
+include __DIR__ . '/cms/_shell_top.tpl';
+?>
 
-    <div class="cms-topbar">
-        <a class="cms-btn cms-btn-ghost cms-btn-sm" href="<?= UIR ?>Cms/index"><i class="fas fa-arrow-left"></i> Pages</a>
-        <h1 class="cms-title"><?= $isNew ? 'New Page' : $h('Edit: ' . $pTitle) ?></h1>
-        <span class="cms-spacer"></span>
+    <?php /* ============ STICKY EDITOR ACTION BAR ============ */ ?>
+    <div class="cms-editbar" id="cmsEditBar">
+        <div class="cms-editbar-status">
+            <span class="cms-badge cms-badge-<?= $isPublished ? 'published' : 'draft' ?>" id="cmsStatusBadge">
+                <?= $isPublished ? 'Published' : 'Draft' ?>
+            </span>
+            <?php if ($pIsSystem): ?><span class="cms-badge cms-badge-system">System</span><?php endif; ?>
+            <span class="cms-editbar-hint" id="cmsSavedHint"></span>
+        </div>
+        <div class="cms-editbar-actions">
+            <?php if ($canEdit): ?>
+                <button type="button" class="cms-btn cms-btn-primary cms-btn-sm" id="cmsSaveBtn"><i class="fas fa-save"></i> Save</button>
+            <?php endif; ?>
+            <?php if ($canPublish): ?>
+                <button type="button" class="cms-btn cms-btn-ghost cms-btn-sm" id="cmsPubBtn" data-status="<?= $isPublished ? 'published' : 'draft' ?>"<?= $isNew ? ' disabled' : '' ?>>
+                    <?php if ($isPublished): ?><i class="fas fa-eye-slash"></i> Unpublish<?php else: ?><i class="fas fa-globe"></i> Publish<?php endif; ?>
+                </button>
+            <?php endif; ?>
+            <button type="button" class="cms-btn cms-btn-ghost cms-btn-sm" id="cmsPreviewToggle"<?= $pageId > 0 ? '' : ' disabled data-needsave="1" data-tip="Save the page first to preview it."' ?>>
+                <i class="fas fa-eye"></i> Preview
+            </button>
+        </div>
     </div>
 
-    <div class="cms-editor">
+    <?php if ($isFrontDoor): ?>
+    <div class="cms-frontdoor-banner" role="note">
+        <span class="cms-frontdoor-mark"><i class="fas fa-fort-awesome"></i></span>
+        <div class="cms-frontdoor-text">
+            <strong>You're editing the public Front Door.</strong>
+            <span>These blocks render as the cinematic landing visitors see first.</span>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <div class="cms-editor cms-editor-haspreview" id="cmsEditorGrid">
 
         <?php /* ---- Meta panel ---- */ ?>
         <div class="cms-meta-panel">
             <h2>Page settings</h2>
-
-            <div class="cms-status-row">
-                Status:
-                <span class="cms-badge cms-badge-<?= $isPublished ? 'published' : 'draft' ?>" id="cmsStatusBadge">
-                    <?= $isPublished ? 'Published' : 'Draft' ?>
-                </span>
-                <?php if ($pIsSystem): ?><span class="cms-badge cms-badge-system">System</span><?php endif; ?>
-            </div>
 
             <div class="cms-field">
                 <label class="cms-label" for="cmsTitle">Title</label>
@@ -89,7 +124,7 @@ foreach ($catalog as $c) {
 
             <div class="cms-field">
                 <label class="cms-label" for="cmsSlug">Slug</label>
-                <input type="text" class="cms-input" id="cmsSlug" value="<?= $h($pSlug) ?>" placeholder="page-slug">
+                <input type="text" class="cms-input" id="cmsSlug" value="<?= $h($pSlug) ?>" placeholder="page-slug"<?= $pIsSystem ? ' readonly' : '' ?>>
                 <div class="cms-help">URL path. Auto-filled from the title until you edit it.</div>
             </div>
 
@@ -109,28 +144,11 @@ foreach ($catalog as $c) {
                 <textarea class="cms-textarea" id="cmsMeta" placeholder="Short summary for search engines." style="min-height:70px;"><?= $h($pMeta) ?></textarea>
             </div>
 
-            <div class="cms-action-row">
-                <?php if ($canEdit): ?>
-                    <button type="button" class="cms-btn cms-btn-primary" id="cmsSaveBtn"><i class="fas fa-save"></i> Save</button>
-                <?php endif; ?>
-                <a class="cms-btn cms-btn-ghost" id="cmsPreviewBtn" href="<?= $pageId > 0 ? UIR . 'Cms/preview/' . $pageId : '#' ?>" target="_blank" rel="noopener"><i class="fas fa-eye"></i> Preview</a>
-            </div>
-
-            <?php if ($canPublish): ?>
-            <div class="cms-action-row">
-                <button type="button" class="cms-btn cms-btn-ghost" id="cmsPubBtn" data-status="<?= $isPublished ? 'published' : 'draft' ?>"<?= $isNew ? ' disabled' : '' ?>>
-                    <?php if ($isPublished): ?><i class="fas fa-eye-slash"></i> Unpublish<?php else: ?><i class="fas fa-globe"></i> Publish<?php endif; ?>
-                </button>
-            </div>
-            <?php endif; ?>
-
             <?php if ($canDelete): ?>
-            <div class="cms-action-row">
+            <div class="cms-action-row" style="margin-top:14px;">
                 <button type="button" class="cms-btn cms-btn-danger" id="cmsDeleteBtn"><i class="fas fa-trash"></i> Delete page</button>
             </div>
             <?php endif; ?>
-
-            <div class="cms-help" id="cmsSavedHint" style="margin-top:12px;"></div>
         </div>
 
         <?php
@@ -144,8 +162,29 @@ foreach ($catalog as $c) {
         include DIR_TEMPLATE . 'default/cms/_block_editor.tpl';
         ?>
 
+        <?php /* ============ IN-CONTEXT PREVIEW PANE ============ */ ?>
+        <aside class="cms-preview-pane" id="cmsPreviewPane" aria-hidden="true">
+            <div class="cms-preview-pane-head">
+                <span class="cms-preview-pane-title"><i class="fas fa-eye"></i> Preview</span>
+                <div class="cms-preview-devtoggle" role="group" aria-label="Preview width">
+                    <button type="button" class="cms-devbtn cms-devbtn-active" data-device="desktop" data-tip="Desktop width"><i class="fas fa-desktop"></i></button>
+                    <button type="button" class="cms-devbtn" data-device="mobile" data-tip="Mobile width"><i class="fas fa-mobile-screen"></i></button>
+                </div>
+                <span class="cms-spacer"></span>
+                <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewRefresh" data-tip="Refresh preview"><i class="fas fa-rotate-right"></i></button>
+                <a class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewOpen" href="<?= $pageId > 0 ? UIR . 'Cms/preview/' . $pageId : '#' ?>" target="_blank" rel="noopener" data-tip="Open in new tab"><i class="fas fa-arrow-up-right-from-square"></i></a>
+                <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-preview-close" id="cmsPreviewClose" data-tip="Close preview"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="cms-preview-pane-body">
+                <div class="cms-preview-frame-wrap" id="cmsPreviewFrameWrap" data-device="desktop">
+                    <iframe class="cms-preview-iframe" id="cmsPreviewIframe" title="Page preview" src="about:blank"></iframe>
+                </div>
+            </div>
+        </aside>
+
     </div>
-</div>
+
+<?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
 
 <script>
 (function () {
@@ -194,7 +233,7 @@ foreach ($catalog as $c) {
             .replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     }
     titleInput.addEventListener('input', function () {
-        if (!slugTouched) { slugInput.value = slugify(titleInput.value); }
+        if (!slugTouched && !slugInput.readOnly) { slugInput.value = slugify(titleInput.value); }
         markDirty();
     });
     slugInput.addEventListener('input', function () { slugTouched = true; markDirty(); });
@@ -217,7 +256,7 @@ foreach ($catalog as $c) {
 
     function markDirty() {
         dirty = true;
-        if (savedHint) { savedHint.textContent = 'Unsaved changes…'; }
+        if (savedHint) { savedHint.textContent = 'Unsaved changes…'; savedHint.className = 'cms-editbar-hint cms-editbar-hint-dirty'; }
         clearTimeout(autosaveTimer);
         if (STATE.canEdit) {
             autosaveTimer = setTimeout(function () { doSave(true); }, 3000);
@@ -240,7 +279,7 @@ foreach ($catalog as $c) {
         saving = true;
         clearTimeout(autosaveTimer);
         if (saveBtn) { saveBtn.disabled = true; }
-        if (savedHint) { savedHint.innerHTML = '<span class="cms-spin"></span> Saving…'; }
+        if (savedHint) { savedHint.innerHTML = '<span class="cms-spin"></span> Saving…'; savedHint.className = 'cms-editbar-hint'; }
 
         var params = {
             page_id: STATE.pageId,
@@ -267,8 +306,10 @@ foreach ($catalog as $c) {
                 params_pageId_synced();
             }
             if (res.slug) { slugInput.value = res.slug; slugTouched = true; }
-            if (savedHint) { savedHint.textContent = 'Saved ' + new Date().toLocaleTimeString(); }
+            if (savedHint) { savedHint.textContent = 'Saved ' + new Date().toLocaleTimeString(); savedHint.className = 'cms-editbar-hint cms-editbar-hint-saved'; }
             toast('Page saved.', 'ok');
+            // Refresh the in-context preview so it reflects the just-saved draft.
+            refreshPreview();
         }).catch(function () {
             saving = false;
             if (saveBtn) { saveBtn.disabled = false; }
@@ -279,10 +320,16 @@ foreach ($catalog as $c) {
 
     // After a new page gets its id, enable Preview/Publish and update URL.
     function params_pageId_synced() {
-        var prev = document.getElementById('cmsPreviewBtn');
-        if (prev) { prev.href = UIR + 'Cms/preview/' + STATE.pageId; }
+        var openLink = document.getElementById('cmsPreviewOpen');
+        if (openLink) { openLink.href = UIR + 'Cms/preview/' + STATE.pageId; }
         var pub = document.getElementById('cmsPubBtn');
         if (pub) { pub.disabled = false; }
+        // Preview is now possible — enable the toggle + clear its "save first" hint.
+        if (previewToggle) {
+            previewToggle.disabled = false;
+            previewToggle.removeAttribute('data-needsave');
+            previewToggle.removeAttribute('data-tip');
+        }
         try {
             history.replaceState(null, '', UIR + 'Cms/edit/' + STATE.pageId);
         } catch (e) {}
@@ -315,6 +362,7 @@ foreach ($catalog as $c) {
                     statusBadge.textContent = nowPub ? 'Published' : 'Draft';
                 }
                 toast(nowPub ? 'Page published.' : 'Page unpublished.', 'ok');
+                refreshPreview();
             }).catch(function () { pubBtn.disabled = false; toast('Network error.', 'error'); });
         });
     }
@@ -336,6 +384,66 @@ foreach ($catalog as $c) {
             });
         });
     }
+
+    /* ================= in-context preview pane ================= */
+    var previewToggle = document.getElementById('cmsPreviewToggle');
+    var previewPane   = document.getElementById('cmsPreviewPane');
+    var previewIframe = document.getElementById('cmsPreviewIframe');
+    var previewWrap   = document.getElementById('cmsPreviewFrameWrap');
+    var previewClose  = document.getElementById('cmsPreviewClose');
+    var previewRefresh = document.getElementById('cmsPreviewRefresh');
+    var editorGrid    = document.getElementById('cmsEditorGrid');
+    var previewLoaded = false;
+
+    function previewUrl() {
+        return UIR + 'Cms/preview/' + STATE.pageId + '?_t=' + Date.now();
+    }
+    function previewOpen() { return previewPane && previewPane.classList.contains('cms-preview-open'); }
+
+    function loadPreview() {
+        if (STATE.pageId <= 0 || !previewIframe) { return; }
+        previewIframe.src = previewUrl();
+        previewLoaded = true;
+    }
+    // Only reload when the pane is open (or already loaded) — avoids fetching a
+    // preview the editor never opened.
+    function refreshPreview() {
+        if (STATE.pageId <= 0 || !previewIframe) { return; }
+        if (previewOpen() || previewLoaded) { loadPreview(); }
+    }
+
+    function openPreview() {
+        if (STATE.pageId <= 0) { toast('Save the page first to preview it.', 'error'); return; }
+        if (previewPane) { previewPane.classList.add('cms-preview-open'); previewPane.setAttribute('aria-hidden', 'false'); }
+        if (editorGrid) { editorGrid.classList.add('cms-preview-active'); }
+        if (previewToggle) { previewToggle.classList.add('cms-btn-active'); }
+        if (!previewLoaded) { loadPreview(); }
+    }
+    function closePreview() {
+        if (previewPane) { previewPane.classList.remove('cms-preview-open'); previewPane.setAttribute('aria-hidden', 'true'); }
+        if (editorGrid) { editorGrid.classList.remove('cms-preview-active'); }
+        if (previewToggle) { previewToggle.classList.remove('cms-btn-active'); }
+    }
+
+    if (previewToggle) {
+        previewToggle.addEventListener('click', function () {
+            if (previewToggle.disabled) { return; }
+            if (previewOpen()) { closePreview(); } else { openPreview(); }
+        });
+    }
+    if (previewClose) { previewClose.addEventListener('click', closePreview); }
+    if (previewRefresh) { previewRefresh.addEventListener('click', function () { loadPreview(); }); }
+
+    // Desktop / Mobile device-width toggle.
+    Array.prototype.forEach.call(document.querySelectorAll('.cms-devbtn'), function (btn) {
+        btn.addEventListener('click', function () {
+            var dev = btn.getAttribute('data-device') || 'desktop';
+            Array.prototype.forEach.call(document.querySelectorAll('.cms-devbtn'), function (b) {
+                b.classList.toggle('cms-devbtn-active', b === btn);
+            });
+            if (previewWrap) { previewWrap.setAttribute('data-device', dev); }
+        });
+    });
 
     /* ================= boot the shared block engine ================= */
     if (BE) {
