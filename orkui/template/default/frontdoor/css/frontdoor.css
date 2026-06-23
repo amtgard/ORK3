@@ -57,6 +57,8 @@
     color: var(--ink);
 }
 
+.fd-body-text { color: #3a4356; }
+
 .fd-pad {
     padding: 42px 44px;
 }
@@ -437,6 +439,8 @@ html[data-theme="dark"] .fd-sec-title {
     color: #e8edf8;
 }
 
+html[data-theme="dark"] .fd-body-text { color: #c8d3ea; }
+
 html[data-theme="dark"] .fd-kicker-d {
     color: #c9940c;
 }
@@ -452,7 +456,7 @@ html[data-theme="dark"] .fd-link:hover {
 
 /* Empty state */
 html[data-theme="dark"] .fd-empty {
-    color: #6677899;
+    color: #8899aa;
 }
 
 /* Annotation banners */
@@ -646,4 +650,8 @@ html[data-theme="dark"] .fd-btn-ghost {
     html[data-theme="dark"] .fd-dropdown a {
         color: #dce3f3;
     }
+}
+
+@media (max-width: 420px) {
+    .fd-kingdoms-grid { grid-template-columns: repeat(2, 1fr); }
 }

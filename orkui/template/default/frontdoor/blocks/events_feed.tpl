@@ -39,7 +39,7 @@ $rows    = $hasRows ? array_slice($EventSummary, 0, $limit) : [];
                 <?php
                 $eventId    = (int)$row['EventId'];
                 $detailId   = (int)$row['NextDetailId'];
-                $rsvpGoing  = (int)$row['RsvpGoing'];
+                $rsvpGoing  = (int)($row['RsvpGoing'] ?? $row['RsvpCount'] ?? 0);
                 $name       = htmlspecialchars(stripslashes($row['Name'] ?? ''), ENT_QUOTES);
                 $kingdomName = htmlspecialchars(stripslashes($row['KingdomName'] ?? ''), ENT_QUOTES);
                 $nextDate   = $row['NextDate'] ?? '';

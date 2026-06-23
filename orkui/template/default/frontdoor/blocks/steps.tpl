@@ -50,7 +50,7 @@ $bgStyle = $isDark ? 'background:var(--navy);color:#fff;' : 'background:#f7f8fb;
                     <?php endif; ?>
 
                     <?php if (!empty($body)): ?>
-                        <div style="font-size:14px;<?= $isDark ? 'opacity:.75;' : 'color:#3a4356;' ?>">
+                        <div class="fd-body-text" style="font-size:14px;<?= $isDark ? 'opacity:.75;' : '' ?>">
                             <?= htmlspecialchars($body, ENT_QUOTES) ?>
                         </div>
                     <?php endif; ?>

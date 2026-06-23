@@ -62,7 +62,7 @@ $ctas       = $blockFields['ctas']        ?? [];
                 $ctaClass = ($cta['style'] ?? '') === 'ghost' ? 'fd-btn-ghost' : 'fd-btn-gold';
                 $ctaStyle = $ctaIdx > 0 ? ' style="margin-left:10px"' : '';
             ?>
-            <a class="<?= $ctaClass ?>" href="<?= $ctaHref ?>"<?= $ctaStyle ?>><?= $ctaLabel ?></a>
+            <a class="<?= htmlspecialchars($ctaClass, ENT_QUOTES) ?>" href="<?= $ctaHref ?>"<?= $ctaStyle ?>><?= $ctaLabel ?></a>
             <?php endforeach; ?>
         </div>
     </div>

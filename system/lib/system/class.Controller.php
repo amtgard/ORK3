@@ -151,7 +151,8 @@ class Controller
                 $this->data['UserParentKingdomId'] = 0;
             }
         } else {
-            $this->data['UserKingdomId'] = 0;
+            $this->data['UserKingdomId']       = 0;
+            $this->data['UserParentKingdomId'] = 0;
         }
 
         unset($this->session->kingdom_id);
@@ -180,6 +181,7 @@ class Controller
                     $ev['RsvpCount'] = $rsvpCounts[(int)($ev['NextDetailId'] ?? 0)] ?? 0;
                 }
                 unset($ev);
+                $DB->Clear();
             }
         }
         $this->data[ 'EventSummary' ] = $eventSummary;

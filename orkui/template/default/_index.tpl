@@ -9,7 +9,6 @@ $fdDir    = DIR_TEMPLATE . 'default/frontdoor/';
 $fdBlockDir = $fdDir . 'blocks/';
 $fdAssetBase = HTTP_TEMPLATE . 'default/frontdoor/';
 ?>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap">
 <link rel="stylesheet" href="<?= $fdAssetBase ?>css/frontdoor.css">
 
 <div class="fd-page">

@@ -27,7 +27,7 @@ $marginAuto = ($align === 'center') ? 'margin:0 auto;' : '';
     <?php endif; ?>
 
     <?php if (!empty($body)): ?>
-        <div style="max-width:680px;<?= $marginAuto ?>font-size:18px;line-height:1.6;color:#3a4356;">
+        <div class="fd-body-text" style="max-width:680px;<?= $marginAuto ?>font-size:18px;line-height:1.6;">
             <?php /* rich-text passthrough */ ?>
             <?= $body ?>
         </div>
