@@ -2,11 +2,60 @@
 /**
  * Partial: marketing_nav.tpl
  * Receives: $blockFields (logo, items[], cta, login), $LoggedIn, $ViewerName, $UserKingdomId, UIR
+ *
+ * Nav source: the editable 'marketing' menu from the CMS nav store
+ * (ork_cms_nav_item) is the authoritative source when it has rows. Like
+ * blog_feed.tpl / events_feed.tpl, this DYNAMIC-ish block sources the menu
+ * itself via the model pass-through (new APIModel('CmsNav') -> GetMenu),
+ * since no controller injects nav rows onto the page. The lib resolves each
+ * item to a renderable 'href' + 'target' (page/post slug, url, or dynamic
+ * route key); see class.CmsNav.php.
+ *
+ * Fallback: if the store is empty/unavailable, we keep rendering the original
+ * $blockFields['items'] hardcoded defaults (no behavioral regression). The
+ * logo, cta, and login always come from $blockFields regardless of source.
  */
 $logo  = $blockFields['logo']  ?? [];
 $items = $blockFields['items'] ?? [];
 $cta   = $blockFields['cta']   ?? [];
 $login = $blockFields['login'] ?? [];
+
+// Prefer the editable 'marketing' menu from the CMS nav store, when present.
+$navFromStore = [];
+if (class_exists('APIModel')) {
+    $navModel  = new APIModel('CmsNav');
+    $navResult = $navModel->GetMenu('marketing', 'global', 0);
+    if (is_array($navResult) && !empty($navResult)) {
+        $navFromStore = $navResult;
+    }
+}
+
+if (!empty($navFromStore)) {
+    // Normalize store items to the shape the markup below expects
+    // (label, href, target, children[label,href,target]).
+    $items = [];
+    foreach ($navFromStore as $navItem) {
+        $row = [
+            'label'  => (string) ($navItem['label'] ?? ''),
+            'href'   => (string) ($navItem['href'] ?? '#'),
+            'target' => (string) ($navItem['target'] ?? ''),
+        ];
+        if (!empty($navItem['children']) && is_array($navItem['children'])) {
+            $kids = [];
+            foreach ($navItem['children'] as $navChild) {
+                $kids[] = [
+                    'label'  => (string) ($navChild['label'] ?? ''),
+                    'href'   => (string) ($navChild['href'] ?? '#'),
+                    'target' => (string) ($navChild['target'] ?? ''),
+                ];
+            }
+            if (!empty($kids)) {
+                $row['children'] = $kids;
+            }
+        }
+        $items[] = $row;
+    }
+}
 ?>
 <nav class="fd-nav">
     <?php if (!empty($logo['src'])): ?>
@@ -19,18 +68,18 @@ $login = $blockFields['login'] ?? [];
         <?php foreach ($items as $item): ?>
             <div class="fd-navitem">
                 <?php if (!empty($item['children'])): ?>
-                    <a href="<?= htmlspecialchars($item['href'] ?? '#', ENT_QUOTES) ?>">
+                    <a href="<?= htmlspecialchars($item['href'] ?? '#', ENT_QUOTES) ?>"<?= !empty($item['target']) ? ' target="' . htmlspecialchars($item['target'], ENT_QUOTES) . '" rel="noopener"' : '' ?>>
                         <?= htmlspecialchars($item['label'] ?? '', ENT_QUOTES) ?> &#9660;
                     </a>
                     <div class="fd-dropdown">
                         <?php foreach ($item['children'] as $child): ?>
-                            <a href="<?= htmlspecialchars($child['href'] ?? '#', ENT_QUOTES) ?>">
+                            <a href="<?= htmlspecialchars($child['href'] ?? '#', ENT_QUOTES) ?>"<?= !empty($child['target']) ? ' target="' . htmlspecialchars($child['target'], ENT_QUOTES) . '" rel="noopener"' : '' ?>>
                                 <?= htmlspecialchars($child['label'] ?? '', ENT_QUOTES) ?>
                             </a>
                         <?php endforeach; ?>
                     </div>
                 <?php else: ?>
-                    <a href="<?= htmlspecialchars($item['href'] ?? '#', ENT_QUOTES) ?>">
+                    <a href="<?= htmlspecialchars($item['href'] ?? '#', ENT_QUOTES) ?>"<?= !empty($item['target']) ? ' target="' . htmlspecialchars($item['target'], ENT_QUOTES) . '" rel="noopener"' : '' ?>>
                         <?= htmlspecialchars($item['label'] ?? '', ENT_QUOTES) ?>
                     </a>
                 <?php endif; ?>

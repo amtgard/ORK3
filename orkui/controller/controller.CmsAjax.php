@@ -35,6 +35,7 @@ class Controller_CmsAjax extends Controller
         $this->load_model('CmsAuth');
         $this->load_model('CmsPage');
         $this->load_model('CmsPost');
+        $this->load_model('CmsNav');
     }
 
     /* ------------------------------------------------------------------ *
@@ -330,6 +331,191 @@ class Controller_CmsAjax extends Controller
         $this->_ok(array('post_id' => $postId, 'deleted' => true));
     }
 
+    /* ================================================================== *
+     * NAVIGATION — edit the 'marketing' (and future) menus. All gated
+     * 'nav.manage'. Mirrors the page/post envelope (_begin/_require/_ok/_fail).
+     * ================================================================== */
+
+    /* ------------------------------------------------------------------ *
+     * savenavitem — create (nav_id<=0) or update one nav item
+     * ------------------------------------------------------------------ */
+
+    public function savenavitem($action = null)
+    {
+        $uid = $this->_begin();
+        $this->_require($uid, 'nav.manage');
+
+        $navId = (int)($_POST['nav_id'] ?? 0);
+        $isNew = ($navId <= 0);
+
+        $label = trim((string)($_POST['label'] ?? ''));
+        if ($label === '') {
+            $this->_fail('A label is required.');
+        }
+
+        $linkType = $this->_normalizeNavLinkType((string)($_POST['link_type'] ?? 'page'));
+
+        // Resolve the link target for the chosen link_type; clear the others so
+        // a type-switch never leaves a stale page_id/post_id/url around.
+        $pageId = null;
+        $postId = null;
+        $url    = null;
+        switch ($linkType) {
+            case 'page':
+                $pageId = (int)($_POST['page_id'] ?? 0);
+                if ($pageId <= 0) {
+                    $this->_fail('Pick a page for this link.');
+                }
+                break;
+            case 'post':
+                $postId = (int)($_POST['post_id'] ?? 0);
+                if ($postId <= 0) {
+                    $this->_fail('Pick a post for this link.');
+                }
+                break;
+            case 'url':
+                $url = trim((string)($_POST['url'] ?? ''));
+                if ($url === '') {
+                    $this->_fail('Enter a URL for this link.');
+                }
+                break;
+            case 'dynamic':
+                $url = trim((string)($_POST['url'] ?? ''));
+                if ($url === '') {
+                    $this->_fail('Enter an internal route (e.g. Directory/index).');
+                }
+                break;
+        }
+
+        // parent_id: 0/'' => top level. A child of a child is not allowed
+        // (one dropdown level), enforced below for the create/update case.
+        $parentRaw = $_POST['parent_id'] ?? '';
+        $parentId  = ((string)$parentRaw !== '' && (int)$parentRaw > 0) ? (int)$parentRaw : null;
+
+        $enabled = (array_key_exists('enabled', $_POST) && ((int)$_POST['enabled'] === 0 || $_POST['enabled'] === 'false'))
+            ? 0 : 1;
+
+        // Validate the proposed parent: must be an existing top-level item of
+        // this menu (so we never create a 3rd nesting level), and not self.
+        if ($parentId !== null) {
+            $parentOk = false;
+            foreach ($this->CmsNav->list_items('marketing', 'global', 0) as $row) {
+                if ((int)($row['nav_id'] ?? 0) === $parentId) {
+                    // Parent must itself be top-level (parent_id null/0).
+                    $pp = $row['parent_id'] ?? null;
+                    $parentOk = ($pp === null || (int)$pp === 0) && ($parentId !== $navId);
+                    break;
+                }
+            }
+            if (!$parentOk) {
+                $parentId = null;
+            }
+        }
+
+        $data = array(
+            'menu'      => 'marketing',
+            'label'     => $label,
+            'link_type' => $linkType,
+            'page_id'   => $pageId,
+            'post_id'   => $postId,
+            'url'       => $url,
+            'parent_id' => $parentId,
+            'enabled'   => $enabled,
+            'scope_type' => 'global',
+            'scope_id'  => 0,
+        );
+
+        if ($isNew) {
+            $navId = (int)$this->CmsNav->create_item($data);
+            if ($navId <= 0) {
+                $this->_fail('Could not create the navigation item.');
+            }
+        } else {
+            $ok = (bool)$this->CmsNav->update_item($navId, $data);
+            if (!$ok) {
+                $this->_fail('Could not update the navigation item.', 4);
+            }
+        }
+
+        $this->_ok(array(
+            'nav_id'   => $navId,
+            'is_new'   => $isNew,
+            'saved_at' => date('c'),
+        ));
+    }
+
+    /* ------------------------------------------------------------------ *
+     * deletenavitem — delete an item (and its direct children)
+     * ------------------------------------------------------------------ */
+
+    public function deletenavitem($action = null)
+    {
+        $uid = $this->_begin();
+        $this->_require($uid, 'nav.manage');
+
+        $navId = (int)($_POST['nav_id'] ?? 0);
+        if ($navId <= 0) {
+            $this->_fail('Navigation item not found.', 4);
+        }
+
+        $deleted = (bool)$this->CmsNav->delete_item($navId);
+        if (!$deleted) {
+            $this->_fail('Navigation item not found.', 4);
+        }
+
+        $this->_ok(array('nav_id' => $navId, 'deleted' => true));
+    }
+
+    /* ------------------------------------------------------------------ *
+     * reordernav — apply a new ordering/parent layout for a menu
+     * ------------------------------------------------------------------ */
+
+    public function reordernav($action = null)
+    {
+        $uid = $this->_begin();
+        $this->_require($uid, 'nav.manage');
+
+        $menu = trim((string)($_POST['menu'] ?? 'marketing'));
+        if ($menu === '') {
+            $menu = 'marketing';
+        }
+
+        $raw = $_POST['items'] ?? $_POST['order'] ?? null;
+        $decoded = is_array($raw) ? $raw : json_decode((string)$raw, true);
+        if (!is_array($decoded)) {
+            $this->_fail('No ordering was supplied.');
+        }
+
+        $ordered = array();
+        $idx = 0;
+        foreach ($decoded as $entry) {
+            if (!is_array($entry) || !isset($entry['nav_id'])) {
+                $idx++;
+                continue;
+            }
+            $navId = (int)$entry['nav_id'];
+            if ($navId <= 0) {
+                $idx++;
+                continue;
+            }
+            $parentRaw = $entry['parent_id'] ?? null;
+            $parentId  = ($parentRaw !== null && $parentRaw !== '' && (int)$parentRaw > 0) ? (int)$parentRaw : null;
+            $ordered[] = array(
+                'nav_id'    => $navId,
+                'parent_id' => $parentId,
+                'ordering'  => isset($entry['ordering']) ? (int)$entry['ordering'] : $idx,
+            );
+            $idx++;
+        }
+
+        $ok = (bool)$this->CmsNav->reorder($menu, $ordered, 'global', 0);
+        if (!$ok) {
+            $this->_fail('Could not save the new order.');
+        }
+
+        $this->_ok(array('menu' => $menu, 'count' => count($ordered)));
+    }
+
     /* ------------------------------------------------------------------ *
      * mediaupload
      * ------------------------------------------------------------------ */
@@ -490,5 +676,13 @@ class Controller_CmsAjax extends Controller
     {
         $allowed = array('composed', 'article', 'media', 'blog_index', 'resource', 'dynamic');
         return in_array($type, $allowed, true) ? $type : 'composed';
+    }
+
+    /** Clamp a nav link_type to the supported enum (default 'page'). */
+    private function _normalizeNavLinkType($linkType)
+    {
+        $allowed = array('page', 'post', 'url', 'dynamic');
+        $linkType = strtolower(trim((string)$linkType));
+        return in_array($linkType, $allowed, true) ? $linkType : 'page';
     }
 }

@@ -28,6 +28,7 @@ class Controller_Cms extends Controller
         $this->load_model('CmsAuth');
         $this->load_model('CmsPage');
         $this->load_model('CmsPost');
+        $this->load_model('CmsNav');
     }
 
     /* ------------------------------------------------------------------ *
@@ -189,6 +190,37 @@ class Controller_Cms extends Controller
         $this->data['TagFilter'] = $tag;
         $this->data['AllTags']   = $this->CmsPost->list_all_tags();
         $this->data['Caps']      = $this->_capFlags($uid);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Navigation management (the 'marketing' menu)
+     * ------------------------------------------------------------------ */
+
+    public function nav($action = null)
+    {
+        $uid = $this->_uid();
+        // Navigation management is an admin-only capability.
+        if (!$this->CmsAuth->cms_can($uid, 'nav.manage', self::$SCOPE)) {
+            return $this->_denyRedirect();
+        }
+
+        $this->template = 'Cms_nav.tpl';
+        $this->data['page_title'] = 'Navigation';
+
+        // The flat item list (incl. disabled) the admin tree is built from.
+        $items = $this->CmsNav->list_items('marketing', 'global', 0);
+        $this->data['Menu']     = 'marketing';
+        $this->data['NavItems'] = is_array($items) ? $items : array();
+
+        // Link-picker source lists: published + draft pages, and posts.
+        $pages = $this->CmsPage->list_pages(array());
+        $this->data['PickerPages'] = is_array($pages) ? $pages : array();
+
+        $postsRes = $this->CmsPost->list_posts(array('includeDrafts' => true, 'scope_type' => 'global', 'scope_id' => 0));
+        $postRows = (is_array($postsRes) && isset($postsRes['rows']) && is_array($postsRes['rows'])) ? $postsRes['rows'] : array();
+        $this->data['PickerPosts'] = $postRows;
+
+        $this->data['Caps'] = $this->_capFlags($uid);
     }
 
     /* ------------------------------------------------------------------ *

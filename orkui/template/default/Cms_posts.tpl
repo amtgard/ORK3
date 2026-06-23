@@ -45,6 +45,9 @@ $h = function ($v) {
     <div class="cms-tabs">
         <a class="cms-tab" href="<?= UIR ?>Cms/index"><i class="fas fa-file-alt"></i> Pages</a>
         <a class="cms-tab cms-tab-active" href="<?= UIR ?>Cms/posts"><i class="fas fa-newspaper"></i> Posts</a>
+        <?php if (!empty($caps['nav'])): ?>
+            <a class="cms-tab" href="<?= UIR ?>Cms/nav"><i class="fas fa-bars"></i> Navigation</a>
+        <?php endif; ?>
     </div>
 
     <?php if ($message !== ''): ?>
