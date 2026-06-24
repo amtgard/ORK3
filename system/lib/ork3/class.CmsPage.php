@@ -465,21 +465,37 @@ class CmsPage extends CmsBase
             $DB->enabled = $enabled;
             $DB->source = $source;
             $DB->fields_json = $fieldsJson;
-            $ok = $DB->Execute(
+            // Execute() returns void and the PDO driver runs in ERRMODE_WARNING
+            // (it retries internally and never throws/aborts the transaction), so
+            // a per-INSERT return value cannot reveal failure. We instead verify
+            // by reading the committed-to-transaction row count back below.
+            $DB->Execute(
                 'INSERT INTO ' . DB_PREFIX . 'cms_block'
                 . ' (owner_type, owner_id, type, ordering, enabled, source, fields_json)'
                 . ' VALUES (:owner_type, :owner_id, :type, :ordering, :enabled, :source, :fields_json)'
             );
 
-            if ($ok === false) {
-                // INSERT failed — undo everything and signal the caller.
-                $DB->Clear();
-                $DB->Execute('ROLLBACK');
-                return -1;
-            }
-
             $inserted++;
             $i++;
+        }
+
+        // Read back the actual block count within the same transaction (this
+        // connection sees its own uncommitted writes). If it doesn't match the
+        // number we intended to insert, an INSERT was silently dropped — undo
+        // everything and signal the partial write rather than COMMIT it.
+        $DB->Clear();
+        $DB->owner_type = $ownerType;
+        $DB->owner_id = $ownerId;
+        $countRow = $this->_firstRow($DB->DataSet(
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_block'
+            . ' WHERE owner_type = :owner_type AND owner_id = :owner_id'
+        ));
+        $actual = $countRow ? (int)$countRow['c'] : 0;
+
+        if ($actual !== $inserted) {
+            $DB->Clear();
+            $DB->Execute('ROLLBACK');
+            return -1;
         }
 
         $DB->Clear();

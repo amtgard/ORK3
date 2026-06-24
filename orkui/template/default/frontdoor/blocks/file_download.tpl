@@ -17,16 +17,11 @@
 $fdbFiles = $blockFields['files'] ?? [];
 $fdbFiles = is_array($fdbFiles) ? array_values(array_filter($fdbFiles, 'is_array')) : [];
 
-/** Allow only http(s) or relative links; everything else → '' (link suppressed). */
+/** Allow only links the authoritative checker deems safe (rejects javascript:,
+ *  data:, vbscript:, protocol-relative //host, etc.); everything else → '' (link suppressed). */
 $fdbSafeHref = static function ($href): string {
     $href = (string) $href;
-    if ($href === '') {
-        return '';
-    }
-    if (preg_match('#^(https?:)?//#i', $href) || preg_match('#^[/?\#]#', $href)) {
-        return $href;
-    }
-    return '';
+    return CmsSanitizer::IsSafeUrl($href) ? $href : '';
 };
 
 /** Pick a FontAwesome icon class from the filetype hint. */

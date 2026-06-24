@@ -403,7 +403,12 @@ class CmsMedia extends CmsBase
         if (function_exists('imagescale')) {
             $scaled = @imagescale($src, $targetW, $targetH);
             if ($scaled !== false) {
-                $this->_preserveAlpha($scaled);
+                // imagescale() already produced the resampled pixels; only
+                // enable alpha preservation on the result. Do NOT call
+                // _preserveAlpha() here — its flood-fill would erase the
+                // scaled content and yield a blank thumbnail.
+                @imagealphablending($scaled, false);
+                @imagesavealpha($scaled, true);
                 return $scaled;
             }
         }

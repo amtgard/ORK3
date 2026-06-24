@@ -39,6 +39,9 @@ $rows    = $hasRows ? array_slice($EventSummary, 0, $limit) : [];
                 <?php
                 $eventId    = (int)$row['EventId'];
                 $detailId   = (int)$row['NextDetailId'];
+                if ($eventId <= 0 || $detailId <= 0) {
+                    continue;
+                }
                 $rsvpGoing  = (int)($row['RsvpGoing'] ?? $row['RsvpCount'] ?? 0);
                 $name       = htmlspecialchars(stripslashes($row['Name'] ?? ''), ENT_QUOTES);
                 $kingdomName = htmlspecialchars(stripslashes($row['KingdomName'] ?? ''), ENT_QUOTES);
@@ -51,7 +54,7 @@ $rows    = $hasRows ? array_slice($EventSummary, 0, $limit) : [];
                     }
                 }
                 ?>
-                <a class="fd-card" href="<?= UIR ?>Event/detail/<?= $detailId ?>"
+                <a class="fd-card" href="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>"
                    style="text-decoration:none;color:inherit;display:block;">
                     <div style="height:8px;background:var(--gold);"></div>
                     <div style="padding:16px;">

@@ -233,7 +233,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var tagsInput  = document.getElementById('cmsTags');
     var savedHint  = document.getElementById('cmsSavedHint');
     var statusBadge = document.getElementById('cmsStatusBadge');
-    var slugTouched = (slugInput.value.trim() !== '');
+    var slugTouched = slugInput ? (slugInput.value.trim() !== '') : false;
 
     function slugify(s) {
         return String(s || '').toLowerCase()
@@ -355,6 +355,10 @@ include __DIR__ . '/cms/_shell_top.tpl';
         });
     }
 
+    // Declared up front so previewSlugSynced (called on first save of a new
+    // post) can reference it without hitting the var-hoisting undefined window.
+    var previewToggle = document.getElementById('cmsPreviewToggle');
+
     // After a new post gets its id, enable Publish + update URL.
     function postIdSynced() {
         var pub = document.getElementById('cmsPubBtn');
@@ -425,7 +429,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     }
 
     /* ================= in-context preview pane ================= */
-    var previewToggle = document.getElementById('cmsPreviewToggle');
+    previewToggle = document.getElementById('cmsPreviewToggle');
     var previewPane   = document.getElementById('cmsPreviewPane');
     var previewIframe = document.getElementById('cmsPreviewIframe');
     var previewWrap   = document.getElementById('cmsPreviewFrameWrap');

@@ -40,6 +40,7 @@ class Controller_Page extends Controller
         $page = ($slug !== '') ? $this->CmsPage->get_page_by_slug($slug, 'global', 0, true) : null;
 
         if (empty($page)) {
+            http_response_code(404);
             $this->data['Message']    = 'Page not found.';
             $this->data['page_title'] = 'Page not found';
             $this->data['FrontDoor']  = [];

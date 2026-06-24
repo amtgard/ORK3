@@ -82,19 +82,18 @@ class CmsSanitizer
 
         // Wrap in an explicit UTF-8 container so DOMDocument does not
         // mangle multibyte content, and so we have a known body root to
-        // extract. LIBXML flags prevent network access (no DTD/entity
-        // loading) and avoid auto-adding <html>/<body> wrappers we'd
-        // then have to special-case.
+        // extract.
         $wrapped = '<?xml encoding="UTF-8"?><div id="cms-sanitizer-root">' . $html . '</div>';
 
+        // LIBXML_NONET blocks network-fetched DTDs/entities. We deliberately
+        // do NOT set LIBXML_NOENT: that flag SUBSTITUTES entities at parse
+        // time, which on hostile input enables XXE / internal-entity
+        // expansion (e.g. an injected <!DOCTYPE> with a SYSTEM "file://"
+        // entity). loadHTML already decodes ordinary HTML character
+        // references (&#x6a; etc.) natively without it.
         $loadFlags = 0;
         if (defined('LIBXML_NONET')) {
             $loadFlags |= LIBXML_NONET;
-        }
-        if (defined('LIBXML_NOENT')) {
-            // Substitute entities so we operate on resolved text; output
-            // is re-encoded safely by DOMDocument::saveHTML().
-            $loadFlags |= LIBXML_NOENT;
         }
 
         $ok = $doc->loadHTML($wrapped, $loadFlags);
@@ -273,10 +272,18 @@ class CmsSanitizer
         // that ASCII-only stripping misses.
         $stripped = preg_replace('/[\pZ\pC]+/u', '', $url);
 
+        // preg_replace returns null on malformed UTF-8 (PREG_BAD_UTF8_ERROR);
+        // treating that as an empty/"safe" URL would let invalid-encoding
+        // payloads bypass the scheme checks below. Fail closed.
+        if ($stripped === null || preg_last_error() !== PREG_NO_ERROR) {
+            return false;
+        }
+
         $lower = strtolower($stripped);
 
         // Explicit deny of dangerous schemes (covers entity-decoded forms
-        // since LIBXML_NOENT already resolved &#x6a; etc into real chars).
+        // such as &#x6a;avascript: which the HTML parser resolves to real
+        // characters before this check runs).
         $deny = array('javascript:', 'data:', 'vbscript:', 'file:', 'about:', 'blob:');
         foreach ($deny as $bad) {
             if (strpos($lower, $bad) === 0) {

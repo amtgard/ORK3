@@ -29,6 +29,9 @@ class Controller_CmsAjax extends Controller
     /** Block field bodies that hold authored HTML → must be sanitized on save. */
     private static $HTML_FIELDS = array('body', 'html');
 
+    /** Block fields that hold a URL → must pass URL-scheme validation on save. */
+    private static $URL_FIELDS = array('href', 'more_href', 'url', 'link', 'cta_href', 'button_href');
+
     public function __construct($call = null, $action = null)
     {
         parent::__construct($call, $action);
@@ -682,6 +685,8 @@ class Controller_CmsAjax extends Controller
                 $fields[$key] = $this->_sanitizeFields($val);
             } elseif (is_string($val) && in_array($key, self::$HTML_FIELDS, true)) {
                 $fields[$key] = $this->CmsSanitizer->clean($val);
+            } elseif (is_string($val) && in_array($key, self::$URL_FIELDS, true)) {
+                $fields[$key] = CmsSanitizer::IsSafeUrl($val) ? $val : '#';
             }
         }
         return $fields;

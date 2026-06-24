@@ -79,6 +79,9 @@ html[data-theme="dark"] .bf-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45);
             <?php foreach ($bfPosts as $bfp): ?>
                 <?php
                 $bfSlug    = isset($bfp['slug']) ? (string) $bfp['slug'] : '';
+                if ($bfSlug === '') {
+                    continue;
+                }
                 $bfTitle   = htmlspecialchars((string) ($bfp['title'] ?? ''), ENT_QUOTES);
                 $bfExcerpt = htmlspecialchars((string) ($bfp['excerpt'] ?? ''), ENT_QUOTES);
                 $bfDate    = '';

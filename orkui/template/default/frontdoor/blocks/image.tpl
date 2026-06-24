@@ -48,12 +48,11 @@ if (is_string($fdbFocal) && $fdbFocal !== '') {
     }
 }
 
-// Link safety: only allow http(s) or relative (no javascript:, data:, etc.).
+// Link safety: defer to the authoritative URL checker (rejects javascript:,
+// data:, vbscript:, protocol-relative //host, etc.).
 $fdbHrefSafe = '';
-if (is_string($fdbHref) && $fdbHref !== '') {
-    if (preg_match('#^(https?:)?//#i', $fdbHref) || preg_match('#^[/?\#]#', $fdbHref)) {
-        $fdbHrefSafe = $fdbHref;
-    }
+if (is_string($fdbHref) && $fdbHref !== '' && CmsSanitizer::IsSafeUrl($fdbHref)) {
+    $fdbHrefSafe = $fdbHref;
 }
 ?>
 <style>

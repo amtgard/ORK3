@@ -414,7 +414,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     /* ---- Save ---- */
     var saveBtn = document.getElementById('cmsNavSave');
-    saveBtn.addEventListener('click', function () {
+    if (saveBtn) { saveBtn.addEventListener('click', function () {
         var type = fType.value;
         var params = {
             nav_id:    fId.value,
@@ -444,7 +444,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             // Reload to re-render the tree with resolved labels/targets.
             window.location.reload();
         }).catch(function () { saveBtn.disabled = false; toast('Network error.', 'error'); });
-    });
+    }); }
 
     /* ---- Card actions (edit / delete / add child / move) ---- */
     var confirmModal = document.getElementById('cmsConfirmModal');

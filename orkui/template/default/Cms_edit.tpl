@@ -227,6 +227,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var metaInput  = document.getElementById('cmsMeta');
     var savedHint  = document.getElementById('cmsSavedHint');
     var statusBadge = document.getElementById('cmsStatusBadge');
+    if (!slugInput) { return; }
     var slugTouched = (slugInput.value.trim() !== '');
 
     function slugify(s) {
@@ -321,6 +322,10 @@ include __DIR__ . '/cms/_shell_top.tpl';
         });
     }
 
+    // Declared up front so params_pageId_synced (called on first save of a new
+    // page) can reference it without hitting the var-hoisting undefined window.
+    var previewToggle = document.getElementById('cmsPreviewToggle');
+
     // After a new page gets its id, enable Preview/Publish and update URL.
     function params_pageId_synced() {
         var openLink = document.getElementById('cmsPreviewOpen');
@@ -389,7 +394,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     }
 
     /* ================= in-context preview pane ================= */
-    var previewToggle = document.getElementById('cmsPreviewToggle');
+    previewToggle = document.getElementById('cmsPreviewToggle');
     var previewPane   = document.getElementById('cmsPreviewPane');
     var previewIframe = document.getElementById('cmsPreviewIframe');
     var previewWrap   = document.getElementById('cmsPreviewFrameWrap');

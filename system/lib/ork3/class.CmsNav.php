@@ -326,15 +326,18 @@ class CmsNav extends CmsBase
             return false;
         }
 
-        // Wrap all per-item UPDATEs in one transaction: O(N) round-trips become
-        // one atomic, pipelined batch (typical menus: 5–20 items → negligible
-        // overhead, but the hot-path is the N×(Clear+prepare+execute) sequence
-        // which becomes a single server-side commit flush).
+        // Wrap the per-item UPDATEs in one transaction. These are N separate
+        // round-trips (one Clear+prepare+execute per item), NOT a single pipelined
+        // statement — the transaction only makes them atomic. Execute() returns
+        // void and the PDO driver runs in ERRMODE_WARNING (internal retry, never
+        // throws/aborts the transaction), so failure can't be seen from a return
+        // value. After the loop we read the rows back inside the transaction and
+        // verify each landed exactly as intended; COMMIT only on a full match.
         $DB->Clear();
         $DB->Execute('START TRANSACTION');
 
         $idx = 0;
-        $ok = true;
+        $intended = array();
         foreach ($orderedItems as $entry) {
             if (!is_array($entry) || !isset($entry['nav_id'])) {
                 $idx++;
@@ -365,7 +368,46 @@ class CmsNav extends CmsBase
                 . ' WHERE nav_id = :nav_id'
             );
 
+            // Record what we meant to write so we can verify it post-write.
+            $intended[$navId] = array('ordering' => $ordering, 'parent_id' => $parentId);
+
             $idx++;
+        }
+
+        // Verify the writes inside the transaction (this connection sees its own
+        // uncommitted changes). Read every intended row back in one IN() query and
+        // confirm ordering + parent_id match. A missing or mismatched row means an
+        // UPDATE was silently dropped → ROLLBACK instead of committing corruption.
+        $ok = true;
+        if (!empty($intended)) {
+            $navIds = array_keys($intended);
+            $DB->Clear();
+            $idList = implode(',', array_map('intval', $navIds));
+            $rows = $this->_eachRow($DB->DataSet(
+                'SELECT nav_id, ordering, parent_id FROM ' . DB_PREFIX . 'cms_nav_item'
+                . ' WHERE nav_id IN (' . $idList . ')'
+            ));
+
+            $seen = array();
+            foreach ($rows as $row) {
+                $rid = (int)$row['nav_id'];
+                $seen[$rid] = true;
+                $want = $intended[$rid];
+                // parent_id is a nullable column; intended value may be PHP null.
+                // Normalize both sides to "null OR int" before comparing so a NULL
+                // column never spuriously equals an int (and 0 is treated as null,
+                // matching how the intended value is derived above).
+                $actualParent = ($row['parent_id'] === null || $row['parent_id'] === '') ? null : (int)$row['parent_id'];
+                $wantParent = ($want['parent_id'] === null) ? null : (int)$want['parent_id'];
+                if ((int)$row['ordering'] !== (int)$want['ordering'] || $actualParent !== $wantParent) {
+                    $ok = false;
+                    break;
+                }
+            }
+            // Any intended row that didn't come back is a dropped write.
+            if ($ok && count($seen) !== count($intended)) {
+                $ok = false;
+            }
         }
 
         $DB->Clear();
@@ -469,7 +511,12 @@ class CmsNav extends CmsBase
 
             case 'url':
                 $url = isset($row['url']) ? trim((string)$row['url']) : '';
-                return ($url !== '') ? $url : '#';
+                // Reject javascript:/data:/protocol-relative etc. at render
+                // time so a stored hostile URL never reaches a visitor.
+                if ($url === '' || !CmsSanitizer::IsSafeUrl($url)) {
+                    return '#';
+                }
+                return $url;
 
             case 'dynamic':
                 // Stored url field is an internal route key (e.g. 'Directory/index').

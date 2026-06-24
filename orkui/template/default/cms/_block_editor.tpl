@@ -241,7 +241,7 @@ window.CmsBlockEditor = (function () {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             credentials: 'same-origin',
             body: body.toString()
-        }).then(function (r) { return r.json(); });
+        }).then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); });
     }
 
     function markDirty() {
@@ -1294,6 +1294,7 @@ window.CmsBlockEditor = (function () {
     var confirmAction = null;
 
     function confirmDialog(title, body, okLabel, fn) {
+        if (!confirmTitle || !confirmBody || !confirmOk) { return; }
         confirmTitle.textContent = title;
         confirmBody.textContent = body;
         confirmOk.textContent = okLabel || 'Delete';
@@ -1518,7 +1519,7 @@ window.CmsBlockEditor = (function () {
         // with '&' — a second '?' would corrupt the Route param (empties $_GET).
         var url = AJAX + 'medialist' + (q ? '&' + new URLSearchParams({ q: q }).toString() : '');
         fetch(url, { credentials: 'same-origin' })
-            .then(function (r) { return r.json(); })
+            .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
             .then(function (res) {
                 if (!res || !res.ok) { mediaGrid.innerHTML = '<div class="cms-media-empty">' + esc((res && res.error) || 'Could not load media.') + '</div>'; return; }
                 renderMediaList(res.media || []);
@@ -1550,18 +1551,26 @@ window.CmsBlockEditor = (function () {
         uploadDrop = document.getElementById('cmsUploadDrop');
         if (!mediaModal) { return; }
 
-        mediaSearchBtn.addEventListener('click', function () { loadMedia(mediaSearch.value.trim()); });
-        mediaSearch.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); loadMedia(mediaSearch.value.trim()); } });
-        uploadInput.addEventListener('change', function () { doUpload(uploadInput.files[0]); uploadInput.value = ''; });
-        ['dragenter', 'dragover'].forEach(function (ev) {
-            uploadDrop.addEventListener(ev, function (e) { e.preventDefault(); uploadDrop.classList.add('cms-drag-active'); });
-        });
-        ['dragleave', 'drop'].forEach(function (ev) {
-            uploadDrop.addEventListener(ev, function (e) { e.preventDefault(); uploadDrop.classList.remove('cms-drag-active'); });
-        });
-        uploadDrop.addEventListener('drop', function (e) {
-            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) { doUpload(e.dataTransfer.files[0]); }
-        });
+        if (mediaSearchBtn) {
+            mediaSearchBtn.addEventListener('click', function () { loadMedia(mediaSearch.value.trim()); });
+        }
+        if (mediaSearch) {
+            mediaSearch.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); loadMedia(mediaSearch.value.trim()); } });
+        }
+        if (uploadInput) {
+            uploadInput.addEventListener('change', function () { doUpload(uploadInput.files[0]); uploadInput.value = ''; });
+        }
+        if (uploadDrop) {
+            ['dragenter', 'dragover'].forEach(function (ev) {
+                uploadDrop.addEventListener(ev, function (e) { e.preventDefault(); uploadDrop.classList.add('cms-drag-active'); });
+            });
+            ['dragleave', 'drop'].forEach(function (ev) {
+                uploadDrop.addEventListener(ev, function (e) { e.preventDefault(); uploadDrop.classList.remove('cms-drag-active'); });
+            });
+            uploadDrop.addEventListener('drop', function (e) {
+                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) { doUpload(e.dataTransfer.files[0]); }
+            });
+        }
     }
 
     /* ================= pristine check (for preset reseeding) ================= */

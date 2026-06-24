@@ -363,15 +363,16 @@ include __DIR__ . '/cms/_shell_top.tpl';
             var pid = btn.getAttribute('data-page-id');
             var title = btn.getAttribute('data-title') || 'this page';
             askConfirm('Delete "' + title + '"? This removes the page and all of its blocks. This cannot be undone.', function () {
-                confirmOk.disabled = true;
+                var okBtn = confirmOk;
+                if (okBtn) { okBtn.disabled = true; }
                 post('deletepage', { page_id: pid }).then(function (res) {
-                    confirmOk.disabled = false;
+                    if (okBtn) { okBtn.disabled = false; }
                     closeModal(confirmModal);
                     if (!res || !res.ok) { toast((res && res.error) || 'Delete failed.', 'error'); return; }
                     var row = document.querySelector('tr[data-page-id="' + pid + '"]');
                     if (row && dt) { dt.row(row).remove().draw(false); } else if (row) { row.parentNode.removeChild(row); }
                     toast('Page deleted.', 'ok');
-                }).catch(function () { confirmOk.disabled = false; toast('Network error.', 'error'); });
+                }).catch(function () { if (okBtn) { okBtn.disabled = false; } toast('Network error.', 'error'); });
             });
         });
     });
