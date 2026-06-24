@@ -342,15 +342,48 @@ window.CmsBlockEditor = (function () {
     var tinyCounter = 0;
     function initTiny(textarea) {
         if (!tinyReady || !textarea) { return; }
+        var isDark = (document.documentElement.getAttribute('data-theme') === 'dark');
         tinymce.init({
             target: textarea,
             menubar: false,
-            statusbar: false,
-            height: 240,
-            plugins: 'lists link',
-            toolbar: 'undo redo | blocks | bold italic | bullist numlist | link blockquote | removeformat',
-            skin: (document.documentElement.getAttribute('data-theme') === 'dark') ? 'oxide-dark' : 'oxide',
-            content_css: (document.documentElement.getAttribute('data-theme') === 'dark') ? 'dark' : 'default',
+            statusbar: true,            // surfaces the word count + resize handle
+            // autoresize grows the editor with content instead of a fixed box.
+            min_height: 220,
+            max_height: 640,
+            autoresize_bottom_margin: 16,
+            plugins: 'lists link autolink autoresize wordcount fullscreen searchreplace charmap quickbars table image emoticons',
+            toolbar: 'undo redo | blocks | bold italic underline strikethrough subscript superscript | '
+                + 'bullist numlist | link image table blockquote hr | emoticons charmap | '
+                + 'removeformat | searchreplace fullscreen',
+            toolbar_mode: 'wrap',       // wrap tools onto multiple rows (vs. hiding behind "…")
+            // Only the headings the sanitizer keeps (h2–h4); H1/H5/H6/pre would be
+            // stripped on save, so don't offer them.
+            block_formats: 'Paragraph=p; Heading 2=h2; Heading 3=h3; Heading 4=h4',
+            // WYSIWYG truth: the sanitizer drops all inline styles, so forbid them
+            // in the editor too (no orphaned colour/size/alignment that won't save).
+            valid_styles: { '*': '' },
+            // Links: https default, title field, new-tab option (sanitizer hardens
+            // target=_blank → rel=noopener on save).
+            link_default_protocol: 'https',
+            link_title: true,
+            link_context_toolbar: true,
+            // Quick selection toolbar; suppress the empty-line insert toolbar.
+            quickbars_selection_toolbar: 'bold italic underline | quicklink blockquote',
+            quickbars_insert_toolbar: false,
+            // Tables author clean (the sanitizer strips border/style; CSS skins them).
+            table_toolbar: 'tableprops tabledelete | tableinsertrowbefore tableinsertrowafter tabledeleterow | '
+                + 'tableinsertcolbefore tableinsertcolafter tabledeletecol',
+            table_appearance_options: false,
+            // Inline images come from the CMS media library, not pasted data URIs.
+            paste_data_images: false,
+            file_picker_types: 'image',
+            file_picker_callback: function (cb) {
+                openMediaPicker(function (m) {
+                    if (m && m.src) { cb(m.src, { alt: m.alt || '' }); }
+                });
+            },
+            skin: isDark ? 'oxide-dark' : 'oxide',
+            content_css: isDark ? 'dark' : 'default',
             setup: function (ed) {
                 ed.on('change keyup input', function () {
                     ed.save();
@@ -1481,7 +1514,9 @@ window.CmsBlockEditor = (function () {
 
     function loadMedia(q) {
         mediaGrid.innerHTML = '<div class="cms-media-empty">Loading…</div>';
-        var url = AJAX + 'medialist?' + new URLSearchParams(q ? { q: q } : {}).toString();
+        // AJAX already ends in '...?Route=CmsAjax/', so the query must be joined
+        // with '&' — a second '?' would corrupt the Route param (empties $_GET).
+        var url = AJAX + 'medialist' + (q ? '&' + new URLSearchParams({ q: q }).toString() : '');
         fetch(url, { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (res) {

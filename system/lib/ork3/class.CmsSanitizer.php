@@ -33,8 +33,9 @@ class CmsSanitizer
      */
     private static $ALLOWED_TAGS = array(
         'p', 'br', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'a', 'strong',
-        'em', 'b', 'i', 'u', 'blockquote', 'hr', 'img', 'figure',
-        'figcaption', 'span', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        'em', 'b', 'i', 'u', 's', 'sub', 'sup', 'blockquote', 'hr', 'img',
+        'figure', 'figcaption', 'span', 'table', 'caption', 'colgroup',
+        'col', 'thead', 'tbody', 'tr', 'th', 'td',
     );
 
     /**
@@ -56,7 +57,9 @@ class CmsSanitizer
         'img' => array('src', 'alt', 'width', 'height'),
         'span' => array('class'),
         'td'  => array('colspan', 'rowspan'),
-        'th'  => array('colspan', 'rowspan'),
+        'th'  => array('colspan', 'rowspan', 'scope'),
+        'col' => array('span'),
+        'colgroup' => array('span'),
     );
 
     /**
