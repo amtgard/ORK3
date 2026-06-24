@@ -692,7 +692,8 @@
 												: '<span style="color:#a0aec0">—</span>' ?>
 										</td>
 										<td class="kn-col-nowrap">
-											<span class="kn-ci-pill"><i class="fas fa-calendar-day"></i> Calendar Item</span>
+											<?php $ciColor = $event['Color'] ?? '#64748b'; $ciColorText = $event['ColorText'] ?? '#fff'; ?>
+											<span class="kn-ci-pill" style="background:<?= htmlspecialchars($ciColor) ?>;border-color:<?= htmlspecialchars($ciColor) ?>;color:<?= htmlspecialchars($ciColorText) ?>"><i class="fas fa-calendar-day"></i> Calendar Item</span>
 											<?php if ($ciOff): ?><span class="kn-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span><?php endif; ?><?php if ($ciLoc): ?><span class="kn-locals-pill" data-tip="Locals-only — hidden from out-of-area players"><i class="fas fa-map-marker-alt"></i></span><?php endif; ?>
 											<?= htmlspecialchars($event['Name']) ?>
 										</td>
@@ -1338,6 +1339,20 @@ var KnBannerConfig = {
 						<label class="kn-emod-label">End <span style="color:#e53e3e">*</span></label>
 						<input type="text" class="kn-emod-input" id="kn-ci-end" autocomplete="off" placeholder="Select end…">
 					</div>
+				</div>
+				<div class="kn-emod-field" style="margin-top:10px">
+					<label class="kn-emod-label">Color</label>
+					<div class="ci-swatches" id="kn-ci-swatches">
+						<button type="button" class="ci-swatch" data-color="#64748b" style="background:#64748b" title="Slate"></button>
+						<button type="button" class="ci-swatch" data-color="#3b82f6" style="background:#3b82f6" title="Blue"></button>
+						<button type="button" class="ci-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="Purple"></button>
+						<button type="button" class="ci-swatch" data-color="#06b6d4" style="background:#06b6d4" title="Cyan"></button>
+						<button type="button" class="ci-swatch" data-color="#22a06b" style="background:#22a06b" title="Green"></button>
+						<button type="button" class="ci-swatch" data-color="#eab308" style="background:#eab308" title="Amber"></button>
+						<button type="button" class="ci-swatch" data-color="#f97316" style="background:#f97316" title="Orange"></button>
+						<button type="button" class="ci-swatch" data-color="#e11d48" style="background:#e11d48" title="Rose"></button>
+					</div>
+					<input type="hidden" id="kn-ci-color" value="#64748b">
 				</div>
 				<div class="kn-emod-field" style="margin-top:10px">
 					<label class="kn-emod-label">Description</label>

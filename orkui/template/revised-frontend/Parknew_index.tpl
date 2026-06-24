@@ -102,10 +102,12 @@
 		if (!$ev['NextDate'] || $ev['NextDate'] === '0000-00-00') continue;
 		if (!empty($ev['_IsCalendarItem'])) {
 			$allDay = !empty($ev['AllDay']);
+			$_ciColor = $ev['Color'] ?? '#64748b';
 			$calEv = [
 				'title'         => $ev['Name'],
 				'start'         => $allDay ? substr($ev['NextDate'], 0, 10) : $ev['NextDate'],
-				'color'         => '#64748b',
+				'color'         => $_ciColor,
+				'textColor'     => CalendarItem::TextColorFor($_ciColor),
 				'type'          => 'calendar-item',
 				'allDay'        => $allDay,
 				'extendedProps' => [
@@ -859,7 +861,8 @@
 								<?php $ciOff = !empty($event['IsOfficerOnly']); $ciLoc = !empty($event['IsLocalsOnly']); ?>
 								<tr class="<?= $ciOff ? 'pk-officer-only' : '' ?> <?= $ciLoc ? 'pk-locals-only' : '' ?>" data-type="calendar-item" onclick="pkShowCalendarItemOverlay(<?= (int)$event['CalendarItemId'] ?>)">
 									<td>
-										<span class="pk-ci-pill"><i class="fas fa-calendar-day"></i> Calendar Item</span>
+										<?php $ciColor = $event['Color'] ?? '#64748b'; $ciColorText = $event['ColorText'] ?? '#fff'; ?>
+										<span class="pk-ci-pill" style="background:<?= htmlspecialchars($ciColor) ?>;border-color:<?= htmlspecialchars($ciColor) ?>;color:<?= htmlspecialchars($ciColorText) ?>"><i class="fas fa-calendar-day"></i> Calendar Item</span>
 										<?php if ($ciOff): ?><span class="pk-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span><?php endif; ?><?php if ($ciLoc): ?><span class="pk-locals-pill" data-tip="Locals-only — hidden from out-of-area players"><i class="fas fa-map-marker-alt"></i></span><?php endif; ?>
 										<?= htmlspecialchars($event['Name']) ?>
 									</td>
@@ -2003,6 +2006,20 @@ var PkBannerConfig = {
 						<label class="pk-emod-label">End <span style="color:#e53e3e">*</span></label>
 						<input type="text" class="pk-emod-input" id="pk-ci-end" autocomplete="off" placeholder="Select end…">
 					</div>
+				</div>
+				<div class="pk-emod-field" style="margin-top:10px">
+					<label class="pk-emod-label">Color</label>
+					<div class="ci-swatches" id="pk-ci-swatches">
+						<button type="button" class="ci-swatch" data-color="#64748b" style="background:#64748b" title="Slate"></button>
+						<button type="button" class="ci-swatch" data-color="#3b82f6" style="background:#3b82f6" title="Blue"></button>
+						<button type="button" class="ci-swatch" data-color="#8b5cf6" style="background:#8b5cf6" title="Purple"></button>
+						<button type="button" class="ci-swatch" data-color="#06b6d4" style="background:#06b6d4" title="Cyan"></button>
+						<button type="button" class="ci-swatch" data-color="#22a06b" style="background:#22a06b" title="Green"></button>
+						<button type="button" class="ci-swatch" data-color="#eab308" style="background:#eab308" title="Amber"></button>
+						<button type="button" class="ci-swatch" data-color="#f97316" style="background:#f97316" title="Orange"></button>
+						<button type="button" class="ci-swatch" data-color="#e11d48" style="background:#e11d48" title="Rose"></button>
+					</div>
+					<input type="hidden" id="pk-ci-color" value="#64748b">
 				</div>
 				<div class="pk-emod-field" style="margin-top:10px">
 					<label class="pk-emod-label">Description</label>

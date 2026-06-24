@@ -3060,6 +3060,65 @@ html[data-theme="dark"] .kn-ac-item.kn-ac-suspended:hover, html[data-theme="dark
 	box-shadow: 0 20px 60px rgba(0,0,0,0.28);
 	overflow: hidden;
 }
+
+/* Shared in-app confirm dialog — themed drop-in replacement for window.confirm() */
+.ork-confirm-overlay {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: rgba(0,0,0,0.5);
+	z-index: 1200;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+}
+.ork-confirm-overlay.ork-confirm-open { display: flex; }
+.ork-confirm-box {
+	background: var(--ork-card-bg, #fff);
+	color: var(--ork-text, #2d3748);
+	border-radius: 10px;
+	width: 100%;
+	max-width: 420px;
+	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+	padding: 22px 22px 18px;
+}
+.ork-confirm-title {
+	font-size: 16px; font-weight: 700; margin-bottom: 8px;
+	color: var(--ork-text, #2d3748);
+}
+.ork-confirm-msg {
+	font-size: 14px; line-height: 1.5; margin-bottom: 20px;
+	color: var(--ork-text-secondary, #4a5568);
+}
+.ork-confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.ork-confirm-cancel {
+	background: var(--ork-border, #e2e8f0); color: var(--ork-text-secondary, #4a5568);
+	border: none; border-radius: 6px; padding: 9px 18px;
+	font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.ork-confirm-cancel:hover { filter: brightness(0.95); }
+.ork-confirm-ok {
+	background: #c53030; color: #fff;
+	border: none; border-radius: 6px; padding: 9px 18px;
+	font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.ork-confirm-ok:hover { background: #9b2c2c; }
+.ork-confirm-ok.ork-confirm-ok-neutral { background: var(--kn-accent, #276749); }
+.ork-confirm-ok.ork-confirm-ok-neutral:hover { background: #22543d; }
+
+/* Calendar-item color palette swatches (event modal) */
+.ci-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.ci-swatch {
+	width: 26px; height: 26px; border-radius: 50%; padding: 0;
+	border: 2px solid transparent; cursor: pointer;
+	box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12);
+	transition: transform 0.08s ease;
+}
+.ci-swatch:hover { transform: scale(1.12); }
+.ci-swatch.selected {
+	border-color: var(--ork-card-bg, #fff);
+	box-shadow: 0 0 0 2px var(--ork-text-muted, #718096);
+}
 .kn-ci-header, .pk-ci-header {
 	display: flex; align-items: center; justify-content: space-between;
 	padding: 16px 20px; border-bottom: 1px solid #e2e8f0; background: #f7fafc;

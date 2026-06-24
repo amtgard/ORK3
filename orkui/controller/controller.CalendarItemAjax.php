@@ -1,120 +1,131 @@
 <?php
 
-class Controller_CalendarItemAjax extends Controller {
+class Controller_CalendarItemAjax extends Controller
+{
+    private function requireLogin()
+    {
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+    }
 
-	private function requireLogin() {
-		if (!isset($this->session->user_id)) {
-			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
-			exit;
-		}
-	}
+    private function sendResult($r)
+    {
+        if (isset($r['Status']) && $r['Status'] == 0) {
+            echo json_encode(['status' => 0, 'id' => (int)($r['Detail'] ?? 0)]);
+        } else {
+            echo json_encode([
+                'status' => $r['Status'] ?? 1,
+                'error'  => ($r['Error'] ?? 'Error') . (isset($r['Detail']) ? ': ' . $r['Detail'] : ''),
+            ]);
+        }
+        exit;
+    }
 
-	private function sendResult($r) {
-		if (isset($r['Status']) && $r['Status'] == 0) {
-			echo json_encode(['status' => 0, 'id' => (int)($r['Detail'] ?? 0)]);
-		} else {
-			echo json_encode([
-				'status' => $r['Status'] ?? 1,
-				'error'  => ($r['Error'] ?? 'Error') . (isset($r['Detail']) ? ': ' . $r['Detail'] : ''),
-			]);
-		}
-		exit;
-	}
+    public function create($p = null)
+    {
+        header('Content-Type: application/json');
+        $this->requireLogin();
+        $this->load_model('CalendarItem');
 
-	public function create($p = null) {
-		header('Content-Type: application/json');
-		$this->requireLogin();
-		$this->load_model('CalendarItem');
+        $r = $this->CalendarItem->create_calendar_item(
+            $this->session->token,
+            (int)($_POST['KingdomId']   ?? 0),
+            (int)($_POST['ParkId']      ?? 0),
+            trim($_POST['Name']         ?? ''),
+            (string)($_POST['Description'] ?? ''),
+            !empty($_POST['AllDay']) ? 1 : 0,
+            (string)($_POST['EventStart']  ?? ''),
+            (string)($_POST['EventEnd']    ?? ''),
+            !empty($_POST['IsOfficerOnly']) ? 1 : 0,
+            !empty($_POST['IsLocalsOnly']) ? 1 : 0,
+            (string)($_POST['Color'] ?? '')
+        );
+        $this->sendResult($r);
+    }
 
-		$r = $this->CalendarItem->create_calendar_item(
-			$this->session->token,
-			(int)($_POST['KingdomId']   ?? 0),
-			(int)($_POST['ParkId']      ?? 0),
-			trim($_POST['Name']         ?? ''),
-			(string)($_POST['Description'] ?? ''),
-			!empty($_POST['AllDay']) ? 1 : 0,
-			(string)($_POST['EventStart']  ?? ''),
-			(string)($_POST['EventEnd']    ?? ''),
-			!empty($_POST['IsOfficerOnly']) ? 1 : 0,
-			!empty($_POST['IsLocalsOnly'])  ? 1 : 0
-		);
-		$this->sendResult($r);
-	}
+    public function update($p = null)
+    {
+        header('Content-Type: application/json');
+        $this->requireLogin();
+        $this->load_model('CalendarItem');
 
-	public function update($p = null) {
-		header('Content-Type: application/json');
-		$this->requireLogin();
-		$this->load_model('CalendarItem');
+        $id = (int)($_POST['CalendarItemId'] ?? 0);
+        $r  = $this->CalendarItem->update_calendar_item(
+            $this->session->token,
+            $id,
+            trim($_POST['Name']         ?? ''),
+            (string)($_POST['Description'] ?? ''),
+            !empty($_POST['AllDay']) ? 1 : 0,
+            (string)($_POST['EventStart']  ?? ''),
+            (string)($_POST['EventEnd']    ?? ''),
+            !empty($_POST['IsOfficerOnly']) ? 1 : 0,
+            !empty($_POST['IsLocalsOnly']) ? 1 : 0,
+            (string)($_POST['Color'] ?? '')
+        );
+        $this->sendResult($r);
+    }
 
-		$id = (int)($_POST['CalendarItemId'] ?? 0);
-		$r  = $this->CalendarItem->update_calendar_item(
-			$this->session->token,
-			$id,
-			trim($_POST['Name']         ?? ''),
-			(string)($_POST['Description'] ?? ''),
-			!empty($_POST['AllDay']) ? 1 : 0,
-			(string)($_POST['EventStart']  ?? ''),
-			(string)($_POST['EventEnd']    ?? ''),
-			!empty($_POST['IsOfficerOnly']) ? 1 : 0,
-			!empty($_POST['IsLocalsOnly'])  ? 1 : 0
-		);
-		$this->sendResult($r);
-	}
+    public function delete($p = null)
+    {
+        header('Content-Type: application/json');
+        $this->requireLogin();
+        $this->load_model('CalendarItem');
 
-	public function delete($p = null) {
-		header('Content-Type: application/json');
-		$this->requireLogin();
-		$this->load_model('CalendarItem');
+        $id = (int)($_POST['CalendarItemId'] ?? 0);
+        $r  = $this->CalendarItem->delete_calendar_item($this->session->token, $id);
+        $this->sendResult($r);
+    }
 
-		$id = (int)($_POST['CalendarItemId'] ?? 0);
-		$r  = $this->CalendarItem->delete_calendar_item($this->session->token, $id);
-		$this->sendResult($r);
-	}
+    public function get($p = null)
+    {
+        header('Content-Type: application/json');
+        $this->load_model('CalendarItem');
+        $id = (int)preg_replace('/[^0-9]/', '', $p ?? '');
+        if (!$id && isset($_GET['id'])) {
+            $id = (int)$_GET['id'];
+        }
 
-	public function get($p = null) {
-		header('Content-Type: application/json');
-		$this->load_model('CalendarItem');
-		$id = (int)preg_replace('/[^0-9]/', '', $p ?? '');
-		if (!$id && isset($_GET['id'])) $id = (int)$_GET['id'];
+        $r = $this->CalendarItem->get_calendar_item($id);
+        if (!isset($r['Status']) || $r['Status']['Status'] != 0) {
+            echo json_encode(['status' => 1, 'error' => 'Not found']);
+            exit;
+        }
 
-		$r = $this->CalendarItem->get_calendar_item($id);
-		if (!isset($r['Status']) || $r['Status']['Status'] != 0) {
-			echo json_encode(['status' => 1, 'error' => 'Not found']);
-			exit;
-		}
+        $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
-		$uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        // Visibility gate: officer-only AND/OR locals-only flags must each pass.
+        if (!CalendarItem::CanSee($uid, (int)$r['KingdomId'], (int)$r['ParkId'], (int)$r['IsOfficerOnly'], (int)$r['IsLocalsOnly'])) {
+            echo json_encode(['status' => 5, 'error' => 'Not authorized']);
+            exit;
+        }
 
-		// Visibility gate: officer-only AND/OR locals-only flags must each pass.
-		if (!CalendarItem::CanSee($uid, (int)$r['KingdomId'], (int)$r['ParkId'], (int)$r['IsOfficerOnly'], (int)$r['IsLocalsOnly'])) {
-			echo json_encode(['status' => 5, 'error' => 'Not authorized']);
-			exit;
-		}
+        // Determine edit permission for the caller (same check the class uses).
+        $canEdit = false;
+        if ($uid > 0) {
+            if ((int)$r['ParkId'] > 0) {
+                $canEdit = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$r['ParkId'], AUTH_CREATE);
+            } elseif ((int)$r['KingdomId'] > 0) {
+                $canEdit = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$r['KingdomId'], AUTH_CREATE);
+            }
+        }
 
-		// Determine edit permission for the caller (same check the class uses).
-		$canEdit = false;
-		if ($uid > 0) {
-			if ((int)$r['ParkId'] > 0) {
-				$canEdit = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$r['ParkId'], AUTH_CREATE);
-			} elseif ((int)$r['KingdomId'] > 0) {
-				$canEdit = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$r['KingdomId'], AUTH_CREATE);
-			}
-		}
-
-		echo json_encode([
-			'status'         => 0,
-			'CalendarItemId' => (int)$r['CalendarItemId'],
-			'KingdomId'      => (int)$r['KingdomId'],
-			'ParkId'         => (int)$r['ParkId'],
-			'Name'           => $r['Name'],
-			'Description'    => $r['Description'],
-			'AllDay'         => (int)$r['AllDay'],
-			'EventStart'     => $r['EventStart'],
-			'EventEnd'       => $r['EventEnd'],
-			'IsOfficerOnly'  => (int)$r['IsOfficerOnly'],
-			'IsLocalsOnly'   => (int)$r['IsLocalsOnly'],
-			'CanEdit'        => $canEdit,
-		]);
-		exit;
-	}
+        echo json_encode([
+            'status'         => 0,
+            'CalendarItemId' => (int)$r['CalendarItemId'],
+            'KingdomId'      => (int)$r['KingdomId'],
+            'ParkId'         => (int)$r['ParkId'],
+            'Name'           => $r['Name'],
+            'Description'    => $r['Description'],
+            'AllDay'         => (int)$r['AllDay'],
+            'EventStart'     => $r['EventStart'],
+            'EventEnd'       => $r['EventEnd'],
+            'IsOfficerOnly'  => (int)$r['IsOfficerOnly'],
+            'IsLocalsOnly'   => (int)$r['IsLocalsOnly'],
+            'Color'          => $r['Color'] ?? '#64748b',
+            'CanEdit'        => $canEdit,
+        ]);
+        exit;
+    }
 }

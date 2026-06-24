@@ -881,7 +881,7 @@ class Controller_KingdomAjax extends Controller
         $ciSql = "
 			SELECT ci.calendar_item_id, ci.name, ci.description, ci.all_day,
 			       ci.event_start, ci.event_end, ci.park_id, ci.kingdom_id,
-			       ci.is_officer_only, ci.is_locals_only,
+			       ci.is_officer_only, ci.is_locals_only, ci.color,
 			       p.abbreviation AS park_abbr
 			FROM " . DB_PREFIX . "calendar_item ci
 			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = ci.park_id
@@ -904,7 +904,8 @@ class Controller_KingdomAjax extends Controller
                 $ev = [
                     'title'         => $abbr . $ciResult->name,
                     'start'         => $allDay ? substr($ciResult->event_start, 0, 10) : $ciResult->event_start,
-                    'color'         => '#64748b',
+                    'color'         => $ciResult->color ?: '#64748b',
+                    'textColor'     => CalendarItem::TextColorFor($ciResult->color ?: '#64748b'),
                     'type'          => 'calendar-item',
                     'allDay'        => $allDay,
                     'extendedProps' => [

@@ -190,7 +190,7 @@ class Controller_Park extends Controller
         // Merge calendar items (park-scoped AND parent-kingdom-scoped) into the list.
         $kidForPark = (int)$this->session->kingdom_id;
         $ciSql = "
-			SELECT ci.calendar_item_id, ci.name, ci.description, ci.all_day, ci.is_officer_only, ci.is_locals_only,
+			SELECT ci.calendar_item_id, ci.name, ci.description, ci.all_day, ci.is_officer_only, ci.is_locals_only, ci.color,
 			       ci.event_start, ci.event_end, ci.park_id, ci.kingdom_id,
 			       p.name AS park_name, p.abbreviation AS park_abbr
 			FROM " . DB_PREFIX . "calendar_item ci
@@ -218,6 +218,8 @@ class Controller_Park extends Controller
                 'Description'    => $ciResult->description,
                 'IsOfficerOnly'  => $ci_isOfficerOnly,
                 'IsLocalsOnly'   => $ci_isLocalsOnly,
+                'Color'          => $ciResult->color ?: '#64748b',
+                'ColorText'      => CalendarItem::TextColorFor($ciResult->color ?: '#64748b'),
                 '_IsCalendarItem' => true,
                 '_IsKingdomLevel' => (int)$ciResult->park_id === 0,
             ];

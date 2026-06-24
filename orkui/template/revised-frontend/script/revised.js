@@ -2882,6 +2882,67 @@ function knPaginate($table, page) {
     $pg.html(html);
 }
 
+// Readable text color (dark/white) for a #rrggbb background — mirrors
+// CalendarItem::TextColorFor() so client-inserted rows match the server.
+function orkCiTextColor(hex) {
+    hex = String(hex || '').replace('#', '');
+    if (hex.length !== 6) return '#ffffff';
+    var r = parseInt(hex.substr(0, 2), 16), g = parseInt(hex.substr(2, 2), 16), b = parseInt(hex.substr(4, 2), 16);
+    return ((0.299 * r + 0.587 * g + 0.114 * b) / 255) > 0.6 ? '#1a202c' : '#ffffff';
+}
+
+// ---- Shared themed confirmation dialog (drop-in for window.confirm) ----
+// orkConfirm(message, onConfirm, { title, okLabel, danger }). danger defaults to true
+// (red OK button) since the current callers are destructive actions.
+window.orkConfirm = function(message, onConfirm, opts) {
+    opts = opts || {};
+    var overlay = document.getElementById('ork-confirm-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'ork-confirm-overlay';
+        overlay.className = 'ork-confirm-overlay';
+        overlay.innerHTML =
+            '<div class="ork-confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="ork-confirm-title" aria-describedby="ork-confirm-msg">' +
+                '<div class="ork-confirm-title" id="ork-confirm-title"></div>' +
+                '<div class="ork-confirm-msg" id="ork-confirm-msg"></div>' +
+                '<div class="ork-confirm-actions">' +
+                    '<button type="button" class="ork-confirm-cancel" id="ork-confirm-cancel">Cancel</button>' +
+                    '<button type="button" class="ork-confirm-ok" id="ork-confirm-ok">OK</button>' +
+                '</div>' +
+            '</div>';
+        document.body.appendChild(overlay);
+    }
+    var titleEl   = overlay.querySelector('#ork-confirm-title');
+    var msgEl     = overlay.querySelector('#ork-confirm-msg');
+    var okBtn     = overlay.querySelector('#ork-confirm-ok');
+    var cancelBtn = overlay.querySelector('#ork-confirm-cancel');
+
+    titleEl.textContent = opts.title || 'Please confirm';
+    titleEl.style.display = (opts.title === '') ? 'none' : '';
+    msgEl.textContent = message || '';
+    okBtn.textContent = opts.okLabel || 'OK';
+    okBtn.className = 'ork-confirm-ok' + (opts.danger === false ? ' ork-confirm-ok-neutral' : '');
+
+    function cleanup() {
+        overlay.classList.remove('ork-confirm-open');
+        document.body.style.overflow = '';
+        okBtn.onclick = null; cancelBtn.onclick = null; overlay.onclick = null;
+        document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) {
+        if (e.key === 'Escape') cleanup();
+        else if (e.key === 'Enter') { cleanup(); if (typeof onConfirm === 'function') onConfirm(); }
+    }
+    okBtn.onclick     = function() { cleanup(); if (typeof onConfirm === 'function') onConfirm(); };
+    cancelBtn.onclick = function() { cleanup(); };
+    overlay.onclick   = function(e) { if (e.target === overlay) cleanup(); };
+    document.addEventListener('keydown', onKey);
+
+    overlay.classList.add('ork-confirm-open');
+    document.body.style.overflow = 'hidden';
+    setTimeout(function() { okBtn.focus(); }, 30);
+};
+
 function knSortDesc($table, colIndex, sortType) {
     if (!$table.length) return;
     $table.find('thead th').removeClass('sort-asc sort-desc');
@@ -3854,7 +3915,19 @@ $(document).ready(function() {
         document.getElementById('kn-ci-allday').checked = false;
         var off = document.getElementById('kn-ci-officer-only'); if (off) off.checked = false;
         var loc = document.getElementById('kn-ci-locals-only');  if (loc) loc.checked = false;
+        knCiSetColor('#64748b');
         knCiRebuildPickers(presetDate || '', '', false);
+    }
+
+    // Select a palette swatch and stash the chosen hex in the hidden input.
+    function knCiSetColor(color) {
+        var input = document.getElementById('kn-ci-color');
+        if (input) input.value = color || '#64748b';
+        var box = document.getElementById('kn-ci-swatches');
+        if (!box) return;
+        box.querySelectorAll('.ci-swatch').forEach(function(b) {
+            b.classList.toggle('selected', b.getAttribute('data-color') === (color || '#64748b'));
+        });
     }
 
     function knCiRebuildPickers(startVal, endVal, allDay) {
@@ -3974,6 +4047,87 @@ $(document).ready(function() {
         ).fail(function() { knEvFeedback('Request failed. Please try again.'); btn.disabled = false; if (dbtn) dbtn.disabled = false; });
     };
 
+    // Reload while preserving the Events tab (reuses the ?tab= auto-activation on load).
+    function knReloadToEventsTab() {
+        try {
+            var u = new URL(window.location.href);
+            u.searchParams.set('tab', 'events');
+            window.location.href = u.toString();
+        } catch (e) {
+            window.location.reload();
+        }
+    }
+
+    function knCiEsc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function knBumpEventsTabCount(delta) {
+        var cnt = document.querySelector('.kn-tab-nav li[data-kntab="events"] .kn-tab-count');
+        if (!cnt) return;
+        var m = cnt.textContent.match(/\d+/);
+        var n = (m ? parseInt(m[0], 10) : 0) + delta;
+        cnt.textContent = '(' + (n < 0 ? 0 : n) + ')';
+    }
+
+    // Insert a freshly-created calendar item into the list view in place (no page reload),
+    // mirroring the server-rendered row markup so rapid entry never bounces off the tab.
+    // Build the 4 <td> cells for a kingdom calendar-item row (shared by insert + edit).
+    function knCiRowCellsHtml(name, parkName, startVal, officerOnly, localsOnly, color) {
+        var dateCell = '<span style="color:#a0aec0">—</span>';
+        var sd = String(startVal || '').substring(0, 10);
+        if (sd && sd !== '0000-00-00') {
+            var d = new Date(sd + 'T00:00:00');
+            if (!isNaN(d.getTime())) dateCell = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+        var offPill = officerOnly ? ' <span class="kn-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span>' : '';
+        var locPill = localsOnly ? ' <span class="kn-locals-pill" data-tip="Locals-only — hidden from out-of-area players"><i class="fas fa-map-marker-alt"></i></span>' : '';
+        color = color || '#64748b';
+        var pillStyle = ' style="background:' + color + ';border-color:' + color + ';color:' + orkCiTextColor(color) + '"';
+        return '<td class="kn-col-nowrap">' + dateCell + '</td>' +
+            '<td class="kn-col-nowrap"><span class="kn-ci-pill"' + pillStyle + '><i class="fas fa-calendar-day"></i> Calendar Item</span>' + offPill + locPill + ' ' + knCiEsc(name) + '</td>' +
+            '<td>' + knCiEsc(parkName) + '</td>' +
+            '<td colspan="2" style="text-align:right;color:#a0aec0;padding-right:8px;">—</td>';
+    }
+
+    function knInsertCalendarItemRow(id, name, parkName, startVal, officerOnly, localsOnly, color) {
+        var table = document.getElementById('kn-events-table');
+        if (!table) return;
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        if (table.style.display === 'none') table.style.display = '';
+        var empty = document.getElementById('kn-events-empty');
+        if (empty) empty.style.display = 'none';
+
+        var tr = document.createElement('tr');
+        tr.className = 'kn-row-link' + (officerOnly ? ' kn-officer-only' : '') + (localsOnly ? ' kn-locals-only' : '');
+        tr.setAttribute('data-type', 'calendar-item');
+        tr.setAttribute('onclick', 'knShowCalendarItemOverlay(' + id + ')');
+        tr.innerHTML = knCiRowCellsHtml(name, parkName, startVal, officerOnly, localsOnly, color);
+
+        // Honor the active "Calendar Items" filter toggle.
+        if (typeof knFilters !== 'undefined' && knFilters['calendar-item'] === false) tr.style.display = 'none';
+
+        tbody.insertBefore(tr, tbody.firstChild);
+        knBumpEventsTabCount(1);
+        if (window.jQuery) knPaginate(jQuery('#kn-events-table'), 1);
+    }
+
+    // Update an existing kingdom calendar-item row in place. Returns false if the row
+    // isn't present (e.g. it was filtered out of the rendered window) so the caller can reload.
+    function knUpdateCalendarItemRow(id, name, parkName, startVal, officerOnly, localsOnly, color) {
+        var row = document.querySelector('#kn-events-table tr[onclick="knShowCalendarItemOverlay(' + id + ')"]');
+        if (!row) return false;
+        // The edit form clears the park-name field, so when it's blank keep whatever the
+        // row already shows (park unchanged) rather than wiping it.
+        if (!parkName && row.children[2]) parkName = row.children[2].textContent.trim();
+        row.className = 'kn-row-link' + (officerOnly ? ' kn-officer-only' : '') + (localsOnly ? ' kn-locals-only' : '');
+        row.innerHTML = knCiRowCellsHtml(name, parkName, startVal, officerOnly, localsOnly, color);
+        if (typeof knFilters !== 'undefined' && knFilters['calendar-item'] === false) row.style.display = 'none';
+        return true;
+    }
+
     function knSubmitCalendarItem() {
         var name    = document.getElementById('kn-event-name').value.trim();
         var allDay  = document.getElementById('kn-ci-allday').checked ? 1 : 0;
@@ -3988,23 +4142,41 @@ $(document).ready(function() {
 
         var officerOnly = document.getElementById('kn-ci-officer-only');
         var localsOnly  = document.getElementById('kn-ci-locals-only');
+        var colorEl     = document.getElementById('kn-ci-color');
+        var color       = (colorEl && colorEl.value) || '#64748b';
         var payload = {
             Name: name, Description: desc, AllDay: allDay,
             EventStart: start, EventEnd: end,
             KingdomId: KnConfig.kingdomId, ParkId: parkId,
             IsOfficerOnly: (officerOnly && officerOnly.checked) ? 1 : 0,
-            IsLocalsOnly:  (localsOnly  && localsOnly.checked)  ? 1 : 0
+            IsLocalsOnly:  (localsOnly  && localsOnly.checked)  ? 1 : 0,
+            Color: color
         };
         var url = CI_CREATE_URL;
-        if (knCiEditingId > 0) { payload.CalendarItemId = knCiEditingId; url = CI_UPDATE_URL; }
+        var wasEditing = (knCiEditingId > 0);
+        if (wasEditing) { payload.CalendarItemId = knCiEditingId; url = CI_UPDATE_URL; }
 
         $.post(url, payload, function(r) {
             if (r && r.status === 0) {
                 knCloseEventModal();
                 knCalCache = {}; // bust cached raw events so the new item appears
                 if (knCalendar) knCalendar.refetchEvents();
-                // List view rows are rendered server-side; reload so they appear in the list.
-                setTimeout(function() { window.location.reload(); }, 150);
+                var parkName = document.getElementById('kn-ci-park-name').value || '';
+                if (wasEditing) {
+                    // Update the existing row in place; the calendar grid already refreshed
+                    // via refetchEvents above. Reload only if the row isn't in the DOM.
+                    if (!knUpdateCalendarItemRow(payload.CalendarItemId, name, parkName, start,
+                            payload.IsOfficerOnly == 1, payload.IsLocalsOnly == 1, color)) {
+                        knReloadToEventsTab();
+                    }
+                } else {
+                    // New item: insert the list row in place so repeated entry never reloads
+                    // and never bounces back to the default tab.
+                    knInsertCalendarItemRow(
+                        parseInt(r.id) || 0, name, parkName,
+                        start, payload.IsOfficerOnly == 1, payload.IsLocalsOnly == 1, color
+                    );
+                }
             } else {
                 knEvFeedback((r && r.error) ? r.error : 'Failed to save calendar item.');
                 btn.disabled = false;
@@ -4080,6 +4252,7 @@ $(document).ready(function() {
         document.getElementById('kn-emod-date-row').style.display = 'none';
         var sVal = (knCiCurrent.AllDay == 1) ? knCiCurrent.EventStart.substring(0, 10) : knCiCurrent.EventStart.replace(' ', 'T').substring(0, 16).replace('T', ' ');
         var eVal = (knCiCurrent.AllDay == 1) ? knCiCurrent.EventEnd.substring(0, 10)   : knCiCurrent.EventEnd.replace(' ', 'T').substring(0, 16).replace('T', ' ');
+        knCiSetColor(knCiCurrent.Color || '#64748b');
         knCiRebuildPickers(sVal, eVal, (knCiCurrent.AllDay == 1));
         knApplyModalType();
         modal.classList.add('kn-emod-open');
@@ -4088,19 +4261,38 @@ $(document).ready(function() {
 
     window.knDeleteCalendarItem = function() {
         if (!knCiCurrent) return;
-        if (!confirm('Delete this calendar item? This cannot be undone.')) return;
-        $.post(CI_DELETE_URL, { CalendarItemId: knCiCurrent.CalendarItemId }, function(r) {
-            if (r && r.status === 0) {
-                knCloseCalendarItemOverlay();
-                window.location.reload();
-            } else {
-                alert((r && r.error) || 'Failed to delete calendar item.');
-            }
-        }, 'json').fail(function() { alert('Request failed.'); });
+        var delId = knCiCurrent.CalendarItemId;
+        orkConfirm('Delete this calendar item? This cannot be undone.', function() {
+            $.post(CI_DELETE_URL, { CalendarItemId: delId }, function(r) {
+                if (r && r.status === 0) {
+                    knCloseCalendarItemOverlay();
+                    knCalCache = {}; // bust cached raw events so the calendar drops it
+                    if (knCalendar) knCalendar.refetchEvents();
+                    // Remove the list row in place; fall back to a tab-preserving reload if not found.
+                    var row = document.querySelector('#kn-events-table tr[onclick="knShowCalendarItemOverlay(' + delId + ')"]');
+                    if (row) {
+                        row.parentNode.removeChild(row);
+                        knBumpEventsTabCount(-1);
+                        var tbody = document.querySelector('#kn-events-table tbody');
+                        if (tbody && tbody.children.length === 0) {
+                            document.getElementById('kn-events-table').style.display = 'none';
+                            var empty = document.getElementById('kn-events-empty');
+                            if (empty) empty.style.display = '';
+                        }
+                        if (window.jQuery) knPaginate(jQuery('#kn-events-table'), 1);
+                    } else {
+                        knReloadToEventsTab();
+                    }
+                } else {
+                    alert((r && r.error) || 'Failed to delete calendar item.');
+                }
+            }, 'json').fail(function() { alert('Request failed.'); });
+        }, { title: 'Delete calendar item', okLabel: 'Delete', danger: true });
     };
 
     $(document).ready(function() {
         $('#kn-event-name, #kn-ci-start, #kn-ci-end').on('input change', function() { knUpdateGoBtn(); });
+        $('#kn-ci-swatches').on('click', '.ci-swatch', function() { knCiSetColor(this.getAttribute('data-color')); });
         $('#kn-event-name').on('keydown', function(e) {
             if (e.key === 'Enter' && !document.getElementById('kn-emod-go-btn').disabled) knCreateEvent();
         });
@@ -7378,7 +7570,19 @@ $(document).ready(function() {
         document.getElementById('pk-ci-allday').checked = false;
         var off = document.getElementById('pk-ci-officer-only'); if (off) off.checked = false;
         var loc = document.getElementById('pk-ci-locals-only');  if (loc) loc.checked = false;
+        pkCiSetColor('#64748b');
         pkCiRebuildPickers(presetDate || '', '', false);
+    }
+
+    // Select a palette swatch and stash the chosen hex in the hidden input.
+    function pkCiSetColor(color) {
+        var input = document.getElementById('pk-ci-color');
+        if (input) input.value = color || '#64748b';
+        var box = document.getElementById('pk-ci-swatches');
+        if (!box) return;
+        box.querySelectorAll('.ci-swatch').forEach(function(b) {
+            b.classList.toggle('selected', b.getAttribute('data-color') === (color || '#64748b'));
+        });
     }
 
     function pkGetModalType() {
@@ -7469,6 +7673,116 @@ $(document).ready(function() {
         ).fail(function() { pkEvFeedback('Request failed. Please try again.'); btn.disabled = false; if (dbtn) dbtn.disabled = false; });
     };
 
+    // Reload while preserving the Events tab (reuses the ?tab= auto-activation on load).
+    function pkReloadToEventsTab() {
+        try {
+            var u = new URL(window.location.href);
+            u.searchParams.set('tab', 'events');
+            window.location.href = u.toString();
+        } catch (e) {
+            window.location.reload();
+        }
+    }
+
+    function pkCiEsc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function pkBumpEventsTabCount(delta) {
+        var cnt = document.querySelector('.pk-tab-nav li[data-pktab="events"] .pk-tab-count');
+        if (!cnt) return;
+        var m = cnt.textContent.match(/\d+/);
+        var n = (m ? parseInt(m[0], 10) : 0) + delta;
+        cnt.textContent = '(' + (n < 0 ? 0 : n) + ')';
+    }
+
+    function pkPad2(n) { return String(n).length < 2 ? '0' + n : String(n); }
+
+    // Keep the static calendar-grid array in sync (the Park grid reads pkCalEvents directly,
+    // so unlike the Kingdom page there is no server re-fetch to lean on).
+    function pkGridAddCalendarItem(id, name, startVal, endVal, allDay, color) {
+        if (typeof pkCalEvents === 'undefined' || !pkCalEvents) return;
+        color = color || '#64748b';
+        var sIso = allDay ? String(startVal).substring(0, 10) : String(startVal).replace(' ', 'T');
+        var eIso;
+        if (allDay) {
+            var ed = new Date(String(endVal).substring(0, 10) + 'T00:00:00');
+            if (!isNaN(ed.getTime())) { ed.setDate(ed.getDate() + 1); eIso = ed.getFullYear() + '-' + pkPad2(ed.getMonth() + 1) + '-' + pkPad2(ed.getDate()); }
+        } else {
+            eIso = String(endVal).replace(' ', 'T');
+        }
+        var ev = { title: name, start: sIso, color: color, textColor: orkCiTextColor(color), type: 'calendar-item', allDay: !!allDay, extendedProps: { calendarItemId: id } };
+        if (eIso) ev.end = eIso;
+        pkCalEvents.push(ev);
+        if (pkCalendar) pkCalendar.refetchEvents();
+    }
+
+    function pkGridRemoveCalendarItem(id) {
+        if (typeof pkCalEvents === 'undefined' || !pkCalEvents) return;
+        for (var i = pkCalEvents.length - 1; i >= 0; i--) {
+            var xp = pkCalEvents[i] && pkCalEvents[i].extendedProps;
+            if (xp && String(xp.calendarItemId) === String(id)) pkCalEvents.splice(i, 1);
+        }
+        if (pkCalendar) pkCalendar.refetchEvents();
+    }
+
+    // Insert a new calendar item into the Park events list in place (no reload). Returns false
+    // if the list is currently empty (no table rendered) so the caller can fall back to a reload.
+    function pkCiClassName(officerOnly, localsOnly) {
+        var cls = [];
+        if (officerOnly) cls.push('pk-officer-only');
+        if (localsOnly)  cls.push('pk-locals-only');
+        return cls.join(' ');
+    }
+
+    // Build the cells for a park calendar-item row (shared by insert + edit).
+    function pkCiRowCellsHtml(name, startVal, officerOnly, localsOnly, color) {
+        var sd = String(startVal || '').substring(0, 10);
+        var dateTxt = '';
+        if (sd && sd !== '0000-00-00') {
+            var d = new Date(sd + 'T00:00:00');
+            if (!isNaN(d.getTime())) dateTxt = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+        var offPill = officerOnly ? ' <span class="pk-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span>' : '';
+        var locPill = localsOnly ? ' <span class="pk-locals-pill" data-tip="Locals-only — hidden from out-of-area players"><i class="fas fa-map-marker-alt"></i></span>' : '';
+        color = color || '#64748b';
+        var pillStyle = ' style="background:' + color + ';border-color:' + color + ';color:' + orkCiTextColor(color) + '"';
+        return '<td><span class="pk-ci-pill"' + pillStyle + '><i class="fas fa-calendar-day"></i> Calendar Item</span>' + offPill + locPill + ' ' + pkCiEsc(name) + '</td>' +
+            '<td class="pk-date-col" data-sortval="' + pkCiEsc(sd) + '">' + dateTxt + '</td>' +
+            '<td class="pk-date-col" colspan="2" style="text-align:right;color:#a0aec0;padding-right:8px;">—</td>';
+    }
+
+    function pkInsertCalendarItemRow(id, name, startVal, officerOnly, localsOnly, color) {
+        var table = document.getElementById('pk-events-table');
+        if (!table) return false;
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return false;
+
+        var tr = document.createElement('tr');
+        tr.className = pkCiClassName(officerOnly, localsOnly);
+        tr.setAttribute('data-type', 'calendar-item');
+        tr.setAttribute('onclick', 'pkShowCalendarItemOverlay(' + id + ')');
+        tr.innerHTML = pkCiRowCellsHtml(name, startVal, officerOnly, localsOnly, color);
+
+        if (typeof pkFilters !== 'undefined' && pkFilters['calendar-item'] === false) tr.style.display = 'none';
+
+        tbody.insertBefore(tr, tbody.firstChild);
+        pkBumpEventsTabCount(1);
+        if (window.jQuery) pkPaginate(jQuery('#pk-events-table'), 1);
+        return true;
+    }
+
+    // Update an existing park calendar-item row in place. Returns false if not found.
+    function pkUpdateCalendarItemRow(id, name, startVal, officerOnly, localsOnly, color) {
+        var row = document.querySelector('#pk-events-table tr[onclick="pkShowCalendarItemOverlay(' + id + ')"]');
+        if (!row) return false;
+        row.className = pkCiClassName(officerOnly, localsOnly);
+        row.innerHTML = pkCiRowCellsHtml(name, startVal, officerOnly, localsOnly, color);
+        if (typeof pkFilters !== 'undefined' && pkFilters['calendar-item'] === false) row.style.display = 'none';
+        return true;
+    }
+
     function pkSubmitCalendarItem() {
         var name   = document.getElementById('pk-event-name').value.trim();
         var allDay = document.getElementById('pk-ci-allday').checked ? 1 : 0;
@@ -7482,20 +7796,39 @@ $(document).ready(function() {
 
         var officerOnly = document.getElementById('pk-ci-officer-only');
         var localsOnly  = document.getElementById('pk-ci-locals-only');
+        var colorEl     = document.getElementById('pk-ci-color');
+        var color       = (colorEl && colorEl.value) || '#64748b';
         var payload = {
             Name: name, Description: desc, AllDay: allDay,
             EventStart: start, EventEnd: end,
             KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId,
             IsOfficerOnly: (officerOnly && officerOnly.checked) ? 1 : 0,
-            IsLocalsOnly:  (localsOnly  && localsOnly.checked)  ? 1 : 0
+            IsLocalsOnly:  (localsOnly  && localsOnly.checked)  ? 1 : 0,
+            Color: color
         };
         var url = CI_CREATE_URL;
-        if (pkCiEditingId > 0) { payload.CalendarItemId = pkCiEditingId; url = CI_UPDATE_URL; }
+        var wasEditing = (pkCiEditingId > 0);
+        if (wasEditing) { payload.CalendarItemId = pkCiEditingId; url = CI_UPDATE_URL; }
 
         $.post(url, payload, function(r) {
             if (r && r.status === 0) {
                 pkCloseEventModal();
-                setTimeout(function() { window.location.reload(); }, 150);
+                if (wasEditing) {
+                    // Replace the grid entry (remove old, add updated) and update the list row
+                    // in place. Reload only if the row isn't present in the DOM.
+                    pkGridRemoveCalendarItem(payload.CalendarItemId);
+                    pkGridAddCalendarItem(payload.CalendarItemId, name, start, end, allDay == 1, color);
+                    if (!pkUpdateCalendarItemRow(payload.CalendarItemId, name, start, payload.IsOfficerOnly == 1, payload.IsLocalsOnly == 1, color)) {
+                        pkReloadToEventsTab();
+                    }
+                } else {
+                    // New item: update the grid array + list row in place so repeated entry
+                    // never reloads. If the list was empty (no table yet), fall back to reload.
+                    pkGridAddCalendarItem(parseInt(r.id) || 0, name, start, end, allDay == 1, color);
+                    if (!pkInsertCalendarItemRow(parseInt(r.id) || 0, name, start, payload.IsOfficerOnly == 1, payload.IsLocalsOnly == 1, color)) {
+                        pkReloadToEventsTab();
+                    }
+                }
             } else {
                 pkEvFeedback((r && r.error) ? r.error : 'Failed to save calendar item.');
                 btn.disabled = false;
@@ -7568,6 +7901,7 @@ $(document).ready(function() {
         document.getElementById('pk-emod-date-row').style.display = 'none';
         var sVal = (pkCiCurrent.AllDay == 1) ? pkCiCurrent.EventStart.substring(0, 10) : pkCiCurrent.EventStart.substring(0, 16).replace('T', ' ');
         var eVal = (pkCiCurrent.AllDay == 1) ? pkCiCurrent.EventEnd.substring(0, 10)   : pkCiCurrent.EventEnd.substring(0, 16).replace('T', ' ');
+        pkCiSetColor(pkCiCurrent.Color || '#64748b');
         pkCiRebuildPickers(sVal, eVal, (pkCiCurrent.AllDay == 1));
         pkApplyModalType();
         modal.classList.add('pk-emod-open');
@@ -7576,19 +7910,36 @@ $(document).ready(function() {
 
     window.pkDeleteCalendarItem = function() {
         if (!pkCiCurrent) return;
-        if (!confirm('Delete this calendar item? This cannot be undone.')) return;
-        $.post(CI_DELETE_URL, { CalendarItemId: pkCiCurrent.CalendarItemId }, function(r) {
-            if (r && r.status === 0) {
-                pkCloseCalendarItemOverlay();
-                window.location.reload();
-            } else {
-                alert((r && r.error) || 'Failed to delete calendar item.');
-            }
-        }, 'json').fail(function() { alert('Request failed.'); });
+        var delId = pkCiCurrent.CalendarItemId;
+        orkConfirm('Delete this calendar item? This cannot be undone.', function() {
+            $.post(CI_DELETE_URL, { CalendarItemId: delId }, function(r) {
+                if (r && r.status === 0) {
+                    pkCloseCalendarItemOverlay();
+                    pkGridRemoveCalendarItem(delId);
+                    // Remove the list row in place; fall back to a tab-preserving reload if not found.
+                    var row = document.querySelector('#pk-events-table tr[onclick="pkShowCalendarItemOverlay(' + delId + ')"]');
+                    if (row) {
+                        var tbody = row.parentNode;
+                        tbody.removeChild(row);
+                        pkBumpEventsTabCount(-1);
+                        if (tbody.children.length === 0) {
+                            pkReloadToEventsTab(); // list now empty — reload to render the empty state
+                            return;
+                        }
+                        if (window.jQuery) pkPaginate(jQuery('#pk-events-table'), 1);
+                    } else {
+                        pkReloadToEventsTab();
+                    }
+                } else {
+                    alert((r && r.error) || 'Failed to delete calendar item.');
+                }
+            }, 'json').fail(function() { alert('Request failed.'); });
+        }, { title: 'Delete calendar item', okLabel: 'Delete', danger: true });
     };
 
     $(document).ready(function() {
         $('#pk-event-name, #pk-ci-start, #pk-ci-end').on('input change', function() { pkUpdateGoBtn(); });
+        $('#pk-ci-swatches').on('click', '.ci-swatch', function() { pkCiSetColor(this.getAttribute('data-color')); });
         $('#pk-event-name').on('keydown', function(e) {
             if (e.key === 'Enter' && !document.getElementById('pk-emod-go-btn').disabled) pkCreateEvent();
         });
