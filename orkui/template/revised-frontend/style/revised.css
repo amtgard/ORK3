@@ -7752,13 +7752,24 @@ html[data-theme="dark"] .kn-filter-toggle.kn-filter-on {
   background: var(--ork-bg-tertiary) !important;
 }
 html[data-theme="dark"] .kn-filter-toggle[data-filter="kingdom-event"].kn-filter-on {
-  border-color: hsl(calc(var(--kn-hue) + 35), 55%, 55%) !important;
+  background: hsl(var(--kn-hue), var(--kn-sat), 45%) !important;
+  border-color: hsl(var(--kn-hue), var(--kn-sat), 45%) !important;
+  color: #fff !important;
 }
 html[data-theme="dark"] .kn-filter-toggle[data-filter="park-event"].kn-filter-on {
-  border-color: #9f7aea !important;
+  background: #7c5fd3 !important;
+  border-color: #7c5fd3 !important;
+  color: #fff !important;
 }
 html[data-theme="dark"] .kn-filter-toggle[data-filter="park-day"].kn-filter-on {
+  background: #d4a537 !important;
   border-color: #d4a537 !important;
+  color: #1a202c !important;
+}
+html[data-theme="dark"] .kn-filter-toggle[data-filter="calendar-item"].kn-filter-on {
+  background: #94a3b8 !important;
+  border-color: #94a3b8 !important;
+  color: #1a202c !important;
 }
 html[data-theme="dark"] .kn-filter-toggle[data-filter="kingdom-event"]:hover:not(.kn-filter-on) {
   border-color: hsl(calc(var(--kn-hue) + 35), 65%, var(--ork-accent-mid-lightness, 72%));
@@ -7886,6 +7897,26 @@ html[data-theme="dark"] .pk-filter-toggle[data-filter="event"].pk-filter-on {
 html[data-theme="dark"] .pk-filter-toggle[data-filter="event"]:hover:not(.pk-filter-on) {
   border-color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%));
   color: hsl(var(--pk-hue), var(--pk-sat), var(--ork-accent-lightness, 65%));
+}
+/* Selected (on) state for the other two filters needs brighter fills in dark
+   mode — the light-mode slate/amber read as muted/unselected on a dark bg. */
+html[data-theme="dark"] .pk-filter-toggle[data-filter="calendar-item"].pk-filter-on {
+  background: #94a3b8;
+  border-color: #94a3b8;
+  color: #1a202c;
+}
+html[data-theme="dark"] .pk-filter-toggle[data-filter="park-day"].pk-filter-on {
+  background: #d4a537;
+  border-color: #d4a537;
+  color: #1a202c;
+}
+html[data-theme="dark"] .pk-filter-toggle[data-filter="calendar-item"]:hover:not(.pk-filter-on) {
+  border-color: #94a3b8;
+  color: #94a3b8;
+}
+html[data-theme="dark"] .pk-filter-toggle[data-filter="park-day"]:hover:not(.pk-filter-on) {
+  border-color: #d4a537;
+  color: #d4a537;
 }
 
 /* ---- prefers-color-scheme auto-detect for all above ---- */

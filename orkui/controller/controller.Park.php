@@ -192,9 +192,10 @@ class Controller_Park extends Controller
         $ciSql = "
 			SELECT ci.calendar_item_id, ci.name, ci.description, ci.all_day, ci.is_officer_only, ci.is_locals_only, ci.color,
 			       ci.event_start, ci.event_end, ci.park_id, ci.kingdom_id,
-			       p.name AS park_name, p.abbreviation AS park_abbr
+			       p.name AS park_name, p.abbreviation AS park_abbr, k.abbreviation AS kingdom_abbr
 			FROM " . DB_PREFIX . "calendar_item ci
 			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = ci.park_id
+			LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = ci.kingdom_id
 			WHERE (ci.park_id = {$pid} OR (ci.park_id = 0 AND ci.kingdom_id = {$kidForPark}))
 			  AND ci.event_end >= DATE_SUB(NOW(), INTERVAL 7 DAY)
 			  AND ci.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
@@ -212,6 +213,7 @@ class Controller_Park extends Controller
                 'Name'           => $ciResult->name,
                 'ParkName'       => $ciResult->park_name,
                 'ParkAbbr'       => $ciResult->park_abbr,
+                'KingdomAbbr'    => $ciResult->kingdom_abbr,
                 'NextDate'       => $ciResult->event_start,
                 'NextEndDate'    => $ciResult->event_end,
                 'AllDay'         => (int)$ciResult->all_day,

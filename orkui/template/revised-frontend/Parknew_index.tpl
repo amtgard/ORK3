@@ -103,8 +103,14 @@
 		if (!empty($ev['_IsCalendarItem'])) {
 			$allDay = !empty($ev['AllDay']);
 			$_ciColor = $ev['Color'] ?? '#64748b';
+			// Prefix kingdom-level items with the kingdom abbreviation so they're
+			// distinguishable from this park's own items (mirrors the kingdom calendar,
+			// which prefixes park items with the park abbreviation).
+			$_ciTitle = (!empty($ev['_IsKingdomLevel']) && !empty($ev['KingdomAbbr']))
+				? $ev['KingdomAbbr'] . ': ' . $ev['Name']
+				: $ev['Name'];
 			$calEv = [
-				'title'         => $ev['Name'],
+				'title'         => $_ciTitle,
 				'start'         => $allDay ? substr($ev['NextDate'], 0, 10) : $ev['NextDate'],
 				'color'         => $_ciColor,
 				'textColor'     => CalendarItem::TextColorFor($_ciColor),
