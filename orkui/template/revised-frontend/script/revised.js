@@ -12792,8 +12792,13 @@ function setupPronounPicker(cfg) {
                             delBtn.disabled = false;
                             if (result && result.status === 0) {
                                 pkCloseAddDayModal();
+                                // Reload so the schedule cards, the Events-tab list, AND the
+                                // calendar all drop the deleted day. The old card-only removal
+                                // left the events list + calendar showing it until a refresh
+                                // (the save path already reloads, so this stays consistent).
                                 var card = document.querySelector('.pk-schedule-card[data-day-id="' + _editingDayId + '"]');
-                                if (card) $(card).fadeOut(300, function() { $(card).remove(); });
+                                if (card) $(card).fadeOut(200);
+                                setTimeout(function() { location.reload(); }, 250);
                             } else {
                                 alert((result && result.error) ? result.error : 'Delete failed.');
                             }

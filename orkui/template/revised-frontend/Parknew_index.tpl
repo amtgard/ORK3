@@ -928,6 +928,12 @@
 								switch ($pkDay['Recurrence']) {
 									case 'weekly':        $pkDayRec = 'Every ' . $pkDay['WeekDay']; break;
 									case 'week-of-month': $pkDayRec = 'Every ' . pk_ordinal($pkDay['WeekOfMonth']) . ' ' . $pkDay['WeekDay']; break;
+									case 'every-x-weeks':
+										$_wi = (int)($pkDay['WeekInterval'] ?? 0);
+										$pkDayRec = ($_wi === 2)
+											? 'Every other ' . $pkDay['WeekDay']
+											: 'Every ' . $_wi . ' weeks on ' . $pkDay['WeekDay'] . 's';
+										break;
 									case 'monthly':       $pkDayRec = 'Monthly on the ' . pk_ordinal($pkDay['MonthDay']); break;
 									default:              $pkDayRec = $pkDay['Recurrence'];
 								}

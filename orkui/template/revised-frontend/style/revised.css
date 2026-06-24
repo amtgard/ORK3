@@ -11340,6 +11340,7 @@ html[data-theme="dark"] .un-img-modal-body small { color: var(--ork-text-muted);
    Outranks the dark-mode `.{x}-img-modal .{x}-btn-outline` rule that forces
    color: var(--ork-text) !important. Keeps red visible in BOTH themes. */
 .pk-btn-danger, .kn-btn-danger, .pn-btn-danger, .un-btn-danger {
+	background: #fff !important;
 	color: #e53e3e !important;
 	border-color: #fed7d7 !important;
 }
