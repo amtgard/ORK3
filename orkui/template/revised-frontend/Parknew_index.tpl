@@ -751,6 +751,12 @@
 							<div class="pk-schedule-info">
 								<div class="pk-schedule-when"><?= htmlspecialchars($recText) ?></div>
 								<div class="pk-schedule-time"><?= date('g:i A', strtotime($day['Time'])) ?></div>
+								<?php $_pdNextDate = $pdNextDateById[(int)$day['ParkDayId']] ?? null; ?>
+								<?php if ($_pdNextDate): ?>
+									<div class="pk-schedule-next" style="font-size:12px;color:var(--ork-text-muted,#718096);margin-top:2px">
+										<i class="fas fa-calendar-day" style="margin-right:4px;opacity:.7"></i>Next: <strong style="color:var(--ork-text,#2d3748);font-weight:600"><?= ($_pdNextDate === $parkLocalToday) ? 'Today' : date('D, M j', strtotime($_pdNextDate)) ?></strong>
+									</div>
+								<?php endif; ?>
 								<span class="pk-schedule-purpose <?= $purposeCls ?>"><?= $purposeLabel ?></span>
 								<?php if (!empty($day['Online'])): ?>
 									<span class="pk-schedule-online-badge"><i class="fas fa-wifi"></i> Online</span>
