@@ -221,7 +221,15 @@ html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !importa
 		<?php else: ?>
 			<div class="si-meta">
 				<i class="fas fa-coins"></i><strong><?= (float)($link['Credits'] ?? 1) ?> credit<?= (float)($link['Credits'] ?? 1) != 1 ? 's' : '' ?></strong> will be recorded &nbsp;&middot;&nbsp;
-				<i class="fas fa-clock"></i> Expires <?= htmlspecialchars(date('D M j, g:i a T', strtotime($link['ExpiresAt'] ?? 'now'))) ?>
+				<?php
+				// ExpiresAt is stored in UTC. Emit both a UTC ISO 8601 stamp (data-iso)
+				// for the client to format in the viewer's local TZ, and a fallback
+				// server-TZ rendering for no-JS / pre-script-paint readers.
+				$_expTs       = strtotime(($link['ExpiresAt'] ?? 'now') . ' UTC');
+				$_expServerTz = htmlspecialchars(date('D M j, g:i a T', $_expTs));
+				$_expIso      = gmdate('Y-m-d\TH:i:s\Z', $_expTs);
+				?>
+				<i class="fas fa-clock"></i> Expires <span class="si-expires" data-iso="<?= $_expIso ?>"><?= $_expServerTz ?></span>
 			</div>
 		<?php endif; ?>
 
@@ -289,6 +297,16 @@ html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !importa
 <script>
 
 (function() {
+	// Re-format the server-emitted UTC expiry into the viewer's local timezone.
+	// Server-side rendering can only pick one zone (the server's), which is
+	// confusing for players in a different TZ than the host park.
+	document.querySelectorAll('.si-expires[data-iso]').forEach(function(el) {
+		var d = new Date(el.getAttribute('data-iso'));
+		if (!isNaN(d.getTime())) {
+			el.textContent = d.toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+		}
+	});
+
 	var pickerOpen = false;
 
 	function setSubmitting(btn) {

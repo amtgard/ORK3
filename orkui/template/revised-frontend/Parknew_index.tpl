@@ -1759,7 +1759,7 @@ var PkBannerConfig = {
 					<div class="pk-att-search-row">
 						<div class="pk-att-field pk-att-field-sm">
 							<label>Duration (hrs)</label>
-							<input type="number" id="pk-att-link-hours" min="1" max="96" step="1" value="3">
+							<input type="number" id="pk-att-link-hours" min="1" max="120" step="1" value="3">
 						</div>
 						<div class="pk-att-field pk-att-field-sm">
 							<label>Credits</label>
@@ -1783,7 +1783,7 @@ var PkBannerConfig = {
 								<i class="fas fa-qrcode"></i> QR
 							</button>
 							<button class="pk-btn" id="pk-att-link-remove-btn" style="white-space:nowrap;background:#fed7d7;border:1px solid #fc8181;color:#c53030" title="Revoke this link so it can no longer be used">
-								<i class="fas fa-trash"></i> Remove
+								<i class="fas fa-times"></i> Revoke
 							</button>
 						</div>
 						<div id="pk-att-link-expires" style="margin-top:6px;font-size:11px;color:#718096"></div>
@@ -1791,13 +1791,12 @@ var PkBannerConfig = {
 					<div style="margin-top:10px;font-size:11px;color:#718096">
 						<i class="fas fa-info-circle"></i> Players log in and select their class to record attendance.
 					</div>
-					<!-- Active links collapsible -->
+					<!-- Active links (always visible — typically 0-3 at any time) -->
 					<div id="pk-att-links-wrap" style="margin-top:14px;border-top:1px solid #e2e8f0;padding-top:10px">
-						<button type="button" id="pk-att-links-toggle" style="background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:#4a5568;display:flex;align-items:center;gap:6px">
-							<i class="fas fa-chevron-right" id="pk-att-links-chevron" style="font-size:10px;transition:transform 0.15s"></i>
-							<span>Active Links</span> <span id="pk-att-links-count" style="color:#a0aec0"></span>
-						</button>
-						<div id="pk-att-links-body" style="display:none;margin-top:8px">
+						<div style="font-size:12px;color:#4a5568;font-weight:600">
+							Active Links <span id="pk-att-links-count" style="color:#a0aec0;font-weight:400"></span>
+						</div>
+						<div id="pk-att-links-body" style="margin-top:8px">
 							<div id="pk-att-links-loading" style="font-size:12px;color:#a0aec0">Loading&hellip;</div>
 							<div id="pk-att-links-empty" style="display:none;font-size:12px;color:#a0aec0">No active links.</div>
 							<table id="pk-att-links-table" style="display:none;width:100%;border-collapse:collapse;font-size:12px">

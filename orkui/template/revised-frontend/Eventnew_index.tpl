@@ -2313,11 +2313,10 @@ var _evRsvpCr = document.getElementById('ev-rsvp-credits'); if (_evRsvpCr && _ev
 				<div id="ev-signin-link-expires"></div>
 			</div>
 			<div id="ev-signin-links-wrap">
-				<button type="button" id="ev-signin-links-toggle">
-					<i class="fas fa-chevron-right" id="ev-signin-links-chevron"></i>
-					<span>Active Links</span> <span id="ev-signin-links-count"></span>
-				</button>
-				<div id="ev-signin-links-body" style="display:none">
+				<div style="font-size:12px;color:#4a5568;font-weight:600">
+					Active Links <span id="ev-signin-links-count" style="color:#a0aec0;font-weight:400"></span>
+				</div>
+				<div id="ev-signin-links-body" style="margin-top:8px">
 					<div id="ev-signin-links-loading">Loading&hellip;</div>
 					<div id="ev-signin-links-empty" style="display:none">No active links.</div>
 					<table id="ev-signin-links-table" style="display:none">

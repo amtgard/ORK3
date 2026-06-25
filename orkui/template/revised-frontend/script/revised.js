@@ -10678,6 +10678,10 @@ $(document).ready(function() {
                 genBtn.innerHTML = '<i class="fas fa-link"></i> Generate';
                 if (r && r.status === 0) {
                     pkCurrentToken   = r.token;
+                    var _pkExpDt = r.expires_iso ? new Date(r.expires_iso) : null;
+                    if (_pkExpDt && !isNaN(_pkExpDt.getTime())) {
+                        r.expires = 'Expires ' + _pkExpDt.toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+                    }
                     pkCurrentExpires = r.expires || '';
                     pkCurrentLinkId  = r.linkId || 0;
                     document.getElementById('pk-att-link-url').value = r.url;
@@ -10762,18 +10766,11 @@ $(document).ready(function() {
         if (e.key === 'Escape') { var o = document.getElementById('pk-qr-overlay'); if (o && o.style.display !== 'none') pkCloseQrModal(); }
     });
 
-    // Active links collapsible
-    var toggleBtn = document.getElementById('pk-att-links-toggle');
-    var chevron   = document.getElementById('pk-att-links-chevron');
-    var body      = document.getElementById('pk-att-links-body');
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', function() {
-            pkLinksOpen = !pkLinksOpen;
-            body.style.display = pkLinksOpen ? '' : 'none';
-            chevron.style.transform = pkLinksOpen ? 'rotate(90deg)' : '';
-            if (pkLinksOpen && !pkLinksLoaded) pkLoadActiveLinks();
-        });
-    }
+    // Active links area is always visible (typically 0-3 at any time), so load
+    // on init. pkLinksOpen kept true so the cache-reset path still triggers a
+    // reload after generate/revoke.
+    pkLinksOpen = true;
+    if (document.getElementById('pk-att-links-body')) pkLoadActiveLinks();
 
     function pkLoadActiveLinks() {
         pkLinksLoaded = true;
@@ -10791,7 +10788,7 @@ $(document).ready(function() {
             var tbody = document.getElementById('pk-att-links-tbody');
             tbody.innerHTML = '';
             r.links.forEach(function(lnk) {
-                var exp = new Date(lnk.ExpiresAt.replace(' ', 'T'));
+                var exp = new Date(lnk.ExpiresAtIso || lnk.ExpiresAt.replace(' ', 'T') + 'Z');
                 var expStr = exp.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
                 var tr = document.createElement('tr');
                 tr.dataset.linkId = lnk.LinkId;
@@ -10844,6 +10841,16 @@ $(document).ready(function() {
                             } else {
                                 document.getElementById('pk-att-links-count').textContent = '(' + remaining + ')';
                             }
+                            // If the revoked link is the one currently shown in the top form,
+                            // clear it too — otherwise Copy/QR/Remove there reference a dead link.
+                            if (parseInt(lid, 10) === parseInt(pkCurrentLinkId, 10)) {
+                                document.getElementById('pk-att-link-result').style.display = 'none';
+                                document.getElementById('pk-att-link-url').value = '';
+                                document.getElementById('pk-att-link-expires').textContent = '';
+                                pkCurrentToken   = '';
+                                pkCurrentExpires = '';
+                                pkCurrentLinkId  = 0;
+                            }
                         }
                     }, 'json');
                 });
@@ -10888,6 +10895,7 @@ $(document).ready(function() {
 
     var evCurrentToken   = '';
     var evCurrentExpires = '';
+    var evCurrentLinkId  = 0;
     var evLinksLoaded    = false;
     var evLinksOpen      = false;
 
@@ -10920,6 +10928,12 @@ $(document).ready(function() {
                 if (r && r.status === 0) {
                     evCurrentToken   = r.token;
                     evCurrentExpires = r.expires || '';
+                    evCurrentLinkId  = r.linkId || 0;
+                    var _evExpDt = r.expires_iso ? new Date(r.expires_iso) : null;
+                    if (_evExpDt && !isNaN(_evExpDt.getTime())) {
+                        r.expires = 'Expires ' + _evExpDt.toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+                        evCurrentExpires = r.expires;
+                    }
                     document.getElementById('ev-signin-link-url').value = r.url;
                     document.getElementById('ev-signin-link-expires').textContent = r.expires;
                     document.getElementById('ev-signin-link-result').style.display = '';
@@ -10965,17 +10979,9 @@ $(document).ready(function() {
         }
     });
 
-    var toggleBtn = document.getElementById('ev-signin-links-toggle');
-    var chevron   = document.getElementById('ev-signin-links-chevron');
-    var body      = document.getElementById('ev-signin-links-body');
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', function() {
-            evLinksOpen = !evLinksOpen;
-            body.style.display = evLinksOpen ? '' : 'none';
-            chevron.style.transform = evLinksOpen ? 'rotate(90deg)' : '';
-            if (evLinksOpen && !evLinksLoaded) evLoadActiveLinks();
-        });
-    }
+    // Active links area is always visible — auto-load on init.
+    evLinksOpen = true;
+    if (document.getElementById('ev-signin-links-body')) evLoadActiveLinks();
 
     function evLoadActiveLinks() {
         evLinksLoaded = true;
@@ -10994,7 +11000,7 @@ $(document).ready(function() {
             var tbody = document.getElementById('ev-signin-links-tbody');
             tbody.innerHTML = '';
             r.links.forEach(function(lnk) {
-                var exp = new Date(lnk.ExpiresAt.replace(' ', 'T'));
+                var exp = new Date(lnk.ExpiresAtIso || lnk.ExpiresAt.replace(' ', 'T') + 'Z');
                 var expStr = exp.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
                 var tr = document.createElement('tr');
                 tr.dataset.linkId = lnk.LinkId;
@@ -11042,6 +11048,14 @@ $(document).ready(function() {
                             } else {
                                 document.getElementById('ev-signin-links-count').textContent = '(' + remaining + ')';
                             }
+                            if (parseInt(lid, 10) === parseInt(evCurrentLinkId, 10)) {
+                                document.getElementById('ev-signin-link-result').style.display = 'none';
+                                document.getElementById('ev-signin-link-url').value = '';
+                                document.getElementById('ev-signin-link-expires').textContent = '';
+                                evCurrentToken   = '';
+                                evCurrentExpires = '';
+                                evCurrentLinkId  = 0;
+                            }
                         }
                     }, 'json');
                 });
@@ -11065,6 +11079,7 @@ $(document).ready(function() {
     var knLinksOpen    = false;
     var knCurrentToken   = '';
     var knCurrentExpires = '';
+    var knCurrentLinkId  = 0;
 
     // Expose a cache invalidator so the open-modal handler (in a sibling
     // scope) can drop stale "no active links" results from previous sessions.
@@ -11145,6 +11160,12 @@ $(document).ready(function() {
             if (r && r.status === 0) {
                 knCurrentToken   = r.token;
                 knCurrentExpires = r.expires || '';
+                knCurrentLinkId  = r.linkId || 0;
+                var _knExpDt = r.expires_iso ? new Date(r.expires_iso) : null;
+                if (_knExpDt && !isNaN(_knExpDt.getTime())) {
+                    r.expires = 'Expires ' + _knExpDt.toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+                    knCurrentExpires = r.expires;
+                }
                 document.getElementById('kn-signinlink-url').value = r.url;
                 document.getElementById('kn-signinlink-expires').textContent = r.expires;
                 document.getElementById('kn-signinlink-result').style.display = '';
@@ -11186,18 +11207,10 @@ $(document).ready(function() {
         });
     }
 
-    // Active links collapsible — lists all kingdom links (park and kingdom-wide)
-    var knToggleBtn = document.getElementById('kn-signinlink-links-toggle');
-    var knChevron   = document.getElementById('kn-signinlink-links-chevron');
-    var knBody      = document.getElementById('kn-signinlink-links-body');
-    if (knToggleBtn) {
-        knToggleBtn.addEventListener('click', function() {
-            knLinksOpen = !knLinksOpen;
-            knBody.style.display = knLinksOpen ? '' : 'none';
-            knChevron.style.transform = knLinksOpen ? 'rotate(90deg)' : '';
-            if (knLinksOpen && !knLinksLoaded) knLoadActiveLinks();
-        });
-    }
+    // Active links area is always visible — auto-load on init. Lists all kingdom
+    // links (park and kingdom-wide).
+    knLinksOpen = true;
+    if (document.getElementById('kn-signinlink-links-body')) knLoadActiveLinks();
 
     function knLoadActiveLinks() {
         knLinksLoaded = true;
@@ -11215,7 +11228,7 @@ $(document).ready(function() {
             var tbody = document.getElementById('kn-signinlink-links-tbody');
             tbody.innerHTML = '';
             r.links.forEach(function(lnk) {
-                var exp = new Date(lnk.ExpiresAt.replace(' ', 'T'));
+                var exp = new Date(lnk.ExpiresAtIso || lnk.ExpiresAt.replace(' ', 'T') + 'Z');
                 var expStr = exp.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
                 var scope = lnk.ParkId > 0 ? (escHtml(lnk.ParkName || 'Park')) : 'Kingdom';
                 var tr = document.createElement('tr');
@@ -11264,6 +11277,14 @@ $(document).ready(function() {
                                 document.getElementById('kn-signinlink-links-count').textContent = '';
                             } else {
                                 document.getElementById('kn-signinlink-links-count').textContent = '(' + remaining + ')';
+                            }
+                            if (parseInt(lid, 10) === parseInt(knCurrentLinkId, 10)) {
+                                document.getElementById('kn-signinlink-result').style.display = 'none';
+                                document.getElementById('kn-signinlink-url').value = '';
+                                document.getElementById('kn-signinlink-expires').textContent = '';
+                                knCurrentToken   = '';
+                                knCurrentExpires = '';
+                                knCurrentLinkId  = 0;
                             }
                         }
                     }, 'json');
