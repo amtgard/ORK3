@@ -288,7 +288,34 @@ html[data-theme="dark"] .sr-timer.sr-timer-expired { background: var(--ork-alert
 }
 </style>
 
-<?php if ($error && !$link): ?>
+<?php if (!empty($already_logged_in)): ?>
+<!-- Logged-in user scanned a self-reg link: they already have an account. -->
+<div class="sr-wrap">
+	<div class="sr-header">
+		<h2><i class="fas fa-user-check" style="margin-right:8px"></i>You're Already Registered</h2>
+	</div>
+	<div class="sr-body">
+		<div class="sr-expired-wrap" style="color:inherit">
+			<i class="fas fa-circle-check" style="color:#38a169"></i>
+			<h3>Signed in as <?= htmlspecialchars($current_user['persona'] ?: 'your account') ?></h3>
+			<?php
+			$_locParts = array_filter([
+				$current_user['park_name']    ?? '',
+				$current_user['kingdom_name'] ?? '',
+			], 'strlen');
+			?>
+			<?php if ($_locParts): ?>
+			<p style="margin-top:6px;color:#718096"><?= htmlspecialchars(implode(' · ', $_locParts)) ?></p>
+			<?php endif; ?>
+			<p style="margin-top:14px">Self-registration links are for new players. You already have an ORK account, so you don't need to register again.</p>
+			<p style="margin-top:18px">
+				<a href="<?= UIR ?>Player/profile/<?= (int)$current_user['mundane_id'] ?>" class="sr-btn-primary" style="display:inline-block;background:#3182ce;color:#fff;padding:9px 18px;border-radius:6px;text-decoration:none;font-weight:600">Go to my profile</a>
+			</p>
+		</div>
+	</div>
+</div>
+
+<?php elseif ($error && !$link): ?>
 <!-- Token invalid/expired: error page -->
 <div class="sr-wrap">
 	<div class="sr-header">
