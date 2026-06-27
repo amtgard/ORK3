@@ -210,7 +210,7 @@ class CmsPost extends CmsBase
         $now = date('Y-m-d H:i:s');
 
         $cols = array(
-            'slug'          => isset($data['slug']) ? (string)$data['slug'] : '',
+            'slug'          => preg_replace('/[^a-z0-9\-]+/', '', strtolower((string)(isset($data['slug']) ? $data['slug'] : ''))),
             'title'         => isset($data['title']) ? (string)$data['title'] : '',
             'excerpt'       => isset($data['excerpt']) ? $data['excerpt'] : null,
             'hero_media_id' => (isset($data['hero_media_id']) && $data['hero_media_id'] !== '') ? (int)$data['hero_media_id'] : null,
@@ -243,12 +243,12 @@ class CmsPost extends CmsBase
         // Pre-check for duplicate (scope_type, scope_id, slug) to avoid the
         // stale-lastInsertId hazard under PDO ERRMODE_WARNING.
         $DB->Clear();
-        $DB->chk_slug       = $cols['slug'];
-        $DB->chk_scope_type = $cols['scope_type'];
-        $DB->chk_scope_id   = (int)$cols['scope_id'];
+        $DB->slug       = $cols['slug'];
+        $DB->scope_type = $cols['scope_type'];
+        $DB->scope_id   = (int)$cols['scope_id'];
         $dup = $this->_firstRow($DB->DataSet(
             'SELECT post_id FROM ' . DB_PREFIX . 'cms_post'
-            . ' WHERE slug = :chk_slug AND scope_type = :chk_scope_type AND scope_id = :chk_scope_id LIMIT 1'
+            . ' WHERE slug = :slug AND scope_type = :scope_type AND scope_id = :scope_id LIMIT 1'
         ));
         if ($dup !== null) {
             return 0;
@@ -263,12 +263,12 @@ class CmsPost extends CmsBase
         // Authoritative read-back by the unique tuple (lastInsertId unreliable
         // under PDO ERRMODE_WARNING on duplicate key).
         $DB->Clear();
-        $DB->rb_slug       = $cols['slug'];
-        $DB->rb_scope_type = $cols['scope_type'];
-        $DB->rb_scope_id   = (int)$cols['scope_id'];
+        $DB->slug       = $cols['slug'];
+        $DB->scope_type = $cols['scope_type'];
+        $DB->scope_id   = (int)$cols['scope_id'];
         $row = $this->_firstRow($DB->DataSet(
             'SELECT post_id FROM ' . DB_PREFIX . 'cms_post'
-            . ' WHERE slug = :rb_slug AND scope_type = :rb_scope_type AND scope_id = :rb_scope_id LIMIT 1'
+            . ' WHERE slug = :slug AND scope_type = :scope_type AND scope_id = :scope_id LIMIT 1'
         ));
         return ($row !== null && isset($row['post_id'])) ? (int)$row['post_id'] : 0;
     }
@@ -332,7 +332,7 @@ class CmsPost extends CmsBase
         }
         if (array_key_exists('slug', $data)) {
             $set[] = 'slug = :slug';
-            $DB->slug = (string)$data['slug'];
+            $DB->slug = preg_replace('/[^a-z0-9\-]+/', '', strtolower((string)$data['slug']));
         }
         if (array_key_exists('excerpt', $data)) {
             $set[] = 'excerpt = :excerpt';
@@ -367,16 +367,18 @@ class CmsPost extends CmsBase
             $DB->scope_id = (int)$data['scope_id'];
         }
 
+        // No caller-supplied columns → nothing to update (checked before the
+        // unconditional updated_at append so an empty $data is a true no-op).
+        if (count($set) === 0) {
+            return false;
+        }
+
         $set[] = 'updated_at = :updated_at';
         $DB->updated_at = date('Y-m-d H:i:s');
         if (array_key_exists('updated_by', $data)) {
             $set[] = 'updated_by = :updated_by';
             $DB->updated_by = ($data['updated_by'] === null || $data['updated_by'] === '')
                 ? null : (int)$data['updated_by'];
-        }
-
-        if (count($set) === 0) {
-            return false;
         }
 
         $DB->post_id = $postId;
@@ -411,7 +413,14 @@ class CmsPost extends CmsBase
         }
 
         if ($status === 'published') {
-            $row = $this->GetPost($postId);
+            // Targeted single-column read (GetPost would also JOIN the author +
+            // run a second tags query, both discarded here).
+            global $DB;
+            $DB->Clear();
+            $DB->post_id = $postId;
+            $row = $this->_firstRow($DB->DataSet(
+                'SELECT published_at FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
+            ));
             if ($row !== null && empty($row['published_at'])) {
                 $data['published_at'] = date('Y-m-d H:i:s');
             }
@@ -436,13 +445,24 @@ class CmsPost extends CmsBase
             return false;
         }
 
-        $row = $this->GetPost($postId);
-        if ($row === null) {
+        // Existence check only — a targeted single-column read (GetPost would
+        // also JOIN the author + fetch tags, all unused on the delete path).
+        $DB->Clear();
+        $DB->post_id = $postId;
+        $exists = $this->_firstRow($DB->DataSet(
+            'SELECT post_id FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
+        ));
+        if ($exists === null) {
             return false;
         }
 
-        // Remove body blocks via the shared polymorphic store.
-        $this->_pages()->ReplaceBlocks('post', $postId, array());
+        // Remove body blocks (direct DELETE, as DeletePage does for its blocks).
+        $DB->Clear();
+        $DB->owner_id = $postId;
+        $DB->Execute(
+            'DELETE FROM ' . DB_PREFIX . 'cms_block'
+            . " WHERE owner_type = 'post' AND owner_id = :owner_id"
+        );
 
         // Remove tag links.
         $DB->Clear();
@@ -491,7 +511,12 @@ class CmsPost extends CmsBase
             }
         }
 
-        // Replace links: clear, then insert the resolved set.
+        // Replace links atomically: clear, then insert the resolved set. The
+        // transaction prevents a silent INSERT failure (ERRMODE_WARNING) from
+        // leaving a partial tag set after the DELETE. Mirrors ReplaceBlocks.
+        $DB->Clear();
+        $DB->Execute('START TRANSACTION');
+
         $DB->Clear();
         $DB->post_id = $postId;
         $DB->Execute(
@@ -507,6 +532,9 @@ class CmsPost extends CmsBase
                 . ' VALUES (:post_id, :tag_id)'
             );
         }
+
+        $DB->Clear();
+        $DB->Execute('COMMIT');
 
         return true;
     }

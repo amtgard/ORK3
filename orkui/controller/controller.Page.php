@@ -19,6 +19,9 @@
  */
 class Controller_Page extends Controller
 {
+    /** v2 scope: org-wide. */
+    private static $SCOPE = array('type' => 'global', 'id' => 0);
+
     public function __construct($call = null, $method = null)
     {
         parent::__construct($call, $method);
@@ -55,7 +58,7 @@ class Controller_Page extends Controller
         $uid = (int) ($this->session->user_id ?? 0);
         if ($uid > 0) {
             $this->load_model('CmsAuth');
-            if ($this->CmsAuth->cms_can($uid, 'page.edit', array('type' => 'global', 'id' => 0))) {
+            if ($this->CmsAuth->cms_can($uid, 'page.edit', self::$SCOPE)) {
                 $this->data['cmsEditUrl'] = UIR . 'Cms/edit/' . (int) $page['page_id'];
                 $this->data['cmsEditTip'] = 'Edit this page';
             }

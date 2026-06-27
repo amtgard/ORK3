@@ -110,7 +110,7 @@ html[data-theme="dark"] .blog-pager-info { color: #9aa6bd; }
 <div class="blog-wrap">
     <div class="blog-head">
         <h1 class="blog-title fd-serif">Amtgard News</h1>
-        <a class="blog-rss" href="<?= UIR ?>Blog/rss" title="RSS feed">
+        <a class="blog-rss" href="<?= UIR ?>Blog/rss" data-tip="RSS feed">
             <i class="fas fa-rss"></i> RSS
         </a>
     </div>

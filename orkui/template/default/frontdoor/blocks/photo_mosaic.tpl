@@ -11,12 +11,16 @@ $img0 = $images[0] ?? null;
 $img1 = $images[1] ?? null;
 $img2 = $images[2] ?? null;
 $img3 = $images[3] ?? null;
+
+if (empty($images)) {
+    return;
+}
 ?>
 <div class="fd-mosaic" style="display:grid;grid-template-columns:2fr 1fr 1fr;grid-template-rows:190px 190px;gap:4px">
 
     <?php if ($img0): ?>
     <img
-        src="<?= htmlspecialchars($img0['src'], ENT_QUOTES, 'UTF-8') ?>"
+        src="<?= htmlspecialchars($img0['src'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
         alt="<?= htmlspecialchars($img0['alt'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
         style="grid-row:span 2;width:100%;height:100%;object-fit:cover"
     >
@@ -24,7 +28,7 @@ $img3 = $images[3] ?? null;
 
     <?php if ($img1): ?>
     <img
-        src="<?= htmlspecialchars($img1['src'], ENT_QUOTES, 'UTF-8') ?>"
+        src="<?= htmlspecialchars($img1['src'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
         alt="<?= htmlspecialchars($img1['alt'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
         style="width:100%;height:100%;object-fit:cover"
     >
@@ -32,7 +36,7 @@ $img3 = $images[3] ?? null;
 
     <?php if ($img2): ?>
     <img
-        src="<?= htmlspecialchars($img2['src'], ENT_QUOTES, 'UTF-8') ?>"
+        src="<?= htmlspecialchars($img2['src'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
         alt="<?= htmlspecialchars($img2['alt'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
         style="width:100%;height:100%;object-fit:cover"
     >
@@ -40,7 +44,7 @@ $img3 = $images[3] ?? null;
 
     <?php if ($img3): ?>
     <img
-        src="<?= htmlspecialchars($img3['src'], ENT_QUOTES, 'UTF-8') ?>"
+        src="<?= htmlspecialchars($img3['src'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
         alt="<?= htmlspecialchars($img3['alt'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
         style="width:100%;height:100%;object-fit:cover"
     >

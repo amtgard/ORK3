@@ -15,7 +15,7 @@
 $fdDir       = DIR_TEMPLATE . 'default/frontdoor/';
 $fdAssetBase = HTTP_TEMPLATE . 'default/frontdoor/';
 
-$therePost = isset($post) && is_array($post) && !empty($post);
+$postFound = isset($post) && is_array($post) && !empty($post);
 $fdBlocks  = (isset($post_blocks) && is_array($post_blocks)) ? $post_blocks : [];
 $heroRef   = (isset($hero) && is_array($hero)) ? $hero : null;
 ?>
@@ -60,7 +60,7 @@ html[data-theme="dark"] .blogp-empty { color: #9aa6bd; }
 
 <div class="fd-page">
 <?php include $fdDir . 'site_header.tpl'; ?>
-<?php if (!$therePost): ?>
+<?php if (!$postFound): ?>
     <div class="blogp-wrap">
         <a class="blogp-back" href="<?= UIR ?>Blog/index"><i class="fas fa-arrow-left"></i> Back to all posts</a>
         <p class="blogp-empty"><?= htmlspecialchars((string) ($Message ?? 'Post not found.'), ENT_QUOTES) ?></p>
@@ -94,7 +94,7 @@ html[data-theme="dark"] .blogp-empty { color: #9aa6bd; }
         <?php if (!empty($tags)): ?>
             <div class="blogp-tags">
                 <?php foreach ($tags as $t): ?>
-                    <a class="blogp-tag" href="<?= UIR ?>Blog/index&tag=<?= rawurlencode((string) ($t['slug'] ?? '')) ?>">
+                    <a class="blogp-tag" href="<?= htmlspecialchars(UIR . 'Blog/index&tag=' . rawurlencode((string) ($t['slug'] ?? '')), ENT_QUOTES) ?>">
                         <?= htmlspecialchars((string) ($t['name'] ?? ''), ENT_QUOTES) ?>
                     </a>
                 <?php endforeach; ?>

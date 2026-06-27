@@ -22,10 +22,11 @@ $weekly      = $att > 0 ? round($att / $wkCount) : 0;
 $eventsCount = is_array($EventSummary ?? null) ? count($EventSummary) : 0;
 
 // --- Field helpers ---
-$logo       = $blockFields['logo']        ?? [];
 $autoplayMs = (int)($blockFields['autoplay_ms'] ?? 4500);
 $slides     = $blockFields['slides']      ?? [];
 $ctas       = $blockFields['ctas']        ?? [];
+$slides     = is_array($slides) ? $slides : [];
+$ctas       = is_array($ctas)   ? $ctas   : [];
 ?>
 <div class="fd-carousel" data-autoplay="<?= $autoplayMs ?>">
 
@@ -52,7 +53,7 @@ $ctas       = $blockFields['ctas']        ?? [];
             <?php endif; ?>
             <?php foreach ($ctas as $ctaIdx => $cta):
                 $ctaLabel = htmlspecialchars($cta['label'] ?? '', ENT_QUOTES, 'UTF-8');
-                $ctaHref  = htmlspecialchars($cta['href']  ?? '#',  ENT_QUOTES, 'UTF-8');
+                $ctaHref  = htmlspecialchars((!empty($cta['href']) && CmsSanitizer::IsSafeUrl($cta['href'])) ? $cta['href'] : '#', ENT_QUOTES, 'UTF-8');
                 $ctaClass = ($cta['style'] ?? '') === 'ghost' ? 'fd-btn-ghost' : 'fd-btn-gold';
                 $ctaStyle = $ctaIdx > 0 ? ' style="margin-left:10px"' : '';
             ?>

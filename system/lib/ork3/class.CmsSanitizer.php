@@ -275,7 +275,7 @@ class CmsSanitizer
         // preg_replace returns null on malformed UTF-8 (PREG_BAD_UTF8_ERROR);
         // treating that as an empty/"safe" URL would let invalid-encoding
         // payloads bypass the scheme checks below. Fail closed.
-        if ($stripped === null || preg_last_error() !== PREG_NO_ERROR) {
+        if ($stripped === null || $stripped === '' || preg_last_error() !== PREG_NO_ERROR) {
             return false;
         }
 

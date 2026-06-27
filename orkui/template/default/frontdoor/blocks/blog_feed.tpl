@@ -22,14 +22,18 @@ $bfTag = isset($blockFields['tag']) ? trim((string) $blockFields['tag']) : '';
 
 $bfPosts = [];
 if (class_exists('APIModel')) {
-    $bfModel = new APIModel('CmsPost');
-    $bfOpts  = ['limit' => $bfLimit, 'offset' => 0, 'scope_type' => 'global', 'scope_id' => 0];
-    if ($bfTag !== '') {
-        $bfOpts['tag'] = $bfTag;
-    }
-    $bfResult = $bfModel->ListPosts($bfOpts);
-    if (is_array($bfResult) && isset($bfResult['rows']) && is_array($bfResult['rows'])) {
-        $bfPosts = $bfResult['rows'];
+    try {
+        $bfModel = new APIModel('CmsPost');
+        $bfOpts  = ['limit' => $bfLimit, 'offset' => 0, 'scope_type' => 'global', 'scope_id' => 0];
+        if ($bfTag !== '') {
+            $bfOpts['tag'] = $bfTag;
+        }
+        $bfResult = $bfModel->ListPosts($bfOpts);
+        if (is_array($bfResult) && isset($bfResult['rows']) && is_array($bfResult['rows'])) {
+            $bfPosts = $bfResult['rows'];
+        }
+    } catch (\Throwable $e) {
+        $bfPosts = [];
     }
 }
 $bfMoreHref = UIR . 'Blog/index' . ($bfTag !== '' ? ('&tag=' . rawurlencode($bfTag)) : '');

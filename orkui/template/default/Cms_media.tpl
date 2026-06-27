@@ -138,7 +138,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             credentials: 'same-origin',
             body: body.toString()
-        }).then(function (r) { return r.json(); });
+        }).then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); });
     }
 
     var area = document.getElementById('cmsMediaArea');
@@ -176,7 +176,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     function loadMedia(q) {
         area.innerHTML = '<div class="cms-empty"><div class="cms-empty-copy"><span class="cms-spin"></span> Loading…</div></div>';
-        var url = AJAX + 'medialist?' + new URLSearchParams(q ? { q: q } : {}).toString();
+        var url = AJAX + 'medialist' + (q ? '&' + new URLSearchParams({ q: q }).toString() : '');
         fetch(url, { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (res) {
@@ -197,6 +197,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         if (!file) { return; }
         if (file.size > 8 * 1024 * 1024) { toast('Image is larger than 8MB.', 'error'); return; }
         var reader = new FileReader();
+        reader.onerror = function () { toast('Could not read file.', 'error'); };
         reader.onload = function () {
             toast('Uploading…');
             post('mediaupload', { data: reader.result, filename: file.name, alt: '' }).then(function (res) {

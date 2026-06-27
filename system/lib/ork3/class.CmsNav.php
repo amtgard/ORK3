@@ -318,7 +318,8 @@ class CmsNav extends CmsBase
 
         // Build the set of nav_ids that legitimately belong to this menu/scope.
         $valid = array();
-        $rows = $this->_fetchItems($menu, $scopeType, $scopeId, false);
+        // Only nav_id is consumed here, so skip the page/post LEFT JOINs.
+        $rows = $this->_fetchItems($menu, $scopeType, $scopeId, false, true);
         foreach ($rows as $row) {
             $valid[(int)$row['nav_id']] = true;
         }
@@ -434,9 +435,12 @@ class CmsNav extends CmsBase
      * @param string $scopeType
      * @param int    $scopeId
      * @param bool   $enabledOnly when true, only enabled=1 rows
+     * @param bool   $idsOnly     when true, SELECT only n.nav_id and skip the
+     *                            page/post joins (callers that just need the
+     *                            id set, e.g. Reorder()'s validity check)
      * @return array list of raw rows (+ page_slug, post_slug, page_title, post_title)
      */
-    private function _fetchItems($menu, $scopeType, $scopeId, $enabledOnly)
+    private function _fetchItems($menu, $scopeType, $scopeId, $enabledOnly, $idsOnly = false)
     {
         global $DB;
 
@@ -444,12 +448,18 @@ class CmsNav extends CmsBase
         $scopeType = $this->_normalizeScopeType($scopeType);
         $scopeId = (int)$scopeId;
 
-        $sql = 'SELECT n.*, pg.slug AS page_slug, pg.title AS page_title,'
-            . ' po.slug AS post_slug, po.title AS post_title'
-            . ' FROM ' . DB_PREFIX . 'cms_nav_item n'
-            . ' LEFT JOIN ' . DB_PREFIX . 'cms_page pg ON pg.page_id = n.page_id'
-            . ' LEFT JOIN ' . DB_PREFIX . 'cms_post po ON po.post_id = n.post_id'
-            . ' WHERE n.menu = :menu AND n.scope_type = :scope_type AND n.scope_id = :scope_id';
+        if ($idsOnly) {
+            $sql = 'SELECT n.nav_id'
+                . ' FROM ' . DB_PREFIX . 'cms_nav_item n'
+                . ' WHERE n.menu = :menu AND n.scope_type = :scope_type AND n.scope_id = :scope_id';
+        } else {
+            $sql = 'SELECT n.*, pg.slug AS page_slug, pg.title AS page_title,'
+                . ' po.slug AS post_slug, po.title AS post_title'
+                . ' FROM ' . DB_PREFIX . 'cms_nav_item n'
+                . ' LEFT JOIN ' . DB_PREFIX . 'cms_page pg ON pg.page_id = n.page_id'
+                . ' LEFT JOIN ' . DB_PREFIX . 'cms_post po ON po.post_id = n.post_id'
+                . ' WHERE n.menu = :menu AND n.scope_type = :scope_type AND n.scope_id = :scope_id';
+        }
         if ($enabledOnly) {
             $sql .= ' AND n.enabled = 1';
         }
@@ -526,6 +536,12 @@ class CmsNav extends CmsBase
                     return '#';
                 }
                 if ($this->_isExternal($route) || strpos($route, 'index.php?Route=') !== false) {
+                    // Apply the same trust-boundary check the 'url' case uses so
+                    // a stored hostile scheme (javascript:/data:/...) can't reach
+                    // a visitor through the 'dynamic' type.
+                    if (!CmsSanitizer::IsSafeUrl($route)) {
+                        return '#';
+                    }
                     return $route;
                 }
                 return $uir . ltrim($route, '/');

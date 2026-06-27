@@ -23,10 +23,14 @@ $login = $blockFields['login'] ?? [];
 // Prefer the editable 'marketing' menu from the CMS nav store, when present.
 $navFromStore = [];
 if (class_exists('APIModel')) {
-    $navModel  = new APIModel('CmsNav');
-    $navResult = $navModel->GetMenu('marketing', 'global', 0);
-    if (is_array($navResult) && !empty($navResult)) {
-        $navFromStore = $navResult;
+    try {
+        $navModel  = new APIModel('CmsNav');
+        $navResult = $navModel->GetMenu('marketing', 'global', 0);
+        if (is_array($navResult) && !empty($navResult)) {
+            $navFromStore = $navResult;
+        }
+    } catch (\Throwable $e) {
+        $navFromStore = [];
     }
 }
 
@@ -68,18 +72,18 @@ if (!empty($navFromStore)) {
         <?php foreach ($items as $item): ?>
             <div class="fd-navitem">
                 <?php if (!empty($item['children'])): ?>
-                    <a href="<?= htmlspecialchars($item['href'] ?? '#', ENT_QUOTES) ?>"<?= !empty($item['target']) ? ' target="' . htmlspecialchars($item['target'], ENT_QUOTES) . '" rel="noopener"' : '' ?>>
+                    <a href="<?= htmlspecialchars(CmsSanitizer::IsSafeUrl($item['href'] ?? '') ? ($item['href'] ?? '#') : '#', ENT_QUOTES) ?>"<?= !empty($item['target']) ? ' target="' . htmlspecialchars($item['target'], ENT_QUOTES) . '" rel="noopener"' : '' ?>>
                         <?= htmlspecialchars($item['label'] ?? '', ENT_QUOTES) ?> &#9660;
                     </a>
                     <div class="fd-dropdown">
                         <?php foreach ($item['children'] as $child): ?>
-                            <a href="<?= htmlspecialchars($child['href'] ?? '#', ENT_QUOTES) ?>"<?= !empty($child['target']) ? ' target="' . htmlspecialchars($child['target'], ENT_QUOTES) . '" rel="noopener"' : '' ?>>
+                            <a href="<?= htmlspecialchars(CmsSanitizer::IsSafeUrl($child['href'] ?? '') ? ($child['href'] ?? '#') : '#', ENT_QUOTES) ?>"<?= !empty($child['target']) ? ' target="' . htmlspecialchars($child['target'], ENT_QUOTES) . '" rel="noopener"' : '' ?>>
                                 <?= htmlspecialchars($child['label'] ?? '', ENT_QUOTES) ?>
                             </a>
                         <?php endforeach; ?>
                     </div>
                 <?php else: ?>
-                    <a href="<?= htmlspecialchars($item['href'] ?? '#', ENT_QUOTES) ?>"<?= !empty($item['target']) ? ' target="' . htmlspecialchars($item['target'], ENT_QUOTES) . '" rel="noopener"' : '' ?>>
+                    <a href="<?= htmlspecialchars(CmsSanitizer::IsSafeUrl($item['href'] ?? '') ? ($item['href'] ?? '#') : '#', ENT_QUOTES) ?>"<?= !empty($item['target']) ? ' target="' . htmlspecialchars($item['target'], ENT_QUOTES) . '" rel="noopener"' : '' ?>>
                         <?= htmlspecialchars($item['label'] ?? '', ENT_QUOTES) ?>
                     </a>
                 <?php endif; ?>

@@ -30,7 +30,21 @@ class Controller_CmsAjax extends Controller
     private static $HTML_FIELDS = array('body', 'html');
 
     /** Block fields that hold a URL → must pass URL-scheme validation on save. */
-    private static $URL_FIELDS = array('href', 'more_href', 'url', 'link', 'cta_href', 'button_href');
+    private static $URL_FIELDS = array('href', 'more_href', 'url', 'link', 'cta_href', 'button_href', 'src');
+
+    /**
+     * Canonical block-type allowlist — kept in lockstep with the keys of
+     * Controller_Cms::_blockCatalog()'s $known map (the authoritative catalog).
+     * Used by _parseBlocks() to drop blocks with an unknown/forged type.
+     */
+    private static $BLOCK_TYPES = array(
+        'marketing_nav', 'member_bar', 'hero_carousel', 'richtext', 'card_grid',
+        'steps', 'events_feed', 'photo_mosaic', 'kingdoms_teaser', 'cta_band',
+        'staff_roster', 'rich_text', 'heading', 'divider', 'spacer', 'accordion',
+        'quote', 'table', 'image', 'gallery', 'video_embed', 'file_download',
+        'columns', 'raw_html', 'stat_ticker', 'tournaments_feed', 'recap_highlight',
+        'blog_feed',
+    );
 
     public function __construct($call = null, $action = null)
     {
@@ -58,7 +72,7 @@ class Controller_CmsAjax extends Controller
         $title = trim((string)($_POST['title'] ?? ''));
         $slug  = $this->_slugify((string)($_POST['slug'] ?? ''), $title);
         $type  = $this->_normalizeType((string)($_POST['type'] ?? 'composed'));
-        $meta  = trim((string)($_POST['meta_description'] ?? ''));
+        $metaDesc = trim((string)($_POST['meta_description'] ?? ''));
 
         if ($title === '') {
             $this->_fail('A page title is required.');
@@ -74,7 +88,7 @@ class Controller_CmsAjax extends Controller
             'title'            => $title,
             'slug'             => $slug,
             'type'             => $type,
-            'meta_description' => ($meta === '' ? null : $meta),
+            'meta_description' => ($metaDesc === '' ? null : $metaDesc),
             'updated_by'       => $uid,
         );
 
@@ -602,24 +616,20 @@ class Controller_CmsAjax extends Controller
 
         $mundaneId = (int)($_GET['mundane_id'] ?? $_POST['mundane_id'] ?? 0);
         if ($mundaneId <= 0) {
-            echo json_encode(array('ok' => false));
-            exit;
+            $this->_fail('A valid person id is required.', 4);
         }
 
         $info = Ork3::$Lib->player->player_info($mundaneId);
         if (!$info || empty($info['Persona'])) {
-            echo json_encode(array('ok' => false));
-            exit;
+            $this->_fail('Person not found.', 4);
         }
 
         $mundaneName = trim(($info['GivenName'] ?? '') . ' ' . ($info['Surname'] ?? ''));
-        echo json_encode(array(
-            'ok'           => true,
+        $this->_ok(array(
             'mundane_id'   => $mundaneId,
             'persona'      => (string)$info['Persona'],
             'mundane_name' => $mundaneName,
         ));
-        exit;
     }
 
     /* ------------------------------------------------------------------ *
@@ -691,6 +701,10 @@ class Controller_CmsAjax extends Controller
             if (!is_array($block) || empty($block['type'])) {
                 continue;
             }
+            // Drop blocks whose type is not in the canonical catalog (forged/unknown).
+            if (!in_array((string)$block['type'], self::$BLOCK_TYPES, true)) {
+                continue;
+            }
             $fields = (isset($block['fields']) && is_array($block['fields'])) ? $block['fields'] : array();
             $fields = $this->_sanitizeFields($fields);
             $out[] = array(
@@ -744,7 +758,7 @@ class Controller_CmsAjax extends Controller
     /** Clamp the page type to the supported enum. */
     private function _normalizeType($type)
     {
-        $allowed = array('composed', 'article', 'media', 'blog_index', 'resource', 'dynamic');
+        $allowed = array('composed', 'article', 'media', 'about', 'blog_index', 'resource', 'dynamic');
         return in_array($type, $allowed, true) ? $type : 'composed';
     }
 

@@ -234,6 +234,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var savedHint  = document.getElementById('cmsSavedHint');
     var statusBadge = document.getElementById('cmsStatusBadge');
     var slugTouched = slugInput ? (slugInput.value.trim() !== '') : false;
+    if (!titleInput || !slugInput) { return; }
 
     function slugify(s) {
         return String(s || '').toLowerCase()
@@ -488,11 +489,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
     /* ================= boot the shared block engine ================= */
     if (BE) {
         BE.init({
-            blocks:    <?= json_encode($blocks, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
-            catalog:   <?= json_encode($catalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
-            labels:    <?= json_encode($catalogLabels, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            blocks:    <?= json_encode($blocks, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            catalog:   <?= json_encode($catalog, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            labels:    <?= json_encode($catalogLabels, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             pageTypes: [],
-            blockAllow: <?= json_encode($blockAllow, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            blockAllow: <?= json_encode($blockAllow, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             pageType:  'post',
             canEdit:   STATE.canEdit,
             onDirty:   markDirty

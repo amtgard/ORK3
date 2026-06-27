@@ -107,7 +107,7 @@ class CmsPage extends CmsBase
             $blocks[] = array(
                 'id'      => (int)$row['block_id'],
                 'type'    => $row['type'],
-                'enabled' => true,
+                'enabled' => true, // always true: query filters enabled = 1
                 'order'   => (int)$row['ordering'],
                 'source'  => $row['source'],
                 'fields'  => $fields,
@@ -142,7 +142,7 @@ class CmsPage extends CmsBase
         $now = date('Y-m-d H:i:s');
 
         $cols = array(
-            'slug'             => isset($data['slug']) ? (string)$data['slug'] : '',
+            'slug'             => preg_replace('/[^a-z0-9\-]+/', '', strtolower((string)(isset($data['slug']) ? $data['slug'] : ''))),
             'type'             => isset($data['type']) ? (string)$data['type'] : 'composed',
             'title'            => isset($data['title']) ? (string)$data['title'] : '',
             'status'           => isset($data['status']) ? (string)$data['status'] : 'draft',
@@ -257,7 +257,7 @@ class CmsPage extends CmsBase
         }
         if (array_key_exists('slug', $data)) {
             $set[] = 'slug = :slug';
-            $DB->slug = (string)$data['slug'];
+            $DB->slug = preg_replace('/[^a-z0-9\-]+/', '', strtolower((string)$data['slug']));
         }
         if (array_key_exists('type', $data)) {
             $set[] = 'type = :type';
@@ -291,6 +291,12 @@ class CmsPage extends CmsBase
             $DB->scope_id = (int)$data['scope_id'];
         }
 
+        // No caller-supplied columns → nothing to update (checked before the
+        // unconditional updated_at append so an empty $data is a true no-op).
+        if (count($set) === 0) {
+            return false;
+        }
+
         // Always bump the updater + timestamp.
         $set[] = 'updated_at = :updated_at';
         $DB->updated_at = date('Y-m-d H:i:s');
@@ -298,10 +304,6 @@ class CmsPage extends CmsBase
             $set[] = 'updated_by = :updated_by';
             $DB->updated_by = ($data['updated_by'] === null || $data['updated_by'] === '')
                 ? null : (int)$data['updated_by'];
-        }
-
-        if (count($set) === 0) {
-            return false;
         }
 
         $DB->page_id = $pageId;
@@ -372,7 +374,12 @@ class CmsPage extends CmsBase
             return false;
         }
 
-        // Remove the page's blocks first, then the page row.
+        // Remove the page's blocks + the page row atomically so a silent
+        // failure of the second DELETE (ERRMODE_WARNING) can't leave a
+        // block-less zombie page. Mirrors the ReplaceBlocks transaction.
+        $DB->Clear();
+        $DB->Execute('START TRANSACTION');
+
         $DB->Clear();
         $DB->owner_id = $pageId;
         $DB->Execute(
@@ -385,6 +392,9 @@ class CmsPage extends CmsBase
         $DB->Execute(
             'DELETE FROM ' . DB_PREFIX . 'cms_page WHERE page_id = :page_id'
         );
+
+        $DB->Clear();
+        $DB->Execute('COMMIT');
 
         return true;
     }
@@ -540,8 +550,11 @@ class CmsPage extends CmsBase
             $DB->slug = (string)$filters['slug'];
         }
         if (!empty($filters['search'])) {
-            $where[] = '(title LIKE :search OR slug LIKE :search)';
-            $DB->search = '%' . $filters['search'] . '%';
+            // Distinct placeholders: native prepared statements forbid reusing
+            // one named param twice in a single statement.
+            $where[] = '(title LIKE :search_t OR slug LIKE :search_s)';
+            $DB->search_t = '%' . $filters['search'] . '%';
+            $DB->search_s = '%' . $filters['search'] . '%';
         }
 
         $limit = '';

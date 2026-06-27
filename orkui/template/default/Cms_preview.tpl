@@ -69,6 +69,7 @@ html[data-theme="dark"] .cms-preview-banner .cms-preview-publish:hover{backgroun
 		btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publishing\u2026';
 		fetch(endpoint, {
 			method: 'POST',
+			credentials: 'same-origin',
 			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
 			body: field + '=' + encodeURIComponent(id)
 		}).then(function (r) {

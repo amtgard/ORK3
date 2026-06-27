@@ -32,9 +32,10 @@ $links   = $blockFields['links']   ?? '';
         <?php
         $btnClass = ($cta['style'] ?? '') === 'gold' ? 'fd-btn-gold' : 'fd-btn-ghost';
         $marginLeft = $i > 0 ? ' style="margin-left:10px;"' : '';
+        $ctaHref = (!empty($cta['href']) && CmsSanitizer::IsSafeUrl($cta['href'])) ? $cta['href'] : '#';
         ?>
         <a class="<?= htmlspecialchars($btnClass, ENT_QUOTES) ?>"
-           href="<?= htmlspecialchars($cta['href'] ?? '#', ENT_QUOTES) ?>"<?= $marginLeft ?>>
+           href="<?= htmlspecialchars($ctaHref, ENT_QUOTES) ?>"<?= $marginLeft ?>>
             <?= htmlspecialchars($cta['label'] ?? '', ENT_QUOTES) ?>
         </a>
     <?php endforeach; ?>

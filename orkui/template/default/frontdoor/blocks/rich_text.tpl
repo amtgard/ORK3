@@ -36,7 +36,7 @@ $marginAuto = ($align === 'center') ? 'margin:0 auto;' : '';
 
     <?php if (!empty($cta['label'])): ?>
         <div style="margin-top:18px;">
-            <a class="fd-link" href="<?= htmlspecialchars($cta['href'] ?? '#', ENT_QUOTES) ?>">
+            <a class="fd-link" href="<?= htmlspecialchars((!empty($cta['href']) && CmsSanitizer::IsSafeUrl($cta['href'])) ? $cta['href'] : '#', ENT_QUOTES) ?>">
                 <?= htmlspecialchars($cta['label'], ENT_QUOTES) ?>
             </a>
         </div>

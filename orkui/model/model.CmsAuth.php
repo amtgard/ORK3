@@ -51,4 +51,14 @@ class Model_CmsAuth extends Model
     {
         return $this->CmsAuth->ListGrants($scopeType, $scopeId);
     }
+
+    public function is_super_admin($uid)
+    {
+        return $this->CmsAuth->IsSuperAdmin($uid);
+    }
+
+    public function all_capabilities()
+    {
+        return $this->CmsAuth->AllCapabilities();
+    }
 }

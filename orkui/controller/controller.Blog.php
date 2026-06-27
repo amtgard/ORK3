@@ -26,6 +26,9 @@ class Controller_Blog extends Controller
     /** Max items in the RSS feed. */
     public const RSS_LIMIT = 20;
 
+    /** v2 CMS-auth scope: org-wide. */
+    private static $SCOPE = array('type' => 'global', 'id' => 0);
+
     public function __construct($call = null, $method = null)
     {
         parent::__construct($call, $method);
@@ -93,6 +96,7 @@ class Controller_Blog extends Controller
             : null;
 
         if (empty($post)) {
+            http_response_code(404);
             $this->data['Message']    = 'Post not found.';
             $this->data['page_title'] = 'Post not found';
             $this->data['post']       = null;
@@ -234,12 +238,16 @@ class Controller_Blog extends Controller
             return;
         }
         $this->load_model('CmsAuth');
-        $scope = array('type' => 'global', 'id' => 0);
-        if ($this->CmsAuth->cms_can($uid, 'page.edit', $scope)) {
+        // Resolve capabilities once instead of two cms_can() round-trips: a
+        // super-admin passes everything; otherwise union the granted caps and
+        // test in memory (mirrors Controller_Cms::_capFlags()).
+        $isSuper = (bool) $this->CmsAuth->is_super_admin($uid);
+        $caps    = $isSuper ? array() : $this->CmsAuth->get_user_capabilities($uid, self::$SCOPE);
+        if ($isSuper || in_array('page.edit', $caps, true)) {
             $this->data['cmsEditUrl'] = $editUrl;
             $this->data['cmsEditTip'] = $editTip;
         }
-        if ($this->CmsAuth->cms_can($uid, 'page.create', $scope)) {
+        if ($isSuper || in_array('page.create', $caps, true)) {
             $this->data['cmsNewPostUrl'] = UIR . 'Cms/editpost/new';
             $this->data['cmsNewPostTip'] = 'New post';
         }

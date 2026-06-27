@@ -137,8 +137,9 @@ class CmsMedia extends CmsBase
 
         imagedestroy($src);
 
-        // Persist the row.
-        $mediaId = $this->_insertRow(array(
+        // Persist the row. Capture the column set so the success payload can be
+        // built from it in memory (no read-back SELECT).
+        $cols = array(
             'filename'    => $this->_safeFilename($filename, $ext),
             'path'        => $relPath,
             'mime'        => $mime,
@@ -152,7 +153,8 @@ class CmsMedia extends CmsBase
             'scope_id'    => isset($scope['id']) ? (int)$scope['id'] : 0,
             'uploaded_by' => (int)$uploadedBy > 0 ? (int)$uploadedBy : null,
             'created_at'  => date('Y-m-d H:i:s'),
-        ));
+        );
+        $mediaId = $this->_insertRow($cols);
 
         if ($mediaId <= 0) {
             // DB write failed — clean up the orphaned files we just wrote.
@@ -166,7 +168,20 @@ class CmsMedia extends CmsBase
         // Best-effort audit (never fail the upload if the hook is unreachable).
         $this->_auditUpload($mediaId, $bytes, $mime, (int)$uploadedBy, $scope);
 
-        return $this->GetMedia($mediaId);
+        // Build the success payload from the columns we just wrote (plus the
+        // new id) — the row is already fully known in memory, so a SELECT to
+        // read back our own INSERT is wasted work. Mirror GetMedia()'s shape.
+        $row = array_merge($cols, array('media_id' => $mediaId));
+        $row['url']       = $this->_url($relPath);
+        $row['thumb_url'] = $this->_url($thumbStored !== null ? $thumbStored : $relPath);
+
+        $ref = $this->ToMediaRef($row);
+        $row['key']   = $ref['key'];
+        $row['src']   = $ref['src'];
+        $row['thumb'] = $ref['thumb'];
+        $row['focal'] = $ref['focal'];
+
+        return $row;
     }
 
     /* ------------------------------------------------------------------ *
@@ -231,7 +246,9 @@ class CmsMedia extends CmsBase
         }
         if ($search !== null && $search !== '') {
             $where[] = '(filename LIKE :search OR alt LIKE :search OR title LIKE :search)';
-            $DB->search = '%' . $search . '%';
+            // Escape LIKE metacharacters: bound params block SQL injection but
+            // not '%'/'_' wildcards, so a bare '%' would otherwise match every row.
+            $DB->search = '%' . str_replace(array('\\', '%', '_'), array('\\\\', '\\%', '\\_'), $search) . '%';
         }
 
         $limitSql = ' LIMIT ' . ($this->_clampLimit($limit));
@@ -252,6 +269,7 @@ class CmsMedia extends CmsBase
             $ref['filename']   = isset($row['filename']) ? (string)$row['filename'] : '';
             $ref['alt']        = isset($row['alt']) ? (string)$row['alt'] : '';
             $ref['created_at'] = isset($row['created_at']) ? $row['created_at'] : null;
+            $ref['title']      = isset($row['title']) ? (string)$row['title'] : '';
             $out[] = $ref;
         }
         return $out;
@@ -442,8 +460,11 @@ class CmsMedia extends CmsBase
                 if (function_exists('imagewebp')) {
                     return (bool)@imagewebp($img, $diskPath);
                 }
-                // Fall through to jpeg if webp unsupported by this GD build.
-                return (bool)@imagejpeg($img, $diskPath, 88);
+                // No webp support in this GD build: writing JPEG bytes to a
+                // .webp path produces an undecodable asset (server sends
+                // Content-Type: image/webp over JPEG payload). Signal failure
+                // so Upload() cleanly aborts rather than storing a corrupt file.
+                return false;
             case 'jpg':
             case 'jpeg':
             default:

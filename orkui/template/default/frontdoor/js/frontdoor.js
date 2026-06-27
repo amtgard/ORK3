@@ -5,6 +5,7 @@
     var dots = car.querySelectorAll('.fd-dot');
     if (slides.length < 2) return;
     var i = 0, ms = parseInt(car.getAttribute('data-autoplay') || '4500', 10), t;
+    if (isNaN(ms) || ms < 100) ms = 4500;
     function go(n) {
       slides[i].classList.remove('is-active'); if (dots[i]) dots[i].classList.remove('on');
       i = (n + slides.length) % slides.length;

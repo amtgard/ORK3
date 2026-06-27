@@ -47,6 +47,16 @@ class CmsAuth extends CmsBase
         'page.publish', 'page.delete', 'roles.manage', 'nav.manage',
     );
 
+    /**
+     * Per-request memoization caches. PHP-FPM resets static state between
+     * requests, so these never leak across requests. GetUserGrants() and
+     * IsSuperAdmin() are hit repeatedly per action (CmsCan() calls both),
+     * so we cache to avoid redundant round-trips. Keyed to preserve the
+     * scope-filter semantics of GetUserGrants().
+     */
+    private static $_grantCache = array();
+    private static $_superAdminCache = array();
+
     public function __construct()
     {
         parent::__construct();
@@ -117,6 +127,13 @@ class CmsAuth extends CmsBase
             return array();
         }
 
+        // Per-request memoization, keyed by the full scope-filter signature.
+        $cacheKey = $uid . '|' . ($scopeType === null ? '*' : (string)$scopeType)
+            . '|' . ($scopeId === null ? '*' : (int)$scopeId);
+        if (isset(self::$_grantCache[$cacheKey])) {
+            return self::$_grantCache[$cacheKey];
+        }
+
         $sql = 'SELECT grant_id, mundane_id, role, scope_type, scope_id, granted_by, created_at'
             . ' FROM ' . DB_PREFIX . 'cms_grant'
             . ' WHERE mundane_id = :mundane_id';
@@ -140,6 +157,8 @@ class CmsAuth extends CmsBase
         foreach ($this->_eachRow($r) as $row) {
             $out[] = $row;
         }
+
+        self::$_grantCache[$cacheKey] = $out;
         return $out;
     }
 
@@ -246,7 +265,12 @@ class CmsAuth extends CmsBase
         if ($uid <= 0 || !is_object(Ork3::$Lib->authorization)) {
             return false;
         }
-        return (bool)Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        if (isset(self::$_superAdminCache[$uid])) {
+            return self::$_superAdminCache[$uid];
+        }
+        $isSuper = (bool)Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        self::$_superAdminCache[$uid] = $isSuper;
+        return $isSuper;
     }
 
     /* ------------------------------------------------------------------ *
@@ -285,13 +309,16 @@ class CmsAuth extends CmsBase
         $DB->role       = $role;
         $DB->scope_type = $scopeType;
         $DB->scope_id   = $scopeId;
-        $DB->granted_by = $grantedBy > 0 ? $grantedBy : null;
+        $DB->granted_by = (int)$grantedBy;
         $DB->created_at = date('Y-m-d H:i:s');
         $DB->Execute(
             'INSERT IGNORE INTO ' . DB_PREFIX . 'cms_grant'
             . ' (mundane_id, role, scope_type, scope_id, granted_by, created_at)'
-            . ' VALUES (:mundane_id, :role, :scope_type, :scope_id, :granted_by, :created_at)'
+            . ' VALUES (:mundane_id, :role, :scope_type, :scope_id, NULLIF(:granted_by, 0), :created_at)'
         );
+
+        // The grant set changed; drop the per-request memo so later reads see it.
+        self::$_grantCache = array();
 
         // Authoritative read-back by the unique tuple.
         $DB->Clear();
@@ -340,7 +367,23 @@ class CmsAuth extends CmsBase
             . ' AND scope_type = :scope_type AND scope_id = :scope_id'
         );
 
-        return true;
+        // The grant set changed; drop the per-request memo so later reads see it.
+        self::$_grantCache = array();
+
+        // Execute() is void; confirm the DELETE took by reading the row back
+        // on the same unique tuple (row gone → success, still present → fail).
+        $DB->Clear();
+        $DB->mundane_id = $uid;
+        $DB->role       = $role;
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = $scopeId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT grant_id FROM ' . DB_PREFIX . 'cms_grant'
+            . ' WHERE mundane_id = :mundane_id AND role = :role'
+            . ' AND scope_type = :scope_type AND scope_id = :scope_id LIMIT 1'
+        ));
+
+        return $row === null;
     }
 
     /**

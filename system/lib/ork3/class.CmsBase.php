@@ -40,7 +40,7 @@ class CmsBase extends Ork3
     }
 
     /**
-     * Yield each result row as an assoc array. Emits the pre-fetched first row
+     * Collect and return each result row as an assoc array. Emits the pre-fetched first row
      * (if present) then advances with Next(); never trusts Size().
      *
      * @param mixed $r YapoDb result or false/null

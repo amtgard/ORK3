@@ -33,7 +33,15 @@ $pageTypes = isset($PageTypes) && is_array($PageTypes) ? $PageTypes : array(
 );
 
 // A "type=" hint may arrive on the New-page URL — seed the meta form's type.
+// Only honor it if it matches a known page type (allowlist) to avoid
+// reflecting an attacker-controlled value into the inline <script> block.
 $urlType = isset($_GET['type']) ? trim((string)$_GET['type']) : '';
+if ($urlType !== '') {
+    $allowedTypes = array_column($pageTypes, 'type');
+    if (!in_array($urlType, $allowedTypes, true)) {
+        $urlType = '';
+    }
+}
 
 $pageId       = (int)($page['page_id'] ?? 0);
 $pTitle       = (string)($page['title'] ?? '');
@@ -455,12 +463,12 @@ include __DIR__ . '/cms/_shell_top.tpl';
     /* ================= boot the shared block engine ================= */
     if (BE) {
         BE.init({
-            blocks:    <?= json_encode($blocks, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
-            catalog:   <?= json_encode($catalog, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
-            labels:    <?= json_encode($catalogLabels, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
-            pageTypes: <?= json_encode($pageTypes, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
-            blockAllow: <?= json_encode($blockAllow, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
-            pageType:  typeInput ? typeInput.value : <?= json_encode($pType) ?>,
+            blocks:    <?= json_encode($blocks, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            catalog:   <?= json_encode($catalog, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            labels:    <?= json_encode($catalogLabels, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            pageTypes: <?= json_encode($pageTypes, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            blockAllow: <?= json_encode($blockAllow, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            pageType:  typeInput ? typeInput.value : <?= json_encode($pType, JSON_HEX_TAG) ?>,
             canEdit:   STATE.canEdit,
             onDirty:   markDirty
         });

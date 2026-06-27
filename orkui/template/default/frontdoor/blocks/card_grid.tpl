@@ -38,7 +38,7 @@ $cards      = $blockFields['cards']      ?? [];
                 $icon  = $card['icon']  ?? '';
                 $title = $card['title'] ?? '';
                 $blurb = $card['blurb'] ?? '';
-                $href  = $card['href']  ?? '#';
+                $href  = (!empty($card['href']) && CmsSanitizer::IsSafeUrl($card['href'])) ? $card['href'] : '#';
                 ?>
                 <a class="fd-path" href="<?= htmlspecialchars($href, ENT_QUOTES) ?>">
                     <?php if (!empty($img['src'])): ?>

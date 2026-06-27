@@ -327,7 +327,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             credentials: 'same-origin',
             body: body.toString()
-        }).then(function (r) { return r.json(); });
+        }).then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); });
     }
 
     /* ---- Edit/Add modal wiring ---- */

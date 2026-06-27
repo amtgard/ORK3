@@ -189,7 +189,8 @@ class Controller_Cms extends Controller
             $filters['status'] = $status;
         }
 
-        $this->data['Pages']      = $this->CmsPage->list_pages($filters);
+        $pages = $this->CmsPage->list_pages($filters);
+        $this->data['Pages']      = is_array($pages) ? $pages : array();
         $this->data['Search']     = $search;
         $this->data['StatusFilter'] = $status;
 
@@ -258,11 +259,12 @@ class Controller_Cms extends Controller
         }
 
         $this->data['Page']         = $page;
+        $catalog = $this->_blockCatalog();
         $this->data['Blocks']       = $blocks;
         $this->data['IsNew']        = $isNew;
-        $this->data['BlockCatalog'] = $this->_blockCatalog();
+        $this->data['BlockCatalog'] = $catalog;
         $this->data['PageTypes']    = $this->_pageTypes();
-        $this->data['BlockAllow']   = $this->_blockAllow();
+        $this->data['BlockAllow']   = $this->_blockAllow($catalog);
         $this->data['Caps']         = $this->_capFlags($uid);
     }
 
@@ -464,8 +466,9 @@ class Controller_Cms extends Controller
         $this->data['Blocks']       = $blocks;
         $this->data['IsNew']        = $isNew;
         $this->data['HeroRef']      = $heroRef;
-        $this->data['BlockCatalog'] = $this->_blockCatalog();
-        $this->data['BlockAllow']   = $this->_blockAllow();
+        $catalog = $this->_blockCatalog();
+        $this->data['BlockCatalog'] = $catalog;
+        $this->data['BlockAllow']   = $this->_blockAllow($catalog);
         $this->data['Caps']         = $this->_capFlags($uid);
     }
 
@@ -742,8 +745,11 @@ class Controller_Cms extends Controller
      *
      * @return array<string,array<int,string>> page-type key => allowed block types
      */
-    private function _blockAllow()
+    private function _blockAllow($catalog = null)
     {
+        if (!is_array($catalog)) {
+            $catalog = $this->_blockCatalog();
+        }
         // Sensible on any page: structure + plain content + a single image.
         $universal = array('heading', 'rich_text', 'image', 'divider', 'spacer', 'quote', 'raw_html');
 
@@ -766,7 +772,7 @@ class Controller_Cms extends Controller
 
         // composed = all addable block types (the full landing-page kit).
         $composed = array();
-        foreach ($this->_blockCatalog() as $c) {
+        foreach ($catalog as $c) {
             if (!empty($c['addable'])) {
                 $composed[] = $c['type'];
             }
@@ -781,8 +787,8 @@ class Controller_Cms extends Controller
 
     /**
      * Human label map for page `type` keys, used by both the Type column and the
-     * type chooser. Unknown keys should fall back to ucfirst() at the call site;
-     * use _typeLabel() to apply that fallback consistently.
+     * type chooser. Unknown keys should fall back to a de-underscored ucwords()
+     * form at the call site (e.g. "blog_index" → "Blog Index").
      *
      * @return array<string,string>
      */
@@ -797,21 +803,6 @@ class Controller_Cms extends Controller
             'blog_index' => 'Blog Index',
             'dynamic'    => 'Dynamic Data',
         );
-    }
-
-    /**
-     * Resolve a single page `type` key to its human label, falling back to a
-     * de-underscored ucwords() form for unknown keys (e.g. "blog_index" with no
-     * map entry → "Blog Index" rather than "Blog_index").
-     */
-    private function _typeLabel($type)
-    {
-        $type   = (string)$type;
-        $labels = $this->_typeLabels();
-        if (isset($labels[$type])) {
-            return $labels[$type];
-        }
-        return ucwords(str_replace('_', ' ', $type));
     }
 
     /**

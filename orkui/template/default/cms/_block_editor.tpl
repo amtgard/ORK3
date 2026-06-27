@@ -14,6 +14,8 @@
  *     catalog:    [...],   // block catalog ([{type,label,group,dynamic,available}])
  *     labels:     {...},   // type → label map
  *     pageTypes:  [...],   // presets ([{type,label,blocks:[...]}]) — may be []
+ *     blockAllow: {...},   // page-type key → [allowed block types] (scoped add-block chooser)
+ *     pageType:   '…',     // current page type key ('post' for blog bodies)
  *     canEdit:    bool,
  *     ajaxUrl:    '…/CmsAjax/',
  *     onDirty:    function(){}      // host marks its own meta form dirty/autosave
@@ -249,6 +251,8 @@ window.CmsBlockEditor = (function () {
     }
 
     /* ================= block model ================= */
+    /* NOTE: 'rich_text' is the canonical block type; 'richtext' is a legacy DB alias.
+       Both spellings are accepted on read (see summarize() / buildBlockBody()). */
     function normBlock(b) {
         return {
             type:    String(b.type || ''),
@@ -643,7 +647,7 @@ window.CmsBlockEditor = (function () {
         dropdown.style.zIndex = '99999';
     }
 
-    function personaLinkField(person) {
+    function personaLinkField(person, onResolve) {
         var wrap = el('div', 'cms-field'); wrap.style.marginBottom = '8px';
         wrap.appendChild(el('label', 'cms-label', 'Link Amtgard persona (optional)'));
 
@@ -681,7 +685,11 @@ window.CmsBlockEditor = (function () {
                         if (d.persona) { person.persona_name = d.persona; }
                         if (d.mundane_name) { person.mundane_name = d.mundane_name; }
                         markDirty();
-                        renderList();
+                        renderChip();
+                        // Refresh just the two bound name inputs (no full
+                        // renderList — that would tear down TinyMCE in every
+                        // other block on the page).
+                        if (typeof onResolve === 'function') { onResolve(); }
                     }
                 })
                 .catch(function () { /* names stay as typed; non-fatal */ });
@@ -1087,9 +1095,17 @@ window.CmsBlockEditor = (function () {
                 function (person) {
                     var box = el('div', null);
                     box.appendChild(imageBound(person, 'image', 'Photo'));
-                    box.appendChild(personaLinkField(person));
-                    box.appendChild(textBound(person, 'persona_name', 'Amtgard name'));
-                    box.appendChild(textBound(person, 'mundane_name', 'Real name'));
+                    var personaField = textBound(person, 'persona_name', 'Amtgard name');
+                    var mundaneField = textBound(person, 'mundane_name', 'Real name');
+                    box.appendChild(personaLinkField(person, function () {
+                        // After persona-link auto-fill, sync the two bound inputs.
+                        var pi = personaField.querySelector('input');
+                        var mi = mundaneField.querySelector('input');
+                        if (pi) { pi.value = person.persona_name || ''; }
+                        if (mi) { mi.value = person.mundane_name || ''; }
+                    }));
+                    box.appendChild(personaField);
+                    box.appendChild(mundaneField);
                     box.appendChild(textBound(person, 'role', 'Role / title'));
                     box.appendChild(textBoundArea(person, 'bio', 'Bio'));
                     box.appendChild(textBound(person, 'href', 'Manual link (used only if no persona is linked)'));
@@ -1648,6 +1664,7 @@ window.CmsBlockEditor = (function () {
         if (!file) { return; }
         if (file.size > 8 * 1024 * 1024) { toast('Image is larger than 8MB.', 'error'); return; }
         var reader = new FileReader();
+        reader.onerror = function () { toast('Could not read file.', 'error'); loadMedia(''); };
         reader.onload = function () {
             mediaGrid.innerHTML = '<div class="cms-media-empty"><span class="cms-spin"></span> Uploading…</div>';
             post('mediaupload', { data: reader.result, filename: file.name, alt: '' }).then(function (res) {

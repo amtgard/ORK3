@@ -346,15 +346,16 @@ include __DIR__ . '/cms/_shell_top.tpl';
             var pid = btn.getAttribute('data-post-id');
             var title = btn.getAttribute('data-title') || 'this post';
             askConfirm('Delete "' + title + '"? This removes the post and all of its content blocks. This cannot be undone.', function () {
-                confirmOk.disabled = true;
+                var okEl = confirmOk;
+                if (okEl) { okEl.disabled = true; }
                 post('deletepost', { post_id: pid }).then(function (res) {
-                    confirmOk.disabled = false;
+                    if (okEl) { okEl.disabled = false; }
                     closeModal(confirmModal);
                     if (!res || !res.ok) { toast((res && res.error) || 'Delete failed.', 'error'); return; }
                     var row = document.querySelector('tr[data-post-id="' + pid + '"]');
                     if (row && dt) { dt.row(row).remove().draw(false); } else if (row) { row.parentNode.removeChild(row); }
                     toast('Post deleted.', 'ok');
-                }).catch(function () { confirmOk.disabled = false; toast('Network error.', 'error'); });
+                }).catch(function () { if (okEl) { okEl.disabled = false; } toast('Network error.', 'error'); });
             });
         });
     });

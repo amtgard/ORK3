@@ -30,4 +30,9 @@ class Model_CmsSanitizer extends Model
     {
         return $this->CmsSanitizer->CleanFragment($html);
     }
+
+    public function is_safe_url($url)
+    {
+        return $this->CmsSanitizer->IsSafeUrl($url);
+    }
 }

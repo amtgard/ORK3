@@ -10,14 +10,17 @@
  *
  * Page-set variables (all optional unless noted):
  *   $cmsActive  string  which rail item is highlighted:
- *                       'pages'|'posts'|'nav'  (any other value, e.g. 'edit',
- *                       highlights nothing — leaf surfaces).
+ *                       'dashboard'|'pages'|'posts'|'media'|'nav'  (any other
+ *                       value, e.g. 'edit', highlights nothing — leaf surfaces).
  *   $cmsTitle   string  masthead display title. Default 'Content'.
  *   $cmsSub     string  optional subtitle under the title.
  *   $cmsCrumbs  array   optional breadcrumb: list of ['label'=>..,'href'=>?..].
  *                       The last crumb (or any without href) renders as plain text.
  *   $cmsActions string  optional raw HTML, right-aligned in the masthead
  *                       (e.g. the page's primary "New Page" button).
+ *   $cmsRailExtra string optional raw HTML rendered in the rail beneath the nav
+ *                       (e.g. the editor's Page-settings panel; widens the rail).
+ *                       Intentionally RAW HTML.
  *   $Caps       array   capability flags; rail hides nav/media items without them.
  *   UIR                 (constant) controller route base.
  *
