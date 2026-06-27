@@ -412,13 +412,13 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     box-sizing: border-box;
     font: inherit;
     font-size: 14px;
-    padding: 9px 11px;
+    padding: 6px 10px;
     border-radius: 7px;
     border: 1px solid var(--ork-input-border);
     background: var(--ork-input-bg);
     color: var(--ork-text);
 }
-.cms-textarea { resize: vertical; min-height: 64px; line-height: 1.45; }
+.cms-textarea { resize: vertical; min-height: 46px; line-height: 1.4; }
 .cms-input::placeholder,
 .cms-textarea::placeholder { color: var(--ork-text-lighter); }
 .cms-input:focus,
@@ -428,15 +428,15 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     border-color: var(--cms-gold, #f0b429);
     box-shadow: 0 0 0 3px rgba(240, 180, 41, .35);
 }
-.cms-field { margin-bottom: 10px; }
+.cms-field { margin-bottom: 7px; }
 .cms-label {
     display: block;
-    font-size: 12.5px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--ork-text-secondary);
-    margin-bottom: 5px;
+    margin-bottom: 3px;
 }
-.cms-help { font-size: 11.5px; color: var(--ork-text-muted); margin-top: 4px; }
+.cms-help { font-size: 11.5px; color: var(--ork-text-muted); margin-top: 3px; }
 
 /* ============================================================================
  * Page list (Cms_index)
@@ -754,7 +754,7 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     border: 1px solid var(--ork-border);
     border-radius: 10px;
     background: var(--ork-card-bg);
-    margin-bottom: 12px;
+    margin-bottom: 9px;
     overflow: hidden;
 }
 .cms-block-card.cms-block-disabled { opacity: .62; }
@@ -837,7 +837,7 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
+    padding: 7px 12px;
     background: var(--ork-bg-secondary);
     border-bottom: 1px solid var(--ork-border);
 }
@@ -890,7 +890,7 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-icon-btn:disabled { opacity: .35; cursor: not-allowed; }
 .cms-icon-btn.cms-icon-danger:hover { background: var(--ork-badge-red-bg); color: var(--ork-badge-red-text); }
 
-.cms-block-body { padding: 11px 12px; }
+.cms-block-body { padding: 10px 12px; }
 .cms-block-body.cms-collapsed { display: none; }
 
 /* toggle switch */
@@ -909,19 +909,19 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-switch input:checked + .cms-slider::before { transform: translateX(17px); }
 
 /* repeating sub-item lists (slides, cards, ctas) */
-.cms-subitems { margin-top: 6px; }
+.cms-subitems { margin-top: 4px; }
 .cms-subitem {
     border: 1px dashed var(--ork-border-dark);
     border-radius: 8px;
-    padding: 10px;
-    margin-bottom: 8px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
     background: var(--ork-bg-secondary);
 }
 .cms-subitem-head {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 7px;
+    margin-bottom: 5px;
 }
 .cms-subitem-head strong { font-size: 12.5px; color: var(--ork-text-secondary); }
 .cms-subitem-head .cms-block-tools { margin-left: auto; }
