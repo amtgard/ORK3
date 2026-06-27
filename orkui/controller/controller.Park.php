@@ -128,6 +128,15 @@ class Controller_Park extends Controller
         $pk_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $pk_isAdmin = ($pk_uid > 0) ? Ork3::$Lib->authorization->HasAuthority($pk_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
 
+        // Drafts are hidden from the listing at the SQL level (mirrors the Kingdom
+        // controller): admins see all; logged-in users see published + their own
+        // drafts; logged-out users see only published. Required because some draft
+        // events have mundane_id = 0, so the per-row creator check alone would leak
+        // them to anonymous viewers (0 === 0).
+        $pk_draftClause = $pk_isAdmin
+            ? ''
+            : ($pk_uid > 0 ? "AND (e.status = 'published' OR e.mundane_id = {$pk_uid})" : "AND e.status = 'published'");
+
         // Viewer's own RSVP status for each event-occurrence. Used by the row's
         // RSVP button to render "Going" / "Interested" instead of the generic
         // "RSVP" when the viewer has already RSVP'd. Anonymous viewer emits NULL
@@ -137,7 +146,7 @@ class Controller_Park extends Controller
             : "NULL";
 
         $evtSql = "
-			SELECT e.event_id, e.name, p.name AS park_name,
+			SELECT e.event_id, e.name, e.status, e.mundane_id AS event_creator, p.name AS park_name,
 			       cd.event_start, cd.event_end, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
 			       COALESCE(rsvp.rsvp_going, 0) AS rsvp_going,
 			       COALESCE(rsvp.rsvp_interested, 0) AS rsvp_interested,
@@ -156,6 +165,7 @@ class Controller_Park extends Controller
 			    GROUP BY event_calendardetail_id
 			) rsvp ON rsvp.event_calendardetail_id = cd.event_calendardetail_id
 			WHERE (e.park_id = {$pid} OR cd.at_park_id = {$pid})
+			{$pk_draftClause}
 			ORDER BY cd.event_start, e.name";
         $DB->Clear();
         $evtResult    = $DB->DataSet($evtSql);

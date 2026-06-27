@@ -369,8 +369,7 @@ class Controller_Event extends Controller
                     $newName = trim($this->request->Eventnew_edit->EventName ?? '');
                     if ($newName) {
                         $this->Event->update_event($this->session->token, $event_id, null, null, null, null, $newName, '', '');
-                        $bustKey = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $event_id]);
-                        Ork3::$Lib->ghettocache->bust('SearchService.Event', $bustKey);
+                        Ork3::$Lib->ghettocache->bust_event_search($event_id);
                     }
                     $r = $this->Event->update_event_detail([
                         'Token'                 => $this->session->token,
@@ -408,8 +407,7 @@ class Controller_Event extends Controller
                         $this->request->clear('Eventnew_edit');
                         $cdKey = Ork3::$Lib->ghettocache->key([$detail_id]);
                         Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $cdKey);
-                        $evKey = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $event_id]);
-                        Ork3::$Lib->ghettocache->bust('SearchService.Event', $evKey);
+                        Ork3::$Lib->ghettocache->bust_event_search($event_id);
                         // Sync admission fees — wrap DELETE+INSERTs in a transaction so a failed INSERT can't leave the fees table empty.
                         global $DB;
                         $_feesJson = trim($_POST['Fees'] ?? '');
@@ -546,10 +544,9 @@ class Controller_Event extends Controller
                                     " WHERE event_calendardetail_id = " . $detail_id .
                                     " AND date < '" . $today . "'"
                                 );
-                                $evKey  = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $event_id]);
                                 $oldKey = Ork3::$Lib->ghettocache->key([$detail_id]);
                                 $newKey = Ork3::$Lib->ghettocache->key([$new_detail_id]);
-                                Ork3::$Lib->ghettocache->bust('SearchService.Event', $evKey);
+                                Ork3::$Lib->ghettocache->bust_event_search($event_id);
                                 Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $oldKey);
                                 Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $newKey);
                                 header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id . '?reconciled=1');
@@ -989,8 +986,7 @@ class Controller_Event extends Controller
                         $new_id = max(array_map('intval', array_column($all, 'EventCalendarDetailId')));
                     }
                 }
-                $bustKey = Ork3::$Lib->ghettocache->key(['', null, null, null, null, null, $event_id]);
-                Ork3::$Lib->ghettocache->bust('SearchService.Event', $bustKey);
+                Ork3::$Lib->ghettocache->bust_event_search($event_id);
                 // Sync admission fees for the new occurrence — wrap DELETE+INSERTs in a transaction.
                 $_feesJson = trim($_POST['Fees'] ?? '');
                 $_feesIn = ($_feesJson !== '') ? json_decode($_feesJson, true) : [];
