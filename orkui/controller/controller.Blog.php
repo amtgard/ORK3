@@ -75,6 +75,7 @@ class Controller_Blog extends Controller
         $this->data['per_page']    = $perPage;
         $this->data['tag']         = $tag;
         $this->data['page_title']  = ($tag !== '') ? ('News — ' . $tag) : 'News';
+        $this->_cmsFab(UIR . 'Cms/posts', 'Manage posts');
     }
 
     /**
@@ -114,6 +115,7 @@ class Controller_Blog extends Controller
         $this->data['hero']        = $hero;
         $this->data['page_title']  = $post['title'];
         $this->data['meta_description'] = isset($post['excerpt']) ? (string) $post['excerpt'] : '';
+        $this->_cmsFab(UIR . 'Cms/editpost/' . (int) $post['post_id'], 'Edit this post');
     }
 
     /**
@@ -218,5 +220,28 @@ class Controller_Blog extends Controller
     private function _cdata($text)
     {
         return str_replace(']]>', ']]&gt;', (string) $text);
+    }
+
+    /**
+     * Expose CMS editor FAB flags (rendered by default.theme) when the viewer
+     * may edit. $editUrl/$editTip drive the Edit FAB; CMS post-creators also get
+     * a New Post FAB. No-op for signed-out or non-CMS users.
+     */
+    private function _cmsFab($editUrl, $editTip)
+    {
+        $uid = (int) ($this->session->user_id ?? 0);
+        if ($uid <= 0) {
+            return;
+        }
+        $this->load_model('CmsAuth');
+        $scope = array('type' => 'global', 'id' => 0);
+        if ($this->CmsAuth->cms_can($uid, 'page.edit', $scope)) {
+            $this->data['cmsEditUrl'] = $editUrl;
+            $this->data['cmsEditTip'] = $editTip;
+        }
+        if ($this->CmsAuth->cms_can($uid, 'page.create', $scope)) {
+            $this->data['cmsNewPostUrl'] = UIR . 'Cms/editpost/new';
+            $this->data['cmsNewPostTip'] = 'New post';
+        }
     }
 }

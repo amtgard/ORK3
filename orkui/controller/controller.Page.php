@@ -50,5 +50,15 @@ class Controller_Page extends Controller
 
         $this->data['FrontDoor']  = $this->CmsPage->get_page_blocks((int) $page['page_id']);
         $this->data['page_title'] = $page['title'];
+
+        // Show the floating editor FAB to CMS editors (rendered by default.theme).
+        $uid = (int) ($this->session->user_id ?? 0);
+        if ($uid > 0) {
+            $this->load_model('CmsAuth');
+            if ($this->CmsAuth->cms_can($uid, 'page.edit', array('type' => 'global', 'id' => 0))) {
+                $this->data['cmsEditUrl'] = UIR . 'Cms/edit/' . (int) $page['page_id'];
+                $this->data['cmsEditTip'] = 'Edit this page';
+            }
+        }
     }
 }

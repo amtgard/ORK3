@@ -1257,5 +1257,28 @@ if (typeof Highcharts !== 'undefined') {
 	})();
 	</script>
 
+<?php if (!empty($cmsEditUrl) || !empty($cmsNewPostUrl)): ?>
+<style>
+.cms-fab-stack{position:fixed;right:22px;bottom:22px;display:flex;gap:12px;z-index:1200;}
+.cms-fab{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:19px;color:#fff;box-shadow:0 4px 14px rgba(20,30,60,.28);text-decoration:none;border:none;cursor:pointer;transition:transform .12s ease,box-shadow .12s ease;position:relative;}
+.cms-fab:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(20,30,60,.35);color:#fff;}
+.cms-fab-primary{background:#1b3a6b;}
+.cms-fab-secondary{background:#b8862b;}
+.cms-fab[data-tip]::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 9px);right:0;background:#1f2937;color:#fff;font-size:12px;line-height:1.3;white-space:normal;width:max-content;max-width:200px;padding:5px 9px;border-radius:6px;opacity:0;pointer-events:none;transform:translateY(4px);transition:opacity .12s ease,transform .12s ease;}
+.cms-fab[data-tip]:hover::after{opacity:1;transform:translateY(0);}
+html[data-theme="dark"] .cms-fab-primary{background:#2a4d86;}
+html[data-theme="dark"] .cms-fab-secondary{background:#caa24a;}
+html[data-theme="dark"] .cms-fab[data-tip]::after{background:#0b1220;}
+@media print{.cms-fab-stack{display:none;}}
+</style>
+<div class="cms-fab-stack">
+    <?php if (!empty($cmsNewPostUrl)): ?>
+        <a class="cms-fab cms-fab-secondary" href="<?= htmlspecialchars($cmsNewPostUrl, ENT_QUOTES) ?>" data-tip="<?= htmlspecialchars(!empty($cmsNewPostTip) ? $cmsNewPostTip : 'New post', ENT_QUOTES) ?>" aria-label="<?= htmlspecialchars(!empty($cmsNewPostTip) ? $cmsNewPostTip : 'New post', ENT_QUOTES) ?>"><i class="fas fa-feather-alt"></i></a>
+    <?php endif; ?>
+    <?php if (!empty($cmsEditUrl)): ?>
+        <a class="cms-fab cms-fab-primary" href="<?= htmlspecialchars($cmsEditUrl, ENT_QUOTES) ?>" data-tip="<?= htmlspecialchars(!empty($cmsEditTip) ? $cmsEditTip : 'Edit this page', ENT_QUOTES) ?>" aria-label="<?= htmlspecialchars(!empty($cmsEditTip) ? $cmsEditTip : 'Edit this page', ENT_QUOTES) ?>"><i class="fas fa-pen"></i></a>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 </body>
 </html>
