@@ -19,7 +19,7 @@ $people       = $blockFields['people']       ?? [];
             <h3 class="fd-sec-title"><?= htmlspecialchars($heading, ENT_QUOTES) ?></h3>
         <?php endif; ?>
         <?php if (!empty($subheading)): ?>
-            <p style="color:#667;margin:6px 0 0;font-size:15px;"><?= htmlspecialchars($subheading, ENT_QUOTES) ?></p>
+            <p style="color:#667;margin:6px 0 0;font-size:15px;text-align:center;"><?= htmlspecialchars($subheading, ENT_QUOTES) ?></p>
         <?php endif; ?>
     </div>
 
