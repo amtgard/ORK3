@@ -587,6 +587,42 @@ class Controller_CmsAjax extends Controller
     }
 
     /* ------------------------------------------------------------------ *
+     * personlookup
+     * ------------------------------------------------------------------ */
+
+    /**
+     * Editor-only: resolve a linked Amtgard persona to its display names so the
+     * roster editor can snapshot them. Gated by CMS auth; real names are only
+     * resolvable behind the CMS capability boundary, never via public search.
+     */
+    public function personlookup($action = null)
+    {
+        $uid = $this->_begin();
+        $this->_require($uid, 'page.edit');
+
+        $mundaneId = (int)($_GET['mundane_id'] ?? $_POST['mundane_id'] ?? 0);
+        if ($mundaneId <= 0) {
+            echo json_encode(array('ok' => false));
+            exit;
+        }
+
+        $info = Ork3::$Lib->player->player_info($mundaneId);
+        if (!$info || empty($info['Persona'])) {
+            echo json_encode(array('ok' => false));
+            exit;
+        }
+
+        $mundaneName = trim(($info['GivenName'] ?? '') . ' ' . ($info['Surname'] ?? ''));
+        echo json_encode(array(
+            'ok'           => true,
+            'mundane_id'   => $mundaneId,
+            'persona'      => (string)$info['Persona'],
+            'mundane_name' => $mundaneName,
+        ));
+        exit;
+    }
+
+    /* ------------------------------------------------------------------ *
      * Internal helpers
      * ------------------------------------------------------------------ */
 

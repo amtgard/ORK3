@@ -285,6 +285,8 @@ window.CmsBlockEditor = (function () {
                 return ((f.slides || []).length) + ' slide(s)';
             case 'card_grid':
                 return (f.heading ? f.heading + ' — ' : '') + ((f.cards || []).length) + ' card(s)';
+            case 'staff_roster':
+                return 'Staff Roster — ' + ((f.people || []).length) + ' people';
             case 'cta_band':
                 return strip(f.heading || '') || ((f.ctas || []).length + ' CTA(s)');
             case 'heading':
@@ -632,6 +634,96 @@ window.CmsBlockEditor = (function () {
         return fieldImage({ fields: obj }, obj, key, label);
     }
 
+    function tnFixedAcPosition(input, dropdown) {
+        var r = input.getBoundingClientRect();
+        dropdown.style.position = 'fixed';
+        dropdown.style.left = r.left + 'px';
+        dropdown.style.top = (r.bottom + 2) + 'px';
+        dropdown.style.width = r.width + 'px';
+        dropdown.style.zIndex = '99999';
+    }
+
+    function personaLinkField(person) {
+        var wrap = el('div', 'cms-field'); wrap.style.marginBottom = '8px';
+        wrap.appendChild(el('label', 'cms-label', 'Link Amtgard persona (optional)'));
+
+        var chip = el('div', 'cms-persona-chip');
+        function renderChip() {
+            chip.innerHTML = '';
+            if (person.mundane_id && person.mundane_id > 0) {
+                chip.appendChild(el('span', null, esc('Linked: ' + (person.persona_name || ('#' + person.mundane_id)))));
+                var unlink = el('button', 'cms-link-btn'); unlink.type = 'button'; unlink.textContent = 'Unlink';
+                unlink.addEventListener('click', function () { person.mundane_id = 0; markDirty(); renderChip(); });
+                chip.appendChild(unlink);
+                chip.style.display = '';
+            } else {
+                chip.style.display = 'none';
+            }
+        }
+
+        var input = el('input', 'cms-input'); input.type = 'text';
+        input.placeholder = 'Search by persona or name…';
+        var dd = el('div', 'kn-ac-results'); dd.style.display = 'none';
+        document.body.appendChild(dd);
+
+        var timer = null, ctrl = null;
+        function closeDd() { dd.classList.remove('kn-ac-open'); dd.style.display = 'none'; }
+        function showDd() { tnFixedAcPosition(input, dd); dd.style.display = 'block'; dd.classList.add('kn-ac-open'); }
+
+        function pick(row) {
+            person.mundane_id = parseInt(row.MundaneId, 10) || 0;
+            person.persona_name = row.Persona || person.persona_name;
+            input.value = ''; closeDd(); markDirty(); renderChip();
+            fetch(UIR + 'CmsAjax/personlookup&mundane_id=' + person.mundane_id)
+                .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
+                .then(function (d) {
+                    if (d && d.ok) {
+                        if (d.persona) { person.persona_name = d.persona; }
+                        if (d.mundane_name) { person.mundane_name = d.mundane_name; }
+                        markDirty();
+                        renderList();
+                    }
+                })
+                .catch(function () { /* names stay as typed; non-fatal */ });
+        }
+
+        function search(term) {
+            if (ctrl) { ctrl.abort(); }
+            ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+            var url = UIR + 'KingdomAjax/playersearch/0&scope=all&include_inactive=1&q=' + encodeURIComponent(term);
+            fetch(url, ctrl ? { signal: ctrl.signal } : undefined)
+                .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
+                .then(function (rows) {
+                    dd.innerHTML = '';
+                    if (!rows || !rows.length) {
+                        dd.appendChild(el('div', 'kn-ac-item kn-ac-none', 'No matches')); showDd(); return;
+                    }
+                    rows.forEach(function (row) {
+                        var loc = [row.KAbbr, row.PAbbr].filter(Boolean).join(':');
+                        var item = el('div', 'kn-ac-item',
+                            esc(row.Persona) + (loc ? ' <span class="kn-ac-meta">' + esc(loc) + '</span>' : ''));
+                        item.addEventListener('mousedown', function (e) { e.preventDefault(); pick(row); });
+                        dd.appendChild(item);
+                    });
+                    showDd();
+                })
+                .catch(function () { /* ignore aborted/failed search */ });
+        }
+
+        input.addEventListener('input', function () {
+            var term = input.value.trim();
+            if (timer) { clearTimeout(timer); }
+            if (term.length < 2) { closeDd(); return; }
+            timer = setTimeout(function () { search(term); }, 200);
+        });
+        input.addEventListener('blur', function () { setTimeout(closeDd, 150); });
+
+        wrap.appendChild(chip);
+        wrap.appendChild(input);
+        renderChip();
+        return wrap;
+    }
+
     /* ---- bound primitive helpers used by the schema renderer ---- */
     function numberBound(obj, key, label, ph) {
         var wrap = el('div', 'cms-field');
@@ -976,6 +1068,31 @@ window.CmsBlockEditor = (function () {
                     box.appendChild(g);
                     box.appendChild(textBound(card, 'title', 'Title'));
                     box.appendChild(textBound(card, 'blurb', 'Blurb'));
+                    return box;
+                }));
+            return body;
+        }
+
+        if (t === 'staff_roster') {
+            body.appendChild(fieldText(block, 'kicker', 'Kicker'));
+            body.appendChild(fieldText(block, 'heading', 'Heading'));
+            body.appendChild(fieldText(block, 'subheading', 'Subheading'));
+            body.appendChild(fieldSelect(block, 'presentation', 'Presentation style',
+                [{ value: 'amtgard', label: 'Amtgard name leads' },
+                 { value: 'mundane', label: 'Real name leads' }], 'amtgard'));
+            body.appendChild(el('div', 'cms-help', 'Choose which name leads on every card. Link a persona to auto-fill names; you can still edit them.'));
+            body.appendChild(el('div', 'cms-label', 'People'));
+            body.appendChild(repeater(block, 'people', 'Person',
+                { image: {}, persona_name: '', mundane_name: '', role: '', bio: '', mundane_id: 0, href: '' },
+                function (person) {
+                    var box = el('div', null);
+                    box.appendChild(imageBound(person, 'image', 'Photo'));
+                    box.appendChild(personaLinkField(person));
+                    box.appendChild(textBound(person, 'persona_name', 'Amtgard name'));
+                    box.appendChild(textBound(person, 'mundane_name', 'Real name'));
+                    box.appendChild(textBound(person, 'role', 'Role / title'));
+                    box.appendChild(textBoundArea(person, 'bio', 'Bio'));
+                    box.appendChild(textBound(person, 'href', 'Manual link (used only if no persona is linked)'));
                     return box;
                 }));
             return body;

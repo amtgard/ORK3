@@ -668,3 +668,19 @@ html[data-theme="dark"] .fd-btn-ghost {
 @media (max-width: 420px) {
     .fd-kingdoms-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ---- staff_roster block ---- */
+.fd-roster-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px;max-width:1100px;margin:0 auto;}
+.fd-roster-card{display:flex;flex-direction:column;align-items:center;text-align:center;background:#fff;border:1px solid #e6e8ef;border-radius:12px;padding:20px 16px;text-decoration:none;color:inherit;transition:box-shadow .15s ease,transform .15s ease;}
+a.fd-roster-card:hover{box-shadow:0 6px 18px rgba(20,30,60,.12);transform:translateY(-2px);}
+.fd-roster-photo{width:96px;height:96px;border-radius:50%;object-fit:cover;margin-bottom:12px;background:#eef0f6;}
+.fd-roster-photo-empty{display:flex;align-items:center;justify-content:center;color:#9aa3b8;font-size:34px;}
+.fd-roster-name{font-size:19px;font-weight:600;color:#1b2a4a;}
+.fd-roster-secondary{font-size:13px;color:#6b7488;margin-top:2px;}
+.fd-roster-role{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--gold);margin-top:6px;font-weight:600;}
+.fd-roster-bio{font-size:14px;color:#4a5168;margin-top:10px;line-height:1.5;}
+html[data-theme="dark"] .fd-roster-card{background:#1c2333;border-color:#2c3650;}
+html[data-theme="dark"] .fd-roster-name{color:#eef1f8;}
+html[data-theme="dark"] .fd-roster-secondary{color:#9aa3b8;}
+html[data-theme="dark"] .fd-roster-bio{color:#c3c9d8;}
+html[data-theme="dark"] .fd-roster-photo{background:#2c3650;}

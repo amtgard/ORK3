@@ -610,6 +610,7 @@ class Controller_Cms extends Controller
             'photo_mosaic'    => array('Photo Mosaic',       'Media',    false, 'fa-icons',         'Asymmetric photo collage (first image large) with a caption tile.'),
             'kingdoms_teaser' => array('Kingdoms Teaser',    'Dynamic',  true,  'fa-crown',         'Live grid of active parent kingdoms with heraldry, linking to each kingdom profile.'),
             'cta_band'        => array('Call-to-Action Band', 'Content', false, 'fa-bullhorn',      'Banner with a heading, subcopy, optional logo, and call-to-action buttons.'),
+            'staff_roster'    => array('Staff Roster',       'Content',  false, 'fa-users',         'A roster of people — photo, name, role, and bio, each optionally linked to their Amtgard persona.'),
             // New CMS block types from the spec (Phase 4 partials).
             'rich_text'       => array('Rich Text',          'Content',  false, 'fa-paragraph',     'Heading + formatted body text with an optional call-to-action.'),
             'heading'         => array('Heading',            'Content',  false, 'fa-heading',       'A standalone section heading (H2–H4) with alignment.'),
@@ -691,6 +692,14 @@ class Controller_Cms extends Controller
                 ),
             ),
             array(
+                'type'   => 'about',
+                'label'  => $labels['about'],
+                'blocks' => array(
+                    $this->_starter('rich_text'),
+                    $this->_starter('staff_roster'),
+                ),
+            ),
+            array(
                 'type'   => 'resource',
                 'label'  => $labels['resource'],
                 'blocks' => array(
@@ -740,6 +749,8 @@ class Controller_Cms extends Controller
             'article'    => array('accordion', 'table', 'file_download', 'video_embed', 'gallery', 'columns'),
             // Media/gallery: image-led blocks.
             'media'      => array('gallery', 'photo_mosaic', 'video_embed', 'card_grid'),
+            // About / Team: a people roster plus supporting content blocks.
+            'about'      => array('staff_roster', 'card_grid', 'cta_band', 'gallery'),
             // Resource/document: downloads + tabular/structured reference.
             'resource'   => array('file_download', 'table', 'accordion', 'columns'),
             // Blog index: the live post feed, with an optional call-to-action.
@@ -778,6 +789,7 @@ class Controller_Cms extends Controller
             'composed'   => 'Composed / Landing',
             'article'    => 'Article / Text',
             'media'      => 'Media / Gallery',
+            'about'      => 'About / Team',
             'resource'   => 'Resource / Document',
             'blog_index' => 'Blog Index',
             'dynamic'    => 'Dynamic Data',
@@ -824,6 +836,7 @@ class Controller_Cms extends Controller
             'rich_text'       => array('kicker' => '', 'heading' => '', 'body' => '', 'align' => 'left', 'cta' => array('label' => '', 'href' => '')),
             'cta_band'        => array('heading' => '', 'subcopy' => '', 'logo' => array(), 'ctas' => array(), 'links' => ''),
             'card_grid'       => array('kicker' => '', 'heading' => '', 'subheading' => '', 'cards' => array()),
+            'staff_roster'    => array('kicker' => '', 'heading' => 'Meet the Team', 'subheading' => '', 'presentation' => 'amtgard', 'people' => array()),
             'heading'         => array('text' => '', 'level' => 2, 'align' => 'left'),
             'gallery'         => array('images' => array(), 'columns' => 3, 'caption' => ''),
             'file_download'   => array('files' => array()),

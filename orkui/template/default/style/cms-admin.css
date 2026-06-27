@@ -1635,3 +1635,10 @@ html[data-theme="dark"] .cms-frontdoor-text strong { color: var(--cms-gold, #f0b
     .cms-filters .cms-select { max-width: none; flex: 1 1 100%; }
     .cms-bulkbar-actions { margin-left: 0; width: 100%; }
 }
+
+/* Staff Roster — persona link chip + autocomplete meta.
+   Note: .cms-help and .cms-link-btn already exist above (theme-var based,
+   dark-compatible) and are reused as-is; only the new selectors are added here. */
+.cms-persona-chip{display:flex;align-items:center;gap:8px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:4px 8px;margin-bottom:6px;font-size:13px;}
+.kn-ac-meta{color:#9aa3b8;font-size:12px;margin-left:6px;}
+html[data-theme="dark"] .cms-persona-chip{background:#1e293b;border-color:#334155;color:#e2e8f0;}
