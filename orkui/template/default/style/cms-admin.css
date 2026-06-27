@@ -510,6 +510,9 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-table tbody tr:hover { background: var(--ork-bg-secondary); }
 .cms-table .cms-pg-title { font-weight: 600; color: var(--ork-text); }
 .cms-table .cms-pg-slug { font-size: 12px; color: var(--ork-text-muted); }
+.cms-table a.cms-pg-slug-link { color: var(--ork-text-muted); text-decoration: none; cursor: pointer; }
+.cms-table a.cms-pg-slug-link:hover { text-decoration: underline; }
+.cms-table a.cms-pg-slug-link .fa-external-link-alt { font-size: .78em; opacity: .55; margin-left: 3px; }
 .cms-row-actions {
     display: flex;
     gap: 6px;
