@@ -75,6 +75,43 @@ $cmsCrumbs  = array(
     array('label' => $isNew ? 'New Page' : $pTitle),
 );
 $cmsActions = '';
+
+/* Page settings live in the rail (beneath the nav) — built before the shell renders. */
+ob_start();
+?>
+<div class="cms-rail-settings">
+    <h2 class="cms-rail-section-title">Page settings</h2>
+    <div class="cms-field">
+        <label class="cms-label" for="cmsTitle">Title</label>
+        <input type="text" class="cms-input" id="cmsTitle" value="<?= $h($pTitle) ?>" placeholder="Page title">
+    </div>
+    <div class="cms-field">
+        <label class="cms-label" for="cmsSlug">Slug</label>
+        <input type="text" class="cms-input" id="cmsSlug" value="<?= $h($pSlug) ?>" placeholder="page-slug"<?= $pIsSystem ? ' readonly' : '' ?>>
+        <div class="cms-help">URL path. Auto-filled from the title until you edit it.</div>
+    </div>
+    <div class="cms-field">
+        <label class="cms-label" for="cmsType">Type</label>
+        <select class="cms-select" id="cmsType">
+            <?php foreach ($pageTypes as $pt):
+                $sel = ((string)$pt['type'] === $pType) ? ' selected' : '';
+            ?>
+                <option value="<?= $h($pt['type']) ?>"<?= $sel ?>><?= $h($pt['label']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="cms-field">
+        <label class="cms-label" for="cmsMeta">Meta description</label>
+        <textarea class="cms-textarea" id="cmsMeta" placeholder="Short summary for search engines." style="min-height:58px;"><?= $h($pMeta) ?></textarea>
+    </div>
+    <?php if ($canDelete): ?>
+    <div class="cms-action-row" style="margin-top:10px;">
+        <button type="button" class="cms-btn cms-btn-danger cms-btn-sm cms-btn-block" id="cmsDeleteBtn"><i class="fas fa-trash"></i> Delete page</button>
+    </div>
+    <?php endif; ?>
+</div>
+<?php
+$cmsRailExtra = ob_get_clean();
 include __DIR__ . '/cms/_shell_top.tpl';
 ?>
 
@@ -113,44 +150,6 @@ include __DIR__ . '/cms/_shell_top.tpl';
     <?php endif; ?>
 
     <div class="cms-editor cms-editor-haspreview" id="cmsEditorGrid">
-
-        <?php /* ---- Meta panel ---- */ ?>
-        <div class="cms-meta-panel">
-            <h2>Page settings</h2>
-
-            <div class="cms-field">
-                <label class="cms-label" for="cmsTitle">Title</label>
-                <input type="text" class="cms-input" id="cmsTitle" value="<?= $h($pTitle) ?>" placeholder="Page title">
-            </div>
-
-            <div class="cms-field">
-                <label class="cms-label" for="cmsSlug">Slug</label>
-                <input type="text" class="cms-input" id="cmsSlug" value="<?= $h($pSlug) ?>" placeholder="page-slug"<?= $pIsSystem ? ' readonly' : '' ?>>
-                <div class="cms-help">URL path. Auto-filled from the title until you edit it.</div>
-            </div>
-
-            <div class="cms-field">
-                <label class="cms-label" for="cmsType">Type</label>
-                <select class="cms-select" id="cmsType">
-                    <?php foreach ($pageTypes as $pt):
-                        $sel = ((string)$pt['type'] === $pType) ? ' selected' : '';
-                    ?>
-                        <option value="<?= $h($pt['type']) ?>"<?= $sel ?>><?= $h($pt['label']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="cms-field">
-                <label class="cms-label" for="cmsMeta">Meta description</label>
-                <textarea class="cms-textarea" id="cmsMeta" placeholder="Short summary for search engines." style="min-height:70px;"><?= $h($pMeta) ?></textarea>
-            </div>
-
-            <?php if ($canDelete): ?>
-            <div class="cms-action-row" style="margin-top:14px;">
-                <button type="button" class="cms-btn cms-btn-danger" id="cmsDeleteBtn"><i class="fas fa-trash"></i> Delete page</button>
-            </div>
-            <?php endif; ?>
-        </div>
 
         <?php
         /* ---- Blocks column + modals + block engine: SHARED partial ---- */

@@ -104,9 +104,9 @@
     display: flex;
     align-items: stretch;
     gap: 0;
-    max-width: 1320px;
+    max-width: 1600px;
     margin: 0 auto;
-    padding: 16px 16px 60px;
+    padding: 12px 14px 36px;
     color: var(--ork-text);
 }
 
@@ -120,13 +120,15 @@
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    padding: 16px 12px;
+    gap: 12px;
+    padding: 14px 11px;
     border-radius: 12px;
     background: linear-gradient(180deg, var(--cms-navy2, #121a30), var(--cms-navy, #0b1120));
     border: 1px solid rgba(240, 180, 41, .22);
     box-shadow: 0 6px 20px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .03);
 }
+/* Edit surfaces add the Page-settings panel, so the rail widens to fit a form. */
+.cms-rail-wide { flex-basis: 258px; width: 258px; }
 .cms-rail-brand {
     display: flex;
     align-items: center;
@@ -201,19 +203,19 @@
 .cms-main {
     flex: 1 1 auto;
     min-width: 0;
-    padding: 0 0 0 26px;
+    padding: 0 0 0 16px;
 }
 .cms-shell-masthead {
     display: flex;
     align-items: flex-start;
     gap: 16px;
     flex-wrap: wrap;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
 }
 .cms-shell-masthead-text { flex: 1 1 auto; min-width: 0; }
 .cms-shell-title {
     font-family: 'Open Sans', system-ui, sans-serif;
-    font-size: 28px;
+    font-size: 23px;
     font-weight: 700;
     letter-spacing: .01em;
     line-height: 1.1;
@@ -416,7 +418,7 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     background: var(--ork-input-bg);
     color: var(--ork-text);
 }
-.cms-textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+.cms-textarea { resize: vertical; min-height: 64px; line-height: 1.45; }
 .cms-input::placeholder,
 .cms-textarea::placeholder { color: var(--ork-text-lighter); }
 .cms-input:focus,
@@ -426,7 +428,7 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     border-color: var(--cms-gold, #f0b429);
     box-shadow: 0 0 0 3px rgba(240, 180, 41, .35);
 }
-.cms-field { margin-bottom: 14px; }
+.cms-field { margin-bottom: 10px; }
 .cms-label {
     display: block;
     font-size: 12.5px;
@@ -678,8 +680,8 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 
 .cms-editor {
     display: grid;
-    grid-template-columns: 320px 1fr;
-    gap: 22px;
+    grid-template-columns: 1fr;   /* blocks span the full width; settings live in the rail */
+    gap: 16px;
     align-items: start;
 }
 .cms-meta-panel {
@@ -696,6 +698,29 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
     color: var(--ork-text);
 }
+
+/* ---- Page-settings panel inside the rail (edit page) ------------------- */
+.cms-rail-extra {
+    border-top: 1px solid rgba(240, 180, 41, .18);
+    padding-top: 12px;
+    margin-top: 2px;
+}
+.cms-rail-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    margin: 0 0 10px;
+    padding: 0 4px;
+    color: var(--cms-gold, #f0b429);
+    background: transparent; border: none; border-radius: 0; text-shadow: none;
+}
+.cms-rail-settings .cms-field { margin-bottom: 9px; }
+.cms-rail-settings .cms-input,
+.cms-rail-settings .cms-select,
+.cms-rail-settings .cms-textarea { font-size: 13px; padding: 7px 9px; }
+.cms-rail-settings .cms-help { font-size: 11px; }
+.cms-btn-block { width: 100%; justify-content: center; }
 .cms-status-row {
     display: flex;
     align-items: center;
@@ -865,7 +890,7 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-icon-btn:disabled { opacity: .35; cursor: not-allowed; }
 .cms-icon-btn.cms-icon-danger:hover { background: var(--ork-badge-red-bg); color: var(--ork-badge-red-text); }
 
-.cms-block-body { padding: 14px; }
+.cms-block-body { padding: 11px 12px; }
 .cms-block-body.cms-collapsed { display: none; }
 
 /* toggle switch */
@@ -888,15 +913,15 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-subitem {
     border: 1px dashed var(--ork-border-dark);
     border-radius: 8px;
-    padding: 12px;
-    margin-bottom: 10px;
+    padding: 10px;
+    margin-bottom: 8px;
     background: var(--ork-bg-secondary);
 }
 .cms-subitem-head {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 7px;
 }
 .cms-subitem-head strong { font-size: 12.5px; color: var(--ork-text-secondary); }
 .cms-subitem-head .cms-block-tools { margin-left: auto; }
@@ -1514,7 +1539,7 @@ html[data-theme="dark"] .cms-frontdoor-text strong { color: var(--cms-gold, #f0b
 
 /* The grid gains a 3rd track only when the pane is open. */
 .cms-editor-haspreview.cms-preview-active {
-    grid-template-columns: 320px 1fr minmax(360px, 0.95fr);
+    grid-template-columns: 1fr minmax(360px, 0.95fr);
 }
 .cms-preview-pane {
     display: none;

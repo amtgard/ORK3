@@ -30,6 +30,9 @@ $cmsTitle   = isset($cmsTitle) && $cmsTitle !== '' ? (string)$cmsTitle : 'Conten
 $cmsSub     = isset($cmsSub) ? (string)$cmsSub : '';
 $cmsCrumbs  = isset($cmsCrumbs) && is_array($cmsCrumbs) ? $cmsCrumbs : array();
 $cmsActions = isset($cmsActions) ? (string)$cmsActions : '';
+// Optional raw HTML rendered in the rail beneath the nav (e.g. the editor's
+// Page-settings panel). Like $cmsActions, this is intentionally RAW HTML.
+$cmsRailExtra = isset($cmsRailExtra) ? (string)$cmsRailExtra : '';
 $shCaps     = isset($Caps) && is_array($Caps) ? $Caps : array();
 
 $shH = function ($v) {
@@ -48,7 +51,7 @@ $shRail = array(
 ?>
 <div class="cms-shell">
 
-    <aside class="cms-rail" aria-label="Content management navigation">
+    <aside class="cms-rail<?= $cmsRailExtra !== '' ? ' cms-rail-wide' : '' ?>" aria-label="Content management navigation">
         <div class="cms-rail-brand">
             <i class="fas fa-folder-open cms-rail-mark" aria-hidden="true"></i>
             <span class="cms-rail-word">Content</span>
@@ -75,6 +78,10 @@ $shRail = array(
                 <span class="cms-rail-label">View live site</span>
             </a>
         </nav>
+
+        <?php if ($cmsRailExtra !== ''): ?>
+            <div class="cms-rail-extra"><?= $cmsRailExtra ?></div>
+        <?php endif; ?>
     </aside>
 
     <main class="cms-main">
