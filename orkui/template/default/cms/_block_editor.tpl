@@ -663,7 +663,7 @@ window.CmsBlockEditor = (function () {
 
         var input = el('input', 'cms-input'); input.type = 'text';
         input.placeholder = 'Search by persona or name…';
-        var dd = el('div', 'kn-ac-results'); dd.style.display = 'none';
+        var dd = el('div', 'kn-ac-results cms-persona-ac'); dd.style.display = 'none';
         document.body.appendChild(dd);
 
         var timer = null, ctrl = null;
