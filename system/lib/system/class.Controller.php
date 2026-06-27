@@ -220,6 +220,17 @@ class Controller
             if (!empty($homeBlocks)) {
                 $frontDoorBlocks = $homeBlocks;
             }
+            // Floating editor FAB on the front-door home for CMS editors
+            // (rendered by default.theme from cmsEditUrl). NOTE: $_uid from the
+            // bootstrap method is out of scope here, so read the session directly.
+            $fabUid = isset($this->session->user_id) ? (int) $this->session->user_id : 0;
+            if ($fabUid > 0) {
+                $this->load_model('CmsAuth');
+                if (isset($this->CmsAuth) && $this->CmsAuth->cms_can($fabUid, 'page.edit', ['type' => 'global', 'id' => 0])) {
+                    $this->data['cmsEditUrl'] = UIR . 'Cms/edit/' . (int) $home['page_id'];
+                    $this->data['cmsEditTip'] = 'Edit home page';
+                }
+            }
         }
         if ($frontDoorBlocks === null) {
             $this->load_model('FrontDoor');
