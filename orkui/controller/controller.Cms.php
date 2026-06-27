@@ -297,6 +297,8 @@ class Controller_Cms extends Controller
         // Preview renders the CURRENT (draft) enabled blocks via the shared renderer.
         $this->data['FrontDoor']   = $this->CmsPage->get_page_blocks((int)$page['page_id']);
         $this->data['PreviewPage'] = $page;
+        $this->data['PreviewKind'] = 'page';
+        $this->data['CanPublish']  = $this->CmsAuth->cms_can($uid, 'page.publish', self::$SCOPE);
         $this->data['page_title']  = 'Preview: ' . $page['title'];
     }
 
@@ -335,6 +337,7 @@ class Controller_Cms extends Controller
         $this->data['FrontDoor']   = $this->CmsPost->get_post_blocks((int)$post['post_id']);
         $this->data['PreviewPage'] = $post;
         $this->data['PreviewKind'] = 'postrow';
+        $this->data['CanPublish']  = $this->CmsAuth->cms_can($uid, 'page.publish', self::$SCOPE);
         $this->data['page_title']  = 'Preview: ' . $post['title'];
     }
 

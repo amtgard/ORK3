@@ -10,6 +10,11 @@ $fdAssetBase = HTTP_TEMPLATE . 'default/frontdoor/';
 $fdBlocks    = isset( $FrontDoor ) && is_array( $FrontDoor ) ? $FrontDoor : [];
 $pvTitle     = ( ! empty( $PreviewPage ) && isset( $PreviewPage['title'] ) ) ? (string) $PreviewPage['title'] : '';
 $pvStatus    = ( ! empty( $PreviewPage ) && isset( $PreviewPage['status'] ) ) ? (string) $PreviewPage['status'] : 'draft';
+$pvCanPublish = ! empty( $CanPublish ) && $pvStatus !== 'published';
+$pvKind       = ( isset( $PreviewKind ) && $PreviewKind === 'postrow' ) ? 'post' : 'page';
+$pvId         = ( $pvKind === 'post' ) ? (int) ( $PreviewPage['post_id'] ?? 0 ) : (int) ( $PreviewPage['page_id'] ?? 0 );
+$pvPublishUrl = UIR . ( $pvKind === 'post' ? 'CmsAjax/publishpost' : 'CmsAjax/publish' );
+$pvIdField    = ( $pvKind === 'post' ) ? 'post_id' : 'page_id';
 ?>
 <link rel="stylesheet" href="<?= $fdAssetBase ?>css/frontdoor.css?v=<?= @filemtime( $fdDir . 'css/frontdoor.css' ) ?>">
 <style>
@@ -20,11 +25,24 @@ $pvStatus    = ( ! empty( $PreviewPage ) && isset( $PreviewPage['status'] ) ) ? 
   text-transform:uppercase;letter-spacing:.06em;font-size:11px;}
 .cms-preview-banner .cms-preview-title{opacity:.92;font-weight:500;}
 html[data-theme="dark"] .cms-preview-banner{background:#78350f;}
+.cms-preview-banner .cms-preview-publish{margin-left:auto;display:inline-flex;align-items:center;gap:7px;
+  background:#16a34a;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:600;
+  cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:background .12s ease;}
+.cms-preview-banner .cms-preview-publish:hover{background:#15803d;}
+.cms-preview-banner .cms-preview-publish:disabled{opacity:.65;cursor:default;}
+html[data-theme="dark"] .cms-preview-banner .cms-preview-publish{background:#15803d;}
+html[data-theme="dark"] .cms-preview-banner .cms-preview-publish:hover{background:#166534;}
 </style>
 
 <div class="cms-preview-banner">
 	<span class="cms-preview-badge"><?= $pvStatus === 'published' ? 'Published' : 'Unpublished' ?> · Preview</span>
 	<?php if ( $pvTitle !== '' ) : ?><span class="cms-preview-title"><?= htmlspecialchars( $pvTitle ) ?></span><?php endif; ?>
+	<?php if ( $pvCanPublish && $pvId > 0 ) : ?>
+		<button type="button" class="cms-preview-publish" id="cmsPreviewPublish"
+			data-endpoint="<?= htmlspecialchars( $pvPublishUrl, ENT_QUOTES ) ?>"
+			data-field="<?= htmlspecialchars( $pvIdField, ENT_QUOTES ) ?>"
+			data-id="<?= $pvId ?>"><i class="fas fa-globe"></i> Publish</button>
+	<?php endif; ?>
 </div>
 
 <?php if ( ! empty( $Message ) && empty( $fdBlocks ) ) : ?>
@@ -36,4 +54,34 @@ html[data-theme="dark"] .cms-preview-banner{background:#78350f;}
 <?php include $fdDir . 'render_blocks.tpl'; ?>
 </div>
 <script src="<?= $fdAssetBase ?>js/frontdoor.js"></script>
+<?php endif; ?>
+
+<?php if ( $pvCanPublish && $pvId > 0 ) : ?>
+<script>
+(function () {
+	var btn = document.getElementById('cmsPreviewPublish');
+	if (!btn) { return; }
+	btn.addEventListener('click', function () {
+		var endpoint = btn.getAttribute('data-endpoint');
+		var field    = btn.getAttribute('data-field');
+		var id       = btn.getAttribute('data-id');
+		btn.disabled = true;
+		btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publishing\u2026';
+		fetch(endpoint, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			body: field + '=' + encodeURIComponent(id)
+		}).then(function (r) {
+			if (!r.ok) { throw new Error('HTTP ' + r.status); }
+			return r.json();
+		}).then(function (d) {
+			if (d && d.ok === true) { location.reload(); }
+			else { throw new Error('publish failed'); }
+		}).catch(function () {
+			btn.disabled = false;
+			btn.innerHTML = '<i class="fas fa-globe"></i> Publish \u2014 retry';
+		});
+	});
+})();
+</script>
 <?php endif; ?>
