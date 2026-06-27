@@ -301,6 +301,15 @@ class CmsAuth extends CmsBase
         $scopeId   = (int)$scopeId;
         $grantedBy = (int)$grantedBy;
 
+        // Authorization: the actor must hold roles.manage on the target scope.
+        // Without this any caller could escalate roles (the grantedBy field was
+        // recorded for audit but never enforced).
+        if ($grantedBy <= 0
+            || !$this->CmsCan($grantedBy, 'roles.manage', array('type' => $scopeType, 'id' => $scopeId))
+        ) {
+            return 0;
+        }
+
         // INSERT IGNORE makes the unique-key collision a no-op; we then read
         // the row back by the unique tuple to get the authoritative id (a
         // duplicate INSERT does not yield a reliable lastInsertId on this DB).
@@ -342,9 +351,15 @@ class CmsAuth extends CmsBase
      * @param string $role
      * @param string $scopeType
      * @param int    $scopeId
+     * @param int    $actorUid  acting user; when > 0 the actor must hold
+     *                          roles.manage on the target scope (revoke is
+     *                          denied otherwise). Defaults to 0 to preserve
+     *                          legacy internal callers that have already
+     *                          authorized the operation upstream — new callers
+     *                          should always pass the real actor.
      * @return bool true when the input was valid and the DELETE executed
      */
-    public function RevokeRole($uid, $role, $scopeType, $scopeId)
+    public function RevokeRole($uid, $role, $scopeType, $scopeId, $actorUid = 0)
     {
         global $DB;
 
@@ -355,6 +370,15 @@ class CmsAuth extends CmsBase
         }
         $scopeType = $this->_normalizeScopeType($scopeType);
         $scopeId   = (int)$scopeId;
+
+        // Authorization (opt-in): when an actor is supplied, require roles.manage
+        // on the target scope before allowing the revoke.
+        $actorUid = (int)$actorUid;
+        if ($actorUid > 0
+            && !$this->CmsCan($actorUid, 'roles.manage', array('type' => $scopeType, 'id' => $scopeId))
+        ) {
+            return false;
+        }
 
         $DB->Clear();
         $DB->mundane_id = $uid;

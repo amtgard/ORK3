@@ -34,10 +34,13 @@ $fdbCount   = count($fdbColumns);
             <?php
             // Recurse into the shared renderer for this column's blocks.
             // render_blocks.tpl reads $fdBlocks; restore the outer value after.
-            $fdbOuterBlocks = isset($fdBlocks) ? $fdBlocks : null;
+            // Use a depth-safe stack so nested columns blocks (a columns block
+            // inside a columns block) don't clobber each other's outer context.
+            static $fdbStack = [];
+            $fdbStack[] = isset($fdBlocks) ? $fdBlocks : null;
             $fdBlocks = is_array($col) ? $col : [];
             include __DIR__ . '/../render_blocks.tpl';
-            $fdBlocks = $fdbOuterBlocks;
+            $fdBlocks = array_pop($fdbStack);
             ?>
         </div>
     <?php endforeach; ?>

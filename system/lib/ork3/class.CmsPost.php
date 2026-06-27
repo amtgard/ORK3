@@ -21,6 +21,9 @@ class CmsPost extends CmsBase
     /** @var CmsPage|null lazily-instantiated block delegate */
     private $_pageLib = null;
 
+    /** @var array per-request memo of ListPosts results, keyed by opts hash */
+    private static $_listCache = array();
+
     public function __construct()
     {
         parent::__construct();
@@ -111,6 +114,14 @@ class CmsPost extends CmsBase
     {
         global $DB;
 
+        // Per-request memo: blog_feed.tpl can call this multiple times per render
+        // with identical opts. Keyed by a hash of the normalized opts; reset
+        // naturally per FPM request and invalidated on any write below.
+        $cacheKey = md5(json_encode(is_array($opts) ? $opts : array()));
+        if (isset(self::$_listCache[$cacheKey])) {
+            return self::$_listCache[$cacheKey];
+        }
+
         $scopeType = $this->_normalizeScopeType(isset($opts['scope_type']) ? $opts['scope_type'] : 'global');
         $scopeId = isset($opts['scope_id']) ? (int)$opts['scope_id'] : 0;
         $includeDrafts = !empty($opts['includeDrafts']);
@@ -193,7 +204,18 @@ class CmsPost extends CmsBase
             unset($row);
         }
 
-        return array('rows' => $rows, 'total' => $total);
+        $result = array('rows' => $rows, 'total' => $total);
+        self::$_listCache[$cacheKey] = $result;
+        return $result;
+    }
+
+    /**
+     * Drop the per-request ListPosts memo. Called on any post/tag write so a
+     * subsequent ListPosts in the same request re-queries fresh data.
+     */
+    private function _invalidateListCache()
+    {
+        self::$_listCache = array();
     }
 
     /**
@@ -270,6 +292,7 @@ class CmsPost extends CmsBase
             'SELECT post_id FROM ' . DB_PREFIX . 'cms_post'
             . ' WHERE slug = :slug AND scope_type = :scope_type AND scope_id = :scope_id LIMIT 1'
         ));
+        $this->_invalidateListCache();
         return ($row !== null && isset($row['post_id'])) ? (int)$row['post_id'] : 0;
     }
 
@@ -387,6 +410,8 @@ class CmsPost extends CmsBase
             . ' WHERE post_id = :post_id'
         );
 
+        // Covers SetStatus too (it delegates here).
+        $this->_invalidateListCache();
         return true;
     }
 
@@ -478,6 +503,7 @@ class CmsPost extends CmsBase
             'DELETE FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id'
         );
 
+        $this->_invalidateListCache();
         return true;
     }
 
@@ -523,18 +549,29 @@ class CmsPost extends CmsBase
             'DELETE FROM ' . DB_PREFIX . 'cms_post_tag WHERE post_id = :post_id'
         );
 
-        foreach ($tagIds as $tagId) {
+        // Single multi-row INSERT for all resolved links (O(1) round-trip vs
+        // O(N) per-tag INSERTs). Distinct placeholders per row; post_id repeated
+        // safely as code-controlled int. Stays inside the open transaction.
+        if (!empty($tagIds)) {
+            $rows = array();
+            $i = 0;
             $DB->Clear();
-            $DB->post_id = $postId;
-            $DB->tag_id = (int)$tagId;
+            foreach ($tagIds as $tagId) {
+                $rows[] = '(:post_id_' . $i . ', :tag_id_' . $i . ')';
+                $DB->{'post_id_' . $i} = $postId;
+                $DB->{'tag_id_' . $i} = (int)$tagId;
+                $i++;
+            }
             $DB->Execute(
                 'INSERT INTO ' . DB_PREFIX . 'cms_post_tag (post_id, tag_id)'
-                . ' VALUES (:post_id, :tag_id)'
+                . ' VALUES ' . implode(', ', $rows)
             );
         }
 
         $DB->Clear();
         $DB->Execute('COMMIT');
+
+        $this->_invalidateListCache();
 
         return true;
     }

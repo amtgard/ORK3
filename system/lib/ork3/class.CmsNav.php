@@ -35,6 +35,16 @@ class CmsNav extends CmsBase
     /** Allowed link_type enum values. */
     private static $LINK_TYPES = array('page', 'post', 'url', 'dynamic');
 
+    /**
+     * Per-request memo for GetMenu() results, keyed by "menu|scope_type|scope_id".
+     * GetMenu is called on every front-door page render (marketing_nav.tpl), so
+     * repeated calls in one request hit memory instead of re-querying. Cleared on
+     * any same-request write so reads can't go stale. Per-request only (a static
+     * resets naturally when the FPM worker finishes the request); no cross-request
+     * cache.
+     */
+    private static $menuCache = array();
+
     public function __construct()
     {
         parent::__construct();
@@ -59,6 +69,15 @@ class CmsNav extends CmsBase
      */
     public function GetMenu($menu, $scopeType = 'global', $scopeId = 0)
     {
+        // Per-request memo: this is called on every front-door page render, often
+        // more than once per request. Key on the normalized scope so callers that
+        // pass equivalent-but-unnormalized scope still share an entry.
+        $cacheKey = $this->_clampMenu($menu) . '|'
+            . $this->_normalizeScopeType($scopeType) . '|' . (int)$scopeId;
+        if (array_key_exists($cacheKey, self::$menuCache)) {
+            return self::$menuCache[$cacheKey];
+        }
+
         $rows = $this->_fetchItems($menu, $scopeType, $scopeId, true);
 
         // Split into top-level + children-by-parent, preserving SQL ordering.
@@ -84,6 +103,7 @@ class CmsNav extends CmsBase
         }
         unset($item);
 
+        self::$menuCache[$cacheKey] = $top;
         return $top;
     }
 
@@ -164,6 +184,9 @@ class CmsNav extends CmsBase
         }
         $DB->Execute($sql);
 
+        // A same-request read must not serve a pre-write tree.
+        self::$menuCache = array();
+
         return (int)$DB->GetLastInsertId();
     }
 
@@ -172,16 +195,38 @@ class CmsNav extends CmsBase
      * link_type and clamps lengths. Returns true when a valid id was supplied
      * and an UPDATE ran.
      *
-     * @param int   $navId
-     * @param array $data subset of CreateItem keys
+     * IDOR guard: before mutating, the target row's stored scope_type/scope_id
+     * must match the caller's intended scope. The intended scope is taken from
+     * the explicit $scopeType/$scopeId params when given, else falls back to the
+     * scope_type/scope_id carried in $data (how the CMS controller calls this).
+     * When no intended scope can be determined (e.g. the data-migration callers
+     * that pass neither) the check is skipped for backward compatibility.
+     *
+     * @param int        $navId
+     * @param array      $data      subset of CreateItem keys
+     * @param string|null $scopeType caller's intended scope_type (ownership guard)
+     * @param int|null    $scopeId   caller's intended scope_id (ownership guard)
      * @return bool
      */
-    public function UpdateItem($navId, $data)
+    public function UpdateItem($navId, $data, $scopeType = null, $scopeId = null)
     {
         global $DB;
 
         $navId = (int)$navId;
         if ($navId <= 0 || !is_array($data)) {
+            return false;
+        }
+
+        // Resolve the caller's intended scope (explicit params win, else $data).
+        if ($scopeType === null && isset($data['scope_type'])) {
+            $scopeType = $data['scope_type'];
+        }
+        if ($scopeId === null && isset($data['scope_id'])) {
+            $scopeId = $data['scope_id'];
+        }
+        // When an intended scope is known, confirm the existing row belongs to it
+        // before mutating — reject cross-scope writes (IDOR).
+        if ($scopeType !== null && !$this->_ownsItem($navId, $scopeType, $scopeId)) {
             return false;
         }
 
@@ -249,6 +294,9 @@ class CmsNav extends CmsBase
             . ' WHERE nav_id = :nav_id'
         );
 
+        // A same-request read must not serve a pre-write tree.
+        self::$menuCache = array();
+
         return true;
     }
 
@@ -257,10 +305,16 @@ class CmsNav extends CmsBase
      * deleting a top-level item removes its whole dropdown). Returns true
      * when the item existed and was removed.
      *
-     * @param int $navId
+     * IDOR guard: when an intended scope is supplied via $scopeType/$scopeId the
+     * target row's stored scope must match it, else the delete is rejected. When
+     * no scope is supplied the check is skipped (backward compatibility).
+     *
+     * @param int         $navId
+     * @param string|null $scopeType caller's intended scope_type (ownership guard)
+     * @param int|null    $scopeId   caller's intended scope_id (ownership guard)
      * @return bool
      */
-    public function DeleteItem($navId)
+    public function DeleteItem($navId, $scopeType = null, $scopeId = null)
     {
         global $DB;
 
@@ -269,15 +323,32 @@ class CmsNav extends CmsBase
             return false;
         }
 
-        // Confirm existence first (so a no-op delete reports false).
+        // Confirm existence first (so a no-op delete reports false). Read the
+        // scope too so we can enforce the ownership guard in the same lookup.
         $DB->Clear();
         $DB->nav_id = $navId;
         $existing = $this->_firstRow($DB->DataSet(
-            'SELECT nav_id FROM ' . DB_PREFIX . 'cms_nav_item WHERE nav_id = :nav_id LIMIT 1'
+            'SELECT nav_id, scope_type, scope_id FROM ' . DB_PREFIX . 'cms_nav_item'
+            . ' WHERE nav_id = :nav_id LIMIT 1'
         ));
         if ($existing === null) {
             return false;
         }
+
+        // Reject cross-scope deletes (IDOR) when an intended scope is supplied.
+        if ($scopeType !== null) {
+            $wantType = $this->_normalizeScopeType($scopeType);
+            $wantId   = (int)$scopeId;
+            if ((string)$existing['scope_type'] !== $wantType || (int)$existing['scope_id'] !== $wantId) {
+                return false;
+            }
+        }
+
+        // Wrap the two DELETEs in one transaction so a failure between them can't
+        // leave a parent removed with orphaned children (or vice versa). Mirrors
+        // the ReplaceBlocks transaction pattern in class.CmsPage.php.
+        $DB->Clear();
+        $DB->Execute('START TRANSACTION');
 
         // Delete children first (one dropdown level).
         $DB->Clear();
@@ -292,6 +363,24 @@ class CmsNav extends CmsBase
         $DB->Execute(
             'DELETE FROM ' . DB_PREFIX . 'cms_nav_item WHERE nav_id = :nav_id'
         );
+
+        // Verify the row is gone within the transaction before committing; a
+        // surviving row means the DELETE was silently dropped → ROLLBACK.
+        $DB->Clear();
+        $DB->nav_id = $navId;
+        $stillThere = $this->_firstRow($DB->DataSet(
+            'SELECT nav_id FROM ' . DB_PREFIX . 'cms_nav_item WHERE nav_id = :nav_id LIMIT 1'
+        ));
+
+        $DB->Clear();
+        if ($stillThere !== null) {
+            $DB->Execute('ROLLBACK');
+            return false;
+        }
+        $DB->Execute('COMMIT');
+
+        // A same-request read must not serve a pre-delete tree.
+        self::$menuCache = array();
 
         return true;
     }
@@ -419,7 +508,44 @@ class CmsNav extends CmsBase
             return false;
         }
 
+        // A same-request read must not serve the pre-reorder tree.
+        self::$menuCache = array();
+
         return true;
+    }
+
+    /**
+     * True when nav row $navId exists AND its stored scope_type/scope_id match
+     * the supplied intended scope. Used as the IDOR ownership guard before a
+     * mutating write. Follows the _firstRow read pattern used elsewhere here.
+     *
+     * @param int    $navId
+     * @param string $scopeType intended scope_type (normalized internally)
+     * @param int    $scopeId   intended scope_id
+     * @return bool
+     */
+    private function _ownsItem($navId, $scopeType, $scopeId)
+    {
+        global $DB;
+
+        $navId = (int)$navId;
+        if ($navId <= 0) {
+            return false;
+        }
+        $wantType = $this->_normalizeScopeType($scopeType);
+        $wantId   = (int)$scopeId;
+
+        $DB->Clear();
+        $DB->nav_id = $navId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_nav_item'
+            . ' WHERE nav_id = :nav_id LIMIT 1'
+        ));
+        if ($row === null) {
+            return false;
+        }
+
+        return (string)$row['scope_type'] === $wantType && (int)$row['scope_id'] === $wantId;
     }
 
     /* ====================================================================

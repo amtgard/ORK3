@@ -487,7 +487,9 @@ class Controller_CmsAjax extends Controller
             $this->_fail('Navigation item not found.', 4);
         }
 
-        $deleted = (bool)$this->CmsNav->delete_item($navId);
+        // Pass the global scope so DeleteItem's scope-ownership (IDOR) guard
+        // actually fires — matches the scope the update path uses.
+        $deleted = (bool)$this->CmsNav->delete_item($navId, 'global', 0);
         if (!$deleted) {
             $this->_fail('Navigation item not found.', 4);
         }

@@ -557,10 +557,13 @@ class CmsPage extends CmsBase
             $DB->search_s = '%' . $filters['search'] . '%';
         }
 
-        $limit = '';
+        // Hard default cap when no caller limit is supplied — never return an
+        // unbounded result set. Explicit $filters['limit'] still wins.
         if (!empty($filters['limit'])) {
             // Code-controlled integer only; inlined since LIMIT can't be bound.
             $limit = ' LIMIT ' . (int)$filters['limit'];
+        } else {
+            $limit = ' LIMIT 500';
         }
 
         $sql = 'SELECT page_id, slug, type, title, status, updated_at'

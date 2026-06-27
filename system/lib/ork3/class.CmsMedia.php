@@ -352,6 +352,19 @@ class CmsMedia extends CmsBase
         $DB->media_id = $mediaId;
         $DB->Execute('DELETE FROM ' . DB_PREFIX . 'cms_media WHERE media_id = :media_id');
 
+        // Execute() is void; under ERRMODE_WARNING a failed DELETE is silent.
+        // Read the row back — only unlink files once the row is actually gone,
+        // so we never orphan a surviving DB row whose files we removed.
+        $DB->Clear();
+        $DB->media_id = $mediaId;
+        $check = $this->_firstRow($DB->DataSet(
+            'SELECT media_id FROM ' . DB_PREFIX . 'cms_media'
+            . ' WHERE media_id = :media_id LIMIT 1'
+        ));
+        if ($check !== null) {
+            return false; // DELETE didn't take — leave files in place.
+        }
+
         // Unlink files (guarded to assets/cms-media/).
         if (!empty($row['path'])) {
             $this->_safeUnlink((string)$row['path']);

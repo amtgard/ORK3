@@ -27,9 +27,9 @@ class Model_CmsAuth extends Model
         return $this->CmsAuth->GrantRole($uid, $role, $scopeType, $scopeId, $grantedBy);
     }
 
-    public function revoke_role($uid, $role, $scopeType, $scopeId)
+    public function revoke_role($uid, $role, $scopeType, $scopeId, $actorUid = 0)
     {
-        return $this->CmsAuth->RevokeRole($uid, $role, $scopeType, $scopeId);
+        return $this->CmsAuth->RevokeRole($uid, $role, $scopeType, $scopeId, $actorUid);
     }
 
     public function get_user_grants($uid, $scopeType = null, $scopeId = null)

@@ -37,9 +37,9 @@ class Model_CmsNav extends Model
         return $this->CmsNav->UpdateItem($navId, $data);
     }
 
-    public function delete_item($navId)
+    public function delete_item($navId, $scopeType = null, $scopeId = null)
     {
-        return $this->CmsNav->DeleteItem($navId);
+        return $this->CmsNav->DeleteItem($navId, $scopeType, $scopeId);
     }
 
     public function reorder($menu, array $orderedItems, $scopeType = 'global', $scopeId = 0)
