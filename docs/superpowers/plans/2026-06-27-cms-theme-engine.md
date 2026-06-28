@@ -551,14 +551,21 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Consumes: `CmsThemeTokens::*`, `CmsBase::_firstRow/_eachRow/_normalizeScopeType`, global `$DB` (YapoDb).
 - Produces (lib, CamelCase): `GetActiveTheme($scopeType,$scopeId): ?array`, `GetActiveCss($scopeType,$scopeId): string`, `SaveTheme($scopeType,$scopeId,$name,$tokens,$uid): int`, `SetActive($scopeType,$scopeId,$id): bool`, `ResetActive($scopeType,$scopeId): bool`. Thin model (snake_case) mirrors these.
 
+**YapoDb idiom (CRITICAL — match `class.CmsPage.php` exactly):** this codebase does NOT use positional `?` placeholders. The shared global `$DB` (YapoDb) uses **named placeholders `:field` in the SQL string, bound via `$DB->field = value` after `$DB->Clear()`**. Tables are prefixed with the `DB_PREFIX` constant (so the table is `DB_PREFIX . 'cms_theme'`). `$DB->DataSet($sql)` runs SELECTs (consume via `$this->_firstRow()`/`_eachRow()`); `$DB->Execute($sql)` runs writes. `GetLastInsertId()` is unreliable under ERRMODE_WARNING — after an INSERT, **read the row back by its unique tuple** (see `CmsPage::CreatePage`). The code below already follows this idiom; reproduce it precisely.
+
 - [ ] **Step 1: Apply the migration locally**
 
-Run:
+Run (container `ork3app`, DB `ork`, user `ork`; password in `.dev.env` as `MYSQL_PASSWORD`):
 ```bash
-docker compose -f docker-compose.php8.yml exec -T ork3app sh -lc 'mysql ork < /var/www/db-migrations/2026-06-27-cms-theme.sql' || \
-  mysql -h127.0.0.1 -P<port> -uork -p<pw> ork < db-migrations/2026-06-27-cms-theme.sql
+docker compose -f docker-compose.php8.yml exec -T ork3app sh -lc \
+  'mysql -uork -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" < /var/www/db-migrations/2026-06-27-cms-theme.sql'
 ```
-Expected: no error; `SHOW TABLES LIKE 'ork_cms_theme'` returns one row. (If unsure of DB creds, check `.dev.env`.)
+Expected: no error. Verify:
+```bash
+docker compose -f docker-compose.php8.yml exec -T ork3app sh -lc \
+  'mysql -uork -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "SHOW TABLES LIKE \"ork_cms_theme\""'
+```
+Expected: one row (`ork_cms_theme`). NOTE: confirm `DB_PREFIX` resolves to `ork_` (grep `define('DB_PREFIX'` in the codebase); the migration hardcodes `ork_cms_theme`, so the lib must build `DB_PREFIX . 'cms_theme'` to match.
 
 - [ ] **Step 2: Implement the lib model**
 
@@ -566,7 +573,12 @@ Expected: no error; `SHOW TABLES LIKE 'ork_cms_theme'` returns one row. (If unsu
 <?php
 // system/lib/ork3/class.CmsTheme.php
 // DB persistence for CMS theme token sets. Pure computation is delegated to
-// CmsThemeTokens; this class only reads/writes ork_cms_theme.
+// CmsThemeTokens; this class only reads/writes <prefix>cms_theme.
+//
+// DB idiom (matches class.CmsPage.php): shared global $DB (YapoDb); always
+// Clear() before a raw DataSet()/Execute(); bind values via $DB->field = ...
+// (the SQL uses :field named placeholders). lastInsertId() is unreliable on
+// dup-key under ERRMODE_WARNING, so INSERTs read back by the unique tuple.
 
 require_once __DIR__ . '/class.CmsThemeTokens.php';
 
@@ -583,17 +595,21 @@ class CmsTheme extends CmsBase
         global $DB;
         $scopeType = $this->_normalizeScopeType($scopeType);
         $scopeId   = (int)$scopeId;
+
         $DB->Clear();
-        $r = $DB->DataSet(
-            "SELECT id, name, tokens_json, is_active FROM ork_cms_theme
-             WHERE scope_type = ? AND scope_id = ? AND is_active = 1 LIMIT 1",
-            array($scopeType, $scopeId)
-        );
-        $row = $this->_firstRow($r);
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = $scopeId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT id, name, tokens_json, is_active FROM ' . DB_PREFIX . 'cms_theme'
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND is_active = 1 LIMIT 1'
+        ));
         if ($row === null) {
             return null;
         }
-        $row['tokens'] = json_decode((string)($row['tokens_json'] ?? ''), true) ?: array();
+        $row['tokens'] = json_decode((string)(isset($row['tokens_json']) ? $row['tokens_json'] : ''), true);
+        if (!is_array($row['tokens'])) {
+            $row['tokens'] = array();
+        }
         return $row;
     }
 
@@ -608,8 +624,8 @@ class CmsTheme extends CmsBase
     }
 
     /**
-     * Upsert a theme by (scope,name); returns its id. Stores only validated
-     * tokens. Does NOT change active state.
+     * Upsert a theme by (scope,name); returns its id (>0) or 0 on failure.
+     * Stores only validated tokens. Does NOT change active state.
      */
     public function SaveTheme($scopeType, $scopeId, $name, $tokens, $uid)
     {
@@ -617,45 +633,70 @@ class CmsTheme extends CmsBase
         $scopeType = $this->_normalizeScopeType($scopeType);
         $scopeId   = (int)$scopeId;
         $name      = trim((string)$name);
-        if ($name === '') { $name = 'Default'; }
-        $clean = CmsThemeTokens::Validate($tokens);
-        $json  = json_encode($clean);
-        $uid   = (int)$uid;
+        if ($name === '') {
+            $name = 'Default';
+        }
+        $json = json_encode(CmsThemeTokens::Validate($tokens));
+        $uid  = (int)$uid;
 
+        // Existing (scope,name) → UPDATE in place.
         $DB->Clear();
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = $scopeId;
+        $DB->name       = $name;
         $existing = $this->_firstRow($DB->DataSet(
-            "SELECT id FROM ork_cms_theme WHERE scope_type=? AND scope_id=? AND name=? LIMIT 1",
-            array($scopeType, $scopeId, $name)
+            'SELECT id FROM ' . DB_PREFIX . 'cms_theme'
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND name = :name LIMIT 1'
         ));
         if ($existing !== null) {
             $id = (int)$existing['id'];
             $DB->Clear();
+            $DB->tokens_json = $json;
+            $DB->updated_by  = $uid;
+            $DB->id          = $id;
             $DB->Execute(
-                "UPDATE ork_cms_theme SET tokens_json=?, updated_by=? WHERE id=?",
-                array($json, $uid, $id)
+                'UPDATE ' . DB_PREFIX . 'cms_theme'
+                . ' SET tokens_json = :tokens_json, updated_by = :updated_by WHERE id = :id'
             );
             return $id;
         }
+
+        // INSERT, then read back by the unique (scope,name) tuple.
         $DB->Clear();
+        $DB->scope_type  = $scopeType;
+        $DB->scope_id    = $scopeId;
+        $DB->name        = $name;
+        $DB->tokens_json = $json;
+        $DB->updated_by  = $uid;
         $DB->Execute(
-            "INSERT INTO ork_cms_theme (scope_type, scope_id, name, tokens_json, updated_by, is_active)
-             VALUES (?, ?, ?, ?, ?, 0)",
-            array($scopeType, $scopeId, $name, $json, $uid)
+            'INSERT INTO ' . DB_PREFIX . 'cms_theme'
+            . ' (scope_type, scope_id, name, tokens_json, updated_by, is_active)'
+            . ' VALUES (:scope_type, :scope_id, :name, :tokens_json, :updated_by, 0)'
         );
-        return (int)$DB->LastInsertId();
+
+        $DB->Clear();
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = $scopeId;
+        $DB->name       = $name;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT id FROM ' . DB_PREFIX . 'cms_theme'
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND name = :name LIMIT 1'
+        ));
+        return $row ? (int)$row['id'] : 0;
     }
 
     /** Make one theme active for its scope (deactivating siblings). */
     public function SetActive($scopeType, $scopeId, $id)
     {
         global $DB;
-        $scopeType = $this->_normalizeScopeType($scopeType);
-        $scopeId   = (int)$scopeId;
-        $id        = (int)$id;
         $DB->Clear();
+        $DB->id         = (int)$id;
+        $DB->scope_type = $this->_normalizeScopeType($scopeType);
+        $DB->scope_id   = (int)$scopeId;
         $DB->Execute(
-            "UPDATE ork_cms_theme SET is_active = IF(id = ?, 1, 0) WHERE scope_type=? AND scope_id=?",
-            array($id, $scopeType, $scopeId)
+            'UPDATE ' . DB_PREFIX . 'cms_theme'
+            . ' SET is_active = IF(id = :id, 1, 0)'
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id'
         );
         return true;
     }
@@ -665,16 +706,18 @@ class CmsTheme extends CmsBase
     {
         global $DB;
         $DB->Clear();
+        $DB->scope_type = $this->_normalizeScopeType($scopeType);
+        $DB->scope_id   = (int)$scopeId;
         $DB->Execute(
-            "UPDATE ork_cms_theme SET is_active = 0 WHERE scope_type=? AND scope_id=?",
-            array($this->_normalizeScopeType($scopeType), (int)$scopeId)
+            'UPDATE ' . DB_PREFIX . 'cms_theme'
+            . ' SET is_active = 0 WHERE scope_type = :scope_type AND scope_id = :scope_id'
         );
         return true;
     }
 }
 ```
 
-Note: verify `$DB->LastInsertId()`/`$DB->Execute`/`$DB->DataSet` signatures against a sibling lib (e.g. `class.CmsPage.php::CreatePage`/`ReplaceBlocks`) and match exactly (method casing, placeholder style). Adjust if the codebase uses a different binding API.
+Note: this mirrors `class.CmsPage.php`'s YapoDb idiom exactly (named `:field` placeholders, `$DB->field =` binds, `DB_PREFIX`, read-back-after-insert). Before finishing, open `class.CmsPage.php` and confirm the method casing (`Clear`/`DataSet`/`Execute`) and `DB_PREFIX` usage still match; adjust if the codebase differs.
 
 - [ ] **Step 3: Implement the thin model**
 
