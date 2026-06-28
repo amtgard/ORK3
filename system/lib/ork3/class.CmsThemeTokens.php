@@ -93,4 +93,154 @@ class CmsThemeTokens
         }
         return $out;
     }
+
+    /** '#rrggbb'|'#rgb' => [r,g,b] 0-255. */
+    public static function HexToRgb($hex)
+    {
+        $hex = ltrim(strtolower(trim((string)$hex)), '#');
+        if (strlen($hex) === 3) {
+            $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+        }
+        if (!preg_match('/^[0-9a-f]{6}$/', $hex)) {
+            return array(0, 0, 0);
+        }
+        return array(hexdec(substr($hex, 0, 2)), hexdec(substr($hex, 2, 2)), hexdec(substr($hex, 4, 2)));
+    }
+
+    public static function RgbToHex($r, $g, $b)
+    {
+        $c = function ($n) {
+            return str_pad(dechex(max(0, min(255, (int)round($n)))), 2, '0', STR_PAD_LEFT);
+        };
+        return '#' . $c($r) . $c($g) . $c($b);
+    }
+
+    /** hex => [h(0-360), s(0-1), l(0-1)]. */
+    public static function HexToHsl($hex)
+    {
+        list($r, $g, $b) = array_map(function ($v) {
+            return $v / 255;
+        }, self::HexToRgb($hex));
+        $max = max($r, $g, $b);
+        $min = min($r, $g, $b);
+        $d = $max - $min;
+        $l = ($max + $min) / 2;
+        $h = 0;
+        $s = 0;
+        if ($d > 0) {
+            $s = $d / (1 - abs(2 * $l - 1));
+            if ($max === $r) {
+                $h = 60 * fmod((($g - $b) / $d), 6);
+            } elseif ($max === $g) {
+                $h = 60 * ((($b - $r) / $d) + 2);
+            } else {
+                $h = 60 * ((($r - $g) / $d) + 4);
+            }
+        }
+        if ($h < 0) {
+            $h += 360;
+        }
+        return array($h, $s, $l);
+    }
+
+    public static function HslToHex($h, $s, $l)
+    {
+        $c = (1 - abs(2 * $l - 1)) * $s;
+        $x = $c * (1 - abs(fmod($h / 60, 2) - 1));
+        $m = $l - $c / 2;
+        if ($h < 60) {
+            $rp = $c;
+            $gp = $x;
+            $bp = 0;
+        } elseif ($h < 120) {
+            $rp = $x;
+            $gp = $c;
+            $bp = 0;
+        } elseif ($h < 180) {
+            $rp = 0;
+            $gp = $c;
+            $bp = $x;
+        } elseif ($h < 240) {
+            $rp = 0;
+            $gp = $x;
+            $bp = $c;
+        } elseif ($h < 300) {
+            $rp = $x;
+            $gp = 0;
+            $bp = $c;
+        } else {
+            $rp = $c;
+            $gp = 0;
+            $bp = $x;
+        }
+        return self::RgbToHex(($rp + $m) * 255, ($gp + $m) * 255, ($bp + $m) * 255);
+    }
+
+    /** WCAG relative luminance 0-1. */
+    public static function Luminance($hex)
+    {
+        $lin = array_map(function ($v) {
+            $v /= 255;
+            return $v <= 0.03928 ? $v / 12.92 : pow(($v + 0.055) / 1.055, 2.4);
+        }, self::HexToRgb($hex));
+        return 0.2126 * $lin[0] + 0.7152 * $lin[1] + 0.0722 * $lin[2];
+    }
+
+    /** WCAG contrast ratio between two hex colors (>=1). */
+    public static function Contrast($a, $b)
+    {
+        $la = self::Luminance($a);
+        $lb = self::Luminance($b);
+        return (max($la, $lb) + 0.05) / (min($la, $lb) + 0.05);
+    }
+
+    /** Black or white, whichever contrasts better with $bg. */
+    private static function BestText($bg)
+    {
+        return self::Contrast('#ffffff', $bg) >= self::Contrast('#1a2236', $bg) ? '#ffffff' : '#1a2236';
+    }
+
+    private static function WithL($hex, $l)
+    {
+        list($h, $s) = self::HexToHsl($hex);
+        return self::HslToHex($h, $s, max(0, min(1, $l)));
+    }
+
+    /** Nudge $fg lightness until it clears $ratio against $bg (preserving hue). */
+    private static function EnsureContrast($fg, $bg, $ratio, $towardLight)
+    {
+        for ($i = 0; $i < 20 && self::Contrast($fg, $bg) < $ratio; $i++) {
+            list($h, $s, $l) = self::HexToHsl($fg);
+            $l = $towardLight ? min(1, $l + 0.04) : max(0, $l - 0.04);
+            $fg = self::HslToHex($h, $s, $l);
+        }
+        return $fg;
+    }
+
+    /** Resolve user tokens to full light + dark token maps. Pure. */
+    public static function Derive($userTokens)
+    {
+        $light = array_merge(self::DefaultValues(), self::Validate($userTokens));
+        $light['--fd-primary-contrast'] = self::BestText($light['--fd-primary']);
+
+        // Dark color set (color tokens only; shape/type pass through).
+        $dark = $light;
+        $dark['--fd-bg']         = self::WithL($light['--fd-primary'], 0.08);   // brand-tinted near-black
+        $dark['--fd-surface']    = self::WithL($light['--fd-primary'], 0.13);
+        $dark['--fd-border']     = self::WithL($light['--fd-primary'], 0.22);
+        $dark['--fd-text']       = '#e8ecf1';
+        $dark['--fd-text-muted'] = '#aab3c0';
+        // Brand colors: lift lightness for legibility on dark, keep hue/sat.
+        list($ph, $ps, $pl) = self::HexToHsl($light['--fd-primary']);
+        $dark['--fd-primary'] = self::HslToHex($ph, $ps, max($pl, 0.55));
+        list($ah, $as, $al) = self::HexToHsl($light['--fd-accent']);
+        $dark['--fd-accent']  = self::HslToHex($ah, $as, max($al, 0.55));
+        $dark['--fd-primary-contrast'] = self::BestText($dark['--fd-primary']);
+
+        // Contrast safety on derived pairs (nudge derived values, not stored ones).
+        $dark['--fd-text']       = self::EnsureContrast($dark['--fd-text'], $dark['--fd-bg'], 4.5, true);
+        $dark['--fd-text-muted'] = self::EnsureContrast($dark['--fd-text-muted'], $dark['--fd-bg'], 3.0, true);
+
+        return array('light' => $light, 'dark' => $dark);
+    }
 }

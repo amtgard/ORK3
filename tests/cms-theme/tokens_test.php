@@ -39,5 +39,18 @@ check('allowlist font kept', ($v['--fd-font-heading'] ?? '') === 'Lexend');
 check('radius clamped to 24px', ($v['--fd-radius'] ?? '') === '24px');
 check('unknown key dropped', !isset($v['evil']));
 
+// --- Derive: light/dark token maps ---
+$d = CmsThemeTokens::Derive(array('--fd-primary' => '#1b4d3e', '--fd-radius' => '6px'));
+check('light keeps user primary', $d['light']['--fd-primary'] === '#1b4d3e');
+check('light bg stays default white', $d['light']['--fd-bg'] === '#ffffff');
+check('dark bg is dark (low luminance)', CmsThemeTokens::Luminance($d['dark']['--fd-bg']) < 0.15);
+check('dark text is light (high luminance)', CmsThemeTokens::Luminance($d['dark']['--fd-text']) > 0.6);
+check('shape passes through to dark', $d['dark']['--fd-radius'] === '6px');
+check('primary-contrast computed for light', in_array($d['light']['--fd-primary-contrast'], array('#ffffff', '#1a2236'), true));
+check('dark text/bg contrast >= 4.5', CmsThemeTokens::Contrast($d['dark']['--fd-text'], $d['dark']['--fd-bg']) >= 4.5);
+// hue preserved: a green primary stays greener than red in dark
+$h = CmsThemeTokens::HexToHsl($d['dark']['--fd-primary']);
+check('primary hue preserved (green-ish)', $h[0] > 90 && $h[0] < 180);
+
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";
 exit($fails === 0 ? 0 : 1);
