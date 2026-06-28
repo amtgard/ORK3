@@ -1058,8 +1058,8 @@ In `frontdoor.css`, replace the existing `.fd-page { --navy; --navy2; --gold; --
     --fd-text-muted: #5b6472;
     --fd-border:  #e2e6ec;
     --fd-primary-contrast: #ffffff;
-    --fd-font-heading: 'MedievalSharp', cursive;
-    --fd-font-body: 'Open Sans', sans-serif;
+    --fd-font-heading: 'MedievalSharp', Georgia, serif;
+    --fd-font-body: system-ui, -apple-system, sans-serif;
     --fd-font-scale: 1rem;
     --fd-radius: 12px;
     --fd-space: 1;
@@ -1079,6 +1079,17 @@ In `frontdoor.css`, replace the existing `.fd-page { --navy; --navy2; --gold; --
     box-shadow: var(--fd-shadow);
 }
 ```
+
+**ZERO-VISUAL-CHANGE — font defaults MUST match current literals.** The CSS token
+DEFAULTS above reproduce today's front-door exactly: body `system-ui, -apple-system,
+sans-serif` (current `.fd-page` line 12), headings `'MedievalSharp', Georgia, serif`
+(current lines 39/54), navy `#0b1120`, gold `#f0b429`, ink `#1a2236`, radius `12px`,
+shadow `0 12px 50px rgba(0,0,0,.4)`. Do NOT use `'Open Sans'`/`cursive` as the CSS
+defaults — that would silently restyle the unthemed site. (Note: the editor's token
+CATALOG default for body is `Open Sans` — intentionally different. That only takes
+effect once a theme is ACTIVE, i.e. theming a site adopts Open Sans for the body; the
+UNTHEMED baseline this task must preserve stays `system-ui`. Confirm every other
+replaced value's default equals the literal it replaced.)
 
 - [ ] **Step 2: Point headings + key surfaces at tokens**
 
