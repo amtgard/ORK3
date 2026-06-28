@@ -825,13 +825,18 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ### Task 7: Render-path injection (front door reads the active theme)
 
 **Files:**
-- Modify: `system/lib/system/class.Controller.php` (`index()` front-door block ~L228; add helper `_attachFrontDoorTheme()`)
-- Modify: `orkui/controller/controller.Page.php`, `orkui/controller/controller.Blog.php` (only where they set `IsFrontDoor`/render `.fd-page` blocks — verify by grep)
-- Modify: `orkui/template/default/default.theme` (emit `<style id="fd-theme-tokens">` in `<head>`)
+- Modify: `system/lib/system/class.Controller.php` (add helper `_attachFrontDoorTheme()`; call it in `index()` ~L230)
+- Modify: `orkui/controller/controller.Page.php` (`view()` — renders `.fd-page` content, sets `IsFrontDoor=false`)
+- Modify: `orkui/controller/controller.Blog.php` (`post()` — renders `.fd-page` content)
+- Modify: `orkui/template/default/default.theme` (emit `<style id="fd-theme-tokens">` at END OF BODY)
 
 **Interfaces:**
 - Consumes: `Model_CmsTheme->get_active_css('global', 0)`.
 - Produces: `$this->data['fdThemeCss']` (string CSS or unset); `default.theme` renders it when non-empty.
+
+**CRITICAL — cascade/source-order facts (already verified):**
+- `frontdoor.css` (which will declare the `.fd-page { --fd-*: default }` tokens in Task 9) is `<link>`ed in the **body** content templates (`_index.tpl:12`, `Page_view.tpl:12`, `Blog_post.tpl:22`, `Cms_preview.tpl`, `Blog_index.tpl`), NOT in `<head>`. So a theme `<style>` placed in `<head>` would load BEFORE `frontdoor.css` and be overridden by its equal-specificity `.fd-page` defaults. The theme block MUST be emitted AFTER the body content — emit it at **end of `<body>`** (just before `</body>`), so source order makes the theme win for both light and dark.
+- Only base `Controller::index()` sets `IsFrontDoor=true`. `Page::view()` and `Blog::post()` render `.fd-page` content but set `IsFrontDoor=false`. The theme emission is gated on `$fdThemeCss` (NOT `IsFrontDoor`), so the helper must be called in ALL THREE controllers, or themed CMS pages/blog posts won't pick up the theme.
 
 - [ ] **Step 1: Add the shared helper to base Controller**
 
@@ -850,43 +855,52 @@ protected function _attachFrontDoorTheme()
 
 - [ ] **Step 2: Call it from `index()`**
 
-Immediately after `$this->data['IsFrontDoor'] = true;` in `index()`, add:
+Immediately after `$this->data['IsFrontDoor'] = true;` in `index()` (~L230), add:
 ```php
 $this->_attachFrontDoorTheme();
 ```
 
-- [ ] **Step 3: Find other front-door render entry points**
+- [ ] **Step 3: Call it from Page::view() and Blog::post()**
 
-Run:
-```bash
-grep -rn "IsFrontDoor.*=.*true" orkui/controller system/lib/system
-```
-Expected: identify Page/view + Blog/post (and any others). Add `$this->_attachFrontDoorTheme();` right where each sets `IsFrontDoor = true`. (If they route through base `index()`, no change needed — confirm.)
-
-- [ ] **Step 4: Emit the style block in default.theme**
-
-In `orkui/template/default/default.theme`, immediately AFTER the `orkui.css` `<link>` (the line with `default/style/orkui.css`), add:
+In `controller.Page.php::view()`, after the line `$this->data['FrontDoor'] = $this->CmsPage->get_page_blocks(...)` (where it populates the block list), add:
 ```php
-		<?php if (!empty($fdThemeCss)): ?>
-		<style id="fd-theme-tokens"><?= $fdThemeCss ?></style>
-		<?php endif; ?>
+$this->_attachFrontDoorTheme();
 ```
-(`$fdThemeCss` is built only from validated tokens — safe to emit unescaped. It must come AFTER orkui.css and frontdoor.css `:root`/`.fd-page` defaults so it overrides them.)
-
-- [ ] **Step 5: Verify (no active theme yet → no regression)**
-
-Run: load `http://localhost:19080/orkui/` and confirm the front door renders normally and `#fd-theme-tokens` is ABSENT (no active theme). Then manually activate a row:
-```sql
-INSERT INTO ork_cms_theme (scope_type,scope_id,name,tokens_json,is_active,updated_by)
-VALUES ('global',0,'Test','{"--fd-primary":"#1b4d3e"}',1,0);
+In `controller.Blog.php::post()`, after the line `$this->data['post_blocks'] = is_array($blocks) ? $blocks : array();`, add:
+```php
+$this->_attachFrontDoorTheme();
 ```
-Reload — confirm `<style id="fd-theme-tokens">` now present and contains `.fd-page{--fd-primary:#1b4d3e…}`. Delete the test row afterward.
+(Both controllers extend the base `Controller`, so the protected helper is in scope. Add it on every return path that renders blocks — but NOT before an early `not-found`/redirect return.)
+
+- [ ] **Step 4: Emit the style block at END OF BODY in default.theme**
+
+In `orkui/template/default/default.theme`, immediately BEFORE the closing `</body>` (line ~891, after the existing `cms-fab-stack` block), add:
+```php
+<?php if (!empty($fdThemeCss)): ?>
+<style id="fd-theme-tokens"><?= $fdThemeCss ?></style>
+<?php endif; ?>
+```
+Rationale: end-of-body places this AFTER the body-linked `frontdoor.css`, so the theme overrides win by source order. `$fdThemeCss` is built only from validated tokens (Task 2) — no user HTML/CSS can reach it — so emitting unescaped is safe. Do NOT also emit it in `<head>` (would be overridden).
+
+- [ ] **Step 5: Verify (no active theme → no regression; active theme → applies)**
+
+Run: load `http://localhost:19080/orkui/` with NO active theme; confirm the front door renders normally and `#fd-theme-tokens` is ABSENT. Then activate a row directly (DB is the `ork3db` MariaDB container; password from `.dev.env`):
+```bash
+docker compose -f docker-compose.php8.yml exec -T ork3db sh -lc \
+  'mariadb -uork -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "INSERT INTO ork_cms_theme (scope_type,scope_id,name,tokens_json,is_active,updated_by) VALUES (\"global\",0,\"Test\",\"{\\\"--fd-primary\\\":\\\"#1b4d3e\\\"}\",1,0)"'
+```
+Reload — confirm `<style id="fd-theme-tokens">` is present near `</body>` and contains `.fd-page{--fd-primary:#1b4d3e…}`, AND that the front-door primary color actually changed (inspect a primary-colored element's computed style → the theme value, not `#0b1120`). This proves the cascade order is correct. Also verify a CMS page (`Page/view`) and a blog post pick it up. Then delete the test row:
+```bash
+docker compose -f docker-compose.php8.yml exec -T ork3db sh -lc \
+  'mariadb -uork -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "DELETE FROM ork_cms_theme WHERE name=\"Test\""'
+```
+(NOTE: the `.fd-page` token defaults don't exist until Task 9 tokenizes `frontdoor.css`. Before Task 9, you can still confirm the `<style>` block is EMITTED in the right place and contains the expected CSS; the visible color change is fully verifiable after Task 9. State which you confirmed in your report.)
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add system/lib/system/class.Controller.php orkui/template/default/default.theme orkui/controller/controller.Page.php orkui/controller/controller.Blog.php
-git commit -m "Enhancement: CMS Theme Engine — inject active theme into front-door head
+git commit -m "Enhancement: CMS Theme Engine — inject active theme at end of front-door body
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
