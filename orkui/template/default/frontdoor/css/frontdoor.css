@@ -475,6 +475,14 @@ html[data-theme="dark"] .fd-nav-login {
     color: #9aa5bc;
 }
 
+html[data-theme="dark"] .fd-dropdown {
+    background: #0b1120;
+}
+
+html[data-theme="dark"] .fd-nav-toggle {
+    color: #1a2236;
+}
+
 /* Section titles and body text */
 html[data-theme="dark"] .fd-sec-title {
     color: #e8edf8;
