@@ -911,12 +911,37 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `orkui/controller/controller.CmsAjax.php` (constructor `load_model('CmsTheme')`; add 4 actions)
+- Modify: `system/lib/ork3/class.CmsTheme.php` (add `PreviewCss($tokens)` passthrough to the pure emitter)
+- Modify: `orkui/model/model.CmsTheme.php` (add `preview_css($tokens)` thin forward)
 
 **Interfaces:**
-- Consumes: `_begin()`, `_require($uid,'theme.manage')`, `_ok()/_fail()`, `$this->CmsTheme->*`, `CmsThemeTokens::Derive/ToCss`.
+- Consumes: `_begin()`, `_require($uid,'theme.manage')`, `_ok()/_fail()`, `$this->CmsTheme->*`.
 - Produces endpoints: `savetheme` (POST), `activatetheme` (POST), `resettheme` (POST), `previewtheme` (POST, echoes CSS, no persistence).
 
-- [ ] **Step 1: Load the model in the constructor**
+**Architecture-layers rule:** controllers must NOT reference `system/lib` classes (e.g. `CmsThemeTokens`) directly — go through the model. So `previewtheme` calls `$this->CmsTheme->preview_css($tokens)`, and the lib wraps the pure emitter. Add these two one-liners first.
+
+- [ ] **Step 1a: Add `PreviewCss` to the lib model**
+
+In `system/lib/ork3/class.CmsTheme.php`, add:
+```php
+    /** Resolve arbitrary tokens to the <style> inner CSS WITHOUT persisting (live preview). */
+    public function PreviewCss($tokens)
+    {
+        return CmsThemeTokens::ToCss(is_array($tokens) ? $tokens : array());
+    }
+```
+
+- [ ] **Step 1b: Add `preview_css` to the thin model**
+
+In `orkui/model/model.CmsTheme.php`, add:
+```php
+    public function preview_css($tokens)
+    {
+        return $this->CmsTheme->PreviewCss($tokens);
+    }
+```
+
+- [ ] **Step 1c: Load the model in the controller constructor**
 
 In `Controller_CmsAjax::__construct`, after `$this->load_model('CmsNav');` add:
 ```php
@@ -971,9 +996,8 @@ In `Controller_CmsAjax::__construct`, after `$this->load_model('CmsNav');` add:
     {
         $uid = $this->_begin();
         $this->_require($uid, 'theme.manage');
-        $this->load_model('CmsTheme'); // ensures CmsThemeTokens autoloaded via lib
         $tokens = $this->_themeTokensFromPost();
-        $css = CmsThemeTokens::ToCss($tokens);
+        $css = (string)$this->CmsTheme->preview_css($tokens);
         $this->_ok(array('css' => $css));
     }
 
@@ -989,7 +1013,7 @@ In `Controller_CmsAjax::__construct`, after `$this->load_model('CmsNav');` add:
     }
 ```
 
-Note: `CmsThemeTokens` is `require_once`'d by `class.CmsTheme.php`; the model load in the constructor guarantees the class is available to `previewtheme`. If the controller can't see the class, add `require_once` of the lib path or call through a model method `$this->CmsTheme->preview_css($tokens)` instead.
+Note: `previewtheme` goes controller → model (`preview_css`) → lib (`PreviewCss`) → pure `CmsThemeTokens::ToCss`, keeping the controller free of direct `system/lib` references (architecture-layers rule). Validation still happens inside the lib (`ToCss`→`Derive`→`Validate`), so the echoed CSS is always sanitized.
 
 - [ ] **Step 3: Verify each endpoint with curl**
 
@@ -1004,7 +1028,7 @@ Expected: `{"ok":true,"css":".fd-page{--fd-primary:#1b4d3e;…"}`. Repeat for `s
 - [ ] **Step 4: Commit**
 
 ```bash
-git add orkui/controller/controller.CmsAjax.php
+git add orkui/controller/controller.CmsAjax.php system/lib/ork3/class.CmsTheme.php orkui/model/model.CmsTheme.php
 git commit -m "Enhancement: CMS Theme Engine — CmsAjax save/activate/preview/reset endpoints
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
