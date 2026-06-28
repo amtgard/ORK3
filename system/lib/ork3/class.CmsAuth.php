@@ -39,12 +39,12 @@ class CmsAuth extends CmsBase
         'author'      => array('page.edit'),
         'editor'      => array('media.manage'),
         'publisher'   => array('page.publish'),
-        'admin'       => array('page.delete', 'nav.manage', 'roles.manage'),
+        'admin'       => array('page.delete', 'nav.manage', 'roles.manage', 'theme.manage'),
     );
 
     /** Capabilities that demand AUTH_ADMIN (not merely AUTH_EDIT) on the bridge. */
     private static $ADMIN_BRIDGE_CAPS = array(
-        'page.publish', 'page.delete', 'roles.manage', 'nav.manage',
+        'page.publish', 'page.delete', 'roles.manage', 'nav.manage', 'theme.manage',
     );
 
     /**
