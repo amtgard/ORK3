@@ -1280,5 +1280,8 @@ html[data-theme="dark"] .cms-fab[data-tip]::after{background:#0b1220;}
     <?php endif; ?>
 </div>
 <?php endif; ?>
+<?php if (!empty($fdThemeCss)): ?>
+<style id="fd-theme-tokens"><?= $fdThemeCss ?></style>
+<?php endif; ?>
 </body>
 </html>

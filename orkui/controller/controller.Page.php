@@ -52,6 +52,7 @@ class Controller_Page extends Controller
         }
 
         $this->data['FrontDoor']  = $this->CmsPage->get_page_blocks((int) $page['page_id']);
+        $this->_attachFrontDoorTheme();
         $this->data['page_title'] = $page['title'];
 
         // Show the floating editor FAB to CMS editors (rendered by default.theme).

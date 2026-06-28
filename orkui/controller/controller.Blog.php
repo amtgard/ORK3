@@ -116,6 +116,7 @@ class Controller_Blog extends Controller
 
         $this->data['post']        = $post;
         $this->data['post_blocks'] = is_array($blocks) ? $blocks : array();
+        $this->_attachFrontDoorTheme();
         $this->data['hero']        = $hero;
         $this->data['page_title']  = $post['title'];
         $this->data['meta_description'] = isset($post['excerpt']) ? (string) $post['excerpt'] : '';

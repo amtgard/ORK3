@@ -228,6 +228,7 @@ class Controller
         // otherwise fall back to the hardcoded Model_FrontDoor defaults so the front
         // door always renders even before the home page is seeded.
         $this->data[ 'IsFrontDoor' ] = true;
+        $this->_attachFrontDoorTheme();
         $frontDoorBlocks = null;
         $this->load_model('CmsPage');
         $home = $this->CmsPage->get_home_page();
@@ -276,6 +277,16 @@ class Controller
         }
         unset($this->data[ 'menu' ][ 'kingdom' ]);
         unset($this->data[ 'menu' ][ 'park' ]);
+    }
+
+    /** Resolve the active front-door theme into $data['fdThemeCss'] (global scope, v1). */
+    protected function _attachFrontDoorTheme()
+    {
+        $this->load_model('CmsTheme');
+        $css = (string) $this->CmsTheme->get_active_css('global', 0);
+        if ($css !== '') {
+            $this->data['fdThemeCss'] = $css;
+        }
     }
 
     public function view()
