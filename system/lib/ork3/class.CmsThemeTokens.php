@@ -43,4 +43,54 @@ class CmsThemeTokens
         }
         return $out;
     }
+
+    /** Numeric ranges for non-color tokens: [min, max, unit]. */
+    private static function Ranges()
+    {
+        return array(
+            '--fd-font-scale'   => array(0.9, 1.25, ''),
+            '--fd-radius'       => array(0, 24, 'px'),
+            '--fd-space'        => array(0.85, 1.3, ''),
+            '--fd-border-width' => array(0, 3, 'px'),
+        );
+    }
+
+    private static $SHADOWS = array(
+        'none', '0 1px 3px rgba(0,0,0,.18)', '0 6px 24px rgba(0,0,0,.28)', '0 12px 50px rgba(0,0,0,.4)',
+    );
+
+    /** Keep only known tokens whose values pass per-group validation. Pure. */
+    public static function Validate($tokens)
+    {
+        $catalog = self::Defaults();
+        $ranges  = self::Ranges();
+        $out = array();
+        foreach ((array)$tokens as $k => $raw) {
+            if (!isset($catalog[$k]) || $catalog[$k]['input'] === 'derived') {
+                continue; // unknown or auto-only
+            }
+            $group = $catalog[$k]['input'];
+            if ($group === 'color') {
+                $val = strtolower(trim((string)$raw));
+                if (preg_match('/^#([0-9a-f]{3}|[0-9a-f]{6})$/', $val)) {
+                    $out[$k] = $val;
+                }
+            } elseif ($group === 'font') {
+                if (in_array((string)$raw, self::FontAllowlist(), true)) {
+                    $out[$k] = (string)$raw;
+                }
+            } elseif ($group === 'shadow') {
+                if (in_array((string)$raw, self::$SHADOWS, true)) {
+                    $out[$k] = (string)$raw;
+                }
+            } elseif (isset($ranges[$k])) {
+                list($min, $max, $unit) = $ranges[$k];
+                $n = (float)preg_replace('/[^0-9.\-]/', '', (string)$raw);
+                $n = max($min, min($max, $n));
+                // integers for px, 2-dp for scales
+                $out[$k] = ($unit === 'px') ? (((int)round($n)) . 'px') : rtrim(rtrim(sprintf('%.2f', $n), '0'), '.');
+            }
+        }
+        return $out;
+    }
 }
