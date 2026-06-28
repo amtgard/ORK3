@@ -70,7 +70,7 @@ html[data-theme="dark"] .cms-preview-banner .cms-preview-publish:hover{backgroun
 		fetch(endpoint, {
 			method: 'POST',
 			credentials: 'same-origin',
-			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': (window.CMS_CSRF || '') },
 			body: field + '=' + encodeURIComponent(id)
 		}).then(function (r) {
 			if (!r.ok) { throw new Error('HTTP ' + r.status); }

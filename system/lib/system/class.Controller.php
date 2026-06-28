@@ -132,6 +132,22 @@ class Controller
         $DB->Clear();
     }
 
+    /**
+     * Per-session CSRF synchronizer token. Minted once and persisted in the
+     * session; the same value is emitted to authenticated pages (for JS to send
+     * back on state-changing requests) and validated server-side. Cryptographically
+     * random; constant-time compared at the validation site.
+     *
+     * @return string 64-hex-char token
+     */
+    protected function _csrfToken()
+    {
+        if (empty($this->session->csrf_token)) {
+            $this->session->csrf_token = bin2hex(random_bytes(32));
+        }
+        return (string) $this->session->csrf_token;
+    }
+
     public function load_model($name)
     {
         if (file_exists(DIR_MODEL . 'model.' . $name . '.php')) {

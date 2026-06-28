@@ -652,6 +652,17 @@ class Controller_CmsAjax extends Controller
         if ($uid <= 0) {
             $this->_fail('You must be logged in.', 5);
         }
+
+        // CSRF: state-changing requests arrive as POST and must carry the
+        // per-session synchronizer token (sent by the editor JS as the
+        // X-CSRF-Token header). GET reads (medialist, personlookup) are exempt.
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+            $sent = (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['csrf_token'] ?? ''));
+            if ($sent === '' || !hash_equals($this->_csrfToken(), $sent)) {
+                $this->_fail('Invalid or expired request token. Reload the page and try again.', 9);
+            }
+        }
+
         return $uid;
     }
 

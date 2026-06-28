@@ -52,6 +52,7 @@ $shRail = array(
     array('nav',       'Navigation', UIR . 'Cms/nav',       'fa-bars',       !empty($shCaps['nav'])),
 );
 ?>
+<script>window.CMS_CSRF = <?= json_encode(isset($CmsCsrf) ? (string)$CmsCsrf : '', JSON_HEX_TAG) ?>;</script>
 <div class="cms-shell">
 
     <aside class="cms-rail<?= $cmsRailExtra !== '' ? ' cms-rail-wide' : '' ?>" aria-label="Content management navigation">

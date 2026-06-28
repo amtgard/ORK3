@@ -240,7 +240,7 @@ window.CmsBlockEditor = (function () {
         Object.keys(params).forEach(function (k) { body.append(k, params[k]); });
         return fetch(AJAX + endpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': (window.CMS_CSRF || '') },
             credentials: 'same-origin',
             body: body.toString()
         }).then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); });

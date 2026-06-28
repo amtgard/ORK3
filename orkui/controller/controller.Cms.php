@@ -36,6 +36,8 @@ class Controller_Cms extends Controller
         $this->load_model('CmsPage');
         $this->load_model('CmsPost');
         $this->load_model('CmsNav');
+        // CSRF synchronizer token for the editor's state-changing requests.
+        $this->data['CmsCsrf'] = $this->_csrfToken();
     }
 
     /* ------------------------------------------------------------------ *
