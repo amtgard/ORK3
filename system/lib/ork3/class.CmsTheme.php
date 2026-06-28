@@ -143,4 +143,10 @@ class CmsTheme extends CmsBase
         );
         return true;
     }
+
+    /** Resolve arbitrary tokens to the <style> inner CSS WITHOUT persisting (live preview). */
+    public function PreviewCss($tokens)
+    {
+        return CmsThemeTokens::ToCss(is_array($tokens) ? $tokens : array());
+    }
 }

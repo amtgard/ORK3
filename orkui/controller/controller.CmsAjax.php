@@ -53,6 +53,7 @@ class Controller_CmsAjax extends Controller
         $this->load_model('CmsPage');
         $this->load_model('CmsPost');
         $this->load_model('CmsNav');
+        $this->load_model('CmsTheme');
     }
 
     /* ------------------------------------------------------------------ *
@@ -603,6 +604,56 @@ class Controller_CmsAjax extends Controller
     }
 
     /* ------------------------------------------------------------------ *
+     * theme engine
+     * ------------------------------------------------------------------ */
+
+    /** POST: validate+persist tokens (draft) under the global scope. */
+    public function savetheme($action = null)
+    {
+        $uid = $this->_begin();
+        $this->_require($uid, 'theme.manage');
+        $tokens = $this->_themeTokensFromPost();
+        $name   = trim((string)($_POST['name'] ?? 'Default'));
+        $id = (int)$this->CmsTheme->save_theme('global', 0, $name, $tokens, $uid);
+        if ($id <= 0) {
+            $this->_fail('Could not save the theme.');
+        }
+        $this->_ok(array('theme_id' => $id, 'saved_at' => date('c')));
+    }
+
+    /** POST: activate a theme id for the global scope. */
+    public function activatetheme($action = null)
+    {
+        $uid = $this->_begin();
+        $this->_require($uid, 'theme.manage');
+        $id = (int)($_POST['theme_id'] ?? 0);
+        if ($id <= 0) {
+            $this->_fail('Missing theme id.', 4);
+        }
+        $this->CmsTheme->set_active('global', 0, $id);
+        $this->_ok(array('active' => $id));
+    }
+
+    /** POST: deactivate all themes (revert to CSS defaults). */
+    public function resettheme($action = null)
+    {
+        $uid = $this->_begin();
+        $this->_require($uid, 'theme.manage');
+        $this->CmsTheme->reset_active('global', 0);
+        $this->_ok();
+    }
+
+    /** POST: echo resolved CSS for the live preview (no persistence). */
+    public function previewtheme($action = null)
+    {
+        $uid = $this->_begin();
+        $this->_require($uid, 'theme.manage');
+        $tokens = $this->_themeTokensFromPost();
+        $css = (string)$this->CmsTheme->preview_css($tokens);
+        $this->_ok(array('css' => $css));
+    }
+
+    /* ------------------------------------------------------------------ *
      * personlookup
      * ------------------------------------------------------------------ */
 
@@ -637,6 +688,17 @@ class Controller_CmsAjax extends Controller
     /* ------------------------------------------------------------------ *
      * Internal helpers
      * ------------------------------------------------------------------ */
+
+    /** Decode posted tokens JSON into an assoc array (validation happens in the lib). */
+    private function _themeTokensFromPost()
+    {
+        $raw = $_POST['tokens'] ?? null;
+        if (is_array($raw)) {
+            return $raw;
+        }
+        $decoded = json_decode((string)$raw, true);
+        return is_array($decoded) ? $decoded : array();
+    }
 
     /**
      * Common preamble: JSON + no-cache headers, login gate. Returns the uid.

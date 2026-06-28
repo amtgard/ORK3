@@ -29,4 +29,8 @@ class Model_CmsTheme extends Model
     {
         return $this->CmsTheme->ResetActive($scopeType, $scopeId);
     }
+    public function preview_css($tokens)
+    {
+        return $this->CmsTheme->PreviewCss($tokens);
+    }
 }
