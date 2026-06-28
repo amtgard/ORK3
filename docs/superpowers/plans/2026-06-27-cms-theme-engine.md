@@ -1150,13 +1150,29 @@ grep -rln 'style="' orkui/template/default/frontdoor/blocks/
 grep -rln '#[0-9a-fA-F]\{3,6\}' orkui/template/default/frontdoor/blocks/
 ```
 
-- [ ] **Step 2: Replace inline colors with token classes/vars**
+- [ ] **Step 2: Replace ONLY exact-match colors with tokens (zero visual change)**
 
-For each hit, move the color into a `frontdoor.css` class that uses `var(--fd-*)`, or inline `style="color:var(--fd-text)"` where a class is overkill. Do NOT introduce new hardcoded hex. Keep structural inline styles (widths, grid) untouched. Work one partial at a time.
+**THE RULE (learned from Task 9's dark-mode regressions): replace a hardcoded color with `var(--fd-x)` ONLY when the token's DEFAULT value equals that color EXACTLY.** A near-match is a regression — leave it. Never introduce new hardcoded hex. Keep all structural inline styles (widths, grid, margins, font-size, opacity) untouched.
 
-- [ ] **Step 3: Verify per partial**
+Safe exact-match mappings (token default → replace these literals):
 
-Run: render a page using each touched block (home, a CMS page, blog post) in light + dark, unthemed. Expected: identical to before.
+| Literal in partial | Replace with | Why safe |
+|---|---|---|
+| `#1a2236` (body text) | `var(--fd-text)` | default `#1a2236` ✓ |
+| `#f0b429` (gold/accent) | `var(--fd-accent)` | default `#f0b429` ✓ |
+| `#fff` / `#ffffff` as a CONTRAST text color on a dark/navy band (e.g. `color:#fff` on `background:var(--navy)`) | `var(--fd-primary-contrast)` | default `#ffffff` ✓, and it derives correctly per-theme |
+| `#fff` / `#ffffff` as a panel/card BACKGROUND | `var(--fd-bg)` | default `#ffffff` ✓ |
+| `#0b1120` (navy band) | `var(--fd-primary)` | default `#0b1120` ✓ |
+
+LEAVE AS-IS (no exact token match → would change appearance): `#f7f8fb`, `#f7f8fa` ambiguity, `#eef2fb`, `#667`, `#9aa7c4`, gradients, decorative/hero one-offs, and anything whose role you're unsure of. Conservatism is correct — a missed tokenization is a future enhancement; a wrong replacement is a visible bug. Note: many partials ALREADY use `var(--navy)`/`var(--gold)` aliases — those already track the theme via Task 9; don't touch them.
+
+DARK-MODE TRAP (from Task 9): if you change an element to use `var(--fd-text)`/`var(--fd-primary)` and that element is rendered on a fixed-color band WITHOUT its own `html[data-theme="dark"]` rule, the dark token override may change it in dark mode. After each change, check whether the element needs a dark cover rule. When in doubt, leave it.
+
+Prefer editing the inline `style="…"` in place (e.g. `color:#1a2236` → `color:var(--fd-text)`) rather than moving to a class — these partials are plain-PHP `.tpl` (NOT Smarty); keep edits minimal and local.
+
+- [ ] **Step 3: Verify zero visual change in the browser (light + dark, unthemed)**
+
+There is NO active theme (table empty), so the page reflects only CSS/inline defaults. Load `http://localhost:19080/orkui/` (home uses many blocks) plus a CMS page and a blog post. In BOTH light and dark, confirm every touched block looks identical to before (git stash the partials to compare, or screenshot). Pay special attention to white-on-band text and any element you re-pointed at a token — verify it didn't shift in dark mode. List exactly which partials you changed and what you verified.
 
 - [ ] **Step 4: Commit**
 
