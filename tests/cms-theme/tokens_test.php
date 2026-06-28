@@ -52,5 +52,13 @@ check('dark text/bg contrast >= 4.5', CmsThemeTokens::Contrast($d['dark']['--fd-
 $h = CmsThemeTokens::HexToHsl($d['dark']['--fd-primary']);
 check('primary hue preserved (green-ish)', $h[0] > 90 && $h[0] < 180);
 
+// --- ToCss: CSS emission ---
+$css = CmsThemeTokens::ToCss(array('--fd-primary' => '#1b4d3e'));
+check('emits .fd-page scope', strpos($css, '.fd-page{') !== false);
+check('emits dark scope', strpos($css, 'html[data-theme="dark"] .fd-page{') !== false);
+check('emits primary var', strpos($css, '--fd-primary:#1b4d3e') !== false);
+check('font emitted with fallback', strpos($css, "--fd-font-body:'Open Sans'") !== false);
+check('no raw braces injection from value', substr_count($css, '}') === 2);
+
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";
 exit($fails === 0 ? 0 : 1);

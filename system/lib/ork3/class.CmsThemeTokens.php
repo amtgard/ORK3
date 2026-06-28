@@ -243,4 +243,33 @@ class CmsThemeTokens
 
         return array('light' => $light, 'dark' => $dark);
     }
+
+    private static function FontStack($family)
+    {
+        $fallback = ($family === 'MedievalSharp') ? 'cursive'
+            : (($family === 'Georgia') ? 'serif'
+            : (($family === 'system-ui') ? 'sans-serif' : "'Open Sans', sans-serif"));
+        return ($family === 'system-ui') ? 'system-ui, sans-serif' : "'" . $family . "', " . $fallback;
+    }
+
+    private static function Block($selector, $tokens)
+    {
+        $parts = array();
+        foreach ($tokens as $k => $v) {
+            if ($k === '--fd-font-heading' || $k === '--fd-font-body') {
+                $v = self::FontStack($v);
+            } elseif ($k === '--fd-font-scale') {
+                $v = 'calc(1rem * ' . $v . ')';
+            }
+            $parts[] = $k . ':' . $v;
+        }
+        return $selector . '{' . implode(';', $parts) . '}';
+    }
+
+    public static function ToCss($userTokens)
+    {
+        $d = self::Derive($userTokens);
+        return self::Block('.fd-page', $d['light'])
+            . ' ' . self::Block('html[data-theme="dark"] .fd-page', $d['dark']);
+    }
 }
