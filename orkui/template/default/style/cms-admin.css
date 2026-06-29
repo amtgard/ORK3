@@ -1872,6 +1872,7 @@ html[data-theme="dark"] .te-color-hex {
     border-color: #2c3650;
     color: #c0cad8;
 }
+html[data-theme="dark"] .te-color-hex::placeholder { color: #6b7585; }
 
 /* Select */
 .te-select {

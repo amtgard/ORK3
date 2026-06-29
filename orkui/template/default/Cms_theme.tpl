@@ -79,7 +79,7 @@ $tokenLabels = array(
 );
 
 // Render one token control. Returns HTML string.
-$renderControl = function ($token, $meta, $idSuffix) use ($h, $val, $fonts, $ranges, $shadowOptions, $shadowLabels, $tokenLabels) {
+$renderControl = function ($token, $meta) use ($h, $val, $fonts, $ranges, $shadowOptions, $shadowLabels, $tokenLabels) {
     $input   = isset($meta['input']) ? (string)$meta['input'] : 'color';
     $tokAttr = $h($token);
     $curVal  = $val($token);
@@ -162,7 +162,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 <h2 class="te-group-title"><i class="fas fa-tint" aria-hidden="true"></i> Colors</h2>
                 <div class="te-group-body">
                     <?php foreach ($grouped['color'] as $token => $meta): ?>
-                        <?= $renderControl($token, $meta, 'main') ?>
+                        <?= $renderControl($token, $meta) ?>
                     <?php endforeach; ?>
                 </div>
             </section>
@@ -172,7 +172,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 <h2 class="te-group-title"><i class="fas fa-font" aria-hidden="true"></i> Typography</h2>
                 <div class="te-group-body">
                     <?php foreach ($grouped['type'] as $token => $meta): ?>
-                        <?= $renderControl($token, $meta, 'main') ?>
+                        <?= $renderControl($token, $meta) ?>
                     <?php endforeach; ?>
                 </div>
             </section>
@@ -182,7 +182,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 <h2 class="te-group-title"><i class="fas fa-vector-square" aria-hidden="true"></i> Shape &amp; Density</h2>
                 <div class="te-group-body">
                     <?php foreach ($grouped['shape'] as $token => $meta): ?>
-                        <?= $renderControl($token, $meta, 'main') ?>
+                        <?= $renderControl($token, $meta) ?>
                     <?php endforeach; ?>
                 </div>
             </section>
@@ -194,7 +194,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     <p class="te-advanced-note">All editable design tokens. Changes here override the grouped controls above.</p>
                     <?php foreach ($catalog as $token => $meta): ?>
                         <?php if (isset($meta['input']) && $meta['input'] === 'derived') { continue; } ?>
-                        <?= $renderControl($token, $meta, 'adv') ?>
+                        <?= $renderControl($token, $meta) ?>
                     <?php endforeach; ?>
                 </div>
             </details>
@@ -242,9 +242,6 @@ include __DIR__ . '/cms/_shell_top.tpl';
 </div><!-- /.theme-editor -->
 
 <script>
-window.THEME_CATALOG   = <?= json_encode($catalog, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-window.THEME_FONTS     = <?= json_encode(array_values($fonts), JSON_HEX_TAG) ?>;
-window.THEME_VALUES    = <?= json_encode($values, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
 </script>
 
