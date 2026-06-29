@@ -66,7 +66,7 @@ html[data-theme="dark"] .bf-card-title { color: #eef2fa; }
 html[data-theme="dark"] .bf-card-excerpt { color: #b6c0d4; }
 html[data-theme="dark"] .bf-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45); }
 </style>
-<div class="fd-pad fd-section-light bf-block" style="background:var(--fd-bg);">
+<div class="fd-pad fd-section-light bf-block" style="background:#fff;">
     <div class="bf-head">
         <?php if ($bfHeading !== ''): ?>
             <h3 class="bf-title fd-sec-title"><?= htmlspecialchars($bfHeading, ENT_QUOTES) ?></h3>
