@@ -3146,6 +3146,10 @@ function evConfirmDeleteOccurrence(e, form) {
 
 // Flatpickr for event edit modal date fields
 function fpAddTitle(label, calEl) {
+	// calEl (fp.calendarContainer) is undefined when flatpickr falls back to the
+	// native mobile picker — bail out instead of throwing (which would abort the
+	// rest of page init, e.g. the schedule/leads wiring).
+	if (!calEl) return;
 	var title = document.createElement('div');
 	title.className = 'ev-fp-title';
 	title.textContent = label;
@@ -3411,9 +3415,9 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 		if (locEl)  locEl.value  = meal.Location || '';
 		if (descEl) descEl.value = meal.Description || '';
 		if (errEl)  { errEl.style.display = 'none'; errEl.textContent = ''; }
-		// Leads
-		try { window.evSchedLeads = meal.Leads || []; } catch(e) { window.evSchedLeads = []; }
-		if (typeof evRenderSchedLeads === 'function') evRenderSchedLeads();
+		// Leads — evSchedLeads/evRenderSchedLeads live in revised.js's closure, not
+		// global, so seed + render them through the exposed bridge.
+		if (window.evSetSchedLeads) window.evSetSchedLeads(meal.Leads || []);
 		// Collapse staff quick-add
 		var qaList = document.getElementById('ev-sched-staff-qa-list');
 		var qaChevron = document.getElementById('ev-sched-staff-qa-chevron');
@@ -3641,7 +3645,7 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 			minuteIncrement: 5,
 			time_24hr:       false,
 			allowInput:      false,
-			onReady: function(sel, str, fp) { fp.calendarContainer.classList.add('ev-sched-fp'); }
+			onReady: function(sel, str, fp) { if (fp.calendarContainer) fp.calendarContainer.classList.add('ev-sched-fp'); }
 		};
 		if (EvConfig.eventStart) _schedFpOpts.minDate = EvConfig.eventStart;
 		if (EvConfig.eventEnd)   _schedFpOpts.maxDate = EvConfig.eventEnd;

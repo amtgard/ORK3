@@ -4681,6 +4681,14 @@ html[data-theme="dark"] .ev-badge-blue { background: rgba(66,153,225,0.20); colo
 .ev-detail-row:last-child { border-bottom: none; }
 .ev-detail-label { color: #718096; font-size: 12px; flex-shrink: 0; }
 .ev-detail-value { color: #2d3748; font-weight: 500; text-align: right; }
+
+/* Admission-type names can be long ("Day Pass Children (non participants…)") —
+   in the fees card let the label wrap/shrink and keep the price fully visible
+   on the right instead of clipping it. (Other detail rows have short labels and
+   keep flex-shrink:0.) */
+.ev-fees-body .ev-detail-row   { align-items: flex-start; }
+.ev-fees-body .ev-detail-label { flex: 1 1 auto; min-width: 0; }
+.ev-fees-body .ev-detail-value { flex: 0 0 auto; white-space: nowrap; }
 .ev-map-btn {
 	display: block;
 	margin-top: 10px;
@@ -4937,6 +4945,11 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 }
 .ev-modal-close:hover { background: #e2e8f0; color: #2d3748; }
 .ev-modal-body { padding: 20px; }
+/* Modals without a <form> wrapper (e.g. the schedule-item modal) put .ev-modal-body
+   as a direct child of .ev-modal. Make it the scroll region so a tall form fits in
+   90vh with the header/footer pinned, instead of overflowing off-screen. Form-based
+   modals scroll via ".ev-modal > form" and are unaffected (their body isn't a direct child). */
+.ev-modal > .ev-modal-body { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
 .ev-modal-section { margin-bottom: 16px; }
 .ev-modal-info-box {
 	display: flex;
@@ -9783,6 +9796,19 @@ html[data-theme="dark"] .ev-rsvp-menu-item:hover:not([disabled]) { background: #
 }
 html[data-theme="dark"] [data-tip]:not(.kn-officer-pill):not(.pk-officer-pill):not(.kn-draft-pill):not(.pk-draft-pill):not(.pn-acct-help-tip):hover::after {
 	background: #f7fafc; color: #1a202c;
+}
+
+/* The feast (meal) card uses overflow:hidden for its rounded corners, so the
+   default upward tooltip on its header edit/remove icons gets clipped by the
+   card's top edge. Anchor those tips below-and-right so they stay inside the
+   card (the icons sit at the top-right, so a centered tip would clip sideways
+   too). !important: the generic [data-tip] rule above has higher specificity. */
+.ev-meal-card-header [data-tip]:hover::after {
+	bottom: auto !important;
+	top: calc(100% + 6px) !important;
+	left: auto !important;
+	right: 0 !important;
+	transform: none !important;
 }
 
 /* Officer-only / Locals-only checkbox tooltips inside the calendar-item edit

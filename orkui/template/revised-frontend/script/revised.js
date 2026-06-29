@@ -8812,7 +8812,7 @@ $(document).ready(function() {
                 return;
             }
             list.innerHTML = evSchedLeads.map(function(l) {
-                return '<span style="display:inline-flex;align-items:center;gap:4px;background:#e2e8f0;border-radius:4px;padding:3px 8px;font-size:12px">' +
+                return '<span style="display:inline-flex;align-items:center;gap:4px;background:#e2e8f0;color:#2d3748;border-radius:4px;padding:3px 8px;font-size:12px">' +
                     escHtmlSt(l.Persona) +
                     '<button type="button" onclick="evRemoveSchedLead(' + l.MundaneId + ')" style="background:none;border:none;cursor:pointer;color:#718096;font-size:13px;padding:0;margin-left:2px;line-height:1">&times;</button>' +
                     '</span>';
@@ -8823,6 +8823,15 @@ $(document).ready(function() {
             evSchedLeads = evSchedLeads.filter(function(l) { return l.MundaneId !== mundaneId; });
             evRenderSchedLeads();
             evRefreshStaffQuickAdd();
+        };
+
+        // Bridge for the feast edit modal (defined in the page template — a
+        // different scope) to seed + render leads through this closure's state.
+        // Without it, the template can't reach evSchedLeads/evRenderSchedLeads,
+        // so feast items opened for edit showed no leads.
+        window.evSetSchedLeads = function(leads) {
+            evSchedLeads = Array.isArray(leads) ? leads : [];
+            evRenderSchedLeads();
         };
 
         function evRefreshStaffQuickAdd() {
@@ -8934,7 +8943,23 @@ $(document).ready(function() {
             });
 
             leadInputEl.addEventListener('blur', function() {
-                setTimeout(function() { leadAcEl.classList.remove(OPEN_CLASS); }, 160);
+                setTimeout(function() {
+                    // Keep the dropdown open if focus moved into it — acKeyNav focuses
+                    // an item on ArrowDown (which blurs the input), and clicks land on
+                    // items too. Only close when focus truly left the widget.
+                    if (leadAcEl.contains(document.activeElement)) return;
+                    leadAcEl.classList.remove(OPEN_CLASS);
+                }, 160);
+            });
+
+            // When keyboard nav has focus on a dropdown item, close only once focus
+            // leaves the whole widget (item -> elsewhere), not on item -> item/input.
+            leadAcEl.addEventListener('focusout', function() {
+                setTimeout(function() {
+                    var a = document.activeElement;
+                    if (a === leadInputEl || leadAcEl.contains(a)) return;
+                    leadAcEl.classList.remove(OPEN_CLASS);
+                }, 160);
             });
 
             acKeyNav(leadInputEl, leadAcEl, OPEN_CLASS, ITEM_SEL);
