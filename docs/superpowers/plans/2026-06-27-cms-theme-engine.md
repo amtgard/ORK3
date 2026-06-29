@@ -1363,19 +1363,33 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - [ ] **Step 1: Collect tokens + debounced preview**
 
 Add JS that, on any control `input`/`change`:
-1. Reads all `[data-token]` controls into a `tokens` object (skipping values equal to default — optional).
-2. POSTs `tokens` (JSON) to `CmsAjax/previewtheme` with the `X-CSRF-Token` header (debounced ~150ms).
-3. Injects the returned `css` into the preview iframe by writing/replacing a `<style id="fd-theme-preview-style">` in the iframe document head:
+1. Reads all `[data-token]` controls into a `tokens` object. **IMPORTANT (from Task 11 review):** the main grouped controls AND the Advanced `<details>` both render a control for the SAME `data-token` — duplicates in the DOM. So (a) when collecting, build `tokens` keyed by token name (so each token yields one value), and (b) on any control's `input`, MIRROR the new value to every other `[data-token="<same>"]` control so main + advanced stay in sync. A small helper:
 ```js
-function applyPreview(css) {
-  var doc = document.getElementById('fd-theme-preview').contentDocument;
-  if (!doc) return;
-  var s = doc.getElementById('fd-theme-preview-style');
-  if (!s) { s = doc.createElement('style'); s.id = 'fd-theme-preview-style'; doc.head.appendChild(s); }
-  s.textContent = css;
+function syncToken(token, value, exceptEl) {
+  document.querySelectorAll('[data-token="' + CSS.escape(token) + '"]').forEach(function (el) {
+    if (el !== exceptEl && el.value !== value) { el.value = value; }
+  });
+}
+function collectTokens() {
+  var out = {};
+  document.querySelectorAll('[data-token]').forEach(function (el) { out[el.getAttribute('data-token')] = el.value; });
+  return out;
 }
 ```
-(Preview iframe is same-origin → contentDocument is accessible.)
+2. POSTs `tokens` (JSON, form-encoded as `tokens=<json>`) to `CmsAjax/previewtheme` with the `X-CSRF-Token: window.CMS_CSRF` header (debounced ~150ms).
+3. Injects the returned `css` into the preview iframe by writing/replacing a `<style id="fd-theme-preview-style">` **at the END OF THE IFRAME BODY** (NOT head). The iframe loads the front door, whose `frontdoor.css` is `<link>`ed in the BODY — a `<style>` in the iframe `<head>` would load BEFORE it and be overridden (the exact cascade bug fixed in Task 7). Appending to the body end makes the preview win:
+```js
+function applyPreview(css) {
+  var fr = document.getElementById('fd-theme-preview');
+  var doc = fr && fr.contentDocument;
+  if (!doc || !doc.body) return;
+  var s = doc.getElementById('fd-theme-preview-style');
+  if (!s) { s = doc.createElement('style'); s.id = 'fd-theme-preview-style'; }
+  s.textContent = css;
+  doc.body.appendChild(s); // re-appending moves it to the end → wins source-order cascade
+}
+```
+(Preview iframe is same-origin → `contentDocument` is accessible. Guard for the iframe not being loaded yet — wire the first preview on the iframe's `load` event.)
 
 - [ ] **Step 2: Light/dark preview toggle**
 
