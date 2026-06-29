@@ -3565,19 +3565,30 @@ class Report extends Ork3
         //    credits separately, applies per-event cap and outside-kingdom credit ceiling.
         // 2. Standard path: single-level GROUP BY with att_expr.
         // Both produce the same att alias with att_count; path 1 also emits outside_credits_raw.
+        //
+        // Kingdom scope is computed by PARK membership, not by attendance.kingdom_id.
+        // attendance.kingdom_id is a point-in-time snapshot set when the row was
+        // inserted; if a park later transfers between kingdoms (most notably when a
+        // principality splits off from its parent), historical rows keep the old
+        // kingdom_id and are silently misattributed. park.kingdom_id is the stable
+        // truth, so we filter via park membership + a fallback branch for kingdom-only
+        // events (which have no park_id by definition).
+        $_park_subq        = "SELECT park_id FROM " . DB_PREFIX . "park WHERE kingdom_id = $kingdom_id";
+        $_in_scope_clause  = "(a.park_id IN ($_park_subq) OR (a.kingdom_id = $kingdom_id AND a.park_id = 0))";
         $att_select_extra = '';
         if ($max_outside_kingdom_creds > 0) {
             $_per_evt = $max_credits_per_event > 0 ? "LEAST(COUNT(*), $max_credits_per_event)" : "COUNT(*)";
-            // Use COALESCE(a.kingdom_id, $kingdom_id) so that attendance rows with NULL kingdom_id
-            // are treated as in-kingdom, preventing NULL propagation in SUM() arithmetic.
+            // In-kingdom classification is by PARK membership (see $_in_scope_clause
+            // comment above). The boolean returns 1 for in-kingdom rows, 0 otherwise,
+            // which is exactly what the credit-multiplier arithmetic below needs.
             $att_join_clause = "LEFT JOIN (
 					SELECT mundane_id,
 					       SUM(in_credits) + LEAST(SUM(out_credits), $max_outside_kingdom_creds) AS att_count,
 					       SUM(out_credits) AS outside_credits_raw
 					FROM (
 					    SELECT a.mundane_id,
-					           $_per_evt * (COALESCE(a.kingdom_id, $kingdom_id) = $kingdom_id) AS in_credits,
-					           $_per_evt * (COALESCE(a.kingdom_id, $kingdom_id) != $kingdom_id) AS out_credits
+					           $_per_evt * ($_in_scope_clause)    AS in_credits,
+					           $_per_evt * (NOT $_in_scope_clause) AS out_credits
 					    FROM " . DB_PREFIX . "attendance a
 					    WHERE a.event_id IS NOT NULL AND a.event_id != 0
 					      AND a.date >= '$start_date'
@@ -3585,8 +3596,8 @@ class Report extends Ork3
 					    GROUP BY a.mundane_id, a.event_id, a.kingdom_id
 					    UNION ALL
 					    SELECT a.mundane_id,
-					           (COALESCE(a.kingdom_id, $kingdom_id) = $kingdom_id) AS in_credits,
-					           (COALESCE(a.kingdom_id, $kingdom_id) != $kingdom_id) AS out_credits
+					           ($_in_scope_clause)    AS in_credits,
+					           (NOT $_in_scope_clause) AS out_credits
 					    FROM " . DB_PREFIX . "attendance a
 					    WHERE (a.event_id = 0 OR a.event_id IS NULL)
 					      AND a.date >= '$start_date'
@@ -3601,7 +3612,7 @@ class Report extends Ork3
             $_kve_join_sql  = $kingdom_evt_bonus
                 ? "LEFT JOIN " . DB_PREFIX . "event kve ON kve.event_id = a.event_id AND a.event_id != 0"
                 : '';
-            $_att_where_kw  = $all_kingdoms ? "1=1" : "a.kingdom_id = $kingdom_id";
+            $_att_where_kw  = $all_kingdoms ? "1=1" : $_in_scope_clause;
             $att_join_clause = "LEFT JOIN (
 					SELECT a.mundane_id, $att_expr AS att_count $att_extra_cols
 					FROM " . DB_PREFIX . "attendance a
@@ -3724,7 +3735,7 @@ class Report extends Ork3
 				CASE WHEN EXISTS (
 					SELECT 1 FROM " . DB_PREFIX . "dues d
 					WHERE d.mundane_id = m.mundane_id
-					  AND d.kingdom_id = $kingdom_id
+					  AND d.park_id IN ($_park_subq)
 					  AND d.revoked != 1
 					  AND (d.dues_until >= CURDATE() OR d.dues_for_life = 1)
 				) THEN 1 ELSE 0 END AS dues_paid,
@@ -3732,7 +3743,7 @@ class Report extends Ork3
 				             ELSE MAX(d.dues_until) END
 				 FROM " . DB_PREFIX . "dues d
 				 WHERE d.mundane_id = m.mundane_id
-				   AND d.kingdom_id = $kingdom_id
+				   AND d.park_id IN ($_park_subq)
 				   AND d.revoked != 1
 				   AND (d.dues_until >= CURDATE() OR d.dues_for_life = 1)
 				) AS dues_until
