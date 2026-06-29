@@ -1188,71 +1188,162 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ### Task 11: Theme editor page (controller action + template + rail link)
 
 **Files:**
-- Modify: `orkui/controller/controller.Cms.php` (add `theme` action)
+- Modify: `system/lib/ork3/class.CmsTheme.php` (add `Catalog()`/`FontAllowlist()`/`BaseValues()` passthroughs)
+- Modify: `orkui/model/model.CmsTheme.php` (add `catalog()`/`font_allowlist()`/`base_values()`)
+- Modify: `orkui/controller/controller.Cms.php` (add `theme()` action + `'theme'` key in `_capFlags()`)
 - Create: `orkui/template/default/Cms_theme.tpl`
-- Modify: `orkui/template/default/cms/_shell_top.tpl:52` (add Theme rail item)
+- Modify: `orkui/template/default/cms/_shell_top.tpl` (add Theme item to `$shRail`)
 - Modify: `orkui/template/default/style/cms-admin.css` (editor styles, light + dark)
 
-**Interfaces:**
-- Consumes: `CmsAuth->cms_can($uid,'theme.manage',SCOPE)`, `CmsTheme->get_active_theme`, `CmsThemeTokens::Defaults/FontAllowlist/DefaultValues`, `_csrfToken()`.
-- Produces: `Cms/theme` page rendering the editor with `window.CMS_CSRF`, the token catalog as JS data, and the active theme values.
+**REAL framework patterns (verified — the prose in earlier plan drafts was wrong):**
+- `Controller_Cms` actions get the uid via `$this->_uid()`, gate with `$this->CmsAuth->cms_can($uid, <cap>, self::$SCOPE)` → `return $this->_denyRedirect();` on fail, then set `$this->template = 'Cms_<x>.tpl';` and populate `$this->data[...]`. **There is NO explicit render call** — the framework auto-renders `$this->template`. `$this->data['CmsCsrf']` is ALREADY set in the constructor (don't re-set it).
+- Controllers must NOT reference `system/lib` classes (e.g. `CmsThemeTokens`) directly — go through the model (architecture-layers rule). So catalog/fonts/defaults come from new model passthroughs.
+- The rail is data-driven by the `$shRail` array INSIDE `cms/_shell_top.tpl`; visibility uses `$shCaps[...]` which comes from `$this->data['Caps'] = $this->_capFlags($uid)`. Add a `'theme'` key to `_capFlags()`.
+- `.tpl` files are PLAIN PHP (`extract()`+`include`). The page template sets local vars from the injected `$Data`, defines an `$h` escaper, sets `$cmsActive`, then `include __DIR__ . '/cms/_shell_top.tpl';`, renders the body, and ends with `include __DIR__ . '/cms/_shell_bottom.tpl';` (mirror `Cms_nav.tpl`).
 
-- [ ] **Step 1: Add the controller action**
+- [ ] **Step 1: Add lib + model passthroughs for the catalog**
 
+In `system/lib/ork3/class.CmsTheme.php`:
+```php
+    /** Token catalog (name => [group,value,input]) — editor metadata. */
+    public function Catalog()
+    {
+        return CmsThemeTokens::Defaults();
+    }
+
+    /** Vetted font families for the editor's font selects. */
+    public function FontAllowlist()
+    {
+        return CmsThemeTokens::FontAllowlist();
+    }
+
+    /** token => default value (editor seed baseline). */
+    public function BaseValues()
+    {
+        return CmsThemeTokens::DefaultValues();
+    }
+```
+In `orkui/model/model.CmsTheme.php`:
+```php
+    public function catalog()
+    {
+        return $this->CmsTheme->Catalog();
+    }
+    public function font_allowlist()
+    {
+        return $this->CmsTheme->FontAllowlist();
+    }
+    public function base_values()
+    {
+        return $this->CmsTheme->BaseValues();
+    }
+```
+
+- [ ] **Step 2: Add the controller action + capability flag**
+
+In `controller.Cms.php`, add the action:
 ```php
     /** Theme engine editor (global scope, v1). */
     public function theme($action = null)
     {
-        $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $uid = $this->_uid();
         if (!$this->CmsAuth->cms_can($uid, 'theme.manage', self::$SCOPE)) {
             return $this->_denyRedirect();
         }
         $this->load_model('CmsTheme');
-        require_once DIR_LIB . 'ork3/class.CmsThemeTokens.php'; // adjust const to match codebase
-        $active = $this->CmsTheme->get_active_theme('global', 0);
 
-        $this->data['CmsCsrf']      = $this->_csrfToken();
-        $this->data['ThemeCatalog'] = CmsThemeTokens::Defaults();
-        $this->data['ThemeFonts']   = CmsThemeTokens::FontAllowlist();
-        $this->data['ThemeValues']  = array_merge(
-            CmsThemeTokens::DefaultValues(),
-            ($active['tokens'] ?? array())
-        );
-        $this->data['ThemeActiveId'] = (int)($active['id'] ?? 0);
+        $active       = $this->CmsTheme->get_active_theme('global', 0);
+        $activeTokens = (is_array($active) && isset($active['tokens']) && is_array($active['tokens'])) ? $active['tokens'] : array();
+
+        $this->template = 'Cms_theme.tpl';
+        $this->data['page_title']    = 'Theme';
         $this->data['cmsActive']     = 'theme';
-        $this->_render('Cms_theme');   // match how other Cms actions render (verify helper name)
+        $this->data['ThemeCatalog']  = $this->CmsTheme->catalog();
+        $this->data['ThemeFonts']    = $this->CmsTheme->font_allowlist();
+        $this->data['ThemeValues']   = array_merge($this->CmsTheme->base_values(), $activeTokens);
+        $this->data['ThemeActiveId'] = (is_array($active) && isset($active['id'])) ? (int)$active['id'] : 0;
+        $this->data['Caps']          = $this->_capFlags($uid);
     }
 ```
-Note: confirm the render mechanism + `DIR_LIB` constant by reading another `Cms` action (e.g. `nav`/`media`); mirror it exactly.
+And add a `'theme'` entry to the array returned by `_capFlags()` (alongside `'nav'`):
+```php
+            'theme'   => $isSuper || in_array('theme.manage', $caps, true),
+```
 
-- [ ] **Step 2: Add the rail item**
+- [ ] **Step 3: Add the rail item**
 
-In `cms/_shell_top.tpl`, after the `nav` item (L52), add:
+In `cms/_shell_top.tpl`, inside the `$shRail` array, after the `nav` line, add:
 ```php
     array('theme',     'Theme',      UIR . 'Cms/theme',     'fa-palette',    !empty($shCaps['theme'])),
 ```
-And ensure `$shCaps['theme']` is populated where `$shCaps` is built (mirror how `media`/`nav` caps are computed — `cms_can($uid,'theme.manage',$scope)`).
+(`fa-palette` is a valid FA5 icon.)
 
-- [ ] **Step 3: Build the editor template (plain PHP)**
+- [ ] **Step 4: Build the editor template (plain PHP, dark-mode compatible)**
 
-Create `Cms_theme.tpl` including the shared shell (`cms/_shell_top.tpl` / `_shell_bottom.tpl` as other `Cms_*.tpl` do), with:
-- Left control rail: iterate `$ThemeCatalog` grouped by `group` (color/type/shape); render `<input type="color">` for colors, `<select>` (from `$ThemeFonts`) for fonts, `<input type="range">`/number for scale/px, `<select>` for shadow. Each control carries `data-token="--fd-…"`. Seed values from `$ThemeValues`.
-- A few preset buttons (`data-preset` with a small inline JSON of token overrides).
-- An "Advanced — all tokens" `<details>` exposing every token raw (same inputs, ungrouped).
-- Right: `<iframe id="fd-theme-preview" src="<?= UIR ?>">` + a light/dark toggle + a contrast-warning area.
-- Footer actions: Save, Activate, Reset.
-- Emit `window.CMS_CSRF` and `window.THEME_VALUES`/`window.THEME_CATALOG` as JSON via `json_encode(..., JSON_HEX_TAG)`.
+Create `orkui/template/default/Cms_theme.tpl` mirroring `Cms_nav.tpl`'s structure. Header comment + local var setup from `$Data`:
+```php
+<?php
+/**
+ * Cms_theme.tpl — CMS Theme engine editor (global scope, v1). PLAIN PHP.
+ * Receives: $ThemeCatalog (token=>[group,value,input]), $ThemeFonts (list),
+ *           $ThemeValues (token=>value seed), $ThemeActiveId (int), $Caps, $CmsCsrf.
+ */
+$catalog   = isset($ThemeCatalog) && is_array($ThemeCatalog) ? $ThemeCatalog : array();
+$fonts     = isset($ThemeFonts) && is_array($ThemeFonts) ? $ThemeFonts : array();
+$values    = isset($ThemeValues) && is_array($ThemeValues) ? $ThemeValues : array();
+$activeId  = isset($ThemeActiveId) ? (int)$ThemeActiveId : 0;
+$caps      = isset($Caps) && is_array($Caps) ? $Caps : array();
+$h = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); };
 
-Follow the dark-mode checklist (`html[data-theme="dark"]`): style labels, ghost buttons, inputs, the iframe frame, and the advanced disclosure for dark.
+$cmsActive = 'theme';
+$cmsTitle  = 'Content';
+$cmsSub    = 'Theme';
+include __DIR__ . '/cms/_shell_top.tpl';
+?>
+<div class="theme-editor">
+  <div class="te-controls">
+    <!-- preset row, then Colors / Typography / Shape groups, then Advanced <details> -->
+  </div>
+  <div class="te-preview">
+    <div class="te-preview-bar"><!-- light/dark toggle + contrast warnings --></div>
+    <iframe id="fd-theme-preview" class="te-preview-frame" src="<?= $h(UIR) ?>" title="Theme preview"></iframe>
+  </div>
+  <div class="te-actions">
+    <button type="button" id="te-reset" class="te-btn te-btn-ghost">Reset to default</button>
+    <button type="button" id="te-save" class="te-btn">Save</button>
+    <button type="button" id="te-activate" class="te-btn te-btn-primary">Apply to site</button>
+  </div>
+</div>
+<script>
+window.THEME_CATALOG   = <?= json_encode($catalog, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+window.THEME_FONTS     = <?= json_encode(array_values($fonts), JSON_HEX_TAG) ?>;
+window.THEME_VALUES    = <?= json_encode($values, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
+</script>
+<?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
+```
+Inside `.te-controls`, render server-side from `$catalog` grouped by `['group']` (`color` → Colors, `type` → Typography, `shape` → Shape & density):
+- **color** inputs: `<input type="color" data-token="<?= $h($name) ?>" value="<?= $h($values[$name]) ?>">` + a hidden/companion text field is optional. (Skip `input === 'derived'` tokens — they're auto-computed, not user-set.)
+- **font** inputs (`input === 'font'`): `<select data-token="...">` with an `<option>` per `$fonts` entry, `selected` on the seeded value.
+- **scale/px** inputs (`input === 'scale'|'px'`): `<input type="range">` or `<input type="number">` with sane min/max/step (scale 0.9–1.25 step .05; radius/px 0–24 step 1) + a value readout, `data-token="..."`.
+- **shadow** input: `<select data-token="--fd-shadow">` with the 4 shadow presets as options.
+- A **preset** row: a few `<button type="button" class="te-preset" data-tokens='{"--fd-primary":"#1b4d3e","--fd-accent":"#c9a227"}'>Name</button>`.
+- An **"Advanced — all tokens"** `<details><summary>` block listing EVERY non-derived token as a raw input (same control types), so power users can set any value directly.
 
-- [ ] **Step 4: Verify the page loads + is gated**
+Every control MUST carry `data-token="<token-name>"` so Task 12's JS can collect them generically. Seed each from `$values`.
 
-Run: visit `http://localhost:19080/orkui/index.php?Route=Cms/theme` as an admin → editor renders with controls seeded. As a non-admin (or logged out) → redirected to login. Confirm dark mode looks correct.
+- [ ] **Step 5: Style the editor in cms-admin.css (light + dark)**
 
-- [ ] **Step 5: Commit**
+Add a `.theme-editor` block to `cms-admin.css`: a two-column layout (`.te-controls` left, `.te-preview` right), collapsible groups, color-swatch rows, the `.te-preview-frame` iframe framing, `.te-actions` footer, and the `<details>` advanced panel. Provide `html[data-theme="dark"]` overrides for every surface (panel bg, labels, inputs, ghost buttons, the iframe frame border, the advanced disclosure) per the project dark-mode checklist. Use FA5 icons only; no native `title` tooltips (use `data-tip` if needed).
+
+- [ ] **Step 6: Verify the page loads + is gated**
+
+Run: `php -l` on the controller/model/lib files. Then `curl -s -o /dev/null -w "%{http_code}" 'http://localhost:19080/orkui/index.php?Route=Cms/theme'` while logged out → expect a redirect (302) or the login page, NOT a 200 editor. (Full admin-session render + dark-mode visual check happens in Task 12's end-to-end pass; here, confirm the route exists, `php -l` is clean, and the template has no PHP errors by checking the rendered HTML contains `window.THEME_CATALOG` when accessed — if you can mint an admin session, do so; otherwise state you verified routing + lint + static template correctness.)
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add orkui/controller/controller.Cms.php orkui/template/default/Cms_theme.tpl orkui/template/default/cms/_shell_top.tpl orkui/template/default/style/cms-admin.css
+git add system/lib/ork3/class.CmsTheme.php orkui/model/model.CmsTheme.php orkui/controller/controller.Cms.php orkui/template/default/Cms_theme.tpl orkui/template/default/cms/_shell_top.tpl orkui/template/default/style/cms-admin.css
 git commit -m "Enhancement: CMS Theme Engine — theme editor page + rail entry
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
