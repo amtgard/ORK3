@@ -11,7 +11,7 @@ $steps   = $blockFields['steps']   ?? [];
 $cta     = $blockFields['cta']     ?? [];
 
 $isDark  = ($band === 'dark');
-$bgStyle = $isDark ? 'background:var(--navy);color:#fff;' : 'background:#f7f8fb;';
+$bgStyle = $isDark ? 'background:var(--navy);color:var(--fd-primary-contrast);' : 'background:#f7f8fb;';
 ?>
 <div class="fd-pad" style="<?= $bgStyle ?>">
     <div style="text-align:center;margin-bottom:26px;">
@@ -22,7 +22,7 @@ $bgStyle = $isDark ? 'background:var(--navy);color:#fff;' : 'background:#f7f8fb;
         <?php endif; ?>
 
         <?php if (!empty($heading)): ?>
-            <h3 class="fd-sec-title fd-serif" style="<?= $isDark ? 'color:#fff;' : '' ?>">
+            <h3 class="fd-sec-title fd-serif" style="<?= $isDark ? 'color:var(--fd-primary-contrast);' : '' ?>">
                 <?= htmlspecialchars($heading, ENT_QUOTES) ?>
             </h3>
         <?php endif; ?>

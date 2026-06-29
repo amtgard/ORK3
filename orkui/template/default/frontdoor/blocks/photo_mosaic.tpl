@@ -51,7 +51,7 @@ if (empty($images)) {
     <?php endif; ?>
 
     <!-- Caption tile (always rendered, fills last cell) -->
-    <div style="background:var(--navy);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:14px">
+    <div style="background:var(--navy);color:var(--fd-primary-contrast);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:14px">
         <?php if ($caption !== ''): ?>
         <div class="fd-serif" style="font-size:22px;color:var(--gold)"><?= $caption ?></div>
         <?php endif; ?>

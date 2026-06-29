@@ -73,7 +73,7 @@ $moreCount    = $totalParent - count($shown);
             <?php if ($moreCount > 0 && !empty($moreHref)): ?>
                 <a class="fd-card" href="<?= htmlspecialchars($moreHref, ENT_QUOTES) ?>"
                    style="padding:12px;text-align:center;display:flex;flex-direction:column;align-items:center;
-                          justify-content:center;background:var(--navy);color:#fff;text-decoration:none;
+                          justify-content:center;background:var(--navy);color:var(--fd-primary-contrast);text-decoration:none;
                           border-color:var(--navy);">
                     <div style="font-size:13px;font-weight:700;">+<?= $moreCount ?> more &rarr;</div>
                 </a>

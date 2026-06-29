@@ -66,7 +66,7 @@ if (empty($fdbRows)) {
     align-items: center;
     gap: 16px;
     padding: 16px 18px;
-    background: #fff;
+    background: var(--fd-bg);
     border: 1px solid #e4e8f0;
     border-radius: 10px;
     text-decoration: none;
@@ -93,7 +93,7 @@ if (empty($fdbRows)) {
 .fdb-file-title {
     font-weight: 700;
     font-size: 15px;
-    color: #1a2236;
+    color: var(--fd-text);
     word-break: break-word;
 }
 .fdb-file-desc {

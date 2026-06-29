@@ -19,7 +19,7 @@ if (!is_array($items)) {
     border: 1px solid #e2e6ef;
     border-radius: 8px;
     margin-bottom: 10px;
-    background: #fff;
+    background: var(--fd-bg);
     overflow: hidden;
 }
 .fdb-accordion-item > summary {

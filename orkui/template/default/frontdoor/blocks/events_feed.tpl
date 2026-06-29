@@ -12,7 +12,7 @@ $moreHref = $blockFields['more_href'] ?? '';
 $hasRows = is_array($EventSummary) && count($EventSummary) > 0;
 $rows    = $hasRows ? array_slice($EventSummary, 0, $limit) : [];
 ?>
-<div class="fd-pad fd-section-light" style="background:#fff;">
+<div class="fd-pad fd-section-light" style="background:var(--fd-bg);">
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;">
         <div>
             <?php if (!empty($kicker)): ?>

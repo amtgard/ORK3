@@ -9,7 +9,7 @@ $subcopy = $blockFields['subcopy'] ?? '';
 $ctas    = $blockFields['ctas']    ?? [];
 $links   = $blockFields['links']   ?? '';
 ?>
-<div class="fd-pad" style="background:var(--navy);color:#fff;text-align:center;">
+<div class="fd-pad" style="background:var(--navy);color:var(--fd-primary-contrast);text-align:center;">
     <?php if (!empty($logo['src'])): ?>
         <img src="<?= htmlspecialchars($logo['src'], ENT_QUOTES) ?>"
              alt="<?= htmlspecialchars($logo['alt'] ?? '', ENT_QUOTES) ?>"
@@ -17,7 +17,7 @@ $links   = $blockFields['links']   ?? '';
     <?php endif; ?>
 
     <?php if (!empty($heading)): ?>
-        <h3 class="fd-serif" style="font-size:32px;color:#fff;margin:0 0 8px;">
+        <h3 class="fd-serif" style="font-size:32px;color:var(--fd-primary-contrast);margin:0 0 8px;">
             <?= htmlspecialchars($heading, ENT_QUOTES) ?>
         </h3>
     <?php endif; ?>

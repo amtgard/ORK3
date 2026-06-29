@@ -9,7 +9,7 @@ if (empty($LoggedIn)) {
 }
 ?>
 <div class="fd-member-bar"
-     style="background:var(--navy2);color:#fff;padding:9px 24px;display:flex;align-items:center;gap:18px;font-size:13px;">
+     style="background:var(--navy2);color:var(--fd-primary-contrast);padding:9px 24px;display:flex;align-items:center;gap:18px;font-size:13px;">
     <span style="opacity:.85;">
         Welcome back,
         <?php if (!empty($ViewerName)): ?>
