@@ -219,7 +219,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     src="<?= $h(UIR) ?>"
                     title="Theme preview"
                     sandbox="allow-same-origin allow-scripts"></iframe>
-            <div class="te-preview-note">Preview is live in the next task. Changes are not applied until you save.</div>
+            <div class="te-preview-note">Live preview &mdash; changes are not applied to your site until you Save.</div>
         </div><!-- /.te-preview -->
 
     </div><!-- /.te-layout -->
@@ -249,3 +249,353 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
 </script>
 
 <?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
+
+<div class="cms-toast" id="teToast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<div class="cms-modal-overlay" id="teConfirmModal">
+    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-labelledby="teConfirmTitle">
+        <div class="cms-modal-head">
+            <h3 id="teConfirmTitle">Confirm</h3>
+            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
+        </div>
+        <div class="cms-modal-body">
+            <p id="teConfirmBody" style="margin:0;font-size:14px;line-height:1.5;"></p>
+        </div>
+        <div class="cms-modal-foot">
+            <button type="button" class="cms-btn cms-btn-ghost" data-close-modal>Cancel</button>
+            <button type="button" class="cms-btn cms-btn-danger" id="teConfirmOk">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    var AJAX = <?= json_encode(UIR) ?> + 'CmsAjax/';
+    var CSRF = window.CMS_CSRF || '';
+    var savedThemeId = window.THEME_ACTIVE_ID || 0;
+
+    /* ---- Toast ---- */
+    var toastEl = document.getElementById('teToast');
+    var toastTimer = null;
+    function toast(msg, kind) {
+        if (!toastEl) { return; }
+        toastEl.textContent = msg;
+        toastEl.className = 'cms-toast cms-show' + (kind ? ' cms-toast-' + kind : '');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toastEl.className = 'cms-toast'; }, 3200);
+    }
+
+    /* ---- POST helper ---- */
+    function post(endpoint, params) {
+        var body = new URLSearchParams();
+        Object.keys(params).forEach(function (k) { body.append(k, params[k]); });
+        return fetch(AJAX + endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF },
+            credentials: 'same-origin',
+            body: body.toString()
+        }).then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); });
+    }
+
+    /* ---- Token sync helpers ---- */
+    function syncToken(token, value, exceptEl) {
+        document.querySelectorAll('[data-token="' + CSS.escape(token) + '"]').forEach(function (el) {
+            if (el !== exceptEl && el.value !== value) { el.value = value; }
+        });
+    }
+    function collectTokens() {
+        var out = {};
+        document.querySelectorAll('[data-token]').forEach(function (el) {
+            out[el.getAttribute('data-token')] = el.value;
+        });
+        return out;
+    }
+
+    /* ---- Preview injection (appended to iframe body end to win cascade) ---- */
+    function applyPreview(css) {
+        var fr = document.getElementById('fd-theme-preview');
+        var doc = fr && fr.contentDocument;
+        if (!doc || !doc.body) { return; }
+        var s = doc.getElementById('fd-theme-preview-style');
+        if (!s) { s = doc.createElement('style'); s.id = 'fd-theme-preview-style'; }
+        s.textContent = css;
+        doc.body.appendChild(s); // re-append → moves to end, wins source-order cascade
+    }
+
+    var previewTimer = null;
+    function schedulePreview() {
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(doPreview, 150);
+    }
+    function doPreview() {
+        var tokens = collectTokens();
+        post('previewtheme', { tokens: JSON.stringify(tokens) }).then(function (res) {
+            if (res && res.ok && res.css) { applyPreview(res.css); }
+        }).catch(function () { /* silent — preview errors are non-blocking */ });
+    }
+
+    /* ---- Iframe load → first preview ---- */
+    var iframe = document.getElementById('fd-theme-preview');
+    if (iframe) {
+        iframe.addEventListener('load', function () {
+            doPreview();
+            // Re-apply dark-mode if the toggle was already on.
+            var darkEl = document.getElementById('te-preview-dark');
+            if (darkEl && darkEl.checked) { setPreviewDark('dark'); }
+        });
+    }
+
+    /* ---- Control input/change handler (delegated) ---- */
+    function handleControlChange(e) {
+        var el = e.target;
+        var token  = el.getAttribute('data-token');
+        var hexFor = el.getAttribute('data-hex-for');
+        if (!token && !hexFor) { return; }
+
+        if (token) {
+            // Sync all other controls with the same token (main ↔ advanced).
+            syncToken(token, el.value, el);
+            // Sync hex display fields.
+            document.querySelectorAll('[data-hex-for="' + CSS.escape(token) + '"]').forEach(function (h) {
+                if (h.value !== el.value) { h.value = el.value; }
+            });
+            schedulePreview();
+            runContrastCheck();
+        } else if (hexFor) {
+            var hex = el.value;
+            if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+                document.querySelectorAll('[data-token="' + CSS.escape(hexFor) + '"]').forEach(function (c) {
+                    if (c.value !== hex) { c.value = hex; }
+                });
+                document.querySelectorAll('[data-hex-for="' + CSS.escape(hexFor) + '"]').forEach(function (h) {
+                    if (h !== el && h.value !== hex) { h.value = hex; }
+                });
+                schedulePreview();
+                runContrastCheck();
+            }
+        }
+    }
+    document.addEventListener('input',  handleControlChange);
+    document.addEventListener('change', handleControlChange);
+
+    /* ---- Dark mode preview toggle ---- */
+    function setPreviewDark(mode) {
+        var fr = document.getElementById('fd-theme-preview');
+        var doc = fr && fr.contentDocument;
+        if (doc && doc.documentElement) {
+            doc.documentElement.setAttribute('data-theme', mode);
+        }
+    }
+    var darkToggle = document.getElementById('te-preview-dark');
+    if (darkToggle) {
+        darkToggle.addEventListener('change', function () {
+            setPreviewDark(darkToggle.checked ? 'dark' : 'light');
+        });
+    }
+
+    /* ---- Preset buttons ---- */
+    document.querySelectorAll('.te-preset').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var tokens;
+            try { tokens = JSON.parse(btn.getAttribute('data-tokens') || '{}'); } catch (ex) { return; }
+            Object.keys(tokens).forEach(function (token) {
+                var val = tokens[token];
+                document.querySelectorAll('[data-token="' + CSS.escape(token) + '"]').forEach(function (el) {
+                    el.value = val;
+                });
+                document.querySelectorAll('[data-hex-for="' + CSS.escape(token) + '"]').forEach(function (h) {
+                    h.value = val;
+                });
+            });
+            schedulePreview();
+            runContrastCheck();
+        });
+    });
+
+    /* ---- WCAG contrast helpers (mirrors CmsThemeTokens server formula) ---- */
+    function wcagLuminance(hex) {
+        hex = hex.replace('#', '');
+        if (hex.length === 3) { hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2]; }
+        var r = parseInt(hex.substr(0, 2), 16) / 255;
+        var g = parseInt(hex.substr(2, 2), 16) / 255;
+        var b = parseInt(hex.substr(4, 2), 16) / 255;
+        function lin(c) { return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+        return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    }
+    function wcagContrast(hex1, hex2) {
+        var l1 = wcagLuminance(hex1), l2 = wcagLuminance(hex2);
+        return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+    }
+    function getTokenHex(token) {
+        var el = document.querySelector('[data-token="' + CSS.escape(token) + '"]');
+        return (el && /^#[0-9a-fA-F]{6}$/.test(el.value)) ? el.value : null;
+    }
+    function setInlineWarn(token, msg) {
+        var el = document.querySelector('.te-group [data-token="' + CSS.escape(token) + '"]');
+        if (!el) { return; }
+        var row = el.closest('.te-token-row');
+        if (!row) { return; }
+        var warn = row.querySelector('.te-contrast-warn-inline');
+        if (msg) {
+            if (!warn) {
+                warn = document.createElement('span');
+                warn.className = 'te-contrast-warn-inline';
+                row.appendChild(warn);
+            }
+            warn.textContent = '⚠ ' + msg;
+        } else if (warn) {
+            warn.remove();
+        }
+    }
+
+    var CONTRAST_PAIRS = [
+        { text: '--fd-text',       bg: '--fd-bg',      label: 'Text – Background' },
+        { text: '--fd-text',       bg: '--fd-surface',  label: 'Text – Surface'    },
+        { text: '--fd-text-muted', bg: '--fd-bg',      label: 'Muted – Background' },
+    ];
+
+    function runContrastCheck() {
+        var barWarns = [];
+        var warnedTokens = {};
+        CONTRAST_PAIRS.forEach(function (pair) {
+            var textHex = getTokenHex(pair.text);
+            var bgHex   = getTokenHex(pair.bg);
+            if (!textHex || !bgHex) { return; }
+            var ratio = wcagContrast(textHex, bgHex);
+            if (ratio < 4.5) {
+                barWarns.push(pair.label + ' (' + ratio.toFixed(1) + ':1)');
+                if (!warnedTokens[pair.text]) {
+                    warnedTokens[pair.text] = ratio.toFixed(1) + ':1';
+                }
+            }
+        });
+        ['--fd-text', '--fd-text-muted'].forEach(function (tok) {
+            setInlineWarn(tok, warnedTokens[tok] ? warnedTokens[tok] + ' — low contrast' : '');
+        });
+        var warnBar = document.getElementById('te-contrast-warn');
+        var warnMsg = document.getElementById('te-contrast-msg');
+        if (warnBar && warnMsg) {
+            if (barWarns.length) {
+                warnMsg.textContent = 'Low contrast: ' + barWarns.join(', ');
+                warnBar.style.display = '';
+            } else {
+                warnBar.style.display = 'none';
+            }
+        }
+    }
+
+    /* ---- Confirm modal ---- */
+    var confirmOverlay = document.getElementById('teConfirmModal');
+    var confirmTitleEl = document.getElementById('teConfirmTitle');
+    var confirmBodyEl  = document.getElementById('teConfirmBody');
+    var confirmOkEl    = document.getElementById('teConfirmOk');
+    var confirmCb      = null;
+
+    function openModal(el)  { if (el) { el.classList.add('cms-open'); } }
+    function closeModal(el) { if (el) { el.classList.remove('cms-open'); } }
+
+    document.addEventListener('click', function (e) {
+        var closer = e.target.closest('[data-close-modal]');
+        if (closer) { closeModal(closer.closest('.cms-modal-overlay')); return; }
+        if (e.target.classList && e.target.classList.contains('cms-modal-overlay')) {
+            closeModal(e.target);
+        }
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.cms-modal-overlay.cms-open').forEach(closeModal);
+        }
+    });
+
+    function tnConfirm(opts) {
+        if (confirmTitleEl) { confirmTitleEl.textContent = opts.title || 'Confirm'; }
+        if (confirmBodyEl)  { confirmBodyEl.textContent  = opts.body  || ''; }
+        if (confirmOkEl) {
+            confirmOkEl.textContent = opts.confirmLabel || 'Confirm';
+            confirmOkEl.className   = 'cms-btn ' + (opts.danger ? 'cms-btn-danger' : 'cms-btn-primary');
+        }
+        confirmCb = opts.onConfirm || null;
+        openModal(confirmOverlay);
+    }
+
+    if (confirmOkEl) {
+        confirmOkEl.addEventListener('click', function () {
+            closeModal(confirmOverlay);
+            if (confirmCb) { var cb = confirmCb; confirmCb = null; cb(); }
+        });
+    }
+
+    /* ---- Save ---- */
+    var teSaveBtn     = document.getElementById('te-save');
+    var teActivateBtn = document.getElementById('te-activate');
+    var teResetBtn    = document.getElementById('te-reset');
+
+    function setBusy(busy) {
+        [teSaveBtn, teActivateBtn, teResetBtn].forEach(function (b) {
+            if (b) { b.disabled = busy; }
+        });
+    }
+
+    function doSave(cb) {
+        setBusy(true);
+        var tokens = collectTokens();
+        post('savetheme', { name: 'Default', tokens: JSON.stringify(tokens) }).then(function (res) {
+            setBusy(false);
+            if (!res || !res.ok) { toast((res && res.error) || 'Save failed.', 'error'); return; }
+            if (res.theme_id) { savedThemeId = parseInt(res.theme_id, 10) || savedThemeId; }
+            toast('Theme saved.', 'ok');
+            if (cb) { cb(); }
+        }).catch(function () {
+            setBusy(false);
+            toast('Network error.', 'error');
+        });
+    }
+
+    if (teSaveBtn) {
+        teSaveBtn.addEventListener('click', function () { doSave(null); });
+    }
+
+    /* ---- Apply to site (save then activate) ---- */
+    if (teActivateBtn) {
+        teActivateBtn.addEventListener('click', function () {
+            doSave(function () {
+                if (!savedThemeId) { toast('No theme to activate — save first.', 'error'); return; }
+                setBusy(true);
+                post('activatetheme', { theme_id: savedThemeId }).then(function (res) {
+                    setBusy(false);
+                    if (!res || !res.ok) { toast((res && res.error) || 'Activate failed.', 'error'); return; }
+                    toast('Theme applied to your site.', 'ok');
+                }).catch(function () { setBusy(false); toast('Network error.', 'error'); });
+            });
+        });
+    }
+
+    /* ---- Reset to defaults ---- */
+    if (teResetBtn) {
+        teResetBtn.addEventListener('click', function () {
+            tnConfirm({
+                title: 'Reset to defaults?',
+                body: 'All theme tokens will return to their default values and any active theme will be deactivated. This cannot be undone.',
+                confirmLabel: 'Reset',
+                danger: true,
+                onConfirm: function () {
+                    setBusy(true);
+                    post('resettheme', {}).then(function (res) {
+                        setBusy(false);
+                        if (!res || !res.ok) { toast((res && res.error) || 'Reset failed.', 'error'); return; }
+                        toast('Theme reset to defaults.', 'ok');
+                        // Reload to repopulate controls from factory defaults.
+                        window.location.reload();
+                    }).catch(function () { setBusy(false); toast('Network error.', 'error'); });
+                }
+            });
+        });
+    }
+
+    /* ---- Initial contrast check ---- */
+    runContrastCheck();
+
+})();
+</script>

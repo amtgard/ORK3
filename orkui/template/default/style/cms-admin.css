@@ -2119,3 +2119,21 @@ html[data-theme="dark"] .te-btn-primary {
     color: #fff;
 }
 html[data-theme="dark"] .te-btn-primary:hover { background: #1e3d72; }
+
+/* Per-token inline contrast warning chip (appended to .te-token-row by JS) */
+.te-contrast-warn-inline {
+    font-size: 11px;
+    color: #b45309;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 4px;
+    padding: 2px 7px;
+    white-space: nowrap;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+html[data-theme="dark"] .te-contrast-warn-inline {
+    color: #fbbf24;
+    background: #27200a;
+    border-color: #78500a;
+}
