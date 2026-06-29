@@ -1706,3 +1706,416 @@ html[data-theme="dark"] .cms-persona-ac {
 }
 html[data-theme="dark"] .cms-persona-ac .kn-ac-item { color: #eef1f8; }
 html[data-theme="dark"] .cms-persona-ac .kn-ac-item:hover { background: rgba(240, 180, 41, .18); }
+
+/* ============================================================
+   Theme Editor (.theme-editor)
+   Two-column: controls left, preview right.
+   All dark-mode overrides use html[data-theme="dark"].
+   ============================================================ */
+
+.theme-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-height: 0;
+}
+
+/* ---- Presets row ---- */
+.te-presets {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 0 14px;
+    border-bottom: 1px solid var(--ork-border, #e2e6ec);
+    margin-bottom: 16px;
+}
+.te-presets-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ork-text-muted, #8a93a6);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-right: 4px;
+}
+.te-preset {
+    padding: 5px 13px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 20px;
+    background: var(--ork-card-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+.te-preset:hover {
+    background: rgba(240, 180, 41, .14);
+    border-color: rgba(240, 180, 41, .5);
+}
+html[data-theme="dark"] .te-presets { border-bottom-color: #2c3650; }
+html[data-theme="dark"] .te-preset {
+    background: #1c2333;
+    border-color: #2c3650;
+    color: #c8d0e0;
+}
+html[data-theme="dark"] .te-preset:hover {
+    background: rgba(240, 180, 41, .16);
+    border-color: rgba(240, 180, 41, .4);
+}
+
+/* ---- Two-column layout ---- */
+.te-layout {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 20px;
+    align-items: start;
+    min-height: 0;
+}
+@media (max-width: 900px) {
+    .te-layout { grid-template-columns: 1fr; }
+}
+
+/* ---- Controls column ---- */
+.te-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+/* ---- Token group section ---- */
+.te-group {
+    background: var(--ork-card-bg, #fff);
+    border: 1px solid var(--ork-border, #e2e6ec);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.te-group-title {
+    /* Reset the global h1–h6 pill style from orkui.css */
+    background: var(--ork-surface, #f4f6fa) !important;
+    border: none !important;
+    border-bottom: 1px solid var(--ork-border, #e2e6ec) !important;
+    border-radius: 0 !important;
+    text-shadow: none !important;
+    padding: 9px 14px !important;
+    margin: 0 !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--ork-text-muted, #8a93a6);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+.te-group-title i { font-size: 11px; }
+.te-group-body {
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+html[data-theme="dark"] .te-group {
+    background: #1c2333;
+    border-color: #2c3650;
+}
+html[data-theme="dark"] .te-group-title {
+    background: #151c2b !important;
+    border-bottom-color: #2c3650 !important;
+    color: #7a8ba6 !important;
+}
+
+/* ---- Token row ---- */
+.te-token-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 30px;
+}
+.te-token-label {
+    flex: 0 0 140px;
+    font-size: 13px;
+    color: var(--ork-text, #1b2a4a);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+html[data-theme="dark"] .te-token-label { color: #c0cad8; }
+
+/* Color input */
+.te-color {
+    width: 38px;
+    height: 30px;
+    padding: 2px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 5px;
+    cursor: pointer;
+    background: none;
+    flex: 0 0 auto;
+}
+.te-color::-webkit-color-swatch-wrapper { padding: 0; }
+.te-color::-webkit-color-swatch { border: none; border-radius: 3px; }
+.te-color-hex {
+    flex: 1 1 80px;
+    max-width: 96px;
+    font-size: 12px;
+    font-family: monospace;
+    padding: 4px 6px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 5px;
+    background: var(--ork-input-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+}
+html[data-theme="dark"] .te-color { border-color: #2c3650; }
+html[data-theme="dark"] .te-color-hex {
+    background: #111827;
+    border-color: #2c3650;
+    color: #c0cad8;
+}
+
+/* Select */
+.te-select {
+    flex: 1 1 auto;
+    max-width: 200px;
+    padding: 5px 8px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 5px;
+    background: var(--ork-input-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+    font-size: 13px;
+}
+html[data-theme="dark"] .te-select {
+    background: #111827;
+    border-color: #2c3650;
+    color: #c0cad8;
+}
+
+/* Range + number */
+.te-range-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 auto;
+}
+.te-range {
+    flex: 1 1 80px;
+    accent-color: var(--cms-gold, #f0b429);
+}
+.te-number {
+    width: 60px;
+    padding: 4px 6px;
+    border: 1px solid var(--ork-border, #d8dde6);
+    border-radius: 5px;
+    background: var(--ork-input-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+    font-size: 13px;
+    text-align: right;
+}
+.te-unit {
+    font-size: 12px;
+    color: var(--ork-text-muted, #8a93a6);
+}
+html[data-theme="dark"] .te-number {
+    background: #111827;
+    border-color: #2c3650;
+    color: #c0cad8;
+}
+
+/* ---- Advanced details ---- */
+.te-advanced {
+    border: 1px solid var(--ork-border, #e2e6ec);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.te-advanced-summary {
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ork-text-muted, #8a93a6);
+    cursor: pointer;
+    background: var(--ork-surface, #f4f6fa);
+    user-select: none;
+    list-style: none;
+}
+.te-advanced-summary::-webkit-details-marker { display: none; }
+.te-advanced-summary::before {
+    content: '▶';
+    display: inline-block;
+    margin-right: 7px;
+    font-size: 10px;
+    transition: transform .15s;
+}
+.te-advanced[open] .te-advanced-summary::before { transform: rotate(90deg); }
+.te-advanced-body {
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.te-advanced-note {
+    font-size: 12px;
+    color: var(--ork-text-muted, #8a93a6);
+    margin: 0 0 6px;
+}
+html[data-theme="dark"] .te-advanced {
+    background: #1c2333;
+    border-color: #2c3650;
+}
+html[data-theme="dark"] .te-advanced-summary {
+    background: #151c2b;
+    color: #7a8ba6;
+}
+
+/* ---- Preview column ---- */
+.te-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: sticky;
+    top: 16px;
+}
+.te-preview-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    background: var(--ork-card-bg, #fff);
+    border: 1px solid var(--ork-border, #e2e6ec);
+    border-radius: 8px 8px 0 0;
+    border-bottom: none;
+}
+.te-preview-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--ork-text-muted, #8a93a6);
+}
+html[data-theme="dark"] .te-preview-bar {
+    background: #1c2333;
+    border-color: #2c3650;
+}
+
+/* Dark toggle */
+.te-dark-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--ork-text-muted, #8a93a6);
+    cursor: pointer;
+}
+.te-dark-toggle input { margin: 0; accent-color: var(--cms-gold, #f0b429); }
+.te-dark-toggle-track i { font-size: 11px; }
+
+/* Contrast warning */
+.te-contrast-warn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #b45309;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 5px;
+    padding: 3px 9px;
+}
+html[data-theme="dark"] .te-contrast-warn {
+    color: #fbbf24;
+    background: #27200a;
+    border-color: #78500a;
+}
+
+/* Preview iframe */
+.te-preview-frame {
+    display: block;
+    width: 100%;
+    height: 540px;
+    border: 1px solid var(--ork-border, #e2e6ec);
+    border-radius: 0 0 8px 8px;
+    background: #fff;
+}
+html[data-theme="dark"] .te-preview-frame { border-color: #2c3650; }
+
+.te-preview-note {
+    font-size: 12px;
+    color: var(--ork-text-muted, #8a93a6);
+    text-align: center;
+}
+
+/* ---- Action bar ---- */
+.te-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0 4px;
+    border-top: 1px solid var(--ork-border, #e2e6ec);
+    margin-top: 16px;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.te-actions-right {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+html[data-theme="dark"] .te-actions { border-top-color: #2c3650; }
+
+/* ---- Shared button styles for the editor ---- */
+.te-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--ork-border, #d8dde6);
+    background: var(--ork-card-bg, #fff);
+    color: var(--ork-text, #1b2a4a);
+    transition: background .15s, border-color .15s;
+}
+.te-btn:hover {
+    background: var(--ork-surface, #f4f6fa);
+}
+.te-btn-ghost {
+    background: transparent;
+    border-color: var(--ork-border, #d8dde6);
+    color: var(--ork-text-muted, #8a93a6);
+}
+.te-btn-ghost:hover {
+    background: var(--ork-surface, #f4f6fa);
+    color: var(--ork-text, #1b2a4a);
+}
+.te-btn-primary {
+    background: var(--cms-navy, #1b3b6f);
+    border-color: var(--cms-navy, #1b3b6f);
+    color: #fff;
+}
+.te-btn-primary:hover {
+    background: #142e58;
+    border-color: #142e58;
+}
+html[data-theme="dark"] .te-btn {
+    background: #1c2333;
+    border-color: #2c3650;
+    color: #c0cad8;
+}
+html[data-theme="dark"] .te-btn:hover { background: #232e44; }
+html[data-theme="dark"] .te-btn-ghost {
+    background: transparent;
+    border-color: #2c3650;
+    color: #7a8ba6;
+}
+html[data-theme="dark"] .te-btn-ghost:hover {
+    background: #1c2333;
+    color: #c0cad8;
+}
+html[data-theme="dark"] .te-btn-primary {
+    background: #2a5298;
+    border-color: #2a5298;
+    color: #fff;
+}
+html[data-theme="dark"] .te-btn-primary:hover { background: #1e3d72; }

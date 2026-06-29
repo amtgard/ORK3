@@ -407,6 +407,34 @@ class Controller_Cms extends Controller
     }
 
     /* ------------------------------------------------------------------ *
+     * Theme engine editor — global scope, v1
+     * ------------------------------------------------------------------ */
+
+    /** Theme engine editor (global scope, v1). */
+    public function theme($action = null)
+    {
+        $uid = $this->_uid();
+        if (!$this->CmsAuth->cms_can($uid, 'theme.manage', self::$SCOPE)) {
+            return $this->_denyRedirect();
+        }
+        $this->load_model('CmsTheme');
+
+        $active       = $this->CmsTheme->get_active_theme('global', 0);
+        $activeTokens = (is_array($active) && isset($active['tokens']) && is_array($active['tokens']))
+            ? $active['tokens']
+            : array();
+
+        $this->template = 'Cms_theme.tpl';
+        $this->data['page_title']    = 'Theme';
+        $this->data['cmsActive']     = 'theme';
+        $this->data['ThemeCatalog']  = $this->CmsTheme->catalog();
+        $this->data['ThemeFonts']    = $this->CmsTheme->font_allowlist();
+        $this->data['ThemeValues']   = array_merge($this->CmsTheme->base_values(), $activeTokens);
+        $this->data['ThemeActiveId'] = (is_array($active) && isset($active['id'])) ? (int)$active['id'] : 0;
+        $this->data['Caps']          = $this->_capFlags($uid);
+    }
+
+    /* ------------------------------------------------------------------ *
      * Blog posts — editor
      * ------------------------------------------------------------------ */
 
@@ -533,6 +561,7 @@ class Controller_Cms extends Controller
             'media'   => $isSuper || in_array('media.manage', $caps, true),
             'nav'     => $isSuper || in_array('nav.manage', $caps, true),
             'roles'   => $isSuper || in_array('roles.manage', $caps, true),
+            'theme'   => $isSuper || in_array('theme.manage', $caps, true),
         );
     }
 

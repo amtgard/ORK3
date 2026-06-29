@@ -33,4 +33,16 @@ class Model_CmsTheme extends Model
     {
         return $this->CmsTheme->PreviewCss($tokens);
     }
+    public function catalog()
+    {
+        return $this->CmsTheme->Catalog();
+    }
+    public function font_allowlist()
+    {
+        return $this->CmsTheme->FontAllowlist();
+    }
+    public function base_values()
+    {
+        return $this->CmsTheme->BaseValues();
+    }
 }

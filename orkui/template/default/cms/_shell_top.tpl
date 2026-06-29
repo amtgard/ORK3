@@ -50,6 +50,7 @@ $shRail = array(
     array('posts',     'Posts',      UIR . 'Cms/posts',     'fa-newspaper',  true),
     array('media',     'Media',      UIR . 'Cms/media',     'fa-images',     !empty($shCaps['media'])),
     array('nav',       'Navigation', UIR . 'Cms/nav',       'fa-bars',       !empty($shCaps['nav'])),
+    array('theme',     'Theme',      UIR . 'Cms/theme',     'fa-palette',    !empty($shCaps['theme'])),
 );
 ?>
 <script>window.CMS_CSRF = <?= json_encode(isset($CmsCsrf) ? (string)$CmsCsrf : '', JSON_HEX_TAG) ?>;</script>

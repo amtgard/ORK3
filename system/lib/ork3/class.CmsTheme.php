@@ -149,4 +149,22 @@ class CmsTheme extends CmsBase
     {
         return CmsThemeTokens::ToCss(is_array($tokens) ? $tokens : array());
     }
+
+    /** Token catalog (name => [group,value,input]) — editor metadata. */
+    public function Catalog()
+    {
+        return CmsThemeTokens::Defaults();
+    }
+
+    /** Vetted font families for the editor's font selects. */
+    public function FontAllowlist()
+    {
+        return CmsThemeTokens::FontAllowlist();
+    }
+
+    /** token => default value (editor seed baseline). */
+    public function BaseValues()
+    {
+        return CmsThemeTokens::DefaultValues();
+    }
 }
