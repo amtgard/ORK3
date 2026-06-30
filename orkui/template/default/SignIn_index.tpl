@@ -107,13 +107,18 @@
 }
 .si-class-picker select {
 	width: 100%;
-	padding: 10px 12px;
+	padding: 10px 36px 10px 12px;
 	border: 1px solid #cbd5e0;
 	border-radius: 6px;
 	font-size: 16px;
-	background: #fff;
 	color: #2d3748;
 	margin-bottom: 12px;
+	/* Replace the UA dropdown chevron (which iOS Safari forces to a
+	   system color that's invisible on our dark bg) with a custom SVG. */
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+	background: #fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%234a5568' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><polyline points='1 1.5 6 6.5 11 1.5'/></svg>") right 12px center / 12px 8px no-repeat;
 }
 .si-class-picker select:focus {
 	outline: none;
@@ -147,7 +152,7 @@ html[data-theme="dark"] .si-change-toggle { color: var(--ork-link, #63b3ed); }
 html[data-theme="dark"] .si-class-picker { border-top-color: var(--ork-border, #4a5568); }
 html[data-theme="dark"] .si-class-picker label { color: var(--ork-text-secondary, #cbd5e0); }
 html[data-theme="dark"] .si-class-picker select {
-	background: var(--ork-input-bg, #374151);
+	background: var(--ork-input-bg, #374151) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%23cbd5e0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><polyline points='1 1.5 6 6.5 11 1.5'/></svg>") right 12px center / 12px 8px no-repeat;
 	border-color: var(--ork-input-border, #4a5568);
 	color: var(--ork-text, #e2e8f0);
 }
@@ -170,7 +175,8 @@ html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !importa
 	html:not([data-theme="light"]) .si-class-picker { border-top-color: #4a5568; }
 	html:not([data-theme="light"]) .si-class-picker label { color: #cbd5e0; }
 	html:not([data-theme="light"]) .si-class-picker select {
-		background: #374151; border-color: #4a5568; color: #e2e8f0;
+		background: #374151 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%23cbd5e0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><polyline points='1 1.5 6 6.5 11 1.5'/></svg>") right 12px center / 12px 8px no-repeat;
+		border-color: #4a5568; color: #e2e8f0;
 	}
 	html:not([data-theme="light"]) .si-class-picker select:focus {
 		border-color: #63b3ed; box-shadow: 0 0 0 3px rgba(99,179,237,0.2);

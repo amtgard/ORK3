@@ -706,7 +706,13 @@
 										<td class="kn-col-nowrap">
 											<?php if (0 != $event['NextDate'] && $event['NextDate'] != '0000-00-00'): ?>
 												<?= date("M j, Y", strtotime($event['NextDate'])) ?>
-												<?php if (strtotime($event['NextDate']) < time()): ?><span class='event-past-badge'>Past</span><?php endif; ?>
+												<?php
+													// Compare date-to-date so an event happening *today*
+													// (NextDate = today at 00:00) isn't flagged Past at 00:01.
+													$_evDate   = date('Y-m-d', strtotime($event['NextDate']));
+													$_isEvPast = strtotime($_evDate) < strtotime(date('Y-m-d'));
+												?>
+												<?php if ($_isEvPast): ?><span class='event-past-badge'>Past</span><?php endif; ?>
 											<?php else: ?>
 												<span style="color:#a0aec0">—</span>
 											<?php endif; ?>

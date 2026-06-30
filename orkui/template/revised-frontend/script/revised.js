@@ -10567,8 +10567,88 @@ $(document).ready(function() {
 
 
 // ============================================================
+// Compose a labeled PNG (title above the QR, expiry below) on a canvas.
+// Used to make the *downloaded* QR self-describing — the on-screen modal
+// keeps showing the bare QR so the scannable area stays large.
+function orkBuildLabeledQrPng(qrImg, titleText, expiresText, callback) {
+    var QR_SIZE       = 512;             // upscaled so print stays sharp
+    var PAD           = 40;
+    var TITLE_FONT    = 'bold 28px sans-serif';
+    var SUBTITLE_FONT = '18px sans-serif';
+    var EXPIRES_FONT  = '20px sans-serif';
+    var LINE_H_TITLE  = 34;
+    var subtitle      = 'Scan to sign in';
+
+    function wrap(ctx, text, maxWidth) {
+        if (!text) return [];
+        var words = text.split(/\s+/);
+        var lines = [];
+        var line  = '';
+        for (var i = 0; i < words.length; i++) {
+            var test = line ? line + ' ' + words[i] : words[i];
+            if (ctx.measureText(test).width > maxWidth && line) {
+                lines.push(line);
+                line = words[i];
+            } else {
+                line = test;
+            }
+        }
+        if (line) lines.push(line);
+        return lines;
+    }
+
+    var canvas = document.createElement('canvas');
+    var ctx    = canvas.getContext('2d');
+
+    var width        = QR_SIZE + PAD * 2;
+    ctx.font         = TITLE_FONT;
+    var titleLines   = wrap(ctx, titleText || '', QR_SIZE);
+    var titleH       = titleLines.length * LINE_H_TITLE;
+    var subH         = subtitle ? 22 : 0;
+    var expH         = expiresText ? 26 : 0;
+    var height       = PAD + titleH + 8 + subH + 16 + QR_SIZE + 16 + expH + PAD;
+
+    canvas.width  = width;
+    canvas.height = height;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'top';
+
+    var y = PAD;
+    ctx.font      = TITLE_FONT;
+    ctx.fillStyle = '#1a202c';
+    titleLines.forEach(function(line) {
+        ctx.fillText(line, width / 2, y);
+        y += LINE_H_TITLE;
+    });
+    y += 8;
+
+    if (subtitle) {
+        ctx.font      = SUBTITLE_FONT;
+        ctx.fillStyle = '#718096';
+        ctx.fillText(subtitle, width / 2, y);
+        y += subH;
+    }
+    y += 16;
+
+    ctx.drawImage(qrImg, PAD, y, QR_SIZE, QR_SIZE);
+    y += QR_SIZE + 16;
+
+    if (expiresText) {
+        ctx.font      = EXPIRES_FONT;
+        ctx.fillStyle = '#4a5568';
+        ctx.fillText(expiresText, width / 2, y);
+    }
+
+    canvas.toBlob(function(blob) { callback(blob); }, 'image/png');
+}
+
+// ============================================================
 // Shared QR modal helper
-function orkOpenQrModal(overlayId, imgId, downloadId, expiresId, token, expiresText, uir) {
+function orkOpenQrModal(overlayId, imgId, downloadId, expiresId, token, expiresText, uir, titleText) {
     var imgEl  = document.getElementById(imgId);
     var dlEl   = document.getElementById(downloadId);
     var overlay = document.getElementById(overlayId);
@@ -10621,7 +10701,9 @@ function orkOpenQrModal(overlayId, imgId, downloadId, expiresId, token, expiresT
         imgEl.src = dataUri;
         imgEl.alt = 'Sign-in QR code';
         imgEl.style.opacity = '1';
-        // Build a blob URL for the download link
+        // Build a blob URL for the download link. This bare-QR PNG is the
+        // fallback — if titleText is set we'll upgrade the href to a
+        // labeled composite asynchronously below.
         try {
             var bytes = atob(r.data);
             var arr = new Uint8Array(bytes.length);
@@ -10633,6 +10715,25 @@ function orkOpenQrModal(overlayId, imgId, downloadId, expiresId, token, expiresT
         }
         dlEl.style.pointerEvents = '';
         dlEl.style.opacity = '';
+
+        // Compose a labeled PNG for download: title (scope name) + QR + expiry.
+        // The modal still shows the bare QR — only the downloaded file gets
+        // the surrounding text. If anything fails we keep the bare-QR href.
+        if (titleText) {
+            var labelImg = new Image();
+            labelImg.onload = function() {
+                try {
+                    orkBuildLabeledQrPng(labelImg, titleText, expiresText, function(labeledBlob) {
+                        if (!labeledBlob) return;
+                        try { URL.revokeObjectURL(dlEl.href); } catch(e) {}
+                        dlEl.href = URL.createObjectURL(labeledBlob);
+                    });
+                } catch(e) {
+                    console.error('QR label compose failed', e);
+                }
+            };
+            labelImg.src = dataUri;
+        }
     }, 'json').fail(function(xhr) {
         console.error('QR request failed', xhr.status, xhr.responseText);
         showError('Could not reach the QR service (' + (xhr.status || 'network') + ').');
@@ -10749,7 +10850,7 @@ $(document).ready(function() {
             var att = document.getElementById('pk-att-overlay');
             if (att) att.classList.remove('pk-att-open');
             orkOpenQrModal('pk-qr-overlay', 'pk-qr-img', 'pk-qr-download', 'pk-qr-expires',
-                pkCurrentToken, pkCurrentExpires, PkConfig.uir);
+                pkCurrentToken, pkCurrentExpires, PkConfig.uir, PkConfig.parkName || 'Park Sign-In');
         });
     }
 
@@ -10846,7 +10947,7 @@ $(document).ready(function() {
                     var att = document.getElementById('pk-att-overlay');
                     if (att) att.classList.remove('pk-att-open');
                     orkOpenQrModal('pk-qr-overlay', 'pk-qr-img', 'pk-qr-download', 'pk-qr-expires',
-                        token, 'Expires ' + expires, PkConfig.uir);
+                        token, 'Expires ' + expires, PkConfig.uir, PkConfig.parkName || 'Park Sign-In');
                 });
             });
             // Revoke buttons
@@ -11024,7 +11125,7 @@ $(document).ready(function() {
             // isn't stuck behind it. See the pk-att-link-qr-btn equivalent.
             if (typeof evCloseSigninLinkModal === 'function') evCloseSigninLinkModal();
             orkOpenQrModal('ev-qr-overlay', 'ev-qr-img', 'ev-qr-download', 'ev-qr-expires',
-                evCurrentToken, evCurrentExpires, EvConfig.uir);
+                evCurrentToken, evCurrentExpires, EvConfig.uir, EvConfig.eventName || 'Event Sign-In');
         });
     }
     document.addEventListener('keydown', function(e) {
@@ -11084,7 +11185,7 @@ $(document).ready(function() {
                     if (!token) return;
                     if (typeof evCloseSigninLinkModal === 'function') evCloseSigninLinkModal();
                     orkOpenQrModal('ev-qr-overlay', 'ev-qr-img', 'ev-qr-download', 'ev-qr-expires',
-                        token, 'Expires ' + expires, EvConfig.uir);
+                        token, 'Expires ' + expires, EvConfig.uir, EvConfig.eventName || 'Event Sign-In');
                 });
             });
             tbody.querySelectorAll('.ev-signin-links-revoke').forEach(function(btn) {
@@ -11258,7 +11359,7 @@ $(document).ready(function() {
             var adm = document.getElementById('kn-admin-overlay');
             if (adm) adm.classList.remove('kn-open');
             orkOpenQrModal('kn-qr-overlay', 'kn-qr-img', 'kn-qr-download', 'kn-qr-expires',
-                knCurrentToken, knCurrentExpires, KnConfig.uir);
+                knCurrentToken, knCurrentExpires, KnConfig.uir, KnConfig.kingdomName || 'Kingdom Sign-In');
         });
     }
 
@@ -11314,7 +11415,7 @@ $(document).ready(function() {
                     var adm = document.getElementById('kn-admin-overlay');
                     if (adm) adm.classList.remove('kn-open');
                     orkOpenQrModal('kn-qr-overlay', 'kn-qr-img', 'kn-qr-download', 'kn-qr-expires',
-                        token, 'Expires ' + expires, KnConfig.uir);
+                        token, 'Expires ' + expires, KnConfig.uir, KnConfig.kingdomName || 'Kingdom Sign-In');
                 });
             });
             tbody.querySelectorAll('.kn-links-revoke').forEach(function(btn) {
