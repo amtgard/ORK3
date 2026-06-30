@@ -10818,8 +10818,8 @@ $(document).ready(function() {
                 var tr = document.createElement('tr');
                 tr.dataset.linkId = lnk.LinkId;
                 tr.innerHTML =
-                    '<td style="padding:4px 6px;color:#4a5568">' + expStr + '</td>' +
-                    '<td style="padding:4px 6px;color:#4a5568">' + lnk.Credits + '</td>' +
+                    '<td style="padding:4px 6px">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px">' + lnk.Credits + '</td>' +
                     '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
                         '<button class="pk-btn pk-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-copy"></i> Copy</button>' +
                         '<button class="pk-btn pk-links-qr" data-token="' + lnk.Token + '" data-expires="' + expStr + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-qrcode"></i> QR</button>' +
@@ -10897,6 +10897,18 @@ window.evOpenSigninLinkModal = function() {
     document.body.style.overflow = 'hidden';
     // Drop any stale "no active links" cache from earlier in the page lifecycle.
     if (typeof window.evResetSigninLinksCache === 'function') window.evResetSigninLinksCache();
+    // Reset feedback. For past events, show the "event ended" notice so the
+    // disabled Generate button doesn't look broken; for everything else, clear.
+    var fb = document.getElementById('ev-signin-feedback');
+    if (fb) {
+        if (typeof EvConfig !== 'undefined' && EvConfig.isPastEvent) {
+            fb.textContent = 'This event has ended — sign-in links can no longer be generated.';
+            fb.className   = 'ev-signin-feedback ev-signin-err';
+            fb.style.display = '';
+        } else {
+            fb.style.display = 'none';
+        }
+    }
 };
 window.evCloseSigninLinkModal = function() {
     var ov = document.getElementById('ev-signin-link-overlay');
@@ -10933,10 +10945,27 @@ $(document).ready(function() {
 
     function evSyncGenBtn() {
         var v = parseFloat(creditsEl.value);
-        genBtn.disabled = !(v > 0);
+        // Past events can't accept new sign-ins, so don't let the officer
+        // generate a link that would only error out on submit.
+        genBtn.disabled = !(v > 0) || !!EvConfig.isPastEvent;
     }
     creditsEl.addEventListener('input', evSyncGenBtn);
     evSyncGenBtn();
+
+    // Styled in-modal feedback replaces native alert() so server errors
+    // ("This event has already ended", etc.) render inline with the same
+    // visual treatment as the rest of the modal.
+    function evSigninFeedback(msg, ok) {
+        var el = document.getElementById('ev-signin-feedback');
+        if (!el) return;
+        el.textContent = msg;
+        el.className   = 'ev-signin-feedback ' + (ok ? 'ev-signin-ok' : 'ev-signin-err');
+        el.style.display = '';
+    }
+    function evSigninFeedbackClear() {
+        var el = document.getElementById('ev-signin-feedback');
+        if (el) el.style.display = 'none';
+    }
 
     genBtn.addEventListener('click', function() {
         var credits = parseFloat(creditsEl.value);
@@ -10945,6 +10974,7 @@ $(document).ready(function() {
         var origHtml = '<i class="fas fa-link"></i> Generate';
         genBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating\u2026';
         document.getElementById('ev-signin-link-result').style.display = 'none';
+        evSigninFeedbackClear();
         $.post(EvConfig.uir + 'AttendanceAjax/link/event/' + EvConfig.eventId + '/create',
             { Credits: credits, EventCalendarDetailId: EvConfig.detailId },
             function(r) {
@@ -10968,13 +10998,13 @@ $(document).ready(function() {
                     evLinksLoaded = false;
                     if (evLinksOpen) evLoadActiveLinks();
                 } else {
-                    alert((r && r.error) ? r.error : 'Could not generate link.');
+                    evSigninFeedback((r && r.error) ? r.error : 'Could not generate link.', false);
                 }
             }, 'json'
         ).fail(function() {
             genBtn.innerHTML = origHtml;
             evSyncGenBtn();
-            alert('Request failed.');
+            evSigninFeedback('Request failed.', false);
         });
     });
 
@@ -11030,8 +11060,8 @@ $(document).ready(function() {
                 var tr = document.createElement('tr');
                 tr.dataset.linkId = lnk.LinkId;
                 tr.innerHTML =
-                    '<td style="padding:4px 6px;color:#4a5568">' + expStr + '</td>' +
-                    '<td style="padding:4px 6px;color:#4a5568">' + lnk.Credits + '</td>' +
+                    '<td style="padding:4px 6px">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px">' + lnk.Credits + '</td>' +
                     '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
                         '<button type="button" class="ev-icon-btn ev-signin-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px"><i class="fas fa-copy"></i> Copy</button>' +
                         '<button type="button" class="ev-icon-btn ev-signin-links-qr" data-token="' + lnk.Token + '" data-expires="' + expStr + '" style="font-size:11px;padding:2px 8px;margin-right:4px"><i class="fas fa-qrcode"></i> QR</button>' +

@@ -6043,13 +6043,13 @@ $(function() {
 						// John's credit"). manual shows the officer's name linked.
 						var byCell;
 						if (d.EntryMethod === 'signin_link') {
-							byCell = '<em title="Player signed in via PM-issued QR / link" style="color:#666">Self via Sign-in Link</em>';
+							byCell = '<em title="Player signed in via PM-issued QR / link" style="color:var(--ork-text-muted)">Self via Sign-in Link</em>';
 						} else if (d.EntryMethod === 'self_reg') {
-							byCell = '<em title="Awarded on account creation" style="color:#666">Self-registration</em>';
+							byCell = '<em title="Awarded on account creation" style="color:var(--ork-text-muted)">Self-registration</em>';
 						} else if (parseInt(d.EnteredById) > 0 && d.EnteredBy) {
 							byCell = '<a href="' + uir + 'Player/profile/' + parseInt(d.EnteredById) + '">' + esc(d.EnteredBy) + '</a>';
 						} else {
-							byCell = '<span style="color:#aaa">—</span>';
+							byCell = '<span style="color:var(--ork-text-muted)">—</span>';
 						}
 						html += '<tr>'
 							+ '<td class="pn-col-nowrap">' + dateLink + '</td>'

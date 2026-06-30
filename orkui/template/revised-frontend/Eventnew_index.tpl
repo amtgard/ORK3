@@ -220,12 +220,16 @@
 .ev-signin-link-url-row { display:flex; gap:6px; align-items:center; margin-top:12px; }
 .ev-signin-link-url-row input { flex:1; min-width:0; font-size:12px; padding:6px 8px; border:1px solid #cbd5e0; border-radius:4px; background:#fff; }
 #ev-signin-link-expires { margin-top:6px; font-size:11px; color:#718096; }
+.ev-signin-feedback { margin-top:12px; padding:8px 12px; border-radius:6px; font-size:13px; }
+.ev-signin-feedback.ev-signin-ok  { background:#f0fff4; border:1px solid #c6f6d5; color:#276749; }
+.ev-signin-feedback.ev-signin-err { background:#fff5f5; border:1px solid #fed7d7; color:#c53030; }
 #ev-signin-links-wrap { margin-top:14px; border-top:1px solid #e2e8f0; padding-top:10px; }
 #ev-signin-links-toggle { background:none; border:none; padding:0; cursor:pointer; font-size:12px; color:#4a5568; display:flex; align-items:center; gap:6px; }
 #ev-signin-links-chevron { font-size:10px; transition:transform .15s; }
 #ev-signin-links-loading, #ev-signin-links-empty { font-size:12px; color:#a0aec0; padding:4px 0; }
 #ev-signin-links-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:6px; }
 #ev-signin-links-table th { color:#718096; text-align:left; padding:4px 6px; font-weight:600; }
+#ev-signin-links-table td { color:#4a5568; }
 /* QR modal */
 #ev-qr-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:var(--z-modal-top, 10200); align-items:center; justify-content:center; }
 #ev-qr-overlay .ev-qr-box { background:#fff; border-radius:12px; padding:28px 28px 20px; box-shadow:0 8px 32px rgba(0,0,0,0.22); max-width:320px; width:calc(100vw - 40px); text-align:center; }
@@ -553,8 +557,12 @@ html[data-theme="dark"] #ev-signin-links-wrap { border-top-color: var(--ork-bord
 html[data-theme="dark"] #ev-signin-links-toggle { color: var(--ork-text-secondary); }
 html[data-theme="dark"] #ev-signin-links-loading,
 html[data-theme="dark"] #ev-signin-links-empty { color: var(--ork-text-muted); }
-html[data-theme="dark"] #ev-signin-links-table th { color: var(--ork-text-muted); }
-html[data-theme="dark"] #ev-signin-links-table td { color: var(--ork-text-secondary); border-color: var(--ork-border); }
+html[data-theme="dark"] #ev-signin-links-table th { color: var(--ork-text-secondary); }
+html[data-theme="dark"] #ev-signin-links-table td { color: var(--ork-text); border-color: var(--ork-border); }
+/* "Active Links" section label uses inline #4a5568 which is unreadable
+   on the dark modal background — promote it to bright body text. */
+html[data-theme="dark"] #ev-signin-links-wrap > div:first-child { color: var(--ork-text) !important; }
+html[data-theme="dark"] #ev-signin-links-count { color: var(--ork-text-muted) !important; }
 
 /* QR modal — dark mode */
 html[data-theme="dark"] #ev-qr-overlay .ev-qr-box { background: var(--ork-card-bg); color: var(--ork-text); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
@@ -1621,7 +1629,9 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					</a>
 					<?php endif; ?>
 					<?php if ($canManageAttendance && $checkinOpen): ?>
-					<button type="button" class="ev-icon-btn" id="ev-signin-link-open-btn" data-tip="Sign-in Link" onclick="evOpenSigninLinkModal()" style="display:inline-flex;align-items:center;gap:6px"><i class="fas fa-qrcode"></i> Sign-In Link</button>
+					<button type="button" class="ev-icon-btn" id="ev-signin-link-open-btn"
+						<?php if ($isPastEvent): ?>disabled data-tip="This event has ended — sign-in links can no longer be generated."<?php else: ?>data-tip="Sign-in Link" onclick="evOpenSigninLinkModal()"<?php endif; ?>
+						style="display:inline-flex;align-items:center;gap:6px"><i class="fas fa-qrcode"></i> Sign-In Link</button>
 					<?php endif; ?>
 					<button class="ev-icon-btn" data-tip="Export CSV" onclick="evExportAttendanceCsv()"><i class="fas fa-download"></i></button>
 					<button class="ev-icon-btn" data-tip="Print" onclick="evPrintAttendance()"><i class="fas fa-print"></i></button>
@@ -2300,6 +2310,7 @@ var _evRsvpCr = document.getElementById('ev-rsvp-credits'); if (_evRsvpCr && _ev
 					</button>
 				</div>
 			</div>
+			<div id="ev-signin-feedback" class="ev-signin-feedback" style="display:none"></div>
 			<div id="ev-signin-link-result" style="display:none">
 				<div class="ev-signin-link-url-row">
 					<input type="text" id="ev-signin-link-url" readonly>
@@ -2357,6 +2368,7 @@ var EvConfig = {
 	canManageStaff:    <?= !empty($canManageStaff) ? 'true' : 'false' ?>,
 	canManageAttendance: <?= !empty($canManageAttendance) ? 'true' : 'false' ?>,
 	checkinOpen:       <?= !empty($checkinOpen) ? 'true' : 'false' ?>,
+	isPastEvent:       <?= !empty($isPastEvent) ? 'true' : 'false' ?>,
 	eventId:    <?= $eventId ?>,
 	detailId:   <?= $detailId ?>,
 	eventName:  <?= json_encode($info['Name'] ?? 'Event') ?>,

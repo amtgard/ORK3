@@ -9827,6 +9827,20 @@ html[data-theme="dark"] [data-tip]:not(.kn-officer-pill):not(.pk-officer-pill):n
 	transform: none !important;
 }
 
+/* Disabled Sign-In Link button: same wrap/anchor fix as the modal checkbox
+   tooltips, plus flip the tooltip BELOW the button. The toolbar sits near the
+   top of a card with overflow:hidden, so the default above-the-trigger
+   placement clips the top half of any wrapped tooltip. */
+#ev-signin-link-open-btn[data-tip]:hover::after {
+	min-width: 0 !important;
+	max-width: 280px !important;
+	white-space: normal !important;
+	left: 0 !important;
+	transform: none !important;
+	bottom: auto !important;
+	top: calc(100% + 6px) !important;
+}
+
 /* Kingdomnew Save-as-draft button */
 .kn-emod-draft-btn,
 .pk-emod-draft-btn {

@@ -36,8 +36,9 @@
 }
 .si-header p {
 	margin: 0;
-	font-size: 13px;
-	opacity: 0.85;
+	font-size: 17px;
+	font-weight: 500;
+	opacity: 0.92;
 }
 .si-body {
 	padding: 28px 32px 32px;
@@ -180,6 +181,18 @@ html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !importa
 }
 </style>
 
+<?php
+	// Header text + icon track scope_type so an event link reads
+	// "Event Sign-in" instead of the default "Park Sign-in". Computed
+	// before the if/else so the values are defined in the else branch.
+	$_scopeType = isset($scope_type) ? $scope_type : 'park';
+	$_scopeMap  = [
+		'event'   => ['Event Sign-in',   'fas fa-calendar-check'],
+		'kingdom' => ['Kingdom Sign-in', 'fas fa-shield-alt'],
+		'park'    => ['Park Sign-in',    'fas fa-clipboard-check'],
+	];
+	[$_scopeHead, $_scopeIcon] = $_scopeMap[$_scopeType] ?? $_scopeMap['park'];
+?>
 <div class="si-wrap">
 
 <?php if ($error && !$link): ?>
@@ -195,7 +208,7 @@ html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !importa
 
 <?php else: ?>
 	<div class="si-header">
-		<h2><i class="fas fa-clipboard-check" style="margin-right:8px;opacity:0.9"></i>Park Sign-in</h2>
+		<h2><i class="<?= $_scopeIcon ?>" style="margin-right:8px;opacity:0.9"></i><?= $_scopeHead ?></h2>
 		<p><?= htmlspecialchars($scope_name) ?></p>
 	</div>
 	<div class="si-body">
@@ -213,7 +226,10 @@ html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !importa
 		?>
 
 		<?php if ($_existing): ?>
-			<div class="si-meta" style="background:#fff8e1;border-left:4px solid #f59e0b;padding:10px 14px;margin-bottom:14px">
+			<!-- color:#78350f forced inline so the dark-mode body color
+			     doesn't inherit onto this cream-background notice and make
+			     it illegible. -->
+			<div class="si-meta" style="background:#fff8e1;border-left:4px solid #f59e0b;padding:10px 14px;margin-bottom:14px;color:#78350f">
 				<i class="fas fa-info-circle" style="margin-right:6px;color:#b45309"></i>
 				You've already signed in today as <strong><?= htmlspecialchars($_existing['ClassName'] ?: 'a previous class') ?></strong>.
 				No additional credit will be recorded &mdash; you can change which class your credit was for below.
