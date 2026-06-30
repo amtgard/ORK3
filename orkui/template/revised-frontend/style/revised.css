@@ -739,6 +739,24 @@ html[data-theme="dark"] .pn-crumb i {
 	white-space: normal;
 }
 
+/* Mobile: let data tables scroll horizontally instead of squishing columns to
+   unreadable widths. The table becomes its own horizontal scroll container
+   (display:block) so wide rows pan left/right rather than wrapping. DataTables-
+   managed tables (.dataTable) get their own scrollX wrapper, so exclude them. */
+@media (max-width: 768px) {
+	.pn-table:not(.dataTable) {
+		display: block;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		white-space: nowrap;
+	}
+}
+
+/* Touch momentum for DataTables horizontal scroll bodies (e.g. recommendations). */
+.dataTables_scrollBody {
+	-webkit-overflow-scrolling: touch;
+}
+
 /* Ladder award progress widgets */
 .pn-ladder-grid {
 	display: grid;

@@ -1267,6 +1267,7 @@ var UnBannerConfig = {
 		</div>
 	</div>
 </div>
+<?php endif; ?>
 
 <?php /* NOTE: revised.js currently loads BEFORE jquery.dataTables. Any DataTables-dependent
          code that ships inside revised.js will run before $.fn.dataTable exists. If a
@@ -1285,6 +1286,7 @@ $(function () {
 	if ($('#un-roster-table').length) {
 		$('#un-roster-table').DataTable({
 			dom         : 'lfrtip',
+			scrollX: true,
 			orderClasses: false,
 			buttons     : [
 				{ extend: 'csv',   filename: '<?=addslashes($_name)?>-roster', exportOptions: { columns: ':not(:last-child)' } },
@@ -1781,6 +1783,3 @@ html[data-theme="dark"] .un-retire-note {
   color: var(--ork-text-secondary);
 }
 </style>
-
-
-<?php endif; ?>

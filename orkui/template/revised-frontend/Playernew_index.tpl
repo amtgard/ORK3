@@ -6292,7 +6292,7 @@ $(function() {
 						var supLink = '<a class="rs-supporter" href="' + PnConfig.uir + 'Player/profile/' + parseInt(s.SupporterMundaneId) + '">' + esc(s.SupporterName) + '</a>';
 						var notesPart = (s.Notes && s.Notes.length > 0)
 							? '<span class="rs-notes">&mdash; "' + truncNotes(s.Notes) + '"</span>'
-							: '<span class="rs-notes-empty">&mdash; (no comment)</span>';
+							: '';
 						// Edit (pencil) is supporter-only — server gates EditSecondNotes that way.
 						// Withdraw mirrors recommendation-delete: supporter OR anyone with
 						// park-level rec-delete authority (PnConfig.canDeleteRec).
@@ -6340,7 +6340,8 @@ $(function() {
 				$('#pn-rec-table').DataTable({
 					order: [[2, 'desc']],
 					columnDefs: [{ targets: [2], type: 'date' }].concat(hasActions ? [{ targets: [-1], orderable: false, searchable: false }] : []),
-					pageLength: 25
+					pageLength: 25,
+					scrollX: true
 				});
 			}
 		}).fail(function() { body.innerHTML = '<div class="pn-empty">Unable to load recommendations.</div>'; });

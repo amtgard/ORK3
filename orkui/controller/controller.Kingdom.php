@@ -938,6 +938,14 @@ class Controller_Kingdom extends Controller
             $this->data['CanManageAnyParkInKingdom'] = ($_aprs && $_aprs->Size() > 0 && $_aprs->Next());
         }
 
+        // Gate the "Voting Eligible" Players-nav link by whether this kingdom has
+        // voting rules defined. Single source of truth lives in
+        // Model_Reports::supported_voting_kingdom_ids() — don't hardcode the list here.
+        $this->data['ShowVotingEligibleLink'] = in_array(
+            (int)$kingdom_id,
+            $this->Reports->supported_voting_kingdom_ids()
+        );
+
         $knConfigs  = Common::get_configs($kingdom_id, CFG_KINGDOM);
         $recsPublic = isset($knConfigs['AwardRecsPublic'])
             ? (bool)(int)$knConfigs['AwardRecsPublic']['Value']

@@ -89,6 +89,14 @@ class Controller_Park extends Controller
         $this->data['park_officers']    = $this->Park->GetOfficers(['ParkId' => $park_id, 'Token' => $this->session->token]);
         $this->data['park_tournaments'] = $this->Reports->get_tournaments(null, null, $park_id);
 
+        // Gate the "Voting Eligible" Players-nav link by whether this park's kingdom
+        // has voting rules defined. Single source of truth lives in
+        // Model_Reports::supported_voting_kingdom_ids() — don't hardcode the list here.
+        $this->data['ShowVotingEligibleLink'] = in_array(
+            (int)$this->session->kingdom_id,
+            $this->Reports->supported_voting_kingdom_ids()
+        );
+
         $this->data['AwardOptions']   = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
         $this->data['OfficerOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Officers');
         $this->data['CustomTitleAliasOptions'] = $this->Award->fetch_custom_title_alias_options();

@@ -287,6 +287,8 @@
 	display    : flex;
 	gap        : 16px;
 	align-items: flex-start;
+	min-width  : 0;
+	max-width  : 100%;
 }
 
 
@@ -391,6 +393,7 @@
 .rp-table-area {
 	flex        : 1;
 	min-width   : 0;
+	max-width   : 100%;
 	background  : var(--rp-bg-table, #fff);
 	border      : 1px solid var(--rp-border);
 	border-radius: 8px;

@@ -408,7 +408,9 @@ class Controller_Player extends Controller
         global $DB;
         $DB->Clear();
         $officerSql   = "SELECT o.role, o.park_id,
-			CASE WHEN o.park_id > 0 THEN IFNULL(pt.title, 'Park') ELSE 'Kingdom' END AS entity_type,
+			CASE WHEN o.park_id > 0 THEN IFNULL(pt.title, 'Park')
+			     WHEN k.parent_kingdom_id > 0 THEN 'Principality'
+			     ELSE 'Kingdom' END AS entity_type,
 			CASE WHEN o.park_id > 0 THEN p.name ELSE k.name END AS entity_name
 			FROM ork_officer o
 			LEFT JOIN ork_kingdom k ON o.kingdom_id = k.kingdom_id
@@ -924,7 +926,6 @@ class Controller_Player extends Controller
         if (!empty($this->data['BeltlineAssociates'])) {
             $this->data['BeltlineAssociates'] = $__dedupeByKey($this->data['BeltlineAssociates'], 'RecipientId');
         }
-
     }
 
 
