@@ -1,3 +1,7 @@
+-- Event staff: officers delegate granular capabilities to per-event staff.
+-- Consolidated migration (Rose-cycle, fresh-deploy edition):
+--   * original CREATE
+--   * + can_schedule, can_feast columns
 CREATE TABLE `ork_event_staff` (
     `event_staff_id` int(11) NOT NULL AUTO_INCREMENT,
     `event_calendardetail_id` int(11) NOT NULL,
@@ -5,6 +9,8 @@ CREATE TABLE `ork_event_staff` (
     `role_name` varchar(100) NOT NULL DEFAULT '',
     `can_manage` tinyint(1) NOT NULL DEFAULT 0,
     `can_attendance` tinyint(1) NOT NULL DEFAULT 0,
+    `can_schedule` tinyint(1) NOT NULL DEFAULT 0,
+    `can_feast` tinyint(1) NOT NULL DEFAULT 0,
     `modified` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
     PRIMARY KEY (`event_staff_id`),
     KEY `event_calendardetail_id` (`event_calendardetail_id`),

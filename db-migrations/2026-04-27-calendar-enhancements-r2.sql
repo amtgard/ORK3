@@ -1,9 +1,10 @@
--- Calendar Enhancements Round 2:
---   * Officer-only calendar items
---   * Draft events
-
-ALTER TABLE ork_calendar_item
-    ADD COLUMN is_officer_only TINYINT(1) NOT NULL DEFAULT 0;
+-- Draft events: status column gates publication visibility on the
+-- park/kingdom event listings and event detail page. Officers and the
+-- event creator see drafts; everyone else sees only published.
+--
+-- The Round-2 calendar-item half of the original migration
+-- (ADD COLUMN is_officer_only) was folded into the consolidated
+-- 2026-04-12-calendar-items.sql.
 
 ALTER TABLE ork_event
     ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'published',
