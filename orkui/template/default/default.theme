@@ -922,6 +922,16 @@ endif;
     var body    = document.getElementById('ork-ep-body');
     if (!overlay || !pick || !body) return;
 
+    // Stash the initial (server-rendered "today") body + date so we can
+    // reset both when the popover reopens — otherwise a previously-picked
+    // date sticks around and looks stale.
+    var initialBody = body.innerHTML;
+    var initialDate = pick.value;
+    window.__orkEpResetToToday = function() {
+        body.innerHTML = initialBody;
+        pick.value     = initialDate;
+    };
+
     // English ordinal — mirrors EraPhoenice::ordinal() so client-side
     // re-renders (from the date picker) match the server-side text.
     function ord(n) {
@@ -986,7 +996,10 @@ endif;
 })();
 function orkOpenEpPopover() {
     var el = document.getElementById('ork-ep-overlay');
-    if (el) { el.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+    if (!el) return;
+    if (typeof window.__orkEpResetToToday === 'function') window.__orkEpResetToToday();
+    el.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
 }
 function orkCloseEpPopover() {
     var el = document.getElementById('ork-ep-overlay');
