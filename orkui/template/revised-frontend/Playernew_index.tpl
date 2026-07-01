@@ -2044,17 +2044,17 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 							<div class="pn-belt-card">
 								<div class="pn-belt-card-title"><i class="fas fa-utensils"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Feast Preferences</div>
 								<?php if ((int)$_fp['NoRestrictions'] === 1): ?>
-									<div class="pn-belt-row" style="justify-content:flex-start;color:#4a5568;font-style:italic">No dietary restrictions.</div>
+									<div class="pn-belt-row" style="justify-content:flex-start;color:var(--ork-text-secondary,#4a5568);font-style:italic">No dietary restrictions.</div>
 								<?php else: ?>
 									<?php if (!empty($_fpDiets)): ?>
 									<div class="pn-belt-group">Diet</div>
-									<div class="pn-belt-row" style="justify-content:flex-start;flex-wrap:wrap;gap:6px">
+									<div class="pn-belt-row" style="justify-content:flex-start;flex-wrap:wrap;gap:6px;color:var(--ork-text-secondary,#4a5568)">
 										<?= htmlspecialchars(implode(', ', array_keys($_fpDiets))) ?>
 									</div>
 									<?php endif; ?>
 									<?php if (!empty($_fpRestricts)): ?>
 									<div class="pn-belt-group">Won't eat</div>
-									<div class="pn-belt-row" style="justify-content:flex-start;flex-wrap:wrap;gap:6px">
+									<div class="pn-belt-row" style="justify-content:flex-start;flex-wrap:wrap;gap:6px;color:var(--ork-text-secondary,#4a5568)">
 										<?= htmlspecialchars(implode(', ', array_keys($_fpRestricts))) ?>
 									</div>
 									<?php endif; ?>
@@ -2063,7 +2063,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 									<?php foreach ($_fpAllergens as $_al => $_sev): ?>
 									<div class="pn-belt-row" style="justify-content:flex-start">
 										<span class="pn-belt-name" style="font-weight:500"><?= htmlspecialchars($_al) ?></span>
-										<span class="pn-belt-title" style="color:<?= $_sev === 2 ? '#c53030' : '#c05621' ?>"><?= $_sev === 2 ? 'Severe' : 'Mild' ?></span>
+										<span class="pn-belt-title" style="color:<?= $_sev === 2 ? '#e53e3e' : '#dd6b20' ?>;font-weight:600"><?= $_sev === 2 ? 'Severe' : 'Mild' ?></span>
 									</div>
 									<?php endforeach; ?>
 									<?php endif; ?>
