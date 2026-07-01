@@ -891,6 +891,7 @@ endif;
 </footer>
 <?php endif; // /IsOrgSite global-footer suppression ?>
 
+<?php if (empty($IsOrgSite)): // global-only chrome; org sites omit it (and it needs $_epToday, which Controller_Site does not set) ?>
 <!-- Era Phoenice popover — mirrors electricsamurai.com/ad -->
 <div id="ork-ep-overlay"
      onclick="if(event.target===this)orkCloseEpPopover()"
@@ -1017,6 +1018,7 @@ function orkCloseEpPopover() {
     if (el) { el.style.display = 'none'; document.body.style.overflow = ''; }
 }
 </script>
+<?php endif; // /Era Phoenice popover (global-only chrome) ?>
 
 <script>
 /* Offline banner */

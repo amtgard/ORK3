@@ -221,15 +221,22 @@ class CmsSite extends CmsBase
             return class_exists('CmsSanitizer') ? CmsSanitizer::Clean($html) : (string) $html;
         };
 
-        // Attributes shared by every seeded page (draft, in the site's scope).
+        // Attributes shared by every seeded page. Seed as PUBLISHED: the
+        // site-level status (unbuilt→draft→published) is the real go-live gate —
+        // nothing is public until an AUTH_ADMIN officer publishes the SITE — and
+        // the public renderer only shows published pages, so draft starter pages
+        // would leave a just-published site showing "being built" with dead nav
+        // links. Published starter pages make go-live coherent; an officer can
+        // unpublish any individual page they aren't ready to show.
         $baseAttrs = array(
-            'status'     => 'draft',
-            'scope_type' => $scopeType,
-            'scope_id'   => $scopeId,
-            'created_by' => $uid,
-            'updated_by' => $uid,
-            'created_at' => $now,
-            'updated_at' => $now,
+            'status'       => 'published',
+            'published_at' => $now,
+            'scope_type'   => $scopeType,
+            'scope_id'     => $scopeId,
+            'created_by'   => $uid,
+            'updated_by'   => $uid,
+            'created_at'   => $now,
+            'updated_at'   => $now,
         );
 
         // Create one page + attach its blocks; returns the new page_id (0 on
@@ -296,7 +303,7 @@ class CmsSite extends CmsBase
         $aboutId = $makePage(
             array(
                 'slug'             => 'about',
-                'type'             => 'about',
+                'type'             => 'article',
                 'title'            => 'About Us',
                 'meta_description' => 'About our kingdom and its history.',
             ),
@@ -583,13 +590,17 @@ class CmsSite extends CmsBase
             return 'Invalid site.';
         }
 
-        $set = array();
-        $DB->Clear();
+        // Gather SET clauses + bind values LOCALLY first. Slug validation calls
+        // ValidateSlug(), which runs $DB->Clear() internally — so binding onto $DB
+        // before that would be wiped, leaving an unbound placeholder that fails the
+        // whole UPDATE silently. Bind everything at the end, right before Execute.
+        $set   = array();
+        $binds = array();
 
         if (array_key_exists('site_name', $fields)) {
             $set[] = 'site_name = :site_name';
             // YapoSave null-skip rule: coerce to a string ('' clears it), never null.
-            $DB->site_name = (string)$fields['site_name'];
+            $binds['site_name'] = (string)$fields['site_name'];
         }
         if (array_key_exists('slug', $fields)) {
             // Normalize with the same derivation used at creation so a typed
@@ -602,16 +613,16 @@ class CmsSite extends CmsBase
                 return $valid; // inline error; do not write anything
             }
             $set[] = 'slug = :slug';
-            $DB->slug = $slug;
+            $binds['slug'] = $slug;
         }
         if (array_key_exists('logo_media_id', $fields)) {
             $set[] = 'logo_media_id = :logo_media_id';
-            $DB->logo_media_id = ($fields['logo_media_id'] === null || $fields['logo_media_id'] === '')
+            $binds['logo_media_id'] = ($fields['logo_media_id'] === null || $fields['logo_media_id'] === '')
                 ? null : (int)$fields['logo_media_id'];
         }
         if (array_key_exists('home_page_id', $fields)) {
             $set[] = 'home_page_id = :home_page_id';
-            $DB->home_page_id = ($fields['home_page_id'] === null || $fields['home_page_id'] === '')
+            $binds['home_page_id'] = ($fields['home_page_id'] === null || $fields['home_page_id'] === '')
                 ? null : (int)$fields['home_page_id'];
         }
 
@@ -621,9 +632,14 @@ class CmsSite extends CmsBase
 
         // Always stamp the updater.
         $set[] = 'updated_by = :updated_by';
-        $DB->updated_by = (int)$uid;
+        $binds['updated_by'] = (int)$uid;
+        $binds['site_id']    = $siteId;
 
-        $DB->site_id = $siteId;
+        // Bind everything now — no intervening $DB call can clobber these.
+        $DB->Clear();
+        foreach ($binds as $k => $v) {
+            $DB->$k = $v;
+        }
         $DB->Execute(
             'UPDATE ' . DB_PREFIX . 'cms_site SET ' . implode(', ', $set)
             . ' WHERE site_id = :site_id'
