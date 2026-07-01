@@ -1858,7 +1858,14 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					</thead>
 					<tbody id="ev-staff-tbody">
 						<?php foreach ($StaffList as $staff): ?>
-						<tr id="ev-staff-row-<?= (int)$staff['EventStaffId'] ?>">
+						<tr id="ev-staff-row-<?= (int)$staff['EventStaffId'] ?>"
+							data-mundane-id="<?= (int)$staff['MundaneId'] ?>"
+							data-persona="<?= htmlspecialchars($staff['Persona']) ?>"
+							data-role="<?= htmlspecialchars($staff['RoleName']) ?>"
+							data-manage="<?= (int)!empty($staff['CanManage']) ?>"
+							data-attendance="<?= (int)!empty($staff['CanAttendance']) ?>"
+							data-schedule="<?= (int)!empty($staff['CanSchedule']) ?>"
+							data-feast="<?= (int)!empty($staff['CanFeast']) ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$staff['MundaneId'] ?>"><?= htmlspecialchars($staff['Persona']) ?></a></td>
 							<td><?= htmlspecialchars($staff['RoleName']) ?></td>
 							<td><?= $staff['CanManage'] ? '<i class="fas fa-check" style="color:#276749"></i>' : '<i class="fas fa-times" style="color:#a0aec0"></i>' ?></td>
@@ -1866,7 +1873,12 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							<td><?= $staff['CanSchedule'] ? '<i class="fas fa-check" style="color:#276749"></i>' : '<i class="fas fa-times" style="color:#a0aec0"></i>' ?></td>
 							<td><?= $staff['CanFeast'] ? '<i class="fas fa-check" style="color:#276749"></i>' : '<i class="fas fa-times" style="color:#a0aec0"></i>' ?></td>
 							<?php if ($canManageStaff): ?>
-							<td class="ev-del-cell">
+							<td class="ev-del-cell" style="white-space:nowrap">
+								<button class="ev-del-link" data-tip="Edit"
+									onclick="evEditStaff(this, <?= (int)$staff['EventStaffId'] ?>)"
+									style="background:none;border:none;cursor:pointer;color:#4299e1;font-size:14px;padding:0 8px 0 0">
+									<i class="fas fa-pencil-alt"></i>
+								</button>
 								<button class="ev-del-link" data-tip="Remove"
 									onclick="evRemoveStaff(this, <?= (int)$staff['EventStaffId'] ?>)"
 									style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">

@@ -667,9 +667,13 @@ class Controller_Event extends Controller
         }
         $this->data['EventStatus']        = $_evtStatus;
         $this->data['EventCanEditStatus'] = $this->data['CanManageEvent'];
-        // Gate non-editor viewers when status is draft.
+        // Gate non-editor viewers when status is draft. Anyone with any
+        // event_staff row on this event's occurrences can see it — a
+        // can_schedule / can_feast / can_attendance staffer needs to open the
+        // draft to fill in their slice before it's published.
         if ($_evtStatus !== 'published'
             && !$this->data['CanManageEvent']
+            && !($uid_staff_can_manage || $uid_staff_can_attendance || $uid_staff_can_schedule || $uid_staff_can_feast)
             && $uid !== $_evtCreator
             && !Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_CREATE)) {
             $this->data['DraftBlocked'] = true;

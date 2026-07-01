@@ -138,12 +138,15 @@ class Controller_Park extends Controller
 
         // Drafts are hidden from the listing at the SQL level (mirrors the Kingdom
         // controller): admins see all; logged-in users see published + their own
-        // drafts; logged-out users see only published. Required because some draft
+        // drafts + drafts they're staffing (via event_staff on any occurrence);
+        // logged-out users see only published. Required because some draft
         // events have mundane_id = 0, so the per-row creator check alone would leak
         // them to anonymous viewers (0 === 0).
-        $pk_draftClause = $pk_isAdmin
-            ? ''
-            : ($pk_uid > 0 ? "AND (e.status = 'published' OR e.mundane_id = {$pk_uid})" : "AND e.status = 'published'");
+        if ($pk_isAdmin || $pk_uid === 0) {
+            $pk_draftClause = $pk_isAdmin ? '' : "AND e.status = 'published'";
+        } else {
+            $pk_draftClause = "AND (e.status = 'published' OR e.mundane_id = {$pk_uid} OR EXISTS (SELECT 1 FROM " . DB_PREFIX . "event_staff es JOIN " . DB_PREFIX . "event_calendardetail cds ON cds.event_calendardetail_id = es.event_calendardetail_id WHERE cds.event_id = e.event_id AND es.mundane_id = {$pk_uid}))";
+        }
 
         // Viewer's own RSVP status for each event-occurrence. Used by the row's
         // RSVP button to render "Going" / "Interested" instead of the generic
@@ -182,9 +185,18 @@ class Controller_Park extends Controller
             do {
                 $eid = (int)($evtResult->event_id ?? 0);
                 if ($eid) {
+                    // Per-row draft visibility. Whitelist: admin / creator /
+                    // AUTH_EVENT-EDIT / event_staff row. The SQL clause lets
+                    // the row reach this loop for staff — without this
+                    // parallel PHP-side check, it'd be dropped again here.
                     $row_status = (string)($evtResult->status ?? 'published');
                     if ($row_status !== 'published' && !$pk_isAdmin && (int)$evtResult->event_creator !== $pk_uid) {
                         $canEditRow = ($pk_uid > 0) ? Ork3::$Lib->authorization->HasAuthority($pk_uid, AUTH_EVENT, $eid, AUTH_EDIT) : false;
+                        if (!$canEditRow && $pk_uid > 0) {
+                            $DB->Clear();
+                            $_staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff es JOIN ' . DB_PREFIX . 'event_calendardetail cds ON cds.event_calendardetail_id = es.event_calendardetail_id WHERE cds.event_id = ' . $eid . ' AND es.mundane_id = ' . $pk_uid . ' LIMIT 1');
+                            $canEditRow = ($_staffRow && $_staffRow->Next());
+                        }
                         if (!$canEditRow) {
                             continue;
                         }
