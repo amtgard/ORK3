@@ -280,6 +280,11 @@
 .ev-img-step-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .ev-crop-wrap { overflow: auto; max-height: 360px; display: flex; justify-content: center; }
 .ev-img-form-error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 8px; }
+/* Same treatment as .ev-img-form-error — the schedule / meal modal was
+   applying an unstyled class name, rendering the "Please enter a title."
+   error as bare text that people missed. */
+.ev-modal-error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 8px; font-weight: 600; }
+.ev-modal-error i { margin-right: 6px; }
 .ev-fp-title { background: #2b6cb0; color: #fff; font-size: 12px; font-weight: 700; padding: 6px 12px; text-align: center; letter-spacing: .04em; }
 /* ── Edit Attendance Modal ─────────────────────── */
 .att-edit-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:9990; align-items:center; justify-content:center; }
@@ -319,6 +324,7 @@ html[data-theme="dark"] .ev-upload-area { border-color: var(--ork-border); color
 html[data-theme="dark"] .ev-upload-area:hover { border-color: var(--ork-link); background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .ev-upload-icon { color: var(--ork-text-muted); }
 html[data-theme="dark"] .ev-img-form-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .ev-modal-error   { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
 html[data-theme="dark"] .ev-fp-title { background: #1a365d; color: #90cdf4; }
 html[data-theme="dark"] .att-edit-modal { background: var(--ork-card-bg); }
 html[data-theme="dark"] .att-edit-label { color: var(--ork-text-muted); }
@@ -2779,7 +2785,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 			</div>
 			<div class="ev-modal-row">
 				<div class="ev-modal-field ev-field-full">
-					<label>Description</label>
+					<label>Description <span style="font-size:11px;color:#718096;font-weight:400">(shown on the Schedule tab)</span></label>
 					<textarea id="ev-sched-description" rows="3" placeholder="Optional details..." style="width:100%;resize:vertical"></textarea>
 				</div>
 			</div>
@@ -2794,7 +2800,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 				</div>
 				<div class="ev-modal-row">
 					<div class="ev-modal-field ev-field-full">
-						<label>Menu <span style="font-size:11px;color:#718096;font-weight:400">(optional)</span></label>
+						<label>Menu <span style="font-size:11px;color:#718096;font-weight:400">(optional &mdash; shown on the Feast tab)</span></label>
 						<textarea id="ev-sched-meal-menu" rows="3" placeholder="List dishes, courses, dietary notes..." style="width:100%;resize:vertical"></textarea>
 					</div>
 				</div>

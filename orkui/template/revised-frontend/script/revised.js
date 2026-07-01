@@ -9249,12 +9249,21 @@ $(document).ready(function() {
             var saveBtn = gid(activeBtnId) || gid('ev-sched-save-btn');
             var allSaveBtns = document.querySelectorAll('#ev-schedule-modal .ev-sched-save-any');
 
+            // Use innerHTML so the icon renders alongside the message. All four
+            // strings below are hand-crafted literals, no user input, so this
+            // is safe. Focus the offending field too so it's visually obvious.
+            function _schedShowErr(msg, focusEl) {
+                errEl.innerHTML = '<i class="fas fa-exclamation-circle"></i>' + msg;
+                errEl.style.display = 'block';
+                if (focusEl) focusEl.focus();
+            }
             errEl.style.display = 'none';
-            if (!title) { errEl.textContent = 'Please enter a title.'; errEl.style.display = 'block'; return; }
-            if (!start) { errEl.textContent = 'Please enter a start time.'; errEl.style.display = 'block'; return; }
-            if (!end)   { errEl.textContent = 'Please enter an end time.'; errEl.style.display = 'block'; return; }
+            if (!title) { _schedShowErr('Please enter a title.',       gid('ev-sched-title'));      return; }
+            if (!start) { _schedShowErr('Please enter a start time.',  gid('ev-sched-start')); return; }
+            if (!end)   { _schedShowErr('Please enter an end time.',   gid('ev-sched-end'));   return; }
             if (new Date(end) < new Date(start)) {
-                errEl.textContent = 'End time cannot be before start time.'; errEl.style.display = 'block'; return;
+                _schedShowErr('End time cannot be before start time.', gid('ev-sched-end'));
+                return;
             }
 
             var orig = saveBtn.innerHTML;
