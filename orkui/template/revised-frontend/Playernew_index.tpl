@@ -2004,6 +2004,74 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 							<?php endif; ?>
 							<?php endif; // $_hasBeltline ?>
 							<?php
+								// Feast Preferences sidebar card (opt-in via Show My Feast Preferences).
+								// Only rendered when the toggle is on AND the player has meaningful data.
+								// NoRestrictions=1 counts as meaningful — "I have none" is intentional.
+								$_showFeastPrefs = (int)($Player['ShowFeastPrefs'] ?? 0);
+								$_fp = $FeastPrefs ?? null;
+								if ($_showFeastPrefs && is_array($_fp)) {
+									$_fpDiets = array_filter([
+										'Vegetarian' => (int)($_fp['DietVegetarian'] ?? 0),
+										'Vegan'      => (int)($_fp['DietVegan'] ?? 0),
+										'Halal'      => (int)($_fp['DietHalal'] ?? 0),
+										'Kosher'     => (int)($_fp['DietKosher'] ?? 0),
+										'Keto'       => (int)($_fp['DietKeto'] ?? 0),
+										'Paleo'      => (int)($_fp['DietPaleo'] ?? 0),
+									]);
+									$_fpRestricts = array_filter([
+										'Dairy'     => (int)($_fp['RestrictDairy'] ?? 0),
+										'Eggs'      => (int)($_fp['RestrictEggs'] ?? 0),
+										'Fish'      => (int)($_fp['RestrictFish'] ?? 0),
+										'Honey'     => (int)($_fp['RestrictHoney'] ?? 0),
+										'Poultry'   => (int)($_fp['RestrictPoultry'] ?? 0),
+										'Beef'      => (int)($_fp['RestrictBeef'] ?? 0),
+										'Pork'      => (int)($_fp['RestrictPork'] ?? 0),
+										'Shellfish' => (int)($_fp['RestrictShellfish'] ?? 0),
+									]);
+									$_fpAllergenLabels = [
+										'Milk','Eggs','Fish','Shellfish','Treenuts','Peanuts','Wheat','Soy',
+										'Sesame','Garlic','Gluten','Onion','Mushroom','Corn','Coconut','Cocoa','Nightshades',
+									];
+									$_fpAllergens = [];
+									foreach ($_fpAllergenLabels as $_al) {
+										$_v = (int)($_fp['Allergen' . $_al] ?? 0);
+										if ($_v > 0) $_fpAllergens[$_al] = $_v; // 1=Mild, 2=Severe
+									}
+									$_fpHasAny = (int)($_fp['NoRestrictions'] ?? 0) === 1
+										|| !empty($_fpDiets) || !empty($_fpRestricts) || !empty($_fpAllergens);
+							?>
+							<?php if ($_fpHasAny): ?>
+							<div class="pn-belt-card">
+								<div class="pn-belt-card-title"><i class="fas fa-utensils"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Feast Preferences</div>
+								<?php if ((int)$_fp['NoRestrictions'] === 1): ?>
+									<div class="pn-belt-row" style="justify-content:flex-start;color:#4a5568;font-style:italic">No dietary restrictions.</div>
+								<?php else: ?>
+									<?php if (!empty($_fpDiets)): ?>
+									<div class="pn-belt-group">Diet</div>
+									<div class="pn-belt-row" style="justify-content:flex-start;flex-wrap:wrap;gap:6px">
+										<?= htmlspecialchars(implode(', ', array_keys($_fpDiets))) ?>
+									</div>
+									<?php endif; ?>
+									<?php if (!empty($_fpRestricts)): ?>
+									<div class="pn-belt-group">Won't eat</div>
+									<div class="pn-belt-row" style="justify-content:flex-start;flex-wrap:wrap;gap:6px">
+										<?= htmlspecialchars(implode(', ', array_keys($_fpRestricts))) ?>
+									</div>
+									<?php endif; ?>
+									<?php if (!empty($_fpAllergens)): ?>
+									<div class="pn-belt-group">Allergens</div>
+									<?php foreach ($_fpAllergens as $_al => $_sev): ?>
+									<div class="pn-belt-row" style="justify-content:flex-start">
+										<span class="pn-belt-name" style="font-weight:500"><?= htmlspecialchars($_al) ?></span>
+										<span class="pn-belt-title" style="color:<?= $_sev === 2 ? '#c53030' : '#c05621' ?>"><?= $_sev === 2 ? 'Severe' : 'Mild' ?></span>
+									</div>
+									<?php endforeach; ?>
+									<?php endif; ?>
+								<?php endif; ?>
+							</div>
+							<?php endif; ?>
+							<?php } // _showFeastPrefs ?>
+							<?php
 								// Compact view skeleton — always emit when in compact mode so
 								// JS can inject level6 items even when zero server-side ones exist.
 								$_renderCompact = $_msCompact && (!empty($_visibleMilestones)
@@ -3405,6 +3473,13 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 						Show My Beltline
 					</label>
 					<div class="pn-design-hint" style="margin-top:4px">Display your peerage relationships (peers and associates) on your About tab. Others can see who you're belted to and who you've belted.</div>
+				</div>
+				<div class="pn-design-field pn-about-beltline-toggle">
+					<label>
+						<input type="checkbox" id="pn-design-show-feast-prefs" <?= ((int)($Player['ShowFeastPrefs'] ?? 0)) ? 'checked' : '' ?> />
+						Show My Feast Preferences
+					</label>
+					<div class="pn-design-hint" style="margin-top:4px">Display your saved feast preferences (diet, restrictions, allergens) on your About tab. Off by default &mdash; turn on only if you're comfortable making this public.</div>
 				</div>
 			</div>
 
@@ -4895,6 +4970,7 @@ var PnBannerConfig = {
 		fd.append('PhotoFocusY', gid('pn-focus-y') ? gid('pn-focus-y').value : PnConfig.photoFocusY);
 		fd.append('PhotoFocusSize', gid('pn-focus-size') ? gid('pn-focus-size').value : PnConfig.photoFocusSize);
 		fd.append('ShowBeltline', gid('pn-design-show-beltline').checked ? 1 : 0);
+		fd.append('ShowFeastPrefs', gid('pn-design-show-feast-prefs') && gid('pn-design-show-feast-prefs').checked ? 1 : 0);
 		fd.append('PronunciationGuide', gid('pn-design-pronunciation').value);
 		fd.append('ShowMundaneFirst', gid('pn-design-show-first').checked ? 1 : 0);
 		fd.append('ShowMundaneLast', gid('pn-design-show-last').checked ? 1 : 0);

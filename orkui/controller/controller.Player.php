@@ -653,6 +653,11 @@ class Controller_Player extends Controller
         $DB->Clear();
         $this->data['BeltlineAssociates'] = $__blAssocs;
 
+        // Feast preferences for the About-tab "Feast Preferences" card.
+        // Always loaded — the template gates visibility on Show My Feast
+        // Preferences + presence of meaningful data. Cheap single-row read.
+        $this->data['FeastPrefs'] = $this->Player->GetDietaryPreferences((int)$id);
+
         if ($uid === (int)$id) {
             $DB->Clear();
             $__assocSql = "SELECT ma.mundane_id AS RecipientId, m.persona AS Persona,

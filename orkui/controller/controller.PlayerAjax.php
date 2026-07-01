@@ -427,6 +427,7 @@ class Controller_PlayerAjax extends Controller
                 'PhotoFocusY'   => isset($_POST['PhotoFocusY']) ? (int)$_POST['PhotoFocusY'] : null,
                 'PhotoFocusSize' => isset($_POST['PhotoFocusSize']) ? (int)$_POST['PhotoFocusSize'] : null,
                 'ShowBeltline'  => isset($_POST['ShowBeltline']) ? (int)$_POST['ShowBeltline'] : null,
+                'ShowFeastPrefs' => isset($_POST['ShowFeastPrefs']) ? (int)$_POST['ShowFeastPrefs'] : null,
                 'PronunciationGuide' => isset($_POST['PronunciationGuide']) ? trim($_POST['PronunciationGuide']) : null,
                 'ShowMundaneFirst' => isset($_POST['ShowMundaneFirst']) ? (int)$_POST['ShowMundaneFirst'] : null,
                 'ShowMundaneLast'  => isset($_POST['ShowMundaneLast']) ? (int)$_POST['ShowMundaneLast'] : null,
