@@ -131,6 +131,9 @@
 	color: #718096;
 }
 .si-invalid i { font-size: 40px; color: #fc8181; margin-bottom: 16px; display: block; }
+/* orkui.css sets `p { text-align: justify }` globally, which overrides the
+   container's center-align for the invalid-link body copy. Force it back. */
+.si-invalid p { text-align: center; }
 @media (max-width: 540px) {
 	.si-wrap { margin: 0; border-radius: 0; box-shadow: none; min-height: 100vh; }
 	.si-header { padding: 20px 20px 16px; }

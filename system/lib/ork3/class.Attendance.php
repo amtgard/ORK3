@@ -520,7 +520,10 @@ class Attendance extends Ork3
         }
         // Revoked links are explicit (someone hit Revoke). Distinguish from
         // natural expiry so the UI can show a more accurate message.
-        if (!empty($this->attendance_link->revoked_at)) {
+        // Direct null-check — empty() misbehaves on Yapo magic fields
+        // (Yapo has __get but no __isset, so empty() always returns true
+        // for a value pulled via magic, letting revoked links through).
+        if ($this->attendance_link->revoked_at !== null) {
             return InvalidParameter('This sign-in link has been revoked.');
         }
         // expires_at is stored as UTC (gmdate at insert time) — strtotime would
@@ -559,7 +562,10 @@ class Attendance extends Ork3
         }
         // Revoked links are explicit (someone hit Revoke). Distinguish from
         // natural expiry so the UI can show a more accurate message.
-        if (!empty($this->attendance_link->revoked_at)) {
+        // Direct null-check — empty() misbehaves on Yapo magic fields
+        // (Yapo has __get but no __isset, so empty() always returns true
+        // for a value pulled via magic, letting revoked links through).
+        if ($this->attendance_link->revoked_at !== null) {
             return InvalidParameter('This sign-in link has been revoked.');
         }
         // expires_at is stored as UTC (gmdate at insert time) — strtotime would
