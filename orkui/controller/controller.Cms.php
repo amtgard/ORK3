@@ -805,6 +805,10 @@ class Controller_Cms extends Controller
             'tournaments_feed' => array('Tournaments Feed',  'Dynamic',  true,  'fa-trophy',        'Live list of recent or upcoming tournaments.'),
             'recap_highlight' => array('Recap Highlight',    'Dynamic',  true,  'fa-newspaper',     'Live highlight from the latest event recap.'),
             'blog_feed'       => array('Blog Feed',          'Dynamic',  true,  'fa-rss',           'Shows the latest published blog posts live as linked cards. Optionally filtered to a single tag.'),
+            // Phase 4 org-scoped dynamic blocks (kingdom sites): pull live ORK data for the page's owning kingdom.
+            'kingdom_officers' => array('Officers (live)',   'Dynamic',  true,  'fa-user-shield',   'Live grid of the kingdom’s current officers from ORK data (office + persona). Pair with a Staff Roster for your Board of Directors.'),
+            'kingdom_parks'   => array('Parks (live)',       'Dynamic',  true,  'fa-map-marked-alt', 'Live grid of the kingdom’s active parks (name + city/state), each linking to its public park profile.'),
+            'kingdom_events'  => array('Events (live)',      'Dynamic',  true,  'fa-calendar-day',  'Live list of the kingdom’s soonest upcoming events, as date cards linking to each event.'),
         );
 
         $blockDir = DIR_TEMPLATE . 'default/frontdoor/blocks/';
@@ -929,13 +933,13 @@ class Controller_Cms extends Controller
             // Media/gallery: image-led blocks.
             'media'      => array('gallery', 'photo_mosaic', 'video_embed', 'card_grid'),
             // About / Team: a people roster plus supporting content blocks.
-            'about'      => array('staff_roster', 'card_grid', 'cta_band', 'gallery'),
+            'about'      => array('staff_roster', 'kingdom_officers', 'kingdom_parks', 'card_grid', 'cta_band', 'gallery'),
             // Resource/document: downloads + tabular/structured reference.
             'resource'   => array('file_download', 'table', 'accordion', 'columns'),
             // Blog index: the live post feed, with an optional call-to-action.
             'blog_index' => array('blog_feed', 'cta_band'),
             // Dynamic data: every live feed, plus framing blocks.
-            'dynamic'    => array('events_feed', 'kingdoms_teaser', 'blog_feed', 'stat_ticker', 'tournaments_feed', 'recap_highlight', 'member_bar', 'card_grid', 'cta_band'),
+            'dynamic'    => array('events_feed', 'kingdoms_teaser', 'blog_feed', 'stat_ticker', 'tournaments_feed', 'recap_highlight', 'kingdom_officers', 'kingdom_parks', 'kingdom_events', 'member_bar', 'card_grid', 'cta_band'),
             // Blog post bodies behave like articles.
             'post'       => array('accordion', 'table', 'file_download', 'video_embed', 'gallery', 'columns'),
         );
@@ -992,6 +996,9 @@ class Controller_Cms extends Controller
             'tournaments_feed' => true,
             'recap_highlight' => true,
             'blog_feed'       => true,
+            'kingdom_officers' => true,
+            'kingdom_parks'   => true,
+            'kingdom_events'  => true,
         );
 
         // Empty field defaults keyed to each partial's consumed fields.
@@ -1021,6 +1028,9 @@ class Controller_Cms extends Controller
             'kingdoms_teaser' => array('kicker' => '', 'heading' => '', 'limit' => 12, 'more_href' => ''),
             'events_feed'     => array('kicker' => '', 'heading' => '', 'limit' => 3, 'more_href' => ''),
             'blog_feed'       => array('heading' => '', 'limit' => 3, 'tag' => ''),
+            'kingdom_officers' => array('kicker' => '', 'heading' => '', 'limit' => 12),
+            'kingdom_parks'   => array('kicker' => '', 'heading' => '', 'limit' => 24, 'more_href' => ''),
+            'kingdom_events'  => array('kicker' => '', 'heading' => '', 'limit' => 3, 'more_href' => ''),
             'member_bar'      => array(),
         );
 

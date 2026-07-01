@@ -834,13 +834,31 @@ window.CmsBlockEditor = (function () {
             { key: 'limit', type: 'number', label: 'Max posts shown', placeholder: '3' },
             { key: 'tag', type: 'text', label: 'Filter by tag (optional)', placeholder: 'Leave blank for all posts' }
         ],
+        kingdom_officers: [
+            { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Our Officers' },
+            { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' },
+            { key: 'limit', type: 'number', label: 'Max officers shown', placeholder: '12' }
+        ],
+        kingdom_parks: [
+            { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Our Parks' },
+            { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' },
+            { key: 'limit', type: 'number', label: 'Max parks shown', placeholder: '24' },
+            { key: 'more_href', type: 'url', label: '“All parks” link', placeholder: 'https://…' }
+        ],
+        kingdom_events: [
+            { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Upcoming Events' },
+            { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' },
+            { key: 'limit', type: 'number', label: 'Max events shown', placeholder: '3' },
+            { key: 'more_href', type: 'url', label: '“All events” link', placeholder: 'https://…' }
+        ],
         member_bar: []  // pure info card; no knobs
     };
 
     /* dynamic block types render an info card (icon + description) above any knobs */
     var DYNAMIC_TYPES = {
         member_bar: true, kingdoms_teaser: true, events_feed: true, blog_feed: true,
-        stat_ticker: true, tournaments_feed: true, recap_highlight: true
+        stat_ticker: true, tournaments_feed: true, recap_highlight: true,
+        kingdom_officers: true, kingdom_parks: true, kingdom_events: true
     };
 
     function catalogEntry(type) {
