@@ -957,7 +957,11 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 						</div>
 						<?php if (!empty($Config['RulesVersion'])): ?>
 						<div class="qt-card-footer">
+							<?php if ($TestType === 'reeve'): ?>
 							Based on Amtgard Rules of Play Version <?= htmlspecialchars($Config['RulesVersion']) ?>
+							<?php else: ?>
+							Based on <?= htmlspecialchars($Config['RulesVersion']) ?>
+							<?php endif; ?>
 						</div>
 						<?php endif; ?>
 					</div>

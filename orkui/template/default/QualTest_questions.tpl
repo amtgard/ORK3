@@ -58,6 +58,7 @@
 .qt-lib-add-btn { white-space:nowrap; padding:4px 12px; background:#2b6cb0; color:#fff; border:none; border-radius:4px; font-size:0.8rem; font-weight:600; cursor:pointer; }
 .qt-lib-add-btn:hover { background:#2c5282; }
 .qt-lib-add-btn:disabled { background:#a0aec0; cursor:default; }
+.qt-lib-flag { display:inline-flex; align-items:center; gap:3px; margin-left:8px; font-size:0.72rem; font-weight:700; color:#e53e3e; vertical-align:middle; }
 #qt-library-search:focus { border-color:#2b6cb0; box-shadow:0 0 0 3px rgba(43,108,176,0.15); }
 .qt-report-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9000; align-items:center; justify-content:center; }
 .qt-report-overlay.qt-open { display:flex; }
@@ -157,6 +158,7 @@ html[data-theme="dark"] .qt-lib-question-text { color: var(--ork-text, #e2e8f0);
 html[data-theme="dark"] .qt-lib-kingdom { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .qt-lib-answer  { color: var(--ork-text-secondary, #cbd5e0); }
 html[data-theme="dark"] .qt-lib-answer.qt-lib-correct { color: #9ae6b4; }
+html[data-theme="dark"] .qt-lib-flag { color: #fc8181; }
 html[data-theme="dark"] .qt-lib-add-btn:disabled { background: #4a5568; color: #a0aec0; }
 html[data-theme="dark"] #qt-library-search:focus { border-color: #63b3ed; box-shadow: 0 0 0 3px rgba(99,179,237,0.2); }
 /* Report-question modal */
@@ -1000,10 +1002,15 @@ $(function() {
 			var answers = q.Answers.map(function(a) {
 				return '<div class="qt-lib-answer">&bull; ' + escH(a.AnswerText) + '</div>';
 			}).join('');
+			// Flag the "offending" questions (2+ player reports) so admins can steer
+			// clear; these are also sorted to the bottom of the list server-side.
+			var flag = (q.ReportCount >= 2)
+				? '<span class="qt-lib-flag" data-tip="' + q.ReportCount + ' player reports"><i class="fas fa-flag"></i> ' + q.ReportCount + '</span>'
+				: '';
 			return '<div class="qt-lib-question" data-qid="' + q.QualQuestionId + '">'
 				+ '<div class="qt-lib-question-hdr">'
 					+ '<div><div class="qt-lib-question-text">' + escH(q.QuestionText) + '</div>'
-					+ '<div class="qt-lib-kingdom"><i class="fas fa-chess-rook" style="margin-right:3px;"></i>' + escH(q.KingdomName) + '</div></div>'
+					+ '<div class="qt-lib-kingdom"><i class="fas fa-chess-rook" style="margin-right:3px;"></i>' + escH(q.KingdomName) + flag + '</div></div>'
 					+ '<button class="qt-lib-add-btn" data-qid="' + q.QualQuestionId + '"><i class="fas fa-plus"></i> Add</button>'
 				+ '</div>'
 				+ '<div class="qt-lib-answers">' + answers + '</div>'

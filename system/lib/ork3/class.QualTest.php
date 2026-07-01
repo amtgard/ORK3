@@ -205,7 +205,9 @@ class QualTest
             'ValidDays'     => 365,
             'ValidUntil'    => null,
             'MaxRetakes'    => 0,
-            'ShareQuestions' => 0,
+            // Default the Reeve's-test sharing opt-in to yes (checkbox pre-checked for
+            // unconfigured kingdoms). Sharing only applies to reeve; corpora stays 0.
+            'ShareQuestions' => ($test_type === 'reeve') ? 1 : 0,
             'Instructions'  => null,
             'RulesVersion'  => '',
             'ShowCorrectOnIncorrect' => 0,
@@ -237,8 +239,10 @@ class QualTest
             ? "'" . $this->esc(trim($instructions)) . "'"
             : 'NULL';
 
-        // Rules version is Reeve-only; ignore for other test types.
-        $rv = ($test_type === 'reeve' && $rules_version !== null && trim($rules_version) !== '')
+        // Version attribution ("Based on ...") applies to any test type: Reeve stores
+        // just the Rules of Play version number, Corpora stores the full document name
+        // and version. Persist whatever was entered for either.
+        $rv = ($rules_version !== null && trim($rules_version) !== '')
             ? trim($rules_version)
             : '';
         $rv_sql = ($rv !== '') ? "'" . $this->esc($rv) . "'" : 'NULL';
@@ -866,10 +870,18 @@ class QualTest
             }
         }
 
+        // report_count is index-backed (qual_report.idx_question). We sort by it
+        // ascending so the most-reported ("offending") questions sink to the bottom
+        // and admins browse the cleanest questions first; ties fall back to the
+        // natural kingdom/id ordering. Because ORDER BY runs before LIMIT, the most-
+        // reported questions are also the first dropped when the shared pool exceeds
+        // the 500-row cap.
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT q.qual_question_id, q.question_text, q.kingdom_id,
-                    k.name AS kingdom_name
+                    k.name AS kingdom_name,
+                    (SELECT COUNT(*) FROM ' . DB_PREFIX . 'qual_report r
+                     WHERE r.qual_question_id = q.qual_question_id) AS report_count
              FROM ' . DB_PREFIX . 'qual_question q
              JOIN ' . DB_PREFIX . 'qual_config c
                ON c.kingdom_id = q.kingdom_id AND c.test_type = \'reeve\' AND c.share_questions = 1
@@ -877,7 +889,7 @@ class QualTest
              WHERE q.kingdom_id != ' . $excluding_kingdom_id . '
                AND q.test_type = \'reeve\'
                AND q.status = \'active\'
-             ORDER BY k.name ASC, q.qual_question_id ASC
+             ORDER BY report_count ASC, k.name ASC, q.qual_question_id ASC
              LIMIT 500'
         );
         $questions = [];
@@ -895,6 +907,7 @@ class QualTest
                     'QuestionText'   => $rs->question_text,
                     'KingdomId'      => (int)$rs->kingdom_id,
                     'KingdomName'    => $rs->kingdom_name,
+                    'ReportCount'    => (int)$rs->report_count,
                     'Answers'        => [],
                 ];
             }

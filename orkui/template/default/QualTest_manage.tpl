@@ -53,6 +53,8 @@
 .qt-validity-days, .qt-validity-until { padding: 5px 8px; border: 1px solid var(--rp-border); border-radius: 4px; font-size: 0.9rem; }
 .qt-validity-days { width: 100px; }
 .qt-validity-until { width: 170px; }
+.qt-validity-warn { display: none; align-items: flex-start; gap: 8px; background: #fff8e1; border: 1px solid #ffc107; border-left: 4px solid #f59e0b; border-radius: 4px; padding: 9px 12px; font-size: 0.82rem; line-height: 1.4; color: #78350f; }
+.qt-validity-warn i { color: #f59e0b; margin-top: 1px; flex-shrink: 0; }
 
 /* ── Toggle switch (label .... [switch]) ───────────────── */
 .qt-switch-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -135,6 +137,8 @@ html[data-theme="dark"] .qt-text-input::placeholder,
 html[data-theme="dark"] .qt-textarea::placeholder { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .qt-hint-inline,
 html[data-theme="dark"] .qt-help-text { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-validity-warn { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.5); border-left-color: #f59e0b; color: #fcd9a0; }
+html[data-theme="dark"] .qt-validity-warn i { color: #fbbf24; }
 html[data-theme="dark"] .qt-section { border-top-color: var(--ork-border, #4a5568); }
 html[data-theme="dark"] .qt-save-row,
 html[data-theme="dark"] .qt-link-row { border-top-color: var(--ork-border, #4a5568); }
@@ -287,6 +291,10 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 									class="qt-validity-until"
 									<?= empty($cfg['ValidUntil']) ? 'disabled style="display:none"' : '' ?>>
 							</span>
+							<div class="qt-validity-warn" style="display:<?= !empty($cfg['ValidUntil']) ? 'flex' : 'none' ?>">
+								<i class="fas fa-exclamation-triangle"></i>
+								<span>If your intent is to render tests invalid at a specific officer changeover, we recommend adding at least 1&ndash;2 weeks to allow the incoming officer to configure new tests.</span>
+							</div>
 						</div>
 						<div class="qt-form-row">
 							<label>Max retakes</label>
@@ -341,6 +349,21 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 								</span>
 							</label>
 							<input type="checkbox" class="qt-switch" name="ShareQuestions" id="qt-share-<?= $type ?>" value="1" <?= !empty($cfg['ShareQuestions']) ? 'checked' : '' ?>>
+						</div>
+					</div>
+					<?php else: ?>
+					<!-- Section: Corpora attribution -->
+					<div class="qt-section">
+						<div class="qt-section-header">Attribution</div>
+						<div class="qt-form-row qt-stack">
+							<label>Based on</label>
+							<div class="qt-field-grow">
+								<input type="text" name="RulesVersion" maxlength="100"
+									value="<?= htmlspecialchars($cfg['RulesVersion'] ?? '') ?>"
+									placeholder="e.g. Corpora 5.1 2026"
+									class="qt-text-input">
+								<div class="qt-help-text">Shown as a footer on every test card: "Based on <em>{value}</em>". Enter the document name(s) and version, e.g. "Corpora 5.1 2026".</div>
+							</div>
 						</div>
 					</div>
 					<?php endif; ?>
@@ -456,12 +479,15 @@ function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); 
 			radio.addEventListener('change', function() {
 				var daysInput  = form.querySelector('.qt-validity-days');
 				var untilInput = form.querySelector('.qt-validity-until');
+				var warnBox    = form.querySelector('.qt-validity-warn');
 				if (radio.value === 'days') {
 					daysInput.style.display  = '';  daysInput.disabled  = false;
 					untilInput.style.display = 'none'; untilInput.disabled = true; untilInput.value = '';
+					if (warnBox) warnBox.style.display = 'none';
 				} else {
 					untilInput.style.display = '';  untilInput.disabled  = false;
 					daysInput.style.display  = 'none'; daysInput.disabled = true;
+					if (warnBox) warnBox.style.display = 'flex';
 				}
 				// Update segmented active state
 				form.querySelectorAll('.qt-segmented label.qt-radio-opt').forEach(function(lbl) {
