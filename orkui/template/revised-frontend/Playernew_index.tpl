@@ -25,6 +25,21 @@
 	$heraldryUrl = $Player['HasHeraldry'] > 0 ? $Player['Heraldry'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
 	$imageUrl = $Player['HasImage'] > 0 ? $Player['Image'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
 
+	$hasBanner       = !empty($Player['HasBanner']);
+	$bannerShowLogo  = !isset($Player['BannerShowLogo']) || (int)$Player['BannerShowLogo'] !== 0;
+	$bannerVignette  = !isset($Player['BannerVignette']) || (int)$Player['BannerVignette'] !== 0;
+	$bannerOffsetX   = isset($Player['BannerOffsetX']) ? max(0, min(100, (int)$Player['BannerOffsetX'])) : 50;
+	$bannerOffsetY   = isset($Player['BannerOffsetY']) ? max(0, min(100, (int)$Player['BannerOffsetY'])) : 50;
+	$bannerUrl       = '';
+	if ($hasBanner) {
+		$bannerFile = Common::resolve_image_ext(DIR_PLAYER_BANNER, sprintf('%06d', (int)$Player['MundaneId']));
+		$bannerFs   = DIR_PLAYER_BANNER . $bannerFile;
+		if (file_exists($bannerFs)) {
+			$bannerUrl = HTTP_PLAYER_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
+		}
+	}
+
+
 	$knightAwardIds = array(17, 18, 19, 20, 245);
 	$_beltImgHost = '//' . $_SERVER['HTTP_HOST'] . '/assets/images/';
 	$beltImageMap = array(
@@ -67,6 +82,19 @@
 	// Auth helpers
 	$isOwnProfile  = isset($this->__session->user_id) && (int)$this->__session->user_id === (int)$Player['MundaneId'];
 	$canEditAdmin  = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT);
+	// Banner edit scope: self OR park officer OR kingdom officer OR admin.
+	$pnCanManageBanner =
+		   $isOwnProfile
+		|| $canEditAdmin
+		|| (
+			   !empty($Player['KingdomId'])
+			&& isset($this->__session->user_id)
+			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, (int)$Player['KingdomId'], AUTH_EDIT)
+		   )
+		|| (
+			   isset($this->__session->user_id)
+			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)
+		   );
 	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_CREATE);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
@@ -244,6 +272,7 @@
 	$_pnFocusX = (int)($Player['PhotoFocusX'] ?? 50);
 	$_pnFocusY = (int)($Player['PhotoFocusY'] ?? 50);
 	$_pnFocusSize = max(15, (int)($Player['PhotoFocusSize'] ?? 100));
+	$_pnShowLogo = !$bannerUrl || $bannerShowLogo;
 
 ?>
 <style>:root { --pn-hero-bg: <?= $_pnHeroBg ?>; --pn-accent: <?= $_pnAccent ?>; --pn-overlay-opacity: <?= $_pnOverlayOpacity ?>; } .pn-hero { background: <?= $_pnHeroBgValue ?>; } html[data-theme="dark"] .pn-hero { background: <?= $_pnHeroBgValueDark ?>; }</style>
@@ -274,16 +303,16 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-layout{display:flex;gap:16px;align-items:flex-start}
 .pna-sidebar{flex:0 0 260px;display:flex;flex-direction:column;gap:12px}
 .pna-feed{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0}
-.pna-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px}
-.pna-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#718096;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.pna-card{background:#fff;border:1px solid var(--ork-border);border-radius:8px;padding:14px 16px}
+.pna-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ork-text-muted);margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .pna-card-title a.pna-card-more{margin-left:auto;font-weight:600;font-size:11px;color:#4299e1;text-decoration:none;text-transform:none;letter-spacing:0}
 .pna-card-title a.pna-card-more:hover{text-decoration:underline}
 .pna-tenure{text-align:center;padding:6px 0 2px}
-.pna-tenure-years{font-size:44px;font-weight:800;color:#2c5282;line-height:1}
-.pna-tenure-label{font-size:13px;color:#718096;margin-top:2px}
-.pna-tenure-since{font-size:11px;color:#a0aec0;margin-top:6px}
+.pna-tenure-years{font-size:44px;font-weight:800;color:var(--ork-blue-primary);line-height:1}
+.pna-tenure-label{font-size:13px;color:var(--ork-text-muted);margin-top:2px}
+.pna-tenure-since{font-size:11px;color:var(--ork-text-hint);margin-top:6px}
 .pna-tenure-info-btn{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#ebf4ff;color:#2b6cb0;font-size:10px;cursor:help;border:1px solid #bee3f8;position:relative;z-index:10;flex-shrink:0;margin-top:8px;vertical-align:middle}
-.pna-tenure-info-btn .pna-tenure-info-text{display:none;position:fixed;width:260px;background:#2d3748;color:#fff;font-size:12px;font-weight:400;line-height:1.5;padding:8px 10px;border-radius:6px;pointer-events:none;z-index:9999;white-space:normal;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.pna-tenure-info-btn .pna-tenure-info-text{display:none;position:fixed;width:260px;background:var(--ork-bg-dark);color:#fff;font-size:12px;font-weight:400;line-height:1.5;padding:8px 10px;border-radius:6px;pointer-events:none;z-index:9999;white-space:normal;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 @keyframes pna-card-glow{0%,100%{box-shadow:0 0 10px 3px #f687b360,0 1px 3px rgba(0,0,0,.07)}25%{box-shadow:0 0 10px 3px #63b3ed60,0 1px 3px rgba(0,0,0,.07)}50%{box-shadow:0 0 10px 3px #68d39160,0 1px 3px rgba(0,0,0,.07)}75%{box-shadow:0 0 10px 3px #f6ad5560,0 1px 3px rgba(0,0,0,.07)}}
 .pna-card-anni{animation:pna-card-glow 3s ease infinite}
 .pna-anni-banner{font-size:12px;font-weight:700;color:#744210;text-align:center;margin-bottom:8px;letter-spacing:.02em}
@@ -292,25 +321,25 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-class-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
 .pna-class-name{font-size:12px;font-weight:600;color:#2d3748}
 .pna-class-level{font-size:11px;font-weight:700;color:#276749}
-.pna-bar-wrap{height:6px;background:#edf2f7;border-radius:4px;overflow:hidden}
+.pna-bar-wrap{height:6px;background:var(--ork-surface-hover);border-radius:4px;overflow:hidden}
 .pna-bar{height:100%;background:linear-gradient(90deg,#48bb78,#276749);border-radius:4px;transition:width .4s ease}
 .pna-bar-max{background:linear-gradient(90deg,#f6ad55,#dd6b20)}
-.pna-class-credits{font-size:10px;color:#a0aec0;margin-top:3px}
+.pna-class-credits{font-size:10px;color:var(--ork-text-hint);margin-top:3px}
 .pna-paragon-dot{color:#b7791f;font-size:10px;margin-left:3px}
-.pna-officer-row{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid #f7fafc}
+.pna-officer-row{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid var(--ork-surface-light)}
 .pna-officer-row:last-child{border-bottom:none}
 .pna-officer-title{font-size:12px;font-weight:600;color:#2d3748}
 .pna-officer-entity{font-size:11px;color:#4299e1;text-decoration:none}
 .pna-officer-entity:hover{text-decoration:underline}
-.pna-assoc-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#a0aec0;padding:8px 0 3px;margin-top:4px;border-top:1px solid #edf2f7}.pna-assoc-group:first-child{border-top:none;margin-top:0;padding-top:2px}.pna-feed-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid #f7fafc;font-size:12.5px}
+.pna-assoc-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ork-text-hint);padding:8px 0 3px;margin-top:4px;border-top:1px solid var(--ork-surface-hover)}.pna-assoc-group:first-child{border-top:none;margin-top:0;padding-top:2px}.pna-feed-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid var(--ork-surface-light);font-size:12.5px}
 .pna-feed-row:last-child{border-bottom:none}
-.pna-feed-date{flex-shrink:0;color:#a0aec0;font-size:11px;min-width:46px}
+.pna-feed-date{flex-shrink:0;color:var(--ork-text-hint);font-size:11px;min-width:46px}
 .pna-feed-label{flex:1;color:#2d3748;font-weight:500;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pna-feed-label a{color:#2d3748;text-decoration:none}
 .pna-feed-label a:hover{text-decoration:underline}
-.pna-feed-sub{flex-shrink:0;color:#718096;font-size:11px}
+.pna-feed-sub{flex-shrink:0;color:var(--ork-text-muted);font-size:11px}
 .pna-feed-rank{display:inline-block;background:#e9d8fd;color:#553c9a;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px;vertical-align:middle}
-.pna-feed-more{font-size:11px;color:#718096;padding-top:6px;text-align:center}
+.pna-feed-more{font-size:11px;color:var(--ork-text-muted);padding-top:6px;text-align:center}
 .pna-congrats-banner{background:linear-gradient(90deg,#fffff0,#fefcbf);border:1px solid #f6e05e;border-radius:6px;padding:9px 13px;font-size:12.5px;font-weight:600;color:#744210;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .pna-welcome-banner{background:linear-gradient(135deg,#1a3d2b,#276749);border-radius:10px;padding:20px 24px;margin-bottom:18px;color:#fff;display:flex;align-items:flex-start;gap:16px}
 .pna-welcome-banner-icon{font-size:32px;flex-shrink:0;line-height:1}
@@ -321,23 +350,23 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-welcome-tip{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:5px 10px;font-size:12px;display:flex;align-items:center;gap:5px}
 .pna-sparkline{display:flex;gap:3px;align-items:flex-end;height:34px;margin-bottom:2px}
 .pna-spark-week{flex:1;border-radius:2px;min-width:0}
-.pna-spark-legend{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11px;color:#718096;flex-wrap:wrap}
+.pna-spark-legend{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11px;color:var(--ork-text-muted);flex-wrap:wrap}
 .pna-spark-swatch{width:12px;height:12px;display:inline-block;border-radius:2px;vertical-align:middle}
 .pna-spark-on{background:#48bb78}
-.pna-spark-off{background:#edf2f7;border:1px solid #e2e8f0}
+.pna-spark-off{background:var(--ork-surface-hover);border:1px solid var(--ork-border)}
 .pna-spark-swatch-on{background:#48bb78}
-.pna-spark-swatch-off{background:#edf2f7;border:1px solid #cbd5e0}
+.pna-spark-swatch-off{background:var(--ork-surface-hover);border:1px solid #cbd5e0}
 .pna-ev-cols{display:flex;gap:10px}
 .pna-ev-col{flex:1;min-width:0}
-.pna-ev-col-hdr{font-size:11px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e2e8f0}
+.pna-ev-col-hdr{font-size:11px;font-weight:700;color:var(--ork-text-body);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--ork-border)}
 .pna-ev-park{color:#718096;font-size:11px;font-weight:500;margin-left:2px}
 .pna-spark-months{display:flex;gap:3px;margin-top:2px}
-.pna-spark-month-lbl{flex:1;font-size:9px;color:#a0aec0;text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
+.pna-spark-month-lbl{flex:1;font-size:9px;color:var(--ork-text-hint);text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
 @media(max-width:700px){
 .pna-layout{flex-direction:column;align-items:stretch}
 .pna-sidebar{flex:none;width:100%}
 .pna-ev-cols{flex-direction:column}
-.pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0}
+.pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid var(--ork-border)}
 .pna-card{padding:12px 13px}
 .pna-tenure-years{font-size:36px}
 }
@@ -349,8 +378,8 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-congrats-banner{font-size:11.5px;padding:7px 10px}
 }
 .pn-givenby-warn{display:inline-flex;align-items:center;gap:4px;cursor:default;position:relative}
-.pn-givenby-warn .pn-tip-icon{color:#e53e3e;font-size:11px;font-weight:700;font-style:normal;border:1px solid #e53e3e;border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
-.pn-givenby-warn .pn-tip-box{display:none;position:absolute;bottom:calc(100% + 6px);left:0;background:#2d3748;color:#fff;font-size:12px;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.pn-givenby-warn .pn-tip-icon{color:var(--ork-red-danger);font-size:11px;font-weight:700;font-style:normal;border:1px solid var(--ork-red-danger);border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
+.pn-givenby-warn .pn-tip-box{display:none;position:absolute;bottom:calc(100% + 6px);left:0;background:var(--ork-bg-dark);color:#fff;font-size:12px;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 .pn-givenby-warn:hover .pn-tip-box{display:block}
 
 /* ===================================================================
@@ -359,7 +388,7 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
    =================================================================== */
 
 /* Required field indicator */
-.required-indicator { color: #e53e3e; }
+.required-indicator { color: var(--ork-red-danger); }
 
 /* Inline danger buttons — light default, dark override below */
 .btn-danger-confirm { background: #c53030; color: #fff; border: none; cursor: pointer; }
@@ -388,7 +417,7 @@ html[data-theme="dark"] .pn-mini-table td { color: var(--ork-text); border-color
 html[data-theme="dark"] .pn-mini-table tbody tr:hover { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .pn-badge-green { background: var(--ork-badge-green-bg, #1c4532); color: var(--ork-badge-green-text, #9ae6b4); }
 html[data-theme="dark"] .pn-badge-red { background: var(--ork-badge-red-bg, #742a2a); color: var(--ork-badge-red-text, #feb2b2); }
-html[data-theme="dark"] .pn-badge-gray { background: #374151; color: #a0aec0; }
+html[data-theme="dark"] .pn-badge-gray { background: #374151; color: var(--ork-text-hint); }
 html[data-theme="dark"] .pn-badge-blue { background: #1a365d; color: #90cdf4; }
 html[data-theme="dark"] .pn-badge-yellow { background: #744210; color: #fbd38d; }
 html[data-theme="dark"] .pn-badge-orange { background: #7b341e; color: #fbd38d; }
@@ -644,17 +673,17 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
    A soft directional shadow only blurs the underside of the glyphs; over a near-white flag stop the
    top/sides of white text still bleed. A tight multi-directional outline wraps every glyph in a dark
    edge so the title reads on any stop — light or dark — while keeping the flag fully visible (no overlay). */
-.pn-hero-pride .pn-persona,.pn-hero-pride .pn-hero-preview-name{text-shadow:0 0 2px rgba(0,0,0,.55),1px 1px 1px rgba(0,0,0,.5),-1px 1px 1px rgba(0,0,0,.5),1px -1px 1px rgba(0,0,0,.5),-1px -1px 1px rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.45)}
+.pn-hero-pride .pn-persona,.pn-hero-pride .pn-hero-preview-name,.pn-hero-name-shadow .pn-persona,.pn-hero-name-shadow .pn-hero-preview-name{text-shadow:0 0 2px rgba(0,0,0,.55),1px 1px 1px rgba(0,0,0,.5),-1px 1px 1px rgba(0,0,0,.5),1px -1px 1px rgba(0,0,0,.5),-1px -1px 1px rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.45)}
 html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,0,.55),1px 1px 1px rgba(0,0,0,.5),-1px 1px 1px rgba(0,0,0,.5),1px -1px 1px rgba(0,0,0,.5),-1px -1px 1px rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.45)!important}
-/* Amtpride: lift the translucent subline text so it reads over light flag stops (text-shadow inherits to children).
+/* Amtpride / name-shadow: lift the translucent subline text so it reads over light flag stops (text-shadow inherits to children).
    The breadcrumb uses self-contained .pn-crumb pills (dark bg) so it needs no pride-specific shadow. */
-.pn-hero-pride .pn-hero-subline{color:rgba(255,255,255,0.95);text-shadow:0 1px 3px rgba(0,0,0,0.6)}
-.pn-hero-pride .pn-sub-pronunciation,.pn-hero-pride .pn-sub-pronouns{color:rgba(255,255,255,0.9)}
-.pn-hero-pride .pn-sub-sep{color:rgba(255,255,255,0.85);opacity:1}
-/* Amtpride: dark translucent backing box behind the subline so it reads over light flag stops.
+.pn-hero-pride .pn-hero-subline,.pn-hero-name-shadow .pn-hero-subline{color:rgba(255,255,255,0.95);text-shadow:0 1px 3px rgba(0,0,0,0.6)}
+.pn-hero-pride .pn-sub-pronunciation,.pn-hero-pride .pn-sub-pronouns,.pn-hero-name-shadow .pn-sub-pronunciation,.pn-hero-name-shadow .pn-sub-pronouns{color:rgba(255,255,255,0.9)}
+.pn-hero-pride .pn-sub-sep,.pn-hero-name-shadow .pn-sub-sep{color:rgba(255,255,255,0.85);opacity:1}
+/* Amtpride / name-shadow: dark translucent backing box behind the subline so it reads over light flag stops.
    0.22 was too faint over a bright-yellow stop (small text needs a real panel, not a halo); 0.45
    gives the white subline a reliable dark surface on any flag while staying clearly translucent. */
-.pn-hero-pride .pn-hero-subline{display:flex;width:fit-content;align-items:center;background:rgba(0,0,0,0.45);padding:2px 9px;border-radius:6px}
+.pn-hero-pride .pn-hero-subline,.pn-hero-name-shadow .pn-hero-subline{display:flex;width:fit-content;align-items:center;background:rgba(0,0,0,0.45);padding:2px 9px;border-radius:6px}
 .pn-hero-preview-sub{font-size:12px;opacity:0.7;margin-top:4px}
 /* Design-modal preview: heraldry-overlay layers mirror the production hero so the
    Low/Med/High/Vignette buttons preview live. Driven by a preview-scoped opacity var
@@ -966,6 +995,72 @@ html[data-theme="dark"] .pn-cms-title { color: var(--ork-text); }
 html[data-theme="dark"] .pn-cms-item { border-bottom-color: var(--ork-border); }
 html[data-theme="dark"] .pn-cms-line { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
+
+/* ===== Dietary Preferences Card ===== */
+.dp-intro{font-size:11.5px;color:#718096;line-height:1.45;margin:0 0 12px}
+.dp-section-hdr{font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#718096;margin:14px 0 6px;display:flex;align-items:center;gap:5px}
+.dp-section-hdr:first-of-type{margin-top:0}
+.dp-info-btn{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#e2e8f0;color:#718096;font-size:9px;font-weight:700;border:none;cursor:pointer;text-transform:none;letter-spacing:0;line-height:1;transition:background .1s}
+.dp-info-btn:hover{background:#cbd5e0}
+#dp-info-pop{position:fixed;z-index:10300;width:290px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.13);padding:13px 15px;font-size:12px;line-height:1.55;color:#4a5568;display:none}
+#dp-info-pop.dp-pop-open{display:block}
+#dp-info-pop .dp-pop-title{font-size:12.5px;font-weight:700;color:#2d3748;margin:0 0 7px}
+#dp-info-pop p{margin:0 0 8px}
+#dp-info-pop p:last-child{margin-bottom:0}
+#dp-info-pop a{color:#4299e1;text-decoration:none}
+#dp-info-pop a:hover{text-decoration:underline}
+.dp-sev-legend{font-size:11px;color:#718096;margin:0 0 10px;line-height:1.8}
+.dp-sl-eg{display:inline-block;padding:1px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.dp-sl-none{background:#e2e8f0;color:#2d3748}
+.dp-sl-mild{background:#fef3c7;color:#92400e}
+.dp-sl-severe{background:#fee2e2;color:#9b1c1c}
+html[data-theme="dark"] .dp-info-btn{background:#4a5568;color:#a0aec0}
+html[data-theme="dark"] .dp-info-btn:hover{background:#718096;color:#e2e8f0}
+html[data-theme="dark"] #dp-info-pop{background:#2d3748;border-color:#4a5568;color:#e2e8f0}
+html[data-theme="dark"] #dp-info-pop .dp-pop-title{color:#f7fafc}
+html[data-theme="dark"] #dp-info-pop a{color:#63b3ed}
+html[data-theme="dark"] .dp-sev-legend{color:#a0aec0}
+html[data-theme="dark"] .dp-sl-none{background:#4a5568;color:#e2e8f0}
+html[data-theme="dark"] .dp-sl-mild{background:#78350f;color:#fde68a}
+html[data-theme="dark"] .dp-sl-severe{background:#7f1d1d;color:#fca5a5}
+.dp-toggles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px 10px;margin-bottom:2px}
+.dp-toggle-row{display:flex;align-items:center;gap:8px;cursor:pointer;padding:3px 0}
+.dp-toggle-label{font-size:12.5px;color:var(--ork-text)}
+.dp-toggle-sw{flex-shrink:0;width:34px;height:20px;border-radius:10px;background:#cbd5e0;position:relative;cursor:pointer;transition:background .15s}
+.dp-toggle-sw::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.dp-toggle-sw.dp-on{background:#48bb78}
+.dp-toggle-sw.dp-on::after{left:17px}
+.dp-anon-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0 10px;border-bottom:1px solid var(--ork-border);margin-bottom:4px}
+.dp-anon-label{font-size:13px;font-weight:600;color:var(--ork-text)}
+.dp-anon-sub{font-size:11px;color:#a0aec0;margin-top:1px}
+.dp-allergens{display:flex;flex-direction:column;gap:6px}
+.dp-al-row{display:flex;align-items:center;gap:10px}
+.dp-al-name{font-size:12.5px;color:var(--ork-text);width:80px;flex-shrink:0}
+.dp-al-slider{flex:1;display:flex;border-radius:6px;padding:2px;gap:0}
+.dp-al-seg{flex:1;padding:5px 0;font-size:11.5px;border:none;background:transparent;cursor:pointer;border-radius:4px;color:#718096;font-weight:500;text-align:center;transition:background .15s,color .15s,box-shadow .15s}
+.dp-al-seg.dp-active[data-v="0"]{background:#e2e8f0;color:#2d3748;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.dp-al-seg.dp-active[data-v="1"]{background:#fef3c7;color:#92400e;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.dp-al-seg.dp-active[data-v="2"]{background:#fee2e2;color:#9b1c1c;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+html[data-theme="dark"] .dp-intro{color:var(--ork-text-secondary)}
+html[data-theme="dark"] .dp-section-hdr{color:#a0aec0}
+html[data-theme="dark"] .dp-toggle-label{color:var(--ork-text)}
+html[data-theme="dark"] .dp-toggle-sw{background:#4a5568}
+html[data-theme="dark"] .dp-toggle-sw.dp-on{background:#48bb78}
+html[data-theme="dark"] .dp-al-slider{background:#2d3748}
+html[data-theme="dark"] .dp-al-seg{color:#a0aec0}
+html[data-theme="dark"] .dp-al-seg.dp-active[data-v="0"]{background:#4a5568;color:#e2e8f0;box-shadow:none}
+html[data-theme="dark"] .dp-al-seg.dp-active[data-v="1"]{background:#78350f;color:#fde68a}
+html[data-theme="dark"] .dp-al-seg.dp-active[data-v="2"]{background:#7f1d1d;color:#fca5a5}
+html[data-theme="dark"] .dp-anon-label{color:var(--ork-text)}
+html[data-theme="dark"] .dp-anon-row{border-bottom-color:var(--ork-border)}
+.dp-no-restrict-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;background:#f7fafc;border:1px solid #e2e8f0;margin:8px 0 12px;cursor:pointer;transition:background .15s}
+.dp-no-restrict-row:hover{background:#edf2f7}
+.dp-no-restrict-label{font-size:13px;font-weight:600;color:var(--ork-text)}
+.dp-no-restrict-sub{font-size:11px;color:#a0aec0;margin-top:1px}
+#dp-prefs-body{transition:opacity .15s}
+#dp-prefs-body.dp-locked{opacity:.35;pointer-events:none;user-select:none}
+html[data-theme="dark"] .dp-no-restrict-row{background:rgba(255,255,255,.04);border-color:var(--ork-border)}
+html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.08)}
 </style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -973,14 +1068,42 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 <!-- =============================================
      ZONE 1: Profile Hero Header
      ============================================= -->
-<div class="pn-hero<?= $_pnHeroGradientKey ? ' pn-hero-pride' : '' ?>">
-<?php if ($_pnOverlayIsVignette): ?>
+<?php
+	$_heroBgUrl   = $bannerUrl ?: $heraldryUrl;
+	$_heroClasses = 'pn-hero';
+	if ($bannerUrl)                    $_heroClasses .= ' pn-hero-has-banner';
+	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' pn-hero-vignette';
+	if ($pnCanManageBanner)            $_heroClasses .= ' pn-hero-editable';
+	if ($_pnHeroGradientKey)           $_heroClasses .= ' pn-hero-pride';
+	if (!empty($Player['NameShadow']))  $_heroClasses .= ' pn-hero-name-shadow';
+	$_bgStyle = '';
+	if ($_heroBgUrl) {
+		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
+		if ($bannerUrl) {
+			$_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
+		}
+	}
+?>
+<div class="<?= $_heroClasses ?>" id="pn-hero">
+<?php if ($bannerUrl): ?>
+	<div class="pn-hero-bg"<?php if ($_bgStyle): ?> style="<?= $_bgStyle ?>"<?php endif; ?>></div>
+<?php elseif ($_pnOverlayIsVignette): ?>
 	<div class="pn-hero-bg pn-hero-bg-vignette-base" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 	<div class="pn-hero-bg-vignette-sharp" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 <?php else: ?>
 	<div class="pn-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 <?php endif; ?>
+	<?php if ($pnCanManageBanner): ?>
+	<button type="button" class="pn-banner-edit-btn"
+			onclick="pnOpenBannerModal()"
+			aria-label="<?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?>">
+		<i class="fas fa-image"></i>
+		<span class="pn-banner-edit-label"> <?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+		<i class="fas fa-pencil-alt pn-banner-edit-pencil" aria-hidden="true"></i>
+	</button>
+	<?php endif; ?>
 	<div class="pn-hero-content">
+		<?php if ($_pnShowLogo): ?>
 		<?php if ($canEditImages): ?>
 		<div class="pn-avatar pn-editable-img">
 			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" data-focus-x="<?= $_pnFocusX ?>" data-focus-y="<?= $_pnFocusY ?>" data-focus-size="<?= $_pnFocusSize ?>" />
@@ -990,6 +1113,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 		<div class="pn-avatar">
 			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" data-focus-x="<?= $_pnFocusX ?>" data-focus-y="<?= $_pnFocusY ?>" data-focus-size="<?= $_pnFocusSize ?>" />
 		</div>
+		<?php endif; ?>
 		<?php endif; ?>
 		<div class="pn-hero-info">
 			<?php
@@ -1003,7 +1127,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<h1 class="pn-persona" id="pn-hero-persona">
 				<?= $_pnDisplayName ?>
 				<?php if ($isKnight && $_pnBeltDisplay === 'white'): ?>
-					<img class="pn-belt-icon" src="<?= $beltIconUrl ?>" alt="Knight" title="Belted Knight" />
+					<img class="pn-belt-icon" src="<?= htmlspecialchars($beltIconUrl) ?>" alt="Knight" data-tip="Belted Knight" />
 				<?php elseif ($isKnight && $_pnBeltDisplay === 'own' && !empty($ownBelts)): ?>
 					<span class="pn-hero-belts">
 					<?php foreach ($ownBelts as $_b): ?>
@@ -1630,10 +1754,148 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 						</div>
 						<?php endif; ?>
 
-					</div><!-- /.pna-feed -->
+							<!-- Feast Preferences (compact trigger) -->
+							<div class="pna-card" id="pna-dp-card">
+								<div class="pna-card-title"><i class="fas fa-utensils"></i> Feast Preferences</div>
+								<div id="pna-dp-summary" style="font-size:12px;color:#718096;margin:0 0 10px;min-height:16px"></div>
+								<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" onclick="dpOpen()">
+									<i class="fas fa-pencil-alt"></i> Edit Preferences
+								</button>
+							</div><!-- /.pna-dp-card -->
+
+						</div><!-- /.pna-feed -->
 				</div><!-- /.pna-layout -->
 			</div><!-- /#pn-tab-myamtgard -->
 			<?php endif; // isOwnProfile ?>
+
+			<?php if ($isOwnProfile): ?>
+			<!-- Feast Preferences Modal -->
+			<div class="pn-overlay" id="pn-dp-overlay">
+				<div class="pn-modal-box" style="width:500px;max-width:calc(100vw - 40px)">
+					<div class="pn-modal-header">
+						<h3 class="pn-modal-title"><i class="fas fa-utensils" style="margin-right:8px;color:#718096"></i>Feast Preferences</h3>
+						<button class="pn-modal-close-btn" id="pn-dp-close-btn" aria-label="Close">&times;</button>
+					</div>
+					<div class="pn-modal-body">
+						<p class="dp-intro">Feast organizers use these when planning meals. Your name is hidden by default&mdash;only totals are shared unless you opt in below. <strong>Remember to RSVP to events</strong>&mdash;your preferences are only included in feast planning for events you&rsquo;ve RSVPed to.</p>
+
+						<!-- Show name toggle -->
+						<div class="dp-anon-row">
+							<div>
+								<div class="dp-anon-label">Show my name to feast organizers</div>
+								<div class="dp-anon-sub">Off = only counts shared; On = organizers see your name &amp; preferences</div>
+							</div>
+							<div class="dp-toggle-sw" data-field="ShowName"></div>
+						</div>
+
+						<!-- No restrictions master toggle -->
+						<div class="dp-no-restrict-row" id="dp-no-restrict-row">
+							<div class="dp-toggle-sw" data-field="NoRestrictions"></div>
+							<div>
+								<div class="dp-no-restrict-label">No dietary restrictions</div>
+								<div class="dp-no-restrict-sub">I have no concerns — clears and disables all options below</div>
+							</div>
+						</div>
+
+						<div id="dp-prefs-body">
+						<!-- Diet -->
+						<div class="dp-section-hdr">Diet <button type="button" class="dp-info-btn" data-info-btn aria-label="About these categories">?</button></div>
+						<div class="dp-toggles">
+							<?php foreach ([
+								'DietHalal'      => 'Halal',
+								'DietKeto'       => 'Keto',
+								'DietKosher'     => 'Kosher',
+								'DietPaleo'      => 'Paleo',
+								'DietVegan'      => 'Vegan',
+								'DietVegetarian' => 'Vegetarian',
+							] as $_dpField => $_dpLabel): ?>
+							<div class="dp-toggle-row">
+								<div class="dp-toggle-sw" data-field="<?= $_dpField ?>"></div>
+								<span class="dp-toggle-label"><?= $_dpLabel ?></span>
+							</div>
+							<?php endforeach; ?>
+						</div>
+
+						<!-- Restrictions (won't eat) -->
+						<div class="dp-section-hdr">Won't Eat <button type="button" class="dp-info-btn" data-info-btn aria-label="About these categories">?</button></div>
+						<div class="dp-toggles">
+							<?php foreach ([
+								'RestrictBeef'      => 'Beef',
+								'RestrictDairy'     => 'Dairy',
+								'RestrictEggs'      => 'Eggs',
+								'RestrictFish'      => 'Fish',
+								'RestrictHoney'     => 'Honey',
+								'RestrictPork'      => 'Pork',
+								'RestrictPoultry'   => 'Poultry',
+								'RestrictShellfish' => 'Shellfish',
+							] as $_dpField => $_dpLabel): ?>
+							<div class="dp-toggle-row">
+								<div class="dp-toggle-sw" data-field="<?= $_dpField ?>"></div>
+								<span class="dp-toggle-label"><?= $_dpLabel ?></span>
+							</div>
+							<?php endforeach; ?>
+						</div>
+
+						<!-- Allergens (3-state) -->
+						<div class="dp-section-hdr">Allergens <button type="button" class="dp-info-btn" data-info-btn aria-label="About these categories">?</button></div>
+						<div class="dp-sev-legend">
+							<span class="dp-sl-eg dp-sl-none">None</span> no concern &nbsp;·&nbsp;
+							<span class="dp-sl-eg dp-sl-mild">Mild</span> prefer to avoid &nbsp;·&nbsp;
+							<span class="dp-sl-eg dp-sl-severe">Severe</span> strict, cross-contamination risk
+						</div>
+						<div class="dp-allergens">
+							<?php foreach ([
+								'AllergenCocoa'       => 'Cocoa',
+								'AllergenCoconut'     => 'Coconut',
+								'AllergenCorn'        => 'Corn',
+								'AllergenEggs'        => 'Eggs',
+								'AllergenFish'        => 'Fish',
+								'AllergenGarlic'      => 'Garlic',
+								'AllergenGluten'      => 'Gluten',
+								'AllergenMilk'        => 'Milk',
+								'AllergenMushroom'    => 'Mushroom',
+								'AllergenNightshades' => 'Nightshades',
+								'AllergenOnion'       => 'Onion',
+								'AllergenPeanuts'   => 'Peanuts',
+								'AllergenSesame'    => 'Sesame',
+								'AllergenShellfish' => 'Shellfish',
+								'AllergenSoy'       => 'Soy',
+								'AllergenTreenuts'  => 'Tree Nuts',
+								'AllergenWheat'     => 'Wheat',
+							] as $_dpField => $_dpLabel): ?>
+							<div class="dp-al-row">
+								<span class="dp-al-name"><?= $_dpLabel ?></span>
+								<div class="dp-al-slider" data-field="<?= $_dpField ?>">
+									<button type="button" class="dp-al-seg dp-active" data-v="0">None</button>
+									<button type="button" class="dp-al-seg" data-v="1">Mild</button>
+									<button type="button" class="dp-al-seg" data-v="2">Severe</button>
+								</div>
+							</div>
+							<?php endforeach; ?>
+						</div>
+						</div><!-- /#dp-prefs-body -->
+					</div><!-- /.pn-modal-body -->
+					<div class="pn-modal-footer" style="align-items:center">
+						<span id="pn-dp-dirty-warn" style="display:none;color:#e53e3e;font-size:12px;margin-right:auto">
+							<i class="fas fa-exclamation-circle"></i> Unsaved changes
+						</span>
+						<button type="button" class="pn-btn pn-btn-secondary" id="pn-dp-cancel-btn">Cancel</button>
+						<button type="button" class="pn-btn pn-btn-primary" id="pn-dp-save-btn" disabled>
+							<i class="fas fa-save"></i> Save
+						</button>
+					</div>
+				</div><!-- /.pn-modal-box -->
+			</div><!-- /#pn-dp-overlay -->
+			<div id="dp-info-pop" role="tooltip">
+				<div class="dp-pop-title">About Dietary Categories</div>
+				<p><strong>Diet</strong> — overall eating styles (Vegan, Kosher, Halal, etc.).<br>
+				<strong>Won't Eat</strong> — ingredients you avoid but aren't allergic to.<br>
+				<strong>Allergens</strong> — substances that may cause a reaction.</p>
+				<p>Allergen severity: <span class="dp-sl-eg dp-sl-none">None</span>&thinsp;=&thinsp;no concern &nbsp; <span class="dp-sl-eg dp-sl-mild">Mild</span>&thinsp;=&thinsp;prefer to avoid, not critical &nbsp; <span class="dp-sl-eg dp-sl-severe">Severe</span>&thinsp;=&thinsp;strict, cross-contamination is a real risk.</p>
+				<p>Allergen list covers all <strong>US FDA Major 9</strong> (FALCPA 2004 + FASTER Act 2023: milk, eggs, fish, shellfish, tree nuts, peanuts, wheat, soy, sesame) and key <strong>Health Canada</strong> priority allergens including gluten sources.</p>
+				<p><a href="https://www.fda.gov/food/nutrition-food-labeling-and-critical-foods/food-allergies" target="_blank" rel="noopener">FDA Food Allergens</a> &nbsp;·&nbsp; <a href="https://www.canada.ca/en/health-canada/services/food-nutrition/food-safety/food-allergies-intolerances/food-allergies.html" target="_blank" rel="noopener">Health Canada</a></p>
+			</div>
+			<?php endif; // isOwnProfile (modal) ?>
 
 			<!-- About Tab -->
 				<?php if ($_showAboutTab): ?>
@@ -2419,6 +2681,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<div class="pn-acct-field">
 				<label for="pn-acct-username">Username <span class="required-indicator">*</span></label>
 				<input type="text" id="pn-acct-username" name="UserName" value="<?= htmlspecialchars($Player['UserName']) ?>" />
+					<div class="pn-acct-hint" id="pn-acct-username-status" style="display:none"></div>
 			</div>
 			<div class="pn-acct-two-col">
 				<div class="pn-acct-field">
@@ -3314,6 +3577,13 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					<div class="pn-design-hint" style="margin-bottom:8px">Choose a decorative font for your persona name in the hero header. If a user has simple or reading-friendly fonts enabled, this custom font will not be shown.</div>
 					<div class="pn-font-picker" id="pn-font-picker"></div>
 				</div>
+				<div class="pn-design-field" style="margin-top:14px">
+					<label class="pn-section-toggle-label">
+						<input type="checkbox" id="pn-name-shadow" <?= !empty($Player['NameShadow']) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+						Name shadow / outline
+						<span class="pn-tooltip-trigger" tabindex="0"><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i><span class="pn-tooltip-text">Adds a dark outline and shadow to your persona name, improving legibility over banner images or light-colored backgrounds. Applied automatically when an AmtPride gradient is active.</span></span>
+					</label>
+				</div>
 				<div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0">
 					<div class="pn-section-heading">Persona Display Controls</div>
 					<?php if ($_isRestricted): ?>
@@ -3688,9 +3958,196 @@ var PnConfig = {
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
 </script>
+<?php if ($pnCanManageBanner): ?>
+<script>
+var PnBannerConfig = {
+	uir:            '<?= UIR ?>',
+	canManage:      <?= $pnCanManageBanner ? 'true' : 'false' ?>,
+	entityId:       <?= (int)$Player['MundaneId'] ?>,
+	hasBanner:      <?= $hasBanner ? 'true' : 'false' ?>,
+	bannerShowLogo: <?= $bannerShowLogo ? 'true' : 'false' ?>,
+	bannerVignette: <?= $bannerVignette ? 'true' : 'false' ?>,
+	bannerOffsetX:  <?= (int)$bannerOffsetX ?>,
+	bannerOffsetY:  <?= (int)$bannerOffsetY ?>,
+	bannerUrl:      <?= json_encode($bannerUrl) ?>,
+};
+</script>
+<?php endif; ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<?php if ($pnCanManageBanner): ?>
+<!-- pn-banner-modal -->
+<div class="pn-img-overlay pn-banner-modal" id="pn-banner-overlay">
+	<div class="pn-img-modal" style="width:min(680px, 96vw)">
+		<div class="pn-img-modal-header">
+			<span class="pn-img-modal-title" id="pn-banner-modal-title"><i class="fas fa-image" style="margin-right:8px"></i><?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+			<button class="pn-img-close-btn" id="pn-banner-close-btn" aria-label="Close">&times;</button>
+		</div>
+
+		<div class="pn-img-modal-body" id="pn-banner-step-select">
+			<p style="margin:0 0 12px;font-size:13px;line-height:1.5">
+				Banners are full-bleed across the player profile header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+			</p>
+			<p style="margin:0 0 12px">
+				<a href="/assets/images/banner-template.png" download="ork-banner-template.png" style="font-size:13px;color:#4299e1;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
+					<i class="fas fa-download"></i> Download blank template (1800 &times; 240 px PNG)
+				</a>
+			</p>
+
+			<div class="pn-banner-wireframes">
+				<figure class="pn-banner-wireframe pn-banner-wf-desktop">
+					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 240 px</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<rect x="0" y="0" width="600" height="80" fill="#cbd5e0"/>
+						<rect x="0" y="0" width="360" height="80" fill="url(#pn-wfLeftFade)" opacity="0.55"/>
+						<rect x="0" y="58" width="600" height="22" fill="url(#pn-wfBottomFade)" opacity="0.55"/>
+						<rect x="20" y="14" width="52" height="52" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="84" y="22" width="170" height="10" rx="1.5" fill="#fff"/>
+						<rect x="84" y="38" width="52" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="142" y="38" width="46" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="84" y="62" width="120" height="5" rx="1" fill="#fff" opacity="0.7"/>
+						<text x="470" y="44" text-anchor="middle" font-size="10" fill="#2d3748" font-weight="700">Safe zone for art</text>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="pn-wfLeftFade" x1="0" y1="0" x2="1" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+							<linearGradient id="pn-wfBottomFade" x1="0" y1="1" x2="0" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+
+				<figure class="pn-banner-wireframe pn-banner-wf-mobile">
+					<figcaption><i class="fas fa-mobile-alt"></i> Mobile &middot; middle ~32%</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<!-- Saved banner (1800 × 240) drawn at 7.5:1 to match the desktop wireframe -->
+						<rect x="0"   y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="396" y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="204" y="0" width="192" height="80" fill="#cbd5e0"/>
+						<rect x="204" y="0" width="192" height="80" fill="url(#pn-wfMobileFade)" opacity="0.40"/>
+						<!-- Tiny logo + title inside the middle band -->
+						<rect x="216" y="22" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="262" y="30" width="120" height="9" rx="1.5" fill="#fff"/>
+						<rect x="262" y="46" width="80"  height="6" rx="1.5" fill="#fff" opacity="0.85"/>
+						<!-- Cropped labels on each flank -->
+						<text x="100" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<text x="498" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<!-- Mobile-safe band markers -->
+						<line x1="204" y1="0" x2="204" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<line x1="396" y1="0" x2="396" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="pn-wfMobileFade" x1="0" y1="0" x2="0" y2="1">
+								<stop offset="0" stop-color="#000" stop-opacity="0"/>
+								<stop offset="1" stop-color="#000" stop-opacity="0.5"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+			</div>
+			<p class="pn-banner-wf-hint">
+				<i class="fas fa-info-circle"></i> On phones, the banner is cropped to the middle third — keep your subject centred so it survives.
+			</p>
+
+			<div class="pn-banner-config">
+				<label class="pn-banner-toggle">
+					<input type="checkbox" id="pn-banner-show-logo" checked>
+					<span>Show Persona Avatar on Left</span>
+					<small>When off, the logo is hidden and the title/crumb shifts left.</small>
+				</label>
+				<label class="pn-banner-toggle">
+					<input type="checkbox" id="pn-banner-vignette" checked>
+					<span>Apply Vignette Effect</span>
+					<small>Adds a soft radial blur and darkening only over the safe zones, so overlay text and pills stay legible.</small>
+				</label>
+			</div>
+
+			<label class="pn-upload-area" for="pn-banner-file-input" style="margin-top:14px">
+				<i class="fas fa-cloud-upload-alt pn-upload-icon"></i>
+				Click to choose a banner image
+				<small>JPG, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
+			</label>
+			<input type="file" id="pn-banner-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
+			<div id="pn-banner-resize-notice" style="font-size:12px;min-height:16px;margin-top:6px;"></div>
+			<div class="pn-img-form-error" id="pn-banner-error" style="display:none;"></div>
+
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
+				<?php if ($hasBanner): ?>
+				<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+					<button class="pn-btn pn-btn-outline" id="pn-banner-adjust-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrows-alt"></i> Adjust Image Framing</button>
+					<button class="pn-btn pn-btn-outline" id="pn-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
+				</div>
+				<button class="pn-btn pn-btn-outline pn-btn-danger" id="pn-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;"><i class="fas fa-trash"></i> Remove Banner</button>
+				<?php else: ?>
+				<span class="pn-field-hint">Upload an image to enable banner display settings.</span>
+				<?php endif; ?>
+			</div>
+		</div>
+
+		<div class="pn-img-modal-body" id="pn-banner-step-position" style="display:none;">
+			<p style="margin:0 0 10px;font-size:13px;line-height:1.5">
+				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
+			</p>
+			<div class="pn-banner-position-wrap">
+				<canvas id="pn-banner-position-canvas" class="pn-banner-position-canvas" width="1800" height="240"></canvas>
+				<svg class="pn-banner-position-overlay" viewBox="0 0 1800 240" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+					<!-- Faint vignette tint for safe zones (matches the real .pn-hero-vignette) -->
+					<rect x="0" y="0" width="900" height="240" fill="url(#pn-posLeftFade)" opacity="0.40"/>
+					<rect x="0" y="150" width="1800" height="90" fill="url(#pn-posBottomFade)" opacity="0.35"/>
+					<!-- Logo placeholder (~110px tall in real layout, vertically centered) -->
+					<rect x="45" y="65" width="110" height="110" rx="8" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="2.5"/>
+					<text x="100" y="128" text-anchor="middle" font-size="16" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
+					<!-- Title bar -->
+					<rect x="180" y="78" width="520" height="28" rx="3" fill="rgba(255,255,255,0.45)"/>
+					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Player Name goes here</text>
+					<!-- Badges row -->
+					<rect x="180" y="118" width="100" height="20" rx="10" fill="rgba(72,187,120,0.55)"/>
+					<rect x="290" y="118" width="115" height="20" rx="10" fill="rgba(66,153,225,0.55)"/>
+					<rect x="415" y="118" width="90"  height="20" rx="10" fill="rgba(159,122,234,0.55)"/>
+					<!-- Crumb -->
+					<rect x="180" y="150" width="260" height="12" rx="2" fill="rgba(255,255,255,0.40)"/>
+					<!-- Mobile-safe band markers: middle ~32% of width -->
+					<line x1="612"  y1="0" x2="612"  y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<line x1="1188" y1="0" x2="1188" y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<text x="900" y="16" text-anchor="middle" font-size="12" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
+					<defs>
+						<linearGradient id="pn-posLeftFade" x1="0" y1="0" x2="1" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+						<linearGradient id="pn-posBottomFade" x1="0" y1="1" x2="0" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+					</defs>
+				</svg>
+			</div>
+			<p class="pn-banner-position-hint">
+				<i class="fas fa-arrows-alt"></i>
+				<span id="pn-banner-position-hint-text">Click and drag to position the image.</span>
+			</p>
+			<div class="pn-img-form-error" id="pn-banner-position-error" style="display:none;"></div>
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px">
+				<button class="pn-btn pn-btn-outline" id="pn-banner-position-back-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrow-left"></i> Back</button>
+				<button class="pn-btn pn-btn-white" id="pn-banner-position-confirm-btn" type="button" style="font-size:13px;padding:7px 18px">Use This View <i class="fas fa-check"></i></button>
+			</div>
+		</div>
+
+		<div class="pn-img-modal-body" id="pn-banner-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
+			<p style="margin-top:12px;">Uploading…</p>
+		</div>
+		<div class="pn-img-modal-body" id="pn-banner-step-success" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
+			<p style="margin-top:12px;color:#48bb78;font-weight:600;">Updated! Refreshing&hellip;</p>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 <script>
 // ---- Markdown rendering for About tab ----
@@ -4206,6 +4663,13 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		});
 	}
 	pnRenderFontPicker();
+	var nameShadowCb = gid('pn-name-shadow');
+	var heroEl = document.querySelector('.pn-hero');
+	if (nameShadowCb && heroEl) {
+		nameShadowCb.addEventListener('change', function() {
+			heroEl.classList.toggle('pn-hero-name-shadow', nameShadowCb.checked);
+		});
+	}
 	if (pnSelectedFont) { pnLoadFont(pnSelectedFont); pnApplyFont(pnSelectedFont); }
 	// Re-render after all fonts land — fonts.ready resolves too early (before downloads finish).
 	// fonts.load() per family triggers downloads and resolves only when each is paint-ready.
@@ -4448,6 +4912,8 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		msConfig['newest_first'] = (newestFirstEl && newestFirstEl.checked) ? 1 : 0;
 		fd.append('MilestoneConfig', JSON.stringify(msConfig));
 			fd.append('NameFont', pnSelectedFont || '');
+
+		fd.append('NameShadow', gid('pn-name-shadow') && gid('pn-name-shadow').checked ? 1 : 0);
 
 		// Belt display (Icons tab — Knights only; radios aren't rendered for non-knights)
 		var beltRadios = document.querySelectorAll('input[name="pn-design-belt-display"]');
@@ -4753,6 +5219,269 @@ function pnRenderSparkline() {
 	if (mel) mel.innerHTML = mhtml;
 }
 pnRenderSparkline();
+
+<?php if ($isOwnProfile): ?>
+// ---- Dietary Preferences Modal ----
+(function() {
+	var DP_LOAD_URL = '<?= UIR ?>PlayerAjax/dietary_preferences/<?= (int)$Player['MundaneId'] ?>';
+	var DP_SAVE_URL = '<?= UIR ?>PlayerAjax/save_dietary_preferences';
+	var dpLoaded = false;
+	var dpDirty  = false;
+	var dpSnap   = null; // modal state at open time; restored on discard
+
+	var ALLERGEN_FIELDS = ['AllergenPeanuts','AllergenTreenuts','AllergenWheat','AllergenMilk','AllergenEggs',
+	                       'AllergenFish','AllergenShellfish','AllergenSoy','AllergenSesame','AllergenGarlic',
+	                       'AllergenGluten','AllergenOnion','AllergenMushroom','AllergenCorn','AllergenCoconut','AllergenCocoa','AllergenNightshades'];
+
+	// ---- DOM helpers (scoped to modal) ----
+	function gInModal(sel) { return document.querySelector('#pn-dp-overlay ' + sel); }
+	function allInModal(sel) { return document.querySelectorAll('#pn-dp-overlay ' + sel); }
+
+	function dpSetToggle(field, val) {
+		var sw = gInModal('.dp-toggle-sw[data-field="' + field + '"]');
+		if (sw) sw.classList.toggle('dp-on', !!val);
+	}
+	function dpToggleValue(field) {
+		var sw = gInModal('.dp-toggle-sw[data-field="' + field + '"]');
+		return sw ? sw.classList.contains('dp-on') : false;
+	}
+	function dpSetAllergen(grp, v) {
+		v = parseInt(v) || 0;
+		grp.querySelectorAll('.dp-al-seg').forEach(function(btn) {
+			btn.classList.toggle('dp-active', parseInt(btn.dataset.v) === v);
+		});
+	}
+	function dpGetAllergen(field) {
+		var grp = gInModal('.dp-al-slider[data-field="' + field + '"]');
+		if (!grp) return 0;
+		var active = grp.querySelector('.dp-al-seg.dp-active');
+		return active ? parseInt(active.dataset.v) : 0;
+	}
+
+	function dpLockPrefs(lock) {
+		var body = document.getElementById('dp-prefs-body');
+		if (body) body.classList.toggle('dp-locked', !!lock);
+	}
+	function dpRender(p) {
+		dpSetToggle('ShowName',         !p.IsAnonymous);
+		dpSetToggle('NoRestrictions',    p.NoRestrictions);
+		dpLockPrefs(p.NoRestrictions);
+		dpSetToggle('DietVegetarian',    p.DietVegetarian);
+		dpSetToggle('DietVegan',         p.DietVegan);
+		dpSetToggle('DietHalal',         p.DietHalal);
+		dpSetToggle('DietKosher',        p.DietKosher);
+		dpSetToggle('DietKeto',          p.DietKeto);
+		dpSetToggle('DietPaleo',         p.DietPaleo);
+		dpSetToggle('RestrictDairy',     p.RestrictDairy);
+		dpSetToggle('RestrictEggs',      p.RestrictEggs);
+		dpSetToggle('RestrictFish',      p.RestrictFish);
+		dpSetToggle('RestrictHoney',     p.RestrictHoney);
+		dpSetToggle('RestrictPoultry',   p.RestrictPoultry);
+		dpSetToggle('RestrictBeef',      p.RestrictBeef);
+		dpSetToggle('RestrictPork',      p.RestrictPork);
+		dpSetToggle('RestrictShellfish', p.RestrictShellfish);
+		ALLERGEN_FIELDS.forEach(function(f) {
+			var grp = gInModal('.dp-al-slider[data-field="' + f + '"]');
+			if (grp) dpSetAllergen(grp, p[f] || 0);
+		});
+	}
+
+	function dpCollect() {
+		var d = {
+			IsAnonymous:       dpToggleValue('ShowName')        ? 0 : 1,
+			NoRestrictions:    dpToggleValue('NoRestrictions')  ? 1 : 0,
+			DietVegetarian:    dpToggleValue('DietVegetarian')  ? 1 : 0,
+			DietVegan:         dpToggleValue('DietVegan')       ? 1 : 0,
+			DietHalal:         dpToggleValue('DietHalal')       ? 1 : 0,
+			DietKosher:        dpToggleValue('DietKosher')      ? 1 : 0,
+			DietKeto:          dpToggleValue('DietKeto')        ? 1 : 0,
+			DietPaleo:         dpToggleValue('DietPaleo')       ? 1 : 0,
+			RestrictDairy:     dpToggleValue('RestrictDairy')   ? 1 : 0,
+			RestrictEggs:      dpToggleValue('RestrictEggs')    ? 1 : 0,
+			RestrictFish:      dpToggleValue('RestrictFish')    ? 1 : 0,
+			RestrictHoney:     dpToggleValue('RestrictHoney')   ? 1 : 0,
+			RestrictPoultry:   dpToggleValue('RestrictPoultry') ? 1 : 0,
+			RestrictBeef:      dpToggleValue('RestrictBeef') ? 1 : 0,
+			RestrictPork:      dpToggleValue('RestrictPork') ? 1 : 0,
+			RestrictShellfish: dpToggleValue('RestrictShellfish') ? 1 : 0,
+		};
+		ALLERGEN_FIELDS.forEach(function(f) { d[f] = dpGetAllergen(f); });
+		return d;
+	}
+
+	// ---- Summary card ----
+	var DIET_LABELS = {DietVegetarian:'Vegetarian',DietVegan:'Vegan',DietHalal:'Halal',DietKosher:'Kosher',DietKeto:'Keto',DietPaleo:'Paleo'};
+	var RESTRICT_LABELS = {RestrictBeef:'No Beef',RestrictDairy:'No Dairy',RestrictEggs:'No Eggs',RestrictFish:'No Fish',RestrictHoney:'No Honey',RestrictPork:'No Pork',RestrictPoultry:'No Poultry',RestrictShellfish:'No Shellfish'};
+	var ALLERGEN_LABELS = {AllergenPeanuts:'Peanuts',AllergenTreenuts:'Tree Nuts',AllergenWheat:'Wheat',AllergenMilk:'Milk',AllergenEggs:'Eggs',AllergenFish:'Fish',AllergenShellfish:'Shellfish',AllergenSoy:'Soy',AllergenSesame:'Sesame',AllergenGarlic:'Garlic',AllergenGluten:'Gluten',AllergenOnion:'Onion',AllergenMushroom:'Mushroom',AllergenCorn:'Corn',AllergenCoconut:'Coconut',AllergenCocoa:'Cocoa',AllergenNightshades:'Nightshades'};
+
+	function dpUpdateSummary(p) {
+		var el = document.getElementById('pna-dp-summary');
+		if (!el) return;
+		if (p.NoRestrictions) { el.textContent = 'No dietary restrictions.'; return; }
+		var parts = [];
+		Object.keys(DIET_LABELS).forEach(function(f)     { if (p[f]) parts.push(DIET_LABELS[f]); });
+		Object.keys(RESTRICT_LABELS).forEach(function(f) { if (p[f]) parts.push(RESTRICT_LABELS[f]); });
+		ALLERGEN_FIELDS.forEach(function(f) {
+			if (p[f] >= 2) parts.push(ALLERGEN_LABELS[f] + ' allergy');
+			else if (p[f] >= 1) parts.push(ALLERGEN_LABELS[f] + ' sensitivity');
+		});
+		el.textContent = parts.length ? parts.slice(0,4).join(', ') + (parts.length > 4 ? ' +' + (parts.length - 4) + ' more' : '') : 'No preferences set.';
+	}
+
+	// ---- Dirty tracking ----
+	function dpMarkDirty() {
+		if (!dpDirty) {
+			dpDirty = true;
+			var warn = document.getElementById('pn-dp-dirty-warn');
+			var btn  = document.getElementById('pn-dp-save-btn');
+			if (warn) warn.style.display = 'inline';
+			if (btn)  btn.disabled = false;
+		}
+	}
+	function dpClearDirty() {
+		dpDirty = false;
+		var warn = document.getElementById('pn-dp-dirty-warn');
+		var btn  = document.getElementById('pn-dp-save-btn');
+		if (warn) warn.style.display = 'none';
+		if (btn)  { btn.disabled = true; btn.innerHTML = '<i class="fas fa-save"></i> Save'; }
+	}
+
+	// ---- Open / close ----
+	window.dpOpen = function() {
+		var ov = document.getElementById('pn-dp-overlay');
+		if (!ov) return;
+		dpClearDirty();
+		if (dpLoaded) {
+			dpSnap = dpCollect();
+		}
+		ov.classList.add('pn-open');
+		if (!dpLoaded) {
+			$.getJSON(DP_LOAD_URL, function(r) {
+				if (r && r.status === 0 && r.prefs) {
+					dpRender(r.prefs);
+					dpUpdateSummary(r.prefs);
+					dpLoaded = true;
+					dpSnap = dpCollect();
+					dpClearDirty();
+				}
+			});
+		}
+	};
+
+	function dpClose(force) {
+		function doClose() {
+			document.getElementById('pn-dp-overlay').classList.remove('pn-open');
+			var pop = document.getElementById('dp-info-pop');
+			if (pop) pop.classList.remove('dp-pop-open');
+			if (dpSnap) { dpRender(dpSnap); dpClearDirty(); }
+		}
+		if (!force && dpDirty) {
+			pnConfirm({ title: 'Unsaved Changes', message: 'Close without saving your feast preferences?', confirmText: 'Discard', danger: true }, doClose);
+		} else {
+			doClose();
+		}
+	}
+
+	// ---- Save ----
+	function dpSave() {
+		var btn = document.getElementById('pn-dp-save-btn');
+		if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; }
+		var data = dpCollect();
+		var fd = new FormData();
+		Object.keys(data).forEach(function(k) { fd.append(k, data[k]); });
+		fetch(DP_SAVE_URL, { method: 'POST', body: fd })
+			.then(function(res) { return res.json(); })
+			.then(function(r) {
+				if (r && r.status === 0) {
+					dpSnap = data;
+					dpClearDirty();
+					dpUpdateSummary(data);
+					document.getElementById('pn-dp-overlay').classList.remove('pn-open');
+				} else {
+					if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save'; }
+				}
+			})
+			.catch(function() {
+				if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save'; }
+			});
+	}
+
+	// ---- Wire modal controls ----
+	function dpClearNoRestrictions() {
+		if (noRestSw && noRestSw.classList.contains('dp-on')) {
+			noRestSw.classList.remove('dp-on');
+			dpLockPrefs(false);
+		}
+	}
+	allInModal('.dp-toggle-sw').forEach(function(sw) {
+		if (sw.dataset.field === 'NoRestrictions') return;
+		sw.addEventListener('click', function() { dpClearNoRestrictions(); sw.classList.toggle('dp-on'); dpMarkDirty(); });
+	});
+	allInModal('.dp-al-seg').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			dpClearNoRestrictions();
+			var grp = btn.closest('.dp-al-slider');
+			if (grp) { dpSetAllergen(grp, btn.dataset.v); dpMarkDirty(); }
+		});
+	});
+
+	// No-restrictions master toggle — whole row is clickable
+	var noRestSw  = gInModal('.dp-toggle-sw[data-field="NoRestrictions"]');
+	var noRestRow = document.getElementById('dp-no-restrict-row');
+	if (noRestSw && noRestRow) {
+		noRestRow.addEventListener('click', function() {
+			var turningOn = !noRestSw.classList.contains('dp-on');
+			noRestSw.classList.toggle('dp-on', turningOn);
+			if (turningOn) {
+				allInModal('.dp-toggle-sw[data-field]').forEach(function(sw) {
+					if (sw.dataset.field !== 'ShowName' && sw.dataset.field !== 'NoRestrictions')
+						sw.classList.remove('dp-on');
+				});
+				allInModal('.dp-al-slider').forEach(function(grp) { dpSetAllergen(grp, 0); });
+			}
+			dpLockPrefs(turningOn);
+			dpMarkDirty();
+		});
+	}
+	document.getElementById('pn-dp-close-btn').addEventListener('click',  function() { dpClose(); });
+	document.getElementById('pn-dp-cancel-btn').addEventListener('click',  function() { dpClose(); });
+	document.getElementById('pn-dp-save-btn').addEventListener('click',    dpSave);
+	document.getElementById('pn-dp-overlay').addEventListener('click',     function(e) { if (e.target === this) dpClose(); });
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && document.getElementById('pn-dp-overlay').classList.contains('pn-open'))
+			dpClose();
+	});
+
+	// Info popover
+	var dpInfoPop = document.getElementById('dp-info-pop');
+	allInModal('[data-info-btn]').forEach(function(btn) {
+		btn.addEventListener('click', function(e) {
+			e.stopPropagation();
+			var rect = btn.getBoundingClientRect();
+			var isOpen = dpInfoPop.classList.contains('dp-pop-open');
+			dpInfoPop.classList.remove('dp-pop-open');
+			if (isOpen) return;
+			var top  = rect.bottom + 6;
+			var left = rect.left;
+			if (left + 295 > window.innerWidth - 10) left = window.innerWidth - 305;
+			dpInfoPop.style.top  = top  + 'px';
+			dpInfoPop.style.left = left + 'px';
+			dpInfoPop.classList.add('dp-pop-open');
+		});
+	});
+	document.addEventListener('click', function() { if (dpInfoPop) dpInfoPop.classList.remove('dp-pop-open'); });
+
+	// Pre-load on page load so summary is populated immediately
+	$.getJSON(DP_LOAD_URL, function(r) {
+		if (r && r.status === 0 && r.prefs) {
+			dpRender(r.prefs);
+			dpUpdateSummary(r.prefs);
+			dpLoaded = true;
+			dpSnap = dpCollect();
+		}
+	});
+})();
+<?php endif; ?>
 </script>
 
 <?php if ($canManageAwards): ?>
@@ -4933,7 +5662,7 @@ pnRenderSparkline();
 .pn-mp-cascade-sel:disabled { background:#edf2f7; color:#718096; cursor:not-allowed; }
 #pn-moveplayer-overlay .pn-modal-body { overflow:visible; }
 #pn-moveplayer-overlay .pn-acct-field { position:relative; }
-.pn-mp-player-locked { background:#f7fafc; border:1px solid #e2e8f0; border-radius:4px; padding:8px 12px; color:#4a5568; font-size:0.95rem; }
+.pn-mp-player-locked { background:var(--ork-surface-light); border:1px solid var(--ork-border); border-radius:4px; padding:8px 12px; color:var(--ork-text-body); font-size:0.95rem; }
 </style>
 <div class="pn-overlay" id="pn-moveplayer-overlay">
 	<div class="pn-modal-box" style="width:500px;max-width:calc(100vw - 40px);">
@@ -5296,6 +6025,7 @@ $(function() {
 						+ '<th data-sorttype="date">Date</th><th data-sorttype="text">Kingdom</th>'
 						+ '<th data-sorttype="text">Park</th><th data-sorttype="text">Event</th>'
 						+ '<th data-sorttype="text">Class</th><th data-sorttype="numeric">Credits</th>'
+						+ '<th data-sorttype="text">By</th>'
 						+ (canEditAny ? '<th style="width:52px;min-width:52px"></th>' : '')
 						+ '</tr></thead><tbody>';
 					att.forEach(function(d) {
@@ -5307,13 +6037,28 @@ $(function() {
 							: '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.Date) + '</a>';
 						var classLabel = (d.Flavor && d.Flavor.trim()) ? esc(d.Flavor) : esc(d.ClassName);
 						var canEditThis = !!(parkAuth[pid] && eid === 0);
+						// "By" cell: show the entry source. signin_link / self_reg
+						// surface as labels (not a link to the player themselves —
+						// that would be redundant and look like "John entered
+						// John's credit"). manual shows the officer's name linked.
+						var byCell;
+						if (d.EntryMethod === 'signin_link') {
+							byCell = '<em title="Player signed in via PM-issued QR / link" style="color:var(--ork-text-muted)">Self via Sign-in Link</em>';
+						} else if (d.EntryMethod === 'self_reg') {
+							byCell = '<em title="Awarded on account creation" style="color:var(--ork-text-muted)">Self-registration</em>';
+						} else if (parseInt(d.EnteredById) > 0 && d.EnteredBy) {
+							byCell = '<a href="' + uir + 'Player/profile/' + parseInt(d.EnteredById) + '">' + esc(d.EnteredBy) + '</a>';
+						} else {
+							byCell = '<span style="color:var(--ork-text-muted)">—</span>';
+						}
 						html += '<tr>'
 							+ '<td class="pn-col-nowrap">' + dateLink + '</td>'
 							+ '<td><a href="' + uir + 'Kingdom/profile/' + esc(d.KingdomId) + '">' + esc(d.KingdomName) + '</a></td>'
 							+ '<td><a href="' + uir + 'Park/profile/' + pid + '">' + esc(d.ParkName) + '</a></td>'
 							+ '<td>' + (eid > 0 ? '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.EventName) + '</a>' : '') + '</td>'
 							+ '<td>' + classLabel + '</td>'
-							+ '<td class="pn-col-numeric">' + esc(d.Credits) + '</td>';
+							+ '<td class="pn-col-numeric">' + esc(d.Credits) + '</td>'
+							+ '<td>' + byCell + '</td>';
 						if (canEditAny) {
 							html += '<td class="pn-award-actions-cell">';
 							if (canEditThis) {
@@ -5613,4 +6358,29 @@ $(function() {
 	});
 });
 initEmailSpellCheck('pn-acct-email', 'pn-acct-email-suggestion');
+// Username availability check on the Update Account modal. currentValue
+// prevents the player's existing username from being flagged as "taken"
+// against their own row.
+if (typeof initUsernameAvailabilityCheck === 'function' && document.getElementById('pn-acct-username')) {
+	window.pnAcctUsernameCheck = initUsernameAvailabilityCheck({
+		inputId:      'pn-acct-username',
+		statusId:     'pn-acct-username-status',
+		submitBtnId:  'pn-acct-save',
+		endpointUrl:  '<?= UIR ?>PlayerAjax/check_username',
+		gateMode:     'soft',
+		currentValue: <?= json_encode($Player['UserName'] ?? '') ?>
+	});
+	// Reset on modal open so a stale "X is taken" from a previous edit
+	// session doesn't linger when the modal is reopened.
+	var _origPnOpenAcct = window.pnOpenAccountModal;
+	if (typeof _origPnOpenAcct === 'function') {
+		window.pnOpenAccountModal = function() {
+			var r = _origPnOpenAcct.apply(this, arguments);
+			if (window.pnAcctUsernameCheck && window.pnAcctUsernameCheck.reset) window.pnAcctUsernameCheck.reset();
+			return r;
+		};
+	}
+}
 </script>
+
+

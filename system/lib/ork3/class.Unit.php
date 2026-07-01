@@ -174,6 +174,17 @@ class Unit extends Ork3 {
 					'History' => $this->unit->history,
 					'Active' => $this->unit->active
 				);
+			// Hydrate banner fields via raw DataSet (avoids Yapo schema-cache misses)
+			global $DB;
+			$DB->Clear();
+			$_bn = $DB->DataSet('SELECT has_banner, banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ork_unit WHERE unit_id = ' . (int)$this->unit->unit_id);
+			if ($_bn && $_bn->Next()) {
+				$response['Unit']['HasBanner']      = (int)$_bn->has_banner;
+				$response['Unit']['BannerShowLogo'] = (int)$_bn->banner_show_logo;
+				$response['Unit']['BannerVignette'] = (int)$_bn->banner_vignette;
+				$response['Unit']['BannerOffsetX']  = (int)$_bn->banner_offset_x;
+				$response['Unit']['BannerOffsetY']  = (int)$_bn->banner_offset_y;
+			}
 		} else {
 			$response['Status'] = InvalidParameter();
 		}

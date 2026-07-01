@@ -375,6 +375,7 @@ class Weather extends Ork3 {
 		if ($ts === false) return array();
 		$dow_name  = date('l', $ts);          // e.g., "Sunday" — matches ork_parkday.week_day enum
 		$dom       = (int)date('j', $ts);     // day-of-month for monthly recurrence
+		$ymd       = date('Y-m-d', $ts);
 		$wom       = (int)ceil($dom / 7);     // 1..5 — which Nth-weekday of the month today is
 
 		// Filter retired/inactive parks at the source — they may still have
@@ -385,7 +386,8 @@ class Weather extends Ork3 {
 			WHERE pd.online = 0 AND p.active = 'Active' AND (
 			(pd.recurrence = 'weekly'        AND pd.week_day = '$dow_name') OR
 			(pd.recurrence = 'week-of-month' AND pd.week_day = '$dow_name' AND pd.week_of_month = $wom) OR
-			(pd.recurrence = 'monthly'       AND pd.month_day = $dom)
+			(pd.recurrence = 'monthly'       AND pd.month_day = $dom) OR
+			(pd.recurrence = 'every-x-weeks' AND pd.week_day = '$dow_name' AND pd.week_interval > 0 AND '$ymd' >= pd.start_date AND MOD(DATEDIFF('$ymd', pd.start_date), pd.week_interval * 7) = 0)
 		)";
 		$rs = $this->db->query($sql);
 		$out = array();
@@ -580,6 +582,7 @@ class Weather extends Ork3 {
 		$ts = strtotime($date);
 		$dow_name = date('l', $ts);
 		$dom = (int)date('j', $ts);
+		$ymd = date('Y-m-d', $ts);
 		$wom = (int)ceil($dom / 7);
 
 		$rs = $this->db->query("SELECT pd.park_id, pd.parkday_id, pd.purpose, pd.time, pd.description,
@@ -591,7 +594,8 @@ class Weather extends Ork3 {
 			  AND (
 				(pd.recurrence = 'weekly'        AND pd.week_day = '$dow_name') OR
 				(pd.recurrence = 'week-of-month' AND pd.week_day = '$dow_name' AND pd.week_of_month = $wom) OR
-				(pd.recurrence = 'monthly'       AND pd.month_day = $dom)
+				(pd.recurrence = 'monthly'       AND pd.month_day = $dom) OR
+				(pd.recurrence = 'every-x-weeks' AND pd.week_day = '$dow_name' AND pd.week_interval > 0 AND '$ymd' >= pd.start_date AND MOD(DATEDIFF('$ymd', pd.start_date), pd.week_interval * 7) = 0)
 			  )
 			ORDER BY p.name");
 		$by_park = array();

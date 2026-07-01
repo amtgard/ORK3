@@ -155,6 +155,11 @@ class Park extends Ork3
 			$this->parkday->week_of_month = $request[ 'WeekOfMonth' ];
 			$this->parkday->week_day = $request[ 'WeekDay' ];
 			$this->parkday->month_day = $request[ 'MonthDay' ];
+			$this->parkday->start_date = ( !empty( $request[ 'StartDate' ] ) ) ? substr( $request[ 'StartDate' ], 0, 10 ) : '1000-01-01';
+			$this->parkday->week_interval = (int)( $request[ 'WeekInterval' ] ?? 0 );
+			if ( $request[ 'Recurrence' ] === 'every-x-weeks' && !empty( $request[ 'StartDate' ] ) ) {
+				$this->parkday->week_day = date( 'l', strtotime( substr( $request[ 'StartDate' ], 0, 10 ) ) );
+			}
 			$this->parkday->time = $request[ 'Time' ];
 			$this->parkday->purpose = $request[ 'Purpose' ];
 			$this->parkday->description = $request[ 'Description' ];
@@ -252,6 +257,11 @@ class Park extends Ork3
 			$this->parkday->week_of_month = $request[ 'WeekOfMonth' ];
 			$this->parkday->week_day = $request[ 'WeekDay' ];
 			$this->parkday->month_day = $request[ 'MonthDay' ];
+			$this->parkday->start_date = ( !empty( $request[ 'StartDate' ] ) ) ? substr( $request[ 'StartDate' ], 0, 10 ) : '1000-01-01';
+			$this->parkday->week_interval = (int)( $request[ 'WeekInterval' ] ?? 0 );
+			if ( $request[ 'Recurrence' ] === 'every-x-weeks' && !empty( $request[ 'StartDate' ] ) ) {
+				$this->parkday->week_day = date( 'l', strtotime( substr( $request[ 'StartDate' ], 0, 10 ) ) );
+			}
 			$this->parkday->time = $request[ 'Time' ];
 			$this->parkday->purpose = $request[ 'Purpose' ];
 			$this->parkday->description = $request[ 'Description' ];
@@ -481,6 +491,16 @@ class Park extends Ork3
 			$response[ 'ParkName' ] = $this->park->name;
 			$response[ 'Abbreviation' ] = $this->park->abbreviation;
 			$response[ 'HasHeraldry' ] = $this->park->has_heraldry;
+			global $DB;
+			$DB->Clear();
+			$_bn = $DB->DataSet("SELECT has_banner, banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ork_park WHERE park_id = " . (int)$request['ParkId']);
+			if ($_bn && $_bn->Next()) {
+				$response['HasBanner']      = (int)$_bn->has_banner;
+				$response['BannerShowLogo'] = (int)$_bn->banner_show_logo;
+				$response['BannerVignette'] = (int)$_bn->banner_vignette;
+				$response['BannerOffsetX']  = (int)$_bn->banner_offset_x;
+				$response['BannerOffsetY']  = (int)$_bn->banner_offset_y;
+			}
 			$response[ 'ParkTitleId' ] = $this->park->parktitle_id;
 			$parktitle = new yapo( $this->db, DB_PREFIX . 'parktitle' );
 			$parktitle->parktitle_id = $this->park->parktitle_id;
@@ -508,7 +528,35 @@ class Park extends Ork3
 		return Common::get_configs( $request[ 'ParkId' ], CFG_PARK );
 	}
 
-	public static function CalculateNextParkDay( $recurrence, $week_of_month, $month_day, $week_day, $from_date = null )
+	public static function ExpandEveryXWeeks( $start_date, $week_interval, DateTime $range_start, DateTime $range_end )
+	{
+		// Returns Y-m-d occurrences in [range_start, range_end) on the
+		// "every X weeks" cadence anchored at $start_date. Half-open interval:
+		// includes range_start, excludes range_end.
+		$out = [];
+		$interval = (int)$week_interval;
+		if ( $interval < 1 ) return $out;
+		$step   = $interval * 7;
+		$anchor = DateTime::createFromFormat( 'Y-m-d', substr( (string)$start_date, 0, 10 ) );
+		if ( !$anchor ) return $out;
+		$anchor->setTime( 0, 0, 0 );
+		$rs = clone $range_start; $rs->setTime( 0, 0, 0 );
+		$re = clone $range_end;   $re->setTime( 0, 0, 0 );
+		$cur = clone $anchor;
+		if ( $cur < $rs ) {
+			$daysBehind  = (int)$cur->diff( $rs )->days;
+			$stepsToSkip = intdiv( $daysBehind, $step ) * $step;
+			if ( $stepsToSkip > 0 ) $cur->modify( "+{$stepsToSkip} days" );
+			while ( $cur < $rs ) $cur->modify( "+{$step} days" );
+		}
+		while ( $cur < $re ) {
+			$out[] = $cur->format( 'Y-m-d' );
+			$cur->modify( "+{$step} days" );
+		}
+		return $out;
+	}
+
+	public static function CalculateNextParkDay( $recurrence, $week_of_month, $month_day, $week_day, $from_date = null, $start_date = null, $week_interval = 0 )
 	{
 		if ( is_null( $from_date ) )
 			$from_date = strtotime( date( "Y-m-d" ) );
@@ -530,6 +578,15 @@ class Park extends Ork3
 				}
 			case 'monthly':
 				return date( "Y-m-d", strtotime( date( "F $month_day, Y", $from_date ), $from_date ) );
+			case 'every-x-weeks':
+				$interval = max( 1, (int)$week_interval );
+				$step     = $interval * 7;
+				$anchor   = strtotime( substr( (string)$start_date, 0, 10 ) );
+				if ( $anchor === false ) return date( "Y-m-d", $from_date );
+				if ( $anchor >= $from_date ) return date( "Y-m-d", $anchor );
+				$daysBehind = floor( ( $from_date - $anchor ) / 86400 );
+				$cycles     = (int)ceil( $daysBehind / $step );
+				return date( "Y-m-d", strtotime( "+" . ( $cycles * $step ) . " days", $anchor ) );
 		}
 	}
 
@@ -548,6 +605,8 @@ class Park extends Ork3
 					'WeekOfMonth'       => $parkday->week_of_month,
 					'WeekDay'           => $parkday->week_day,
 					'MonthDay'          => $parkday->month_day,
+					'StartDate'         => $parkday->start_date,
+					'WeekInterval'      => (int)$parkday->week_interval,
 					'Time'              => $parkday->time,
 					'Purpose'           => $parkday->purpose,
 					'Description'       => $parkday->description,

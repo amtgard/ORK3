@@ -684,6 +684,17 @@ class Controller_Player extends Controller
                 }
             }
             $DB->Clear();
+            // Same dedupe — first occurrence per recipient is the highest
+            // peerage rank, so the "My Associates" list collapses to one
+            // row per associate at their current rank.
+            $__assocSeen = [];
+            $__assocs    = array_values(array_filter($__assocs, function ($r) use (&$__assocSeen) {
+                if (isset($__assocSeen[$r['RecipientId']])) {
+                    return false;
+                }
+                $__assocSeen[$r['RecipientId']] = true;
+                return true;
+            }));
             $this->data['MyAssociates'] = $__assocs;
         }
 
@@ -894,6 +905,27 @@ class Controller_Player extends Controller
         $this->data['CustomMilestones'] = is_array($__customMs) ? $__customMs : [];
         $this->data['MilestoneConfig'] = $this->data['Player']['MilestoneConfig'] ?? '';
 
+        // Collapse the Peers/Associates *display* lists to one row per
+        // counterparty, keeping the highest-precedence peerage (the SQL
+        // already orders Squire→Page so the first row wins). Run this AFTER
+        // milestones are built so the historical "Became Page → Became
+        // Squire" progression still surfaces in the timeline.
+        $__dedupeByKey = function (array $rows, string $key): array {
+            $__seen = [];
+            return array_values(array_filter($rows, function ($r) use (&$__seen, $key) {
+                if (isset($__seen[$r[$key]])) {
+                    return false;
+                }
+                $__seen[$r[$key]] = true;
+                return true;
+            }));
+        };
+        if (!empty($this->data['BeltlinePeers'])) {
+            $this->data['BeltlinePeers'] = $__dedupeByKey($this->data['BeltlinePeers'], 'PeerId');
+        }
+        if (!empty($this->data['BeltlineAssociates'])) {
+            $this->data['BeltlineAssociates'] = $__dedupeByKey($this->data['BeltlineAssociates'], 'RecipientId');
+        }
     }
 
 

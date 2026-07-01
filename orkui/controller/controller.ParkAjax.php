@@ -1,217 +1,235 @@
 <?php
 
-class Controller_ParkAjax extends Controller {
+class Controller_ParkAjax extends Controller
+{
+    public function park($p = null)
+    {
+        header('Content-Type: application/json');
+        $parts   = explode('/', $p ?? '');
+        $park_id = (int)preg_replace('/[^0-9]/', '', $parts[0] ?? '');
+        $action  = $parts[1] ?? '';
 
-	public function park($p = null) {
-		header('Content-Type: application/json');
-		$parts   = explode('/', $p ?? '');
-		$park_id = (int)preg_replace('/[^0-9]/', '', $parts[0] ?? '');
-		$action  = $parts[1] ?? '';
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
 
-		if (!isset($this->session->user_id)) {
-			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
-			exit;
-		}
+        if (!valid_id($park_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid park ID']);
+            exit;
+        }
 
-		if (!valid_id($park_id)) {
-			echo json_encode(['status' => 1, 'error' => 'Invalid park ID']);
-			exit;
-		}
+        $this->load_model('Park');
 
-		$this->load_model('Park');
+        if ($action === 'setofficers') {
+            $officers = [];
+            foreach ($_POST as $key => $val) {
+                if (preg_match('/^(.+)Id$/', $key, $m) && valid_id((int)$val)) {
+                    $role = str_replace('_', ' ', $m[1]);
+                    $officers[$role] = ['MundaneId' => (int)$val, 'Role' => $role];
+                }
+            }
+            if (empty($officers)) {
+                echo json_encode(['status' => 1, 'error' => 'No officer assignments provided.']);
+                exit;
+            }
+            $results = $this->Park->set_officers($this->session->token, $park_id, $officers);
+            $errors  = [];
+            foreach ($results as $r) {
+                if (isset($r['Status']) && $r['Status'] != 0) {
+                    $errors[] = ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '');
+                }
+            }
+            echo $errors
+                ? json_encode(['status' => 1, 'error' => implode('; ', $errors)])
+                : json_encode(['status' => 0]);
 
-		if ($action === 'setofficers') {
-			$officers = [];
-			foreach ($_POST as $key => $val) {
-				if (preg_match('/^(.+)Id$/', $key, $m) && valid_id((int)$val)) {
-					$role = str_replace('_', ' ', $m[1]);
-					$officers[$role] = ['MundaneId' => (int)$val, 'Role' => $role];
-				}
-			}
-			if (empty($officers)) {
-				echo json_encode(['status' => 1, 'error' => 'No officer assignments provided.']);
-				exit;
-			}
-			$results = $this->Park->set_officers($this->session->token, $park_id, $officers);
-			$errors  = [];
-			foreach ($results as $r) {
-				if (isset($r['Status']) && $r['Status'] != 0)
-					$errors[] = ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '');
-			}
-			echo $errors
-				? json_encode(['status' => 1, 'error' => implode('; ', $errors)])
-				: json_encode(['status' => 0]);
+        } elseif ($action === 'vacateofficer') {
+            $role = trim($_POST['Role'] ?? '');
+            if (!strlen($role)) {
+                echo json_encode(['status' => 1, 'error' => 'Role is required.']);
+                exit;
+            }
+            $r = $this->Park->vacate_officer($park_id, $role, $this->session->token);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'vacateofficer') {
-			$role = trim($_POST['Role'] ?? '');
-			if (!strlen($role)) {
-				echo json_encode(['status' => 1, 'error' => 'Role is required.']);
-				exit;
-			}
-			$r = $this->Park->vacate_officer($park_id, $role, $this->session->token);
-			echo (!isset($r['Status']) || $r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'addparkday') {
+            $recurrence = trim($_POST['Recurrence'] ?? '');
+            $time       = trim($_POST['Time']       ?? '');
+            if (!strlen($recurrence)) {
+                echo json_encode(['status' => 1, 'error' => 'Recurrence is required.']);
+                exit;
+            }
+            if (!strlen($time)) {
+                echo json_encode(['status' => 1, 'error' => 'Time is required.']);
+                exit;
+            }
+            if ($recurrence === 'every-x-weeks' && !strlen(trim($_POST['StartDate'] ?? ''))) {
+                echo json_encode(['status' => 1, 'error' => 'A start date is required for the "every X weeks" cadence.']);
+                exit;
+            }
+            $online = (($_POST['Online'] ?? '0') === '1') ? 1 : 0;
+            $altLoc = (!$online && (($_POST['AlternateLocation'] ?? '0') === '1')) ? 1 : 0;
+            $r = $this->Park->add_park_day([
+                'Token'             => $this->session->token,
+                'ParkId'            => $park_id,
+                'Recurrence'        => $recurrence,
+                'WeekDay'           => trim($_POST['WeekDay']     ?? ''),
+                'WeekOfMonth'       => (int)($_POST['WeekOfMonth'] ?? 0),
+                'MonthDay'          => (int)($_POST['MonthDay']    ?? 0),
+                'StartDate'         => trim($_POST['StartDate']   ?? ''),
+                'WeekInterval'      => (int)($_POST['WeekInterval'] ?? 0),
+                'Time'              => $time,
+                'Purpose'           => trim($_POST['Purpose']     ?? 'other'),
+                'Description'       => trim($_POST['Description'] ?? ''),
+                'Online'            => $online,
+                'AlternateLocation' => $altLoc,
+                'Address'           => trim($_POST['Address']     ?? ''),
+                'City'              => trim($_POST['City']        ?? ''),
+                'Province'          => trim($_POST['Province']    ?? ''),
+                'PostalCode'        => trim($_POST['PostalCode']  ?? ''),
+                'MapUrl'            => trim($_POST['MapUrl']      ?? ''),
+                'LocationUrl'       => trim($_POST['LocationUrl'] ?? ''),
+            ]);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'addparkday') {
-			$recurrence = trim($_POST['Recurrence'] ?? '');
-			$time       = trim($_POST['Time']       ?? '');
-			if (!strlen($recurrence)) {
-				echo json_encode(['status' => 1, 'error' => 'Recurrence is required.']);
-				exit;
-			}
-			if (!strlen($time)) {
-				echo json_encode(['status' => 1, 'error' => 'Time is required.']);
-				exit;
-			}
-			$online = (($_POST['Online'] ?? '0') === '1') ? 1 : 0;
-			$altLoc = (!$online && (($_POST['AlternateLocation'] ?? '0') === '1')) ? 1 : 0;
-			$r = $this->Park->add_park_day([
-				'Token'             => $this->session->token,
-				'ParkId'            => $park_id,
-				'Recurrence'        => $recurrence,
-				'WeekDay'           => trim($_POST['WeekDay']     ?? ''),
-				'WeekOfMonth'       => (int)($_POST['WeekOfMonth'] ?? 0),
-				'MonthDay'          => (int)($_POST['MonthDay']    ?? 0),
-				'Time'              => $time,
-				'Purpose'           => trim($_POST['Purpose']     ?? 'other'),
-				'Description'       => trim($_POST['Description'] ?? ''),
-				'Online'            => $online,
-				'AlternateLocation' => $altLoc,
-				'Address'           => trim($_POST['Address']     ?? ''),
-				'City'              => trim($_POST['City']        ?? ''),
-				'Province'          => trim($_POST['Province']    ?? ''),
-				'PostalCode'        => trim($_POST['PostalCode']  ?? ''),
-				'MapUrl'            => trim($_POST['MapUrl']      ?? ''),
-				'LocationUrl'       => trim($_POST['LocationUrl'] ?? ''),
-			]);
-			echo (!isset($r['Status']) || $r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'editparkday') {
+            $parkDayId  = (int)($_POST['ParkDayId'] ?? 0);
+            $recurrence = trim($_POST['Recurrence'] ?? '');
+            $time       = trim($_POST['Time']       ?? '');
+            if (!valid_id($parkDayId)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid park day ID.']);
+                exit;
+            }
+            if (!strlen($recurrence)) {
+                echo json_encode(['status' => 1, 'error' => 'Recurrence is required.']);
+                exit;
+            }
+            if (!strlen($time)) {
+                echo json_encode(['status' => 1, 'error' => 'Time is required.']);
+                exit;
+            }
+            if ($recurrence === 'every-x-weeks' && !strlen(trim($_POST['StartDate'] ?? ''))) {
+                echo json_encode(['status' => 1, 'error' => 'A start date is required for the "every X weeks" cadence.']);
+                exit;
+            }
+            $online = (($_POST['Online'] ?? '0') === '1') ? 1 : 0;
+            $altLoc = (!$online && (($_POST['AlternateLocation'] ?? '0') === '1')) ? 1 : 0;
+            $r = $this->Park->edit_park_day([
+                'Token'             => $this->session->token,
+                'ParkDayId'         => $parkDayId,
+                'Recurrence'        => $recurrence,
+                'WeekDay'           => trim($_POST['WeekDay']     ?? ''),
+                'WeekOfMonth'       => (int)($_POST['WeekOfMonth'] ?? 0),
+                'MonthDay'          => (int)($_POST['MonthDay']    ?? 0),
+                'StartDate'         => trim($_POST['StartDate']   ?? ''),
+                'WeekInterval'      => (int)($_POST['WeekInterval'] ?? 0),
+                'Time'              => $time,
+                'Purpose'           => trim($_POST['Purpose']     ?? 'other'),
+                'Description'       => trim($_POST['Description'] ?? ''),
+                'Online'            => $online,
+                'AlternateLocation' => $altLoc,
+                'Address'           => trim($_POST['Address']     ?? ''),
+                'City'              => trim($_POST['City']        ?? ''),
+                'Province'          => trim($_POST['Province']    ?? ''),
+                'PostalCode'        => trim($_POST['PostalCode']  ?? ''),
+                'MapUrl'            => trim($_POST['MapUrl']      ?? ''),
+                'LocationUrl'       => trim($_POST['LocationUrl'] ?? ''),
+            ]);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'editparkday') {
-			$parkDayId  = (int)($_POST['ParkDayId'] ?? 0);
-			$recurrence = trim($_POST['Recurrence'] ?? '');
-			$time       = trim($_POST['Time']       ?? '');
-			if (!valid_id($parkDayId)) {
-				echo json_encode(['status' => 1, 'error' => 'Invalid park day ID.']);
-				exit;
-			}
-			if (!strlen($recurrence)) {
-				echo json_encode(['status' => 1, 'error' => 'Recurrence is required.']);
-				exit;
-			}
-			if (!strlen($time)) {
-				echo json_encode(['status' => 1, 'error' => 'Time is required.']);
-				exit;
-			}
-			$online = (($_POST['Online'] ?? '0') === '1') ? 1 : 0;
-			$altLoc = (!$online && (($_POST['AlternateLocation'] ?? '0') === '1')) ? 1 : 0;
-			$r = $this->Park->edit_park_day([
-				'Token'             => $this->session->token,
-				'ParkDayId'         => $parkDayId,
-				'Recurrence'        => $recurrence,
-				'WeekDay'           => trim($_POST['WeekDay']     ?? ''),
-				'WeekOfMonth'       => (int)($_POST['WeekOfMonth'] ?? 0),
-				'MonthDay'          => (int)($_POST['MonthDay']    ?? 0),
-				'Time'              => $time,
-				'Purpose'           => trim($_POST['Purpose']     ?? 'other'),
-				'Description'       => trim($_POST['Description'] ?? ''),
-				'Online'            => $online,
-				'AlternateLocation' => $altLoc,
-				'Address'           => trim($_POST['Address']     ?? ''),
-				'City'              => trim($_POST['City']        ?? ''),
-				'Province'          => trim($_POST['Province']    ?? ''),
-				'PostalCode'        => trim($_POST['PostalCode']  ?? ''),
-				'MapUrl'            => trim($_POST['MapUrl']      ?? ''),
-				'LocationUrl'       => trim($_POST['LocationUrl'] ?? ''),
-			]);
-			echo (!isset($r['Status']) || $r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'deleteparkday') {
+            $parkDayId = (int)($_POST['ParkDayId'] ?? 0);
+            if (!valid_id($parkDayId)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid park day ID.']);
+                exit;
+            }
+            $r = $this->Park->delete_park_day([
+                'Token'     => $this->session->token,
+                'ParkDayId' => $parkDayId,
+            ]);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'deleteparkday') {
-			$parkDayId = (int)($_POST['ParkDayId'] ?? 0);
-			if (!valid_id($parkDayId)) {
-				echo json_encode(['status' => 1, 'error' => 'Invalid park day ID.']);
-				exit;
-			}
-			$r = $this->Park->delete_park_day([
-				'Token'     => $this->session->token,
-				'ParkDayId' => $parkDayId,
-			]);
-			echo (!isset($r['Status']) || $r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'setdetails') {
+            $r = $this->Park->set_park_details([
+                'Token'       => $this->session->token,
+                'ParkId'      => $park_id,
+                'Url'         => trim($_POST['Url']         ?? ''),
+                'Address'     => trim($_POST['Address']     ?? ''),
+                'City'        => trim($_POST['City']        ?? ''),
+                'Province'    => trim($_POST['Province']    ?? ''),
+                'PostalCode'  => trim($_POST['PostalCode']  ?? ''),
+                'MapUrl'      => trim($_POST['MapUrl']      ?? ''),
+                'Description' => trim($_POST['Description'] ?? ''),
+                'Directions'  => trim($_POST['Directions']  ?? ''),
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'setdetails') {
-			$r = $this->Park->set_park_details([
-				'Token'       => $this->session->token,
-				'ParkId'      => $park_id,
-				'Url'         => trim($_POST['Url']         ?? ''),
-				'Address'     => trim($_POST['Address']     ?? ''),
-				'City'        => trim($_POST['City']        ?? ''),
-				'Province'    => trim($_POST['Province']    ?? ''),
-				'PostalCode'  => trim($_POST['PostalCode']  ?? ''),
-				'MapUrl'      => trim($_POST['MapUrl']      ?? ''),
-				'Description' => trim($_POST['Description'] ?? ''),
-				'Directions'  => trim($_POST['Directions']  ?? ''),
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'playersearch') {
+            $q                = trim($_GET['q']               ?? '');
+            $scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude' | 'all'
+            $prioritize       = !empty($_GET['prioritize']);
+            $include_inactive  = !empty($_GET['include_inactive']);
+            $include_suspended = !empty($_GET['include_suspended']);
+            if (strlen($q) < 2) {
+                echo json_encode([]);
+                exit;
+            }
 
-		} elseif ($action === 'playersearch') {
-			$q                = trim($_GET['q']               ?? '');
-			$scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude' | 'all'
-			$prioritize       = !empty($_GET['prioritize']);
-			$include_inactive  = !empty($_GET['include_inactive']);
-			$include_suspended = !empty($_GET['include_suspended']);
-			if (strlen($q) < 2) {
-				echo json_encode([]);
-				exit;
-			}
+            global $DB;
+            $pid  = (int)$park_id;
 
-			global $DB;
-			$pid  = (int)$park_id;
+            // Parse optional "KD:PK search term" abbreviation prefix
+            $filterKid = 0;
+            $filterPid = 0;
+            $searchQ   = $q;
+            if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\*)?\s+(.+)$/i', $q, $m)) {
+                $kAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[1]);
+                $rs = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
+                if ($rs && $rs->Next()) {
+                    $filterKid = (int)$rs->kingdom_id;
+                }
+                if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
+                    $pAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[2]);
+                    $rs = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
+                    if ($rs && $rs->Next()) {
+                        $filterPid = (int)$rs->park_id;
+                    }
+                }
+                $searchQ = trim($m[3]);
+            }
+            $term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $searchQ);
 
-			// Parse optional "KD:PK search term" abbreviation prefix
-			$filterKid = 0;
-			$filterPid = 0;
-			$searchQ   = $q;
-			if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\*)?\s+(.+)$/i', $q, $m)) {
-				$kAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[1]);
-				$rs = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
-				if ($rs && $rs->Next()) $filterKid = (int)$rs->kingdom_id;
-				if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
-					$pAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[2]);
-					$rs = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
-					if ($rs && $rs->Next()) $filterPid = (int)$rs->park_id;
-				}
-				$searchQ = trim($m[3]);
-			}
-			$term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $searchQ);
+            if ($scope === 'own') {
+                $park_clause = "AND m.park_id = {$pid}";
+            } elseif ($scope === 'exclude') {
+                $park_clause = "AND m.park_id != {$pid}";
+            } else {
+                $park_clause = '';
+            }
 
-			if ($scope === 'own') {
-				$park_clause = "AND m.park_id = {$pid}";
-			} elseif ($scope === 'exclude') {
-				$park_clause = "AND m.park_id != {$pid}";
-			} else {
-				$park_clause = '';
-			}
+            $order_clause = $prioritize
+                ? "CASE WHEN m.park_id = {$pid} THEN 0 WHEN m.kingdom_id = (SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$pid} LIMIT 1) THEN 1 ELSE 2 END,"
+                : "";
 
-			$order_clause = $prioritize
-				? "CASE WHEN m.park_id = {$pid} THEN 0 WHEN m.kingdom_id = (SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$pid} LIMIT 1) THEN 1 ELSE 2 END,"
-				: "";
+            // Abbreviation prefix overrides scope filter when specific kingdom/park matched
+            if ($filterPid > 0) {
+                $park_clause = "AND m.park_id = {$filterPid}";
+            } elseif ($filterKid > 0) {
+                $park_clause = "AND m.kingdom_id = {$filterKid}";
+            }
 
-			// Abbreviation prefix overrides scope filter when specific kingdom/park matched
-			if ($filterPid > 0) {
-				$park_clause = "AND m.park_id = {$filterPid}";
-			} elseif ($filterKid > 0) {
-				$park_clause = "AND m.kingdom_id = {$filterKid}";
-			}
-
-			$sql = "
+            $sql = "
 				SELECT m.mundane_id, m.persona, m.park_id AS m_park_id, m.kingdom_id AS m_kingdom_id,
 				       k.name AS kingdom_name, p.name AS park_name,
 				       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
@@ -221,7 +239,7 @@ class Controller_ParkAjax extends Controller {
 				LEFT JOIN ork_park p ON p.park_id = m.park_id
 				WHERE LENGTH(m.persona) > 0
 				  " . ($include_suspended ? "" : "AND m.suspended = 0") . "
-				  " . ($include_inactive  ? "" : "AND m.active = 1")    . "
+				  " . ($include_inactive ? "" : "AND m.active = 1")    . "
 				  {$park_clause}
 				  AND (m.persona LIKE '%{$term}%'
 				    OR m.given_name LIKE '%{$term}%'
@@ -229,342 +247,573 @@ class Controller_ParkAjax extends Controller {
 				    OR m.username LIKE '%{$term}%')
 				ORDER BY m.suspended ASC, m.active DESC, {$order_clause} m.persona
 				LIMIT 15";
-			$DB->Clear();
-			$rs      = $DB->DataSet($sql);
-			$results = [];
-			while ($rs->Next()) {
-				$results[] = [
-					'MundaneId'   => (int)$rs->mundane_id,
-					'Persona'     => $rs->persona,
-					'KingdomId'   => (int)$rs->m_kingdom_id,
-					'ParkId'      => (int)$rs->m_park_id,
-					'KingdomName' => $rs->kingdom_name,
-					'ParkName'    => $rs->park_name,
-					'KAbbr'       => $rs->k_abbr,
-					'PAbbr'       => $rs->p_abbr,
-					'Suspended'   => (int)$rs->suspended,
-					'Active'      => (int)$rs->active,
-				];
-			}
+            $DB->Clear();
+            $rs      = $DB->DataSet($sql);
+            $results = [];
+            while ($rs->Next()) {
+                $results[] = [
+                    'MundaneId'   => (int)$rs->mundane_id,
+                    'Persona'     => $rs->persona,
+                    'KingdomId'   => (int)$rs->m_kingdom_id,
+                    'ParkId'      => (int)$rs->m_park_id,
+                    'KingdomName' => $rs->kingdom_name,
+                    'ParkName'    => $rs->park_name,
+                    'KAbbr'       => $rs->k_abbr,
+                    'PAbbr'       => $rs->p_abbr,
+                    'Suspended'   => (int)$rs->suspended,
+                    'Active'      => (int)$rs->active,
+                ];
+            }
 
-			echo json_encode($results);
+            echo json_encode($results);
 
-		} elseif ($action === 'setheraldry') {
-			if (empty($_FILES['Heraldry']['tmp_name']) || !is_uploaded_file($_FILES['Heraldry']['tmp_name'])) {
-				echo json_encode(['status' => 1, 'error' => 'No image file received.']); exit;
-			}
-			$allowed = ['image/png', 'image/jpeg', 'image/gif'];
-			if (!in_array($_FILES['Heraldry']['type'], $allowed)) {
-				echo json_encode(['status' => 1, 'error' => 'Invalid image type. Use PNG, JPG, or GIF.']); exit;
-			}
-			$heraldryData = base64_encode(file_get_contents($_FILES['Heraldry']['tmp_name']));
-			$r = $this->Park->SetParkDetails([
-				'Token'            => $this->session->token,
-				'ParkId'           => $park_id,
-				'Heraldry'         => $heraldryData,
-				'HeraldryMimeType' => $_FILES['Heraldry']['type'],
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'setheraldry') {
+            if (empty($_FILES['Heraldry']['tmp_name']) || !is_uploaded_file($_FILES['Heraldry']['tmp_name'])) {
+                echo json_encode(['status' => 1, 'error' => 'No image file received.']);
+                exit;
+            }
+            $allowed = ['image/png', 'image/jpeg', 'image/gif'];
+            if (!in_array($_FILES['Heraldry']['type'], $allowed)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid image type. Use PNG, JPG, or GIF.']);
+                exit;
+            }
+            $heraldryData = base64_encode(file_get_contents($_FILES['Heraldry']['tmp_name']));
+            $r = $this->Park->SetParkDetails([
+                'Token'            => $this->session->token,
+                'ParkId'           => $park_id,
+                'Heraldry'         => $heraldryData,
+                'HeraldryMimeType' => $_FILES['Heraldry']['type'],
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'removeheraldry') {
-			$r = $this->Park->RemoveParkHeraldry([
-				'Token'  => $this->session->token,
-				'ParkId' => $park_id,
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'removeheraldry') {
+            $r = $this->Park->RemoveParkHeraldry([
+                'Token'  => $this->session->token,
+                'ParkId' => $park_id,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'resetwaivers') {
-			$this->load_model('Player');
-			$r = $this->Player->reset_waivers([
-				'Token'  => $this->session->token,
-				'ParkId' => $park_id,
-			]);
-			if ($r['Status'] == 5) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
-			} elseif ($r['Status'] != 0) {
-				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
-			} else {
-				echo json_encode(['status' => 0, 'message' => $r['Detail'] ?? 'Waivers reset.']);
-			}
+        } elseif ($action === 'resetwaivers') {
+            $this->load_model('Player');
+            $r = $this->Player->reset_waivers([
+                'Token'  => $this->session->token,
+                'ParkId' => $park_id,
+            ]);
+            if ($r['Status'] == 5) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+            } elseif ($r['Status'] != 0) {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            } else {
+                echo json_encode(['status' => 0, 'message' => $r['Detail'] ?? 'Waivers reset.']);
+            }
 
-		} elseif ($action === 'moveplayer') {
-			$this->load_model('Player');
-			$mundane_id   = (int)($_POST['MundaneId']  ?? 0);
-			$dest_park_id = (int)($_POST['DestParkId'] ?? 0);
-			if (!valid_id($mundane_id))   { echo json_encode(['status' => 1, 'error' => 'Select a player.']); exit; }
-			if (!valid_id($dest_park_id)) { echo json_encode(['status' => 1, 'error' => 'Select a destination park.']); exit; }
-			$r = $this->Player->move_player(['Token' => $this->session->token, 'MundaneId' => $mundane_id, 'ParkId' => $dest_park_id]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'moveplayer') {
+            $this->load_model('Player');
+            $mundane_id   = (int)($_POST['MundaneId']  ?? 0);
+            $dest_park_id = (int)($_POST['DestParkId'] ?? 0);
+            if (!valid_id($mundane_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Select a player.']);
+                exit;
+            }
+            if (!valid_id($dest_park_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Select a destination park.']);
+                exit;
+            }
+            $r = $this->Player->move_player(['Token' => $this->session->token, 'MundaneId' => $mundane_id, 'ParkId' => $dest_park_id]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'addrecommendation') {
-			if (!isset($this->session->user_id)) { echo json_encode(['status' => 1, 'error' => 'You must be logged in to submit a recommendation.']); exit; }
-			$this->load_model('Player');
-			$mundane_id   = (int)($_POST['MundaneId']       ?? 0);
-			$award_id     = (int)($_POST['KingdomAwardId']  ?? 0);
-			$rank         = (int)($_POST['Rank']            ?? 0);
-			$reason       = trim($_POST['Reason']           ?? '');
-			if (!valid_id($mundane_id)) { echo json_encode(['status' => 1, 'error' => 'Please select a player.']); exit; }
-			if (!valid_id($award_id))   { echo json_encode(['status' => 1, 'error' => 'Please select an award.']); exit; }
-			if (!$reason)               { echo json_encode(['status' => 1, 'error' => 'Please enter a reason.']); exit; }
-			$r = $this->Player->add_player_recommendation([
-				'Token'          => $this->session->token,
-				'MundaneId'      => $mundane_id,
-				'KingdomAwardId' => $award_id,
-				'Rank'           => $rank > 0 ? $rank : null,
-				'GivenById'      => $this->session->user_id,
-				'Reason'         => $reason,
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'addrecommendation') {
+            if (!isset($this->session->user_id)) {
+                echo json_encode(['status' => 1, 'error' => 'You must be logged in to submit a recommendation.']);
+                exit;
+            }
+            $this->load_model('Player');
+            $mundane_id   = (int)($_POST['MundaneId']       ?? 0);
+            $award_id     = (int)($_POST['KingdomAwardId']  ?? 0);
+            $rank         = (int)($_POST['Rank']            ?? 0);
+            $reason       = trim($_POST['Reason']           ?? '');
+            if (!valid_id($mundane_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Please select a player.']);
+                exit;
+            }
+            if (!valid_id($award_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Please select an award.']);
+                exit;
+            }
+            if (!$reason) {
+                echo json_encode(['status' => 1, 'error' => 'Please enter a reason.']);
+                exit;
+            }
+            $r = $this->Player->add_player_recommendation([
+                'Token'          => $this->session->token,
+                'MundaneId'      => $mundane_id,
+                'KingdomAwardId' => $award_id,
+                'Rank'           => $rank > 0 ? $rank : null,
+                'GivenById'      => $this->session->user_id,
+                'Reason'         => $reason,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'dismissrecommendation') {
-			$this->load_model('Player');
-			$rec_id = (int)($_POST['RecommendationsId'] ?? 0);
-			if (!valid_id($rec_id)) { echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']); exit; }
-			$r = $this->Player->delete_player_recommendation([
-				'Token'             => $this->session->token,
-				'RecommendationsId' => $rec_id,
-				'RequestedBy'       => $this->session->user_id,
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'dismissrecommendation') {
+            $this->load_model('Player');
+            $rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+            if (!valid_id($rec_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']);
+                exit;
+            }
+            $r = $this->Player->delete_player_recommendation([
+                'Token'             => $this->session->token,
+                'RecommendationsId' => $rec_id,
+                'RequestedBy'       => $this->session->user_id,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'deletedrecommendations') {
-			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
-			}
-			$this->load_model('Reports');
-			$recs = $this->Reports->deleted_recommended_awards(['ParkId' => $park_id, 'KingdomId' => 0, 'PlayerId' => 0]);
-			echo json_encode(['status' => 0, 'recommendations' => is_array($recs) ? array_values($recs) : []]);
+        } elseif ($action === 'deletedrecommendations') {
+            $uid = (int)$this->session->user_id;
+            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $this->load_model('Reports');
+            $recs = $this->Reports->deleted_recommended_awards(['ParkId' => $park_id, 'KingdomId' => 0, 'PlayerId' => 0]);
+            echo json_encode(['status' => 0, 'recommendations' => is_array($recs) ? array_values($recs) : []]);
 
-		} elseif ($action === 'restorerecommendation') {
-			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
-			}
-			$this->load_model('Player');
-			$rec_id = (int)($_POST['RecommendationsId'] ?? 0);
-			if (!valid_id($rec_id)) { echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']); exit; }
-			$r = $this->Player->restore_player_recommendation([
-				'Token'             => $this->session->token,
-				'RecommendationsId' => $rec_id,
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'restorerecommendation') {
+            $uid = (int)$this->session->user_id;
+            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $this->load_model('Player');
+            $rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+            if (!valid_id($rec_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']);
+                exit;
+            }
+            $r = $this->Player->restore_player_recommendation([
+                'Token'             => $this->session->token,
+                'RecommendationsId' => $rec_id,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'addauth') {
-			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
-			}
-			$mid  = (int)($_POST['MundaneId'] ?? 0);
-			// Scoped grants only accept create / edit. The legacy 'admin' role at
-			// park scope is no longer granted from the UI — system-wide admin is
-			// managed on its own page and only ever issued unscoped.
-			$role = in_array($_POST['Role'] ?? '', ['create','edit']) ? $_POST['Role'] : 'create';
-			if (!$mid) { echo json_encode(['status' => 1, 'error' => 'Invalid player.']); exit; }
-			global $DB;
-			$DB->Clear();
-			$DB->Execute("INSERT INTO ork_authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
+        } elseif ($action === 'addauth') {
+            $uid = (int)$this->session->user_id;
+            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $mid  = (int)($_POST['MundaneId'] ?? 0);
+            // Scoped grants only accept create / edit. The legacy 'admin' role at
+            // park scope is no longer granted from the UI — system-wide admin is
+            // managed on its own page and only ever issued unscoped.
+            $role = in_array($_POST['Role'] ?? '', ['create','edit']) ? $_POST['Role'] : 'create';
+            if (!$mid) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid player.']);
+                exit;
+            }
+            global $DB;
+            $DB->Clear();
+            $DB->Execute("INSERT INTO ork_authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
 				VALUES ({$mid}, {$park_id}, 0, 0, 0, '{$role}', NOW())");
-			$DB->Clear();
-			$rs = $DB->DataSet("SELECT a.authorization_id, m.persona FROM ork_authorization a
+            $DB->Clear();
+            $rs = $DB->DataSet("SELECT a.authorization_id, m.persona FROM ork_authorization a
 				LEFT JOIN ork_mundane m ON m.mundane_id = a.mundane_id
 				WHERE a.mundane_id = {$mid} AND a.park_id = {$park_id}
 				ORDER BY a.authorization_id DESC LIMIT 1");
-			$authId = 0; $persona = '';
-			if ($rs && $rs->Next()) { $authId = (int)$rs->authorization_id; $persona = $rs->persona; }
-			Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_PARK, 'Id' => $park_id, 'Role' => $role], 'Player', $mid, null, [
-				'authorization_id' => $authId,
-				'mundane_id'       => $mid,
-				'park_id'          => (int)$park_id,
-				'kingdom_id'       => 0,
-				'event_id'         => 0,
-				'unit_id'          => 0,
-				'role'             => $role,
-			]);
-			echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
+            $authId = 0;
+            $persona = '';
+            if ($rs && $rs->Next()) {
+                $authId = (int)$rs->authorization_id;
+                $persona = $rs->persona;
+            }
+            Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_PARK, 'Id' => $park_id, 'Role' => $role], 'Player', $mid, null, [
+                'authorization_id' => $authId,
+                'mundane_id'       => $mid,
+                'park_id'          => (int)$park_id,
+                'kingdom_id'       => 0,
+                'event_id'         => 0,
+                'unit_id'          => 0,
+                'role'             => $role,
+            ]);
+            echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
 
-		} elseif ($action === 'removeauth') {
-			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized.']); exit;
-			}
-			$this->load_model('Authorization');
-			$r = $this->Authorization->del_auth([
-				'Token'           => $this->session->token,
-				'AuthorizationId' => (int)($_POST['AuthorizationId'] ?? 0),
-			]);
-			echo ($r['Status'] == 0)
-				? json_encode(['status' => 0])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        } elseif ($action === 'removeauth') {
+            $uid = (int)$this->session->user_id;
+            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $this->load_model('Authorization');
+            $r = $this->Authorization->del_auth([
+                'Token'           => $this->session->token,
+                'AuthorizationId' => (int)($_POST['AuthorizationId'] ?? 0),
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} elseif ($action === 'createtournament') {
-			$this->load_model('Tournament');
-			$name       = trim($_POST['Name']        ?? '');
-			$when       = trim($_POST['When']        ?? '');
-			$desc       = trim($_POST['Description'] ?? '');
-			$url        = trim($_POST['Url']         ?? '');
-			$kingdom_id = (int)($_POST['KingdomId']  ?? 0);
-			$ecd_id     = (int)($_POST['EventCalendarDetailId'] ?? 0);
+        } elseif ($action === 'createtournament') {
+            $this->load_model('Tournament');
+            $name       = trim($_POST['Name']        ?? '');
+            $when       = trim($_POST['When']        ?? '');
+            $desc       = trim($_POST['Description'] ?? '');
+            $url        = trim($_POST['Url']         ?? '');
+            $kingdom_id = (int)($_POST['KingdomId']  ?? 0);
+            $ecd_id     = (int)($_POST['EventCalendarDetailId'] ?? 0);
 
-			if (!strlen($name)) {
-				echo json_encode(['status' => 1, 'error' => 'Tournament name is required.']); exit;
-			}
-			if (!strlen($when)) {
-				echo json_encode(['status' => 1, 'error' => 'Tournament date is required.']); exit;
-			}
+            if (!strlen($name)) {
+                echo json_encode(['status' => 1, 'error' => 'Tournament name is required.']);
+                exit;
+            }
+            if (!strlen($when)) {
+                echo json_encode(['status' => 1, 'error' => 'Tournament date is required.']);
+                exit;
+            }
 
-			$r = $this->Tournament->create_tournament([
-				'Token'                 => $this->session->token,
-				'Name'                  => $name,
-				'Description'           => $desc,
-				'Url'                   => $url,
-				'When'                  => $when,
-				'KingdomId'             => $kingdom_id,
-				'ParkId'                => $park_id,
-				'EventCalendarDetailId' => $ecd_id,
-			]);
-			echo (!isset($r['Status']) || $r['Status'] == 0)
-				? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
-				: json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            $r = $this->Tournament->create_tournament([
+                'Token'                 => $this->session->token,
+                'Name'                  => $name,
+                'Description'           => $desc,
+                'Url'                   => $url,
+                'When'                  => $when,
+                'KingdomId'             => $kingdom_id,
+                'ParkId'                => $park_id,
+                'EventCalendarDetailId' => $ecd_id,
+            ]);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
-		} else {
-			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
-		}
-		exit;
-	}
+        } elseif ($action === 'selfreg_link') {
+            $this->load_model('Player');
+            $r = $this->Player->create_selfreg_link([
+                'Token'  => $this->session->token,
+                'ParkId' => $park_id,
+            ]);
+            if ($r['Status'] == 0) {
+                $detail = $r['Detail'];
+                echo json_encode([
+                    'status'            => 0,
+                    'token'             => $detail['token'],
+                    'expires_at'        => $detail['expires_at'],
+                    'seconds_remaining' => $detail['seconds_remaining'],
+                ]);
+            } else {
+                echo json_encode([
+                    'status' => $r['Status'],
+                    'error'  => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''),
+                ]);
+            }
 
-	public function kingdom($p = null) {
-		header('Content-Type: application/json');
-		$parts      = explode('/', $p ?? '');
-		$kingdom_id = (int)preg_replace('/[^0-9]/', '', $parts[0] ?? '');
-		$action     = $parts[1] ?? '';
+        } else {
+            echo json_encode(['status' => 1, 'error' => 'Unknown action']);
+        }
+        exit;
+    }
 
-		if (!isset($this->session->user_id)) {
-			echo json_encode(['status' => 5, 'error' => 'Not logged in']);
-			exit;
-		}
+    public function kingdom($p = null)
+    {
+        header('Content-Type: application/json');
+        $parts      = explode('/', $p ?? '');
+        $kingdom_id = (int)preg_replace('/[^0-9]/', '', $parts[0] ?? '');
+        $action     = $parts[1] ?? '';
 
-		if (!valid_id($kingdom_id)) {
-			echo json_encode(['status' => 1, 'error' => 'Invalid kingdom ID']);
-			exit;
-		}
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
 
-		if ($action === 'create') {
-			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized to create parks in this kingdom.']); exit;
-			}
-			$this->load_model('Park');
-			$name    = trim($_POST['Name'] ?? '');
-			$abbr    = preg_replace('/[^A-Za-z0-9]/', '', trim($_POST['Abbreviation'] ?? ''));
-			$titleId = (int)($_POST['ParkTitleId'] ?? 0);
+        if (!valid_id($kingdom_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid kingdom ID']);
+            exit;
+        }
 
-			if (!strlen($name)) {
-				echo json_encode(['status' => 1, 'error' => 'Park must have a name.']);
-				exit;
-			}
-			if (!strlen($abbr)) {
-				echo json_encode(['status' => 1, 'error' => 'Park must have an abbreviation.']);
-				exit;
-			}
-			if (!valid_id($titleId)) {
-				echo json_encode(['status' => 1, 'error' => 'Parks must have a title.']);
-				exit;
-			}
+        if ($action === 'create') {
+            $uid = (int)$this->session->user_id;
+            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized to create parks in this kingdom.']);
+                exit;
+            }
+            $this->load_model('Park');
+            $name    = trim($_POST['Name'] ?? '');
+            $abbr    = preg_replace('/[^A-Za-z0-9]/', '', trim($_POST['Abbreviation'] ?? ''));
+            $titleId = (int)($_POST['ParkTitleId'] ?? 0);
 
-			$r = $this->Park->create_park([
-				'Token'        => $this->session->token,
-				'Name'         => $name,
-				'Abbreviation' => $abbr,
-				'KingdomId'    => $kingdom_id,
-				'ParkTitleId'  => $titleId,
-			]);
+            if (!strlen($name)) {
+                echo json_encode(['status' => 1, 'error' => 'Park must have a name.']);
+                exit;
+            }
+            if (!strlen($abbr)) {
+                echo json_encode(['status' => 1, 'error' => 'Park must have an abbreviation.']);
+                exit;
+            }
+            if (!valid_id($titleId)) {
+                echo json_encode(['status' => 1, 'error' => 'Parks must have a title.']);
+                exit;
+            }
 
-			if ($r['Status'] == 0) {
-				$bustKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kingdom_id]);
-				Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkAverages',        $bustKey);
-				Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkMonthlyAverages', $bustKey);
-				echo json_encode(['status' => 0, 'parkId' => (int)($r['Detail'] ?? 0)]);
-			} else {
-				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
-			}
-		} elseif ($action === 'editpark') {
-			$uid = (int)$this->session->user_id;
-			if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
-				echo json_encode(['status' => 5, 'error' => 'Not authorized to edit parks in this kingdom.']); exit;
-			}
-			$this->load_model('Park');
-			$park_id = (int)($_POST['ParkId'] ?? 0);
-			$name    = trim($_POST['Name'] ?? '');
-			$abbr    = preg_replace('/[^A-Za-z0-9]/', '', trim($_POST['Abbreviation'] ?? ''));
-			$titleId = (int)($_POST['ParkTitleId'] ?? 0);
-			$active  = ($_POST['Active'] ?? '') === 'Active' ? 'Active' : 'Retired';
+            $r = $this->Park->create_park([
+                'Token'        => $this->session->token,
+                'Name'         => $name,
+                'Abbreviation' => $abbr,
+                'KingdomId'    => $kingdom_id,
+                'ParkTitleId'  => $titleId,
+            ]);
 
-			if (!valid_id($park_id)) {
-				echo json_encode(['status' => 1, 'error' => 'Invalid park ID.']);
-				exit;
-			}
-			// Verify the park belongs to this kingdom
-			global $DB;
-			$DB->Clear();
-			$pkCheck = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} AND kingdom_id = {$kingdom_id} LIMIT 1");
-			if (!$pkCheck || !$pkCheck->Next()) {
-				echo json_encode(['status' => 1, 'error' => 'Park does not belong to this kingdom.']); exit;
-			}
-			if (!strlen($name)) {
-				echo json_encode(['status' => 1, 'error' => 'Park must have a name.']);
-				exit;
-			}
-			if (!strlen($abbr)) {
-				echo json_encode(['status' => 1, 'error' => 'Park must have an abbreviation.']);
-				exit;
-			}
-			if (!valid_id($titleId)) {
-				echo json_encode(['status' => 1, 'error' => 'Parks must have a title.']);
-				exit;
-			}
+            if ($r['Status'] == 0) {
+                $bustKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kingdom_id]);
+                Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkAverages', $bustKey);
+                Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkMonthlyAverages', $bustKey);
+                echo json_encode(['status' => 0, 'parkId' => (int)($r['Detail'] ?? 0)]);
+            } else {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            }
+        } elseif ($action === 'editpark') {
+            $uid = (int)$this->session->user_id;
+            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized to edit parks in this kingdom.']);
+                exit;
+            }
+            $this->load_model('Park');
+            $park_id = (int)($_POST['ParkId'] ?? 0);
+            $name    = trim($_POST['Name'] ?? '');
+            $abbr    = preg_replace('/[^A-Za-z0-9]/', '', trim($_POST['Abbreviation'] ?? ''));
+            $titleId = (int)($_POST['ParkTitleId'] ?? 0);
+            $active  = ($_POST['Active'] ?? '') === 'Active' ? 'Active' : 'Retired';
 
-			$r = $this->Park->set_park_details([
-				'Token'        => $this->session->token,
-				'ParkId'       => $park_id,
-				'Name'         => $name,
-				'Abbreviation' => $abbr,
-				'ParkTitleId'  => $titleId,
-				'Active'       => $active,
-			]);
+            if (!valid_id($park_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid park ID.']);
+                exit;
+            }
+            // Verify the park belongs to this kingdom
+            global $DB;
+            $DB->Clear();
+            $pkCheck = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} AND kingdom_id = {$kingdom_id} LIMIT 1");
+            if (!$pkCheck || !$pkCheck->Next()) {
+                echo json_encode(['status' => 1, 'error' => 'Park does not belong to this kingdom.']);
+                exit;
+            }
+            if (!strlen($name)) {
+                echo json_encode(['status' => 1, 'error' => 'Park must have a name.']);
+                exit;
+            }
+            if (!strlen($abbr)) {
+                echo json_encode(['status' => 1, 'error' => 'Park must have an abbreviation.']);
+                exit;
+            }
+            if (!valid_id($titleId)) {
+                echo json_encode(['status' => 1, 'error' => 'Parks must have a title.']);
+                exit;
+            }
 
-			if ($r['Status'] == 0) {
-				echo json_encode(['status' => 0]);
-			} else {
-				echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
-			}
-		} elseif ($action === 'checkabbr') {
-			$abbr        = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
-			$excludeId   = (int)($_POST['ExcludeParkId'] ?? 0);
-			if (!strlen($abbr)) { echo json_encode(['status' => 0, 'taken' => false]); exit; }
-			global $DB;
-			$DB->Clear();
-			$excludeClause = $excludeId > 0 ? " AND park_id != {$excludeId}" : '';
-			$rs = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$abbr}' AND kingdom_id = {$kingdom_id}{$excludeClause} LIMIT 1");
-			echo ($rs && $rs->Next())
-				? json_encode(['status' => 0, 'taken' => true])
-				: json_encode(['status' => 0, 'taken' => false]);
+            $r = $this->Park->set_park_details([
+                'Token'        => $this->session->token,
+                'ParkId'       => $park_id,
+                'Name'         => $name,
+                'Abbreviation' => $abbr,
+                'ParkTitleId'  => $titleId,
+                'Active'       => $active,
+            ]);
 
-		} else {
-			echo json_encode(['status' => 1, 'error' => 'Unknown action']);
-		}
-		exit;
-	}
+            if ($r['Status'] == 0) {
+                echo json_encode(['status' => 0]);
+            } else {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            }
+        } elseif ($action === 'checkabbr') {
+            $abbr        = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
+            $excludeId   = (int)($_POST['ExcludeParkId'] ?? 0);
+            if (!strlen($abbr)) {
+                echo json_encode(['status' => 0, 'taken' => false]);
+                exit;
+            }
+            global $DB;
+            $DB->Clear();
+            $excludeClause = $excludeId > 0 ? " AND park_id != {$excludeId}" : '';
+            $rs = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$abbr}' AND kingdom_id = {$kingdom_id}{$excludeClause} LIMIT 1");
+            echo ($rs && $rs->Next())
+                ? json_encode(['status' => 0, 'taken' => true])
+                : json_encode(['status' => 0, 'taken' => false]);
+
+        } else {
+            echo json_encode(['status' => 1, 'error' => 'Unknown action']);
+        }
+        exit;
+    }
+
+
+    public function banner($p = null)
+    {
+        header('Content-Type: application/json');
+
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+
+        $params  = explode('/', $p ?? '');
+        $park_id = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $action  = $params[1] ?? '';
+
+        if (!valid_id($park_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid Park ID.']);
+            exit;
+        }
+
+        $uid = (int)$this->session->user_id;
+        $canEdit = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_EDIT);
+        if (!$canEdit) {
+            echo json_encode(['status' => 5, 'error' => 'Not authorized to edit this park.']);
+            exit;
+        }
+
+        global $DB;
+
+        // I2 fix: refuse banner uploads / config changes on retired parks.
+        // The canonical "is active" check elsewhere compares park.active to 'Active'
+        // (see system/lib/ork3/class.Park.php). Block update + config; remove is allowed
+        // so admins can still clear stale banners after retirement.
+        if ($action === 'update' || $action === 'config') {
+            $DB->Clear();
+            $activeRow = $DB->DataSet('SELECT active FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
+            if ($activeRow && $activeRow->Next() && trim((string)$activeRow->active) !== 'Active') {
+                echo json_encode(['status' => 1, 'error' => 'This park is retired. Restore the park before changing its banner.']);
+                exit;
+            }
+        }
+
+        if ($action === 'remove') {
+            $DB->Clear();
+            // Reset display toggles AND framing offsets to defaults so a future
+            // upload starts fresh instead of inheriting the removed banner's config.
+            $DB->Execute('UPDATE ' . DB_PREFIX . 'park SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1, banner_offset_x = 50, banner_offset_y = 50 WHERE park_id = ' . $park_id);
+            // I4 fix: verify the UPDATE landed before deleting the file.
+            // If the DB update silently failed and we delete the file, the
+            // banner column stays 1 but the file is gone -> broken banner.
+            $DB->Clear();
+            $removeCheck = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
+            if (!$removeCheck || !$removeCheck->Next() || (int)$removeCheck->has_banner !== 0) {
+                echo json_encode(['status' => 1, 'error' => 'Could not clear banner flag in database. Please try again.']);
+                exit;
+            }
+            $base = DIR_PARK_BANNER . sprintf('%05d', $park_id);
+            if (file_exists($base . '.jpg')) {
+                unlink($base . '.jpg');
+            }
+            if (file_exists($base . '.png')) {
+                unlink($base . '.png');
+            }
+            echo json_encode(['status' => 0]);
+            exit;
+        }
+
+        if ($action === 'config') {
+            // Refuse silent no-ops: config only meaningful with a banner present.
+            $DB->Clear();
+            $row = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
+            if (!$row || !$row->Next() || (int)$row->has_banner !== 1) {
+                echo json_encode(['status' => 1, 'error' => 'Upload a banner first before saving settings.']);
+                exit;
+            }
+            $showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
+            $vignette = !empty($_POST['Vignette']) ? 1 : 0;
+            $offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
+            $offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
+            $DB->Clear();
+            $DB->Execute('UPDATE ' . DB_PREFIX . 'park SET banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE park_id = ' . $park_id);
+            // F1 fix: verify-after-write — mirror update/remove branches. YapoMysql
+            // can swallow failures silently; re-read one column to confirm the write.
+            $DB->Clear();
+            $cfgVerify = $DB->DataSet('SELECT banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
+            if (!$cfgVerify || !$cfgVerify->Next()
+                || (int)$cfgVerify->banner_show_logo !== $showLogo
+                || (int)$cfgVerify->banner_vignette  !== $vignette
+                || (int)$cfgVerify->banner_offset_x  !== $offX
+                || (int)$cfgVerify->banner_offset_y  !== $offY) {
+                echo json_encode(['status' => 1, 'error' => 'Could not save banner settings. Please try again.']);
+                exit;
+            }
+            echo json_encode(['status' => 0]);
+            exit;
+        }
+
+        if ($action === 'update') {
+            if (empty($_FILES['Banner']['tmp_name'])) {
+                echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
+                exit;
+            }
+            // I2 fix: validate the upload came via a real HTTP file upload (prevents spoofing).
+            if (!is_uploaded_file($_FILES['Banner']['tmp_name'])) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid upload.']);
+                exit;
+            }
+            // I5 fix: server-side file size check (JS resize can be bypassed via curl).
+            if (($_FILES['Banner']['size'] ?? 0) > 1024 * 1024) {
+                echo json_encode(['status' => 1, 'error' => 'File too large (max 1 MB).']);
+                exit;
+            }
+            $tmp  = $_FILES['Banner']['tmp_name'];
+            // I3 fix: use exif_imagetype() (magic-byte check) instead of the
+            // browser-supplied MIME type, which is trivially spoofable.
+            $detectedType = exif_imagetype($tmp);
+            if ($detectedType !== IMAGETYPE_JPEG && $detectedType !== IMAGETYPE_PNG) {
+                echo json_encode(['status' => 1, 'error' => 'Only JPEG and PNG images are supported.']);
+                exit;
+            }
+            $mime = ($detectedType === IMAGETYPE_PNG) ? 'image/png' : 'image/jpeg';
+            if (!is_dir(DIR_PARK_BANNER)) {
+                @mkdir(DIR_PARK_BANNER, 0775, true);
+            }
+            $ext  = ($mime === 'image/png') ? 'png' : 'jpg';
+            $base = DIR_PARK_BANNER . sprintf('%05d', $park_id);
+            // Delete any previous banner files (both extensions) before saving the
+            // new one so we never leave the old image behind when the user switches
+            // formats. resolve_image_ext picks whichever file survives.
+            if (file_exists($base . '.jpg')) {
+                @unlink($base . '.jpg');
+            }
+            if (file_exists($base . '.png')) {
+                @unlink($base . '.png');
+            }
+            if (!@move_uploaded_file($tmp, $base . '.' . $ext)) {
+                echo json_encode(['status' => 1, 'error' => 'Could not save uploaded file.']);
+                exit;
+            }
+            $showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
+            $vignette = !empty($_POST['Vignette']) ? 1 : 0;
+            $offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
+            $offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
+            $DB->Clear();
+            $DB->Execute('UPDATE ' . DB_PREFIX . 'park SET has_banner = 1, banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE park_id = ' . $park_id);
+            // $DB->Execute() is void; the YapoMysql layer can silently swallow
+            // failures (sql_mode=STRICT etc). Verify the update landed by
+            // re-reading has_banner. If it didn't, roll back the file so we
+            // don't leave an orphan whose flag is still 0.
+            $DB->Clear();
+            $verify = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
+            if (!$verify || !$verify->Next() || (int)$verify->has_banner !== 1) {
+                @unlink($base . '.' . $ext);
+                echo json_encode(['status' => 1, 'error' => 'Saved file but could not update the database. Please try again.']);
+                exit;
+            }
+            echo json_encode(['status' => 0]);
+            exit;
+        }
+
+        echo json_encode(['status' => 1, 'error' => 'Unknown action.']);
+        exit;
+    }
+
 }

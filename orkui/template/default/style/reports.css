@@ -144,7 +144,7 @@
 }
 
 .rp-context-icon {
-	color     : #0891b2;
+	color     : var(--ork-teal-accent);
 	font-size : 14px;
 	flex-shrink: 0;
 	margin-top: 1px;
@@ -449,7 +449,7 @@
 }
 
 .rp-table-area table.dataTable thead th:hover {
-	background: #edf2f7;
+	background: var(--ork-surface-hover);
 }
 
 /* DataTables sort arrows */
@@ -543,7 +543,7 @@
 /* Action link (delete, etc.) inside table cells */
 .rp-action-link {
 	font-size   : 0.8rem;
-	color       : #e53e3e;
+	color       : var(--ork-red-danger);
 	text-decoration: none;
 	white-space : nowrap;
 }
@@ -1143,8 +1143,6 @@ html[data-theme="dark"] .pdm-table th.pdm-corner {
   background: #2d3748;
 }
 
-/* =====================================================
-   
 /* =====================================================
    DARK MODE — Chart container background
    ===================================================== */

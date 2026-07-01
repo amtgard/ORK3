@@ -38,6 +38,16 @@ class Kingdom  extends Ork3 {
 			$response['KingdomInfo']['KingdomName'] = $this->kingdom->name;
 			$response['KingdomInfo']['Abbreviation'] = $this->kingdom->abbreviation;
 			$response['KingdomInfo']['HasHeraldry'] = $this->kingdom->has_heraldry;
+			global $DB;
+			$DB->Clear();
+			$_bn = $DB->DataSet("SELECT has_banner, banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ork_kingdom WHERE kingdom_id = " . (int)$this->kingdom->kingdom_id);
+			if ($_bn && $_bn->Next()) {
+				$response['KingdomInfo']['HasBanner']      = (int)$_bn->has_banner;
+				$response['KingdomInfo']['BannerShowLogo'] = (int)$_bn->banner_show_logo;
+				$response['KingdomInfo']['BannerVignette'] = (int)$_bn->banner_vignette;
+				$response['KingdomInfo']['BannerOffsetX']  = (int)$_bn->banner_offset_x;
+				$response['KingdomInfo']['BannerOffsetY']  = (int)$_bn->banner_offset_y;
+			}
 			$response['KingdomInfo']['IsPrincipality'] = $this->kingdom->parent_kingdom_id>0?1:0;
 			$response['KingdomInfo']['ParentKingdomId'] = $this->kingdom->parent_kingdom_id;
 			$response['KingdomInfo']['Active'] = $this->kingdom->active;

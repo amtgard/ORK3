@@ -128,11 +128,37 @@ class Controller_Park extends Controller
         global $DB;
         $pid = (int)$park_id;
 
+        // Viewer identity for permission gates below ($pk_isAdmin guards draft-event
+        // visibility; $pk_uid is also passed to CalendarItem::CanSee for officer-/
+        // locals-only filtering). Without these initialized, every officer-only
+        // calendar item was filtered out of the Park calendar — even from the
+        // creator and ORK admins.
+        $pk_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $pk_isAdmin = ($pk_uid > 0) ? Ork3::$Lib->authorization->HasAuthority($pk_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
+
+        // Drafts are hidden from the listing at the SQL level (mirrors the Kingdom
+        // controller): admins see all; logged-in users see published + their own
+        // drafts; logged-out users see only published. Required because some draft
+        // events have mundane_id = 0, so the per-row creator check alone would leak
+        // them to anonymous viewers (0 === 0).
+        $pk_draftClause = $pk_isAdmin
+            ? ''
+            : ($pk_uid > 0 ? "AND (e.status = 'published' OR e.mundane_id = {$pk_uid})" : "AND e.status = 'published'");
+
+        // Viewer's own RSVP status for each event-occurrence. Used by the row's
+        // RSVP button to render "Going" / "Interested" instead of the generic
+        // "RSVP" when the viewer has already RSVP'd. Anonymous viewer emits NULL
+        // to skip the correlated subquery (matches Kingdom controller pattern).
+        $pk_myRsvpSubq = $pk_uid > 0
+            ? "(SELECT status FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND mundane_id = " . (int)$pk_uid . " LIMIT 1)"
+            : "NULL";
+
         $evtSql = "
-			SELECT e.event_id, e.name, p.name AS park_name,
+			SELECT e.event_id, e.name, e.status, e.mundane_id AS event_creator, p.name AS park_name,
 			       cd.event_start, cd.event_end, cd.event_calendardetail_id AS next_detail_id, e.has_heraldry,
 			       COALESCE(rsvp.rsvp_going, 0) AS rsvp_going,
-			       COALESCE(rsvp.rsvp_interested, 0) AS rsvp_interested
+			       COALESCE(rsvp.rsvp_interested, 0) AS rsvp_interested,
+			       {$pk_myRsvpSubq} AS my_rsvp
 			FROM ork_event e
 			LEFT JOIN ork_park p ON p.park_id = e.park_id
 			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
@@ -146,7 +172,8 @@ class Controller_Park extends Controller
 			    FROM ork_event_rsvp
 			    GROUP BY event_calendardetail_id
 			) rsvp ON rsvp.event_calendardetail_id = cd.event_calendardetail_id
-			WHERE e.park_id = {$pid}
+			WHERE (e.park_id = {$pid} OR cd.at_park_id = {$pid})
+			{$pk_draftClause}
 			ORDER BY cd.event_start, e.name";
         $DB->Clear();
         $evtResult    = $DB->DataSet($evtSql);
@@ -155,6 +182,13 @@ class Controller_Park extends Controller
             do {
                 $eid = (int)($evtResult->event_id ?? 0);
                 if ($eid) {
+                    $row_status = (string)($evtResult->status ?? 'published');
+                    if ($row_status !== 'published' && !$pk_isAdmin && (int)$evtResult->event_creator !== $pk_uid) {
+                        $canEditRow = ($pk_uid > 0) ? Ork3::$Lib->authorization->HasAuthority($pk_uid, AUTH_EVENT, $eid, AUTH_EDIT) : false;
+                        if (!$canEditRow) {
+                            continue;
+                        }
+                    }
                     $eventSummary[] = [
                         'EventId'      => $eid,
                         'Name'         => $evtResult->name,
@@ -165,11 +199,129 @@ class Controller_Park extends Controller
                         'HasHeraldry'  => (int)$evtResult->has_heraldry,
                         'RsvpGoing'      => (int)$evtResult->rsvp_going,
                     'RsvpInterested' => (int)$evtResult->rsvp_interested,
+                    'MyRsvp'         => (string)($evtResult->my_rsvp ?? ''),
+                    'Status'         => $row_status,
                     ];
                 }
             } while ($evtResult->Next());
         }
-        $this->data['event_summary'] = $eventSummary;
+        // Merge calendar items (park-scoped AND parent-kingdom-scoped) into the list.
+        $kidForPark = (int)$this->session->kingdom_id;
+        $ciSql = "
+			SELECT ci.calendar_item_id, ci.name, ci.description, ci.all_day, ci.is_officer_only, ci.is_locals_only, ci.color,
+			       ci.event_start, ci.event_end, ci.park_id, ci.kingdom_id,
+			       p.name AS park_name, p.abbreviation AS park_abbr, k.abbreviation AS kingdom_abbr
+			FROM " . DB_PREFIX . "calendar_item ci
+			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = ci.park_id
+			LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = ci.kingdom_id
+			WHERE (ci.park_id = {$pid} OR (ci.park_id = 0 AND ci.kingdom_id = {$kidForPark}))
+			  AND ci.event_end >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+			  AND ci.event_start <= DATE_ADD(NOW(), INTERVAL 12 MONTH)
+			ORDER BY ci.event_start";
+        $DB->Clear();
+        $ciResult = $DB->DataSet($ciSql);
+        while ($ciResult && $ciResult->Next()) {
+            $ci_isOfficerOnly = (int)$ciResult->is_officer_only;
+            $ci_isLocalsOnly  = (int)$ciResult->is_locals_only;
+            if (!CalendarItem::CanSee($pk_uid, (int)$ciResult->kingdom_id, (int)$ciResult->park_id, $ci_isOfficerOnly, $ci_isLocalsOnly)) {
+                continue;
+            }
+            $eventSummary[] = [
+                'CalendarItemId' => (int)$ciResult->calendar_item_id,
+                'Name'           => $ciResult->name,
+                'ParkName'       => $ciResult->park_name,
+                'ParkAbbr'       => $ciResult->park_abbr,
+                'KingdomAbbr'    => $ciResult->kingdom_abbr,
+                'NextDate'       => $ciResult->event_start,
+                'NextEndDate'    => $ciResult->event_end,
+                'AllDay'         => (int)$ciResult->all_day,
+                'Description'    => $ciResult->description,
+                'IsOfficerOnly'  => $ci_isOfficerOnly,
+                'IsLocalsOnly'   => $ci_isLocalsOnly,
+                'Color'          => $ciResult->color ?: '#64748b',
+                'ColorText'      => CalendarItem::TextColorFor($ciResult->color ?: '#64748b'),
+                '_IsCalendarItem' => true,
+                '_IsKingdomLevel' => (int)$ciResult->park_id === 0,
+            ];
+        }
+        usort($eventSummary, function ($a, $b) {
+            return strcmp($a['NextDate'] ?? '', $b['NextDate'] ?? '');
+        });
+
+        // Resolve event coords (event Location JSON → at_park park lat/lng → host park lat/lng) and build map locations.
+        $nowStamp        = time();
+        $horizonStamp    = $nowStamp + (90 * 86400);
+        $pkEventMapLocs  = [];
+        $pkMapNoLocCount = 0;
+        foreach ($eventSummary as &$_evt) {
+            if (empty($_evt['EventId'])) {
+                continue;
+            }
+            $startTs = strtotime($_evt['NextDate'] ?? '');
+            if (!$startTs || $startTs > $horizonStamp) {
+                continue;
+            }
+
+            $DB->Clear();
+            $cdRow = $DB->DataSet("
+				SELECT cd.location AS event_loc, cd.at_park_id, p.latitude AS at_park_lat, p.longitude AS at_park_lng
+				FROM " . DB_PREFIX . "event_calendardetail cd
+				LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = cd.at_park_id
+				WHERE cd.event_calendardetail_id = " . (int)$_evt['NextDetailId'] . " LIMIT 1");
+            $lat = null;
+            $lng = null;
+            if ($cdRow && $cdRow->Next()) {
+                $rawLoc = (string)($cdRow->event_loc ?? '');
+                if ($rawLoc) {
+                    $loc = @json_decode(stripslashes($rawLoc));
+                    if ($loc) {
+                        $pt = isset($loc->location) ? $loc->location
+                            : (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
+                        if ($pt && is_numeric($pt->lat ?? null) && is_numeric($pt->lng ?? null)) {
+                            $lat = (float)$pt->lat;
+                            $lng = (float)$pt->lng;
+                        }
+                    }
+                }
+                if ($lat === null && is_numeric($cdRow->at_park_lat) && (float)$cdRow->at_park_lat != 0) {
+                    $lat = (float)$cdRow->at_park_lat;
+                    $lng = (float)$cdRow->at_park_lng;
+                }
+            }
+            // Fall back to the host park coords (current park context).
+            if ($lat === null) {
+                $DB->Clear();
+                $hostRow = $DB->DataSet("SELECT latitude, longitude FROM " . DB_PREFIX . "park WHERE park_id = {$pid} LIMIT 1");
+                if ($hostRow && $hostRow->Next() && is_numeric($hostRow->latitude) && (float)$hostRow->latitude != 0) {
+                    $lat = (float)$hostRow->latitude;
+                    $lng = (float)$hostRow->longitude;
+                }
+            }
+
+
+            if ($lat !== null && $startTs >= ($nowStamp - 86400)) {
+                $pkEventMapLocs[] = [
+                    'event_id'                => (int)$_evt['EventId'],
+                    'event_calendardetail_id' => (int)($_evt['NextDetailId'] ?? 0),
+                    'name'                    => $_evt['Name'],
+                    'date'                    => date('Y-m-d', $startTs),
+                    'date_label'              => date('M j, Y', $startTs),
+                    'park_name'               => $_evt['ParkName'] ?? '',
+                    'lat'                     => $lat,
+                    'lng'                     => $lng,
+                    'my_rsvp'                 => $_evt['MyRsvp'] ?? '',
+                    'going'                   => (int)($_evt['RsvpGoing'] ?? 0),
+                    'interested'              => (int)($_evt['RsvpInterested'] ?? 0),
+                    'is_draft'                => (($_evt['Status'] ?? 'published') === 'draft'),
+                ];
+            } elseif ($lat === null && $startTs <= $horizonStamp && $startTs >= ($nowStamp - 86400)) {
+                $pkMapNoLocCount++;
+            }
+        }
+        unset($_evt);
+        $this->data['event_summary']        = $eventSummary;
+        $this->data['pkEventMapLocations']  = $pkEventMapLocs;
+        $this->data['pkEventMapNoLocCount'] = $pkMapNoLocCount;
 
         $pkRosterCacheKey = Ork3::$Lib->ghettocache->key(['ParkId' => $pid]);
         $parkPlayers = Ork3::$Lib->ghettocache->get(__CLASS__ . '.park_players', $pkRosterCacheKey, 1200);

@@ -2,6 +2,41 @@
 
 class Controller_PlayerAjax extends Controller
 {
+    // Generic username-availability probe. Used by the SelfReg form, the
+    // Park/Kingdom "Create Player" modals, and profile edit so we can warn the
+    // user up-front instead of silently mangling their chosen name with a
+    // -xxxxx suffix at SelfRegister/CreatePlayer time. Requires a logged-in
+    // session — the SelfReg public path has its own token-gated equivalent
+    // in Controller_SelfReg::check_username().
+    public function check_username($p = null)
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        $candidate = trim($_POST['UserName'] ?? '');
+        echo json_encode(self::username_check_payload($candidate));
+        exit;
+    }
+
+    // Shared helper — used by check_username() above AND by
+    // Controller_SelfReg::check_username(). Same JSON contract so the JS
+    // helper (initUsernameAvailabilityCheck in revised.js) works with both.
+    public static function username_check_payload($candidate)
+    {
+        $candidate = trim((string)$candidate);
+        if (strlen($candidate) < 4) {
+            return ['status' => 0, 'available' => false, 'reason' => 'too-short', 'username' => $candidate];
+        }
+        global $DB;
+        $DB->Clear();
+        $DB->username = $candidate;
+        $rs = $DB->DataSet('SELECT mundane_id FROM ' . DB_PREFIX . 'mundane WHERE username = :username LIMIT 1');
+        $taken = ($rs && $rs->Next());
+        return ['status' => 0, 'available' => !$taken, 'username' => $candidate];
+    }
+
     public function park($p = null)
     {
         header('Content-Type: application/json');
@@ -381,12 +416,12 @@ class Controller_PlayerAjax extends Controller
                 'AboutStory'    => isset($_POST['AboutStory']) ? $_POST['AboutStory'] : null,
                 'ColorPrimary'  => (isset($_POST['ColorPrimary']) && preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['ColorPrimary'])) ? $_POST['ColorPrimary'] : null,
                 'ColorAccent'   => (isset($_POST['ColorAccent']) && preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['ColorAccent'])) ? $_POST['ColorAccent'] : null,
-                    'ColorSecondary' => isset($_POST['ColorSecondary']) ? (preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['ColorSecondary']) ? $_POST['ColorSecondary'] : '') : null,
-                    'HeroGradient'  => isset($_POST['HeroGradient']) ? substr(trim((string)$_POST['HeroGradient']), 0, 32) : null,
-                    'HeroOverlay'   => isset($_POST['HeroOverlay']) ? $_POST['HeroOverlay'] : null,
+                'ColorSecondary' => isset($_POST['ColorSecondary']) ? (preg_match('/^#[0-9a-fA-F]{6}$/', $_POST['ColorSecondary']) ? $_POST['ColorSecondary'] : '') : null,
+                'HeroGradient'  => isset($_POST['HeroGradient']) ? substr(trim((string)$_POST['HeroGradient']), 0, 32) : null,
+                'HeroOverlay'   => isset($_POST['HeroOverlay']) ? $_POST['HeroOverlay'] : null,
                 'NamePrefix'    => isset($_POST['NamePrefix']) ? trim($_POST['NamePrefix']) : null,
                 'NameSuffix'    => isset($_POST['NameSuffix']) ? trim($_POST['NameSuffix']) : null,
-                    'SuffixComma'   => isset($_POST['SuffixComma']) ? (int)$_POST['SuffixComma'] : null,
+                'SuffixComma'   => isset($_POST['SuffixComma']) ? (int)$_POST['SuffixComma'] : null,
                 'Persona'       => isset($_POST['Persona']) ? trim($_POST['Persona']) : null,
                 'PhotoFocusX'   => isset($_POST['PhotoFocusX']) ? (int)$_POST['PhotoFocusX'] : null,
                 'PhotoFocusY'   => isset($_POST['PhotoFocusY']) ? (int)$_POST['PhotoFocusY'] : null,
@@ -398,12 +433,13 @@ class Controller_PlayerAjax extends Controller
                 'ShowEmail'        => isset($_POST['ShowEmail']) ? (int)$_POST['ShowEmail'] : null,
                 'MilestoneConfig'  => isset($_POST['MilestoneConfig']) ? $_POST['MilestoneConfig'] : null,
                 'NameFont'         => (isset($_POST['NameFont']) && in_array($_POST['NameFont'], ['','Cinzel','Cinzel Decorative','IM Fell English','UnifrakturMaguntia','Metamorphous','Uncial Antiqua','Pirata One','Almendra','Pinyon Script','Great Vibes'])) ? $_POST['NameFont'] : null,
-                    'BeltDisplay'      => (isset($_POST['BeltDisplay']) && in_array($_POST['BeltDisplay'], ['white','own','none'])) ? $_POST['BeltDisplay'] : null,
-                    // Administrative fields — UpdatePlayer gates these behind HasAuthority,
-                    // so non-officers sending them have no effect.
-                    'Active'           => isset($_POST['Active']) ? (int)$_POST['Active'] : null,
-                    'Waivered'         => isset($_POST['Waivered']) ? (int)$_POST['Waivered'] : null,
-                    'ParkMemberSince'  => isset($_POST['ParkMemberSince']) ? trim($_POST['ParkMemberSince']) : null,
+                'NameShadow'       => isset($_POST['NameShadow']) ? (int)$_POST['NameShadow'] : null,
+                'BeltDisplay'      => (isset($_POST['BeltDisplay']) && in_array($_POST['BeltDisplay'], ['white','own','none'])) ? $_POST['BeltDisplay'] : null,
+                // Administrative fields — UpdatePlayer gates these behind HasAuthority,
+                // so non-officers sending them have no effect.
+                'Active'           => isset($_POST['Active']) ? (int)$_POST['Active'] : null,
+                'Waivered'         => isset($_POST['Waivered']) ? (int)$_POST['Waivered'] : null,
+                'ParkMemberSince'  => isset($_POST['ParkMemberSince']) ? trim($_POST['ParkMemberSince']) : null,
             ];
             $r = $this->Player->update_player($fields);
             $_isProf = ($r['Status'] != 0 && ($r['Error'] ?? '') === ProfanityFilter::ERROR_MESSAGE);
@@ -791,4 +827,242 @@ class Controller_PlayerAjax extends Controller
         echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '', 'detail' => $r['Detail'] ?? '']);
         exit;
     }
+
+    public function banner($p = null)
+    {
+        header('Content-Type: application/json');
+
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+
+        $params            = explode('/', $p ?? '');
+        $mundane_id_target = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $action            = $params[1] ?? '';
+
+        if (!valid_id($mundane_id_target)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid Player ID.']);
+            exit;
+        }
+
+        $uid = (int)$this->session->user_id;
+
+        // Load player's park/kingdom for officer auth lookup.
+        global $DB;
+        $DB->Clear();
+        $_pInfo = $DB->DataSet("SELECT park_id, kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = " . $mundane_id_target);
+        if (!$_pInfo || !$_pInfo->Next()) {
+            echo json_encode(['status' => 1, 'error' => 'Player not found.']);
+            exit;
+        }
+        $_parkId    = (int)$_pInfo->park_id;
+        $_kingdomId = (int)$_pInfo->kingdom_id;
+
+        $canEdit = $uid > 0 && (
+            $uid === $mundane_id_target
+            || ($_parkId    && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $_parkId, AUTH_EDIT))
+            || ($_kingdomId && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $_kingdomId, AUTH_EDIT))
+            || Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)
+        );
+        if (!$canEdit) {
+            echo json_encode(['status' => 5, 'error' => 'Not authorized to manage this player\'s banner.']);
+            exit;
+        }
+
+        if ($action === 'remove') {
+            $DB->Clear();
+            // Reset display toggles AND framing offsets to defaults so a future
+            // upload starts fresh instead of inheriting the removed banner's
+            // config.
+            $DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1, banner_offset_x = 50, banner_offset_y = 50 WHERE mundane_id = ' . $mundane_id_target);
+            // I4 fix: verify the UPDATE landed before deleting the file.
+            // If the DB update silently failed and we delete the file, the
+            // banner column stays 1 but the file is gone -> broken banner.
+            $DB->Clear();
+            $removeCheck = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id_target);
+            if (!$removeCheck || !$removeCheck->Next() || (int)$removeCheck->has_banner !== 0) {
+                echo json_encode(['status' => 1, 'error' => 'Could not clear banner flag in database. Please try again.']);
+                exit;
+            }
+            $base = DIR_PLAYER_BANNER . sprintf('%06d', $mundane_id_target);
+            if (file_exists($base . '.jpg')) {
+                unlink($base . '.jpg');
+            }
+            if (file_exists($base . '.png')) {
+                unlink($base . '.png');
+            }
+            echo json_encode(['status' => 0]);
+            exit;
+        }
+
+        if ($action === 'config') {
+            // Refuse silent no-ops: config only meaningful with a banner present.
+            $DB->Clear();
+            $row = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id_target);
+            if (!$row || !$row->Next() || (int)$row->has_banner !== 1) {
+                echo json_encode(['status' => 1, 'error' => 'Upload a banner first before saving settings.']);
+                exit;
+            }
+            $showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
+            $vignette = !empty($_POST['Vignette']) ? 1 : 0;
+            $offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
+            $offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
+            $DB->Clear();
+            $DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE mundane_id = ' . $mundane_id_target);
+            // Verify the UPDATE landed (YapoMysql can silently swallow failures
+            // under STRICT sql_mode etc). Re-read and compare each field so the
+            // client can surface a real error rather than a false success.
+            $DB->Clear();
+            $verifyCfg = $DB->DataSet('SELECT banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id_target);
+            if (!$verifyCfg || !$verifyCfg->Next()
+                || (int)$verifyCfg->banner_show_logo !== $showLogo
+                || (int)$verifyCfg->banner_vignette  !== $vignette
+                || (int)$verifyCfg->banner_offset_x  !== $offX
+                || (int)$verifyCfg->banner_offset_y  !== $offY) {
+                echo json_encode(['status' => 1, 'error' => 'Could not save banner settings. Please try again.']);
+                exit;
+            }
+            echo json_encode(['status' => 0]);
+            exit;
+        }
+
+        if ($action === 'update') {
+            if (empty($_FILES['Banner']['tmp_name'])) {
+                echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
+                exit;
+            }
+            // I2 fix: validate the upload came via a real HTTP file upload (prevents spoofing).
+            if (!is_uploaded_file($_FILES['Banner']['tmp_name'])) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid upload.']);
+                exit;
+            }
+            // I5 fix: server-side file size check (JS resize can be bypassed via curl).
+            if (($_FILES['Banner']['size'] ?? 0) > 1024 * 1024) {
+                echo json_encode(['status' => 1, 'error' => 'File too large (max 1 MB).']);
+                exit;
+            }
+            $tmp  = $_FILES['Banner']['tmp_name'];
+            // I3 fix: use exif_imagetype() (magic-byte check) instead of the
+            // browser-supplied MIME type, which is trivially spoofable.
+            $detectedType = exif_imagetype($tmp);
+            if ($detectedType !== IMAGETYPE_JPEG && $detectedType !== IMAGETYPE_PNG) {
+                echo json_encode(['status' => 1, 'error' => 'Only JPEG and PNG images are supported.']);
+                exit;
+            }
+            $mime = ($detectedType === IMAGETYPE_PNG) ? 'image/png' : 'image/jpeg';
+            if (!is_dir(DIR_PLAYER_BANNER)) {
+                @mkdir(DIR_PLAYER_BANNER, 0775, true);
+            }
+            $ext  = ($mime === 'image/png') ? 'png' : 'jpg';
+            $base = DIR_PLAYER_BANNER . sprintf('%06d', $mundane_id_target);
+            // Delete any previous banner files (both extensions) before saving
+            // the new one so we never leave the old image behind when the host
+            // switches images. resolve_image_ext picks whichever survives.
+            if (file_exists($base . '.jpg')) {
+                @unlink($base . '.jpg');
+            }
+            if (file_exists($base . '.png')) {
+                @unlink($base . '.png');
+            }
+            if (!@move_uploaded_file($tmp, $base . '.' . $ext)) {
+                echo json_encode(['status' => 1, 'error' => 'Could not save uploaded file.']);
+                exit;
+            }
+            $showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
+            $vignette = !empty($_POST['Vignette']) ? 1 : 0;
+            $offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
+            $offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
+            $DB->Clear();
+            $DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET has_banner = 1, banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE mundane_id = ' . $mundane_id_target);
+            // Clear any AmtPride gradient — banner image takes precedence and the
+            // gradient would flash through before the image finishes loading.
+            $DB->Clear();
+            $DB->Execute('UPDATE ' . DB_PREFIX . 'mundane_design SET hero_gradient = NULL WHERE mundane_id = ' . $mundane_id_target);
+            // $DB->Execute() is void; the YapoMysql layer can silently swallow
+            // failures (sql_mode=STRICT etc). Verify the update landed by
+            // re-reading has_banner. If it didn't, roll back the file so we
+            // don't leave an orphan whose flag is still 0.
+            $DB->Clear();
+            $verify = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id_target);
+            if (!$verify || !$verify->Next() || (int)$verify->has_banner !== 1) {
+                @unlink($base . '.' . $ext);
+                echo json_encode(['status' => 1, 'error' => 'Saved file but could not update the database. Please try again.']);
+                exit;
+            }
+            echo json_encode(['status' => 0]);
+            exit;
+        }
+
+        echo json_encode(['status' => 1, 'error' => 'Unknown action.']);
+        exit;
+    }
+
+    public function dietary_preferences($p = null)
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        $mundane_id = (int)($p ?? 0);
+        if (!valid_id($mundane_id) || (int)$mundane_id !== (int)$this->session->user_id) {
+            echo json_encode(['status' => 1, 'error' => 'Access denied']);
+            exit;
+        }
+        $this->load_model('Player');
+        $prefs = $this->Player->GetDietaryPreferences($mundane_id);
+        echo json_encode(['status' => 0, 'prefs' => $prefs ?: []]);
+        exit;
+    }
+
+    public function save_dietary_preferences()
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        $mundane_id = (int)$this->session->user_id;
+        $data = [
+            'IsAnonymous'       => (int)!empty($_POST['IsAnonymous']),
+            'NoRestrictions'    => (int)!empty($_POST['NoRestrictions']),
+            'DietVegetarian'    => (int)!empty($_POST['DietVegetarian']),
+            'DietVegan'         => (int)!empty($_POST['DietVegan']),
+            'DietHalal'         => (int)!empty($_POST['DietHalal']),
+            'DietKosher'        => (int)!empty($_POST['DietKosher']),
+            'DietKeto'          => (int)!empty($_POST['DietKeto']),
+            'DietPaleo'         => (int)!empty($_POST['DietPaleo']),
+            'RestrictDairy'     => (int)!empty($_POST['RestrictDairy']),
+            'RestrictEggs'      => (int)!empty($_POST['RestrictEggs']),
+            'RestrictFish'      => (int)!empty($_POST['RestrictFish']),
+            'RestrictHoney'     => (int)!empty($_POST['RestrictHoney']),
+            'RestrictPoultry'   => (int)!empty($_POST['RestrictPoultry']),
+            'RestrictBeef'      => (int)!empty($_POST['RestrictBeef']),
+            'RestrictPork'      => (int)!empty($_POST['RestrictPork']),
+            'RestrictShellfish' => (int)!empty($_POST['RestrictShellfish']),
+            'AllergenMilk'      => max(0, min(2, (int)($_POST['AllergenMilk']      ?? 0))),
+            'AllergenEggs'      => max(0, min(2, (int)($_POST['AllergenEggs']      ?? 0))),
+            'AllergenFish'      => max(0, min(2, (int)($_POST['AllergenFish']      ?? 0))),
+            'AllergenShellfish' => max(0, min(2, (int)($_POST['AllergenShellfish'] ?? 0))),
+            'AllergenTreenuts'  => max(0, min(2, (int)($_POST['AllergenTreenuts']  ?? 0))),
+            'AllergenPeanuts'   => max(0, min(2, (int)($_POST['AllergenPeanuts']   ?? 0))),
+            'AllergenWheat'     => max(0, min(2, (int)($_POST['AllergenWheat']     ?? 0))),
+            'AllergenSoy'       => max(0, min(2, (int)($_POST['AllergenSoy']       ?? 0))),
+            'AllergenSesame'    => max(0, min(2, (int)($_POST['AllergenSesame']    ?? 0))),
+            'AllergenGarlic'    => max(0, min(2, (int)($_POST['AllergenGarlic']    ?? 0))),
+            'AllergenGluten'    => max(0, min(2, (int)($_POST['AllergenGluten']    ?? 0))),
+            'AllergenOnion'     => max(0, min(2, (int)($_POST['AllergenOnion']     ?? 0))),
+            'AllergenMushroom'  => max(0, min(2, (int)($_POST['AllergenMushroom']  ?? 0))),
+            'AllergenCorn'      => max(0, min(2, (int)($_POST['AllergenCorn']      ?? 0))),
+            'AllergenCoconut'   => max(0, min(2, (int)($_POST['AllergenCoconut']   ?? 0))),
+            'AllergenCocoa'       => max(0, min(2, (int)($_POST['AllergenCocoa']       ?? 0))),
+            'AllergenNightshades' => max(0, min(2, (int)($_POST['AllergenNightshades'] ?? 0))),
+        ];
+        $this->load_model('Player');
+        $this->Player->SaveDietaryPreferences($mundane_id, $data);
+        echo json_encode(['status' => 0]);
+        exit;
+    }
+
 }

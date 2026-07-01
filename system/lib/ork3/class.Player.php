@@ -8,6 +8,7 @@ class Player extends Ork3 {
 		$this->notes = new yapo($this->db, DB_PREFIX . 'mundane_note');
 		$this->dues = new yapo($this->db, DB_PREFIX . 'dues');
 		$this->pronoun = new yapo($this->db, DB_PREFIX . 'pronoun');
+		$this->selfreg_link = new yapo($this->db, DB_PREFIX . 'selfreg_link');
 		$this->load_model('Kingdom');
 		$this->load_model('Park');
 		$this->load_model('Pronoun');
@@ -355,7 +356,8 @@ class Player extends Ork3 {
 						'ShowMundaneLast' => (int)$design->show_mundane_last,
 						'ShowEmail' => (int)$design->show_email,
 						'MilestoneConfig' => $design->milestone_config,
-						'NameFont' => $design->name_font,
+						'NameFont'   => $design->name_font,
+						'NameShadow' => (int)$design->name_shadow,
 							'BeltDisplay' => $design->belt_display,
 						'BasicFonts' => (int)$this->mundane->basic_fonts,
 						'DyslexiaFonts' => (int)$this->mundane->dyslexia_fonts,
@@ -366,6 +368,17 @@ class Player extends Ork3 {
 			} else {
 				$response['Player']['Company'] = $unit['Units'];
 			}
+			// Hydrate banner fields via raw DataSet (avoids Yapo schema-cache misses)
+			global $DB;
+			$DB->Clear();
+			$_bn = $DB->DataSet('SELECT has_banner, banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ork_mundane WHERE mundane_id = ' . (int)$this->mundane->mundane_id);
+			if ($_bn && $_bn->Next()) {
+				$response['Player']['HasBanner']      = (int)$_bn->has_banner;
+				$response['Player']['BannerShowLogo'] = (int)$_bn->banner_show_logo;
+				$response['Player']['BannerVignette'] = (int)$_bn->banner_vignette;
+				$response['Player']['BannerOffsetX']  = (int)$_bn->banner_offset_x;
+				$response['Player']['BannerOffsetY']  = (int)$_bn->banner_offset_y;
+			}
 		} else {
 			$response['Status'] = InvalidParameter();
 		}
@@ -374,11 +387,12 @@ class Player extends Ork3 {
 
 	public function AttendanceForPlayer($request) {
 		$sql = "select 
-              a.*, c.name as class_name, 
-                ifnull(p.name, ep.name) as park_name, 
-                ifnull(k.name, ek.name) as kingdom_name, 
-                e.name as event_name, e.park_id as event_park_id, e.kingdom_id as event_kingdom_id, 
-                ep.name as event_park_name, ek.name as event_kingdom_name
+              a.*, c.name as class_name,
+                ifnull(p.name, ep.name) as park_name,
+                ifnull(k.name, ek.name) as kingdom_name,
+                e.name as event_name, e.park_id as event_park_id, e.kingdom_id as event_kingdom_id,
+                ep.name as event_park_name, ek.name as event_kingdom_name,
+                bwm.persona as by_whom_persona
 					from " . DB_PREFIX . "attendance a
 						left join " . DB_PREFIX . "park p on a.park_id = p.park_id
 						left join " . DB_PREFIX . "kingdom k on a.kingdom_id = k.kingdom_id
@@ -386,6 +400,7 @@ class Player extends Ork3 {
 						left join " . DB_PREFIX . "event e on a.event_id = e.event_id
 							left join " . DB_PREFIX . "park ep on e.park_id = ep.park_id
 							left join " . DB_PREFIX . "kingdom ek on e.kingdom_id = ek.kingdom_id
+						left join " . DB_PREFIX . "mundane bwm on bwm.mundane_id = a.by_whom_id
           where a.mundane_id = '" . mysql_real_escape_string($request['MundaneId']) . "'";
     $date_start = $request['date_start'];
     if (!is_null($date_start) && strtotime($date_start)) {
@@ -409,7 +424,9 @@ class Player extends Ork3 {
 				$response['Attendance'][] = array(
 						'AttendanceId' => $r->attendance_id,
 						'EnteredById' => $r->by_whom_id,
-						'EnteredAt' => $r->entered_at,
+						'EnteredBy'   => $r->by_whom_persona,
+						'EnteredAt'   => $r->entered_at,
+						'EntryMethod' => $r->entry_method,
 						'MundaneId' => $r->mundane_id,
 						'ClassId' => $r->class_id,
 						'Date' => $r->date,
@@ -773,6 +790,258 @@ class Player extends Ork3 {
 			return NoAuthorization();
 		}
 	}
+
+	public function CreateSelfRegLink($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($mundane_id))
+			return NoAuthorization();
+		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_CREATE))
+			return NoAuthorization();
+
+		// A13: Reuse unexpired unused token for same park
+		global $DB;
+		$DB->Clear();
+		$park_id = (int)$request['ParkId'];
+		$existing = $DB->DataSet("SELECT token, expires_at FROM " . DB_PREFIX . "selfreg_link WHERE park_id = {$park_id} AND used_by IS NULL AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1");
+		if ($existing && $existing->Next()) {
+			$seconds_remaining = max(0, strtotime($existing->expires_at) - time());
+			return Success([
+				'token'             => $existing->token,
+				'expires_at'        => $existing->expires_at,
+				'seconds_remaining' => $seconds_remaining,
+			]);
+		}
+
+		$token      = bin2hex(random_bytes(24));
+		$expires_at = date('Y-m-d H:i:s', time() + 15 * 60);
+
+		$this->selfreg_link->clear();
+		$this->selfreg_link->token      = $token;
+		$this->selfreg_link->park_id    = $park_id;
+		$this->selfreg_link->created_by = $mundane_id;
+		$this->selfreg_link->created_at = date('Y-m-d H:i:s');
+		$this->selfreg_link->expires_at = $expires_at;
+		$this->selfreg_link->save();
+
+		// A12: Verify selfreg_id after save
+		if (!$this->selfreg_link->selfreg_id)
+			return InvalidParameter('Could not create self-registration link.');
+
+		return Success([
+			'token'             => $token,
+			'expires_at'        => $expires_at,
+			'seconds_remaining' => 15 * 60,
+		]);
+	}
+
+	public function ValidateSelfRegLink($request) {
+		$token = preg_replace('/[^a-f0-9]/', '', (string)($request['SelfRegToken'] ?? ''));
+		if (strlen($token) !== 48)
+			return InvalidParameter('Invalid registration link.');
+
+		$this->selfreg_link->clear();
+		$this->selfreg_link->token = $token;
+		if (!$this->selfreg_link->find())
+			return InvalidParameter('Link not found.');
+
+		// A11: Loose NULL check for used_by (yapo may return '' for DB NULL)
+		if (!empty($this->selfreg_link->used_by) && (int)$this->selfreg_link->used_by > 0)
+			return InvalidParameter('This registration link has already been used.');
+
+		if (strtotime($this->selfreg_link->expires_at) <= time())
+			return InvalidParameter('This registration link has expired.');
+
+		return Success([
+			'selfreg_id' => (int)$this->selfreg_link->selfreg_id,
+			'park_id'    => (int)$this->selfreg_link->park_id,
+			'expires_at' => $this->selfreg_link->expires_at,
+		]);
+	}
+
+	public function SelfRegister($request) {
+		// A8: Transactional locking — do NOT delegate to ValidateSelfRegLink
+		$token = preg_replace('/[^a-f0-9]/', '', (string)($request['SelfRegToken'] ?? ''));
+
+		// B10: Build a sanitized audit payload (no password, capture IP and
+		// the token + email actually attempted) used by both success and
+		// failure paths below. selfreg is a public, unauthenticated surface
+		// so every attempt — good or bad — should leave a trail.
+		$_selfreg_audit = [
+			'SelfRegToken' => $token,
+			'Email'        => trim($request['Email'] ?? ''),
+			'Persona'      => trim($request['Persona'] ?? ''),
+			'UserName'     => trim($request['UserName'] ?? ''),
+			'RemoteAddr'   => $_SERVER['REMOTE_ADDR'] ?? '',
+		];
+		$_selfreg_fail = function($reason) use ($_selfreg_audit) {
+			$payload = $_selfreg_audit;
+			$payload['Result'] = 'failure';
+			$payload['Reason'] = $reason;
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::SelfRegister", $payload, 'Player', 0, null);
+			return InvalidParameter($reason);
+		};
+
+		if (strlen($token) !== 48)
+			return $_selfreg_fail('Invalid registration link.');
+
+		if (strlen(trim($request['Persona'] ?? '')) < 1)
+			return $_selfreg_fail('Persona is required.');
+		if (strlen(trim($request['Email'] ?? '')) < 1)
+			return $_selfreg_fail('Email is required.');
+		if (!filter_var(trim($request['Email']), FILTER_VALIDATE_EMAIL))
+			return $_selfreg_fail('Please enter a valid email address.');
+		if (strlen(trim($request['UserName'] ?? '')) < 4)
+			return $_selfreg_fail('Username must be at least 4 characters.');
+		// Defense in depth: controller.SelfReg.php also enforces this; service layer
+		// enforces it again so direct orkservice POSTs cannot bypass the minimum.
+		if (strlen($request['Password'] ?? '') < 8)
+			return $_selfreg_fail('Password must be at least 8 characters.');
+
+		global $DB;
+
+		// A8: START TRANSACTION with FOR UPDATE locking
+		$DB->Clear();
+		$DB->Execute('START TRANSACTION');
+
+		$DB->Clear();
+		$DB->token = $token;
+		$row = $DB->DataSet("SELECT selfreg_id, park_id, used_by, expires_at FROM " . DB_PREFIX . "selfreg_link WHERE token = :token FOR UPDATE");
+		if (!$row || !$row->Next()) {
+			$DB->Clear();
+			$DB->Execute('ROLLBACK');
+			return $_selfreg_fail('Link not found.');
+		}
+
+		$selfreg_id = (int)$row->selfreg_id;
+		$park_id    = (int)$row->park_id;
+
+		// A11: Loose NULL check
+		if (!empty($row->used_by) && (int)$row->used_by > 0) {
+			$DB->Clear();
+			$DB->Execute('ROLLBACK');
+			return $_selfreg_fail('This registration link has already been used.');
+		}
+		if (strtotime($row->expires_at) <= time()) {
+			$DB->Clear();
+			$DB->Execute('ROLLBACK');
+			return $_selfreg_fail('This registration link has expired.');
+		}
+
+		// A14: Duplicate email check
+		$email = trim($request['Email']);
+		$DB->Clear();
+		$DB->email = $email;
+		$emailCheck = $DB->DataSet("SELECT mundane_id, persona FROM " . DB_PREFIX . "mundane WHERE email = :email LIMIT 1");
+		if ($emailCheck && $emailCheck->Next()) {
+			$DB->Clear();
+			$DB->Execute('ROLLBACK');
+			return $_selfreg_fail('An account with this email already exists. Please sign in instead, or use a different email address.');
+		}
+
+		// Look up park for kingdom_id
+		$park = new yapo($this->db, DB_PREFIX . 'park');
+		$park->clear();
+		$park->park_id = $park_id;
+		if (!$park->find()) {
+			$DB->Clear();
+			$DB->Execute('ROLLBACK');
+			return $_selfreg_fail('Park not found.');
+		}
+		$kingdom_id = (int)$park->kingdom_id;
+		$park_name  = $park->name;
+
+		// Username uniqueness
+		$username = $this->unique_username(trim($request['UserName']), 4);
+		if ($username === false) {
+			$DB->Clear();
+			$DB->Execute('ROLLBACK');
+			return $_selfreg_fail('No username could be generated. Please try again.');
+		}
+
+		// Create mundane record (mirrors CreatePlayer lines 536-560)
+		$this->mundane->clear();
+		$this->mundane->given_name        = trim($request['GivenName'] ?? '');
+		$this->mundane->surname           = trim($request['Surname'] ?? '');
+		$this->mundane->other_name        = '';
+		$this->mundane->username          = $username;
+		$this->mundane->persona           = trim($request['Persona']);
+		$this->mundane->email             = $email;
+		$this->mundane->park_id           = $park_id;
+		$this->mundane->kingdom_id        = $kingdom_id;
+		$this->mundane->modified          = date('Y-m-d H:i:s', time());
+		$this->mundane->restricted        = 0;
+		$this->mundane->waivered          = 0;
+		$this->mundane->has_image         = 0;
+		$this->mundane->penalty_box       = 0;
+		$this->mundane->active            = 1;
+		$this->mundane->password_expires  = date('Y-m-d H:i:s', time() + 60 * 60 * 24 * 365);
+		$this->mundane->password_salt     = md5(rand() . microtime());
+		$this->mundane->park_member_since = date('Y-m-d');
+		$this->mundane->token             = md5(uniqid(rand(), true));
+		$this->mundane->xtoken            = md5(uniqid(rand(), true));
+		$this->mundane->waiver_ext        = '';
+		$this->mundane->reeve_qualified_until = '0000-00-00';
+		$this->mundane->save();
+
+		$new_mundane_id = (int)$this->mundane->mundane_id;
+		if (!$new_mundane_id) {
+			$DB->Clear();
+			$DB->Execute('ROLLBACK');
+			return $_selfreg_fail('Could not create account. Please try again.');
+		}
+
+		// Hash password
+		Authorization::SaltPassword($this->mundane->password_salt, strtoupper($username) . trim($request['Password']), $this->mundane->password_expires);
+
+		// Mark token as used (A8: with AND used_by IS NULL for safety)
+		$now = date('Y-m-d H:i:s');
+		$DB->Clear();
+		$DB->Execute("UPDATE " . DB_PREFIX . "selfreg_link SET used_by = {$new_mundane_id}, used_at = '{$now}' WHERE selfreg_id = {$selfreg_id} AND used_by IS NULL");
+
+		// Add Color attendance credit for date of registration
+		$today = date('Y-m-d');
+		$DB->Clear();
+		// Self-registration on first-ever signup: the new player gets one
+		// attendance credit (Peasant class) as a welcome. entry_method tags
+		// the row so reports don't confusingly render "Augustus entered
+		// Augustus's first credit" — instead they show "Self-registration".
+		$DB->Execute("INSERT INTO " . DB_PREFIX . "attendance (mundane_id, class_id, date, date_year, date_month, date_week3, date_week6, park_id, kingdom_id, event_id, event_calendardetail_id, credits, persona, flavor, note, by_whom_id, entered_at, entry_method) VALUES (" . $new_mundane_id . ", 6, '" . $today . "', YEAR('" . $today . "'), MONTH('" . $today . "'), WEEK('" . $today . "', 3), WEEK('" . $today . "', 6), " . $park_id . ", " . $kingdom_id . ", 0, 0, 1.00, '" . addslashes(trim($request['Persona'])) . "', '', 'Self-registration', " . $new_mundane_id . ", '" . $now . "', 'self_reg')");
+
+		// COMMIT transaction
+		$DB->Clear();
+		$DB->Execute('COMMIT');
+
+		// Auto-login: generate session token
+		$this->mundane->token = md5(openssl_random_pseudo_bytes(16) . microtime());
+		$this->mundane->token_expires = date('Y:m:d H:i:s', time() + LOGIN_TIMEOUT);
+		$this->mundane->save();
+
+		// A9: Look up kingdom name for session context
+		$kingdom_name = '';
+		$DB->Clear();
+		$knRow = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "kingdom WHERE kingdom_id = {$kingdom_id} LIMIT 1");
+		if ($knRow && $knRow->Next()) {
+			$kingdom_name = $knRow->name;
+		}
+
+		// B10: success audit — capture token, IP, and resulting mundane_id.
+		$_selfreg_success = $_selfreg_audit;
+		$_selfreg_success['Result']    = 'success';
+		$_selfreg_success['ParkId']    = $park_id;
+		$_selfreg_success['KingdomId'] = $kingdom_id;
+		Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::SelfRegister", $_selfreg_success, 'Player', $new_mundane_id, null);
+
+		return Success([
+			'mundane_id'   => $new_mundane_id,
+			'token'        => $this->mundane->token,
+			'username'     => $this->mundane->username,
+			'park_id'      => $park_id,
+			'park_name'    => $park_name,
+			'kingdom_id'   => $kingdom_id,
+			'kingdom_name' => $kingdom_name,
+		]);
+	}
+
 
   public function hydrated_players($ids) {
     $sql = "select k.name as kingdom, k.kingdom_id, p.name as park, p.park_id, m.mundane_id, m.persona 
@@ -1241,7 +1510,7 @@ class Player extends Ork3 {
 								  'photo_focus_x','photo_focus_y','photo_focus_size',
 								  'show_beltline','belt_display','pronunciation_guide',
 								  'show_mundane_first','show_mundane_last','show_email',
-								  'milestone_config','name_font'] as $_f) {
+								  'milestone_config','name_font','name_shadow'] as $_f) {
 							$_cur[$_f] = $design->{$_f};
 						}
 					}
@@ -1310,7 +1579,8 @@ class Player extends Ork3 {
 					$design->show_mundane_last = is_null($request['ShowMundaneLast']) ? ($_designExisted ? (int)$_cur['show_mundane_last'] : 0) : (int)$request['ShowMundaneLast'];
 					$design->show_email = is_null($request['ShowEmail']) ? ($_designExisted ? (int)$_cur['show_email'] : 0) : (int)$request['ShowEmail'];
 					$design->milestone_config = $_pick($request['MilestoneConfig'], 'milestone_config');
-					$design->name_font = $_pick($request['NameFont'], 'name_font');
+					$design->name_font   = $_pick($request['NameFont'], 'name_font');
+					$design->name_shadow = is_null($request['NameShadow'] ?? null) ? ($_designExisted ? (int)$_cur['name_shadow'] : 0) : (int)$request['NameShadow'];
 					$validBeltDisplays = ['white','own','none'];
 					$design->belt_display = (isset($request['BeltDisplay']) && in_array($request['BeltDisplay'], $validBeltDisplays)) ? $request['BeltDisplay'] : ($_designExisted ? $_cur['belt_display'] : 'white');
 				}
@@ -2898,6 +3168,94 @@ class Player extends Ork3 {
 		$date = $r->earliest_date;
 		$out = $date ? date('Y-m-d', strtotime($date)) : null;
 		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
+	}
+
+	public function GetDietaryPreferences($mundane_id) {
+		$mundane_id = (int)$mundane_id;
+		if (!$mundane_id) return null;
+		$sql = "SELECT * FROM " . DB_PREFIX . "mundane_dietary WHERE mundane_id = $mundane_id LIMIT 1";
+		$r = $this->db->query($sql);
+		if ($r === false || $r->size() == 0) {
+			return $this->_dietary_defaults($mundane_id);
+		}
+		$r->next();
+		return $this->_dietary_row($r);
+	}
+
+	public function SaveDietaryPreferences($mundane_id, $data) {
+		$mundane_id = (int)$mundane_id;
+		if (!$mundane_id) return false;
+		$b = function($k) use ($data) { return (int)!empty($data[$k]); };
+		$a = function($k) use ($data) { return max(0, min(2, (int)($data[$k] ?? 0))); };
+		$sql = "INSERT INTO " . DB_PREFIX . "mundane_dietary
+			(`mundane_id`, `is_anonymous`, `no_restrictions`,
+			 `diet_vegetarian`, `diet_vegan`, `diet_halal`, `diet_kosher`, `diet_keto`, `diet_paleo`,
+			 `restrict_dairy`, `restrict_eggs`, `restrict_fish`, `restrict_honey`, `restrict_poultry`, `restrict_beef`, `restrict_pork`, `restrict_shellfish`,
+			 `allergen_milk`, `allergen_eggs`, `allergen_fish`, `allergen_shellfish`, `allergen_treenuts`, `allergen_peanuts`,
+			 `allergen_wheat`, `allergen_soy`, `allergen_sesame`, `allergen_garlic`, `allergen_gluten`, `allergen_onion`, `allergen_mushroom`,
+			 `allergen_corn`, `allergen_coconut`, `allergen_cocoa`, `allergen_nightshades`)
+			VALUES
+			($mundane_id, {$b('IsAnonymous')}, {$b('NoRestrictions')},
+			 {$b('DietVegetarian')}, {$b('DietVegan')}, {$b('DietHalal')}, {$b('DietKosher')}, {$b('DietKeto')}, {$b('DietPaleo')},
+			 {$b('RestrictDairy')}, {$b('RestrictEggs')}, {$b('RestrictFish')}, {$b('RestrictHoney')}, {$b('RestrictPoultry')}, {$b('RestrictBeef')}, {$b('RestrictPork')}, {$b('RestrictShellfish')},
+			 {$a('AllergenMilk')}, {$a('AllergenEggs')}, {$a('AllergenFish')}, {$a('AllergenShellfish')}, {$a('AllergenTreenuts')}, {$a('AllergenPeanuts')},
+			 {$a('AllergenWheat')}, {$a('AllergenSoy')}, {$a('AllergenSesame')}, {$a('AllergenGarlic')}, {$a('AllergenGluten')}, {$a('AllergenOnion')}, {$a('AllergenMushroom')},
+			 {$a('AllergenCorn')}, {$a('AllergenCoconut')}, {$a('AllergenCocoa')}, {$a('AllergenNightshades')})
+			ON DUPLICATE KEY UPDATE
+			 `is_anonymous`       = {$b('IsAnonymous')},
+			 `no_restrictions`    = {$b('NoRestrictions')},
+			 `diet_vegetarian`    = {$b('DietVegetarian')},  `diet_vegan`    = {$b('DietVegan')},
+			 `diet_halal`         = {$b('DietHalal')},       `diet_kosher`   = {$b('DietKosher')},
+			 `diet_keto`          = {$b('DietKeto')},        `diet_paleo`    = {$b('DietPaleo')},
+			 `restrict_dairy`     = {$b('RestrictDairy')},   `restrict_eggs` = {$b('RestrictEggs')},
+			 `restrict_fish`      = {$b('RestrictFish')},    `restrict_honey`= {$b('RestrictHoney')},
+			 `restrict_poultry`   = {$b('RestrictPoultry')}, `restrict_beef`     = {$b('RestrictBeef')}, `restrict_pork` = {$b('RestrictPork')},
+			 `restrict_shellfish` = {$b('RestrictShellfish')},
+			 `allergen_milk`      = {$a('AllergenMilk')},    `allergen_eggs` = {$a('AllergenEggs')},
+			 `allergen_fish`      = {$a('AllergenFish')},    `allergen_shellfish`= {$a('AllergenShellfish')},
+			 `allergen_treenuts`  = {$a('AllergenTreenuts')},`allergen_peanuts`  = {$a('AllergenPeanuts')},
+			 `allergen_wheat`     = {$a('AllergenWheat')},   `allergen_soy`  = {$a('AllergenSoy')},
+			 `allergen_sesame`    = {$a('AllergenSesame')},  `allergen_garlic`   = {$a('AllergenGarlic')},
+			 `allergen_gluten`    = {$a('AllergenGluten')},  `allergen_onion`    = {$a('AllergenOnion')},   `allergen_mushroom` = {$a('AllergenMushroom')},
+			 `allergen_corn`        = {$a('AllergenCorn')},    `allergen_coconut`    = {$a('AllergenCoconut')},
+			 `allergen_cocoa`       = {$a('AllergenCocoa')},   `allergen_nightshades`= {$a('AllergenNightshades')}";
+		$this->db->Clear();
+		$this->db->Execute($sql);
+		return true;
+	}
+
+	private function _dietary_defaults($mundane_id) {
+		return [
+			'MundaneId' => (int)$mundane_id, 'IsAnonymous' => 1, 'NoRestrictions' => 0,
+			'DietVegetarian' => 0, 'DietVegan' => 0, 'DietHalal' => 0, 'DietKosher' => 0, 'DietKeto' => 0, 'DietPaleo' => 0,
+			'RestrictDairy' => 0, 'RestrictEggs' => 0, 'RestrictFish' => 0, 'RestrictHoney' => 0,
+			'RestrictPoultry' => 0, 'RestrictBeef' => 0, 'RestrictPork' => 0, 'RestrictShellfish' => 0,
+			'AllergenMilk' => 0, 'AllergenEggs' => 0, 'AllergenFish' => 0, 'AllergenShellfish' => 0,
+			'AllergenTreenuts' => 0, 'AllergenPeanuts' => 0, 'AllergenWheat' => 0, 'AllergenSoy' => 0,
+			'AllergenSesame' => 0, 'AllergenGarlic' => 0, 'AllergenGluten' => 0, 'AllergenOnion' => 0, 'AllergenMushroom' => 0,
+			'AllergenCorn' => 0, 'AllergenCoconut' => 0, 'AllergenCocoa' => 0, 'AllergenNightshades' => 0,
+		];
+	}
+
+	private function _dietary_row($r) {
+		return [
+			'MundaneId' => (int)$r->mundane_id, 'IsAnonymous' => (int)$r->is_anonymous, 'NoRestrictions' => (int)$r->no_restrictions,
+			'DietVegetarian' => (int)$r->diet_vegetarian, 'DietVegan'    => (int)$r->diet_vegan,
+			'DietHalal'      => (int)$r->diet_halal,      'DietKosher'   => (int)$r->diet_kosher,
+			'DietKeto'       => (int)$r->diet_keto,        'DietPaleo'   => (int)$r->diet_paleo,
+			'RestrictDairy'     => (int)$r->restrict_dairy,    'RestrictEggs'     => (int)$r->restrict_eggs,
+			'RestrictFish'      => (int)$r->restrict_fish,     'RestrictHoney'    => (int)$r->restrict_honey,
+			'RestrictPoultry'   => (int)$r->restrict_poultry,  'RestrictBeef'     => (int)$r->restrict_beef,     'RestrictPork' => (int)$r->restrict_pork,
+			'RestrictShellfish' => (int)$r->restrict_shellfish,
+			'AllergenMilk'      => (int)$r->allergen_milk,     'AllergenEggs'     => (int)$r->allergen_eggs,
+			'AllergenFish'      => (int)$r->allergen_fish,     'AllergenShellfish'=> (int)$r->allergen_shellfish,
+			'AllergenTreenuts'  => (int)$r->allergen_treenuts, 'AllergenPeanuts'  => (int)$r->allergen_peanuts,
+			'AllergenWheat'     => (int)$r->allergen_wheat,    'AllergenSoy'      => (int)$r->allergen_soy,
+			'AllergenSesame'    => (int)$r->allergen_sesame,   'AllergenGarlic'   => (int)$r->allergen_garlic,
+			'AllergenGluten'    => (int)$r->allergen_gluten,   'AllergenOnion'    => (int)$r->allergen_onion,    'AllergenMushroom' => (int)$r->allergen_mushroom,
+			'AllergenCorn'        => (int)$r->allergen_corn,        'AllergenCoconut'     => (int)$r->allergen_coconut,
+			'AllergenCocoa'       => (int)$r->allergen_cocoa,       'AllergenNightshades' => (int)$r->allergen_nightshades,
+		];
 	}
 
 	// Earliest valid attendance credit date at a specific park — used as a

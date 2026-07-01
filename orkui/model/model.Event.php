@@ -42,7 +42,17 @@ class Model_Event extends Model {
 			// Reuse the first GetEvent() result ($r) instead of calling GetEvent() again
 			$ret['HeraldryUrl'] = $r['HeraldryUrl'] ?? '';
 			$ret['HasHeraldry'] = $r['HasHeraldry'] ?? false;
-			
+
+			// Merge banner-image fields onto EventInfo[0] so the template (which
+			// reads $info[0] from Search_Event) sees them alongside HasHeraldry.
+			if (isset($ret['EventInfo'][0]) && is_array($ret['EventInfo'][0])) {
+				$ret['EventInfo'][0]['HasBanner']      = $r['HasBanner']      ?? 0;
+				$ret['EventInfo'][0]['BannerShowLogo'] = $r['BannerShowLogo'] ?? 1;
+				$ret['EventInfo'][0]['BannerVignette'] = $r['BannerVignette'] ?? 1;
+				$ret['EventInfo'][0]['BannerOffsetX']  = $r['BannerOffsetX']  ?? 50;
+				$ret['EventInfo'][0]['BannerOffsetY']  = $r['BannerOffsetY']  ?? 50;
+			}
+
 			return $ret;
 		} else {
 			return $r;
@@ -136,10 +146,12 @@ class Model_Event extends Model {
 	function get_rsvp_list($detail_id) {
 		global $DB;
 		$DB->Clear();
-		$r = $DB->DataSet("SELECT m.mundane_id, m.persona, er.status, m.waivered, p.abbreviation AS park_abbr, k.abbreviation AS kingdom_abbr, la.class_id AS last_class_id, c.name AS last_class_name FROM " . DB_PREFIX . "event_rsvp er JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = er.mundane_id LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id LEFT JOIN " . DB_PREFIX . "attendance la ON la.attendance_id = (SELECT a.attendance_id FROM " . DB_PREFIX . "attendance a WHERE a.mundane_id = m.mundane_id ORDER BY a.attendance_id DESC LIMIT 1) LEFT JOIN " . DB_PREFIX . "class c ON c.class_id = la.class_id WHERE er.event_calendardetail_id = " . (int)$detail_id . " ORDER BY er.status, m.persona");
+		// last-attendance lookup uses a derived-table JOIN on MAX(attendance_id) per mundane,
+		// instead of a per-row correlated subquery — runs once instead of O(n) seeks on ork_attendance.
+		$r = $DB->DataSet("SELECT m.mundane_id, m.persona, er.status, m.waivered, p.park_id, p.abbreviation AS park_abbr, k.kingdom_id, k.abbreviation AS kingdom_abbr, la.class_id AS last_class_id, c.name AS last_class_name FROM " . DB_PREFIX . "event_rsvp er JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = er.mundane_id LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id LEFT JOIN (SELECT mundane_id, MAX(attendance_id) AS last_aid FROM " . DB_PREFIX . "attendance GROUP BY mundane_id) la_max ON la_max.mundane_id = m.mundane_id LEFT JOIN " . DB_PREFIX . "attendance la ON la.attendance_id = la_max.last_aid LEFT JOIN " . DB_PREFIX . "class c ON c.class_id = la.class_id WHERE er.event_calendardetail_id = " . (int)$detail_id . " ORDER BY er.status, m.persona");
 		$list = [];
 		if ($r) while ($r->Next()) {
-			$list[] = ['MundaneId' => $r->mundane_id, 'Persona' => $r->persona, 'Status' => $r->status, 'Waivered' => (bool)$r->waivered, 'KingdomAbbr' => $r->kingdom_abbr, 'ParkAbbr' => $r->park_abbr, 'LastClassId' => $r->last_class_id, 'LastClassName' => $r->last_class_name];
+			$list[] = ['MundaneId' => $r->mundane_id, 'Persona' => $r->persona, 'Status' => $r->status, 'Waivered' => (bool)$r->waivered, 'KingdomId' => $r->kingdom_id, 'KingdomAbbr' => $r->kingdom_abbr, 'ParkId' => $r->park_id, 'ParkAbbr' => $r->park_abbr, 'LastClassId' => $r->last_class_id, 'LastClassName' => $r->last_class_name];
 		}
 		return $list;
 	}
@@ -157,14 +169,16 @@ class Model_Event extends Model {
 			" ORDER BY cd.event_start ASC"
 		);
 		$list = [];
-		while ($r->Next()) {
-			$list[] = [
-				'EventCalendarDetailId' => $r->event_calendardetail_id,
-				'EventId'               => $r->event_id,
-				'EventName'             => $r->event_name,
-				'EventStart'            => $r->event_start,
-				'EventEnd'              => $r->event_end,
-			];
+		if ($r) {
+			while ($r->Next()) {
+				$list[] = [
+					'EventCalendarDetailId' => $r->event_calendardetail_id,
+					'EventId'               => $r->event_id,
+					'EventName'             => $r->event_name,
+					'EventStart'            => $r->event_start,
+					'EventEnd'              => $r->event_end,
+				];
+			}
 		}
 		return $list;
 	}
@@ -179,6 +193,7 @@ class Model_Event extends Model {
 			" JOIN " . DB_PREFIX . "event e ON e.event_id = cd.event_id" .
 			" LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = e.park_id" .
 			" WHERE e.kingdom_id = " . (int)$kingdom_id .
+			" AND (e.status IS NULL OR e.status = 'published')" .
 			" AND cd.event_start > NOW()" .
 			" AND cd.event_calendardetail_id NOT IN (" .
 			"   SELECT event_calendardetail_id FROM " . DB_PREFIX . "event_rsvp WHERE mundane_id = " . (int)$exclude_mundane_id .
@@ -186,7 +201,7 @@ class Model_Event extends Model {
 			" ORDER BY cd.event_start ASC LIMIT 6"
 		);
 		$list = [];
-		while ($r->Next()) {
+		if ($r) while ($r->Next()) {
 			$list[] = [
 				'EventCalendarDetailId' => $r->event_calendardetail_id,
 				'EventId'               => $r->event_id,

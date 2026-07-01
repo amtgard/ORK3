@@ -18,8 +18,10 @@ $_actionLabels = [
 	'Player::MovePlayer'           => 'Player Moved',
 	'Player::SetPlayerSuspension'  => 'Suspension Changed',
 	'Player::RemoveNote'           => 'Note Deleted',
-	'Attendance::SetAttendance'    => 'Attendance Modified',
-	'Attendance::RemoveAttendance' => 'Attendance Removed',
+	'Attendance::SetAttendance'         => 'Attendance Modified',
+	'Attendance::RemoveAttendance'      => 'Attendance Removed',
+	'Attendance::UpdateSelfSigninClass' => 'Sign-In Class Changed',
+	'Player::SelfRegister'              => 'Self-Registration',
 	'Player::DeleteAwardRecommendation' => 'Recommendation Removed',
 	'Player::RestoreAwardRecommendation' => 'Recommendation Restored',
 	'Player::AddSecondToRecommendation' => 'Recommendation Seconded',
@@ -341,6 +343,37 @@ function _auditSummary($method, $params, $prior, $post, $kawardMap = [], $parkMa
 			$detail = array_filter([$date, $cls]);
 			$verb = ($method === 'Attendance::RemoveAttendance') ? 'Deleted' : 'Updated';
 			return $verb . ' attendance' . ($detail ? ': ' . implode(', ', $detail) : '');
+		case 'Attendance::UpdateSelfSigninClass':
+			// Player changed the class on their own self-signed attendance row.
+			// Prior/post use CamelCase keys (see UpdateSelfSigninClass payload).
+			$_priorCid = (int)($p['PriorClassId'] ?? $b['ClassId'] ?? 0);
+			$_newCid   = (int)($p['NewClassId']   ?? $a['ClassId'] ?? 0);
+			$_priorCls = $classMap[$_priorCid] ?? ('Class #' . $_priorCid);
+			$_newCls   = $classMap[$_newCid]   ?? ('Class #' . $_newCid);
+			$_pkid     = (int)($a['ParkId'] ?? $b['ParkId'] ?? 0);
+			$_park     = $_pkid ? ($parkMap[$_pkid] ?? '') : '';
+			$_date     = (string)($a['Date'] ?? $b['Date'] ?? '');
+			$_where    = array_filter([$_park, $_date]);
+			return 'Changed sign-in class: ' . htmlspecialchars($_priorCls) . ' → ' . htmlspecialchars($_newCls)
+				. ($_where ? ' (' . htmlspecialchars(implode(' · ', $_where)) . ')' : '');
+		case 'Player::SelfRegister':
+			// New player onboarded via SelfReg QR. Parameters include Persona,
+			// UserName, Email, ParkId, KingdomId, Result ('success'|'failure'),
+			// and on failure a Reason.
+			$_persona = (string)($p['Persona'] ?? '');
+			$_uname   = (string)($p['UserName'] ?? '');
+			$_pkid    = (int)($p['ParkId'] ?? 0);
+			$_park    = $_pkid ? ($parkMap[$_pkid] ?? '') : '';
+			$_result  = (string)($p['Result'] ?? 'success');
+			if ($_result === 'failure') {
+				$_reason = (string)($p['Reason'] ?? 'reason not recorded');
+				return 'Self-registration FAILED'
+					. ($_uname ? ' (attempted as ' . htmlspecialchars($_uname) . ')' : '')
+					. ': ' . htmlspecialchars($_reason);
+			}
+			$_who = $_persona ?: ($_uname ?: 'new player');
+			return 'Registered new player ' . htmlspecialchars($_who)
+				. ($_park ? ' at ' . htmlspecialchars($_park) : '');
 		case 'Player::RevokeDues':
 			$_kid = (int)($b['kingdom_id'] ?? 0);
 			$kingdom = $_kid ? ($kingdomMap[$_kid] ?? 'kingdom #' . $_kid) : '';
@@ -907,6 +940,48 @@ function _auditDetail($method, $params, $prior, $post, $parkMap, $kingdomMap, $m
 			if (!empty($att['park_id']))    $html .= '<tr><td class="al-diff-field">Park</td><td colspan="2">'    . _auditIdLink('park',    $att['park_id'],    $parkMap)    . '</td></tr>';
 			if (!empty($att['kingdom_id'])) $html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', $att['kingdom_id'], $kingdomMap) . '</td></tr>';
 			if (!empty($att['event_id']))   $html .= '<tr><td class="al-diff-field">Event</td><td colspan="2">'   . _auditIdLink('event',   $att['event_id'],   $eventMap)   . '</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'Player::SelfRegister':
+			// Onboarding via SelfReg QR. Useful to see persona, email, IP,
+			// the link token used, and (on failure) the rejection reason.
+			$html = '<table class="al-diff-table"><tbody>';
+			$_result = (string)($p['Result'] ?? 'success');
+			$_resCol = $_result === 'failure' ? '#c53030' : '#2f855a';
+			$html .= '<tr><td class="al-diff-field">Result</td><td colspan="2" style="color:' . $_resCol . ';font-weight:600">' . htmlspecialchars(ucfirst($_result)) . '</td></tr>';
+			if (!empty($p['Reason']))    $html .= '<tr><td class="al-diff-field">Reason</td><td colspan="2">'   . htmlspecialchars($p['Reason'])   . '</td></tr>';
+			if (!empty($p['Persona']))   $html .= '<tr><td class="al-diff-field">Persona</td><td colspan="2">'  . htmlspecialchars($p['Persona'])  . '</td></tr>';
+			if (!empty($p['UserName']))  $html .= '<tr><td class="al-diff-field">Username</td><td colspan="2">' . htmlspecialchars($p['UserName']) . '</td></tr>';
+			if (!empty($p['Email']))     $html .= '<tr><td class="al-diff-field">Email</td><td colspan="2">'    . htmlspecialchars($p['Email'])    . '</td></tr>';
+			if (!empty($p['ParkId']))    $html .= '<tr><td class="al-diff-field">Park</td><td colspan="2">'    . _auditIdLink('park',    (int)$p['ParkId'],    $parkMap)    . '</td></tr>';
+			if (!empty($p['KingdomId'])) $html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">' . _auditIdLink('kingdom', (int)$p['KingdomId'], $kingdomMap) . '</td></tr>';
+			if (!empty($p['RemoteAddr'])) $html .= '<tr><td class="al-diff-field">From IP</td><td colspan="2">' . htmlspecialchars($p['RemoteAddr']) . '</td></tr>';
+			if (!empty($p['SelfRegToken'])) $html .= '<tr><td class="al-diff-field">Link Token</td><td colspan="2" style="font-family:monospace;font-size:11px">' . htmlspecialchars(substr($p['SelfRegToken'], 0, 16)) . '…</td></tr>';
+			$html .= '</tbody></table>';
+			return $html;
+
+		case 'Attendance::UpdateSelfSigninClass':
+			// Self-signin class edit. Prior/post use CamelCase keys (ClassId, Date, ParkId, etc.).
+			if (empty($b) && empty($p)) return '<em style="color:#a0aec0">No detail available.</em>';
+			$_priorCid = (int)($p['PriorClassId'] ?? $b['ClassId'] ?? 0);
+			$_newCid   = (int)($p['NewClassId']   ?? $a['ClassId'] ?? 0);
+			$_priorCls = $classMap[$_priorCid] ?? ('Class #' . $_priorCid);
+			$_newCls   = $classMap[$_newCid]   ?? ('Class #' . $_newCid);
+			$html  = '<table class="al-diff-table">';
+			$html .= '<thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>';
+			$html .= '<tr class="al-diff-changed"><td class="al-diff-field">Class</td>'
+			       . '<td class="al-diff-old">' . htmlspecialchars($_priorCls) . '</td>'
+			       . '<td class="al-diff-new">' . htmlspecialchars($_newCls)   . '</td></tr>';
+			// Context — these don't change on a class flip but help locate the row
+			$_att = $b ?: $a;
+			if (!empty($_att['Date']))         $html .= '<tr><td class="al-diff-field">Date</td><td colspan="2">'         . htmlspecialchars($_att['Date'])              . '</td></tr>';
+			if (!empty($_att['AttendanceId'])) $html .= '<tr><td class="al-diff-field">Attendance ID</td><td colspan="2">' . (int)$_att['AttendanceId']                   . '</td></tr>';
+			if (!empty($_att['MundaneId']))    $html .= '<tr><td class="al-diff-field">Player</td><td colspan="2">'       . _auditIdLink('player',  (int)$_att['MundaneId'], $mundaneMap) . '</td></tr>';
+			if (!empty($_att['ParkId']))       $html .= '<tr><td class="al-diff-field">Park</td><td colspan="2">'         . _auditIdLink('park',    (int)$_att['ParkId'],    $parkMap)    . '</td></tr>';
+			if (!empty($_att['KingdomId']))    $html .= '<tr><td class="al-diff-field">Kingdom</td><td colspan="2">'      . _auditIdLink('kingdom', (int)$_att['KingdomId'], $kingdomMap) . '</td></tr>';
+			if (!empty($_att['EventId']))      $html .= '<tr><td class="al-diff-field">Event</td><td colspan="2">'        . _auditIdLink('event',   (int)$_att['EventId'],   $eventMap)   . '</td></tr>';
+			if (!empty($p['RemoteAddr']))      $html .= '<tr><td class="al-diff-field">From IP</td><td colspan="2">'      . htmlspecialchars($p['RemoteAddr'])                              . '</td></tr>';
 			$html .= '</tbody></table>';
 			return $html;
 

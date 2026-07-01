@@ -30,6 +30,7 @@
 		<meta property="og:image:width" content="1075">
 		<meta property="og:image:height" content="1075">
 		<?php endif; ?>
+		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/tokens.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/tokens.css')?>" rel="stylesheet" />
 		<link type="text/css" href="<?=HTTP_TEMPLATE;?>default/style/orkui.css?v=<?=filemtime(DIR_TEMPLATE.'default/style/orkui.css')?>" rel="stylesheet" />
 
 		<link rel="preconnect" href="https://fonts.googleapis.com">
@@ -55,7 +56,7 @@
 		gtag('config', 'G-PVQCKENY0M');
 		</script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b2fb40110e5740e2ac1aeffe77a18936"}'></script><!-- End Cloudflare Web Analytics -->
-	
+
 	<style>
 	/* Offline banner */
 	#ork-offline-banner { display:none; position:fixed; bottom:0; left:0; right:0; z-index:99999; background:#92400e; color:#fff; text-align:center; padding:10px 16px; font-size:0.85rem; font-weight:600; box-shadow:0 -2px 8px rgba(0,0,0,0.25); }
@@ -77,8 +78,10 @@
 	.wn-item-title { font-weight:600; color:#2d3748; font-size:14px; }
 	.wn-item-body { color:#4a5568; font-size:13px; line-height:1.5; margin-top:2px; }
 	.wn-footer { display:flex; align-items:center; justify-content:center; gap:12px; }
-	.wn-all-versions { background:none; color:#4299e1; border:1px solid #4299e1; border-radius:7px; padding:10px 20px; font-size:15px; cursor:pointer; font-family:inherit; text-decoration:none; display:inline-flex; align-items:center; }
-	.wn-all-versions:hover { background:#ebf8ff; }
+	.wn-all-versions { background:#38a169; color:#fff; border:1px solid #38a169; border-radius:7px; padding:10px 20px; font-size:15px; cursor:pointer; font-family:inherit; text-decoration:none; display:inline-flex; align-items:center; animation:wnGlowPulse 2.2s ease-in-out infinite; }
+	.wn-all-versions:hover { background:#2f855a; border-color:#2f855a; }
+	@keyframes wnGlowPulse { 0%, 100% { box-shadow:0 0 0 0 rgba(56,161,105,0.40); } 50% { box-shadow:0 0 14px 3px rgba(56,161,105,0.55); } }
+	@media (prefers-reduced-motion: reduce) { .wn-all-versions { animation:none; } }
 	.wn-dismiss { background:#4299e1; color:#fff; border:none; border-radius:7px; padding:10px 32px; font-size:15px; cursor:pointer; font-family:inherit; }
 	.wn-dismiss:hover { background:#3182ce; }
 
@@ -89,8 +92,10 @@
 	html[data-theme="dark"] .wn-item-title { color: #e2e8f0; }
 	html[data-theme="dark"] .wn-item-body { color: #cbd5e0; }
 	html[data-theme="dark"] .wn-subtitle { color: #a0aec0; }
-	html[data-theme="dark"] .wn-all-versions { border-color: #63b3ed; color: #63b3ed; }
-	html[data-theme="dark"] .wn-all-versions:hover { background: #374151; }
+	html[data-theme="dark"] .wn-all-versions { background: #38a169; border-color: #38a169; color: #fff; }
+	html[data-theme="dark"] .wn-all-versions:hover { background: #2f855a; border-color: #2f855a; }
+	html[data-theme="dark"] .wn-all-versions { animation:wnGlowPulseDark 2.2s ease-in-out infinite; }
+	@keyframes wnGlowPulseDark { 0%, 100% { box-shadow:0 0 0 0 rgba(72,187,120,0.45); } 50% { box-shadow:0 0 16px 4px rgba(72,187,120,0.65); } }
 	
 	/* Dark mode toggle button */
 	.nav-theme-toggle {
@@ -119,7 +124,101 @@
 	html[data-theme="dark"] #theme_container a { color: #63b3ed; }
 	html[data-theme="dark"] #theme_container a:hover { color: #90cdf4; }
 	html[data-theme="dark"] #nav-maintenance-pop { background:#2d3748;color:#e2e8f0;border-color:#4a5568; }
-		</style>
+
+	/* ============================================================
+	   ORK Help Panel — Gmail compose-style slide-up
+	   ============================================================ */
+	.nav-help-btn {
+		background: none; border: none; cursor: pointer;
+		color: rgba(255,255,255,0.55); font-size: 16px;
+		width: 36px; height: 36px; border-radius: 50%;
+		display: inline-flex; align-items: center; justify-content: center;
+		transition: color 0.15s, background 0.15s; flex-shrink: 0;
+	}
+	.nav-help-btn:hover, .nav-help-btn.ork-help-active {
+		color: #fff; background: rgba(255,255,255,0.18);
+	}
+	#ork-help-panel {
+		position: fixed; bottom: 0; right: 80px;
+		width: 380px; max-height: 72vh;
+		background: #fff; border-radius: 10px 10px 0 0;
+		box-shadow: 0 -4px 24px rgba(0,0,0,0.22);
+		transform: translateY(100%);
+		transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+		z-index: 8500;
+		display: flex; flex-direction: column;
+	}
+	#ork-help-panel.ork-help-open { transform: translateY(0); }
+	#ork-help-panel.ork-help-minimized { transform: translateY(calc(100% - 46px)); }
+	.ork-help-header {
+		display: flex; align-items: center; justify-content: space-between;
+		padding: 0 14px; height: 46px;
+		background: #2b4c7e; border-radius: 10px 10px 0 0;
+		cursor: pointer; flex-shrink: 0;
+	}
+	.ork-help-header-title {
+		display: flex; align-items: center; gap: 8px;
+		color: #fff; font-weight: 600; font-size: 14px; user-select: none;
+	}
+	.ork-help-header-title i { font-size: 15px; }
+	.ork-help-scope-badge {
+		background: rgba(255,255,255,0.18); border-radius: 10px;
+		padding: 1px 9px; font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.9);
+	}
+	.ork-help-header-controls { display: flex; gap: 2px; }
+	.ork-help-header-controls button {
+		background: none; border: none; cursor: pointer;
+		color: rgba(255,255,255,0.7); width: 30px; height: 30px;
+		border-radius: 50%; display: flex; align-items: center;
+		justify-content: center; font-size: 13px; transition: background 0.15s, color 0.15s;
+	}
+	.ork-help-header-controls button:hover { background: rgba(255,255,255,0.2); color: #fff; }
+	.ork-help-body {
+		overflow-y: auto; padding: 16px; flex: 1; min-height: 0;
+		-webkit-overflow-scrolling: touch;
+	}
+	/* Sections */
+	.ork-help-section { margin-bottom: 18px; }
+	.ork-help-section-label {
+		font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+		letter-spacing: 0.09em; color: #718096; margin-bottom: 8px;
+		padding-bottom: 5px; border-bottom: 1px solid #e2e8f0;
+	}
+	/* Accordion items */
+	.ork-help-item {
+		border: 1px solid #e2e8f0; border-radius: 7px;
+		margin-bottom: 6px; overflow: hidden;
+	}
+	.ork-help-item-trigger {
+		display: flex; align-items: center; justify-content: space-between;
+		padding: 10px 12px; cursor: pointer;
+		font-size: 13px; font-weight: 500; color: #2d3748;
+		background: #f7fafc; border: none; width: 100%; text-align: left;
+		transition: background 0.12s;
+	}
+	.ork-help-item-trigger:hover { background: #edf2f7; }
+	.ork-help-item-trigger-left { display: flex; align-items: center; gap: 0; }
+	.ork-help-item-icon { color: #3a7bd5; width: 20px; text-align: center; margin-right: 9px; }
+	.ork-help-chevron { color: #a0aec0; font-size: 11px; transition: transform 0.2s; }
+	.ork-help-item.ork-help-expanded .ork-help-chevron { transform: rotate(180deg); }
+	.ork-help-item-body {
+		display: none; padding: 12px 14px;
+		font-size: 13px; color: #4a5568; line-height: 1.65;
+		border-top: 1px solid #e2e8f0; background: #fff;
+	}
+	.ork-help-item.ork-help-expanded .ork-help-item-body { display: block; }
+	.ork-help-item-body p { margin: 0 0 8px 0; }
+	.ork-help-item-body p:last-child { margin-bottom: 0; }
+	.ork-help-item-body ul { margin: 6px 0 8px 0; padding-left: 18px; }
+	.ork-help-item-body li { margin-bottom: 5px; }
+	.ork-help-tip {
+		background: #ebf4ff; border-left: 3px solid #3a7bd5;
+		padding: 8px 10px; border-radius: 0 5px 5px 0; margin-top: 10px;
+		font-size: 12px; color: #2c5282;
+	}
+	.ork-help-tip i { margin-right: 4px; }
+	.ork-help-empty { color: #718096; font-size: 13px; text-align: center; padding: 24px 0; }
+	</style>
 </head>
 	<body<?php if (!empty($ViewerDyslexiaFonts)) echo ' class="ork-dyslexia-font"'; ?>>
 		<!-- Google Tag Manager (noscript) -->
@@ -261,6 +360,9 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 <?php endif; ?>
 <?php endif; ?>
 
+			<!-- Help button -->
+			<button class='nav-help-btn' id='ork-help-nav-btn' onclick='orkHelpToggle()' title='Help'><i class='fas fa-question-circle'></i></button>
+
 			<!-- Resources dropdown -->
 			<div class='nav-dropdown-wrap' id='nav-resources-wrap'>
 				<button class='nav-icon-btn' onclick="document.getElementById('nav-resources-wrap').classList.toggle('open')" title='Resources'><i class='fas fa-book'></i></button>
@@ -321,6 +423,27 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 <?php endif; ?>
 		</div>
 	</nav>
+
+
+	<!-- =============================================
+	     ORK Help Panel
+	     ============================================= -->
+	<div id='ork-help-panel'>
+		<div class='ork-help-header' id='ork-help-header'>
+			<div class='ork-help-header-title'>
+				<i class='fas fa-question-circle'></i>
+				<span>Help</span>
+				<span class='ork-help-scope-badge' id='ork-help-scope-badge' style='display:none'></span>
+			</div>
+			<div class='ork-help-header-controls'>
+				<button id='ork-help-minimize-btn' title='Minimize'><i class='fas fa-minus'></i></button>
+				<button id='ork-help-close-btn' title='Close'><i class='fas fa-times'></i></button>
+			</div>
+		</div>
+		<div class='ork-help-body' id='ork-help-body'>
+			<div class='ork-help-empty'><i class='fas fa-spinner fa-spin'></i>&ensp;Loading help&hellip;</div>
+		</div>
+	</div>
 
 	<script>
 	// ---- Search toggle ----
@@ -738,11 +861,151 @@ endif;
   Amtgard is a registered trademark of Amtgard International, Inc., a 501(c)(3) non-profit organization.
   &nbsp;&middot;&nbsp;
   <a href="<?=UIR?>ReleaseNotes" style="color:var(--ork-text-muted,#94a3b8);text-decoration:none;border-bottom:1px dotted var(--ork-text-muted,#94a3b8);">ORK v<?=ORK_VERSION?></a>
+  &nbsp;&middot;&nbsp;
+<?php
+    // Pre-render today's E.P. summary so opening the popover doesn't need
+    // a network round-trip. Same shape as /EraPhoenice/today JSON.
+    $_epToday    = new DateTimeImmutable('today');
+    $_epLastHol  = EraPhoenice::lastHoliday($_epToday);
+    $_epNextHol  = EraPhoenice::nextHoliday($_epToday);
+?>
+  <button type="button" id="ork-ep-footer-btn"
+          onclick="orkOpenEpPopover()"
+          style="background:none;border:none;padding:0;font:inherit;color:var(--ork-text-muted,#94a3b8);cursor:pointer;border-bottom:1px dotted var(--ork-text-muted,#94a3b8);">
+    <?= htmlspecialchars(EraPhoenice::format($_epToday)) ?>
+  </button>
 <?php if (!empty($IsOwnProfile)): ?>
   &nbsp;&middot;&nbsp;
   <a href="<?=UIR?>Reports/orkremental" aria-label="Back to top" style="color:var(--ork-text-muted,#94a3b8);text-decoration:none;"><i class="fas fa-chevron-up"></i></a>
 <?php endif; ?>
 </footer>
+
+<!-- Era Phoenice popover — mirrors electricsamurai.com/ad -->
+<div id="ork-ep-overlay"
+     onclick="if(event.target===this)orkCloseEpPopover()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9998;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--ork-card-bg,#fff);color:var(--ork-text,#2d3748);border-radius:12px;padding:28px 32px 24px;max-width:520px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.28);text-align:center;font-family:inherit;">
+    <button type="button" onclick="orkCloseEpPopover()" aria-label="Close"
+            style="float:right;background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:var(--ork-text-muted,#a0aec0);padding:0 4px;">&times;</button>
+    <div id="ork-ep-body">
+      <div style="font-size:26px;font-weight:700;line-height:1.15;margin:6px 0 4px;color:var(--ork-text,#1a202c);">
+        <?= htmlspecialchars(EraPhoenice::format($_epToday)) ?>
+      </div>
+      <div style="font-style:italic;color:var(--ork-text-muted,#718096);margin-bottom:18px;">
+        (<?= htmlspecialchars(EraPhoenice::imperiumFormat($_epToday)) ?>)
+      </div>
+      <?php if ($_epLastHol): ?>
+        <div style="line-height:1.55;">
+          The last Amtgard holiday was <strong><?= htmlspecialchars($_epLastHol['name']) ?></strong>,
+          on <?= htmlspecialchars(EraPhoenice::longCivil($_epLastHol['date'])) ?>.
+        </div>
+      <?php endif; ?>
+      <?php if ($_epNextHol): ?>
+        <div style="line-height:1.55;margin-top:4px;">
+          The next Amtgard holiday is <strong><?= htmlspecialchars($_epNextHol['name']) ?></strong>,
+          on <?= htmlspecialchars(EraPhoenice::longCivil($_epNextHol['date'])) ?>.
+        </div>
+      <?php endif; ?>
+    </div>
+    <div style="margin-top:22px;padding-top:16px;border-top:1px solid var(--ork-border,#e2e8f0);">
+      <label for="ork-ep-datepick" style="font-size:12px;color:var(--ork-text-muted,#718096);margin-right:6px;">or find a date:</label>
+      <input type="date" id="ork-ep-datepick" value="<?= $_epToday->format('Y-m-d') ?>"
+             style="padding:4px 6px;border:1px solid var(--ork-border,#cbd5e0);border-radius:4px;background:var(--ork-card-bg,#fff);color:var(--ork-text,#2d3748);font-family:inherit;">
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+    var overlay = document.getElementById('ork-ep-overlay');
+    var pick    = document.getElementById('ork-ep-datepick');
+    var body    = document.getElementById('ork-ep-body');
+    if (!overlay || !pick || !body) return;
+
+    // Stash the initial (server-rendered "today") body + date so we can
+    // reset both when the popover reopens — otherwise a previously-picked
+    // date sticks around and looks stale.
+    var initialBody = body.innerHTML;
+    var initialDate = pick.value;
+    window.__orkEpResetToToday = function() {
+        body.innerHTML = initialBody;
+        pick.value     = initialDate;
+    };
+
+    // English ordinal — mirrors EraPhoenice::ordinal() so client-side
+    // re-renders (from the date picker) match the server-side text.
+    function ord(n) {
+        var abs = Math.abs(n) % 100;
+        if (abs >= 11 && abs <= 13) return n + 'th';
+        switch (n % 10) {
+            case 1:  return n + 'st';
+            case 2:  return n + 'nd';
+            case 3:  return n + 'rd';
+            default: return n + 'th';
+        }
+    }
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function render(payload) {
+        if (!payload || !payload.ok) {
+            body.innerHTML = '<div style="color:#c53030">Could not load E.P. data.</div>';
+            return;
+        }
+        var html = '';
+        html += '<div style="font-size:26px;font-weight:700;line-height:1.15;margin:6px 0 4px;color:var(--ork-text,#1a202c);">'
+              + esc(payload.ep.formatted) + '</div>';
+        html += '<div style="font-style:italic;color:var(--ork-text-muted,#718096);margin-bottom:18px;">('
+              + esc(payload.imperium.formatted) + ')</div>';
+        if (payload.holiday) {
+            html += '<div style="line-height:1.55;margin-bottom:6px;">'
+                  + '<i class="fas fa-star" style="color:#d69e2e;margin-right:4px"></i>'
+                  + 'That day is <strong>' + esc(payload.holiday) + '</strong>.</div>';
+        }
+        if (payload.last_holiday) {
+            html += '<div style="line-height:1.55;">The last Amtgard holiday was <strong>'
+                  + esc(payload.last_holiday.name) + '</strong>, on '
+                  + esc(payload.last_holiday.civil) + '.</div>';
+        }
+        if (payload.next_holiday) {
+            html += '<div style="line-height:1.55;margin-top:4px;">The next Amtgard holiday is <strong>'
+                  + esc(payload.next_holiday.name) + '</strong>, on '
+                  + esc(payload.next_holiday.civil) + '.</div>';
+        }
+        body.innerHTML = html;
+    }
+
+    pick.addEventListener('change', function() {
+        var v = pick.value;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
+        body.innerHTML = '<div style="color:var(--ork-text-muted,#718096);padding:24px 0;">Loading&hellip;</div>';
+        fetch('<?=UIR?>EraPhoenice/date/' + v, { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(render)
+            .catch(function() {
+                body.innerHTML = '<div style="color:#c53030">Could not reach the E.P. service.</div>';
+            });
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && overlay.style.display === 'flex') orkCloseEpPopover();
+    });
+})();
+function orkOpenEpPopover() {
+    var el = document.getElementById('ork-ep-overlay');
+    if (!el) return;
+    if (typeof window.__orkEpResetToToday === 'function') window.__orkEpResetToToday();
+    el.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+function orkCloseEpPopover() {
+    var el = document.getElementById('ork-ep-overlay');
+    if (el) { el.style.display = 'none'; document.body.style.overflow = ''; }
+}
+</script>
 
 <script>
 /* Offline banner */
@@ -857,6 +1120,135 @@ if (typeof Highcharts !== 'undefined') {
   })();
 }
 </script>
+
+	<script>
+	// ============================================================
+	//  ORK Help Panel System
+	// ============================================================
+	(function() {
+		var _panel, _body, _badge, _navBtn;
+		var _isOpen = false, _isMinimized = false;
+
+		function _init() {
+			_panel  = document.getElementById('ork-help-panel');
+			_body   = document.getElementById('ork-help-body');
+			_badge  = document.getElementById('ork-help-scope-badge');
+			_navBtn = document.getElementById('ork-help-nav-btn');
+
+			document.getElementById('ork-help-close-btn').addEventListener('click', function(e) {
+				e.stopPropagation(); _close();
+			});
+			document.getElementById('ork-help-minimize-btn').addEventListener('click', function(e) {
+				e.stopPropagation(); _toggleMinimize();
+			});
+			document.getElementById('ork-help-header').addEventListener('click', function() {
+				if (_isMinimized) _expand();
+			});
+		}
+
+		function _open() {
+			_renderContent();
+			_panel.classList.add('ork-help-open');
+			_panel.classList.remove('ork-help-minimized');
+			_isOpen = true; _isMinimized = false;
+			if (_navBtn) _navBtn.classList.add('ork-help-active');
+		}
+
+		function _close() {
+			_panel.classList.remove('ork-help-open', 'ork-help-minimized');
+			_isOpen = false; _isMinimized = false;
+			if (_navBtn) _navBtn.classList.remove('ork-help-active');
+		}
+
+		function _toggleMinimize() {
+			if (_isMinimized) { _expand(); }
+			else { _panel.classList.add('ork-help-minimized'); _isMinimized = true; }
+		}
+
+		function _expand() {
+			_panel.classList.remove('ork-help-minimized'); _isMinimized = false;
+		}
+
+		function _esc(s) {
+			return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+		}
+
+		function _renderContent() {
+			var ctx     = window.orkHelpContext  || {};
+			var content = window.orkHelpContent  || [];
+
+			// Update scope badge
+			if (_badge) {
+				if (ctx.scopeLabel) {
+					_badge.textContent = ctx.scopeLabel;
+					_badge.style.display = '';
+				} else {
+					_badge.style.display = 'none';
+				}
+			}
+
+			// Filter sections & items by context requirements
+			var sections = [];
+			content.forEach(function(sec) {
+				var items = (sec.items || []).filter(function(item) {
+					var r = item.requires;
+					if (!r) return true;
+					if (r === 'own'          && !ctx.isOwnProfile) return false;
+					if (r === 'edit'         && !ctx.canEdit)      return false;
+					if (r === 'own_or_edit'  && !ctx.isOwnProfile && !ctx.canEdit) return false;
+					if (r === 'loggedin'     && !ctx.isLoggedIn)   return false;
+					return true;
+				});
+				if (items.length) sections.push({ section: sec.section, items: items });
+			});
+
+			if (!sections.length) {
+				_body.innerHTML = '<div class="ork-help-empty">No help topics available for this page.</div>';
+				return;
+			}
+
+			var html = '';
+			sections.forEach(function(sec) {
+				html += '<div class="ork-help-section">';
+				html += '<div class="ork-help-section-label">' + _esc(sec.section) + '</div>';
+				sec.items.forEach(function(item) {
+					html += '<div class="ork-help-item">';
+					html += '<button class="ork-help-item-trigger" type="button">';
+					html += '<span class="ork-help-item-trigger-left">';
+					html += '<i class="' + _esc(item.icon) + ' ork-help-item-icon"></i>';
+					html += _esc(item.title);
+					html += '</span>';
+					html += '<i class="fas fa-chevron-down ork-help-chevron"></i>';
+					html += '</button>';
+					html += '<div class="ork-help-item-body">' + (item.body || '') + '</div>';
+					html += '</div>';
+				});
+				html += '</div>';
+			});
+
+			_body.innerHTML = html;
+
+			// Wire accordion
+			_body.querySelectorAll('.ork-help-item-trigger').forEach(function(btn) {
+				btn.addEventListener('click', function() {
+					var item = this.closest('.ork-help-item');
+					item.classList.toggle('ork-help-expanded');
+				});
+			});
+		}
+
+		// Public toggle
+		window.orkHelpToggle = function() {
+			if (_isOpen && !_isMinimized) { _close(); } else { _open(); }
+		};
+
+		if (document.readyState === 'loading') {
+			document.addEventListener('DOMContentLoaded', _init);
+		} else {
+			_init();
+		}
+	})();
+	</script>
 
 </body>
 </html>

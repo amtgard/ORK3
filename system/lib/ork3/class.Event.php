@@ -7,7 +7,23 @@ class Event  extends Ork3 {
 		$this->event = new yapo($this->db, DB_PREFIX . 'event');
 		$this->detail = new yapo($this->db, DB_PREFIX . 'event_calendardetail');
 	}
-	
+
+	// GhettoCache-backed wrapper around Common::Geocode. Saves of the same address
+	// (common during edits) skip the synchronous Google round-trip.
+	private function _geocodeCached($address, $city, $province, $postalCode) {
+		$ckey = Ork3::$Lib->ghettocache->key([
+			'a' => strtolower(trim((string)$address)),
+			'c' => strtolower(trim((string)$city)),
+			'p' => strtolower(trim((string)$province)),
+			'z' => strtolower(trim((string)$postalCode)),
+		]);
+		if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.Geocode', $ckey, 86400)) !== false) {
+			return $cached;
+		}
+		$result = Common::Geocode($address, $city, $province, $postalCode);
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.Geocode', $ckey, $result);
+	}
+
 	public function CreateEvent($request) {
 		logtrace("CreateEvent()", $request);
 		$log = '';
@@ -106,6 +122,25 @@ class Event  extends Ork3 {
 			$response['Name'] = $this->event->name;
 			$response['HasHeraldry'] = $this->event->has_heraldry;
 			$response['HeraldryUrl'] = $this->event->has_heraldry?Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type'=>'Event','Id'=>$request['EventId'])):Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type'=>'Event','Id'=>0));
+			// Banner image fields — read via raw SQL to sidestep any stale Yapo
+			// schema cache (these columns were added late in the event-planning
+			// expansion).
+			global $DB;
+			$DB->Clear();
+			$bRow = $DB->DataSet('SELECT has_banner, banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ' . DB_PREFIX . 'event WHERE event_id = ' . (int)$request['EventId']);
+			if ($bRow && $bRow->Next()) {
+				$response['HasBanner']      = (int)$bRow->has_banner;
+				$response['BannerShowLogo'] = (int)$bRow->banner_show_logo;
+				$response['BannerVignette'] = (int)$bRow->banner_vignette;
+				$response['BannerOffsetX']  = (int)$bRow->banner_offset_x;
+				$response['BannerOffsetY']  = (int)$bRow->banner_offset_y;
+			} else {
+				$response['HasBanner']      = 0;
+				$response['BannerShowLogo'] = 1;
+				$response['BannerVignette'] = 1;
+				$response['BannerOffsetX']  = 50;
+				$response['BannerOffsetY']  = 50;
+			}
 			$response['Status'] = Success();
 		} else {
 			$response['Status'] = InvalidParameter();
@@ -202,7 +237,7 @@ class Event  extends Ork3 {
 				}
 			}
 
-			$details   = Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['PostalCode']);
+			$details   = $this->_geocodeCached($request['Address'], $request['City'], $request['Province'], $request['PostalCode']);
 			$geocode   = ($details && isset($details['Geocode'])) ? json_decode($details['Geocode']) : null;
 			$latitude  = ($geocode && isset($geocode->results[0])) ? $geocode->results[0]->geometry->location->lat : 0.0;
 			$longitude = ($geocode && isset($geocode->results[0])) ? $geocode->results[0]->geometry->location->lng : 0.0;
@@ -225,6 +260,7 @@ class Event  extends Ork3 {
 			$newDetail->country        = $request['Country'];
 			$newDetail->map_url        = $request['MapUrl'];
 			$newDetail->map_url_name   = $request['MapUrlName'];
+			if (!empty($request['EventType'])) $newDetail->event_type = $request['EventType'];
 			$newDetail->modified       = date('Y-m-d H:i:s');
 			$newDetail->google_geocode = $details ? $details['Geocode']  : null;
 			$newDetail->location       = $details ? $details['Location'] : null;
@@ -235,6 +271,68 @@ class Event  extends Ork3 {
 		} else {
 			return NoAuthorization();
 		}
+	}
+
+	public function GetActiveEventsAtScope($request) {
+		// Returns published events whose [event_start, event_end] range covers
+		// the given Date, scoped to a park or kingdom. "Scope" semantics:
+		//   - park scope: events where ork_event.park_id = scope_id, OR events
+		//     whose calendar detail is hosted at this park (cd.at_park_id = scope_id).
+		//   - kingdom scope: kingdom-level events (ork_event.kingdom_id = scope_id
+		//     AND ork_event.park_id = 0). Park-owned events at parks within the
+		//     kingdom are not surfaced here; the caller queries park scope for those.
+		// Ordered by event_start ASC. Drafts excluded.
+		$scope    = strtolower((string)($request['Scope'] ?? ''));
+		$scopeId  = (int)($request['ScopeId'] ?? 0);
+		$date     = (string)($request['Date'] ?? '');
+		if (!$scopeId || !$date || !in_array($scope, ['park','kingdom'], true)) {
+			return ['Status' => InvalidParameter(), 'Events' => []];
+		}
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+			return ['Status' => InvalidParameter(), 'Events' => []];
+		}
+		// GhettoCache: 60s TTL keyed by scope + scope_id + date.
+		$cacheKey = Ork3::$Lib->ghettocache->key(['Scope' => $scope, 'ScopeId' => $scopeId, 'Date' => $date]);
+		if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $cacheKey, 60)) !== false)
+			return $cached;
+		$dStart = $date . ' 00:00:00';
+		$dEnd   = $date . ' 23:59:59';
+		if ($scope === 'park') {
+			$where = "(e.park_id = {$scopeId} OR cd.at_park_id = {$scopeId})";
+		} else {
+			$where = "e.kingdom_id = {$scopeId} AND e.park_id = 0";
+		}
+		$sql = "
+			SELECT e.event_id, e.name, e.has_heraldry, e.status,
+			       cd.event_calendardetail_id, cd.event_start, cd.event_end, cd.at_park_id
+			FROM ork_event e
+			JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
+			WHERE {$where}
+			  AND COALESCE(e.status, 'published') = 'published'
+			  AND cd.event_start <= '{$dEnd}'
+			  AND cd.event_end   >= '{$dStart}'
+			ORDER BY cd.event_start ASC, e.event_id ASC";
+		$this->db->Clear();
+		$rs = $this->db->DataSet($sql);
+		$events = [];
+		if ($rs && $rs->Size() > 0) {
+			while ($rs->Next()) {
+				$eid = (int)$rs->event_id;
+				if ($eid) {
+					$events[] = [
+						'EventId'              => $eid,
+						'Name'                 => (string)$rs->name,
+						'EventStart'           => (string)$rs->event_start,
+						'EventEnd'             => (string)$rs->event_end,
+						'EventCalendarDetailId'=> (int)$rs->event_calendardetail_id,
+						'AtParkId'             => (int)$rs->at_park_id,
+						'HasHeraldry'          => (int)$rs->has_heraldry,
+					];
+				}
+			}
+		}
+		$response = ['Status' => Success(), 'Events' => $events];
+		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $cacheKey, $response);
 	}
 
 	public function SetCurrent($request) {
@@ -290,6 +388,14 @@ class Event  extends Ork3 {
 		if ($mundane_id > 0 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
 			if (Ork3::$Lib->attendance->HasAttendance(array( 'Filter' => 'Event', 'Value' => $request['EventCalendarDetailId'] )))
 				return InvalidParameter('This event occurrence cannot be deleted because attendance has already been entered for it.');
+			// B5: Expire any scoped attendance links before the detail row goes away.
+			// Once the B3 FK CASCADE migration is deployed, link rows will be hard-deleted
+			// automatically; this UPDATE provides graceful expiration first so staff UIs
+			// can render "expired" instead of "missing" during the brief window before
+			// the cascade runs.
+			$_detail_id = (int)$request['EventCalendarDetailId'];
+			$this->db->Clear();
+			$this->db->Execute("UPDATE " . DB_PREFIX . "attendance_link SET expires_at = NOW() - INTERVAL 1 SECOND WHERE event_calendardetail_id = " . $_detail_id);
 			$this->detail->clear();
 			$this->detail->event_calendardetail_id = $request['EventCalendarDetailId'];
 			if ($this->detail->find()) {
@@ -299,8 +405,9 @@ class Event  extends Ork3 {
 				return ProcessingError('Event Calendar Detail is missing after it was found.  Race conditions eminent!');
 			}
 		}
+		return NoAuthorization();
 	}
-	
+
   public function PlayAmtgard($request) {
 		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
 		if (!$mundane_id || $mundane_id <= 0) {
@@ -313,14 +420,29 @@ class Event  extends Ork3 {
 
     $latitude  = (float)($request['latitude']  ?? 0);
     $longitude = (float)($request['longitude'] ?? 0);
-    $start = isset($request['start']) ? date("Y-m-d", strtotime($request['start'])) : date("Y-m-d");
-    $end = date("Y-m-d", strtotime($request['end'] ?? $request['start'] ?? 'now + 90 days'));
-    // Validate dates are proper Y-m-d format
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start)) {
+    // B8: Validate strtotime BEFORE calling date(); date(false) silently becomes
+    // '1970-01-01' which would return thousands of historical rows.
+    if (isset($request['start'])) {
+        $_start_ts = strtotime((string)$request['start']);
+        if ($_start_ts === false) {
+            return InvalidParameter('Invalid date range.');
+        }
+        $start = date("Y-m-d", $_start_ts);
+    } else {
         $start = date("Y-m-d");
     }
+    $_end_raw = $request['end'] ?? $request['start'] ?? 'now + 90 days';
+    $_end_ts  = strtotime((string)$_end_raw);
+    if ($_end_ts === false) {
+        return InvalidParameter('Invalid date range.');
+    }
+    $end = date("Y-m-d", $_end_ts);
+    // Validate dates are proper Y-m-d format (belt-and-suspenders).
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start)) {
+        return InvalidParameter('Invalid date range.');
+    }
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) {
-        $end = date("Y-m-d", strtotime('+90 days'));
+        return InvalidParameter('Invalid date range.');
     }
     $distance = max(1, (float)($request['distance'] ?? 25));
     $limit    = min(100, max(1, (int)($request['limit'] ?? 12)));
@@ -389,7 +511,13 @@ class Event  extends Ork3 {
 
 		logtrace("SetEventDetails()",$request);
 		
-		if (valid_id($mundane_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {
+		$isStaffManager = false;
+		if (valid_id($mundane_id) && valid_id($request['EventCalendarDetailId'] ?? '')) {
+			$this->db->Clear();
+			$staffCheck = $this->db->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . (int)$request['EventCalendarDetailId'] . ' AND mundane_id = ' . (int)$mundane_id . ' AND can_manage = 1 LIMIT 1');
+			$isStaffManager = $staffCheck && $staffCheck->Next();
+		}
+		if (valid_id($mundane_id) && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT) || $isStaffManager)) {
 		
 			$this->detail->clear();
 			$this->detail->event_id = $request['EventId'];
@@ -397,7 +525,7 @@ class Event  extends Ork3 {
 			if (valid_id($request['EventCalendarDetailId']) && $this->detail->find()) {
 			
 				$hasAddress = !empty(trim(($request['Address'] ?? '') . ($request['City'] ?? '') . ($request['Province'] ?? '') . ($request['PostalCode'] ?? '')));
-				$details  = $hasAddress ? Common::Geocode($request['Address'], $request['City'], $request['Province'], $request['PostalCode']) : false;
+				$details  = $hasAddress ? $this->_geocodeCached($request['Address'], $request['City'], $request['Province'], $request['PostalCode']) : false;
 				$geocode  = ($details && !empty($details['Geocode'])) ? json_decode($details['Geocode']) : null;
 
 				$this->detail->event_id = $request['EventId'];
@@ -422,6 +550,7 @@ class Event  extends Ork3 {
 				}
 				$this->detail->map_url = $request['MapUrl'];
 				$this->detail->map_url_name = $request['MapUrlName'];
+				$this->detail->event_type = $request['EventType'] ?? null;
 				$this->detail->modified = date('Y-m-d H:i:s');
 				$this->detail->google_geocode = $details ? $details['Geocode'] : null;
 				$this->detail->location = $details ? $details['Location'] : null;
