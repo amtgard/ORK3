@@ -232,6 +232,38 @@ class Controller_Event extends Controller
             exit;
         }
 
+        // If the URL omits detail_id (e.g. someone shared /Event/detail/17955
+        // without the occurrence id), pick the next upcoming detail and
+        // redirect to the canonical URL. Without this fallback every
+        // detail-scoped tab (schedule, feast, RSVPs, staff, attendance)
+        // renders empty because their SQL is scoped to detail_id 0, and the
+        // page banner reads "TBD / PAST" for the same reason.
+        if ($detail_id <= 0) {
+            global $DB;
+            $DB->Clear();
+            $_cdRow = $DB->DataSet(
+                "SELECT event_calendardetail_id FROM " . DB_PREFIX . "event_calendardetail
+                 WHERE event_id = " . (int)$event_id . " AND event_start >= NOW()
+                 ORDER BY event_start ASC LIMIT 1"
+            );
+            if (!$_cdRow || !$_cdRow->Next()) {
+                $DB->Clear();
+                $_cdRow = $DB->DataSet(
+                    "SELECT event_calendardetail_id FROM " . DB_PREFIX . "event_calendardetail
+                     WHERE event_id = " . (int)$event_id . "
+                     ORDER BY event_start DESC LIMIT 1"
+                );
+                if ($_cdRow) {
+                    $_cdRow->Next();
+                }
+            }
+            $_pickedDetail = ($_cdRow && isset($_cdRow->event_calendardetail_id)) ? (int)$_cdRow->event_calendardetail_id : 0;
+            if ($_pickedDetail > 0) {
+                header('Location: ' . UIR . 'Event/detail/' . (int)$event_id . '/' . $_pickedDetail);
+                exit;
+            }
+        }
+
         $this->data['EventInfo']  = $info;
         $this->data['event_id']   = $event_id;
         $this->data['detail_id']  = $detail_id;
@@ -819,7 +851,11 @@ class Controller_Event extends Controller
         $this->data['MealList'] = array_values(array_filter($this->data['ScheduleList'], fn ($s) => ($s['Category'] ?? '') === 'Feast and Food' || ($s['SecondaryCategory'] ?? '') === 'Feast and Food'));
 
         $this->data['DietarySummary'] = null;
-        if ($this->data['CanManageFeast']) {
+        // Guard against detail_id = 0. Historical ork_attendance rows
+        // (~3.4M of 3.6M on prod) default event_calendardetail_id to 0, so
+        // a detail-less request would UNION in every player who ever signed
+        // in anywhere as "checked in" — surfaced as 163k+ bogus rows.
+        if ($this->data['CanManageFeast'] && $detail_id > 0) {
             $DB->Clear();
             $dsRows = $DB->DataSet(
                 'SELECT m.mundane_id AS MundaneId, m.persona AS Persona,
