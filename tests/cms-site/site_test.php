@@ -169,7 +169,8 @@ $newRow = array('site_id' => 42, 'scope_type' => 'kingdom', 'scope_id' => 7, 'sl
 $DB->queue = array(
     array(),               // GetSiteForScope -> none
     array(),               // ValidateSlug uniqueness -> unique
-    array($newRow),        // readback after INSERT
+    array($newRow),        // readback after INSERT ($created)
+    array($newRow),        // re-read after starter-template seed (home_page_id refresh)
 );
 $created = $site->EnsureSite('kingdom', 7, 99);
 check('EnsureSite creates when absent (returns row)', is_array($created) && (int)$created['site_id'] === 42);

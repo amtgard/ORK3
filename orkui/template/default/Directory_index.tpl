@@ -437,6 +437,65 @@
 	pointer-events: none;
 }
 
+/* ---- "Visit site" discovery link (published org sites) ---- */
+/* The card is a single <a>; the visit link is a SIBLING inside a positioned
+   wrapper (valid HTML — never a nested anchor) and sits above the card. */
+.hm-card-wrap { position: relative; display: flex; }
+.hm-card-wrap > a { flex: 1 1 auto; min-width: 0; }
+.hm-visit-site {
+	position: absolute;
+	top: 7px;
+	left: 8px;
+	z-index: 3;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	background: var(--ork-card-bg);
+	border: 1px solid var(--ork-border);
+	border-radius: 10px;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	color: var(--ork-link);
+	padding: 2px 7px;
+	text-decoration: none;
+	transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.hm-visit-site:hover {
+	border-color: var(--ork-link);
+	background: var(--ork-bg-secondary);
+	box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.hm-visit-site i { font-size: 9px; }
+/* Scoped data-tip tooltip (no native title); wraps + stays on-screen. */
+.hm-visit-site[data-tip]::after {
+	content: attr(data-tip);
+	position: absolute;
+	top: calc(100% + 6px);
+	left: 0;
+	background: #1f2937;
+	color: #fff;
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 1.3;
+	letter-spacing: normal;
+	white-space: normal;
+	width: max-content;
+	max-width: 200px;
+	padding: 5px 9px;
+	border-radius: 6px;
+	opacity: 0;
+	pointer-events: none;
+	transform: translateY(4px);
+	transition: opacity 0.12s ease, transform 0.12s ease;
+	z-index: 5;
+}
+.hm-visit-site[data-tip]:hover::after {
+	opacity: 1;
+	transform: translateY(0);
+}
+html[data-theme="dark"] .hm-visit-site[data-tip]::after { background: #0b1220; }
+
 /* ---- Empty state ---- */
 .hm-empty {
 	font-size: 13px;
@@ -572,32 +631,42 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 		</div>
 	</div>
 	<div class="hm-kingdoms-grid">
-		<?php foreach ($hmKingdoms as $k): ?>
-		<a class="hm-kingdom-card<?= !empty($k['_pinned']) ? ' hm-pinned' : '' ?>" href="<?= UIR ?>Kingdom/profile/<?= (int)$k['KingdomId'] ?>">
-			<div class="hm-card-heraldry-wrap">
-				<?php if (!empty($k['_pinned'])): ?><span class="hm-pin-badge">Your Kingdom</span><?php endif; ?>
-				<img class="hm-card-heraldry"
-				     src="<?= htmlspecialchars($k['_heraldry']) ?>"
-				     onerror="this.closest('.hm-card-heraldry-wrap').style.background='var(--ork-bg-tertiary,#edf2f7)'"
-				     alt="<?= htmlspecialchars(stripslashes($k['KingdomName'])) ?> heraldry">
-			</div>
-			<div class="hm-card-body">
-				<div class="hm-card-name"><?= htmlspecialchars(stripslashes($k['KingdomName'])) ?></div>
-				<div class="hm-card-stats">
-					<span class="hm-card-stat hm-card-stat-full">
-						<i class="fas fa-map-marker-alt"></i>
-						<?= (int)$k['ParkCount'] ?> park<?= (int)$k['ParkCount'] != 1 ? 's' : '' ?>
-					</span>
-					<span class="hm-card-stat hm-card-stat-full">
-						<i class="fas fa-users"></i>
-						<?= number_format($k['_weekly'], 1) ?>/wk
-						<span class="hm-stat-sep">&middot;</span>
-						<i class="fas fa-calendar-alt"></i>
-						<?= number_format($k['_monthly'], 1) ?>/mo
-					</span>
+		<?php foreach ($hmKingdoms as $k):
+			$kSiteSlug = isset($KingdomSiteSlugs[(int)$k['KingdomId']]) ? (string)$KingdomSiteSlugs[(int)$k['KingdomId']] : '';
+		?>
+		<div class="hm-card-wrap">
+			<a class="hm-kingdom-card<?= !empty($k['_pinned']) ? ' hm-pinned' : '' ?>" href="<?= UIR ?>Kingdom/profile/<?= (int)$k['KingdomId'] ?>">
+				<div class="hm-card-heraldry-wrap">
+					<?php if (!empty($k['_pinned'])): ?><span class="hm-pin-badge">Your Kingdom</span><?php endif; ?>
+					<img class="hm-card-heraldry"
+					     src="<?= htmlspecialchars($k['_heraldry']) ?>"
+					     onerror="this.closest('.hm-card-heraldry-wrap').style.background='var(--ork-bg-tertiary,#edf2f7)'"
+					     alt="<?= htmlspecialchars(stripslashes($k['KingdomName'])) ?> heraldry">
 				</div>
-			</div>
-		</a>
+				<div class="hm-card-body">
+					<div class="hm-card-name"><?= htmlspecialchars(stripslashes($k['KingdomName'])) ?></div>
+					<div class="hm-card-stats">
+						<span class="hm-card-stat hm-card-stat-full">
+							<i class="fas fa-map-marker-alt"></i>
+							<?= (int)$k['ParkCount'] ?> park<?= (int)$k['ParkCount'] != 1 ? 's' : '' ?>
+						</span>
+						<span class="hm-card-stat hm-card-stat-full">
+							<i class="fas fa-users"></i>
+							<?= number_format($k['_weekly'], 1) ?>/wk
+							<span class="hm-stat-sep">&middot;</span>
+							<i class="fas fa-calendar-alt"></i>
+							<?= number_format($k['_monthly'], 1) ?>/mo
+						</span>
+					</div>
+				</div>
+			</a>
+			<?php if ($kSiteSlug !== ''): ?>
+			<a class="hm-visit-site" href="<?= UIR ?>Site/view/<?= rawurlencode($kSiteSlug) ?>"
+			   data-tip="Visit this kingdom's public site">
+				<i class="fas fa-external-link-alt"></i> Visit site
+			</a>
+			<?php endif; ?>
+		</div>
 		<?php endforeach; ?>
 	</div>
 </div>
@@ -614,18 +683,28 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 			<span class="hm-section-title"><i class="fas fa-shield-alt"></i> Principalities</span>
 		</div>
 		<div class="hm-prinz-grid">
-			<?php foreach ($hmPrinz as $p): ?>
-			<a class="hm-prinz-card<?= !empty($p['_pinned']) ? ' hm-pinned' : '' ?>" href="<?= UIR ?>Kingdom/profile/<?= (int)$p['KingdomId'] ?>">
-				<div class="hm-card-heraldry-wrap" style="position:relative">
-					<?php if (!empty($p['_pinned'])): ?><span class="hm-pin-badge">Your Principality</span><?php endif; ?>
-					<img class="hm-prinz-heraldry"
-					     src="<?= htmlspecialchars($p['_heraldry']) ?>"
-					     onerror="this.style.display='none'"
-					     alt="<?= htmlspecialchars(stripslashes($p['KingdomName'])) ?>">
-				</div>
-				<div class="hm-prinz-name"><?= htmlspecialchars(stripslashes($p['KingdomName'])) ?></div>
-				<div class="hm-prinz-stat"><?= (int)$p['ParkCount'] ?> parks &middot; <?= number_format($p['_weekly'], 1) ?>/wk &middot; <?= number_format($p['_monthly'], 1) ?>/mo</div>
-			</a>
+			<?php foreach ($hmPrinz as $p):
+				$pSiteSlug = isset($KingdomSiteSlugs[(int)$p['KingdomId']]) ? (string)$KingdomSiteSlugs[(int)$p['KingdomId']] : '';
+			?>
+			<div class="hm-card-wrap">
+				<a class="hm-prinz-card<?= !empty($p['_pinned']) ? ' hm-pinned' : '' ?>" href="<?= UIR ?>Kingdom/profile/<?= (int)$p['KingdomId'] ?>">
+					<div class="hm-card-heraldry-wrap" style="position:relative">
+						<?php if (!empty($p['_pinned'])): ?><span class="hm-pin-badge">Your Principality</span><?php endif; ?>
+						<img class="hm-prinz-heraldry"
+						     src="<?= htmlspecialchars($p['_heraldry']) ?>"
+						     onerror="this.style.display='none'"
+						     alt="<?= htmlspecialchars(stripslashes($p['KingdomName'])) ?>">
+					</div>
+					<div class="hm-prinz-name"><?= htmlspecialchars(stripslashes($p['KingdomName'])) ?></div>
+					<div class="hm-prinz-stat"><?= (int)$p['ParkCount'] ?> parks &middot; <?= number_format($p['_weekly'], 1) ?>/wk &middot; <?= number_format($p['_monthly'], 1) ?>/mo</div>
+				</a>
+				<?php if ($pSiteSlug !== ''): ?>
+				<a class="hm-visit-site" href="<?= UIR ?>Site/view/<?= rawurlencode($pSiteSlug) ?>"
+				   data-tip="Visit this principality's public site">
+					<i class="fas fa-external-link-alt"></i> Visit site
+				</a>
+				<?php endif; ?>
+			</div>
 			<?php endforeach; ?>
 		</div>
 	</div>

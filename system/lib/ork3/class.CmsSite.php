@@ -109,14 +109,12 @@ class CmsSite extends CmsBase
      * return the row. Idempotent — a second call returns the existing row and
      * performs no INSERT.
      *
-     * Phase 1 (foundation) ONLY creates the ork_cms_site row with a unique
-     * placeholder slug. It deliberately does NOT seed any pages, blocks, or nav.
-     *
-     * TODO(Phase 5 — starter template): on first creation, seed the starter
-     * template here (home + About/History + Our Parks + Officers + Documents
-     * pages, a scoped 'site' nav menu, and set home_page_id to the seeded home
-     * page). See spec §"Starter template & provisioning". Keep the seed fully
-     * editable/deletable — a seed, not a cage.
+     * On FIRST creation it also seeds the starter template (home + About/History
+     * + Our Parks + Officers + Documents pages, a scoped 'marketing' nav menu, and
+     * home_page_id → the seeded home) via _seedStarterTemplate(). The seed runs
+     * ONLY in the create branch below, so it can never double-seed: a later
+     * EnsureSite call finds the existing row and returns early before reaching it.
+     * The seed is fully editable/deletable — a seed, not a cage.
      *
      * @param string $scopeType 'kingdom'|'park'
      * @param int    $scopeId
@@ -164,7 +162,333 @@ class CmsSite extends CmsBase
 
         // Read back by the unique (scope_type, scope_id) tuple rather than
         // trusting lastInsertId() (unreliable on dup-key under ERRMODE_WARNING).
-        return $this->GetSiteForScope($scopeType, $scopeId);
+        $created = $this->GetSiteForScope($scopeType, $scopeId);
+
+        // FIRST-CREATION ONLY: seed the starter template (pages + blocks + nav)
+        // and point home_page_id at the seeded home page. This line is reached
+        // exclusively when no prior row existed (the idempotency guard above
+        // returns early for an existing site), so the seed runs EXACTLY once per
+        // scope and can never double-seed — even if a partial failure leaves the
+        // template incomplete, the now-present site row makes every later
+        // EnsureSite call return early before reaching here.
+        if ($created !== null && isset($created['site_id'])) {
+            $this->_seedStarterTemplate((int) $created['site_id'], $scopeType, $scopeId, $uid);
+            // Re-read so the returned row carries the freshly-set home_page_id.
+            $created = $this->GetSiteForScope($scopeType, $scopeId);
+        }
+
+        return $created;
+    }
+
+    /**
+     * Seed the starter template for a freshly-created site: five editable pages
+     * (home, about, parks, officers, documents), a scoped 'marketing' nav menu
+     * linking them, and home_page_id → the seeded home. All pages are DRAFTS in
+     * the site's OWN scope — the site stays unpublished until an AUTH_ADMIN
+     * officer publishes it (Phase 3). Everything is editable: only the home page
+     * is is_system=1 (undeletable, so the site always retains a landing page);
+     * the rest can be freely edited or deleted — a seed, not a cage.
+     *
+     * Idempotency: invoked ONLY from EnsureSite's create branch (right after the
+     * INSERT), so it runs once per scope. As belt-and-suspenders, CmsPage's
+     * CreatePage self-guards the UNIQUE (scope_type, scope_id, slug) tuple
+     * (returns 0 on collision) — so even a defensive re-entry cannot duplicate a
+     * page or clobber an officer's later edits; $makePage() recovers the existing
+     * id on collision so nav + home_page_id still link.
+     *
+     * Content goes through the CmsPage/CmsNav libs only — NO raw SQL here.
+     *
+     * @param int    $siteId    the new site row id (target of home_page_id)
+     * @param string $scopeType 'kingdom'|'park'
+     * @param int    $scopeId
+     * @param int    $uid       acting mundane_id (audit)
+     * @return void
+     */
+    private function _seedStarterTemplate($siteId, $scopeType, $scopeId, $uid)
+    {
+        // Content libs must be loaded (they are, via the ork3 scandir autoload).
+        // If not, leave the bare site row rather than fatal.
+        if (!class_exists('CmsPage') || !class_exists('CmsNav')) {
+            return;
+        }
+
+        $page = new CmsPage();
+        $nav  = new CmsNav();
+        $now  = date('Y-m-d H:i:s');
+
+        // Sanitize authored HTML bodies exactly the way the editor save path does.
+        $clean = function ($html) {
+            return class_exists('CmsSanitizer') ? CmsSanitizer::Clean($html) : (string) $html;
+        };
+
+        // Attributes shared by every seeded page (draft, in the site's scope).
+        $baseAttrs = array(
+            'status'     => 'draft',
+            'scope_type' => $scopeType,
+            'scope_id'   => $scopeId,
+            'created_by' => $uid,
+            'updated_by' => $uid,
+            'created_at' => $now,
+            'updated_at' => $now,
+        );
+
+        // Create one page + attach its blocks; returns the new page_id (0 on
+        // hard failure). On a UNIQUE-slug collision (CreatePage returns 0) recover
+        // the existing id so nav + home_page_id still resolve — defensive only;
+        // collisions cannot occur on the once-per-scope create path.
+        $makePage = function ($attrs, $blocks) use ($page, $baseAttrs, $scopeType, $scopeId) {
+            $pid = (int) $page->CreatePage(array_merge($baseAttrs, $attrs));
+            if ($pid <= 0) {
+                $slug = isset($attrs['slug']) ? (string) $attrs['slug'] : '';
+                $row  = ($slug !== '') ? $page->GetPageBySlug($slug, $scopeType, $scopeId, false) : null;
+                return ($row !== null && isset($row['page_id'])) ? (int) $row['page_id'] : 0;
+            }
+            if (is_array($blocks) && count($blocks) > 0) {
+                $page->ReplaceBlocks('page', $pid, $blocks);
+            }
+            return $pid;
+        };
+
+        // ---- HOME (is_system within scope) — welcome + intro + upcoming events ----
+        // NOTE: deliberately NOT hero_carousel — that block bakes in a GLOBAL
+        // stats ticker (0s on a kingdom scope) and would emit an empty-src <img>
+        // with no seed image. The spec cut the stats ticker; the org adds its own
+        // hero imagery via the editor. Seed a clean welcome rich_text instead.
+        $homeId = $makePage(
+            array(
+                'slug'             => 'home',
+                'type'             => 'composed',
+                'title'            => 'Home',
+                'is_system'        => 1,
+                'meta_description' => 'Welcome to our kingdom.',
+            ),
+            array(
+                array(
+                    'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
+                    'fields' => array(
+                        'kicker'  => 'Welcome',
+                        'heading' => 'Welcome to Our Kingdom',
+                        'align'   => 'center',
+                        'body'    => $clean('<p>Foam swords, real friendships, and a place for everyone. Find a park near you and come play &mdash; your first day on the field is always free.</p>'),
+                    ),
+                ),
+                array(
+                    'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
+                    'fields' => array(
+                        'kicker'  => 'About Us',
+                        'heading' => 'A Kingdom of Adventurers',
+                        'align'   => 'center',
+                        'body'    => $clean('<p>Tell visitors who you are in a sentence or two. Edit this block to introduce your kingdom, describe what a typical game day looks like, and invite newcomers to their first (always free) day on the field.</p>'),
+                    ),
+                ),
+                array(
+                    'type' => 'kingdom_events', 'source' => 'dynamic', 'enabled' => 1, 'order' => 30,
+                    'fields' => array(
+                        'heading' => 'Upcoming Events',
+                        'kicker'  => "What's happening",
+                        'limit'   => 6,
+                    ),
+                ),
+            )
+        );
+
+        // ---- ABOUT US / HISTORY — heading + rich_text placeholder ----
+        $aboutId = $makePage(
+            array(
+                'slug'             => 'about',
+                'type'             => 'about',
+                'title'            => 'About Us',
+                'meta_description' => 'About our kingdom and its history.',
+            ),
+            array(
+                array(
+                    'type' => 'heading', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
+                    'fields' => array('text' => 'About Us', 'level' => 2, 'align' => 'center'),
+                ),
+                array(
+                    'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
+                    'fields' => array(
+                        'kicker'  => 'Our History',
+                        'heading' => 'How We Got Here',
+                        'align'   => 'left',
+                        'body'    => $clean('<p>Share your kingdom&rsquo;s story: when it was founded, the lands and parks it covers, and the traditions that make it yours. Replace this placeholder with your own history.</p>'),
+                    ),
+                ),
+            )
+        );
+
+        // ---- OUR PARKS — heading + kingdom_parks (dynamic) ----
+        $parksId = $makePage(
+            array(
+                'slug'             => 'parks',
+                'type'             => 'composed',
+                'title'            => 'Our Parks',
+                'meta_description' => 'Find a park near you.',
+            ),
+            array(
+                array(
+                    'type' => 'heading', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
+                    'fields' => array('text' => 'Our Parks', 'level' => 2, 'align' => 'center'),
+                ),
+                array(
+                    'type' => 'kingdom_parks', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
+                    'fields' => array(
+                        'heading' => 'Where We Play',
+                        'kicker'  => 'Our Parks',
+                        'limit'   => 24,
+                    ),
+                ),
+            )
+        );
+
+        // ---- OFFICERS — heading + kingdom_officers (dynamic) + Board roster ----
+        $officersId = $makePage(
+            array(
+                'slug'             => 'officers',
+                'type'             => 'composed',
+                'title'            => 'Officers',
+                'meta_description' => 'Meet the officers who keep the kingdom running.',
+            ),
+            array(
+                array(
+                    'type' => 'heading', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
+                    'fields' => array('text' => 'Officers', 'level' => 2, 'align' => 'center'),
+                ),
+                array(
+                    'type' => 'kingdom_officers', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
+                    'fields' => array(
+                        'heading' => 'Our Officers',
+                        'kicker'  => 'Leadership',
+                        'limit'   => 12,
+                    ),
+                ),
+                array(
+                    'type' => 'staff_roster', 'source' => 'authored', 'enabled' => 1, 'order' => 30,
+                    'fields' => array(
+                        'kicker'       => 'Governance',
+                        'heading'      => 'Board of Directors',
+                        'subheading'   => 'Add the members who govern and steward the kingdom.',
+                        'presentation' => 'mundane',
+                        'people'       => array(
+                            array(
+                                'image'        => array(),
+                                'persona_name' => '',
+                                'mundane_name' => 'Add a board member',
+                                'role'         => 'Role / title',
+                                'bio'          => '',
+                                'mundane_id'   => 0,
+                                'href'         => '',
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        );
+
+        // ---- DOCUMENTS & RESOURCES — heading + empty file_download library ----
+        $documentsId = $makePage(
+            array(
+                'slug'             => 'documents',
+                'type'             => 'media',
+                'title'            => 'Documents & Resources',
+                'meta_description' => 'Kingdom documents, bylaws, and resources.',
+            ),
+            array(
+                array(
+                    'type' => 'heading', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
+                    'fields' => array('text' => 'Documents & Resources', 'level' => 2, 'align' => 'center'),
+                ),
+                array(
+                    'type' => 'file_download', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
+                    'fields' => array('files' => array()),
+                ),
+            )
+        );
+
+        // ---- Scoped nav menu ('marketing' — the key org_header.tpl reads) ----
+        // link_type='page' so items follow slug changes; org_header re-points the
+        // resolved Page/view href onto this site's own /Site/page/ route. Same
+        // scope as the pages so CmsNav's scope-bound page join resolves the slug.
+        //
+        // CreateItem is NOT UNIQUE-guarded (unlike CreatePage), so guard the nav
+        // seed on an empty menu — this keeps nav idempotent even in the (extremely
+        // narrow) concurrency window where two EnsureSite calls both read back the
+        // same freshly-INSERTed site row (the DB UNIQUE(scope) key collapses their
+        // INSERTs to one row, but both could still reach this seed). Mirrors the
+        // 2026-06-23-cms-seed-nav.php "skip if the menu already has rows" idiom.
+        $existingNav = $nav->ListItems('marketing', $scopeType, $scopeId);
+        if (is_array($existingNav) && count($existingNav) > 0) {
+            // Menu already seeded (or hand-edited) — leave it untouched, but still
+            // ensure home_page_id is set below.
+            if ($homeId > 0) {
+                $this->UpdateSite($siteId, array('home_page_id' => $homeId), $uid);
+            }
+            return;
+        }
+
+        $navPages = array(
+            array('label' => 'Home',                  'page_id' => $homeId),
+            array('label' => 'About Us',              'page_id' => $aboutId),
+            array('label' => 'Our Parks',             'page_id' => $parksId),
+            array('label' => 'Officers',              'page_id' => $officersId),
+            array('label' => 'Documents & Resources', 'page_id' => $documentsId),
+        );
+        $ordering = 0;
+        foreach ($navPages as $navPage) {
+            if ((int) $navPage['page_id'] <= 0) {
+                continue; // page failed to seed — skip its nav item
+            }
+            $ordering += 10;
+            $nav->CreateItem(array(
+                'menu'       => 'marketing',
+                'label'      => $navPage['label'],
+                'link_type'  => 'page',
+                'page_id'    => (int) $navPage['page_id'],
+                'parent_id'  => null,
+                'ordering'   => $ordering,
+                'enabled'    => 1,
+                'scope_type' => $scopeType,
+                'scope_id'   => $scopeId,
+            ));
+        }
+
+        // ---- Point the site's landing page at the seeded home ----
+        if ($homeId > 0) {
+            $this->UpdateSite($siteId, array('home_page_id' => $homeId), $uid);
+        }
+    }
+
+    /**
+     * Batch discovery map: [scope_id => slug] for every PUBLISHED site of a given
+     * scope type. One query — used by the Directory to render a "Visit site" link
+     * per org WITHOUT an N+1 per-row GetSiteForScope() call. The unique
+     * (scope_type, scope_id) key guarantees at most one row per scope_id.
+     *
+     * @param string $scopeType 'kingdom'|'park'
+     * @return array<int,string> map of scope_id => slug (empty when none published)
+     */
+    public function PublishedSlugMapByScope($scopeType)
+    {
+        global $DB;
+
+        $scopeType = $this->_normalizeSiteScopeType($scopeType);
+
+        $DB->Clear();
+        $DB->scope_type = $scopeType;
+        $rs = $DB->DataSet(
+            'SELECT scope_id, slug FROM ' . DB_PREFIX . 'cms_site'
+            . " WHERE scope_type = :scope_type AND status = 'published'"
+        );
+
+        $map = array();
+        foreach ($this->_eachRow($rs) as $row) {
+            $sid  = (int) $row['scope_id'];
+            $slug = (string) $row['slug'];
+            if ($sid > 0 && $slug !== '') {
+                $map[$sid] = $slug;
+            }
+        }
+        return $map;
     }
 
     /**

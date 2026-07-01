@@ -14,5 +14,20 @@ class Controller_Directory extends Controller
         // The Directory is NOT the CMS home page — drop the home-edit FAB flag
         // that the base index() set so the editor FAB doesn't appear here.
         unset($this->data[ 'cmsEditUrl' ], $this->data[ 'cmsEditTip' ]);
+
+        // Discovery: prefetch published kingdom-site slugs in ONE query (avoids an
+        // N+1 per-card GetSiteForScope). The template renders a "Visit site" link
+        // for any kingdom present in this [kingdom_id => slug] map.
+        $siteSlugs = array();
+        try {
+            $this->load_model('CmsSite');
+            $map = $this->CmsSite->published_slug_map_by_scope('kingdom');
+            if (is_array($map)) {
+                $siteSlugs = $map;
+            }
+        } catch (Exception $e) {
+            $siteSlugs = array();
+        }
+        $this->data[ 'KingdomSiteSlugs' ] = $siteSlugs;
     }
 }

@@ -20,6 +20,10 @@ class Model_CmsSite extends Model
     {
         return $this->CmsSite->GetSiteForScope($scopeType, $scopeId);
     }
+    public function published_slug_map_by_scope($scopeType)
+    {
+        return $this->CmsSite->PublishedSlugMapByScope($scopeType);
+    }
     public function ensure_site($scopeType, $scopeId, $uid)
     {
         return $this->CmsSite->EnsureSite($scopeType, $scopeId, $uid);
