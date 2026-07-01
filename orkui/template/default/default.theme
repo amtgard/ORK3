@@ -11,7 +11,7 @@
 		'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 		})(window,document,'script','dataLayer','GTM-5HZHGSLT');</script>
 		<!-- End Google Tag Manager -->
-		<title><?php echo (strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title); ?></title>
+		<title><?php echo htmlspecialchars((strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title), ENT_QUOTES); ?></title>
 		<link rel="icon" type="image/png" sizes="32x32" href="<?= HTTP_ASSETS ?>images/favicon-32x32.png">
 		<link rel="icon" type="image/png" sizes="16x16" href="<?= HTTP_ASSETS ?>images/favicon-16x16.png">
 		<link rel="apple-touch-icon" sizes="180x180" href="<?= HTTP_ASSETS ?>images/favicon-180x180.png">
@@ -20,7 +20,7 @@
 		<meta name="robots" content="noindex">
 		<?php endif ; ?>
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="The Online Record Keeper for the Amtgard International LARP.">
+		<meta name="description" content="<?= htmlspecialchars(!empty($meta_description) ? $meta_description : 'The Online Record Keeper for the Amtgard International LARP.', ENT_QUOTES) ?>">
 		<?php if ($page_title === 'Home') : ?>
 		<meta property="og:type" content="website">
 		<meta property="og:site_name" content="ORK 3 - Amtgard Online Record Keeper">
@@ -36,7 +36,7 @@
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap">
-		<?php if (!empty($IsFrontDoor)): ?>
+		<?php if (!empty($IsFrontDoor) || !empty($IsOrgSite)): ?>
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap">
 		<?php endif; ?>
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.8.2/css/all.min.css" integrity="sha384-oS3vJWv+0UjzBfQzYUhtDYW+Pj2yciDJxpsK1OYPAYjqT085Qq/1cq5FLXAZQ7Ay" crossorigin="anonymous" referrerpolicy="no-referrer">
@@ -259,6 +259,7 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 
 		</div>
 
+<?php if (empty($IsOrgSite)): // standalone org sites render their own header, not the global ORK nav ?>
 	<nav id='newmenu'>
 		<a id='nav-mobile-home' href='<?=UIR?>'><i class='fas fa-home'></i></a>
 		<!-- Left: breadcrumb navigation -->
@@ -430,6 +431,7 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 <?php endif; ?>
 		</div>
 	</nav>
+<?php endif; // /IsOrgSite global-nav suppression ?>
 
 
 	<!-- =============================================
@@ -864,6 +866,7 @@ endif;
 </script>
 <?php endif; ?>
 
+<?php if (empty($IsOrgSite)): // standalone org sites render their own footer ?>
 <footer style="margin-top:40px;padding:18px 24px;border-top:1px solid var(--ork-border,#e2e8f0);background:var(--ork-bg-secondary,#f8fafc);font-size:11px;color:var(--ork-text-muted,#94a3b8);text-align:center;line-height:1.7;">
   Amtgard is a registered trademark of Amtgard International, Inc., a 501(c)(3) non-profit organization.
   &nbsp;&middot;&nbsp;
@@ -886,6 +889,7 @@ endif;
   <a href="<?=UIR?>Reports/orkremental" aria-label="Back to top" style="color:var(--ork-text-muted,#94a3b8);text-decoration:none;"><i class="fas fa-chevron-up"></i></a>
 <?php endif; ?>
 </footer>
+<?php endif; // /IsOrgSite global-footer suppression ?>
 
 <!-- Era Phoenice popover — mirrors electricsamurai.com/ad -->
 <div id="ork-ep-overlay"
