@@ -132,9 +132,9 @@
 // SCHEDULED MAINTENANCE NOTICE
 // Set start/end as UTC ISO strings. Leave $downtime_start empty to hide.
 // Example: 6am–9am EDT (UTC-4) on April 24th = 10:00–13:00 UTC
-$downtime_start = '';
-$downtime_end   = '2026-05-15T03:00:00Z';
-$downtime_note  = 'ORK downtime to migrate to the Mask 3.5.2 Release';
+$downtime_start = '2026-07-01T02:30:00Z';
+$downtime_end   = '2026-07-01T04:00:00Z';
+$downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 // -----------------------------------------------------------------------
 ?>
 		<div id='theme_container'>
