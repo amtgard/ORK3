@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/trait.CmsScope.php';
+
 /**
  * Controller_Cms — CMS admin (page-rendering surfaces).
  *
@@ -17,7 +19,13 @@
  */
 class Controller_Cms extends Controller
 {
-    /** v2 scope: org-wide. */
+    use CmsScopeContext;
+
+    /**
+     * Default scope when no ?scope= selector is present — the global front door.
+     * Phase 3 threads a per-request scope via _resolveScope(); this constant is
+     * only the fallback shape and the byte-for-byte legacy behavior.
+     */
     private static $SCOPE = array('type' => 'global', 'id' => 0);
 
     /**
@@ -47,16 +55,28 @@ class Controller_Cms extends Controller
     public function dashboard($action = null)
     {
         $uid = $this->_uid();
+        $scope = $this->_scopeOrDeny($uid);
+        if ($scope === false) {
+            return;
+        }
         // The dashboard is visible to anyone holding ANY CMS capability (or super-admin).
-        if (!$this->_hasAnyCmsCapability($uid)) {
+        if (!$this->_hasAnyCmsCapability($uid, $scope)) {
             return $this->_denyRedirect();
+        }
+        $this->_applyScopeData($scope);
+
+        // Entry point: opening the dashboard in a non-global org scope lazily
+        // provisions the org's site row (status='unbuilt'; seeding is Phase 5).
+        // Idempotent — a second open returns the existing row and no-ops.
+        if (!$this->_scopeIsGlobal($scope)) {
+            $this->_loadSiteContext($uid, $scope, true);
         }
 
         $this->template = 'Cms_dashboard.tpl';
         $this->data['page_title'] = 'Content Management';
 
         // ---- Pages overview (list_pages is already ORDER BY updated_at DESC) ----
-        $pages = $this->CmsPage->list_pages(array());
+        $pages = $this->CmsPage->list_pages($this->_scopeFilters($scope));
         $pages = is_array($pages) ? $pages : array();
 
         $pageCount  = count($pages);
@@ -68,7 +88,7 @@ class Controller_Cms extends Controller
         }
 
         // ---- Posts overview ----
-        $postsRes = $this->CmsPost->list_posts(array('includeDrafts' => true, 'scope_type' => 'global', 'scope_id' => 0));
+        $postsRes = $this->CmsPost->list_posts(array('includeDrafts' => true) + $this->_scopeFilters($scope));
         $posts    = (is_array($postsRes) && isset($postsRes['rows']) && is_array($postsRes['rows'])) ? $postsRes['rows'] : array();
 
         $postCount  = count($posts);
@@ -88,7 +108,7 @@ class Controller_Cms extends Controller
                 'title'      => (string)($p['title'] ?? '(untitled)'),
                 'status'     => (string)($p['status'] ?? 'draft'),
                 'updated_at' => (string)($p['updated_at'] ?? ''),
-                'edit_href'  => UIR . 'Cms/edit/' . (int)($p['page_id'] ?? 0),
+                'edit_href'  => UIR . 'Cms/edit/' . (int)($p['page_id'] ?? 0) . $this->_scopeQuery($scope),
             );
         }
         foreach (array_slice($posts, 0, 6) as $p) {
@@ -98,7 +118,7 @@ class Controller_Cms extends Controller
                 'title'      => (string)($p['title'] ?? '(untitled)'),
                 'status'     => (string)($p['status'] ?? 'draft'),
                 'updated_at' => (string)($p['updated_at'] ?? ''),
-                'edit_href'  => UIR . 'Cms/editpost/' . (int)($p['post_id'] ?? 0),
+                'edit_href'  => UIR . 'Cms/editpost/' . (int)($p['post_id'] ?? 0) . $this->_scopeQuery($scope),
             );
         }
         // Newest-first across both kinds; keep the 6 most recently touched.
@@ -117,8 +137,33 @@ class Controller_Cms extends Controller
         );
         $this->data['PageTypes']  = $this->_pageTypes();
         $this->data['TypeLabels'] = $this->_typeLabels();
-        $this->data['Caps']       = $this->_capFlags($uid);
+        $this->data['Caps']       = $this->_capFlags($uid, $scope);
         $this->data['Greet']      = $this->_greeting();
+    }
+
+    /**
+     * Load the org site row + publish-gate flag for the dashboard's site card
+     * (non-global scope only). Optionally EnsureSite first (dashboard entry).
+     * Sets $this->data['CmsSite'] and ['CanPublishSite'].
+     *
+     * @param int   $uid
+     * @param array $scope     resolved, authorized non-global scope
+     * @param bool  $ensure    provision the row if missing (idempotent)
+     * @return void
+     */
+    private function _loadSiteContext($uid, $scope, $ensure = false)
+    {
+        $this->load_model('CmsSite');
+        $type = (string)$scope['type'];
+        $id   = (int)$scope['id'];
+        $site = $ensure
+            ? $this->CmsSite->ensure_site($type, $id, $uid)
+            : $this->CmsSite->get_site_for_scope($type, $id);
+        $this->data['CmsSite'] = is_array($site) ? $site : array();
+        // Site publish/unpublish is an AUTH_ADMIN-tier action (monarch/regent).
+        // page.publish bridges to AUTH_ADMIN on the scope, so it is the correct
+        // gate: an AUTH_EDIT-only officer sees the "must be published" state.
+        $this->data['CanPublishSite'] = $this->CmsAuth->cms_can($uid, 'page.publish', $scope);
     }
 
     /**
@@ -147,11 +192,16 @@ class Controller_Cms extends Controller
     public function media($action = null)
     {
         $uid = $this->_uid();
-        $caps = $this->_capFlags($uid);
+        $scope = $this->_scopeOrDeny($uid);
+        if ($scope === false) {
+            return;
+        }
+        $caps = $this->_capFlags($uid, $scope);
         // Media management is its own capability (super-admins pass via _capFlags).
         if (empty($caps['media'])) {
             return $this->_denyRedirect();
         }
+        $this->_applyScopeData($scope);
 
         $this->load_model('CmsMedia');
 
@@ -160,7 +210,7 @@ class Controller_Cms extends Controller
 
         $search = trim((string)($_GET['q'] ?? ''));
 
-        $media = $this->CmsMedia->list_media(self::$SCOPE, 200, ($search === '' ? null : $search));
+        $media = $this->CmsMedia->list_media($scope, 200, ($search === '' ? null : $search));
         $this->data['Media']  = is_array($media) ? $media : array();
         $this->data['Search'] = $search;
         $this->data['Caps']   = $caps;
@@ -173,15 +223,20 @@ class Controller_Cms extends Controller
     public function index($action = null)
     {
         $uid = $this->_uid();
+        $scope = $this->_scopeOrDeny($uid);
+        if ($scope === false) {
+            return;
+        }
         // The list is visible to anyone holding ANY CMS capability (or super-admin).
-        if (!$this->_hasAnyCmsCapability($uid)) {
+        if (!$this->_hasAnyCmsCapability($uid, $scope)) {
             return $this->_denyRedirect();
         }
+        $this->_applyScopeData($scope);
 
         $this->template = 'Cms_index.tpl';
         $this->data['page_title'] = 'Content Management';
 
-        $filters = array();
+        $filters = $this->_scopeFilters($scope);
         $search = trim((string)($_GET['q'] ?? ''));
         if ($search !== '') {
             $filters['search'] = $search;
@@ -201,7 +256,7 @@ class Controller_Cms extends Controller
         $this->data['TypeLabels'] = $this->_typeLabels();
 
         // Capability flags the list UI uses to show/hide actions.
-        $this->data['Caps'] = $this->_capFlags($uid);
+        $this->data['Caps'] = $this->_capFlags($uid, $scope);
     }
 
     /* ------------------------------------------------------------------ *
@@ -215,13 +270,18 @@ class Controller_Cms extends Controller
         }
 
         $uid    = $this->_uid();
+        $scope  = $this->_scopeOrDeny($uid);
+        if ($scope === false) {
+            return;
+        }
         $id     = (string)$id;
         $isNew  = ($id === 'new' || $id === '' || $id === '0');
         $needed = $isNew ? 'page.create' : 'page.edit';
 
-        if (!$this->CmsAuth->cms_can($uid, $needed, self::$SCOPE)) {
+        if (!$this->CmsAuth->cms_can($uid, $needed, $scope)) {
             return $this->_denyRedirect();
         }
+        $this->_applyScopeData($scope);
 
         $this->template = 'Cms_edit.tpl';
 
@@ -236,21 +296,23 @@ class Controller_Cms extends Controller
                 'hero_media_id'    => null,
                 'meta_description' => '',
                 'is_system'        => 0,
-                'scope_type'       => 'global',
-                'scope_id'         => 0,
+                'scope_type'       => (string)$scope['type'],
+                'scope_id'         => (int)$scope['id'],
             );
             $blocks = array();
             $this->data['page_title'] = 'New Page';
         } else {
             $page = $this->CmsPage->get_page((int)$id);
-            if (empty($page)) {
+            // IDOR guard: a page from another scope is treated as not-found so a
+            // scoped officer can neither view nor edit cross-org content.
+            if (empty($page) || !$this->_rowInScope($page, $scope)) {
                 // No such page — fall back to the list with a message.
                 $this->template = 'Cms_index.tpl';
                 $this->data['page_title'] = 'Content Management';
-                $this->data['Pages']  = $this->CmsPage->list_pages(array());
+                $this->data['Pages']  = $this->CmsPage->list_pages($this->_scopeFilters($scope));
                 $this->data['Search'] = '';
                 $this->data['StatusFilter'] = '';
-                $this->data['Caps'] = $this->_capFlags($uid);
+                $this->data['Caps'] = $this->_capFlags($uid, $scope);
                 $this->data['Message'] = 'Page not found.';
                 return;
             }
@@ -267,7 +329,7 @@ class Controller_Cms extends Controller
         $this->data['BlockCatalog'] = $catalog;
         $this->data['PageTypes']    = $this->_pageTypes();
         $this->data['BlockAllow']   = $this->_blockAllow($catalog);
-        $this->data['Caps']         = $this->_capFlags($uid);
+        $this->data['Caps']         = $this->_capFlags($uid, $scope);
     }
 
     /* ------------------------------------------------------------------ *
@@ -281,16 +343,22 @@ class Controller_Cms extends Controller
         }
 
         $uid = $this->_uid();
-        if (!$this->CmsAuth->cms_can($uid, 'page.edit', self::$SCOPE)) {
+        $scope = $this->_scopeOrDeny($uid);
+        if ($scope === false) {
+            return;
+        }
+        if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)) {
             return $this->_denyRedirect();
         }
+        $this->_applyScopeData($scope);
 
         $this->template = 'Cms_preview.tpl';
         $this->data['IsFrontDoor'] = false;
         $this->data['no_index']    = true;
 
         $page = $this->CmsPage->get_page((int)$id);
-        if (empty($page)) {
+        // IDOR guard: never preview a page belonging to another scope.
+        if (empty($page) || !$this->_rowInScope($page, $scope)) {
             $this->data['Message']    = 'Page not found.';
             $this->data['page_title'] = 'Preview — not found';
             $this->data['FrontDoor']  = array();
@@ -302,7 +370,7 @@ class Controller_Cms extends Controller
         $this->data['FrontDoor']   = $this->CmsPage->get_page_blocks((int)$page['page_id']);
         $this->data['PreviewPage'] = $page;
         $this->data['PreviewKind'] = 'page';
-        $this->data['CanPublish']  = $this->CmsAuth->cms_can($uid, 'page.publish', self::$SCOPE);
+        $this->data['CanPublish']  = $this->CmsAuth->cms_can($uid, 'page.publish', $scope);
         $this->data['page_title']  = 'Preview: ' . $page['title'];
     }
 
@@ -320,16 +388,22 @@ class Controller_Cms extends Controller
         }
 
         $uid = $this->_uid();
-        if (!$this->CmsAuth->cms_can($uid, 'page.edit', self::$SCOPE)) {
+        $scope = $this->_scopeOrDeny($uid);
+        if ($scope === false) {
+            return;
+        }
+        if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)) {
             return $this->_denyRedirect();
         }
+        $this->_applyScopeData($scope);
 
         $this->template = 'Cms_preview.tpl';
         $this->data['IsFrontDoor'] = false;
         $this->data['no_index']    = true;
 
         $post = $this->CmsPost->get_post((int)$id);
-        if (empty($post)) {
+        // IDOR guard: never preview a post belonging to another scope.
+        if (empty($post) || !$this->_rowInScope($post, $scope)) {
             $this->data['Message']     = 'Post not found.';
             $this->data['page_title']  = 'Preview — not found';
             $this->data['FrontDoor']   = array();
@@ -341,7 +415,7 @@ class Controller_Cms extends Controller
         $this->data['FrontDoor']   = $this->CmsPost->get_post_blocks((int)$post['post_id']);
         $this->data['PreviewPage'] = $post;
         $this->data['PreviewKind'] = 'postrow';
-        $this->data['CanPublish']  = $this->CmsAuth->cms_can($uid, 'page.publish', self::$SCOPE);
+        $this->data['CanPublish']  = $this->CmsAuth->cms_can($uid, 'page.publish', $scope);
         $this->data['page_title']  = 'Preview: ' . $post['title'];
     }
 
@@ -352,15 +426,20 @@ class Controller_Cms extends Controller
     public function posts($action = null)
     {
         $uid = $this->_uid();
+        $scope = $this->_scopeOrDeny($uid);
+        if ($scope === false) {
+            return;
+        }
         // Same gate as the page list: visible to anyone holding ANY CMS capability.
-        if (!$this->_hasAnyCmsCapability($uid)) {
+        if (!$this->_hasAnyCmsCapability($uid, $scope)) {
             return $this->_denyRedirect();
         }
+        $this->_applyScopeData($scope);
 
         $this->template = 'Cms_posts.tpl';
         $this->data['page_title'] = 'Blog Posts';
 
-        $opts = array('includeDrafts' => true, 'scope_type' => 'global', 'scope_id' => 0);
+        $opts = array('includeDrafts' => true) + $this->_scopeFilters($scope);
         $tag = trim((string)($_GET['tag'] ?? ''));
         if ($tag !== '') {
             $opts['tag'] = $tag;
@@ -372,7 +451,7 @@ class Controller_Cms extends Controller
         $this->data['Posts']     = $rows;
         $this->data['TagFilter'] = $tag;
         $this->data['AllTags']   = $this->CmsPost->list_all_tags();
-        $this->data['Caps']      = $this->_capFlags($uid);
+        $this->data['Caps']      = $this->_capFlags($uid, $scope);
     }
 
     /* ------------------------------------------------------------------ *
@@ -382,28 +461,33 @@ class Controller_Cms extends Controller
     public function nav($action = null)
     {
         $uid = $this->_uid();
+        $scope = $this->_scopeOrDeny($uid);
+        if ($scope === false) {
+            return;
+        }
         // Navigation management is an admin-only capability.
-        if (!$this->CmsAuth->cms_can($uid, 'nav.manage', self::$SCOPE)) {
+        if (!$this->CmsAuth->cms_can($uid, 'nav.manage', $scope)) {
             return $this->_denyRedirect();
         }
+        $this->_applyScopeData($scope);
 
         $this->template = 'Cms_nav.tpl';
         $this->data['page_title'] = 'Navigation';
 
         // The flat item list (incl. disabled) the admin tree is built from.
-        $items = $this->CmsNav->list_items('marketing', 'global', 0);
+        $items = $this->CmsNav->list_items('marketing', (string)$scope['type'], (int)$scope['id']);
         $this->data['Menu']     = 'marketing';
         $this->data['NavItems'] = is_array($items) ? $items : array();
 
-        // Link-picker source lists: published + draft pages, and posts.
-        $pages = $this->CmsPage->list_pages(array());
+        // Link-picker source lists: published + draft pages, and posts (scope-filtered).
+        $pages = $this->CmsPage->list_pages($this->_scopeFilters($scope));
         $this->data['PickerPages'] = is_array($pages) ? $pages : array();
 
-        $postsRes = $this->CmsPost->list_posts(array('includeDrafts' => true, 'scope_type' => 'global', 'scope_id' => 0));
+        $postsRes = $this->CmsPost->list_posts(array('includeDrafts' => true) + $this->_scopeFilters($scope));
         $postRows = (is_array($postsRes) && isset($postsRes['rows']) && is_array($postsRes['rows'])) ? $postsRes['rows'] : array();
         $this->data['PickerPosts'] = $postRows;
 
-        $this->data['Caps'] = $this->_capFlags($uid);
+        $this->data['Caps'] = $this->_capFlags($uid, $scope);
     }
 
     /* ------------------------------------------------------------------ *
@@ -414,12 +498,17 @@ class Controller_Cms extends Controller
     public function theme($action = null)
     {
         $uid = $this->_uid();
-        if (!$this->CmsAuth->cms_can($uid, 'theme.manage', self::$SCOPE)) {
+        $scope = $this->_scopeOrDeny($uid);
+        if ($scope === false) {
+            return;
+        }
+        if (!$this->CmsAuth->cms_can($uid, 'theme.manage', $scope)) {
             return $this->_denyRedirect();
         }
+        $this->_applyScopeData($scope);
         $this->load_model('CmsTheme');
 
-        $active       = $this->CmsTheme->get_active_theme('global', 0);
+        $active       = $this->CmsTheme->get_active_theme((string)$scope['type'], (int)$scope['id']);
         $activeTokens = (is_array($active) && isset($active['tokens']) && is_array($active['tokens']))
             ? $active['tokens']
             : array();
@@ -431,7 +520,7 @@ class Controller_Cms extends Controller
         $this->data['ThemeFonts']    = $this->CmsTheme->font_allowlist();
         $this->data['ThemeValues']   = array_merge($this->CmsTheme->base_values(), $activeTokens);
         $this->data['ThemeActiveId'] = (is_array($active) && isset($active['id'])) ? (int)$active['id'] : 0;
-        $this->data['Caps']          = $this->_capFlags($uid);
+        $this->data['Caps']          = $this->_capFlags($uid, $scope);
     }
 
     /* ------------------------------------------------------------------ *
@@ -445,13 +534,18 @@ class Controller_Cms extends Controller
         }
 
         $uid    = $this->_uid();
+        $scope  = $this->_scopeOrDeny($uid);
+        if ($scope === false) {
+            return;
+        }
         $id     = (string)$id;
         $isNew  = ($id === 'new' || $id === '' || $id === '0');
         $needed = $isNew ? 'page.create' : 'page.edit';
 
-        if (!$this->CmsAuth->cms_can($uid, $needed, self::$SCOPE)) {
+        if (!$this->CmsAuth->cms_can($uid, $needed, $scope)) {
             return $this->_denyRedirect();
         }
+        $this->_applyScopeData($scope);
 
         $this->template = 'Cms_editpost.tpl';
 
@@ -466,8 +560,8 @@ class Controller_Cms extends Controller
                 'hero_media_id' => null,
                 'author_id'     => $uid,
                 'author_name'   => '',
-                'scope_type'    => 'global',
-                'scope_id'      => 0,
+                'scope_type'    => (string)$scope['type'],
+                'scope_id'      => (int)$scope['id'],
                 'tags'          => array(),
             );
             $blocks = array();
@@ -475,15 +569,16 @@ class Controller_Cms extends Controller
             $this->data['page_title'] = 'New Post';
         } else {
             $post = $this->CmsPost->get_post((int)$id);
-            if (empty($post)) {
+            // IDOR guard: a post from another scope is treated as not-found.
+            if (empty($post) || !$this->_rowInScope($post, $scope)) {
                 // No such post — fall back to the post list with a message.
                 $this->template = 'Cms_posts.tpl';
                 $this->data['page_title'] = 'Blog Posts';
-                $listed = $this->CmsPost->list_posts(array('includeDrafts' => true));
+                $listed = $this->CmsPost->list_posts(array('includeDrafts' => true) + $this->_scopeFilters($scope));
                 $this->data['Posts']     = (is_array($listed) && isset($listed['rows'])) ? $listed['rows'] : array();
                 $this->data['TagFilter'] = '';
                 $this->data['AllTags']   = $this->CmsPost->list_all_tags();
-                $this->data['Caps']      = $this->_capFlags($uid);
+                $this->data['Caps']      = $this->_capFlags($uid, $scope);
                 $this->data['Message']   = 'Post not found.';
                 return;
             }
@@ -499,7 +594,7 @@ class Controller_Cms extends Controller
         $catalog = $this->_blockCatalog();
         $this->data['BlockCatalog'] = $catalog;
         $this->data['BlockAllow']   = $this->_blockAllow($catalog);
-        $this->data['Caps']         = $this->_capFlags($uid);
+        $this->data['Caps']         = $this->_capFlags($uid, $scope);
     }
 
     /**
@@ -530,15 +625,16 @@ class Controller_Cms extends Controller
     }
 
     /**
-     * True when the user holds at least one CMS capability at global scope
-     * (covers super-admin via _resolveCapabilities short-circuit).
+     * True when the user holds at least one CMS capability in the given scope
+     * (covers super-admin via _resolveCapabilities short-circuit). Scope defaults
+     * to the global front door for legacy callers.
      */
-    private function _hasAnyCmsCapability($uid)
+    private function _hasAnyCmsCapability($uid, $scope = null)
     {
         if ($uid <= 0) {
             return false;
         }
-        $resolved = $this->_resolveCapabilities($uid);
+        $resolved = $this->_resolveCapabilities($uid, $scope);
         if ($resolved['is_super']) {
             return true;
         }
@@ -546,11 +642,12 @@ class Controller_Cms extends Controller
     }
 
     /**
-     * Per-capability boolean map for templates (show/hide editor buttons).
+     * Per-capability boolean map for templates (show/hide editor buttons), for
+     * the given scope (defaults to the global front door).
      */
-    private function _capFlags($uid)
+    private function _capFlags($uid, $scope = null)
     {
-        $resolved = $this->_resolveCapabilities($uid);
+        $resolved = $this->_resolveCapabilities($uid, $scope);
         $isSuper  = $resolved['is_super'];
         $caps     = $resolved['caps'];
         return array(
@@ -575,28 +672,70 @@ class Controller_Cms extends Controller
      * Big-O: O(G × R) per request, G = grant rows, R = roles/caps (both tiny,
      * single-digit in practice); previously O(N) DB round-trips where N = caps.
      *
-     * @param int $uid mundane_id
+     * @param int        $uid   mundane_id
+     * @param array|null $scope resolved request scope (null → global default)
      * @return array{is_super:bool, caps:string[]}
      */
-    private function _resolveCapabilities($uid)
+    private function _resolveCapabilities($uid, $scope = null)
     {
         $uid = (int)$uid;
-        if (isset($this->_capCache[$uid])) {
-            return $this->_capCache[$uid];
+        if (!is_array($scope)) {
+            $scope = self::$SCOPE;
+        }
+        // Cache key MUST include scope: caps differ per org within one request,
+        // so a uid-only key would leak one scope's caps into another.
+        $key = $uid . '|' . (string)($scope['type'] ?? 'global') . ':' . (int)($scope['id'] ?? 0);
+        if (isset($this->_capCache[$key])) {
+            return $this->_capCache[$key];
         }
 
         // One HasAuthority query (super-admin short-circuit).
         $isSuper = ($uid > 0) && (bool)$this->CmsAuth->IsSuperAdmin($uid);
 
-        // One GetUserGrants query + in-memory role expansion.
+        // One GetUserGrants query + in-memory role expansion, scoped to this org.
         // Skip for super-admins — they pass every cap already.
         $caps = ($uid > 0 && !$isSuper)
-            ? $this->CmsAuth->get_user_capabilities($uid, self::$SCOPE)
+            ? $this->CmsAuth->get_user_capabilities($uid, $scope)
             : array();
 
         $resolved = array('is_super' => $isSuper, 'caps' => $caps);
-        $this->_capCache[$uid] = $resolved;
+        $this->_capCache[$key] = $resolved;
         return $resolved;
+    }
+
+    /**
+     * Resolve the request scope for a page surface, or emit the deny redirect
+     * when a present selector is malformed / unauthorized. Returns the scope
+     * array on success, or false after arranging the deny (caller must return).
+     *
+     * @param int $uid
+     * @return array{type:string,id:int}|false
+     */
+    private function _scopeOrDeny($uid)
+    {
+        $scope = $this->_resolveScope($uid);
+        if ($scope === false) {
+            $this->_denyRedirect();
+            return false;
+        }
+        return $scope;
+    }
+
+    /**
+     * Publish the resolved scope's context to the template layer: the shell
+     * reads these to thread scope onto rail links, emit window.CMS_SCOPE, and
+     * render the "Editing: {Org} — public site" banner. No-ops to empty for
+     * global so the legacy front-door chrome is unchanged.
+     *
+     * @param array $scope
+     * @return void
+     */
+    private function _applyScopeData($scope)
+    {
+        $this->data['CmsScope']      = $scope;
+        $this->data['CmsScopeQuery'] = $this->_scopeQuery($scope);
+        $this->data['CmsScopeSel']   = $this->_scopeSelector($scope);
+        $this->data['CmsScopeLabel'] = $this->_scopeIsGlobal($scope) ? '' : $this->_scopeOrgLabel($scope);
     }
 
     /**

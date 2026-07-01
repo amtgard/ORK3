@@ -28,6 +28,9 @@ $catalog = isset($BlockCatalog) && is_array($BlockCatalog) ? $BlockCatalog : arr
 $blockAllow = isset($BlockAllow) && is_array($BlockAllow) ? $BlockAllow : array();
 $caps    = isset($Caps) && is_array($Caps) ? $Caps : array();
 $heroRef = (isset($HeroRef) && is_array($HeroRef)) ? $HeroRef : null;
+// Active scope query ('&scope=k:5' or '') threaded onto every intra-admin link
+// so breadcrumbs + post-save redirects stay in the current org scope.
+$scopeQ  = isset($CmsScopeQuery) ? (string)$CmsScopeQuery : '';
 
 $postId      = (int)($post['post_id'] ?? 0);
 $pTitle      = (string)($post['title'] ?? '');
@@ -68,8 +71,8 @@ foreach ($catalog as $c) {
 $cmsActive  = 'posts';
 $cmsTitle   = $isNew ? 'New Post' : 'Edit: ' . $pTitle;
 $cmsCrumbs  = array(
-    array('label' => 'Dashboard', 'href' => UIR . 'Cms/dashboard'),
-    array('label' => 'Posts',           'href' => UIR . 'Cms/posts'),
+    array('label' => 'Dashboard', 'href' => UIR . 'Cms/dashboard' . $scopeQ),
+    array('label' => 'Posts',           'href' => UIR . 'Cms/posts' . $scopeQ),
     array('label' => $isNew ? 'New Post' : $pTitle),
 );
 $cmsActions = '';
@@ -176,7 +179,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 </div>
                 <span class="cms-spacer"></span>
                 <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewRefresh" data-tip="Refresh preview"><i class="fas fa-redo"></i></button>
-                <a class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewOpen" href="<?= $postId > 0 ? UIR . 'Cms/previewpost/' . $postId : '#' ?>" target="_blank" rel="noopener" data-tip="Open in new tab"><i class="fas fa-external-link-alt"></i></a>
+                <a class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewOpen" href="<?= $postId > 0 ? UIR . 'Cms/previewpost/' . $postId . $scopeQ : '#' ?>" target="_blank" rel="noopener" data-tip="Open in new tab"><i class="fas fa-external-link-alt"></i></a>
                 <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-preview-close" id="cmsPreviewClose" data-tip="Close preview"><i class="fas fa-times"></i></button>
             </div>
             <div class="cms-preview-note cms-muted">Preview shows the current draft.</div>
@@ -218,7 +221,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     function post(endpoint, params) {
         var body = new URLSearchParams();
         Object.keys(params).forEach(function (k) { body.append(k, params[k]); });
-        return fetch(UIR + 'CmsAjax/' + endpoint, {
+        return fetch(UIR + 'CmsAjax/' + endpoint + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''), {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': (window.CMS_CSRF || '') },
             credentials: 'same-origin',
@@ -365,14 +368,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
         var pub = document.getElementById('cmsPubBtn');
         if (pub) { pub.disabled = false; }
         try {
-            history.replaceState(null, '', UIR + 'Cms/editpost/' + STATE.postId);
+            history.replaceState(null, '', UIR + 'Cms/editpost/' + STATE.postId + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''));
         } catch (e) {}
     }
     // Once the post is saved (has an id), the draft preview becomes possible.
     function previewSlugSynced() {
         if (STATE.postId <= 0) { return; }
         var openLink = document.getElementById('cmsPreviewOpen');
-        if (openLink) { openLink.href = UIR + 'Cms/previewpost/' + STATE.postId; }
+        if (openLink) { openLink.href = UIR + 'Cms/previewpost/' + STATE.postId + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''); }
         if (previewToggle) {
             previewToggle.disabled = false;
             previewToggle.removeAttribute('data-needsave');
@@ -423,7 +426,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     BE.closeConfirm();
                     if (!res || !res.ok) { toast((res && res.error) || 'Delete failed.', 'error'); return; }
                     dirty = false;
-                    window.location.href = UIR + 'Cms/posts';
+                    window.location.href = UIR + 'Cms/posts' + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '');
                 }).catch(function () { if (okEl) { okEl.disabled = false; } toast('Network error.', 'error'); });
             });
         });
@@ -440,7 +443,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var previewLoaded = false;
 
     function previewUrl() {
-        return UIR + 'Cms/previewpost/' + STATE.postId + '?_t=' + Date.now();
+        return UIR + 'Cms/previewpost/' + STATE.postId + '?_t=' + Date.now() + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '');
     }
     function previewOpen() { return previewPane && previewPane.classList.contains('cms-preview-open'); }
 

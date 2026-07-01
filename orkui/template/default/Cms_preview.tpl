@@ -13,7 +13,8 @@ $pvStatus    = ( ! empty( $PreviewPage ) && isset( $PreviewPage['status'] ) ) ? 
 $pvCanPublish = ! empty( $CanPublish ) && $pvStatus !== 'published';
 $pvKind       = ( isset( $PreviewKind ) && $PreviewKind === 'postrow' ) ? 'post' : 'page';
 $pvId         = ( $pvKind === 'post' ) ? (int) ( $PreviewPage['post_id'] ?? 0 ) : (int) ( $PreviewPage['page_id'] ?? 0 );
-$pvPublishUrl = UIR . ( $pvKind === 'post' ? 'CmsAjax/publishpost' : 'CmsAjax/publish' );
+$pvScopeQuery = isset( $CmsScopeQuery ) ? (string) $CmsScopeQuery : '';
+$pvPublishUrl = UIR . ( $pvKind === 'post' ? 'CmsAjax/publishpost' : 'CmsAjax/publish' ) . $pvScopeQuery;
 $pvIdField    = ( $pvKind === 'post' ) ? 'post_id' : 'page_id';
 ?>
 <link rel="stylesheet" href="<?= $fdAssetBase ?>css/frontdoor.css?v=<?= @filemtime( $fdDir . 'css/frontdoor.css' ) ?>">

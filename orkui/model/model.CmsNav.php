@@ -32,9 +32,9 @@ class Model_CmsNav extends Model
         return $this->CmsNav->CreateItem($data);
     }
 
-    public function update_item($navId, $data)
+    public function update_item($navId, $data, $scopeType = null, $scopeId = null)
     {
-        return $this->CmsNav->UpdateItem($navId, $data);
+        return $this->CmsNav->UpdateItem($navId, $data, $scopeType, $scopeId);
     }
 
     public function delete_item($navId, $scopeType = null, $scopeId = null)

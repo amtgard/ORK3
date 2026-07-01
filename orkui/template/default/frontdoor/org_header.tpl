@@ -4,8 +4,10 @@
  * PLAIN PHP (extract()+include; never Smarty). Reuses the .fd-nav markup +
  * frontdoor.css so it inherits the responsive hamburger + dark-mode styling.
  *
- * Nav source: the editable 'site' menu from the CMS nav store for THIS org's
- * scope (CmsNav::GetMenu('site', $SiteNavScopeType, $SiteNavScopeId)). Empty
+ * Nav source: the editable 'marketing' menu from the CMS nav store for THIS
+ * org's scope (CmsNav::GetMenu('marketing', $SiteNavScopeType, $SiteNavScopeId)) —
+ * the SAME menu key the scope-aware nav admin (CmsAjax::savenavitem) writes,
+ * differentiated by scope. Empty
  * scope / empty menu → no links (graceful). CmsNav resolves page/post link
  * types to the GLOBAL Page/Blog routes; $orgHref() re-points those onto this
  * site's own /Site/... routes so a nav item stays inside the org site.
@@ -50,7 +52,7 @@ $items = [];
 if ($navScopeId > 0 && class_exists('APIModel')) {
     try {
         $navModel  = new APIModel('CmsNav');
-        $navResult = $navModel->GetMenu('site', $navScopeType, $navScopeId);
+        $navResult = $navModel->GetMenu('marketing', $navScopeType, $navScopeId);
         if (is_array($navResult)) {
             foreach ($navResult as $navItem) {
                 $row = [

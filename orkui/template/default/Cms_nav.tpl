@@ -322,7 +322,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     function post(endpoint, params) {
         var body = new URLSearchParams();
         Object.keys(params).forEach(function (k) { body.append(k, params[k]); });
-        return fetch(AJAX + endpoint, {
+        return fetch(AJAX + endpoint + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''), {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': (window.CMS_CSRF || '') },
             credentials: 'same-origin',

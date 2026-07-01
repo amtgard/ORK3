@@ -133,7 +133,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     function post(endpoint, params) {
         var body = new URLSearchParams();
         Object.keys(params).forEach(function (k) { body.append(k, params[k]); });
-        return fetch(AJAX + endpoint, {
+        return fetch(AJAX + endpoint + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''), {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': (window.CMS_CSRF || '') },
             credentials: 'same-origin',
@@ -176,7 +176,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     function loadMedia(q) {
         area.innerHTML = '<div class="cms-empty"><div class="cms-empty-copy"><span class="cms-spin"></span> Loading…</div></div>';
-        var url = AJAX + 'medialist' + (q ? '&' + new URLSearchParams({ q: q }).toString() : '');
+        var url = AJAX + 'medialist' + (q ? '&' + new URLSearchParams({ q: q }).toString() : '')
+            + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '');
         fetch(url, { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (res) {

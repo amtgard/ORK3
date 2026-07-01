@@ -38,22 +38,35 @@ $cmsActions = isset($cmsActions) ? (string)$cmsActions : '';
 $cmsRailExtra = isset($cmsRailExtra) ? (string)$cmsRailExtra : '';
 $shCaps     = isset($Caps) && is_array($Caps) ? $Caps : array();
 
+// --- Scope context (CMS Multi-Site Phase 3) --------------------------------
+// $CmsScopeQuery : '&scope=k:5' (or '' for the global front door) appended to
+//                  every intra-admin link so the active scope rides along.
+// $CmsScopeSel   : 'k:5' bare selector echoed to JS as window.CMS_SCOPE so AJAX
+//                  fetches re-send it for server-side re-validation.
+// $CmsScopeLabel : org display name for the "Editing: {Org}" banner ('' global).
+$shScopeQuery = isset($CmsScopeQuery) ? (string)$CmsScopeQuery : '';
+$shScopeSel   = isset($CmsScopeSel) ? (string)$CmsScopeSel : '';
+$shScopeLabel = isset($CmsScopeLabel) ? (string)$CmsScopeLabel : '';
+
 $shH = function ($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 };
 
-// Rail items: [key, label, href, icon, show?]. `show` defaults to true.
-// Only surfaces with a real controller action are listed.
+// Rail items: [key, label, href, icon, show?]. `show` defaults to true. Each
+// href carries the active scope so navigating the rail stays in-scope.
 $shRail = array(
-    array('dashboard', 'Dashboard',  UIR . 'Cms/dashboard', 'fa-tachometer-alt', true),
-    array('pages',     'Pages',      UIR . 'Cms/index',     'fa-file-alt',   true),
-    array('posts',     'Posts',      UIR . 'Cms/posts',     'fa-newspaper',  true),
-    array('media',     'Media',      UIR . 'Cms/media',     'fa-images',     !empty($shCaps['media'])),
-    array('nav',       'Navigation', UIR . 'Cms/nav',       'fa-bars',       !empty($shCaps['nav'])),
-    array('theme',     'Theme',      UIR . 'Cms/theme',     'fa-palette',    !empty($shCaps['theme'])),
+    array('dashboard', 'Dashboard',  UIR . 'Cms/dashboard' . $shScopeQuery, 'fa-tachometer-alt', true),
+    array('pages',     'Pages',      UIR . 'Cms/index' . $shScopeQuery,     'fa-file-alt',   true),
+    array('posts',     'Posts',      UIR . 'Cms/posts' . $shScopeQuery,     'fa-newspaper',  true),
+    array('media',     'Media',      UIR . 'Cms/media' . $shScopeQuery,     'fa-images',     !empty($shCaps['media'])),
+    array('nav',       'Navigation', UIR . 'Cms/nav' . $shScopeQuery,       'fa-bars',       !empty($shCaps['nav'])),
+    array('theme',     'Theme',      UIR . 'Cms/theme' . $shScopeQuery,     'fa-palette',    !empty($shCaps['theme'])),
 );
 ?>
-<script>window.CMS_CSRF = <?= json_encode(isset($CmsCsrf) ? (string)$CmsCsrf : '', JSON_HEX_TAG) ?>;</script>
+<script>
+window.CMS_CSRF = <?= json_encode(isset($CmsCsrf) ? (string)$CmsCsrf : '', JSON_HEX_TAG) ?>;
+window.CMS_SCOPE = <?= json_encode($shScopeSel, JSON_HEX_TAG) ?>;
+</script>
 <div class="cms-shell">
 
     <aside class="cms-rail<?= $cmsRailExtra !== '' ? ' cms-rail-wide' : '' ?>" aria-label="Content management navigation">
@@ -121,5 +134,37 @@ $shRail = array(
                 <div class="cms-shell-actions"><?= $cmsActions ?></div>
             <?php endif; ?>
         </div>
+
+        <?php if ($shScopeLabel !== ''): ?>
+            <style>
+            /* Scope-context banner (CMS Multi-Site). Dark-mode via html[data-theme]. */
+            .cms-scope-banner {
+                display: flex; align-items: center; gap: 10px;
+                margin: 0 0 18px; padding: 10px 14px;
+                border: 1px solid var(--cms-gold-deep, #caa23a);
+                border-left-width: 4px;
+                border-radius: 9px;
+                background: #fff8e6; color: #4a3b12;
+                font-size: 13.5px; line-height: 1.35;
+            }
+            .cms-scope-banner .fa-globe-americas,
+            .cms-scope-banner .cms-scope-ico { color: var(--cms-gold-deep, #caa23a); font-size: 16px; }
+            .cms-scope-banner strong { font-weight: 700; }
+            .cms-scope-banner .cms-scope-hint { color: #6b5a29; }
+            html[data-theme="dark"] .cms-scope-banner {
+                background: rgba(240, 180, 41, .10);
+                border-color: var(--cms-gold, #f0b429);
+                color: var(--ork-text, #e8e2d0);
+            }
+            html[data-theme="dark"] .cms-scope-banner .cms-scope-hint { color: var(--ork-text-muted, #b8ae90); }
+            </style>
+            <div class="cms-scope-banner" role="status">
+                <i class="fas fa-globe-americas cms-scope-ico" aria-hidden="true"></i>
+                <span>
+                    Editing: <strong><?= $shH($shScopeLabel) ?></strong> — public site.
+                    <span class="cms-scope-hint">This is separate from the global ORK front door.</span>
+                </span>
+            </div>
+        <?php endif; ?>
 
         <div class="cms-shell-body">

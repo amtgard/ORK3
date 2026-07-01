@@ -44,6 +44,9 @@ $canDelete  = !empty($caps['delete']);
 $h = function ($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 };
+// Active scope query ('&scope=k:5' or '') threaded onto every intra-admin link
+// so navigating into an editor/preview stays in the current org scope.
+$scopeQ = isset($CmsScopeQuery) ? (string)$CmsScopeQuery : '';
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -154,7 +157,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                         <td data-label="Actions">
                             <div class="cms-row-actions">
                                 <?php if ($canEdit || $canCreate): ?>
-                                    <a class="cms-btn cms-btn-sm" href="<?= UIR ?>Cms/edit/<?= $pid ?>"><i class="fas fa-pen"></i> Edit</a>
+                                    <a class="cms-btn cms-btn-sm" href="<?= UIR ?>Cms/edit/<?= $pid ?><?= $scopeQ ?>"><i class="fas fa-pen"></i> Edit</a>
                                 <?php endif; ?>
                                 <div class="cms-overflow">
                                     <button type="button" class="cms-overflow-btn" data-overflow-toggle
@@ -162,7 +165,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                                         <i class="fas fa-ellipsis-h"></i>
                                     </button>
                                     <div class="cms-overflow-menu" role="menu">
-                                        <a class="cms-overflow-item" role="menuitem" href="<?= UIR ?>Cms/preview/<?= $pid ?>" target="_blank"><i class="fas fa-eye"></i> Preview</a>
+                                        <a class="cms-overflow-item" role="menuitem" href="<?= UIR ?>Cms/preview/<?= $pid ?><?= $scopeQ ?>" target="_blank"><i class="fas fa-eye"></i> Preview</a>
                                         <?php if ($canPublish): ?>
                                             <button type="button" class="cms-overflow-item" role="menuitem"
                                                     data-pubtoggle
@@ -205,7 +208,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             <p class="cms-muted" style="margin-top:0;font-size:13px;">Pick a starting layout. You can add or remove any block afterward.</p>
             <div class="cms-typegrid">
                 <?php foreach ($pageTypes as $pt): ?>
-                    <a class="cms-typecard" href="<?= UIR ?>Cms/edit/new&type=<?= $h($pt['type']) ?>">
+                    <a class="cms-typecard" href="<?= UIR ?>Cms/edit/new&type=<?= $h($pt['type']) ?><?= $scopeQ ?>">
                         <strong><?= $h($pt['label']) ?></strong>
                         <span><?= $h($pt['type']) ?></span>
                     </a>
@@ -310,7 +313,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     function post(endpoint, params) {
         var body = new URLSearchParams();
         Object.keys(params).forEach(function (k) { body.append(k, params[k]); });
-        return fetch(AJAX + endpoint, {
+        return fetch(AJAX + endpoint + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''), {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': (window.CMS_CSRF || '') },
             credentials: 'same-origin',

@@ -45,6 +45,15 @@ if ($hr < 5) {
 $h = function ($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 };
+
+// --- Scope context (CMS Multi-Site Phase 3) ---
+$scopeQ        = isset($CmsScopeQuery) ? (string)$CmsScopeQuery : '';
+$dashScope     = isset($CmsScope) && is_array($CmsScope) ? $CmsScope : array('type' => 'global', 'id' => 0);
+$dashIsOrgSite = ($dashScope['type'] ?? 'global') !== 'global';
+$dashSite      = isset($CmsSite) && is_array($CmsSite) ? $CmsSite : array();
+$dashSiteStatus = (string)($dashSite['status'] ?? 'unbuilt');
+$dashSiteSlug   = (string)($dashSite['slug'] ?? '');
+$dashCanPublish = !empty($CanPublishSite);
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 
@@ -122,6 +131,25 @@ a.cms-stat-tile:hover { border-color: var(--cms-gold-deep, #caa23a); }
 .cms-recent-meta { font-size: 12px; color: var(--ork-text-muted); }
 .cms-recent-actions { flex: 0 0 auto; }
 
+/* Public-site status card (Multi-Site) */
+.cms-sitecard {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    border: 1px solid var(--ork-border-dark); border-left: 4px solid var(--cms-gold, #f0b429);
+    border-radius: 11px; background: var(--ork-bg-secondary); padding: 16px 18px;
+}
+.cms-sitecard-main { flex: 1 1 260px; min-width: 0; }
+.cms-sitecard-title { font-size: 15.5px; font-weight: 700; color: var(--ork-text); display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.cms-sitecard-title .fa-globe-americas { color: var(--cms-gold-deep, #caa23a); }
+.cms-sitecard-sub { font-size: 13px; color: var(--ork-text-muted); margin-top: 5px; }
+.cms-sitecard-sub code { background: var(--ork-bg-tertiary); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
+.cms-sitecard-badge { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+.cms-sitecard-badge-pub { background: #1f7a3d; color: #fff; }
+.cms-sitecard-badge-draft { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); border: 1px solid var(--ork-border); }
+.cms-sitecard-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
+.cms-sitecard-note { font-size: 13px; color: var(--ork-text-muted); display: inline-flex; align-items: center; gap: 7px; }
+.cms-sitecard-note .fa-lock { color: var(--cms-gold-deep, #caa23a); }
+html[data-theme="dark"] .cms-sitecard-badge-pub { background: #2e9d55; }
+
 .cms-dash-livelink { display: inline-flex; align-items: center; gap: 7px; color: var(--ork-text-muted); text-decoration: none; font-size: 13.5px; }
 .cms-dash-livelink:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
 html[data-theme="dark"] .cms-dash-livelink:hover { color: var(--cms-gold, #f0b429); }
@@ -145,18 +173,59 @@ include __DIR__ . '/cms/_shell_top.tpl';
         <p class="cms-dash-lede">Pick up where you left off, or create something new below.</p>
     </div>
 
+    <?php if ($dashIsOrgSite): ?>
+    <?php
+        $siteIsPublished = ($dashSiteStatus === 'published');
+        $siteBadgeClass  = $siteIsPublished ? 'cms-sitecard-badge-pub' : 'cms-sitecard-badge-draft';
+        $siteBadgeText   = $siteIsPublished ? 'Published' : ($dashSiteStatus === 'draft' ? 'Draft' : 'Not yet published');
+    ?>
+    <div class="cms-dash-block">
+        <div class="cms-sitecard" id="cmsSiteCard"
+             data-status="<?= $h($dashSiteStatus) ?>"
+             data-can-publish="<?= $dashCanPublish ? '1' : '0' ?>">
+            <div class="cms-sitecard-main">
+                <div class="cms-sitecard-title">
+                    <i class="fas fa-globe-americas"></i> Public site
+                    <span class="cms-sitecard-badge <?= $siteBadgeClass ?>" id="cmsSiteBadge"><?= $h($siteBadgeText) ?></span>
+                </div>
+                <div class="cms-sitecard-sub" id="cmsSiteSub">
+                    <?php if ($siteIsPublished): ?>
+                        Your public site is live<?php if ($dashSiteSlug !== ''): ?> at <code>/k/<?= $h($dashSiteSlug) ?></code><?php endif; ?>.
+                    <?php else: ?>
+                        Your public site is not visible to the public yet.
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="cms-sitecard-actions">
+                <?php if ($dashCanPublish): ?>
+                    <button type="button" class="cms-btn cms-btn-primary" id="cmsSitePublishBtn"<?= $siteIsPublished ? ' style="display:none;"' : '' ?>>
+                        <i class="fas fa-globe"></i> Publish site
+                    </button>
+                    <button type="button" class="cms-btn cms-btn-ghost" id="cmsSiteUnpublishBtn"<?= $siteIsPublished ? '' : ' style="display:none;"' ?>>
+                        <i class="fas fa-eye-slash"></i> Unpublish
+                    </button>
+                <?php else: ?>
+                    <span class="cms-sitecard-note" data-tip="Only a monarch or regent (kingdom administrator) can publish the public site.">
+                        <i class="fas fa-lock"></i> A monarch or regent must publish this site.
+                    </span>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <?php if ($canCreate): ?>
     <div class="cms-dash-block">
         <h3 class="cms-dash-section-title">Quick create</h3>
         <div class="cms-quick-row">
-            <a class="cms-quick-card" id="cmsDashNewPage" href="<?= UIR ?>Cms/edit/new" role="button">
+            <a class="cms-quick-card" id="cmsDashNewPage" href="<?= UIR ?>Cms/edit/new<?= $scopeQ ?>" role="button">
                 <span class="cms-quick-ico"><i class="fas fa-file-alt"></i></span>
                 <span class="cms-quick-text">
                     <strong>New Page</strong>
                     <span>Create a landing or content page</span>
                 </span>
             </a>
-            <a class="cms-quick-card" href="<?= UIR ?>Cms/editpost/new" role="button">
+            <a class="cms-quick-card" href="<?= UIR ?>Cms/editpost/new<?= $scopeQ ?>" role="button">
                 <span class="cms-quick-ico"><i class="fas fa-plus"></i></span>
                 <span class="cms-quick-text">
                     <strong>New Post</strong>
@@ -170,15 +239,15 @@ include __DIR__ . '/cms/_shell_top.tpl';
     <div class="cms-dash-block">
         <h3 class="cms-dash-section-title">At a glance</h3>
         <div class="cms-stat-row">
-            <a class="cms-stat-tile" href="<?= UIR ?>Cms/index">
+            <a class="cms-stat-tile" href="<?= UIR ?>Cms/index<?= $scopeQ ?>">
                 <div class="cms-stat-num"><?= $statPages ?></div>
                 <div class="cms-stat-lbl"><i class="fas fa-file-alt"></i> Page<?= $statPages === 1 ? '' : 's' ?></div>
             </a>
-            <a class="cms-stat-tile" href="<?= UIR ?>Cms/posts">
+            <a class="cms-stat-tile" href="<?= UIR ?>Cms/posts<?= $scopeQ ?>">
                 <div class="cms-stat-num"><?= $statPosts ?></div>
                 <div class="cms-stat-lbl"><i class="fas fa-newspaper"></i> Post<?= $statPosts === 1 ? '' : 's' ?></div>
             </a>
-            <a class="cms-stat-tile cms-stat-tile-drafts" href="<?= UIR ?>Cms/index&status=draft">
+            <a class="cms-stat-tile cms-stat-tile-drafts" href="<?= UIR ?>Cms/index&status=draft<?= $scopeQ ?>">
                 <div class="cms-stat-num"><?= $statDrafts ?></div>
                 <div class="cms-stat-lbl"><i class="fas fa-pencil-ruler"></i> Draft<?= $statDrafts === 1 ? '' : 's' ?> in progress</div>
             </a>
@@ -192,7 +261,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 <div class="cms-empty-icon"><i class="fas fa-file-alt"></i></div>
                 <div class="cms-empty-copy">Nothing here yet — your recent edits will appear here.</div>
                 <?php if ($canCreate): ?>
-                    <a class="cms-btn cms-btn-primary cms-empty-cta" href="<?= UIR ?>Cms/edit/new"><i class="fas fa-plus"></i> New Page</a>
+                    <a class="cms-btn cms-btn-primary cms-empty-cta" href="<?= UIR ?>Cms/edit/new<?= $scopeQ ?>"><i class="fas fa-plus"></i> New Page</a>
                 <?php endif; ?>
             </div>
         <?php else: ?>
@@ -246,7 +315,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             <p class="cms-muted" style="margin-top:0;font-size:13px;">Pick a starting layout. You can add or remove any block afterward.</p>
             <div class="cms-typegrid">
                 <?php foreach ($pageTypes as $pt): ?>
-                    <a class="cms-typecard" href="<?= UIR ?>Cms/edit/new&type=<?= $h($pt['type']) ?>">
+                    <a class="cms-typecard" href="<?= UIR ?>Cms/edit/new&type=<?= $h($pt['type']) ?><?= $scopeQ ?>">
                         <strong><?= $h($pt['label']) ?></strong>
                         <span><?= $h($pt['type']) ?></span>
                     </a>
@@ -286,5 +355,54 @@ include __DIR__ . '/cms/_shell_top.tpl';
         }
     });
     <?php endif; ?>
+
+    /* ---- Public-site publish / unpublish (org scope only) ---- */
+    var siteCard = document.getElementById('cmsSiteCard');
+    if (siteCard) {
+        var pubBtn   = document.getElementById('cmsSitePublishBtn');
+        var unpubBtn = document.getElementById('cmsSiteUnpublishBtn');
+        var badge    = document.getElementById('cmsSiteBadge');
+        var subEl    = document.getElementById('cmsSiteSub');
+
+        function siteAction(endpoint, btn) {
+            var original = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Working…';
+            var url = UIR + 'CmsAjax/' + endpoint
+                + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '');
+            fetch(url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': (window.CMS_CSRF || '') },
+                body: ''
+            }).then(function (r) { return r.json(); }).then(function (d) {
+                btn.disabled = false;
+                btn.innerHTML = original;
+                if (!d || d.ok !== true) {
+                    if (subEl) { subEl.textContent = (d && d.error) ? d.error : 'That action could not be completed.'; }
+                    return;
+                }
+                var published = (d.status === 'published');
+                if (badge) {
+                    badge.textContent = published ? 'Published' : 'Draft';
+                    badge.className = 'cms-sitecard-badge ' + (published ? 'cms-sitecard-badge-pub' : 'cms-sitecard-badge-draft');
+                }
+                if (subEl) {
+                    subEl.textContent = published
+                        ? 'Your public site is live.'
+                        : 'Your public site is not visible to the public yet.';
+                }
+                if (pubBtn) { pubBtn.style.display = published ? 'none' : ''; }
+                if (unpubBtn) { unpubBtn.style.display = published ? '' : 'none'; }
+            }).catch(function () {
+                btn.disabled = false;
+                btn.innerHTML = original;
+                if (subEl) { subEl.textContent = 'Network error — please try again.'; }
+            });
+        }
+
+        if (pubBtn) { pubBtn.addEventListener('click', function () { siteAction('publishsite', pubBtn); }); }
+        if (unpubBtn) { unpubBtn.addEventListener('click', function () { siteAction('unpublishsite', unpubBtn); }); }
+    }
 })();
 </script>

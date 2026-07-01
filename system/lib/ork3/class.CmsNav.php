@@ -582,8 +582,13 @@ class CmsNav extends CmsBase
             $sql = 'SELECT n.*, pg.slug AS page_slug, pg.title AS page_title,'
                 . ' po.slug AS post_slug, po.title AS post_title'
                 . ' FROM ' . DB_PREFIX . 'cms_nav_item n'
+                // Scope-bound joins: a nav item can only resolve a page/post in
+                // its OWN scope, so a cross-scope target id (should one ever be
+                // stored) can never leak another org's title/slug into this list.
                 . ' LEFT JOIN ' . DB_PREFIX . 'cms_page pg ON pg.page_id = n.page_id'
+                . ' AND pg.scope_type = n.scope_type AND pg.scope_id = n.scope_id'
                 . ' LEFT JOIN ' . DB_PREFIX . 'cms_post po ON po.post_id = n.post_id'
+                . ' AND po.scope_type = n.scope_type AND po.scope_id = n.scope_id'
                 . ' WHERE n.menu = :menu AND n.scope_type = :scope_type AND n.scope_id = :scope_id';
         }
         if ($enabledOnly) {

@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/trait.CmsScope.php';
+
 /**
  * Controller_CmsAjax — JSON endpoints for the CMS admin editor.
  *
@@ -23,7 +25,13 @@
  */
 class Controller_CmsAjax extends Controller
 {
-    /** v2 scope: org-wide. */
+    use CmsScopeContext;
+
+    /**
+     * Default scope when no ?scope= selector is present — the global front door.
+     * Phase 3 threads a per-request scope via _resolveScope() / _scope(); this
+     * constant is only the fallback shape (byte-for-byte legacy behavior).
+     */
     private static $SCOPE = array('type' => 'global', 'id' => 0);
 
     /** Block field bodies that hold authored HTML → must be sanitized on save. */
@@ -63,11 +71,12 @@ class Controller_CmsAjax extends Controller
     public function savepage($action = null)
     {
         $uid = $this->_begin();
+        $scope = $this->_scope($uid);
 
         $pageId = (int)($_POST['page_id'] ?? 0);
         $isNew  = ($pageId <= 0);
         $needed = $isNew ? 'page.create' : 'page.edit';
-        $this->_require($uid, $needed);
+        $this->_require($uid, $needed, $scope);
 
         // ---- Page meta ----
         $title = trim((string)($_POST['title'] ?? ''));
@@ -95,14 +104,17 @@ class Controller_CmsAjax extends Controller
 
         if (array_key_exists('hero_media_id', $_POST)) {
             $hero = (int)$_POST['hero_media_id'];
-            $meta['hero_media_id'] = ($hero > 0) ? $hero : null;
+            // Only honor an in-scope media id; a cross-scope (forged) id is dropped.
+            $this->load_model('CmsMedia');
+            $meta['hero_media_id'] = ($hero > 0 && $this->_rowInScope($this->CmsMedia->get_media($hero), $scope))
+                ? $hero : null;
         }
 
         if ($isNew) {
             $meta['created_by'] = $uid;
             $meta['status']     = 'draft';
-            $meta['scope_type'] = 'global';
-            $meta['scope_id']   = 0;
+            $meta['scope_type'] = (string)$scope['type'];
+            $meta['scope_id']   = (int)$scope['id'];
             $pageId = (int)$this->CmsPage->create_page($meta);
             if ($pageId <= 0) {
                 $this->_fail('Could not create the page (the slug may already be in use).');
@@ -112,6 +124,8 @@ class Controller_CmsAjax extends Controller
             if (empty($existing)) {
                 $this->_fail('Page not found.', 4);
             }
+            // IDOR guard: the existing page must belong to the resolved scope.
+            $this->_requireOwned($existing, $scope);
             $this->CmsPage->update_page($pageId, $meta);
         }
 
@@ -133,12 +147,15 @@ class Controller_CmsAjax extends Controller
     public function publish($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'page.publish');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'page.publish', $scope);
 
         $pageId = (int)($_POST['page_id'] ?? 0);
-        if ($pageId <= 0 || empty($this->CmsPage->get_page($pageId))) {
+        $row = $this->CmsPage->get_page($pageId);
+        if ($pageId <= 0 || empty($row)) {
             $this->_fail('Page not found.', 4);
         }
+        $this->_requireOwned($row, $scope);
 
         $this->CmsPage->set_status($pageId, 'published', $uid);
         $row = $this->CmsPage->get_page($pageId);
@@ -153,12 +170,15 @@ class Controller_CmsAjax extends Controller
     public function unpublish($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'page.publish');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'page.publish', $scope);
 
         $pageId = (int)($_POST['page_id'] ?? 0);
-        if ($pageId <= 0 || empty($this->CmsPage->get_page($pageId))) {
+        $row = $this->CmsPage->get_page($pageId);
+        if ($pageId <= 0 || empty($row)) {
             $this->_fail('Page not found.', 4);
         }
+        $this->_requireOwned($row, $scope);
 
         $this->CmsPage->set_status($pageId, 'draft', $uid);
 
@@ -175,13 +195,16 @@ class Controller_CmsAjax extends Controller
     public function deletepage($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'page.delete');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'page.delete', $scope);
 
         $pageId = (int)($_POST['page_id'] ?? 0);
         $row    = $this->CmsPage->get_page($pageId);
         if ($pageId <= 0 || empty($row)) {
             $this->_fail('Page not found.', 4);
         }
+        // IDOR guard: never delete a page belonging to another scope.
+        $this->_requireOwned($row, $scope);
         if (!empty($row['is_system'])) {
             $this->_fail('System pages cannot be deleted.', 3);
         }
@@ -206,11 +229,12 @@ class Controller_CmsAjax extends Controller
     public function savepost($action = null)
     {
         $uid = $this->_begin();
+        $scope = $this->_scope($uid);
 
         $postId = (int)($_POST['post_id'] ?? 0);
         $isNew  = ($postId <= 0);
         $needed = $isNew ? 'page.create' : 'page.edit';
-        $this->_require($uid, $needed);
+        $this->_require($uid, $needed, $scope);
 
         // ---- Post meta ----
         $title   = trim((string)($_POST['title'] ?? ''));
@@ -236,15 +260,18 @@ class Controller_CmsAjax extends Controller
 
         if (array_key_exists('hero_media_id', $_POST)) {
             $hero = (int)$_POST['hero_media_id'];
-            $meta['hero_media_id'] = ($hero > 0) ? $hero : null;
+            // Only honor an in-scope media id; a cross-scope (forged) id is dropped.
+            $this->load_model('CmsMedia');
+            $meta['hero_media_id'] = ($hero > 0 && $this->_rowInScope($this->CmsMedia->get_media($hero), $scope))
+                ? $hero : null;
         }
 
         if ($isNew) {
             $meta['author_id']  = $uid;
             $meta['created_by'] = $uid;
             $meta['status']     = 'draft';
-            $meta['scope_type'] = 'global';
-            $meta['scope_id']   = 0;
+            $meta['scope_type'] = (string)$scope['type'];
+            $meta['scope_id']   = (int)$scope['id'];
             $postId = (int)$this->CmsPost->create_post($meta);
             if ($postId <= 0) {
                 $this->_fail('Could not create the post (the slug may already be in use).');
@@ -254,6 +281,8 @@ class Controller_CmsAjax extends Controller
             if (empty($existing)) {
                 $this->_fail('Post not found.', 4);
             }
+            // IDOR guard: the existing post must belong to the resolved scope.
+            $this->_requireOwned($existing, $scope);
             $this->CmsPost->update_post($postId, $meta);
         }
 
@@ -291,12 +320,15 @@ class Controller_CmsAjax extends Controller
     public function publishpost($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'page.publish');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'page.publish', $scope);
 
         $postId = (int)($_POST['post_id'] ?? 0);
-        if ($postId <= 0 || empty($this->CmsPost->get_post($postId))) {
+        $row = $this->CmsPost->get_post($postId);
+        if ($postId <= 0 || empty($row)) {
             $this->_fail('Post not found.', 4);
         }
+        $this->_requireOwned($row, $scope);
 
         $this->CmsPost->set_status($postId, 'published', $uid);
         $row = $this->CmsPost->get_post($postId);
@@ -311,12 +343,15 @@ class Controller_CmsAjax extends Controller
     public function unpublishpost($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'page.publish');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'page.publish', $scope);
 
         $postId = (int)($_POST['post_id'] ?? 0);
-        if ($postId <= 0 || empty($this->CmsPost->get_post($postId))) {
+        $row = $this->CmsPost->get_post($postId);
+        if ($postId <= 0 || empty($row)) {
             $this->_fail('Post not found.', 4);
         }
+        $this->_requireOwned($row, $scope);
 
         $this->CmsPost->set_status($postId, 'draft', $uid);
 
@@ -333,13 +368,16 @@ class Controller_CmsAjax extends Controller
     public function deletepost($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'page.delete');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'page.delete', $scope);
 
         $postId = (int)($_POST['post_id'] ?? 0);
         $row    = $this->CmsPost->get_post($postId);
         if ($postId <= 0 || empty($row)) {
             $this->_fail('Post not found.', 4);
         }
+        // IDOR guard: never delete a post belonging to another scope.
+        $this->_requireOwned($row, $scope);
 
         $deleted = (bool)$this->CmsPost->delete_post($postId);
         if (!$deleted) {
@@ -361,7 +399,8 @@ class Controller_CmsAjax extends Controller
     public function savenavitem($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'nav.manage');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'nav.manage', $scope);
 
         $navId = (int)($_POST['nav_id'] ?? 0);
         $isNew = ($navId <= 0);
@@ -384,12 +423,18 @@ class Controller_CmsAjax extends Controller
                 if ($pageId <= 0) {
                     $this->_fail('Pick a page for this link.');
                 }
+                // IDOR: the linked page must belong to THIS scope. Otherwise its
+                // title/slug would leak into this org's nav admin via the
+                // page/post JOIN (cross-org, incl. draft, metadata disclosure).
+                $this->_requireOwned($this->CmsPage->get_page($pageId), $scope);
                 break;
             case 'post':
                 $postId = (int)($_POST['post_id'] ?? 0);
                 if ($postId <= 0) {
                     $this->_fail('Pick a post for this link.');
                 }
+                // IDOR: the linked post must belong to THIS scope (see above).
+                $this->_requireOwned($this->CmsPost->get_post($postId), $scope);
                 break;
             case 'url':
                 $url = trim((string)($_POST['url'] ?? ''));
@@ -429,7 +474,7 @@ class Controller_CmsAjax extends Controller
         // this menu (so we never create a 3rd nesting level), and not self.
         if ($parentId !== null) {
             $parentOk = false;
-            foreach ($this->CmsNav->list_items('marketing', 'global', 0) as $row) {
+            foreach ($this->CmsNav->list_items('marketing', (string)$scope['type'], (int)$scope['id']) as $row) {
                 if ((int)($row['nav_id'] ?? 0) === $parentId) {
                     // Parent must itself be top-level (parent_id null/0).
                     $pp = $row['parent_id'] ?? null;
@@ -451,8 +496,8 @@ class Controller_CmsAjax extends Controller
             'url'       => $url,
             'parent_id' => $parentId,
             'enabled'   => $enabled,
-            'scope_type' => 'global',
-            'scope_id'  => 0,
+            'scope_type' => (string)$scope['type'],
+            'scope_id'  => (int)$scope['id'],
         );
 
         if ($isNew) {
@@ -461,7 +506,9 @@ class Controller_CmsAjax extends Controller
                 $this->_fail('Could not create the navigation item.');
             }
         } else {
-            $ok = (bool)$this->CmsNav->update_item($navId, $data);
+            // Pass explicit scope so UpdateItem's IDOR ownership guard fires —
+            // a cross-scope nav_id is rejected before any write.
+            $ok = (bool)$this->CmsNav->update_item($navId, $data, (string)$scope['type'], (int)$scope['id']);
             if (!$ok) {
                 $this->_fail('Could not update the navigation item.', 4);
             }
@@ -481,16 +528,17 @@ class Controller_CmsAjax extends Controller
     public function deletenavitem($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'nav.manage');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'nav.manage', $scope);
 
         $navId = (int)($_POST['nav_id'] ?? 0);
         if ($navId <= 0) {
             $this->_fail('Navigation item not found.', 4);
         }
 
-        // Pass the global scope so DeleteItem's scope-ownership (IDOR) guard
-        // actually fires — matches the scope the update path uses.
-        $deleted = (bool)$this->CmsNav->delete_item($navId, 'global', 0);
+        // Pass the resolved scope so DeleteItem's scope-ownership (IDOR) guard
+        // actually fires — a cross-scope nav_id is rejected before any delete.
+        $deleted = (bool)$this->CmsNav->delete_item($navId, (string)$scope['type'], (int)$scope['id']);
         if (!$deleted) {
             $this->_fail('Navigation item not found.', 4);
         }
@@ -505,7 +553,8 @@ class Controller_CmsAjax extends Controller
     public function reordernav($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'nav.manage');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'nav.manage', $scope);
 
         $menu = trim((string)($_POST['menu'] ?? 'marketing'));
         if ($menu === '') {
@@ -540,7 +589,7 @@ class Controller_CmsAjax extends Controller
             $idx++;
         }
 
-        $ok = (bool)$this->CmsNav->reorder($menu, $ordered, 'global', 0);
+        $ok = (bool)$this->CmsNav->reorder($menu, $ordered, (string)$scope['type'], (int)$scope['id']);
         if (!$ok) {
             $this->_fail('Could not save the new order.');
         }
@@ -555,7 +604,8 @@ class Controller_CmsAjax extends Controller
     public function mediaupload($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'media.manage');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'media.manage', $scope);
 
         $data = (string)($_POST['data'] ?? $_POST['image'] ?? '');
         if ($data === '') {
@@ -565,7 +615,7 @@ class Controller_CmsAjax extends Controller
         $alt      = trim((string)($_POST['alt'] ?? ''));
 
         $this->load_model('CmsMedia');
-        $row = $this->CmsMedia->upload($data, $filename, $alt, $uid, self::$SCOPE);
+        $row = $this->CmsMedia->upload($data, $filename, $alt, $uid, $scope);
         if (empty($row)) {
             $this->_fail('The image could not be processed (unsupported type or too large).');
         }
@@ -585,7 +635,8 @@ class Controller_CmsAjax extends Controller
     public function medialist($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'media.manage');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'media.manage', $scope);
 
         $search = trim((string)($_GET['q'] ?? $_POST['q'] ?? ''));
         $search = ($search === '') ? null : $search;
@@ -595,7 +646,7 @@ class Controller_CmsAjax extends Controller
         }
 
         $this->load_model('CmsMedia');
-        $list = $this->CmsMedia->list_media(self::$SCOPE, $limit, $search);
+        $list = $this->CmsMedia->list_media($scope, $limit, $search);
         if (!is_array($list)) {
             $list = array();
         }
@@ -611,10 +662,11 @@ class Controller_CmsAjax extends Controller
     public function savetheme($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'theme.manage');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'theme.manage', $scope);
         $tokens = $this->_themeTokensFromPost();
         $name   = trim((string)($_POST['name'] ?? 'Default'));
-        $id = (int)$this->CmsTheme->save_theme('global', 0, $name, $tokens, $uid);
+        $id = (int)$this->CmsTheme->save_theme((string)$scope['type'], (int)$scope['id'], $name, $tokens, $uid);
         if ($id <= 0) {
             $this->_fail('Could not save the theme.');
         }
@@ -625,12 +677,15 @@ class Controller_CmsAjax extends Controller
     public function activatetheme($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'theme.manage');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'theme.manage', $scope);
         $id = (int)($_POST['theme_id'] ?? 0);
         if ($id <= 0) {
             $this->_fail('Missing theme id.', 4);
         }
-        $this->CmsTheme->set_active('global', 0, $id);
+        // SetActive's WHERE keys on (scope_type, scope_id), so a foreign theme_id
+        // cannot be activated cross-scope — the IDOR guard is inherent here.
+        $this->CmsTheme->set_active((string)$scope['type'], (int)$scope['id'], $id);
         $this->_ok(array('active' => $id));
     }
 
@@ -638,8 +693,9 @@ class Controller_CmsAjax extends Controller
     public function resettheme($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'theme.manage');
-        $this->CmsTheme->reset_active('global', 0);
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'theme.manage', $scope);
+        $this->CmsTheme->reset_active((string)$scope['type'], (int)$scope['id']);
         $this->_ok();
     }
 
@@ -647,10 +703,58 @@ class Controller_CmsAjax extends Controller
     public function previewtheme($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'theme.manage');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'theme.manage', $scope);
         $tokens = $this->_themeTokensFromPost();
         $css = (string)$this->CmsTheme->preview_css($tokens);
         $this->_ok(array('css' => $css));
+    }
+
+    /* ------------------------------------------------------------------ *
+     * site lifecycle — publish / unpublish an org's public site
+     * ------------------------------------------------------------------ */
+
+    /**
+     * POST: publish the resolved org's public site (status='published').
+     * Requires a non-global scope and an AUTH_ADMIN-tier officer (monarch /
+     * regent) — gated via 'page.publish', which bridges to AUTH_ADMIN on the
+     * scope. EnsureSite first so a never-opened site can still be published.
+     */
+    public function publishsite($action = null)
+    {
+        $uid = $this->_begin();
+        $scope = $this->_scope($uid);
+        if ($this->_scopeIsGlobal($scope)) {
+            $this->_fail('The global front door is not a publishable org site.', 3);
+        }
+        $this->_require($uid, 'page.publish', $scope);
+
+        $this->load_model('CmsSite');
+        $site = $this->CmsSite->ensure_site((string)$scope['type'], (int)$scope['id'], $uid);
+        if (empty($site) || empty($site['site_id'])) {
+            $this->_fail('Could not resolve the site.', 4);
+        }
+        $this->CmsSite->set_published((int)$site['site_id'], $uid);
+        $this->_ok(array('status' => 'published'));
+    }
+
+    /** POST: return the resolved org's public site to draft (unpublish). */
+    public function unpublishsite($action = null)
+    {
+        $uid = $this->_begin();
+        $scope = $this->_scope($uid);
+        if ($this->_scopeIsGlobal($scope)) {
+            $this->_fail('The global front door is not a publishable org site.', 3);
+        }
+        $this->_require($uid, 'page.publish', $scope);
+
+        $this->load_model('CmsSite');
+        $site = $this->CmsSite->get_site_for_scope((string)$scope['type'], (int)$scope['id']);
+        if (empty($site) || empty($site['site_id'])) {
+            $this->_fail('Could not resolve the site.', 4);
+        }
+        $this->CmsSite->set_draft((int)$site['site_id'], $uid);
+        $this->_ok(array('status' => 'draft'));
     }
 
     /* ------------------------------------------------------------------ *
@@ -665,7 +769,8 @@ class Controller_CmsAjax extends Controller
     public function personlookup($action = null)
     {
         $uid = $this->_begin();
-        $this->_require($uid, 'page.edit');
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'page.edit', $scope);
 
         $mundaneId = (int)($_GET['mundane_id'] ?? $_POST['mundane_id'] ?? 0);
         if ($mundaneId <= 0) {
@@ -728,11 +833,45 @@ class Controller_CmsAjax extends Controller
         return $uid;
     }
 
-    /** Gate a capability at global scope; JSON error + exit when denied. */
-    private function _require($uid, $capability)
+    /**
+     * Resolve + authorize the request scope, or emit a JSON 403 and exit.
+     * Returns the validated ['type'=>..,'id'=>..] scope array. No selector →
+     * global (legacy). A present-but-invalid/unauthorized selector never
+     * downgrades to global — it is rejected.
+     *
+     * @param int $uid
+     * @return array{type:string,id:int}
+     */
+    private function _scope($uid)
     {
-        if (!$this->CmsAuth->cms_can($uid, $capability, self::$SCOPE)) {
+        $scope = $this->_resolveScope($uid);
+        if ($scope === false) {
+            $this->_fail('You are not authorized for this site.', 5);
+        }
+        return $scope;
+    }
+
+    /** Gate a capability in the resolved scope; JSON error + exit when denied. */
+    private function _require($uid, $capability, $scope)
+    {
+        if (!$this->CmsAuth->cms_can($uid, $capability, $scope)) {
             $this->_fail('You are not authorized to perform this action.', 5);
+        }
+    }
+
+    /**
+     * IDOR guard: reject (JSON 403 + exit) when the loaded target row does not
+     * belong to the resolved request scope. Closes cross-org tampering even by
+     * an officer authorized for a DIFFERENT org.
+     *
+     * @param array|null $row   the target row (must carry scope_type/scope_id)
+     * @param array      $scope the resolved, authorized request scope
+     * @return void
+     */
+    private function _requireOwned($row, $scope)
+    {
+        if (!$this->_rowInScope($row, $scope)) {
+            $this->_fail('You are not authorized to modify this content.', 5);
         }
     }
 

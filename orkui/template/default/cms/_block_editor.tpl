@@ -238,7 +238,7 @@ window.CmsBlockEditor = (function () {
     function post(endpoint, params) {
         var body = new URLSearchParams();
         Object.keys(params).forEach(function (k) { body.append(k, params[k]); });
-        return fetch(AJAX + endpoint, {
+        return fetch(AJAX + endpoint + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''), {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': (window.CMS_CSRF || '') },
             credentials: 'same-origin',
@@ -678,7 +678,7 @@ window.CmsBlockEditor = (function () {
             person.mundane_id = parseInt(row.MundaneId, 10) || 0;
             person.persona_name = row.Persona || person.persona_name;
             input.value = ''; closeDd(); markDirty(); renderChip();
-            fetch(UIR + 'CmsAjax/personlookup&mundane_id=' + person.mundane_id)
+            fetch(UIR + 'CmsAjax/personlookup&mundane_id=' + person.mundane_id + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''))
                 .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
                 .then(function (d) {
                     if (d && d.ok) {
@@ -1650,7 +1650,8 @@ window.CmsBlockEditor = (function () {
         mediaGrid.innerHTML = '<div class="cms-media-empty">Loading…</div>';
         // AJAX already ends in '...?Route=CmsAjax/', so the query must be joined
         // with '&' — a second '?' would corrupt the Route param (empties $_GET).
-        var url = AJAX + 'medialist' + (q ? '&' + new URLSearchParams({ q: q }).toString() : '');
+        var url = AJAX + 'medialist' + (q ? '&' + new URLSearchParams({ q: q }).toString() : '')
+            + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '');
         fetch(url, { credentials: 'same-origin' })
             .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
             .then(function (res) {

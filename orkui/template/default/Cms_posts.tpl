@@ -26,6 +26,8 @@ $canDelete  = !empty($caps['delete']);
 $h = function ($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 };
+// Active scope query ('&scope=k:5' or '') threaded onto intra-admin links.
+$scopeQ = isset($CmsScopeQuery) ? (string)$CmsScopeQuery : '';
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -48,7 +50,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     <?php if (!empty($allTags)): ?>
     <div class="cms-filters" style="flex-wrap:wrap;">
         <span class="cms-muted" style="font-size:13px;align-self:center;">Filter by tag:</span>
-        <a class="cms-btn cms-btn-sm<?= $tagF === '' ? ' cms-btn-primary' : ' cms-btn-ghost' ?>" href="<?= UIR ?>Cms/posts">All</a>
+        <a class="cms-btn cms-btn-sm<?= $tagF === '' ? ' cms-btn-primary' : ' cms-btn-ghost' ?>" href="<?= UIR ?>Cms/posts<?= $scopeQ ?>">All</a>
         <?php foreach ($allTags as $t):
             $tslug = (string)($t['slug'] ?? '');
             $tname = (string)($t['name'] ?? '');
@@ -56,7 +58,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             $active = ($tslug !== '' && $tslug === $tagF);
         ?>
             <a class="cms-btn cms-btn-sm<?= $active ? ' cms-btn-primary' : ' cms-btn-ghost' ?>"
-               href="<?= UIR ?>Cms/posts&tag=<?= $h($tslug) ?>"><?= $h($tname) ?> <span class="cms-muted">(<?= $tcnt ?>)</span></a>
+               href="<?= UIR ?>Cms/posts&tag=<?= $h($tslug) ?><?= $scopeQ ?>"><?= $h($tname) ?> <span class="cms-muted">(<?= $tcnt ?>)</span></a>
         <?php endforeach; ?>
     </div>
     <?php endif; ?>
@@ -154,7 +156,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                         <td data-label="Actions">
                             <div class="cms-row-actions">
                                 <?php if ($canEdit || $canCreate): ?>
-                                    <a class="cms-btn cms-btn-sm" href="<?= UIR ?>Cms/editpost/<?= $pid ?>"><i class="fas fa-pen"></i> Edit</a>
+                                    <a class="cms-btn cms-btn-sm" href="<?= UIR ?>Cms/editpost/<?= $pid ?><?= $scopeQ ?>"><i class="fas fa-pen"></i> Edit</a>
                                 <?php endif; ?>
                                 <div class="cms-overflow">
                                     <button type="button" class="cms-overflow-btn" data-overflow-toggle
@@ -162,7 +164,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                                         <i class="fas fa-ellipsis-h"></i>
                                     </button>
                                     <div class="cms-overflow-menu" role="menu">
-                                        <a class="cms-overflow-item" role="menuitem" href="<?= UIR ?>Cms/previewpost/<?= $pid ?>" target="_blank"><i class="fas fa-eye"></i> Preview</a>
+                                        <a class="cms-overflow-item" role="menuitem" href="<?= UIR ?>Cms/previewpost/<?= $pid ?><?= $scopeQ ?>" target="_blank"><i class="fas fa-eye"></i> Preview</a>
                                         <?php if ($canPublish): ?>
                                             <button type="button" class="cms-overflow-item" role="menuitem"
                                                     data-pubtoggle
@@ -276,7 +278,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     });
 
     /* ---- New Post (navigate to the post editor) ---- */
-    function goNewPost() { window.location.href = UIR + 'Cms/editpost/new'; }
+    function goNewPost() { window.location.href = UIR + 'Cms/editpost/new' + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''); }
     var newPostBtn = document.getElementById('cmsNewPostBtn');
     if (newPostBtn) { newPostBtn.addEventListener('click', goNewPost); }
     var newPostBtnEmpty = document.getElementById('cmsNewPostBtnEmpty');
@@ -286,7 +288,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     function post(endpoint, params) {
         var body = new URLSearchParams();
         Object.keys(params).forEach(function (k) { body.append(k, params[k]); });
-        return fetch(AJAX + endpoint, {
+        return fetch(AJAX + endpoint + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''), {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': (window.CMS_CSRF || '') },
             credentials: 'same-origin',
