@@ -725,6 +725,8 @@
 												alt="">
 											<?php if ($isDraft): ?><span class="kn-draft-pill" data-tip="Draft — hidden from members. Publish to make visible.">DRAFT</span><?php endif; ?>
 											<?php if ($event['NextDetailId']): ?><a href="<?= UIR ?>Event/detail/<?= $event['EventId'] ?>/<?= $event['NextDetailId'] ?>"><?= htmlspecialchars($event['Name']) ?></a><?php else: ?><?= htmlspecialchars($event['Name']) ?><?php endif; ?>
+											<?php if (!empty($event['MonarchRsvp'])): ?><span class="kn-royal-badge kn-royal-monarch" data-tip="Kingdom Monarch in Attendance"><i class="fas fa-crown"></i></span><?php endif; ?>
+											<?php if (!empty($event['RegentRsvp'])): ?><span class="kn-royal-badge kn-royal-regent" data-tip="Kingdom Regent in Attendance"><i class="fas fa-crown"></i></span><?php endif; ?>
 										</td>
 										<td><?= htmlspecialchars($event['ParkName']) ?></td>
 										<td colspan="2" style="text-align:right;padding:6px 8px;">
