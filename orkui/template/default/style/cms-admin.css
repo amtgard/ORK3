@@ -585,13 +585,38 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 .cms-typegroup { margin-bottom: 16px; }
 .cms-typegroup:last-child { margin-bottom: 0; }
 .cms-typegroup-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: .06em;
     text-transform: uppercase;
     color: var(--ork-text-muted);
     margin: 0 0 8px;
+    padding: 4px 2px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
 }
+.cms-typegroup-title:hover { color: var(--ork-text); }
+.cms-typegroup-caret {
+    font-size: 10px;
+    transition: transform .12s ease;
+}
+.cms-typegroup-count {
+    font-weight: 600;
+    color: var(--ork-text-muted);
+    background: var(--ork-bg-tertiary);
+    border-radius: 999px;
+    padding: 0 7px;
+    letter-spacing: 0;
+}
+.cms-typegroup-collapsed .cms-typegroup-caret { transform: rotate(-90deg); }
+.cms-typegroup-collapsed .cms-typegrid { display: none; }
+.cms-typegroup-collapsed .cms-typegroup-title { margin-bottom: 0; }
 .cms-typegrid-empty {
     padding: 20px;
     text-align: center;
@@ -673,6 +698,19 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 }
 .cms-typecard-disabled:hover { border-color: var(--ork-border-dark); background: var(--ork-bg-secondary); }
 .cms-typecard-disabled .cms-typecard-icon { color: var(--ork-text-muted); }
+
+/* Add-block chooser: wide modal → three responsive columns (less vertical
+ * scroll), each card carrying a one-line description of what the block is. */
+#cmsAddModal .cms-typegrid {
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+.cms-typecard-desc {
+    display: block;
+    font-size: 12px;
+    color: var(--ork-text-muted);
+    line-height: 1.4;
+    margin-top: 4px;
+}
 
 /* ============================================================================
  * Block editor (Cms_edit)
@@ -1048,6 +1086,7 @@ html[data-theme="dark"] .cms-note a { color: var(--cms-gold, #f0b429); }
     max-height: calc(100vh - 80px);
 }
 .cms-modal.cms-modal-sm { max-width: 440px; }
+.cms-modal.cms-modal-wide { max-width: 840px; }
 .cms-modal-head {
     display: flex;
     align-items: center;

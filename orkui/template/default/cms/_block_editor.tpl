@@ -65,7 +65,7 @@ $beHeading   = isset($beHeading) ? (string)$beHeading : 'Blocks';
 
 <?php /* ---- Add-block chooser modal ---- */ ?>
 <div class="cms-modal-overlay" id="cmsAddModal">
-    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Choose a block">
+    <div class="cms-modal cms-modal-wide" role="dialog" aria-modal="true" aria-label="Choose a block">
         <div class="cms-modal-head">
             <h3>Choose a block</h3>
             <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
@@ -146,6 +146,7 @@ window.CmsBlockEditor = (function () {
     var blockAllow = {};        // page-type key -> [allowed block types]
     var pageType = '';          // current page type ('post' for blog bodies)
     var showAllBlocks = false;  // chooser "Show all blocks" toggle state
+    var addGroupCollapsed = {}; // chooser: per-group collapsed state (by group name)
     var canEdit = false;
     var onDirty = function () {};
 
@@ -1511,10 +1512,14 @@ window.CmsBlockEditor = (function () {
         var badge = c.available
             ? (c.dynamic ? '<span class="cms-typecard-badge cms-badge-dynamic">live</span>' : '')
             : '<span class="cms-typecard-badge cms-badge-soon">coming soon</span>';
+        var descHtml = c.description
+            ? '<span class="cms-typecard-desc">' + esc(c.description) + '</span>'
+            : '';
         cardBtn.innerHTML =
             icoHtml +
             '<span class="cms-typecard-text">' +
                 '<strong>' + esc(c.label) + badge + '</strong>' +
+                descHtml +
                 '<span class="cms-typecard-key">' + esc(c.type) + '</span>' +
             '</span>';
         if (c.available) {
@@ -1574,10 +1579,25 @@ window.CmsBlockEditor = (function () {
             var items = buckets[g];
             if (!items.length) { return; }
             any = true;
-            var sec = el('div', 'cms-typegroup');
-            sec.appendChild(el('div', 'cms-typegroup-title', esc(g)));
+            // Never collapsed while searching (matches must stay visible).
+            var collapsed = !q && !!addGroupCollapsed[g];
+            var sec = el('div', 'cms-typegroup' + (collapsed ? ' cms-typegroup-collapsed' : ''));
+            var titleBtn = el('button', 'cms-typegroup-title');
+            titleBtn.type = 'button';
+            titleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            titleBtn.innerHTML =
+                '<i class="fas fa-chevron-down cms-typegroup-caret"></i>' +
+                '<span>' + esc(g) + '</span>' +
+                '<span class="cms-typegroup-count">' + items.length + '</span>';
             var grid = el('div', 'cms-typegrid');
             items.forEach(function (c) { grid.appendChild(typeCard(c)); });
+            titleBtn.addEventListener('click', function () {
+                var nowCollapsed = !sec.classList.contains('cms-typegroup-collapsed');
+                sec.classList.toggle('cms-typegroup-collapsed', nowCollapsed);
+                titleBtn.setAttribute('aria-expanded', nowCollapsed ? 'false' : 'true');
+                addGroupCollapsed[g] = nowCollapsed;
+            });
+            sec.appendChild(titleBtn);
             sec.appendChild(grid);
             addGroupsEl.appendChild(sec);
         });
