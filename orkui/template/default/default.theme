@@ -657,6 +657,7 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 	</script>
 
 	
+<?php if (empty($IsOrgSite)): // global-only logged-in chrome (What's New + email prompt); org sites omit it — it uses base-Controller data ($DB / session / release constants) that Controller_Site does not set, and would fatal mid-render, truncating the page before the editor FAB. ?>
 <?php require_once(DIR_UI . 'whats_new_content.php'); ?>
 <?php if ($this->__session->token != null) : ?>
 <?php
@@ -865,6 +866,7 @@ endif;
 })();
 </script>
 <?php endif; ?>
+<?php endif; // /global-only logged-in chrome (What's New + email prompt) ?>
 
 <?php if (empty($IsOrgSite)): // standalone org sites render their own footer ?>
 <footer style="margin-top:40px;padding:18px 24px;border-top:1px solid var(--ork-border,#e2e8f0);background:var(--ork-bg-secondary,#f8fafc);font-size:11px;color:var(--ork-text-muted,#94a3b8);text-align:center;line-height:1.7;">
