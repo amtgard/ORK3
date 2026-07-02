@@ -826,11 +826,14 @@ class Controller_Event extends Controller
 
         // Load external links for this occurrence
         $DB->Clear();
+        // Column is `event_links_id` (plural) in the schema; singular was a
+        // typo that made the SELECT silently return nothing and hid the
+        // whole card, including the ticket link, on the event detail page.
         $linkRows = $DB->DataSet(
-            'SELECT event_link_id AS EventLinkId, title AS Title, url AS Url, icon AS Icon, sort_order AS SortOrder
+            'SELECT event_links_id AS EventLinkId, title AS Title, url AS Url, icon AS Icon, sort_order AS SortOrder
 			FROM ' . DB_PREFIX . 'event_links
 			WHERE event_calendardetail_id = ' . $detail_id . '
-			ORDER BY sort_order, event_link_id'
+			ORDER BY sort_order, event_links_id'
         );
         $linkList = [];
         if ($linkRows) {

@@ -8757,6 +8757,11 @@ $(document).ready(function() {
             fd.append('CanAttendance', canAtt);
             fd.append('CanSchedule',   canSched);
             fd.append('CanFeast',      canFeast);
+            // Editing? Send the staff row id so the backend does an UPDATE
+            // instead of an INSERT. ork_event_staff has no UNIQUE constraint
+            // on (detail_id, mundane_id) yet, so a bare insert-upsert makes
+            // duplicates instead of updating the row we're editing.
+            if (evEditingStaffId) fd.append('StaffId', evEditingStaffId);
 
             fetch(EvConfig.uir + 'EventAjax/add_staff/' + EvConfig.eventId + '/' + EvConfig.detailId, {
                 method: 'POST', body: fd,
@@ -16576,6 +16581,16 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
 
         labelInput.addEventListener('input', upsertTicketLink);
         urlInput.addEventListener('input',   upsertTicketLink);
+
+        // Belt-and-suspenders: force the ticket link into the ExternalLinks
+        // JSON on form submit. Without this, a URL entered without a
+        // subsequent `input` event landing (e.g. autocomplete / paste in
+        // some browsers, or focus lost before the value settled) would
+        // never make it into the hidden JSON and the link wouldn't save.
+        var form = document.getElementById('ev-edit-form') || document.getElementById('ec-form');
+        if (form) {
+            form.addEventListener('submit', upsertTicketLink, true); // capture so we run before the external-links IIFE's serialize()
+        }
 
         // Re-sync when the edit modal is opened with fresh data.
         window.evTicketLinkReset = syncVisibility;

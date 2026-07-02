@@ -591,6 +591,14 @@ class Controller_EventAjax extends Controller
         $can_attendance = (int)(bool)($_POST['CanAttendance'] ?? 0);
         $can_schedule   = (int)(bool)($_POST['CanSchedule']   ?? 0);
         $can_feast      = (int)(bool)($_POST['CanFeast']      ?? 0);
+        // Editing an existing row: the frontend passes StaffId. We can't rely
+        // on INSERT ... ON DUPLICATE KEY UPDATE because ork_event_staff has no
+        // UNIQUE constraint on (event_calendardetail_id, mundane_id) — every
+        // upsert without StaffId would create a duplicate row. Adding the
+        // unique constraint is a separate follow-up (needs a dedup migration
+        // for existing dupes); for now, treat StaffId > 0 as "UPDATE that row"
+        // and StaffId = 0 as "INSERT new."
+        $staff_id_in  = (int)($_POST['StaffId'] ?? 0);
 
         if (!valid_id($mundane_id)) {
             echo json_encode(['status' => 1, 'error' => 'A player must be selected.']);
@@ -603,11 +611,14 @@ class Controller_EventAjax extends Controller
 
         global $DB;
         $role_safe = str_replace(["'", '\\'], ["''", '\\\\'], $role_name);
-        // Capture prior state so the audit log distinguishes Add from Update
-        // (upsert emits one row either way; the diff is only meaningful with
-        // prior_state populated).
+        // Capture prior state for the audit log. If we're editing, pull the
+        // exact target row by staff_id; otherwise look up by natural key.
         $DB->Clear();
-        $priorRs = $DB->DataSet('SELECT event_staff_id, role_name, can_manage, can_attendance, can_schedule, can_feast FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $mundane_id . ' LIMIT 1');
+        if ($staff_id_in > 0) {
+            $priorRs = $DB->DataSet('SELECT event_staff_id, role_name, can_manage, can_attendance, can_schedule, can_feast FROM ' . DB_PREFIX . 'event_staff WHERE event_staff_id = ' . $staff_id_in . ' AND event_calendardetail_id = ' . $detail_id . ' LIMIT 1');
+        } else {
+            $priorRs = $DB->DataSet('SELECT event_staff_id, role_name, can_manage, can_attendance, can_schedule, can_feast FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $mundane_id . ' LIMIT 1');
+        }
         $priorState = null;
         if ($priorRs && $priorRs->Next()) {
             $priorState = [
@@ -620,14 +631,36 @@ class Controller_EventAjax extends Controller
             ];
         }
         $DB->Clear(); // reset stale bound params from prior ORM queries in this request
-        $DB->Execute(
-            'INSERT INTO ' . DB_PREFIX . 'event_staff
+        if ($staff_id_in > 0 && $priorState) {
+            // Explicit UPDATE — no INSERT path — so a stale form re-submit
+            // can't accidentally spawn a duplicate row.
+            $DB->Execute(
+                'UPDATE ' . DB_PREFIX . 'event_staff
+				 SET role_name = \'' . $role_safe . '\',
+				     can_manage = ' . $can_manage . ',
+				     can_attendance = ' . $can_attendance . ',
+				     can_schedule = ' . $can_schedule . ',
+				     can_feast = ' . $can_feast . '
+				 WHERE event_staff_id = ' . $staff_id_in . '
+				   AND event_calendardetail_id = ' . $detail_id
+            );
+        } else {
+            $DB->Execute(
+                'INSERT INTO ' . DB_PREFIX . 'event_staff
 			(event_calendardetail_id, mundane_id, role_name, can_manage, can_attendance, can_schedule, can_feast)
 			VALUES (' . $detail_id . ', ' . $mundane_id . ', \'' . $role_safe . '\', ' . $can_manage . ', ' . $can_attendance . ', ' . $can_schedule . ', ' . $can_feast . ')
 			ON DUPLICATE KEY UPDATE role_name = VALUES(role_name), can_manage = VALUES(can_manage), can_attendance = VALUES(can_attendance), can_schedule = VALUES(can_schedule), can_feast = VALUES(can_feast)'
-        );
+            );
+        }
         $DB->Clear();
-        $idrow = $DB->DataSet('SELECT s.event_staff_id, m.persona FROM ' . DB_PREFIX . 'event_staff s LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id WHERE s.event_calendardetail_id = ' . $detail_id . ' AND s.mundane_id = ' . $mundane_id . ' ORDER BY s.event_staff_id DESC LIMIT 1');
+        // For UPDATE we already know the staff_id; for INSERT look it up by
+        // detail+mundane (ordered DESC so we grab the row we just wrote if
+        // there happen to be legacy duplicates).
+        if ($staff_id_in > 0) {
+            $idrow = $DB->DataSet('SELECT s.event_staff_id, m.persona FROM ' . DB_PREFIX . 'event_staff s LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id WHERE s.event_staff_id = ' . $staff_id_in . ' LIMIT 1');
+        } else {
+            $idrow = $DB->DataSet('SELECT s.event_staff_id, m.persona FROM ' . DB_PREFIX . 'event_staff s LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id WHERE s.event_calendardetail_id = ' . $detail_id . ' AND s.mundane_id = ' . $mundane_id . ' ORDER BY s.event_staff_id DESC LIMIT 1');
+        }
         $fetched   = ($idrow && $idrow->Next());
         $staff_id  = $fetched ? (int)$idrow->event_staff_id : 0;
         $persona   = $fetched ? (string)$idrow->persona : '';
