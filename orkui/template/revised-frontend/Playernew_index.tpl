@@ -1397,8 +1397,11 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 			<?php endif; ?>
 		</div>
 
-		<!-- Event RSVPs -->
-		<?php if (!empty($UpcomingRsvps)): ?>
+		<!-- Event RSVPs — hidden from logged-out viewers so a player's
+		     upcoming plans aren't exposed to search engines / anonymous
+		     scrapers. Any logged-in user (including the profile owner
+		     and officers) still sees the list. -->
+		<?php if (!empty($UpcomingRsvps) && isset($this->__session->user_id)): ?>
 		<div class="pn-card">
 			<h4><i class="fas fa-calendar-check"></i> Event RSVPs</h4>
 			<table class="pn-mini-table">
