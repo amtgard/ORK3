@@ -508,6 +508,77 @@ class CmsSite extends CmsBase
     }
 
     /**
+     * Super-admin overview: enumerate EVERY started org site (one ork_cms_site
+     * row each, any status) with its real org name and content aggregates.
+     *
+     * One query — the org name comes from a scope_type-gated LEFT JOIN to
+     * ork_kingdom / ork_park (integer-id joins). ork_park is MyISAM/latin1 while
+     * ork_kingdom/ork_cms_site are InnoDB/utf8mb4, so the COALESCE of the two name
+     * columns is the collation-sensitive expression (not the join): each side is
+     * CONVERT'ed to utf8mb4 so mixing them can't raise "Illegal mix of collations".
+     * The page/post counts are correlated subqueries keyed on the (scope_type,
+     * scope_id) tuple these sites share with ork_cms_page/_post.
+     *
+     * Ordered kingdoms-then-parks ('kingdom' < 'park'), then by org name, so the
+     * caller can split the flat list into its two sections in order.
+     *
+     * @return array list of site rows, each carrying the base ork_cms_site
+     *   columns plus: org_name, pages_total, pages_published, posts_total.
+     */
+    public function ListAllSites()
+    {
+        global $DB;
+
+        $DB->Clear();
+        $rs = $DB->DataSet(
+            'SELECT s.*,'
+            . ' COALESCE(CONVERT(k.name USING utf8mb4), CONVERT(p.name USING utf8mb4)) AS org_name,'
+            . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_page pg'
+            . '    WHERE pg.scope_type = s.scope_type AND pg.scope_id = s.scope_id) AS pages_total,'
+            . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_page pg'
+            . '    WHERE pg.scope_type = s.scope_type AND pg.scope_id = s.scope_id'
+            . "      AND pg.status = 'published') AS pages_published,"
+            . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_post po'
+            . '    WHERE po.scope_type = s.scope_type AND po.scope_id = s.scope_id) AS posts_total'
+            . ' FROM ' . DB_PREFIX . 'cms_site s'
+            . ' LEFT JOIN ' . DB_PREFIX . "kingdom k ON s.scope_type = 'kingdom' AND k.kingdom_id = s.scope_id"
+            . ' LEFT JOIN ' . DB_PREFIX . "park    p ON s.scope_type = 'park'    AND p.park_id    = s.scope_id"
+            . ' ORDER BY s.scope_type ASC, org_name ASC, s.slug ASC'
+        );
+        return $this->_eachRow($rs);
+    }
+
+    /**
+     * Content aggregates for the GLOBAL front door (scope_type='global',
+     * scope_id=0), which is NOT an ork_cms_site row — its home lives directly in
+     * ork_cms_page. Powers the pinned "Amtgard International" summary card on the
+     * sites overview. Mirrors the ListAllSites subquery shape for the global tuple.
+     *
+     * @return array{pages_total:int, pages_published:int, posts_total:int}
+     */
+    public function GlobalPageCounts()
+    {
+        global $DB;
+
+        $DB->Clear();
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT'
+            . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_page pg'
+            . "    WHERE pg.scope_type = 'global' AND pg.scope_id = 0) AS pages_total,"
+            . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_page pg'
+            . "    WHERE pg.scope_type = 'global' AND pg.scope_id = 0"
+            . "      AND pg.status = 'published') AS pages_published,"
+            . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_post po'
+            . "    WHERE po.scope_type = 'global' AND po.scope_id = 0) AS posts_total"
+        ));
+        return array(
+            'pages_total'     => (int)($row['pages_total'] ?? 0),
+            'pages_published' => (int)($row['pages_published'] ?? 0),
+            'posts_total'     => (int)($row['posts_total'] ?? 0),
+        );
+    }
+
+    /**
      * Publish a site: status='published', stamping published_at (only when not
      * already set, so re-publish preserves the historical first-publish stamp).
      *

@@ -20,6 +20,14 @@ class Model_CmsSite extends Model
     {
         return $this->CmsSite->GetSiteForScope($scopeType, $scopeId);
     }
+    public function list_all_sites()
+    {
+        return $this->CmsSite->ListAllSites();
+    }
+    public function global_page_counts()
+    {
+        return $this->CmsSite->GlobalPageCounts();
+    }
     public function published_slug_map_by_scope($scopeType)
     {
         return $this->CmsSite->PublishedSlugMapByScope($scopeType);

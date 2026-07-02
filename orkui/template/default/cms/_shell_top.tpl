@@ -61,6 +61,9 @@ $shRail = array(
     array('media',     'Media',      UIR . 'Cms/media' . $shScopeQuery,     'fa-images',     !empty($shCaps['media'])),
     array('nav',       'Navigation', UIR . 'Cms/nav' . $shScopeQuery,       'fa-bars',       !empty($shCaps['nav'])),
     array('theme',     'Theme',      UIR . 'Cms/theme' . $shScopeQuery,     'fa-palette',    !empty($shCaps['theme'])),
+    // GLOBAL cross-org overview — super-admins only (scopeless href on purpose;
+    // it lists every scope at once). Hidden for org-scoped officers.
+    array('sites',     'All sites',  UIR . 'Cms/sites',                     'fa-sitemap',    !empty($shCaps['super'])),
 );
 ?>
 <script>

@@ -189,6 +189,125 @@ class Controller_Cms extends Controller
     }
 
     /* ------------------------------------------------------------------ *
+     * All sites — GLOBAL super-admin overview of every started org site
+     * ------------------------------------------------------------------ */
+
+    /**
+     * Cms/sites — the cross-org "CMS Sites" overview. SUPER-ADMIN ONLY: a
+     * non-super-admin is bounced to Login via _denyRedirect() with NO site data
+     * ever assembled (the ListAllSites query is never reached), so there is no
+     * cross-org data leak. This is a GLOBAL page — it deliberately does NOT use
+     * _scopeOrDeny/_applyScopeData (those thread a single org scope); it lists
+     * every scope at once and builds per-row scope selectors instead.
+     */
+    public function sites($action = null)
+    {
+        $uid = $this->_uid();
+        // Hard gate: only an ORK super-admin (all-zero-scope AUTH_ADMIN row) may
+        // see the cross-org overview. Bounce everyone else before any data load.
+        if (!$this->CmsAuth->IsSuperAdmin($uid)) {
+            return $this->_denyRedirect();
+        }
+
+        $this->load_model('CmsSite');
+
+        $this->template = 'Cms_sites.tpl';
+        $this->data['page_title'] = 'CMS Sites';
+        $this->data['cmsActive']  = 'sites';
+
+        // ---- Pinned front-door summary (Amtgard International) -------------
+        // The global front door is NOT an ork_cms_site row — its home lives in
+        // ork_cms_page (scope_type='global'). It is always live; its admin is the
+        // scopeless dashboard and its public URL is the site root.
+        $globalCounts = $this->CmsSite->global_page_counts();
+        $globalCounts = is_array($globalCounts) ? $globalCounts : array();
+        $this->data['FrontDoor'] = array(
+            'name'            => 'Amtgard International',
+            'subtitle'       => 'Global front door',
+            'pages_total'     => (int)($globalCounts['pages_total'] ?? 0),
+            'pages_published' => (int)($globalCounts['pages_published'] ?? 0),
+            'posts_total'     => (int)($globalCounts['posts_total'] ?? 0),
+            // Scopeless dashboard = the global front-door CMS admin.
+            'manage_url'      => UIR . 'Cms/dashboard',
+            // Public front door is the site root, not a Site/view route.
+            'visit_url'       => HTTP_UI_REMOTE,
+        );
+
+        // ---- Every started org site, split into Kingdoms / Parks ----------
+        $all = $this->CmsSite->list_all_sites();
+        $all = is_array($all) ? $all : array();
+
+        $kingdoms = array();
+        $parks    = array();
+        $kingdomHasSite = array(); // scope_id => true, to flag the provision picker
+
+        foreach ($all as $row) {
+            $type    = (string)($row['scope_type'] ?? 'kingdom');
+            $scopeId = (int)($row['scope_id'] ?? 0);
+            $slug    = (string)($row['slug'] ?? '');
+            $sel     = (($type === 'park') ? 'p:' : 'k:') . $scopeId;
+
+            $view = array(
+                'site_id'         => (int)($row['site_id'] ?? 0),
+                'scope_type'      => $type,
+                'scope_id'        => $scopeId,
+                'scope_sel'       => $sel,
+                'org_name'        => (string)($row['org_name'] ?? ''),
+                'slug'            => $slug,
+                'status'          => (string)($row['status'] ?? 'unbuilt'),
+                'pages_total'     => (int)($row['pages_total'] ?? 0),
+                'pages_published' => (int)($row['pages_published'] ?? 0),
+                'posts_total'     => (int)($row['posts_total'] ?? 0),
+                'updated_at'      => (string)($row['updated_at'] ?? ''),
+                // Manage = the scoped CMS dashboard for this org.
+                'manage_url'      => UIR . 'Cms/dashboard&scope=' . $sel,
+                // Visit = the org's public site home (empty when no slug yet).
+                'visit_url'       => ($slug !== '') ? UIR . 'Site/view/' . rawurlencode($slug) : '',
+            );
+
+            if ($type === 'park') {
+                $parks[] = $view;
+            } else {
+                $kingdoms[] = $view;
+                $kingdomHasSite[$scopeId] = true;
+            }
+        }
+
+        $this->data['KingdomSites'] = $kingdoms;
+        $this->data['ParkSites']    = $parks;
+
+        // ---- Provisioning picker: every active kingdom, name-sorted, with a
+        //      flag for those that already have a site (so the picker can nudge
+        //      toward un-provisioned orgs). Opening a scoped dashboard auto-fires
+        //      EnsureSite, so provisioning needs no dedicated endpoint. ----
+        $this->load_model('Kingdom');
+        $kres = $this->Kingdom->GetKingdoms(array());
+        $rawKingdoms = (is_array($kres) && isset($kres['Kingdoms']) && is_array($kres['Kingdoms']))
+            ? $kres['Kingdoms']
+            : array();
+
+        $pick = array();
+        foreach ($rawKingdoms as $k) {
+            $kid = (int)($k['KingdomId'] ?? 0);
+            if ($kid <= 0) {
+                continue;
+            }
+            $pick[] = array(
+                'id'       => $kid,
+                'name'     => (string)($k['KingdomName'] ?? ''),
+                'has_site' => !empty($kingdomHasSite[$kid]),
+            );
+        }
+        usort($pick, function ($a, $b) {
+            return strcasecmp((string)$a['name'], (string)$b['name']);
+        });
+        $this->data['ProvisionKingdoms'] = $pick;
+
+        // Rail flag: this is a super-admin so the "All sites" entry is shown.
+        $this->data['Caps'] = $this->_capFlags($uid);
+    }
+
+    /* ------------------------------------------------------------------ *
      * Media library
      * ------------------------------------------------------------------ */
 
@@ -673,6 +792,10 @@ class Controller_Cms extends Controller
             'nav'     => $isSuper || in_array('nav.manage', $caps, true),
             'roles'   => $isSuper || in_array('roles.manage', $caps, true),
             'theme'   => $isSuper || in_array('theme.manage', $caps, true),
+            // ORK super-admin only. Gates the global "All sites" rail entry (the
+            // overview is a cross-org, super-admin-only surface). Never true for
+            // an org-scoped officer, so the rail entry stays hidden for them.
+            'super'   => $isSuper,
         );
     }
 
