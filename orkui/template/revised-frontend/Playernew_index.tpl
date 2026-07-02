@@ -5493,9 +5493,18 @@ pnRenderSparkline();
 		}
 	}
 	allInModal('.dp-toggle-sw').forEach(function(sw) {
-		if (sw.dataset.field === 'NoRestrictions') return;
+		// Skip NoRestrictions (has its own row-click handler below) AND
+		// ShowName (unrelated to dietary state — clicking it should NOT
+		// clear No dietary restrictions).
+		if (sw.dataset.field === 'NoRestrictions' || sw.dataset.field === 'ShowName') return;
 		sw.addEventListener('click', function() { dpClearNoRestrictions(); sw.classList.toggle('dp-on'); dpMarkDirty(); });
 	});
+	// ShowName toggle: just flip its own state — no side-effects on the
+	// rest of the form.
+	var showNameSw = gInModal('.dp-toggle-sw[data-field="ShowName"]');
+	if (showNameSw) {
+		showNameSw.addEventListener('click', function() { showNameSw.classList.toggle('dp-on'); dpMarkDirty(); });
+	}
 	allInModal('.dp-al-seg').forEach(function(btn) {
 		btn.addEventListener('click', function() {
 			dpClearNoRestrictions();
