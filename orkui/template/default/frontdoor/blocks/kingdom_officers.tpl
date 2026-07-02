@@ -63,7 +63,13 @@ $koRoleLabels = [
 ];
 
 // Optional per-officer avatar from PLAYER heraldry (hidden on load error).
-$koHeraldry = class_exists('APIModel') ? new APIModel('Heraldry') : null;
+// Guarded: a construction failure must not 500 the whole page (the block
+// degrades to icon avatars).
+try {
+    $koHeraldry = class_exists('APIModel') ? new APIModel('Heraldry') : null;
+} catch (\Throwable $e) {
+    $koHeraldry = null;
+}
 ?>
 <style>
 .ko-block { background: var(--fd-bg); }

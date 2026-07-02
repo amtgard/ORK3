@@ -245,10 +245,16 @@ class CmsMedia extends CmsBase
             }
         }
         if ($search !== null && $search !== '') {
-            $where[] = '(filename LIKE :search OR alt LIKE :search OR title LIKE :search)';
+            // A named placeholder reused across a statement is undefined behavior
+            // under PDO emulated prepares (only the first binds), so use distinct
+            // names — same rule CmsPage::ListPages follows.
+            $where[] = '(filename LIKE :search_fn OR alt LIKE :search_alt OR title LIKE :search_ti)';
             // Escape LIKE metacharacters: bound params block SQL injection but
             // not '%'/'_' wildcards, so a bare '%' would otherwise match every row.
-            $DB->search = '%' . str_replace(array('\\', '%', '_'), array('\\\\', '\\%', '\\_'), $search) . '%';
+            $like = '%' . str_replace(array('\\', '%', '_'), array('\\\\', '\\%', '\\_'), $search) . '%';
+            $DB->search_fn  = $like;
+            $DB->search_alt = $like;
+            $DB->search_ti  = $like;
         }
 
         $limitSql = ' LIMIT ' . ($this->_clampLimit($limit));

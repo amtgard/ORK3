@@ -16,5 +16,11 @@ foreach ( $fdBlocks as $block ) {
 	if ( ! file_exists( $partial ) ) { continue; }
 	$blockFields = isset( $block['fields'] ) && is_array( $block['fields'] ) ? $block['fields'] : [];
 	$blockMeta   = $block;
-	include $partial;
+	// Contain a broken block: a fatal in one partial must not blank the whole
+	// page — skip it and render the rest.
+	try {
+		include $partial;
+	} catch ( \Throwable $e ) {
+		// Intentionally swallow; one bad block shouldn't take down the page.
+	}
 }

@@ -57,9 +57,9 @@ class Model_CmsPage extends Model
         return $this->CmsPage->SetStatus($pageId, $status, $updatedBy);
     }
 
-    public function delete_page($pageId)
+    public function delete_page($pageId, $scopeType = null, $scopeId = null)
     {
-        return $this->CmsPage->DeletePage($pageId);
+        return $this->CmsPage->DeletePage($pageId, $scopeType, $scopeId);
     }
 
     public function replace_blocks($ownerType, $ownerId, $blocksArray)

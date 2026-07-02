@@ -52,9 +52,9 @@ class Model_CmsPost extends Model
         return $this->CmsPost->SetStatus($postId, $status, $uid);
     }
 
-    public function delete_post($postId)
+    public function delete_post($postId, $scopeType = null, $scopeId = null)
     {
-        return $this->CmsPost->DeletePost($postId);
+        return $this->CmsPost->DeletePost($postId, $scopeType, $scopeId);
     }
 
     public function set_tags($postId, array $tagNames)

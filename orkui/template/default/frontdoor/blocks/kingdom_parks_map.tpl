@@ -71,7 +71,7 @@ if (class_exists('APIModel')) {
                 $heraldry = $file !== '' ? HTTP_PARK_HERALDRY . $file : '';
             }
             $kpmParks[] = [
-                'name'     => ucwords((string) ($details['Name'] ?? '')),
+                'name'     => htmlspecialchars(ucwords((string) ($details['Name'] ?? '')), ENT_QUOTES),
                 'lat'      => (float) $latlng->lat,
                 'lng'      => (float) $latlng->lng,
                 'id'       => $parkId,

@@ -461,7 +461,7 @@ class CmsPost extends CmsBase
      * @param int $postId
      * @return bool
      */
-    public function DeletePost($postId)
+    public function DeletePost($postId, $scopeType = null, $scopeId = null)
     {
         global $DB;
 
@@ -470,18 +470,35 @@ class CmsPost extends CmsBase
             return false;
         }
 
-        // Existence check only — a targeted single-column read (GetPost would
-        // also JOIN the author + fetch tags, all unused on the delete path).
+        // Existence check — read the scope too so we can enforce the ownership
+        // guard in the same lookup (a targeted read; GetPost would also JOIN the
+        // author + fetch tags, all unused on the delete path).
         $DB->Clear();
         $DB->post_id = $postId;
         $exists = $this->_firstRow($DB->DataSet(
-            'SELECT post_id FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
+            'SELECT post_id, scope_type, scope_id FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
         ));
         if ($exists === null) {
             return false;
         }
 
-        // Remove body blocks (direct DELETE, as DeletePage does for its blocks).
+        // IDOR guard (opt-in, mirrors CmsNav::DeleteItem): reject a cross-scope
+        // delete when the caller supplies its intended scope.
+        if ($scopeType !== null) {
+            $wantType = $this->_normalizeScopeType($scopeType);
+            if ((string)$exists['scope_type'] !== $wantType || (int)$exists['scope_id'] !== (int)$scopeId) {
+                return false;
+            }
+        }
+
+        // Wrap the three DELETEs in one transaction so a failure partway can't
+        // leave orphaned blocks/tags or a half-deleted post. Read the post row
+        // back before committing (Execute() is void + ERRMODE_WARNING swallows
+        // failures) and ROLLBACK if it survived. Mirrors CmsNav::DeleteItem.
+        $DB->Clear();
+        $DB->Execute('START TRANSACTION');
+
+        // Remove body blocks.
         $DB->Clear();
         $DB->owner_id = $postId;
         $DB->Execute(
@@ -502,6 +519,20 @@ class CmsPost extends CmsBase
         $DB->Execute(
             'DELETE FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id'
         );
+
+        $DB->Clear();
+        $DB->post_id = $postId;
+        $still = $this->_firstRow($DB->DataSet(
+            'SELECT post_id FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
+        ));
+        if ($still !== null) {
+            $DB->Clear();
+            $DB->Execute('ROLLBACK');
+            return false;
+        }
+
+        $DB->Clear();
+        $DB->Execute('COMMIT');
 
         $this->_invalidateListCache();
         return true;

@@ -356,7 +356,7 @@ class CmsPage extends CmsBase
      * @param int $pageId
      * @return bool
      */
-    public function DeletePage($pageId)
+    public function DeletePage($pageId, $scopeType = null, $scopeId = null)
     {
         global $DB;
 
@@ -372,6 +372,15 @@ class CmsPage extends CmsBase
         if (!empty($row['is_system'])) {
             // System pages (e.g. the home page) are protected.
             return false;
+        }
+
+        // IDOR guard (opt-in, mirrors CmsNav::DeleteItem): when the caller supplies
+        // an intended scope, reject a page that belongs to a different org.
+        if ($scopeType !== null) {
+            $wantType = $this->_normalizeScopeType($scopeType);
+            if ((string)$row['scope_type'] !== $wantType || (int)$row['scope_id'] !== (int)$scopeId) {
+                return false;
+            }
         }
 
         // Remove the page's blocks + the page row atomically so a silent
@@ -392,6 +401,21 @@ class CmsPage extends CmsBase
         $DB->Execute(
             'DELETE FROM ' . DB_PREFIX . 'cms_page WHERE page_id = :page_id'
         );
+
+        // Confirm the page row is actually gone before committing. Execute() is
+        // void and ERRMODE_WARNING swallows failures, so a silently-dropped page
+        // DELETE would otherwise COMMIT the block deletion alone → a block-less
+        // zombie page. Read back inside the transaction and ROLLBACK if it survived.
+        $DB->Clear();
+        $DB->page_id = $pageId;
+        $still = $this->_firstRow($DB->DataSet(
+            'SELECT page_id FROM ' . DB_PREFIX . 'cms_page WHERE page_id = :page_id LIMIT 1'
+        ));
+        if ($still !== null) {
+            $DB->Clear();
+            $DB->Execute('ROLLBACK');
+            return false;
+        }
 
         $DB->Clear();
         $DB->Execute('COMMIT');

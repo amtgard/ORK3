@@ -265,6 +265,14 @@ class CmsSanitizer
             return false;
         }
 
+        // Percent-decode ONCE (matching a browser's single decode of an href)
+        // BEFORE stripping + scheme checks. Without this, an encoded scheme like
+        // "%6aavascript:" (%6a = 'j') or an encoded control char like
+        // "java%09script:" survives every check and returns true, yet the browser
+        // decodes it on click and executes javascript:. Decoding first, then
+        // stripping controls, collapses both back to the literal "javascript:".
+        $url = rawurldecode($url);
+
         // Strip ALL Unicode whitespace/control characters that can hide a
         // scheme, e.g. "java\tscript:" or scheme prefixed with U+2000.
         // Using \pZ (separators) + \pC (other controls, incl. \x00-\x1f,

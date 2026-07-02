@@ -371,11 +371,13 @@ class CmsAuth extends CmsBase
         $scopeType = $this->_normalizeScopeType($scopeType);
         $scopeId   = (int)$scopeId;
 
-        // Authorization (opt-in): when an actor is supplied, require roles.manage
-        // on the target scope before allowing the revoke.
+        // Authorization (fail-closed, mirrors GrantRole): the actor MUST hold
+        // roles.manage on the target scope. A missing/zero actor is a denial, not
+        // a bypass — otherwise a caller that forgot to pass the actor could revoke
+        // any grant unchecked.
         $actorUid = (int)$actorUid;
-        if ($actorUid > 0
-            && !$this->CmsCan($actorUid, 'roles.manage', array('type' => $scopeType, 'id' => $scopeId))
+        if ($actorUid <= 0
+            || !$this->CmsCan($actorUid, 'roles.manage', array('type' => $scopeType, 'id' => $scopeId))
         ) {
             return false;
         }

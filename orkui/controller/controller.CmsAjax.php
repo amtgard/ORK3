@@ -209,7 +209,7 @@ class Controller_CmsAjax extends Controller
             $this->_fail('System pages cannot be deleted.', 3);
         }
 
-        $deleted = (bool)$this->CmsPage->delete_page($pageId);
+        $deleted = (bool)$this->CmsPage->delete_page($pageId, (string)$scope['type'], (int)$scope['id']);
         if (!$deleted) {
             $this->_fail('Could not delete the page.');
         }
@@ -379,7 +379,7 @@ class Controller_CmsAjax extends Controller
         // IDOR guard: never delete a post belonging to another scope.
         $this->_requireOwned($row, $scope);
 
-        $deleted = (bool)$this->CmsPost->delete_post($postId);
+        $deleted = (bool)$this->CmsPost->delete_post($postId, (string)$scope['type'], (int)$scope['id']);
         if (!$deleted) {
             $this->_fail('Could not delete the post.');
         }
