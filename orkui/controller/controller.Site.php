@@ -44,6 +44,9 @@ class Controller_Site extends Controller
     /** Posts per page on the scoped blog index. */
     public const PER_PAGE = 12;
 
+    /** True when the viewer is an authorized officer previewing an unpublished site. */
+    private $_isPreview = false;
+
     public function __construct($call = null, $method = null)
     {
         parent::__construct($call, $method);
@@ -93,7 +96,7 @@ class Controller_Site extends Controller
             // site's scope — otherwise a public visitor could see an unpublished
             // or cross-scope page. Fall through to the empty state if not.
             if (!empty($page)
-                && (string) $page['status'] === 'published'
+                && ((string) $page['status'] === 'published' || $this->_isPreview)
                 && (string) $page['scope_type'] === $scopeType
                 && (int) $page['scope_id'] === $scopeId
             ) {
@@ -130,7 +133,7 @@ class Controller_Site extends Controller
         $page     = null;
         if ($pageSlug !== '') {
             $this->load_model('CmsPage');
-            $page = $this->CmsPage->get_page_by_slug($pageSlug, $scopeType, $scopeId, true);
+            $page = $this->CmsPage->get_page_by_slug($pageSlug, $scopeType, $scopeId, !$this->_isPreview);
         }
 
         if (empty($page)) {
@@ -167,12 +170,16 @@ class Controller_Site extends Controller
         $offset  = ($pageNo - 1) * $perPage;
 
         $this->load_model('CmsPost');
-        $result = $this->CmsPost->list_posts(array(
+        $listArgs = array(
             'limit'      => $perPage,
             'offset'     => $offset,
             'scope_type' => $scopeType,
             'scope_id'   => $scopeId,
-        ));
+        );
+        if ($this->_isPreview) {
+            $listArgs['includeDrafts'] = true; // officer preview shows draft posts too
+        }
+        $result = $this->CmsPost->list_posts($listArgs);
         $rows  = (isset($result['rows']) && is_array($result['rows'])) ? $result['rows'] : array();
         $total = isset($result['total']) ? (int) $result['total'] : 0;
         $pages = ($perPage > 0) ? (int) ceil($total / $perPage) : 1;
@@ -208,7 +215,7 @@ class Controller_Site extends Controller
         $post     = null;
         if ($postSlug !== '') {
             $this->load_model('CmsPost');
-            $post = $this->CmsPost->get_post_by_slug($postSlug, $scopeType, $scopeId, true);
+            $post = $this->CmsPost->get_post_by_slug($postSlug, $scopeType, $scopeId, !$this->_isPreview);
         }
 
         if (empty($post)) {
@@ -273,19 +280,50 @@ class Controller_Site extends Controller
             return true;
         }
         $status = (string) ($site['status'] ?? 'unbuilt');
-        if ($status === 'unbuilt') {
-            // No public identity yet — render a BARE not-found (pass null, not the
-            // site row) so an in-progress site is indistinguishable from an
-            // unknown slug: no name/logo/nav leak that a site exists in progress.
-            $this->_renderNotFound(null);
-            return true;
-        }
         if ($status !== 'published') {
+            // Authorized officers PREVIEW their own unpublished site (see the
+            // seeded / draft content before go-live) — the whole point of building
+            // a site is to look at it before publishing. The PUBLIC still gets the
+            // gated states below.
+            if ($this->_viewerCanPreview($site)) {
+                $this->_isPreview          = true;
+                $this->data['SitePreview'] = true;
+                return false;
+            }
+            if ($status === 'unbuilt') {
+                // No public identity yet — render a BARE not-found (pass null, not
+                // the site row) so an in-progress site is indistinguishable from an
+                // unknown slug: no name/logo/nav leak that a site exists in progress.
+                $this->_renderNotFound(null);
+                return true;
+            }
             // Draft: lightweight branded "coming soon"; NEVER render page bodies.
             $this->_renderComingSoon($site);
             return true;
         }
         return false;
+    }
+
+    /**
+     * True when the current viewer is an officer authorized to EDIT this site's
+     * org (kingdom/park) — they may preview it before it is published. Uses the
+     * same HasAuthority(AUTH_EDIT) gate as the CMS admin (super-admins pass via
+     * HasAuthority's all-zero short-circuit).
+     *
+     * @param array $site
+     * @return bool
+     */
+    private function _viewerCanPreview($site)
+    {
+        $uid = (int) ($this->session->user_id ?? 0);
+        if ($uid <= 0 || !is_array($site) || !is_object(Ork3::$Lib->authorization)) {
+            return false;
+        }
+        $type     = (string) ($site['scope_type'] ?? '');
+        $id       = (int) ($site['scope_id'] ?? 0);
+        $authType = ($type === 'park') ? AUTH_PARK : AUTH_KINGDOM;
+        return $id > 0
+            && Ork3::$Lib->authorization->HasAuthority($uid, $authType, $id, AUTH_EDIT);
     }
 
     /**
@@ -298,7 +336,8 @@ class Controller_Site extends Controller
     {
         $this->template          = 'Site_shell.tpl';
         $this->data['IsOrgSite'] = true;
-        $this->data['no_index']  = false;
+        // A preview render (unpublished site, officer viewer) must never be indexed.
+        $this->data['no_index']  = $this->_isPreview;
 
         $scopeType = (string) $site['scope_type'];
         $scopeId   = (int) $site['scope_id'];

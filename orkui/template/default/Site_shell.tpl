@@ -27,6 +27,18 @@ $fdBlocks    = isset($SiteBlocks) && is_array($SiteBlocks) ? $SiteBlocks : [];
 <link rel="stylesheet" href="<?= $fdAssetBase ?>css/frontdoor.css?v=<?= @filemtime($fdDir . 'css/frontdoor.css') ?>">
 <link rel="stylesheet" href="<?= $fdAssetBase ?>css/orgsite.css?v=<?= @filemtime($fdDir . 'css/orgsite.css') ?>">
 <div class="fd-page fd-org">
+<?php if (!empty($SitePreview)) : ?>
+<style>
+.org-preview-banner{display:flex;align-items:center;gap:10px;justify-content:center;background:#b8862b;color:#fff;padding:10px 16px;font-size:14px;line-height:1.4;text-align:center;}
+.org-preview-banner i{font-size:15px;opacity:.9;}
+html[data-theme="dark"] .org-preview-banner{background:#8a6420;}
+@media print{.org-preview-banner{display:none;}}
+</style>
+<div class="org-preview-banner" role="status">
+    <i class="fas fa-eye" aria-hidden="true"></i>
+    <span><strong>Draft preview</strong> &mdash; this site isn&rsquo;t published yet. Only officers can see it; publish it from the CMS to go live.</span>
+</div>
+<?php endif; ?>
 <?php include $fdDir . 'org_header.tpl'; ?>
 <?php if ($siteMode === 'comingsoon') : ?>
     <section class="org-notice">
