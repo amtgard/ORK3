@@ -47,6 +47,9 @@ class Controller_Site extends Controller
     /** True when the viewer is an authorized officer previewing an unpublished site. */
     private $_isPreview = false;
 
+    /** Memoized "viewer may edit this org" (AUTH_EDIT) — powers preview + the edit FAB. */
+    private $_canEditMemo = null;
+
     public function __construct($call = null, $method = null)
     {
         parent::__construct($call, $method);
@@ -111,6 +114,9 @@ class Controller_Site extends Controller
             // Don't let the placeholder interstitial get indexed as public content.
             $this->data['no_index'] = true;
         }
+        if ($homePageId > 0) {
+            $this->_cmsFab($site, UIR . 'Cms/edit/' . $homePageId . $this->_scopeQ($site), 'Edit this page');
+        }
     }
 
     /**
@@ -145,6 +151,7 @@ class Controller_Site extends Controller
         $this->data['SiteBlocks']       = $this->CmsPage->get_page_blocks((int) $page['page_id']);
         $this->data['page_title']       = (string) $page['title'];
         $this->data['meta_description'] = isset($page['meta_description']) ? (string) $page['meta_description'] : '';
+        $this->_cmsFab($site, UIR . 'Cms/edit/' . (int) $page['page_id'] . $this->_scopeQ($site), 'Edit this page');
     }
 
     /**
@@ -192,6 +199,7 @@ class Controller_Site extends Controller
         $this->data['SitePostsPage']  = $pageNo;
         $this->data['SitePostsPages'] = $pages;
         $this->data['page_title']     = ($this->data['SiteName'] !== '' ? $this->data['SiteName'] . ' — ' : '') . 'News';
+        $this->_cmsFab($site, UIR . 'Cms/posts' . $this->_scopeQ($site), 'Manage posts', true);
     }
 
     /**
@@ -228,6 +236,7 @@ class Controller_Site extends Controller
         $this->data['SiteBlocks']       = $this->CmsPost->get_post_blocks((int) $post['post_id']);
         $this->data['page_title']       = (string) $post['title'];
         $this->data['meta_description'] = isset($post['excerpt']) ? (string) $post['excerpt'] : '';
+        $this->_cmsFab($site, UIR . 'Cms/editpost/' . (int) $post['post_id'] . $this->_scopeQ($site), 'Edit this post', true);
     }
 
     /* ==================================================================
@@ -315,15 +324,52 @@ class Controller_Site extends Controller
      */
     private function _viewerCanPreview($site)
     {
-        $uid = (int) ($this->session->user_id ?? 0);
-        if ($uid <= 0 || !is_array($site) || !is_object(Ork3::$Lib->authorization)) {
-            return false;
+        if ($this->_canEditMemo !== null) {
+            return $this->_canEditMemo;
         }
-        $type     = (string) ($site['scope_type'] ?? '');
-        $id       = (int) ($site['scope_id'] ?? 0);
-        $authType = ($type === 'park') ? AUTH_PARK : AUTH_KINGDOM;
-        return $id > 0
-            && Ork3::$Lib->authorization->HasAuthority($uid, $authType, $id, AUTH_EDIT);
+        $ok  = false;
+        $uid = (int) ($this->session->user_id ?? 0);
+        if ($uid > 0 && is_array($site) && is_object(Ork3::$Lib->authorization)) {
+            $type     = (string) ($site['scope_type'] ?? '');
+            $id       = (int) ($site['scope_id'] ?? 0);
+            $authType = ($type === 'park') ? AUTH_PARK : AUTH_KINGDOM;
+            $ok = $id > 0
+                && Ork3::$Lib->authorization->HasAuthority($uid, $authType, $id, AUTH_EDIT);
+        }
+        $this->_canEditMemo = $ok;
+        return $ok;
+    }
+
+    /** The '&scope=k:17' / '&scope=p:3' fragment for linking into the scoped CMS admin. */
+    private function _scopeQ($site)
+    {
+        $prefix = ((string) ($site['scope_type'] ?? 'kingdom') === 'park') ? 'p' : 'k';
+        return '&scope=' . $prefix . ':' . (int) ($site['scope_id'] ?? 0);
+    }
+
+    /**
+     * Expose the CMS edit / new-post FAB (rendered by default.theme) when the
+     * viewer may edit this org — on published AND preview pages alike. Links
+     * point into the SCOPED CMS admin so edits land in the org's own content,
+     * never the global front door.
+     *
+     * @param array  $site
+     * @param string $editUrl     already-built edit link (Cms/edit|editpost|posts + scope)
+     * @param string $editTip     tooltip for the pen FAB
+     * @param bool   $withNewPost also show the "new post" (feather) FAB
+     * @return void
+     */
+    private function _cmsFab($site, $editUrl, $editTip, $withNewPost = false)
+    {
+        if (!$this->_viewerCanPreview($site)) {
+            return;
+        }
+        $this->data['cmsEditUrl'] = $editUrl;
+        $this->data['cmsEditTip'] = $editTip;
+        if ($withNewPost) {
+            $this->data['cmsNewPostUrl'] = UIR . 'Cms/editpost/new' . $this->_scopeQ($site);
+            $this->data['cmsNewPostTip'] = 'New post';
+        }
     }
 
     /**
