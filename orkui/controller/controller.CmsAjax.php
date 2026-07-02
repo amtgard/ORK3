@@ -51,7 +51,7 @@ class Controller_CmsAjax extends Controller
         'staff_roster', 'rich_text', 'heading', 'divider', 'spacer', 'accordion',
         'quote', 'table', 'image', 'gallery', 'video_embed', 'file_download',
         'columns', 'raw_html', 'stat_ticker', 'tournaments_feed', 'recap_highlight',
-        'blog_feed', 'kingdom_officers', 'kingdom_parks', 'kingdom_events',
+        'blog_feed', 'kingdom_officers', 'kingdom_parks', 'kingdom_parks_map', 'kingdom_events',
     );
 
     public function __construct($call = null, $action = null)

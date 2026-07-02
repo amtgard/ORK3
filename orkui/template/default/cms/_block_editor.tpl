@@ -842,8 +842,18 @@ window.CmsBlockEditor = (function () {
         kingdom_parks: [
             { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Our Parks' },
             { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' },
+            { key: 'sort', type: 'select', label: 'Sort order', options: [
+                { value: 'name', label: 'Park name (A–Z)' },
+                { value: 'city', label: 'City, then park name' },
+                { value: 'state', label: 'State, then city, then park name' }
+            ] },
+            { key: 'show_heraldry', type: 'bool', label: 'Display park heraldry' },
             { key: 'limit', type: 'number', label: 'Max parks shown', placeholder: '24' },
             { key: 'more_href', type: 'url', label: '“All parks” link', placeholder: 'https://…' }
+        ],
+        kingdom_parks_map: [
+            { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Park Map' },
+            { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' }
         ],
         kingdom_events: [
             { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Upcoming Events' },
@@ -858,7 +868,7 @@ window.CmsBlockEditor = (function () {
     var DYNAMIC_TYPES = {
         member_bar: true, kingdoms_teaser: true, events_feed: true, blog_feed: true,
         stat_ticker: true, tournaments_feed: true, recap_highlight: true,
-        kingdom_officers: true, kingdom_parks: true, kingdom_events: true
+        kingdom_officers: true, kingdom_parks: true, kingdom_parks_map: true, kingdom_events: true
     };
 
     function catalogEntry(type) {

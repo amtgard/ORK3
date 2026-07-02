@@ -338,10 +338,19 @@ class CmsSite extends CmsBase
                     'fields' => array('text' => 'Our Parks', 'level' => 2, 'align' => 'center'),
                 ),
                 array(
-                    'type' => 'kingdom_parks', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
+                    'type' => 'kingdom_parks_map', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
+                    'fields' => array(
+                        'heading' => 'Find a Park Near You',
+                        'kicker'  => 'Our Parks',
+                    ),
+                ),
+                array(
+                    'type' => 'kingdom_parks', 'source' => 'dynamic', 'enabled' => 1, 'order' => 30,
                     'fields' => array(
                         'heading' => 'Where We Play',
-                        'kicker'  => 'Our Parks',
+                        'kicker'  => '',
+                        'sort'    => 'city',
+                        'show_heraldry' => 1,
                         'limit'   => 24,
                     ),
                 ),
