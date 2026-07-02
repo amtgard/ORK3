@@ -296,7 +296,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
     </div>
 
     <div class="cms-dash-block">
-        <a class="cms-dash-livelink" href="<?= UIR ?>" target="_blank" rel="noopener">
+        <a class="cms-dash-livelink" href="<?= htmlspecialchars(isset($SiteLiveUrl) ? $SiteLiveUrl : UIR) ?>" target="_blank" rel="noopener">
             <i class="fas fa-external-link-alt"></i> View live site
         </a>
     </div>

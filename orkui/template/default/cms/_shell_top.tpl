@@ -91,7 +91,7 @@ window.CMS_SCOPE = <?= json_encode($shScopeSel, JSON_HEX_TAG) ?>;
 
             <div class="cms-rail-divider" role="separator"></div>
 
-            <a class="cms-rail-item cms-rail-item-quiet" href="<?= $shH(UIR) ?>" target="_blank" rel="noopener">
+            <a class="cms-rail-item cms-rail-item-quiet" href="<?= $shH(isset($SiteLiveUrl) ? $SiteLiveUrl : UIR) ?>" target="_blank" rel="noopener">
                 <i class="fas fa-external-link-alt cms-rail-icon" aria-hidden="true"></i>
                 <span class="cms-rail-label">View live site</span>
             </a>

@@ -35,6 +35,9 @@ class Controller_Cms extends Controller
      */
     private $_capCache = array();
 
+    /** Memoized site row for the current non-global scope (false = not yet looked up). */
+    private $_scopeSiteMemo = false;
+
     public function __construct($call = null, $action = null)
     {
         parent::__construct($call, $action);
@@ -247,7 +250,18 @@ class Controller_Cms extends Controller
         }
 
         $pages = $this->CmsPage->list_pages($filters);
-        $this->data['Pages']      = is_array($pages) ? $pages : array();
+        $pages = is_array($pages) ? $pages : array();
+        // Attach the scope-correct PUBLIC live URL to each row so the list links
+        // to the org site (Site/...) in a scoped context, not the global Page route.
+        foreach ($pages as &$pRow) {
+            $pRow['live_href'] = $this->_pageLiveHref(
+                $scope,
+                (int)($pRow['page_id'] ?? 0),
+                (string)($pRow['slug'] ?? '')
+            );
+        }
+        unset($pRow);
+        $this->data['Pages']      = $pages;
         $this->data['Search']     = $search;
         $this->data['StatusFilter'] = $status;
 
@@ -736,6 +750,77 @@ class Controller_Cms extends Controller
         $this->data['CmsScopeQuery'] = $this->_scopeQuery($scope);
         $this->data['CmsScopeSel']   = $this->_scopeSelector($scope);
         $this->data['CmsScopeLabel'] = $this->_scopeIsGlobal($scope) ? '' : $this->_scopeOrgLabel($scope);
+        // The "View live site" target for THIS scope: the org's own public home
+        // (/k|/p route) for a scoped site, or the global front door otherwise.
+        $this->data['SiteLiveUrl']   = $this->_scopeLiveHome($scope);
+    }
+
+    /**
+     * Memoized site row for the current (non-global) scope, or null. Used to
+     * build scope-correct PUBLIC live URLs in the admin — a kingdom/park page's
+     * public address is Site/... (its org site), never the global Page/Blog route.
+     *
+     * @param array $scope
+     * @return array|null
+     */
+    private function _scopeSite($scope)
+    {
+        if ($this->_scopeSiteMemo !== false) {
+            return $this->_scopeSiteMemo;
+        }
+        $this->_scopeSiteMemo = null;
+        if (!$this->_scopeIsGlobal($scope)) {
+            $this->load_model('CmsSite');
+            $site = $this->CmsSite->get_site_for_scope((string)$scope['type'], (int)$scope['id']);
+            $this->_scopeSiteMemo = is_array($site) ? $site : null;
+        }
+        return $this->_scopeSiteMemo;
+    }
+
+    /**
+     * The "View live site" URL for the current scope: the org site's public home
+     * (Site/view/{siteSlug}) when scoped, else the global front door (UIR).
+     *
+     * @param array $scope
+     * @return string
+     */
+    private function _scopeLiveHome($scope)
+    {
+        if ($this->_scopeIsGlobal($scope)) {
+            return UIR;
+        }
+        $site = $this->_scopeSite($scope);
+        $slug = ($site && !empty($site['slug'])) ? (string)$site['slug'] : '';
+        return $slug !== '' ? UIR . 'Site/view/' . rawurlencode($slug) : UIR;
+    }
+
+    /**
+     * Scope-correct PUBLIC live URL for a page row. Global scope keeps the
+     * legacy Page/view route; a scoped page maps to its org site — the home page
+     * (matched by home_page_id, or the 'home' slug) to Site/view/{siteSlug}, any
+     * other page to Site/page/{siteSlug}/{pageSlug}. Returns '' when a scoped
+     * site has no resolvable slug yet (no public URL to link).
+     *
+     * @param array  $scope
+     * @param int    $pageId
+     * @param string $pageSlug
+     * @return string
+     */
+    private function _pageLiveHref($scope, $pageId, $pageSlug)
+    {
+        $pageSlug = (string)$pageSlug;
+        if ($this->_scopeIsGlobal($scope)) {
+            return ($pageSlug === 'home') ? UIR : UIR . 'Page/view/' . rawurlencode($pageSlug);
+        }
+        $site = $this->_scopeSite($scope);
+        $siteSlug = ($site && !empty($site['slug'])) ? (string)$site['slug'] : '';
+        if ($siteSlug === '') {
+            return '';
+        }
+        $isHome = ($site && (int)($site['home_page_id'] ?? 0) === (int)$pageId) || $pageSlug === 'home';
+        return $isHome
+            ? UIR . 'Site/view/' . rawurlencode($siteSlug)
+            : UIR . 'Site/page/' . rawurlencode($siteSlug) . '/' . rawurlencode($pageSlug);
     }
 
     /**

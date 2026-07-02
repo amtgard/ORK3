@@ -139,8 +139,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
                                 <?php if ($isSystem): ?><span class="cms-badge cms-badge-system" style="margin-left:6px;">System</span><?php endif; ?>
                             </div>
                             <?php if ($slug !== ''): ?>
-                                <?php if ($isPub): ?>
-                                    <?php $liveUrl = ($slug === 'home') ? UIR : UIR . 'Page/view/' . rawurlencode($slug); ?>
+                                <?php $liveUrl = $isPub ? (string)($p['live_href'] ?? '') : ''; ?>
+                                <?php if ($liveUrl !== ''): ?>
                                     <a class="cms-pg-slug cms-pg-slug-link" href="<?= $h($liveUrl) ?>" target="_blank" rel="noopener noreferrer">/<?= $h($slug) ?> <i class="fas fa-external-link-alt"></i></a>
                                 <?php else: ?>
                                     <div class="cms-pg-slug">/<?= $h($slug) ?></div>
