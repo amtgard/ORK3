@@ -66,6 +66,21 @@
 		return round($f) . '°F / ' . $c . '°C';
 	};
 
+	// Compact "97/36°" — matches the inline temp format used on cards + popups.
+	$wxPair = function($f) {
+		if ($f === null) return '';
+		return round($f) . '/' . round(($f - 32) * 5 / 9) . '°';
+	};
+
+	// "(feels 107/41°)" tail when the apparent temp diverges enough from air
+	// temp to matter — heat index on hot+humid days, wind chill on cold+windy
+	// days. Same field (Open-Meteo `apparent_temperature`) handles both.
+	$wxFeelsTail = function($f, $appF) use ($wxPair) {
+		if ($f === null || $appF === null) return '';
+		if (abs($appF - $f) < 5) return '';
+		return ' <span class="wx-feels">(feels ' . $wxPair($appF) . ')</span>';
+	};
+
 	// ─── Lead sentence(s). Counts here are scoped to parks with in-person play today —
 	//    so a 113°F forecast at a park with no scheduled play doesn't show up,
 	//    keeping the rundown actionable for "should I head out tonight?".
@@ -341,6 +356,10 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 .wx-map-popup .wx-pp-badges .wx-event-badge { margin-left: 0; padding: 2px 8px; font-size: 10.5px; }
 
 .wx-play-row.wx-hidden, .wx-event.wx-hidden { display: none; }
+/* "(feels 107/41°)" tail — muted so it reads as a modifier on the primary temp,
+   not a second competing number. Slightly lighter weight for the same reason. */
+.wx-feels { color: var(--ork-text-muted, #718096); font-weight: 500; font-size: 0.9em; margin-left: 2px; }
+html[data-theme="dark"] .wx-feels { color: #a0aec0; }
 </style>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -470,7 +489,7 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 						?>
 							<div class="wx-play-temps">
 								<?= $wxIcon($fc['code']) ?>
-								<?= round($fc['hi_f']) ?>/<?= $hiC ?>°<?php if ($fc['lo_f'] !== null): ?> · L <?= round($fc['lo_f']) ?>/<?= $loC ?>°<?php endif; ?>
+								<?= round($fc['hi_f']) ?>/<?= $hiC ?>°<?= $wxFeelsTail($fc['hi_f'], $fc['app_hi_f'] ?? null) ?><?php if ($fc['lo_f'] !== null): ?> · L <?= round($fc['lo_f']) ?>/<?= $loC ?>°<?= $wxFeelsTail($fc['lo_f'], $fc['app_lo_f'] ?? null) ?><?php endif; ?>
 							</div>
 							<?php if (!empty($p['badges'])): ?>
 								<div class="wx-play-meta">
@@ -552,7 +571,7 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 					?>
 						<div class="wx-event-temps">
 							<?= $wxIcon($fc['code']) ?>
-							<?= round($fc['hi_f']) ?>/<?= $hiC ?>°<?php if ($fc['lo_f'] !== null): ?> · L <?= round($fc['lo_f']) ?>/<?= $loC ?>°<?php endif; ?>
+							<?= round($fc['hi_f']) ?>/<?= $hiC ?>°<?= $wxFeelsTail($fc['hi_f'], $fc['app_hi_f'] ?? null) ?><?php if ($fc['lo_f'] !== null): ?> · L <?= round($fc['lo_f']) ?>/<?= $loC ?>°<?= $wxFeelsTail($fc['lo_f'], $fc['app_lo_f'] ?? null) ?><?php endif; ?>
 						</div>
 						<?php if (!empty($fc['precip_pct']) && $fc['precip_pct'] >= 20): ?>
 							<div class="wx-event-meta"><?= (int)$fc['precip_pct'] ?>% rain</div>
@@ -602,6 +621,13 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 	};
 	function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 	function tempPair(f) { var c = Math.round((f - 32) * 5 / 9); return Math.round(f) + '/' + c + '°'; }
+	// "(feels 107/41°)" tail when apparent temp diverges by ≥5°F — heat index
+	// on hot+humid days, wind chill on cold+windy days. Silent otherwise.
+	function feelsTail(f, appF) {
+		if (f == null || appF == null) return '';
+		if (Math.abs(appF - f) < 5) return '';
+		return ' <span class="wx-feels">(feels ' + tempPair(appF) + ')</span>';
+	}
 
 	// Kingdom-name shortener mirrors Weather::short_kingdom in PHP
 	function shortKingdom(name) {
@@ -788,8 +814,8 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 			var fc = p.forecast;
 			var wxLine = '';
 			if (fc && fc.hi_f != null) {
-				var loPart = fc.lo_f != null ? ' / L ' + tempPair(fc.lo_f) : '';
-				wxLine = '<div class="wx-pp-wx">' + wxIcon(fc.code) + ' ' + tempPair(fc.hi_f) + loPart + '</div>';
+				var loPart = fc.lo_f != null ? ' / L ' + tempPair(fc.lo_f) + feelsTail(fc.lo_f, fc.app_lo_f) : '';
+				wxLine = '<div class="wx-pp-wx">' + wxIcon(fc.code) + ' ' + tempPair(fc.hi_f) + feelsTail(fc.hi_f, fc.app_hi_f) + loPart + '</div>';
 				wxLine += renderBadgeChips(p.badges);
 			} else {
 				wxLine = '<div class="wx-pp-meta">' + esc(statusText(p.forecast_status)) + '</div>';
@@ -849,8 +875,8 @@ html[data-theme="dark"] .wx-map .leaflet-tooltip-right:before { border-right-col
 			});
 			var wx = '';
 			if (fc && fc.hi_f != null) {
-				var loPart = fc.lo_f != null ? ' · L ' + tempPair(fc.lo_f) : '';
-				wx = '<div class="wx-play-temps">' + wxIcon(fc.code) + ' ' + tempPair(fc.hi_f) + loPart + '</div>';
+				var loPart = fc.lo_f != null ? ' · L ' + tempPair(fc.lo_f) + feelsTail(fc.lo_f, fc.app_lo_f) : '';
+				wx = '<div class="wx-play-temps">' + wxIcon(fc.code) + ' ' + tempPair(fc.hi_f) + feelsTail(fc.hi_f, fc.app_hi_f) + loPart + '</div>';
 				if (p.badges && p.badges.length) {
 					wx += '<div class="wx-play-meta">' +
 						p.badges.map(function(b) { return '<span class="wx-event-badge wx-event-badge-' + b.severity + '" title="' + esc(b.label) + '">' + b.icon + '</span>'; }).join(' ') +
