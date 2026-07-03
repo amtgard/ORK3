@@ -287,7 +287,7 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 					<?php endif; ?>
 					<a href='https://play.amtgard.com/' target='_blank'><i class='fas fa-map-marker-alt'></i> Find a Chapter</a>
 					<div class='nav-dropdown-divider'></div>
-					<a href='#' onclick="navInfoDialog('New Documentation Coming Soon!');return false;"><i class='fas fa-book'></i> ORK Documentation</a>
+					<a href='#' onclick="navInfoDialog('New Documentation Coming Soon!', '<?= UIR ?>ReleaseNotes', 'In the meantime, see the release notes');return false;"><i class='fas fa-book'></i> ORK Documentation</a>
 				</div>
 			</div>
 
@@ -527,13 +527,27 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 	<div id="nav-info-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
 		<div style="background:var(--ork-card-bg,#fff);border-radius:10px;padding:32px 28px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);text-align:center;font-family:inherit;color:var(--ork-text,#2d3748);">
 			<div style="font-size:32px;margin-bottom:12px;color:var(--ork-text-secondary,#4a5568);"><i class="fas fa-book"></i></div>
-			<div id="nav-info-msg" style="font-size:15px;color:var(--ork-text,#2d3748);line-height:1.5;margin-bottom:20px;"></div>
+			<div id="nav-info-msg" style="font-size:15px;color:var(--ork-text,#2d3748);line-height:1.5;margin-bottom:12px;"></div>
+			<div id="nav-info-link" style="font-size:14px;line-height:1.5;margin-bottom:20px;"></div>
 			<button onclick="document.getElementById('nav-info-overlay').style.display='none';" style="background:#4299e1;color:#fff;border:none;border-radius:6px;padding:8px 28px;font-size:14px;cursor:pointer;font-family:inherit;">OK</button>
 		</div>
 	</div>
 	<script>
-	function navInfoDialog(msg) {
+	// Second/third args optional — pass a URL + label to render a "In the
+	// meantime, …" link below the message. Anchor is built with textContent
+	// + attribute setters, so any caller-supplied strings stay XSS-safe.
+	function navInfoDialog(msg, linkHref, linkLabel) {
 		document.getElementById('nav-info-msg').textContent = msg;
+		var linkBox = document.getElementById('nav-info-link');
+		linkBox.textContent = '';
+		if (linkHref && linkLabel) {
+			var a = document.createElement('a');
+			a.href = linkHref;
+			a.textContent = linkLabel;
+			a.style.color = '#4299e1';
+			a.style.textDecoration = 'underline';
+			linkBox.appendChild(a);
+		}
 		var el = document.getElementById('nav-info-overlay');
 		el.style.display = 'flex';
 		el.onclick = function(e) { if (e.target === el) el.style.display = 'none'; };
