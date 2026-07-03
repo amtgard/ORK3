@@ -3949,18 +3949,29 @@ $(document).ready(function() {
         if (knCiFlatEnd)   { knCiFlatEnd.destroy();   knCiFlatEnd   = null; }
         var fmt = allDay ? 'Y-m-d' : 'Y-m-d H:i';
         var opts = { enableTime: !allDay, dateFormat: fmt, altInput: true, altFormat: allDay ? 'F j, Y' : 'F j, Y h:i K', minuteIncrement: 15, time_24hr: false };
+        // Track the previous start so onChange can slide the end by the same
+        // delta, preserving the item's duration — same rule as the event modal.
+        var _prevStart = null;
         knCiFlatStart = flatpickr('#kn-ci-start', Object.assign({}, opts, {
+            onReady: function(sel) { _prevStart = sel[0] || null; },
             onChange: function(sel) {
                 if (!sel[0] || !knCiFlatEnd) return;
-                if (!knCiFlatEnd.selectedDates[0] || knCiFlatEnd.selectedDates[0] < sel[0]) {
-                    var end = new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000));
-                    knCiFlatEnd.setDate(end, true);
+                var endDate = knCiFlatEnd.selectedDates[0];
+                if (endDate && _prevStart) {
+                    var offset = endDate.getTime() - _prevStart.getTime();
+                    knCiFlatEnd.setDate(new Date(sel[0].getTime() + offset), true);
+                } else if (!endDate) {
+                    knCiFlatEnd.setDate(new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000)), true);
                 }
+                _prevStart = sel[0];
             }
         }));
         knCiFlatEnd = flatpickr('#kn-ci-end', opts);
         if (startVal) knCiFlatStart.setDate(startVal, true);
         if (endVal)   knCiFlatEnd.setDate(endVal, true);
+        // Sync the cache to the initial start value (setDate() does not fire
+        // onChange when called with `true`).
+        _prevStart = knCiFlatStart.selectedDates[0] || null;
     }
 
     function knGetModalType() {
@@ -7570,18 +7581,25 @@ $(document).ready(function() {
         if (pkCiFlatEnd)   { pkCiFlatEnd.destroy();   pkCiFlatEnd   = null; }
         var fmt  = allDay ? 'Y-m-d' : 'Y-m-d H:i';
         var opts = { enableTime: !allDay, dateFormat: fmt, altInput: true, altFormat: allDay ? 'F j, Y' : 'F j, Y h:i K', minuteIncrement: 15, time_24hr: false };
+        var _prevStart = null;
         pkCiFlatStart = flatpickr('#pk-ci-start', Object.assign({}, opts, {
+            onReady: function(sel) { _prevStart = sel[0] || null; },
             onChange: function(sel) {
                 if (!sel[0] || !pkCiFlatEnd) return;
-                if (!pkCiFlatEnd.selectedDates[0] || pkCiFlatEnd.selectedDates[0] < sel[0]) {
-                    var end = new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000));
-                    pkCiFlatEnd.setDate(end, true);
+                var endDate = pkCiFlatEnd.selectedDates[0];
+                if (endDate && _prevStart) {
+                    var offset = endDate.getTime() - _prevStart.getTime();
+                    pkCiFlatEnd.setDate(new Date(sel[0].getTime() + offset), true);
+                } else if (!endDate) {
+                    pkCiFlatEnd.setDate(new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000)), true);
                 }
+                _prevStart = sel[0];
             }
         }));
         pkCiFlatEnd = flatpickr('#pk-ci-end', opts);
         if (startVal) pkCiFlatStart.setDate(startVal, true);
         if (endVal)   pkCiFlatEnd.setDate(endVal, true);
+        _prevStart = pkCiFlatStart.selectedDates[0] || null;
     }
 
     function pkCiResetForm(presetDate) {
