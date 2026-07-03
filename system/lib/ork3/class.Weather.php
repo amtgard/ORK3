@@ -1391,7 +1391,9 @@ class Weather extends Ork3
                 'blocked_archive'      => (int)($s['blocked_archive']   ?? 0),
             );
         }
-        $cooldown_ts = Ork3::$Lib->ghettocache->get(__CLASS__ . '.cooldown_429', 'global', 1800);
+        $cooldown_ts     = Ork3::$Lib->ghettocache->get(__CLASS__ . '.cooldown_429', 'global', 1800);
+        $cooldown_err_ts = Ork3::$Lib->ghettocache->get(__CLASS__ . '.cooldown_err', 'global', 300);
+        $error_streak    = (int)Ork3::$Lib->ghettocache->get(__CLASS__ . '.error_streak', 'global', 60);
 
         // Pull memcached server's own clock so we can tell clock skew from a
         // stuck (non-evicting) key. If 'remaining' is negative AND the key
@@ -1412,11 +1414,16 @@ class Weather extends Ork3
         $remaining_mc    = ($clears_unix !== null && $mc_time !== null) ? $clears_unix - $mc_time : null;
         $skew_seconds    = $mc_time !== null ? $mc_time - $now : null;
 
+        $err_clears_unix = $cooldown_err_ts ? (int)$cooldown_err_ts + 300 : null;
         return array(
             'days'                => $out,
             'cooldown_set_at'     => $cooldown_ts ? date('Y-m-d H:i:s', (int)$cooldown_ts) : null,
             'cooldown_clears_at'  => $clears_unix ? date('Y-m-d H:i:s', $clears_unix) : null,
             'cooldown_present'    => $cooldown_ts !== false,
+            'cooldown_err_set_at'    => $cooldown_err_ts ? date('Y-m-d H:i:s', (int)$cooldown_err_ts) : null,
+            'cooldown_err_clears_at' => $err_clears_unix ? date('Y-m-d H:i:s', $err_clears_unix) : null,
+            'cooldown_err_present'   => $cooldown_err_ts !== false,
+            'error_streak'           => $error_streak,
             'remaining_seconds_server'   => $remaining_srv,
             'remaining_seconds_memcache' => $remaining_mc,
             'server_time'         => date('Y-m-d H:i:s', $now),
@@ -1441,6 +1448,20 @@ class Weather extends Ork3
             return false;
         }
 
+        // Error-cascade cooldown — bail when a recent burst of non-429 errors
+        // (5xx, connect timeout, DNS, TLS) tripped the streak. Without this,
+        // every page load hits a dead upstream synchronously, blocking on the
+        // 5s connect + 30s read timeout and pinning FPM workers. On 2026-07-03
+        // an Open-Meteo forecast outage 03:44–06:25 UTC generated 2826 errors
+        // in a single day for exactly this reason. Shorter TTL than the 429
+        // cooldown so we probe again quickly once upstream is likely back.
+        $err_cooldown = Ork3::$Lib->ghettocache->get(__CLASS__ . '.cooldown_err', 'global', 300);
+        if ($err_cooldown !== false) {
+            $this->last_http_status = 0;
+            $this->wx_stats_bump(array('blocked', 'blocked_' . $endpoint));
+            return false;
+        }
+
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -1454,11 +1475,25 @@ class Weather extends Ork3
             $this->last_http_status = $http;
             if ($http === 200) {
                 $this->wx_stats_bump('success');
+                // Any success clears the error streak — one good call means
+                // upstream is healthy again, no reason to keep counting.
+                Ork3::$Lib->ghettocache->bust(__CLASS__ . '.error_streak', 'global');
             } elseif ($http === 429) {
                 $this->wx_stats_bump('rate_limited');
                 Ork3::$Lib->ghettocache->cache(__CLASS__ . '.cooldown_429', 'global', time());
             } else {
                 $this->wx_stats_bump('error');
+                // Track consecutive non-200/non-429 errors. Three in a rolling
+                // 60s window trips a 5-min cooldown — long enough to spare us
+                // from the cascade, short enough to recover quickly once the
+                // upstream comes back.
+                $streak  = (int)Ork3::$Lib->ghettocache->get(__CLASS__ . '.error_streak', 'global', 60);
+                $streak += 1;
+                Ork3::$Lib->ghettocache->cache(__CLASS__ . '.error_streak', 'global', $streak);
+                if ($streak >= 3) {
+                    Ork3::$Lib->ghettocache->get(__CLASS__ . '.cooldown_err', 'global', 300);
+                    Ork3::$Lib->ghettocache->cache(__CLASS__ . '.cooldown_err', 'global', time());
+                }
             }
             if ($http !== 200) {
                 return false;
