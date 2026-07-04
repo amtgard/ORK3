@@ -2277,7 +2277,7 @@ tr:hover .pk-copy-link { opacity: 1; }
 #pk-selfreg-overlay .pk-modal-box {
 	background: #fff; border-radius: 12px;
 	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-	max-height: 90vh; display: flex; flex-direction: column;
+	max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;
 }
 #pk-selfreg-overlay .pk-modal-header {
 	display: flex; align-items: center; justify-content: space-between;

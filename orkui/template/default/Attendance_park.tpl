@@ -270,6 +270,7 @@ $show_chart = $total > 0;
 	width: 680px;
 	max-width: 96vw;
 	max-height: 82vh;
+	max-height: 82dvh;
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;

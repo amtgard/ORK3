@@ -207,7 +207,7 @@
 /* Sign-in link modal */
 #ev-signin-link-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9050; align-items:center; justify-content:center; }
 #ev-signin-link-overlay.ev-open { display:flex; }
-.ev-signin-link-modal { background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.22); width:min(520px, calc(100vw - 32px)); max-height:calc(100vh - 40px); overflow:auto; }
+.ev-signin-link-modal { background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.22); width:min(520px, calc(100vw - 32px)); max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px); overflow:auto; }
 .ev-signin-link-modal-header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #e2e8f0; background:#f7fafc; font-size:15px; font-weight:700; color:#2d3748; }
 .ev-signin-link-close { background:none; border:none; font-size:22px; color:#718096; cursor:pointer; padding:0 4px; line-height:1; }
 .ev-signin-link-modal-body { padding:18px 22px 22px; }
@@ -3965,7 +3965,7 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	/* Banner/image modal mobile fit */
 	.ev-img-overlay { align-items:flex-start; overflow:auto; }
 	.ev-img-modal {
-		width:min(520px, 96vw); max-height:calc(100vh - 32px);
+		width:min(520px, 96vw); max-height:calc(100vh - 32px); max-height:calc(100dvh - 32px);
 		overflow:auto; margin:16px 0;
 	}
 	.ev-banner-position-wrap { min-height:120px !important; }

@@ -1313,6 +1313,7 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 .pn-acct-modal-body {
 	padding: 20px;
 	max-height: calc(80vh - 120px);
+	max-height: calc(80dvh - 120px);
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	-webkit-overflow-scrolling: touch;
@@ -2874,7 +2875,7 @@ html[data-theme="dark"] .kn-ac-item.kn-ac-suspended:hover, html[data-theme="dark
 /* Reuse modal structure for kn- award modal */
 #kn-award-overlay, #kn-rec-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-award-overlay.kn-open, #kn-rec-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-award-overlay .kn-modal-box, #kn-rec-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; width:90vw; max-width:520px; }
+#kn-award-overlay .kn-modal-box, #kn-rec-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; width:90vw; max-width:520px; }
 #kn-award-overlay .kn-modal-header, #kn-rec-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; background:var(--ork-bg-secondary); }
 /* Reset global h1-h6 box styles for all kn modal titles (fights orkui.css gray box) */
 .kn-modal-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
@@ -4148,7 +4149,7 @@ html[data-theme="dark"] .pk-ac-item.pk-ac-suspended:hover, html[data-theme="dark
 /* Reuse pn- overlay/modal styles for pk- award modal */
 #pk-award-overlay, #pk-rec-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-award-overlay.pk-open, #pk-rec-overlay.pk-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-award-overlay .pk-modal-box, #pk-rec-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; width:90vw; max-width:520px; }
+#pk-award-overlay .pk-modal-box, #pk-rec-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; width:90vw; max-width:520px; }
 #pk-award-overlay .pk-modal-header, #pk-rec-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; }
 /* Reset global h1-h6 box styles for all pk modal titles */
 .pk-modal-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
@@ -4930,7 +4931,12 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 	border-radius: 8px;
 	max-width: 700px;
 	width: 100%;
+	/* vh first as fallback; dvh (dynamic viewport height) overrides on
+	   browsers that support it, so mobile Safari sizes against the ACTUAL
+	   visible viewport with URL bar shown — otherwise the pinned footer
+	   gets pushed off-screen when browser chrome is visible. */
 	max-height: 90vh;
+	max-height: 90dvh;
 	display: flex;
 	flex-direction: column;
 	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
@@ -5123,7 +5129,7 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 		align-items: flex-start;
 		padding: 8px;
 	}
-	.ev-modal { max-height: calc(100vh - 64px); }
+	.ev-modal { max-height: calc(100vh - 64px); max-height: calc(100dvh - 64px); }
 	.ev-checkin-label { display: none; }
 	/* Contain RSVP/Staff table horizontal scroll inside the table itself
 	   (not the whole tab panel). Never touch the schedule table. */
@@ -5806,7 +5812,7 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 /* ---- Attendance Modal (pk-att-) ---- */
 #pk-att-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:flex-start; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-att-overlay.pk-att-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-att-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; width:620px; max-width:calc(100vw - 40px); margin-top:60px; }
+#pk-att-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; width:620px; max-width:calc(100vw - 40px); margin-top:60px; }
 #pk-att-overlay .pk-modal-header { display:flex; align-items:flex-start; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; gap:12px; }
 #pk-att-overlay .pk-modal-title { font-size:16px; font-weight:700; color:var(--ork-text, #1a202c); margin:0 0 2px; }
 #pk-att-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-lighter, #a0aec0); cursor:pointer; line-height:1; padding:0 4px; flex-shrink:0; }
@@ -5975,7 +5981,7 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 /* ---- Add Park Modal (kn-addpark-) ---- */
 #kn-addpark-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-addpark-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-addpark-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-addpark-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-addpark-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; background:var(--ork-bg-secondary); }
 #kn-addpark-overlay .kn-modal-title { font-size:16px; font-weight:700; color:var(--ork-text); margin:0; }
 #kn-addpark-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
@@ -5993,7 +5999,7 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 /* ---- Edit Park Modal (kn-editpark-) ---- */
 #kn-editpark-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-editpark-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-editpark-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-editpark-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-editpark-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; background:var(--ork-bg-secondary); }
 #kn-editpark-overlay .kn-modal-title { font-size:16px; font-weight:700; color:var(--ork-text); margin:0; }
 #kn-editpark-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
@@ -6013,7 +6019,7 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 /* ---- Edit Officers Modal (kn-editoff-) ---- */
 #kn-editoff-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-editoff-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-editoff-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-editoff-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-editoff-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
 #kn-editoff-overlay .kn-modal-title { font-size:16px; font-weight:700; color:var(--ork-text); margin:0; }
 #kn-editoff-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
@@ -6039,7 +6045,7 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 /* ---- Kingdom Admin Overlay (kn-admin-) ---- */
 #kn-admin-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-admin-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-admin-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-admin-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-admin-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
 #kn-admin-overlay .kn-modal-title { font-size:16px; font-weight:700; color:var(--ork-text); margin:0; }
 #kn-admin-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
@@ -6130,13 +6136,13 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 /* ---- Confirmation modal ---- */
 #kn-md-help-overlay, #pk-md-help-overlay, #ev-md-help-overlay, #un-md-help-overlay, #ec-md-help-overlay, #pn-md-help-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:var(--z-help-overlay, 1300); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-md-help-overlay.kn-open, #pk-md-help-overlay.kn-open, #ev-md-help-overlay.kn-open, #un-md-help-overlay.kn-open, #ec-md-help-overlay.kn-open, #pn-md-help-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-md-help-overlay .kn-modal-box, #pk-md-help-overlay .kn-modal-box, #ev-md-help-overlay .kn-modal-box, #un-md-help-overlay .kn-modal-box, #ec-md-help-overlay .kn-modal-box, #pn-md-help-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-md-help-overlay .kn-modal-box, #pk-md-help-overlay .kn-modal-box, #ev-md-help-overlay .kn-modal-box, #un-md-help-overlay .kn-modal-box, #ec-md-help-overlay .kn-modal-box, #pn-md-help-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-md-help-overlay .kn-modal-header, #pk-md-help-overlay .kn-modal-header, #ev-md-help-overlay .kn-modal-header, #un-md-help-overlay .kn-modal-header, #ec-md-help-overlay .kn-modal-header, #pn-md-help-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
 #kn-md-help-overlay .kn-modal-close-btn, #pk-md-help-overlay .kn-modal-close-btn, #ev-md-help-overlay .kn-modal-close-btn, #un-md-help-overlay .kn-modal-close-btn, #ec-md-help-overlay .kn-modal-close-btn, #pn-md-help-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
 #kn-md-help-overlay .kn-modal-close-btn:hover, #pk-md-help-overlay .kn-modal-close-btn:hover, #ev-md-help-overlay .kn-modal-close-btn:hover, #un-md-help-overlay .kn-modal-close-btn:hover, #ec-md-help-overlay .kn-modal-close-btn:hover, #pn-md-help-overlay .kn-modal-close-btn:hover { color:var(--ork-text); }
 #kn-confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal-top, 1200); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-confirm-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-confirm-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-confirm-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-confirm-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
 #kn-confirm-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
 #kn-confirm-overlay .kn-modal-close-btn:hover { color:var(--ork-text); }
@@ -6184,7 +6190,7 @@ html[data-theme="dark"] .kn-admin-award-search-empty { color:var(--ork-text-mute
 /* ---- Add Player Modal (plr- shared, kn-addplayer / pk-addplayer overlays) ---- */
 #kn-addplayer-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-addplayer-overlay.kn-addplayer-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-addplayer-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-addplayer-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-addplayer-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
 #kn-addplayer-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
 #kn-addplayer-overlay .kn-modal-close-btn:hover { color:var(--ork-text); }
@@ -6192,7 +6198,7 @@ html[data-theme="dark"] .kn-admin-award-search-empty { color:var(--ork-text-mute
 #kn-addplayer-overlay .kn-modal-footer { padding:14px 20px; border-top:1px solid var(--ork-border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
 #pk-addplayer-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-addplayer-overlay.pk-addplayer-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-addplayer-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-addplayer-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #pk-addplayer-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; }
 #pk-addplayer-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-lighter, #a0aec0); cursor:pointer; line-height:1; padding:0 4px; }
 #pk-addplayer-overlay .pk-modal-close-btn:hover { color:var(--ork-text, #4a5568); }
@@ -6270,7 +6276,7 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 .pk-edit-officers-btn:hover { color:#0891b2; background:#ebf4ff; }
 #pk-editoff-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-editoff-overlay.pk-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-editoff-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-editoff-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #pk-editoff-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; }
 #pk-editoff-overlay .pk-modal-title { font-size:16px; font-weight:700; color:var(--ork-text, #1a202c); margin:0; }
 #pk-editoff-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-lighter, #a0aec0); cursor:pointer; line-height:1; padding:0 4px; }
@@ -6296,7 +6302,7 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
    ============================================== */
 #pk-addday-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-addday-overlay.pk-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-addday-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-addday-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #pk-addday-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; }
 #pk-addday-overlay .pk-modal-title { font-size:16px; font-weight:700; color:var(--ork-text, #1a202c); margin:0; }
 #pk-addday-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-lighter, #a0aec0); cursor:pointer; line-height:1; padding:0 4px; }
@@ -6375,7 +6381,7 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 .pk-edit-details-btn:hover { color:#0891b2; background:#ebf4ff; }
 #pk-admin-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-admin-overlay.pk-admin-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-admin-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-admin-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #pk-admin-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
 #pk-admin-overlay .kn-modal-title { font-size:16px; font-weight:700; color:var(--ork-text); margin:0; }
 #pk-admin-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
@@ -6392,7 +6398,7 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 #kn-mergeplayer-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
 #kn-moveplayer-overlay .kn-modal-box,
 #kn-claimpark-overlay .kn-modal-box,
-#kn-mergeplayer-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-mergeplayer-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-moveplayer-overlay .kn-modal-header,
 #kn-claimpark-overlay .kn-modal-header,
 #kn-mergeplayer-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
@@ -6495,7 +6501,7 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 #pk-mergeplayer-overlay .pk-modal-box {
     background: var(--ork-card-bg, #fff); border-radius: 12px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-    max-height: 90vh; display: flex; flex-direction: column;
+    max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;
 }
 #pk-heraldry-overlay .pk-modal-header,
 #pk-moveplayer-overlay .pk-modal-header,
@@ -6732,7 +6738,7 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 /* ---- Add Tournament Modal (Kingdom: kn-addtournament-) ---- */
 #kn-addtournament-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-addtournament-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-addtournament-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-addtournament-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-addtournament-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
 #kn-addtournament-overlay .kn-modal-title { font-size:16px; font-weight:700; color:var(--ork-text); margin:0; }
 #kn-addtournament-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
@@ -6752,7 +6758,7 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 /* ---- Add Tournament Modal (Park: pk-addtournament-) ---- */
 #pk-addtournament-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-addtournament-overlay.pk-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-addtournament-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-addtournament-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #pk-addtournament-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; }
 #pk-addtournament-overlay .pk-modal-title { font-size:16px; font-weight:700; color:var(--ork-text, #1a202c); margin:0; }
 #pk-addtournament-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-lighter, #a0aec0); cursor:pointer; line-height:1; padding:0 4px; }
@@ -10657,7 +10663,7 @@ html[data-theme="dark"] .pk-banner-position-hint i { color: var(--ork-link-brigh
 	background: #fff; border-radius: 10px; width: min(520px, 96vw);
 	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
 	/* I3 fix: scroll internally on small viewports so buttons are never clipped */
-	max-height: 90vh; overflow-y: auto;
+	max-height: 90vh; max-height: 90dvh; overflow-y: auto;
 }
 .pk-img-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
@@ -10884,7 +10890,7 @@ html[data-theme="dark"] .kn-banner-position-hint i { color: var(--ork-link-brigh
 	background: #fff; border-radius: 10px; width: min(520px, 96vw);
 	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
 	/* I3 fix: scroll internally on small viewports so buttons are never clipped */
-	max-height: 90vh; overflow-y: auto;
+	max-height: 90vh; max-height: 90dvh; overflow-y: auto;
 }
 .kn-img-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
@@ -11116,7 +11122,7 @@ html[data-theme="dark"] .pn-banner-position-hint i { color: var(--ork-link-brigh
 	background: #fff; border-radius: 10px; width: min(520px, 96vw);
 	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
 	/* I3 fix: scroll internally on small viewports so buttons are never clipped */
-	max-height: 90vh; overflow-y: auto;
+	max-height: 90vh; max-height: 90dvh; overflow-y: auto;
 }
 .pn-img-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
@@ -11335,7 +11341,7 @@ html[data-theme="dark"] .un-banner-position-hint i { color: var(--ork-link-brigh
 	background: #fff; border-radius: 10px; width: min(520px, 96vw);
 	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
 	/* I3 fix: scroll internally on small viewports so buttons are never clipped */
-	max-height: 90vh; overflow-y: auto;
+	max-height: 90vh; max-height: 90dvh; overflow-y: auto;
 }
 .un-img-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
