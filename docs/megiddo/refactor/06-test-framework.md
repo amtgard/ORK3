@@ -151,7 +151,7 @@ Missing tables produce PDO warnings that can break Infection’s initial coverag
 | `orkservice/Report/ReportService.test.php` | Report | — (TBD in T-10) | Deprecated manual script |
 | `orkservice/Calendar/CalendarService.test.php` | Calendar | `CalendarServiceTest` | Deprecated, `die()` |
 | `orkservice/Event/EventService.test.php` | Event | — (TBD in T-04/T-05) | Deprecated, `die()` |
-| `orkservice/Authorization/AuthorizationService.testrig.php` | Authorization | — (TBD in T-02) | Deprecated test rig |
+| `orkservice/Authorization/AuthorizationService.testrig.php` | Authorization | `AuthorizationAddTest` (T-02) | Deprecated test rig |
 
 ---
 

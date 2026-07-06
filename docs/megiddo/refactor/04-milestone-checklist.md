@@ -449,14 +449,18 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 | Step | Status |
 |------|--------|
-| Backend unit/integration tests | [ ] |
-| Frontend functional tests | [ ] |
-| Milestone-scoped Infection passes | [ ] |
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Integration/AuthorizationAddTest.php`, `tests/Support/AuthorizationAddFixture.php`, `tests/e2e/auth-permissions.spec.ts`
+
+**Infection (pre-refactor):** `infection.t02-auth-insert.json5` — `--only-covered --filter=class.Authorization.php --test-framework-options="--filter=AuthorizationAddTest"` (MSI 42%, covered MSI 42%)
 
 #### T-02 sign-off gate
 
-- [ ] Test sprint sign-off checklist (above) satisfied
-- [ ] Branch `megiddo/t-02-auth-insert-tests` squashed to exactly one commit
+- [x] Test sprint sign-off checklist (above) satisfied
+- [x] Branch `megiddo/t-02-auth-insert-tests` squashed to exactly one commit
 
 ---
 
@@ -793,4 +797,4 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code, keep tests green |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** T-02 (Authorization INSERT bypass tests — pairs with completed DS-02).
+**Next actionable milestone:** R-02 (Authorization INSERT bypass refactor — pairs with completed T-02).

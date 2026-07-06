@@ -20,9 +20,6 @@
             <directory suffix=".php">system/lib/ork3</directory>
             <directory suffix=".php">orkservice</directory>
         </include>
-        <exclude>
-            <file>system/lib/ork3/class.Authorization.php</file>
-        </exclude>
     </source>
     <coverage>
         <report>

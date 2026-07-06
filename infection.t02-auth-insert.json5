@@ -3,19 +3,12 @@
     "timeout": 120,
     "source": {
         "directories": [
-            "system/lib/ork3",
-            "orkservice"
-        ],
-        "excludes": [
-            "AuthorizationService.testrig.php",
-            "AuthorizationService.testrig.sql",
-            "*.test.php",
-            "*.testrig.php"
+            "system/lib/ork3"
         ]
     },
     "logs": {
-        "text": "build/infection.log",
-        "summary": "build/infection-summary.log"
+        "text": "build/infection-t02.log",
+        "summary": "build/infection-t02-summary.log"
     },
     "mutators": {
         "@default": true
@@ -27,5 +20,5 @@
     "phpUnit": {
         "configDir": "."
     },
-    "tmpDir": "build/infection"
+    "tmpDir": "build/infection-t02"
 }
