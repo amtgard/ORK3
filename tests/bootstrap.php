@@ -56,6 +56,7 @@ require_once ORK3_ROOT . '/startup.php';
 require_once __DIR__ . '/Support/EventRsvpFixture.php';
 require_once __DIR__ . '/Support/AuthorizationAddFixture.php';
 require_once __DIR__ . '/Support/BannerFixture.php';
+require_once __DIR__ . '/Support/EventPlanningFixture.php';
 require_once DIR_UI . 'model/model.Event.php';
 require_once DIR_SERVICE . 'Common.definitions.php';
 

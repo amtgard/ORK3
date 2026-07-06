@@ -503,14 +503,18 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 | Step | Status |
 |------|--------|
-| Backend unit/integration tests | [ ] |
-| Frontend functional tests | [ ] |
-| Milestone-scoped Infection passes | [ ] |
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Integration/EventPlanningTest.php`, `tests/Integration/EventAttendanceAjaxTest.php`, `tests/Support/EventPlanningFixture.php`, `tests/e2e/event-planning.spec.ts`
+
+**Infection (pre-refactor):** `infection.t04-eventajax.json5` — `--only-covered --filter=class.Event.php --test-framework-options="--filter=EventPlanningTest"` (MSI 48%, covered MSI 48%)
 
 #### T-04 sign-off gate
 
-- [ ] Test sprint sign-off checklist (above) satisfied
-- [ ] Branch `megiddo/t-04-eventajax-tests` squashed to exactly one commit
+- [x] Test sprint sign-off checklist (above) satisfied
+- [x] Branch `megiddo/t-04-eventajax-tests` squashed to exactly one commit
 
 ---
 
@@ -801,4 +805,4 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code, keep tests green |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** T-04 (EventAjax core tests — pairs with completed DS-04).
+**Next actionable milestone:** T-05 (Event controller detail tests — pairs with completed DS-05).
