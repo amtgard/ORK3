@@ -584,14 +584,18 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 | Step | Status |
 |------|--------|
-| Backend unit/integration tests | [ ] |
-| Frontend functional tests | [ ] |
-| Milestone-scoped Infection passes | [ ] |
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Integration/ParkProfileTest.php`, `tests/Integration/ParkAjaxTest.php`, `tests/e2e/park-profile.spec.ts`
+
+**Infection (pre-refactor):** `infection.t07-park.json5` — `--only-covered --filter=class.Park.php --test-framework-options="--filter=ParkProfileTest|ParkAjaxTest"` (MSI 24%, covered MSI 24%)
 
 #### T-07 sign-off gate
 
-- [ ] Test sprint sign-off checklist (above) satisfied
-- [ ] Branch `megiddo/t-07-park-tests` squashed to exactly one commit
+- [x] Test sprint sign-off checklist (above) satisfied
+- [x] Branch `megiddo/t-07-park-tests` squashed to exactly one commit
 
 ---
 
