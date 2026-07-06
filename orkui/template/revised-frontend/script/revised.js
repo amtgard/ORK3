@@ -2922,6 +2922,9 @@ window.orkConfirm = function(message, onConfirm, opts) {
     msgEl.textContent = message || '';
     okBtn.textContent = opts.okLabel || 'OK';
     okBtn.className = 'ork-confirm-ok' + (opts.danger === false ? ' ork-confirm-ok-neutral' : '');
+    // alertMode: informational one-button dialog (no Cancel). Same shell,
+    // no second button — used as a styled replacement for window.alert().
+    cancelBtn.style.display = opts.alertMode ? 'none' : '';
 
     function cleanup() {
         overlay.classList.remove('ork-confirm-open');
@@ -2941,6 +2944,17 @@ window.orkConfirm = function(message, onConfirm, opts) {
     overlay.classList.add('ork-confirm-open');
     document.body.style.overflow = 'hidden';
     setTimeout(function() { okBtn.focus(); }, 30);
+};
+
+// Drop-in styled replacement for window.alert. Same visual as orkConfirm,
+// but one button, no Cancel. Opts: { title, okLabel }.
+window.orkAlert = function(message, opts) {
+    opts = opts || {};
+    opts.alertMode = true;
+    opts.danger    = (opts.danger !== false);
+    if (!opts.title)   opts.title   = 'Heads up';
+    if (!opts.okLabel) opts.okLabel = 'OK';
+    window.orkConfirm(message, null, opts);
 };
 
 function knSortDesc($table, colIndex, sortType) {
@@ -3935,18 +3949,29 @@ $(document).ready(function() {
         if (knCiFlatEnd)   { knCiFlatEnd.destroy();   knCiFlatEnd   = null; }
         var fmt = allDay ? 'Y-m-d' : 'Y-m-d H:i';
         var opts = { enableTime: !allDay, dateFormat: fmt, altInput: true, altFormat: allDay ? 'F j, Y' : 'F j, Y h:i K', minuteIncrement: 15, time_24hr: false };
+        // Track the previous start so onChange can slide the end by the same
+        // delta, preserving the item's duration — same rule as the event modal.
+        var _prevStart = null;
         knCiFlatStart = flatpickr('#kn-ci-start', Object.assign({}, opts, {
+            onReady: function(sel) { _prevStart = sel[0] || null; },
             onChange: function(sel) {
                 if (!sel[0] || !knCiFlatEnd) return;
-                if (!knCiFlatEnd.selectedDates[0] || knCiFlatEnd.selectedDates[0] < sel[0]) {
-                    var end = new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000));
-                    knCiFlatEnd.setDate(end, true);
+                var endDate = knCiFlatEnd.selectedDates[0];
+                if (endDate && _prevStart) {
+                    var offset = endDate.getTime() - _prevStart.getTime();
+                    knCiFlatEnd.setDate(new Date(sel[0].getTime() + offset), true);
+                } else if (!endDate) {
+                    knCiFlatEnd.setDate(new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000)), true);
                 }
+                _prevStart = sel[0];
             }
         }));
         knCiFlatEnd = flatpickr('#kn-ci-end', opts);
         if (startVal) knCiFlatStart.setDate(startVal, true);
         if (endVal)   knCiFlatEnd.setDate(endVal, true);
+        // Sync the cache to the initial start value (setDate() does not fire
+        // onChange when called with `true`).
+        _prevStart = knCiFlatStart.selectedDates[0] || null;
     }
 
     function knGetModalType() {
@@ -7587,18 +7612,25 @@ $(document).ready(function() {
         if (pkCiFlatEnd)   { pkCiFlatEnd.destroy();   pkCiFlatEnd   = null; }
         var fmt  = allDay ? 'Y-m-d' : 'Y-m-d H:i';
         var opts = { enableTime: !allDay, dateFormat: fmt, altInput: true, altFormat: allDay ? 'F j, Y' : 'F j, Y h:i K', minuteIncrement: 15, time_24hr: false };
+        var _prevStart = null;
         pkCiFlatStart = flatpickr('#pk-ci-start', Object.assign({}, opts, {
+            onReady: function(sel) { _prevStart = sel[0] || null; },
             onChange: function(sel) {
                 if (!sel[0] || !pkCiFlatEnd) return;
-                if (!pkCiFlatEnd.selectedDates[0] || pkCiFlatEnd.selectedDates[0] < sel[0]) {
-                    var end = new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000));
-                    pkCiFlatEnd.setDate(end, true);
+                var endDate = pkCiFlatEnd.selectedDates[0];
+                if (endDate && _prevStart) {
+                    var offset = endDate.getTime() - _prevStart.getTime();
+                    pkCiFlatEnd.setDate(new Date(sel[0].getTime() + offset), true);
+                } else if (!endDate) {
+                    pkCiFlatEnd.setDate(new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000)), true);
                 }
+                _prevStart = sel[0];
             }
         }));
         pkCiFlatEnd = flatpickr('#pk-ci-end', opts);
         if (startVal) pkCiFlatStart.setDate(startVal, true);
         if (endVal)   pkCiFlatEnd.setDate(endVal, true);
+        _prevStart = pkCiFlatStart.selectedDates[0] || null;
     }
 
     function pkCiResetForm(presetDate) {
@@ -8559,22 +8591,55 @@ $(document).ready(function() {
     if (EvConfig.canManageStaff || EvConfig.canManageSchedule || EvConfig.canManageFeast) {
         var gid = function(id) { return document.getElementById(id); };
         var evStaffAcTimer = null;
+        // 0 = adding a new staffer. Nonzero = editing an existing row —
+        // evSubmitStaff() reads this to decide whether to REPLACE the row
+        // in the table or APPEND. The upsert endpoint handles both cases,
+        // but only the frontend knows which visual to render.
+        var evEditingStaffId = 0;
 
-        window.evOpenStaffModal = function() {
+        window.evOpenStaffModal = function(prefill) {
             var modal = gid('ev-staff-modal');
             if (!modal) return;
-            gid('ev-staff-role').value = '';
-            gid('ev-staff-player-name').value = '';
-            gid('ev-staff-player-id').value = '';
-            gid('ev-staff-can-manage').checked = false;
-            gid('ev-staff-can-attendance').checked = false;
-            if (gid('ev-staff-can-schedule')) gid('ev-staff-can-schedule').checked = false;
-            if (gid('ev-staff-can-feast'))    gid('ev-staff-can-feast').checked    = false;
+            var editing = !!(prefill && prefill.staffId);
+            evEditingStaffId = editing ? prefill.staffId : 0;
+            gid('ev-staff-role').value             = editing ? prefill.role      : '';
+            gid('ev-staff-player-name').value      = editing ? prefill.persona   : '';
+            gid('ev-staff-player-id').value        = editing ? prefill.mundaneId : '';
+            // Player is fixed when editing — the upsert key is (detail, mundane),
+            // so changing the player would create a second row rather than
+            // updating this one.
+            gid('ev-staff-player-name').readOnly   = editing;
+            gid('ev-staff-can-manage').checked     = editing ? !!prefill.canManage     : false;
+            gid('ev-staff-can-attendance').checked = editing ? !!prefill.canAttendance : false;
+            if (gid('ev-staff-can-schedule')) gid('ev-staff-can-schedule').checked = editing ? !!prefill.canSchedule : false;
+            if (gid('ev-staff-can-feast'))    gid('ev-staff-can-feast').checked    = editing ? !!prefill.canFeast    : false;
             gid('ev-staff-error').style.display = 'none';
             gid('ev-staff-ac').classList.remove('kn-ac-open');
+            // Title + submit-button copy switch on mode.
+            var titleEl = modal.querySelector('.ev-modal-header h3');
+            if (titleEl) titleEl.innerHTML = '<i class="fas fa-id-badge" style="margin-right:8px"></i>' + (editing ? 'Edit Staff Member' : 'Add Staff Member');
+            var saveBtn = gid('ev-staff-save-btn');
+            if (saveBtn) saveBtn.innerHTML = editing
+                ? '<i class="fas fa-save" style="margin-right:5px"></i>Save Changes'
+                : '<i class="fas fa-plus" style="margin-right:5px"></i>Add Staff';
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
             setTimeout(function() { gid('ev-staff-role').focus(); }, 50);
+        };
+
+        window.evEditStaff = function(btn, staffId) {
+            var row = btn.closest('tr');
+            if (!row) return;
+            evOpenStaffModal({
+                staffId:       staffId,
+                mundaneId:     row.getAttribute('data-mundane-id') || '',
+                persona:       row.getAttribute('data-persona')    || '',
+                role:          row.getAttribute('data-role')       || '',
+                canManage:     row.getAttribute('data-manage')     === '1',
+                canAttendance: row.getAttribute('data-attendance') === '1',
+                canSchedule:   row.getAttribute('data-schedule')   === '1',
+                canFeast:      row.getAttribute('data-feast')      === '1'
+            });
         };
 
         window.evCloseStaffModal = function() {
@@ -8693,7 +8758,23 @@ $(document).ready(function() {
             });
 
             staffNameEl.addEventListener('blur', function() {
-                setTimeout(function() { staffAcEl.classList.remove(OPEN_CLASS); }, 160);
+                setTimeout(function() {
+                    // Keep the dropdown open when focus moves INTO it — otherwise
+                    // arrow-key navigation (which focuses the first item) fires
+                    // this blur handler and hides the list mid-navigation.
+                    if (staffAcEl.contains(document.activeElement)) return;
+                    staffAcEl.classList.remove(OPEN_CLASS);
+                }, 160);
+            });
+
+            // Close only once focus leaves the whole widget (item→elsewhere),
+            // not on item→item/input transitions during arrow-key nav.
+            staffAcEl.addEventListener('focusout', function() {
+                setTimeout(function() {
+                    var a = document.activeElement;
+                    if (a === staffNameEl || staffAcEl.contains(a)) return;
+                    staffAcEl.classList.remove(OPEN_CLASS);
+                }, 160);
             });
 
             acKeyNav(staffNameEl, staffAcEl, OPEN_CLASS, ITEM_SEL);
@@ -8725,6 +8806,11 @@ $(document).ready(function() {
             fd.append('CanAttendance', canAtt);
             fd.append('CanSchedule',   canSched);
             fd.append('CanFeast',      canFeast);
+            // Editing? Send the staff row id so the backend does an UPDATE
+            // instead of an INSERT. ork_event_staff has no UNIQUE constraint
+            // on (detail_id, mundane_id) yet, so a bare insert-upsert makes
+            // duplicates instead of updating the row we're editing.
+            if (evEditingStaffId) fd.append('StaffId', evEditingStaffId);
 
             fetch(EvConfig.uir + 'EventAjax/add_staff/' + EvConfig.eventId + '/' + EvConfig.detailId, {
                 method: 'POST', body: fd,
@@ -8737,18 +8823,35 @@ $(document).ready(function() {
                     var s = data.staff;
                     var chk = '<i class="fas fa-check" style="color:#276749"></i>';
                     var x   = '<i class="fas fa-times" style="color:#a0aec0"></i>';
-                    var newRow = '<tr id="ev-staff-row-' + s.EventStaffId + '">' +
+                    var newRow = '<tr id="ev-staff-row-' + s.EventStaffId + '"'
+                        + ' data-mundane-id="' + s.MundaneId + '"'
+                        + ' data-persona="'    + escHtmlSt(s.Persona || '') + '"'
+                        + ' data-role="'       + escHtmlSt(s.RoleName || '') + '"'
+                        + ' data-manage="'     + (s.CanManage     ? 1 : 0) + '"'
+                        + ' data-attendance="' + (s.CanAttendance ? 1 : 0) + '"'
+                        + ' data-schedule="'   + (s.CanSchedule   ? 1 : 0) + '"'
+                        + ' data-feast="'      + (s.CanFeast      ? 1 : 0) + '">' +
                         '<td><a href="' + EvConfig.uir + 'Player/profile/' + s.MundaneId + '">' + escHtmlSt(s.Persona || '') + '</a></td>' +
                         '<td>' + escHtmlSt(s.RoleName || '') + '</td>' +
                         '<td>' + (s.CanManage ? chk : x) + '</td>' +
                         '<td>' + (s.CanAttendance ? chk : x) + '</td>' +
                         '<td>' + (s.CanSchedule ? chk : x) + '</td>' +
                         '<td>' + (s.CanFeast ? chk : x) + '</td>' +
-                        '<td class="ev-del-cell"><button class="ev-del-link" data-tip="Remove" onclick="evRemoveStaff(this,' + s.EventStaffId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button></td>' +
+                        '<td class="ev-del-cell" style="white-space:nowrap">' +
+                            '<button class="ev-del-link" data-tip="Edit" onclick="evEditStaff(this,' + s.EventStaffId + ')" style="background:none;border:none;cursor:pointer;color:#4299e1;font-size:14px;padding:0 8px 0 0"><i class="fas fa-pencil-alt"></i></button>' +
+                            '<button class="ev-del-link" data-tip="Remove" onclick="evRemoveStaff(this,' + s.EventStaffId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button>' +
+                        '</td>' +
                         '</tr>';
                     var tbody = gid('ev-staff-tbody');
                     if (tbody) {
-                        tbody.insertAdjacentHTML('beforeend', newRow);
+                        // Editing → REPLACE the existing row so we don't render
+                        // a duplicate; adding → APPEND.
+                        var existing = evEditingStaffId ? gid('ev-staff-row-' + evEditingStaffId) : null;
+                        if (existing) {
+                            existing.outerHTML = newRow;
+                        } else {
+                            tbody.insertAdjacentHTML('beforeend', newRow);
+                        }
                     } else {
                         // First staff member: table doesn't exist yet, reload to render it properly
                         location.reload();
@@ -8756,14 +8859,16 @@ $(document).ready(function() {
                     }
                     var empty = gid('ev-staff-empty');
                     if (empty) empty.style.display = 'none';
-                    // Update tab count badge
-                    var navItems = document.querySelectorAll('#ev-tab-nav li');
-                    navItems.forEach(function(li) {
-                        if (li.getAttribute('data-tab') === 'ev-tab-staff') {
-                            var badge = li.querySelector('.ev-tab-count');
-                            if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
-                        }
-                    });
+                    // Only bump the tab count when we actually added a new row.
+                    if (!evEditingStaffId) {
+                        var navItems = document.querySelectorAll('#ev-tab-nav li');
+                        navItems.forEach(function(li) {
+                            if (li.getAttribute('data-tab') === 'ev-tab-staff') {
+                                var badge = li.querySelector('.ev-tab-count');
+                                if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
+                            }
+                        });
+                    }
                 } else {
                     errEl.textContent = data.error || 'An error occurred.';
                     errEl.style.display = 'block';
@@ -8788,7 +8893,16 @@ $(document).ready(function() {
         };
 
         window.evRemoveStaff = function(btn, staffId) {
-            if (!confirm('Remove this staff member?')) return;
+            // Pull the persona out of the row so the confirm dialog names who's
+            // being removed — the native confirm() said only "Remove this staff
+            // member?" which is easy to misfire on the wrong row.
+            var row     = btn.closest('tr');
+            var nameEl  = row ? row.querySelector('td a, td') : null;
+            var persona = nameEl ? nameEl.textContent.trim() : '';
+            var msg     = persona
+                ? 'Remove ' + persona + ' from this event’s staff?'
+                : 'Remove this staff member?';
+            orkConfirm(msg, function() {
             var fd = new FormData();
             fd.append('StaffId', staffId);
             fetch(EvConfig.uir + 'EventAjax/remove_staff/' + EvConfig.eventId + '/' + EvConfig.detailId, {
@@ -8825,6 +8939,7 @@ $(document).ready(function() {
                 }
             })
             .catch(function(err) { alert('Request failed: ' + err.message); });
+            }, { title: 'Remove Staff Member', okLabel: 'Remove' });
         };
 
         // ---- Schedule modal ----
@@ -9188,12 +9303,21 @@ $(document).ready(function() {
             var saveBtn = gid(activeBtnId) || gid('ev-sched-save-btn');
             var allSaveBtns = document.querySelectorAll('#ev-schedule-modal .ev-sched-save-any');
 
+            // Use innerHTML so the icon renders alongside the message. All four
+            // strings below are hand-crafted literals, no user input, so this
+            // is safe. Focus the offending field too so it's visually obvious.
+            function _schedShowErr(msg, focusEl) {
+                errEl.innerHTML = '<i class="fas fa-exclamation-circle"></i>' + msg;
+                errEl.style.display = 'block';
+                if (focusEl) focusEl.focus();
+            }
             errEl.style.display = 'none';
-            if (!title) { errEl.textContent = 'Please enter a title.'; errEl.style.display = 'block'; return; }
-            if (!start) { errEl.textContent = 'Please enter a start time.'; errEl.style.display = 'block'; return; }
-            if (!end)   { errEl.textContent = 'Please enter an end time.'; errEl.style.display = 'block'; return; }
+            if (!title) { _schedShowErr('Please enter a title.',       gid('ev-sched-title'));      return; }
+            if (!start) { _schedShowErr('Please enter a start time.',  gid('ev-sched-start')); return; }
+            if (!end)   { _schedShowErr('Please enter an end time.',   gid('ev-sched-end'));   return; }
             if (new Date(end) < new Date(start)) {
-                errEl.textContent = 'End time cannot be before start time.'; errEl.style.display = 'block'; return;
+                _schedShowErr('End time cannot be before start time.', gid('ev-sched-end'));
+                return;
             }
 
             var orig = saveBtn.innerHTML;
@@ -16507,6 +16631,16 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
         labelInput.addEventListener('input', upsertTicketLink);
         urlInput.addEventListener('input',   upsertTicketLink);
 
+        // Belt-and-suspenders: force the ticket link into the ExternalLinks
+        // JSON on form submit. Without this, a URL entered without a
+        // subsequent `input` event landing (e.g. autocomplete / paste in
+        // some browsers, or focus lost before the value settled) would
+        // never make it into the hidden JSON and the link wouldn't save.
+        var form = document.getElementById('ev-edit-form') || document.getElementById('ec-form');
+        if (form) {
+            form.addEventListener('submit', upsertTicketLink, true); // capture so we run before the external-links IIFE's serialize()
+        }
+
         // Re-sync when the edit modal is opened with fresh data.
         window.evTicketLinkReset = syncVisibility;
     }
@@ -17085,10 +17219,15 @@ window.evSetEventStatus = function(eventId, status, btn) {
         if (r && r.status === 0) {
             window.location.reload();
         } else {
-            alert((r && r.error) || 'Failed to set event status.');
+            var err = (r && r.error) || 'Failed to set event status.';
+            var isAuth = (r && (r.status === 3 || /not authoriz/i.test(err)));
+            orkAlert(err, { title: isAuth ? 'Not Authorized' : 'Could Not Update Event' });
             if (btn) btn.disabled = false;
         }
-    }, 'json').fail(function() { alert('Request failed.'); if (btn) btn.disabled = false; });
+    }, 'json').fail(function() {
+        orkAlert('Could not reach the server. Please try again.', { title: 'Request Failed' });
+        if (btn) btn.disabled = false;
+    });
 };
 
 // =============================================================================

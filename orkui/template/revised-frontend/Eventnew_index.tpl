@@ -207,7 +207,7 @@
 /* Sign-in link modal */
 #ev-signin-link-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9050; align-items:center; justify-content:center; }
 #ev-signin-link-overlay.ev-open { display:flex; }
-.ev-signin-link-modal { background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.22); width:min(520px, calc(100vw - 32px)); max-height:calc(100vh - 40px); overflow:auto; }
+.ev-signin-link-modal { background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.22); width:min(520px, calc(100vw - 32px)); max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px); overflow:auto; }
 .ev-signin-link-modal-header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #e2e8f0; background:#f7fafc; font-size:15px; font-weight:700; color:#2d3748; }
 .ev-signin-link-close { background:none; border:none; font-size:22px; color:#718096; cursor:pointer; padding:0 4px; line-height:1; }
 .ev-signin-link-modal-body { padding:18px 22px 22px; }
@@ -280,6 +280,11 @@
 .ev-img-step-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .ev-crop-wrap { overflow: auto; max-height: 360px; display: flex; justify-content: center; }
 .ev-img-form-error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 8px; }
+/* Same treatment as .ev-img-form-error — the schedule / meal modal was
+   applying an unstyled class name, rendering the "Please enter a title."
+   error as bare text that people missed. */
+.ev-modal-error { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 8px 12px; border-radius: 5px; font-size: 13px; margin-top: 8px; font-weight: 600; }
+.ev-modal-error i { margin-right: 6px; }
 .ev-fp-title { background: #2b6cb0; color: #fff; font-size: 12px; font-weight: 700; padding: 6px 12px; text-align: center; letter-spacing: .04em; }
 /* ── Edit Attendance Modal ─────────────────────── */
 .att-edit-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:9990; align-items:center; justify-content:center; }
@@ -319,6 +324,7 @@ html[data-theme="dark"] .ev-upload-area { border-color: var(--ork-border); color
 html[data-theme="dark"] .ev-upload-area:hover { border-color: var(--ork-link); background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .ev-upload-icon { color: var(--ork-text-muted); }
 html[data-theme="dark"] .ev-img-form-error { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .ev-modal-error   { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
 html[data-theme="dark"] .ev-fp-title { background: #1a365d; color: #90cdf4; }
 html[data-theme="dark"] .att-edit-modal { background: var(--ork-card-bg); }
 html[data-theme="dark"] .att-edit-label { color: var(--ork-text-muted); }
@@ -962,11 +968,21 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 		}
 		// For live/forecast: render from the cached 7-day forecast (server-side).
 		// For historical: render placeholder; JS lazy-fetches the archive.
-		$evFC = ($evWxMode === 'live' || $evWxMode === 'forecast')
-			? ($evWxLat !== null
-				? Ork3::$Lib->weather->forecast_for_coords($evWxLat, $evWxLng, $evWxDate, false)
-				: Ork3::$Lib->weather->forecast_for_date($evWxParkId, $evWxDate))
-			: null;
+		//
+		// Coord-first, park-fallback: prefer the event's own coords when we have
+		// them, but if the coord-keyed memcached forecast is cold (never warmed
+		// by the warm_event_venue_coords cron), fall back to the park's cached
+		// 14-day forecast. Showing the park's data is much better than showing
+		// nothing when the event coords are ~a few km away from the park.
+		$evFC = null;
+		if ($evWxMode === 'live' || $evWxMode === 'forecast') {
+			if ($evWxLat !== null) {
+				$evFC = Ork3::$Lib->weather->forecast_for_coords($evWxLat, $evWxLng, $evWxDate, false);
+			}
+			if ($evFC === null && $evWxParkId) {
+				$evFC = Ork3::$Lib->weather->forecast_for_date($evWxParkId, $evWxDate);
+			}
+		}
 		if ($evFC && $evFC['hi_f'] !== null):
 			$c = (int)$evFC['code'];
 			$evIc = ($c===0)?'☀️':(($c===1)?'🌤️':(($c===2)?'⛅':(($c===3)?'☁️':(($c===45||$c===48)?'🌫️':(($c>=51&&$c<=57)?'🌦️':(($c>=61&&$c<=67)?'🌧️':(($c>=71&&$c<=77)?'❄️':(($c>=80&&$c<=82)?'🌦️':(($c===85||$c===86)?'🌨️':(($c>=95)?'⛈️':'🌡️'))))))))));
@@ -984,7 +1000,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			<?php if ($evBadges): ?>
 				<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;justify-content:center">
 					<?php foreach ($evBadges as $_b): ?>
-						<span data-tip="<?= htmlspecialchars($_b['label']) ?>" style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600;background:<?= $_b['severity']==='warning'?'#fee2e2':'#fef3c7' ?>;color:<?= $_b['severity']==='warning'?'#991b1b':'#92400e' ?>;border:1px solid <?= $_b['severity']==='warning'?'#fca5a5':'#fcd34d' ?>"><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?></span>
+						<span data-tip="<?= htmlspecialchars($_b['label']) ?>" style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600;background:<?= $_b['severity']==='warning'?'#fee2e2':'#fef3c7' ?>;color:<?= $_b['severity']==='warning'?'#991b1b':'#92400e' ?>;border:1px solid <?= $_b['severity']==='warning'?'#fca5a5':'#fcd34d' ?>"<?= wx_safety_attrs($_b['label']) ?>><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?><?= wx_safety_icon_html($_b['label']) ?></span>
 					<?php endforeach; ?>
 				</div>
 			<?php endif; ?>
@@ -993,7 +1009,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			<?= $evWxMode === 'live' ? 'Today' : 'Forecast' ?>
 			<a href="https://open-meteo.com/" target="_blank" rel="noopener"
 			   data-tip="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"
-			   style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px;opacity:.6">ⓘ</a>
+			   style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px">ⓘ</a>
 		</div>
 	</div>
 	<?php elseif ($evWxMode === 'historical'): ?>
@@ -1858,7 +1874,14 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					</thead>
 					<tbody id="ev-staff-tbody">
 						<?php foreach ($StaffList as $staff): ?>
-						<tr id="ev-staff-row-<?= (int)$staff['EventStaffId'] ?>">
+						<tr id="ev-staff-row-<?= (int)$staff['EventStaffId'] ?>"
+							data-mundane-id="<?= (int)$staff['MundaneId'] ?>"
+							data-persona="<?= htmlspecialchars($staff['Persona']) ?>"
+							data-role="<?= htmlspecialchars($staff['RoleName']) ?>"
+							data-manage="<?= (int)!empty($staff['CanManage']) ?>"
+							data-attendance="<?= (int)!empty($staff['CanAttendance']) ?>"
+							data-schedule="<?= (int)!empty($staff['CanSchedule']) ?>"
+							data-feast="<?= (int)!empty($staff['CanFeast']) ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$staff['MundaneId'] ?>"><?= htmlspecialchars($staff['Persona']) ?></a></td>
 							<td><?= htmlspecialchars($staff['RoleName']) ?></td>
 							<td><?= $staff['CanManage'] ? '<i class="fas fa-check" style="color:#276749"></i>' : '<i class="fas fa-times" style="color:#a0aec0"></i>' ?></td>
@@ -1866,7 +1889,12 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							<td><?= $staff['CanSchedule'] ? '<i class="fas fa-check" style="color:#276749"></i>' : '<i class="fas fa-times" style="color:#a0aec0"></i>' ?></td>
 							<td><?= $staff['CanFeast'] ? '<i class="fas fa-check" style="color:#276749"></i>' : '<i class="fas fa-times" style="color:#a0aec0"></i>' ?></td>
 							<?php if ($canManageStaff): ?>
-							<td class="ev-del-cell">
+							<td class="ev-del-cell" style="white-space:nowrap">
+								<button class="ev-del-link" data-tip="Edit"
+									onclick="evEditStaff(this, <?= (int)$staff['EventStaffId'] ?>)"
+									style="background:none;border:none;cursor:pointer;color:#4299e1;font-size:14px;padding:0 8px 0 0">
+									<i class="fas fa-pencil-alt"></i>
+								</button>
 								<button class="ev-del-link" data-tip="Remove"
 									onclick="evRemoveStaff(this, <?= (int)$staff['EventStaffId'] ?>)"
 									style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">
@@ -2767,7 +2795,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 			</div>
 			<div class="ev-modal-row">
 				<div class="ev-modal-field ev-field-full">
-					<label>Description</label>
+					<label>Description <span style="font-size:11px;color:#718096;font-weight:400">(shown on the Schedule tab)</span></label>
 					<textarea id="ev-sched-description" rows="3" placeholder="Optional details..." style="width:100%;resize:vertical"></textarea>
 				</div>
 			</div>
@@ -2782,7 +2810,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 				</div>
 				<div class="ev-modal-row">
 					<div class="ev-modal-field ev-field-full">
-						<label>Menu <span style="font-size:11px;color:#718096;font-weight:400">(optional)</span></label>
+						<label>Menu <span style="font-size:11px;color:#718096;font-weight:400">(optional &mdash; shown on the Feast tab)</span></label>
 						<textarea id="ev-sched-meal-menu" rows="3" placeholder="List dishes, courses, dietary notes..." style="width:100%;resize:vertical"></textarea>
 					</div>
 				</div>
@@ -3331,7 +3359,7 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 			document.getElementById('ev-wx-label').innerHTML = 'Historical' +
 				' <a href="https://open-meteo.com/" target="_blank" rel="noopener"' +
 				' data-tip="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"' +
-				' style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px;opacity:.6">ⓘ</a>';
+				' style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px">ⓘ</a>';
 		})
 		.catch(showUnavailable);
 })();
@@ -3947,7 +3975,7 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	/* Banner/image modal mobile fit */
 	.ev-img-overlay { align-items:flex-start; overflow:auto; }
 	.ev-img-modal {
-		width:min(520px, 96vw); max-height:calc(100vh - 32px);
+		width:min(520px, 96vw); max-height:calc(100vh - 32px); max-height:calc(100dvh - 32px);
 		overflow:auto; margin:16px 0;
 	}
 	.ev-banner-position-wrap { min-height:120px !important; }

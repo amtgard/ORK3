@@ -601,10 +601,16 @@ class Controller_Kingdom extends Controller
         }
 
         $kn_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        // Drafts: visible to creator + AUTH_EVENT/AUTH_EDIT; for the kingdom list,
-        // we keep it simple — non-editors only see published events. ORK admins see all.
+        // Drafts: visible to creator, event-editors, ORK admins, and anyone
+        // with an event_staff row on any of the event's occurrences — a
+        // scheduler / feaster / attendance staffer needs to see the draft
+        // to fill in their piece before it's published.
         $kn_isAdmin = ($kn_uid > 0) ? Ork3::$Lib->authorization->HasAuthority($kn_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
-        $kn_draftClause = $kn_isAdmin ? '' : ($kn_uid > 0 ? "AND (e.status = 'published' OR e.mundane_id = {$kn_uid})" : "AND e.status = 'published'");
+        if ($kn_isAdmin || $kn_uid === 0) {
+            $kn_draftClause = $kn_isAdmin ? '' : "AND e.status = 'published'";
+        } else {
+            $kn_draftClause = "AND (e.status = 'published' OR e.mundane_id = {$kn_uid} OR EXISTS (SELECT 1 FROM " . DB_PREFIX . "event_staff es JOIN " . DB_PREFIX . "event_calendardetail cds ON cds.event_calendardetail_id = es.event_calendardetail_id WHERE cds.event_id = e.event_id AND es.mundane_id = {$kn_uid}))";
+        }
         // A12: Skip correlated subquery for anonymous users — emit NULL literal instead of joining on mundane_id = 0.
         $myRsvpSubq = $kn_uid > 0
             ? "(SELECT status FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = cd.event_calendardetail_id AND mundane_id = " . (int)$kn_uid . " LIMIT 1)"
@@ -640,10 +646,20 @@ class Controller_Kingdom extends Controller
         while ($evtResult && $evtResult->Next()) {
             $eid = (int)($evtResult->event_id ?? 0);
             if ($eid) {
-                // Per-row draft visibility for users with event-edit auth (not just creator/admin).
+                // Per-row draft visibility. Whitelist: admin / creator /
+                // AUTH_EVENT-EDIT / anyone with an event_staff row on this
+                // event. The SQL clause above lets the row reach this loop
+                // for staff, but without this parallel PHP-side check the
+                // row is dropped again here.
                 $row_status = (string)($evtResult->status ?? 'published');
                 if ($row_status !== 'published' && !$kn_isAdmin && (int)$evtResult->event_creator !== $kn_uid) {
                     $canEditRow = ($kn_uid > 0) ? Ork3::$Lib->authorization->HasAuthority($kn_uid, AUTH_EVENT, $eid, AUTH_EDIT) : false;
+                    if (!$canEditRow && $kn_uid > 0) {
+                        global $DB;
+                        $DB->Clear();
+                        $_staffRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff es JOIN ' . DB_PREFIX . 'event_calendardetail cds ON cds.event_calendardetail_id = es.event_calendardetail_id WHERE cds.event_id = ' . $eid . ' AND es.mundane_id = ' . $kn_uid . ' LIMIT 1');
+                        $canEditRow = ($_staffRow && $_staffRow->Next());
+                    }
                     if (!$canEditRow) {
                         continue;
                     }

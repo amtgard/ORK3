@@ -376,6 +376,7 @@ class Player extends Ork3
                     'PhotoFocusY' => $design->photo_focus_y,
                     'PhotoFocusSize' => $design->photo_focus_size,
                         'ShowBeltline' => (int)$design->show_beltline,
+                        'ShowFeastPrefs' => (int)$design->show_feast_prefs,
                         'PronunciationGuide' => $design->pronunciation_guide,
                         'ShowMundaneFirst' => (int)$design->show_mundane_first,
                         'ShowMundaneLast' => (int)$design->show_mundane_last,
@@ -1514,7 +1515,7 @@ class Player extends Ork3
             'ColorPrimary' => 1, 'ColorAccent' => 1, 'ColorSecondary' => 1, 'HeroGradient' => 1, 'HeroOverlay' => 1,
             'NameFont' => 1,
             'PhotoFocusX' => 1, 'PhotoFocusY' => 1, 'PhotoFocusSize' => 1,
-            'ShowBeltline' => 1, 'BeltDisplay' => 1,
+            'ShowBeltline' => 1, 'ShowFeastPrefs' => 1, 'BeltDisplay' => 1,
             'BasicFonts' => 1, 'DyslexiaFonts' => 1,
         ];
         // Fields whose value always shifts even on no-op saves — ignore.
@@ -1617,7 +1618,7 @@ class Player extends Ork3
                         foreach (['about_persona','about_story','color_primary','color_accent','color_secondary',
                                   'hero_gradient','hero_overlay','name_prefix','name_suffix','suffix_comma',
                                   'photo_focus_x','photo_focus_y','photo_focus_size',
-                                  'show_beltline','belt_display','pronunciation_guide',
+                                  'show_beltline','show_feast_prefs','belt_display','pronunciation_guide',
                                   'show_mundane_first','show_mundane_last','show_email',
                                   'milestone_config','name_font','name_shadow'] as $_f) {
                             $_cur[$_f] = $design->{$_f};
@@ -1687,6 +1688,8 @@ class Player extends Ork3
                     $design->photo_focus_y = is_null($request['PhotoFocusY']) ? ($_designExisted ? (int)$_cur['photo_focus_y'] : 50) : (int)$request['PhotoFocusY'];
                     $design->photo_focus_size = is_null($request['PhotoFocusSize']) ? ($_designExisted ? (int)$_cur['photo_focus_size'] : 100) : (int)$request['PhotoFocusSize'];
                     $design->show_beltline = is_null($request['ShowBeltline']) ? ($_designExisted ? (int)$_cur['show_beltline'] : 1) : (int)$request['ShowBeltline'];
+                    // ShowFeastPrefs defaults to 0 (opt-in) since feast prefs carry allergen info.
+                    $design->show_feast_prefs = is_null($request['ShowFeastPrefs']) ? ($_designExisted ? (int)$_cur['show_feast_prefs'] : 0) : (int)$request['ShowFeastPrefs'];
                     $design->pronunciation_guide = $_pick($request['PronunciationGuide'], 'pronunciation_guide');
                     $design->show_mundane_first = is_null($request['ShowMundaneFirst']) ? ($_designExisted ? (int)$_cur['show_mundane_first'] : 0) : (int)$request['ShowMundaneFirst'];
                     $design->show_mundane_last = is_null($request['ShowMundaneLast']) ? ($_designExisted ? (int)$_cur['show_mundane_last'] : 0) : (int)$request['ShowMundaneLast'];

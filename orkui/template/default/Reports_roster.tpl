@@ -509,7 +509,7 @@ $(function() {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <div id="es-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
-	<div id="es-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;overflow-y:auto;">
+	<div id="es-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;max-height:90dvh;overflow-y:auto;">
 		<div style="font-size:1.08em;font-weight:600;color:#2d3748;margin-bottom:18px"><i class="fas fa-pencil-alt" style="color:#4a5568;margin-right:7px"></i>Edit Suspension</div>
 
 		<div id="es-error" style="display:none;background:#fff5f5;border:1px solid #fc8181;color:#c53030;border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.93em"></div>
@@ -749,7 +749,7 @@ $(function() {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <div id="sp-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
-	<div id="sp-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;overflow-y:auto;">
+	<div id="sp-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;max-height:90dvh;overflow-y:auto;">
 		<div style="font-size:1.08em;font-weight:600;color:#2d3748;margin-bottom:18px"><i class="fas fa-ban" style="color:#e53e3e;margin-right:7px"></i>Suspend Player</div>
 
 		<div id="sp-error" style="display:none;background:#fff5f5;border:1px solid #fc8181;color:#c53030;border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.93em"></div>

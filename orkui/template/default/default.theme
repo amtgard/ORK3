@@ -65,13 +65,22 @@
 	/* What's New modal */
 	.wn-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; }
 	.wn-overlay.wn-open { display:flex; }
-	.wn-modal { background:#fff; border-radius:12px; padding:32px 28px 24px; max-width:480px; width:92%; box-shadow:0 8px 40px rgba(0,0,0,0.28); font-family:inherit; display:flex; flex-direction:column; max-height:90dvh; max-height:90vh; }
+	/* max-height ordering: vh fallback FIRST so browsers that support dvh
+	   override with the dynamic value. dvh handles iOS Safari's shrinking
+	   URL bar in landscape better; without this the modal was overflowing
+	   past the viewport and clipping the footer buttons off-screen. */
+	.wn-modal { background:#fff; border-radius:12px; padding:32px 28px 24px; max-width:480px; width:92%; box-shadow:0 8px 40px rgba(0,0,0,0.28); font-family:inherit; display:flex; flex-direction:column; max-height:90vh; max-height:90dvh; }
 	.wn-header { display:flex; align-items:center; gap:12px; margin-bottom:20px; flex-shrink:0; }
 	.wn-header-icon { font-size:28px; color:#4299e1; }
 	.wn-title { font-size:20px; font-weight:700; color:#2d3748; background:transparent; border:none; padding:0; border-radius:0; text-shadow:none; }
 	.wn-subtitle { font-size:12px; color:#718096; margin-top:3px; font-style:italic; }
 	.wn-date { font-size:11px; color:#a0aec0; margin-top:1px; font-style:italic; }
-	.wn-items { list-style:none; margin:0 0 24px; padding:0; display:flex; flex-direction:column; gap:14px; overflow-y:auto; flex-shrink:1; }
+	/* min-height:0 is the fix for the iOS Safari flex-scroll bug: a flex
+	   item's default min-height is `auto`, which prevents it from
+	   shrinking below content size and disables overflow-y:auto entirely.
+	   Without this, the list grew past the modal's max-height and pushed
+	   the footer buttons off-screen with no way to reach them. */
+	.wn-items { list-style:none; margin:0 0 24px; padding:0; display:flex; flex-direction:column; gap:14px; overflow-y:auto; flex-shrink:1; min-height:0; -webkit-overflow-scrolling:touch; }
 	.wn-footer { flex-shrink:0; }
 	.wn-item { display:flex; gap:14px; align-items:flex-start; }
 	.wn-item-icon { color:#4299e1; font-size:18px; margin-top:2px; min-width:20px; }
@@ -125,99 +134,6 @@
 	html[data-theme="dark"] #theme_container a:hover { color: #90cdf4; }
 	html[data-theme="dark"] #nav-maintenance-pop { background:#2d3748;color:#e2e8f0;border-color:#4a5568; }
 
-	/* ============================================================
-	   ORK Help Panel — Gmail compose-style slide-up
-	   ============================================================ */
-	.nav-help-btn {
-		background: none; border: none; cursor: pointer;
-		color: rgba(255,255,255,0.55); font-size: 16px;
-		width: 36px; height: 36px; border-radius: 50%;
-		display: inline-flex; align-items: center; justify-content: center;
-		transition: color 0.15s, background 0.15s; flex-shrink: 0;
-	}
-	.nav-help-btn:hover, .nav-help-btn.ork-help-active {
-		color: #fff; background: rgba(255,255,255,0.18);
-	}
-	#ork-help-panel {
-		position: fixed; bottom: 0; right: 80px;
-		width: 380px; max-height: 72vh;
-		background: #fff; border-radius: 10px 10px 0 0;
-		box-shadow: 0 -4px 24px rgba(0,0,0,0.22);
-		transform: translateY(100%);
-		transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
-		z-index: 8500;
-		display: flex; flex-direction: column;
-	}
-	#ork-help-panel.ork-help-open { transform: translateY(0); }
-	#ork-help-panel.ork-help-minimized { transform: translateY(calc(100% - 46px)); }
-	.ork-help-header {
-		display: flex; align-items: center; justify-content: space-between;
-		padding: 0 14px; height: 46px;
-		background: #2b4c7e; border-radius: 10px 10px 0 0;
-		cursor: pointer; flex-shrink: 0;
-	}
-	.ork-help-header-title {
-		display: flex; align-items: center; gap: 8px;
-		color: #fff; font-weight: 600; font-size: 14px; user-select: none;
-	}
-	.ork-help-header-title i { font-size: 15px; }
-	.ork-help-scope-badge {
-		background: rgba(255,255,255,0.18); border-radius: 10px;
-		padding: 1px 9px; font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.9);
-	}
-	.ork-help-header-controls { display: flex; gap: 2px; }
-	.ork-help-header-controls button {
-		background: none; border: none; cursor: pointer;
-		color: rgba(255,255,255,0.7); width: 30px; height: 30px;
-		border-radius: 50%; display: flex; align-items: center;
-		justify-content: center; font-size: 13px; transition: background 0.15s, color 0.15s;
-	}
-	.ork-help-header-controls button:hover { background: rgba(255,255,255,0.2); color: #fff; }
-	.ork-help-body {
-		overflow-y: auto; padding: 16px; flex: 1; min-height: 0;
-		-webkit-overflow-scrolling: touch;
-	}
-	/* Sections */
-	.ork-help-section { margin-bottom: 18px; }
-	.ork-help-section-label {
-		font-size: 10.5px; font-weight: 700; text-transform: uppercase;
-		letter-spacing: 0.09em; color: #718096; margin-bottom: 8px;
-		padding-bottom: 5px; border-bottom: 1px solid #e2e8f0;
-	}
-	/* Accordion items */
-	.ork-help-item {
-		border: 1px solid #e2e8f0; border-radius: 7px;
-		margin-bottom: 6px; overflow: hidden;
-	}
-	.ork-help-item-trigger {
-		display: flex; align-items: center; justify-content: space-between;
-		padding: 10px 12px; cursor: pointer;
-		font-size: 13px; font-weight: 500; color: #2d3748;
-		background: #f7fafc; border: none; width: 100%; text-align: left;
-		transition: background 0.12s;
-	}
-	.ork-help-item-trigger:hover { background: #edf2f7; }
-	.ork-help-item-trigger-left { display: flex; align-items: center; gap: 0; }
-	.ork-help-item-icon { color: #3a7bd5; width: 20px; text-align: center; margin-right: 9px; }
-	.ork-help-chevron { color: #a0aec0; font-size: 11px; transition: transform 0.2s; }
-	.ork-help-item.ork-help-expanded .ork-help-chevron { transform: rotate(180deg); }
-	.ork-help-item-body {
-		display: none; padding: 12px 14px;
-		font-size: 13px; color: #4a5568; line-height: 1.65;
-		border-top: 1px solid #e2e8f0; background: #fff;
-	}
-	.ork-help-item.ork-help-expanded .ork-help-item-body { display: block; }
-	.ork-help-item-body p { margin: 0 0 8px 0; }
-	.ork-help-item-body p:last-child { margin-bottom: 0; }
-	.ork-help-item-body ul { margin: 6px 0 8px 0; padding-left: 18px; }
-	.ork-help-item-body li { margin-bottom: 5px; }
-	.ork-help-tip {
-		background: #ebf4ff; border-left: 3px solid #3a7bd5;
-		padding: 8px 10px; border-radius: 0 5px 5px 0; margin-top: 10px;
-		font-size: 12px; color: #2c5282;
-	}
-	.ork-help-tip i { margin-right: 4px; }
-	.ork-help-empty { color: #718096; font-size: 13px; text-align: center; padding: 24px 0; }
 	</style>
 </head>
 	<body<?php if (!empty($ViewerDyslexiaFonts)) echo ' class="ork-dyslexia-font"'; ?>>
@@ -249,6 +165,119 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 		</div>
 		<style>@media (max-width:767px){#nav-maintenance-mobile{display:block!important;}}</style>
 <?php endif; ?>
+
+<!-- Weather safety info dialog (Extreme heat / Frostbite risk).
+     Defined BEFORE $CONTROLLER_CONTENTS so the wxSafetyDialog / wxSafetyAttrs
+     / wxSafetyIconHtml JS globals exist before any content template's inline
+     scripts run. PHP-side helpers live in
+     system/lib/ork3/wx_safety_helpers.php (autoloaded), ready before
+     content templates render. -->
+<style>
+/* One rule enough — badges tagged with data-wx-safety become click targets. */
+[data-wx-safety] { cursor: pointer; }
+[data-wx-safety]:hover { filter: brightness(1.05); }
+[data-wx-safety]:focus-visible { outline: 2px solid #4299e1; outline-offset: 1px; }
+</style>
+<div id="wx-safety-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+	<div style="background:var(--ork-card-bg,#fff);border-radius:10px;padding:28px 26px 24px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);font-family:inherit;color:var(--ork-text,#2d3748);">
+		<div id="wx-safety-icon" style="font-size:36px;text-align:center;margin-bottom:6px;line-height:1"></div>
+		<div id="wx-safety-title" style="font-size:17px;font-weight:700;text-align:center;margin-bottom:12px;color:var(--ork-text,#2d3748);"></div>
+		<div id="wx-safety-body" style="font-size:14px;line-height:1.55;margin-bottom:16px;color:var(--ork-text-secondary,#4a5568);"></div>
+		<div id="wx-safety-links" style="font-size:14px;line-height:1.85;margin-bottom:20px;"></div>
+		<div style="text-align:center;">
+			<button type="button" onclick="closeSafetyDialog()" style="background:#4299e1;color:#fff;border:none;border-radius:6px;padding:8px 28px;font-size:14px;cursor:pointer;font-family:inherit;">Close</button>
+		</div>
+	</div>
+</div>
+<script>
+(function() {
+	var WX_SAFETY = {
+		heat: {
+			icon: '\u{1F975}',
+			title: 'Extreme Heat Safety',
+			body: 'When conditions include extreme heat, watch for heat exhaustion (heavy sweating, weakness, headache, nausea) and heat stroke (high body temperature, confusion, unconsciousness — call emergency services immediately). Hydrate, take breaks in shade, and check on vulnerable players. Some medications can raise your heat-illness risk — check the third link if you take prescriptions.',
+			links: [
+				{ label: 'CDC — Preventing Heat-Related Illness (US)', url: 'https://www.cdc.gov/extreme-heat/prevention/index.html' },
+				{ label: 'Health Canada — Protect yourself from extreme heat', url: 'https://www.canada.ca/en/health-canada/services/climate-change-health/extreme-heat/how-protect-yourself.html' },
+				{ label: 'Health Canada — Medications and extreme heat', url: 'https://www.canada.ca/en/health-canada/services/publications/healthy-living/extreme-heat-human-health-pharmacists-technicians.html' }
+			]
+		},
+		cold: {
+			icon: '\u{1F976}',
+			title: 'Frostbite &amp; Hypothermia Safety',
+			body: 'When conditions include frostbite risk, watch for numb or whitish/yellowish skin (frostbite) and shivering, confusion, slurred speech (hypothermia — call emergency services immediately). Cover exposed skin, stay out of the wind, and get to warmth if symptoms appear.',
+			links: [
+				{ label: 'CDC — Preventing Hypothermia (US)', url: 'https://www.cdc.gov/winter-weather/prevention/index.html' },
+				{ label: 'Health Canada — Extreme cold', url: 'https://www.canada.ca/en/health-canada/services/healthy-living/your-health/environment/extreme-cold.html' }
+			]
+		}
+	};
+	// Exposed on window so the inline onclick on the Close button (defined
+	// outside this IIFE) can reach it. Backdrop click + Esc + Close all
+	// funnel through here so the keydown listener is consistently detached.
+	window.closeSafetyDialog = function() {
+		var el = document.getElementById('wx-safety-overlay');
+		el.style.display = 'none';
+		// Symmetric with the add — must pass the same `capture: true` (or a
+		// boolean) or removeEventListener() silently no-ops.
+		document.removeEventListener('keydown', _wxSafetyEsc, true);
+	};
+	function _wxSafetyEsc(e) {
+		if (e.key === 'Escape' || e.key === 'Esc') {
+			// stopImmediatePropagation prevents the Weather-page map's own
+			// document-level Esc handler (which flies back to the zoomed-out
+			// view) from firing when the user was just dismissing our modal.
+			e.preventDefault();
+			e.stopImmediatePropagation();
+			closeSafetyDialog();
+		}
+	}
+	window.wxSafetyDialog = function(kind) {
+		var d = WX_SAFETY[kind]; if (!d) return;
+		document.getElementById('wx-safety-icon').textContent  = d.icon;
+		var titleEl = document.getElementById('wx-safety-title');
+		var tmp = document.createElement('div'); tmp.innerHTML = d.title; titleEl.textContent = tmp.textContent;
+		document.getElementById('wx-safety-body').textContent = d.body;
+		var links = document.getElementById('wx-safety-links'); links.textContent = '';
+		d.links.forEach(function(l) {
+			var a = document.createElement('a');
+			a.textContent = l.label;
+			a.setAttribute('href', l.url);
+			a.setAttribute('target', '_blank');
+			a.setAttribute('rel', 'noopener noreferrer');
+			a.style.color = '#2b6cb0'; a.style.textDecoration = 'underline'; a.style.display = 'block';
+			links.appendChild(a);
+		});
+		var el = document.getElementById('wx-safety-overlay');
+		el.style.display = 'flex';
+		el.onclick = function(e) { if (e.target === el) closeSafetyDialog(); };
+		// Attach at CAPTURE phase so we see Escape before the Weather-page
+		// map's document-level bubble-phase handler (which zooms out any
+		// open marker popup). closeSafetyDialog() detaches on any close path
+		// so the listener never lingers when the modal isn't open.
+		document.addEventListener('keydown', _wxSafetyEsc, true);
+	};
+	// JS-side equivalents of wx_safety_attrs / wx_safety_icon_html from
+	// system/lib/ork3/wx_safety_helpers.php. Two helpers because they get
+	// spliced into different parts of the badge markup — attrs on the
+	// opening tag, icon into the label text.
+	function _wxSafetyKind(label) {
+		if (label === 'Extreme heat')   return 'heat';
+		if (label === 'Frostbite risk') return 'cold';
+		return null;
+	}
+	window.wxSafetyAttrs = function(label) {
+		var kind = _wxSafetyKind(label);
+		if (!kind) return '';
+		return ' onclick="wxSafetyDialog(\'' + kind + '\')"'
+			+ ' role="button" tabindex="0" data-wx-safety="' + kind + '"';
+	};
+	window.wxSafetyIconHtml = function(label) {
+		if (!_wxSafetyKind(label)) return '';
+		return ' <i class="fas fa-info-circle" style="margin-left:3px;opacity:0.8;font-size:0.9em"></i>';
+	};
+})();
+</script>
 
 <?php
 	echo $CONTROLLER_CONTENTS;
@@ -360,9 +389,6 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 <?php endif; ?>
 <?php endif; ?>
 
-			<!-- Help button -->
-			<button class='nav-help-btn' id='ork-help-nav-btn' onclick='orkHelpToggle()' title='Help'><i class='fas fa-question-circle'></i></button>
-
 			<!-- Resources dropdown -->
 			<div class='nav-dropdown-wrap' id='nav-resources-wrap'>
 				<button class='nav-icon-btn' onclick="document.getElementById('nav-resources-wrap').classList.toggle('open')" title='Resources'><i class='fas fa-book'></i></button>
@@ -374,7 +400,7 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 					<?php endif; ?>
 					<a href='https://play.amtgard.com/' target='_blank'><i class='fas fa-map-marker-alt'></i> Find a Chapter</a>
 					<div class='nav-dropdown-divider'></div>
-					<a href='#' onclick="navInfoDialog('New Documentation Coming Soon!');return false;"><i class='fas fa-book'></i> ORK Documentation</a>
+					<a href='#' onclick="navInfoDialog('New Documentation Coming Soon!', '<?= UIR ?>ReleaseNotes', 'In the meantime, see the release notes');return false;"><i class='fas fa-book'></i> ORK Documentation</a>
 				</div>
 			</div>
 
@@ -424,26 +450,6 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 		</div>
 	</nav>
 
-
-	<!-- =============================================
-	     ORK Help Panel
-	     ============================================= -->
-	<div id='ork-help-panel'>
-		<div class='ork-help-header' id='ork-help-header'>
-			<div class='ork-help-header-title'>
-				<i class='fas fa-question-circle'></i>
-				<span>Help</span>
-				<span class='ork-help-scope-badge' id='ork-help-scope-badge' style='display:none'></span>
-			</div>
-			<div class='ork-help-header-controls'>
-				<button id='ork-help-minimize-btn' title='Minimize'><i class='fas fa-minus'></i></button>
-				<button id='ork-help-close-btn' title='Close'><i class='fas fa-times'></i></button>
-			</div>
-		</div>
-		<div class='ork-help-body' id='ork-help-body'>
-			<div class='ork-help-empty'><i class='fas fa-spinner fa-spin'></i>&ensp;Loading help&hellip;</div>
-		</div>
-	</div>
 
 	<script>
 	// ---- Search toggle ----
@@ -634,20 +640,33 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 	<div id="nav-info-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
 		<div style="background:var(--ork-card-bg,#fff);border-radius:10px;padding:32px 28px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);text-align:center;font-family:inherit;color:var(--ork-text,#2d3748);">
 			<div style="font-size:32px;margin-bottom:12px;color:var(--ork-text-secondary,#4a5568);"><i class="fas fa-book"></i></div>
-			<div id="nav-info-msg" style="font-size:15px;color:var(--ork-text,#2d3748);line-height:1.5;margin-bottom:20px;"></div>
+			<div id="nav-info-msg" style="font-size:15px;color:var(--ork-text,#2d3748);line-height:1.5;margin-bottom:12px;"></div>
+			<div id="nav-info-link" style="font-size:14px;line-height:1.5;margin-bottom:20px;"></div>
 			<button onclick="document.getElementById('nav-info-overlay').style.display='none';" style="background:#4299e1;color:#fff;border:none;border-radius:6px;padding:8px 28px;font-size:14px;cursor:pointer;font-family:inherit;">OK</button>
 		</div>
 	</div>
 	<script>
-	function navInfoDialog(msg) {
+	// Second/third args optional — pass a URL + label to render a "In the
+	// meantime, …" link below the message. Anchor is built with textContent
+	// + attribute setters, so any caller-supplied strings stay XSS-safe.
+	function navInfoDialog(msg, linkHref, linkLabel) {
 		document.getElementById('nav-info-msg').textContent = msg;
+		var linkBox = document.getElementById('nav-info-link');
+		linkBox.textContent = '';
+		if (linkHref && linkLabel) {
+			var a = document.createElement('a');
+			a.href = linkHref;
+			a.textContent = linkLabel;
+			a.style.color = '#4299e1';
+			a.style.textDecoration = 'underline';
+			linkBox.appendChild(a);
+		}
 		var el = document.getElementById('nav-info-overlay');
 		el.style.display = 'flex';
 		el.onclick = function(e) { if (e.target === el) el.style.display = 'none'; };
 	}
 	</script>
 
-	
 <?php require_once(DIR_UI . 'whats_new_content.php'); ?>
 <?php if ($this->__session->token != null) : ?>
 <?php
@@ -1121,134 +1140,6 @@ if (typeof Highcharts !== 'undefined') {
 }
 </script>
 
-	<script>
-	// ============================================================
-	//  ORK Help Panel System
-	// ============================================================
-	(function() {
-		var _panel, _body, _badge, _navBtn;
-		var _isOpen = false, _isMinimized = false;
-
-		function _init() {
-			_panel  = document.getElementById('ork-help-panel');
-			_body   = document.getElementById('ork-help-body');
-			_badge  = document.getElementById('ork-help-scope-badge');
-			_navBtn = document.getElementById('ork-help-nav-btn');
-
-			document.getElementById('ork-help-close-btn').addEventListener('click', function(e) {
-				e.stopPropagation(); _close();
-			});
-			document.getElementById('ork-help-minimize-btn').addEventListener('click', function(e) {
-				e.stopPropagation(); _toggleMinimize();
-			});
-			document.getElementById('ork-help-header').addEventListener('click', function() {
-				if (_isMinimized) _expand();
-			});
-		}
-
-		function _open() {
-			_renderContent();
-			_panel.classList.add('ork-help-open');
-			_panel.classList.remove('ork-help-minimized');
-			_isOpen = true; _isMinimized = false;
-			if (_navBtn) _navBtn.classList.add('ork-help-active');
-		}
-
-		function _close() {
-			_panel.classList.remove('ork-help-open', 'ork-help-minimized');
-			_isOpen = false; _isMinimized = false;
-			if (_navBtn) _navBtn.classList.remove('ork-help-active');
-		}
-
-		function _toggleMinimize() {
-			if (_isMinimized) { _expand(); }
-			else { _panel.classList.add('ork-help-minimized'); _isMinimized = true; }
-		}
-
-		function _expand() {
-			_panel.classList.remove('ork-help-minimized'); _isMinimized = false;
-		}
-
-		function _esc(s) {
-			return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-		}
-
-		function _renderContent() {
-			var ctx     = window.orkHelpContext  || {};
-			var content = window.orkHelpContent  || [];
-
-			// Update scope badge
-			if (_badge) {
-				if (ctx.scopeLabel) {
-					_badge.textContent = ctx.scopeLabel;
-					_badge.style.display = '';
-				} else {
-					_badge.style.display = 'none';
-				}
-			}
-
-			// Filter sections & items by context requirements
-			var sections = [];
-			content.forEach(function(sec) {
-				var items = (sec.items || []).filter(function(item) {
-					var r = item.requires;
-					if (!r) return true;
-					if (r === 'own'          && !ctx.isOwnProfile) return false;
-					if (r === 'edit'         && !ctx.canEdit)      return false;
-					if (r === 'own_or_edit'  && !ctx.isOwnProfile && !ctx.canEdit) return false;
-					if (r === 'loggedin'     && !ctx.isLoggedIn)   return false;
-					return true;
-				});
-				if (items.length) sections.push({ section: sec.section, items: items });
-			});
-
-			if (!sections.length) {
-				_body.innerHTML = '<div class="ork-help-empty">No help topics available for this page.</div>';
-				return;
-			}
-
-			var html = '';
-			sections.forEach(function(sec) {
-				html += '<div class="ork-help-section">';
-				html += '<div class="ork-help-section-label">' + _esc(sec.section) + '</div>';
-				sec.items.forEach(function(item) {
-					html += '<div class="ork-help-item">';
-					html += '<button class="ork-help-item-trigger" type="button">';
-					html += '<span class="ork-help-item-trigger-left">';
-					html += '<i class="' + _esc(item.icon) + ' ork-help-item-icon"></i>';
-					html += _esc(item.title);
-					html += '</span>';
-					html += '<i class="fas fa-chevron-down ork-help-chevron"></i>';
-					html += '</button>';
-					html += '<div class="ork-help-item-body">' + (item.body || '') + '</div>';
-					html += '</div>';
-				});
-				html += '</div>';
-			});
-
-			_body.innerHTML = html;
-
-			// Wire accordion
-			_body.querySelectorAll('.ork-help-item-trigger').forEach(function(btn) {
-				btn.addEventListener('click', function() {
-					var item = this.closest('.ork-help-item');
-					item.classList.toggle('ork-help-expanded');
-				});
-			});
-		}
-
-		// Public toggle
-		window.orkHelpToggle = function() {
-			if (_isOpen && !_isMinimized) { _close(); } else { _open(); }
-		};
-
-		if (document.readyState === 'loading') {
-			document.addEventListener('DOMContentLoaded', _init);
-		} else {
-			_init();
-		}
-	})();
-	</script>
 
 </body>
 </html>

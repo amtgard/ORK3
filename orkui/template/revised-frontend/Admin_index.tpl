@@ -323,7 +323,7 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 .cp-overlay.cp-open { display: flex; }
 .cp-modal-box {
 	background: #fff; border-radius: 10px; width: 520px; max-width: calc(100vw - 32px);
-	max-height: calc(100vh - 48px); display: flex; flex-direction: column;
+	max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); display: flex; flex-direction: column;
 	box-shadow: 0 8px 32px rgba(0,0,0,0.22); overflow: visible;
 }
 .cp-modal-header {

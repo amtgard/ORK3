@@ -294,6 +294,15 @@ class Controller_Player extends Controller
         $action    = $params[1] ?? '';
         $roastbeef = $params[2] ?? '';
 
+        // Missing row → bail rather than render a mostly-blank profile with
+        // sub-fields synthesized from queries against a nonexistent id. Same
+        // guard as index() at the top of this file.
+        $this->data['Player'] = $this->Player->fetch_player($id);
+        if (empty($this->data['Player']['MundaneId'])) {
+            header('Location: ' . UIR);
+            exit;
+        }
+
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
         if ($uid > 0 && $uid === (int)$id && isset($this->request->cancel_rsvp_detail_id)) {
@@ -652,6 +661,11 @@ class Controller_Player extends Controller
         }
         $DB->Clear();
         $this->data['BeltlineAssociates'] = $__blAssocs;
+
+        // Feast preferences for the About-tab "Feast Preferences" card.
+        // Always loaded — the template gates visibility on Show My Feast
+        // Preferences + presence of meaningful data. Cheap single-row read.
+        $this->data['FeastPrefs'] = $this->Player->GetDietaryPreferences((int)$id);
 
         if ($uid === (int)$id) {
             $DB->Clear();

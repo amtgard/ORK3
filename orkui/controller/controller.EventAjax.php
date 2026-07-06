@@ -65,11 +65,24 @@ class Controller_EventAjax extends Controller
             echo json_encode(['status' => 1, 'error' => 'Invalid parameters']);
             exit;
         }
-        if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $evtId, AUTH_EDIT)) {
+        // Either AUTH_EVENT/EDIT on the event *or* a can_manage staff row on
+        // any of the event's occurrences. Staff rows are per-detail, so the
+        // event-level status flip needs the join to cover any of them.
+        // Mirrors the CanManageEvent check in controller.Event.php so the
+        // "Hide as draft" / "Publish" buttons — which are gated on
+        // CanManageEvent — actually work when a staff can_manage user clicks
+        // them (previously the buttons rendered but the submit was rejected).
+        global $DB;
+        $authorized = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $evtId, AUTH_EDIT);
+        if (!$authorized) {
+            $DB->Clear();
+            $mgrRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff es JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_calendardetail_id = es.event_calendardetail_id WHERE cd.event_id = ' . $evtId . ' AND es.mundane_id = ' . $uid . ' AND es.can_manage = 1 LIMIT 1');
+            $authorized = ($mgrRow && $mgrRow->Next());
+        }
+        if (!$authorized) {
             echo json_encode(['status' => 5, 'error' => 'Not authorized']);
             exit;
         }
-        global $DB;
         $DB->Clear();
         // A2: $status is whitelisted to 'published'|'draft' above; safe to interpolate. Drop mysql_real_escape_string (fatal under PHP 8).
         $DB->Execute("UPDATE " . DB_PREFIX . "event SET status = '" . $status . "' WHERE event_id = " . $evtId);
@@ -554,7 +567,20 @@ class Controller_EventAjax extends Controller
             exit;
         }
 
-        if (!Ork3::$Lib->authorization->HasAuthority((int)$this->session->user_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+        // Anyone with AUTH_EVENT/CREATE (traditional event admin) *or* an
+        // event_staff.can_manage row for this detail may add other staff.
+        // The staff-manage capability was previously only honored by
+        // add_schedule/etc. — leaving staff add/remove admin-only defeated
+        // the point of delegating "Can Manage".
+        $uid = (int)$this->session->user_id;
+        $authorized = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
+        if (!$authorized) {
+            global $DB;
+            $DB->Clear();
+            $mgrRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND can_manage = 1 LIMIT 1');
+            $authorized = ($mgrRow && $mgrRow->Next());
+        }
+        if (!$authorized) {
             echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
             exit;
         }
@@ -565,6 +591,14 @@ class Controller_EventAjax extends Controller
         $can_attendance = (int)(bool)($_POST['CanAttendance'] ?? 0);
         $can_schedule   = (int)(bool)($_POST['CanSchedule']   ?? 0);
         $can_feast      = (int)(bool)($_POST['CanFeast']      ?? 0);
+        // Editing an existing row: the frontend passes StaffId. We can't rely
+        // on INSERT ... ON DUPLICATE KEY UPDATE because ork_event_staff has no
+        // UNIQUE constraint on (event_calendardetail_id, mundane_id) — every
+        // upsert without StaffId would create a duplicate row. Adding the
+        // unique constraint is a separate follow-up (needs a dedup migration
+        // for existing dupes); for now, treat StaffId > 0 as "UPDATE that row"
+        // and StaffId = 0 as "INSERT new."
+        $staff_id_in  = (int)($_POST['StaffId'] ?? 0);
 
         if (!valid_id($mundane_id)) {
             echo json_encode(['status' => 1, 'error' => 'A player must be selected.']);
@@ -577,18 +611,83 @@ class Controller_EventAjax extends Controller
 
         global $DB;
         $role_safe = str_replace(["'", '\\'], ["''", '\\\\'], $role_name);
+        // Capture prior state for the audit log. If we're editing, pull the
+        // exact target row by staff_id; otherwise look up by natural key.
+        $DB->Clear();
+        if ($staff_id_in > 0) {
+            $priorRs = $DB->DataSet('SELECT event_staff_id, role_name, can_manage, can_attendance, can_schedule, can_feast FROM ' . DB_PREFIX . 'event_staff WHERE event_staff_id = ' . $staff_id_in . ' AND event_calendardetail_id = ' . $detail_id . ' LIMIT 1');
+        } else {
+            $priorRs = $DB->DataSet('SELECT event_staff_id, role_name, can_manage, can_attendance, can_schedule, can_feast FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $mundane_id . ' LIMIT 1');
+        }
+        $priorState = null;
+        if ($priorRs && $priorRs->Next()) {
+            $priorState = [
+                'event_staff_id' => (int)$priorRs->event_staff_id,
+                'role_name'      => (string)$priorRs->role_name,
+                'can_manage'     => (int)$priorRs->can_manage,
+                'can_attendance' => (int)$priorRs->can_attendance,
+                'can_schedule'   => (int)$priorRs->can_schedule,
+                'can_feast'      => (int)$priorRs->can_feast,
+            ];
+        }
         $DB->Clear(); // reset stale bound params from prior ORM queries in this request
-        $DB->Execute(
-            'INSERT INTO ' . DB_PREFIX . 'event_staff
+        if ($staff_id_in > 0 && $priorState) {
+            // Explicit UPDATE — no INSERT path — so a stale form re-submit
+            // can't accidentally spawn a duplicate row.
+            $DB->Execute(
+                'UPDATE ' . DB_PREFIX . 'event_staff
+				 SET role_name = \'' . $role_safe . '\',
+				     can_manage = ' . $can_manage . ',
+				     can_attendance = ' . $can_attendance . ',
+				     can_schedule = ' . $can_schedule . ',
+				     can_feast = ' . $can_feast . '
+				 WHERE event_staff_id = ' . $staff_id_in . '
+				   AND event_calendardetail_id = ' . $detail_id
+            );
+        } else {
+            $DB->Execute(
+                'INSERT INTO ' . DB_PREFIX . 'event_staff
 			(event_calendardetail_id, mundane_id, role_name, can_manage, can_attendance, can_schedule, can_feast)
 			VALUES (' . $detail_id . ', ' . $mundane_id . ', \'' . $role_safe . '\', ' . $can_manage . ', ' . $can_attendance . ', ' . $can_schedule . ', ' . $can_feast . ')
 			ON DUPLICATE KEY UPDATE role_name = VALUES(role_name), can_manage = VALUES(can_manage), can_attendance = VALUES(can_attendance), can_schedule = VALUES(can_schedule), can_feast = VALUES(can_feast)'
-        );
+            );
+        }
         $DB->Clear();
-        $idrow = $DB->DataSet('SELECT s.event_staff_id, m.persona FROM ' . DB_PREFIX . 'event_staff s LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id WHERE s.event_calendardetail_id = ' . $detail_id . ' AND s.mundane_id = ' . $mundane_id . ' ORDER BY s.event_staff_id DESC LIMIT 1');
+        // For UPDATE we already know the staff_id; for INSERT look it up by
+        // detail+mundane (ordered DESC so we grab the row we just wrote if
+        // there happen to be legacy duplicates).
+        if ($staff_id_in > 0) {
+            $idrow = $DB->DataSet('SELECT s.event_staff_id, m.persona FROM ' . DB_PREFIX . 'event_staff s LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id WHERE s.event_staff_id = ' . $staff_id_in . ' LIMIT 1');
+        } else {
+            $idrow = $DB->DataSet('SELECT s.event_staff_id, m.persona FROM ' . DB_PREFIX . 'event_staff s LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id WHERE s.event_calendardetail_id = ' . $detail_id . ' AND s.mundane_id = ' . $mundane_id . ' ORDER BY s.event_staff_id DESC LIMIT 1');
+        }
         $fetched   = ($idrow && $idrow->Next());
         $staff_id  = $fetched ? (int)$idrow->event_staff_id : 0;
         $persona   = $fetched ? (string)$idrow->persona : '';
+        Ork3::$Lib->dangeraudit->audit(
+            $priorState ? 'EventStaff::Update' : 'EventStaff::Add',
+            [
+                'EventId'       => $event_id,
+                'DetailId'      => $detail_id,
+                'MundaneId'     => $mundane_id,
+                'RoleName'      => $role_name,
+                'CanManage'     => $can_manage,
+                'CanAttendance' => $can_attendance,
+                'CanSchedule'   => $can_schedule,
+                'CanFeast'      => $can_feast,
+            ],
+            'Event',
+            $event_id,
+            $priorState,
+            [
+                'event_staff_id' => $staff_id,
+                'role_name'      => $role_name,
+                'can_manage'     => $can_manage,
+                'can_attendance' => $can_attendance,
+                'can_schedule'   => $can_schedule,
+                'can_feast'      => $can_feast,
+            ]
+        );
         echo json_encode(['status' => 0, 'staff' => [
             'EventStaffId'  => $staff_id,
             'MundaneId'     => (int)$mundane_id,
@@ -621,17 +720,52 @@ class Controller_EventAjax extends Controller
             exit;
         }
 
-        if (!Ork3::$Lib->authorization->HasAuthority((int)$this->session->user_id, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+        // Mirror add_staff: an event admin *or* a staff row with can_manage
+        // may remove staff. Otherwise a delegated manager could add staff
+        // but not undo their own mistake.
+        $uid = (int)$this->session->user_id;
+        $authorized = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
+        global $DB;
+        if (!$authorized) {
+            $DB->Clear();
+            $mgrRow = $DB->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . $detail_id . ' AND mundane_id = ' . $uid . ' AND can_manage = 1 LIMIT 1');
+            $authorized = ($mgrRow && $mgrRow->Next());
+        }
+        if (!$authorized) {
             echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
             exit;
         }
 
-        global $DB;
+        // Capture the row before delete so the audit log has prior_state.
+        $DB->Clear();
+        $priorRs = $DB->DataSet('SELECT event_staff_id, mundane_id, role_name, can_manage, can_attendance, can_schedule, can_feast FROM ' . DB_PREFIX . 'event_staff WHERE event_staff_id = ' . $staff_id . ' AND event_calendardetail_id = ' . $detail_id . ' LIMIT 1');
+        $priorState = null;
+        if ($priorRs && $priorRs->Next()) {
+            $priorState = [
+                'event_staff_id' => (int)$priorRs->event_staff_id,
+                'mundane_id'     => (int)$priorRs->mundane_id,
+                'role_name'      => (string)$priorRs->role_name,
+                'can_manage'     => (int)$priorRs->can_manage,
+                'can_attendance' => (int)$priorRs->can_attendance,
+                'can_schedule'   => (int)$priorRs->can_schedule,
+                'can_feast'      => (int)$priorRs->can_feast,
+            ];
+        }
         $DB->Clear();
         $DB->Execute(
             'DELETE FROM ' . DB_PREFIX . 'event_staff
 			WHERE event_staff_id = ' . $staff_id . ' AND event_calendardetail_id = ' . $detail_id
         );
+        if ($priorState) {
+            Ork3::$Lib->dangeraudit->audit(
+                'EventStaff::Remove',
+                ['EventId' => $event_id, 'DetailId' => $detail_id, 'StaffId' => $staff_id],
+                'Event',
+                $event_id,
+                $priorState,
+                null
+            );
+        }
         echo json_encode(['status' => 0]);
         exit;
     }

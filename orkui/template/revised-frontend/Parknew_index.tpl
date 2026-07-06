@@ -405,7 +405,7 @@
 						if (!empty($nextPdForecast['precip_pct']) && $nextPdForecast['precip_pct'] >= 20) echo ' · ' . (int)$nextPdForecast['precip_pct'] . '% rain';
 					?>
 					<?php foreach (Ork3::$Lib->weather->badges_for_date($park_id, $nextParkDayDate) as $_b): ?>
-						<span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>"><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?></span>
+						<span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>"<?= wx_safety_attrs($_b['label']) ?>><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?><?= wx_safety_icon_html($_b['label']) ?></span>
 					<?php endforeach; ?>
 				</div>
 			<?php endif; ?>
@@ -803,7 +803,7 @@
 										<span style="margin-left:6px"><?= (int)$_pdFC['precip_pct'] ?>% rain</span>
 									<?php endif; ?>
 									<?php foreach ($_pdBadges as $_b): ?>
-										<span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>" style="margin-left:6px"><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?></span>
+										<span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>" style="margin-left:6px"<?= wx_safety_attrs($_b['label']) ?>><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?><?= wx_safety_icon_html($_b['label']) ?></span>
 									<?php endforeach; ?>
 									<a href="https://open-meteo.com/" target="_blank" rel="noopener"
 									   title="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"
@@ -921,7 +921,7 @@
 											?>
 											<br><span style="font-size:11px;color:var(--ork-text-muted,#718096)"><?php if ($evDateStr !== $parkLocalToday): ?><em style="opacity:.7;margin-right:2px">forecast</em> <?php endif; ?><?= $ic ?> <?= round($evFC['hi_f']) ?>/<?= $hiC ?>°<?php
 												if (!empty($evFC['precip_pct']) && $evFC['precip_pct'] >= 20) echo ' · ' . (int)$evFC['precip_pct'] . '%';
-											?><?php foreach (Ork3::$Lib->weather->badges_for_date($park_id, $evDateStr) as $_b): ?> <span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>"><?= $_b['icon'] ?></span><?php endforeach; ?></span>
+											?><?php foreach (Ork3::$Lib->weather->badges_for_date($park_id, $evDateStr) as $_b): ?> <span class="pk-wx-badge pk-wx-<?= $_b['severity'] ?>" title="<?= htmlspecialchars($_b['label']) ?>"<?= wx_safety_attrs($_b['label']) ?>><?= $_b['icon'] ?></span><?php endforeach; ?></span>
 											<?php endif; ?>
 										<?php endif; ?>
 									</td>
@@ -2277,7 +2277,7 @@ tr:hover .pk-copy-link { opacity: 1; }
 #pk-selfreg-overlay .pk-modal-box {
 	background: #fff; border-radius: 12px;
 	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-	max-height: 90vh; display: flex; flex-direction: column;
+	max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;
 }
 #pk-selfreg-overlay .pk-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
