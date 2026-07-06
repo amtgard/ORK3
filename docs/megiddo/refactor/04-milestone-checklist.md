@@ -557,14 +557,18 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 | Step | Status |
 |------|--------|
-| Backend unit/integration tests | [ ] |
-| Frontend functional tests | [ ] |
-| Milestone-scoped Infection passes | [ ] |
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Integration/KingdomProfileTest.php`, `tests/Integration/KingdomAjaxTest.php`, `tests/e2e/kingdom-profile.spec.ts`
+
+**Infection (pre-refactor):** `infection.t06-kingdom.json5` — `--only-covered --filter=class.Kingdom.php --filter=class.Report.php --test-framework-options="--filter=KingdomProfileTest|KingdomAjaxTest"` (MSI 43%, covered MSI 43%)
 
 #### T-06 sign-off gate
 
-- [ ] Test sprint sign-off checklist (above) satisfied
-- [ ] Branch `megiddo/t-06-kingdom-tests` squashed to exactly one commit
+- [x] Test sprint sign-off checklist (above) satisfied
+- [x] Branch `megiddo/t-06-kingdom-tests` squashed to exactly one commit
 
 ---
 
