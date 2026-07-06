@@ -318,13 +318,22 @@ Each discovery sprint follows the same workflow for its target IDs (from [03-imp
 
 ### DS-12: Attendance & sign-in
 
+**Branch:** `megiddo/ds-12-attendance-discovery`
+
 **Targets:** T-ATT-01 through T-ATT-06, T-SIN-01 through T-SIN-04, T-QR-01
 
 | Step | Status | Output link |
 |------|--------|-------------|
-| Backend survey | [ ] | |
-| Test design | [ ] | |
-| Proposed revision | [ ] | |
+| Backend survey | [x] | [ds-12-attendance-discovery.md §1](./ds-12-attendance-discovery.md#1-backend-survey) |
+| Test design | [x] | [ds-12-attendance-discovery.md §2](./ds-12-attendance-discovery.md#2-test-design) |
+| Proposed revision | [x] | [ds-12-attendance-discovery.md §3](./ds-12-attendance-discovery.md#3-proposed-revision) |
+
+#### DS-12 sign-off gate
+
+- [x] [05-development-steering.md](./05-development-steering.md) DS-1, DS-2, DS-3, DS-6, DS-8 satisfied
+- [x] Full unit test suite passes (DS-4, DS-5)
+- [x] Infection scope documented in test design (DS-7 at R-12)
+- [x] Branch `megiddo/ds-12-attendance-discovery` squashed to exactly one commit
 
 ---
 
