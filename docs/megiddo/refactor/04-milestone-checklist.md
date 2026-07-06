@@ -108,13 +108,22 @@ Each discovery sprint follows the same workflow for its target IDs (from [03-imp
 
 ### DS-02: Authorization INSERT bypass
 
+**Branch:** `megiddo/ds-02-auth-insert-discovery`
+
 **Targets:** T-ADM-11, T-KNA-03, T-PRA-02, T-EVA-06
 
 | Step | Status | Output link |
 |------|--------|-------------|
-| Backend survey | [ ] | |
-| Test design | [ ] | |
-| Proposed revision | [ ] | |
+| Backend survey | [x] | [ds-02-auth-insert-discovery.md §1](./ds-02-auth-insert-discovery.md#1-backend-survey) |
+| Test design | [x] | [ds-02-auth-insert-discovery.md §2](./ds-02-auth-insert-discovery.md#2-test-design) |
+| Proposed revision | [x] | [ds-02-auth-insert-discovery.md §3](./ds-02-auth-insert-discovery.md#3-proposed-revision) |
+
+#### DS-02 sign-off gate
+
+- [x] [05-development-steering.md](./05-development-steering.md) DS-1, DS-2, DS-3, DS-6, DS-8 satisfied
+- [x] Full unit test suite passes (DS-4, DS-5)
+- [x] Infection scope documented in test design (DS-7 at R-02)
+- [x] Branch `megiddo/ds-02-auth-insert-discovery` squashed to exactly one commit
 
 ---
 
