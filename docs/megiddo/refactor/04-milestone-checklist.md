@@ -611,13 +611,17 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 | Step | Status |
 |------|--------|
-| Backend unit/integration tests | [ ] |
-| Frontend functional tests | [ ] |
-| Milestone-scoped Infection passes | [ ] |
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Unit/AdminDashboardTrendStatsTest.php`, `tests/Integration/AdminPermissionsTest.php`, `tests/Integration/DangerAuditQueryTest.php`, `tests/Unit/ServerHealthStatsTest.php`, `tests/Unit/AbbreviationUniqueTest.php`, `tests/Unit/StateOfAmtgardValidationTest.php`, `tests/e2e/admin-dashboard.spec.ts`
+
+**Infection (pre-refactor):** scoped batches via `infection.t08-admin.json5` (≥15% MSI each): DangerAudit+Player 20%, Report 94%, StateOfAmtgard 98%, Park 24%. Weather freshness validated by SQL mirror in `ServerHealthStatsTest` (domain class excluded — pre-refactor gap).
 
 #### T-08 sign-off gate
 
-- [ ] Test sprint sign-off checklist (above) satisfied
+- [x] Test sprint sign-off checklist (above) satisfied
 - [ ] Branch `megiddo/t-08-admin-tests` squashed to exactly one commit
 
 ---

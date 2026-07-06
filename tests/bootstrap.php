@@ -48,6 +48,12 @@ if (!class_exists('Memcached', false)) {
         {
             return true;
         }
+
+        /** @return array<string, array<string, int>> */
+        public function getStats(): array
+        {
+            return ['localhost:11211' => ['time' => time()]];
+        }
     }
 }
 
@@ -59,6 +65,7 @@ require_once __DIR__ . '/Support/BannerFixture.php';
 require_once __DIR__ . '/Support/EventPlanningFixture.php';
 require_once __DIR__ . '/Support/KingdomProfileFixture.php';
 require_once __DIR__ . '/Support/ParkProfileFixture.php';
+require_once __DIR__ . '/Support/AdminDashboardFixture.php';
 require_once DIR_UI . 'model/model.Event.php';
 require_once DIR_UI . 'model/model.Attendance.php';
 require_once DIR_SERVICE . 'Common.definitions.php';
