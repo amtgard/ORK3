@@ -11,7 +11,8 @@ class YapoMysql extends YapoDb {
 	private static $schema_cache = [];
 
 	function __construct($host, $dbname, $user, $password) {
-		$this->DBH = new PDO("mysql:host=$host;dbname=$dbname", $user, $password);
+		$port = defined('DB_PORT') ? (int) DB_PORT : 3306;
+		$this->DBH = new PDO("mysql:host=$host;port=$port;dbname=$dbname", $user, $password);
 		$this->DBH->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
 	}
 	

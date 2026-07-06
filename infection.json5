@@ -1,0 +1,32 @@
+{
+    "$schema": "vendor/infection/infection/resources/schema.json",
+    "timeout": 120,
+    "source": {
+        "directories": [
+            "system/lib/ork3",
+            "orkservice"
+        ],
+        "excludes": [
+            "class.Authorization.php",
+            "AuthorizationService.testrig.php",
+            "AuthorizationService.testrig.sql",
+            "*.test.php",
+            "*.testrig.php"
+        ]
+    },
+    "logs": {
+        "text": "build/infection.log",
+        "summary": "build/infection-summary.log"
+    },
+    "mutators": {
+        "@default": true
+    },
+    "minMsi": 15,
+    "minCoveredMsi": 15,
+    "testFramework": "phpunit",
+    "bootstrap": "tests/bootstrap.php",
+    "phpUnit": {
+        "configDir": "."
+    },
+    "tmpDir": "build/infection"
+}

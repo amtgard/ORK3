@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         executionOrder="default"
+         cacheDirectory="build/phpunit-cache"
+         failOnWarning="false"
+         failOnDeprecation="false">
+    <testsuites>
+        <testsuite name="unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="integration">
+            <directory>tests/Integration</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory suffix=".php">system/lib/ork3</directory>
+            <directory suffix=".php">orkservice</directory>
+        </include>
+        <exclude>
+            <file>system/lib/ork3/class.Authorization.php</file>
+        </exclude>
+    </source>
+    <coverage>
+        <report>
+            <clover outputFile="build/coverage/clover.xml"/>
+            <text outputFile="php://stdout" showOnlySummary="true"/>
+        </report>
+    </coverage>
+    <php>
+        <env name="ENVIRONMENT" value="TEST"/>
+    </php>
+</phpunit>
