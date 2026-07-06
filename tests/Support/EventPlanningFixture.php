@@ -36,6 +36,12 @@ final class EventPlanningFixture
     /** @var list<int> */
     private array $attendanceIds = [];
 
+    /** @var list<int> */
+    private array $feeIds = [];
+
+    /** @var list<int> */
+    private array $linkIds = [];
+
     public function __construct(
         private readonly PDO $pdo,
     ) {
@@ -209,6 +215,93 @@ final class EventPlanningFixture
         )->execute([$detailId, $mundaneId, $status]);
     }
 
+    public function insertFee(int $detailId, string $admissionType, float $cost, int $sortOrder = 0): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'event_fees (event_calendardetail_id, admission_type, cost, sort_order)
+             VALUES (?, ?, ?, ?)'
+        );
+        $stmt->execute([$detailId, $admissionType, $cost, $sortOrder]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->feeIds[] = $id;
+
+        return $id;
+    }
+
+    public function insertLink(int $detailId, string $title, string $url, string $icon, int $sortOrder = 0): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'event_links (event_calendardetail_id, title, url, icon, sort_order)
+             VALUES (?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([$detailId, $title, $url, $icon, $sortOrder]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->linkIds[] = $id;
+
+        return $id;
+    }
+
+    /**
+     * @return list<array{AdmissionType: string, Cost: float, SortOrder: int}>
+     */
+    public function fetchFees(int $detailId): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT admission_type, cost, sort_order FROM ' . DB_PREFIX . 'event_fees
+             WHERE event_calendardetail_id = ? ORDER BY sort_order, event_fees_id'
+        );
+        $stmt->execute([$detailId]);
+        $rows = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $rows[] = [
+                'AdmissionType' => (string) $row['admission_type'],
+                'Cost' => (float) $row['cost'],
+                'SortOrder' => (int) $row['sort_order'],
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return list<array{Title: string, Url: string, Icon: string}>
+     */
+    public function fetchLinks(int $detailId): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT title, url, icon FROM ' . DB_PREFIX . 'event_links
+             WHERE event_calendardetail_id = ? ORDER BY sort_order, event_links_id'
+        );
+        $stmt->execute([$detailId]);
+        $rows = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $rows[] = [
+                'Title' => (string) $row['title'],
+                'Url' => (string) $row['url'],
+                'Icon' => (string) $row['icon'],
+            ];
+        }
+
+        return $rows;
+    }
+
+    public function countAttendanceOnDetail(int $detailId): int
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM ' . DB_PREFIX . 'attendance WHERE event_calendardetail_id = ?'
+        );
+        $stmt->execute([$detailId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    public function trackAttendance(int $attendanceId): void
+    {
+        if (!in_array($attendanceId, $this->attendanceIds, true)) {
+            $this->attendanceIds[] = $attendanceId;
+        }
+    }
+
     public function fetchEventStatus(int $eventId): ?string
     {
         $stmt = $this->pdo->prepare('SELECT status FROM ' . DB_PREFIX . 'event WHERE event_id = ?');
@@ -317,10 +410,22 @@ final class EventPlanningFixture
         }
 
         foreach ($this->detailIds as $id) {
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'attendance WHERE event_calendardetail_id = ' . (int) $id);
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'attendance_myisam WHERE event_calendardetail_id = ' . (int) $id);
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_fees WHERE event_calendardetail_id = ' . (int) $id);
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_rsvp WHERE event_calendardetail_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_schedule WHERE event_calendardetail_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = ' . (int) $id);
+        }
+
+        foreach ($this->feeIds as $id) {
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_fees WHERE event_fees_id = ' . (int) $id);
+        }
+
+        foreach ($this->linkIds as $id) {
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_links_id = ' . (int) $id);
         }
 
         foreach ($this->eventIds as $id) {

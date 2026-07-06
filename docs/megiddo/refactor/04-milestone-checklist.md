@@ -530,14 +530,18 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 | Step | Status |
 |------|--------|
-| Backend unit/integration tests | [ ] |
-| Frontend functional tests | [ ] |
-| Milestone-scoped Infection passes | [ ] |
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Integration/EventOccurrenceTest.php`, `tests/Integration/EventRsvpBatchTest.php`, `tests/e2e/event-detail.spec.ts`
+
+**Infection (pre-refactor):** `infection.t05-event.json5` — `--only-covered --filter=class.Event.php --test-framework-options="--filter=EventOccurrenceTest|EventRsvpBatchTest"` (MSI 37%, covered MSI 37%)
 
 #### T-05 sign-off gate
 
-- [ ] Test sprint sign-off checklist (above) satisfied
-- [ ] Branch `megiddo/t-05-event-tests` squashed to exactly one commit
+- [x] Test sprint sign-off checklist (above) satisfied
+- [x] Branch `megiddo/t-05-event-tests` squashed to exactly one commit
 
 ---
 
