@@ -171,13 +171,22 @@ Each discovery sprint follows the same workflow for its target IDs (from [03-imp
 
 ### DS-05: Event controller detail
 
+**Branch:** `megiddo/ds-05-event-discovery`
+
 **Targets:** T-EVT-01 through T-EVT-08
 
 | Step | Status | Output link |
 |------|--------|-------------|
-| Backend survey | [ ] | |
-| Test design | [ ] | |
-| Proposed revision | [ ] | |
+| Backend survey | [x] | [ds-05-event-discovery.md §1](./ds-05-event-discovery.md#1-backend-survey) |
+| Test design | [x] | [ds-05-event-discovery.md §2](./ds-05-event-discovery.md#2-test-design) |
+| Proposed revision | [x] | [ds-05-event-discovery.md §3](./ds-05-event-discovery.md#3-proposed-revision) |
+
+#### DS-05 sign-off gate
+
+- [x] [05-development-steering.md](./05-development-steering.md) DS-1, DS-2, DS-3, DS-6, DS-8 satisfied
+- [x] Full unit test suite passes (DS-4, DS-5)
+- [x] Infection scope documented in test design (DS-7 at R-05)
+- [x] Branch `megiddo/ds-05-event-discovery` squashed to exactly one commit
 
 ---
 
