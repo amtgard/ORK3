@@ -968,11 +968,21 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 		}
 		// For live/forecast: render from the cached 7-day forecast (server-side).
 		// For historical: render placeholder; JS lazy-fetches the archive.
-		$evFC = ($evWxMode === 'live' || $evWxMode === 'forecast')
-			? ($evWxLat !== null
-				? Ork3::$Lib->weather->forecast_for_coords($evWxLat, $evWxLng, $evWxDate, false)
-				: Ork3::$Lib->weather->forecast_for_date($evWxParkId, $evWxDate))
-			: null;
+		//
+		// Coord-first, park-fallback: prefer the event's own coords when we have
+		// them, but if the coord-keyed memcached forecast is cold (never warmed
+		// by the warm_event_venue_coords cron), fall back to the park's cached
+		// 14-day forecast. Showing the park's data is much better than showing
+		// nothing when the event coords are ~a few km away from the park.
+		$evFC = null;
+		if ($evWxMode === 'live' || $evWxMode === 'forecast') {
+			if ($evWxLat !== null) {
+				$evFC = Ork3::$Lib->weather->forecast_for_coords($evWxLat, $evWxLng, $evWxDate, false);
+			}
+			if ($evFC === null && $evWxParkId) {
+				$evFC = Ork3::$Lib->weather->forecast_for_date($evWxParkId, $evWxDate);
+			}
+		}
 		if ($evFC && $evFC['hi_f'] !== null):
 			$c = (int)$evFC['code'];
 			$evIc = ($c===0)?'☀️':(($c===1)?'🌤️':(($c===2)?'⛅':(($c===3)?'☁️':(($c===45||$c===48)?'🌫️':(($c>=51&&$c<=57)?'🌦️':(($c>=61&&$c<=67)?'🌧️':(($c>=71&&$c<=77)?'❄️':(($c>=80&&$c<=82)?'🌦️':(($c===85||$c===86)?'🌨️':(($c>=95)?'⛈️':'🌡️'))))))))));
@@ -990,7 +1000,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			<?php if ($evBadges): ?>
 				<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;justify-content:center">
 					<?php foreach ($evBadges as $_b): ?>
-						<span data-tip="<?= htmlspecialchars($_b['label']) ?>" style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600;background:<?= $_b['severity']==='warning'?'#fee2e2':'#fef3c7' ?>;color:<?= $_b['severity']==='warning'?'#991b1b':'#92400e' ?>;border:1px solid <?= $_b['severity']==='warning'?'#fca5a5':'#fcd34d' ?>"><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?></span>
+						<span data-tip="<?= htmlspecialchars($_b['label']) ?>" style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600;background:<?= $_b['severity']==='warning'?'#fee2e2':'#fef3c7' ?>;color:<?= $_b['severity']==='warning'?'#991b1b':'#92400e' ?>;border:1px solid <?= $_b['severity']==='warning'?'#fca5a5':'#fcd34d' ?>"<?= wx_safety_attrs($_b['label']) ?>><?= $_b['icon'] ?> <?= htmlspecialchars($_b['label']) ?><?= wx_safety_icon_html($_b['label']) ?></span>
 					<?php endforeach; ?>
 				</div>
 			<?php endif; ?>
@@ -999,7 +1009,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			<?= $evWxMode === 'live' ? 'Today' : 'Forecast' ?>
 			<a href="https://open-meteo.com/" target="_blank" rel="noopener"
 			   data-tip="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"
-			   style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px;opacity:.6">ⓘ</a>
+			   style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px">ⓘ</a>
 		</div>
 	</div>
 	<?php elseif ($evWxMode === 'historical'): ?>
@@ -3349,7 +3359,7 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 			document.getElementById('ev-wx-label').innerHTML = 'Historical' +
 				' <a href="https://open-meteo.com/" target="_blank" rel="noopener"' +
 				' data-tip="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com"' +
-				' style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px;opacity:.6">ⓘ</a>';
+				' style="font-size:10px;color:var(--ork-text-muted,#a0aec0);text-decoration:none;margin-left:4px">ⓘ</a>';
 		})
 		.catch(showUnavailable);
 })();

@@ -494,7 +494,7 @@ html[data-theme="dark"] .wx-feels { color: #a0aec0; }
 							<?php if (!empty($p['badges'])): ?>
 								<div class="wx-play-meta">
 									<?php foreach ($p['badges'] as $b): ?>
-										<span class="wx-event-badge wx-event-badge-<?= $b['severity'] ?>" title="<?= htmlspecialchars($b['label']) ?>"><?= $b['icon'] ?></span>
+										<span class="wx-event-badge wx-event-badge-<?= $b['severity'] ?>" title="<?= htmlspecialchars($b['label']) ?>"<?= wx_safety_attrs($b['label']) ?>><?= $b['icon'] ?></span>
 									<?php endforeach; ?>
 								</div>
 							<?php endif; ?>
@@ -579,7 +579,7 @@ html[data-theme="dark"] .wx-feels { color: #a0aec0; }
 						<?php if (!empty($ev['badges'])): ?>
 							<div class="wx-event-meta">
 								<?php foreach ($ev['badges'] as $b): ?>
-									<span class="wx-event-badge wx-event-badge-<?= $b['severity'] ?>" title="<?= htmlspecialchars($b['label']) ?>"><?= $b['icon'] ?></span>
+									<span class="wx-event-badge wx-event-badge-<?= $b['severity'] ?>" title="<?= htmlspecialchars($b['label']) ?>"<?= wx_safety_attrs($b['label']) ?>><?= $b['icon'] ?></span>
 								<?php endforeach; ?>
 							</div>
 						<?php endif; ?>
@@ -879,7 +879,7 @@ html[data-theme="dark"] .wx-feels { color: #a0aec0; }
 				wx = '<div class="wx-play-temps">' + wxIcon(fc.code) + ' ' + tempPair(fc.hi_f) + feelsTail(fc.hi_f, fc.app_hi_f) + loPart + '</div>';
 				if (p.badges && p.badges.length) {
 					wx += '<div class="wx-play-meta">' +
-						p.badges.map(function(b) { return '<span class="wx-event-badge wx-event-badge-' + b.severity + '" title="' + esc(b.label) + '">' + b.icon + '</span>'; }).join(' ') +
+						p.badges.map(function(b) { return '<span class="wx-event-badge wx-event-badge-' + b.severity + '" title="' + esc(b.label) + '"' + wxSafetyAttrs(b.label) + '>' + b.icon + '</span>'; }).join(' ') +
 						'</div>';
 				}
 			} else {
@@ -1181,7 +1181,7 @@ html[data-theme="dark"] .wx-feels { color: #a0aec0; }
 	function renderBadgeChips(badges) {
 		if (!badges || !badges.length) return '';
 		return '<div class="wx-pp-badges">' + badges.map(function(b) {
-			return '<span class="wx-event-badge wx-event-badge-' + b.severity + '">' + b.icon + ' ' + esc(b.label) + '</span>';
+			return '<span class="wx-event-badge wx-event-badge-' + b.severity + '"' + wxSafetyAttrs(b.label) + '>' + b.icon + ' ' + esc(b.label) + wxSafetyIconHtml(b.label) + '</span>';
 		}).join('') + '</div>';
 	}
 
