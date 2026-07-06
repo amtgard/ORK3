@@ -6,6 +6,31 @@
 	$link_token      = $link_token      ?? '';
 	$last_class_id   = (int)($last_class_id   ?? 0);
 	$last_class_name = $last_class_name ?? '';
+
+	// Compact "L4 · 5 to L5" / "L6 · max" suffix used both on <option>
+	// labels and next to the quick-signin button. $c is a row from $classes
+	// enriched by controller.SignIn.php with Level + ToNext.
+	$_siLvlText = function($c) {
+		$lvl = isset($c['Level']) ? (int)$c['Level'] : 1;
+		$tn  = $c['ToNext'] ?? null;
+		if ($tn === null) return 'L' . $lvl . ' · max';
+		// Strip trailing zeros on fractional credit remainders (0.5 → "0.5",
+		// 5.0 → "5") so numbers read cleanly at a glance.
+		$tnStr = rtrim(rtrim(number_format((float)$tn, 2, '.', ''), '0'), '.');
+		if ($tnStr === '' || $tnStr === '-') $tnStr = '0';
+		return 'L' . $lvl . ' · ' . $tnStr . ' to L' . ($lvl + 1);
+	};
+
+	// Build the "as of last check-in" enrichment for the quick-signin button.
+	$_siLastClassSuffix = '';
+	if ($last_class_id > 0) {
+		foreach ($classes as $c) {
+			if ((int)$c['ClassId'] === $last_class_id) {
+				$_siLastClassSuffix = ' (' . $_siLvlText($c) . ')';
+				break;
+			}
+		}
+	}
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 
@@ -269,7 +294,7 @@ html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !importa
 					<label for="si-class-select">Change to a different class</label>
 					<select id="si-class-select">
 						<?php foreach ($classes as $c): ?>
-							<option value="<?= (int)$c['ClassId'] ?>"<?= (int)$c['ClassId'] === (int)$_existing['ClassId'] ? ' selected' : '' ?>><?= htmlspecialchars($c['Name']) ?></option>
+							<option value="<?= (int)$c['ClassId'] ?>"<?= (int)$c['ClassId'] === (int)$_existing['ClassId'] ? ' selected' : '' ?>><?= htmlspecialchars($c['Name']) ?> · <?= htmlspecialchars($_siLvlText($c)) ?></option>
 						<?php endforeach; ?>
 					</select>
 					<button type="submit" class="si-btn-primary" id="si-alt-btn">
@@ -280,7 +305,7 @@ html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !importa
 				<!-- Quick sign-in with last class -->
 				<button type="submit" class="si-btn-primary" id="si-quick-btn"
 					onclick="document.getElementById('si-class-id-input').value=<?= $last_class_id ?>">
-					<i class="fas fa-check" style="margin-right:8px"></i>Sign In As <?= htmlspecialchars($last_class_name) ?>
+					<i class="fas fa-check" style="margin-right:8px"></i>Sign In As <?= htmlspecialchars($last_class_name) ?><?= htmlspecialchars($_siLastClassSuffix) ?>
 				</button>
 				<button type="button" class="si-change-toggle" id="si-change-toggle">
 					<i class="fas fa-chevron-down" id="si-toggle-icon" style="margin-right:4px"></i>Choose a Different Class
@@ -291,7 +316,7 @@ html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !importa
 					<select id="si-class-select">
 						<option value="">— select a class —</option>
 						<?php foreach ($classes as $c): ?>
-							<option value="<?= (int)$c['ClassId'] ?>"><?= htmlspecialchars($c['Name']) ?></option>
+							<option value="<?= (int)$c['ClassId'] ?>"><?= htmlspecialchars($c['Name']) ?> · <?= htmlspecialchars($_siLvlText($c)) ?></option>
 						<?php endforeach; ?>
 					</select>
 					<button type="submit" class="si-btn-primary" id="si-alt-btn" disabled>
@@ -305,7 +330,7 @@ html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !importa
 					<select id="si-class-select">
 						<option value="">— select a class —</option>
 						<?php foreach ($classes as $c): ?>
-							<option value="<?= (int)$c['ClassId'] ?>"><?= htmlspecialchars($c['Name']) ?></option>
+							<option value="<?= (int)$c['ClassId'] ?>"><?= htmlspecialchars($c['Name']) ?> · <?= htmlspecialchars($_siLvlText($c)) ?></option>
 						<?php endforeach; ?>
 					</select>
 					<button type="submit" class="si-btn-primary" id="si-alt-btn" disabled>
