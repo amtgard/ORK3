@@ -339,13 +339,22 @@ Each discovery sprint follows the same workflow for its target IDs (from [03-imp
 
 ### DS-13: Infrastructure & misc
 
-**Targets:** T-INF-01 through T-INF-05, T-WN-01
+**Branch:** `megiddo/ds-13-infrastructure-discovery`
+
+**Targets:** T-INF-01 through T-INF-05, T-WN-01 (T-INF-06 home RSVP batch — see design note)
 
 | Step | Status | Output link |
 |------|--------|-------------|
-| Backend survey | [ ] | |
-| Test design | [ ] | |
-| Proposed revision | [ ] | |
+| Backend survey | [x] | [ds-13-infrastructure-discovery.md §1](./ds-13-infrastructure-discovery.md#1-backend-survey) |
+| Test design | [x] | [ds-13-infrastructure-discovery.md §2](./ds-13-infrastructure-discovery.md#2-test-design) |
+| Proposed revision | [x] | [ds-13-infrastructure-discovery.md §3](./ds-13-infrastructure-discovery.md#3-proposed-revision) |
+
+#### DS-13 sign-off gate
+
+- [x] [05-development-steering.md](./05-development-steering.md) DS-1, DS-2, DS-3, DS-6, DS-8 satisfied
+- [x] Full unit test suite passes (DS-4, DS-5)
+- [x] Infection scope documented in test design (DS-7 at R-13)
+- [x] Branch `megiddo/ds-13-infrastructure-discovery` squashed to exactly one commit
 
 ---
 
