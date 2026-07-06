@@ -255,13 +255,22 @@ Each discovery sprint follows the same workflow for its target IDs (from [03-imp
 
 ### DS-09: Player profile & AJAX
 
+**Branch:** `megiddo/ds-09-player-discovery`
+
 **Targets:** T-PLR-01 through T-PLR-08, T-PLA-01 through T-PLA-05, T-PLM-01 through T-PLM-04
 
 | Step | Status | Output link |
 |------|--------|-------------|
-| Backend survey | [ ] | |
-| Test design | [ ] | |
-| Proposed revision | [ ] | |
+| Backend survey | [x] | [ds-09-player-discovery.md §1](./ds-09-player-discovery.md#1-backend-survey) |
+| Test design | [x] | [ds-09-player-discovery.md §2](./ds-09-player-discovery.md#2-test-design) |
+| Proposed revision | [x] | [ds-09-player-discovery.md §3](./ds-09-player-discovery.md#3-proposed-revision) |
+
+#### DS-09 sign-off gate
+
+- [x] [05-development-steering.md](./05-development-steering.md) DS-1, DS-2, DS-3, DS-6, DS-8 satisfied
+- [x] Full unit test suite passes (DS-4, DS-5)
+- [x] Infection scope documented in test design (DS-7 at R-09)
+- [x] Branch `megiddo/ds-09-player-discovery` squashed to exactly one commit
 
 ---
 
