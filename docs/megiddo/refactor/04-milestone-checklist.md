@@ -476,14 +476,18 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 | Step | Status |
 |------|--------|
-| Backend unit/integration tests | [ ] |
-| Frontend functional tests | [ ] |
-| Milestone-scoped Infection passes | [ ] |
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Integration/BannerTest.php`, `tests/Support/BannerFixture.php`, `tests/e2e/banner.spec.ts`
+
+**Infection (pre-refactor):** `infection.t03-banner.json5` — `--only-covered --filter=class.Park.php --test-framework-options="--filter=BannerTest"` (MSI 55%, covered MSI 55%)
 
 #### T-03 sign-off gate
 
-- [ ] Test sprint sign-off checklist (above) satisfied
-- [ ] Branch `megiddo/t-03-banner-tests` squashed to exactly one commit
+- [x] Test sprint sign-off checklist (above) satisfied
+- [x] Branch `megiddo/t-03-banner-tests` squashed to exactly one commit
 
 ---
 
@@ -797,4 +801,4 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code, keep tests green |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** R-02 (Authorization INSERT bypass refactor — pairs with completed T-02).
+**Next actionable milestone:** T-04 (EventAjax core tests — pairs with completed DS-04).
