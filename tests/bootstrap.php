@@ -53,6 +53,9 @@ if (!class_exists('Memcached', false)) {
 
 require_once ORK3_ROOT . '/startup.php';
 
+require_once __DIR__ . '/Support/EventRsvpFixture.php';
+require_once DIR_UI . 'model/model.Event.php';
+
 /**
  * Whether the configured test database accepts connections.
  */

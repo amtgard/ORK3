@@ -5,6 +5,7 @@
 **Target IDs:** T-PRK-01 through T-PRK-05, T-PRA-01, T-PRA-03  
 **Depends on:** M0.1, DS-02 (auth INSERT — T-PRA-02 excluded), DS-03 (banner — T-PRA-04 excluded), DS-06 (shared event list — coordinate R-06/R-07), DS-11 (search — T-PRA-01 excluded)  
 **Execution sprint:** R-07
+**Test sprint:** T-07
 
 ---
 
@@ -136,7 +137,7 @@ ParkAjax actions using `Model_Park` / `Model_Player` only: `setofficers`, `vacat
 
 ## 2. Test design
 
-### 2.1 Backend unit/integration tests (implement in R-07)
+### 2.1 Backend unit/integration tests (implement in T-07)
 
 Add `tests/Integration/ParkProfileTest.php`:
 
@@ -156,7 +157,7 @@ Add `tests/Integration/ParkAjaxTest.php`:
 
 Skip when `ork3_test_db_available()` is false.
 
-### 2.2 Infection scope (R-07, DS-7)
+### 2.2 Infection scope (T-07, DS-7)
 
 ```bash
 sh bin/run-infection.sh \
@@ -167,7 +168,7 @@ sh bin/run-infection.sh \
 
 If event summary lives in shared `KingdomProfile` from R-06, include that file. Target ≥ `minMsi` / `minCoveredMsi` (15).
 
-### 2.3 Frontend functional tests (implement in R-07)
+### 2.3 Frontend functional tests (implement in T-07)
 
 | Flow | Steps | Assert |
 |------|-------|--------|

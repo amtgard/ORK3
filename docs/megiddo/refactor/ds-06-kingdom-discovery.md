@@ -5,6 +5,7 @@
 **Target IDs:** T-KNG-01 through T-KNG-11, T-KNA-01, T-KNA-02, T-KNA-04 through T-KNA-07  
 **Depends on:** M0.1, DS-02 (auth INSERT — T-KNA-03 excluded), DS-03 (banner — T-KNA-08 excluded), DS-11 (search — T-KNA-06 excluded)  
 **Execution sprint:** R-06
+**Test sprint:** T-06
 
 ---
 
@@ -205,7 +206,7 @@ Per milestone scope, **T-KNA-03** (auth INSERT), **T-KNA-08** (banner CRUD), and
 
 ## 2. Test design
 
-### 2.1 Backend unit/integration tests (implement in R-06)
+### 2.1 Backend unit/integration tests (implement in T-06)
 
 Add `tests/Integration/KingdomProfileTest.php`:
 
@@ -233,7 +234,7 @@ Add `tests/Integration/KingdomAjaxTest.php`:
 
 Skip when `ork3_test_db_available()` is false.
 
-### 2.2 Infection scope (R-06, DS-7)
+### 2.2 Infection scope (T-06, DS-7)
 
 ```bash
 sh bin/run-infection.sh \
@@ -244,7 +245,7 @@ sh bin/run-infection.sh \
 
 Add `class.KingdomEvents.php` (if new file) to filter list. Target ≥ `minMsi` / `minCoveredMsi` (15).
 
-### 2.3 Frontend functional tests (implement in R-06)
+### 2.3 Frontend functional tests (implement in T-06)
 
 | Flow | Steps | Assert |
 |------|-------|--------|

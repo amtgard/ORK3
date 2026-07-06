@@ -5,6 +5,7 @@
 **Target IDs:** T-INF-01 through T-INF-05, T-WN-01 (plus T-INF-06 — home-widget RSVP batch; same files, tracked in [03-implementation-plan.md](./03-implementation-plan.md) as `T-INF-*`)  
 **Depends on:** M0.1, DS-01 (T-INF-06 RSVP counts overlap `GetRsvpCountsBatch`)  
 **Execution sprint:** R-13
+**Test sprint:** T-13
 
 ---
 
@@ -144,7 +145,7 @@ Infrastructure violations live in **shared frontend bootstrap** code that runs o
 
 ## 2. Test design
 
-### 2.1 Backend unit/integration tests (implement in R-13)
+### 2.1 Backend unit/integration tests (implement in T-13)
 
 Add `tests/Unit/HealthTest.php`:
 
@@ -182,7 +183,7 @@ Add `tests/Integration/LegacyRedirectTest.php`:
 
 Skip integration tests when `ork3_test_db_available()` is false.
 
-### 2.2 Infection scope (R-13, DS-7)
+### 2.2 Infection scope (T-13, DS-7)
 
 ```bash
 sh bin/run-infection.sh \
@@ -193,7 +194,7 @@ sh bin/run-infection.sh \
 
 Focus mutators on: token equality branch, INSERT IGNORE path, font int casts, kingdom join NULL handling.
 
-### 2.3 Frontend functional tests (implement in R-13)
+### 2.3 Frontend functional tests (implement in T-13)
 
 | Flow | Steps | Assert |
 |------|-------|--------|

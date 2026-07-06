@@ -5,6 +5,7 @@
 **Target IDs:** T-PLA-06, T-PRA-04, T-KNA-08, T-UNT-01, T-EVA-14  
 **Depends on:** M0.1 (test framework), DS-02 (complete)  
 **Execution sprint:** R-03
+**Test sprint:** T-03
 
 ---
 
@@ -120,7 +121,7 @@ All five targets expose the same three actions via path segment: `{EntityAjax}/b
 
 ## 2. Test design
 
-### 2.1 Backend unit/integration tests (implement in R-03)
+### 2.1 Backend unit/integration tests (implement in T-03)
 
 Add `tests/Integration/BannerTest.php` (DB + temp banner dirs required):
 
@@ -143,7 +144,7 @@ Use seeded park/kingdom/unit/player/event IDs from dev DB; create files under te
 
 Invoke `BannerSetBanner`, `BannerRemoveBanner`, `BannerUpdateConfig` from `BannerService.function.php` after bootstrap to verify SOAP wrapper parity with domain.
 
-### 2.3 Infection scope (R-03, DS-7)
+### 2.3 Infection scope (T-03, DS-7)
 
 | Source filter | PHPUnit filter |
 |---------------|----------------|
@@ -159,7 +160,7 @@ sh bin/run-infection.sh \
 
 Target ≥ `minMsi` / `minCoveredMsi` (15) from `infection.json5`.
 
-### 2.4 Frontend functional tests (implement in R-03)
+### 2.4 Frontend functional tests (implement in T-03)
 
 Playwright/Cypress against `http://localhost:19080/orkui/` per [06-test-framework.md](./06-test-framework.md):
 

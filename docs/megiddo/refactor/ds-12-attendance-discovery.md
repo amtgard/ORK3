@@ -5,6 +5,7 @@
 **Target IDs:** T-ATT-01 through T-ATT-06, T-SIN-01 through T-SIN-04, T-QR-01  
 **Depends on:** M0.1, DS-09 (player profile class display — threshold duplication), DS-14 (authorization gates, ghettocache, weather — partial), DS-04 (event active-at-scope — cross-ref)  
 **Execution sprint:** R-12
+**Test sprint:** T-12
 
 ---
 
@@ -191,7 +192,7 @@ Attendance/sign-in frontend violations span **five files**:
 
 ## 2. Test design
 
-### 2.1 Backend unit/integration tests (implement in R-12)
+### 2.1 Backend unit/integration tests (implement in T-12)
 
 Add `tests/Unit/ClassLevelTest.php`:
 
@@ -221,7 +222,7 @@ Add `tests/Integration/AttendanceWriteTest.php`:
 
 Skip integration tests when `ork3_test_db_available()` is false.
 
-### 2.2 Infection scope (R-12, DS-7)
+### 2.2 Infection scope (T-12, DS-7)
 
 ```bash
 sh bin/run-infection.sh \
@@ -232,7 +233,7 @@ sh bin/run-infection.sh \
 
 Focus mutators on: reactivate branch, level threshold comparisons, adjacent date `<`/`>` filters, link expiry UTC parsing, duplicate sign-in guard.
 
-### 2.3 Frontend functional tests (implement in R-12)
+### 2.3 Frontend functional tests (implement in T-12)
 
 | Flow | Steps | Assert |
 |------|-------|--------|

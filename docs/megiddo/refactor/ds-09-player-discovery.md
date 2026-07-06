@@ -5,6 +5,7 @@
 **Target IDs:** T-PLR-01 through T-PLR-08, T-PLA-01 through T-PLA-05, T-PLM-01 through T-PLM-04  
 **Depends on:** M0.1, DS-03 (banner — T-PLA-06 excluded), DS-10 (voting badge — cross-ref only), DS-14 (authorization/cache — T-PLR-08 partial)  
 **Execution sprint:** R-09
+**Test sprint:** T-09
 
 ---
 
@@ -245,7 +246,7 @@ The **revised player profile** (`profile` → `Playernew_index.tpl`) performs **
 
 ## 2. Test design
 
-### 2.1 Backend unit/integration tests (implement in R-09)
+### 2.1 Backend unit/integration tests (implement in T-09)
 
 Add `tests/Integration/PlayerProfileTest.php`:
 
@@ -278,7 +279,7 @@ Add `tests/Unit/ModelPlayerCacheTest.php`:
 
 Skip integration tests when `ork3_test_db_available()` is false.
 
-### 2.2 Infection scope (R-09, DS-7)
+### 2.2 Infection scope (T-09, DS-7)
 
 ```bash
 sh bin/run-infection.sh \
@@ -292,7 +293,7 @@ Focus mutators on: merge auth tier branches, email validation, beltline alias ru
 
 **Out of R-09 tests:** T-PLA-06 (DS-03).
 
-### 2.3 Frontend functional tests (implement in R-09)
+### 2.3 Frontend functional tests (implement in T-09)
 
 | Flow | Steps | Assert |
 |------|-------|--------|

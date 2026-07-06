@@ -5,6 +5,7 @@
 **Target IDs:** T-EVT-01 through T-EVT-08  
 **Depends on:** M0.1, DS-01 (RSVP), DS-04 (EventAjax planning — partial overlap)  
 **Execution sprint:** R-05
+**Test sprint:** T-05
 
 ---
 
@@ -145,7 +146,7 @@ Same as T-EVT-03 display block (637–927): park address, draft gate, staff, sch
 
 ## 2. Test design
 
-### 2.1 Backend unit/integration tests (implement in R-05)
+### 2.1 Backend unit/integration tests (implement in T-05)
 
 Add `tests/Integration/EventOccurrenceTest.php`:
 
@@ -171,7 +172,7 @@ Add `tests/Integration/EventRsvpBatchTest.php` (or section in DS-01 suite):
 
 Skip when `ork3_test_db_available()` is false.
 
-### 2.2 Infection scope (R-05, DS-7)
+### 2.2 Infection scope (T-05, DS-7)
 
 Primary paths (after R-04/R-01 land shared helpers):
 
@@ -184,7 +185,7 @@ sh bin/run-infection.sh \
 
 Include fees/links methods whether placed in `Event` or `EventPlanning`. Target ≥ configured `minMsi` / `minCoveredMsi` (15).
 
-### 2.3 Frontend functional tests (implement in R-05)
+### 2.3 Frontend functional tests (implement in T-05)
 
 | Flow | Steps | Assert |
 |------|-------|--------|

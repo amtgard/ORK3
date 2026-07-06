@@ -5,6 +5,7 @@
 **Target IDs:** T-SRC-01, T-SRC-02, T-ADM-10, T-KNA-06, T-PRA-01, T-EVA-06 (search portion)  
 **Depends on:** M0.1, DS-06 (kingdom family scope — T-KNA-06), DS-07 (park scope — T-PRA-01), DS-08 (admin playersearch — T-ADM-10), DS-04 (event auth playersearch — T-EVA-06)  
 **Execution sprint:** R-11
+**Test sprint:** T-11
 
 ---
 
@@ -129,7 +130,7 @@ Universal search (`SearchAjax::universal`) adds **typographic punctuation foldin
 
 ## 2. Test design
 
-### 2.1 Backend unit/integration tests (implement in R-11)
+### 2.1 Backend unit/integration tests (implement in T-11)
 
 Add `tests/Integration/SearchServiceTest.php`:
 
@@ -153,7 +154,7 @@ Add `tests/Unit/SearchEscapeTest.php` (pure):
 
 Skip integration tests when `ork3_test_db_available()` is false.
 
-### 2.2 Infection scope (R-11, DS-7)
+### 2.2 Infection scope (T-11, DS-7)
 
 ```bash
 sh bin/run-infection.sh \
@@ -164,7 +165,7 @@ sh bin/run-infection.sh \
 
 Focus mutators on: abbr prefix branch, restricted-name gate, scope CASE ordering, punct-fold REPLACE chain, budget/focus arithmetic, unit activity date interval.
 
-### 2.3 Frontend functional tests (implement in R-11)
+### 2.3 Frontend functional tests (implement in T-11)
 
 | Flow | Steps | Assert |
 |------|-------|--------|

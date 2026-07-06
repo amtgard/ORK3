@@ -60,7 +60,7 @@ Each refactor target must have:
 - **Frontend functional tests** verifying the user-facing behavior is unchanged.
 - **Mutation tests** (Infection) scoped to the milestone, passing before sign-off per [05-development-steering.md](./05-development-steering.md) DS-7.
 
-Test design is part of discovery sprints; test implementation precedes or accompanies each refactor execution sprint.
+Test design is part of discovery sprints (Phase 1). Test **implementation** and Infection validation happen in matching test sprints (Phase 1.5, milestones T-01 … T-14) **before** the corresponding refactor execution sprint (R-*).
 
 ### FR-4: Authorization integrity
 

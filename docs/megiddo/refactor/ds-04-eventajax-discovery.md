@@ -5,6 +5,7 @@
 **Target IDs:** T-EVA-01 through T-EVA-13  
 **Depends on:** M0.1 (test framework), DS-01 (RSVP — partial overlap), DS-02 (auth INSERT — partial overlap)  
 **Execution sprint:** R-04
+**Test sprint:** T-04
 
 ---
 
@@ -193,7 +194,7 @@ Proposed domain helper: `EventPlanning::CanManageDetail($mundane_id, $event_id, 
 
 ## 2. Test design
 
-### 2.1 Backend unit/integration tests (implement in R-04)
+### 2.1 Backend unit/integration tests (implement in T-04)
 
 Add `tests/Integration/EventPlanningTest.php`:
 
@@ -229,7 +230,7 @@ Skip when `ork3_test_db_available()` is false.
 
 Wire new SOAP functions in `EventService.function.php` (or new `EventPlanningService`) and assert wrapper parity with domain for at least `SetEventStatus`, `AddEventStaff`, `AddEventSchedule`.
 
-### 2.3 Infection scope (R-04, DS-7)
+### 2.3 Infection scope (T-04, DS-7)
 
 Primary source paths:
 
@@ -250,7 +251,7 @@ sh bin/run-infection.sh \
 
 Include `EventService.function.php` once handlers exist. Target ≥ `minMsi` / `minCoveredMsi` (15).
 
-### 2.4 Frontend functional tests (implement in R-04)
+### 2.4 Frontend functional tests (implement in T-04)
 
 | Flow | Steps | Assert |
 |------|-------|--------|
@@ -263,7 +264,7 @@ Include `EventService.function.php` once handlers exist. Target ≥ `minMsi` / `
 | Copy from past | Select source → copy schedule+staff | New occurrence shifted to chosen dates |
 | Heraldry remove | Remove event logo | Flag off; image 404 |
 
-Auth: event admin + delegated staff personas documented in R-04 commit.
+Auth: event admin + delegated staff personas documented in T-04 commit.
 
 ---
 

@@ -299,3 +299,28 @@ Targets are batched into discovery sprints (see [04-milestone-checklist.md](./04
 | DS-14 | T-LIB-* + HasAuthority cross-cut | Ork3::$Lib service migration |
 
 Each discovery sprint produces: backend survey, test plan, proposed API revision — **not** implementation.
+
+---
+
+## Test Sprint Groupings (Phase 1.5)
+
+Each test sprint implements the test plan from its matching discovery sprint (see [04-milestone-checklist.md](./04-milestone-checklist.md)). Test milestones use IDs **T-01 … T-14** (distinct from refactor target IDs like `T-RSV-01`).
+
+| Sprint | Depends on | Target IDs | Theme |
+|--------|------------|------------|-------|
+| T-01 | DS-01 | T-RSV-*, T-INF-06 | RSVP subsystem tests |
+| T-02 | DS-02 | T-ADM-11, T-KNA-03, T-PRA-02, T-EVA-06 | Authorization INSERT tests |
+| T-03 | DS-03 | Banner target IDs | Banner CRUD tests |
+| T-04 | DS-04 | T-EVA-01 – T-EVA-13 | EventAjax core tests |
+| T-05 | DS-05 | T-EVT-* | Event controller detail tests |
+| T-06 | DS-06 | Kingdom target IDs | Kingdom profile & AJAX tests |
+| T-07 | DS-07 | Park target IDs | Park profile & AJAX tests |
+| T-08 | DS-08 | Admin target IDs | Admin dashboard & health tests |
+| T-09 | DS-09 | Player target IDs | Player profile & AJAX tests |
+| T-10 | DS-10 | T-RPT-*, T-AWD-01 | Reports, voting rules, awards tests |
+| T-11 | DS-11 | Search target IDs | Search & player search tests |
+| T-12 | DS-12 | T-ATT-*, T-SIN-*, T-QR-01 | Attendance & sign-in tests |
+| T-13 | DS-13 | T-INF-*, T-WN-01 | Infrastructure & misc tests |
+| T-14 | DS-14 | T-LIB-* + HasAuthority cross-cut | Ork3::$Lib service migration tests |
+
+Each test sprint delivers: backend tests, frontend functional tests (when applicable), and passing milestone-scoped Infection — **not** production refactor.

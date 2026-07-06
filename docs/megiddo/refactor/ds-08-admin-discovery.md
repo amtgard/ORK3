@@ -5,6 +5,7 @@
 **Target IDs:** T-ADM-01 through T-ADM-10, T-ADM-12  
 **Depends on:** M0.1, DS-02 (auth INSERT — T-ADM-11 excluded), DS-06 (kingdom abbr — T-ADM-07), DS-07 (park abbr — T-ADM-06), DS-11 (search — T-ADM-10 excluded)  
 **Execution sprint:** R-08
+**Test sprint:** T-08
 
 ---
 
@@ -197,7 +198,7 @@ Per milestone scope, **T-ADM-11** (auth INSERT) is **out of R-08** (DS-02). **T-
 
 ## 2. Test design
 
-### 2.1 Backend unit/integration tests (implement in R-08)
+### 2.1 Backend unit/integration tests (implement in T-08)
 
 Add `tests/Unit/AdminDashboardTrendStatsTest.php`:
 
@@ -244,7 +245,7 @@ Add `tests/Unit/StateOfAmtgardValidationTest.php`:
 
 Skip integration tests when `ork3_test_db_available()` is false.
 
-### 2.2 Infection scope (R-08, DS-7)
+### 2.2 Infection scope (T-08, DS-7)
 
 ```bash
 sh bin/run-infection.sh \
@@ -261,7 +262,7 @@ Target ≥ `minMsi` / `minCoveredMsi` (15). Focus mutators on date window bounda
 
 **Out of R-08 tests:** T-ADM-10 (DS-11), T-ADM-11 (DS-02).
 
-### 2.3 Frontend functional tests (implement in R-08)
+### 2.3 Frontend functional tests (implement in T-08)
 
 | Flow | Steps | Assert |
 |------|-------|--------|

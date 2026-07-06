@@ -5,6 +5,7 @@
 **Target IDs:** T-RSV-01 through T-RSV-09, T-INF-06  
 **Depends on:** M0.1 (test framework)  
 **Execution sprint:** R-01
+**Test sprint:** T-01
 
 ---
 
@@ -120,7 +121,7 @@ class.Controller::__construct ──► inline batch total counts (home widget)
 
 ## 2. Test design
 
-### 2.1 Backend unit tests (implement in R-01)
+### 2.1 Backend unit tests (implement in T-01)
 
 Add `tests/Integration/EventRsvpTest.php` (DB required) covering domain methods after move:
 
@@ -150,16 +151,16 @@ Extend integration tests to call SOAP/JSON wrappers once registered:
 - `Event.SetRsvp`, `Event.WithdrawRsvp`, `Event.GetRsvpSummary`, etc.
 - Verify response shapes match what `APIModel('Event')` callers need.
 
-### 2.3 Infection scope (R-01, DS-7)
+### 2.3 Infection scope (T-01, DS-7)
 
 | Source filter | PHPUnit filter |
 |---------------|----------------|
 | `--filter=class.Event.php` (or `class.EventRsvp.php` if split) | `--test-framework-options="--filter=EventRsvpTest"` |
 | Include `EventService.function.php` once handlers exist | Same |
 
-Document exact filters in R-01 commit. Target ≥ current `minMsi` / `minCoveredMsi` (15) from `infection.json5`.
+Document exact filters in T-01 commit. Target ≥ current `minMsi` / `minCoveredMsi` (15) from `infection.json5`.
 
-### 2.4 Frontend functional tests (implement in R-01)
+### 2.4 Frontend functional tests (implement in T-01)
 
 Playwright/Cypress against `http://localhost:19080/orkui/` per [06-test-framework.md](./06-test-framework.md):
 
@@ -173,7 +174,7 @@ Playwright/Cypress against `http://localhost:19080/orkui/` per [06-test-framewor
 | Staff RSVP list | Event staff with attendance perm | RSVP list visible with player names |
 | Home widget counts | Home page logged out/in | Event summary shows RSVP totals |
 
-Auth: use dev admin or seeded test player credentials documented in R-01.
+Auth: use dev admin or seeded test player credentials documented in T-01.
 
 ---
 

@@ -116,7 +116,7 @@ sh bin/run-infection.sh \
   --test-framework-options="--filter=ParkCalculateNextParkDayTest"
 ```
 
-Document the `--filter` source path and PHPUnit filter used in each execution milestone design note.
+Document the `--filter` source path and PHPUnit filter used in each T-* and R-* milestone commit.
 
 ### Thresholds (`infection.json5`)
 
@@ -125,7 +125,7 @@ Document the `--filter` source path and PHPUnit filter used in each execution mi
 | `minMsi` | 15 | Conservative starting floor (~21% on current covered code) |
 | `minCoveredMsi` | 15 | Covered-code floor |
 
-Raise thresholds as coverage grows during R-* sprints.
+Raise thresholds as coverage grows during T-* and R-* sprints.
 
 ### Database migrations
 
@@ -145,13 +145,13 @@ Missing tables produce PDO warnings that can break Infection’s initial coverag
 
 | File | Service | PHPUnit replacement | Status |
 |------|---------|---------------------|--------|
-| `orkservice/Player/PlayerService.test.php` | Player | — (TBD in DS-09) | Deprecated, `die()` |
-| `orkservice/Kingdom/KingdomService.test.php` | Kingdom | — (TBD in DS-06) | Deprecated, `die()` |
+| `orkservice/Player/PlayerService.test.php` | Player | — (TBD in T-09) | Deprecated, `die()` |
+| `orkservice/Kingdom/KingdomService.test.php` | Kingdom | — (TBD in T-06) | Deprecated, `die()` |
 | `orkservice/Park/ParkService.test.php` | Park | `ParkCalculateNextParkDayTest` (partial) | Deprecated, `die()` |
-| `orkservice/Report/ReportService.test.php` | Report | — (TBD in DS-10) | Deprecated manual script |
+| `orkservice/Report/ReportService.test.php` | Report | — (TBD in T-10) | Deprecated manual script |
 | `orkservice/Calendar/CalendarService.test.php` | Calendar | `CalendarServiceTest` | Deprecated, `die()` |
-| `orkservice/Event/EventService.test.php` | Event | — (TBD in DS-04/05) | Deprecated, `die()` |
-| `orkservice/Authorization/AuthorizationService.testrig.php` | Authorization | — (TBD in DS-02) | Deprecated test rig |
+| `orkservice/Event/EventService.test.php` | Event | — (TBD in T-04/T-05) | Deprecated, `die()` |
+| `orkservice/Authorization/AuthorizationService.testrig.php` | Authorization | — (TBD in T-02) | Deprecated test rig |
 
 ---
 
@@ -163,8 +163,8 @@ ORK3 has no automated frontend test runner today. Recommended approach for refac
 |--------|------|
 | **Tooling** | Playwright or Cypress against `http://localhost:19080/orkui/` (docker app) |
 | **Scope** | One happy-path flow per touched controller (auth-gated pages use dev admin login) |
-| **When** | Implemented during R-* sprints per DS test design — not required for M0.1 sign-off |
-| **Sign-off** | DS-7 applies to backend Infection only until frontend runner is added |
+| **When** | Implemented during T-* test sprints (Phase 1.5) per DS test design |
+| **Sign-off** | DS-7 Infection gate on T-*; R-* re-runs Infection on refactored code |
 
 Discovery sprints document required frontend flows in their test design step.
 

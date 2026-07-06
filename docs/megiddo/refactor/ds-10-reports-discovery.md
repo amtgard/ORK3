@@ -5,6 +5,7 @@
 **Target IDs:** T-RPT-01 through T-RPT-09, T-AWD-01  
 **Depends on:** M0.1, DS-09 (voting badge in PlayerAjax — cross-ref), DS-14 (HasAuthority / ghettocache — T-RPT-02 partial)  
 **Execution sprint:** R-10
+**Test sprint:** T-10
 
 ---
 
@@ -177,7 +178,7 @@ Reports frontend violations span three files:
 
 ## 2. Test design
 
-### 2.1 Backend unit/integration tests (implement in R-10)
+### 2.1 Backend unit/integration tests (implement in T-10)
 
 Add `tests/Integration/VotingRulesTest.php`:
 
@@ -221,7 +222,7 @@ Add `tests/Unit/AwardOptionGroupsTest.php`:
 
 Skip integration tests when `ork3_test_db_available()` is false.
 
-### 2.2 Infection scope (R-10, DS-7)
+### 2.2 Infection scope (T-10, DS-7)
 
 ```bash
 sh bin/run-infection.sh \
@@ -233,7 +234,7 @@ sh bin/run-infection.sh \
 
 Focus mutators on: voting rule flag branches, ladder rank/count logic, pseudo-ladder ID list, principality merge toggle, attendance date scope filter.
 
-### 2.3 Frontend functional tests (implement in R-10)
+### 2.3 Frontend functional tests (implement in T-10)
 
 | Flow | Steps | Assert |
 |------|-------|--------|

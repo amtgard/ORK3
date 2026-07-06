@@ -5,6 +5,7 @@
 **Target IDs:** T-LIB-01 through T-LIB-05; cross-cutting `HasAuthority` and remaining `Ork3::$Lib` bypass patterns  
 **Depends on:** M0.1, DS-02 (authorization domain), prior DS-* domain surveys  
 **Execution sprint:** R-14
+**Test sprint:** T-14
 
 ---
 
@@ -161,7 +162,7 @@ R-14 delivers **HasAuthority + Live + Weather + EraPhoenice JSON** first; other 
 
 ## 2. Test design
 
-### 2.1 Backend unit/integration tests (implement in R-14)
+### 2.1 Backend unit/integration tests (implement in T-14)
 
 Extend `tests/Integration/AuthorizationTest.php` (or create):
 
@@ -197,7 +198,7 @@ Add `tests/Unit/EraPhoeniceTest.php`:
 
 Skip integration tests when DB unavailable.
 
-### 2.2 Infection scope (R-14, DS-7)
+### 2.2 Infection scope (T-14, DS-7)
 
 Phase R-14 in two mutation passes (recommended):
 
@@ -221,7 +222,7 @@ sh bin/run-infection.sh \
 
 Focus mutators on: HasAuthority early-return branches, cache TTL boundaries, Live cutoff time math, Weather archive lag guard.
 
-### 2.3 Frontend functional tests (implement in R-14)
+### 2.3 Frontend functional tests (implement in T-14)
 
 | Flow | Steps | Assert |
 |------|-------|--------|

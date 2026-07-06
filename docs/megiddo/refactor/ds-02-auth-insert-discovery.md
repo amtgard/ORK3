@@ -5,6 +5,7 @@
 **Target IDs:** T-ADM-11, T-KNA-03, T-PRA-02, T-EVA-06 (addauth portion only)  
 **Depends on:** M0.1 (test framework), DS-01 (complete)  
 **Execution sprint:** R-02
+**Test sprint:** T-02
 
 ---
 
@@ -145,7 +146,7 @@ Controller_Admin::addauth    ──► Model_Unit::add_unit_auth ──► Autho
 
 ## 2. Test design
 
-### 2.1 Backend unit/integration tests (implement in R-02)
+### 2.1 Backend unit/integration tests (implement in T-02)
 
 Add `tests/Integration/AuthorizationAddTest.php` (DB required):
 
@@ -169,7 +170,7 @@ Port highest-value cases from `AuthorizationService.testrig.php` matrices (admin
 
 Same integration tests can invoke `AddAuthorization()` from `AuthorizationService.function.php` after bootstrap to verify SOAP wrapper parity.
 
-### 2.3 Infection scope (R-02, DS-7)
+### 2.3 Infection scope (T-02, DS-7)
 
 | Source filter | PHPUnit filter |
 |---------------|----------------|
@@ -185,7 +186,7 @@ sh bin/run-infection.sh \
 
 Target ≥ `minMsi` / `minCoveredMsi` (15) from `infection.json5`.
 
-### 2.4 Frontend functional tests (implement in R-02)
+### 2.4 Frontend functional tests (implement in T-02)
 
 Playwright/Cypress against `http://localhost:19080/orkui/` per [06-test-framework.md](./06-test-framework.md):
 
@@ -198,7 +199,7 @@ Playwright/Cypress against `http://localhost:19080/orkui/` per [06-test-framewor
 | Event permissions | Event admin → Permissions → add create/edit | Same |
 | Unauthorized grant | Non-admin attempts kingdom addauth | JSON error; no new row |
 
-Auth: dev admin + scoped test officers documented in R-02 commit.
+Auth: dev admin + scoped test officers documented in T-02 commit.
 
 ---
 

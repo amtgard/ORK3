@@ -34,6 +34,7 @@ All work happens on a branch named for the **milestone currently being executed*
 |----------------|----------------|---------|
 | Foundation | `megiddo/m0.{n}-{slug}` | `megiddo/m0.1-test-framework` |
 | Discovery | `megiddo/ds-{nn}-{slug}` | `megiddo/ds-01-rsvp-discovery` |
+| Test development | `megiddo/t-{nn}-{slug}` | `megiddo/t-01-rsvp-tests` |
 | Execution | `megiddo/r-{nn}-{slug}` | `megiddo/r-01-rsvp-refactor` |
 
 - One active milestone per branch.
