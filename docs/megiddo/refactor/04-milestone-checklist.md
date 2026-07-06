@@ -129,13 +129,22 @@ Each discovery sprint follows the same workflow for its target IDs (from [03-imp
 
 ### DS-03: Hero banner CRUD
 
+**Branch:** `megiddo/ds-03-banner-discovery`
+
 **Targets:** T-PLA-06, T-PRA-04, T-KNA-08, T-UNT-01, T-EVA-14
 
 | Step | Status | Output link |
 |------|--------|-------------|
-| Backend survey | [ ] | |
-| Test design | [ ] | |
-| Proposed revision | [ ] | |
+| Backend survey | [x] | [ds-03-banner-discovery.md §1](./ds-03-banner-discovery.md#1-backend-survey) |
+| Test design | [x] | [ds-03-banner-discovery.md §2](./ds-03-banner-discovery.md#2-test-design) |
+| Proposed revision | [x] | [ds-03-banner-discovery.md §3](./ds-03-banner-discovery.md#3-proposed-revision) |
+
+#### DS-03 sign-off gate
+
+- [x] [05-development-steering.md](./05-development-steering.md) DS-1, DS-2, DS-3, DS-6, DS-8 satisfied
+- [x] Full unit test suite passes (DS-4, DS-5)
+- [x] Infection scope documented in test design (DS-7 at R-03)
+- [x] Branch `megiddo/ds-03-banner-discovery` squashed to exactly one commit
 
 ---
 
