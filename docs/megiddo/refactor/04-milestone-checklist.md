@@ -192,13 +192,22 @@ Each discovery sprint follows the same workflow for its target IDs (from [03-imp
 
 ### DS-06: Kingdom profile & AJAX
 
+**Branch:** `megiddo/ds-06-kingdom-discovery`
+
 **Targets:** T-KNG-01 through T-KNG-11, T-KNA-01, T-KNA-02, T-KNA-04 through T-KNA-07
 
 | Step | Status | Output link |
 |------|--------|-------------|
-| Backend survey | [ ] | |
-| Test design | [ ] | |
-| Proposed revision | [ ] | |
+| Backend survey | [x] | [ds-06-kingdom-discovery.md §1](./ds-06-kingdom-discovery.md#1-backend-survey) |
+| Test design | [x] | [ds-06-kingdom-discovery.md §2](./ds-06-kingdom-discovery.md#2-test-design) |
+| Proposed revision | [x] | [ds-06-kingdom-discovery.md §3](./ds-06-kingdom-discovery.md#3-proposed-revision) |
+
+#### DS-06 sign-off gate
+
+- [x] [05-development-steering.md](./05-development-steering.md) DS-1, DS-2, DS-3, DS-6, DS-8 satisfied
+- [x] Full unit test suite passes (DS-4, DS-5)
+- [x] Infection scope documented in test design (DS-7 at R-06)
+- [x] Branch `megiddo/ds-06-kingdom-discovery` squashed to exactly one commit
 
 ---
 
