@@ -297,13 +297,22 @@ Each discovery sprint follows the same workflow for its target IDs (from [03-imp
 
 ### DS-11: Search & player search
 
+**Branch:** `megiddo/ds-11-search-discovery`
+
 **Targets:** T-SRC-01, T-SRC-02, T-ADM-10, T-KNA-06, T-PRA-01, T-EVA-06 (search portion)
 
 | Step | Status | Output link |
 |------|--------|-------------|
-| Backend survey | [ ] | |
-| Test design | [ ] | |
-| Proposed revision | [ ] | |
+| Backend survey | [x] | [ds-11-search-discovery.md §1](./ds-11-search-discovery.md#1-backend-survey) |
+| Test design | [x] | [ds-11-search-discovery.md §2](./ds-11-search-discovery.md#2-test-design) |
+| Proposed revision | [x] | [ds-11-search-discovery.md §3](./ds-11-search-discovery.md#3-proposed-revision) |
+
+#### DS-11 sign-off gate
+
+- [x] [05-development-steering.md](./05-development-steering.md) DS-1, DS-2, DS-3, DS-6, DS-8 satisfied
+- [x] Full unit test suite passes (DS-4, DS-5)
+- [x] Infection scope documented in test design (DS-7 at R-11)
+- [x] Branch `megiddo/ds-11-search-discovery` squashed to exactly one commit
 
 ---
 
