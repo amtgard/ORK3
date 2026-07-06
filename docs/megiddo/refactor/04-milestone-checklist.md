@@ -213,13 +213,22 @@ Each discovery sprint follows the same workflow for its target IDs (from [03-imp
 
 ### DS-07: Park profile & AJAX
 
+**Branch:** `megiddo/ds-07-park-discovery`
+
 **Targets:** T-PRK-01 through T-PRK-05, T-PRA-01, T-PRA-03
 
 | Step | Status | Output link |
 |------|--------|-------------|
-| Backend survey | [ ] | |
-| Test design | [ ] | |
-| Proposed revision | [ ] | |
+| Backend survey | [x] | [ds-07-park-discovery.md §1](./ds-07-park-discovery.md#1-backend-survey) |
+| Test design | [x] | [ds-07-park-discovery.md §2](./ds-07-park-discovery.md#2-test-design) |
+| Proposed revision | [x] | [ds-07-park-discovery.md §3](./ds-07-park-discovery.md#3-proposed-revision) |
+
+#### DS-07 sign-off gate
+
+- [x] [05-development-steering.md](./05-development-steering.md) DS-1, DS-2, DS-3, DS-6, DS-8 satisfied
+- [x] Full unit test suite passes (DS-4, DS-5)
+- [x] Infection scope documented in test design (DS-7 at R-07)
+- [x] Branch `megiddo/ds-07-park-discovery` squashed to exactly one commit
 
 ---
 
