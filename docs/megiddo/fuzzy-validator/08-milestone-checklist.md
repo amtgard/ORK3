@@ -72,11 +72,11 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 
 ### FU-7: Asset hard gate
 
-- [ ] Branch `megiddo/fu-7-asset-gate`
-- [ ] `gate_assets.py`, `lib/asset_manifest.py`, `lib/asset_store.py`
-- [ ] Fail on 1-byte change; pass on same commit
-- [ ] pytest coverage ≥ 90% on asset modules
-- [ ] Single squashed commit
+- [x] Branch `megiddo/fu-7-asset-gate`
+- [x] `gate_assets.py`, `lib/asset_manifest.py`, `lib/asset_store.py`
+- [x] Fail on 1-byte change; pass on same commit
+- [x] pytest coverage ≥ 90% on asset modules
+- [x] Single squashed commit
 
 ### FU-8: DOM fuzz calibration
 
@@ -123,8 +123,8 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 | FU-3 | 2026-07-07 | 742310c4 | 96% |
 | FU-4 | 2026-07-07 | 195e316a | 95% |
 | FU-5 | 2026-07-07 | eb281bad | 95% |
-| FU-6 | | | |
-| FU-7 | | | |
+| FU-6 | 2026-07-07 | f7f306ab | n/a (11 PW unit tests) |
+| FU-7 | 2026-07-07 | 3f82fd89 | 95% |
 | FU-8 | | | |
 | FU-9 | | | |
 | FU-10 | | | |

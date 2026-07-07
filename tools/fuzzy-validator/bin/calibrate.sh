@@ -92,4 +92,9 @@ for target in "${TARGETS[@]}"; do
     --out "$manifest_out" \
     --overlay "$overlay_out" \
     --baseline-out "$baseline_out"
+
+  echo "calibrate.sh: asserting asset stability for $trimmed"
+  python3 "$PYTHON_DIR/calibrate_assets.py" \
+    --page-id "$trimmed" \
+    --calibration-dir "$cal_dir"
 done

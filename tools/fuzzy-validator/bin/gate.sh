@@ -46,7 +46,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "$PHASE" != "visual" ]]; then
+if [[ "$PHASE" != "visual" && "$PHASE" != "assets" ]]; then
   echo "gate.sh: phase '$PHASE' not implemented until FU-9" >&2
   exit 2
 fi
@@ -68,6 +68,35 @@ for target in "${TARGETS[@]}"; do
   trimmed="${target// /}"
   [[ -z "$trimmed" ]] && continue
 
+  echo "gate.sh: capturing candidate for $trimmed"
+  FUZZ_MODE=candidate FUZZ_PAGES="$trimmed" \
+    npx playwright test --project=fuzzy-capture
+
+  if [[ "$PHASE" == "assets" ]]; then
+    baseline="$TOOL_ROOT/baselines/${trimmed}.assets.json"
+    candidate="$TOOL_ROOT/calibrations/${trimmed}/candidate.assets.json"
+    diff_dir="$TOOL_ROOT/reports/${trimmed}-asset-diffs"
+
+    if [[ ! -f "$baseline" ]]; then
+      echo "gate.sh: missing asset baseline $baseline" >&2
+      exit 2
+    fi
+    if [[ ! -f "$candidate" ]]; then
+      echo "gate.sh: missing candidate asset manifest $candidate" >&2
+      exit 2
+    fi
+
+    if ! python3 "$PYTHON_DIR/gate_assets.py" \
+      --page-id "$trimmed" \
+      --baseline "$baseline" \
+      --candidate "$candidate" \
+      --calibration-dir "$TOOL_ROOT/calibrations/${trimmed}" \
+      --diff-dir "$diff_dir"; then
+      exit_code=1
+    fi
+    continue
+  fi
+
   baseline="$TOOL_ROOT/baselines/${trimmed}.png"
   manifest="$TOOL_ROOT/manifests/${trimmed}.fuzz.json"
   candidate="$TOOL_ROOT/calibrations/${trimmed}/candidate.png"
@@ -81,10 +110,6 @@ for target in "${TARGETS[@]}"; do
     echo "gate.sh: missing manifest $manifest" >&2
     exit 2
   fi
-
-  echo "gate.sh: capturing candidate for $trimmed"
-  FUZZ_MODE=candidate FUZZ_PAGES="$trimmed" \
-    npx playwright test --project=fuzzy-capture
 
   if ! python3 "$PYTHON_DIR/gate.py" \
     --page-id "$trimmed" \

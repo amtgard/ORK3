@@ -90,9 +90,9 @@ def _resolve_page_ids(args: argparse.Namespace) -> list[str]:
 
 
 def _run_capture(args: argparse.Namespace) -> int:
-    if args.phase not in {"visual", "all"}:
+    if args.phase not in {"visual", "assets", "all"}:
         print(
-            f"fuzzy-validator record: phase '{args.phase}' not implemented until FU-6+",
+            f"fuzzy-validator record: phase '{args.phase}' not implemented until FU-8+",
             file=sys.stderr,
         )
         return 2
@@ -118,6 +118,28 @@ def _run_capture(args: argparse.Namespace) -> int:
     )
     if result.returncode != 0:
         return int(result.returncode)
+
+    if args.phase == "assets":
+        env["PYTHONPATH"] = f"{env.get('PYTHONPATH', '')}:{PYTHON_DIR}"
+        calibrate_assets_script = PYTHON_DIR / "calibrate_assets.py"
+        for page_id in page_ids:
+            cal_dir = TOOL_ROOT / "calibrations" / page_id
+            calibrate = subprocess.run(
+                [
+                    sys.executable,
+                    str(calibrate_assets_script),
+                    "--page-id",
+                    page_id,
+                    "--calibration-dir",
+                    str(cal_dir),
+                ],
+                cwd=REPO_ROOT,
+                env=env,
+                check=False,
+            )
+            if calibrate.returncode != 0:
+                return int(calibrate.returncode)
+        return 0
 
     discover_script = PYTHON_DIR / "discover_fuzz.py"
     env["PYTHONPATH"] = f"{env.get('PYTHONPATH', '')}:{PYTHON_DIR}"
@@ -152,7 +174,7 @@ def _run_capture(args: argparse.Namespace) -> int:
 
 
 def _run_validate(args: argparse.Namespace) -> int:
-    if args.phase not in {"visual", "all"}:
+    if args.phase not in {"visual", "assets", "all"}:
         print(
             f"fuzzy-validator validate: phase '{args.phase}' not implemented until FU-9+",
             file=sys.stderr,
