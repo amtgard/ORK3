@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Fuzzy Validator — CLI dispatcher (FU-0 stub; implement subcommands in FU-1+)
+# Fuzzy Validator — CLI dispatcher
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TOOL_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PYTHON_DIR="$TOOL_ROOT/python"
 
 usage() {
   cat <<'EOF'
@@ -32,10 +32,8 @@ shift || true
 
 case "$cmd" in
   record|validate)
-    echo "fuzzy-validator: '$cmd' not implemented yet (FU-1+)." >&2
-    echo "Planned implementation: $TOOL_ROOT/bin/fuzzy-validator-$cmd" >&2
-    usage
-    exit 2
+    export PYTHONPATH="${PYTHONPATH:-}:$PYTHON_DIR"
+    exec python3 -m fuzzy_validator.cli "$cmd" "$@"
     ;;
   -h|--help|help|'')
     usage

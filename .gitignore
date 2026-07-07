@@ -49,3 +49,7 @@ config.tmpprod.php
 tools/ork-db/extracted/
 tools/ork-db/rendered/
 tools/ork-db/.last-apply.json
+tools/fuzzy-validator/calibrations/
+tools/fuzzy-validator/reports/
+__pycache__/
+*.pyc

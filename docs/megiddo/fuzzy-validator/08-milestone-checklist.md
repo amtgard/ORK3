@@ -8,15 +8,15 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 
 ### FU-0: Scaffold
 
-- [ ] Branch `megiddo/fu-0-scaffold` created
-- [ ] Directory layout under `tools/fuzzy-validator/`
-- [ ] **`bin/fuzzy-validator`** wrapper at repo root (executable)
-- [ ] `tools/fuzzy-validator/bin/fuzzy-validator` with `record` / `validate` stubs
-- [ ] Python CLI stubs with `--help`
-- [ ] npm scripts in root `package.json`
-- [ ] `.gitignore` entries for `calibrations/` and `reports/`
-- [ ] Milestone tests pass; coverage baseline recorded
-- [ ] Single squashed commit on branch
+- [x] Branch `megiddo/fu-0-scaffold` created
+- [x] Directory layout under `tools/fuzzy-validator/`
+- [x] **`bin/fuzzy-validator`** wrapper at repo root (executable)
+- [x] `tools/fuzzy-validator/bin/fuzzy-validator` with `record` / `validate` stubs
+- [x] Python CLI stubs with `--help`
+- [x] npm scripts in root `package.json`
+- [x] `.gitignore` entries for `calibrations/` and `reports/`
+- [x] Milestone tests pass; coverage baseline recorded
+- [x] Single squashed commit on branch
 
 ### FU-1: Playwright capture
 
@@ -102,13 +102,22 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 - [ ] pytest coverage ≥ 90% on entire `tools/fuzzy-validator/python/`
 - [ ] Single squashed commit
 
+### FU-11: Dual database profiles
+
+- [ ] Branch `megiddo/fu-11-dual-db`
+- [ ] `manifests/profiles.json5`; baselines under `baselines/test/` and `baselines/mirror/`
+- [ ] `record`/`validate` default `--profiles test,mirror`; calls `bin/ork-db use`
+- [ ] Tiered thresholds: test strict (1.0), mirror lenient (visual 0.98)
+- [ ] HTML report sections per profile
+- [ ] Single squashed commit
+
 ---
 
 ## Sign-off notes
 
 | Milestone | Date | Commit | Coverage % |
 |-----------|------|--------|------------|
-| FU-0 | | | |
+| FU-0 | 2026-07-07 | 97e1b335 | n/a (4 tests) |
 | FU-1 | | | |
 | FU-2 | | | |
 | FU-3 | | | |
@@ -119,3 +128,4 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 | FU-8 | | | |
 | FU-9 | | | |
 | FU-10 | | | |
+| FU-11 | | | |
