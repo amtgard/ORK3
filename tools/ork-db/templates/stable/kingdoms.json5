@@ -1,7 +1,7 @@
 {
   "kingdoms": [
     {
-      "id": 9001,
+      "id": 100001,
       "type": "sovereign",
       "moniker": "Empire of",
       "name": "Ashkara",
@@ -10,7 +10,7 @@
       "description": "Caliphal test sovereign — primary parent for Litavia."
     },
     {
-      "id": 9002,
+      "id": 100002,
       "type": "sovereign",
       "moniker": "Kingdom of",
       "name": "Meridia",
@@ -19,7 +19,7 @@
       "description": "Western feudal test sovereign."
     },
     {
-      "id": 9003,
+      "id": 100003,
       "type": "sovereign",
       "moniker": "Sultanate of",
       "name": "Zanzibarr",
@@ -28,7 +28,7 @@
       "description": "Swahili coast test sovereign."
     },
     {
-      "id": 9004,
+      "id": 100004,
       "type": "sovereign",
       "moniker": "Tsardom of",
       "name": "Vyatka",
@@ -37,12 +37,12 @@
       "description": "Rus-inspired test sovereign."
     },
     {
-      "id": 9005,
+      "id": 100005,
       "type": "principality",
       "moniker": "Grand Duchy of",
       "name": "Litavia",
       "abbreviation": "GDL",
-      "parent_kingdom_id": 9001,
+      "parent_kingdom_id": 100001,
       "description": "Baltic-flavored principality under Empire of Ashkara."
     }
   ]

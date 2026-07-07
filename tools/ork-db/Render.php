@@ -33,7 +33,7 @@ final class Render
     /** @var list<array{event_id: int, kingdom_id: int, name: string}> */
     private array $events = [];
 
-    private int $nextFakeMundaneId = 1000;
+    private int $nextFakeMundaneId = IdNamespace::FAKE_MUNDANE_ID_START;
     private int $nextEventId = 80000;
     private int $nextKingdomAwardId = 1;
     private int $nextConfigurationId = 1;
@@ -92,16 +92,119 @@ final class Render
 
     public function expectedParkCountForSeed(int $seed): int
     {
+        return count($this->parkLayoutForSeed($seed));
+    }
+
+    /**
+     * @return list<array{kingdom_id: int, park_id: int, name: string, abbreviation: string, kingdom_ordinal: int}>
+     */
+    public function parkLayoutForSeed(int $seed): array
+    {
         mt_srand($seed);
-        $total = 0;
-        for ($i = 0; $i < 5; $i++) {
-            $total += mt_rand(
-                (int) ($this->fingerprints['parks_per_kingdom_range'][0] ?? 2),
-                (int) ($this->fingerprints['parks_per_kingdom_range'][1] ?? 6)
-            );
+
+        return $this->generateParksLayout();
+    }
+
+    /** @return list<int> */
+    public function fakeMundaneIdsForSeed(int $seed): array
+    {
+        mt_srand($seed);
+        $this->resetGenerationState();
+
+        foreach ($this->generateParksLayout() as $park) {
+            $this->parks[] = [
+                'kingdom_id' => $park['kingdom_id'],
+                'park_id' => $park['park_id'],
+                'name' => $park['name'],
+                'abbreviation' => $park['abbreviation'],
+            ];
         }
 
-        return $total;
+        $this->consumeRealPlayerRng();
+
+        $ids = [];
+        foreach ($this->parks as $park) {
+            unset($park);
+            $targetCount = mt_rand(5, 25);
+            for ($slot = 0; $slot < $targetCount; $slot++) {
+                $ids[] = $this->nextFakeMundaneId++;
+            }
+        }
+
+        return $ids;
+    }
+
+    /** @return list<int> */
+    public function fakeMundaneHeraldryIdsForSeed(int $seed): array
+    {
+        mt_srand($seed);
+        $this->resetGenerationState();
+
+        foreach ($this->generateParksLayout() as $park) {
+            $this->parks[] = [
+                'kingdom_id' => $park['kingdom_id'],
+                'park_id' => $park['park_id'],
+                'name' => $park['name'],
+                'abbreviation' => $park['abbreviation'],
+            ];
+        }
+
+        $this->consumeRealPlayerRng();
+
+        $ids = [];
+        foreach ($this->parks as $park) {
+            unset($park);
+            $targetCount = mt_rand(5, 25);
+            for ($slot = 0; $slot < $targetCount; $slot++) {
+                if (mt_rand(1, 100) <= IdNamespace::FAKE_PLAYER_HERALDRY_PERCENT) {
+                    $ids[] = $this->nextFakeMundaneId;
+                }
+                $this->nextFakeMundaneId++;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * @return list<array{kingdom_id: int, park_id: int, name: string, abbreviation: string, kingdom_ordinal: int}>
+     */
+    private function generateParksLayout(): array
+    {
+        $names = Json5::decodeFile($this->toolRoot . '/templates/stable/park_names.json5')['names'] ?? [];
+        if ($names === []) {
+            throw new ValidationException('Park name pool is empty');
+        }
+
+        $kingdoms = Json5::decodeFile($this->toolRoot . '/templates/stable/kingdoms.json5')['kingdoms'] ?? [];
+        $range = $this->fingerprints['parks_per_kingdom_range'] ?? [2, 6];
+        $min = (int) $range[0];
+        $max = (int) $range[1];
+        $parks = [];
+        $nameIndex = 0;
+
+        foreach ($kingdoms as $ordinal => $kingdom) {
+            $kingdomId = (int) $kingdom['id'];
+            $parkCount = mt_rand($min, $max);
+            for ($seq = 1; $seq <= $parkCount; $seq++) {
+                $name = (string) $names[$nameIndex % count($names)];
+                $nameIndex++;
+                $abbreviation = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $name) ?? 'PRK', 0, 3));
+                if ($abbreviation === '') {
+                    $abbreviation = 'PRK';
+                }
+
+                $parks[] = [
+                    'kingdom_id' => $kingdomId,
+                    'park_id' => IdNamespace::parkId((int) $ordinal, $seq),
+                    'name' => $name,
+                    'abbreviation' => $abbreviation,
+                    'kingdom_ordinal' => (int) $ordinal,
+                ];
+            }
+        }
+
+        return $parks;
     }
 
     private function resetGenerationState(): void
@@ -110,7 +213,7 @@ final class Render
         $this->fakePlayers = [];
         $this->awards = [];
         $this->events = [];
-        $this->nextFakeMundaneId = 1000;
+        $this->nextFakeMundaneId = IdNamespace::FAKE_MUNDANE_ID_START;
         $this->nextEventId = 80000;
         $this->nextKingdomAwardId = 1;
         $this->nextConfigurationId = 1;
@@ -309,7 +412,7 @@ final class Render
                 'kingdom_id' => (int) $kingdom['id'],
                 'name' => $displayName,
                 'abbreviation' => (string) $kingdom['abbreviation'],
-                'has_heraldry' => 0,
+                'has_heraldry' => 1,
                 'parent_kingdom_id' => (int) $kingdom['parent_kingdom_id'],
                 'description' => (string) ($kingdom['description'] ?? ''),
                 'url' => null,
@@ -323,60 +426,38 @@ final class Render
 
     private function sectionParks(bool $deterministic): string
     {
-        $names = Json5::decodeFile($this->toolRoot . '/templates/stable/park_names.json5')['names'] ?? [];
-        if ($names === []) {
-            throw new ValidationException('Park name pool is empty');
-        }
-
-        $kingdoms = Json5::decodeFile($this->toolRoot . '/templates/stable/kingdoms.json5')['kingdoms'] ?? [];
-        $range = $this->fingerprints['parks_per_kingdom_range'] ?? [2, 6];
-        $min = (int) $range[0];
-        $max = (int) $range[1];
         $lines = ["-- Section: parks\n"];
-        $nameIndex = 0;
 
-        foreach ($kingdoms as $kingdom) {
-            $kingdomId = (int) $kingdom['id'];
-            $parkCount = mt_rand($min, $max);
-            for ($seq = 1; $seq <= $parkCount; $seq++) {
-                $parkId = $kingdomId * 1000 + $seq;
-                $name = (string) $names[$nameIndex % count($names)];
-                $nameIndex++;
-                $abbreviation = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $name) ?? 'PRK', 0, 3));
-                if ($abbreviation === '') {
-                    $abbreviation = 'PRK';
-                }
+        foreach ($this->generateParksLayout() as $park) {
+            $this->parks[] = [
+                'kingdom_id' => $park['kingdom_id'],
+                'park_id' => $park['park_id'],
+                'name' => $park['name'],
+                'abbreviation' => $park['abbreviation'],
+            ];
 
-                $this->parks[] = [
-                    'kingdom_id' => $kingdomId,
-                    'park_id' => $parkId,
-                    'name' => $name,
-                    'abbreviation' => $abbreviation,
-                ];
-
-                $lines[] = $this->buildInsert(self::DB_PREFIX . 'park', [
-                    'park_id' => $parkId,
-                    'kingdom_id' => $kingdomId,
-                    'name' => $name,
-                    'abbreviation' => $abbreviation,
-                    'has_heraldry' => 0,
-                    'url' => '',
-                    'parktitle_id' => 1,
-                    'active' => 'Active',
-                    'address' => '1 Test Lane',
-                    'city' => 'Testville',
-                    'province' => 'TS',
-                    'postal_code' => '00000',
-                    'google_geocode' => '',
-                    'latitude' => 0.0,
-                    'longitude' => 0.0,
-                    'location' => '',
-                    'map_url' => '',
-                    'description' => 'Generated test park',
-                    'directions' => '',
-                    'modified' => $this->timestampValue($deterministic),
-                ]);
-            }
+            $lines[] = $this->buildInsert(self::DB_PREFIX . 'park', [
+                'park_id' => $park['park_id'],
+                'kingdom_id' => $park['kingdom_id'],
+                'name' => $park['name'],
+                'abbreviation' => $park['abbreviation'],
+                'has_heraldry' => 1,
+                'url' => '',
+                'parktitle_id' => 1,
+                'active' => 'Active',
+                'address' => '1 Test Lane',
+                'city' => 'Testville',
+                'province' => 'TS',
+                'postal_code' => '00000',
+                'google_geocode' => '',
+                'latitude' => 0.0,
+                'longitude' => 0.0,
+                'location' => '',
+                'map_url' => '',
+                'description' => 'Generated test park',
+                'directions' => '',
+                'modified' => $this->timestampValue($deterministic),
+            ]);
         }
 
         return implode("\n", $lines) . "\n";
@@ -419,6 +500,8 @@ final class Render
             }
 
             $mundane['modified'] = $this->timestampValue($deterministic);
+            $mundane['has_heraldry'] = 1;
+            $mundane['has_image'] = 0;
             $lines[] = $this->buildInsert(
                 self::DB_PREFIX . 'mundane',
                 $this->filterMundaneRow($mundane)
@@ -426,6 +509,42 @@ final class Render
         }
 
         return implode("\n", $lines) . "\n";
+    }
+
+    private function consumeRealPlayerRng(): void
+    {
+        $path = $this->toolRoot . '/extracted/mundane_real.json';
+        if (!is_readable($path)) {
+            return;
+        }
+
+        $bundle = json_decode((string) file_get_contents($path), true);
+        if (!is_array($bundle)) {
+            return;
+        }
+
+        $rules = Json5::decodeFile($this->toolRoot . '/templates/hybrid/real_players.json5');
+        $ruleMap = [];
+        foreach ($rules['players'] ?? [] as $rule) {
+            $ruleMap[(string) $rule['key']] = $rule;
+        }
+
+        foreach ($bundle['players'] ?? [] as $player) {
+            $key = (string) ($player['key'] ?? '');
+            $mundane = $player['mundane'] ?? null;
+            if (!is_array($mundane)) {
+                continue;
+            }
+
+            $rule = $ruleMap[$key] ?? ['assign_park' => 'seed', 'keep_global_admin' => false];
+            if (!empty($rule['keep_global_admin'])) {
+                continue;
+            }
+
+            if (($rule['assign_park'] ?? null) === 'seed' && $this->parks !== []) {
+                mt_rand(0, count($this->parks) - 1);
+            }
+        }
     }
 
     private function sectionFakePlayers(bool $deterministic): string
@@ -446,6 +565,7 @@ final class Render
                 $personaIndex++;
                 $slug = strtolower(preg_replace('/[^a-z0-9]+/i', '-', $persona) ?? 'player');
                 $username = 'test-' . $slug . '-' . $this->nextFakeMundaneId;
+                $hasHeraldry = mt_rand(1, 100) <= IdNamespace::FAKE_PLAYER_HERALDRY_PERCENT ? 1 : 0;
 
                 $player = [
                     'mundane_id' => $this->nextFakeMundaneId,
@@ -462,7 +582,7 @@ final class Render
                     'restricted' => 0,
                     'waivered' => 1,
                     'waiver_ext' => '',
-                    'has_heraldry' => 0,
+                    'has_heraldry' => $hasHeraldry,
                     'has_image' => 0,
                     'company_id' => 0,
                     'token_expires' => '2030-01-01 00:00:00',
@@ -567,6 +687,9 @@ final class Render
         $detailId = 1;
         $anchor = new \DateTimeImmutable($anchorDate);
 
+        $primaryKingdomId = IdNamespace::KINGDOM_ID_MIN;
+        $primaryParkId = $this->parks[0]['park_id'] ?? IdNamespace::parkId(0, 1);
+
         foreach ($templates as $template) {
             $name = (string) $template['name'];
             $sample = $this->findExtractedEventSample($extracted, $name);
@@ -576,12 +699,12 @@ final class Render
 
             for ($i = 0; $i < $occurrences; $i++) {
                 $eventId = $this->nextEventId++;
-                $this->events[] = ['event_id' => $eventId, 'kingdom_id' => 9001, 'name' => $name];
+                $this->events[] = ['event_id' => $eventId, 'kingdom_id' => $primaryKingdomId, 'name' => $name];
 
                 $lines[] = $this->buildInsert(self::DB_PREFIX . 'event', [
                     'event_id' => $eventId,
-                    'kingdom_id' => 9001,
-                    'park_id' => $this->parks[0]['park_id'] ?? 9001001,
+                    'kingdom_id' => $primaryKingdomId,
+                    'park_id' => $primaryParkId,
                     'mundane_id' => 0,
                     'unit_id' => 0,
                     'name' => $name,
@@ -668,7 +791,7 @@ final class Render
         $awardRows = $this->loadAwardRows();
         $lines = ["-- Section: kingdom awards\n"];
 
-        foreach ($config['kingdom_ids'] ?? [9001, 9002, 9003, 9004, 9005] as $kingdomId) {
+        foreach ($config['kingdom_ids'] ?? range(IdNamespace::KINGDOM_ID_MIN, IdNamespace::KINGDOM_ID_MAX) as $kingdomId) {
             $kingdomId = (int) $kingdomId;
             foreach ($awardRows as $award) {
                 $lines[] = $this->buildInsert(self::DB_PREFIX . 'kingdomaward', [

@@ -61,7 +61,7 @@ Move **synthetic** entities into high blocks. **Do not change** real operator `m
 |--------|-----|----------|---------|----------|
 | **Kingdoms** | `9001`–`9005` | `100000` | Fixed in `kingdoms.json5`: `100001` … `100005` | Ashkara → `100001`, Litavia → `100005` |
 | **Parks** | `9001001`, … | `1000000` | `1_000_000 + (kingdom_ordinal × 100) + seq` | K1 park 1 → `1000001`; K5 park 3 → `1000403` |
-| **Fake mundanes** | `1000+` | `1000000` | Counter from `1_000_000` | `1000000`, `1000001`, … |
+| **Fake mundanes** | `1000+` | `100000000` | Counter from `100_000_000` | `100000000`, `100000001`, … |
 | **Real mundanes** | unchanged | — | Extract pins | `1`, `4`, `43232`, `46193` |
 | **Events** *(optional)* | `80000+` | `2000000` | Counter from `2_000_000` | Avoids park block; defer if not needed |
 
@@ -79,7 +79,7 @@ Move **synthetic** entities into high blocks. **Do not change** real operator `m
 
 ### Why migrate
 
-Real prod/mirror heraldry uses low IDs (`0042.jpg`, `12345.jpg`). Test assets at `100001+`, `1000001+`, `1000000+` stay in a dedicated namespace. The old `9001`/`9001001` range could overlap plausible real kingdom/park IDs on a dev mirror.
+Real prod/mirror heraldry uses low IDs (`0042.jpg`, `12345.jpg`). Test assets at `100001+`, `1000001+`, `100000000+` stay in a dedicated namespace. The old `9001`/`9001001` range could overlap plausible real kingdom/park IDs on a dev mirror.
 
 ### Code and doc touch list
 
@@ -100,7 +100,7 @@ Real prod/mirror heraldry uses low IDs (`0042.jpg`, `12345.jpg`). Test assets at
 ### Format
 
 - **Source:** SVG (diffable, parameterized, committed)
-- **Output:** PNG 256×256 or 512×512, transparent background trimmed
+- **Output:** PNG `@ 256×256` for default player placeholder (`000000.png`); JPEG quality **80** for kingdom, park, and per-player heraldry
 - **Shape:** Heater shield (kingdom and park); same silhouette for consistency
 
 ### Kingdom shields (5 unique)
@@ -121,12 +121,10 @@ Real prod/mirror heraldry uses low IDs (`0042.jpg`, `12345.jpg`). Test assets at
 
 ### Player placeholders
 
-- Single **phoenix on shield** master SVG
-- Deployed to every fake player ID as:
-  - `assets/heraldry/player/{mundane_id}.png` → `has_heraldry=1`
-  - `assets/players/{mundane_id}.png` → `has_image=1` (square crop for avatars)
-
-**Real players** (`megiddo`, Ken, Avery): open decision — phoenix placeholders for sandbox consistency, or keep extract flags and accept missing files until real art is supplied. Default recommendation: **phoenix placeholders in sandbox** so profile/roster pages never show broken images.
+- Single **phoenix on shield** master SVG deployed once as **`000000.png`** under `assets/heraldry/player/` and `assets/players/` (ORK default basename)
+- **~30%** of fake players (seed-stable roll) get `has_heraldry=1` and a per-id heraldry PNG; the rest use `has_heraldry=0` (letter fallback on rosters)
+- Fake players keep `has_image=0`; portraits fall back to heraldry when flagged, otherwise the default phoenix path is available on disk for manual/report use
+- Real operators keep `has_heraldry=1` with per-id heraldry files; `has_image=0`
 
 ---
 
@@ -172,8 +170,8 @@ After ID migration, `Render.php` emits:
 
 - `ork_kingdom.has_heraldry = 1` for all five test kingdoms
 - `ork_park.has_heraldry = 1` for all generated parks
-- `ork_mundane.has_heraldry = 1`, `has_image = 1` for all fake players
-- Real players: per open decision (§4)
+- ~30% of fake `ork_mundane` rows get `has_heraldry = 1`; all fake rows keep `has_image = 0`
+- Real players: `has_heraldry = 1`, `has_image = 0`
 
 ---
 
@@ -225,7 +223,7 @@ Post-apply checks (extend `Validate.php`):
 |-------|----------------|
 | Kingdom heraldry files | For each `ork_kingdom` row `100001`–`100005` with `has_heraldry=1`, file exists |
 | Park heraldry files | For each test park row with `has_heraldry=1`, file exists |
-| Fake player files | For fake mundanes `≥ 1000000` with flags set, heraldry + portrait files exist |
+| Fake player files | For fake mundanes `≥ 100000000` with flags set, heraldry + portrait files exist |
 | Asset manifest *(optional)* | SHA256 matches `asset-manifest.json5` |
 
 Failure remediation hint: `bin/ork-db generate-assets && bin/ork-db deploy-assets`
@@ -249,7 +247,7 @@ Failure remediation hint: `bin/ork-db generate-assets && bin/ork-db deploy-asset
 
 | ID | Title | Deliverable |
 |----|-------|-------------|
-| **TD-11a** | ID namespace | `100001` kingdoms, `1M` parks/players; validate + tests + docs |
+| **TD-11a** | ID namespace | `100001` kingdoms, `1M` parks, `100M` fake mundanes; validate + tests + docs |
 | **TD-11b** | Generate heraldry | SVG templates, `generate-assets`, render flags, committed PNGs |
 | **TD-11c** | Deploy assets | `deploy-assets`, `deploy-sandbox` hook, validate file checks |
 | **TD-11d** | Visual sign-off | Manual or Playwright smoke on kingdom/park/player pages |

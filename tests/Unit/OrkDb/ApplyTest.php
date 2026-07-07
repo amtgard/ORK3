@@ -174,11 +174,11 @@ final class ApplyTest extends TestCase
             )'
         );
         $kingdoms = [
-            [9001, 'Empire of Ashkara', 'EAK', 0],
-            [9002, 'Kingdom of Meridia', 'KMR', 0],
-            [9003, 'Sultanate of Zanzibarr', 'SZ', 0],
-            [9004, 'Tsardom of Vyatka', 'TVK', 0],
-            [9005, 'Grand Duchy of Litavia', 'GDL', 9001],
+            [100001, 'Empire of Ashkara', 'EAK', 0],
+            [100002, 'Kingdom of Meridia', 'KMR', 0],
+            [100003, 'Sultanate of Zanzibarr', 'SZ', 0],
+            [100004, 'Tsardom of Vyatka', 'TVK', 0],
+            [100005, 'Grand Duchy of Litavia', 'GDL', 100001],
         ];
         foreach ($kingdoms as $row) {
             $pdo->exec(sprintf(
@@ -192,7 +192,7 @@ final class ApplyTest extends TestCase
 
         $pdo->exec('CREATE TABLE ork_park (park_id INTEGER PRIMARY KEY, kingdom_id INTEGER)');
         $parkId = 1;
-        foreach ([9001 => 4, 9002 => 4, 9003 => 3, 9004 => 6, 9005 => 3] as $kingdomId => $count) {
+        foreach ([100001 => 4, 100002 => 4, 100003 => 3, 100004 => 6, 100005 => 3] as $kingdomId => $count) {
             for ($i = 0; $i < $count; $i++) {
                 $pdo->exec('INSERT INTO ork_park VALUES (' . $parkId++ . ', ' . $kingdomId . ')');
             }

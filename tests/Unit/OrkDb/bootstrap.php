@@ -6,6 +6,7 @@ define('ORK3_ROOT', dirname(__DIR__, 3));
 
 require_once ORK3_ROOT . '/vendor/autoload.php';
 
+require_once ORK3_ROOT . '/tools/ork-db/lib/IdNamespace.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/Json5.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/ValidationException.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/TierRefusalException.php';
@@ -24,6 +25,8 @@ require_once ORK3_ROOT . '/tools/ork-db/Bootstrap.php';
 require_once ORK3_ROOT . '/tools/ork-db/DriftCheck.php';
 require_once ORK3_ROOT . '/tools/ork-db/SchemaDiff.php';
 require_once ORK3_ROOT . '/tools/ork-db/DeploySandbox.php';
+require_once ORK3_ROOT . '/tools/ork-db/GenerateAssets.php';
+require_once ORK3_ROOT . '/tools/ork-db/DeployAssets.php';
 
 /**
  * Whether the sandbox database used by ork-db tools accepts connections.

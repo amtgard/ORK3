@@ -6,6 +6,7 @@ namespace OrkDb\Tests;
 
 use OrkDb\Apply;
 use OrkDb\Bootstrap;
+use OrkDb\DeployAssets;
 use OrkDb\DeploySandbox;
 use OrkDb\DeploymentTier;
 use OrkDb\Extract;
@@ -40,6 +41,7 @@ final class DeploySandboxIntegrationTest extends TestCase
         $apply = new Apply($wiring, $validate, $render, ORK3_ROOT);
         $bootstrap = new Bootstrap($validate, $init, $extract, $apply, $toolRoot);
         $useProfile = new UseProfile($tier, ORK3_ROOT, static fn (): int => 0);
+        $deployAssets = new DeployAssets($toolRoot, ORK3_ROOT);
 
         $deploy = new DeploySandbox(
             $tier,
@@ -51,10 +53,11 @@ final class DeploySandboxIntegrationTest extends TestCase
             $render,
             $apply,
             $useProfile,
+            $deployAssets,
             $toolRoot,
         );
 
-        $result = $deploy->run(['yes' => true, 'skip_use_dev' => true]);
+        $result = $deploy->run(['yes' => true, 'skip_use_dev' => true, 'force_refresh' => true]);
         putenv('ENVIRONMENT');
 
         $output = implode("\n", $result['lines']);

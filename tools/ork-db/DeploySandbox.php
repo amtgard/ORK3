@@ -16,6 +16,7 @@ final class DeploySandbox
         private readonly Render $render,
         private readonly Apply $apply,
         private readonly UseProfile $useProfile,
+        private readonly DeployAssets $deployAssets,
         private readonly string $toolRoot,
         private readonly ?\DateTimeImmutable $clock = null,
     ) {
@@ -112,7 +113,28 @@ final class DeploySandbox
             $lines[] = 'Deploy:       daily refresh skipped (render anchored today)';
         }
 
-        $post = $this->validate->run(Validate::MODE_POST_APPLY);
+        try {
+            $assetDeploy = $this->deployAssets->run();
+            $lines[] = 'Deploy:       deploy-assets → ' . count($assetDeploy['files']) . ' files';
+            $lines[] = sprintf(
+                'Deploy:       assets kingdom %d, park %d, player heraldry %d, portraits %d',
+                $assetDeploy['kingdom_count'],
+                $assetDeploy['park_count'],
+                $assetDeploy['player_heraldry_count'],
+                $assetDeploy['player_portrait_count'],
+            );
+            if ($assetDeploy['manifest_ok'] === true) {
+                $lines[] = 'Deploy:       asset manifest ok';
+            }
+        } catch (ValidationException $e) {
+            $lines[] = 'Deploy:       deploy-assets FAIL — ' . $e->getMessage();
+            $lines[] = 'Remediation:  bin/ork-db generate-assets && bin/ork-db deploy-assets';
+            $lines[] = 'Deploy:       ABORT — deploy-assets failed';
+
+            return ['lines' => $lines, 'exit_code' => 2];
+        }
+
+        $post = $this->validate->run(Validate::MODE_POST_APPLY, true);
         foreach ($post['lines'] as $line) {
             $lines[] = $line;
         }
@@ -186,6 +208,9 @@ final class DeploySandbox
         }
         if (str_contains($text, 'Blocklist:    FAIL')) {
             $hints[] = 'Remediation:  inspect tools/ork-db/rendered/sandbox.sql and re-run apply';
+        }
+        if (str_contains($text, 'Assets:       FAIL')) {
+            $hints[] = 'Remediation:  bin/ork-db generate-assets && bin/ork-db deploy-assets';
         }
 
         if ($hints === []) {

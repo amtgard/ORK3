@@ -25,7 +25,7 @@ Explicit, isolated test database for ORK3 development and PHPUnit integration te
 | [09-milestone-checklist.md](./09-milestone-checklist.md) | TD-* completion checkboxes |
 | [10-cli-reference.md](./10-cli-reference.md) | **`bin/ork-db` command palette** |
 | [11-post-implementation-tasks.md](./11-post-implementation-tasks.md) | **Post TD-6/7 backlog, schema-drift explanation, sign-off path** |
-| [12-heraldry-and-assets.md](./12-heraldry-and-assets.md) | **TD-11: heraldry generation, asset deploy, ID namespace (`100001` / `1M`)** |
+| [12-heraldry-and-assets.md](./12-heraldry-and-assets.md) | **TD-11: heraldry generation, asset deploy, ID namespace (`100001` / `1M` parks / `100M` players)** |
 
 ---
 

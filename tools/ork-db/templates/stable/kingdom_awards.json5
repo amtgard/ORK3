@@ -1,14 +1,17 @@
 {
-  "clone_from_award": true,
-  "kingdom_ids": [9001, 9002, 9003, 9004, 9005],
-  "extras_per_kingdom": { "min": 2, "max": 8 },
+  "kingdom_ids": [100001, 100002, 100003, 100004, 100005],
+  "extras_per_kingdom": {
+    "min": 2,
+    "max": 8
+  },
   "extra_name_pool": [
-    "Order of the Golden Quill",
-    "Shield of the Broken Crown",
-    "Mark of the Silent Herald",
-    "Badge of the Ember Road",
-    "Star of the Hollow Oak",
-    "Crown of Salt and Ash",
-    "Sigil of the Wandering Lark"
+    "Order of the Test Blade",
+    "Golden Quill",
+    "Silver Oak",
+    "Iron Star",
+    "Crimson Feather",
+    "Azure Shield",
+    "Verdant Crown",
+    "Obsidian Ring"
   ]
 }

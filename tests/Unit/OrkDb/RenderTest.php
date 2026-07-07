@@ -64,10 +64,11 @@ final class RenderTest extends TestCase
         $this->assertStringContainsString('INSERT INTO `ork_configuration`', $sql);
         $this->assertStringContainsString('-- migration: 2026-05-17-add-entity-banners.sql', $sql);
         $this->assertStringContainsString('-- baseline schema gaps', $sql);
-        $this->assertLessThan(
-            strpos($sql, 'INSERT INTO `ork_park`'),
-            strpos($sql, 'INSERT INTO `ork_kingdom`')
-        );
+        $this->assertStringContainsString('INSERT INTO `ork_kingdom`', $sql);
+        $this->assertStringContainsString('`has_heraldry`, `parent_kingdom_id`', $sql);
+        $this->assertStringContainsString('VALUES (100001,', $sql);
+        $this->assertStringContainsString('VALUES (1000001, 100001,', $sql);
+        $this->assertStringContainsString('`has_heraldry`, `has_image`', $sql);
     }
 
     public function testRunFailsWhenExtractCatalogMissing(): void
@@ -83,6 +84,30 @@ final class RenderTest extends TestCase
     {
         $render = new Render($this->toolRoot, $this->repoRoot);
         $this->assertSame(20, $render->expectedParkCountForSeed(42));
+    }
+
+    public function testRenderEmitsHighNamespaceIdsAndHeraldryFlags(): void
+    {
+        $render = new Render($this->toolRoot, $this->repoRoot);
+        $output = $this->toolRoot . '/rendered/namespace.sql';
+        $render->run([
+            'anchor_date' => '2026-07-07',
+            'seed' => 42,
+            'output' => $output,
+            'deterministic' => true,
+        ]);
+
+        $sql = (string) file_get_contents($output);
+        $this->assertStringContainsString('VALUES (100001,', $sql);
+        $this->assertStringContainsString('VALUES (1000001, 100001,', $sql);
+        $this->assertStringContainsString('`has_heraldry`, `parent_kingdom_id`', $sql);
+        $this->assertStringContainsString('`has_heraldry`, `has_image`', $sql);
+        $this->assertMatchesRegularExpression('/VALUES \(100000000,/', $sql);
+        $this->assertStringContainsString(', 0, 0,', $sql);
+        $this->assertStringContainsString(', 1, 0,', $sql);
+        $heraldryIds = $render->fakeMundaneHeraldryIdsForSeed(42);
+        $this->assertNotEmpty($heraldryIds);
+        $this->assertLessThan(count($render->fakeMundaneIdsForSeed(42)), count($heraldryIds));
     }
 
     public function testAttendanceDatesStayInsideThreeYearWindow(): void

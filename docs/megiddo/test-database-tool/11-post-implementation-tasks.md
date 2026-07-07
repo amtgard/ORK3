@@ -153,7 +153,7 @@ Spec: [07-implementation-plan.md](./07-implementation-plan.md) §9 · [10-cli-re
 
 | Task | Deliverable | Acceptance |
 |------|-------------|------------|
-| **11a** | ID migration | Kingdoms `100001`–`100005`; parks `@ 1M`; fake mundanes `@ 1M`; validate + golden hash |
+| **11a** | ID migration | Kingdoms `100001`–`100005`; parks `@ 1M`; fake mundanes `@ 100M`; validate + golden hash |
 | **11b** | `generate-assets` | SVG → PNG; kingdom/park shields + phoenix player placeholder; render flags |
 | **11c** | `deploy-assets` | Copy to `assets/`; hook `deploy-sandbox`; post-apply file validation |
 | **11d** | Visual sign-off | Kingdom/park/player pages show real art, not defaults |

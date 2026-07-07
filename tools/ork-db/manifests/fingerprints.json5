@@ -1,10 +1,10 @@
 {
   "kingdoms": [
-    { "id": 9001, "name": "Empire of Ashkara", "abbreviation": "EAK", "parent_kingdom_id": 0 },
-    { "id": 9002, "name": "Kingdom of Meridia", "abbreviation": "KMR", "parent_kingdom_id": 0 },
-    { "id": 9003, "name": "Sultanate of Zanzibarr", "abbreviation": "SZ", "parent_kingdom_id": 0 },
-    { "id": 9004, "name": "Tsardom of Vyatka", "abbreviation": "TVK", "parent_kingdom_id": 0 },
-    { "id": 9005, "name": "Grand Duchy of Litavia", "abbreviation": "GDL", "parent_kingdom_id": 9001 }
+    { "id": 100001, "name": "Empire of Ashkara", "abbreviation": "EAK", "parent_kingdom_id": 0 },
+    { "id": 100002, "name": "Kingdom of Meridia", "abbreviation": "KMR", "parent_kingdom_id": 0 },
+    { "id": 100003, "name": "Sultanate of Zanzibarr", "abbreviation": "SZ", "parent_kingdom_id": 0 },
+    { "id": 100004, "name": "Tsardom of Vyatka", "abbreviation": "TVK", "parent_kingdom_id": 0 },
+    { "id": 100005, "name": "Grand Duchy of Litavia", "abbreviation": "GDL", "parent_kingdom_id": 100001 }
   ],
   "park_count_by_seed": {
     "42": 20
@@ -23,7 +23,6 @@
     "Wolfs Eye"
   ],
   "render_seed_default": 42,
-  // Arbitrary mt_srand() input — persistence matters, not the number. 42 → 23 parks (see park_count_by_seed).
   "content_seed": 42,
   "content_seed_basis": null,
   "schema_fingerprint": null,

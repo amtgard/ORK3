@@ -6,6 +6,7 @@ namespace OrkDb\Tests;
 
 use OrkDb\Apply;
 use OrkDb\Bootstrap;
+use OrkDb\DeployAssets;
 use OrkDb\DeploySandbox;
 use OrkDb\DeploymentTier;
 use OrkDb\Extract;
@@ -101,6 +102,14 @@ final class DeploySandboxTest extends TestCase
         $this->assertStringContainsString('bin/ork-db validate --mode pre-apply', implode("\n", $hints));
     }
 
+    public function testRemediationHintsCoverAssetFailures(): void
+    {
+        $deploy = $this->makeDeploySandbox();
+        $hints = $deploy->remediationHints(['Assets:       FAIL (missing 3 files: kingdom/100001)'], true);
+
+        $this->assertStringContainsString('generate-assets && bin/ork-db deploy-assets', implode("\n", $hints));
+    }
+
     public function testRunAbortsOnPreflightFailure(): void
     {
         $deploy = $this->makeDeploySandbox(
@@ -137,6 +146,8 @@ final class DeploySandboxTest extends TestCase
         $this->assertStringContainsString('init skipped', $output);
         $this->assertStringContainsString('bootstrap skipped', $output);
         $this->assertStringContainsString('daily refresh skipped', $output);
+        $this->assertStringContainsString('deploy-assets →', $output);
+        $this->assertStringContainsString('asset manifest ok', $output);
         $this->assertStringContainsString('Profile:      dev', $output);
         $this->assertStringContainsString('POST-APPLY VALIDATION PASSED', $output);
         $this->assertStringContainsString('Deploy:       complete', $output);
@@ -168,8 +179,11 @@ final class DeploySandboxTest extends TestCase
         $bootstrap = new Bootstrap($validate, $init, $extract, $apply, $toolRoot);
 
         putenv('ENVIRONMENT=DEV');
+        $repoRoot = dirname($toolRoot) . '/repo-' . uniqid('', true);
+        mkdir($repoRoot . '/assets', 0775, true);
+        $deployAssets = new DeployAssets($toolRoot, $repoRoot);
         $deploy = new DeploySandbox(
-            $this->makeLocalTier(),
+            $this->makeLocalTier($repoRoot),
             $wiring,
             $validate,
             $init,
@@ -177,7 +191,8 @@ final class DeploySandboxTest extends TestCase
             $extract,
             $render,
             $apply,
-            new UseProfile($this->makeLocalTier(), ORK3_ROOT, static fn (): int => 0),
+            new UseProfile($this->makeLocalTier($repoRoot), $repoRoot, static fn (): int => 0),
+            $deployAssets,
             $toolRoot,
             new \DateTimeImmutable('2026-07-07', new \DateTimeZone(LastRender::TIMEZONE)),
         );
@@ -277,8 +292,11 @@ final class DeploySandboxTest extends TestCase
         );
 
         putenv('ENVIRONMENT=DEV');
+        $repoRoot = dirname($toolRoot) . '/repo-' . uniqid('', true);
+        mkdir($repoRoot . '/assets', 0775, true);
+        $deployAssets = new DeployAssets($toolRoot, $repoRoot);
         $deploy = new DeploySandbox(
-            $this->makeLocalTier(),
+            $this->makeLocalTier($repoRoot),
             $wiring,
             $validate,
             new Init($wiring, $validate, ORK3_ROOT),
@@ -286,7 +304,8 @@ final class DeploySandboxTest extends TestCase
             $extract,
             $render,
             $apply,
-            new UseProfile($this->makeLocalTier(), ORK3_ROOT, static fn (): int => 0),
+            new UseProfile($this->makeLocalTier($repoRoot), $repoRoot, static fn (): int => 0),
+            $deployAssets,
             $toolRoot,
             new \DateTimeImmutable('2026-07-07', new \DateTimeZone(LastRender::TIMEZONE)),
         );
@@ -326,8 +345,11 @@ final class DeploySandboxTest extends TestCase
         );
 
         putenv('ENVIRONMENT=DEV');
+        $repoRoot = dirname($toolRoot) . '/repo-' . uniqid('', true);
+        mkdir($repoRoot . '/assets', 0775, true);
+        $deployAssets = new DeployAssets($toolRoot, $repoRoot);
         $deploy = new DeploySandbox(
-            $this->makeLocalTier(),
+            $this->makeLocalTier($repoRoot),
             $wiring,
             $validate,
             new Init($wiring, $validate, ORK3_ROOT),
@@ -335,7 +357,8 @@ final class DeploySandboxTest extends TestCase
             $extract,
             $render,
             $apply,
-            new UseProfile($this->makeLocalTier(), ORK3_ROOT, static fn (): int => 0),
+            new UseProfile($this->makeLocalTier($repoRoot), $repoRoot, static fn (): int => 0),
+            $deployAssets,
             $toolRoot,
             new \DateTimeImmutable('2026-07-07', new \DateTimeZone(LastRender::TIMEZONE)),
         );
@@ -357,18 +380,22 @@ final class DeploySandboxTest extends TestCase
         ?string $repoRoot = null,
     ): DeploySandbox {
         $toolRoot ??= $this->copyToolRoot();
+        $repoRoot ??= dirname($toolRoot) . '/repo-' . uniqid('', true);
+        if (!is_dir($repoRoot . '/assets')) {
+            mkdir($repoRoot . '/assets', 0775, true);
+        }
         $pdo ??= $this->makePostApplyPdo();
-        $repoRoot ??= ORK3_ROOT;
         $tier ??= $this->makeLocalTier($repoRoot);
 
         $wiring = new Wiring($toolRoot);
-        $validate = new Validate($wiring, $toolRoot, fn (): PDO => $pdo);
+        $validate = new Validate($wiring, $toolRoot, fn (): PDO => $pdo, $repoRoot);
         $render = new Render($toolRoot, ORK3_ROOT);
         $init = new Init($wiring, $validate, ORK3_ROOT);
         $extract = new Extract($wiring, $toolRoot, fn (): PDO => $pdo);
         $apply = new Apply($wiring, $validate, $render, ORK3_ROOT, static function (): void {
         });
         $bootstrap = new Bootstrap($validate, $init, $extract, $apply, $toolRoot);
+        $deployAssets = new DeployAssets($toolRoot, $repoRoot);
 
         putenv('ENVIRONMENT=DEV');
         $deploy = new DeploySandbox(
@@ -381,6 +408,7 @@ final class DeploySandboxTest extends TestCase
             $render,
             $apply,
             new UseProfile($tier, $repoRoot, static fn (): int => 0),
+            $deployAssets,
             $toolRoot,
             $clock,
         );
@@ -438,11 +466,11 @@ final class DeploySandboxTest extends TestCase
             )'
         );
         $kingdoms = [
-            [9001, 'Empire of Ashkara', 'EAK', 0],
-            [9002, 'Kingdom of Meridia', 'KMR', 0],
-            [9003, 'Sultanate of Zanzibarr', 'SZ', 0],
-            [9004, 'Tsardom of Vyatka', 'TVK', 0],
-            [9005, 'Grand Duchy of Litavia', 'GDL', 9001],
+            [100001, 'Empire of Ashkara', 'EAK', 0],
+            [100002, 'Kingdom of Meridia', 'KMR', 0],
+            [100003, 'Sultanate of Zanzibarr', 'SZ', 0],
+            [100004, 'Tsardom of Vyatka', 'TVK', 0],
+            [100005, 'Grand Duchy of Litavia', 'GDL', 100001],
         ];
         foreach ($kingdoms as $row) {
             $pdo->exec(sprintf(
@@ -456,7 +484,7 @@ final class DeploySandboxTest extends TestCase
 
         $pdo->exec('CREATE TABLE ork_park (park_id INTEGER PRIMARY KEY, kingdom_id INTEGER)');
         $parkId = 1;
-        foreach ([9001 => 4, 9002 => 4, 9003 => 3, 9004 => 6, 9005 => 3] as $kingdomId => $count) {
+        foreach ([100001 => 4, 100002 => 4, 100003 => 3, 100004 => 6, 100005 => 3] as $kingdomId => $count) {
             for ($i = 0; $i < $count; $i++) {
                 $pdo->exec('INSERT INTO ork_park VALUES (' . $parkId++ . ', ' . $kingdomId . ')');
             }

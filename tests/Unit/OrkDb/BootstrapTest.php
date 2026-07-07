@@ -84,7 +84,7 @@ final class BootstrapTest extends TestCase
         $this->seedPreApplySandbox($pdo);
         $pdo->exec(
             'CREATE TABLE ork_kingdom (kingdom_id INTEGER PRIMARY KEY, name TEXT, abbreviation TEXT, parent_kingdom_id INTEGER);'
-            . 'INSERT INTO ork_kingdom VALUES (9001, "Empire of Ashkara", "EAK", 0);'
+            . 'INSERT INTO ork_kingdom VALUES (100001, "Empire of Ashkara", "EAK", 0);'
         );
         $validate = new Validate(new Wiring($toolRoot), $toolRoot, fn (): PDO => $pdo);
         $this->removeTree($toolRoot);

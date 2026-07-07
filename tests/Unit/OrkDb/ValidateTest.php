@@ -64,11 +64,11 @@ final class ValidateTest extends TestCase
             )'
         );
         $kingdoms = [
-            [9001, 'Empire of Ashkara', 'EAK', 0],
-            [9002, 'Kingdom of Meridia', 'KMR', 0],
-            [9003, 'Sultanate of Zanzibarr', 'SZ', 0],
-            [9004, 'Tsardom of Vyatka', 'TVK', 0],
-            [9005, 'Grand Duchy of Litavia', 'GDL', 9001],
+            [100001, 'Empire of Ashkara', 'EAK', 0],
+            [100002, 'Kingdom of Meridia', 'KMR', 0],
+            [100003, 'Sultanate of Zanzibarr', 'SZ', 0],
+            [100004, 'Tsardom of Vyatka', 'TVK', 0],
+            [100005, 'Grand Duchy of Litavia', 'GDL', 100001],
         ];
         foreach ($kingdoms as $row) {
             $pdo->exec(
@@ -80,7 +80,7 @@ final class ValidateTest extends TestCase
         }
         $pdo->exec('CREATE TABLE ork_park (park_id INTEGER PRIMARY KEY, kingdom_id INTEGER)');
         $parkId = 1;
-        foreach ([9001 => 4, 9002 => 4, 9003 => 3, 9004 => 6, 9005 => 3] as $kingdomId => $count) {
+        foreach ([100001 => 4, 100002 => 4, 100003 => 3, 100004 => 6, 100005 => 3] as $kingdomId => $count) {
             for ($i = 0; $i < $count; $i++) {
                 $pdo->exec('INSERT INTO ork_park VALUES (' . $parkId++ . ', ' . $kingdomId . ')');
             }
@@ -122,11 +122,11 @@ final class ValidateTest extends TestCase
         );
         $pdo->exec('CREATE TABLE ork_kingdom (kingdom_id INTEGER PRIMARY KEY, name TEXT, abbreviation TEXT, parent_kingdom_id INTEGER)');
         $kingdoms = [
-            [9001, 'Empire of Ashkara', 'EAK', 0],
-            [9002, 'Kingdom of Meridia', 'KMR', 0],
-            [9003, 'Sultanate of Zanzibarr', 'SZ', 0],
-            [9004, 'Tsardom of Vyatka', 'TVK', 0],
-            [9005, 'Grand Duchy of Litavia', 'GDL', 9001],
+            [100001, 'Empire of Ashkara', 'EAK', 0],
+            [100002, 'Kingdom of Meridia', 'KMR', 0],
+            [100003, 'Sultanate of Zanzibarr', 'SZ', 0],
+            [100004, 'Tsardom of Vyatka', 'TVK', 0],
+            [100005, 'Grand Duchy of Litavia', 'GDL', 100001],
             [99, 'Northern Lights', 'NL', 0],
         ];
         foreach ($kingdoms as $row) {
@@ -140,7 +140,7 @@ final class ValidateTest extends TestCase
         }
         $pdo->exec('CREATE TABLE ork_park (park_id INTEGER PRIMARY KEY, kingdom_id INTEGER)');
         $parkId = 1;
-        foreach ([9001 => 4, 9002 => 4, 9003 => 3, 9004 => 6, 9005 => 3] as $kingdomId => $count) {
+        foreach ([100001 => 4, 100002 => 4, 100003 => 3, 100004 => 6, 100005 => 3] as $kingdomId => $count) {
             for ($i = 0; $i < $count; $i++) {
                 $pdo->exec('INSERT INTO ork_park VALUES (' . $parkId++ . ', ' . $kingdomId . ')');
             }
@@ -166,11 +166,11 @@ final class ValidateTest extends TestCase
         $pdo->exec('CREATE TABLE ork_kingdom (kingdom_id INTEGER PRIMARY KEY, name TEXT, abbreviation TEXT, parent_kingdom_id INTEGER)');
         foreach (
             [
-                [9001, 'Empire of Ashkara', 'EAK', 0],
-                [9002, 'Kingdom of Meridia', 'KMR', 0],
-                [9003, 'Sultanate of Zanzibarr', 'SZ', 0],
-                [9004, 'Tsardom of Vyatka', 'TVK', 0],
-                [9005, 'Grand Duchy of Litavia', 'GDL', 9001],
+                [100001, 'Empire of Ashkara', 'EAK', 0],
+                [100002, 'Kingdom of Meridia', 'KMR', 0],
+                [100003, 'Sultanate of Zanzibarr', 'SZ', 0],
+                [100004, 'Tsardom of Vyatka', 'TVK', 0],
+                [100005, 'Grand Duchy of Litavia', 'GDL', 100001],
             ] as $row
         ) {
             $pdo->exec(sprintf(
@@ -183,7 +183,7 @@ final class ValidateTest extends TestCase
         }
         $pdo->exec('CREATE TABLE ork_park (park_id INTEGER PRIMARY KEY, kingdom_id INTEGER)');
         $parkId = 1;
-        foreach ([9001 => 1, 9002 => 5, 9003 => 5, 9004 => 5, 9005 => 4] as $kingdomId => $count) {
+        foreach ([100001 => 1, 100002 => 5, 100003 => 5, 100004 => 5, 100005 => 4] as $kingdomId => $count) {
             for ($i = 0; $i < $count; $i++) {
                 $pdo->exec('INSERT INTO ork_park VALUES (' . $parkId++ . ', ' . $kingdomId . ')');
             }
@@ -194,7 +194,7 @@ final class ValidateTest extends TestCase
         $this->removeTree($toolRoot);
 
         $this->assertFalse($result['passed']);
-        $this->assertStringContainsString('Parks:        FAIL (kingdom 9001 has 1 parks)', implode("\n", $result['lines']));
+        $this->assertStringContainsString('Parks:        FAIL (kingdom 100001 has 1 parks)', implode("\n", $result['lines']));
     }
 
     public function testRunFailsWhenParkTableMissingInPostApply(): void
@@ -208,11 +208,11 @@ final class ValidateTest extends TestCase
         $pdo->exec('CREATE TABLE ork_kingdom (kingdom_id INTEGER PRIMARY KEY, name TEXT, abbreviation TEXT, parent_kingdom_id INTEGER)');
         foreach (
             [
-                [9001, 'Empire of Ashkara', 'EAK', 0],
-                [9002, 'Kingdom of Meridia', 'KMR', 0],
-                [9003, 'Sultanate of Zanzibarr', 'SZ', 0],
-                [9004, 'Tsardom of Vyatka', 'TVK', 0],
-                [9005, 'Grand Duchy of Litavia', 'GDL', 9001],
+                [100001, 'Empire of Ashkara', 'EAK', 0],
+                [100002, 'Kingdom of Meridia', 'KMR', 0],
+                [100003, 'Sultanate of Zanzibarr', 'SZ', 0],
+                [100004, 'Tsardom of Vyatka', 'TVK', 0],
+                [100005, 'Grand Duchy of Litavia', 'GDL', 100001],
             ] as $row
         ) {
             $pdo->exec(sprintf(
@@ -301,7 +301,7 @@ final class ValidateTest extends TestCase
             . "INSERT INTO _ork_canary_test VALUES (1, 'ORK3_TEST_CANARY_v1');"
         );
         $pdo->exec('CREATE TABLE ork_kingdom (kingdom_id INTEGER PRIMARY KEY, name TEXT, abbreviation TEXT, parent_kingdom_id INTEGER)');
-        $pdo->exec("INSERT INTO ork_kingdom VALUES (9001, 'Wrong Name', 'EAK', 0)");
+        $pdo->exec("INSERT INTO ork_kingdom VALUES (100001, 'Wrong Name', 'EAK', 0)");
 
         $validate = new Validate(new Wiring($toolRoot), $toolRoot, fn (): \PDO => $pdo);
         $result = $validate->run(Validate::MODE_POST_APPLY);
@@ -341,11 +341,11 @@ final class ValidateTest extends TestCase
         $pdo->exec('CREATE TABLE ork_kingdom (kingdom_id INTEGER PRIMARY KEY, name TEXT, abbreviation TEXT, parent_kingdom_id INTEGER)');
         foreach (
             [
-                [9001, 'Empire of Ashkara', 'EAK', 0],
-                [9002, 'Kingdom of Meridia', 'KMR', 0],
-                [9003, 'Sultanate of Zanzibarr', 'SZ', 0],
-                [9004, 'Tsardom of Vyatka', 'TVK', 0],
-                [9005, 'Grand Duchy of Litavia', 'GDL', 9001],
+                [100001, 'Empire of Ashkara', 'EAK', 0],
+                [100002, 'Kingdom of Meridia', 'KMR', 0],
+                [100003, 'Sultanate of Zanzibarr', 'SZ', 0],
+                [100004, 'Tsardom of Vyatka', 'TVK', 0],
+                [100005, 'Grand Duchy of Litavia', 'GDL', 100001],
             ] as $row
         ) {
             $pdo->exec(sprintf(
@@ -357,7 +357,7 @@ final class ValidateTest extends TestCase
             ));
         }
         $pdo->exec('CREATE TABLE ork_park (park_id INTEGER PRIMARY KEY, kingdom_id INTEGER)');
-        $pdo->exec('INSERT INTO ork_park VALUES (1, 9001)');
+        $pdo->exec('INSERT INTO ork_park VALUES (1, 100001)');
 
         $validate = new Validate(new Wiring($toolRoot), $toolRoot, fn (): \PDO => $pdo);
         $result = $validate->run(Validate::MODE_POST_APPLY);
@@ -378,11 +378,11 @@ final class ValidateTest extends TestCase
         $pdo->exec('CREATE TABLE ork_kingdom (kingdom_id INTEGER PRIMARY KEY, name TEXT, abbreviation TEXT, parent_kingdom_id INTEGER)');
         foreach (
             [
-                [9001, 'Empire of Ashkara', 'EAK', 0],
-                [9002, 'Kingdom of Meridia', 'KMR', 0],
-                [9003, 'Sultanate of Zanzibarr', 'SZ', 0],
-                [9004, 'Tsardom of Vyatka', 'TVK', 0],
-                [9005, 'Grand Duchy of Litavia', 'GDL', 9001],
+                [100001, 'Empire of Ashkara', 'EAK', 0],
+                [100002, 'Kingdom of Meridia', 'KMR', 0],
+                [100003, 'Sultanate of Zanzibarr', 'SZ', 0],
+                [100004, 'Tsardom of Vyatka', 'TVK', 0],
+                [100005, 'Grand Duchy of Litavia', 'GDL', 100001],
             ] as $row
         ) {
             $pdo->exec(sprintf(
@@ -403,7 +403,7 @@ final class ValidateTest extends TestCase
         }
         $pdo->exec('CREATE TABLE ork_park (park_id INTEGER PRIMARY KEY, kingdom_id INTEGER)');
         $parkId = 1;
-        foreach ([9001 => 4, 9002 => 4, 9003 => 3, 9004 => 6, 9005 => 3] as $kingdomId => $count) {
+        foreach ([100001 => 4, 100002 => 4, 100003 => 3, 100004 => 6, 100005 => 3] as $kingdomId => $count) {
             for ($i = 0; $i < $count; $i++) {
                 $pdo->exec('INSERT INTO ork_park VALUES (' . $parkId++ . ', ' . $kingdomId . ')');
             }
@@ -415,6 +415,155 @@ final class ValidateTest extends TestCase
 
         $this->assertFalse($result['passed']);
         $this->assertStringContainsString('Blocklist:    FAIL (kingdom count heuristic', implode("\n", $result['lines']));
+    }
+
+    public function testPostApplySkipsAssetsWhenHeraldryColumnMissing(): void
+    {
+        $toolRoot = $this->makeTempToolRootWithSandboxPort(19307);
+        $pdo = $this->makeValidateSqlitePdo();
+        $pdo->exec(
+            'CREATE TABLE _ork_canary_test (id INTEGER PRIMARY KEY, marker TEXT);'
+            . "INSERT INTO _ork_canary_test VALUES (1, 'ORK3_TEST_CANARY_v1');"
+        );
+        $pdo->exec('CREATE TABLE ork_kingdom (kingdom_id INTEGER PRIMARY KEY, name TEXT, abbreviation TEXT, parent_kingdom_id INTEGER)');
+        foreach (
+            [
+                [100001, 'Empire of Ashkara', 'EAK', 0],
+                [100002, 'Kingdom of Meridia', 'KMR', 0],
+                [100003, 'Sultanate of Zanzibarr', 'SZ', 0],
+                [100004, 'Tsardom of Vyatka', 'TVK', 0],
+                [100005, 'Grand Duchy of Litavia', 'GDL', 100001],
+            ] as $row
+        ) {
+            $pdo->exec(sprintf(
+                'INSERT INTO ork_kingdom VALUES (%d, %s, %s, %d)',
+                $row[0],
+                $pdo->quote($row[1]),
+                $pdo->quote($row[2]),
+                $row[3]
+            ));
+        }
+        $pdo->exec('CREATE TABLE ork_park (park_id INTEGER PRIMARY KEY, kingdom_id INTEGER)');
+        $parkId = 1;
+        foreach ([100001 => 4, 100002 => 4, 100003 => 3, 100004 => 6, 100005 => 3] as $kingdomId => $count) {
+            for ($i = 0; $i < $count; $i++) {
+                $pdo->exec('INSERT INTO ork_park VALUES (' . $parkId++ . ', ' . $kingdomId . ')');
+            }
+        }
+
+        $validate = new Validate(new Wiring($toolRoot), $toolRoot, fn (): PDO => $pdo);
+        $result = $validate->run(Validate::MODE_POST_APPLY, true);
+        $this->removeTree($toolRoot);
+
+        $output = implode("\n", $result['lines']);
+        $this->assertTrue($result['passed'], $output);
+        $this->assertStringContainsString('Assets:       SKIP (no heraldry flags in schema)', $output);
+    }
+
+    public function testPostApplyFailsWhenKingdomAssetMissing(): void
+    {
+        $toolRoot = $this->makeTempToolRootWithSandboxPort(19307);
+        $repoRoot = sys_get_temp_dir() . '/ork-db-validate-assets-' . uniqid('', true);
+        mkdir($repoRoot . '/assets/heraldry/kingdom', 0775, true);
+        $pdo = $this->makePostApplyPdoWithHeraldryFlags();
+
+        $validate = new Validate(new Wiring($toolRoot), $toolRoot, fn (): PDO => $pdo, $repoRoot);
+        $result = $validate->run(Validate::MODE_POST_APPLY, true);
+
+        $this->removeTree($toolRoot);
+        $this->removeTree($repoRoot);
+
+        $this->assertFalse($result['passed']);
+        $this->assertStringContainsString('Assets:       FAIL', implode("\n", $result['lines']));
+    }
+
+    public function testPostApplyPassesWhenDeployedAssetsPresent(): void
+    {
+        $toolRoot = $this->makeTempToolRootWithSandboxPort(19307);
+        $repoRoot = sys_get_temp_dir() . '/ork-db-validate-assets-' . uniqid('', true);
+        $deploy = new \OrkDb\DeployAssets(ORK3_ROOT . '/tools/ork-db', $repoRoot);
+        $deploy->run(['verify_manifest' => true]);
+        $pdo = $this->makePostApplyPdoWithHeraldryFlags();
+
+        $validate = new Validate(new Wiring($toolRoot), $toolRoot, fn (): PDO => $pdo, $repoRoot);
+        $result = $validate->run(Validate::MODE_POST_APPLY, true);
+
+        $this->removeTree($toolRoot);
+        $this->removeTree($repoRoot);
+
+        $output = implode("\n", $result['lines']);
+        $this->assertTrue($result['passed'], $output);
+        $this->assertStringContainsString('Assets:       PASS (heraldry files present)', $output);
+    }
+
+    private function makePostApplyPdoWithHeraldryFlags(): PDO
+    {
+        $pdo = $this->makeValidateSqlitePdo();
+        $pdo->exec(
+            'CREATE TABLE _ork_canary_test (id INTEGER PRIMARY KEY, marker TEXT);'
+            . "INSERT INTO _ork_canary_test VALUES (1, 'ORK3_TEST_CANARY_v1');"
+        );
+        $pdo->exec(
+            'CREATE TABLE ork_kingdom (
+                kingdom_id INTEGER PRIMARY KEY,
+                name TEXT,
+                abbreviation TEXT,
+                parent_kingdom_id INTEGER,
+                has_heraldry INTEGER
+            )'
+        );
+        $kingdoms = [
+            [100001, 'Empire of Ashkara', 'EAK', 0],
+            [100002, 'Kingdom of Meridia', 'KMR', 0],
+            [100003, 'Sultanate of Zanzibarr', 'SZ', 0],
+            [100004, 'Tsardom of Vyatka', 'TVK', 0],
+            [100005, 'Grand Duchy of Litavia', 'GDL', 100001],
+        ];
+        foreach ($kingdoms as $row) {
+            $pdo->exec(sprintf(
+                'INSERT INTO ork_kingdom VALUES (%d, %s, %s, %d, 1)',
+                $row[0],
+                $pdo->quote($row[1]),
+                $pdo->quote($row[2]),
+                $row[3]
+            ));
+        }
+
+        $pdo->exec('CREATE TABLE ork_park (park_id INTEGER PRIMARY KEY, kingdom_id INTEGER, has_heraldry INTEGER)');
+        $parkLayouts = [
+            100001 => [1000001, 1000002, 1000003, 1000004],
+            100002 => [1000101, 1000102, 1000103, 1000104],
+            100003 => [1000201, 1000202, 1000203],
+            100004 => [1000301, 1000302, 1000303, 1000304, 1000305, 1000306],
+            100005 => [1000401, 1000402, 1000403],
+        ];
+        foreach ($parkLayouts as $kingdomId => $parkIds) {
+            foreach ($parkIds as $parkId) {
+                $pdo->exec(sprintf(
+                    'INSERT INTO ork_park VALUES (%d, %d, 1)',
+                    $parkId,
+                    $kingdomId
+                ));
+            }
+        }
+
+        $pdo->exec(
+            'CREATE TABLE ork_mundane (
+                mundane_id INTEGER PRIMARY KEY,
+                has_heraldry INTEGER,
+                has_image INTEGER
+            )'
+        );
+        for ($id = 100_000_000; $id < 100_000_005; $id++) {
+            $pdo->exec(sprintf('INSERT INTO ork_mundane VALUES (%d, 0, 0)', $id));
+        }
+
+        $render = new \OrkDb\Render(ORK3_ROOT . '/tools/ork-db', ORK3_ROOT);
+        foreach (array_slice($render->fakeMundaneHeraldryIdsForSeed(42), 0, 3) as $id) {
+            $pdo->exec(sprintf('UPDATE ork_mundane SET has_heraldry = 1 WHERE mundane_id = %d', $id));
+        }
+
+        return $pdo;
     }
 
     private function makeTempToolRootWithSandboxPort(int $port): string

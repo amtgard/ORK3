@@ -102,7 +102,7 @@ Query:
 ```sql
 SELECT kingdom_id, name, abbreviation
 FROM ork_kingdom
-WHERE kingdom_id BETWEEN 9001 AND 9005
+WHERE kingdom_id BETWEEN 100001 AND 100005
 ORDER BY kingdom_id;
 ```
 
@@ -110,7 +110,7 @@ ORDER BY kingdom_id;
 |-------|----------------|
 | Row count | Exactly **5** |
 | Full names | Match `manifests/fingerprints.json5` exactly |
-| Principality | Exactly one row with `parent_kingdom_id > 0` (9005 → 9001) |
+| Principality | Exactly one row with `parent_kingdom_id > 0` (100005 → 100001) |
 | Abbreviations | Match manifest exactly |
 
 Expected:
@@ -118,11 +118,11 @@ Expected:
 ```json5
 {
   "kingdoms": [
-    { "id": 9001, "name": "Empire of Ashkara", "abbreviation": "EAK", "parent_kingdom_id": 0 },
-    { "id": 9002, "name": "Kingdom of Meridia", "abbreviation": "KMR", "parent_kingdom_id": 0 },
-    { "id": 9003, "name": "Sultanate of Zanzibarr", "abbreviation": "SZ", "parent_kingdom_id": 0 },
-    { "id": 9004, "name": "Tsardom of Vyatka", "abbreviation": "TVK", "parent_kingdom_id": 0 },
-    { "id": 9005, "name": "Grand Duchy of Litavia", "abbreviation": "GDL", "parent_kingdom_id": 9001 }
+    { "id": 100001, "name": "Empire of Ashkara", "abbreviation": "EAK", "parent_kingdom_id": 0 },
+    { "id": 100002, "name": "Kingdom of Meridia", "abbreviation": "KMR", "parent_kingdom_id": 0 },
+    { "id": 100003, "name": "Sultanate of Zanzibarr", "abbreviation": "SZ", "parent_kingdom_id": 0 },
+    { "id": 100004, "name": "Tsardom of Vyatka", "abbreviation": "TVK", "parent_kingdom_id": 0 },
+    { "id": 100005, "name": "Grand Duchy of Litavia", "abbreviation": "GDL", "parent_kingdom_id": 100001 }
   ]
 }
 ```
@@ -146,7 +146,7 @@ For render `seed=42`, expected total park count is precomputed (stored in `finge
 
 | Check | Pass condition |
 |-------|----------------|
-| Total parks | `COUNT(*) FROM ork_park WHERE kingdom_id BETWEEN 9001 AND 9005` equals expected for seed |
+| Total parks | `COUNT(*) FROM ork_park WHERE kingdom_id BETWEEN 100001 AND 100005` equals expected for seed |
 | Per-kingdom | Each kingdom has 2–6 parks |
 
 If render seed changes, `fingerprints.json5` must be updated (or tool recomputes expected count deterministically from seed without storing).

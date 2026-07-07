@@ -189,7 +189,7 @@ Assignment rule: each real account receives a **seed-stable** `park_id` and matc
 
 - `1` — `admin` (fixed)
 - `2–5` — real operators (fixed order from extract)
-- `1000+` — generated players (stable IDs across renders for FK integrity within a render; may shift if volume rules change)
+- `100_000_000+` — generated fake players (counter from `100_000_000`; see [12-heraldry-and-assets.md](./12-heraldry-and-assets.md))
 
 ### 4.4 Attendance (`ork_attendance`)
 
@@ -265,9 +265,9 @@ To prevent collision with real data if databases are ever miswired:
 
 | Entity | ID range |
 |--------|----------|
-| Kingdoms | 9001–9005 |
-| Parks | 91001–91999 (kingdom_id × 1000 + seq) |
-| Fake mundane | ≥ 1000 |
+| Kingdoms | 100001–100005 |
+| Parks | 1_000_001+ (`1_000_000 + kingdom_ordinal × 100 + seq`) |
+| Fake mundane | ≥ 100_000_000 |
 | Fake events | ≥ 80000 |
 | Fake units | ≥ 70000 |
 

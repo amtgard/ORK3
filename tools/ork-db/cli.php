@@ -3,6 +3,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/lib/IdNamespace.php';
 require_once __DIR__ . '/lib/Json5.php';
 require_once __DIR__ . '/lib/ValidationException.php';
 require_once __DIR__ . '/lib/TierRefusalException.php';
@@ -21,13 +22,17 @@ require_once __DIR__ . '/Bootstrap.php';
 require_once __DIR__ . '/DriftCheck.php';
 require_once __DIR__ . '/SchemaDiff.php';
 require_once __DIR__ . '/DeploySandbox.php';
+require_once __DIR__ . '/GenerateAssets.php';
+require_once __DIR__ . '/DeployAssets.php';
 
 use OrkDb\Apply;
 use OrkDb\Bootstrap;
+use OrkDb\DeployAssets;
 use OrkDb\DeploySandbox;
 use OrkDb\DeploymentTier;
 use OrkDb\DriftCheck;
 use OrkDb\Extract;
+use OrkDb\GenerateAssets;
 use OrkDb\Init;
 use OrkDb\Render;
 use OrkDb\SchemaDiff;
@@ -51,6 +56,8 @@ $useProfile = new UseProfile($tier, $repoRoot);
 $bootstrap = new Bootstrap($validate, $init, $extract, $apply, $toolRoot);
 $driftCheck = new DriftCheck($wiring, $toolRoot, $repoRoot);
 $schemaDiff = new SchemaDiff($wiring, $repoRoot);
+$generateAssets = new GenerateAssets($toolRoot, $render);
+$deployAssets = new DeployAssets($toolRoot, $repoRoot);
 $deploySandbox = new DeploySandbox(
     $tier,
     $wiring,
@@ -61,6 +68,7 @@ $deploySandbox = new DeploySandbox(
     $render,
     $apply,
     $useProfile,
+    $deployAssets,
     $toolRoot
 );
 
@@ -78,6 +86,8 @@ try {
         'apply' => runApply($tier, $apply, $options),
         'bootstrap' => runBootstrap($tier, $bootstrap, $options),
         'deploy-sandbox' => runDeploySandbox($tier, $deploySandbox, $options),
+        'generate-assets' => runGenerateAssets($tier, $generateAssets, $options),
+        'deploy-assets' => runDeployAssets($tier, $deployAssets, $options),
         'drift-check' => runDriftCheck($tier, $driftCheck, $options),
         'schema-diff' => runSchemaDiff($tier, $schemaDiff),
         'use' => runUse($tier, $useProfile, $options),
@@ -259,6 +269,8 @@ Usage:
   bin/ork-db init
   bin/ork-db bootstrap [--yes] [--skip-extract] [--force-extract]
   bin/ork-db deploy-sandbox [--yes] [--force-refresh] [--skip-use-dev]
+  bin/ork-db generate-assets [--seed N]
+  bin/ork-db deploy-assets
   bin/ork-db drift-check [--strict]
   bin/ork-db schema-diff
   bin/ork-db help [command]
@@ -299,7 +311,7 @@ function runValidate(DeploymentTier $tier, Validate $validate, array $options): 
         exit(2);
     }
 
-    $result = $validate->run($mode);
+    $result = $validate->run($mode, $mode === Validate::MODE_POST_APPLY);
     foreach ($result['lines'] as $line) {
         fwrite(STDOUT, $line . PHP_EOL);
     }
@@ -432,6 +444,44 @@ function runDeploySandbox(DeploymentTier $tier, DeploySandbox $deploySandbox, ar
     }
 
     exit($result['exit_code']);
+}
+
+/** @param array{seed: int|null} $options */
+function runGenerateAssets(DeploymentTier $tier, GenerateAssets $generateAssets, array $options): never
+{
+    $tier->refuseDataCommands('generate-assets');
+
+    $result = $generateAssets->run([
+        'seed' => $options['seed'],
+    ]);
+
+    fwrite(STDOUT, 'Output:       ' . $result['output_root'] . PHP_EOL);
+    fwrite(STDOUT, 'Kingdoms:     ' . $result['kingdom_count'] . PHP_EOL);
+    fwrite(STDOUT, 'Parks:        ' . $result['park_count'] . PHP_EOL);
+    fwrite(STDOUT, 'Players:      ' . $result['player_count'] . PHP_EOL);
+    fwrite(STDOUT, 'Files:        ' . count($result['files']) . PHP_EOL);
+
+    exit(0);
+}
+
+function runDeployAssets(DeploymentTier $tier, DeployAssets $deployAssets): never
+{
+    $tier->refuseDataCommands('deploy-assets');
+
+    $result = $deployAssets->run();
+
+    fwrite(STDOUT, 'Assets root:  ' . $result['assets_root'] . PHP_EOL);
+    fwrite(STDOUT, 'Source:       ' . $result['source_root'] . PHP_EOL);
+    fwrite(STDOUT, 'Kingdoms:     ' . $result['kingdom_count'] . PHP_EOL);
+    fwrite(STDOUT, 'Parks:        ' . $result['park_count'] . PHP_EOL);
+    fwrite(STDOUT, 'Player art:   ' . $result['player_heraldry_count'] . PHP_EOL);
+    fwrite(STDOUT, 'Portraits:    ' . $result['player_portrait_count'] . PHP_EOL);
+    fwrite(STDOUT, 'Files:        ' . count($result['files']) . PHP_EOL);
+    if ($result['manifest_ok'] === true) {
+        fwrite(STDOUT, 'Manifest:     ok' . PHP_EOL);
+    }
+
+    exit(0);
 }
 
 /** @param array{args: list<string>, mode: string|null, yes: bool} $options */
