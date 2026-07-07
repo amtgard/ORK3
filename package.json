@@ -21,6 +21,7 @@
     "build-email-spell-checker": "npx esbuild node_modules/@zootools/email-spell-checker/dist/index.js --bundle --format=iife --global-name=EmailSpellChecker --minify --outfile=orkui/template/revised-frontend/script/email-spell-checker.min.js",
     "fuzz:record": "bin/fuzzy-validator record",
     "fuzz:validate": "bin/fuzzy-validator validate",
-    "fuzz:capture": "bin/fuzzy-validator record"
+    "fuzz:capture": "bin/fuzzy-validator record",
+    "fuzz:calibrate": "tools/fuzzy-validator/bin/calibrate.sh"
   }
 }

@@ -12,6 +12,7 @@ from pathlib import Path
 TOOL_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = TOOL_ROOT.parent.parent
 PAGES_MANIFEST = TOOL_ROOT / "manifests" / "pages.json5"
+PYTHON_DIR = TOOL_ROOT / "python"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -113,7 +114,39 @@ def _run_capture(args: argparse.Namespace) -> int:
         env=env,
         check=False,
     )
-    return int(result.returncode)
+    if result.returncode != 0:
+        return int(result.returncode)
+
+    discover_script = PYTHON_DIR / "discover_fuzz.py"
+    env["PYTHONPATH"] = f"{env.get('PYTHONPATH', '')}:{PYTHON_DIR}"
+    for page_id in page_ids:
+        cal_dir = TOOL_ROOT / "calibrations" / page_id
+        manifest_out = TOOL_ROOT / "manifests" / f"{page_id}.fuzz.json"
+        overlay_out = TOOL_ROOT / "reports" / f"{page_id}-calibration-overlay.png"
+        baseline_out = TOOL_ROOT / "baselines" / f"{page_id}.png"
+        discover = subprocess.run(
+            [
+                sys.executable,
+                str(discover_script),
+                "--page-id",
+                page_id,
+                "--calibration-dir",
+                str(cal_dir),
+                "--out",
+                str(manifest_out),
+                "--overlay",
+                str(overlay_out),
+                "--baseline-out",
+                str(baseline_out),
+            ],
+            cwd=REPO_ROOT,
+            env=env,
+            check=False,
+        )
+        if discover.returncode != 0:
+            return int(discover.returncode)
+
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

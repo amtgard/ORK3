@@ -1,4 +1,4 @@
-"""CLI tests (FU-0 / FU-1)."""
+"""CLI tests (FU-0 / FU-1 / FU-3)."""
 
 import json
 from pathlib import Path

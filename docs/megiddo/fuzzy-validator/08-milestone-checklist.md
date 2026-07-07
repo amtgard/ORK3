@@ -29,11 +29,11 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 
 ### FU-2: Pixel fuzz discovery
 
-- [ ] Branch `megiddo/fu-2-discover`
-- [ ] `python/lib/diff_regions.py`, `discover_fuzz.py`, `overlay.py`
-- [ ] Auto `manifests/{pageId}.fuzz.json` + calibration overlay
-- [ ] pytest coverage ≥ 90% on new Python modules
-- [ ] Single squashed commit
+- [x] Branch `megiddo/fu-2-discover`
+- [x] `python/lib/diff_regions.py`, `discover_fuzz.py`, `overlay.py`
+- [x] Auto `manifests/{pageId}.fuzz.json` + calibration overlay
+- [x] pytest coverage ≥ 90% on new Python modules
+- [x] Single squashed commit
 
 ### FU-3: Pixel gate
 
@@ -119,7 +119,7 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 |-----------|------|--------|------------|
 | FU-0 | 2026-07-07 | 02e0a306 | n/a (4 tests) |
 | FU-1 | 2026-07-07 | 7eab9424 | n/a (8 tests + 3 PW unit) |
-| FU-2 | | | |
+| FU-2 | 2026-07-07 | | 96% |
 | FU-3 | | | |
 | FU-4 | | | |
 | FU-5 | | | |
