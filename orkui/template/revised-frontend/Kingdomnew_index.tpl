@@ -431,7 +431,7 @@
 
 					<!-- List view -->
 					<div id="kn-parks-list-view" style="display:none">
-						<table class="kn-table kn-sortable" id="kn-parks-table">
+						<table class="kn-table kn-sortable kn-parks-dt" id="kn-parks-table">
 							<thead>
 								<tr>
 									<th data-sorttype="text">Park</th>
@@ -440,7 +440,7 @@
 									<th data-sorttype="numeric" class="kn-col-numeric" title="Average distinct players per month over the past 12 months">Avg/Mo</th>
 									<th data-sorttype="numeric" class="kn-col-numeric" title="Distinct players who signed in at this park in the past 12 months">Total Players</th>
 									<th data-sorttype="numeric" class="kn-col-numeric" title="Distinct players whose home park is here who signed in at this park in the past 12 months">Total Members</th>
-									<?php if ($CanManageKingdom ?? false): ?><th data-sorttype="none" style="width:32px"></th><?php endif; ?>
+									<?php if ($CanManageKingdom ?? false): ?><th data-sorttype="none" class="no-export" style="width:32px"></th><?php endif; ?>
 								</tr>
 							</thead>
 							<tbody>
@@ -539,7 +539,7 @@
 									<span class="kn-prinz-name"><?= htmlspecialchars($prinz['Name']) ?></span>
 									<i class="fas fa-external-link-alt kn-prinz-extlink"></i>
 								</a>
-								<table class="kn-table kn-sortable">
+								<table class="kn-table kn-sortable kn-parks-dt" data-csvname="<?= htmlspecialchars($prinz['Name']) ?> Parks">
 									<thead>
 										<tr>
 											<th data-sorttype="text">Park</th>

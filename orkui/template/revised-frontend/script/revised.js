@@ -2599,6 +2599,9 @@ function knActivateTab(tab) {
     if (tab === 'recommendations') {
         knLazyLoadRecs();
     }
+    if (tab === 'parks') {
+        window.orkAdjustDataTables($('#kn-tab-parks'));
+    }
 }
 
 // Lazily fetch the Recommendations tab's inner HTML the first time the tab is
@@ -2896,6 +2899,7 @@ $(document).ready(function() {
             $('#kn-prinz-tables').show();
             $('#kn-view-list').addClass('kn-view-active');
             $('#kn-view-tiles').removeClass('kn-view-active');
+            window.orkAdjustDataTables($('#kn-tab-parks'));
         } else {
             $('#kn-parks-list-view').hide();
             $('#kn-parks-tiles').show();
@@ -3027,8 +3031,25 @@ $(document).ready(function() {
 
     // ---- Default sort + initial pagination ----
 
-    knSortAsc($('#kn-parks-table'), 0, 'text');
-    knPaginate($('#kn-parks-table'), 1);
+    // Parks + principality tables → standard DataTables toolbar.
+    $('#kn-parks-table').each(function() {
+        var lastCol = this.tHead ? this.tHead.rows[0].cells.length - 1 : 0;
+        var hasGear = $(this).find('thead th.no-export').length > 0;
+        window.orkInitDataTable($(this), {
+            order: [[0, 'asc']],
+            csvName: 'Kingdom Parks',
+            columnDefs: hasGear ? [{ targets: lastCol, orderable: false, searchable: false }] : []
+        });
+    });
+    $('.kn-parks-dt').not('#kn-parks-table').each(function() {
+        var hasGear = $(this).find('thead th.no-export').length > 0;
+        var lastCol = this.tHead ? this.tHead.rows[0].cells.length - 1 : 0;
+        window.orkInitDataTable($(this), {
+            order: [[0, 'asc']],
+            csvName: ($(this).data('csvname') || 'Parks'),
+            columnDefs: hasGear ? [{ targets: lastCol, orderable: false, searchable: false }] : []
+        });
+    });
 
     knSortAsc($('#kn-events-table'), 0, 'date');
     knPaginate($('#kn-events-table'), 1);
