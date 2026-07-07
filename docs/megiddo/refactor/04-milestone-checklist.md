@@ -719,13 +719,17 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 | Step | Status |
 |------|--------|
-| Backend unit/integration tests | [ ] |
-| Frontend functional tests | [ ] |
-| Milestone-scoped Infection passes | [ ] |
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Unit/ClassLevelTest.php`, `tests/Integration/AttendanceSignInTest.php`, `tests/Integration/AttendanceWriteTest.php`, `tests/Support/AttendanceFixture.php`, `tests/e2e/attendance.spec.ts`
+
+**Infection (pre-refactor):** `infection.t12-attendance.json5` — `--only-covered --filter=class.Attendance.php --filter=class.Player.php --test-framework-options="--filter=ClassLevelTest|AttendanceSignInTest|AttendanceWriteTest"` (MSI 53%, covered MSI 53%)
 
 #### T-12 sign-off gate
 
-- [ ] Test sprint sign-off checklist (above) satisfied
+- [x] Test sprint sign-off checklist (above) satisfied
 - [ ] Branch `megiddo/t-12-attendance-tests` squashed to exactly one commit
 
 ---
@@ -833,4 +837,4 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code, keep tests green |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** T-05 (Event controller detail tests — pairs with completed DS-05).
+**Next actionable milestone:** T-13 (Infrastructure & misc tests — pairs with completed DS-13).
