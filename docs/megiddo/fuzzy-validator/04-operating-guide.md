@@ -113,6 +113,17 @@ Add manual zones if auto missed a corner:
 ]
 ```
 
+### `--all` calibration runtime
+
+`bin/fuzzy-validator record --all` and `tools/fuzzy-validator/bin/calibrate.sh --all` iterate every non-`skip` entry in `manifests/pages.json5`. Each page runs five stabilized captures plus fuzz discovery (~45–60s per page on Linux with docker).
+
+| Active pages | Approximate runtime |
+|--------------|---------------------|
+| 26 (current registry) | ~20–26 minutes sequential |
+| Full registry growth | ~1 minute per additional page |
+
+Run batched or overnight when calibrating the expanded registry; pilot pages (`home-anonymous`, `home-authenticated`, `player-profile`) are the only entries with committed baselines until maintainers `record` new routes.
+
 ---
 
 ## 4. `validate` — refactor sign-off (R-*)

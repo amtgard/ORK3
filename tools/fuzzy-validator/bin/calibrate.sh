@@ -11,6 +11,7 @@ usage() {
 Usage:
   calibrate.sh --page PAGE_ID
   calibrate.sh --pages id1,id2
+  calibrate.sh --all
 
 Runs Playwright capture (×N) then discover_fuzz.py for each page.
 EOF
@@ -18,6 +19,7 @@ EOF
 
 PAGE=""
 PAGES=""
+ALL=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -28,6 +30,10 @@ while [[ $# -gt 0 ]]; do
     --pages)
       PAGES="$2"
       shift 2
+      ;;
+    --all)
+      ALL=true
+      shift
       ;;
     -h|--help)
       usage
@@ -41,12 +47,28 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -n "$PAGE" ]]; then
+if [[ "$ALL" == true ]]; then
+  TARGETS=()
+  export PYTHONPATH="${PYTHONPATH:-}:$PYTHON_DIR"
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && TARGETS+=("$line")
+  done < <(python3 -c "
+import sys
+sys.path.insert(0, '$PYTHON_DIR')
+from lib.page_registry import load_pages_registry, active_page_ids, estimated_calibrate_seconds
+registry = load_pages_registry('$TOOL_ROOT/manifests/pages.json5')
+seconds = estimated_calibrate_seconds(registry)
+ids = active_page_ids(registry)
+print(f'calibrate.sh: --all will process {len(ids)} pages (~{seconds // 60} min)', file=sys.stderr)
+for page_id in ids:
+    print(page_id)
+")
+elif [[ -n "$PAGE" ]]; then
   TARGETS=("$PAGE")
 elif [[ -n "$PAGES" ]]; then
   IFS=',' read -r -a TARGETS <<< "$PAGES"
 else
-  echo "calibrate.sh: specify --page or --pages" >&2
+  echo "calibrate.sh: specify --page, --pages, or --all" >&2
   exit 2
 fi
 

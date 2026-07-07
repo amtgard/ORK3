@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loadPagesRegistry, resolveRequestedPages } from './lib/pages';
+import { activePageIds, loadPagesRegistry, resolveRequestedPages, validatePagesRegistry } from './lib/pages';
 
 test.describe('pages registry', () => {
   test('contains pilot page ids', () => {
@@ -8,6 +8,23 @@ test.describe('pages registry', () => {
     expect(ids).toContain('home-anonymous');
     expect(ids).toContain('home-authenticated');
     expect(ids).toContain('player-profile');
+  });
+
+  test('has at least twenty registry entries', () => {
+    const registry = loadPagesRegistry();
+    expect(registry.pages.length).toBeGreaterThanOrEqual(20);
+  });
+
+  test('activePageIds excludes skipped entries', () => {
+    const registry = loadPagesRegistry();
+    const active = activePageIds(registry);
+    expect(active).not.toContain('health-endpoint');
+    expect(active.length).toBeGreaterThanOrEqual(20);
+  });
+
+  test('validatePagesRegistry returns no errors for committed registry', () => {
+    const registry = loadPagesRegistry();
+    expect(validatePagesRegistry(registry)).toEqual([]);
   });
 
   test('resolveRequestedPages returns a single entry', () => {

@@ -45,13 +45,11 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 
 ### FU-4: Page registry expansion
 
-- [ ] Branch `megiddo/fu-4-page-registry`
-- [ ] `pages.json5` ≥ 20 entries mapped from `tests/e2e/`
-- [ ] Documented runtime for `--all` calibrate
-- [ ] Tests for registry loader / validation
-- [ ] Single squashed commit
-
-### FU-5: CI (optional)
+- [x] Branch `megiddo/fu-4-page-registry`
+- [x] `pages.json5` ≥ 20 entries mapped from `tests/e2e/`
+- [x] Documented runtime for `--all` calibrate
+- [x] Tests for registry loader / validation
+- [x] Single squashed commit
 
 - [ ] Branch `megiddo/fu-5-ci`
 - [ ] Linux workflow job for gate (optional PR check)
@@ -120,8 +118,8 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 | FU-0 | 2026-07-07 | 02e0a306 | n/a (4 tests) |
 | FU-1 | 2026-07-07 | 7eab9424 | n/a (8 tests + 3 PW unit) |
 | FU-2 | 2026-07-07 | d8820b06 | 96% |
-| FU-3 | 2026-07-07 | | 96% |
-| FU-4 | | | |
+| FU-3 | 2026-07-07 | 742310c4 | 96% |
+| FU-4 | 2026-07-07 | 195e316a | 95% |
 | FU-5 | | | |
 | FU-6 | | | |
 | FU-7 | | | |

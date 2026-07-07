@@ -68,15 +68,20 @@ def test_resolve_page_ids_pages_list():
     assert _resolve_page_ids(args) == ["home-anonymous", "player-profile"]
 
 
-def test_resolve_page_ids_all_pilot_pages():
+def test_resolve_page_ids_all_active_pages():
     args = _record_args(all=True)
     ids = _resolve_page_ids(args)
     assert "home-anonymous" in ids
     assert "player-profile" in ids
+    assert "health-endpoint" not in ids
+    assert len(ids) >= 20
 
 
-def test_pages_manifest_exists_with_three_pilots():
+def test_pages_manifest_has_at_least_twenty_entries():
     with PAGES_MANIFEST.open(encoding="utf-8") as handle:
         registry = json.load(handle)
+    assert len(registry["pages"]) >= 20
     page_ids = [page["id"] for page in registry["pages"]]
-    assert page_ids == ["home-anonymous", "home-authenticated", "player-profile"]
+    assert "home-anonymous" in page_ids
+    assert "home-authenticated" in page_ids
+    assert "player-profile" in page_ids

@@ -11,21 +11,202 @@
       "url": "./index.php?Route=",
       "auth": "none",
       "readySelector": "body",
-      "notes": "Public home / event search widget"
+      "notes": "rsvp.spec.ts — public home / event search widget"
     },
     {
       "id": "home-authenticated",
       "url": "./index.php?Route=",
       "auth": "login",
       "readySelector": "#main, body",
-      "notes": "Post-login home; RSVP widget, kingdom chrome"
+      "notes": "infrastructure.spec.ts — post-login home"
     },
     {
       "id": "player-profile",
       "url": "./index.php?Route=Player/profile",
       "auth": "login",
       "waitAfterMs": 1000,
-      "notes": "T-01 / DS-09 player profile"
+      "notes": "rsvp.spec.ts — logged-in player profile (default route)"
+    },
+    {
+      "id": "player-profile-sandbox",
+      "url": "./index.php?Route=Player/profile/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "notes": "player-profile.spec.ts — sandbox player id 1"
+    },
+    {
+      "id": "park-profile",
+      "url": "./index.php?Route=Park/profile/1",
+      "auth": "login",
+      "notes": "park-profile.spec.ts / banner.spec.ts"
+    },
+    {
+      "id": "kingdom-profile",
+      "url": "./index.php?Route=Kingdom/profile/1",
+      "auth": "login",
+      "notes": "kingdom-profile.spec.ts / banner.spec.ts"
+    },
+    {
+      "id": "event-list",
+      "url": "./index.php?Route=Event",
+      "auth": "login",
+      "notes": "event-planning.spec.ts / banner.spec.ts"
+    },
+    {
+      "id": "event-detail",
+      "url": "./index.php?Route=Event/detail/1/1",
+      "auth": "login",
+      "notes": "event-detail.spec.ts"
+    },
+    {
+      "id": "event-index",
+      "url": "./index.php?Route=Event/index/1",
+      "auth": "login",
+      "notes": "event-detail.spec.ts"
+    },
+    {
+      "id": "event-create",
+      "url": "./index.php?Route=Event/create/1",
+      "auth": "login",
+      "notes": "event-detail.spec.ts"
+    },
+    {
+      "id": "event-kingdom",
+      "url": "./index.php?Route=Event/kingdom/1",
+      "auth": "login",
+      "notes": "event-planning.spec.ts"
+    },
+    {
+      "id": "event-park",
+      "url": "./index.php?Route=Event/park/1",
+      "auth": "login",
+      "notes": "event-planning.spec.ts"
+    },
+    {
+      "id": "admin-dashboard",
+      "url": "./index.php?Route=Admin",
+      "auth": "login",
+      "notes": "admin-dashboard.spec.ts"
+    },
+    {
+      "id": "admin-state-of-amtgard",
+      "url": "./index.php?Route=Admin/stateofamtgard",
+      "auth": "login",
+      "notes": "admin-dashboard.spec.ts"
+    },
+    {
+      "id": "admin-permissions",
+      "url": "./index.php?Route=Admin/permissions",
+      "auth": "login",
+      "notes": "auth-permissions.spec.ts"
+    },
+    {
+      "id": "search",
+      "url": "./index.php?Route=Search",
+      "auth": "none",
+      "notes": "search.spec.ts — public search landing"
+    },
+    {
+      "id": "search-unitsearch",
+      "url": "./index.php?Route=Search/unitsearch",
+      "auth": "login",
+      "notes": "search.spec.ts"
+    },
+    {
+      "id": "attendance",
+      "url": "./index.php?Route=Attendance",
+      "auth": "none",
+      "notes": "attendance.spec.ts — park attendance landing"
+    },
+    {
+      "id": "sign-in-invalid",
+      "url": "./index.php?Route=SignIn/index/abc",
+      "auth": "none",
+      "notes": "attendance.spec.ts — invalid token error page"
+    },
+    {
+      "id": "reports-officer-directory",
+      "url": "./index.php?Route=Reports/kingdom_officer_directory",
+      "auth": "none",
+      "notes": "reports.spec.ts — public officer directory"
+    },
+    {
+      "id": "reports-voting-eligible",
+      "url": "./index.php?Route=Reports/voting_eligible&KingdomId=14",
+      "auth": "login",
+      "notes": "reports.spec.ts"
+    },
+    {
+      "id": "reports-ladder-grid",
+      "url": "./index.php?Route=Reports/ladder_grid&KingdomId=14",
+      "auth": "login",
+      "notes": "reports.spec.ts"
+    },
+    {
+      "id": "reports-attendance",
+      "url": "./index.php?Route=Reports/attendance&KingdomId=14",
+      "auth": "login",
+      "notes": "reports.spec.ts"
+    },
+    {
+      "id": "live-stats",
+      "url": "./index.php?Route=Live/stats",
+      "auth": "login",
+      "notes": "lib-service.spec.ts"
+    },
+    {
+      "id": "weather",
+      "url": "./index.php?Route=Weather",
+      "auth": "login",
+      "notes": "lib-service.spec.ts — live widget; may need stubs in test env"
+    },
+    {
+      "id": "tournament",
+      "url": "./index.php?Route=Tournament",
+      "auth": "login",
+      "notes": "lib-service.spec.ts"
+    },
+    {
+      "id": "health-endpoint",
+      "url": "./index.php?Route=Health",
+      "auth": "none",
+      "skip": true,
+      "notes": "infrastructure.spec.ts — plain-text health probe; skip visual capture"
+    },
+    {
+      "id": "search-ajax-universal",
+      "url": "./index.php?Route=SearchAjax/universal&q=test",
+      "auth": "login",
+      "skip": true,
+      "notes": "search.spec.ts — AJAX JSON; skip visual capture"
+    },
+    {
+      "id": "attendance-ajax-getday",
+      "url": "./index.php?Route=AttendanceAjax/park/1/getday",
+      "auth": "login",
+      "skip": true,
+      "notes": "attendance.spec.ts — AJAX JSON; skip visual capture"
+    },
+    {
+      "id": "qr-link-api",
+      "url": "./index.php?Route=QR/link/abc",
+      "auth": "none",
+      "skip": true,
+      "notes": "attendance.spec.ts — JSON API; skip visual capture"
+    },
+    {
+      "id": "era-phoenice-api",
+      "url": "./index.php?Route=EraPhoenice/today",
+      "auth": "none",
+      "skip": true,
+      "notes": "lib-service.spec.ts — JSON API; skip visual capture"
+    },
+    {
+      "id": "kingdom-ics",
+      "url": "./index.php?Route=Kingdom/ics/1",
+      "auth": "login",
+      "skip": true,
+      "notes": "kingdom-profile.spec.ts — ICS download; skip visual capture"
     }
   ]
 }

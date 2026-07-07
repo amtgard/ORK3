@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+
+from lib.page_registry import active_page_ids, assert_valid_pages_registry, load_pages_registry
 
 TOOL_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = TOOL_ROOT.parent.parent
@@ -53,8 +54,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _load_registry() -> dict:
-    with PAGES_MANIFEST.open(encoding="utf-8") as handle:
-        return json.load(handle)
+    registry = load_pages_registry(PAGES_MANIFEST)
+    assert_valid_pages_registry(registry)
+    return registry
 
 
 def _resolve_page_ids(args: argparse.Namespace) -> list[str]:
@@ -66,7 +68,7 @@ def _resolve_page_ids(args: argparse.Namespace) -> list[str]:
 
     if args.all:
         registry = _load_registry()
-        return [page["id"] for page in registry["pages"] if not page.get("skip")]
+        return active_page_ids(registry)
 
     if args.urls:
         page_ids: list[str] = []
