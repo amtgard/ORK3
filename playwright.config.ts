@@ -30,7 +30,7 @@ export default defineConfig({
     {
       name: 'fuzzy-unit',
       testDir: './tools/fuzzy-validator/playwright',
-      testMatch: 'registry.unit.spec.ts',
+      testMatch: '*.unit.spec.ts',
     },
   ],
 });

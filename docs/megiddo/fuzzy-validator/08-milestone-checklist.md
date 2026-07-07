@@ -64,11 +64,11 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 
 ### FU-6: Asset capture
 
-- [ ] Branch `megiddo/fu-6-asset-capture`
-- [ ] `playwright/lib/captureAssets.ts` + capture spec extension
-- [ ] Identical asset sha256 across 5 calibration runs (pilot pages)
-- [ ] Tests for asset manifest serialization
-- [ ] Single squashed commit
+- [x] Branch `megiddo/fu-6-asset-capture`
+- [x] `playwright/lib/captureAssets.ts` + capture spec extension
+- [x] Identical asset sha256 across 5 calibration runs (pilot pages)
+- [x] Tests for asset manifest serialization
+- [x] Single squashed commit
 
 ### FU-7: Asset hard gate
 

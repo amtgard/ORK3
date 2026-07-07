@@ -8,6 +8,7 @@ import { test } from '@playwright/test';
 import { hasAuthCredentials, login } from './lib/auth';
 import { loadPagesRegistry, parsePageIdList, resolveRequestedPages } from './lib/pages';
 import { appReachable } from './lib/reachable';
+import { startAssetCapture } from './lib/captureAssets';
 import { FIXED_CLOCK_TIME, captureScreenshot, stabilizePage } from './lib/stabilize';
 
 const TOOL_ROOT = path.join(__dirname, '..');
@@ -51,17 +52,24 @@ for (const pageEntry of capturePages) {
     fs.mkdirSync(outDir, { recursive: true });
 
     for (let run = 1; run <= repeat; run += 1) {
+      const runLabel = singleCapture ? 'candidate' : `run-${String(run).padStart(3, '0')}`;
+      const captureUrl = new URL(pageEntry.url, baseURL!).href;
+      const assetSession = startAssetCapture(page, captureUrl);
+
       await page.goto(pageEntry.url);
       await stabilizePage(page, {
         readySelector: pageEntry.readySelector,
         waitAfterMs,
       });
 
-      const fileName = singleCapture
-        ? 'candidate.png'
-        : `run-${String(run).padStart(3, '0')}.png`;
+      const fileName = singleCapture ? 'candidate.png' : `${runLabel}.png`;
       const outPath = path.join(outDir, fileName);
       await captureScreenshot(page, outPath);
+      await assetSession.finish({
+        pageId: pageEntry.id,
+        runLabel,
+        outDir,
+      });
     }
   });
 }
