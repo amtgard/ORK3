@@ -16071,21 +16071,14 @@ window.initUsernameAvailabilityCheck = function(opts) {
             var delBy = r.DeletedById
                 ? '<a href="' + uirBase() + 'Player/profile/' + parseInt(r.DeletedById, 10) + '">' + escHtml(r.DeletedByName || '') + '</a>'
                 : '&mdash;';
-            var searchKey = [
-                r.Persona || '',
-                r.AwardName || '',
-                r.Reason || '',
-                r.RecommendedByName || '',
-                r.DeletedByName || ''
-            ].join(' ').toLowerCase();
-            html += '<tr data-rec-id="' + rid + '" data-search="' + escHtml(searchKey) + '">'
+            html += '<tr data-rec-id="' + rid + '">'
                 + '<td><a href="' + uirBase() + 'Player/profile/' + parseInt(r.MundaneId, 10) + '">' + escHtml(r.Persona || '') + '</a></td>'
                 + '<td>' + escHtml(r.AwardName || '') + '</td>'
-                + '<td>' + rank + '</td>'
+                + '<td data-order="' + (parseInt(r.Rank, 10) || 0) + '">' + rank + '</td>'
                 + '<td>' + notes + '</td>'
-                + '<td>' + escHtml(r.DateRecommended || '') + '</td>'
+                + '<td data-order="' + (Date.parse(r.DateRecommended) || 0) + '">' + escHtml(r.DateRecommended || '') + '</td>'
                 + '<td>' + recBy + '</td>'
-                + '<td>' + escHtml(fmtDt(r.DeletedAt)) + '</td>'
+                + '<td data-order="' + (Date.parse(r.DeletedAt) || 0) + '">' + escHtml(fmtDt(r.DeletedAt)) + '</td>'
                 + '<td>' + delBy + '</td>'
                 + '<td style="text-align:right;white-space:nowrap"><button type="button" class="pk-deleted-restore-btn" data-rec-id="' + rid + '"><i class="fas fa-undo"></i> Restore</button></td>'
                 + '</tr>';
@@ -16123,8 +16116,13 @@ window.initUsernameAvailabilityCheck = function(opts) {
                 }
                 renderRows(tbody, recs);
                 if (wrap) wrap.style.display = '';
-                var searchWrap = panel.querySelector('.pk-deleted-recs-search-wrap');
-                if (searchWrap) searchWrap.style.display = recs.length > 5 ? '' : 'none';
+                var $delTable = $(panel).find('.pk-deleted-recs-table');
+                panel.__dt = window.orkInitDataTable($delTable, {
+                    order: [[6, 'desc']],   // Deleted At, newest first
+                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Deleted Recommendations',
+                    columnDefs: [{ targets: 8, orderable: false, searchable: false }]
+                });
+                window.orkAdjustDataTables($(panel));
                 panel.dataset.loaded = '1';
                 if (onRendered) onRendered();
             })
@@ -16157,25 +16155,6 @@ window.initUsernameAvailabilityCheck = function(opts) {
                 loadDeleted(panel, listUrl);
             }
         });
-
-        var searchInput = panel.querySelector('.pk-deleted-recs-search');
-        if (searchInput) {
-            searchInput.addEventListener('input', function () {
-                var q = this.value.trim().toLowerCase();
-                var tbody = panel.querySelector('tbody');
-                if (!tbody) return;
-                var rows = tbody.querySelectorAll('tr');
-                var visible = 0;
-                for (var i = 0; i < rows.length; i++) {
-                    var key = rows[i].getAttribute('data-search') || '';
-                    var match = !q || key.indexOf(q) !== -1;
-                    rows[i].style.display = match ? '' : 'none';
-                    if (match) visible++;
-                }
-                var noMatch = panel.querySelector('.pk-deleted-recs-no-match');
-                if (noMatch) noMatch.style.display = (q && visible === 0) ? '' : 'none';
-            });
-        }
 
         panel.addEventListener('click', function (e) {
             var btn = e.target.closest ? e.target.closest('.pk-deleted-restore-btn') : null;
@@ -16210,25 +16189,27 @@ window.initUsernameAvailabilityCheck = function(opts) {
                         return;
                     }
                     var row = btn.closest('tr');
-                    if (row) {
-                        row.classList.add('pk-deleted-restored');
-                        setTimeout(function () {
-                            row.parentNode && row.parentNode.removeChild(row);
-                            var countEl = panel.querySelector('.pk-deleted-recs-count');
-                            var tbody   = panel.querySelector('tbody');
-                            var remaining = tbody ? tbody.querySelectorAll('tr').length : 0;
-                            if (countEl) {
-                                countEl.textContent = remaining;
-                                countEl.style.display = remaining > 0 ? '' : 'none';
-                            }
-                            if (remaining === 0) {
-                                var wrap = panel.querySelector('.pk-deleted-recs-table-wrap');
-                                var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
-                                if (wrap)    wrap.style.display = 'none';
-                                if (emptyEl) emptyEl.style.display = '';
-                            }
-                        }, 500);
-                    }
+                    if (row) row.classList.add('pk-deleted-restored');
+                    var recIdDone = btn.getAttribute('data-rec-id');
+                    setTimeout(function () {
+                        if (panel.__dt) {
+                            panel.__dt.rows(function (i, data, node) {
+                                return node.getAttribute('data-rec-id') === recIdDone;
+                            }).remove().draw(false);
+                        }
+                        var remaining = panel.__dt ? panel.__dt.rows().count() : 0;
+                        var countEl = panel.querySelector('.pk-deleted-recs-count');
+                        if (countEl) {
+                            countEl.textContent = remaining;
+                            countEl.style.display = remaining > 0 ? '' : 'none';
+                        }
+                        if (remaining === 0) {
+                            var wrap = panel.querySelector('.pk-deleted-recs-table-wrap');
+                            var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
+                            if (wrap)    wrap.style.display = 'none';
+                            if (emptyEl) emptyEl.style.display = '';
+                        }
+                    }, 500);
                 })
                 .catch(function () {
                     alert('Network error.');
