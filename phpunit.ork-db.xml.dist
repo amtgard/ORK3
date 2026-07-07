@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/Unit/OrkDb/bootstrap.php"
+         colors="true"
+         cacheDirectory="build/phpunit-ork-db-cache">
+    <testsuites>
+        <testsuite name="ork-db">
+            <directory>tests/Unit/OrkDb</directory>
+            <directory>tests/Integration/OrkDb</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory suffix=".php">tools/ork-db</directory>
+        </include>
+        <exclude>
+            <file>tools/ork-db/cli.php</file>
+            <file>tools/ork-db/Init.php</file>
+        </exclude>
+    </source>
+    <coverage>
+        <report>
+            <text outputFile="php://stdout" showOnlySummary="true"/>
+        </report>
+    </coverage>
+</phpunit>

@@ -39,9 +39,28 @@ services:
     container_name: ork3-php8-db
     networks:
       - ork3-php8-net
+  ork3testdb:
+    image: mariadb:latest
+    command: --sql-mode=''
+    restart: always
+    environment:
+      MARIADB_DATABASE: 'ork_test'
+      MARIADB_USER: 'ork'
+      MARIADB_PASSWORD: 'secret'
+      MARIADB_ROOT_PASSWORD: 'root'
+    ports:
+      - '19307:3306'
+    expose:
+      - '3306'
+    volumes:
+      - data-test-db:/var/lib/mysql
+    container_name: ork3-php8-test-db
+    networks:
+      - ork3-php8-net
 
 volumes:
   data-db: {}
+  data-test-db: {}
 
 networks:
   ork3-php8-net:

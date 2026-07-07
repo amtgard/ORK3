@@ -15,16 +15,16 @@
 
 ## TD-1 — Docker sandbox container
 
-- [ ] `ork3testdb` on port 19307, database `ork_test`, volume `data-test-db`
+- [x] `ork3testdb` on port 19307, database `ork_test`, volume `data-test-db`
 
 ---
 
 ## TD-2 — Safety + tier guard
 
-- [ ] `DeploymentTier.php` — local vs production
-- [ ] Data commands refused on production tier
-- [ ] `validate` — port 19307, database `ork_test`, canaries, fingerprints
-- [ ] No CLI overrides for wiring host/port/database
+- [x] `DeploymentTier.php` — local vs production
+- [x] Data commands refused on production tier
+- [x] `validate` — port 19307, database `ork_test`, canaries, fingerprints
+- [x] No CLI overrides for wiring host/port/database
 
 ---
 

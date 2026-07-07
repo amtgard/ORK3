@@ -45,3 +45,7 @@ ork.zip
 config.tmpprod.php
 .DS_Store
 .vscode/
+.ork3-db.local
+tools/ork-db/extracted/
+tools/ork-db/rendered/
+tools/ork-db/.last-apply.json
