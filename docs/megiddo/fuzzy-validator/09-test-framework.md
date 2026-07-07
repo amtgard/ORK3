@@ -129,3 +129,19 @@ Workflow job (Linux):
 ```
 
 Separate optional job: docker compose + `npm run fuzz:gate:all -- --pages home-anonymous` on PRs touching `orkui/`.
+
+---
+
+## Evidence suite (FU-12+)
+
+Integration proof lives under `tools/fuzzy-validator/evidence/` — committed baselines, fuzz manifests, and HTML reports reviewers can open without docker.
+
+| Command | Purpose |
+|---------|---------|
+| `bin/fuzzy-validator record --tool-root tools/fuzzy-validator/evidence …` | Virgin capture into `evidence/baselines/` |
+| `evidence/scripts/run-evidence-suite.sh` | Discover + validate pass/fail (FU-13+); stub exits 1 until baselines exist |
+| `validate --skip-capture` | Use prepared `calibrations/*/candidate.*` (evidence mutations) |
+
+Pytest CI does **not** run the evidence suite (docker required). Optional nightly/manual workflow in FU-15.
+
+See [evidence/README.md](../../../tools/fuzzy-validator/evidence/README.md) and [08-milestone-checklist.md](./08-milestone-checklist.md) Phase 3.

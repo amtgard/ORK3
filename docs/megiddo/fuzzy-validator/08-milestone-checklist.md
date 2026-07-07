@@ -190,12 +190,12 @@ tools/fuzzy-validator/evidence/
 
 ### FU-12: Evidence harness + virgin capture
 
-- [ ] Branch `megiddo/fu-12-evidence-harness`
-- [ ] `tools/fuzzy-validator/evidence/` layout + `README.md`
-- [ ] `evidence/pages.json5` (1–2 pages) + mutation recipe doc (heraldry swap, CSS byte, DOM twig)
-- [ ] Virgin `record --profile test` on stable commit; baselines committed under `evidence/baselines/test/`
-- [ ] `evidence/scripts/run-evidence-suite.sh` stub (exits non-zero until FU-13–15 fill in)
-- [ ] Update [09-test-framework.md](./09-test-framework.md) § Evidence suite (cross-ref)
+- [x] Branch `megiddo/fu-12-evidence-harness`
+- [x] `tools/fuzzy-validator/evidence/` layout + `README.md`
+- [x] `evidence/pages.json5` (1–2 pages) + mutation recipe doc (heraldry swap, CSS byte, DOM twig)
+- [x] Virgin `record --profile test` on stable commit; baselines committed under `evidence/baselines/test/`
+- [x] `evidence/scripts/run-evidence-suite.sh` stub (exits non-zero until FU-13–15 fill in)
+- [x] Update [09-test-framework.md](./09-test-framework.md) § Evidence suite (cross-ref)
 - [ ] Single squashed commit
 
 ### FU-13: Pixel + DOM fuzz discovery evidence

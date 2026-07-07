@@ -12,7 +12,7 @@ import { startAssetCapture } from './lib/captureAssets';
 import { captureDomHtml } from './lib/captureDom';
 import { FIXED_CLOCK_TIME, captureScreenshot, stabilizePage } from './lib/stabilize';
 
-const TOOL_ROOT = path.join(__dirname, '..');
+const TOOL_ROOT = process.env.FUZZ_TOOL_ROOT || path.join(__dirname, '..');
 const requestedIds = parsePageIdList(process.env.FUZZ_PAGES);
 const registry = loadPagesRegistry();
 const capturePages = resolveRequestedPages(registry, requestedIds);

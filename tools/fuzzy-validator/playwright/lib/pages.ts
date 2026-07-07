@@ -23,8 +23,20 @@ export interface PagesRegistry {
   pages: PageEntry[];
 }
 
+function toolRoot(): string {
+  return process.env.FUZZ_TOOL_ROOT || path.join(__dirname, '..', '..');
+}
+
 export function registryPath(): string {
-  return path.join(__dirname, '..', '..', 'manifests', 'pages.json5');
+  if (process.env.FUZZ_PAGES_MANIFEST) {
+    return process.env.FUZZ_PAGES_MANIFEST;
+  }
+  const root = toolRoot();
+  const rootPages = path.join(root, 'pages.json5');
+  if (fs.existsSync(rootPages)) {
+    return rootPages;
+  }
+  return path.join(root, 'manifests', 'pages.json5');
 }
 
 const PAGE_ID_PATTERN = /^[a-z0-9-]+$/;

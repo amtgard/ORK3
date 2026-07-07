@@ -6,9 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from fuzzy_validator.cli import PAGES_MANIFEST, _resolve_page_ids, main
-
-TOOL_ROOT = Path(__file__).resolve().parents[2]
+from fuzzy_validator.cli import TOOL_ROOT, _resolve_page_ids, main
+from lib.tool_paths import pages_manifest_path
 
 
 def _record_args(**kwargs):
@@ -66,17 +65,17 @@ def test_validate_runs_gate_script():
 
 def test_resolve_page_ids_single_page():
     args = _record_args(page="home-anonymous")
-    assert _resolve_page_ids(args) == ["home-anonymous"]
+    assert _resolve_page_ids(args, TOOL_ROOT) == ["home-anonymous"]
 
 
 def test_resolve_page_ids_pages_list():
     args = _record_args(pages="home-anonymous,player-profile")
-    assert _resolve_page_ids(args) == ["home-anonymous", "player-profile"]
+    assert _resolve_page_ids(args, TOOL_ROOT) == ["home-anonymous", "player-profile"]
 
 
 def test_resolve_page_ids_all_active_pages():
     args = _record_args(all=True)
-    ids = _resolve_page_ids(args)
+    ids = _resolve_page_ids(args, TOOL_ROOT)
     assert "home-anonymous" in ids
     assert "player-profile" in ids
     assert "health-endpoint" not in ids
@@ -84,7 +83,8 @@ def test_resolve_page_ids_all_active_pages():
 
 
 def test_pages_manifest_has_at_least_twenty_entries():
-    with PAGES_MANIFEST.open(encoding="utf-8") as handle:
+    pages_manifest = pages_manifest_path(TOOL_ROOT)
+    with pages_manifest.open(encoding="utf-8") as handle:
         registry = json.load(handle)
     assert len(registry["pages"]) >= 20
     page_ids = [page["id"] for page in registry["pages"]]

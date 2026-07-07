@@ -156,6 +156,8 @@ def test_gate_run_main_writes_summary(tmp_path: Path, monkeypatch: pytest.Monkey
                 "all",
                 "--run-dir",
                 str(run_dir),
+                "--tool-root",
+                str(tmp_path),
             ]
         )
         == 0

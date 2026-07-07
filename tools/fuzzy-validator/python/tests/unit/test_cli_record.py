@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from fuzzy_validator.cli import _resolve_page_ids, main
+from fuzzy_validator.cli import TOOL_ROOT, _resolve_page_ids, main
 
 
 class _Args:
@@ -26,13 +26,13 @@ def test_resolve_page_ids_from_urls_file(tmp_path):
     urls_file = tmp_path / "urls.txt"
     urls_file.write_text("page:home-anonymous\n# comment\n", encoding="utf-8")
     args = _Args(page=None, pages=None, all=False, urls=str(urls_file))
-    assert _resolve_page_ids(args) == ["home-anonymous"]
+    assert _resolve_page_ids(args, TOOL_ROOT) == ["home-anonymous"]
 
 
 def test_resolve_page_ids_missing_selector_exits():
     args = _Args(page=None, pages=None, all=False, urls=None)
     with pytest.raises(SystemExit) as exc:
-        _resolve_page_ids(args)
+        _resolve_page_ids(args, TOOL_ROOT)
     assert exc.value.code == 2
 
 

@@ -12,6 +12,13 @@ from pathlib import Path
 from gate_run import finalize_multi_profile_run, finalize_run, run_batch_gate
 from lib.manifest import load_defaults
 from lib.page_registry import active_page_ids, assert_valid_pages_registry, load_pages_registry
+from lib.tool_paths import (
+    DEFAULT_TOOL_ROOT,
+    defaults_path,
+    pages_manifest_path,
+    profiles_config_path,
+    resolve_tool_root,
+)
 from lib.profiles import (
     ProfileError,
     assert_profile_baselines_exist,
@@ -24,9 +31,8 @@ from lib.profiles import (
     resolve_profile_names,
 )
 
-TOOL_ROOT = Path(__file__).resolve().parents[2]
+TOOL_ROOT = DEFAULT_TOOL_ROOT
 REPO_ROOT = TOOL_ROOT.parent.parent
-PAGES_MANIFEST = TOOL_ROOT / "manifests" / "pages.json5"
 PYTHON_DIR = TOOL_ROOT / "python"
 
 
@@ -56,6 +62,16 @@ def _build_parser() -> argparse.ArgumentParser:
     shared.add_argument("--visual-min-score", type=float, metavar="SCORE")
     shared.add_argument("--dom-min-score", type=float, metavar="SCORE")
     shared.add_argument("--assets-min-score", type=float, metavar="SCORE")
+    shared.add_argument(
+        "--tool-root",
+        metavar="PATH",
+        help="Alternate tool root (e.g. tools/fuzzy-validator/evidence)",
+    )
+    shared.add_argument(
+        "--skip-capture",
+        action="store_true",
+        help="Validate using existing candidate files in calibrations/ (evidence suite)",
+    )
 
     record = subparsers.add_parser(
         "record",
@@ -85,13 +101,13 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _load_registry() -> dict:
-    registry = load_pages_registry(PAGES_MANIFEST)
+def _load_registry(tool_root: Path) -> dict:
+    registry = load_pages_registry(pages_manifest_path(tool_root))
     assert_valid_pages_registry(registry)
     return registry
 
 
-def _resolve_page_ids(args: argparse.Namespace) -> list[str]:
+def _resolve_page_ids(args: argparse.Namespace, tool_root: Path) -> list[str]:
     if args.page:
         return [args.page]
 
@@ -99,7 +115,7 @@ def _resolve_page_ids(args: argparse.Namespace) -> list[str]:
         return [page_id.strip() for page_id in args.pages.split(",") if page_id.strip()]
 
     if args.all:
-        registry = _load_registry()
+        registry = _load_registry(tool_root)
         return active_page_ids(registry)
 
     if args.urls:
@@ -155,21 +171,21 @@ def _activate_profile(
     return merged
 
 
-def _manifest_path(profile: str, page_id: str, suffix: str) -> Path:
-    return profile_manifests_dir(TOOL_ROOT, profile) / f"{page_id}{suffix}"
+def _manifest_path(tool_root: Path, profile: str, page_id: str, suffix: str) -> Path:
+    return profile_manifests_dir(tool_root, profile) / f"{page_id}{suffix}"
 
 
-def _baseline_path(profile: str, page_id: str, suffix: str) -> Path:
-    return profile_baselines_dir(TOOL_ROOT, profile) / f"{page_id}{suffix}"
+def _baseline_path(tool_root: Path, profile: str, page_id: str, suffix: str) -> Path:
+    return profile_baselines_dir(tool_root, profile) / f"{page_id}{suffix}"
 
 
-def _run_dom_discover(page_ids: list[str], env: dict, profile: str) -> int:
+def _run_dom_discover(page_ids: list[str], env: dict, profile: str, tool_root: Path) -> int:
     discover_script = PYTHON_DIR / "discover_dom_fuzz.py"
     for page_id in page_ids:
-        cal_dir = TOOL_ROOT / "calibrations" / page_id
-        dom_manifest_out = _manifest_path(profile, page_id, ".dom-fuzz.json")
-        dom_debug_out = TOOL_ROOT / "reports" / f"{profile}-{page_id}-dom-fuzz.txt"
-        dom_baseline_out = _baseline_path(profile, page_id, ".dom.json")
+        cal_dir = tool_root / "calibrations" / page_id
+        dom_manifest_out = _manifest_path(tool_root, profile, page_id, ".dom-fuzz.json")
+        dom_debug_out = tool_root / "reports" / f"{profile}-{page_id}-dom-fuzz.txt"
+        dom_baseline_out = _baseline_path(tool_root, profile, page_id, ".dom.json")
         discover = subprocess.run(
             [
                 sys.executable,
@@ -194,13 +210,13 @@ def _run_dom_discover(page_ids: list[str], env: dict, profile: str) -> int:
     return 0
 
 
-def _run_pixel_discover(page_ids: list[str], env: dict, profile: str) -> int:
+def _run_pixel_discover(page_ids: list[str], env: dict, profile: str, tool_root: Path) -> int:
     discover_script = PYTHON_DIR / "discover_fuzz.py"
     for page_id in page_ids:
-        cal_dir = TOOL_ROOT / "calibrations" / page_id
-        manifest_out = _manifest_path(profile, page_id, ".fuzz.json")
-        overlay_out = TOOL_ROOT / "reports" / f"{profile}-{page_id}-calibration-overlay.png"
-        baseline_out = _baseline_path(profile, page_id, ".png")
+        cal_dir = tool_root / "calibrations" / page_id
+        manifest_out = _manifest_path(tool_root, profile, page_id, ".fuzz.json")
+        overlay_out = tool_root / "reports" / f"{profile}-{page_id}-calibration-overlay.png"
+        baseline_out = _baseline_path(tool_root, profile, page_id, ".png")
         discover = subprocess.run(
             [
                 sys.executable,
@@ -225,9 +241,16 @@ def _run_pixel_discover(page_ids: list[str], env: dict, profile: str) -> int:
     return 0
 
 
-def _run_playwright_capture(page_ids: list[str], env: dict, args: argparse.Namespace) -> int:
+def _run_playwright_capture(
+    page_ids: list[str],
+    env: dict,
+    args: argparse.Namespace,
+    tool_root: Path,
+) -> int:
     capture_env = env.copy()
     capture_env["FUZZ_PAGES"] = ",".join(page_ids)
+    capture_env["FUZZ_TOOL_ROOT"] = str(tool_root)
+    capture_env["FUZZ_PAGES_MANIFEST"] = str(pages_manifest_path(tool_root))
     if args.repeat is not None:
         capture_env["FUZZ_REPEAT"] = str(args.repeat)
     if args.base_url:
@@ -242,10 +265,10 @@ def _run_playwright_capture(page_ids: list[str], env: dict, args: argparse.Names
     return int(result.returncode)
 
 
-def _run_calibrate_assets(page_ids: list[str], env: dict, profile: str) -> int:
+def _run_calibrate_assets(page_ids: list[str], env: dict, profile: str, tool_root: Path) -> int:
     calibrate_assets_script = PYTHON_DIR / "calibrate_assets.py"
     for page_id in page_ids:
-        cal_dir = TOOL_ROOT / "calibrations" / page_id
+        cal_dir = tool_root / "calibrations" / page_id
         calibrate = subprocess.run(
             [
                 sys.executable,
@@ -255,7 +278,7 @@ def _run_calibrate_assets(page_ids: list[str], env: dict, profile: str) -> int:
                 "--calibration-dir",
                 str(cal_dir),
                 "--baseline-out",
-                str(_baseline_path(profile, page_id, ".assets.json")),
+                str(_baseline_path(tool_root, profile, page_id, ".assets.json")),
             ],
             cwd=REPO_ROOT,
             env=env,
@@ -266,28 +289,34 @@ def _run_calibrate_assets(page_ids: list[str], env: dict, profile: str) -> int:
     return 0
 
 
-def _run_capture_phase(args: argparse.Namespace, page_ids: list[str], env: dict, profile: str) -> int:
-    code = _run_playwright_capture(page_ids, env, args)
+def _run_capture_phase(
+    args: argparse.Namespace,
+    page_ids: list[str],
+    env: dict,
+    profile: str,
+    tool_root: Path,
+) -> int:
+    code = _run_playwright_capture(page_ids, env, args, tool_root)
     if code != 0:
         return code
 
     env["PYTHONPATH"] = f"{env.get('PYTHONPATH', '')}:{PYTHON_DIR}"
 
     if args.phase == "assets":
-        return _run_calibrate_assets(page_ids, env, profile)
+        return _run_calibrate_assets(page_ids, env, profile, tool_root)
 
     if args.phase in {"visual", "all"}:
-        code = _run_pixel_discover(page_ids, env, profile)
+        code = _run_pixel_discover(page_ids, env, profile, tool_root)
         if code != 0:
             return code
 
     if args.phase in {"visual", "all"}:
-        code = _run_calibrate_assets(page_ids, env, profile)
+        code = _run_calibrate_assets(page_ids, env, profile, tool_root)
         if code != 0:
             return code
 
     if args.phase in {"dom", "all"}:
-        return _run_dom_discover(page_ids, env, profile)
+        return _run_dom_discover(page_ids, env, profile, tool_root)
 
     return 0
 
@@ -300,9 +329,10 @@ def _run_capture(args: argparse.Namespace) -> int:
         )
         return 2
 
-    page_ids = _resolve_page_ids(args)
+    tool_root = resolve_tool_root(args.tool_root)
+    page_ids = _resolve_page_ids(args, tool_root)
     if args.dry_run:
-        config = load_profiles_config()
+        config = load_profiles_config(profiles_config_path(tool_root))
         for profile_name in resolve_profile_names(
             config=config,
             profile=args.profile,
@@ -312,7 +342,7 @@ def _run_capture(args: argparse.Namespace) -> int:
                 print(f"{profile_name}:{page_id}")
         return 0
 
-    config = load_profiles_config()
+    config = load_profiles_config(profiles_config_path(tool_root))
     profile_names = resolve_profile_names(
         config=config,
         profile=args.profile,
@@ -321,9 +351,9 @@ def _run_capture(args: argparse.Namespace) -> int:
     base_env = os.environ.copy()
 
     for profile_name in profile_names:
-        print(f"fuzzy-validator record: profile={profile_name}")
+        print(f"fuzzy-validator record: profile={profile_name} tool-root={tool_root}")
         env = _activate_profile(profile_name, config, ensure_sandbox=args.ensure_sandbox, env=base_env)
-        code = _run_capture_phase(args, page_ids, env, profile_name)
+        code = _run_capture_phase(args, page_ids, env, profile_name, tool_root)
         if code != 0:
             return code
 
@@ -339,8 +369,9 @@ def _threshold_overrides(args: argparse.Namespace) -> dict[str, float | None]:
 
 
 def _run_validate(args: argparse.Namespace) -> int:
-    page_ids = _resolve_page_ids(args)
-    config = load_profiles_config()
+    tool_root = resolve_tool_root(args.tool_root)
+    page_ids = _resolve_page_ids(args, tool_root)
+    config = load_profiles_config(profiles_config_path(tool_root))
     profile_names = resolve_profile_names(
         config=config,
         profile=args.profile,
@@ -354,10 +385,10 @@ def _run_validate(args: argparse.Namespace) -> int:
         return 0
 
     run_id = args.run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    run_dir = TOOL_ROOT / "reports" / f"run-{run_id}"
+    run_dir = tool_root / "reports" / f"run-{run_id}"
     base_env = os.environ.copy()
     base_env["PYTHONPATH"] = f"{base_env.get('PYTHONPATH', '')}:{PYTHON_DIR}"
-    defaults = load_defaults(TOOL_ROOT / "manifests" / "defaults.json5")
+    defaults = load_defaults(defaults_path(tool_root))
     overrides = _threshold_overrides(args)
 
     overall_exit = 0
@@ -365,32 +396,35 @@ def _run_validate(args: argparse.Namespace) -> int:
 
     for profile_name in profile_names:
         try:
-            assert_profile_baselines_exist(TOOL_ROOT, profile_name, page_ids)
+            assert_profile_baselines_exist(tool_root, profile_name, page_ids)
         except ProfileError as exc:
             print(f"fuzzy-validator: {exc}", file=sys.stderr)
             return 2
 
-        print(f"fuzzy-validator validate: profile={profile_name}")
+        print(f"fuzzy-validator validate: profile={profile_name} tool-root={tool_root}")
         env = _activate_profile(profile_name, config, ensure_sandbox=args.ensure_sandbox, env=base_env)
 
-        capture_env = env.copy()
-        capture_env["FUZZ_MODE"] = "candidate"
-        for page_id in page_ids:
-            capture_env["FUZZ_PAGES"] = page_id
-            capture = subprocess.run(
-                ["npx", "playwright", "test", "--project=fuzzy-capture"],
-                cwd=REPO_ROOT,
-                env=capture_env,
-                check=False,
-            )
-            if capture.returncode != 0:
-                return int(capture.returncode)
+        if not args.skip_capture:
+            capture_env = env.copy()
+            capture_env["FUZZ_MODE"] = "candidate"
+            capture_env["FUZZ_TOOL_ROOT"] = str(tool_root)
+            capture_env["FUZZ_PAGES_MANIFEST"] = str(pages_manifest_path(tool_root))
+            for page_id in page_ids:
+                capture_env["FUZZ_PAGES"] = page_id
+                capture = subprocess.run(
+                    ["npx", "playwright", "test", "--project=fuzzy-capture"],
+                    cwd=REPO_ROOT,
+                    env=capture_env,
+                    check=False,
+                )
+                if capture.returncode != 0:
+                    return int(capture.returncode)
 
-        thresholds = profile_thresholds(config, profile_name, **overrides)
+        thresholds = profile_thresholds(config, profile_name, **_threshold_overrides(args))
         page_results, exit_code = run_batch_gate(
             page_ids=page_ids,
             phase=args.phase,
-            tool_root=TOOL_ROOT,
+            tool_root=tool_root,
             defaults=defaults,
             run_dir=run_dir,
             profile=profile_name,

@@ -1,0 +1,14 @@
+{
+  "colorThreshold": 20,
+  "minAreaPx": 64,
+  "padPx": 4,
+  "calibrationRuns": 5,
+  "gateColorThreshold": 20,
+  "gateMaxOutsideDiffPx": 500,
+  "morphologyKernelPx": 5,
+  "assetsMinScore": 1.0,
+  "domMinScore": 1.0,
+  "visualMinScore": 1.0,
+  "assetStripQuery": false,
+  "domCompareScriptBodies": false
+}

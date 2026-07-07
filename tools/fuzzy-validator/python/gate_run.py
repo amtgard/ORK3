@@ -19,8 +19,9 @@ from lib.manifest import effective_fuzz_zones, load_defaults, load_fuzz_manifest
 from lib.overlay import draw_gate_annotation
 from lib.report_html import copy_page_artifacts, render_summary_table, write_report_bundle, write_summary_json
 from lib.scoring import Thresholds, build_page_summary, build_run_summary
+from lib.tool_paths import DEFAULT_TOOL_ROOT, defaults_path, resolve_tool_root
 
-TOOL_ROOT = Path(__file__).resolve().parents[1]
+TOOL_ROOT = DEFAULT_TOOL_ROOT
 
 
 @dataclass
@@ -441,6 +442,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--run-dir", type=Path, help="Report run directory")
     parser.add_argument("--profile", help="Database profile name")
+    parser.add_argument("--tool-root", type=Path, help="Alternate tool root")
     parser.add_argument("--visual-min-score", type=float)
     parser.add_argument("--dom-min-score", type=float)
     parser.add_argument("--assets-min-score", type=float)
@@ -460,7 +462,9 @@ def _resolve_page_ids(args: argparse.Namespace) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    defaults = load_defaults(args.defaults)
+    tool_root = resolve_tool_root(args.tool_root)
+    defaults_path_resolved = args.defaults if args.defaults else defaults_path(tool_root)
+    defaults = load_defaults(defaults_path_resolved)
     page_ids = _resolve_page_ids(args)
 
     thresholds = Thresholds.from_defaults(defaults).with_overrides(
@@ -472,7 +476,7 @@ def main(argv: list[str] | None = None) -> int:
     run_dir = args.run_dir
     if run_dir is None:
         run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        run_dir = TOOL_ROOT / "reports" / f"run-{run_id}"
+        run_dir = tool_root / "reports" / f"run-{run_id}"
 
     if len(page_ids) == 1 and args.visual_diff_out is not None:
         visual_out = args.visual_diff_out
@@ -486,7 +490,7 @@ def main(argv: list[str] | None = None) -> int:
             page_result = run_page_gate(
                 page_id=page_ids[0],
                 phase=args.phase,
-                tool_root=TOOL_ROOT,
+                tool_root=tool_root,
                 defaults=defaults,
                 profile=args.profile,
                 thresholds=thresholds,
@@ -500,7 +504,7 @@ def main(argv: list[str] | None = None) -> int:
         copy_page_artifacts(
             run_dir=run_dir,
             page_id=page_ids[0],
-            tool_root=TOOL_ROOT,
+            tool_root=tool_root,
             profile=args.profile,
         )
         page_results = [page_result]
@@ -509,7 +513,7 @@ def main(argv: list[str] | None = None) -> int:
         page_results, exit_code = run_batch_gate(
             page_ids=page_ids,
             phase=args.phase,
-            tool_root=TOOL_ROOT,
+            tool_root=tool_root,
             defaults=defaults,
             run_dir=run_dir,
             profile=args.profile,
