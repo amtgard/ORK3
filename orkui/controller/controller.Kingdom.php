@@ -957,6 +957,13 @@ class Controller_Kingdom extends Controller
         // Qualification Tests module: gate the Tests management UI.
         $this->data['CanManageTests'] = $uid > 0 && Ork3::$Lib->qualtest->canManage($uid, (int)$kingdom_id);
 
+        // Kingdom-level configs are read in two places below (QualTest toggles
+        // and AwardRecsPublic). Fetch once here — before the qual-tests branch
+        // was merged with master this was assigned lower down, which left the
+        // QualTest reads reaching for an undefined variable and always
+        // resolving to false.
+        $knConfigs  = Common::get_configs($kingdom_id, CFG_KINGDOM);
+
         // Qualification Tests config toggles (per-kingdom enable of reeve/corpora tests).
         $this->data['QualTestReeveEnabled'] = isset($knConfigs['QualTestReeveEnabled'])
             ? (bool)(int)$knConfigs['QualTestReeveEnabled']['Value']
@@ -973,7 +980,6 @@ class Controller_Kingdom extends Controller
             $this->Reports->supported_voting_kingdom_ids()
         );
 
-        $knConfigs  = Common::get_configs($kingdom_id, CFG_KINGDOM);
         $recsPublic = isset($knConfigs['AwardRecsPublic'])
             ? (bool)(int)$knConfigs['AwardRecsPublic']['Value']
             : true;

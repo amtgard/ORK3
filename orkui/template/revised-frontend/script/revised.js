@@ -8738,7 +8738,14 @@ $(document).ready(function() {
                                 fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=exclude')
                                     .then(function(r2) { return r2.json(); })
                                     .then(function(other) {
-                                        other = (other || []).slice(0, 10 - own.length);
+                                        // Dedup by MundaneId. With an abbreviation
+                                        // prefix like "nb:ff alt", the backend
+                                        // ignores scope entirely so both fetches
+                                        // return the same rows — same player would
+                                        // otherwise render twice in the dropdown.
+                                        var seen = {};
+                                        own.forEach(function(pl) { seen[pl.MundaneId] = true; });
+                                        other = (other || []).filter(function(pl) { return !seen[pl.MundaneId]; }).slice(0, 10 - own.length);
                                         var combined = own.concat(other);
                                         evStaffRenderAc(combined.length ? combined : [{ MundaneId: 0, Persona: 'No players found', KAbbr: '', PAbbr: '' }]);
                                         // Remove no-results placeholder from being selectable

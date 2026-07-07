@@ -875,6 +875,12 @@ $(function() {
 	var parsedQuestions = [];
 	var importedCount = 0;
 
+	// HTML-escape helper — the Test Preview IIFE has its own copy scoped to
+	// that closure, so we need our own here. Without it, any parsed input
+	// throws ReferenceError inside the click handler and the preview stays
+	// silently blank.
+	function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
 	function parseQuestions(raw) {
 		var blocks = raw.split(/\n\s*\n/).map(function(b) { return b.trim(); }).filter(Boolean);
 		var questions = [], errors = [];
