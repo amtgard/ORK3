@@ -17,7 +17,7 @@ from gate_dom import run_dom_gate
 from lib.diff_regions import load_rgb_array, rects_from_manifest_zones
 from lib.manifest import effective_fuzz_zones, load_defaults, load_fuzz_manifest
 from lib.overlay import draw_gate_annotation
-from lib.report_html import copy_page_artifacts, write_report_bundle, write_summary_json
+from lib.report_html import copy_page_artifacts, render_summary_table, write_report_bundle, write_summary_json
 from lib.scoring import Thresholds, build_page_summary, build_run_summary
 
 TOOL_ROOT = Path(__file__).resolve().parents[1]
@@ -334,6 +334,98 @@ def finalize_run(
         thresholds=thresholds,
         profile=profile,
     )
+    return index_path
+
+
+def finalize_multi_profile_run(
+    *,
+    run_dir: Path,
+    phase: str,
+    profile_runs: list[dict],
+    exit_code: int,
+    profiles: list[str],
+) -> Path:
+    profile_sections: list[dict] = []
+    for entry in profile_runs:
+        profile_name = entry["profile"]
+        profile_label = entry.get("label", profile_name)
+        page_results = entry["page_results"]
+        thresholds: Thresholds = entry["thresholds"]
+        page_summaries = [
+            build_page_summary(
+                page_id=result.page_id,
+                layers=result.as_dict()["layers"],
+                thresholds=thresholds,
+                report_path=f"pages/{profile_name}/{result.page_id}.html",
+            )
+            for result in page_results
+        ]
+        profile_sections.append(
+            {
+                "profile": profile_name,
+                "label": profile_label,
+                "table_html": render_summary_table(page_summaries, thresholds),
+            }
+        )
+        profile_pages_dir = run_dir / "pages" / profile_name
+        profile_pages_dir.mkdir(parents=True, exist_ok=True)
+        write_report_bundle(
+            run_dir=run_dir,
+            run_id=run_dir.name.removeprefix("run-"),
+            phase=phase,
+            page_results=[result.as_dict() for result in page_results],
+            thresholds=thresholds,
+            run_pass=all(result.passed for result in page_results),
+            profile=profile_name,
+            profile_label=profile_label,
+        )
+        for page_file in (run_dir / "pages").glob("*.html"):
+            if page_file.parent == run_dir / "pages":
+                page_file.replace(profile_pages_dir / page_file.name)
+
+    write_run_summary(
+        run_dir=run_dir,
+        phase=phase,
+        page_results=[],
+        exit_code=exit_code,
+        thresholds=Thresholds(),
+        profiles=profiles,
+    )
+    index_path = write_report_bundle(
+        run_dir=run_dir,
+        run_id=run_dir.name.removeprefix("run-"),
+        phase=phase,
+        page_results=[],
+        thresholds=Thresholds(),
+        run_pass=exit_code == 0,
+        profiles=profiles,
+        profile_sections=profile_sections,
+    )
+
+    print(f"Fuzzy UI Gate — {'PASS' if exit_code == 0 else 'FAIL'}")
+    for entry in profile_runs:
+        profile_name = entry["profile"]
+        thresholds = entry["thresholds"]
+        for result in entry["page_results"]:
+            scores = {layer.layer: layer.score for layer in result.layers}
+            assets = scores.get("assets", 1.0)
+            dom = scores.get("dom", 1.0)
+            visual = scores.get("visual", 1.0)
+            status = "PASS" if result.passed else "FAIL"
+            print(
+                f"  [{profile_name}] {result.page_id:<22} {status}  "
+                f"assets={assets:.2f} dom={dom:.2f} visual={visual:.3f}"
+            )
+
+    run_id = run_dir.name.removeprefix("run-")
+    page_count = len(profile_runs[0]["page_results"]) if profile_runs else 0
+    pass_pages = page_count * len(profiles) if exit_code == 0 else 0
+    fail_pages = page_count * len(profiles) - pass_pages if exit_code != 0 else 0
+    print(
+        f"FUZZ_GATE run={run_id} profiles={','.join(profiles)} "
+        f"pages={page_count} pass={pass_pages} fail={fail_pages} exit={exit_code}"
+    )
+    print(f"Report: {run_dir / 'index.html'}")
     return index_path
 
 

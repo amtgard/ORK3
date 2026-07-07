@@ -1,0 +1,32 @@
+{
+  "profiles": {
+    "test": {
+      "orkDbUse": "dev",
+      "label": "Sandbox (ork_test @ 19307)",
+      "thresholds": {
+        "assetsMinScore": 1.0,
+        "domMinScore": 1.0,
+        "visualMinScore": 1.0
+      },
+      "auth": {
+        "username": "megiddo",
+        "passwordEnv": "ORK3_E2E_TEST_PASSWORD",
+        "passwordDefault": "test-db-player"
+      }
+    },
+    "mirror": {
+      "orkDbUse": "prod",
+      "label": "Mirror (ork @ 19306)",
+      "thresholds": {
+        "assetsMinScore": 1.0,
+        "domMinScore": 0.99,
+        "visualMinScore": 0.98
+      },
+      "auth": {
+        "usernameEnv": "ORK3_E2E_USERNAME",
+        "passwordEnv": "ORK3_E2E_PASSWORD"
+      }
+    }
+  },
+  "defaultProfiles": ["test", "mirror"]
+}

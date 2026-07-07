@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import patch
 
 import pytest
@@ -12,6 +13,13 @@ from fuzzy_validator.cli import _resolve_page_ids, main
 class _Args:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
+
+
+@pytest.fixture(autouse=True)
+def _skip_profile_activation():
+    with patch("fuzzy_validator.cli._activate_profile") as activate:
+        activate.side_effect = lambda profile_name, config, *, ensure_sandbox, env: env
+        yield activate
 
 
 def test_resolve_page_ids_from_urls_file(tmp_path):
@@ -31,49 +39,109 @@ def test_resolve_page_ids_missing_selector_exits():
 def test_record_runs_capture_and_discover():
     with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
         run_mock.return_value.returncode = 0
-        assert main(["record", "--page", "home-anonymous", "--phase", "visual"]) == 0
+        assert (
+            main(["record", "--page", "home-anonymous", "--phase", "visual", "--profile", "test"])
+            == 0
+        )
         assert run_mock.call_count == 3
 
 
 def test_record_phase_assets_runs_capture_and_calibrate():
     with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
         run_mock.return_value.returncode = 0
-        assert main(["record", "--page", "home-anonymous", "--phase", "assets"]) == 0
+        assert (
+            main(["record", "--page", "home-anonymous", "--phase", "assets", "--profile", "test"])
+            == 0
+        )
         assert run_mock.call_count == 2
 
 
 def test_validate_phase_assets_runs_gate():
     with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
         run_mock.return_value.returncode = 0
-        assert main(["validate", "--page", "home-anonymous", "--phase", "assets"]) == 0
-        assert run_mock.call_count == 1
+        with patch("fuzzy_validator.cli.run_batch_gate") as gate_mock:
+            gate_mock.return_value = ([], 0)
+            with patch("fuzzy_validator.cli.finalize_run"):
+                assert (
+                    main(
+                        [
+                            "validate",
+                            "--page",
+                            "home-anonymous",
+                            "--phase",
+                            "assets",
+                            "--profile",
+                            "test",
+                        ]
+                    )
+                    == 0
+                )
+                assert run_mock.call_count == 1
 
 
 def test_record_phase_dom_runs_capture_and_discover():
     with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
         run_mock.return_value.returncode = 0
-        assert main(["record", "--page", "home-anonymous", "--phase", "dom"]) == 0
+        assert (
+            main(["record", "--page", "home-anonymous", "--phase", "dom", "--profile", "test"])
+            == 0
+        )
         assert run_mock.call_count == 2
 
 
 def test_validate_phase_all_runs_gate():
     with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
         run_mock.return_value.returncode = 0
-        assert main(["validate", "--page", "home-anonymous", "--phase", "all"]) == 0
-        assert run_mock.call_count == 1
+        with patch("fuzzy_validator.cli.run_batch_gate") as gate_mock:
+            gate_mock.return_value = ([], 0)
+            with patch("fuzzy_validator.cli.finalize_run"):
+                assert (
+                    main(
+                        [
+                            "validate",
+                            "--page",
+                            "home-anonymous",
+                            "--phase",
+                            "all",
+                            "--profile",
+                            "test",
+                        ]
+                    )
+                    == 0
+                )
+                assert run_mock.call_count == 1
 
 
 def test_validate_phase_dom_runs_gate():
     with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
         run_mock.return_value.returncode = 0
-        assert main(["validate", "--page", "home-anonymous", "--phase", "dom"]) == 0
-        assert run_mock.call_count == 1
+        with patch("fuzzy_validator.cli.run_batch_gate") as gate_mock:
+            gate_mock.return_value = ([], 0)
+            with patch("fuzzy_validator.cli.finalize_run"):
+                assert (
+                    main(
+                        [
+                            "validate",
+                            "--page",
+                            "home-anonymous",
+                            "--phase",
+                            "dom",
+                            "--profile",
+                            "test",
+                        ]
+                    )
+                    == 0
+                )
+                assert run_mock.call_count == 1
 
 
 def test_record_capture_failure_propagates():
     with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
         run_mock.return_value.returncode = 1
-        assert main(["record", "--page", "home-anonymous", "--phase", "visual"]) == 1
+        assert (
+            main(["record", "--page", "home-anonymous", "--phase", "visual", "--profile", "test"])
+            == 1
+        )
         assert run_mock.call_count == 1
 
 
@@ -83,4 +151,7 @@ def test_record_discover_failure_propagates():
             type("Result", (), {"returncode": 0})(),
             type("Result", (), {"returncode": 1})(),
         ]
-        assert main(["record", "--page", "home-anonymous", "--phase", "visual"]) == 1
+        assert (
+            main(["record", "--page", "home-anonymous", "--phase", "visual", "--profile", "test"])
+            == 1
+        )

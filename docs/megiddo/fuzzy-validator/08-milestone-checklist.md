@@ -100,16 +100,16 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 - [x] `scoring.py`, `report_html.py`, full `reports/run-{id}/` bundle
 - [x] `summary.json`, stdout `FUZZ_GATE` line, `--visual-min-score`
 - [x] pytest coverage ≥ 90% on entire `tools/fuzzy-validator/python/`
-- [ ] Single squashed commit
+- [x] Single squashed commit
 
 ### FU-11: Dual database profiles
 
-- [ ] Branch `megiddo/fu-11-dual-db`
-- [ ] `manifests/profiles.json5`; baselines under `baselines/test/` and `baselines/mirror/`
-- [ ] `record`/`validate` default `--profiles test,mirror`; calls `bin/ork-db use`
-- [ ] Tiered thresholds: test strict (1.0), mirror lenient (visual 0.98)
-- [ ] HTML report sections per profile
-- [ ] Single squashed commit
+- [x] Branch `megiddo/fu-11-dual-db`
+- [x] `manifests/profiles.json5`; baselines under `baselines/test/` and `baselines/mirror/`
+- [x] `record`/`validate` default `--profiles test,mirror`; calls `bin/ork-db use`
+- [x] Tiered thresholds: test strict (1.0), mirror lenient (visual 0.98)
+- [x] HTML report sections per profile
+- [x] Single squashed commit
 
 ---
 
@@ -127,5 +127,5 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 | FU-7 | 2026-07-07 | 3f82fd89 | 95% |
 | FU-8 | 2026-07-07 | 4a004419 | 94% |
 | FU-9 | 2026-07-07 | 9af10a9a | 95% |
-| FU-10 | | | |
-| FU-11 | | | |
+| FU-10 | 2026-07-07 | 32277160 | 94% |
+| FU-11 | 2026-07-07 | f0702472 | 92% |

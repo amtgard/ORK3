@@ -59,8 +59,10 @@ def copy_run_assets_to_baseline(
     calibration_dir: Path,
     run_label: str = "run-003",
     tool_root: Path | None = None,
+    baselines_root: Path | None = None,
 ) -> Path:
     root = tool_root or TOOL_ROOT
+    baselines_root = baselines_root or (root / "baselines")
     manifest_path = calibration_dir / f"{run_label}.assets.json"
     if not manifest_path.exists():
         raise FileNotFoundError(f"Missing calibration asset manifest: {manifest_path}")
@@ -70,7 +72,7 @@ def copy_run_assets_to_baseline(
     if not source_assets_dir.is_dir():
         raise FileNotFoundError(f"Missing calibration asset bytes: {source_assets_dir}")
 
-    target_assets_dir = baseline_assets_dir(page_id, root)
+    target_assets_dir = baselines_root / "assets" / page_id
     if target_assets_dir.exists():
         shutil.rmtree(target_assets_dir)
     target_assets_dir.mkdir(parents=True, exist_ok=True)
@@ -98,7 +100,7 @@ def copy_run_assets_to_baseline(
 
         target_path = target_assets_dir / source_name
         shutil.copy2(source_path, target_path)
-        relative = Path("baselines") / "assets" / page_id / source_name
+        relative = target_path.relative_to(root)
         baseline_entries.append(
             AssetEntry(
                 id=entry.id,
@@ -117,7 +119,7 @@ def copy_run_assets_to_baseline(
         baseline_entries=baseline_entries,
         captured_from_commit=_git_head(root.parent.parent),
     )
-    baseline_out = root / "baselines" / f"{page_id}.assets.json"
+    baseline_out = baselines_root / f"{page_id}.assets.json"
     save_asset_manifest(baseline_out, baseline_manifest)
     return baseline_out
 

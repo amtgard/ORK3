@@ -405,3 +405,6 @@ def write_summary_json(run_dir: Path, summary: dict[str, Any]) -> Path:
         json.dump(summary, handle, indent=2)
         handle.write("\n")
     return summary_path
+
+
+render_summary_table = _summary_table_rows

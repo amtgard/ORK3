@@ -18,6 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--page-id", required=True)
     parser.add_argument("--calibration-dir", type=Path, required=True)
     parser.add_argument("--run-label", default="run-003")
+    parser.add_argument("--baseline-out", type=Path, help="Asset manifest output path")
     return parser
 
 
@@ -27,11 +28,13 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         assert_calibration_asset_stability(args.calibration_dir)
+        baselines_root = args.baseline_out.parent if args.baseline_out else None
         baseline_out = copy_run_assets_to_baseline(
             page_id=args.page_id,
             calibration_dir=args.calibration_dir,
             run_label=args.run_label,
             tool_root=TOOL_ROOT,
+            baselines_root=baselines_root,
         )
     except (ValueError, FileNotFoundError) as exc:
         print(f"calibrate_assets: {exc}", file=sys.stderr)

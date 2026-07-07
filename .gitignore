@@ -53,3 +53,8 @@ tools/fuzzy-validator/calibrations/
 tools/fuzzy-validator/reports/
 __pycache__/
 *.pyc
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+test-results/

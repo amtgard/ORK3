@@ -52,10 +52,16 @@ def test_validate_help_exits_zero():
 def test_validate_runs_gate_script():
     with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
         run_mock.return_value.returncode = 0
-        assert main(["validate", "--page", "home-anonymous", "--phase", "visual"]) == 0
-        command = run_mock.call_args[0][0]
-        assert "gate.sh" in command[0]
-        assert command[-1] == "visual"
+        with patch("fuzzy_validator.cli._activate_profile") as activate:
+            activate.side_effect = lambda profile_name, config, *, ensure_sandbox, env: env
+            with patch("fuzzy_validator.cli.run_batch_gate") as gate_mock:
+                gate_mock.return_value = ([], 0)
+                with patch("fuzzy_validator.cli.finalize_multi_profile_run"):
+                    assert (
+                        main(["validate", "--page", "home-anonymous", "--phase", "visual"])
+                        == 0
+                    )
+                    assert run_mock.call_count >= 1
 
 
 def test_resolve_page_ids_single_page():
