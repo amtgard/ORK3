@@ -10,10 +10,66 @@ Unified backend unit testing and Infection mutation testing for `system/lib/ork3
 |-------------|-------|
 | **PHP 8.2+** | Host CLI (DS-2). Docker app container is PHP 8.1 — run tests on the host. |
 | **Composer dev deps** | `composer install` from repo root |
-| **MariaDB (dev)** | `docker compose -f docker-compose.php8.yml up` — DB on `localhost:19306` |
+| **MariaDB (dev)** | `docker compose -f docker-compose.php8.yml up` — mirror DB on `localhost:19306` (`ork`); **sandbox** on `localhost:19307` (`ork_test`) |
+| **Test sandbox** | `bin/ork-db deploy-sandbox` — canonical fake data for PHPUnit and fuzzy-validator **`test`** profile ([test-database-tool](../test-database-tool/README.md)) |
 | **Coverage driver** | **pcov** (preferred), phpdbg, or Xdebug for Infection |
+| **E2E login credentials** | Required before T-* / R-* milestones with auth-gated Playwright or fuzzy-validator flows — see [E2E login credentials (preflight)](#e2e-login-credentials-preflight) below |
 
 Inside the app container, set `ORK3_TEST_DB_HOST=ork3-php8-db` and `ORK3_TEST_DB_PORT=3306`.
+
+---
+
+## E2E login credentials (preflight)
+
+Playwright specs (`tests/e2e/`) and **`bin/fuzzy-validator`** auth-gated pages perform a **real login** through the standard `Login` route. They do **not** use a code-level password bypass.
+
+**Do not** rely on the local-only `class.Authorization.php` login bypass (`true ||` hack). That file is never committed, is invalid for milestone sign-off, and must not be substituted for configured test credentials.
+
+Before any **T-*** or **R-*** milestone that runs authenticated frontend tests (or optional fuzzy-validator gates on login pages), configure credentials once per shell session:
+
+### 1. Stack and database profile
+
+```bash
+docker compose -f docker-compose.php8.yml up -d
+export ORK3_E2E_BASE_URL=http://127.0.0.1:19080/orkui/
+```
+
+| Active DB profile | `bin/ork-db` | Login user | Password |
+|-------------------|--------------|------------|----------|
+| **Sandbox** (`ork_test` @ 19307) | `use dev` | `megiddo` | `test-db-player` (documented sandbox password — [test-database-tool §4.3](../test-database-tool/02-data-model.md#43-players-ork_mundane)) |
+| **Mirror** (`ork` @ 19306) | `use prod` | Your local mirror account | Your local mirror password |
+
+Refresh sandbox before strict gates: `bin/ork-db deploy-sandbox`.
+
+### 2. Export env vars (Playwright + fuzzy-validator FU-1+)
+
+Until fuzzy-validator **FU-11** profile auth is wired, both profiles use the same Playwright env pair — set them to match the **active** `bin/ork-db use` target:
+
+```bash
+# Sandbox example (after bin/ork-db use dev && deploy-sandbox)
+export ORK3_E2E_USERNAME=megiddo
+export ORK3_E2E_PASSWORD=test-db-player
+
+# Mirror example (after bin/ork-db use prod)
+export ORK3_E2E_USERNAME='your-mirror-user'
+export ORK3_E2E_PASSWORD='your-mirror-password'
+```
+
+After **FU-11**, the **`test`** profile reads `ORK3_E2E_TEST_PASSWORD` (default `test-db-player`) and **`mirror`** reads `ORK3_E2E_USERNAME` / `ORK3_E2E_PASSWORD` — see [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md).
+
+### 3. Verify login works
+
+```bash
+# Smoke — no auth required
+npx playwright test tests/e2e/infrastructure.spec.ts -g "health route"
+
+# Auth — must not skip
+npx playwright test tests/e2e/infrastructure.spec.ts -g "home route loads after login"
+```
+
+If authenticated specs report **skipped** (`Set ORK3_E2E_USERNAME and ORK3_E2E_PASSWORD`), preflight is incomplete — do not sign off frontend functional tests.
+
+**Never** commit credentials, `.ork3-db.local`, or local `class.Authorization.php` overrides.
 
 ---
 
@@ -36,7 +92,7 @@ Test classes use `declare(strict_types=1);` and extend `PHPUnit\Framework\TestCa
 All PHPUnit tests load `tests/bootstrap.php`, which:
 
 1. Sets `$_SERVER['HTTP_HOST'] = 'localhost'`
-2. Sets `ENVIRONMENT=TEST` → `config.test.php` (DB host `127.0.0.1`, port `19306` by default)
+2. Sets `ENVIRONMENT=TEST` → `config.test.php` (DB host `127.0.0.1`, port **`19307`**, database **`ork_test`** when TD-7 routing is active)
 3. Runs `startup.php` (full ORK3 runtime, same as `$DONOTWEBSERVICE` service includes)
 
 Service tests that previously used:
@@ -53,8 +109,8 @@ should instead rely on the bootstrap (domain classes are already loaded) or requ
 | Tier | When | Approach |
 |------|------|----------|
 | **Unit** | No DB needed | Test static methods and `common.php` helpers |
-| **Integration** | DB required | Use existing dev seed data; no isolated fixtures yet |
-| **Future execution sprints** | Refactor targets | Add focused fixtures or transactions per DS test design |
+| **Integration** | DB required | Prefer **`ork_test` sandbox** after `bin/ork-db deploy-sandbox`; stable kingdoms/parks/players |
+| **Future execution sprints** | Refactor targets | Focused fixtures where sandbox rows are insufficient |
 
 Integration tests call `ork3_test_db_available()` in `setUp()` and `markTestSkipped()` when the database is down — so the full suite stays green in CI-less environments, but sign-off on a milestone machine requires the docker DB running.
 
@@ -162,7 +218,7 @@ ORK3 has no automated frontend test runner today. Recommended approach for refac
 | Aspect | Plan |
 |--------|------|
 | **Tooling** | Playwright or Cypress against `http://localhost:19080/orkui/` (docker app) |
-| **Scope** | One happy-path flow per touched controller (auth-gated pages use dev admin login) |
+| **Scope** | One happy-path flow per touched controller (auth-gated pages use configured login — see [E2E login credentials preflight](./06-test-framework.md#e2e-login-credentials-preflight)) |
 | **When** | Implemented during T-* test sprints (Phase 1.5) per DS test design |
 | **Sign-off** | DS-7 Infection gate on T-*; R-* re-runs Infection on refactored code |
 
@@ -170,13 +226,32 @@ Discovery sprints document required frontend flows in their test design step.
 
 ---
 
+## Fuzzy render stability gate (optional — R-* sign-off)
+
+Complements Playwright e2e behavior tests with **pixel + DOM + asset** stability checks. Tool: **`bin/fuzzy-validator`** ([fuzzy-validator docs](../fuzzy-validator/README.md)).
+
+| Aspect | Plan |
+|--------|------|
+| **When** | Optional at R-* sign-off after FU-11; not a substitute for DS-4 PHPUnit |
+| **Databases** | Runs **both** profiles by default: **`test`** (sandbox, strict) and **`mirror`** (local `ork`, lenient) |
+| **Setup** | `bin/ork-db deploy-sandbox` before validate; E2E credentials per [E2E login credentials (preflight)](./06-test-framework.md#e2e-login-credentials-preflight) |
+| **Strictness** | `test`: all scores **1.0**; `mirror`: visual **≥ 0.98**, DOM **≥ 0.99**, assets **1.0** |
+| **Command** | `bin/fuzzy-validator validate --pages <ids> --phase all` |
+| **Output** | Exit code + HTML report under `tools/fuzzy-validator/reports/run-{id}/` |
+
+Record baselines once per page on a stable branch: `bin/fuzzy-validator record --pages …`. See [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md).
+
+---
+
 ## Local workflow before commit (DS-5)
 
 1. Start docker stack: `docker compose -f docker-compose.php8.yml up -d`
-2. Apply any pending SQL in `db-migrations/` if tests fail on missing schema
-3. `sh bin/run-unit-tests.sh` — all tests green
-4. For milestones with mutation gate: `sh bin/run-infection.sh --filter=…`
-5. Commit on the milestone branch only
+2. Refresh sandbox when integration tests need stable data: `bin/ork-db deploy-sandbox`
+3. **T-* / R-* with auth-gated Playwright or fuzzy-validator:** complete [E2E login credentials preflight](./06-test-framework.md#e2e-login-credentials-preflight) — export `ORK3_E2E_*` for the active DB profile; do not use `class.Authorization.php` bypass
+4. Apply any pending SQL in `db-migrations/` if tests fail on missing schema
+5. `sh bin/run-unit-tests.sh` — all tests green
+6. For milestones with mutation gate: `sh bin/run-infection.sh --filter=…`
+7. Commit on the milestone branch only
 
 Optional: add `sh bin/run-unit-tests.sh` to personal pre-push hook (not enforced repo-wide in M0.1).
 
@@ -198,3 +273,5 @@ Optional: add `sh bin/run-unit-tests.sh` to personal pre-push hook (not enforced
 |-----|---------|
 | [04-milestone-checklist.md](./04-milestone-checklist.md) | M0.1 checklist |
 | [05-development-steering.md](./05-development-steering.md) | DS-4–DS-7 gates |
+| [../test-database-tool/README.md](../test-database-tool/README.md) | Sandbox DB (`bin/ork-db`) |
+| [../fuzzy-validator/README.md](../fuzzy-validator/README.md) | Render gate (`bin/fuzzy-validator`) |

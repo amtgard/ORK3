@@ -19,10 +19,10 @@ Open the report in a browser after a failed CI run (download artifact). See [06-
 
 ### Phase overview
 
-| Phase | Record (baselines) | Validate (gate) | Refactor strictness |
-|-------|-------------------|-----------------|---------------------|
-| 1 — pixels | `record --phase visual` | `validate --phase visual` | Fuzzy bbox |
-| 2 — assets + DOM | `record --phase all` | `validate --phase all` | Hard CSS/JS + DOM fuzz |
+| Phase | Record | Validate | Thresholds |
+|-------|--------|----------|------------|
+| Both (default) | `record` → test + mirror | `validate` → test + mirror | test strict; mirror lenient |
+| Sandbox only | `record --profile test` | `validate --profile test` | all 1.0 |
 
 ## 1. One-time setup
 
@@ -30,15 +30,15 @@ Open the report in a browser after a failed CI run (download artifact). See [06-
 # Repo root
 npm ci
 npx playwright install chromium
-
 pip install -r tools/fuzzy-validator/python/requirements.txt
 
-# App stack
 docker compose -f docker-compose.php8.yml up -d
+bin/ork-db deploy-sandbox              # stable test dataset (required for test profile)
 
 export ORK3_E2E_BASE_URL=http://localhost:19080/orkui/
-export ORK3_E2E_USERNAME=your-test-user
-export ORK3_E2E_PASSWORD=your-test-password
+export ORK3_E2E_USERNAME=your-mirror-user      # mirror profile
+export ORK3_E2E_PASSWORD=your-mirror-password
+export ORK3_E2E_TEST_PASSWORD=test-db-player   # test profile (optional override)
 ```
 
 ---

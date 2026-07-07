@@ -4,6 +4,8 @@ Track progress here. Check items when complete. Discovery sprint outputs (design
 
 **Development steering:** All milestones must satisfy [05-development-steering.md](./05-development-steering.md) before sign-off (branch naming, full unit suite, one commit, mutation tests, commit message).
 
+**E2E preflight (T-* and R-*):** Before sign-off on milestones with auth-gated Playwright or fuzzy-validator flows, complete [06-test-framework.md § E2E login credentials (preflight)](./06-test-framework.md#e2e-login-credentials-preflight). Do **not** use the local `class.Authorization.php` password bypass.
+
 **Documentation sign-off (every milestone):** Any edits under `docs/megiddo/refactor/` made during the milestone — including checklist checkoffs, design notes, steering, requirements, and implementation-plan updates — must be **committed on the active milestone branch** as part of that milestone's single sign-off commit (DS-6). Do not leave planning docs uncommitted, stashed for a later branch, or split onto a separate docs-only commit after sign-off.
 
 ---
@@ -401,6 +403,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 **Test sprint sign-off (every T-*):**
 
 - [ ] [05-development-steering.md](./05-development-steering.md) DS-1 through DS-8 satisfied
+- [ ] E2E login preflight complete when milestone includes auth-gated Playwright specs ([06-test-framework.md § preflight](./06-test-framework.md#e2e-login-credentials-preflight))
 - [ ] Backend tests implemented per matching DS-* design note §2.1
 - [ ] Frontend functional tests implemented per matching DS-* design note §2 (frontend functional subsection, when applicable)
 - [ ] **Full** unit test suite passes (DS-4, DS-5)
@@ -815,9 +818,11 @@ Per execution sprint checklist:
 
 - [ ] [05-development-steering.md](./05-development-steering.md) DS-1 through DS-8 satisfied
 - [ ] Matching T-* test sprint complete (tests already in place; do not defer test writing to R-*)
+- [ ] E2E login preflight complete when milestone includes auth-gated Playwright or fuzzy-validator flows ([06-test-framework.md § preflight](./06-test-framework.md#e2e-login-credentials-preflight))
 - [ ] **Full** unit test suite passes (no partial run at sign-off)
 - [ ] Milestone-scoped Infection run passes configured thresholds on refactored code
 - [ ] Frontend functional tests pass (when applicable to milestone)
+- [ ] Optional (when [fuzzy-validator FU-11+](../fuzzy-validator/README.md) is available): `bin/ork-db deploy-sandbox` then `bin/fuzzy-validator validate --pages <touched-pages> --phase all` passes **test** (strict) and **mirror** (lenient) profiles — see [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md)
 - [ ] Target IDs marked done in [03-implementation-plan.md](./03-implementation-plan.md)
 - [ ] No new `$DB` or unauthorized `Ork3::$Lib` usage introduced in touched files
 - [ ] All `docs/megiddo/refactor/` updates committed on the milestone branch (Documentation sign-off above)

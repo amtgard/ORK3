@@ -17,23 +17,30 @@ Automated, non-commercial regression harness for the Megiddo **refactor**. Valid
 | [03-manifest-schema.md](./03-manifest-schema.md) | Page registry, fuzz-zone JSON format, baseline metadata |
 | [04-operating-guide.md](./04-operating-guide.md) | Day-to-day: record, validate, review baselines |
 | [10-cli-reference.md](./10-cli-reference.md) | **`bin/fuzzy-validator` command palette** |
+| [11-dual-database-profiles.md](./11-dual-database-profiles.md) | **Test sandbox + mirror profiles, tiered thresholds** |
 | [05-phase2-asset-dom-gate.md](./05-phase2-asset-dom-gate.md) | Phase 2: hard CSS/JS + fuzzy DOM tree gate |
 | [06-gate-output-and-report.md](./06-gate-output-and-report.md) | Pass/fail scoring + JaCoCo-style HTML report |
 | [07-agent-milestone-prompt.md](./07-agent-milestone-prompt.md) | Copy-paste agent prompt per FU milestone |
 | [08-milestone-checklist.md](./08-milestone-checklist.md) | FU-* completion checkboxes |
 | [09-test-framework.md](./09-test-framework.md) | pytest + 90% coverage sign-off |
+| [11-dual-database-profiles.md](./11-dual-database-profiles.md) | Test sandbox + mirror profiles, tiered thresholds |
 
 ---
 
 ## Quick start
 
 ```bash
-# Establish baselines (stable branch)
+docker compose -f docker-compose.php8.yml up -d
+bin/ork-db deploy-sandbox    # stable test dataset (ork_test @ 19307)
+
+# Record baselines on BOTH profiles (default): strict test + lenient mirror
 bin/fuzzy-validator record --page player-profile
 
-# Refactor sign-off
+# Refactor sign-off — must pass test (1.0) and mirror (≥0.98 visual)
 bin/fuzzy-validator validate --page player-profile
 ```
+
+See [11-dual-database-profiles.md](./11-dual-database-profiles.md) for profile switching via `bin/ork-db use dev|prod`.
 
 ---
 
@@ -95,10 +102,12 @@ See [06-gate-output-and-report.md](./06-gate-output-and-report.md).
 
 | Requirement | Notes |
 |-------------|-------|
-| Docker php8 stack | Same as existing e2e: `docker compose -f docker-compose.php8.yml up -d` |
-| Node + Playwright | Already in repo root `package.json` |
-| Python 3.11+ | Host CLI; `pip install -r tools/fuzzy-validator/python/requirements.txt` |
-| Env vars | `ORK3_E2E_BASE_URL`, `ORK3_E2E_USERNAME`, `ORK3_E2E_PASSWORD` for auth pages |
+| Docker php8 stack | `docker compose -f docker-compose.php8.yml up -d` |
+| **Test sandbox** | `bin/ork-db deploy-sandbox` — app on **`test`** profile uses `ork_test` @ `19307` |
+| **Mirror DB** | Local `ork` @ `19306` — app on **`mirror`** profile via `bin/ork-db use prod` |
+| Node + Playwright | Root `package.json` |
+| Python 3.11+ | `pip install -r tools/fuzzy-validator/python/requirements.txt` |
+| Auth | Profile-specific — see `manifests/profiles.json5` (`test`: sandbox user; `mirror`: `ORK3_E2E_*`) |
 
 ---
 
@@ -106,9 +115,10 @@ See [06-gate-output-and-report.md](./06-gate-output-and-report.md).
 
 | Megiddo artifact | Fuzzy Validator |
 |------------------|-------------------|
-| T-* functional e2e (`tests/e2e/*.spec.ts`) | Behavior unchanged; validator adds **render stability** |
-| R-* sign-off (DS-4 full PHPUnit) | Optional additional command before merge |
-| FR-3 no regression | Complements backend tests; does not replace them |
+| T-* / R-* Playwright e2e | Behavior tests; same docker app, may use either DB profile |
+| R-* optional gate | `bin/fuzzy-validator validate` — **both** profiles, tiered scores |
+| [ork-db](../test-database-tool/README.md) | Switches app DB; sandbox supplies stable **`test`** profile data |
+| FR-3 no regression | Complements PHPUnit + e2e; does not replace them |
 
 Recommended usage:
 

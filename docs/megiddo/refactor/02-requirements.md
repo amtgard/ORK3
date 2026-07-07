@@ -59,6 +59,9 @@ Each refactor target must have:
 - **Backend unit tests** covering the moved logic (or existing logic if consolidating duplicates).
 - **Frontend functional tests** verifying the user-facing behavior is unchanged.
 - **Mutation tests** (Infection) scoped to the milestone, passing before sign-off per [05-development-steering.md](./05-development-steering.md) DS-7.
+- **Optional render stability gate** (when [fuzzy-validator](../fuzzy-validator/README.md) FU-11+ is available): `bin/fuzzy-validator validate` against **`test`** (strict) and **`mirror`** (lenient) database profiles — see [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md).
+
+Authenticated Playwright and fuzzy-validator flows require **configured E2E login credentials** (sandbox `megiddo` / `test-db-player` or mirror dev user) — not the local-only `class.Authorization.php` bypass. See [06-test-framework.md § E2E login credentials (preflight)](./06-test-framework.md#e2e-login-credentials-preflight).
 
 Test design is part of discovery sprints (Phase 1). Test **implementation** and Infection validation happen in matching test sprints (Phase 1.5, milestones T-01 … T-14) **before** the corresponding refactor execution sprint (R-*).
 
@@ -141,6 +144,10 @@ Each discovery sprint produces a short design note linking:
 
 Moved logic must preserve existing semantics unless an explicit product decision documents intentional change.
 
+### NFR-7: E2E login preflight (T-* and R-*)
+
+Milestones that run auth-gated Playwright or fuzzy-validator checks must complete the credential preflight in [06-test-framework.md](./06-test-framework.md#e2e-login-credentials-preflight) before sign-off. Use documented sandbox or mirror passwords via `ORK3_E2E_*` env vars — **never** the uncommitted `class.Authorization.php` login bypass.
+
 ## Discovery Sprint Requirements
 
 Before implementing any refactor target group, a discovery sprint must:
@@ -160,6 +167,7 @@ The refactor is complete when:
 - [ ] All items in [03-implementation-plan.md](./03-implementation-plan.md) marked done
 - [ ] Backend unit test coverage for all moved logic
 - [ ] Frontend functional tests for affected user flows
+- [ ] Optional: fuzzy-validator dual-profile gate passes for touched pages ([fuzzy-validator](../fuzzy-validator/README.md))
 - [ ] No direct `INSERT`/`UPDATE`/`DELETE` on domain tables from `orkui`
 
 ## Document Index
@@ -171,3 +179,5 @@ The refactor is complete when:
 | [04-milestone-checklist.md](./04-milestone-checklist.md) | Milestones and sprint tracking |
 | [05-development-steering.md](./05-development-steering.md) | Branch, test, mutation, and commit rules |
 | [07-agent-milestone-prompt.md](./07-agent-milestone-prompt.md) | Copy-paste agent prompt per milestone |
+| [../fuzzy-validator/README.md](../fuzzy-validator/README.md) | Render stability gate (`bin/fuzzy-validator`) |
+| [../test-database-tool/README.md](../test-database-tool/README.md) | Stable sandbox DB for tests and fuzzy **`test`** profile |

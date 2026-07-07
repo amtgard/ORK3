@@ -72,6 +72,8 @@ Skim `03-implementation-plan.md` for targets relevant to your milestone. Use `04
 
 If `06-test-framework.md` exists, read it for test and Infection commands. If M0.1 is not done, note that mutation sign-off (DS-7) applies once that doc exists.
 
+For **T-*** or **R-*** milestones with auth-gated Playwright or fuzzy-validator flows: complete [E2E login credentials preflight](./06-test-framework.md#e2e-login-credentials-preflight) before running or signing off frontend tests. Do **not** use the local `class.Authorization.php` password bypass.
+
 ### 2. Familiarize yourself with the milestone you are going to work on
 
 In `04-milestone-checklist.md`:

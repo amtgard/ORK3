@@ -24,7 +24,9 @@
                           └── report_html.py → reports/run-{id}/
 ```
 
-**Requirements on PATH:** `python3`, `node`, `npx` (Playwright). ORK3 app reachable at `ORK3_E2E_BASE_URL` (default `http://localhost:19080/orkui/`).
+**Requirements on PATH:** `python3`, `node`, `npx`, `bin/ork-db`. ORK3 app at `http://localhost:19080/orkui/` (docker).
+
+**Database profiles:** By default, `record` and `validate` run **`test`** (sandbox `ork_test` via `ork-db use dev`) then **`mirror`** (local `ork` via `ork-db use prod`), with **stricter score thresholds on test**. See [11-dual-database-profiles.md](./11-dual-database-profiles.md).
 
 **Working directory:** Commands assume repo root; paths to baselines and reports are under `tools/fuzzy-validator/`.
 
@@ -123,25 +125,31 @@ When a line starts with `page:`, resolve via registry (auth, viewport, waits).
 
 | Option | Commands | Default | Description |
 |--------|----------|---------|-------------|
+| `--profiles LIST` | both | `test,mirror` | Run each profile sequentially (`test` then `mirror`) |
+| `--profile NAME` | both | — | Single profile only (`test` \| `mirror`) |
+| `--ensure-sandbox` | both | off | Run `bin/ork-db deploy-sandbox` before `test` pass |
 | `--phase` | both | `all` | `visual` \| `assets` \| `dom` \| `all` |
 | `--repeat N` | record | `5` | Calibration capture count |
 | `--base-url URL` | both | `$ORK3_E2E_BASE_URL` | Override app base |
 | `--run-id ID` | both | UTC timestamp | Report directory name |
 | `--report-dir PATH` | validate | `reports/run-{id}` | HTML bundle output |
-| `--visual-min-score` | validate | `1.0` | Pixel pass threshold (e.g. `0.98`) |
-| `--dom-min-score` | validate | `1.0` | DOM pass threshold |
-| `--assets-min-score` | validate | `1.0` | Asset pass threshold (keep at 1.0 for refactor) |
+| `--visual-min-score` | validate | per profile | Override profile default (`test`: 1.0; `mirror`: 0.98) |
+| `--dom-min-score` | validate | per profile | Override profile default (`test`: 1.0; `mirror`: 0.99) |
+| `--assets-min-score` | validate | `1.0` both | Keep at 1.0 for refactor gates |
 | `--defaults FILE` | both | `manifests/defaults.json5` | Threshold overrides |
 | `--dry-run` | both | off | Print planned targets, no capture |
 | `-h, --help` | both | | Subcommand help |
 
-### Auth (ORK3)
+### Auth (per profile)
 
-| Option | Description |
-|--------|-------------|
-| `--auth login` | Run login flow before each URL |
-| `--username` / `--password` | Override `ORK3_E2E_USERNAME` / `ORK3_E2E_PASSWORD` |
-| *(registry)* | Pages with `"auth": "login"` in `pages.json5` login automatically |
+Credentials come from `manifests/profiles.json5`, not a single global env pair.
+
+| Profile | Typical login | Password |
+|---------|---------------|----------|
+| **`test`** | `megiddo` (sandbox operator) | `test-db-player` or `ORK3_E2E_TEST_PASSWORD` |
+| **`mirror`** | Your mirror dev user | `ORK3_E2E_USERNAME` / `ORK3_E2E_PASSWORD` |
+
+Override per run: `--username`, `--password` (applies to active profile pass only).
 
 ---
 
@@ -151,25 +159,28 @@ When a line starts with `page:`, resolve via registry (auth, viewport, waits).
 
 ```bash
 docker compose -f docker-compose.php8.yml up -d
-export ORK3_E2E_USERNAME=… ORK3_E2E_PASSWORD=…
+bin/ork-db deploy-sandbox
+export ORK3_E2E_USERNAME=… ORK3_E2E_PASSWORD=…   # mirror profile auth
 
 bin/fuzzy-validator record --pages home-anonymous,player-profile --phase all
-# Review reports/record-*/ then commit baselines/ + manifests/
+# Commits baselines/test/* and baselines/mirror/* + manifests/
 ```
 
 **At R-* sign-off:**
 
 ```bash
+bin/ork-db deploy-sandbox
 bin/fuzzy-validator validate --pages home-anonymous,player-profile --phase all
-echo $?   # 0 = pass
+echo $?   # 0 only if test (strict) and mirror (lenient) both pass
 open tools/fuzzy-validator/reports/run-*/index.html
 ```
 
 **CI (lights-out):**
 
 ```bash
-bin/fuzzy-validator validate --urls "$URLS_FILE" --phase all --visual-min-score 0.98
-# Upload tools/fuzzy-validator/reports/run-*/ as artifact
+bin/ork-db deploy-sandbox
+bin/fuzzy-validator validate --urls "$URLS_FILE" --phase all --profile test
+# Optional second job: --profile mirror with profile defaults (visual ≥ 0.98)
 ```
 
 ---
@@ -203,4 +214,4 @@ Legacy npm aliases (optional, FU-0+):
 
 - [04-operating-guide.md](./04-operating-guide.md) — review workflow
 - [06-gate-output-and-report.md](./06-gate-output-and-report.md) — pass/fail + HTML report
-- [03-manifest-schema.md](./03-manifest-schema.md) — `pages.json5`, thresholds
+- [11-dual-database-profiles.md](./11-dual-database-profiles.md) — test vs mirror tiers

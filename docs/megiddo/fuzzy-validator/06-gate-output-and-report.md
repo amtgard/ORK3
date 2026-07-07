@@ -51,28 +51,23 @@ page_pass =
   AND visual_score >= visualMinScore  # default 1.0; tune to 0.98 in practice
 ```
 
-**Run pass:** every exercised page passes.
+**Run pass:** every exercised page passes **for every profile** in the run (default: `test` and `mirror`).
 
-### 1.3 Threshold defaults — `manifests/defaults.json5`
+### 1.3 Threshold defaults
 
-Start strict; relax only with evidence:
+**Per-profile** thresholds live in `manifests/profiles.json5` — see [11-dual-database-profiles.md](./11-dual-database-profiles.md).
 
-```json5
-{
-  "assetsMinScore": 1.0,
-  "domMinScore": 1.0,
-  "visualMinScore": 1.0,
-  "gateMaxOutsideDiffPx": 500,
-  "gateColorThreshold": 20
-}
-```
+| Profile | `visualMinScore` | `domMinScore` | `assetsMinScore` |
+|---------|------------------|---------------|------------------|
+| **`test`** (sandbox) | **1.0** | **1.0** | **1.0** |
+| **`mirror`** (local ork) | **0.98** | **0.99** | **1.0** |
 
-When anti-aliasing causes flaky pixel gates, lower **`visualMinScore`** first (e.g. `0.98`) — equivalent to allowing ~2% of comparable pixels to differ outside fuzz. Keep **`assetsMinScore`** at `1.0` for refactor testing.
+Fallback globals in `manifests/defaults.json5` apply only when no profile is specified (legacy single-DB mode).
 
-CLI override:
+CLI override (per profile pass):
 
 ```bash
-npm run fuzz:gate:all -- --pages home-authenticated --visual-min-score 0.98
+bin/fuzzy-validator validate --profile mirror --visual-min-score 0.97
 ```
 
 ### 1.4 Stdout summary (lights-out)

@@ -130,6 +130,7 @@ Before marking a milestone complete in [04-milestone-checklist.md](./04-mileston
 | 6 | Exactly one commit on branch | DS-6 |
 | 7 | Milestone-scoped mutation tests pass | DS-7 |
 | 8 | Commit title/body match branch + milestone | DS-8 |
+| 9 | E2E login preflight (when applicable) | [06-test-framework.md § preflight](./06-test-framework.md#e2e-login-credentials-preflight) — T-* / R-* with auth-gated Playwright or fuzzy-validator; no `class.Authorization.php` bypass |
 
 ---
 

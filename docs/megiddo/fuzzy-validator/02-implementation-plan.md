@@ -30,9 +30,10 @@ Independent of Megiddo DS/T/R numbering. Execute in order.
 | **FU-7** | `megiddo/fu-7-asset-gate` | Python `gate_assets.py` | Fails on single-byte CSS/JS change; passes on same commit |
 | **FU-8** | `megiddo/fu-8-dom-fuzz` | `canonical_dom.py`, `discover_dom_fuzz.py`, DOM baselines | Auto `dom-fuzz.json`; debug path report |
 | **FU-9** | `megiddo/fu-9-unified-gate` | `gate_dom.py`, `gate.sh --phase all`, `gate_run.py` v1 | All layers pass/fail; visual report with green/red boxes |
-| **FU-10** | `megiddo/fu-10-report` | Full JaCoCo-style dashboard + `summary.json` + asset/DOM long-form diffs | `index.html` drill-down; CI artifact upload |
+| **FU-10** | `megiddo/fu-10-report` | Full JaCoCo-style dashboard + `summary.json` | `index.html` drill-down; CI artifact upload |
+| **FU-11** | `megiddo/fu-11-dual-db` | Dual profile `record`/`validate`, `profiles.json5`, tiered thresholds | Pass/fail both test (strict) + mirror (lenient) |
 
-Megiddo R-* teams **consume** FU-3 for pixel-only pilots; **FU-10** is the target for full refactor sign-off (`--phase all` + HTML report).
+Megiddo R-* teams **consume** FU-3 for pixel-only pilots; **FU-11** is the target for full refactor sign-off (dual DB + report).
 
 ---
 
@@ -327,15 +328,41 @@ See [06-gate-output-and-report.md](./06-gate-output-and-report.md).
 
 ---
 
-## 14. Integration with Megiddo R-* sign-off
+## 14. Phase FU-11 — Dual database profiles
+
+### Tasks
+
+1. Add `manifests/profiles.json5` (from [profiles.json5.example](./manifests/profiles.json5.example))
+2. Restructure `baselines/{profile}/` and `manifests/{profile}/`
+3. Before each profile pass: `bin/ork-db use dev|prod`; wait for app container
+4. `--profiles test,mirror` default on `record` and `validate`; `--profile` for single
+5. `--ensure-sandbox` → `bin/ork-db deploy-sandbox` before `test` pass
+6. Apply profile-specific thresholds in `scoring.py`
+7. HTML report: top-level summary + subsection per profile
+8. Stdout: `[test]` / `[mirror]` lines per page
+
+### Acceptance
+
+- `validate` on same commit passes both profiles with default thresholds
+- `test` fails at visual 0.99; `mirror` passes at 0.983 with default 0.98 floor
+- Missing `baselines/mirror/` fails with clear error when mirror in profile list
+
+See [11-dual-database-profiles.md](./11-dual-database-profiles.md).
+
+---
+
+## 15. Integration with Megiddo R-* sign-off
 
 Optional checklist item for execution sprints:
 
 ```bash
 # After full PHPUnit (DS-4), before commit (DS-5):
 docker compose -f docker-compose.php8.yml up -d
-export ORK3_E2E_USERNAME=... ORK3_E2E_PASSWORD=...
-npm run fuzz:gate:all -- --pages <pages-for-this-milestone>
+bin/ork-db deploy-sandbox
+export ORK3_E2E_USERNAME=... ORK3_E2E_PASSWORD=...   # mirror profile
+
+bin/fuzzy-validator validate --pages <pages-for-this-milestone> --phase all
+# Default: test (strict 1.0) + mirror (lenient visual 0.98)
 ```
 
 If gate fails, open **`reports/run-{id}/index.html`** (CI artifact). Layer-specific sections:
@@ -350,7 +377,7 @@ Do **not** replace PHPUnit or Infection sign-off.
 
 ---
 
-## 15. Implementation notes
+## 16. Implementation notes
 
 ### Playwright config extension
 
@@ -390,7 +417,7 @@ python3 gate.py \
 
 ---
 
-## 16. Success metrics
+## 17. Success metrics
 
 ### Phase 1
 
@@ -411,7 +438,7 @@ python3 gate.py \
 
 ---
 
-## 17. Future work
+## 18. Future work
 
 - Cross-link pixel bbox centers to DOM paths (`elementFromPoint`)
 - Optional query-string stripping for asset URLs if cache-busters are noisy

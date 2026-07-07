@@ -25,6 +25,7 @@ This tool is separate from Megiddo DS/T/R milestones but consumes the same docke
 | Milestone checklist | `docs/megiddo/fuzzy-validator/08-milestone-checklist.md` | Done state — update when finished |
 | Test framework | `docs/megiddo/fuzzy-validator/09-test-framework.md` | pytest, 90% coverage |
 | CLI reference | `docs/megiddo/fuzzy-validator/10-cli-reference.md` | **`bin/fuzzy-validator record|validate`** |
+| Dual DB profiles | `docs/megiddo/fuzzy-validator/11-dual-database-profiles.md` | **`test` strict + `mirror` lenient**; uses `bin/ork-db` |
 
 ## Steering (non-negotiable)
 
@@ -38,15 +39,17 @@ This tool is separate from Megiddo DS/T/R milestones but consumes the same docke
 
 ## Milestone to execute
 
-{{MILESTONE}}
+FU-2 and FU-3
 
-Default if not specified: **Execute the next unchecked FU milestone** in `docs/megiddo/fuzzy-validator/08-milestone-checklist.md` in order: FU-0 → FU-1 → … → FU-10. Skip completed milestones unless asked to revisit.
+Default if not specified: **Execute the next unchecked FU milestone** in `docs/megiddo/fuzzy-validator/08-milestone-checklist.md` in order: FU-0 → FU-1 → … → FU-11. Skip completed milestones unless asked to revisit.
 
 State the milestone ID, branch name, and exit criteria (from `02-implementation-plan.md`) before coding.
 
 ---
 
 ## Process (follow in order)
+
+### 0. Stage and commit all unstaged or uncommitted work to the prior working branch.
 
 ### 1. Read the plan for this milestone
 
@@ -93,7 +96,7 @@ State the milestone ID, branch name, and exit criteria (from `02-implementation-
 ### 7. Commit
 
 1. pytest coverage ≥ 90% (when applicable)
-2. Stage all deliverables: `tools/fuzzy-validator/**`, doc checklist updates, root `package.json` if changed
+2. Stage and commit all deliverables: `tools/fuzzy-validator/**`, doc checklist updates, root `package.json` if changed
 3. Squash to **one commit**
 4. Title format: `FU-2: Pixel fuzz discovery with pytest coverage`
 
@@ -131,6 +134,7 @@ Begin with step 1 now.
 | FU-8 | `megiddo/fu-8-dom-fuzz` | DOM tree calibration | pytest ≥ 90% |
 | FU-9 | `megiddo/fu-9-unified-gate` | `--phase all`, `gate_run.py` v1 | E2E fixture test |
 | FU-10 | `megiddo/fu-10-report` | HTML dashboard + `summary.json` | pytest ≥ 90% whole python/ |
+| FU-11 | `megiddo/fu-11-dual-db` | Dual DB + tiered thresholds | Both profiles in one validate |
 
 ## Per-milestone agent focus (one line each)
 
@@ -147,6 +151,7 @@ Begin with step 1 now.
 | **FU-8** | Canonical DOM tree + consecutive-intersection fuzz nodes. |
 | **FU-9** | Wire assets + DOM + visual; `gate_run.py` v1; unified exit code. |
 | **FU-10** | Normalized scores (`visualMinScore`), full HTML report, `summary.json`, `FUZZ_GATE` stdout. |
+| **FU-11** | `--profiles test,mirror`; `bin/ork-db use` between passes; split baselines; tiered thresholds. |
 
 ## Related documents
 
