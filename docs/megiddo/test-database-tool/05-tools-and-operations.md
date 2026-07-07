@@ -34,12 +34,28 @@ bin/ork-db status            # what's wired, what tier am I on
 
 ## Typical workflows (local workstation)
 
-```bash
-# Setup
-docker compose -f docker-compose.php8.yml up -d
-bin/ork-db extract
-bin/ork-db apply
+### First-run bootstrap (new developer)
 
+```bash
+# Start all services — mirror (19306) + sandbox (19307) + app
+docker compose -f docker-compose.php8.yml up -d
+
+# One-time mirror setup (if ork @ 19306 is empty):
+#   import dev dump, then apply db-migrations/2026-07-07-add-prod-canary.sql
+
+# Sandbox bootstrap (manual today; bin/ork-db bootstrap planned in TD-7)
+bin/ork-db init              # schema + test canary on empty ork_test
+bin/ork-db extract           # pull catalogs from mirror
+bin/ork-db apply --yes       # load fake kingdoms, parks, players
+
+bin/ork-db validate --mode post-apply
+```
+
+`init` alone does **not** load fake data — it only prepares the sandbox schema. A full first run always ends with `extract` + `apply`.
+
+### Daily use
+
+```bash
 # Daily test reset
 bin/ork-db apply --yes
 sh bin/run-unit-tests.sh

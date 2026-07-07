@@ -1,7 +1,7 @@
 # Test Database Tool — Architecture
 
-**Status:** Plan (not implemented)  
-**Stack:** Docker MariaDB × 2, compositional SQL renderer, shell/CLI orchestration  
+**Status:** TD-1–TD-5 implemented (`docker-compose.php8.yml`, `bin/ork-db` extract/render/apply/init)  
+**Stack:** Docker MariaDB × 2, compositional SQL renderer, PHP CLI orchestration  
 **Safety model:** Fail-closed — no database CLI args on data commands; deployment tier guard; destructive ops abort unless every validation passes
 
 ---
@@ -38,7 +38,14 @@ ORK3 needs a **dedicated test database** with:
 
 ### 3.1 Docker services
 
-Extend `docker-compose.php8.yml` (or add `docker-compose.php8-test-db.yml` overlay):
+**Implemented in** `docker-compose.php8.yml` (TD-1). Both database services use **separate named volumes** so a sandbox wipe never touches mirror data:
+
+| Service | Container | Host port | Database | Docker volume | Data path inside container |
+|---------|-----------|-----------|----------|---------------|----------------------------|
+| `ork3db` (existing) | `ork3-php8-db` | **19306** | `ork` | `data-db` | `/var/lib/mysql` |
+| `ork3testdb` (new) | `ork3-php8-test-db` | **19307** | `ork_test` | `data-test-db` | `/var/lib/mysql` |
+
+Named volumes persist on the Docker host (e.g. `docker volume inspect data-test-db`) but are **not** bind-mounted into the repo tree. That keeps mirror and sandbox physically isolated without sharing a host directory with the primary database.
 
 ```yaml
   ork3testdb:
@@ -59,10 +66,13 @@ Extend `docker-compose.php8.yml` (or add `docker-compose.php8-test-db.yml` overl
       - ork3-php8-net
 ```
 
-| Service | Container | Host port | Database | Volume |
-|---------|-----------|-----------|----------|--------|
-| `ork3db` (existing) | `ork3-php8-db` | **19306** | `ork` | `data-db` |
-| `ork3testdb` (new) | `ork3-php8-test-db` | **19307** | `ork_test` | `data-test-db` |
+Bring up the full dev stack (app + mirror + sandbox):
+
+```bash
+docker compose -f docker-compose.php8.yml up -d
+# or sandbox only:
+docker compose -f docker-compose.php8.yml up -d ork3testdb
+```
 
 Both containers share network `ork3-php8-net`. App container resolves:
 - Dev: `ork3-php8-db:3306`
@@ -99,6 +109,23 @@ if ($profile === 'dev') {
 ```
 
 App container receives `ORK3_DB_PROFILE` via `env_file` merge. `bin/ork-db use dev` sets the file and runs `docker compose restart ork3app`.
+
+### 3.3 First-run dev bootstrap
+
+New developers need mirror + sandbox containers, a initialized sandbox schema, catalog extracts, and fake data loaded. Today this is a **multi-step** workflow; TD-7 adds a single orchestrator.
+
+| Step | Command | Purpose |
+|------|---------|---------|
+| 1 | `docker compose -f docker-compose.php8.yml up -d` | Start app, mirror (`19306`), sandbox (`19307`) |
+| 2 | *(mirror only)* Import prod/dev dump into `ork` on `19306` if empty | Mirror extract source |
+| 3 | *(mirror only)* Apply `db-migrations/2026-07-07-add-prod-canary.sql` to `ork` | Enables `extract` safety guard |
+| 4 | `bin/ork-db init` | Sandbox schema (`ork.sql`) + `_ork_canary_test` |
+| 5 | `bin/ork-db extract` | Pull Type-1 catalogs + real players from mirror |
+| 6 | `bin/ork-db apply --yes` | Wipe + reload sandbox with fake kingdoms/players |
+
+**Planned (TD-7):** `bin/ork-db bootstrap` runs steps 4–6 (and optionally checks step 1), skipping work that is already done. `init` alone is **not** a full bootstrap — it only prepares an empty sandbox for the first `apply`.
+
+Daily reset after bootstrap: `bin/ork-db apply --yes`.
 
 ---
 

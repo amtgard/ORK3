@@ -26,7 +26,7 @@ docs/megiddo/test-database-tool/ — read 10-cli-reference.md and 04-safety-vali
 
 ## Milestone
 
-{{MILESTONE}}
+TD-4, TD-5
 
 Branch: megiddo/td-N. Commit: TD-N: <description>.
 
@@ -34,7 +34,7 @@ Branch: megiddo/td-N. Commit: TD-N: <description>.
 
 1. Ensure prior working branch has all work staged and committed.
 2. Create a relevant working branch name for this work.
-3. Implement the milestone.
+3. Implement the milestone and any prior work from prior milestones that is incomplete and can be completed now.
 4. Implement unit tests to 90% coverage and reasonable integ tests to cover this work
 5. Update the milestone checklist
 6. Stage and commit all work for these milestone(s) to the local working branch

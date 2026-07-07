@@ -15,7 +15,9 @@
 
 ## TD-1 — Docker sandbox container
 
+- [x] `docker-compose.php8.yml` — `ork3testdb` service added
 - [x] `ork3testdb` on port 19307, database `ork_test`, volume `data-test-db`
+- [x] Volume `data-test-db` isolated from mirror volume `data-db`
 
 ---
 
@@ -61,9 +63,10 @@
 
 ---
 
-## TD-7 — PHPUnit
+## TD-7 — PHPUnit + dev bootstrap
 
 - [ ] `config.test.php` → 19307 / `ork_test`
+- [ ] `bin/ork-db bootstrap` — idempotent first-run (init → extract → apply)
 - [ ] Full suite passes after `apply`
 
 ---

@@ -15,7 +15,7 @@ Phased delivery for the test database infrastructure, PHP renderer, safety syste
 | **TD-4** | Template renderer | `bin/ork-db render` |
 | **TD-5** | Apply + wipe/replay | `bin/ork-db apply` (sandbox, hardcoded) |
 | **TD-6** | DB profile switcher | `bin/ork-db use prod\|dev` |
-| **TD-7** | PHPUnit integration | `config.test.php`, bootstrap, doc updates |
+| **TD-7** | PHPUnit + dev bootstrap | `config.test.php` → `19307`/`ork_test`, `bin/ork-db bootstrap`, doc updates |
 | **TD-8** | Migration classifier + drift detection | `migration-classification.json5` + `drift-check` + `schema-diff` |
 | **TD-9** | Renderer tests | PHPUnit golden files + integration smoke |
 
@@ -81,10 +81,12 @@ docs/megiddo/refactor/06-test-framework.md  # update prerequisites
 
 ### Phase 1 — TD-1 + TD-2
 
+**TD-1 deliverable (done):** `docker-compose.php8.yml` extended with `ork3testdb` — port `19307`, database `ork_test`, isolated volume `data-test-db` (separate from mirror volume `data-db`).
+
 **Acceptance:**
 
 ```bash
-docker compose up -d ork3testdb
+docker compose -f docker-compose.php8.yml up -d ork3testdb
 bin/ork-db validate --mode init
 bin/ork-db validate          # tier + wiring checks
 ```
@@ -111,9 +113,17 @@ bin/ork-db status
 
 ### Phase 4 — TD-6 + TD-7
 
+**TD-7 deliverables:**
+
+- `config.test.php` defaults → `127.0.0.1:19307` / `ork_test` (today still points at `19306` / `ork`)
+- `bin/ork-db bootstrap` — first-run orchestrator (see §8)
+- Doc updates for onboarding
+
 **Acceptance:**
 
 ```bash
+docker compose -f docker-compose.php8.yml up -d
+bin/ork-db bootstrap --yes    # planned — init + extract + apply
 bin/ork-db use dev
 bin/ork-db use prod
 ENVIRONMENT=TEST sh bin/run-unit-tests.sh
@@ -176,12 +186,66 @@ tools/ork-db/.last-apply.json
 | 8 | Content seed | Arbitrary integer for `mt_srand()` — persisted in `fingerprints.json5`; default `42` is a stable starting point, not domain-specific |
 | 9 | Type 1 tables | `fixed_extract` + `fixed_embedded` in `extract-sources.json5` |
 | 10 | Drift detection | `bin/ork-db drift-check` — schema + catalog + migration coverage |
+| 11 | Dev bootstrap | `bin/ork-db bootstrap` — first-run sandbox setup (TD-7) |
+
+---
+
+## 8. Dev environment bootstrap
+
+### What exists today
+
+| Piece | Status | Notes |
+|-------|--------|-------|
+| `docker-compose.php8.yml` + `ork3testdb` | **Done (TD-1)** | Port `19307`, DB `ork_test`, volume `data-test-db` |
+| Volume isolation from mirror | **Done (TD-1)** | `data-db` vs `data-test-db` — separate Docker named volumes |
+| `bin/ork-db init` | **Done (TD-2)** | Schema + test canary only; no fake data |
+| `bin/ork-db extract` / `apply` | **Done (TD-3–5)** | Full sandbox reload |
+| `bin/ork-db bootstrap` | **Planned (TD-7)** | Single first-run command |
+
+### First-run workflow (manual, until `bootstrap` ships)
+
+```bash
+# 1. Containers
+docker compose -f docker-compose.php8.yml up -d
+
+# 2. Mirror prerequisites (one-time per workstation)
+#    — import a dev dump into ork @ 19306 if the mirror is empty
+#    — apply db-migrations/2026-07-07-add-prod-canary.sql to ork
+
+# 3. Sandbox bootstrap
+bin/ork-db init              # schema + _ork_canary_test on empty ork_test
+bin/ork-db extract           # catalogs from mirror (19306)
+bin/ork-db apply --yes       # wipe + reload sandbox (19307)
+
+# 4. Verify
+bin/ork-db validate --mode post-apply
+bin/ork-db status
+```
+
+### Planned `bin/ork-db bootstrap` (TD-7)
+
+Idempotent orchestrator for step 3 above:
+
+```
+tier check (local only)
+  → optional: warn if ork3testdb not reachable (suggest docker compose up)
+  → init (skip if test canary already valid)
+  → extract (skip if extracted/ fresh unless --force-extract)
+  → apply --yes
+  → validate --mode post-apply
+  → status
+```
+
+Flags: `--yes` (skip prompts), `--skip-extract` (reuse existing extracts), `--force-extract`.
+
+Does **not** import mirror dumps or install prod canary — those remain manual one-time mirror setup.
 
 ---
 
 ## 7. Success criteria (project complete)
 
-- [ ] Two MariaDB containers; sandbox on 19307 only
+- [x] Two MariaDB containers; sandbox on 19307 only (`docker-compose.php8.yml`)
+- [x] Sandbox volume `data-test-db` isolated from mirror volume `data-db`
 - [ ] `apply` cannot succeed on production tier or against mirror (19306 / `ork`)
 - [ ] Prod canary on prod-like DB prevents mistaken wipe
 - [ ] 5 kingdom rows: 4 sovereigns with varied monikers + 1 principality
@@ -190,4 +254,5 @@ tools/ork-db/.last-apply.json
 - [ ] admin, megiddo, Ken Walker, Avery Krouse accounts work
 - [ ] `bin/ork-db use` toggles app between prod and dev profiles
 - [ ] Full PHPUnit suite runs against dev profile
+- [ ] `bin/ork-db bootstrap` brings a fresh clone from zero to post-apply sandbox
 - [ ] Award catalog matches prod extract

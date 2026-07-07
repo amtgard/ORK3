@@ -28,6 +28,7 @@ bin/ork-db apply              # wipe + reload sandbox — target is hardcoded
 
 bin/ork-db validate           # safety checks on hardcoded sandbox target
 bin/ork-db init               # first-time sandbox schema + canary
+bin/ork-db bootstrap          # first-run: init + extract + apply (TD-7 — planned)
 bin/ork-db schema-diff        # compare mirror vs sandbox schema (local only)
 
 bin/ork-db help [command]
@@ -174,13 +175,47 @@ bin/ork-db status
 
 All probe **sandbox only** (hardcoded `19307` / `ork_test`). Refused on production tier except `status` (read-only tier report).
 
+### `init` vs full bootstrap
+
+| Command | Scope |
+|---------|-------|
+| `init` | Empty `ork_test` → apply `ork.sql` + install `_ork_canary_test` only |
+| `bootstrap` *(TD-7)* | Idempotent first-run: `init` (if needed) → `extract` → `apply` → post-validate |
+
+`init` does **not** load fake kingdoms or players. New developers need `extract` + `apply` after `init`, or `bootstrap` once TD-7 ships.
+
+---
+
+## `bootstrap` *(planned — TD-7)*
+
+```bash
+bin/ork-db bootstrap
+bin/ork-db bootstrap --yes
+bin/ork-db bootstrap --skip-extract
+```
+
+- **Local tier only** — same refusal rules as other data commands
+- Does **not** start Docker — operator runs `docker compose -f docker-compose.php8.yml up -d` first
+- Does **not** import mirror dumps or install prod canary (manual mirror one-time setup)
+
+Pipeline:
+
+```
+tier check (local only)
+  → init (if test canary missing)
+  → extract (unless --skip-extract)
+  → apply --yes (unless interactive)
+  → validate --mode post-apply
+```
+
 ---
 
 ## Examples (local workstation only)
 
 ```bash
-# First-time setup
+# First-time setup (manual today; bootstrap in TD-7)
 docker compose -f docker-compose.php8.yml up -d
+bin/ork-db init
 bin/ork-db extract
 bin/ork-db apply
 

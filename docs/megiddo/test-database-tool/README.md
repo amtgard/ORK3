@@ -4,7 +4,9 @@ Explicit, isolated test database for ORK3 development and PHPUnit integration te
 
 **Goal:** Safe, repeatable test data that mirrors production schema and reference catalogs (awards, classes) while using entirely synthetic kingdoms, parks, and most players — plus a small set of real operator accounts.
 
-**Code (planned):** `tools/ork-db/` · **CLI:** `bin/ork-db` · **Docs:** `docs/megiddo/test-database-tool/`
+**Code:** `tools/ork-db/` · **CLI:** `bin/ork-db` · **Docs:** `docs/megiddo/test-database-tool/`
+
+**Implementation status:** TD-1–TD-5 shipped (Docker sandbox, safety, extract, render, apply). TD-6–TD-9 pending (`use`, PHPUnit routing, bootstrap, drift checks).
 
 ---
 
@@ -61,10 +63,14 @@ Explicit, isolated test database for ORK3 development and PHPUnit integration te
 
 ---
 
-## Quick operations (planned)
+## Quick operations
 
 ```bash
-# Switch which DB the local website uses
+# First-run (see 05-tools-and-operations.md for full bootstrap)
+docker compose -f docker-compose.php8.yml up -d
+bin/ork-db init && bin/ork-db extract && bin/ork-db apply --yes
+
+# Switch which DB the local website uses (TD-6 — planned)
 bin/ork-db use prod      # mirror — real local data
 bin/ork-db use dev       # sandbox — fake data
 
@@ -93,6 +99,7 @@ On **production servers**, `extract` / `render` / `apply` refuse to run. See [10
 
 | Requirement | Notes |
 |-------------|-------|
-| Docker php8 stack | `docker compose -f docker-compose.php8.yml up -d` (extended with test DB service) |
-| Source dev DB | Award/class catalogs extracted once from dev `ork` (or redacted prod dump) |
+| Docker php8 stack | `docker compose -f docker-compose.php8.yml up -d` — includes `ork3db` (mirror, `data-db`) and `ork3testdb` (sandbox, `data-test-db`) |
+| Mirror database | Import dev dump into `ork` @ `19306`; apply prod canary migration before first `extract` |
+| Sandbox bootstrap | `bin/ork-db init` + `extract` + `apply` (or `bin/ork-db bootstrap` when TD-7 ships) |
 | PHP 8.2+ CLI | Renderer in `tools/ork-db/` — see [07-implementation-plan.md](./07-implementation-plan.md) |
