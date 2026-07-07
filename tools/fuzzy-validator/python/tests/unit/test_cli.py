@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -48,8 +49,13 @@ def test_validate_help_exits_zero():
     assert exc.value.code == 0
 
 
-def test_validate_stub_exits_two():
-    assert main(["validate", "--page", "home-anonymous"]) == 2
+def test_validate_runs_gate_script():
+    with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
+        run_mock.return_value.returncode = 0
+        assert main(["validate", "--page", "home-anonymous", "--phase", "visual"]) == 0
+        command = run_mock.call_args[0][0]
+        assert "gate.sh" in command[0]
+        assert command[-1] == "visual"
 
 
 def test_resolve_page_ids_single_page():

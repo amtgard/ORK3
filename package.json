@@ -22,6 +22,7 @@
     "fuzz:record": "bin/fuzzy-validator record",
     "fuzz:validate": "bin/fuzzy-validator validate",
     "fuzz:capture": "bin/fuzzy-validator record",
-    "fuzz:calibrate": "tools/fuzzy-validator/bin/calibrate.sh"
+    "fuzz:calibrate": "tools/fuzzy-validator/bin/calibrate.sh",
+    "fuzz:gate": "tools/fuzzy-validator/bin/gate.sh"
   }
 }

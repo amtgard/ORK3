@@ -149,6 +149,30 @@ def _run_capture(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_validate(args: argparse.Namespace) -> int:
+    if args.phase not in {"visual", "all"}:
+        print(
+            f"fuzzy-validator validate: phase '{args.phase}' not implemented until FU-9+",
+            file=sys.stderr,
+        )
+        return 2
+
+    page_ids = _resolve_page_ids(args)
+    if args.dry_run:
+        for page_id in page_ids:
+            print(page_id)
+        return 0
+
+    gate_script = TOOL_ROOT / "bin" / "gate.sh"
+    pages_arg = ",".join(page_ids)
+    result = subprocess.run(
+        [str(gate_script), "--pages", pages_arg, "--phase", args.phase],
+        cwd=REPO_ROOT,
+        check=False,
+    )
+    return int(result.returncode)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -161,8 +185,7 @@ def main(argv: list[str] | None = None) -> int:
         return _run_capture(args)
 
     if args.command == "validate":
-        print("fuzzy-validator validate: not implemented yet (FU-3+).", file=sys.stderr)
-        return 2
+        return _run_validate(args)
 
     parser.print_help()
     return 2

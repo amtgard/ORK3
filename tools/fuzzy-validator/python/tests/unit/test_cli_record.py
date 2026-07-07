@@ -39,6 +39,10 @@ def test_record_phase_assets_not_implemented():
     assert main(["record", "--page", "home-anonymous", "--phase", "assets"]) == 2
 
 
+def test_validate_phase_all_not_implemented():
+    assert main(["validate", "--page", "home-anonymous", "--phase", "all"]) == 2
+
+
 def test_record_capture_failure_propagates():
     with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
         run_mock.return_value.returncode = 1

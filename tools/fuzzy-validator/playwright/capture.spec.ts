@@ -45,7 +45,8 @@ for (const pageEntry of capturePages) {
     }
 
     const waitAfterMs = pageEntry.waitAfterMs ?? registry.defaults.waitAfterMs ?? 500;
-    const repeat = repeatCount(pageEntry.repeat);
+    const singleCapture = process.env.FUZZ_MODE === 'candidate';
+    const repeat = singleCapture ? 1 : repeatCount(pageEntry.repeat);
     const outDir = path.join(TOOL_ROOT, 'calibrations', pageEntry.id);
     fs.mkdirSync(outDir, { recursive: true });
 
@@ -56,7 +57,10 @@ for (const pageEntry of capturePages) {
         waitAfterMs,
       });
 
-      const outPath = path.join(outDir, `run-${String(run).padStart(3, '0')}.png`);
+      const fileName = singleCapture
+        ? 'candidate.png'
+        : `run-${String(run).padStart(3, '0')}.png`;
+      const outPath = path.join(outDir, fileName);
       await captureScreenshot(page, outPath);
     }
   });

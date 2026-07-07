@@ -37,11 +37,11 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 
 ### FU-3: Pixel gate
 
-- [ ] Branch `megiddo/fu-3-gate`
-- [ ] `python/gate.py` + `bin/gate.sh` wired
-- [ ] Pass on same commit; fail on intentional layout change
-- [ ] pytest coverage ≥ 90% cumulative on `python/`
-- [ ] Single squashed commit
+- [x] Branch `megiddo/fu-3-gate`
+- [x] `python/gate.py` + `bin/gate.sh` wired
+- [x] Pass on same commit; fail on intentional layout change
+- [x] pytest coverage ≥ 90% cumulative on `python/`
+- [x] Single squashed commit
 
 ### FU-4: Page registry expansion
 
@@ -119,8 +119,8 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 |-----------|------|--------|------------|
 | FU-0 | 2026-07-07 | 02e0a306 | n/a (4 tests) |
 | FU-1 | 2026-07-07 | 7eab9424 | n/a (8 tests + 3 PW unit) |
-| FU-2 | 2026-07-07 | | 96% |
-| FU-3 | | | |
+| FU-2 | 2026-07-07 | d8820b06 | 96% |
+| FU-3 | 2026-07-07 | | 96% |
 | FU-4 | | | |
 | FU-5 | | | |
 | FU-6 | | | |
