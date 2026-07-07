@@ -7,9 +7,9 @@ Controlled mutations for integration proof. Scripts in `scripts/evidence_mutatio
 | Step | Mutation | Expected |
 |------|----------|----------|
 | Virgin | 5× identical stabilized capture | Baseline PNG committed |
-| 2a Discover | Runs 1–3 virgin; runs 4–5 heraldry patch (bbox ~35,140–225,280) with alternate heraldry PNG | Non-empty `player-profile.fuzz.json` + overlay |
+| 2a Discover | Runs 1,3,5 virgin; runs 2,4 heraldry patch (bbox ~35,140–225,280) alternating | Non-empty `player-profile.fuzz.json` + overlay |
 | 2b In-zone | Candidate with heraldry patch inside learned bbox | `validate --phase visual` → exit 0 |
-| 2c Out-of-zone | Candidate with 20px top padding bar (full width, outside heraldry bbox) | `validate --phase visual` → exit 1, red boxes in report |
+| 2c Out-of-zone | Candidate with 20px in-image top bar (outside heraldry bbox) | `validate --phase visual` → exit 1, red boxes in report |
 
 **Heraldry source:** `tools/ork-db/generated-assets/players/000000.png` swapped into profile heraldry region.
 
@@ -18,9 +18,9 @@ Controlled mutations for integration proof. Scripts in `scripts/evidence_mutatio
 | Step | Mutation | Expected |
 |------|----------|----------|
 | Virgin | 5× capture with DOM HTML | Baseline `home-authenticated.dom.json` |
-| 2a Discover | Runs 1–3 stable; runs 4–5 change `data-session-token` on `#main` (or equivalent volatile attr) | Non-empty `home-authenticated.dom-fuzz.json` + `dom-fuzz.txt` |
-| 2b In-zone | Candidate with same token drift as calibration runs 4–5 | `validate --phase dom` → exit 0 |
-| 2c Out-of-zone | Candidate renames stable heading text outside fuzz nodes | `validate --phase dom` → exit 1 |
+| 2a Discover | Runs alternate `data-session-token` on `#theme_container` | Non-empty `home-authenticated.dom-fuzz.json` + `dom-fuzz.txt` |
+| 2b In-zone | Candidate with token drift inside learned attr fuzz | `validate --phase dom` → exit 0 |
+| 2c Out-of-zone | Candidate changes welcome heading text outside fuzz nodes | `validate --phase dom` → exit 1 |
 
 ## Assets — *(FU-14, deferred here)*
 

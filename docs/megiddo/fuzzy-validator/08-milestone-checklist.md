@@ -129,6 +129,8 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 | FU-9 | 2026-07-07 | 9af10a9a | 95% |
 | FU-10 | 2026-07-07 | 32277160 | 94% |
 | FU-11 | 2026-07-07 | f0702472 | 92% |
+| FU-12 | 2026-07-07 | 26de47b4 | 92% |
+| FU-13 | 2026-07-07 | 92c4a575 | 92% |
 
 ---
 
@@ -196,18 +198,18 @@ tools/fuzzy-validator/evidence/
 - [x] Virgin `record --profile test` on stable commit; baselines committed under `evidence/baselines/test/`
 - [x] `evidence/scripts/run-evidence-suite.sh` stub (exits non-zero until FU-13–15 fill in)
 - [x] Update [09-test-framework.md](./09-test-framework.md) § Evidence suite (cross-ref)
-- [ ] Single squashed commit
+- [x] Single squashed commit
 
 ### FU-13: Pixel + DOM fuzz discovery evidence
 
-- [ ] Branch `megiddo/fu-13-fuzz-evidence`
-- [ ] **Pixel:** heraldry-only mutation → multi-grab calibrate → non-empty `fuzz.json` + overlay committed
-- [ ] **Pixel:** validate in-zone pass; out-of-zone layout change fail with annotated PNG
-- [ ] **DOM:** in-zone volatile node mutation → `dom-fuzz.json` non-empty + `dom-fuzz.txt` debug
-- [ ] **DOM:** validate in-zone pass; structural change outside fuzz fail
-- [ ] `evidence/reports/pixel-proof/` and `dom-proof/` with `index.html` + `summary.json`
-- [ ] `run-evidence-suite.sh` asserts discover + pass/fail exit codes for pixel + dom
-- [ ] Single squashed commit
+- [x] Branch `megiddo/fu-13-fuzz-evidence`
+- [x] **Pixel:** heraldry-only mutation → multi-grab calibrate → non-empty `fuzz.json` + overlay committed
+- [x] **Pixel:** validate in-zone pass; out-of-zone layout change fail with annotated PNG
+- [x] **DOM:** in-zone volatile node mutation → `dom-fuzz.json` non-empty + `dom-fuzz.txt` debug
+- [x] **DOM:** validate in-zone pass; structural change outside fuzz fail
+- [x] `evidence/reports/pixel-proof/` and `dom-proof/` with `index.html` + `summary.json`
+- [x] `run-evidence-suite.sh` asserts discover + pass/fail exit codes for pixel + dom
+- [x] Single squashed commit
 
 ### FU-14: Asset hard-gate evidence
 

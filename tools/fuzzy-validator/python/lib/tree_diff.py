@@ -204,7 +204,7 @@ def _is_fuzzed(path: str, fuzz_nodes: list[dict]) -> bool:
         mode = node.get("mode")
         if mode == "subtree" and (path == fuzz_path or path.startswith(f"{fuzz_path}/")):
             return True
-        if path == fuzz_path and mode in {"text", "attributes"}:
+        if path == fuzz_path and mode == "text":
             return True
     return False
 

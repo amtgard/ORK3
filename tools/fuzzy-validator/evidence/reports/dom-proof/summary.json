@@ -1,0 +1,45 @@
+{
+  "runId": "dom-inzone",
+  "phase": "dom",
+  "exitCode": 0,
+  "pass": true,
+  "thresholds": {
+    "assetsMinScore": 1.0,
+    "domMinScore": 1.0,
+    "visualMinScore": 1.0
+  },
+  "pages": [
+    {
+      "pageId": "home-authenticated",
+      "pass": true,
+      "scores": {
+        "dom": 1.0
+      },
+      "pageScore": 1.0,
+      "reportPath": "pages/home-authenticated.html"
+    }
+  ],
+  "profile": "test",
+  "generatedAt": "2026-07-07T22:28:49Z",
+  "pagesDetailed": [
+    {
+      "pageId": "home-authenticated",
+      "passed": true,
+      "layers": [
+        {
+          "layer": "dom",
+          "passed": true,
+          "score": 1.0,
+          "exitCode": 0,
+          "details": {
+            "passed": true,
+            "domScore": 1.0,
+            "comparablePaths": 264,
+            "failurePaths": 0,
+            "failures": []
+          }
+        }
+      ]
+    }
+  ]
+}

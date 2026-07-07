@@ -73,6 +73,25 @@ def test_compare_dom_trees_passes_with_attributes_fuzz():
     assert result.passed is True
 
 
+def test_compare_dom_trees_fails_on_child_text_with_attributes_fuzz_on_parent():
+    baseline = _tree('<html><body><div data-token="a"><h1>Stable</h1></div></body></html>')
+    candidate = _tree('<html><body><div data-token="b"><h1>Changed</h1></div></body></html>')
+    manifest = {
+        "fuzzNodes": [
+            {
+                "path": "/html[0]/body[0]/div[0]",
+                "mode": "attributes",
+                "attrs": ["data-token"],
+                "source": "manual",
+            }
+        ],
+        "manualNodes": [],
+    }
+    result = compare_dom_trees(baseline, candidate, manifest)
+    assert result.passed is False
+    assert any(failure.reason == "text_mismatch" for failure in result.failures)
+
+
 def test_discover_fuzz_nodes_from_calibration_runs():
     trees = [
         _tree('<html><body><span>Mon</span></body></html>'),

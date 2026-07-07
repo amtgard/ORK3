@@ -1,0 +1,52 @@
+{
+  "runId": "dom-outzone",
+  "phase": "dom",
+  "exitCode": 1,
+  "pass": false,
+  "thresholds": {
+    "assetsMinScore": 1.0,
+    "domMinScore": 1.0,
+    "visualMinScore": 1.0
+  },
+  "pages": [
+    {
+      "pageId": "home-authenticated",
+      "pass": false,
+      "scores": {
+        "dom": 0.996226
+      },
+      "pageScore": 0.996226,
+      "reportPath": "pages/home-authenticated.html"
+    }
+  ],
+  "profile": "test",
+  "generatedAt": "2026-07-07T22:29:39Z",
+  "pagesDetailed": [
+    {
+      "pageId": "home-authenticated",
+      "passed": false,
+      "layers": [
+        {
+          "layer": "dom",
+          "passed": false,
+          "score": 0.996226,
+          "exitCode": 1,
+          "details": {
+            "passed": false,
+            "domScore": 0.996226,
+            "comparablePaths": 265,
+            "failurePaths": 1,
+            "failures": [
+              {
+                "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/h1[0]/text[0]",
+                "reason": "text_mismatch",
+                "baseline": "Welcome to the Amtgard Online Record Keeper",
+                "candidate": "EVIDENCE OUT-OF-ZONE DOM REGRESSION"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

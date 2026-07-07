@@ -1,0 +1,10 @@
+{
+  "failures": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/h1[0]/text[0]",
+      "reason": "text_mismatch",
+      "baseline": "Welcome to the Amtgard Online Record Keeper",
+      "candidate": "EVIDENCE OUT-OF-ZONE DOM REGRESSION"
+    }
+  ]
+}

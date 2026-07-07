@@ -300,6 +300,7 @@
           "tag": "div",
           "path": "/html[0]/body[0]/div[1]",
           "attrs": {
+            "data-session-token": "evidence-session-volatile-a",
             "id": "theme_container"
           },
           "children": [
