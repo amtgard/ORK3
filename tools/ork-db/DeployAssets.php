@@ -69,6 +69,7 @@ final class DeployAssets
             foreach (glob($sourceDir . '/*.{png,jpg}', GLOB_BRACE) ?: [] as $sourcePath) {
                 $filename = basename($sourcePath);
                 $destPath = $destDir . '/' . $filename;
+                $this->removeStaleAlternateExtensions($destDir, $filename);
                 if (!copy($sourcePath, $destPath)) {
                     throw new \RuntimeException("Failed to copy asset: {$sourcePath} → {$destPath}");
                 }
@@ -173,6 +174,26 @@ final class DeployAssets
 
         if (!mkdir($path, 0775, true) && !is_dir($path)) {
             throw new \RuntimeException("Failed to create directory: {$path}");
+        }
+    }
+
+    private function removeStaleAlternateExtensions(string $destDir, string $filename): void
+    {
+        $basename = pathinfo($filename, PATHINFO_FILENAME);
+        $extension = strtolower((string) pathinfo($filename, PATHINFO_EXTENSION));
+        if ($basename === '' || ($extension !== 'png' && $extension !== 'jpg')) {
+            return;
+        }
+
+        foreach (['png', 'jpg'] as $alternate) {
+            if ($alternate === $extension) {
+                continue;
+            }
+
+            $stalePath = $destDir . '/' . $basename . '.' . $alternate;
+            if (is_file($stalePath) && !unlink($stalePath)) {
+                throw new \RuntimeException("Failed to remove stale asset: {$stalePath}");
+            }
         }
     }
 }

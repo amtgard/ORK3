@@ -86,3 +86,44 @@ function ork3_ensure_mirror_prod_canary(): void
         . escapeshellarg($migration) . ' 2>/dev/null';
     exec($command);
 }
+
+function ork3_app_base_url(): string
+{
+    $base = getenv('ORK3_E2E_BASE_URL') ?: 'http://127.0.0.1:19080/orkui/';
+
+    return str_replace('://localhost:', '://127.0.0.1:', $base);
+}
+
+function ork3_app_reachable(): bool
+{
+    static $reachable = null;
+    if ($reachable !== null) {
+        return $reachable;
+    }
+
+    $url = ork3_app_base_url();
+    if (!str_ends_with($url, '/')) {
+        $url .= '/';
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'HEAD',
+            'timeout' => 2,
+            'ignore_errors' => true,
+        ],
+    ]);
+
+    $headers = @get_headers($url, true, $context);
+    if (!is_array($headers)) {
+        $reachable = false;
+
+        return $reachable;
+    }
+
+    $statusLine = $headers[0] ?? '';
+    $reachable = is_string($statusLine)
+        && preg_match('/\s(200|302|405)\s/', $statusLine) === 1;
+
+    return $reachable;
+}

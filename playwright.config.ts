@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = process.env.ORK3_E2E_BASE_URL ?? 'http://localhost:19080/orkui/';
+const baseURL = process.env.ORK3_E2E_BASE_URL ?? 'http://127.0.0.1:19080/orkui/';
 
 export default defineConfig({
   testDir: './tests/e2e',

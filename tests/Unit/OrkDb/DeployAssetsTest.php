@@ -90,6 +90,19 @@ final class DeployAssetsTest extends TestCase
         ]);
     }
 
+    public function testRunRemovesStaleAlternateExtensionBeforeCopy(): void
+    {
+        $kingdomDir = $this->repoRoot . '/assets/heraldry/kingdom';
+        mkdir($kingdomDir, 0775, true);
+        file_put_contents($kingdomDir . '/100001.png', 'stale-png');
+
+        $deploy = new DeployAssets($this->toolRoot, $this->repoRoot);
+        $deploy->run(['verify_manifest' => true]);
+
+        $this->assertFileDoesNotExist($kingdomDir . '/100001.png');
+        $this->assertFileExists($kingdomDir . '/100001.jpg');
+    }
+
     private function copyTree(string $source, string $destination): void
     {
         if (!mkdir($destination, 0775, true) && !is_dir($destination)) {

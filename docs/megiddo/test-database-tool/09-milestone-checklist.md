@@ -125,8 +125,8 @@ Spec: [12-heraldry-and-assets.md](./12-heraldry-and-assets.md)
 
 ### TD-11d — Visual sign-off
 
-- [ ] Kingdom and park pages show non-default shield heraldry
-- [ ] Fake player avatars show phoenix placeholder (not letter fallback)
+- [x] Kingdom and park pages show non-default shield heraldry
+- [x] Fake player avatars show phoenix placeholder (not letter fallback)
 
 ---
 
