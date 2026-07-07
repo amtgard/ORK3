@@ -19,6 +19,7 @@ Phased delivery for the test database infrastructure, PHP renderer, safety syste
 | **TD-8** | Migration classifier + drift detection | `migration-classification.json5` + `drift-check` + `schema-diff` |
 | **TD-9** | Renderer tests | PHPUnit golden files + integration smoke |
 | **TD-10** | Dev entry orchestrator | `bin/ork-db deploy-sandbox` — single safe daily startup command |
+| **TD-11** | Heraldry + asset pipeline | High ID namespace, shield heraldry, `generate-assets` / `deploy-assets` — [12-heraldry-and-assets.md](./12-heraldry-and-assets.md) |
 
 ---
 

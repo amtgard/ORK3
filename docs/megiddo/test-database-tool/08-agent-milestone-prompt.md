@@ -26,7 +26,7 @@ docs/megiddo/test-database-tool/ — read 10-cli-reference.md and 04-safety-vali
 
 ## Milestone
 
-TD-4, TD-5
+TD-10
 
 Branch: megiddo/td-N. Commit: TD-N: <description>.
 

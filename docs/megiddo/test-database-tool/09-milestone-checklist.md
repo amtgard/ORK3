@@ -99,6 +99,37 @@
 
 ---
 
+## TD-11 — Heraldry, assets, and ID namespace
+
+Spec: [12-heraldry-and-assets.md](./12-heraldry-and-assets.md)
+
+### TD-11a — ID namespace migration
+
+- [ ] Kingdoms `9001`–`9005` → `100001`–`100005`
+- [ ] Parks → `1_000_000 + (kingdom_ordinal × 100) + seq`
+- [ ] Fake mundanes → counter from `1_000_000`
+- [ ] `fingerprints.json5`, `Validate.php`, tests, golden hash updated
+
+### TD-11b — Generate heraldry
+
+- [ ] SVG shield templates (kingdom, park, player phoenix)
+- [ ] `bin/ork-db generate-assets`
+- [ ] Render emits `has_heraldry=1` (kingdoms, parks) and `has_heraldry` + `has_image=1` (fake players)
+- [ ] PNGs committed under `tools/ork-db/generated-assets/`
+
+### TD-11c — Deploy assets
+
+- [ ] `bin/ork-db deploy-assets` — copy to `assets/heraldry/` and `assets/players/` (local tier only)
+- [ ] Hook into `deploy-sandbox`
+- [ ] Post-apply validate: file exists for each flagged test entity
+
+### TD-11d — Visual sign-off
+
+- [ ] Kingdom and park pages show non-default shield heraldry
+- [ ] Fake player avatars show phoenix placeholder (not letter fallback)
+
+---
+
 ## Project sign-off
 
 - [ ] `apply` impossible on production host

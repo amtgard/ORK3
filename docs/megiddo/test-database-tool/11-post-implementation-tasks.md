@@ -149,13 +149,24 @@ bin/ork-db validate --mode post-apply
 
 Spec: [07-implementation-plan.md](./07-implementation-plan.md) §9 · [10-cli-reference.md](./10-cli-reference.md) § deploy-sandbox.
 
+### P1c — TD-11: Heraldry, assets, and ID namespace
+
+| Task | Deliverable | Acceptance |
+|------|-------------|------------|
+| **11a** | ID migration | Kingdoms `100001`–`100005`; parks `@ 1M`; fake mundanes `@ 1M`; validate + golden hash |
+| **11b** | `generate-assets` | SVG → PNG; kingdom/park shields + phoenix player placeholder; render flags |
+| **11c** | `deploy-assets` | Copy to `assets/`; hook `deploy-sandbox`; post-apply file validation |
+| **11d** | Visual sign-off | Kingdom/park/player pages show real art, not defaults |
+
+Spec: [12-heraldry-and-assets.md](./12-heraldry-and-assets.md).
+
 ### P2 — Documentation and ops
 
 | Task | Notes |
 |------|-------|
 | **Update 06-test-framework.md** | Prerequisites: sandbox on `19307`, run `deploy-sandbox` before sign-off; ork-db tests via `phpunit.ork-db.xml.dist` |
 | **`.ork3-db.local.example`** | Optional committed template `ORK3_DB_PROFILE=prod` for first-time Docker users |
-| **Maintainer review (TD-0)** | Confirm port 19307, kingdom IDs 9001–9005, Ken/Avery mundane IDs |
+| **Maintainer review (TD-0)** | Confirm port 19307, kingdom IDs `100001`–`100005` (TD-11), Ken/Avery mundane IDs |
 
 ### P3 — Project sign-off (checklist §Project)
 
@@ -211,11 +222,11 @@ ORK3_TEST_DB_PORT=19306 ORK3_TEST_DB_HOST=127.0.0.1 \
   # edit config.test.php DB_DATABASE back to ork — NOT recommended long-term
 ```
 
-**Option C — target state (after TD-8 + TD-9 + TD-10)**
+**Option C — target state (after TD-8 + TD-9 + TD-10 + TD-11)**
 
 ```bash
 docker compose -f docker-compose.php8.yml up -d
-bin/ork-db deploy-sandbox
+bin/ork-db deploy-sandbox   # includes deploy-assets when TD-11 ships
 sh bin/run-unit-tests.sh
 ```
 
@@ -228,7 +239,8 @@ sh bin/run-unit-tests.sh
 | TD-1–2 | `megiddo/td-*` | `docker-compose.php8.yml`, safety, validate |
 | TD-3–5 | `megiddo/td-4-5` | extract, render, apply |
 | TD-6–7 | `megiddo/td-6-7` | `Use.php`, `Bootstrap.php`, `config.test.php`, profile switching |
-| TD-8–10 | TBD | migration manifest, drift-check, deploy-sandbox |
+| TD-8–10 | `megiddo/td-*` | migration manifest, drift-check, deploy-sandbox |
+| TD-11 | `megiddo/td-11` | ID namespace, heraldry, generate-assets, deploy-assets |
 
 ---
 
@@ -239,3 +251,5 @@ sh bin/run-unit-tests.sh
 3. **Mirror migrations on fresh clone** — document one-time `db-migrations/` apply to mirror before first `extract`?
 4. **TD-7 checklist item** — “Full suite passes after apply”: mark done only after TD-8+9, or split into schema-green vs data-green criteria?
 5. **`deploy-sandbox` vs `bootstrap`** — keep both? (`bootstrap` = sandbox-only; `deploy-sandbox` = full dev entry)
+6. **TD-11 real player placeholders** — phoenix for Ken/Avery/megiddo in sandbox, or missing files OK?
+7. **TD-11 event IDs** — migrate to `2_000_000` block or leave at `80000`?
