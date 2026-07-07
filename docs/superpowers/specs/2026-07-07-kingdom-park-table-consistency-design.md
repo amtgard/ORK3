@@ -41,56 +41,74 @@ The standard mechanism is **jQuery DataTables** (already loaded on both pages). 
 
 ## 3. Assets
 
-DataTables core is loaded from CDN (`cdn.datatables.net/1.13.8`). Add, from the same CDN (consistent with existing pattern), on **both** `Kingdomnew_index.tpl` and `Parknew_index.tpl`:
+DataTables core (`cdn.datatables.net/1.13.8`) is already loaded on both pages. **No new JS plugins are added** — not Buttons, not RowGroup.
 
-- CSS: `buttons/2.4.2/css/buttons.dataTables.min.css`
-- JS: `buttons/2.4.2/js/dataTables.buttons.min.js`
-- JS: `buttons/2.4.2/js/buttons.html5.min.js`
+- **CSV** uses a shared custom helper (`orkExportDataTableCsv`, §4) generalized from the existing, proven `recsExportCsv` (`revised.js:15567`). This gives one CSV codepath for every table and avoids the Buttons/JSZip dependency and its separate styling burden.
+- **RowGroup** is not needed (Players deferred).
 
-CSV export (`csvHtml5`) needs **no JSZip** (JSZip is Excel-only). RowGroup is **not** added (Players deferred).
+The only new asset is a stylesheet: `orkui/template/revised-frontend/css/ork-datatables.css` — dark-mode (`html[data-theme="dark"]`) + ORK brand theming for the DataTables toolbar chrome (search input, length select, Export CSV button, pagination, info row). Linked on both pages.
 
-New file: `orkui/template/revised-frontend/css/ork-datatables.css` — dark-mode (`html[data-theme="dark"]`) + ORK brand theming for the DataTables toolbar chrome (search input, length select, Buttons, pagination, info row). Linked on both pages.
+## 4. Shared helpers: `orkInitDataTable` + `orkExportDataTableCsv`
 
-## 4. Shared wrapper: `orkInitDataTable`
-
-A single helper in `revised.js` so every table shares identical config, toolbar layout, and CSV behavior.
+Two helpers in `revised.js` so every table shares identical config, toolbar layout, and CSV behavior. No DataTables plugins required.
 
 ```js
-// $table: jQuery table element. opts overrides per-table.
-// Returns the DataTables API instance.
+// Serialize a DataTables instance to CSV: data columns only (skip <th class="no-export">),
+// current filtered + sorted view, ALL rows (search+order applied, no paging limit).
+// Generalized from the existing recsExportCsv (revised.js:15567).
+function orkExportDataTableCsv(dt, filename) {
+    var keep = [];               // column indexes to export (exclude .no-export headers)
+    var headers = [];
+    dt.columns().every(function(i) {
+        var $h = $(this.header());
+        if ($h.hasClass('no-export')) return;
+        keep.push(i);
+        headers.push($h.text().trim());
+    });
+    var rows = [headers];
+    dt.rows({ search: 'applied', order: 'applied' }).every(function() {
+        var $tds = $(this.node()).find('td');
+        rows.push(keep.map(function(ci) { return $tds.eq(ci).text().trim(); }));
+    });
+    var csv = rows.map(function(r) {
+        return r.map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\r\n');
+    var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+// Init a table as a DataTable with the standard ORK toolbar + Export CSV button.
+// $table: jQuery table. opts: { order, columnDefs, csvName, dt (extra config) }.
 function orkInitDataTable($table, opts) {
     opts = opts || {};
     if ($.fn.dataTable.isDataTable($table)) { $table.DataTable().destroy(); }
-    var config = $.extend(true, {
-        dom: "<'ork-dt-top'lfB>rt<'ork-dt-bot'ip>", // length, filter, buttons / table / info, pagination
+    var dt = $table.DataTable($.extend(true, {
+        dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>", // length, filter / table / info, pagination
         pageLength: 25,
         lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
         pagingType: 'simple_numbers',
         autoWidth: false,
         scrollX: true,
-        language: {
-            search: '',                 // placeholder set via CSS/attr instead of label
-            searchPlaceholder: 'Search…',
-            lengthMenu: 'Show _MENU_',
-        },
-        buttons: [{
-            extend: 'csvHtml5',
-            text: 'Export CSV',
-            className: 'ork-dt-csv',
-            title: opts.csvName || null,          // filename (no timestamp)
-            exportOptions: {
-                columns: ':not(.no-export)',      // data columns only
-                modifier: { search: 'applied', order: 'applied', page: 'all' },
-            },
-        }],
+        order: (opts.order || []),
         columnDefs: (opts.columnDefs || []),
-    }, opts.dt || {});
-    return $table.DataTable(config);
+        language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' },
+    }, opts.dt || {}));
+    // Inject the Export CSV button into the toolbar (no Buttons plugin).
+    var $top = $(dt.table().container()).find('.ork-dt-top');
+    var $btn = $('<button type="button" class="ork-dt-csv"><i class="fas fa-file-csv"></i> Export CSV</button>');
+    $btn.on('click', function() { orkExportDataTableCsv(dt, (opts.csvName || 'export') + '.csv'); });
+    $top.append($btn);
+    return dt;
 }
 ```
 
-- **Action/non-data columns** (edit gear, RSVP, row-action buttons) get class `no-export` **and** `columnDefs`/`<th>` markers for `orderable:false, searchable:false`. `:not(.no-export)` then excludes them from CSV; non-orderable/non-searchable keeps them out of sort + search.
-- **CSV semantics** are DataTables Buttons defaults made explicit: `page:'all'` → all rows (not just the visible page), `search:'applied'` + `order:'applied'` → the current filtered + sorted view.
+- **Action/non-data columns** (edit gear, RSVP, row-action buttons) get `<th class="no-export">` **and** `columnDefs` markers for `orderable:false, searchable:false`. The `no-export` header class excludes them from CSV; non-orderable/non-searchable keeps them out of sort + search.
+- **CSV semantics:** `rows({search:'applied', order:'applied'})` with no paging modifier → the current filtered + sorted view, **all rows** (not just the visible page). Data columns only.
+- **Recs tables** keep their existing `recsExportCsv`/`recsExportPrint` buttons (already conform) — they are *not* re-inited through `orkInitDataTable`; they only gain Show-X + a search box (see §5.2).
 - **Date/number sort reliability:** date cells emit a `data-order` attribute (epoch ms) so DataTables sorts by real value regardless of display text. Numeric cells rely on DataTables auto-detection (or `data-order` when the display text is not a bare number). Existing `data-sortval` attributes are re-emitted as `data-order`.
 
 ### Hidden-tab initialization
@@ -107,17 +125,20 @@ DataTables mis-measures column widths when initialized inside a `display:none` t
 - CSV filename: `Kingdom Parks`.
 
 ### 5.2 Kingdom & Park Recs (`#kn-rec-table`, `#pk-rec-table`)
-- Already DataTables. **Re-init through `orkInitDataTable`** (or extend existing init) so they gain the shared toolbar: Show-X (`lengthMenu`), a global search box, and the Export CSV button.
-- **Preserve** the existing `$.fn.dataTable.ext.search.push` filter-bar predicate and the current default order (KN `[[5,'desc']]`, PK `[[4,'desc']]`) and the actions column being non-orderable.
-- Kingdom's table is lazy-loaded via `knInitRecsTab()` — keep the idempotent destroy/re-init; just route through the shared wrapper.
-- Actions column: `no-export` (already non-orderable/non-searchable).
-- CSV filenames: `Kingdom Recommendations`, `Park Recommendations`.
+- Already DataTables, already have working CSV + Print buttons (`knRecCsv`/`pkRecCsv` → `recsExportCsv`, which exports data columns only + all `search:'applied'` rows) and a filter bar. **Do NOT re-init through `orkInitDataTable`** (that would add a second CSV button and risk the filter predicate/lazy-load).
+- **Only add the two missing features** to their existing inline `.DataTable({...})` config: Show-X and search box — by adding `dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>"` and `lengthMenu: [[10,25,50,100,-1],[10,25,50,100,'All']]` to the config. Keep `order`, `columnDefs`, `scrollX`, the `ext.search` predicate, the filter bar, and the CSV/Print buttons exactly as they are.
+- `ork-datatables.css` styles the added search/length chrome to match the other tables.
+- No filename change (existing `recs-<slug>.csv`).
 
 ### 5.3 Kingdom & Park Deleted-recs
-- Both tables are structurally identical (`.pk-deleted-recs-table`, 9 columns: Player, Award, Rank, Notes, Date Rec., Recommended By, Deleted At, Deleted By, [actions]).
-- Rows are JS-populated into `#kn-deleted-recs-tbody` / `#pk-deleted-recs-tbody`. **Init the DataTable *after* the rows are injected** (or add rows via the DataTables API). The collapsible reveal already gates when the body is populated — hook init there.
-- Column types: Rank numeric; Date Rec. + Deleted At are dates (emit `data-order` epoch in the row-builder); rest text. Actions column: `no-export`, `orderable:false`, `searchable:false`.
-- **Replace** the bespoke search input (`.pk-deleted-recs-search` + its handler) with the DataTables search box; remove the now-dead `*-no-match`/manual filter code. Keep the collapsible toggle + count.
+- Both tables are structurally identical (`.pk-deleted-recs-table`, 9 columns: Player, Award, Rank, Notes, Date Rec., Recommended By, Deleted At, Deleted By, [actions]). Populated by the shared `wirePanel`/`loadDeleted`/`renderRows` IIFE (`revised.js:15886`–`16054`).
+- **Init the DataTable *after* rows are injected** — inside `loadDeleted`'s success branch, right after `renderRows(tbody, recs)` and showing the wrap. Store the instance on the panel (e.g. `panel.__dt`).
+- Column types via `columnDefs`: Rank (col 2) numeric; Date Rec. (col 4) + Deleted At (col 6) dates — the row-builder (`renderRows`) must add `data-order="<epoch ms>"` to those two cells so DT sorts by value. Actions column (col 8): `<th class="no-export">` + `orderable:false, searchable:false`.
+- **Replace the bespoke search** (`.pk-deleted-recs-search` + its `input` handler) with the DataTables search box; remove the now-dead `.pk-deleted-recs-no-match` / `searchWrap` visibility code and the `data-search` attribute path. Keep the collapsible toggle.
+- **Integration fixes required** because DataTables now owns the tbody DOM (paging removes off-page `<tr>`s):
+  - **Restore removal** must use the API: replace `row.parentNode.removeChild(row)` with `panel.__dt.row(row).remove().draw(false)`.
+  - **Count** must use the API: replace `tbody.querySelectorAll('tr').length` with `panel.__dt.rows().count()`.
+  - When the last row is restored (count 0), destroy/empty the DT and show the empty state.
 - CSV filenames: `Kingdom Deleted Recommendations`, `Park Deleted Recommendations`.
 
 ### 5.4 Kingdom Players sort (minimal, standalone)
@@ -146,7 +167,8 @@ Theme all DataTables chrome for both light and `html[data-theme="dark"]`:
 | CSV leaks action columns | `no-export` class + `columns: ':not(.no-export)'`; verify exported header row. |
 | Double sort/paginate management on Parks | Remove `#kn-parks-table` from `knSortAsc`/`knPaginate` default calls. |
 | Dark-mode DT chrome unstyled | Dedicated `ork-datatables.css`; walk dark-mode checklist before done. |
-| CDN Buttons version drift vs core 1.13.8 | Pin Buttons 2.4.2 (compatible with DT 1.13.x). |
+| Deleted-recs restore/count desync after DT owns tbody | Use `dt.row(node).remove().draw(false)` for restore and `dt.rows().count()` for the count (§5.3). |
+| Second CSV button on recs | Recs are NOT re-inited through the wrapper — they keep their existing CSV/Print and only gain Show-X + search (§5.2). |
 
 ## 8. Execution
 
