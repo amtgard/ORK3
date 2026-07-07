@@ -133,6 +133,7 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 | FU-13 | 2026-07-07 | 92c4a575 | 92% |
 | FU-14 | 2026-07-07 | 0380ae0a | 92% |
 | FU-15 | 2026-07-07 | 608f5b18 | 92% |
+| FU-16 | 2026-07-07 | 603fd405 | 91% |
 
 ---
 
@@ -341,15 +342,15 @@ PR diffs show `latestBundle` filename change — the audit trail for *which blob
 
 ### FU-16: Setpoint capture, zip bundle, and external store
 
-- [ ] Branch `megiddo/fu-16-setpoint`
-- [ ] `bin/fuzzy-validator setpoint capture` — one-shot `record --all --phase all` + zip named `{date-time}-{git-commit}-{content-sha}.zip`
-- [ ] `bin/fuzzy-validator setpoint publish` — write/update `setpoint.json` with committed **bundle filename** + metadata
-- [ ] `bin/fuzzy-validator setpoint restore --bundle PATH` — verify content sha256 vs pointer, extract to `baselines/`
-- [ ] `.gitignore` — stop tracking heavy `baselines/**`; keep `setpoint.json` + `manifests/` in git
-- [ ] Migrate existing pilot baselines into first published zip; remove PNGs from git on cutover branch
-- [ ] Document public Drive folder setup (world-readable, maintainer write)
-- [ ] [04-operating-guide.md](./04-operating-guide.md) § Setpoint promotion (replaces §5 multi-file git add for baselines)
-- [ ] [10-cli-reference.md](./10-cli-reference.md) `setpoint` subcommand docs
-- [ ] `validate` fails with actionable message when baselines missing → `setpoint restore --bundle …`
-- [ ] **Deferred:** `--base-url` download, Drive folder auto-scan for committed filename
-- [ ] Single squashed commit
+- [x] Branch `megiddo/fu-16-setpoint`
+- [x] `bin/fuzzy-validator setpoint capture` — one-shot `record --all --phase all` + zip named `{date-time}-{git-commit}-{content-sha}.zip`
+- [x] `bin/fuzzy-validator setpoint publish` — write/update `setpoint.json` with committed **bundle filename** + metadata
+- [x] `bin/fuzzy-validator setpoint restore --bundle PATH` — verify content sha256 vs pointer, extract to `baselines/`
+- [x] `.gitignore` — stop tracking heavy `baselines/**`; keep `setpoint.json` + `manifests/` in git
+- [x] Migrate existing pilot baselines into first published zip; remove PNGs from git on cutover branch
+- [x] Document public Drive folder setup (world-readable, maintainer write)
+- [x] [04-operating-guide.md](./04-operating-guide.md) § Setpoint promotion (replaces §5 multi-file git add for baselines)
+- [x] [10-cli-reference.md](./10-cli-reference.md) `setpoint` subcommand docs
+- [x] `validate` fails with actionable message when baselines missing → `setpoint restore --bundle …`
+- [x] **Deferred:** `--base-url` download, Drive folder auto-scan for committed filename
+- [x] Single squashed commit

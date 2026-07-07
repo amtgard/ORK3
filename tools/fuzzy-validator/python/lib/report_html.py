@@ -27,10 +27,141 @@ th { background: #f5f5f5; }
 .badge-warn { color: #856404; font-weight: bold; }
 a { color: #0366d6; }
 pre { background: #f6f8fa; padding: 0.75rem; overflow-x: auto; }
-.thumbs { display: flex; gap: 1rem; flex-wrap: wrap; }
-.thumbs img { max-width: 240px; border: 1px solid #ddd; }
 nav { margin-bottom: 1rem; font-size: 0.9rem; }
 .profile-section { border-left: 4px solid #0366d6; padding-left: 1rem; margin: 2rem 0; }
+.thumbs { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0.75rem 0; }
+.thumbs figure { margin: 0; }
+.thumbs figcaption { font-size: 0.85rem; color: #444; margin-bottom: 0.25rem; }
+.thumbs img, .screenshot-thumb {
+  display: block; max-width: 240px; border: 2px solid #ddd; border-radius: 4px;
+  cursor: pointer; background: #fafafa;
+}
+.thumbs img.active, .screenshot-thumb.active { border-color: #0366d6; box-shadow: 0 0 0 1px #0366d6; }
+.screenshot-viewer { margin: 1rem 0 2rem; }
+.screenshot-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
+.screenshot-expand, .screenshot-lb-tab {
+  font: inherit; font-size: 0.9rem; padding: 0.35rem 0.75rem; border: 1px solid #ccc;
+  border-radius: 4px; background: #f6f8fa; cursor: pointer;
+}
+.screenshot-expand { font-weight: 600; }
+.screenshot-expand:hover { background: #eef4fc; }
+.screenshot-hint { font-size: 0.85rem; color: #666; margin: 0.5rem 0 0; }
+.screenshot-hint kbd {
+  display: inline-block; padding: 0.1rem 0.35rem; border: 1px solid #ccc;
+  border-radius: 3px; background: #f6f8fa; font-size: 0.8rem;
+}
+.screenshot-lightbox {
+  position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.92);
+  display: flex; flex-direction: column;
+}
+.screenshot-lightbox[hidden] { display: none !important; }
+.screenshot-lightbox-bar {
+  display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+  padding: 0.75rem 1rem; background: rgba(0, 0, 0, 0.55); color: #fff;
+}
+.screenshot-lightbox-bar .screenshot-lb-tab {
+  background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.25);
+}
+.screenshot-lightbox-bar .screenshot-lb-tab.active { background: #0366d6; border-color: #0366d6; }
+.screenshot-lightbox-bar .screenshot-lb-tab:hover { background: rgba(255,255,255,0.22); }
+.screenshot-lightbox-title { flex: 1; font-weight: 600; min-width: 8rem; }
+.screenshot-lightbox-close {
+  font: inherit; padding: 0.35rem 0.85rem; border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 4px; background: transparent; color: #fff; cursor: pointer;
+}
+.screenshot-lightbox-close:hover { background: rgba(255,255,255,0.15); }
+.screenshot-lightbox-body {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  overflow: auto; padding: 1rem; min-height: 0; position: relative;
+}
+.screenshot-lightbox-img {
+  max-width: 100%; max-height: calc(100vh - 7rem); width: auto; height: auto;
+  object-fit: contain; box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+.screenshot-lightbox-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  font-size: 2rem; line-height: 1; padding: 0.5rem 0.85rem; border: none;
+  background: rgba(255,255,255,0.12); color: #fff; cursor: pointer; border-radius: 4px;
+}
+.screenshot-lightbox-nav:hover { background: rgba(255,255,255,0.25); }
+.screenshot-lightbox-nav.prev { left: 0.75rem; }
+.screenshot-lightbox-nav.next { right: 0.75rem; }
+"""
+
+REPORT_JS = r"""
+(function () {
+  function initViewer(root) {
+    var thumbs = Array.prototype.slice.call(root.querySelectorAll('.screenshot-thumb'));
+    var expandBtn = root.querySelector('.screenshot-expand');
+    var lightbox = root.querySelector('.screenshot-lightbox');
+    if (!thumbs.length || !lightbox) return;
+
+    var lbImg = lightbox.querySelector('.screenshot-lightbox-img');
+    var lbTitle = lightbox.querySelector('.screenshot-lightbox-title');
+    var lbTabs = Array.prototype.slice.call(lightbox.querySelectorAll('.screenshot-lb-tab'));
+    var activeIndex = 0;
+
+    function frameAt(index) {
+      return thumbs[(index + thumbs.length) % thumbs.length];
+    }
+
+    function selectIndex(index, openLb) {
+      activeIndex = (index + thumbs.length) % thumbs.length;
+      var thumb = frameAt(activeIndex);
+      var src = thumb.getAttribute('data-src');
+      var label = thumb.getAttribute('data-label') || thumb.alt;
+      thumbs.forEach(function (t, i) { t.classList.toggle('active', i === activeIndex); });
+      lbTabs.forEach(function (t, i) { t.classList.toggle('active', i === activeIndex); });
+      lbImg.src = src;
+      lbImg.alt = label;
+      if (lbTitle) lbTitle.textContent = label;
+      if (openLb) openLightbox();
+    }
+
+    function openLightbox() {
+      lightbox.hidden = false;
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox() {
+      lightbox.hidden = true;
+      document.body.style.overflow = '';
+    }
+
+    thumbs.forEach(function (thumb, index) {
+      thumb.addEventListener('click', function () { selectIndex(index, true); });
+    });
+    lbTabs.forEach(function (tab, index) {
+      tab.addEventListener('click', function () { selectIndex(index, true); });
+    });
+    if (expandBtn) expandBtn.addEventListener('click', function () { openLightbox(); });
+    lightbox.querySelector('.screenshot-lightbox-close').addEventListener('click', closeLightbox);
+    lightbox.querySelector('.screenshot-lightbox-body').addEventListener('click', function (e) {
+      if (e.target === e.currentTarget) closeLightbox();
+    });
+    var prev = lightbox.querySelector('.screenshot-lightbox-nav.prev');
+    var next = lightbox.querySelector('.screenshot-lightbox-nav.next');
+    if (prev) prev.addEventListener('click', function (e) { e.stopPropagation(); selectIndex(activeIndex - 1, true); });
+    if (next) next.addEventListener('click', function (e) { e.stopPropagation(); selectIndex(activeIndex + 1, true); });
+
+    document.addEventListener('keydown', function (e) {
+      if (lightbox.hidden) return;
+      if (e.key === 'Escape') { closeLightbox(); e.preventDefault(); return; }
+      var num = parseInt(e.key, 10);
+      if (num >= 1 && num <= thumbs.length) {
+        selectIndex(num - 1, true);
+        e.preventDefault();
+        return;
+      }
+      if (e.key === 'ArrowLeft') { selectIndex(activeIndex - 1, true); e.preventDefault(); return; }
+      if (e.key === 'ArrowRight') { selectIndex(activeIndex + 1, true); e.preventDefault(); return; }
+    });
+
+    selectIndex(0, false);
+  }
+
+  document.querySelectorAll('[data-screenshot-viewer]').forEach(initViewer);
+})();
 """
 
 INDEX_TEMPLATE = """<!DOCTYPE html>
@@ -72,12 +203,41 @@ PAGE_TEMPLATE = """<!DOCTYPE html>
 <div class="{{ 'banner-pass' if page_pass else 'banner-fail' }}">
   {{ verdict }}
 </div>
-{% if annotated_rel %}
-<h2>Annotated screenshot</h2>
-<div class="thumbs">
-  {% if baseline_rel %}<figure><figcaption>Baseline</figcaption><img src="../{{ baseline_rel }}" alt="baseline"></figure>{% endif %}
-  {% if candidate_rel %}<figure><figcaption>Candidate</figcaption><img src="../{{ candidate_rel }}" alt="candidate"></figure>{% endif %}
-  <figure><figcaption>Annotated</figcaption><img src="../{{ annotated_rel }}" alt="annotated"></figure>
+{% if screenshot_frames %}
+<h2>Screenshots</h2>
+<div class="screenshot-viewer" data-screenshot-viewer tabindex="0">
+  <div class="screenshot-toolbar">
+    <button type="button" class="screenshot-expand">Fullscreen</button>
+  </div>
+  <div class="thumbs">
+    {% for frame in screenshot_frames %}
+    <figure>
+      <figcaption>{{ frame.label }}</figcaption>
+      <img class="screenshot-thumb" src="../{{ frame.src }}" alt="{{ frame.label }}"
+        data-src="../{{ frame.src }}" data-label="{{ frame.label }}">
+    </figure>
+    {% endfor %}
+  </div>
+  <p class="screenshot-hint">
+    Click a thumbnail to open fullscreen at that view · <strong>Fullscreen</strong> uses the selected thumb ·
+    in fullscreen use <kbd>1</kbd>–<kbd>{{ screenshot_frames | length }}</kbd> or <kbd>←</kbd><kbd>→</kbd> · <kbd>Esc</kbd> close
+  </p>
+  <div class="screenshot-lightbox" hidden>
+    <div class="screenshot-lightbox-bar">
+      <span class="screenshot-lightbox-title">{{ screenshot_frames[0].label }}</span>
+      {% for frame in screenshot_frames %}
+      <button type="button" class="screenshot-lb-tab{% if loop.first %} active{% endif %}"
+        data-src="../{{ frame.src }}" data-label="{{ frame.label }}">{{ frame.label }}</button>
+      {% endfor %}
+      <button type="button" class="screenshot-lightbox-close">Close (Esc)</button>
+    </div>
+    <div class="screenshot-lightbox-body">
+      <button type="button" class="screenshot-lightbox-nav prev" aria-label="Previous">‹</button>
+      <img class="screenshot-lightbox-img" src="../{{ screenshot_frames[0].src }}"
+        alt="{{ screenshot_frames[0].label }}">
+      <button type="button" class="screenshot-lightbox-nav next" aria-label="Next">›</button>
+    </div>
+  </div>
 </div>
 {% endif %}
 {% for layer in layers %}
@@ -109,6 +269,7 @@ PAGE_TEMPLATE = """<!DOCTYPE html>
 {% endif %}
 {% endif %}
 {% endfor %}
+<script>{{ report_js | safe }}</script>
 </body></html>"""
 
 LAYER_INDEX_TEMPLATE = """<!DOCTYPE html>
@@ -126,6 +287,52 @@ LAYER_INDEX_TEMPLATE = """<!DOCTYPE html>
 <p>No failures in this layer.</p>
 {% endif %}
 </body></html>"""
+
+
+def _screenshot_frames(
+    *,
+    baseline_rel: str | None,
+    candidate_rel: str | None,
+    annotated_rel: str | None,
+) -> list[dict[str, str]]:
+    frames: list[dict[str, str]] = []
+    if baseline_rel:
+        frames.append({"label": "Baseline", "src": baseline_rel})
+    if candidate_rel:
+        frames.append({"label": "Candidate", "src": candidate_rel})
+    if annotated_rel:
+        frames.append({"label": "Annotated", "src": annotated_rel})
+    return frames
+
+
+def _thresholds_from_summary(raw: dict[str, Any]) -> Thresholds:
+    return Thresholds(
+        assets_min=float(raw.get("assetsMinScore", 1.0)),
+        dom_min=float(raw.get("domMinScore", 1.0)),
+        visual_min=float(raw.get("visualMinScore", 1.0)),
+    )
+
+
+def refresh_report_bundle(run_dir: Path) -> Path | None:
+    """Regenerate HTML from an existing summary.json (e.g. evidence reports)."""
+    summary_path = run_dir / "summary.json"
+    if not summary_path.is_file():
+        return None
+    with summary_path.open(encoding="utf-8") as handle:
+        summary = json.load(handle)
+    page_results = summary.get("pagesDetailed") or []
+    if not page_results:
+        return None
+    thresholds = _thresholds_from_summary(summary.get("thresholds", {}))
+    return write_report_bundle(
+        run_dir=run_dir,
+        run_id=str(summary.get("runId", run_dir.name)),
+        phase=str(summary.get("phase", "all")),
+        page_results=page_results,
+        thresholds=thresholds,
+        run_pass=bool(summary.get("pass", summary.get("exitCode", 1) == 0)),
+        profile=summary.get("profile"),
+    )
 
 
 def _env() -> Environment:
@@ -189,7 +396,7 @@ def _verdict_strip(page_id: str, layers: list[dict], thresholds: Thresholds, pas
         layer = scores[name]
         threshold = _layer_threshold(name, thresholds)
         if layer["score"] < threshold:
-            parts.append(f"FAIL — {name} score {layer['score']:.3f} &lt; threshold {threshold:.3f}")
+            parts.append(f"FAIL — {name} score {layer['score']:.3f} < threshold {threshold:.3f}")
         else:
             parts.append(f"PASS — {name}")
     return " · ".join(parts) if parts else "FAIL"
@@ -303,15 +510,23 @@ def write_report_bundle(
             if "assets" in scores and scores["assets"] < thresholds.assets_min:
                 asset_failures_index.append({"page_id": page_id, "score": scores["assets"]})
 
+        annotated_rel = f"data/{page_id}-annotated.png" if annotated.exists() else None
+        baseline_rel = f"data/{page_id}-baseline.png" if baseline.exists() else None
+        candidate_rel = f"data/{page_id}-candidate.png" if candidate.exists() else None
+        screenshot_frames = _screenshot_frames(
+            baseline_rel=baseline_rel,
+            candidate_rel=candidate_rel,
+            annotated_rel=annotated_rel,
+        )
+
         page_html = _render(
             PAGE_TEMPLATE,
             css=REPORT_CSS,
+            report_js=REPORT_JS,
             page_id=page_id,
             page_pass=passed,
             verdict=_verdict_strip(page_id, layers, thresholds, passed),
-            annotated_rel=f"data/{page_id}-annotated.png" if annotated.exists() else None,
-            baseline_rel=f"data/{page_id}-baseline.png" if baseline.exists() else None,
-            candidate_rel=f"data/{page_id}-candidate.png" if candidate.exists() else None,
+            screenshot_frames=screenshot_frames,
             layers=layer_views,
             dom_failures=dom_failure_rows,
             asset_diffs=asset_diffs,

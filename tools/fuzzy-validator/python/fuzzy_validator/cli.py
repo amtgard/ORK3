@@ -19,6 +19,14 @@ from lib.tool_paths import (
     profiles_config_path,
     resolve_tool_root,
 )
+from lib.setpoint import (
+    SetpointError,
+    create_bundle,
+    missing_baselines_hint,
+    publish_bundle,
+    resolve_bundle_path,
+    restore_bundle,
+)
 from lib.profiles import (
     ProfileError,
     assert_profile_baselines_exist,
@@ -97,6 +105,73 @@ def _build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--pages", metavar="IDS", help="Comma-separated registry page ids")
     validate.add_argument("--all", action="store_true", help="All non-skipped registry pages")
     validate.add_argument("--phase", default="all", choices=["visual", "assets", "dom", "all"])
+
+    setpoint = subparsers.add_parser(
+        "setpoint",
+        help="Capture, publish, and restore baseline setpoint bundles",
+    )
+    setpoint_sub = setpoint.add_subparsers(dest="setpoint_command", metavar="ACTION")
+
+    sp_capture = setpoint_sub.add_parser(
+        "capture",
+        help="record --all --phase all + zip baselines to setpoints/out/",
+    )
+    sp_capture.add_argument("--profile", metavar="NAME", help="Single profile: test or mirror")
+    sp_capture.add_argument(
+        "--profiles",
+        metavar="LIST",
+        default="test,mirror",
+        help="Comma-separated profiles (default: test,mirror)",
+    )
+    sp_capture.add_argument("--ensure-sandbox", action="store_true")
+    sp_capture.add_argument("--base-url", metavar="URL")
+    sp_capture.add_argument("--dry-run", action="store_true")
+    sp_capture.add_argument(
+        "--out-dir",
+        metavar="PATH",
+        help="Bundle output directory (default: setpoints/out)",
+    )
+
+    sp_publish = setpoint_sub.add_parser(
+        "publish",
+        help="Update setpoint.json with bundle filename + metadata",
+    )
+    sp_publish.add_argument(
+        "--bundle",
+        metavar="PATH",
+        help="Path to zip (default: newest file in setpoints/out/)",
+    )
+    sp_publish.add_argument(
+        "--drive-folder",
+        metavar="NAME",
+        default="ORK3 Fuzzy Setpoints",
+        help="Human hint for Google Drive folder name",
+    )
+
+    sp_restore = setpoint_sub.add_parser(
+        "restore",
+        help="Extract baselines from a setpoint zip bundle",
+    )
+    sp_restore.add_argument(
+        "--bundle",
+        metavar="PATH",
+        help="Local zip path (default: bootstrap or cached latest from setpoint.json)",
+    )
+    sp_restore.add_argument(
+        "--base-url",
+        metavar="URL",
+        help="Public folder base URL; downloads latestBundle filename",
+    )
+    sp_restore.add_argument(
+        "--no-verify",
+        action="store_true",
+        help="Skip content sha256 check against setpoint.json",
+    )
+    sp_restore.add_argument(
+        "--tool-root",
+        metavar="PATH",
+        help="Alternate tool root (default: tools/fuzzy-validator)",
+    )
 
     return parser
 
@@ -399,6 +474,7 @@ def _run_validate(args: argparse.Namespace) -> int:
             assert_profile_baselines_exist(tool_root, profile_name, page_ids)
         except ProfileError as exc:
             print(f"fuzzy-validator: {exc}", file=sys.stderr)
+            print(f"fuzzy-validator: {missing_baselines_hint(tool_root)}", file=sys.stderr)
             return 2
 
         print(f"fuzzy-validator validate: profile={profile_name} tool-root={tool_root}")
@@ -467,6 +543,125 @@ def _run_validate(args: argparse.Namespace) -> int:
     return overall_exit
 
 
+def _newest_bundle_in_dir(directory: Path) -> Path | None:
+    if not directory.is_dir():
+        return None
+    bundles = sorted(directory.glob("*.zip"), key=lambda path: path.stat().st_mtime, reverse=True)
+    return bundles[0] if bundles else None
+
+
+def _run_setpoint_capture(args: argparse.Namespace) -> int:
+    if args.dry_run:
+        print("setpoint capture: would run record --all --phase all --profiles", args.profiles)
+        print(f"setpoint capture: would write zip under {args.out_dir or 'setpoints/out'}")
+        return 0
+
+    record_args = argparse.Namespace(
+        urls=None,
+        page=None,
+        pages=None,
+        all=True,
+        phase="all",
+        repeat=None,
+        base_url=args.base_url,
+        dry_run=False,
+        run_id=None,
+        visual_min_score=None,
+        dom_min_score=None,
+        assets_min_score=None,
+        tool_root=None,
+        skip_capture=False,
+        profile=args.profile,
+        profiles=args.profiles,
+        ensure_sandbox=args.ensure_sandbox,
+    )
+    code = _run_capture(record_args)
+    if code != 0:
+        return code
+
+    tool_root = DEFAULT_TOOL_ROOT
+    out_dir = Path(args.out_dir) if args.out_dir else tool_root / "setpoints" / "out"
+    config = load_profiles_config(profiles_config_path(tool_root))
+    profile_names = resolve_profile_names(
+        config=config,
+        profile=args.profile,
+        profiles=args.profiles,
+    )
+    try:
+        bundle_path = create_bundle(
+            tool_root,
+            out_dir=out_dir,
+            repo_root=REPO_ROOT,
+            profiles=profile_names,
+        )
+    except SetpointError as exc:
+        print(f"fuzzy-validator setpoint capture: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"setpoint capture: bundle={bundle_path}")
+    print("setpoint capture: upload zip to Google Drive, then run setpoint publish --bundle …")
+    return 0
+
+
+def _run_setpoint_publish(args: argparse.Namespace) -> int:
+    tool_root = DEFAULT_TOOL_ROOT
+    bundle_path = Path(args.bundle) if args.bundle else None
+    if bundle_path is None:
+        newest = _newest_bundle_in_dir(tool_root / "setpoints" / "out")
+        if newest is None:
+            print(
+                "fuzzy-validator setpoint publish: specify --bundle PATH "
+                "or run setpoint capture first",
+                file=sys.stderr,
+            )
+            return 2
+        bundle_path = newest
+
+    try:
+        data = publish_bundle(tool_root, bundle_path, drive_folder=args.drive_folder)
+    except SetpointError as exc:
+        print(f"fuzzy-validator setpoint publish: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"setpoint publish: latestBundle={data['latestBundle']}")
+    print(f"setpoint publish: wrote {tool_root / 'setpoint.json'}")
+    return 0
+
+
+def _run_setpoint_restore(args: argparse.Namespace) -> int:
+    tool_root = resolve_tool_root(args.tool_root)
+    try:
+        bundle_path = resolve_bundle_path(
+            tool_root,
+            bundle=args.bundle,
+            base_url=args.base_url,
+            use_latest=not args.bundle and not args.base_url,
+        )
+        extracted = restore_bundle(
+            tool_root,
+            bundle_path,
+            verify_pointer=not args.no_verify,
+        )
+    except SetpointError as exc:
+        print(f"fuzzy-validator setpoint restore: {exc}", file=sys.stderr)
+        print(f"fuzzy-validator: {missing_baselines_hint(tool_root)}", file=sys.stderr)
+        return 2
+
+    print(f"setpoint restore: bundle={bundle_path.name} files={len(extracted)}")
+    return 0
+
+
+def _run_setpoint(args: argparse.Namespace) -> int:
+    if args.setpoint_command == "capture":
+        return _run_setpoint_capture(args)
+    if args.setpoint_command == "publish":
+        return _run_setpoint_publish(args)
+    if args.setpoint_command == "restore":
+        return _run_setpoint_restore(args)
+    print("fuzzy-validator setpoint: specify capture, publish, or restore", file=sys.stderr)
+    return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -480,6 +675,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "validate":
         return _run_validate(args)
+
+    if args.command == "setpoint":
+        return _run_setpoint(args)
 
     parser.print_help()
     return 2

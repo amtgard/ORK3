@@ -176,4 +176,6 @@ Open inzone/index.html (PASS — assets + dom + visual all green).
 outzone/index.html (FAIL — structural DOM change outside fuzz nodes).
 EOF
 
+python3 "$SCRIPTS/write_reports_index.py"
+
 echo "evidence-suite: PASS (pixel + dom + assets + unified discover/pass/fail)"

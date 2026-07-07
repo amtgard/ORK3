@@ -51,6 +51,10 @@ tools/ork-db/rendered/
 tools/ork-db/.last-apply.json
 tools/fuzzy-validator/calibrations/
 tools/fuzzy-validator/reports/
+tools/fuzzy-validator/setpoints/out/
+tools/fuzzy-validator/setpoints/cache/
+tools/fuzzy-validator/baselines/**
+!tools/fuzzy-validator/baselines/.gitkeep
 __pycache__/
 *.pyc
 .coverage

@@ -10,10 +10,12 @@ usage() {
 Usage:
   fuzzy-validator record  [URL ...] [--urls FILE] [options]
   fuzzy-validator validate [URL ...] [--urls FILE] [options]
+  fuzzy-validator setpoint capture|publish|restore [options]
 
 Commands:
   record    Capture stabilized renders (×N), learn fuzz zones, write baselines
   validate  Capture once, compare to baselines, pass/fail + HTML report
+  setpoint  Bundle baselines for external storage (capture / publish / restore)
 
 Global options:
   -h, --help    Show help
@@ -31,7 +33,7 @@ cmd="${1:-}"
 shift || true
 
 case "$cmd" in
-  record|validate)
+  record|validate|setpoint)
     export PYTHONPATH="${PYTHONPATH:-}:$PYTHON_DIR"
     exec python3 -m fuzzy_validator.cli "$cmd" "$@"
     ;;

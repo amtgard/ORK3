@@ -93,7 +93,38 @@ bin/fuzzy-validator validate --all
 6. **Pass/fail:** exit `0` or `1`; stdout `FUZZ_GATE …` line
 7. **Report:** `tools/fuzzy-validator/reports/run-{id}/index.html`
 
-**Exit code:** `0` pass, `1` fail, `2` harness error (missing baseline, bad manifest).
+**Exit code:** `0` pass, `1` fail, `2` harness error (missing baseline, bad manifest). When baselines are missing, stderr includes a `setpoint restore` hint.
+
+---
+
+### `setpoint` — baseline bundle capture, publish, restore
+
+Heavy baseline bytes (PNG, DOM, asset stores) are stored in **zip bundles** off git. Git commits `setpoint.json` (filename pointer) and `manifests/` only.
+
+```bash
+# Maintainer on main after docker + sandbox
+bin/fuzzy-validator setpoint capture
+# → record --all --phase all --profiles test,mirror
+# → writes setpoints/out/{date}-{git-sha}-{content-sha}.zip
+
+# Upload zip to Google Drive folder "ORK3 Fuzzy Setpoints" (filename unchanged)
+
+bin/fuzzy-validator setpoint publish --bundle tools/fuzzy-validator/setpoints/out/….zip
+# → updates setpoint.json; commit pointer + manifests/
+
+# Developer before validate
+bin/fuzzy-validator setpoint restore
+bin/fuzzy-validator setpoint restore --bundle path/to/downloaded.zip
+bin/fuzzy-validator setpoint restore --base-url https://drive.example/public/folder
+```
+
+| Subcommand | Purpose | Exit code |
+|------------|---------|-----------|
+| `capture` | Full `record` + zip to `setpoints/out/` | 0 success; 1 record fail; 2 bundle error |
+| `publish` | Write `setpoint.json` from `--bundle` or newest `out/` zip | 0; 2 missing bundle |
+| `restore` | Verify sha256 (optional), extract to `baselines/` | 0; 2 missing/invalid bundle |
+
+Bootstrap zips under `setpoints/bootstrap/` match `latestBundle` for local restore and CI without Drive.
 
 ---
 
@@ -191,6 +222,9 @@ bin/fuzzy-validator validate --urls "$URLS_FILE" --phase all --profile test
 |--------------|-----------------------------------|
 | `record` | `capture.spec.ts` + `discover_fuzz.py` + `discover_dom_fuzz.py` |
 | `validate` | `capture.spec.ts` + `gate_assets.py` + `gate_dom.py` + `gate.py` + `gate_run.py` |
+| `setpoint capture` | `record` + `lib/setpoint.py` `create_bundle` |
+| `setpoint publish` | `lib/setpoint.py` `publish_bundle` → `setpoint.json` |
+| `setpoint restore` | `lib/setpoint.py` `restore_bundle` → `baselines/` |
 
 Legacy npm aliases (optional, FU-0+):
 
@@ -212,6 +246,8 @@ Legacy npm aliases (optional, FU-0+):
 
 ## Related docs
 
+- [USER-GUIDE.md](./USER-GUIDE.md) — operator workflows
+- [DEVELOPER-GUIDE.md](./DEVELOPER-GUIDE.md) — tests and extending the tool
 - [04-operating-guide.md](./04-operating-guide.md) — review workflow
 - [06-gate-output-and-report.md](./06-gate-output-and-report.md) — pass/fail + HTML report
 - [11-dual-database-profiles.md](./11-dual-database-profiles.md) — test vs mirror tiers

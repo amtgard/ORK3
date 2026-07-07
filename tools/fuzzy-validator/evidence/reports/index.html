@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Fuzzy Validator — Evidence Reports</title>
+  <style>
+body { font-family: system-ui, sans-serif; margin: 1.5rem; color: #222; max-width: 960px; }
+h1, h2 { margin-top: 1.5rem; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid #ccc; padding: 0.5rem 0.75rem; text-align: left; vertical-align: top; }
+th { background: #f5f5f5; }
+a { color: #0366d6; }
+.badge-pass { color: #155724; font-weight: bold; }
+.badge-fail { color: #721c24; font-weight: bold; }
+.lead { color: #444; font-size: 1.05rem; }
+nav.meta { font-size: 0.9rem; margin-bottom: 1.5rem; }
+section { margin: 2rem 0; border-left: 4px solid #0366d6; padding-left: 1rem; }
+ul.compact { margin: 0.25rem 0; padding-left: 1.25rem; }
+</style>
+</head>
+<body>
+  <h1>Fuzzy Validator — Evidence Reports</h1>
+  <p class="lead">Integration proof for fuzzy pass/fail behavior (FU-13…FU-15).
+  Open this page once, then drill into each layer. Green boxes = allowed fuzz; red = regression.</p>
+  <nav class="meta">
+    <a href="../README.md">Evidence README</a> ·
+    <a href="../mutations.md">Mutation recipes</a> ·
+    Re-run: <code>evidence/scripts/run-evidence-suite.sh</code>
+  </nav>
+
+  <h2>All layers</h2>
+  <table>
+    <tr>
+      <th>Layer</th>
+      <th>Scenarios</th>
+      <th>Dashboard</th>
+      <th>Artifacts</th>
+    </tr>
+    <tr>
+  <td><strong>Pixel (fuzzy)</strong><br><code>player-profile</code></td>
+  <td>Heraldry swap inside learned bbox passes; layout bar outside fails.<ul class="compact"><li><a href="pixel-proof/inzone/index.html">PASS — in-zone</a> <span class="badge-pass">PASS</span></li><li><a href="pixel-proof/outzone/index.html">FAIL — out-of-zone</a> <span class="badge-fail">FAIL</span></li></ul></td>
+  <td><a href="pixel-proof/index.html">Layer dashboard</a></td>
+  <td><ul class="compact"><li><a href="pixel-proof/player-profile-calibration-overlay.png">Calibration overlay</a></li></ul></td>
+</tr>
+<tr>
+  <td><strong>DOM (fuzzy)</strong><br><code>home-authenticated</code></td>
+  <td>Session token drift inside fuzz passes; heading change outside fails.<ul class="compact"><li><a href="dom-proof/inzone/index.html">PASS — in-zone</a> <span class="badge-pass">PASS</span></li><li><a href="dom-proof/outzone/index.html">FAIL — out-of-zone</a> <span class="badge-fail">FAIL</span></li></ul></td>
+  <td><a href="dom-proof/index.html">Layer dashboard</a></td>
+  <td><ul class="compact"><li><a href="dom-proof/home-authenticated-dom-fuzz.txt">DOM fuzz debug</a></li></ul></td>
+</tr>
+<tr>
+  <td><strong>Assets (hard gate)</strong><br><code>home-authenticated</code></td>
+  <td>Zero tolerance: same bytes pass; +1 byte CSS or JS fails.<ul class="compact"><li><a href="assets-proof/pass/index.html">PASS — same commit</a> <span class="badge-pass">PASS</span></li><li><a href="assets-proof/css-fail/index.html">FAIL — 1-byte CSS</a> <span class="badge-fail">FAIL</span></li><li><a href="assets-proof/js-fail/index.html">FAIL — 1-byte JS</a> <span class="badge-fail">FAIL</span></li></ul></td>
+  <td><a href="assets-proof/index.html">Layer dashboard</a></td>
+  <td>—</td>
+</tr>
+<tr>
+  <td><strong>Unified (all phases)</strong><br><code>home-authenticated</code></td>
+  <td>Composite pass when only fuzzed DOM drifts; fail on structural change.<ul class="compact"><li><a href="unified-proof/inzone/index.html">PASS — in-zone</a> <span class="badge-pass">PASS</span></li><li><a href="unified-proof/outzone/index.html">FAIL — out-of-zone</a> <span class="badge-fail">FAIL</span></li></ul></td>
+  <td><a href="unified-proof/index.html">Layer dashboard</a></td>
+  <td>—</td>
+</tr>
+  </table>
+
+  <section>
+    <h2>How to read screenshots</h2>
+    <ul>
+      <li><strong>Green boxes</strong> — fuzz allowance (diff ignored)</li>
+      <li><strong>Red boxes</strong> — regression that caused failure</li>
+      <li>Each scenario report has <strong>Visual</strong>, <strong>DOM</strong>, and <strong>Assets</strong> tabs where applicable</li>
+    </ul>
+  </section>
+</body>
+</html>

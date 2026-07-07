@@ -1,6 +1,6 @@
 # Fuzzy Validator — Architecture
 
-**Status:** Plan (not implemented)  
+**Status:** Implemented — see [12-design-and-implementation.md](./12-design-and-implementation.md) for as-built design; this doc retains algorithm and stabilization detail.  
 **Stack:** Playwright (TypeScript) + Python (Pillow, NumPy, OpenCV)  
 **License / cost:** OSS only, no SaaS
 

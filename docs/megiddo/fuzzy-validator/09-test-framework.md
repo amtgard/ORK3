@@ -2,6 +2,8 @@
 
 Tests validate the **tool itself** (not ORK3 pages under test). Target: **≥ 90% line coverage** on `tools/fuzzy-validator/python/` at each milestone sign-off from FU-2 onward.
 
+**Primary developer reference:** [DEVELOPER-GUIDE.md](./DEVELOPER-GUIDE.md) (setup, unit tests, integration tiers, CI, extending the tool).
+
 ---
 
 ## Layout

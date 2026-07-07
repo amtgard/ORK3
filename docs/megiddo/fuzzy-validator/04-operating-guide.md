@@ -2,6 +2,8 @@
 
 Day-to-day commands for maintainers and Megiddo R-* agents. Assumes **FU-10** for full gate + report; FU-3 for pixel-only.
 
+> **New:** [USER-GUIDE.md](./USER-GUIDE.md) consolidates operator workflows. This guide retains detailed procedures and troubleshooting.
+
 ---
 
 ## Gate outputs (every run)
@@ -167,22 +169,74 @@ tools/fuzzy-validator/bin/gate.sh --pages home-anonymous,player-profile --phase 
 
 ---
 
-## 5. Update baselines after intentional change
+## 5. Setpoint promotion (baseline bundles)
+
+Heavy baseline bytes (PNG, DOM JSON, raw CSS/JS) live in **versioned zip bundles** on Google Drive. Git tracks only `setpoint.json` (filename pointer) and `manifests/` (fuzz allowances).
+
+### Google Drive folder (one-time setup)
+
+1. Create a shared folder named **ORK3 Fuzzy Setpoints**.
+2. Set link sharing to **Anyone with the link can view** (maintainers retain edit access).
+3. Upload setpoint zips with **exact filenames** from `setpoint capture` (do not rename).
+
+Local bootstrap zips under `setpoints/bootstrap/` let developers and CI restore without Drive until auto-fetch lands.
+
+### After intentional UI change (maintainer on `main`)
+
+```bash
+docker compose -f docker-compose.php8.yml up -d
+bin/ork-db deploy-sandbox
+
+# 1. Capture all pages + zip
+bin/fuzzy-validator setpoint capture
+
+# 2. Upload setpoints/out/{date}-{sha}-{hash}.zip to Google Drive (filename unchanged)
+
+# 3. Publish pointer + commit manifests only
+bin/fuzzy-validator setpoint publish --bundle tools/fuzzy-validator/setpoints/out/….zip
+git add tools/fuzzy-validator/setpoint.json tools/fuzzy-validator/manifests/
+git commit -m "Promote fuzzy setpoint …"
+```
+
+### Developer restore (before validate)
+
+```bash
+bin/fuzzy-validator setpoint restore
+# or explicit path after Drive download:
+bin/fuzzy-validator setpoint restore --bundle ~/Downloads/20260708T….zip
+
+bin/fuzzy-validator validate --pages player-profile --phase all
+```
+
+If baselines are missing, `validate` prints a hint pointing at `setpoint restore`.
+
+### Scope-only captures
+
+| Trigger | Command |
+|---------|---------|
+| Full UI merge on `main` | `setpoint capture` (all profiles, all phases) |
+| Sandbox schema only | `record --profile test --all --phase all` then manual zip if needed |
+| Mirror DB refresh | `record --profile mirror --all --phase all` |
+| Fuzz manifest tweak only | Edit `manifests/` in git; no new zip |
+
+---
+
+## 6. Legacy: update baselines in git (pre-FU-16)
+
+**Deprecated.** Before FU-16, baselines were committed directly:
 
 ```bash
 git checkout integration-branch
-
 bin/fuzzy-validator record --pages affected-page-id --phase all
-
 git add tools/fuzzy-validator/baselines/
 git add tools/fuzzy-validator/manifests/
 ```
 
-Merge integration branch into refactor branch; `validate` should pass.
+Use **§5 Setpoint promotion** instead.
 
 ---
 
-## 6. Troubleshooting
+## 7. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
@@ -194,10 +248,11 @@ Merge integration branch into refactor branch; `validate` should pass.
 | Dimension mismatch error | Content height changed | Expected; update baseline |
 | Auth pages skipped | Missing env creds | Export `ORK3_E2E_*` |
 | macOS vs Linux diff | Font rendering | CI baselines only; local gate optional |
+| Missing baselines / validate exit 2 | No setpoint restore | `bin/fuzzy-validator setpoint restore` |
 
 ---
 
-## 7. Stabilization reference
+## 8. Stabilization reference
 
 Injected before every capture (see [01-architecture.md](./01-architecture.md)):
 
@@ -211,7 +266,7 @@ If a page remains noisy after calibration, prefer **test env stubs** (weather AP
 
 ---
 
-## 8. Command reference
+## 9. Command reference
 
 Primary interface: **`bin/fuzzy-validator`** from repo root. Full flags: [10-cli-reference.md](./10-cli-reference.md).
 
@@ -223,6 +278,9 @@ Primary interface: **`bin/fuzzy-validator`** from repo root. Full flags: [10-cli
 | `bin/fuzzy-validator validate --page ID` | Pass/fail + HTML report |
 | `bin/fuzzy-validator validate --urls FILE` | Same, URL list file |
 | `bin/fuzzy-validator validate --phase all` | Assets + DOM + pixels |
+| `bin/fuzzy-validator setpoint capture` | Full record + zip bundle |
+| `bin/fuzzy-validator setpoint publish --bundle PATH` | Update `setpoint.json` pointer |
+| `bin/fuzzy-validator setpoint restore` | Extract baselines from bootstrap/Drive zip |
 
 ---
 
@@ -252,7 +310,7 @@ Every `gate-pilot` run uploads `tools/fuzzy-validator/reports/` and candidate PN
 
 ---
 
-## 9. Megiddo milestone mapping (suggested)
+## 11. Megiddo milestone mapping (suggested)
 
 When an R-* milestone lists frontend routes in its DS design note, add corresponding page ids to the gate command for that sprint.
 

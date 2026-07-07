@@ -24,7 +24,10 @@ This tool is separate from Megiddo DS/T/R milestones but consumes the same docke
 | Gate output | `docs/megiddo/fuzzy-validator/06-gate-output-and-report.md` | Pass/fail scores + HTML report |
 | Milestone checklist | `docs/megiddo/fuzzy-validator/08-milestone-checklist.md` | Done state — update when finished |
 | Test framework | `docs/megiddo/fuzzy-validator/09-test-framework.md` | pytest, 90% coverage |
-| CLI reference | `docs/megiddo/fuzzy-validator/10-cli-reference.md` | **`bin/fuzzy-validator record|validate`** |
+| **User guide** | `docs/megiddo/fuzzy-validator/USER-GUIDE.md` | **Workflows, setpoints, reading reports** |
+| **Developer guide** | `docs/megiddo/fuzzy-validator/DEVELOPER-GUIDE.md` | **Tests, CI, extending the tool** |
+| **Design & implementation** | `docs/megiddo/fuzzy-validator/12-design-and-implementation.md` | **Design decisions, module map** |
+| CLI reference | `docs/megiddo/fuzzy-validator/10-cli-reference.md` | **`bin/fuzzy-validator record|validate|setpoint`** |
 | Dual DB profiles | `docs/megiddo/fuzzy-validator/11-dual-database-profiles.md` | **`test` strict + `mirror` lenient**; uses `bin/ork-db` |
 
 ## Steering (non-negotiable)
@@ -39,7 +42,7 @@ This tool is separate from Megiddo DS/T/R milestones but consumes the same docke
 
 ## Milestone to execute
 
-FU-2 and FU-3
+FU-16
 
 Default if not specified: **Execute the next unchecked FU milestone** in `docs/megiddo/fuzzy-validator/08-milestone-checklist.md` in order: FU-0 → FU-1 → … → FU-11. Skip completed milestones unless asked to revisit.
 

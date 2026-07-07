@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lib.report_html import write_report_bundle, write_summary_json
+from lib.report_html import refresh_report_bundle, write_report_bundle, write_summary_json
 from lib.scoring import Thresholds
 
 
@@ -82,3 +82,48 @@ def test_write_summary_json(tmp_path: Path):
     path = write_summary_json(tmp_path, {"runId": "demo", "pass": True})
     assert path.exists()
     assert '"runId": "demo"' in path.read_text(encoding="utf-8")
+
+
+def test_page_report_includes_screenshot_viewer(tmp_path: Path):
+    run_dir = tmp_path / "run-visual"
+    data_dir = run_dir / "data"
+    data_dir.mkdir(parents=True)
+    # Minimal 1x1 PNG
+    png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+        b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc``\x00\x00"
+        b"\x00\x02\x00\x01\xe2!\xbc3\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    for suffix in ("baseline", "candidate", "annotated"):
+        (data_dir / f"fixture-page-{suffix}.png").write_bytes(png)
+
+    write_report_bundle(
+        run_dir=run_dir,
+        run_id="visual",
+        phase="visual",
+        page_results=[_sample_page(passed=True)],
+        thresholds=Thresholds(),
+        run_pass=True,
+    )
+    page_html = (run_dir / "pages" / "fixture-page.html").read_text(encoding="utf-8")
+    assert "data-screenshot-viewer" in page_html
+    assert "screenshot-lightbox" in page_html
+    assert "screenshot-thumb" in page_html
+    assert "Fullscreen" in page_html
+    assert "fixture-page-annotated.png" in page_html
+
+
+def test_refresh_report_bundle_from_summary(tmp_path: Path):
+    run_dir = tmp_path / "bundle"
+    run_dir.mkdir()
+    summary = {
+        "runId": "demo",
+        "phase": "visual",
+        "pass": True,
+        "exitCode": 0,
+        "thresholds": {"assetsMinScore": 1.0, "domMinScore": 1.0, "visualMinScore": 1.0},
+        "pagesDetailed": [_sample_page(passed=True)],
+    }
+    write_summary_json(run_dir, summary)
+    assert refresh_report_bundle(run_dir) is not None
+    assert (run_dir / "pages" / "fixture-page.html").exists()

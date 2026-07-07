@@ -14,10 +14,65 @@ th { background: #f5f5f5; }
 .badge-warn { color: #856404; font-weight: bold; }
 a { color: #0366d6; }
 pre { background: #f6f8fa; padding: 0.75rem; overflow-x: auto; }
-.thumbs { display: flex; gap: 1rem; flex-wrap: wrap; }
-.thumbs img { max-width: 240px; border: 1px solid #ddd; }
 nav { margin-bottom: 1rem; font-size: 0.9rem; }
 .profile-section { border-left: 4px solid #0366d6; padding-left: 1rem; margin: 2rem 0; }
+.thumbs { display: flex; gap: 1rem; flex-wrap: wrap; margin: 0.75rem 0; }
+.thumbs figure { margin: 0; }
+.thumbs figcaption { font-size: 0.85rem; color: #444; margin-bottom: 0.25rem; }
+.thumbs img, .screenshot-thumb {
+  display: block; max-width: 240px; border: 2px solid #ddd; border-radius: 4px;
+  cursor: pointer; background: #fafafa;
+}
+.thumbs img.active, .screenshot-thumb.active { border-color: #0366d6; box-shadow: 0 0 0 1px #0366d6; }
+.screenshot-viewer { margin: 1rem 0 2rem; }
+.screenshot-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
+.screenshot-expand, .screenshot-lb-tab {
+  font: inherit; font-size: 0.9rem; padding: 0.35rem 0.75rem; border: 1px solid #ccc;
+  border-radius: 4px; background: #f6f8fa; cursor: pointer;
+}
+.screenshot-expand { font-weight: 600; }
+.screenshot-expand:hover { background: #eef4fc; }
+.screenshot-hint { font-size: 0.85rem; color: #666; margin: 0.5rem 0 0; }
+.screenshot-hint kbd {
+  display: inline-block; padding: 0.1rem 0.35rem; border: 1px solid #ccc;
+  border-radius: 3px; background: #f6f8fa; font-size: 0.8rem;
+}
+.screenshot-lightbox {
+  position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.92);
+  display: flex; flex-direction: column;
+}
+.screenshot-lightbox[hidden] { display: none !important; }
+.screenshot-lightbox-bar {
+  display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+  padding: 0.75rem 1rem; background: rgba(0, 0, 0, 0.55); color: #fff;
+}
+.screenshot-lightbox-bar .screenshot-lb-tab {
+  background: rgba(255,255,255,0.12); color: #fff; border-color: rgba(255,255,255,0.25);
+}
+.screenshot-lightbox-bar .screenshot-lb-tab.active { background: #0366d6; border-color: #0366d6; }
+.screenshot-lightbox-bar .screenshot-lb-tab:hover { background: rgba(255,255,255,0.22); }
+.screenshot-lightbox-title { flex: 1; font-weight: 600; min-width: 8rem; }
+.screenshot-lightbox-close {
+  font: inherit; padding: 0.35rem 0.85rem; border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 4px; background: transparent; color: #fff; cursor: pointer;
+}
+.screenshot-lightbox-close:hover { background: rgba(255,255,255,0.15); }
+.screenshot-lightbox-body {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  overflow: auto; padding: 1rem; min-height: 0; position: relative;
+}
+.screenshot-lightbox-img {
+  max-width: 100%; max-height: calc(100vh - 7rem); width: auto; height: auto;
+  object-fit: contain; box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+.screenshot-lightbox-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  font-size: 2rem; line-height: 1; padding: 0.5rem 0.85rem; border: none;
+  background: rgba(255,255,255,0.12); color: #fff; cursor: pointer; border-radius: 4px;
+}
+.screenshot-lightbox-nav:hover { background: rgba(255,255,255,0.25); }
+.screenshot-lightbox-nav.prev { left: 0.75rem; }
+.screenshot-lightbox-nav.next { right: 0.75rem; }
 </style></head><body>
 <nav><a href="../index.html">Summary</a></nav>
 <h1>player-profile</h1>
@@ -25,11 +80,58 @@ nav { margin-bottom: 1rem; font-size: 0.9rem; }
   PASS — all layers meet thresholds for player-profile
 </div>
 
-<h2>Annotated screenshot</h2>
-<div class="thumbs">
-  <figure><figcaption>Baseline</figcaption><img src="../data/player-profile-baseline.png" alt="baseline"></figure>
-  <figure><figcaption>Candidate</figcaption><img src="../data/player-profile-candidate.png" alt="candidate"></figure>
-  <figure><figcaption>Annotated</figcaption><img src="../data/player-profile-annotated.png" alt="annotated"></figure>
+<h2>Screenshots</h2>
+<div class="screenshot-viewer" data-screenshot-viewer tabindex="0">
+  <div class="screenshot-toolbar">
+    <button type="button" class="screenshot-expand">Fullscreen</button>
+  </div>
+  <div class="thumbs">
+    
+    <figure>
+      <figcaption>Baseline</figcaption>
+      <img class="screenshot-thumb" src="../data/player-profile-baseline.png" alt="Baseline"
+        data-src="../data/player-profile-baseline.png" data-label="Baseline">
+    </figure>
+    
+    <figure>
+      <figcaption>Candidate</figcaption>
+      <img class="screenshot-thumb" src="../data/player-profile-candidate.png" alt="Candidate"
+        data-src="../data/player-profile-candidate.png" data-label="Candidate">
+    </figure>
+    
+    <figure>
+      <figcaption>Annotated</figcaption>
+      <img class="screenshot-thumb" src="../data/player-profile-annotated.png" alt="Annotated"
+        data-src="../data/player-profile-annotated.png" data-label="Annotated">
+    </figure>
+    
+  </div>
+  <p class="screenshot-hint">
+    Click a thumbnail to open fullscreen at that view · <strong>Fullscreen</strong> uses the selected thumb ·
+    in fullscreen use <kbd>1</kbd>–<kbd>3</kbd> or <kbd>←</kbd><kbd>→</kbd> · <kbd>Esc</kbd> close
+  </p>
+  <div class="screenshot-lightbox" hidden>
+    <div class="screenshot-lightbox-bar">
+      <span class="screenshot-lightbox-title">Baseline</span>
+      
+      <button type="button" class="screenshot-lb-tab active"
+        data-src="../data/player-profile-baseline.png" data-label="Baseline">Baseline</button>
+      
+      <button type="button" class="screenshot-lb-tab"
+        data-src="../data/player-profile-candidate.png" data-label="Candidate">Candidate</button>
+      
+      <button type="button" class="screenshot-lb-tab"
+        data-src="../data/player-profile-annotated.png" data-label="Annotated">Annotated</button>
+      
+      <button type="button" class="screenshot-lightbox-close">Close (Esc)</button>
+    </div>
+    <div class="screenshot-lightbox-body">
+      <button type="button" class="screenshot-lightbox-nav prev" aria-label="Previous">‹</button>
+      <img class="screenshot-lightbox-img" src="../data/player-profile-baseline.png"
+        alt="Baseline">
+      <button type="button" class="screenshot-lightbox-nav next" aria-label="Next">›</button>
+    </div>
+  </div>
 </div>
 
 
@@ -44,4 +146,79 @@ nav { margin-bottom: 1rem; font-size: 0.9rem; }
 </table>
 
 
+<script>
+(function () {
+  function initViewer(root) {
+    var thumbs = Array.prototype.slice.call(root.querySelectorAll('.screenshot-thumb'));
+    var expandBtn = root.querySelector('.screenshot-expand');
+    var lightbox = root.querySelector('.screenshot-lightbox');
+    if (!thumbs.length || !lightbox) return;
+
+    var lbImg = lightbox.querySelector('.screenshot-lightbox-img');
+    var lbTitle = lightbox.querySelector('.screenshot-lightbox-title');
+    var lbTabs = Array.prototype.slice.call(lightbox.querySelectorAll('.screenshot-lb-tab'));
+    var activeIndex = 0;
+
+    function frameAt(index) {
+      return thumbs[(index + thumbs.length) % thumbs.length];
+    }
+
+    function selectIndex(index, openLb) {
+      activeIndex = (index + thumbs.length) % thumbs.length;
+      var thumb = frameAt(activeIndex);
+      var src = thumb.getAttribute('data-src');
+      var label = thumb.getAttribute('data-label') || thumb.alt;
+      thumbs.forEach(function (t, i) { t.classList.toggle('active', i === activeIndex); });
+      lbTabs.forEach(function (t, i) { t.classList.toggle('active', i === activeIndex); });
+      lbImg.src = src;
+      lbImg.alt = label;
+      if (lbTitle) lbTitle.textContent = label;
+      if (openLb) openLightbox();
+    }
+
+    function openLightbox() {
+      lightbox.hidden = false;
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox() {
+      lightbox.hidden = true;
+      document.body.style.overflow = '';
+    }
+
+    thumbs.forEach(function (thumb, index) {
+      thumb.addEventListener('click', function () { selectIndex(index, true); });
+    });
+    lbTabs.forEach(function (tab, index) {
+      tab.addEventListener('click', function () { selectIndex(index, true); });
+    });
+    if (expandBtn) expandBtn.addEventListener('click', function () { openLightbox(); });
+    lightbox.querySelector('.screenshot-lightbox-close').addEventListener('click', closeLightbox);
+    lightbox.querySelector('.screenshot-lightbox-body').addEventListener('click', function (e) {
+      if (e.target === e.currentTarget) closeLightbox();
+    });
+    var prev = lightbox.querySelector('.screenshot-lightbox-nav.prev');
+    var next = lightbox.querySelector('.screenshot-lightbox-nav.next');
+    if (prev) prev.addEventListener('click', function (e) { e.stopPropagation(); selectIndex(activeIndex - 1, true); });
+    if (next) next.addEventListener('click', function (e) { e.stopPropagation(); selectIndex(activeIndex + 1, true); });
+
+    document.addEventListener('keydown', function (e) {
+      if (lightbox.hidden) return;
+      if (e.key === 'Escape') { closeLightbox(); e.preventDefault(); return; }
+      var num = parseInt(e.key, 10);
+      if (num >= 1 && num <= thumbs.length) {
+        selectIndex(num - 1, true);
+        e.preventDefault();
+        return;
+      }
+      if (e.key === 'ArrowLeft') { selectIndex(activeIndex - 1, true); e.preventDefault(); return; }
+      if (e.key === 'ArrowRight') { selectIndex(activeIndex + 1, true); e.preventDefault(); return; }
+    });
+
+    selectIndex(0, false);
+  }
+
+  document.querySelectorAll('[data-screenshot-viewer]').forEach(initViewer);
+})();
+</script>
 </body></html>

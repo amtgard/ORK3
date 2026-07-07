@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "setpoints": {
+    "20260707T224643Z-608f5b18-1d9fef8a07db63d0.zip": {
+      "gitSha": "608f5b18",
+      "capturedAt": "2026-07-07T22:00:00Z",
+      "contentSha256": "1d9fef8a07db63d09c799e5b3c60c4394b011546671a7e7bc797b6fc43c5dd5e",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 3
+    }
+  },
+  "latestBundle": "20260707T224643Z-608f5b18-1d9fef8a07db63d0.zip",
+  "driveFolder": "ORK3 Fuzzy Setpoints"
+}

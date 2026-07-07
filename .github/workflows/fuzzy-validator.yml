@@ -85,6 +85,9 @@ jobs:
         continue-on-error: true
         run: bin/ork-db deploy-sandbox --yes
 
+      - name: Restore pilot baselines from setpoint bundle
+        run: bin/fuzzy-validator setpoint restore
+
       - name: Run pixel gate on pilot baselines
         env:
           ORK3_E2E_BASE_URL: http://127.0.0.1:19080/orkui/
