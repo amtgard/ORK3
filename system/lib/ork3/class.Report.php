@@ -4680,11 +4680,17 @@ class Report extends Ork3
         $selfregLinks   = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}selfreg_link`");
         $selfregUsed    = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}selfreg_link` WHERE used_by IS NOT NULL");
         $selfregConv    = ($selfregLinks > 0) ? round(100.0 * $selfregUsed / $selfregLinks, 1) : null;
-        $attnSignin     = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}attendance` WHERE entry_method = 'signin_link'");
-        $attnSelfreg    = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}attendance` WHERE entry_method = 'self_reg'");
+        // Attendance entry-method metrics are scoped to the last 30 days. The
+        // entry_method column is unindexed on a 3.5M-row table, so an all-time
+        // count is a full table scan (x3 here); the `date` index turns each into
+        // a ~1.4k-row range scan. It is also more meaningful: sign-in links and
+        // self-reg launched with 3.5.3, so an all-time entry-method mix is ~100%
+        // legacy 'manual' — a recent window shows how players are checking in now.
+        $attnSignin     = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}attendance` WHERE `date` >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND entry_method = 'signin_link'");
+        $attnSelfreg    = $this->_rfuScalar("SELECT COUNT(*) AS c FROM `{$p}attendance` WHERE `date` >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND entry_method = 'self_reg'");
         $entryBreak     = $this->_rfuBreakdown(
             "SELECT entry_method AS k, COUNT(*) AS c FROM `{$p}attendance`
-			 WHERE entry_method IS NOT NULL AND entry_method <> ''
+			 WHERE `date` >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND entry_method IS NOT NULL AND entry_method <> ''
 			 GROUP BY entry_method ORDER BY c DESC, entry_method ASC"
         );
         $featSignin = array(
@@ -4695,13 +4701,13 @@ class Report extends Ork3
                 $this->_rfuKpi('Sign-in links created', $signinLinks, null, null, 'rows in attendance link'),
                 $this->_rfuKpi('Officers issuing links', $signinCreators, null, null, 'distinct members who created a sign-in link'),
                 $this->_rfuKpi('Links tied to an event', $signinEventTied, null, null, 'sign-in links scoped to a specific event'),
-                $this->_rfuKpi('Check-ins via sign-in link', $attnSignin, null, null, "attendance rows with entry_method 'signin_link'"),
+                $this->_rfuKpi('Check-ins via sign-in link (30d)', $attnSignin, null, null, "attendance in the last 30 days with entry_method 'signin_link'"),
                 $this->_rfuKpi('Self-reg links created', $selfregLinks, null, null, 'rows in self-registration link'),
                 $this->_rfuKpi('Self-reg links redeemed', $selfregUsed, $selfregLinks, $selfregConv, 'self-reg links that created a new player', null, null, 'of self-reg links were used'),
-                $this->_rfuKpi('Self-reg check-ins recorded', $attnSelfreg, null, null, "attendance rows with entry_method 'self_reg'"),
+                $this->_rfuKpi('Self-reg check-ins recorded (30d)', $attnSelfreg, null, null, "attendance in the last 30 days with entry_method 'self_reg'"),
             ),
             'charts' => array(
-                $this->_rfuChartFromBreakdown('rfu-entry-method', 'pie', 'Attendance by entry method', $entryBreak, 'Sign-ins'),
+                $this->_rfuChartFromBreakdown('rfu-entry-method', 'pie', 'Attendance by entry method (last 30 days)', $entryBreak, 'Sign-ins'),
             ),
         );
 
