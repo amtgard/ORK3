@@ -1,0 +1,30 @@
+{
+  // Source for bin/ork-db extract — hardcoded mirror in wiring.json5
+  "source": "mirror",
+
+  "tables_verbatim": [
+    "award",
+    "class",
+    "parktitle",
+    "pronoun"
+  ],
+
+  "configuration_keys": ["*"],
+
+  "mundane_real": {
+    "by_username": ["admin", "megiddo"],
+    "by_mundane_id": {
+      // Maintainer: fill before TD-3 extract testing
+      "ken_walker": null,
+      "avery_krouse": null
+    }
+  },
+
+  "events_by_name_like": [
+    "%Gathering of Kingdoms%",
+    "%Spring War%",
+    "%Olympiad%"
+  ],
+
+  "kingdomaward_clone_source_kingdom_id": null
+}

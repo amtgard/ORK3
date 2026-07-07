@@ -757,7 +757,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 #### T-13 sign-off gate
 
 - [x] Test sprint sign-off checklist (above) satisfied
-- [ ] Branch `megiddo/t-13-infrastructure-tests` squashed to exactly one commit
+- [x] Branch `megiddo/t-13-infrastructure-tests` squashed to exactly one commit
 
 ---
 
@@ -773,14 +773,18 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 | Step | Status |
 |------|--------|
-| Backend unit/integration tests | [ ] |
-| Frontend functional tests | [ ] |
-| Milestone-scoped Infection passes | [ ] |
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Integration/AuthorizationLibTest.php`, `tests/Integration/LiveServiceTest.php`, `tests/Integration/WeatherServiceTest.php`, `tests/Unit/EraPhoeniceTest.php`, `tests/e2e/lib-service.spec.ts`
+
+**Infection (pre-refactor):** scoped batches via `infection.t14-lib-auth-era.json5` and `infection.t14-lib-live-weather.json5` (≥15% MSI each): Authorization+EraPhoenice 19%, Live+Weather 62%
 
 #### T-14 sign-off gate
 
-- [ ] Test sprint sign-off checklist (above) satisfied
-- [ ] Branch `megiddo/t-14-lib-service-tests` squashed to exactly one commit
+- [x] Test sprint sign-off checklist (above) satisfied
+- [x] Branch `megiddo/t-14-lib-service-tests` squashed to exactly one commit
 
 ---
 
@@ -841,4 +845,4 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code, keep tests green |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** T-14 (Ork3::$Lib service migration tests — pairs with completed DS-14).
+**Next actionable milestone:** R-01 (RSVP refactor — pairs with completed DS-01 and T-01).

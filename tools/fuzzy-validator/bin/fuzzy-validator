@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Fuzzy Validator — CLI dispatcher (FU-0 stub; implement subcommands in FU-1+)
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+TOOL_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  fuzzy-validator record  [URL ...] [--urls FILE] [options]
+  fuzzy-validator validate [URL ...] [--urls FILE] [options]
+
+Commands:
+  record    Capture stabilized renders (×N), learn fuzz zones, write baselines
+  validate  Capture once, compare to baselines, pass/fail + HTML report
+
+Global options:
+  -h, --help    Show help
+
+Run from repo root:
+  bin/fuzzy-validator record --help
+  bin/fuzzy-validator validate --help
+
+Documentation:
+  docs/megiddo/fuzzy-validator/10-cli-reference.md
+EOF
+}
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  record|validate)
+    echo "fuzzy-validator: '$cmd' not implemented yet (FU-1+)." >&2
+    echo "Planned implementation: $TOOL_ROOT/bin/fuzzy-validator-$cmd" >&2
+    usage
+    exit 2
+    ;;
+  -h|--help|help|'')
+    usage
+    exit 0
+    ;;
+  *)
+    echo "fuzzy-validator: unknown command '$cmd'" >&2
+    usage
+    exit 2
+    ;;
+esac
