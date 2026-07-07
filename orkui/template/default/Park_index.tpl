@@ -171,7 +171,7 @@
 				<td>
 					<div class='tiny-heraldry'>
 						<?php if ($event['HasHeraldry']==1): ?>
-							<img src="<?=HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) ?>" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
+							<img src="<?=HTTP_EVENT_HERALDRY . Common::resolve_media_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId']), 'thumb') ?>" onerror="this.src='<?=HTTP_EVENT_HERALDRY ?>00000.jpg';">
 						<?php else: ?>
 							<img src="<?=HTTP_EVENT_HERALDRY ?>00000.jpg">
 						<?php endif; ?>

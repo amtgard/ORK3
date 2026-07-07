@@ -14,7 +14,7 @@
 
 	$eventName   = htmlspecialchars($info['Name'] ?? 'Event');
 	$hasHeraldry = !empty($info['HasHeraldry']);
-	$heraldryFile = $hasHeraldry ? Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $eventId)) : '00000.jpg';
+	$heraldryFile = $hasHeraldry ? Common::resolve_media_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $eventId), 'display') : '00000.jpg';
 	$heraldryFs   = DIR_EVENT_HERALDRY . $heraldryFile;
 	$heraldryVer  = ($hasHeraldry && file_exists($heraldryFs)) ? '?v=' . filemtime($heraldryFs) : '';
 	$heraldryUrl  = HTTP_EVENT_HERALDRY . $heraldryFile . $heraldryVer;
@@ -2488,7 +2488,7 @@ var EvConfig = {
 			<label class="ev-upload-area" for="ev-img-file-input">
 				<i class="fas fa-cloud-upload-alt ev-upload-icon"></i>
 				Click to choose an image
-				<small>JPG, PNG &middot; Max 340&nbsp;KB (larger images auto-resized)</small>
+				<small>JPG, PNG &middot; High-resolution welcome &mdash; very large images are optimized automatically</small>
 			</label>
 			<input type="file" id="ev-img-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
 			<div id="ev-img-resize-notice" style="font-size:12px;min-height:16px;margin-top:6px;"></div>

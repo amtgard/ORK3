@@ -270,7 +270,7 @@ class Player extends Ork3
                     $mundane_id == $request['MundaneId']) {
                 $fetchprivate = false;
             }
-            $heraldry = Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type' => 'Player', 'Id' => $this->mundane->mundane_id));
+            $heraldry = Ork3::$Lib->heraldry->GetHeraldryUrl(array('Type' => 'Player', 'Id' => $this->mundane->mundane_id, 'Size' => $request['Size'] ?? 'display'));
             $response['Status'] = Success();
             // Moving Dues response here to stuff the old DuesThrough response until mORK updates go out
             $dues = $this->GetDues(['MundaneId' => $this->mundane->mundane_id, 'ExcludeRevoked' => 1, 'Active' => 1]);
@@ -354,7 +354,7 @@ class Player extends Ork3
                     'HasHeraldry' => $this->mundane->has_heraldry,
                     'Heraldry' => $heraldry['Url'] . '?' . strtotime($this->mundane->modified),
                     'HasImage' => $this->mundane->has_image,
-                    'Image' => $this->resolve_player_image_url($this->mundane->mundane_id, $this->mundane->modified),
+                    'Image' => $this->resolve_player_image_url($this->mundane->mundane_id, $this->mundane->modified, $request['Size'] ?? 'display'),
                     'PenaltyBox' => $this->mundane->penalty_box,
                     'Active' => $this->mundane->active,
                     'PasswordExpires' => $this->mundane->password_expires,
@@ -744,6 +744,10 @@ class Player extends Ork3
                 $this->mundane->reeve_qualified_until = '0000-00-00';
                 $this->mundane->save();
                 $new_mundane_id = (int)$this->mundane->mundane_id;
+                // Accumulates soft rejections (over-size photo / heraldry) so a
+                // create that saved the player but dropped a too-large image can
+                // report it. Carried out via Success()'s Value field (see below).
+                $notices = '';
 
                 // Paired design-preferences row (one per mundane, all schema defaults at creation).
                 $design = new yapo($this->db, DB_PREFIX . 'mundane_design');
@@ -787,27 +791,51 @@ class Player extends Ork3
                         $this->mundane->waiver_ext = 'pdf';
                     }
                 }
-                if ($request['HasImage'] && strlen($request['Image']) > 0 && strlen($request['Image']) < 1365334 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
+                if ($request['HasImage'] && strlen($request['Image']) > 0 && strlen($request['Image']) < IMAGE_UPLOAD_MAX_BYTES && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
                     $playerimage = @imagecreatefromstring(base64_decode($request['Image']));
                     if ($playerimage !== false) {
+                        // Clamp the stored master to a 3000px longest edge (never upscale);
+                        // GD is authoritative regardless of what the client sent.
+                        $playerimage = Common::gd_scale_to_max_edge($playerimage, 3000);
                         $base = DIR_PLAYER_IMAGE . sprintf("%06d", $this->mundane->mundane_id);
                         $use_png = Common::gd_has_transparency($playerimage);
 
-                        if (file_exists($base . '.jpg')) {
-                            unlink($base . '.jpg');
-                        }
-                        if (file_exists($base . '.png')) {
-                            unlink($base . '.png');
-                        }
-
-                        if ($use_png) {
-                            imagealphablending($playerimage, false);
-                            imagesavealpha($playerimage, true);
-                            imagepng($playerimage, $base . '.png');
+                        // Reject (never silently shrink) a master that still exceeds
+                        // the ~6 MB ceiling after the clamp.
+                        $encoded = Common::encode_size($playerimage, $use_png ? 'png' : 'jpeg', 92);
+                        if ($encoded > IMAGE_MASTER_MAX_BYTES) {
+                            $this->mundane->has_image = 0;
+                            $notices .= 'Photo was not saved: image too large even after resizing; please upload a smaller file.<br />';
                         } else {
-                            imagejpeg($playerimage, $base . '.jpg');
+                            if (file_exists($base . '.jpg')) {
+                                unlink($base . '.jpg');
+                            }
+                            if (file_exists($base . '.png')) {
+                                unlink($base . '.png');
+                            }
+                            if (file_exists($base . '_thumb.webp')) {
+                                unlink($base . '_thumb.webp');
+                            }
+                            if (file_exists($base . '_thumb.jpg')) {
+                                unlink($base . '_thumb.jpg');
+                            }
+                            if (file_exists($base . '_display.webp')) {
+                                unlink($base . '_display.webp');
+                            }
+                            if (file_exists($base . '_display.jpg')) {
+                                unlink($base . '_display.jpg');
+                            }
+
+                            if ($use_png) {
+                                imagealphablending($playerimage, false);
+                                imagesavealpha($playerimage, true);
+                                imagepng($playerimage, $base . '.png');
+                            } else {
+                                imagejpeg($playerimage, $base . '.jpg', 92);
+                            }
+                            Common::generate_renditions($playerimage, $base, $use_png);
+                            $this->mundane->has_image = 1;
                         }
-                        $this->mundane->has_image = 1;
                     } else {
                         $this->mundane->has_image = 0;
                     }
@@ -817,7 +845,12 @@ class Player extends Ork3
                 $this->mundane->save();
                 if (strlen($request['Heraldry'])) {
                     $request['MundaneId'] = $new_mundane_id;
-                    Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
+                    $_herResult = Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
+                    if (is_array($_herResult) && empty($_herResult['Status'])) {
+                        $notices .= !empty($_herResult['Result'])
+                            ? ($_herResult['Result'] . '<br />')
+                            : 'Heraldry was not saved: image too large.<br />';
+                    }
                 }
 
                 // Audit: record who created which player. Captures officer/admin
@@ -832,7 +865,9 @@ class Player extends Ork3
                 $_audit_req['OfficerEdit'] = (!$_audit_req['AdminEdit'] && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) ? 1 : 0;
                 Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $_audit_req, 'Player', $new_mundane_id, null, $_audit_post);
 
-                return Success($new_mundane_id);
+                // Result stays the new id (callers redirect on it); soft
+                // rejection notices ride in Value so the id contract is intact.
+                return Success($new_mundane_id, $notices);
             } else {
                 return InvalidParameter();
             }
@@ -1715,7 +1750,18 @@ class Player extends Ork3
                     $this->set_waiver($request);
                 }
                 $this->mundane->save();
-                $this->set_image($request);
+                // set_image surfaces a rejected upload (over-size after resize,
+                // unsupported type, undecodable) via its returned Result string.
+                // Fold that into the outer notices so a rejected photo isn't
+                // reported as a clean success. Only when an image was actually
+                // submitted, else set_image's generic "no image" notice is spurious.
+                $_imgAttempted = !empty($request['HasImage'])
+                    || strlen($request['Image'] ?? '') > 0
+                    || strlen($request['ImageUrl'] ?? '') > 0;
+                $_imgResult = $this->set_image($request);
+                if ($_imgAttempted && is_array($_imgResult) && !empty($_imgResult['Result'])) {
+                    $notices .= $_imgResult['Result'];
+                }
                 if ($design !== null) {
                     $design->save();
                 }
@@ -1745,7 +1791,16 @@ class Player extends Ork3
                     $this->mundane->park_member_since = is_null($pms) ? $this->mundane->park_member_since : (($pms === '' || $pms === '0000-00-00') ? null : $pms);
                 }
                 if (strlen($request['Heraldry'])) {
-                    Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
+                    // SetPlayerHeraldry returns an error Result (InvalidParameter)
+                    // when the heraldry was too large to store. This is a combined
+                    // update whose other fields saved, so surface it as a notice
+                    // rather than aborting the whole update.
+                    $_herResult = Ork3::$Lib->heraldry->SetPlayerHeraldry($request);
+                    if (is_array($_herResult) && empty($_herResult['Status'])) {
+                        $notices .= !empty($_herResult['Result'])
+                            ? ($_herResult['Result'] . '<br />')
+                            : 'Heraldry was not saved: image too large.<br />';
+                    }
                 }
                 if ($request['DuesDate']) {
                     // Add dues to new system as well until mORK is updated
@@ -1830,7 +1885,7 @@ class Player extends Ork3
         $mime = $prefix . 'MimeType';
         if (strlen($request[$url]) > 0 && Common::url_exists($request[$url])) {
             $mime_type = Common::exif_to_mime(@exif_imagetype($request[$url]), $request[$url]);
-            if (Common::supported_mime_types($mime_type) && Ork3::$Lib->heraldry->url_file_size($request[$url]) < 1365334) {
+            if (Common::supported_mime_types($mime_type) && Ork3::$Lib->heraldry->url_file_size($request[$url]) < IMAGE_UPLOAD_MAX_BYTES) {
                 $request[$media] = base64_encode(file_get_contents($request[$url]));
                 $request[$mime] = $mime_type;
             }
@@ -1842,27 +1897,50 @@ class Player extends Ork3
     {
         logtrace("set_image", $request);
         $request = $this->media_fetch('Image', $request);
-        if (strlen($request['Image']) > 0 && strlen($request['Image']) < 1365334 && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
+        if (strlen($request['Image']) > 0 && strlen($request['Image']) < IMAGE_UPLOAD_MAX_BYTES && Common::supported_mime_types($request['ImageMimeType']) && !Common::is_pdf_mime_type($request['ImageMimeType'])) {
             $playerimage = imagecreatefromstring(base64_decode($request['Image']));
             if ($playerimage !== false) {
+                // Clamp the stored master to a 3000px longest edge (never upscale);
+                // GD is authoritative regardless of what the client sent.
+                $playerimage = Common::gd_scale_to_max_edge($playerimage, 3000);
                 $base = DIR_PLAYER_IMAGE . sprintf("%06d", $this->mundane->mundane_id);
                 $use_png = Common::gd_has_transparency($playerimage);
 
-                if (file_exists($base . '.jpg')) {
-                    unlink($base . '.jpg');
-                }
-                if (file_exists($base . '.png')) {
-                    unlink($base . '.png');
-                }
-
-                if ($use_png) {
-                    imagealphablending($playerimage, false);
-                    imagesavealpha($playerimage, true);
-                    imagepng($playerimage, $base . '.png');
+                // Reject (never silently shrink) a master that still exceeds the
+                // ~6 MB ceiling after the clamp; surface via the notices string.
+                $encoded = Common::encode_size($playerimage, $use_png ? 'png' : 'jpeg', 92);
+                if ($encoded > IMAGE_MASTER_MAX_BYTES) {
+                    $notices .= 'Image is too large even after resizing; please upload a smaller file.<br />';
                 } else {
-                    imagejpeg($playerimage, $base . '.jpg');
+                    if (file_exists($base . '.jpg')) {
+                        unlink($base . '.jpg');
+                    }
+                    if (file_exists($base . '.png')) {
+                        unlink($base . '.png');
+                    }
+                    if (file_exists($base . '_thumb.webp')) {
+                        unlink($base . '_thumb.webp');
+                    }
+                    if (file_exists($base . '_thumb.jpg')) {
+                        unlink($base . '_thumb.jpg');
+                    }
+                    if (file_exists($base . '_display.webp')) {
+                        unlink($base . '_display.webp');
+                    }
+                    if (file_exists($base . '_display.jpg')) {
+                        unlink($base . '_display.jpg');
+                    }
+
+                    if ($use_png) {
+                        imagealphablending($playerimage, false);
+                        imagesavealpha($playerimage, true);
+                        imagepng($playerimage, $base . '.png');
+                    } else {
+                        imagejpeg($playerimage, $base . '.jpg', 92);
+                    }
+                    Common::generate_renditions($playerimage, $base, $use_png);
+                    $this->mundane->has_image = 1;
                 }
-                $this->mundane->has_image = 1;
             } else {
                 $notices .= "Image could not be decoded.";
             }
@@ -1873,17 +1951,19 @@ class Player extends Ork3
         return Success($notices);
     }
 
-    private function resolve_player_image_url($mundane_id, $modified)
+    private function resolve_player_image_url($mundane_id, $modified, $size = null)
     {
         $name = sprintf('%06d', $mundane_id);
-        $ext  = file_exists(DIR_PLAYER_IMAGE . $name . '.png') ? 'png' : 'jpg';
-        $file = DIR_PLAYER_IMAGE . $name . '.' . $ext;
+        // Rendition-aware: null/'master' probes .png then .jpg; 'thumb'/'display'
+        // probe the WebP/JPEG rendition, falling back to the master on miss.
+        $filename = Common::resolve_media_ext(DIR_PLAYER_IMAGE, $name, $size);
+        $file = DIR_PLAYER_IMAGE . $filename;
         // Trust filemtime() over the DB `modified` column: the timestamp
         // always advances on save, whereas a same-second re-upload or
         // no-op UPDATE can leave `modified` untouched and browsers happily
         // keep the old cached image.
         $v = file_exists($file) ? filemtime($file) : strtotime($modified);
-        return HTTP_PLAYER_IMAGE . $name . '.' . $ext . '?' . $v;
+        return HTTP_PLAYER_IMAGE . $filename . '?' . $v;
     }
 
     public function set_waiver($request)
@@ -1984,10 +2064,8 @@ class Player extends Ork3
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
             if ($this->mundane->find()) {
-                $path = DIR_PLAYER_IMAGE . sprintf('%06d', $request['MundaneId']) . '.jpg';
-                if (file_exists($path)) {
-                    unlink($path);
-                }
+                $base = DIR_PLAYER_IMAGE . sprintf('%06d', $request['MundaneId']);
+                Common::unlink_image_set($base);
                 $this->mundane->has_image = 0;
                 $this->mundane->save();
                 $this->reset_photo_focus($request['MundaneId']);

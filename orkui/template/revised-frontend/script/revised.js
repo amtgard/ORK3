@@ -1288,17 +1288,14 @@ if (PnConfig.recError) {
                 img.src = url;
             }
 
-            if (file.size > 348836) {
-                gid('pn-img-resize-notice').textContent = 'Resizing\u2026';
-                resizeImageToLimit(file, 348836, function(blob) {
-                    gid('pn-img-resize-notice').textContent = 'Auto-resized to ' + Math.round(blob.size / 1024) + '\u00a0KB';
-                    loadIntoModal(blob);
-                }, function(errMsg) {
-                    showError(errMsg);
-                }, origImgIsPng);
-            } else {
-                loadIntoModal(file);
-            }
+            clampImageIfHuge(file, 3000, function(blob) {
+                if (blob !== file) {
+                    gid('pn-img-resize-notice').textContent = 'Resized to ' + Math.round(blob.size / 1024) + '\u00a0KB';
+                }
+                loadIntoModal(blob);
+            }, function(errMsg) {
+                showError(errMsg);
+            }, origImgIsPng);
         });
 
         // ---- Crop tool ----
@@ -1463,14 +1460,10 @@ if (PnConfig.recError) {
             var outMime    = origImgIsPng ? 'image/png'  : 'image/jpeg';
             var outQuality = origImgIsPng ? undefined    : 0.88;
             outCanvas.toBlob(function(blob) {
-                if (blob.size > 348836) {
-                    resizeImageToLimit(blob, 348836, doUpload, function(err) {
-                        showStep('pn-img-step-select');
-                        showError(err);
-                    }, origImgIsPng);
-                } else {
-                    doUpload(blob);
-                }
+                clampImageIfHuge(blob, 3000, doUpload, function(err) {
+                    showStep('pn-img-step-select');
+                    showError(err);
+                }, origImgIsPng);
             }, outMime, outQuality);
         }
 
@@ -5008,7 +5001,7 @@ $(document).ready(function() {
                 success: function(r) {
                     btn.disabled = false;
                     if (r && r.status === 0) {
-                        feedback('kn-admin-details-feedback', 'Details saved!', true);
+                        feedback('kn-admin-details-feedback', r.warning ? ('Details saved. ' + r.warning) : 'Details saved!', true);
                         knClearPending('kn-admin-body-details');
                         gid('kn-admin-body-details').querySelectorAll('[data-original]').forEach(function(el) {
                             el.dataset.original = el.value;
@@ -6228,6 +6221,14 @@ window.bannerConfirm = (function() {
 
     function gid(id) { return document.getElementById(id); }
 
+    function showFb(msg, ok) {
+        var el = gid('kn-heraldry-feedback');
+        if (!el) return;
+        el.style.display = 'block';
+        el.className = ok ? 'kn-editoff-feedback kn-editoff-ok' : 'kn-editoff-feedback kn-editoff-err';
+        el.textContent = msg;
+    }
+
     function closeModal() {
         var overlay = gid('kn-heraldry-overlay');
         if (overlay) overlay.classList.remove('kn-open');
@@ -6242,10 +6243,12 @@ window.bannerConfirm = (function() {
         var upl     = gid('kn-heraldry-step-uploading');
         var done    = gid('kn-heraldry-step-done');
         var confirm = gid('kn-heraldry-remove-confirm');
+        var fb      = gid('kn-heraldry-feedback');
         if (sel)     sel.style.display     = '';
         if (upl)     upl.style.display     = 'none';
         if (done)    done.style.display    = 'none';
         if (confirm) confirm.style.display = 'none';
+        if (fb)      fb.style.display      = 'none';
         overlay.classList.add('kn-open');
     };
 
@@ -6258,11 +6261,11 @@ window.bannerConfirm = (function() {
             .then(function(r) {
                 if (r && r.status === 0) {
                 } else {
-                    alert((r && r.error) ? r.error : 'Remove failed. Please try again.');
+                    showFb((r && r.error) ? r.error : 'Remove failed. Please try again.', false);
                 }
             })
             .catch(function() {
-                alert('Request failed. Please try again.');
+                showFb('Request failed. Please try again.', false);
             });
     };
 
@@ -6276,8 +6279,10 @@ window.bannerConfirm = (function() {
                 var sel  = gid('kn-heraldry-step-select');
                 var upl  = gid('kn-heraldry-step-uploading');
                 var done = gid('kn-heraldry-step-done');
+                var fb   = gid('kn-heraldry-feedback');
                 if (sel) sel.style.display = 'none';
                 if (upl) upl.style.display = '';
+                if (fb) fb.style.display = 'none';
 
                 function doUpload(blob) {
                     var fd = new FormData();
@@ -6290,28 +6295,24 @@ window.bannerConfirm = (function() {
                                 setTimeout(function() { window.location.reload(); }, 1200);
                             } else {
                                 if (sel) sel.style.display = '';
-                                alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
+                                showFb((r && r.error) ? r.error : 'Upload failed. Please try again.', false);
                             }
                         })
                         .catch(function() {
                             if (upl) upl.style.display = 'none';
                             if (sel) sel.style.display = '';
-                            alert('Request failed. Please try again.');
+                            showFb('Request failed. Please try again.', false);
                         });
                 }
 
                 trimTransparentEdges(file, function(trimmed) {
                     file = trimmed;
-                    if (file.size > 348836) {
-                        var isPng = (file.type === 'image/png');
-                        resizeImageToLimit(file, 348836, doUpload, function(errMsg) {
-                            if (upl) upl.style.display = 'none';
-                            if (sel) sel.style.display = '';
-                            alert(errMsg || 'Could not resize image. Please choose a smaller file.');
-                        }, isPng);
-                    } else {
-                        doUpload(file);
-                    }
+                    var isPng = (file.type === 'image/png');
+                    clampImageIfHuge(file, 3000, doUpload, function(errMsg) {
+                        if (upl) upl.style.display = 'none';
+                        if (sel) sel.style.display = '';
+                        showFb(errMsg || 'Could not process image. Please choose a different file.', false);
+                    }, isPng);
                 });
             });
         }
@@ -14620,10 +14621,12 @@ window.pnCloseUnitCreateModal = function() {
         var upl     = gid('pk-heraldry-step-uploading');
         var done    = gid('pk-heraldry-step-done');
         var confirm = gid('pk-heraldry-remove-confirm');
+        var fb      = gid('pk-heraldry-feedback');
         if (sel)     sel.style.display     = '';
         if (upl)     upl.style.display     = 'none';
         if (done)    done.style.display    = 'none';
         if (confirm) confirm.style.display = 'none';
+        if (fb)      fb.style.display      = 'none';
         overlay.classList.add('pk-open');
     };
 
@@ -14634,11 +14637,11 @@ window.pnCloseUnitCreateModal = function() {
                 if (r && r.status === 0) {
                     window.location.reload();
                 } else {
-                    alert((r && r.error) ? r.error : 'Remove failed. Please try again.');
+                    showFb((r && r.error) ? r.error : 'Remove failed. Please try again.', false);
                 }
             })
             .catch(function() {
-                alert('Request failed. Please try again.');
+                showFb('Request failed. Please try again.', false);
             });
     };
 
@@ -14652,8 +14655,10 @@ window.pnCloseUnitCreateModal = function() {
                 var sel  = gid('pk-heraldry-step-select');
                 var upl  = gid('pk-heraldry-step-uploading');
                 var done = gid('pk-heraldry-step-done');
+                var fb   = gid('pk-heraldry-feedback');
                 if (sel) sel.style.display = 'none';
                 if (upl) upl.style.display = '';
+                if (fb) fb.style.display = 'none';
 
                 function doUpload(blob) {
                     var fd = new FormData();
@@ -14667,28 +14672,24 @@ window.pnCloseUnitCreateModal = function() {
                                 setTimeout(function() { window.location.reload(); }, 1200);
                             } else {
                                 if (sel) sel.style.display = '';
-                                alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
+                                showFb((r && r.error) ? r.error : 'Upload failed. Please try again.', false);
                             }
                         })
                         .catch(function() {
                             if (upl) upl.style.display = 'none';
                             if (sel) sel.style.display = '';
-                            alert('Request failed. Please try again.');
+                            showFb('Request failed. Please try again.', false);
                         });
                 }
 
                 trimTransparentEdges(file, function(trimmed) {
                     file = trimmed;
-                    if (file.size > 348836) {
-                        var isPng = (file.type === 'image/png');
-                        resizeImageToLimit(file, 348836, doUpload, function(errMsg) {
-                            if (upl) upl.style.display = 'none';
-                            if (sel) sel.style.display = '';
-                            alert(errMsg || 'Could not resize image. Please choose a smaller file.');
-                        }, isPng);
-                    } else {
-                        doUpload(file);
-                    }
+                    var isPng = (file.type === 'image/png');
+                    clampImageIfHuge(file, 3000, doUpload, function(errMsg) {
+                        if (upl) upl.style.display = 'none';
+                        if (sel) sel.style.display = '';
+                        showFb(errMsg || 'Could not process image. Please choose a different file.', false);
+                    }, isPng);
                 });
             });
         }
@@ -15534,17 +15535,14 @@ window.pnCloseUnitCreateModal = function() {
             img.src = url;
         }
 
-        if (file.size > 348836) {
-            var isPng = (file.type === 'image/png');
-            var rn = gid('ev-img-resize-notice'); if (rn) rn.textContent = 'Resizing…';
-            resizeImageToLimit(file, 348836, function(blob) {
+        var isPng = (file.type === 'image/png');
+        clampImageIfHuge(file, 3000, function(blob) {
+            if (blob !== file) {
                 var rn2 = gid('ev-img-resize-notice');
-                if (rn2) rn2.textContent = 'Auto-resized to ' + Math.round(blob.size / 1024) + ' KB';
-                loadIntoModal(blob);
-            }, function(errMsg) { showError(errMsg); }, isPng);
-        } else {
-            loadIntoModal(file);
-        }
+                if (rn2) rn2.textContent = 'Resized to ' + Math.round(blob.size / 1024) + ' KB';
+            }
+            loadIntoModal(blob);
+        }, function(errMsg) { showError(errMsg); }, isPng);
     });
 
     function initCrop() {
@@ -15684,14 +15682,10 @@ window.pnCloseUnitCreateModal = function() {
         var outMime = origImgIsPng ? 'image/png' : 'image/jpeg';
         var outQuality = origImgIsPng ? 1 : 0.88;
         outCanvas.toBlob(function(blob) {
-            if (blob.size > 348836) {
-                resizeImageToLimit(blob, 348836, doUpload, function(err) {
-                    showStep('ev-img-step-select');
-                    showError(err);
-                }, origImgIsPng);
-            } else {
-                doUpload(blob);
-            }
+            clampImageIfHuge(blob, 3000, doUpload, function(err) {
+                showStep('ev-img-step-select');
+                showError(err);
+            }, origImgIsPng);
         }, outMime, outQuality);
     }
 

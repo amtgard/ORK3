@@ -300,8 +300,14 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 
 	function buildRow(u) {
 		var uid   = parseInt(u.UnitId) || 0;
-		var thumb = HERALDRY + (u.HasHeraldry ? (String(uid).padStart(5, '0') + '.jpg') : '00000.jpg');
-		var imgHtml  = '<img class="ul-thumb" src="' + thumb + '" onerror="this.onerror=null;this.src=\'' + HERALDRY + '00000.jpg\'" alt="">';
+		// List thumbnails request the 256px '_thumb.webp' rendition. onerror chain:
+		// webp -> master .png (transparent heraldry is stored as .png) -> master .jpg
+		// (opaque, un-backfilled) -> default placeholder.
+		var padded      = String(uid).padStart(5, '0');
+		var thumb       = HERALDRY + (u.HasHeraldry ? (padded + '_thumb.webp') : '00000.jpg');
+		var pngThumb    = HERALDRY + (u.HasHeraldry ? (padded + '.png') : '00000.jpg');
+		var masterThumb = HERALDRY + (u.HasHeraldry ? (padded + '.jpg') : '00000.jpg');
+		var imgHtml  = '<img class="ul-thumb" src="' + thumb + '" onerror="this.onerror=function(){this.onerror=function(){this.onerror=null;this.src=\'' + HERALDRY + '00000.jpg\';};this.src=\'' + masterThumb + '\';};this.src=\'' + pngThumb + '\';" alt="">';
 		var nameHtml = '<a class="ul-name-link" href="' + UIR_BASE + 'Unit/index/' + uid + '">'
 			+ $('<span>').text(u.Name || '(Unnamed)').html() + '</a>'
 			+ '<span class="ul-type-badge ' + badgeClass(u.Type) + '">' + (u.Type || '') + '</span>';

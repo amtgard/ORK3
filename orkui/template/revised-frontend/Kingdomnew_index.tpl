@@ -77,7 +77,7 @@
 			'id'       => (int)$p['ParkId'],
 			'city'     => htmlspecialchars(trim($p['City'] ?? '')),
 			'province' => htmlspecialchars(trim($p['Province'] ?? '')),
-			'heraldry' => $p['HasHeraldry'] ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $p['ParkId'])) : '',
+			'heraldry' => $p['HasHeraldry'] ? HTTP_PARK_HERALDRY . Common::resolve_media_ext(DIR_PARK_HERALDRY, sprintf('%05d', $p['ParkId']), 'thumb') : '',
 			'dir'      => kn_map_markdown($p['Directions'] ?? ''),
 			'desc'     => kn_map_markdown($p['Description'] ?? ''),
 		];
@@ -98,7 +98,7 @@
 				'id'       => (int)$p['ParkId'],
 				'city'     => htmlspecialchars(trim($p['City'] ?? '')),
 				'province' => htmlspecialchars(trim($p['Province'] ?? '')),
-				'heraldry' => $p['HasHeraldry'] ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $p['ParkId'])) : '',
+				'heraldry' => $p['HasHeraldry'] ? HTTP_PARK_HERALDRY . Common::resolve_media_ext(DIR_PARK_HERALDRY, sprintf('%05d', $p['ParkId']), 'thumb') : '',
 				'dir'      => kn_map_markdown($p['Directions'] ?? ''),
 				'desc'     => kn_map_markdown($p['Description'] ?? ''),
 				'prinz'    => true,
@@ -400,7 +400,7 @@
 					<div id="kn-parks-tiles" class="kn-park-tiles">
 						<?php foreach ($parkList as $park): ?>
 							<?php $tileHeraldry = $park['HasHeraldry'] == 1
-								? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']))
+								? HTTP_PARK_HERALDRY . Common::resolve_media_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']), 'thumb')
 								: HTTP_PARK_HERALDRY . '00000.jpg'; ?>
 							<a class="kn-park-tile<?= !empty($park['_pinned']) ? ' kn-pinned' : '' ?>" href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>" data-park-id="<?= (int)$park['ParkId'] ?>">
 								<div class="kn-park-tile-img-wrap">
@@ -448,7 +448,7 @@
 										<td class="kn-col-nowrap">
 											<img class="kn-thumb"
 												loading="lazy"
-												src="<?= $park['HasHeraldry'] == 1 ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId'])) : HTTP_PARK_HERALDRY . '00000.jpg' ?>"
+												src="<?= $park['HasHeraldry'] == 1 ? HTTP_PARK_HERALDRY . Common::resolve_media_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']), 'thumb') : HTTP_PARK_HERALDRY . '00000.jpg' ?>"
 												onerror="this.src='<?= HTTP_PARK_HERALDRY ?>00000.jpg'"
 												alt="">
 											<a href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>"><?= htmlspecialchars($park['ParkName']) ?></a>
@@ -488,7 +488,7 @@
 					<!-- Principality tile sections (tile view) -->
 					<div id="kn-prinz-tile-sections">
 						<?php foreach ($prinzParks as $prinz): ?>
-							<?php $prId = (int)$prinz['KingdomId']; $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId)); ?>
+							<?php $prId = (int)$prinz['KingdomId']; $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_media_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId), 'thumb'); ?>
 							<section class="kn-prinz-section" data-prinz-id="<?= $prId ?>">
 								<a class="kn-prinz-head" href="<?= UIR ?>Kingdom/profile/<?= $prId ?>">
 									<img class="kn-prinz-heraldry" loading="lazy" src="<?= $prHeraldry ?>" onerror="this.src='<?= HTTP_KINGDOM_HERALDRY ?>0000.jpg'" alt="">
@@ -498,7 +498,7 @@
 								<div class="kn-park-tiles">
 									<?php foreach ((array)$prinz['parks'] as $park): ?>
 										<?php $tileHeraldry = $park['HasHeraldry'] == 1
-											? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']))
+											? HTTP_PARK_HERALDRY . Common::resolve_media_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']), 'thumb')
 											: HTTP_PARK_HERALDRY . '00000.jpg'; ?>
 										<a class="kn-park-tile" href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>" data-park-id="<?= (int)$park['ParkId'] ?>">
 											<div class="kn-park-tile-img-wrap">
@@ -531,7 +531,7 @@
 					<!-- Principality tables (list view) -->
 					<div id="kn-prinz-tables" style="display:none">
 						<?php foreach ($prinzParks as $prinz): ?>
-							<?php $prId = (int)$prinz['KingdomId']; $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId)); ?>
+							<?php $prId = (int)$prinz['KingdomId']; $prHeraldry = HTTP_KINGDOM_HERALDRY . Common::resolve_media_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prId), 'thumb'); ?>
 							<div class="kn-prinz-table-wrap" data-prinz-id="<?= $prId ?>">
 								<a class="kn-prinz-head" href="<?= UIR ?>Kingdom/profile/<?= $prId ?>">
 									<img class="kn-prinz-heraldry" loading="lazy" src="<?= $prHeraldry ?>" onerror="this.src='<?= HTTP_KINGDOM_HERALDRY ?>0000.jpg'" alt="">
@@ -555,7 +555,7 @@
 												<td class="kn-col-nowrap">
 													<img class="kn-thumb"
 														loading="lazy"
-														src="<?= $park['HasHeraldry'] == 1 ? HTTP_PARK_HERALDRY . Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId'])) : HTTP_PARK_HERALDRY . '00000.jpg' ?>"
+														src="<?= $park['HasHeraldry'] == 1 ? HTTP_PARK_HERALDRY . Common::resolve_media_ext(DIR_PARK_HERALDRY, sprintf("%05d", $park['ParkId']), 'thumb') : HTTP_PARK_HERALDRY . '00000.jpg' ?>"
 														onerror="this.src='<?= HTTP_PARK_HERALDRY ?>00000.jpg'"
 														alt="">
 													<a href="<?= UIR ?>Park/profile/<?= $park['ParkId'] ?>"><?= htmlspecialchars($park['ParkName']) ?></a>
@@ -720,7 +720,7 @@
 										<td class="kn-col-nowrap">
 											<img class="kn-thumb <?= $event['_IsParkEvent'] ? 'kn-evt-park' : 'kn-evt-kingdom' ?>"
 												loading="lazy"
-												src="<?= $event['HasHeraldry'] == 1 ? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId'])) : HTTP_EVENT_HERALDRY . '00000.jpg' ?>"
+												src="<?= $event['HasHeraldry'] == 1 ? HTTP_EVENT_HERALDRY . Common::resolve_media_ext(DIR_EVENT_HERALDRY, sprintf("%05d", $event['EventId']), 'thumb') : HTTP_EVENT_HERALDRY . '00000.jpg' ?>"
 												onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
 												alt="">
 											<?php if ($isDraft): ?><span class="kn-draft-pill" data-tip="Draft — hidden from members. Publish to make visible.">DRAFT</span><?php endif; ?>
@@ -1481,6 +1481,7 @@ var KnBannerConfig = {
 				Click to select an image<br><small style="color:#a0aec0">PNG, JPG, or GIF</small>
 			</label>
 			<input type="file" id="kn-heraldry-file-input" accept="image/png,image/jpeg,image/gif" style="display:none">
+			<div id="kn-heraldry-feedback" class="kn-editoff-feedback" style="display:none;margin-top:12px"></div>
 			<?php if ($hasHeraldry): ?>
 			<div style="text-align:center;margin-top:14px">
 				<button type="button" id="kn-heraldry-remove-btn" class="pn-btn pn-btn-ghost" style="color:#e53e3e;border-color:#feb2b2;font-size:12px;padding:4px 14px">

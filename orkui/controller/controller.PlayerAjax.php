@@ -109,7 +109,11 @@ class Controller_PlayerAjax extends Controller
 
             $r = $this->Player->create_player($request);
             if ($r['Status'] == 0) {
-                echo json_encode(['status' => 0, 'mundaneId' => (int)($r['Detail'] ?? 0)]);
+                $ok = ['status' => 0, 'mundaneId' => (int)($r['Detail'] ?? 0)];
+                if (!empty($r['Value'])) {
+                    $ok['warning'] = $r['Value'];
+                }
+                echo json_encode($ok);
             } else {
                 echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
             }
