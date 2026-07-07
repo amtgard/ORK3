@@ -3032,21 +3032,19 @@ $(document).ready(function() {
     // ---- Default sort + initial pagination ----
 
     // Parks + principality tables → standard DataTables toolbar.
-    $('#kn-parks-table').each(function() {
+    // Capture the whole set in ONE pass, before any init runs. DataTables'
+    // scrollX clone tables copy the source table's kn-parks-dt class, so a
+    // second selector pass after the first table initialises would match
+    // those clones and try to re-initialise them ("Cannot reinitialise
+    // table" alert). Selecting up-front — while nothing is a DataTable yet —
+    // means the collection holds only the real tables.
+    $('.kn-parks-dt').each(function() {
         var lastCol = this.tHead ? this.tHead.rows[0].cells.length - 1 : 0;
         var hasGear = $(this).find('thead th.no-export').length > 0;
+        var isMain  = this.id === 'kn-parks-table';
         window.orkInitDataTable($(this), {
             order: [[0, 'asc']],
-            csvName: 'Kingdom Parks',
-            columnDefs: hasGear ? [{ targets: lastCol, orderable: false, searchable: false }] : []
-        });
-    });
-    $('.kn-parks-dt').not('#kn-parks-table').each(function() {
-        var hasGear = $(this).find('thead th.no-export').length > 0;
-        var lastCol = this.tHead ? this.tHead.rows[0].cells.length - 1 : 0;
-        window.orkInitDataTable($(this), {
-            order: [[0, 'asc']],
-            csvName: ($(this).data('csvname') || 'Parks'),
+            csvName: isMain ? 'Kingdom Parks' : ($(this).data('csvname') || 'Parks'),
             columnDefs: hasGear ? [{ targets: lastCol, orderable: false, searchable: false }] : []
         });
     });
@@ -15745,6 +15743,10 @@ window.orkExportDataTableCsv = function(dt, filename) {
 window.orkInitDataTable = function($table, opts) {
     opts = opts || {};
     if (!$table || !$table.length) return null;
+    // Never operate on a DataTables scrollX clone table — the clones copy the
+    // source table's classes, so a class-based selector can hand us one. Real
+    // (un-initialised) tables are not yet inside a .dataTables_scroll wrapper.
+    if ($table.closest('.dataTables_scroll').length) return null;
     if ($.fn.dataTable.isDataTable($table)) { $table.DataTable().destroy(); }
     var dt = $table.DataTable($.extend(true, {
         dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>",
