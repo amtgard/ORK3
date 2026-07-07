@@ -225,10 +225,45 @@ final class Render
             throw new ValidationException('Failed to read schema file: ' . $schemaPath);
         }
 
-        $supplementsPath = $this->toolRoot . '/templates/schema/supplements.sql';
-        $supplements = is_readable($supplementsPath) ? (string) file_get_contents($supplementsPath) : '';
+        $classifier = new MigrationClassifier($this->repoRoot, $this->toolRoot);
+        $lines = ["-- Section: schema\n", $schema];
 
-        return "-- Section: schema\n" . $schema . "\n" . $supplements . "\n";
+        $baselineGapsPath = $this->toolRoot . '/templates/schema/baseline-gaps.sql';
+        if (is_readable($baselineGapsPath)) {
+            $lines[] = '-- baseline schema gaps';
+            $lines[] = trim((string) file_get_contents($baselineGapsPath));
+            $lines[] = '';
+        }
+
+        foreach ($classifier->renderSources() as $source) {
+            $migrationSql = file_get_contents($source['path']);
+            if ($migrationSql === false) {
+                throw new ValidationException('Failed to read migration: ' . $source['path']);
+            }
+
+            $lines[] = '-- migration: ' . $source['name'] . ' (' . $source['class'] . ')';
+            $lines[] = $classifier->sanitizeMigrationSql($migrationSql);
+            $lines[] = '';
+        }
+
+        $postSchemaPath = $this->toolRoot . '/templates/schema/post-schema-indexes.sql';
+        if (is_readable($postSchemaPath)) {
+            $lines[] = '-- post-schema indexes';
+            $lines[] = trim((string) file_get_contents($postSchemaPath));
+            $lines[] = '';
+        }
+
+        $supplementsPath = $this->toolRoot . '/templates/schema/supplements.sql';
+        if (is_readable($supplementsPath)) {
+            $supplements = trim((string) file_get_contents($supplementsPath));
+            if ($supplements !== '' && !str_starts_with($supplements, '-- Retired')) {
+                $lines[] = '-- supplements (legacy)';
+                $lines[] = $supplements;
+                $lines[] = '';
+            }
+        }
+
+        return implode("\n", $lines);
     }
 
     private function sectionCatalogs(): string

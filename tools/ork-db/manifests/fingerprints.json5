@@ -27,5 +27,10 @@
   "content_seed": 42,
   "content_seed_basis": null,
   "schema_fingerprint": null,
-  "catalog_hashes": {}
+  "catalog_hashes": {
+    "award": "sha256:aa39e5312c714dbedcd5adc93c15a5b85196bfd06a4a0666d28a6dc540a368d3",
+    "class": "sha256:6108479ca17b6e80e9baa87c8536150eb5ac3011ea7f603ddeb1c52b19ad580e",
+    "parktitle": "sha256:ccc8cc59bb4d871451d66f16c2e5578a63b6510e4b13b4e3797e04495ab7aa5b",
+    "pronoun": "sha256:9c8b8cdb13a14abc6ca3feca51fc456a5437dad22b0cfc5c81f7a9cae38f3e0e"
+  }
 }

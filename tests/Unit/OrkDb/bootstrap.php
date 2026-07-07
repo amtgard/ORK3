@@ -11,6 +11,8 @@ require_once ORK3_ROOT . '/tools/ork-db/lib/ValidationException.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/TierRefusalException.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/Wiring.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/DeploymentTier.php';
+require_once ORK3_ROOT . '/tools/ork-db/lib/MigrationClassifier.php';
+require_once ORK3_ROOT . '/tools/ork-db/lib/SchemaIntrospection.php';
 require_once ORK3_ROOT . '/tools/ork-db/Validate.php';
 require_once ORK3_ROOT . '/tools/ork-db/Extract.php';
 require_once ORK3_ROOT . '/tools/ork-db/Render.php';
@@ -18,6 +20,8 @@ require_once ORK3_ROOT . '/tools/ork-db/Init.php';
 require_once ORK3_ROOT . '/tools/ork-db/Apply.php';
 require_once ORK3_ROOT . '/tools/ork-db/Use.php';
 require_once ORK3_ROOT . '/tools/ork-db/Bootstrap.php';
+require_once ORK3_ROOT . '/tools/ork-db/DriftCheck.php';
+require_once ORK3_ROOT . '/tools/ork-db/SchemaDiff.php';
 
 /**
  * Whether the sandbox database used by ork-db tools accepts connections.

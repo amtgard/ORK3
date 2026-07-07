@@ -15,5 +15,8 @@ if [ ! -f vendor/bin/phpunit ]; then
     exit 1
 fi
 
+echo "== ork-db drift-check --strict =="
+php tools/ork-db/cli.php drift-check --strict
+
 export ENVIRONMENT=TEST
 exec php vendor/bin/phpunit -c phpunit.xml.dist "$@"

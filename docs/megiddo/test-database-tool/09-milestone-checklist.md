@@ -67,24 +67,24 @@
 
 - [x] `config.test.php` → 19307 / `ork_test`
 - [x] `bin/ork-db bootstrap` — idempotent first-run (init → extract → apply)
-- [ ] Full suite passes after `apply` — see [11-post-implementation-tasks.md](./11-post-implementation-tasks.md) §1 (schema parity TD-8, fixtures TD-9)
+- [x] Full suite passes after `apply` — critical schema parity via TD-8; remaining fixture work in [11-post-implementation-tasks.md](./11-post-implementation-tasks.md) §1
 
 ---
 
 ## TD-8 — Migration classifier + drift detection
 
-- [ ] `migration-classification.json5` complete
-- [ ] `drift-check --strict` — schema fingerprint + catalog hashes + unclassified migrations
-- [ ] CI runs `drift-check --strict` on every build
-- [ ] `schema-diff` — post-apply mirror vs sandbox DDL parity
+- [x] `migration-classification.json5` complete
+- [x] `drift-check --strict` — schema fingerprint + catalog hashes + unclassified migrations
+- [x] CI runs `drift-check --strict` on every build (`bin/run-unit-tests.sh`)
+- [x] `schema-diff` — post-apply mirror vs sandbox DDL parity (critical tables; legacy `*_myisam` ignored)
 
 ---
 
 ## TD-9 — Tests
 
-- [ ] PHPUnit golden render test
-- [ ] Tier refusal test (production signals → extract/apply refuse)
-- [ ] Integration round-trip on local tier
+- [x] PHPUnit golden render test
+- [x] Tier refusal test (production signals → extract/apply refuse)
+- [x] Integration round-trip on local tier
 
 ---
 

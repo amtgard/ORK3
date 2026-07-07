@@ -58,6 +58,8 @@ final class RenderTest extends TestCase
         $this->assertStringContainsString('INSERT INTO `ork_award`', $sql);
         $this->assertStringContainsString('INSERT INTO `ork_kingdomaward`', $sql);
         $this->assertStringContainsString('INSERT INTO `ork_configuration`', $sql);
+        $this->assertStringContainsString('-- migration: 2026-05-17-add-entity-banners.sql', $sql);
+        $this->assertStringContainsString('-- baseline schema gaps', $sql);
         $this->assertLessThan(
             strpos($sql, 'INSERT INTO `ork_park`'),
             strpos($sql, 'INSERT INTO `ork_kingdom`')

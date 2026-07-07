@@ -301,6 +301,24 @@ final class ExtractTest extends TestCase
         $extract->run(['table' => 'award']);
     }
 
+    public function testCatalogSqlHashReturnsSha256Digest(): void
+    {
+        $pdo = $this->makeSqlitePdo();
+        $pdo->exec(
+            'CREATE TABLE ork_class (
+                class_id INTEGER PRIMARY KEY,
+                name TEXT
+            )'
+        );
+        $pdo->exec("INSERT INTO ork_class VALUES (1, 'Warrior')");
+
+        $extract = new Extract(new Wiring($this->toolRoot), $this->toolRoot, fn (): PDO => $pdo);
+        $hash = $extract->catalogSqlHash($pdo, 'class');
+
+        $this->assertSame($hash, $extract->catalogSqlHash($pdo, 'class'));
+        $this->assertMatchesRegularExpression('/^sha256:[a-f0-9]{64}$/', $hash);
+    }
+
     private function makeSqlitePdo(): PDO
     {
         $pdo = new PDO('sqlite::memory:');

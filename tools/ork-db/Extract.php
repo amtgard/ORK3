@@ -95,6 +95,19 @@ final class Extract
         return ['files' => $written, 'warnings' => $warnings, 'source' => $this->wiring->mirrorTargetLabel()];
     }
 
+    public function catalogSqlHash(PDO $pdo, string $table): string
+    {
+        $allowed = $this->fixedExtractTables();
+        if (!in_array($table, $allowed, true)) {
+            throw new ValidationException("Unknown catalog table '{$table}'");
+        }
+
+        $fullTable = self::DB_PREFIX . $table;
+        $sql = $this->buildTableDump($pdo, $fullTable);
+
+        return 'sha256:' . hash('sha256', $sql);
+    }
+
     public function connectMirror(): PDO
     {
         if ($this->connectionFactory !== null) {

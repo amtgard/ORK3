@@ -8,6 +8,8 @@ require_once __DIR__ . '/lib/ValidationException.php';
 require_once __DIR__ . '/lib/TierRefusalException.php';
 require_once __DIR__ . '/lib/Wiring.php';
 require_once __DIR__ . '/lib/DeploymentTier.php';
+require_once __DIR__ . '/lib/MigrationClassifier.php';
+require_once __DIR__ . '/lib/SchemaIntrospection.php';
 require_once __DIR__ . '/Validate.php';
 require_once __DIR__ . '/Init.php';
 require_once __DIR__ . '/Extract.php';
@@ -15,13 +17,17 @@ require_once __DIR__ . '/Render.php';
 require_once __DIR__ . '/Apply.php';
 require_once __DIR__ . '/Use.php';
 require_once __DIR__ . '/Bootstrap.php';
+require_once __DIR__ . '/DriftCheck.php';
+require_once __DIR__ . '/SchemaDiff.php';
 
 use OrkDb\Apply;
 use OrkDb\Bootstrap;
 use OrkDb\DeploymentTier;
+use OrkDb\DriftCheck;
 use OrkDb\Extract;
 use OrkDb\Init;
 use OrkDb\Render;
+use OrkDb\SchemaDiff;
 use OrkDb\TierRefusalException;
 use OrkDb\UseProfile;
 use OrkDb\Validate;
@@ -40,6 +46,8 @@ $render = new Render($toolRoot, $repoRoot);
 $apply = new Apply($wiring, $validate, $render, $repoRoot);
 $useProfile = new UseProfile($tier, $repoRoot);
 $bootstrap = new Bootstrap($validate, $init, $extract, $apply, $toolRoot);
+$driftCheck = new DriftCheck($wiring, $toolRoot, $repoRoot);
+$schemaDiff = new SchemaDiff($wiring, $repoRoot);
 
 $command = $argv[1] ?? 'help';
 $options = parseOptions($argv);
@@ -54,7 +62,8 @@ try {
         'render' => runRender($tier, $render, $options),
         'apply' => runApply($tier, $apply, $options),
         'bootstrap' => runBootstrap($tier, $bootstrap, $options),
-        'schema-diff' => runStubDataCommand($tier, $command),
+        'drift-check' => runDriftCheck($tier, $driftCheck, $options),
+        'schema-diff' => runSchemaDiff($tier, $schemaDiff),
         'use' => runUse($tier, $useProfile, $options),
         default => unknownCommand($command),
     };
@@ -83,7 +92,8 @@ try {
  *   deterministic: bool,
  *   persist_seed: bool,
  *   skip_extract: bool,
- *   force_extract: bool
+ *   force_extract: bool,
+ *   strict: bool
  * }
  */
 function parseOptions(array $argv): array
@@ -100,6 +110,7 @@ function parseOptions(array $argv): array
     $persistSeed = false;
     $skipExtract = false;
     $forceExtract = false;
+    $strict = false;
     $positional = [];
 
     for ($i = 2, $count = count($argv); $i < $count; $i++) {
@@ -152,6 +163,10 @@ function parseOptions(array $argv): array
             $forceExtract = true;
             continue;
         }
+        if ($arg === '--strict') {
+            $strict = true;
+            continue;
+        }
         if (str_starts_with($arg, '--mode=')) {
             $mode = substr($arg, strlen('--mode='));
             continue;
@@ -193,6 +208,7 @@ function parseOptions(array $argv): array
         'persist_seed' => $persistSeed,
         'skip_extract' => $skipExtract,
         'force_extract' => $forceExtract,
+        'strict' => $strict,
     ];
 }
 
@@ -212,6 +228,7 @@ Usage:
   bin/ork-db validate [--mode init|pre-apply|post-apply]
   bin/ork-db init
   bin/ork-db bootstrap [--yes] [--skip-extract] [--force-extract]
+  bin/ork-db drift-check [--strict]
   bin/ork-db schema-diff
   bin/ork-db help [command]
 
@@ -326,11 +343,28 @@ function runApply(DeploymentTier $tier, Apply $apply, array $options): never
     exit($result['exit_code']);
 }
 
-function runStubDataCommand(DeploymentTier $tier, string $command): never
+function runDriftCheck(DeploymentTier $tier, DriftCheck $driftCheck, array $options): never
 {
-    $tier->refuseDataCommands($command);
-    fwrite(STDERR, "ork-db: '{$command}' not implemented yet (TD-8).\n");
-    exit(2);
+    unset($tier);
+
+    $result = $driftCheck->run((bool) ($options['strict'] ?? false));
+    foreach ($result['lines'] as $line) {
+        fwrite(STDOUT, $line . PHP_EOL);
+    }
+
+    exit($result['exit_code']);
+}
+
+function runSchemaDiff(DeploymentTier $tier, SchemaDiff $schemaDiff): never
+{
+    $tier->refuseDataCommands('schema-diff');
+
+    $result = $schemaDiff->run();
+    foreach ($result['lines'] as $line) {
+        fwrite(STDOUT, $line . PHP_EOL);
+    }
+
+    exit($result['exit_code']);
 }
 
 /** @param array{yes: bool, skip_extract: bool, force_extract: bool} $options */
