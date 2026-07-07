@@ -3302,7 +3302,10 @@ $(function() {
 				<?php endif; ?>
 			],
 			pageLength: 25,
-			scrollX: true
+			scrollX: true,
+			dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>",
+			lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+			language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' }
 		});
 	}
 });
