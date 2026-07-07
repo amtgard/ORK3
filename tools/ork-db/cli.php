@@ -11,10 +11,14 @@ require_once __DIR__ . '/lib/DeploymentTier.php';
 require_once __DIR__ . '/Validate.php';
 require_once __DIR__ . '/Init.php';
 require_once __DIR__ . '/Extract.php';
+require_once __DIR__ . '/Render.php';
+require_once __DIR__ . '/Apply.php';
 
+use OrkDb\Apply;
 use OrkDb\DeploymentTier;
 use OrkDb\Extract;
 use OrkDb\Init;
+use OrkDb\Render;
 use OrkDb\TierRefusalException;
 use OrkDb\Validate;
 use OrkDb\ValidationException;
@@ -28,6 +32,8 @@ $tier = new DeploymentTier($wiring, $repoRoot);
 $validate = new Validate($wiring, $toolRoot);
 $init = new Init($wiring, $validate, $repoRoot);
 $extract = new Extract($wiring, $toolRoot);
+$render = new Render($toolRoot, $repoRoot);
+$apply = new Apply($wiring, $validate, $render, $repoRoot);
 
 $command = $argv[1] ?? 'help';
 $options = parseOptions($argv);
@@ -39,7 +45,9 @@ try {
         'validate' => runValidate($tier, $validate, $options),
         'init' => runInit($tier, $init),
         'extract' => runExtract($tier, $extract, $wiring, $options),
-        'render', 'apply', 'schema-diff' => runStubDataCommand($tier, $command),
+        'render' => runRender($tier, $render, $options),
+        'apply' => runApply($tier, $apply, $options),
+        'schema-diff' => runStubDataCommand($tier, $command),
         'use' => runUseStub($tier, $options),
         default => unknownCommand($command),
     };
@@ -54,14 +62,33 @@ try {
     exit(1);
 }
 
-/** @return array{args: list<string>, mode: string|null, yes: bool, table: string|null, players_only: bool} */
+/**
+ * @return array{
+ *   args: list<string>,
+ *   mode: string|null,
+ *   yes: bool,
+ *   table: string|null,
+ *   players_only: bool,
+ *   anchor_date: string|null,
+ *   seed: int|null,
+ *   output: string|null,
+ *   sql: string|null,
+ *   deterministic: bool,
+ *   persist_seed: bool
+ * }
+ */
 function parseOptions(array $argv): array
 {
-    $command = $argv[1] ?? 'help';
     $mode = null;
     $yes = false;
     $table = null;
     $playersOnly = false;
+    $anchorDate = null;
+    $seed = null;
+    $output = null;
+    $sql = null;
+    $deterministic = false;
+    $persistSeed = false;
     $positional = [];
 
     for ($i = 2, $count = count($argv); $i < $count; $i++) {
@@ -74,6 +101,22 @@ function parseOptions(array $argv): array
             $table = $argv[++$i];
             continue;
         }
+        if ($arg === '--anchor-date' && isset($argv[$i + 1])) {
+            $anchorDate = $argv[++$i];
+            continue;
+        }
+        if ($arg === '--seed' && isset($argv[$i + 1])) {
+            $seed = (int) $argv[++$i];
+            continue;
+        }
+        if ($arg === '--output' && isset($argv[$i + 1])) {
+            $output = $argv[++$i];
+            continue;
+        }
+        if ($arg === '--sql' && isset($argv[$i + 1])) {
+            $sql = $argv[++$i];
+            continue;
+        }
         if ($arg === '--yes') {
             $yes = true;
             continue;
@@ -82,12 +125,36 @@ function parseOptions(array $argv): array
             $playersOnly = true;
             continue;
         }
+        if ($arg === '--deterministic') {
+            $deterministic = true;
+            continue;
+        }
+        if ($arg === '--persist-seed') {
+            $persistSeed = true;
+            continue;
+        }
         if (str_starts_with($arg, '--mode=')) {
             $mode = substr($arg, strlen('--mode='));
             continue;
         }
         if (str_starts_with($arg, '--table=')) {
             $table = substr($arg, strlen('--table='));
+            continue;
+        }
+        if (str_starts_with($arg, '--anchor-date=')) {
+            $anchorDate = substr($arg, strlen('--anchor-date='));
+            continue;
+        }
+        if (str_starts_with($arg, '--seed=')) {
+            $seed = (int) substr($arg, strlen('--seed='));
+            continue;
+        }
+        if (str_starts_with($arg, '--output=')) {
+            $output = substr($arg, strlen('--output='));
+            continue;
+        }
+        if (str_starts_with($arg, '--sql=')) {
+            $sql = substr($arg, strlen('--sql='));
             continue;
         }
         $positional[] = $arg;
@@ -99,6 +166,12 @@ function parseOptions(array $argv): array
         'yes' => $yes,
         'table' => $table,
         'players_only' => $playersOnly,
+        'anchor_date' => $anchorDate,
+        'seed' => $seed,
+        'output' => $output,
+        'sql' => $sql,
+        'deterministic' => $deterministic,
+        'persist_seed' => $persistSeed,
     ];
 }
 
@@ -113,8 +186,8 @@ Usage:
   bin/ork-db use <prod|dev>
   bin/ork-db status
   bin/ork-db extract
-  bin/ork-db render
-  bin/ork-db apply [--yes]
+  bin/ork-db render [--anchor-date YYYY-MM-DD] [--seed N] [--deterministic]
+  bin/ork-db apply [--yes] [--sql path]
   bin/ork-db validate [--mode init|pre-apply|post-apply]
   bin/ork-db init
   bin/ork-db schema-diff
@@ -192,10 +265,49 @@ function runExtract(DeploymentTier $tier, Extract $extract, Wiring $wiring, arra
     exit(0);
 }
 
+/** @param array{anchor_date: string|null, seed: int|null, output: string|null, deterministic: bool, persist_seed: bool} $options */
+function runRender(DeploymentTier $tier, Render $render, array $options): never
+{
+    $tier->refuseDataCommands('render');
+
+    $result = $render->run([
+        'anchor_date' => $options['anchor_date'],
+        'seed' => $options['seed'],
+        'output' => $options['output'],
+        'deterministic' => $options['deterministic'],
+        'persist_seed' => $options['persist_seed'],
+    ]);
+
+    fwrite(STDOUT, 'Output:       ' . $result['output'] . PHP_EOL);
+    fwrite(STDOUT, 'Anchor date:  ' . $result['anchor_date'] . PHP_EOL);
+    fwrite(STDOUT, 'Content seed: ' . $result['content_seed'] . PHP_EOL);
+    fwrite(STDOUT, 'Kingdoms:     ' . $result['kingdom_count'] . PHP_EOL);
+    fwrite(STDOUT, 'Parks:        ' . $result['park_count'] . PHP_EOL);
+
+    exit(0);
+}
+
+/** @param array{yes: bool, sql: string|null} $options */
+function runApply(DeploymentTier $tier, Apply $apply, array $options): never
+{
+    $tier->refuseDataCommands('apply');
+
+    $result = $apply->run([
+        'yes' => $options['yes'],
+        'sql' => $options['sql'],
+    ]);
+
+    foreach ($result['lines'] as $line) {
+        fwrite(STDOUT, $line . PHP_EOL);
+    }
+
+    exit($result['exit_code']);
+}
+
 function runStubDataCommand(DeploymentTier $tier, string $command): never
 {
     $tier->refuseDataCommands($command);
-    fwrite(STDERR, "ork-db: '{$command}' not implemented yet (TD-3+).\n");
+    fwrite(STDERR, "ork-db: '{$command}' not implemented yet (TD-8).\n");
     exit(2);
 }
 

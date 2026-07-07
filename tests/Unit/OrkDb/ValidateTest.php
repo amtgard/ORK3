@@ -80,7 +80,7 @@ final class ValidateTest extends TestCase
         }
         $pdo->exec('CREATE TABLE ork_park (park_id INTEGER PRIMARY KEY, kingdom_id INTEGER)');
         $parkId = 1;
-        foreach ([9001 => 5, 9002 => 5, 9003 => 4, 9004 => 4, 9005 => 5] as $kingdomId => $count) {
+        foreach ([9001 => 4, 9002 => 4, 9003 => 3, 9004 => 6, 9005 => 3] as $kingdomId => $count) {
             for ($i = 0; $i < $count; $i++) {
                 $pdo->exec('INSERT INTO ork_park VALUES (' . $parkId++ . ', ' . $kingdomId . ')');
             }
@@ -140,7 +140,7 @@ final class ValidateTest extends TestCase
         }
         $pdo->exec('CREATE TABLE ork_park (park_id INTEGER PRIMARY KEY, kingdom_id INTEGER)');
         $parkId = 1;
-        foreach ([9001 => 5, 9002 => 5, 9003 => 4, 9004 => 4, 9005 => 5] as $kingdomId => $count) {
+        foreach ([9001 => 4, 9002 => 4, 9003 => 3, 9004 => 6, 9005 => 3] as $kingdomId => $count) {
             for ($i = 0; $i < $count; $i++) {
                 $pdo->exec('INSERT INTO ork_park VALUES (' . $parkId++ . ', ' . $kingdomId . ')');
             }
@@ -183,7 +183,7 @@ final class ValidateTest extends TestCase
         }
         $pdo->exec('CREATE TABLE ork_park (park_id INTEGER PRIMARY KEY, kingdom_id INTEGER)');
         $parkId = 1;
-        foreach ([9001 => 1, 9002 => 5, 9003 => 5, 9004 => 5, 9005 => 7] as $kingdomId => $count) {
+        foreach ([9001 => 1, 9002 => 5, 9003 => 5, 9004 => 5, 9005 => 4] as $kingdomId => $count) {
             for ($i = 0; $i < $count; $i++) {
                 $pdo->exec('INSERT INTO ork_park VALUES (' . $parkId++ . ', ' . $kingdomId . ')');
             }
@@ -403,7 +403,7 @@ final class ValidateTest extends TestCase
         }
         $pdo->exec('CREATE TABLE ork_park (park_id INTEGER PRIMARY KEY, kingdom_id INTEGER)');
         $parkId = 1;
-        foreach ([9001 => 5, 9002 => 5, 9003 => 4, 9004 => 4, 9005 => 5] as $kingdomId => $count) {
+        foreach ([9001 => 4, 9002 => 4, 9003 => 3, 9004 => 6, 9005 => 3] as $kingdomId => $count) {
             for ($i = 0; $i < $count; $i++) {
                 $pdo->exec('INSERT INTO ork_park VALUES (' . $parkId++ . ', ' . $kingdomId . ')');
             }

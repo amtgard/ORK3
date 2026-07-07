@@ -37,20 +37,20 @@
 
 ## TD-4 — Render
 
-- [ ] `bin/ork-db render` — no DB connection
-- [ ] Content seed from `fingerprints.json5` (persisted, not re-rolled per run)
-- [ ] `fixed_embedded` catalogs (e.g. `day_convert.sql`) included in composition
-- [ ] Kingdomaward: clone `ork_award` per fake kingdom + seed-stable extras
-- [ ] Configuration: sample extract + clone to fake kingdoms/parks
-- [ ] Refused on production tier
+- [x] `bin/ork-db render` — no DB connection
+- [x] Content seed from `fingerprints.json5` (persisted, not re-rolled per run)
+- [x] `fixed_embedded` catalogs (e.g. `day_convert.sql`) included in composition
+- [x] Kingdomaward: clone `ork_award` per fake kingdom + seed-stable extras
+- [x] Configuration: sample extract + clone to fake kingdoms/parks
+- [x] Refused on production tier
 
 ---
 
 ## TD-5 — Apply
 
-- [ ] `bin/ork-db apply` — no args — always sandbox 19307/ork_test
-- [ ] Refused on production tier
-- [ ] Kingdom monikers + Grand Duchy of Litavia post-apply
+- [x] `bin/ork-db apply` — no args — always sandbox 19307/ork_test
+- [x] Refused on production tier
+- [x] Kingdom monikers + Grand Duchy of Litavia post-apply
 
 ---
 

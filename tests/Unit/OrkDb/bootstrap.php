@@ -13,3 +13,6 @@ require_once ORK3_ROOT . '/tools/ork-db/lib/Wiring.php';
 require_once ORK3_ROOT . '/tools/ork-db/lib/DeploymentTier.php';
 require_once ORK3_ROOT . '/tools/ork-db/Validate.php';
 require_once ORK3_ROOT . '/tools/ork-db/Extract.php';
+require_once ORK3_ROOT . '/tools/ork-db/Render.php';
+require_once ORK3_ROOT . '/tools/ork-db/Init.php';
+require_once ORK3_ROOT . '/tools/ork-db/Apply.php';

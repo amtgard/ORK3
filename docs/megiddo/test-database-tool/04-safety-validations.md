@@ -138,7 +138,7 @@ For render `seed=42`, expected total park count is precomputed (stored in `finge
 ```json5
 {
   "park_count_by_seed": {
-    "42": 23
+    "42": 20
   },
   "parks_per_kingdom_range": [2, 6]
 }
