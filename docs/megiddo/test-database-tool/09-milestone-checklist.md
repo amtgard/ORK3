@@ -90,12 +90,12 @@
 
 ## TD-10 — deploy-sandbox
 
-- [ ] `bin/ork-db deploy-sandbox` — single daily dev entry command
-- [ ] State detection: uninitialized → init; first-run → bootstrap; stale render → refresh
-- [ ] Validate at each gate — halt with remediation steps on failure
-- [ ] Auto `use dev` after sandbox is valid
-- [ ] Daily refresh when last render `anchor_date` &lt; today
-- [ ] `tools/ork-db/rendered/.last-render.json` written by render/apply
+- [x] `bin/ork-db deploy-sandbox` — single daily dev entry command
+- [x] State detection: uninitialized → init; first-run → bootstrap; stale render → refresh
+- [x] Validate at each gate — halt with remediation steps on failure
+- [x] Auto `use dev` after sandbox is valid
+- [x] Daily refresh when last render `anchor_date` &lt; today
+- [x] `tools/ork-db/rendered/.last-render.json` written by render/apply
 
 ---
 

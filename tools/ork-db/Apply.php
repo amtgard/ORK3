@@ -39,9 +39,13 @@ final class Apply
             return ['lines' => $lines, 'exit_code' => $pre['exit_code'], 'sql_path' => ''];
         }
 
-        $sqlPath = isset($options['sql']) && $options['sql'] !== null && $options['sql'] !== ''
-            ? (string) $options['sql']
-            : $this->render->run()['output'];
+        $renderMeta = null;
+        if (isset($options['sql']) && $options['sql'] !== null && $options['sql'] !== '') {
+            $sqlPath = (string) $options['sql'];
+        } else {
+            $renderMeta = $this->render->run();
+            $sqlPath = $renderMeta['output'];
+        }
 
         if (!is_readable($sqlPath)) {
             throw new ValidationException("Rendered SQL not readable: {$sqlPath}");
@@ -63,11 +67,33 @@ final class Apply
             $lines[] = $line;
         }
 
+        if ($post['passed']) {
+            $this->recordLastRender($sqlPath, $renderMeta);
+        }
+
         return [
             'lines' => $lines,
             'exit_code' => $post['passed'] ? 0 : $post['exit_code'],
             'sql_path' => $sqlPath,
         ];
+    }
+
+    /** @param array{anchor_date: string, content_seed: int}|null $renderMeta */
+    private function recordLastRender(string $sqlPath, ?array $renderMeta): void
+    {
+        $toolRoot = $this->repoRoot . '/tools/ork-db';
+
+        if ($renderMeta !== null) {
+            LastRender::write($toolRoot, $renderMeta['anchor_date'], $renderMeta['content_seed']);
+
+            return;
+        }
+
+        $anchorDate = LastRender::parseAnchorDateFromSql($sqlPath);
+        $contentSeed = LastRender::parseContentSeedFromSql($sqlPath);
+        if ($anchorDate !== null && $contentSeed !== null) {
+            LastRender::write($toolRoot, $anchorDate, $contentSeed);
+        }
     }
 
     private function confirmApply(string $sqlPath): bool

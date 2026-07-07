@@ -66,6 +66,43 @@ final class BootstrapTest extends TestCase
         $this->assertTrue($validate->testCanaryPresent());
     }
 
+    public function testHasTestKingdomRowsReturnsFalseWhenMissing(): void
+    {
+        $toolRoot = $this->copyToolRoot();
+        $pdo = $this->makeValidateSqlitePdo();
+        $this->seedPreApplySandbox($pdo);
+        $validate = new Validate(new Wiring($toolRoot), $toolRoot, fn (): PDO => $pdo);
+        $this->removeTree($toolRoot);
+
+        $this->assertFalse($validate->hasTestKingdomRows());
+    }
+
+    public function testHasTestKingdomRowsReturnsTrueWhenPresent(): void
+    {
+        $toolRoot = $this->copyToolRoot();
+        $pdo = $this->makeValidateSqlitePdo();
+        $this->seedPreApplySandbox($pdo);
+        $pdo->exec(
+            'CREATE TABLE ork_kingdom (kingdom_id INTEGER PRIMARY KEY, name TEXT, abbreviation TEXT, parent_kingdom_id INTEGER);'
+            . 'INSERT INTO ork_kingdom VALUES (9001, "Empire of Ashkara", "EAK", 0);'
+        );
+        $validate = new Validate(new Wiring($toolRoot), $toolRoot, fn (): PDO => $pdo);
+        $this->removeTree($toolRoot);
+
+        $this->assertTrue($validate->hasTestKingdomRows());
+    }
+
+    public function testHasTestKingdomRowsReturnsFalseWhenConnectionFails(): void
+    {
+        $toolRoot = $this->copyToolRoot();
+        $validate = new Validate(new Wiring($toolRoot), $toolRoot, function (): PDO {
+            throw new \PDOException('connection failed');
+        });
+        $this->removeTree($toolRoot);
+
+        $this->assertFalse($validate->hasTestKingdomRows());
+    }
+
     public function testRunAbortsWhenApplyFails(): void
     {
         $toolRoot = $this->copyToolRoot();

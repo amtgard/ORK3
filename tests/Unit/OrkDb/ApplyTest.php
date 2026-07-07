@@ -102,7 +102,49 @@ final class ApplyTest extends TestCase
 
         $this->assertTrue($loaded);
         $this->assertSame(0, $result['exit_code']);
-        $this->assertNotSame('', $result['sql_path']);
+        $metadata = \OrkDb\LastRender::read(ORK3_ROOT . '/tools/ork-db');
+        $this->assertNotNull($metadata);
+        $this->assertSame(42, $metadata['content_seed']);
+    }
+
+    public function testRunRecordsLastRenderMetadataFromProvidedSqlHeader(): void
+    {
+        $toolRoot = $this->makeTempToolRoot();
+        $sqlPath = sys_get_temp_dir() . '/ork-db-apply-header-' . uniqid('', true) . '.sql';
+        file_put_contents($sqlPath, implode("\n", [
+            '-- anchor_date: 2026-06-01',
+            '-- content_seed: 99',
+            'SELECT 1;',
+        ]));
+
+        $pdo = $this->makeValidateSqlitePdo();
+        $pdo->exec(
+            'CREATE TABLE _ork_canary_test (id INTEGER PRIMARY KEY, marker TEXT);'
+            . "INSERT INTO _ork_canary_test VALUES (1, 'ORK3_TEST_CANARY_v1');"
+        );
+        $this->seedPostApplyTables($pdo);
+
+        $wiring = new Wiring($toolRoot);
+        $validate = new Validate($wiring, $toolRoot, fn (): PDO => $pdo);
+        $render = new Render($toolRoot, ORK3_ROOT);
+        $apply = new Apply(
+            $wiring,
+            $validate,
+            $render,
+            ORK3_ROOT,
+            static function (): void {
+            }
+        );
+
+        $result = $apply->run(['yes' => true, 'sql' => $sqlPath]);
+        unlink($sqlPath);
+        $this->removeTree($toolRoot);
+
+        $this->assertSame(0, $result['exit_code']);
+        $metadata = \OrkDb\LastRender::read(ORK3_ROOT . '/tools/ork-db');
+        $this->assertNotNull($metadata);
+        $this->assertSame('2026-06-01', $metadata['anchor_date']);
+        $this->assertSame(99, $metadata['content_seed']);
     }
 
     private function makeTempToolRoot(): string

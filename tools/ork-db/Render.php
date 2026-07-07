@@ -79,6 +79,8 @@ final class Render
             throw new \RuntimeException("Failed to write rendered SQL: {$output}");
         }
 
+        LastRender::write($this->toolRoot, $anchorDate, $contentSeed);
+
         return [
             'output' => $output,
             'park_count' => count($this->parks),

@@ -94,7 +94,7 @@ final class Validate
         }
 
         $runFingerprints = $mode === self::MODE_POST_APPLY
-            || ($mode === self::MODE_PRE_APPLY && $this->hasTestKingdomRows($pdo));
+            || ($mode === self::MODE_PRE_APPLY && $this->hasTestKingdomRowsOnPdo($pdo));
 
         if ($runFingerprints) {
             $kingdomResult = $this->checkKingdoms($pdo);
@@ -139,6 +139,18 @@ final class Validate
             $pdo = $this->connectSandbox($credentials['user'], $credentials['password']);
 
             return $this->checkTestCanary($pdo)['present'];
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    public function hasTestKingdomRows(): bool
+    {
+        try {
+            $credentials = $this->wiring->credentials();
+            $pdo = $this->connectSandbox($credentials['user'], $credentials['password']);
+
+            return $this->hasTestKingdomRowsOnPdo($pdo);
         } catch (\Throwable) {
             return false;
         }
@@ -191,7 +203,7 @@ final class Validate
         return ['present' => $count === 1];
     }
 
-    private function hasTestKingdomRows(PDO $pdo): bool
+    private function hasTestKingdomRowsOnPdo(PDO $pdo): bool
     {
         if (!$this->tableExists($pdo, 'ork_kingdom')) {
             return false;

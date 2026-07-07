@@ -10,6 +10,7 @@ require_once __DIR__ . '/lib/Wiring.php';
 require_once __DIR__ . '/lib/DeploymentTier.php';
 require_once __DIR__ . '/lib/MigrationClassifier.php';
 require_once __DIR__ . '/lib/SchemaIntrospection.php';
+require_once __DIR__ . '/lib/LastRender.php';
 require_once __DIR__ . '/Validate.php';
 require_once __DIR__ . '/Init.php';
 require_once __DIR__ . '/Extract.php';
@@ -19,9 +20,11 @@ require_once __DIR__ . '/Use.php';
 require_once __DIR__ . '/Bootstrap.php';
 require_once __DIR__ . '/DriftCheck.php';
 require_once __DIR__ . '/SchemaDiff.php';
+require_once __DIR__ . '/DeploySandbox.php';
 
 use OrkDb\Apply;
 use OrkDb\Bootstrap;
+use OrkDb\DeploySandbox;
 use OrkDb\DeploymentTier;
 use OrkDb\DriftCheck;
 use OrkDb\Extract;
@@ -48,6 +51,18 @@ $useProfile = new UseProfile($tier, $repoRoot);
 $bootstrap = new Bootstrap($validate, $init, $extract, $apply, $toolRoot);
 $driftCheck = new DriftCheck($wiring, $toolRoot, $repoRoot);
 $schemaDiff = new SchemaDiff($wiring, $repoRoot);
+$deploySandbox = new DeploySandbox(
+    $tier,
+    $wiring,
+    $validate,
+    $init,
+    $bootstrap,
+    $extract,
+    $render,
+    $apply,
+    $useProfile,
+    $toolRoot
+);
 
 $command = $argv[1] ?? 'help';
 $options = parseOptions($argv);
@@ -62,6 +77,7 @@ try {
         'render' => runRender($tier, $render, $options),
         'apply' => runApply($tier, $apply, $options),
         'bootstrap' => runBootstrap($tier, $bootstrap, $options),
+        'deploy-sandbox' => runDeploySandbox($tier, $deploySandbox, $options),
         'drift-check' => runDriftCheck($tier, $driftCheck, $options),
         'schema-diff' => runSchemaDiff($tier, $schemaDiff),
         'use' => runUse($tier, $useProfile, $options),
@@ -93,6 +109,8 @@ try {
  *   persist_seed: bool,
  *   skip_extract: bool,
  *   force_extract: bool,
+ *   force_refresh: bool,
+ *   skip_use_dev: bool,
  *   strict: bool
  * }
  */
@@ -110,6 +128,8 @@ function parseOptions(array $argv): array
     $persistSeed = false;
     $skipExtract = false;
     $forceExtract = false;
+    $forceRefresh = false;
+    $skipUseDev = false;
     $strict = false;
     $positional = [];
 
@@ -163,6 +183,14 @@ function parseOptions(array $argv): array
             $forceExtract = true;
             continue;
         }
+        if ($arg === '--force-refresh') {
+            $forceRefresh = true;
+            continue;
+        }
+        if ($arg === '--skip-use-dev') {
+            $skipUseDev = true;
+            continue;
+        }
         if ($arg === '--strict') {
             $strict = true;
             continue;
@@ -208,6 +236,8 @@ function parseOptions(array $argv): array
         'persist_seed' => $persistSeed,
         'skip_extract' => $skipExtract,
         'force_extract' => $forceExtract,
+        'force_refresh' => $forceRefresh,
+        'skip_use_dev' => $skipUseDev,
         'strict' => $strict,
     ];
 }
@@ -228,6 +258,7 @@ Usage:
   bin/ork-db validate [--mode init|pre-apply|post-apply]
   bin/ork-db init
   bin/ork-db bootstrap [--yes] [--skip-extract] [--force-extract]
+  bin/ork-db deploy-sandbox [--yes] [--force-refresh] [--skip-use-dev]
   bin/ork-db drift-check [--strict]
   bin/ork-db schema-diff
   bin/ork-db help [command]
@@ -376,6 +407,24 @@ function runBootstrap(DeploymentTier $tier, Bootstrap $bootstrap, array $options
         'yes' => $options['yes'],
         'skip_extract' => $options['skip_extract'],
         'force_extract' => $options['force_extract'],
+    ]);
+
+    foreach ($result['lines'] as $line) {
+        fwrite(STDOUT, $line . PHP_EOL);
+    }
+
+    exit($result['exit_code']);
+}
+
+/** @param array{yes: bool, force_refresh: bool, skip_use_dev: bool} $options */
+function runDeploySandbox(DeploymentTier $tier, DeploySandbox $deploySandbox, array $options): never
+{
+    $tier->refuseDataCommands('deploy-sandbox');
+
+    $result = $deploySandbox->run([
+        'yes' => $options['yes'],
+        'force_refresh' => $options['force_refresh'],
+        'skip_use_dev' => $options['skip_use_dev'],
     ]);
 
     foreach ($result['lines'] as $line) {

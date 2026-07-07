@@ -56,6 +56,10 @@ final class RenderTest extends TestCase
         $this->assertStringContainsString('ork_day_convert', $sql);
         $this->assertStringContainsString('_ork_canary_test', $sql);
         $this->assertStringContainsString('INSERT INTO `ork_award`', $sql);
+        $metadata = \OrkDb\LastRender::read($this->toolRoot);
+        $this->assertNotNull($metadata);
+        $this->assertSame('2026-07-07', $metadata['anchor_date']);
+        $this->assertSame(42, $metadata['content_seed']);
         $this->assertStringContainsString('INSERT INTO `ork_kingdomaward`', $sql);
         $this->assertStringContainsString('INSERT INTO `ork_configuration`', $sql);
         $this->assertStringContainsString('-- migration: 2026-05-17-add-entity-banners.sql', $sql);

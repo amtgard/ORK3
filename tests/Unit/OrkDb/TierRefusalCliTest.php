@@ -29,6 +29,13 @@ final class TierRefusalCliTest extends TestCase
         $tier->refuseDataCommands('apply');
     }
 
+    public function testDeploySandboxRefusesWhenProductionTierDetected(): void
+    {
+        $tier = $this->productionTier();
+        $this->expectException(TierRefusalException::class);
+        $tier->refuseDataCommands('deploy-sandbox');
+    }
+
     public function testUseDevRefusesWhenProductionTierDetected(): void
     {
         $tempRoot = sys_get_temp_dir() . '/ork-db-use-tier-' . uniqid('', true);
