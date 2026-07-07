@@ -6990,6 +6990,23 @@ table.dataTable.adm-table tbody tr.even:hover {
     .kn-heraldry-edit-btn { opacity: 1; }
     .pk-heraldry-edit-btn { opacity: 1; }
     .ev-heraldry-edit-btn { opacity: 1; }
+
+    /* Leave-household / inline-confirm controls: the desktop-hover glyphs are
+       micro-targets (× ~7x13px, Yes ~21x13px) that can't be reliably tapped
+       with a finger, so leaving a household was impossible on mobile. Grow the
+       hit areas on coarse pointers only; desktop layout is unchanged. */
+    .pn-delete-link,
+    .pn-delete-yes,
+    .pn-delete-no {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 40px;
+        min-height: 40px;
+        font-size: 16px;
+    }
+    .pn-delete-confirm { gap: 14px; }
+    .pn-unit-row { padding: 6px 0; }
 }
 
 /* === Park Profile: 425px Hero Breakpoint === */
