@@ -15881,6 +15881,66 @@ function recsCellText(td) {
     $c.find('button, .pk-rec-notes-ellipsis').remove();
     return $c.text().replace(/\s+/g, ' ').trim();
 }
+// ---- Shared DataTables helpers (ORK standard toolbar + CSV) ----
+// CSV: data columns only (skip <th class="no-export">), current filtered+sorted view, ALL rows.
+window.orkExportDataTableCsv = function(dt, filename) {
+    var keep = [], headers = [];
+    dt.columns().every(function(i) {
+        var $h = $(this.header());
+        if ($h.hasClass('no-export')) return;
+        keep.push(i);
+        headers.push($h.text().trim());
+    });
+    var rows = [headers];
+    dt.rows({ search: 'applied', order: 'applied' }).every(function() {
+        var $tds = $(this.node()).find('td');
+        rows.push(keep.map(function(ci) { return $tds.eq(ci).text().trim().replace(/\s+/g, ' '); }));
+    });
+    var csv = rows.map(function(r) {
+        return r.map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\r\n');
+    var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+};
+
+// Init a table as a DataTable with the ORK standard toolbar + an Export CSV button.
+// opts: { order, columnDefs, csvName, dt (extra config merged last) }
+window.orkInitDataTable = function($table, opts) {
+    opts = opts || {};
+    if (!$table || !$table.length) return null;
+    if ($.fn.dataTable.isDataTable($table)) { $table.DataTable().destroy(); }
+    var dt = $table.DataTable($.extend(true, {
+        dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>",
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+        pagingType: 'simple_numbers',
+        autoWidth: false,
+        scrollX: true,
+        order: (opts.order || []),
+        columnDefs: (opts.columnDefs || []),
+        language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' }
+    }, opts.dt || {}));
+    var $top = $(dt.table().container()).find('.ork-dt-top');
+    var $btn = $('<button type="button" class="ork-dt-csv"><i class="fas fa-file-csv"></i> Export CSV</button>');
+    $btn.on('click', function() { window.orkExportDataTableCsv(dt, (opts.csvName || 'export') + '.csv'); });
+    $top.append($btn);
+    return dt;
+};
+
+// Re-measure columns for any DataTables inside a just-revealed container
+// (fixes zero-width columns when a table was initialised while its tab was hidden).
+window.orkAdjustDataTables = function($scope) {
+    $($scope || document).find('table').each(function() {
+        if ($.fn.dataTable.isDataTable(this)) {
+            try { $(this).DataTable().columns.adjust(); } catch (e) {}
+        }
+    });
+};
+
 window.recsExportCsv = function(dt, filename) {
     var EXPORT_COLS = 6; // skip actions column
     var headers = [];
