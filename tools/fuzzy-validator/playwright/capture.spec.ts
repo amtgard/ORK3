@@ -9,6 +9,7 @@ import { hasAuthCredentials, login } from './lib/auth';
 import { loadPagesRegistry, parsePageIdList, resolveRequestedPages } from './lib/pages';
 import { appReachable } from './lib/reachable';
 import { startAssetCapture } from './lib/captureAssets';
+import { captureDomHtml } from './lib/captureDom';
 import { FIXED_CLOCK_TIME, captureScreenshot, stabilizePage } from './lib/stabilize';
 
 const TOOL_ROOT = path.join(__dirname, '..');
@@ -65,6 +66,11 @@ for (const pageEntry of capturePages) {
       const fileName = singleCapture ? 'candidate.png' : `${runLabel}.png`;
       const outPath = path.join(outDir, fileName);
       await captureScreenshot(page, outPath);
+
+      const domLabel = singleCapture ? 'candidate' : runLabel;
+      const domPath = path.join(outDir, `${domLabel}.dom.html`);
+      await captureDomHtml(page, domPath);
+
       await assetSession.finish({
         pageId: pageEntry.id,
         runLabel,

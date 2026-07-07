@@ -32,7 +32,7 @@ def test_record_runs_capture_and_discover():
     with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
         run_mock.return_value.returncode = 0
         assert main(["record", "--page", "home-anonymous", "--phase", "visual"]) == 0
-        assert run_mock.call_count == 2
+        assert run_mock.call_count == 3
 
 
 def test_record_phase_assets_runs_capture_and_calibrate():
@@ -47,6 +47,13 @@ def test_validate_phase_assets_runs_gate():
         run_mock.return_value.returncode = 0
         assert main(["validate", "--page", "home-anonymous", "--phase", "assets"]) == 0
         assert run_mock.call_count == 1
+
+
+def test_record_phase_dom_runs_capture_and_discover():
+    with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
+        run_mock.return_value.returncode = 0
+        assert main(["record", "--page", "home-anonymous", "--phase", "dom"]) == 0
+        assert run_mock.call_count == 2
 
 
 def test_validate_phase_all_not_implemented():

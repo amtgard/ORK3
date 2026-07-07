@@ -62,3 +62,27 @@ def load_fuzz_manifest(path: Path | str) -> dict[str, Any]:
 
 def effective_fuzz_zones(manifest: dict[str, Any]) -> list[dict]:
     return list(manifest.get("fuzzZones", [])) + list(manifest.get("manualZones", []))
+
+
+def build_dom_fuzz_manifest(
+    *,
+    page_id: str,
+    fuzz_nodes: list[dict[str, Any]],
+    calibration_runs: int,
+    calibrated_from_commit: str | None = None,
+) -> dict[str, Any]:
+    manifest: dict[str, Any] = {
+        "schemaVersion": 1,
+        "pageId": page_id,
+        "calibratedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "calibrationRuns": calibration_runs,
+        "fuzzNodes": fuzz_nodes,
+        "manualNodes": [],
+    }
+    if calibrated_from_commit:
+        manifest["calibratedFromCommit"] = calibrated_from_commit
+    return manifest
+
+
+def load_dom_fuzz_manifest(path: Path | str) -> dict[str, Any]:
+    return load_json5(path)

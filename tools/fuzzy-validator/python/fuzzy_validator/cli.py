@@ -89,60 +89,39 @@ def _resolve_page_ids(args: argparse.Namespace) -> list[str]:
     raise SystemExit(2)
 
 
-def _run_capture(args: argparse.Namespace) -> int:
-    if args.phase not in {"visual", "assets", "all"}:
-        print(
-            f"fuzzy-validator record: phase '{args.phase}' not implemented until FU-8+",
-            file=sys.stderr,
+def _run_dom_discover(page_ids: list[str], env: dict) -> int:
+    discover_script = PYTHON_DIR / "discover_dom_fuzz.py"
+    for page_id in page_ids:
+        cal_dir = TOOL_ROOT / "calibrations" / page_id
+        dom_manifest_out = TOOL_ROOT / "manifests" / f"{page_id}.dom-fuzz.json"
+        dom_debug_out = TOOL_ROOT / "reports" / f"{page_id}-dom-fuzz.txt"
+        dom_baseline_out = TOOL_ROOT / "baselines" / f"{page_id}.dom.json"
+        discover = subprocess.run(
+            [
+                sys.executable,
+                str(discover_script),
+                "--page-id",
+                page_id,
+                "--calibration-dir",
+                str(cal_dir),
+                "--out",
+                str(dom_manifest_out),
+                "--debug-out",
+                str(dom_debug_out),
+                "--baseline-out",
+                str(dom_baseline_out),
+            ],
+            cwd=REPO_ROOT,
+            env=env,
+            check=False,
         )
-        return 2
+        if discover.returncode != 0:
+            return int(discover.returncode)
+    return 0
 
-    page_ids = _resolve_page_ids(args)
-    if args.dry_run:
-        for page_id in page_ids:
-            print(page_id)
-        return 0
 
-    env = os.environ.copy()
-    env["FUZZ_PAGES"] = ",".join(page_ids)
-    if args.repeat is not None:
-        env["FUZZ_REPEAT"] = str(args.repeat)
-    if args.base_url:
-        env["ORK3_E2E_BASE_URL"] = args.base_url
-
-    result = subprocess.run(
-        ["npx", "playwright", "test", "--project=fuzzy-capture"],
-        cwd=REPO_ROOT,
-        env=env,
-        check=False,
-    )
-    if result.returncode != 0:
-        return int(result.returncode)
-
-    if args.phase == "assets":
-        env["PYTHONPATH"] = f"{env.get('PYTHONPATH', '')}:{PYTHON_DIR}"
-        calibrate_assets_script = PYTHON_DIR / "calibrate_assets.py"
-        for page_id in page_ids:
-            cal_dir = TOOL_ROOT / "calibrations" / page_id
-            calibrate = subprocess.run(
-                [
-                    sys.executable,
-                    str(calibrate_assets_script),
-                    "--page-id",
-                    page_id,
-                    "--calibration-dir",
-                    str(cal_dir),
-                ],
-                cwd=REPO_ROOT,
-                env=env,
-                check=False,
-            )
-            if calibrate.returncode != 0:
-                return int(calibrate.returncode)
-        return 0
-
+def _run_pixel_discover(page_ids: list[str], env: dict) -> int:
     discover_script = PYTHON_DIR / "discover_fuzz.py"
-    env["PYTHONPATH"] = f"{env.get('PYTHONPATH', '')}:{PYTHON_DIR}"
     for page_id in page_ids:
         cal_dir = TOOL_ROOT / "calibrations" / page_id
         manifest_out = TOOL_ROOT / "manifests" / f"{page_id}.fuzz.json"
@@ -169,6 +148,89 @@ def _run_capture(args: argparse.Namespace) -> int:
         )
         if discover.returncode != 0:
             return int(discover.returncode)
+    return 0
+
+
+def _run_capture(args: argparse.Namespace) -> int:
+    if args.phase not in {"visual", "assets", "dom", "all"}:
+        print(
+            f"fuzzy-validator record: unsupported phase '{args.phase}'",
+            file=sys.stderr,
+        )
+        return 2
+
+    page_ids = _resolve_page_ids(args)
+    if args.dry_run:
+        for page_id in page_ids:
+            print(page_id)
+        return 0
+
+    env = os.environ.copy()
+    env["FUZZ_PAGES"] = ",".join(page_ids)
+    if args.repeat is not None:
+        env["FUZZ_REPEAT"] = str(args.repeat)
+    if args.base_url:
+        env["ORK3_E2E_BASE_URL"] = args.base_url
+
+    result = subprocess.run(
+        ["npx", "playwright", "test", "--project=fuzzy-capture"],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+    )
+    if result.returncode != 0:
+        return int(result.returncode)
+
+    env["PYTHONPATH"] = f"{env.get('PYTHONPATH', '')}:{PYTHON_DIR}"
+
+    if args.phase == "assets":
+        calibrate_assets_script = PYTHON_DIR / "calibrate_assets.py"
+        for page_id in page_ids:
+            cal_dir = TOOL_ROOT / "calibrations" / page_id
+            calibrate = subprocess.run(
+                [
+                    sys.executable,
+                    str(calibrate_assets_script),
+                    "--page-id",
+                    page_id,
+                    "--calibration-dir",
+                    str(cal_dir),
+                ],
+                cwd=REPO_ROOT,
+                env=env,
+                check=False,
+            )
+            if calibrate.returncode != 0:
+                return int(calibrate.returncode)
+        return 0
+
+    if args.phase in {"visual", "all"}:
+        code = _run_pixel_discover(page_ids, env)
+        if code != 0:
+            return code
+
+    if args.phase in {"visual", "all"}:
+        calibrate_assets_script = PYTHON_DIR / "calibrate_assets.py"
+        for page_id in page_ids:
+            cal_dir = TOOL_ROOT / "calibrations" / page_id
+            calibrate = subprocess.run(
+                [
+                    sys.executable,
+                    str(calibrate_assets_script),
+                    "--page-id",
+                    page_id,
+                    "--calibration-dir",
+                    str(cal_dir),
+                ],
+                cwd=REPO_ROOT,
+                env=env,
+                check=False,
+            )
+            if calibrate.returncode != 0:
+                return int(calibrate.returncode)
+
+    if args.phase in {"dom", "all"}:
+        return _run_dom_discover(page_ids, env)
 
     return 0
 

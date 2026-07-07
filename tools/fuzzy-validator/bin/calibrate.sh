@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fuzzy Validator — pixel calibration (capture + fuzz discovery)
+# Fuzzy Validator — pixel/DOM calibration (capture + fuzz discovery)
 set -euo pipefail
 
 TOOL_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -9,17 +9,19 @@ PYTHON_DIR="$TOOL_ROOT/python"
 usage() {
   cat <<'EOF'
 Usage:
-  calibrate.sh --page PAGE_ID
-  calibrate.sh --pages id1,id2
-  calibrate.sh --all
+  calibrate.sh --page PAGE_ID [--phase visual|dom|all]
+  calibrate.sh --pages id1,id2 [--phase visual|dom|all]
+  calibrate.sh --all [--phase visual|dom|all]
 
-Runs Playwright capture (×N) then discover_fuzz.py for each page.
+Runs Playwright capture (×N) then discovery for each page.
+Default phase: visual (pixel fuzz + asset stability).
 EOF
 }
 
 PAGE=""
 PAGES=""
 ALL=false
+PHASE="visual"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -35,6 +37,10 @@ while [[ $# -gt 0 ]]; do
       ALL=true
       shift
       ;;
+    --phase)
+      PHASE="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -46,6 +52,11 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "$PHASE" != "visual" && "$PHASE" != "dom" && "$PHASE" != "all" ]]; then
+  echo "calibrate.sh: unsupported phase '$PHASE'" >&2
+  exit 2
+fi
 
 if [[ "$ALL" == true ]]; then
   TARGETS=()
@@ -82,19 +93,35 @@ for target in "${TARGETS[@]}"; do
   bin/fuzzy-validator record --page "$trimmed"
 
   cal_dir="$TOOL_ROOT/calibrations/$trimmed"
-  manifest_out="$TOOL_ROOT/manifests/${trimmed}.fuzz.json"
-  overlay_out="$TOOL_ROOT/reports/${trimmed}-calibration-overlay.png"
-  baseline_out="$TOOL_ROOT/baselines/${trimmed}.png"
 
-  python3 "$PYTHON_DIR/discover_fuzz.py" \
-    --page-id "$trimmed" \
-    --calibration-dir "$cal_dir" \
-    --out "$manifest_out" \
-    --overlay "$overlay_out" \
-    --baseline-out "$baseline_out"
+  if [[ "$PHASE" == "visual" || "$PHASE" == "all" ]]; then
+    manifest_out="$TOOL_ROOT/manifests/${trimmed}.fuzz.json"
+    overlay_out="$TOOL_ROOT/reports/${trimmed}-calibration-overlay.png"
+    baseline_out="$TOOL_ROOT/baselines/${trimmed}.png"
+
+    python3 "$PYTHON_DIR/discover_fuzz.py" \
+      --page-id "$trimmed" \
+      --calibration-dir "$cal_dir" \
+      --out "$manifest_out" \
+      --overlay "$overlay_out" \
+      --baseline-out "$baseline_out"
+  fi
 
   echo "calibrate.sh: asserting asset stability for $trimmed"
   python3 "$PYTHON_DIR/calibrate_assets.py" \
     --page-id "$trimmed" \
     --calibration-dir "$cal_dir"
+
+  if [[ "$PHASE" == "dom" || "$PHASE" == "all" ]]; then
+    dom_manifest_out="$TOOL_ROOT/manifests/${trimmed}.dom-fuzz.json"
+    dom_debug_out="$TOOL_ROOT/reports/${trimmed}-dom-fuzz.txt"
+    dom_baseline_out="$TOOL_ROOT/baselines/${trimmed}.dom.json"
+
+    python3 "$PYTHON_DIR/discover_dom_fuzz.py" \
+      --page-id "$trimmed" \
+      --calibration-dir "$cal_dir" \
+      --out "$dom_manifest_out" \
+      --debug-out "$dom_debug_out" \
+      --baseline-out "$dom_baseline_out"
+  fi
 done

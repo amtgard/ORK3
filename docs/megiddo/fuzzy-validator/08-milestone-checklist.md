@@ -80,11 +80,11 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 
 ### FU-8: DOM fuzz calibration
 
-- [ ] Branch `megiddo/fu-8-dom-fuzz`
-- [ ] `canonical_dom.py`, `tree_diff.py`, `discover_dom_fuzz.py`
-- [ ] `manifests/{pageId}.dom-fuzz.json` + baselines `{pageId}.dom.json`
-- [ ] pytest coverage ≥ 90% on DOM modules
-- [ ] Single squashed commit
+- [x] Branch `megiddo/fu-8-dom-fuzz`
+- [x] `canonical_dom.py`, `tree_diff.py`, `discover_dom_fuzz.py`
+- [x] `manifests/{pageId}.dom-fuzz.json` + baselines `{pageId}.dom.json`
+- [x] pytest coverage ≥ 90% on DOM modules
+- [x] Single squashed commit
 
 ### FU-9: Unified gate
 
@@ -125,7 +125,7 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 | FU-5 | 2026-07-07 | eb281bad | 95% |
 | FU-6 | 2026-07-07 | f7f306ab | n/a (11 PW unit tests) |
 | FU-7 | 2026-07-07 | 3f82fd89 | 95% |
-| FU-8 | | | |
+| FU-8 | 2026-07-07 | 9db25343 | 94% |
 | FU-9 | | | |
 | FU-10 | | | |
 | FU-11 | | | |
