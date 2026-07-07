@@ -5,8 +5,11 @@ Refactor-stability harness for ORK3 front-end pages: stabilized Playwright captu
 ## Run from repo root
 
 ```bash
-bin/fuzzy-validator record --urls path/to/pages.txt
+bin/fuzzy-validator record --pages home-anonymous
 bin/fuzzy-validator validate --urls path/to/pages.txt
+
+# npm aliases
+npm run fuzz:capture -- --pages home-anonymous
 ```
 
 ## Documentation

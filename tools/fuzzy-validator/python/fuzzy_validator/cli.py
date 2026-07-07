@@ -1,9 +1,17 @@
-"""Fuzzy Validator CLI — record / validate orchestration (stubs through FU-1)."""
+"""Fuzzy Validator CLI — record / validate orchestration."""
 
 from __future__ import annotations
 
 import argparse
+import json
+import os
+import subprocess
 import sys
+from pathlib import Path
+
+TOOL_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = TOOL_ROOT.parent.parent
+PAGES_MANIFEST = TOOL_ROOT / "manifests" / "pages.json5"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -43,6 +51,71 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _load_registry() -> dict:
+    with PAGES_MANIFEST.open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _resolve_page_ids(args: argparse.Namespace) -> list[str]:
+    if args.page:
+        return [args.page]
+
+    if args.pages:
+        return [page_id.strip() for page_id in args.pages.split(",") if page_id.strip()]
+
+    if args.all:
+        registry = _load_registry()
+        return [page["id"] for page in registry["pages"] if not page.get("skip")]
+
+    if args.urls:
+        page_ids: list[str] = []
+        with open(args.urls, encoding="utf-8") as handle:
+            for line in handle:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if stripped.startswith("page:"):
+                    page_ids.append(stripped.removeprefix("page:").strip())
+        if page_ids:
+            return page_ids
+
+    if args.urls is not None:
+        return []
+
+    print("fuzzy-validator record: specify --page, --pages, or --all", file=sys.stderr)
+    raise SystemExit(2)
+
+
+def _run_capture(args: argparse.Namespace) -> int:
+    if args.phase not in {"visual", "all"}:
+        print(
+            f"fuzzy-validator record: phase '{args.phase}' not implemented until FU-6+",
+            file=sys.stderr,
+        )
+        return 2
+
+    page_ids = _resolve_page_ids(args)
+    if args.dry_run:
+        for page_id in page_ids:
+            print(page_id)
+        return 0
+
+    env = os.environ.copy()
+    env["FUZZ_PAGES"] = ",".join(page_ids)
+    if args.repeat is not None:
+        env["FUZZ_REPEAT"] = str(args.repeat)
+    if args.base_url:
+        env["ORK3_E2E_BASE_URL"] = args.base_url
+
+    result = subprocess.run(
+        ["npx", "playwright", "test", "--project=fuzzy-capture"],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+    )
+    return int(result.returncode)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -52,8 +125,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "record":
-        print("fuzzy-validator record: not implemented yet (FU-1+).", file=sys.stderr)
-        return 2
+        return _run_capture(args)
 
     if args.command == "validate":
         print("fuzzy-validator validate: not implemented yet (FU-3+).", file=sys.stderr)

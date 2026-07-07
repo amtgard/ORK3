@@ -18,5 +18,19 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'fuzzy-capture',
+      testDir: './tools/fuzzy-validator/playwright',
+      testMatch: 'capture.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 720 },
+      },
+    },
+    {
+      name: 'fuzzy-unit',
+      testDir: './tools/fuzzy-validator/playwright',
+      testMatch: 'registry.unit.spec.ts',
+    },
   ],
 });

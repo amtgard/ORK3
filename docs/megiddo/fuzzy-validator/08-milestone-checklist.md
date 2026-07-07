@@ -20,12 +20,12 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 
 ### FU-1: Playwright capture
 
-- [ ] Branch `megiddo/fu-1-capture`
-- [ ] `playwright/lib/stabilize.ts`, `auth.ts`, `capture.spec.ts`
-- [ ] `manifests/pages.json5` pilot pages (3)
-- [ ] Five PNGs per pilot page on stable commit
-- [ ] Unit/integration tests for stabilization helpers where applicable
-- [ ] Single squashed commit
+- [x] Branch `megiddo/fu-1-capture`
+- [x] `playwright/lib/stabilize.ts`, `auth.ts`, `capture.spec.ts`
+- [x] `manifests/pages.json5` pilot pages (3)
+- [x] Five PNGs per pilot page on stable commit
+- [x] Unit/integration tests for stabilization helpers where applicable
+- [x] Single squashed commit
 
 ### FU-2: Pixel fuzz discovery
 
@@ -117,8 +117,8 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 
 | Milestone | Date | Commit | Coverage % |
 |-----------|------|--------|------------|
-| FU-0 | 2026-07-07 | 97e1b335 | n/a (4 tests) |
-| FU-1 | | | |
+| FU-0 | 2026-07-07 | 02e0a306 | n/a (4 tests) |
+| FU-1 | 2026-07-07 | 7eab9424 | n/a (8 tests + 3 PW unit) |
 | FU-2 | | | |
 | FU-3 | | | |
 | FU-4 | | | |

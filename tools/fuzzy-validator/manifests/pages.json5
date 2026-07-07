@@ -1,0 +1,31 @@
+{
+  "defaults": {
+    "viewport": { "width": 1280, "height": 720 },
+    "repeat": 5,
+    "waitAfterMs": 500,
+    "auth": "none"
+  },
+  "pages": [
+    {
+      "id": "home-anonymous",
+      "url": "./index.php?Route=",
+      "auth": "none",
+      "readySelector": "body",
+      "notes": "Public home / event search widget"
+    },
+    {
+      "id": "home-authenticated",
+      "url": "./index.php?Route=",
+      "auth": "login",
+      "readySelector": "#main, body",
+      "notes": "Post-login home; RSVP widget, kingdom chrome"
+    },
+    {
+      "id": "player-profile",
+      "url": "./index.php?Route=Player/profile",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "notes": "T-01 / DS-09 player profile"
+    }
+  ]
+}
