@@ -2963,7 +2963,10 @@ $(document).ready(function() {
             return isAsc ? cmp : -cmp;
         });
         $.each(rows, function(i, row) { $tbody.append(row); });
-        knPaginate($table, 1);
+        // The year-grouped Players list shows every member per year section
+        // (no pagination) — sorting only reorders it. Other kn-sortable tables
+        // (e.g. Events) keep their pager.
+        if (!$table.hasClass('kn-year-table')) knPaginate($table, 1);
     });
 
     // ---- Pagination event delegation ----

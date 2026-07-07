@@ -141,11 +141,11 @@
 								<tr>
 									<th>Player</th>
 									<th>Award</th>
-									<th data-dt-type="num">Rank</th>
+									<th>Rank</th>
 									<th>Notes</th>
-									<th data-dt-type="date">Date Rec.</th>
+									<th>Date Rec.</th>
 									<th>Recommended By</th>
-									<th data-dt-type="date">Deleted At</th>
+									<th>Deleted At</th>
 									<th>Deleted By</th>
 									<th class="no-export"></th>
 								</tr>
