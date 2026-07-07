@@ -622,7 +622,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 #### T-08 sign-off gate
 
 - [x] Test sprint sign-off checklist (above) satisfied
-- [ ] Branch `megiddo/t-08-admin-tests` squashed to exactly one commit
+- [x] Branch `megiddo/t-08-admin-tests` squashed to exactly one commit
 
 ---
 
@@ -638,14 +638,18 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 | Step | Status |
 |------|--------|
-| Backend unit/integration tests | [ ] |
-| Frontend functional tests | [ ] |
-| Milestone-scoped Infection passes | [ ] |
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Integration/PlayerProfileTest.php`, `tests/Integration/PlayerAjaxTest.php`, `tests/Unit/ModelPlayerCacheTest.php`, `tests/e2e/player-profile.spec.ts`
+
+**Infection (pre-refactor):** scoped batches via `infection.t09-player.json5` (≥15% MSI each): Player profile+cache 25%, Player AJAX 22%, Authorization 52%. Report filter deferred — no T-09 test coverage on Report domain paths.
 
 #### T-09 sign-off gate
 
-- [ ] Test sprint sign-off checklist (above) satisfied
-- [ ] Branch `megiddo/t-09-player-tests` squashed to exactly one commit
+- [x] Test sprint sign-off checklist (above) satisfied
+- [x] Branch `megiddo/t-09-player-tests` squashed to exactly one commit
 
 ---
 
