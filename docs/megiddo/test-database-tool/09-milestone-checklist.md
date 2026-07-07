@@ -67,7 +67,7 @@
 
 - [x] `config.test.php` → 19307 / `ork_test`
 - [x] `bin/ork-db bootstrap` — idempotent first-run (init → extract → apply)
-- [ ] Full suite passes after `apply` (blocked on sandbox schema parity — TD-8)
+- [ ] Full suite passes after `apply` — see [11-post-implementation-tasks.md](./11-post-implementation-tasks.md) §1 (schema parity TD-8, fixtures TD-9)
 
 ---
 
@@ -85,6 +85,17 @@
 - [ ] PHPUnit golden render test
 - [ ] Tier refusal test (production signals → extract/apply refuse)
 - [ ] Integration round-trip on local tier
+
+---
+
+## TD-10 — deploy-sandbox
+
+- [ ] `bin/ork-db deploy-sandbox` — single daily dev entry command
+- [ ] State detection: uninitialized → init; first-run → bootstrap; stale render → refresh
+- [ ] Validate at each gate — halt with remediation steps on failure
+- [ ] Auto `use dev` after sandbox is valid
+- [ ] Daily refresh when last render `anchor_date` &lt; today
+- [ ] `tools/ork-db/rendered/.last-render.json` written by render/apply
 
 ---
 

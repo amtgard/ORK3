@@ -28,7 +28,8 @@ bin/ork-db apply              # wipe + reload sandbox — target is hardcoded
 
 bin/ork-db validate           # safety checks on hardcoded sandbox target
 bin/ork-db init               # first-time sandbox schema + canary
-bin/ork-db bootstrap          # first-run: init + extract + apply (TD-7)
+bin/ork-db bootstrap          # sandbox-only: init + extract + apply
+bin/ork-db deploy-sandbox     # daily dev entry: bootstrap + validate + use dev + daily refresh (TD-10)
 bin/ork-db schema-diff        # compare mirror vs sandbox schema (local only)
 
 bin/ork-db help [command]
@@ -175,14 +176,15 @@ bin/ork-db status
 
 All probe **sandbox only** (hardcoded `19307` / `ork_test`). Refused on production tier except `status` (read-only tier report).
 
-### `init` vs full bootstrap
+### `init` vs bootstrap vs deploy-sandbox
 
 | Command | Scope |
 |---------|-------|
 | `init` | Empty `ork_test` → apply `ork.sql` + install `_ork_canary_test` only |
-| `bootstrap` *(TD-7)* | Idempotent first-run: `init` (if needed) → `extract` → `apply` → post-validate |
+| `bootstrap` | Sandbox only: `init` (if needed) → `extract` → `apply` → post-validate |
+| `deploy-sandbox` *(TD-10)* | **Default dev entry:** detect state → init/bootstrap → validate (halt + hints) → `use dev` → daily refresh if stale |
 
-`init` does **not** load fake kingdoms or players. New developers need `extract` + `apply` after `init`, or `bootstrap` once TD-7 ships.
+`init` does **not** load fake kingdoms or players. Prefer `deploy-sandbox` for day-to-day work; use `bootstrap` when you only need sandbox data without switching the app.
 
 ---
 
@@ -196,7 +198,8 @@ bin/ork-db bootstrap --force-extract
 ```
 
 - **Local tier only** — same refusal rules as other data commands
-- Does **not** start Docker — operator runs `docker compose -f docker-compose.php8.yml up -d` first
+- Does **not** switch app profile — use `use dev` separately, or run `deploy-sandbox`
+- Does **not** start Docker
 - Does **not** import mirror dumps or install prod canary (manual mirror one-time setup)
 
 Pipeline:
@@ -211,23 +214,66 @@ tier check (local only)
 
 ---
 
+## `deploy-sandbox` *(planned — TD-10)*
+
+```bash
+bin/ork-db deploy-sandbox
+bin/ork-db deploy-sandbox --yes
+bin/ork-db deploy-sandbox --force-refresh
+```
+
+**Single safe command** to start local dev from whatever state the workstation is in to whatever state it needs to be.
+
+Automatically:
+
+1. **Detects state** — uninitialized sandbox, first-run (no fake data), or current
+2. **Inits and/or bootstraps** as needed
+3. **Validates** at each gate — **halts on error** with remediation steps (not just exit codes)
+4. **Switches app to dev** (`use dev` → sandbox @ 19307)
+5. **Refreshes data if stale** — runs `extract` → `render` → `apply` when last render `anchor_date` is before today
+
+Pipeline:
+
+```
+tier check (local only)
+  → preflight (mirror + sandbox reachable)
+  → init (if test canary missing)
+  → bootstrap path (if kingdom fingerprints missing)
+  → validate — HALT with remediation on failure
+  → use dev
+  → if last render anchor_date < today: extract → render → apply --yes
+  → validate --mode post-apply
+  → status
+```
+
+| Flag | Description |
+|------|-------------|
+| `--yes` | Skip apply confirmation only — never skips safety checks |
+| `--force-refresh` | Run extract/render/apply even if render is already anchored today |
+| `--skip-use-dev` | Sandbox maintenance without switching app profile |
+
+Last-render metadata: `tools/ork-db/rendered/.last-render.json` (gitignored). See [07-implementation-plan.md](./07-implementation-plan.md) §9.
+
+---
+
 ## Examples (local workstation only)
 
 ```bash
-# First-time setup (manual today; bootstrap in TD-7)
+# Target daily workflow (TD-10)
 docker compose -f docker-compose.php8.yml up -d
+bin/ork-db deploy-sandbox
+open http://localhost:19080/orkui/
+
+# Low-level / sandbox-only (no app switch)
+bin/ork-db bootstrap --yes
+
+# Manual step-by-step
 bin/ork-db init
 bin/ork-db extract
-bin/ork-db apply
-
-# Daily reset
 bin/ork-db apply --yes
-sh bin/run-unit-tests.sh
-
-# Browse fake data
-bin/ork-db apply
 bin/ork-db use dev
-open http://localhost:19080/orkui/
+
+# Browse mirror again
 bin/ork-db use prod
 ```
 

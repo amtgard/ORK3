@@ -18,6 +18,7 @@ Phased delivery for the test database infrastructure, PHP renderer, safety syste
 | **TD-7** | PHPUnit + dev bootstrap | `config.test.php` → `19307`/`ork_test`, `bin/ork-db bootstrap`, doc updates |
 | **TD-8** | Migration classifier + drift detection | `migration-classification.json5` + `drift-check` + `schema-diff` |
 | **TD-9** | Renderer tests | PHPUnit golden files + integration smoke |
+| **TD-10** | Dev entry orchestrator | `bin/ork-db deploy-sandbox` — single safe daily startup command |
 
 ---
 
@@ -38,6 +39,9 @@ tools/ork-db/
   Render.php
   Validate.php
   Extract.php
+  Bootstrap.php
+  DeploySandbox.php
+  Use.php
   lib/
   templates/
     stable/kingdoms.json5
@@ -111,22 +115,17 @@ bin/ork-db status
 # 5 kingdoms incl. Grand Duchy of Litavia; admin login on 19307
 ```
 
-### Phase 4 — TD-6 + TD-7
-
-**TD-7 deliverables:**
-
-- `config.test.php` defaults → `127.0.0.1:19307` / `ork_test` (today still points at `19306` / `ork`)
-- `bin/ork-db bootstrap` — first-run orchestrator (see §8)
-- Doc updates for onboarding
+### Phase 4 — TD-6 + TD-7 (done)
 
 **Acceptance:**
 
 ```bash
 docker compose -f docker-compose.php8.yml up -d
-bin/ork-db bootstrap --yes    # planned — init + extract + apply
+bin/ork-db bootstrap --yes
 bin/ork-db use dev
 bin/ork-db use prod
-ENVIRONMENT=TEST sh bin/run-unit-tests.sh
+php vendor/bin/phpunit -c phpunit.ork-db.xml.dist
+# Main suite: blocked on TD-8 schema parity — see 11-post-implementation-tasks.md
 ```
 
 ### Phase 5 — TD-8 + TD-9
@@ -135,6 +134,21 @@ ENVIRONMENT=TEST sh bin/run-unit-tests.sh
 - `bin/ork-db drift-check --strict` in CI (every build)
 - `bin/ork-db schema-diff` (post-apply sandbox parity)
 - PHPUnit golden + apply round-trip
+- Main Megiddo suite green against sandbox
+
+### Phase 6 — TD-10 (`deploy-sandbox`)
+
+**Goal:** One safe command to bring local dev from whatever state it is in to whatever state it needs to be — first clone, first run of the day, or no-op if already current.
+
+**Acceptance:**
+
+```bash
+docker compose -f docker-compose.php8.yml up -d
+bin/ork-db deploy-sandbox
+# App on sandbox; dates anchored to today; validate passed; open http://localhost:19080/orkui/
+```
+
+See §9 for full pipeline spec.
 
 ---
 
@@ -167,6 +181,7 @@ define('DB_DATABASE', 'ork_test');
 tools/ork-db/extracted/
 tools/ork-db/rendered/
 tools/ork-db/.last-apply.json
+tools/ork-db/rendered/.last-render.json
 ```
 
 ---
@@ -187,6 +202,7 @@ tools/ork-db/.last-apply.json
 | 9 | Type 1 tables | `fixed_extract` + `fixed_embedded` in `extract-sources.json5` |
 | 10 | Drift detection | `bin/ork-db drift-check` — schema + catalog + migration coverage |
 | 11 | Dev bootstrap | `bin/ork-db bootstrap` — first-run sandbox setup (TD-7) |
+| 12 | Daily dev entry | `bin/ork-db deploy-sandbox` — init/bootstrap + validate + `use dev` + daily refresh (TD-10) |
 
 ---
 
@@ -200,9 +216,18 @@ tools/ork-db/.last-apply.json
 | Volume isolation from mirror | **Done (TD-1)** | `data-db` vs `data-test-db` — separate Docker named volumes |
 | `bin/ork-db init` | **Done (TD-2)** | Schema + test canary only; no fake data |
 | `bin/ork-db extract` / `apply` | **Done (TD-3–5)** | Full sandbox reload |
-| `bin/ork-db bootstrap` | **Planned (TD-7)** | Single first-run command |
+| `bin/ork-db bootstrap` | **Done (TD-7)** | Idempotent init + extract + apply |
+| `bin/ork-db deploy-sandbox` | **Planned (TD-10)** | Single daily dev entry — see §9 |
 
-### First-run workflow (manual, until `bootstrap` ships)
+### Target workflow (after TD-10)
+
+```bash
+docker compose -f docker-compose.php8.yml up -d
+bin/ork-db deploy-sandbox
+# Done — app on sandbox, data current for today
+```
+
+### Manual / low-level workflow (still supported)
 
 ```bash
 # 1. Containers
@@ -212,33 +237,122 @@ docker compose -f docker-compose.php8.yml up -d
 #    — import a dev dump into ork @ 19306 if the mirror is empty
 #    — apply db-migrations/2026-07-07-add-prod-canary.sql to ork
 
-# 3. Sandbox bootstrap
-bin/ork-db init              # schema + _ork_canary_test on empty ork_test
-bin/ork-db extract           # catalogs from mirror (19306)
-bin/ork-db apply --yes       # wipe + reload sandbox (19307)
+# 3. Sandbox only (no app switch, no daily-refresh logic)
+bin/ork-db bootstrap --yes
 
 # 4. Verify
 bin/ork-db validate --mode post-apply
 bin/ork-db status
 ```
 
-### Planned `bin/ork-db bootstrap` (TD-7)
+### `bin/ork-db bootstrap` (TD-7 — done)
 
-Idempotent orchestrator for step 3 above:
+Idempotent sandbox loader only (no `use dev`, no daily-refresh gate):
 
 ```
 tier check (local only)
-  → optional: warn if ork3testdb not reachable (suggest docker compose up)
   → init (skip if test canary already valid)
   → extract (skip if extracted/ fresh unless --force-extract)
   → apply --yes
   → validate --mode post-apply
+```
+
+Flags: `--yes`, `--skip-extract`, `--force-extract`.
+
+Does **not** import mirror dumps or install prod canary — those remain manual one-time mirror setup.
+
+---
+
+## 9. `deploy-sandbox` (TD-10 — planned)
+
+### Purpose
+
+**Single safe call** to start local dev from wherever the workstation is to wherever it needs to be. Replaces the multi-step mental model (init? bootstrap? use dev? apply?) with one command operators run after `docker compose up`.
+
+```bash
+bin/ork-db deploy-sandbox
+bin/ork-db deploy-sandbox --yes    # skip confirmation prompts only
+```
+
+**Local tier only** — same refusal rules as other data commands. Does **not** start Docker.
+
+### State detection
+
+The command classifies sandbox state before acting:
+
+| State | Signals | Action |
+|-------|---------|--------|
+| **Uninitialized** | Sandbox reachable but `_ork_canary_test` missing | `init` |
+| **First-run** | Test canary present; kingdom fingerprints (9001–9005) missing | `bootstrap` path (extract + apply) |
+| **Stale render** | Post-apply valid but last render `anchor_date` &lt; today (local date) | `extract` → `render` → `apply --yes` |
+| **Current** | Post-apply valid; render anchored today | Skip data pipeline |
+| **Blocked** | Any validate check fails | **Halt** — print remediation steps; exit `2` |
+
+Last-render metadata stored in gitignored `tools/ork-db/rendered/.last-render.json` (written by `render` / `apply`):
+
+```json5
+{
+  "anchor_date": "2026-07-07",
+  "rendered_at": "2026-07-07T17:30:00-05:00",
+  "content_seed": 42
+}
+```
+
+Daily refresh compares `anchor_date` to **today** in `America/Chicago` (same TZ as ORK3 config). Same-day re-runs are no-ops for extract/render/apply unless `--force-refresh`.
+
+### Pipeline
+
+```
+tier check (local only)
+  → preflight: mirror + sandbox ports reachable
+  → init                    (if uninitialized)
+  → bootstrap               (if first-run — extract + apply if needed)
+  → validate                (strict — HALT on failure with remediation)
+  → use dev                 (app container → ork_test)
+  → if stale render:
+      extract → render → apply --yes
+  → validate --mode post-apply
   → status
 ```
 
-Flags: `--yes` (skip prompts), `--skip-extract` (reuse existing extracts), `--force-extract`.
+### Validate-and-halt behavior
 
-Does **not** import mirror dumps or install prod canary — those remain manual one-time mirror setup.
+Every validate failure **stops the pipeline** and prints **actionable remediation** (not just "FAIL"). Examples:
+
+| Check | Remediation hint |
+|-------|------------------|
+| Sandbox port unreachable | `docker compose -f docker-compose.php8.yml up -d ork3testdb` |
+| Mirror port unreachable | `docker compose -f docker-compose.php8.yml up -d ork3db` |
+| Mirror extract refused (no prod canary) | Apply `db-migrations/2026-07-07-add-prod-canary.sql` to `ork` @ 19306 |
+| Mirror empty / extract fails | Import dev dump into mirror (one-time workstation setup) |
+| Prod canary on sandbox target | **ABORT** — wrong database; do not proceed |
+| Post-apply fingerprints fail | Re-run with `--force-refresh` or inspect `tools/ork-db/rendered/sandbox.sql` |
+
+Exit code `2` on any validation or tier refusal. Exit code `0` when sandbox is current and app is on `dev`.
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--yes` | off | Skip interactive confirmation on apply (never skips safety checks) |
+| `--force-refresh` | off | Run extract → render → apply even if render is already anchored today |
+| `--skip-use-dev` | off | Skip app profile switch (sandbox-only maintenance) |
+
+### Relationship to other commands
+
+| Command | When to use |
+|---------|-------------|
+| **`deploy-sandbox`** | **Default** — start of day, new clone, "make dev work" |
+| `bootstrap` | Sandbox data only; no app switch; no daily-refresh logic |
+| `apply --yes` | Quick reset when you know sandbox is already initialized |
+| `init` | Low-level; rarely needed directly |
+
+### Implementation notes
+
+- Class: `tools/ork-db/DeploySandbox.php`
+- Reuses: `Init`, `Bootstrap`, `Extract`, `Render`, `Apply`, `Validate`, `UseProfile`, `DeploymentTier`
+- `render` and `apply` must update `.last-render.json` with `anchor_date`
+- TD-8 schema parity should land **before** TD-10 sign-off so post-validate reflects real app schema
 
 ---
 
@@ -255,4 +369,5 @@ Does **not** import mirror dumps or install prod canary — those remain manual 
 - [ ] `bin/ork-db use` toggles app between prod and dev profiles
 - [ ] Full PHPUnit suite runs against dev profile
 - [ ] `bin/ork-db bootstrap` brings a fresh clone from zero to post-apply sandbox
+- [ ] `bin/ork-db deploy-sandbox` is the one-command daily dev entry (TD-10)
 - [ ] Award catalog matches prod extract

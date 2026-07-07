@@ -15,53 +15,83 @@ The tool **hardcodes** these endpoints. You never type a database name on `extra
 
 ---
 
+## Daily dev entry (target — TD-10)
+
+One command after Docker is up:
+
+```bash
+docker compose -f docker-compose.php8.yml up -d
+bin/ork-db deploy-sandbox
+```
+
+This automatically:
+
+- Detects first-time vs first-run vs current sandbox state
+- Runs `init` and/or `bootstrap` as needed
+- **Validates and halts** with remediation steps if anything is wrong
+- Switches the app to sandbox (`use dev`)
+- Runs `extract` → `render` → `apply` if the last render was before today
+
+See [07-implementation-plan.md](./07-implementation-plan.md) §9 and [10-cli-reference.md](./10-cli-reference.md) § deploy-sandbox.
+
+---
+
 ## Command palette
 
 ```bash
-bin/ork-db use prod          # website → mirror (19306)
-bin/ork-db use dev           # website → sandbox (19307)
+bin/ork-db deploy-sandbox   # daily dev entry (TD-10 — planned)
+bin/ork-db use prod         # website → mirror (19306)
+bin/ork-db use dev          # website → sandbox (19307)
 
-bin/ork-db extract           # read mirror (always 19306)
-bin/ork-db render            # build sandbox SQL file (no DB)
-bin/ork-db apply             # wipe + reload sandbox (always 19307)
+bin/ork-db extract          # read mirror (always 19306)
+bin/ork-db render           # build sandbox SQL file (no DB)
+bin/ork-db apply            # wipe + reload sandbox (always 19307)
+bin/ork-db bootstrap        # sandbox-only init + extract + apply
 
-bin/ork-db status            # what's wired, what tier am I on
+bin/ork-db status           # tier, wiring, canaries
+bin/ork-db validate         # safety checks on sandbox
 ```
 
-**On production servers:** `extract`, `render`, and `apply` all refuse. See [10-cli-reference.md](./10-cli-reference.md) § deployment tier.
+**On production servers:** data commands refuse. See [10-cli-reference.md](./10-cli-reference.md) § deployment tier.
 
 ---
 
 ## Typical workflows (local workstation)
 
-### First-run bootstrap (new developer)
+### New developer (until TD-10 ships)
 
 ```bash
-# Start all services — mirror (19306) + sandbox (19307) + app
 docker compose -f docker-compose.php8.yml up -d
 
 # One-time mirror setup (if ork @ 19306 is empty):
 #   import dev dump, then apply db-migrations/2026-07-07-add-prod-canary.sql
 
-# Sandbox bootstrap (TD-7)
-bin/ork-db bootstrap --yes    # init + extract + apply (idempotent)
-
+bin/ork-db bootstrap --yes
+bin/ork-db use dev
 bin/ork-db validate --mode post-apply
 ```
 
-`init` alone does **not** load fake data — it only prepares the sandbox schema. A full first run always ends with `extract` + `apply`.
-
-### Daily use
+### New developer (after TD-10)
 
 ```bash
-# Daily test reset
-bin/ork-db apply --yes
+docker compose -f docker-compose.php8.yml up -d
+bin/ork-db deploy-sandbox
+```
+
+### Daily use (after TD-10)
+
+```bash
+bin/ork-db deploy-sandbox    # no-op data pipeline if already refreshed today
 sh bin/run-unit-tests.sh
 
-# Browse fake data in browser
+bin/ork-db use prod          # switch back to mirror when needed
+```
+
+### Manual reset (low-level)
+
+```bash
+bin/ork-db apply --yes
 bin/ork-db use dev
-# … browse …
-bin/ork-db use prod
 ```
 
 ---
@@ -69,3 +99,5 @@ bin/ork-db use prod
 ## Safety
 
 [04-safety-validations.md](./04-safety-validations.md) — tier guard, port lock, canaries, kingdom fingerprints. `apply` cannot target mirror or production regardless of what the operator types.
+
+Post-implementation backlog: [11-post-implementation-tasks.md](./11-post-implementation-tasks.md).

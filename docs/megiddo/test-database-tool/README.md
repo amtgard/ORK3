@@ -6,7 +6,7 @@ Explicit, isolated test database for ORK3 development and PHPUnit integration te
 
 **Code:** `tools/ork-db/` · **CLI:** `bin/ork-db` · **Docs:** `docs/megiddo/test-database-tool/`
 
-**Implementation status:** TD-1–TD-5 shipped (Docker sandbox, safety, extract, render, apply). TD-6–TD-9 pending (`use`, PHPUnit routing, bootstrap, drift checks).
+**Implementation status:** TD-1–TD-7 shipped. TD-8–TD-10 pending (schema parity, tests, `deploy-sandbox`). See [11-post-implementation-tasks.md](./11-post-implementation-tasks.md).
 
 ---
 
@@ -24,6 +24,7 @@ Explicit, isolated test database for ORK3 development and PHPUnit integration te
 | [08-agent-milestone-prompt.md](./08-agent-milestone-prompt.md) | Copy-paste agent prompt per TD milestone |
 | [09-milestone-checklist.md](./09-milestone-checklist.md) | TD-* completion checkboxes |
 | [10-cli-reference.md](./10-cli-reference.md) | **`bin/ork-db` command palette** |
+| [11-post-implementation-tasks.md](./11-post-implementation-tasks.md) | **Post TD-6/7 backlog, schema-drift explanation, sign-off path** |
 
 ---
 
