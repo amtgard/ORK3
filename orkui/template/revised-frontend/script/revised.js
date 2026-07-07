@@ -2941,29 +2941,29 @@ $(document).ready(function() {
         knSetEventsView('list');
     }
 
-    // ---- Sortable tables ----
-    $('.kn-sortable').each(function() {
-        var $table = $(this);
-        $table.find('thead th').on('click', function() {
-            var colIndex = $(this).index();
-            var sortType = $(this).data('sorttype') || 'text';
-            var isAsc = !$(this).hasClass('sort-asc');
-            $table.find('thead th').removeClass('sort-asc sort-desc');
-            $(this).addClass(isAsc ? 'sort-asc' : 'sort-desc');
-            var $tbody = $table.find('tbody');
-            var rows = $tbody.find('tr').get();
-            rows.sort(function(a, b) {
-                var aVal = $(a).find('td').eq(colIndex).text().trim();
-                var bVal = $(b).find('td').eq(colIndex).text().trim();
-                var cmp = 0;
-                if (sortType === 'numeric')   cmp = (parseFloat(aVal) || 0) - (parseFloat(bVal) || 0);
-                else if (sortType === 'date') cmp = (new Date(aVal).getTime() || 0) - (new Date(bVal).getTime() || 0);
-                else                          cmp = aVal.localeCompare(bVal);
-                return isAsc ? cmp : -cmp;
-            });
-            $.each(rows, function(i, row) { $tbody.append(row); });
-            knPaginate($table, 1);
+    // ---- Sortable tables (delegated so JS-injected tables like the Players
+    //      list are covered too) ----
+    $(document).on('click', '.kn-sortable thead th', function() {
+        var $th = $(this);
+        var $table = $th.closest('table');
+        var colIndex = $th.index();
+        var sortType = $th.data('sorttype') || 'text';
+        var isAsc = !$th.hasClass('sort-asc');
+        $table.find('thead th').removeClass('sort-asc sort-desc');
+        $th.addClass(isAsc ? 'sort-asc' : 'sort-desc');
+        var $tbody = $table.find('tbody');
+        var rows = $tbody.find('tr').get();
+        rows.sort(function(a, b) {
+            var aVal = $(a).find('td').eq(colIndex).text().trim();
+            var bVal = $(b).find('td').eq(colIndex).text().trim();
+            var cmp = 0;
+            if (sortType === 'numeric')   cmp = (parseFloat(aVal) || 0) - (parseFloat(bVal) || 0);
+            else if (sortType === 'date') cmp = (new Date(aVal).getTime() || 0) - (new Date(bVal).getTime() || 0);
+            else                          cmp = aVal.localeCompare(bVal);
+            return isAsc ? cmp : -cmp;
         });
+        $.each(rows, function(i, row) { $tbody.append(row); });
+        knPaginate($table, 1);
     });
 
     // ---- Pagination event delegation ----

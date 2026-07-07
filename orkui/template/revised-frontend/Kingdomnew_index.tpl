@@ -2790,7 +2790,7 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 					listHtml.push(
 						'<details class="kn-year-section"' + openAttr + ' data-year="' + yk + '">'
 						+ summary
-						+ '<table class="kn-table kn-year-table"><thead><tr>'
+						+ '<table class="kn-table kn-year-table kn-sortable"><thead><tr>'
 						+ '<th data-sorttype="text">Persona</th>'
 						+ '<th data-sorttype="text">Park</th>'
 						+ '<th data-sorttype="numeric">6mo Sign-ins</th>'
