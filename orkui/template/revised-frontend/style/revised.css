@@ -923,45 +923,6 @@ html[data-theme="dark"] .pn-ladder-bar-track { background: var(--ork-bg-tertiary
 	font-style: italic;
 }
 
-/* Pagination */
-.pn-pagination {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 10px 0 0 0;
-	margin-top: 6px;
-	border-top: 1px solid #edf2f7;
-}
-.pn-pagination-info {
-	color: #a0aec0;
-	font-size: 12px;
-}
-.pn-pagination-controls {
-	display: flex;
-	gap: 3px;
-	align-items: center;
-}
-.pn-page-btn {
-	min-width: 28px;
-	height: 28px;
-	border: 1px solid #e2e8f0;
-	border-radius: 4px;
-	background: #fff;
-	color: #4a5568;
-	font-size: 12px;
-	font-weight: 600;
-	cursor: pointer;
-	padding: 0 6px;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	transition: background 0.1s, border-color 0.1s;
-	line-height: 1;
-}
-.pn-page-btn:hover:not(:disabled) { background: #edf2f7; border-color: #cbd5e0; }
-.pn-page-btn.pn-page-active { background: #2c5282; color: #fff; border-color: #2c5282; }
-.pn-page-btn:disabled { opacity: 0.4; cursor: default; }
-.pn-page-ellipsis { color: #a0aec0; padding: 0 3px; font-size: 12px; line-height: 28px; }
 
 /* Recommendation form in modal */
 .pn-rec-field {
@@ -1640,61 +1601,6 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 .pn-ac-item:last-child { border-bottom: none; }
 .pn-ac-item:hover, .pn-ac-item:focus, .pn-ac-item.pn-ac-focused { background: #ebf4ff; color: #0891b2; outline: none; }
 .pn-ac-no-results { padding: 8px 12px; font-size: 13px; color: #a0aec0; font-style: italic; }
-/* Page size selector */
-.pn-pagesize-bar {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	margin-bottom: 8px;
-	font-size: 13px;
-	color: #4a5568;
-}
-.pn-pagesize-select {
-	border: 1px solid #e2e8f0;
-	border-radius: 4px;
-	padding: 3px 6px;
-	font-size: 13px;
-	outline: none;
-	appearance: none;
-	-webkit-appearance: none;
-}
-.pn-pagesize-select:focus { border-color: #90cdf4; }
-/* Table toolbar (pagesize + search side by side) */
-.pn-table-toolbar {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	margin-bottom: 10px;
-}
-.pn-table-toolbar .pn-award-search-bar {
-	flex: 1;
-	min-width: 0;
-}
-/* Award search bar */
-.pn-award-search-bar {
-	position: relative;
-	margin-bottom: 10px;
-}
-.pn-award-search-icon {
-	position: absolute;
-	left: 9px;
-	top: 50%;
-	transform: translateY(-50%);
-	color: #a0aec0;
-	font-size: 12px;
-	pointer-events: none;
-}
-.pn-award-search-input {
-	width: 100%;
-	box-sizing: border-box;
-	border: 1px solid #e2e8f0;
-	border-radius: 5px;
-	padding: 6px 10px 6px 28px;
-	font-size: 13px;
-	outline: none;
-	transition: border-color 0.15s;
-}
-.pn-award-search-input:focus { border-color: #90cdf4; }
 /* Tab toolbar (Add Award / Add Title button) */
 .pn-tab-toolbar {
 	display: flex;
@@ -7058,7 +6964,6 @@ table.dataTable.adm-table tbody tr.even:hover {
 @media (max-width: 768px) {
     .kn-player-search-input,
     .pk-player-search-input,
-    .pn-award-search-input,
     .kn-emod-input,
     .pk-emod-input,
     input[type="text"],
@@ -7072,7 +6977,6 @@ table.dataTable.adm-table tbody tr.even:hover {
     textarea {
         font-size: 16px !important;
     }
-    .pn-pagesize-select,
     .kn-pagesize-select,
     .pk-pagesize-select {
         font-size: 16px !important;
@@ -8632,6 +8536,66 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
   color: #fff !important;
   border-color: #2b6cb0 !important;
 }
+
+/* ── Player-profile DataTables controls (unified sort/length/search/CSV) ── */
+.pn-tab-panel .pn-dt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.pn-tab-panel .pn-dt-toolbar .dataTables_length { margin: 0; }
+.pn-tab-panel .pn-dt-toolbar .dataTables_filter { margin: 0 0 0 auto; }
+.pn-tab-panel .pn-dt-toolbar .dt-buttons { margin: 0; }
+.pn-tab-panel .dataTables_filter input {
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  padding: 5px 10px;
+  margin-left: 6px;
+}
+.pn-tab-panel .dataTables_length select {
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+.pn-tab-panel .pn-dt-csv-btn {
+  background: #1a365d;
+  color: #fff;
+  border: 1px solid #1a365d;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pn-tab-panel .pn-dt-csv-btn:hover { background: #142a4a; border-color: #142a4a; }
+.pn-tab-panel .pn-dt-csv-btn i { margin-right: 5px; }
+
+html[data-theme="dark"] .pn-tab-panel .dataTables_filter input,
+html[data-theme="dark"] .pn-tab-panel .dataTables_length select {
+  background: var(--ork-input-bg) !important;
+  border-color: var(--ork-input-border) !important;
+  color: var(--ork-text) !important;
+}
+html[data-theme="dark"] .pn-tab-panel .dataTables_info,
+html[data-theme="dark"] .pn-tab-panel .dataTables_filter label,
+html[data-theme="dark"] .pn-tab-panel .dataTables_length label {
+  color: var(--ork-text-muted) !important;
+}
+html[data-theme="dark"] .pn-tab-panel .dataTables_paginate .paginate_button {
+  background-color: #2d3748 !important;
+  background-image: none !important;
+  color: #cbd5e0 !important;
+  border-color: #4a5568 !important;
+}
+html[data-theme="dark"] .pn-tab-panel .dataTables_paginate .paginate_button.current {
+  background: #2b6cb0 !important;
+  color: #fff !important;
+  border-color: #2b6cb0 !important;
+}
+html[data-theme="dark"] .pn-tab-panel .pn-dt-csv-btn { background: #2b6cb0; border-color: #2b6cb0; }
+html[data-theme="dark"] .pn-tab-panel .pn-dt-csv-btn:hover { background: #2c5282; border-color: #2c5282; }
 
 /* Attendance form */
 html[data-theme="dark"] .ev-att-form {

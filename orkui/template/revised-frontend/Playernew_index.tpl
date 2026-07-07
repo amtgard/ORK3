@@ -501,9 +501,6 @@ html[data-theme="dark"] .pn-ac-item { color: var(--ork-text); border-bottom-colo
 html[data-theme="dark"] .pn-ac-item:hover,
 html[data-theme="dark"] .pn-ac-item:focus,
 html[data-theme="dark"] .pn-ac-item.pn-ac-focused { background: var(--ork-bg-tertiary); color: var(--ork-link-bright); }
-html[data-theme="dark"] .pn-page-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pn-page-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
-html[data-theme="dark"] .pn-page-btn.pn-page-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
 html[data-theme="dark"] .pn-award-type-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
 html[data-theme="dark"] .pn-award-type-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
 html[data-theme="dark"] .pn-award-type-btn.pn-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
@@ -1064,6 +1061,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 </style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 
 <!-- =============================================
      ZONE 1: Profile Hero Header
@@ -1196,9 +1194,14 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 			<?php if ($isSuspended): ?>
 				<div class="pn-suspended-detail">
 					<i class="fas fa-info-circle"></i>
-					Suspended <?= htmlspecialchars($Player['SuspendedAt'] ?? '') ?> &mdash; Until <?php $_until = $Player['SuspendedUntil'] ?? ''; echo ($_until && $_until !== '0000-00-00') ? htmlspecialchars($_until) : 'Indefinite'; ?>
-					<?php if (!empty($Player['Suspension'])): ?>
-						&mdash; <?= htmlspecialchars($Player['Suspension']) ?>
+					Suspended <?php $_susAt = $Player['SuspendedAt'] ?? ''; $_until = $Player['SuspendedUntil'] ?? ''; if (!$_until || $_until === '0000-00-00') { echo 'Indefinitely' . ($_susAt ? ' as of ' . htmlspecialchars($_susAt) : ''); } else { echo htmlspecialchars($_susAt) . ' &mdash; Until ' . htmlspecialchars($_until); } ?>
+					<?php
+						$_susReason = trim($Player['Suspension'] ?? '');
+						// Skip reason text that only restates the "Suspended Indefinitely" status (no added detail).
+						$_susRedundant = in_array(strtolower(rtrim($_susReason, " .;,")), ['suspended indefinitely', 'indefinitely', 'indefinite', 'indefinite suspension', 'suspended indefinite'], true);
+					?>
+					<?php if ($_susReason !== '' && !$_susRedundant): ?>
+						&mdash; <?= htmlspecialchars($_susReason) ?>
 					<?php endif; ?>
 				</div>
 			<?php endif; ?>
@@ -2287,26 +2290,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 				<?php if (count($filteredAwards) === 0): ?>
 					<div class="pn-empty">No awards recorded</div>
 				<?php else: ?>
-				<div class="pn-table-toolbar">
-					<?php if (count($filteredAwards) > 10): ?>
-					<div class="pn-pagesize-bar" style="margin-bottom:0">
-						<label for="pn-awards-pagesize">Show</label>
-						<select id="pn-awards-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize('pn-awards-table', this.value)">
-							<option value="10">10</option>
-							<option value="25">25</option>
-							<option value="50">50</option>
-							<option value="100">100</option>
-							<option value="all">All</option>
-						</select>
-						<span>per page</span>
-					</div>
-					<?php endif; ?>
-					<div class="pn-award-search-bar" style="margin-bottom:0">
-						<i class="fas fa-search pn-award-search-icon"></i>
-						<input type="text" id="pn-award-search" placeholder="Search awards…" class="pn-award-search-input" autocomplete="off" oninput="pnAwardSearch(this.value)" />
-					</div>
-				</div>
-				<table class="pn-table pn-sortable" id="pn-awards-table">
+				<table class="pn-table display" id="pn-awards-table">
 					<thead>
 						<tr>
 							<th data-sorttype="text">Award</th>
@@ -2316,7 +2300,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 							<th data-sorttype="text">Given At</th>
 							<th data-sorttype="text">Note</th>
 							<th data-sorttype="text">Entered By</th>
-							<?php if ($canManageAwards): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
+							<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
 						</tr>
 					</thead>
 					<tbody>
@@ -2376,12 +2360,11 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 						<?php endforeach; ?>
 					</tbody>
 				</table>
-				<div id="pn-award-search-empty" class="pn-empty" style="display:none">No awards match your search</div>
-				<?php endif; ?>
+								<?php endif; ?>
 				<?php if ($canManageAwards && !empty($RevokedAwards)): ?>
 				<div class="pn-revoked-section">
 					<h4 class="pn-revoked-heading"><i class="fas fa-ban"></i> Revoked Awards</h4>
-					<table class="pn-table pn-sortable" id="pn-revoked-awards-table">
+					<table class="pn-table display" id="pn-revoked-awards-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Award</th>
@@ -2429,19 +2412,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 					}
 				?>
 				<?php if (count($filteredTitles) > 0): ?>
-					<?php if (count($filteredTitles) > 10): ?>
-					<div class="pn-pagesize-bar">
-						<label for="pn-titles-pagesize">Show</label>
-						<select id="pn-titles-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize('pn-titles-table', this.value)">
-							<option value="10">10</option>
-							<option value="25">25</option>
-							<option value="50">50</option>
-							<option value="100">100</option>
-						</select>
-						<span>per page</span>
-					</div>
-					<?php endif; ?>
-					<table class="pn-table pn-sortable" id="pn-titles-table">
+					<table class="pn-table display" id="pn-titles-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Title</th>
@@ -2451,7 +2422,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 								<th data-sorttype="text">Given At</th>
 								<th data-sorttype="text">Note</th>
 								<th data-sorttype="text">Entered By</th>
-								<?php if ($canManageAwards): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
+								<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
@@ -2545,7 +2516,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 				<?php if ($canManageAwards && !empty($RevokedTitles)): ?>
 				<div class="pn-revoked-section">
 					<h4 class="pn-revoked-heading"><i class="fas fa-ban"></i> Revoked Titles</h4>
-					<table class="pn-table pn-sortable" id="pn-revoked-titles-table">
+					<table class="pn-table display" id="pn-revoked-titles-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Title</th>
@@ -2630,7 +2601,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 				</div>
 				<?php endif; ?>
 				<?php if (count($classList) > 0): ?>
-					<table class="pn-table" id="pn-classes-table">
+					<table class="pn-table display" id="pn-classes-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Class</th>
@@ -5283,9 +5254,6 @@ var PnBannerConfig = {
 	};
 })();
 
-pnSortDesc($('#pn-awards-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-awards-table'), 1);
-pnSortDesc($('#pn-titles-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-titles-table'), 1);
-pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-table'), 1);
 // 26-week sparkline (called on load and again after attendance AJAX)
 function pnRenderSparkline() {
 	var el = document.getElementById('pna-sparkline');
@@ -7065,6 +7033,9 @@ function pnOpenTestChooser() {
 <?php endif; ?>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script>
 $(function() {
 	// Voting eligibility badge — loaded async so it doesn't block page render
@@ -7255,16 +7226,12 @@ $(function() {
 				if (!att.length) {
 					body.innerHTML = '<div class="pn-empty">No attendance records</div>';
 				} else {
-					var html = '<div class="pn-pagesize-bar"><label for="pn-attendance-pagesize">Show</label>'
-						+ '<select id="pn-attendance-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize(\'pn-attendance-table\', this.value)">'
-						+ '<option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option>'
-						+ '</select><span>per page</span></div>'
-						+ '<table class="pn-table pn-sortable" id="pn-attendance-table"><thead><tr>'
+					var html = '<table class="pn-table display" id="pn-attendance-table"><thead><tr>'
 						+ '<th data-sorttype="date">Date</th><th data-sorttype="text">Kingdom</th>'
 						+ '<th data-sorttype="text">Park</th><th data-sorttype="text">Event</th>'
 						+ '<th data-sorttype="text">Class</th><th data-sorttype="numeric">Credits</th>'
 						+ '<th data-sorttype="text">By</th>'
-						+ (canEditAny ? '<th style="width:52px;min-width:52px"></th>' : '')
+						+ (canEditAny ? '<th class="pn-nosort" style="width:52px;min-width:52px"></th>' : '')
 						+ '</tr></thead><tbody>';
 					att.forEach(function(d) {
 						var pid = parseInt(d.ParkId) || 0;
@@ -7317,8 +7284,7 @@ $(function() {
 						html += '</tr>';
 					});
 					body.innerHTML = html + '</tbody></table>';
-					pnSortDesc($('#pn-attendance-table'), 0, 'date');
-					pnPaginate($('#pn-attendance-table'), 1);
+					pnInitDataTable('#pn-attendance-table', { order: [[0, 'desc']], filename: 'Attendance' });
 				}
 			}
 
@@ -7452,8 +7418,8 @@ $(function() {
 			if (_inone) _inone.style.display = notes.length > 0 ? 'none' : '';
 			if (!notes.length) { body.innerHTML = '<div class="pn-empty" id="pn-history-empty">No notes</div>'; return; }
 			var esc = function(s) { return $('<div>').text(s || '').html(); };
-			var html = '<table class="pn-table" id="pn-history-table"><thead><tr><th>Note</th><th>Description</th><th>Date</th>'
-				+ (PnConfig.canEditAdmin ? '<th style="width:60px"></th>' : '') + '</tr></thead><tbody>';
+			var html = '<table class="pn-table display" id="pn-history-table"><thead><tr><th data-sorttype="text">Note</th><th data-sorttype="text">Description</th><th data-sorttype="date">Date</th>'
+				+ (PnConfig.canEditAdmin ? '<th class="pn-nosort" style="width:60px"></th>' : '') + '</tr></thead><tbody>';
 			notes.forEach(function(n) {
 				var nid = parseInt(n.NoteId) || 0;
 				var dt = esc(n.Date || '');
@@ -7461,7 +7427,7 @@ $(function() {
 				html += '<tr data-notes-id="' + nid + '">'
 					+ '<td>' + esc(n.Note) + '</td>'
 					+ '<td>' + esc(n.Description) + '</td>'
-					+ '<td class="pn-col-nowrap">' + dt + dc + '</td>';
+					+ '<td class="pn-col-nowrap" data-order="' + esc(n.Date || '') + '">' + dt + dc + '</td>';
 				if (PnConfig.canEditAdmin) {
 					html += '<td class="pn-award-actions-cell">'
 						+ '<button class="pn-award-action-btn pn-award-edit-btn pn-note-edit-btn"'
@@ -7477,6 +7443,7 @@ $(function() {
 				html += '</tr>';
 			});
 			body.innerHTML = html + '</tbody></table>';
+			pnInitDataTable('#pn-history-table', { order: [[2, 'desc']], filename: 'Notes' });
 		}).fail(function() { body.innerHTML = '<div class="pn-empty">Unable to load notes.</div>'; });
 	}
 
@@ -7507,8 +7474,8 @@ $(function() {
 					+ '</span>';
 			};
 			var html = '<table class="pn-table display" id="pn-rec-table"><thead><tr>'
-				+ '<th>Award</th><th>Rank</th><th>Date</th><th>Sent By</th><th>Reason</th>'
-				+ (hasActions ? '<th style="white-space:nowrap;width:1%">Actions</th>' : '')
+				+ '<th>Award</th><th>Rank</th><th data-sorttype="date">Date</th><th>Sent By</th><th>Reason</th>'
+				+ (hasActions ? '<th class="pn-nosort" style="white-space:nowrap;width:1%">Actions</th>' : '')
 				+ '</tr></thead><tbody>';
 			recList.forEach(function(rec) {
 				var kaid  = parseInt(rec.KingdomAwardId) || 0;
@@ -7574,19 +7541,13 @@ $(function() {
 				html += '</tr>';
 			});
 			body.innerHTML = html + '</tbody></table>';
-			if ($.fn.DataTable) {
-				$('#pn-rec-table').DataTable({
-					order: [[2, 'desc']],
-					columnDefs: [{ targets: [2], type: 'date' }].concat(hasActions ? [{ targets: [-1], orderable: false, searchable: false }] : []),
-					pageLength: 25,
-					scrollX: true
-				});
-			}
+			pnInitDataTable('#pn-rec-table', { order: [[2, 'desc']], filename: 'Recommendations' });
 		}).fail(function() { body.innerHTML = '<div class="pn-empty">Unable to load recommendations.</div>'; });
 	}
 
 	// Allow OrkRsCfg.reload (set above) to force a recs reload after seconds actions.
 	window.pnReloadRecs = function() { pnRecsLoaded = false; pnLoadRecs(); };
+	window.pnReloadNotes = function() { pnNotesLoaded = false; pnLoadNotes(); };
 
 	// Hook tab clicks to trigger lazy loading
 	$(document).on('click', '.pn-tab-nav li', function() {
