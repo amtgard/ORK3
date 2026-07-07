@@ -1,0 +1,112 @@
+name: Fuzzy Validator
+
+on:
+  pull_request:
+    paths:
+      - 'orkui/**'
+      - 'system/lib/system/class.Controller.php'
+      - 'tools/fuzzy-validator/**'
+  push:
+    branches:
+      - 'megiddo/**'
+    paths:
+      - 'tools/fuzzy-validator/**'
+  workflow_dispatch:
+
+concurrency:
+  group: fuzzy-validator-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pyunit:
+    name: Python unit tests (≥90%)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r tools/fuzzy-validator/python/requirements.txt
+          pip install -r tools/fuzzy-validator/python/requirements-dev.txt
+
+      - name: pytest with coverage gate
+        working-directory: tools/fuzzy-validator/python
+        run: |
+          pytest tests/ \
+            --cov=lib \
+            --cov=. \
+            --cov-report=term-missing \
+            --cov-fail-under=90
+
+  gate-pilot:
+    name: Pixel gate — pilot pages (optional)
+    runs-on: ubuntu-latest
+    needs: pyunit
+    continue-on-error: true
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Node and Python dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          pip install -r tools/fuzzy-validator/python/requirements.txt
+
+      - name: Start docker stack
+        run: docker compose -f docker-compose.php8.yml up -d --build
+
+      - name: Wait for ORK3 app
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -sf -o /dev/null http://127.0.0.1:19080/orkui/; then
+              echo "App ready after ${attempt} attempts"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "ORK3 app did not become ready on port 19080" >&2
+          exit 1
+
+      - name: Deploy sandbox (best effort)
+        continue-on-error: true
+        run: bin/ork-db deploy-sandbox --yes
+
+      - name: Run pixel gate on pilot baselines
+        env:
+          ORK3_E2E_BASE_URL: http://127.0.0.1:19080/orkui/
+          ORK3_E2E_USERNAME: ${{ secrets.ORK3_E2E_USERNAME }}
+          ORK3_E2E_PASSWORD: ${{ secrets.ORK3_E2E_PASSWORD }}
+        run: |
+          if [ -z "${ORK3_E2E_USERNAME:-}" ]; then
+            echo "ORK3_E2E_USERNAME not set — validating home-anonymous only"
+            bin/fuzzy-validator validate --page home-anonymous --phase visual
+          else
+            bin/fuzzy-validator validate \
+              --pages home-anonymous,home-authenticated,player-profile \
+              --phase visual
+          fi
+
+      - name: Upload gate report artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzzy-validator-reports-${{ github.run_id }}
+          path: |
+            tools/fuzzy-validator/reports/
+            tools/fuzzy-validator/calibrations/*/candidate.png
+          retention-days: 14
+          if-no-files-found: ignore

@@ -218,6 +218,32 @@ Primary interface: **`bin/fuzzy-validator`** from repo root. Full flags: [10-cli
 
 ---
 
+## 10. CI (GitHub Actions)
+
+Workflow: [`.github/workflows/fuzzy-validator.yml`](../../../.github/workflows/fuzzy-validator.yml)
+
+| Job | When | Purpose |
+|-----|------|---------|
+| `pyunit` | PRs touching `orkui/`, `class.Controller.php`, or `tools/fuzzy-validator/` | pytest ≥ 90% coverage (required) |
+| `gate-pilot` | Same PRs + `workflow_dispatch` | Linux pixel gate on pilot baselines (optional; `continue-on-error`) |
+
+### Optional gate secrets
+
+Set repository secrets for full pilot gate (all three baselines):
+
+| Secret | Purpose |
+|--------|---------|
+| `ORK3_E2E_USERNAME` | Mirror/test login for auth-gated pilot pages |
+| `ORK3_E2E_PASSWORD` | Matching password |
+
+Without secrets, CI validates `home-anonymous` only.
+
+### Report artifacts
+
+Every `gate-pilot` run uploads `tools/fuzzy-validator/reports/` and candidate PNGs as artifact **`fuzzy-validator-reports-{runId}`** (14-day retention). Download from the Actions run → **Artifacts** after a failed optional gate. Full HTML dashboard arrives in FU-10; FU-3/FU-5 artifacts include per-page diff PNGs (`{pageId}-gate-diff.png`) and calibration overlays.
+
+---
+
 ## 9. Megiddo milestone mapping (suggested)
 
 When an R-* milestone lists frontend routes in its DS design note, add corresponding page ids to the gate command for that sprint.

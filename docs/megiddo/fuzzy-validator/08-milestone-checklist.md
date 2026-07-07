@@ -51,10 +51,12 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 - [x] Tests for registry loader / validation
 - [x] Single squashed commit
 
-- [ ] Branch `megiddo/fu-5-ci`
-- [ ] Linux workflow job for gate (optional PR check)
-- [ ] Report artifact upload documented
-- [ ] Single squashed commit
+### FU-5: CI (optional)
+
+- [x] Branch `megiddo/fu-5-ci`
+- [x] Linux workflow job for gate (optional PR check)
+- [x] Report artifact upload documented
+- [x] Single squashed commit
 
 ---
 
@@ -120,7 +122,7 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 | FU-2 | 2026-07-07 | d8820b06 | 96% |
 | FU-3 | 2026-07-07 | 742310c4 | 96% |
 | FU-4 | 2026-07-07 | 195e316a | 95% |
-| FU-5 | | | |
+| FU-5 | 2026-07-07 | eb281bad | 95% |
 | FU-6 | | | |
 | FU-7 | | | |
 | FU-8 | | | |

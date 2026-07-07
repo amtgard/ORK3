@@ -282,11 +282,15 @@ jinja2>=3.1
 
 ## 5. CI artifact policy
 
-On every gate run (pass or fail):
+Workflow: [`.github/workflows/fuzzy-validator.yml`](../../../.github/workflows/fuzzy-validator.yml) (FU-5).
 
-1. Upload `reports/run-{runId}/` as workflow artifact (retention 14–30 days).
-2. On **fail**, print report URL path in CI log.
-3. On **pass**, optional upload for audit trail on R-* branches.
+On every `gate-pilot` job run (pass or fail):
+
+1. Upload `tools/fuzzy-validator/reports/` and `calibrations/*/candidate.png` as artifact **`fuzzy-validator-reports-{runId}`** (retention 14 days).
+2. On **fail**, download artifact from GitHub Actions → **Artifacts**; open diff PNGs locally (`{pageId}-gate-diff.png`).
+3. On **pass**, optional upload retained for audit trail on R-* branches.
+
+After **FU-10**, artifact path becomes `reports/run-{runId}/index.html` (full HTML dashboard). Until then, per-page diff PNGs and calibration overlays are the review surface.
 
 Do not commit `reports/run-*` to git.
 

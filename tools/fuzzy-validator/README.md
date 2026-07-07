@@ -37,3 +37,12 @@ pip install -r tools/fuzzy-validator/python/requirements-dev.txt
 npx playwright install chromium
 docker compose -f docker-compose.php8.yml up -d
 ```
+
+## CI
+
+GitHub Actions workflow [`.github/workflows/fuzzy-validator.yml`](../../.github/workflows/fuzzy-validator.yml):
+
+- **Required:** Python unit tests with ≥ 90% coverage
+- **Optional:** Linux pixel gate on pilot baselines (`home-anonymous`, `home-authenticated`, `player-profile`); uploads `reports/` artifacts on every run
+
+Set `ORK3_E2E_USERNAME` / `ORK3_E2E_PASSWORD` repository secrets for authenticated pilot pages. See [04-operating-guide.md §10](../../docs/megiddo/fuzzy-validator/04-operating-guide.md).
