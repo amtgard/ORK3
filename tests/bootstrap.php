@@ -67,9 +67,12 @@ require_once __DIR__ . '/Support/KingdomProfileFixture.php';
 require_once __DIR__ . '/Support/ParkProfileFixture.php';
 require_once __DIR__ . '/Support/AdminDashboardFixture.php';
 require_once __DIR__ . '/Support/PlayerProfileFixture.php';
+require_once __DIR__ . '/Support/ReportsFixture.php';
 require_once DIR_UI . 'model/model.Event.php';
 require_once DIR_UI . 'model/model.Attendance.php';
 require_once DIR_UI . 'model/model.Player.php';
+require_once DIR_UI . 'model/model.Reports.php';
+require_once DIR_UI . 'model/model.Award.php';
 require_once DIR_UI . 'controller/controller.PlayerAjax.php';
 require_once DIR_SERVICE . 'Common.definitions.php';
 

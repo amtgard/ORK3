@@ -665,13 +665,17 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 | Step | Status |
 |------|--------|
-| Backend unit/integration tests | [ ] |
-| Frontend functional tests | [ ] |
-| Milestone-scoped Infection passes | [ ] |
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Integration/VotingRulesTest.php`, `tests/Integration/LadderGridTest.php`, `tests/Unit/AttendanceDatesTest.php`, `tests/Integration/OfficerDirectoryTest.php`, `tests/Unit/AwardOptionGroupsTest.php`, `tests/e2e/reports.spec.ts`
+
+**Infection (pre-refactor):** `infection.t10-reports.json5` — `--only-covered --filter=class.Report.php --filter=class.Award.php --test-framework-options="--filter=VotingRulesTest|LadderGridTest|AttendanceDatesTest|OfficerDirectoryTest|AwardOptionGroupsTest"` (MSI 48%, covered MSI 48%)
 
 #### T-10 sign-off gate
 
-- [ ] Test sprint sign-off checklist (above) satisfied
+- [x] Test sprint sign-off checklist (above) satisfied
 - [ ] Branch `megiddo/t-10-reports-tests` squashed to exactly one commit
 
 ---
