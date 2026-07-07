@@ -3226,6 +3226,9 @@ window.knInitRecsTab = function() {
 			{ targets: [-1], orderable: false, searchable: false },
 			<?php endif; ?>
 		],
+		dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>",
+		lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+		language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' },
 		pageLength: 25,
 		scrollX: true
 	});
