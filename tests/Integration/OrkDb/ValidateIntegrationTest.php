@@ -56,25 +56,3 @@ final class ValidateIntegrationTest extends TestCase
         $this->assertTrue($result['passed'], $output);
     }
 }
-
-function ork3_sandbox_db_available(): bool
-{
-    static $available = null;
-    if ($available !== null) {
-        return $available;
-    }
-
-    try {
-        $pdo = new \PDO(
-            'mysql:host=127.0.0.1;port=19307;dbname=ork_test;charset=utf8mb4',
-            'root',
-            'root',
-            [\PDO::ATTR_TIMEOUT => 2]
-        );
-        $available = (bool) $pdo->query('SELECT 1')->fetchColumn();
-    } catch (\Throwable) {
-        $available = false;
-    }
-
-    return $available;
-}

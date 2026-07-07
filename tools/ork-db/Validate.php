@@ -132,6 +132,18 @@ final class Validate
         return ['passed' => true, 'lines' => $lines, 'exit_code' => 0];
     }
 
+    public function testCanaryPresent(): bool
+    {
+        try {
+            $credentials = $this->wiring->credentials();
+            $pdo = $this->connectSandbox($credentials['user'], $credentials['password']);
+
+            return $this->checkTestCanary($pdo)['present'];
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     public function connectSandbox(string $user, string $password): PDO
     {
         if ($this->pdoFactory !== null) {

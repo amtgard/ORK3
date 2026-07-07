@@ -58,16 +58,16 @@
 
 ## TD-6 — use prod|dev
 
-- [ ] `bin/ork-db use prod` / `use dev`
-- [ ] `use dev` refused on production tier
+- [x] `bin/ork-db use prod` / `use dev`
+- [x] `use dev` refused on production tier
 
 ---
 
 ## TD-7 — PHPUnit + dev bootstrap
 
-- [ ] `config.test.php` → 19307 / `ork_test`
-- [ ] `bin/ork-db bootstrap` — idempotent first-run (init → extract → apply)
-- [ ] Full suite passes after `apply`
+- [x] `config.test.php` → 19307 / `ork_test`
+- [x] `bin/ork-db bootstrap` — idempotent first-run (init → extract → apply)
+- [ ] Full suite passes after `apply` (blocked on sandbox schema parity — TD-8)
 
 ---
 

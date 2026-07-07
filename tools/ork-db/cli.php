@@ -13,13 +13,17 @@ require_once __DIR__ . '/Init.php';
 require_once __DIR__ . '/Extract.php';
 require_once __DIR__ . '/Render.php';
 require_once __DIR__ . '/Apply.php';
+require_once __DIR__ . '/Use.php';
+require_once __DIR__ . '/Bootstrap.php';
 
 use OrkDb\Apply;
+use OrkDb\Bootstrap;
 use OrkDb\DeploymentTier;
 use OrkDb\Extract;
 use OrkDb\Init;
 use OrkDb\Render;
 use OrkDb\TierRefusalException;
+use OrkDb\UseProfile;
 use OrkDb\Validate;
 use OrkDb\ValidationException;
 use OrkDb\Wiring;
@@ -34,6 +38,8 @@ $init = new Init($wiring, $validate, $repoRoot);
 $extract = new Extract($wiring, $toolRoot);
 $render = new Render($toolRoot, $repoRoot);
 $apply = new Apply($wiring, $validate, $render, $repoRoot);
+$useProfile = new UseProfile($tier, $repoRoot);
+$bootstrap = new Bootstrap($validate, $init, $extract, $apply, $toolRoot);
 
 $command = $argv[1] ?? 'help';
 $options = parseOptions($argv);
@@ -47,8 +53,9 @@ try {
         'extract' => runExtract($tier, $extract, $wiring, $options),
         'render' => runRender($tier, $render, $options),
         'apply' => runApply($tier, $apply, $options),
+        'bootstrap' => runBootstrap($tier, $bootstrap, $options),
         'schema-diff' => runStubDataCommand($tier, $command),
-        'use' => runUseStub($tier, $options),
+        'use' => runUse($tier, $useProfile, $options),
         default => unknownCommand($command),
     };
 } catch (TierRefusalException $e) {
@@ -74,7 +81,9 @@ try {
  *   output: string|null,
  *   sql: string|null,
  *   deterministic: bool,
- *   persist_seed: bool
+ *   persist_seed: bool,
+ *   skip_extract: bool,
+ *   force_extract: bool
  * }
  */
 function parseOptions(array $argv): array
@@ -89,6 +98,8 @@ function parseOptions(array $argv): array
     $sql = null;
     $deterministic = false;
     $persistSeed = false;
+    $skipExtract = false;
+    $forceExtract = false;
     $positional = [];
 
     for ($i = 2, $count = count($argv); $i < $count; $i++) {
@@ -133,6 +144,14 @@ function parseOptions(array $argv): array
             $persistSeed = true;
             continue;
         }
+        if ($arg === '--skip-extract') {
+            $skipExtract = true;
+            continue;
+        }
+        if ($arg === '--force-extract') {
+            $forceExtract = true;
+            continue;
+        }
         if (str_starts_with($arg, '--mode=')) {
             $mode = substr($arg, strlen('--mode='));
             continue;
@@ -172,6 +191,8 @@ function parseOptions(array $argv): array
         'sql' => $sql,
         'deterministic' => $deterministic,
         'persist_seed' => $persistSeed,
+        'skip_extract' => $skipExtract,
+        'force_extract' => $forceExtract,
     ];
 }
 
@@ -190,6 +211,7 @@ Usage:
   bin/ork-db apply [--yes] [--sql path]
   bin/ork-db validate [--mode init|pre-apply|post-apply]
   bin/ork-db init
+  bin/ork-db bootstrap [--yes] [--skip-extract] [--force-extract]
   bin/ork-db schema-diff
   bin/ork-db help [command]
 
@@ -311,8 +333,26 @@ function runStubDataCommand(DeploymentTier $tier, string $command): never
     exit(2);
 }
 
+/** @param array{yes: bool, skip_extract: bool, force_extract: bool} $options */
+function runBootstrap(DeploymentTier $tier, Bootstrap $bootstrap, array $options): never
+{
+    $tier->refuseDataCommands('bootstrap');
+
+    $result = $bootstrap->run([
+        'yes' => $options['yes'],
+        'skip_extract' => $options['skip_extract'],
+        'force_extract' => $options['force_extract'],
+    ]);
+
+    foreach ($result['lines'] as $line) {
+        fwrite(STDOUT, $line . PHP_EOL);
+    }
+
+    exit($result['exit_code']);
+}
+
 /** @param array{args: list<string>, mode: string|null, yes: bool} $options */
-function runUseStub(DeploymentTier $tier, array $options): never
+function runUse(DeploymentTier $tier, UseProfile $useProfile, array $options): never
 {
     $profile = $options['args'][0] ?? null;
     if ($profile === null) {
@@ -320,12 +360,12 @@ function runUseStub(DeploymentTier $tier, array $options): never
         exit(2);
     }
 
-    if ($profile === 'dev') {
-        $tier->refuseDataCommands('use dev');
+    $result = $useProfile->run($profile);
+    foreach ($result['lines'] as $line) {
+        fwrite(STDOUT, $line . PHP_EOL);
     }
 
-    fwrite(STDERR, "ork-db: 'use {$profile}' not implemented yet (TD-6).\n");
-    exit(2);
+    exit(0);
 }
 
 function unknownCommand(string $command): never

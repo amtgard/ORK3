@@ -28,7 +28,7 @@ bin/ork-db apply              # wipe + reload sandbox — target is hardcoded
 
 bin/ork-db validate           # safety checks on hardcoded sandbox target
 bin/ork-db init               # first-time sandbox schema + canary
-bin/ork-db bootstrap          # first-run: init + extract + apply (TD-7 — planned)
+bin/ork-db bootstrap          # first-run: init + extract + apply (TD-7)
 bin/ork-db schema-diff        # compare mirror vs sandbox schema (local only)
 
 bin/ork-db help [command]
@@ -186,12 +186,13 @@ All probe **sandbox only** (hardcoded `19307` / `ork_test`). Refused on producti
 
 ---
 
-## `bootstrap` *(planned — TD-7)*
+## `bootstrap`
 
 ```bash
 bin/ork-db bootstrap
 bin/ork-db bootstrap --yes
 bin/ork-db bootstrap --skip-extract
+bin/ork-db bootstrap --force-extract
 ```
 
 - **Local tier only** — same refusal rules as other data commands

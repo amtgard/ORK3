@@ -16,3 +16,64 @@ require_once ORK3_ROOT . '/tools/ork-db/Extract.php';
 require_once ORK3_ROOT . '/tools/ork-db/Render.php';
 require_once ORK3_ROOT . '/tools/ork-db/Init.php';
 require_once ORK3_ROOT . '/tools/ork-db/Apply.php';
+require_once ORK3_ROOT . '/tools/ork-db/Use.php';
+require_once ORK3_ROOT . '/tools/ork-db/Bootstrap.php';
+
+/**
+ * Whether the sandbox database used by ork-db tools accepts connections.
+ */
+function ork3_sandbox_db_available(): bool
+{
+    static $available = null;
+    if ($available !== null) {
+        return $available;
+    }
+
+    try {
+        $pdo = new PDO(
+            'mysql:host=127.0.0.1;port=19307;dbname=ork_test;charset=utf8mb4',
+            'root',
+            'root',
+            [PDO::ATTR_TIMEOUT => 2]
+        );
+        $available = (bool) $pdo->query('SELECT 1')->fetchColumn();
+    } catch (Throwable) {
+        $available = false;
+    }
+
+    return $available;
+}
+
+function ork3_mirror_db_available(): bool
+{
+    static $available = null;
+    if ($available !== null) {
+        return $available;
+    }
+
+    try {
+        $pdo = new PDO(
+            'mysql:host=127.0.0.1;port=19306;dbname=ork;charset=utf8mb4',
+            'root',
+            'root',
+            [PDO::ATTR_TIMEOUT => 2]
+        );
+        $available = (bool) $pdo->query('SELECT 1')->fetchColumn();
+    } catch (Throwable) {
+        $available = false;
+    }
+
+    return $available;
+}
+
+function ork3_ensure_mirror_prod_canary(): void
+{
+    $migration = ORK3_ROOT . '/db-migrations/2026-07-07-add-prod-canary.sql';
+    if (!is_readable($migration)) {
+        return;
+    }
+
+    $command = 'docker exec -i ork3-php8-db mariadb -uroot -proot ork < '
+        . escapeshellarg($migration) . ' 2>/dev/null';
+    exec($command);
+}

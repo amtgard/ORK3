@@ -80,7 +80,7 @@ require_once DIR_UI . 'controller/controller.PlayerAjax.php';
 require_once DIR_SERVICE . 'Common.definitions.php';
 
 /**
- * Whether the configured test database accepts connections.
+ * Whether the configured test database (sandbox) accepts connections.
  */
 function ork3_test_db_available(): bool
 {
@@ -91,9 +91,9 @@ function ork3_test_db_available(): bool
 
     try {
         $host = getenv('ORK3_TEST_DB_HOST') ?: '127.0.0.1';
-        $port = getenv('ORK3_TEST_DB_PORT') ?: '19306';
+        $port = getenv('ORK3_TEST_DB_PORT') ?: '19307';
         $pdo = new PDO(
-            "mysql:host={$host};port={$port};dbname=ork",
+            "mysql:host={$host};port={$port};dbname=ork_test",
             'ork',
             'secret',
             [PDO::ATTR_TIMEOUT => 2]
@@ -104,4 +104,12 @@ function ork3_test_db_available(): bool
     }
 
     return $available;
+}
+
+/**
+ * Whether the sandbox database used by ork-db tools accepts connections.
+ */
+function ork3_sandbox_db_available(): bool
+{
+    return ork3_test_db_available();
 }

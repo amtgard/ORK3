@@ -43,10 +43,8 @@ docker compose -f docker-compose.php8.yml up -d
 # One-time mirror setup (if ork @ 19306 is empty):
 #   import dev dump, then apply db-migrations/2026-07-07-add-prod-canary.sql
 
-# Sandbox bootstrap (manual today; bin/ork-db bootstrap planned in TD-7)
-bin/ork-db init              # schema + test canary on empty ork_test
-bin/ork-db extract           # pull catalogs from mirror
-bin/ork-db apply --yes       # load fake kingdoms, parks, players
+# Sandbox bootstrap (TD-7)
+bin/ork-db bootstrap --yes    # init + extract + apply (idempotent)
 
 bin/ork-db validate --mode post-apply
 ```

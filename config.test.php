@@ -4,8 +4,8 @@
  * PHPUnit / Infection bootstrap config.
  *
  * Loaded when ENVIRONMENT=TEST (see startup.php). Defaults target the local
- * docker-compose MariaDB on localhost:19306. Override with ORK3_TEST_DB_HOST
- * and ORK3_TEST_DB_PORT when running inside the app container.
+ * docker-compose sandbox MariaDB on localhost:19307 / ork_test. Override with
+ * ORK3_TEST_DB_HOST and ORK3_TEST_DB_PORT when running inside the app container.
  */
 
 date_default_timezone_set('America/Chicago');
@@ -84,10 +84,10 @@ define('DIR_MODEL', DIR_UI . 'model/');
 // DB — host-side defaults match docker-compose.php8.yml port mapping
 define('DB_DRIVER', 'mysql');
 define('DB_HOSTNAME', getenv('ORK3_TEST_DB_HOST') ?: '127.0.0.1');
-define('DB_PORT', (int) (getenv('ORK3_TEST_DB_PORT') ?: 19306));
+define('DB_PORT', (int) (getenv('ORK3_TEST_DB_PORT') ?: 19307));
 define('DB_USERNAME', 'ork');
 define('DB_PASSWORD', 'secret');
-define('DB_DATABASE', 'ork');
+define('DB_DATABASE', 'ork_test');
 define('DB_PREFIX', 'ork_');
 define('CACHE_HOST', 'ork-dev');
 define('CUSTOM_CSS', HTTP_TEMPLATE . 'default/style/custom.css');

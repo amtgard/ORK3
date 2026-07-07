@@ -19,10 +19,9 @@ final class Init
     {
         $pre = $this->validate->run(Validate::MODE_INIT);
         if (!$pre['passed']) {
-            foreach ($pre['lines'] as $line) {
-                fwrite(STDERR, $line . PHP_EOL);
-            }
-            exit(2);
+            throw new ValidationException(
+                'Init pre-validation failed: ' . implode('; ', $pre['lines'])
+            );
         }
 
         $sandbox = $this->wiring->sandbox();
@@ -62,7 +61,9 @@ SQL;
         }
 
         if (!$post['passed']) {
-            exit($post['exit_code']);
+            throw new ValidationException(
+                'Init post-validation failed: ' . implode('; ', $post['lines'])
+            );
         }
     }
 
