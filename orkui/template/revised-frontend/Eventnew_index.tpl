@@ -242,15 +242,32 @@
 	transform:translateX(-50%) translateY(calc(-100% - 8px));
 }
 .ev-rsvp-th-tooltip:hover .ev-rsvp-th-tip { display:block; }
-/* Heraldry edit overlay */
-.ev-heraldry-edit-wrap { position: relative; display: inline-block; cursor: pointer; }
-.ev-heraldry-edit-overlay {
-	position: absolute; inset: 0; background: rgba(0,0,0,0); border-radius: 6px;
-	display: flex; align-items: center; justify-content: center; transition: background .2s;
+/* Heraldry edit button — corner target, mirrors player .pn-img-edit-btn.
+   The logo image itself is a .heraldry-img lightbox trigger; this small
+   button is the only edit affordance (frame no longer clicks-to-edit). */
+.ev-heraldry-frame { position: relative; }
+.ev-heraldry-edit-btn {
+	position: absolute;
+	bottom: 6px;
+	right: 6px;
+	width: 26px;
+	height: 26px;
+	background: rgba(0,0,0,0.62);
+	border-radius: 50%;
+	border: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+	transition: opacity 0.18s, background 0.15s;
+	cursor: pointer;
+	z-index: 2;
+	padding: 0;
+	line-height: 1;
 }
-.ev-heraldry-edit-wrap:hover .ev-heraldry-edit-overlay { background: rgba(0,0,0,0.45); }
-.ev-heraldry-edit-icon { color: #fff; font-size: 22px; opacity: 0; transition: opacity .2s; }
-.ev-heraldry-edit-wrap:hover .ev-heraldry-edit-icon { opacity: 1; }
+.ev-heraldry-frame:hover .ev-heraldry-edit-btn { opacity: 1; }
+.ev-heraldry-edit-btn:hover { background: rgba(44,82,130,0.9); }
+.ev-heraldry-edit-btn i { color: #fff; font-size: 12px; pointer-events: none; }
 /* Image upload modal */
 .ev-img-overlay {
 	display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55);
@@ -742,14 +759,14 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 	<div class="ev-hero-content">
 
 		<?php if ($_showLogo): ?>
-		<div class="ev-heraldry-frame<?= $canManage ? ' ev-heraldry-edit-wrap' : '' ?>"<?= $canManage ? ' onclick="evOpenImgModal()" data-tip="Change logo"' : '' ?>>
-			<img id="ev-heraldry-img"
+		<div class="ev-heraldry-frame">
+			<img id="ev-heraldry-img"<?= $hasHeraldry ? ' class="heraldry-img"' : '' ?>
 				src="<?= htmlspecialchars($heraldryUrl) ?>"
 				onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
 				alt="<?= $eventName ?> logo"
 				crossorigin="anonymous">
 			<?php if ($canManage): ?>
-			<div class="ev-heraldry-edit-overlay"><i class="fas fa-camera ev-heraldry-edit-icon"></i></div>
+			<button type="button" class="ev-heraldry-edit-btn" onclick="evOpenImgModal()" aria-label="Change logo"><i class="fas fa-camera"></i></button>
 			<?php endif; ?>
 		</div>
 		<?php endif; ?>
