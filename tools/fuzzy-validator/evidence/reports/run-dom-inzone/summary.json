@@ -20,7 +20,7 @@
     }
   ],
   "profile": "test",
-  "generatedAt": "2026-07-07T22:28:49Z",
+  "generatedAt": "2026-07-07T22:41:49Z",
   "pagesDetailed": [
     {
       "pageId": "home-authenticated",
@@ -34,7 +34,7 @@
           "details": {
             "passed": true,
             "domScore": 1.0,
-            "comparablePaths": 264,
+            "comparablePaths": 265,
             "failurePaths": 0,
             "failures": []
           }

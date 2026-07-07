@@ -213,12 +213,12 @@ tools/fuzzy-validator/evidence/
 
 ### FU-14: Asset hard-gate evidence
 
-- [ ] Branch `megiddo/fu-14-asset-evidence`
-- [ ] Virgin capture: `validate --phase assets` pass on same commit
-- [ ] 1-byte CSS change → fail; diff visible in `evidence/reports/assets-proof/`
-- [ ] 1-byte JS change → fail (separate scenario or same report section)
-- [ ] `run-evidence-suite.sh` extended for asset pass/fail
-- [ ] Single squashed commit
+- [x] Branch `megiddo/fu-14-asset-evidence`
+- [x] Virgin capture: `validate --phase assets` pass on same commit
+- [x] 1-byte CSS change → fail; diff visible in `evidence/reports/assets-proof/`
+- [x] 1-byte JS change → fail (separate scenario or same report section)
+- [x] `run-evidence-suite.sh` extended for asset pass/fail
+- [x] Single squashed commit
 
 ### FU-15: Unified evidence + optional CI
 

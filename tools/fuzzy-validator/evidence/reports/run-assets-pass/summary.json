@@ -1,0 +1,45 @@
+{
+  "runId": "assets-pass",
+  "phase": "assets",
+  "exitCode": 0,
+  "pass": true,
+  "thresholds": {
+    "assetsMinScore": 1.0,
+    "domMinScore": 1.0,
+    "visualMinScore": 1.0
+  },
+  "pages": [
+    {
+      "pageId": "home-authenticated",
+      "pass": true,
+      "scores": {
+        "assets": 1.0
+      },
+      "pageScore": 1.0,
+      "reportPath": "pages/home-authenticated.html"
+    }
+  ],
+  "profile": "test",
+  "generatedAt": "2026-07-07T22:41:53Z",
+  "pagesDetailed": [
+    {
+      "pageId": "home-authenticated",
+      "passed": true,
+      "layers": [
+        {
+          "layer": "assets",
+          "passed": true,
+          "score": 1.0,
+          "exitCode": 0,
+          "details": {
+            "passed": true,
+            "missingIds": [],
+            "extraIds": [],
+            "changedIds": [],
+            "assetsScore": 1.0
+          }
+        }
+      ]
+    }
+  ]
+}

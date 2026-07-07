@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import shutil
 import sys
@@ -11,11 +12,18 @@ from pathlib import Path
 
 from PIL import Image
 
+from lib.asset_manifest import load_asset_manifest, parse_assets, save_asset_manifest
+from lib.asset_store import asset_file_name, resolve_baseline_asset_path
+
 HERALDRY_BOX = (35, 140, 225, 280)
 SESSION_TOKEN_ATTR = "data-session-token"
 SESSION_TOKEN_STABLE = "evidence-session-stable"
 SESSION_TOKEN_VOLATILE_A = "evidence-session-volatile-a"
 SESSION_TOKEN_VOLATILE_B = "evidence-session-volatile-b"
+
+ASSET_PAGE_ID = "home-authenticated"
+ASSET_CSS_ID = "css-000"
+ASSET_JS_ID = "js-000"
 
 
 def _repo_root() -> Path:
@@ -164,6 +172,79 @@ def prepare_dom_outzone_candidate(cal_dir: Path, virgin_dom_html: Path) -> None:
     (cal_dir / "candidate.dom.html").write_text(mutated, encoding="utf-8")
 
 
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _baseline_assets_manifest(root: Path, profile: str, page_id: str) -> Path:
+    return root / "baselines" / profile / f"{page_id}.assets.json"
+
+
+def _candidate_assets_dir(cal_dir: Path) -> Path:
+    return cal_dir / "assets" / "candidate"
+
+
+def _copy_asset_bytes(
+    *,
+    entry,
+    root: Path,
+    dest_dir: Path,
+) -> None:
+    source = resolve_baseline_asset_path(entry.baseline_path, root)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, dest_dir / asset_file_name(entry))
+
+
+def prepare_assets_pass_candidate(root: Path, profile: str, page_id: str = ASSET_PAGE_ID) -> None:
+    cal_dir = root / "calibrations" / page_id
+    manifest_path = _baseline_assets_manifest(root, profile, page_id)
+    manifest = load_asset_manifest(manifest_path)
+    candidate_dir = _candidate_assets_dir(cal_dir)
+    if candidate_dir.exists():
+        shutil.rmtree(candidate_dir)
+    for entry in parse_assets(manifest):
+        _copy_asset_bytes(entry=entry, root=root, dest_dir=candidate_dir)
+    save_asset_manifest(cal_dir / "candidate.assets.json", manifest)
+
+
+def _mutate_asset_byte(
+    *,
+    root: Path,
+    profile: str,
+    page_id: str,
+    asset_id: str,
+) -> None:
+    prepare_assets_pass_candidate(root, profile, page_id)
+    cal_dir = root / "calibrations" / page_id
+    manifest_path = cal_dir / "candidate.assets.json"
+    manifest = load_asset_manifest(manifest_path)
+    candidate_dir = _candidate_assets_dir(cal_dir)
+    target = next(entry for entry in parse_assets(manifest) if entry.id == asset_id)
+    asset_path = candidate_dir / asset_file_name(target)
+    if not asset_path.is_file():
+        matches = sorted(candidate_dir.glob(f"{asset_id}*"))
+        asset_path = matches[0]
+    mutated = asset_path.read_bytes() + b"X"
+    asset_path.write_bytes(mutated)
+    updated_assets = []
+    for asset in manifest["assets"]:
+        payload = dict(asset)
+        if payload["id"] == asset_id:
+            payload["sha256"] = _sha256_bytes(mutated)
+            payload["byteLength"] = len(mutated)
+        updated_assets.append(payload)
+    manifest["assets"] = updated_assets
+    save_asset_manifest(manifest_path, manifest)
+
+
+def prepare_assets_css_fail_candidate(root: Path, profile: str) -> None:
+    _mutate_asset_byte(root=root, profile=profile, page_id=ASSET_PAGE_ID, asset_id=ASSET_CSS_ID)
+
+
+def prepare_assets_js_fail_candidate(root: Path, profile: str) -> None:
+    _mutate_asset_byte(root=root, profile=profile, page_id=ASSET_PAGE_ID, asset_id=ASSET_JS_ID)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Evidence suite mutation helpers")
     parser.add_argument(
@@ -175,6 +256,9 @@ def build_parser() -> argparse.ArgumentParser:
             "dom-discover",
             "dom-inzone",
             "dom-outzone",
+            "assets-pass",
+            "assets-css-fail",
+            "assets-js-fail",
         ],
     )
     parser.add_argument("--evidence-root", type=Path, default=None)
@@ -186,6 +270,20 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     root = args.evidence_root or evidence_root()
     profile = "test"
+
+    if args.action.startswith("assets"):
+        manifest_path = _baseline_assets_manifest(root, profile, ASSET_PAGE_ID)
+        if not manifest_path.is_file():
+            print(f"evidence_mutations: missing asset baseline {manifest_path}", file=sys.stderr)
+            return 1
+        if args.action == "assets-pass":
+            prepare_assets_pass_candidate(root, profile)
+        elif args.action == "assets-css-fail":
+            prepare_assets_css_fail_candidate(root, profile)
+        elif args.action == "assets-js-fail":
+            prepare_assets_js_fail_candidate(root, profile)
+        return 0
+
     heraldry = heraldry_source()
 
     if args.action.startswith("pixel"):

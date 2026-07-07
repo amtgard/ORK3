@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Evidence suite — pixel + DOM fuzz discovery and pass/fail proof (FU-13).
+# Evidence suite — pixel + DOM fuzz + asset hard gate proof (FU-13…FU-15).
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-EVIDENCE="$ROOT/tools/fuzzy-validator/evidence"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+EVIDENCE="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROOT="$(cd "$EVIDENCE/../../.." && pwd)"
 PYTHON_DIR="$ROOT/tools/fuzzy-validator/python"
 SCRIPTS="$EVIDENCE/scripts"
 PROFILE="test"
@@ -73,7 +74,7 @@ copy_report() {
   cp "$src/summary.json" "$dest/../summary-${run_id}.json" 2>/dev/null || cp "$src/summary.json" "$dest/summary.json"
 }
 
-mkdir -p "$EVIDENCE/reports/pixel-proof" "$EVIDENCE/reports/dom-proof"
+mkdir -p "$EVIDENCE/reports/pixel-proof" "$EVIDENCE/reports/dom-proof" "$EVIDENCE/reports/assets-proof"
 
 echo "=== Pixel: discover fuzz from heraldry mutation ==="
 python3 "$SCRIPTS/evidence_mutations.py" pixel-discover
@@ -136,4 +137,26 @@ cp "$EVIDENCE/reports/pixel-proof/inzone/summary.json" "$EVIDENCE/reports/pixel-
 cp "$EVIDENCE/reports/dom-proof/inzone/index.html" "$EVIDENCE/reports/dom-proof/index.html" 2>/dev/null || true
 cp "$EVIDENCE/reports/dom-proof/inzone/summary.json" "$EVIDENCE/reports/dom-proof/summary.json" 2>/dev/null || true
 
-echo "evidence-suite: PASS (pixel + dom discover, in-zone pass, out-of-zone fail)"
+echo "=== Assets: virgin validate (expect pass) ==="
+python3 "$SCRIPTS/evidence_mutations.py" assets-pass
+run_validate "home-authenticated" assets "assets-pass" 0
+copy_report "assets-pass" "$EVIDENCE/reports/assets-proof/pass"
+
+echo "=== Assets: 1-byte CSS change (expect fail) ==="
+python3 "$SCRIPTS/evidence_mutations.py" assets-css-fail
+run_validate "home-authenticated" assets "assets-css-fail" 1
+copy_report "assets-css-fail" "$EVIDENCE/reports/assets-proof/css-fail"
+
+echo "=== Assets: 1-byte JS change (expect fail) ==="
+python3 "$SCRIPTS/evidence_mutations.py" assets-js-fail
+run_validate "home-authenticated" assets "assets-js-fail" 1
+copy_report "assets-js-fail" "$EVIDENCE/reports/assets-proof/js-fail"
+
+cp "$EVIDENCE/reports/assets-proof/pass/index.html" "$EVIDENCE/reports/assets-proof/index.html" 2>/dev/null || true
+cp "$EVIDENCE/reports/assets-proof/pass/summary.json" "$EVIDENCE/reports/assets-proof/summary.json" 2>/dev/null || true
+cat > "$EVIDENCE/reports/assets-proof/README.txt" <<'EOF'
+Open pass/index.html (PASS on same commit).
+css-fail/index.html and js-fail/index.html show asset diffs (FAIL).
+EOF
+
+echo "evidence-suite: PASS (pixel + dom + assets discover/pass/fail)"

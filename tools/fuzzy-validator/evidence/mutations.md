@@ -22,12 +22,13 @@ Controlled mutations for integration proof. Scripts in `scripts/evidence_mutatio
 | 2b In-zone | Candidate with token drift inside learned attr fuzz | `validate --phase dom` → exit 0 |
 | 2c Out-of-zone | Candidate changes welcome heading text outside fuzz nodes | `validate --phase dom` → exit 1 |
 
-## Assets — *(FU-14, deferred here)*
+## Assets — `home-authenticated`
 
 | Step | Mutation | Expected |
 |------|----------|----------|
-| Pass | Same commit as baseline | `validate --phase assets` → exit 0 |
-| Fail | Append one byte to a captured `.css` under `orkui/` | exit 1, diff in `assets-proof` report |
+| Pass | Candidate copies virgin baseline bytes (`css-000`, `js-000`, …) | `validate --phase assets` → exit 0 |
+| Fail CSS | Append one byte to `css-000-tokens.css.css` | exit 1, unified diff in `assets-proof/css-fail` |
+| Fail JS | Append one byte to `js-000-orkui.js.js` | exit 1, unified diff in `assets-proof/js-fail` |
 
 ## Unified — *(FU-15, deferred here)*
 

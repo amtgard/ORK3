@@ -14,6 +14,7 @@ from lib.asset_store import (
     copy_run_assets_to_baseline,
     read_baseline_bytes,
     read_candidate_bytes,
+    resolve_baseline_asset_path,
 )
 from lib.asset_manifest import AssetEntry
 
@@ -198,6 +199,29 @@ def test_read_baseline_bytes_requires_baseline_path(tmp_path: Path):
     )
     with pytest.raises(ValueError, match="no baselinePath"):
         read_baseline_bytes(entry, tool_root=tmp_path)
+
+
+def test_resolve_baseline_asset_path_supports_evidence_tool_root(tmp_path: Path):
+    evidence_root = tmp_path / "tools" / "fuzzy-validator" / "evidence"
+    default_root = tmp_path / "tools" / "fuzzy-validator"
+    asset_path = evidence_root / "baselines" / "test" / "assets" / "home-authenticated" / "css-000.css"
+    asset_path.parent.mkdir(parents=True, exist_ok=True)
+    asset_path.write_text("body{}", encoding="utf-8")
+    baseline_path = "evidence/baselines/test/assets/home-authenticated/css-000.css"
+    resolved = resolve_baseline_asset_path(baseline_path, evidence_root)
+    assert resolved == asset_path
+    assert read_baseline_bytes(
+        AssetEntry(
+            id="css-000",
+            kind="css",
+            url="http://localhost/orkui/revised.css",
+            inline=False,
+            sha256="abc",
+            byte_length=6,
+            baseline_path=baseline_path,
+        ),
+        tool_root=evidence_root,
+    ) == b"body{}"
 
 
 def test_read_candidate_bytes_missing_file(tmp_path: Path):

@@ -1,0 +1,7 @@
+--- baseline/js-000
++++ candidate/js-000
+@@ -25138,3 +25138,4 @@
+     jQuery.sidr = b,
+     jQuery.fn.sidr = d
+ }();
++X

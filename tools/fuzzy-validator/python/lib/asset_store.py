@@ -124,14 +124,24 @@ def copy_run_assets_to_baseline(
     return baseline_out
 
 
-def read_baseline_bytes(entry: AssetEntry, tool_root: Path | None = None) -> bytes:
+def resolve_baseline_asset_path(baseline_path: str, tool_root: Path | None = None) -> Path:
     root = tool_root or TOOL_ROOT
+    candidates = [
+        root / baseline_path,
+        TOOL_ROOT / baseline_path,
+    ]
+    if root.name == "evidence" and baseline_path.startswith("evidence/"):
+        candidates.append(root / baseline_path.removeprefix("evidence/"))
+    for path in candidates:
+        if path.is_file():
+            return path
+    raise FileNotFoundError(f"Baseline asset bytes not found: {baseline_path}")
+
+
+def read_baseline_bytes(entry: AssetEntry, tool_root: Path | None = None) -> bytes:
     if not entry.baseline_path:
         raise ValueError(f"Asset {entry.id} has no baselinePath")
-    path = root / entry.baseline_path
-    if not path.is_file():
-        raise FileNotFoundError(f"Baseline asset bytes not found: {entry.baseline_path}")
-    return path.read_bytes()
+    return resolve_baseline_asset_path(entry.baseline_path, tool_root).read_bytes()
 
 
 def read_candidate_bytes(

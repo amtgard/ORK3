@@ -1,0 +1,47 @@
+{
+  "runId": "assets-css-fail",
+  "phase": "assets",
+  "exitCode": 1,
+  "pass": false,
+  "thresholds": {
+    "assetsMinScore": 1.0,
+    "domMinScore": 1.0,
+    "visualMinScore": 1.0
+  },
+  "pages": [
+    {
+      "pageId": "home-authenticated",
+      "pass": false,
+      "scores": {
+        "assets": 0.956522
+      },
+      "pageScore": 0.956522,
+      "reportPath": "pages/home-authenticated.html"
+    }
+  ],
+  "profile": "test",
+  "generatedAt": "2026-07-07T22:41:56Z",
+  "pagesDetailed": [
+    {
+      "pageId": "home-authenticated",
+      "passed": false,
+      "layers": [
+        {
+          "layer": "assets",
+          "passed": false,
+          "score": 0.956522,
+          "exitCode": 1,
+          "details": {
+            "passed": false,
+            "missingIds": [],
+            "extraIds": [],
+            "changedIds": [
+              "css-000"
+            ],
+            "assetsScore": 0.956522
+          }
+        }
+      ]
+    }
+  ]
+}
