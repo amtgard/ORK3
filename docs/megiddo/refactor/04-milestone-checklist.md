@@ -676,7 +676,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 #### T-10 sign-off gate
 
 - [x] Test sprint sign-off checklist (above) satisfied
-- [ ] Branch `megiddo/t-10-reports-tests` squashed to exactly one commit
+- [x] Branch `megiddo/t-10-reports-tests` squashed to exactly one commit
 
 ---
 
@@ -692,14 +692,18 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 | Step | Status |
 |------|--------|
-| Backend unit/integration tests | [ ] |
-| Frontend functional tests | [ ] |
-| Milestone-scoped Infection passes | [ ] |
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Integration/SearchServiceTest.php`, `tests/Unit/SearchEscapeTest.php`, `tests/e2e/search.spec.ts`
+
+**Infection (pre-refactor):** `infection.t11-search.json5` — `--only-covered --filter=class.SearchService.php --test-framework-options="--filter=SearchServiceTest|SearchEscapeTest"` (MSI 50%, covered MSI 50%)
 
 #### T-11 sign-off gate
 
-- [ ] Test sprint sign-off checklist (above) satisfied
-- [ ] Branch `megiddo/t-11-search-tests` squashed to exactly one commit
+- [x] Test sprint sign-off checklist (above) satisfied
+- [x] Branch `megiddo/t-11-search-tests` squashed to exactly one commit
 
 ---
 
