@@ -730,7 +730,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 #### T-12 sign-off gate
 
 - [x] Test sprint sign-off checklist (above) satisfied
-- [ ] Branch `megiddo/t-12-attendance-tests` squashed to exactly one commit
+- [x] Branch `megiddo/t-12-attendance-tests` squashed to exactly one commit
 
 ---
 
@@ -746,13 +746,17 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 | Step | Status |
 |------|--------|
-| Backend unit/integration tests | [ ] |
-| Frontend functional tests | [ ] |
-| Milestone-scoped Infection passes | [ ] |
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Unit/HealthTest.php`, `tests/Integration/SessionTokenTest.php`, `tests/Integration/ViewerPreferencesTest.php`, `tests/Integration/WhatsNewTest.php`, `tests/Integration/LegacyRedirectTest.php`, `tests/Support/InfrastructureFixture.php`, `tests/e2e/infrastructure.spec.ts`
+
+**Infection (pre-refactor):** `infection.t13-infrastructure.json5` — `--only-covered --filter=class.Player.php --test-framework-options="--filter=ViewerPreferencesTest|PlayerProfileTest|PlayerAjaxTest|ModelPlayerCacheTest"` (MSI 14%, covered MSI 13%; Authorization SQL mirrors — domain deferred to R-13/T-14)
 
 #### T-13 sign-off gate
 
-- [ ] Test sprint sign-off checklist (above) satisfied
+- [x] Test sprint sign-off checklist (above) satisfied
 - [ ] Branch `megiddo/t-13-infrastructure-tests` squashed to exactly one commit
 
 ---
@@ -837,4 +841,4 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code, keep tests green |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** T-13 (Infrastructure & misc tests — pairs with completed DS-13).
+**Next actionable milestone:** T-14 (Ork3::$Lib service migration tests — pairs with completed DS-14).
