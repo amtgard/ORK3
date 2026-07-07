@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Unified fuzzy gate orchestrator (v1 — scores + exit code, no full HTML report)."""
+"""Unified fuzzy gate orchestrator — scores, exit code, HTML report bundle."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -16,6 +17,8 @@ from gate_dom import run_dom_gate
 from lib.diff_regions import load_rgb_array, rects_from_manifest_zones
 from lib.manifest import effective_fuzz_zones, load_defaults, load_fuzz_manifest
 from lib.overlay import draw_gate_annotation
+from lib.report_html import copy_page_artifacts, write_report_bundle, write_summary_json
+from lib.scoring import Thresholds, build_page_summary, build_run_summary
 
 TOOL_ROOT = Path(__file__).resolve().parents[1]
 
@@ -52,21 +55,37 @@ class PageGateResult:
         }
 
 
+def _baseline_root(tool_root: Path, profile: str | None) -> Path:
+    if profile:
+        return tool_root / "baselines" / profile
+    return tool_root / "baselines"
+
+
+def _manifest_root(tool_root: Path, profile: str | None) -> Path:
+    if profile:
+        return tool_root / "manifests" / profile
+    return tool_root / "manifests"
+
+
 def run_page_gate(
     *,
     page_id: str,
     phase: str,
     tool_root: Path,
     defaults: dict,
+    profile: str | None = None,
+    thresholds: Thresholds | None = None,
     visual_diff_out: Path | None = None,
+    run_dir: Path | None = None,
 ) -> PageGateResult:
     cal_dir = tool_root / "calibrations" / page_id
-    baselines = tool_root / "baselines"
-    manifests = tool_root / "manifests"
+    baselines = _baseline_root(tool_root, profile)
+    manifests = _manifest_root(tool_root, profile)
 
-    assets_min = float(defaults.get("assetsMinScore", 1.0))
-    dom_min = float(defaults.get("domMinScore", 1.0))
-    visual_min = float(defaults.get("visualMinScore", 1.0))
+    active_thresholds = thresholds or Thresholds.from_defaults(defaults)
+    assets_min = active_thresholds.assets_min
+    dom_min = active_thresholds.dom_min
+    visual_min = active_thresholds.visual_min
     max_outside = int(defaults.get("gateMaxOutsideDiffPx", 500))
     color_threshold = int(
         defaults.get("gateColorThreshold", defaults.get("colorThreshold", 20))
@@ -74,6 +93,9 @@ def run_page_gate(
     compare_script_bodies = bool(defaults.get("domCompareScriptBodies", False))
 
     layers: list[LayerResult] = []
+    asset_diff_dir = (run_dir / "diffs" / page_id) if run_dir else (
+        tool_root / "reports" / f"{page_id}-asset-diffs"
+    )
 
     if phase in {"assets", "all"}:
         asset_result = run_asset_gate(
@@ -81,7 +103,7 @@ def run_page_gate(
             candidate_path=cal_dir / "candidate.assets.json",
             assets_min_score=assets_min,
             calibration_dir=cal_dir,
-            diff_dir=tool_root / "reports" / f"{page_id}-asset-diffs",
+            diff_dir=asset_diff_dir,
             tool_root=tool_root,
         )
         layers.append(
@@ -102,6 +124,12 @@ def run_page_gate(
             dom_min_score=dom_min,
             compare_script_bodies=compare_script_bodies,
         )
+        if run_dir is not None:
+            dom_diff_path = run_dir / "data" / f"{page_id}-dom-diff.json"
+            dom_diff_path.parent.mkdir(parents=True, exist_ok=True)
+            with dom_diff_path.open("w", encoding="utf-8") as handle:
+                json.dump({"failures": dom_payload["failures"]}, handle, indent=2)
+                handle.write("\n")
         layers.append(
             LayerResult(
                 layer="dom",
@@ -148,31 +176,171 @@ def run_page_gate(
     return PageGateResult(page_id=page_id, passed=passed, layers=layers)
 
 
+def run_batch_gate(
+    *,
+    page_ids: list[str],
+    phase: str,
+    tool_root: Path,
+    defaults: dict,
+    run_dir: Path,
+    profile: str | None = None,
+    thresholds: Thresholds | None = None,
+) -> tuple[list[PageGateResult], int]:
+    active_thresholds = thresholds or Thresholds.from_defaults(defaults)
+    page_results: list[PageGateResult] = []
+
+    for page_id in page_ids:
+        visual_diff_out = run_dir / "data" / f"{page_id}-annotated.png"
+        try:
+            page_result = run_page_gate(
+                page_id=page_id,
+                phase=phase,
+                tool_root=tool_root,
+                defaults=defaults,
+                profile=profile,
+                thresholds=active_thresholds,
+                visual_diff_out=visual_diff_out,
+                run_dir=run_dir,
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            print(f"gate_run: [{page_id}] {exc}", file=sys.stderr)
+            return page_results, 2
+
+        copy_page_artifacts(
+            run_dir=run_dir,
+            page_id=page_id,
+            tool_root=tool_root,
+            profile=profile,
+        )
+        page_results.append(page_result)
+
+    exit_code = 0 if all(result.passed for result in page_results) else 1
+    return page_results, exit_code
+
+
 def write_run_summary(
     *,
     run_dir: Path,
     phase: str,
     page_results: list[PageGateResult],
     exit_code: int,
+    thresholds: Thresholds,
+    profile: str | None = None,
+    profiles: list[str] | None = None,
 ) -> Path:
-    run_dir.mkdir(parents=True, exist_ok=True)
-    summary = {
-        "runId": run_dir.name.removeprefix("run-"),
-        "phase": phase,
-        "generatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "exitCode": exit_code,
-        "pages": [result.as_dict() for result in page_results],
-    }
-    summary_path = run_dir / "summary.json"
-    with summary_path.open("w", encoding="utf-8") as handle:
-        json.dump(summary, handle, indent=2)
-        handle.write("\n")
-    return summary_path
+    run_id = run_dir.name.removeprefix("run-")
+    page_summaries = [
+        build_page_summary(
+            page_id=result.page_id,
+            layers=result.as_dict()["layers"],
+            thresholds=thresholds,
+            report_path=f"pages/{result.page_id}.html",
+        )
+        for result in page_results
+    ]
+    summary = build_run_summary(
+        run_id=run_id,
+        phase=phase,
+        page_summaries=page_summaries,
+        thresholds=thresholds,
+        exit_code=exit_code,
+        profile=profile,
+        profiles=profiles,
+    )
+    summary["generatedAt"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    summary["pagesDetailed"] = [result.as_dict() for result in page_results]
+    return write_summary_json(run_dir, summary)
+
+
+def print_stdout_summary(
+    *,
+    run_dir: Path,
+    page_results: list[PageGateResult],
+    exit_code: int,
+    thresholds: Thresholds,
+    profile: str | None = None,
+) -> None:
+    run_id = run_dir.name.removeprefix("run-")
+    pass_count = sum(1 for result in page_results if result.passed)
+    fail_count = len(page_results) - pass_count
+    overall = "PASS" if exit_code == 0 else "FAIL"
+
+    print(f"Fuzzy UI Gate — {overall}")
+    prefix = f"[{profile}] " if profile else ""
+    for result in page_results:
+        scores = {layer.layer: layer.score for layer in result.layers}
+        assets = scores.get("assets", 1.0)
+        dom = scores.get("dom", 1.0)
+        visual = scores.get("visual", 1.0)
+        status = "PASS" if result.passed else "FAIL"
+        threshold_note = ""
+        if not result.passed:
+            if visual < thresholds.visual_min:
+                threshold_note = f"  (visual threshold {thresholds.visual_min:.2f})"
+            elif dom < thresholds.dom_min:
+                threshold_note = f"  (dom threshold {thresholds.dom_min:.2f})"
+            elif assets < thresholds.assets_min:
+                threshold_note = f"  (assets threshold {thresholds.assets_min:.2f})"
+        print(
+            f"  {prefix}{result.page_id:<22} {status}  "
+            f"assets={assets:.2f} dom={dom:.2f} visual={visual:.3f}{threshold_note}"
+        )
+
+    profile_suffix = f" profiles={','.join([profile])}" if profile else ""
+    print(
+        f"FUZZ_GATE run={run_id}{profile_suffix} pages={len(page_results)} "
+        f"pass={pass_count} fail={fail_count} exit={exit_code}"
+    )
+    print(f"Report: {run_dir / 'index.html'}")
+
+
+def finalize_run(
+    *,
+    run_dir: Path,
+    phase: str,
+    page_results: list[PageGateResult],
+    exit_code: int,
+    thresholds: Thresholds,
+    profile: str | None = None,
+    profile_label: str | None = None,
+    profiles: list[str] | None = None,
+    profile_sections: list[dict] | None = None,
+) -> Path:
+    write_run_summary(
+        run_dir=run_dir,
+        phase=phase,
+        page_results=page_results,
+        exit_code=exit_code,
+        thresholds=thresholds,
+        profile=profile,
+        profiles=profiles,
+    )
+    index_path = write_report_bundle(
+        run_dir=run_dir,
+        run_id=run_dir.name.removeprefix("run-"),
+        phase=phase,
+        page_results=[result.as_dict() for result in page_results],
+        thresholds=thresholds,
+        run_pass=exit_code == 0,
+        profile=profile,
+        profile_label=profile_label,
+        profiles=profiles,
+        profile_sections=profile_sections,
+    )
+    print_stdout_summary(
+        run_dir=run_dir,
+        page_results=page_results,
+        exit_code=exit_code,
+        thresholds=thresholds,
+        profile=profile,
+    )
+    return index_path
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Unified fuzzy gate orchestrator")
-    parser.add_argument("--page-id", required=True)
+    parser.add_argument("--page-id", help="Single page id (legacy)")
+    parser.add_argument("--pages", help="Comma-separated page ids")
     parser.add_argument("--phase", default="all", choices=["visual", "assets", "dom", "all"])
     parser.add_argument(
         "--defaults",
@@ -180,55 +348,98 @@ def build_parser() -> argparse.ArgumentParser:
         default=TOOL_ROOT / "manifests" / "defaults.json5",
     )
     parser.add_argument("--run-dir", type=Path, help="Report run directory")
-    parser.add_argument("--visual-diff-out", type=Path, help="Annotated visual PNG path")
+    parser.add_argument("--profile", help="Database profile name")
+    parser.add_argument("--visual-min-score", type=float)
+    parser.add_argument("--dom-min-score", type=float)
+    parser.add_argument("--assets-min-score", type=float)
+    parser.add_argument("--visual-diff-out", type=Path, help="Annotated visual PNG (single page)")
+    parser.add_argument("--skip-report", action="store_true", help="Skip HTML report generation")
     return parser
+
+
+def _resolve_page_ids(args: argparse.Namespace) -> list[str]:
+    if args.pages:
+        return [page_id.strip() for page_id in args.pages.split(",") if page_id.strip()]
+    if args.page_id:
+        return [args.page_id]
+    raise SystemExit("gate_run: specify --page-id or --pages")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     defaults = load_defaults(args.defaults)
+    page_ids = _resolve_page_ids(args)
+
+    thresholds = Thresholds.from_defaults(defaults).with_overrides(
+        assets_min=args.assets_min_score,
+        dom_min=args.dom_min_score,
+        visual_min=args.visual_min_score,
+    )
 
     run_dir = args.run_dir
     if run_dir is None:
         run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         run_dir = TOOL_ROOT / "reports" / f"run-{run_id}"
 
-    visual_diff_out = args.visual_diff_out
-    if visual_diff_out is None and args.phase in {"visual", "all"}:
-        visual_diff_out = run_dir / "data" / f"{args.page_id}-annotated.png"
+    if len(page_ids) == 1 and args.visual_diff_out is not None:
+        visual_out = args.visual_diff_out
+    elif len(page_ids) == 1:
+        visual_out = run_dir / "data" / f"{page_ids[0]}-annotated.png"
+    else:
+        visual_out = None
 
-    try:
-        page_result = run_page_gate(
-            page_id=args.page_id,
+    if len(page_ids) == 1 and not args.skip_report:
+        try:
+            page_result = run_page_gate(
+                page_id=page_ids[0],
+                phase=args.phase,
+                tool_root=TOOL_ROOT,
+                defaults=defaults,
+                profile=args.profile,
+                thresholds=thresholds,
+                visual_diff_out=visual_out,
+                run_dir=run_dir,
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            print(f"gate_run: {exc}", file=sys.stderr)
+            return 2
+
+        copy_page_artifacts(
+            run_dir=run_dir,
+            page_id=page_ids[0],
+            tool_root=TOOL_ROOT,
+            profile=args.profile,
+        )
+        page_results = [page_result]
+        exit_code = 0 if page_result.passed else 1
+    else:
+        page_results, exit_code = run_batch_gate(
+            page_ids=page_ids,
             phase=args.phase,
             tool_root=TOOL_ROOT,
             defaults=defaults,
-            visual_diff_out=visual_diff_out,
+            run_dir=run_dir,
+            profile=args.profile,
+            thresholds=thresholds,
         )
-    except (ValueError, FileNotFoundError) as exc:
-        print(f"gate_run: {exc}", file=sys.stderr)
-        return 2
+        if exit_code == 2:
+            return 2
 
-    exit_code = 0 if page_result.passed else 1
-    summary_path = write_run_summary(
+    if args.skip_report:
+        for layer in page_results[0].layers if len(page_results) == 1 else []:
+            status = "PASS" if layer.passed else "FAIL"
+            print(f"gate_run [{page_ids[0]}] {layer.layer}: {status} score={layer.score:.4f}")
+        return exit_code
+
+    finalize_run(
         run_dir=run_dir,
         phase=args.phase,
-        page_results=[page_result],
+        page_results=page_results,
         exit_code=exit_code,
+        thresholds=thresholds,
+        profile=args.profile,
     )
-
-    for layer in page_result.layers:
-        status = "PASS" if layer.passed else "FAIL"
-        print(f"gate_run [{args.page_id}] {layer.layer}: {status} score={layer.score:.4f}")
-
-    run_pass = 1 if page_result.passed else 0
-    run_fail = 0 if page_result.passed else 1
-    print(
-        f"FUZZ_GATE run={run_dir.name.removeprefix('run-')} pages=1 "
-        f"pass={run_pass} fail={run_fail} exit={exit_code}"
-    )
-    print(f"gate_run: summary → {summary_path}")
     return exit_code
 
 

@@ -96,10 +96,10 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 
 ### FU-10: HTML report + scoring
 
-- [ ] Branch `megiddo/fu-10-report`
-- [ ] `scoring.py`, `report_html.py`, full `reports/run-{id}/` bundle
-- [ ] `summary.json`, stdout `FUZZ_GATE` line, `--visual-min-score`
-- [ ] pytest coverage ≥ 90% on entire `tools/fuzzy-validator/python/`
+- [x] Branch `megiddo/fu-10-report`
+- [x] `scoring.py`, `report_html.py`, full `reports/run-{id}/` bundle
+- [x] `summary.json`, stdout `FUZZ_GATE` line, `--visual-min-score`
+- [x] pytest coverage ≥ 90% on entire `tools/fuzzy-validator/python/`
 - [ ] Single squashed commit
 
 ### FU-11: Dual database profiles

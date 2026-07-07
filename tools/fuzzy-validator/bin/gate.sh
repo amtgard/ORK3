@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fuzzy Validator — unified gate (capture + layer compare)
+# Fuzzy Validator — unified gate (capture + layer compare + HTML report)
 set -euo pipefail
 
 TOOL_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -20,6 +20,11 @@ EOF
 PAGE=""
 PAGES=""
 PHASE="all"
+VISUAL_MIN=""
+DOM_MIN=""
+ASSETS_MIN=""
+PROFILE=""
+RUN_DIR=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -33,6 +38,26 @@ while [[ $# -gt 0 ]]; do
       ;;
     --phase)
       PHASE="$2"
+      shift 2
+      ;;
+    --visual-min-score)
+      VISUAL_MIN="$2"
+      shift 2
+      ;;
+    --dom-min-score)
+      DOM_MIN="$2"
+      shift 2
+      ;;
+    --assets-min-score)
+      ASSETS_MIN="$2"
+      shift 2
+      ;;
+    --profile)
+      PROFILE="$2"
+      shift 2
+      ;;
+    --run-dir)
+      RUN_DIR="$2"
       shift 2
       ;;
     -h|--help)
@@ -64,9 +89,10 @@ fi
 cd "$REPO_ROOT"
 export PYTHONPATH="${PYTHONPATH:-}:$PYTHON_DIR"
 
-RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
-RUN_DIR="$TOOL_ROOT/reports/run-$RUN_ID"
-exit_code=0
+if [[ -z "$RUN_DIR" ]]; then
+  RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
+  RUN_DIR="$TOOL_ROOT/reports/run-$RUN_ID"
+fi
 
 for target in "${TARGETS[@]}"; do
   trimmed="${target// /}"
@@ -75,17 +101,42 @@ for target in "${TARGETS[@]}"; do
   echo "gate.sh: capturing candidate for $trimmed"
   FUZZ_MODE=candidate FUZZ_PAGES="$trimmed" \
     npx playwright test --project=fuzzy-capture
+done
 
-  if [[ "$PHASE" == "all" ]]; then
-    if ! python3 "$PYTHON_DIR/gate_run.py" \
-      --page-id "$trimmed" \
-      --phase all \
-      --run-dir "$RUN_DIR" \
-      --visual-diff-out "$RUN_DIR/data/${trimmed}-annotated.png"; then
-      exit_code=1
+if [[ "$PHASE" == "all" ]]; then
+  PAGES_ARG=""
+  for target in "${TARGETS[@]}"; do
+    trimmed="${target// /}"
+    [[ -z "$trimmed" ]] && continue
+    if [[ -z "$PAGES_ARG" ]]; then
+      PAGES_ARG="$trimmed"
+    else
+      PAGES_ARG="$PAGES_ARG,$trimmed"
     fi
-    continue
+  done
+
+  gate_args=(
+    "$PYTHON_DIR/gate_run.py"
+    --pages "$PAGES_ARG"
+    --phase all
+    --run-dir "$RUN_DIR"
+  )
+  [[ -n "$PROFILE" ]] && gate_args+=(--profile "$PROFILE")
+  [[ -n "$VISUAL_MIN" ]] && gate_args+=(--visual-min-score "$VISUAL_MIN")
+  [[ -n "$DOM_MIN" ]] && gate_args+=(--dom-min-score "$DOM_MIN")
+  [[ -n "$ASSETS_MIN" ]] && gate_args+=(--assets-min-score "$ASSETS_MIN")
+
+  if python3 "${gate_args[@]}"; then
+    exit 0
+  else
+    exit 1
   fi
+fi
+
+exit_code=0
+for target in "${TARGETS[@]}"; do
+  trimmed="${target// /}"
+  [[ -z "$trimmed" ]] && continue
 
   if [[ "$PHASE" == "assets" ]]; then
     baseline="$TOOL_ROOT/baselines/${trimmed}.assets.json"
