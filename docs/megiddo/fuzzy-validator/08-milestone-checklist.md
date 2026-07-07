@@ -88,11 +88,11 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 
 ### FU-9: Unified gate
 
-- [ ] Branch `megiddo/fu-9-unified-gate`
-- [ ] `gate_dom.py`, `gate.sh --phase all`, `gate_run.py` v1
-- [ ] Green/red annotated PNG data; layer pass/fail exit codes
-- [ ] End-to-end test with fixture pages (no docker required)
-- [ ] Single squashed commit
+- [x] Branch `megiddo/fu-9-unified-gate`
+- [x] `gate_dom.py`, `gate.sh --phase all`, `gate_run.py` v1
+- [x] Green/red annotated PNG data; layer pass/fail exit codes
+- [x] End-to-end test with fixture pages (no docker required)
+- [x] Single squashed commit
 
 ### FU-10: HTML report + scoring
 
@@ -125,7 +125,7 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 | FU-5 | 2026-07-07 | eb281bad | 95% |
 | FU-6 | 2026-07-07 | f7f306ab | n/a (11 PW unit tests) |
 | FU-7 | 2026-07-07 | 3f82fd89 | 95% |
-| FU-8 | 2026-07-07 | 9db25343 | 94% |
-| FU-9 | | | |
+| FU-8 | 2026-07-07 | 4a004419 | 94% |
+| FU-9 | 2026-07-07 | 9af10a9a | 95% |
 | FU-10 | | | |
 | FU-11 | | | |

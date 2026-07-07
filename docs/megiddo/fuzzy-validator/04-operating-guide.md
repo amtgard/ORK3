@@ -141,6 +141,14 @@ bin/fuzzy-validator validate --page player-profile --phase visual
 bin/fuzzy-validator validate --urls path/to/urls.txt --visual-min-score 0.98
 ```
 
+`validate --phase all` (default) runs **assets → dom → pixels** via `gate_run.py` v1. Each run writes `reports/run-{id}/summary.json`, per-page annotated PNGs under `reports/run-{id}/data/`, and a stdout `FUZZ_GATE …` line. Full JaCoCo-style `index.html` arrives in FU-10.
+
+```bash
+# Layer-specific gates (also via gate.sh)
+tools/fuzzy-validator/bin/gate.sh --page home-anonymous --phase dom
+tools/fuzzy-validator/bin/gate.sh --pages home-anonymous,player-profile --phase all
+```
+
 ### On failure
 
 1. Open `reports/run-{id}/index.html` (path printed in stdout)

@@ -56,8 +56,18 @@ def test_record_phase_dom_runs_capture_and_discover():
         assert run_mock.call_count == 2
 
 
-def test_validate_phase_all_not_implemented():
-    assert main(["validate", "--page", "home-anonymous", "--phase", "all"]) == 2
+def test_validate_phase_all_runs_gate():
+    with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
+        run_mock.return_value.returncode = 0
+        assert main(["validate", "--page", "home-anonymous", "--phase", "all"]) == 0
+        assert run_mock.call_count == 1
+
+
+def test_validate_phase_dom_runs_gate():
+    with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
+        run_mock.return_value.returncode = 0
+        assert main(["validate", "--page", "home-anonymous", "--phase", "dom"]) == 0
+        assert run_mock.call_count == 1
 
 
 def test_record_capture_failure_propagates():

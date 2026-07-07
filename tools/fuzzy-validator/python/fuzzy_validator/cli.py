@@ -236,13 +236,6 @@ def _run_capture(args: argparse.Namespace) -> int:
 
 
 def _run_validate(args: argparse.Namespace) -> int:
-    if args.phase not in {"visual", "assets", "all"}:
-        print(
-            f"fuzzy-validator validate: phase '{args.phase}' not implemented until FU-9+",
-            file=sys.stderr,
-        )
-        return 2
-
     page_ids = _resolve_page_ids(args)
     if args.dry_run:
         for page_id in page_ids:
