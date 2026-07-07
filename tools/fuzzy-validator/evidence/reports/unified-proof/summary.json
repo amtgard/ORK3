@@ -1,0 +1,73 @@
+{
+  "runId": "unified-inzone",
+  "phase": "all",
+  "exitCode": 0,
+  "pass": true,
+  "thresholds": {
+    "assetsMinScore": 1.0,
+    "domMinScore": 1.0,
+    "visualMinScore": 1.0
+  },
+  "pages": [
+    {
+      "pageId": "home-authenticated",
+      "pass": true,
+      "scores": {
+        "assets": 1.0,
+        "dom": 1.0,
+        "visual": 1.0
+      },
+      "pageScore": 1.0,
+      "reportPath": "pages/home-authenticated.html"
+    }
+  ],
+  "profile": "test",
+  "generatedAt": "2026-07-07T22:43:38Z",
+  "pagesDetailed": [
+    {
+      "pageId": "home-authenticated",
+      "passed": true,
+      "layers": [
+        {
+          "layer": "assets",
+          "passed": true,
+          "score": 1.0,
+          "exitCode": 0,
+          "details": {
+            "passed": true,
+            "missingIds": [],
+            "extraIds": [],
+            "changedIds": [],
+            "assetsScore": 1.0
+          }
+        },
+        {
+          "layer": "dom",
+          "passed": true,
+          "score": 1.0,
+          "exitCode": 0,
+          "details": {
+            "passed": true,
+            "domScore": 1.0,
+            "comparablePaths": 265,
+            "failurePaths": 0,
+            "failures": []
+          }
+        },
+        {
+          "layer": "visual",
+          "passed": true,
+          "score": 1.0,
+          "exitCode": 0,
+          "details": {
+            "passed": true,
+            "outsideDiffPx": 0,
+            "comparablePx": 1282560,
+            "visualScore": 1.0,
+            "failureBoxCount": 0
+          }
+        }
+      ]
+    }
+  ]
+}

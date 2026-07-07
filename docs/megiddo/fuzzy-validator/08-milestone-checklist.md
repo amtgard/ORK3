@@ -131,6 +131,8 @@ Track implementation progress for FU-* milestones. Check items only when exit cr
 | FU-11 | 2026-07-07 | f0702472 | 92% |
 | FU-12 | 2026-07-07 | 26de47b4 | 92% |
 | FU-13 | 2026-07-07 | 92c4a575 | 92% |
+| FU-14 | 2026-07-07 | 0380ae0a | 92% |
+| FU-15 | 2026-07-07 | 608f5b18 | 92% |
 
 ---
 
@@ -222,12 +224,12 @@ tools/fuzzy-validator/evidence/
 
 ### FU-15: Unified evidence + optional CI
 
-- [ ] Branch `megiddo/fu-15-unified-evidence`
-- [ ] Full `validate --phase all` on evidence page: in-zone composite pass, out-of-zone fail
-- [ ] `evidence/reports/unified-proof/index.html` — all layers in one JaCoCo-style report
-- [ ] Optional nightly / manual workflow: docker + `evidence/scripts/run-evidence-suite.sh` (not blocking pytest CI)
-- [ ] Sign-off: reviewer checklist in `evidence/README.md` (open 4 report URLs, confirm green/red boxes)
-- [ ] Single squashed commit
+- [x] Branch `megiddo/fu-15-unified-evidence`
+- [x] Full `validate --phase all` on evidence page: in-zone composite pass, out-of-zone fail
+- [x] `evidence/reports/unified-proof/index.html` — all layers in one JaCoCo-style report
+- [x] Optional nightly / manual workflow: docker + `evidence/scripts/run-evidence-suite.sh` (not blocking pytest CI)
+- [x] Sign-off: reviewer checklist in `evidence/README.md` (open 4 report URLs, confirm green/red boxes)
+- [x] Single squashed commit
 
 ---
 

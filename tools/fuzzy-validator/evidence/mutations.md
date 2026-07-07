@@ -30,6 +30,11 @@ Controlled mutations for integration proof. Scripts in `scripts/evidence_mutatio
 | Fail CSS | Append one byte to `css-000-tokens.css.css` | exit 1, unified diff in `assets-proof/css-fail` |
 | Fail JS | Append one byte to `js-000-orkui.js.js` | exit 1, unified diff in `assets-proof/js-fail` |
 
-## Unified — *(FU-15, deferred here)*
+## Unified — `home-authenticated`
 
-Composite in-zone pass and out-of-zone fail with `validate --phase all`.
+| Step | Mutation | Expected |
+|------|----------|----------|
+| In-zone | DOM token drift + virgin PNG + virgin assets | `validate --phase all` → exit 0 |
+| Out-of-zone | Structural welcome heading change outside fuzz nodes | `validate --phase all` → exit 1 (dom layer) |
+
+Report bundle: `reports/unified-proof/` (`inzone/` PASS, `outzone/` FAIL).

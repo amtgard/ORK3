@@ -11,8 +11,8 @@ Committed integration proof for Phase 3 (FU-12…FU-15). Reviewers can open HTML
 | `manifests/test/` | Learned `*.fuzz.json` and `*.dom-fuzz.json` |
 | `reports/pixel-proof/` | Pixel discover overlay + in-zone pass + out-of-zone fail |
 | `reports/dom-proof/` | DOM fuzz debug + in-zone pass + out-of-zone fail |
-| `reports/assets-proof/` | *(FU-14)* hard gate pass/fail |
-| `reports/unified-proof/` | *(FU-15)* `--phase all` composite |
+| `reports/assets-proof/` | Hard gate pass + CSS/JS 1-byte fail with diffs |
+| `reports/unified-proof/` | `--phase all` composite pass/fail |
 | `scripts/run-evidence-suite.sh` | Orchestrates discover → validate; asserts exit codes |
 
 ## Re-run (maintainer)
@@ -27,19 +27,28 @@ bin/fuzzy-validator record \
   --pages player-profile,home-authenticated \
   --phase all
 
-# Full evidence suite (FU-13+)
+# Full evidence suite (FU-13…FU-15)
 tools/fuzzy-validator/evidence/scripts/run-evidence-suite.sh
 ```
 
 Use `--tool-root tools/fuzzy-validator/evidence` on all `record` / `validate` commands so baselines and manifests stay under `evidence/`.
 
-## Reviewer checklist (FU-13)
+Optional CI: `.github/workflows/fuzzy-validator-evidence.yml` (`workflow_dispatch` or weekly cron). Does **not** block pytest CI.
 
-1. Open `reports/pixel-proof/index.html` — green heraldry bbox; in-zone PASS; out-of-zone FAIL with red boxes.
-2. Open `reports/dom-proof/index.html` — volatile session node fuzzed; in-zone PASS; structural change FAIL.
-3. Confirm `manifests/test/player-profile.fuzz.json` has non-empty `fuzzZones`.
-4. Confirm `manifests/test/home-authenticated.dom-fuzz.json` has non-empty `fuzzNodes`.
-5. Run `scripts/run-evidence-suite.sh` — exit 0.
+## Reviewer checklist (FU-15 sign-off)
+
+Open these four report entry points and confirm pass/fail behavior:
+
+1. **`reports/pixel-proof/index.html`** — green heraldry fuzz bbox on calibration overlay; in-zone PASS; out-of-zone FAIL with red boxes (`outzone/`).
+2. **`reports/dom-proof/index.html`** — session token attr fuzzed; in-zone PASS; structural heading change FAIL (`outzone/`).
+3. **`reports/assets-proof/index.html`** — same-commit PASS (`pass/`); 1-byte CSS and JS mutations FAIL with unified diffs (`css-fail/`, `js-fail/`).
+4. **`reports/unified-proof/index.html`** — all layers on `home-authenticated`: in-zone PASS (`inzone/`); out-of-zone DOM FAIL (`outzone/`).
+
+Also confirm:
+
+5. `manifests/test/player-profile.fuzz.json` has non-empty `fuzzZones`.
+6. `manifests/test/home-authenticated.dom-fuzz.json` has non-empty `fuzzNodes`.
+7. `scripts/run-evidence-suite.sh` exits 0 locally (or via optional evidence workflow).
 
 See [mutations.md](./mutations.md) for in-zone / out-of-zone recipes.
 

@@ -44,8 +44,8 @@
       "kind": "js",
       "url": "http://localhost:19080/orkui/template/default/script/orkui.js",
       "inline": false,
-      "sha256": "5b7bdeaba3237d0f9ed85ccc3e9ac0ba8ec1abc3b5a48189021f3b674f301712",
-      "byteLength": 1032787,
+      "sha256": "2dd738f1456f6dcf97ae10bf40b8fcac6d0dc425d8c29e1fac2b94425a4b17a5",
+      "byteLength": 1032786,
       "baselinePath": "evidence/baselines/test/assets/home-authenticated/js-000-orkui.js.js"
     },
     {

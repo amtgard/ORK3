@@ -25138,4 +25138,3 @@ function _typeof(e) {
     jQuery.sidr = b,
     jQuery.fn.sidr = d
 }();
-X

@@ -245,6 +245,24 @@ def prepare_assets_js_fail_candidate(root: Path, profile: str) -> None:
     _mutate_asset_byte(root=root, profile=profile, page_id=ASSET_PAGE_ID, asset_id=ASSET_JS_ID)
 
 
+def prepare_unified_inzone_candidate(root: Path, profile: str) -> None:
+    page_id = "home-authenticated"
+    cal_dir = root / "calibrations" / page_id
+    virgin_dom = root / "baselines" / profile / f"{page_id}.dom.html"
+    virgin_png = root / "baselines" / profile / f"{page_id}.png"
+    prepare_dom_inzone_candidate(cal_dir, virgin_dom)
+    shutil.copy2(virgin_png, cal_dir / "candidate.png")
+    prepare_assets_pass_candidate(root, profile, page_id)
+
+
+def prepare_unified_outzone_candidate(root: Path, profile: str) -> None:
+    page_id = "home-authenticated"
+    cal_dir = root / "calibrations" / page_id
+    virgin_dom = root / "baselines" / profile / f"{page_id}.dom.html"
+    prepare_unified_inzone_candidate(root, profile)
+    prepare_dom_outzone_candidate(cal_dir, virgin_dom)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Evidence suite mutation helpers")
     parser.add_argument(
@@ -259,6 +277,8 @@ def build_parser() -> argparse.ArgumentParser:
             "assets-pass",
             "assets-css-fail",
             "assets-js-fail",
+            "unified-inzone",
+            "unified-outzone",
         ],
     )
     parser.add_argument("--evidence-root", type=Path, default=None)
@@ -282,6 +302,17 @@ def main(argv: list[str] | None = None) -> int:
             prepare_assets_css_fail_candidate(root, profile)
         elif args.action == "assets-js-fail":
             prepare_assets_js_fail_candidate(root, profile)
+        return 0
+
+    if args.action.startswith("unified"):
+        virgin_dom = root / "baselines" / profile / "home-authenticated.dom.html"
+        if not virgin_dom.is_file():
+            print(f"evidence_mutations: missing virgin DOM {virgin_dom}", file=sys.stderr)
+            return 1
+        if args.action == "unified-inzone":
+            prepare_unified_inzone_candidate(root, profile)
+        elif args.action == "unified-outzone":
+            prepare_unified_outzone_candidate(root, profile)
         return 0
 
     heraldry = heraldry_source()

@@ -74,7 +74,7 @@ copy_report() {
   cp "$src/summary.json" "$dest/../summary-${run_id}.json" 2>/dev/null || cp "$src/summary.json" "$dest/summary.json"
 }
 
-mkdir -p "$EVIDENCE/reports/pixel-proof" "$EVIDENCE/reports/dom-proof" "$EVIDENCE/reports/assets-proof"
+mkdir -p "$EVIDENCE/reports/pixel-proof" "$EVIDENCE/reports/dom-proof" "$EVIDENCE/reports/assets-proof" "$EVIDENCE/reports/unified-proof"
 
 echo "=== Pixel: discover fuzz from heraldry mutation ==="
 python3 "$SCRIPTS/evidence_mutations.py" pixel-discover
@@ -159,4 +159,21 @@ Open pass/index.html (PASS on same commit).
 css-fail/index.html and js-fail/index.html show asset diffs (FAIL).
 EOF
 
-echo "evidence-suite: PASS (pixel + dom + assets discover/pass/fail)"
+echo "=== Unified: in-zone validate --phase all (expect pass) ==="
+python3 "$SCRIPTS/evidence_mutations.py" unified-inzone
+run_validate "home-authenticated" all "unified-inzone" 0
+copy_report "unified-inzone" "$EVIDENCE/reports/unified-proof/inzone"
+
+echo "=== Unified: out-of-zone validate --phase all (expect fail) ==="
+python3 "$SCRIPTS/evidence_mutations.py" unified-outzone
+run_validate "home-authenticated" all "unified-outzone" 1
+copy_report "unified-outzone" "$EVIDENCE/reports/unified-proof/outzone"
+
+cp "$EVIDENCE/reports/unified-proof/inzone/index.html" "$EVIDENCE/reports/unified-proof/index.html" 2>/dev/null || true
+cp "$EVIDENCE/reports/unified-proof/inzone/summary.json" "$EVIDENCE/reports/unified-proof/summary.json" 2>/dev/null || true
+cat > "$EVIDENCE/reports/unified-proof/README.txt" <<'EOF'
+Open inzone/index.html (PASS — assets + dom + visual all green).
+outzone/index.html (FAIL — structural DOM change outside fuzz nodes).
+EOF
+
+echo "evidence-suite: PASS (pixel + dom + assets + unified discover/pass/fail)"
