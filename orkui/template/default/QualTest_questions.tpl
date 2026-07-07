@@ -329,7 +329,12 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				<?php foreach ($activeQs as $q): ?>
 					<tr id="qrow-<?= $q['QualQuestionId'] ?>">
 						<td class="qt-bulk-cb-th"><input type="checkbox" class="qt-bulk-cb qt-active-cb" data-id="<?= $q['QualQuestionId'] ?>"></td>
-						<td><?= htmlspecialchars($q['QuestionText']) ?></td>
+						<td>
+							<?= htmlspecialchars($q['QuestionText']) ?>
+							<?php if (($q['AnswerMode'] ?? 'single') === 'multi'): ?>
+							<span style="background:#e6fffa;color:#234e52;font-size:0.7rem;padding:1px 6px;border-radius:3px;font-weight:600;margin-left:6px;">multi</span>
+							<?php endif; ?>
+						</td>
 						<td>
 							<?php if ($q['CorrectCount'] > 0): ?>
 								<span class="qt-badge qt-badge-green"><?= $q['AnswerCount'] ?> answers</span>
@@ -897,8 +902,11 @@ $(function() {
 				if (line) answers.push({ AnswerText: line, IsCorrect: isCorrect ? 1 : 0 });
 			}
 			if (answers.length < 2) { errors.push('Block ' + (bi+1) + ': at least 2 answers required.'); return; }
-			if (correctCount !== 1) { errors.push('Block ' + (bi+1) + ': exactly 1 correct answer required (found ' + correctCount + ').'); return; }
-			questions.push({ QuestionText: qText, Answers: answers });
+			if (correctCount < 1)   { errors.push('Block ' + (bi+1) + ': at least 1 correct answer required.'); return; }
+			// Multi-correct is auto-detected: 2+ starred answers → "select all
+			// that apply." Admins can still flip the toggle in the editor.
+			var mode = correctCount > 1 ? 'multi' : 'single';
+			questions.push({ QuestionText: qText, AnswerMode: mode, Answers: answers });
 		});
 		return { questions: questions, errors: errors };
 	}
@@ -915,7 +923,10 @@ $(function() {
 			}
 			html += '<div class="qt-bulk-import-success">' + parsedQuestions.length + ' question(s) ready to import</div>';
 			parsedQuestions.forEach(function(q, qi) {
-				html += '<div class="qt-bulk-import-preview-q"><div class="qt-bulk-import-preview-q-text">' + (qi+1) + '. ' + escH(q.QuestionText) + '</div>';
+				var badge = q.AnswerMode === 'multi'
+					? ' <span style="background:#e6fffa;color:#234e52;font-size:0.7rem;padding:1px 6px;border-radius:3px;font-weight:600;margin-left:6px;">select all that apply</span>'
+					: '';
+				html += '<div class="qt-bulk-import-preview-q"><div class="qt-bulk-import-preview-q-text">' + (qi+1) + '. ' + escH(q.QuestionText) + badge + '</div>';
 				q.Answers.forEach(function(a) {
 					html += '<div class="qt-bulk-import-preview-a' + (a.IsCorrect ? ' qt-correct' : '') + '">';
 					html += (a.IsCorrect ? '<i class="fas fa-check" style="margin-right:4px;color:#276749;"></i>' : '&bull; ') + escH(a.AnswerText) + '</div>';

@@ -80,7 +80,9 @@ class Controller_QualTestAjax extends Controller
     // -----------------------------------------------------------------------
     // savequestion
     // POST: KingdomId, TestType, QuestionId (0=new), QuestionText,
-    //       AnswerText[] (array), IsCorrect (single index of correct answer)
+    //       AnswerText[] (array), AnswerMode ('single'|'multi'),
+    //       IsCorrect (single-mode: index of correct answer)
+    //       IsCorrect[] (multi-mode: array of correct-answer indices)
     // -----------------------------------------------------------------------
     public function savequestion($p = null)
     {
@@ -99,7 +101,25 @@ class Controller_QualTestAjax extends Controller
         $test_type     = $_POST['TestType']     ?? 'reeve';
         $question_text = trim($_POST['QuestionText'] ?? '');
         $answer_texts  = $_POST['AnswerText']   ?? [];
-        $correct_index = (int)($_POST['IsCorrect'] ?? -1);
+        $answer_mode   = (($_POST['AnswerMode'] ?? 'single') === 'multi') ? 'multi' : 'single';
+
+        // IsCorrect is a single scalar for single-mode, an array of indices
+        // for multi-mode. Normalize to a set of correct indices either way.
+        $raw_correct   = $_POST['IsCorrect'] ?? null;
+        $correct_set   = [];
+        if (is_array($raw_correct)) {
+            foreach ($raw_correct as $idx) {
+                $i = (int)$idx;
+                if ($i >= 0) {
+                    $correct_set[$i] = true;
+                }
+            }
+        } elseif ($raw_correct !== null && $raw_correct !== '') {
+            $i = (int)$raw_correct;
+            if ($i >= 0) {
+                $correct_set[$i] = true;
+            }
+        }
 
         if (!$question_text) {
             $this->jsonOut(['status' => 1, 'error' => 'Question text is required.']);
@@ -107,8 +127,11 @@ class Controller_QualTestAjax extends Controller
         if (count($answer_texts) < 2) {
             $this->jsonOut(['status' => 1, 'error' => 'At least 2 answers required.']);
         }
-        if ($correct_index < 0 || $correct_index >= count($answer_texts)) {
+        if (empty($correct_set)) {
             $this->jsonOut(['status' => 1, 'error' => 'A correct answer must be selected.']);
+        }
+        if ($answer_mode === 'single' && count($correct_set) > 1) {
+            $this->jsonOut(['status' => 1, 'error' => 'Single-answer questions can have only one correct answer. Switch the mode to Multiple, or unselect extras.']);
         }
 
         $answers = [];
@@ -119,7 +142,7 @@ class Controller_QualTestAjax extends Controller
             }
             $answers[] = [
                 'AnswerText' => $text,
-                'IsCorrect'  => ($i === $correct_index) ? 1 : 0,
+                'IsCorrect'  => isset($correct_set[$i]) ? 1 : 0,
             ];
         }
 
@@ -127,6 +150,7 @@ class Controller_QualTestAjax extends Controller
             'KingdomId'    => $kingdom_id,
             'TestType'     => $test_type,
             'QuestionText' => $question_text,
+            'AnswerMode'   => $answer_mode,
             'Answers'      => $answers,
             'CreatedBy'    => $uid,
         ]);
@@ -396,8 +420,9 @@ class Controller_QualTestAjax extends Controller
 
     // -----------------------------------------------------------------------
     // checkanswer
-    // POST: KingdomId, TestType, QuestionId, AnswerId
-    // Returns whether the submitted answer is correct and reveals the correct answer ID
+    // POST: KingdomId, TestType, QuestionId, AnswerIds[] (multi) OR AnswerId (single/legacy)
+    // Returns whether the submitted answer is correct and (per config) reveals
+    // the full set of correct answer IDs.
     // -----------------------------------------------------------------------
     public function checkanswer($p = null)
     {
@@ -405,7 +430,16 @@ class Controller_QualTestAjax extends Controller
         $kingdom_id  = (int)($_POST['KingdomId']  ?? 0);
         $test_type   = $_POST['TestType']   ?? 'reeve';
         $question_id = (int)($_POST['QuestionId'] ?? 0);
-        $answer_id   = (int)($_POST['AnswerId']   ?? 0);
+
+        // AnswerIds is the new array shape (used by both single and multi UI);
+        // AnswerId (scalar) stays supported so legacy clients don't break.
+        if (isset($_POST['AnswerIds']) && is_array($_POST['AnswerIds'])) {
+            $answer_ids = array_values(array_unique(array_map('intval', $_POST['AnswerIds'])));
+        } elseif (isset($_POST['AnswerId'])) {
+            $answer_ids = [(int)$_POST['AnswerId']];
+        } else {
+            $answer_ids = [];
+        }
 
         if (!valid_id($kingdom_id) || !valid_id($question_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid request.']);
@@ -416,20 +450,30 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Question not found.']);
         }
 
-        $correct_answer_id = $correct_map[$question_id];
-        $is_correct = ($answer_id === $correct_answer_id);
+        // Score via the same predicate that scoreTest() uses so a per-question
+        // "correct" verdict never disagrees with the aggregate result.
+        $qtmp    = Ork3::$Lib->qualtest;
+        $score   = $qtmp->scoreTest([$question_id => $correct_map[$question_id]], [$question_id => $answer_ids]);
+        $is_correct = ($score['correct'] === 1);
 
-        // Only reveal the correct answer when the player got it right, or when the
+        // Only reveal correct answers when the player got it right, or when the
         // kingdom has opted into showing correct answers on incorrect submissions.
-        $cfg = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);
+        $cfg    = $qtmp->getConfig($kingdom_id, $test_type);
         $reveal = $is_correct || !empty($cfg['ShowCorrectOnIncorrect']);
 
         $out = [
-            'status'     => 0,
-            'is_correct' => $is_correct,
+            'status'      => 0,
+            'is_correct'  => $is_correct,
+            'answer_mode' => $correct_map[$question_id]['Mode'] ?? 'single',
         ];
         if ($reveal) {
-            $out['correct_answer_id'] = $correct_answer_id;
+            // Full set every time — multi questions rely on the array; single
+            // clients can just take [0].
+            $out['correct_answer_ids'] = $correct_map[$question_id]['AnswerIds'];
+            // Back-compat: keep the scalar around for the legacy take page JS
+            // that reads correct_answer_id. It's the first correct id, which
+            // for single is THE answer and for multi is at least AN answer.
+            $out['correct_answer_id']  = (int)$correct_map[$question_id]['AnswerIds'][0];
         }
         $this->jsonOut($out);
     }
@@ -499,10 +543,17 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'No answers submitted.']);
         }
 
-        // Sanitize submitted answer map
+        // Sanitize submitted answer map. Multi-correct questions arrive as an
+        // array of ids; single-correct come as a scalar (or a one-element array
+        // from the new client). Scoring downstream handles both shapes.
         $submitted = [];
         foreach ($raw_answers as $qid => $aid) {
-            $submitted[(int)$qid] = (int)$aid;
+            $qid = (int)$qid;
+            if (is_array($aid)) {
+                $submitted[$qid] = array_values(array_unique(array_map('intval', $aid)));
+            } else {
+                $submitted[$qid] = (int)$aid;
+            }
         }
 
         $config      = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);

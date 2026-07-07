@@ -281,7 +281,7 @@ class QualTest
         $test_type = $this->sanitizeType($test_type);
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT q.qual_question_id, q.question_text, q.status, q.created_at,
+            'SELECT q.qual_question_id, q.question_text, q.answer_mode, q.status, q.created_at,
                     COUNT(a.qual_answer_id) AS answer_count,
                     SUM(a.is_correct) AS correct_count,
                     (SELECT ac.answer_text FROM ' . DB_PREFIX . 'qual_answer ac
@@ -304,6 +304,7 @@ class QualTest
                 $list[] = [
                     'QualQuestionId' => (int)$rs->qual_question_id,
                     'QuestionText'   => $rs->question_text,
+                    'AnswerMode'     => $rs->answer_mode,
                     'Status'         => $rs->status,
                     'CreatedAt'      => $rs->created_at,
                     'AnswerCount'    => (int)$rs->answer_count,
@@ -338,6 +339,7 @@ class QualTest
             'KingdomId'      => (int)$rs->kingdom_id,
             'TestType'       => $rs->test_type,
             'QuestionText'   => $rs->question_text,
+            'AnswerMode'     => $rs->answer_mode,
             'Status'         => $rs->status,
             'Answers'        => [],
         ];
@@ -372,6 +374,10 @@ class QualTest
         $test_type     = $this->sanitizeType($data['TestType'] ?? '');
         $question_text = trim($data['QuestionText'] ?? '');
         $answers       = is_array($data['Answers']) ? $data['Answers'] : [];
+        // 'multi' = "select all that apply" (score all-or-nothing).
+        // Default 'single' so callers that predate the multi-correct
+        // feature keep working unchanged.
+        $answer_mode   = (($data['AnswerMode'] ?? 'single') === 'multi') ? 'multi' : 'single';
 
         if (!$question_text || !$test_type || !valid_id($kingdom_id)) {
             return 0;
@@ -380,14 +386,18 @@ class QualTest
             return 0;
         }
 
-        $has_correct = false;
+        $correct_count = 0;
         foreach ($answers as $a) {
             if (!empty($a['IsCorrect'])) {
-                $has_correct = true;
-                break;
+                $correct_count++;
             }
         }
-        if (!$has_correct) {
+        if ($correct_count < 1) {
+            return 0;
+        }
+        // Single-mode is an equality check downstream — refuse to persist a
+        // question that would silently drop one of its correct answers.
+        if ($answer_mode === 'single' && $correct_count > 1) {
             return 0;
         }
 
@@ -403,7 +413,8 @@ class QualTest
             $this->db->Clear();
             $this->db->Execute(
                 'UPDATE ' . DB_PREFIX . 'qual_question
-                 SET question_text = \'' . $this->esc($question_text) . '\'
+                 SET question_text = \'' . $this->esc($question_text) . '\',
+                     answer_mode  = \'' . $answer_mode . '\'
                  WHERE qual_question_id = ' . $question_id
             );
         } else {
@@ -411,8 +422,8 @@ class QualTest
             $this->db->Clear();
             $this->db->Execute(
                 'INSERT INTO ' . DB_PREFIX . 'qual_question
-                 (kingdom_id, test_type, question_text, status, created_by)
-                 VALUES (' . $kingdom_id . ', \'' . $test_type . '\', \'' . $this->esc($question_text) . '\', \'active\', ' . $created_by . ')'
+                 (kingdom_id, test_type, question_text, answer_mode, status, created_by)
+                 VALUES (' . $kingdom_id . ', \'' . $test_type . '\', \'' . $this->esc($question_text) . '\', \'' . $answer_mode . '\', \'active\', ' . $created_by . ')'
             );
             $this->db->Clear();
             $ir = $this->db->DataSet('SELECT LAST_INSERT_ID() AS new_id');
@@ -511,7 +522,7 @@ class QualTest
 
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT qual_question_id, question_text
+            'SELECT qual_question_id, question_text, answer_mode
              FROM ' . DB_PREFIX . 'qual_question
              WHERE kingdom_id = ' . (int)$kingdom_id . '
                AND test_type = \'' . $test_type . '\'
@@ -529,6 +540,7 @@ class QualTest
                 $questions[$qid] = [
                     'QualQuestionId' => $qid,
                     'QuestionText'   => $rs->question_text,
+                    'AnswerMode'     => $rs->answer_mode,
                     'Answers'        => [],
                 ];
             }
@@ -588,8 +600,12 @@ class QualTest
     }
 
     /**
-     * Get correct answer IDs for a set of question IDs (server-side scoring).
-     * Returns array: [question_id => correct_answer_id, ...]
+     * Get correct-answer info per question for server-side scoring.
+     * Returns array: [question_id => ['Mode' => 'single'|'multi', 'AnswerIds' => [int,...]]]
+     *
+     * Multi-correct questions carry every is_correct=1 row; single-correct
+     * questions carry the single row (also as a one-element array so the
+     * scoring code doesn't need two branches).
      */
     public function getCorrectAnswers($question_ids, $kingdom_id = 0, $test_type = '')
     {
@@ -598,27 +614,29 @@ class QualTest
         }
         $ids_str    = implode(',', array_map('intval', $question_ids));
         $test_type  = $this->sanitizeType($test_type);
-        // JOIN through qual_question to verify kingdom + type ownership
+        // JOIN through qual_question to verify kingdom + type ownership AND
+        // pull the mode so the caller knows whether to score by equality
+        // (single) or set-match (multi).
         $where_kq = $kingdom_id > 0
             ? 'AND q.kingdom_id = ' . (int)$kingdom_id . ' AND q.test_type = \'' . $test_type . '\''
             : '';
-        // One aggregation scan: the first (lowest-id) correct answer per question.
-        // Replaces a per-row correlated MIN subquery; the returned map shape
-        // (question_id => correct_answer_id) is identical.
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT a.qual_question_id, MIN(a.qual_answer_id) AS qual_answer_id
+            'SELECT a.qual_question_id, a.qual_answer_id, q.answer_mode
              FROM ' . DB_PREFIX . 'qual_answer a
              JOIN ' . DB_PREFIX . 'qual_question q ON q.qual_question_id = a.qual_question_id
              WHERE a.qual_question_id IN (' . $ids_str . ')
                AND a.is_correct = 1
-               ' . $where_kq . '
-             GROUP BY a.qual_question_id'
+               ' . $where_kq
         );
         $map = [];
         if ($rs) {
             while ($rs->Next()) {
-                $map[(int)$rs->qual_question_id] = (int)$rs->qual_answer_id;
+                $qid = (int)$rs->qual_question_id;
+                if (!isset($map[$qid])) {
+                    $map[$qid] = ['Mode' => $rs->answer_mode, 'AnswerIds' => []];
+                }
+                $map[$qid]['AnswerIds'][] = (int)$rs->qual_answer_id;
             }
         }
         return $map;
@@ -626,17 +644,19 @@ class QualTest
 
     /**
      * Score a submitted test.
-     * $correct_map: [question_id => correct_answer_id]
-     * $submitted:   [question_id => submitted_answer_id]
+     * $correct_map: [question_id => ['Mode' => 'single'|'multi', 'AnswerIds' => [int,...]]]
+     * $submitted:   [question_id => int | int[]] — scalar for single, list for multi
      * Returns ['score_percent' => int, 'correct' => int, 'total' => int]
+     *
+     * Multi is all-or-nothing: the submitted set must exactly equal the
+     * correct set (no missing, no extra).
      */
     public function scoreTest($correct_map, $submitted)
     {
         $total   = count($correct_map);
         $correct = 0;
-        foreach ($correct_map as $qid => $correct_aid) {
-            $given = isset($submitted[$qid]) ? (int)$submitted[$qid] : 0;
-            if ($given === (int)$correct_aid) {
+        foreach ($correct_map as $qid => $info) {
+            if ($this->_scoreOne($info, $submitted[$qid] ?? null)) {
                 $correct++;
             }
         }
@@ -645,16 +665,46 @@ class QualTest
     }
 
     /**
+     * Predicate: did the player answer this ONE question correctly?
+     * $info:      ['Mode' => 'single'|'multi', 'AnswerIds' => [int,...]]
+     * $given_raw: int | int[] | null (scalar for single; list for multi)
+     *
+     * Kept private so scoreTest() and recordQuestionStats() share the same
+     * definition of "correct" — a per-question stat that disagrees with the
+     * aggregate would rot admin question-quality reports.
+     */
+    private function _scoreOne($info, $given_raw)
+    {
+        $mode        = $info['Mode'] ?? 'single';
+        $correct_ids = $info['AnswerIds'] ?? [];
+        if ($mode === 'multi') {
+            $given = is_array($given_raw) ? array_values(array_unique(array_map('intval', $given_raw))) : [];
+            sort($given);
+            $want = array_values(array_unique(array_map('intval', $correct_ids)));
+            sort($want);
+            return !empty($want) && $given === $want;
+        }
+        $given_id = is_array($given_raw) ? (int)($given_raw[0] ?? 0) : (int)$given_raw;
+        $want_id  = (int)($correct_ids[0] ?? 0);
+        return $given_id > 0 && $given_id === $want_id;
+    }
+
+    /**
      * Record per-question answer stats (called after every test submission).
-     * $correct_map: [question_id => correct_answer_id]
-     * $submitted:   [question_id => submitted_answer_id]
+     * $correct_map: new shape from getCorrectAnswers() —
+     *               [question_id => ['Mode' => 'single'|'multi', 'AnswerIds' => [int,...]]]
+     * $submitted:   [question_id => int | int[]]
+     *
+     * Correctness is determined by re-running the same predicate scoreTest()
+     * uses, so a multi-correct question only counts as "correct" when the
+     * submitted set exactly matches the correct set.
      */
     public function recordQuestionStats($correct_map, $submitted)
     {
         $rows = [];
-        foreach ($correct_map as $qid => $correct_aid) {
+        foreach ($correct_map as $qid => $info) {
             $qid         = (int)$qid;
-            $was_correct = (isset($submitted[$qid]) && (int)$submitted[$qid] === (int)$correct_aid) ? 1 : 0;
+            $was_correct = $this->_scoreOne($info, $submitted[$qid] ?? null) ? 1 : 0;
             $rows[] = '(' . $qid . ', 1, ' . $was_correct . ')';
         }
         if (empty($rows)) {
@@ -1475,6 +1525,9 @@ class QualTest
                 'KingdomId'    => $kingdom_id,
                 'TestType'     => $test_type,
                 'QuestionText' => $text,
+                // AnswerMode is set by the bulk-import parser (multi when the
+                // block had 2+ *-prefixed answers). Absence defaults to single.
+                'AnswerMode'   => ($q['AnswerMode'] ?? 'single'),
                 'Answers'      => $clean_answers,
                 'CreatedBy'    => $created_by,
             ]);

@@ -8,8 +8,10 @@
 	$q          = $Question ?? ['QuestionText' => '', 'Answers' => []];
 	$answers    = $q['Answers'];
 	while (count($answers) < 4) { $answers[] = ['QualAnswerId' => 0, 'AnswerText' => '', 'IsCorrect' => false]; }
-	$correctIdx = 0;
-	foreach ($answers as $i => $a) { if (!empty($a['IsCorrect'])) { $correctIdx = $i; break; } }
+	$correctIdxs = [];
+	foreach ($answers as $i => $a) { if (!empty($a['IsCorrect'])) { $correctIdxs[] = $i; } }
+	if (empty($correctIdxs)) { $correctIdxs = [0]; }
+	$answerMode = ($q['AnswerMode'] ?? 'single') === 'multi' ? 'multi' : 'single';
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css">
 
@@ -173,6 +175,20 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 					</div>
 
 					<div class="qt-field">
+						<label>Answer Mode</label>
+						<div style="display:flex;gap:14px;align-items:center;font-size:0.9rem;">
+							<label style="display:inline-flex;align-items:center;gap:5px;font-weight:normal;text-transform:none;letter-spacing:normal;color:var(--rp-text);margin:0;">
+								<input type="radio" name="AnswerMode" value="single" id="qt-mode-single" <?= $answerMode === 'single' ? 'checked' : '' ?>>
+								Single correct answer
+							</label>
+							<label style="display:inline-flex;align-items:center;gap:5px;font-weight:normal;text-transform:none;letter-spacing:normal;color:var(--rp-text);margin:0;">
+								<input type="radio" name="AnswerMode" value="multi" id="qt-mode-multi" <?= $answerMode === 'multi' ? 'checked' : '' ?>>
+								Multiple correct (select all that apply)
+							</label>
+						</div>
+					</div>
+
+					<div class="qt-field">
 						<label>Answer Choices <span style="color:#e53e3e">*</span></label>
 						<?php if (!$isEdit): ?>
 						<div class="qt-quick-answers">
@@ -181,12 +197,12 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 							<button type="button" class="qt-quick-pill" data-answers="Yes,No">Yes / No</button>
 						</div>
 						<?php endif; ?>
-						<div class="qt-field-hint">Radio button = correct answer.</div>
-						<ul class="qt-answers-list" id="qt-answers-list">
-							<?php foreach ($answers as $i => $a): ?>
+						<div class="qt-field-hint" id="qt-correct-hint">Radio button = correct answer.</div>
+						<ul class="qt-answers-list" id="qt-answers-list" data-correct='<?= htmlspecialchars(json_encode($correctIdxs), ENT_QUOTES) ?>'>
+							<?php foreach ($answers as $i => $a): $checked = in_array($i, $correctIdxs, true); ?>
 							<li class="qt-answer-row">
-								<input type="radio" name="IsCorrect" value="<?= $i ?>"
-								       <?= ($i === $correctIdx) ? 'checked' : '' ?> data-tip="Correct answer">
+								<input type="<?= $answerMode === 'multi' ? 'checkbox' : 'radio' ?>" name="IsCorrect<?= $answerMode === 'multi' ? '[]' : '' ?>" value="<?= $i ?>"
+								       <?= $checked ? 'checked' : '' ?> data-tip="Correct answer">
 								<input type="text" name="AnswerText[]"
 								       value="<?= htmlspecialchars($a['AnswerText']) ?>"
 								       placeholder="Answer <?= $i + 1 ?>">
@@ -225,10 +241,49 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 	var form      = document.getElementById('qt-question-form');
 	var errorBanner = document.getElementById('qt-error-banner');
 
+	// Which mode is currently active — read once and updated on toggle.
+	function currentMode() {
+		var m = document.querySelector('input[name=AnswerMode]:checked');
+		return m && m.value === 'multi' ? 'multi' : 'single';
+	}
+
 	function reindex() {
-		list.querySelectorAll('input[type=radio]').forEach(function(r, i) { r.value = i; });
+		list.querySelectorAll('.qt-answer-row input[type=radio], .qt-answer-row input[type=checkbox]')
+			.forEach(function(r, i) { r.value = i; });
 		list.querySelectorAll('input[type=text]').forEach(function(t, i) { t.placeholder = 'Answer ' + (i + 1); });
 	}
+
+	// Swap every correct-answer input between radio (single) and checkbox
+	// (multi). Preserves the currently-checked set so a mode toggle round-trip
+	// isn't destructive.
+	function retypeCorrectInputs(mode) {
+		var checkedVals = [];
+		list.querySelectorAll('.qt-answer-row input[type=radio], .qt-answer-row input[type=checkbox]')
+			.forEach(function(cb) { if (cb.checked) checkedVals.push(cb.value); });
+
+		// If switching to single but multiple were checked, keep only the first.
+		if (mode === 'single' && checkedVals.length > 1) checkedVals = [checkedVals[0]];
+
+		list.querySelectorAll('.qt-answer-row').forEach(function(row, i) {
+			var old  = row.querySelector('input[type=radio], input[type=checkbox]');
+			var next = document.createElement('input');
+			next.type    = (mode === 'multi') ? 'checkbox' : 'radio';
+			next.name    = (mode === 'multi') ? 'IsCorrect[]' : 'IsCorrect';
+			next.value   = old.value;
+			next.checked = checkedVals.indexOf(old.value) !== -1;
+			next.setAttribute('data-tip', 'Correct answer');
+			old.parentNode.replaceChild(next, old);
+		});
+
+		var hint = document.getElementById('qt-correct-hint');
+		if (hint) hint.textContent = (mode === 'multi')
+			? 'Check every answer that should count as correct — the player must pick all of them.'
+			: 'Radio button = correct answer.';
+	}
+
+	document.querySelectorAll('input[name=AnswerMode]').forEach(function(r) {
+		r.addEventListener('change', function() { retypeCorrectInputs(currentMode()); });
+	});
 
 	function attachRemove(btn) {
 		btn.addEventListener('click', function() {
@@ -240,11 +295,18 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 
 	list.querySelectorAll('.qt-remove-btn').forEach(attachRemove);
 
+	function correctInputHtml(idx) {
+		var mode = currentMode();
+		var t    = mode === 'multi' ? 'checkbox' : 'radio';
+		var n    = mode === 'multi' ? 'IsCorrect[]' : 'IsCorrect';
+		return '<input type="' + t + '" name="' + n + '" value="' + idx + '" data-tip="Correct answer">';
+	}
+
 	addBtn.addEventListener('click', function() {
 		var idx = list.querySelectorAll('li').length;
 		var li  = document.createElement('li');
 		li.className = 'qt-answer-row';
-		li.innerHTML = '<input type="radio" name="IsCorrect" value="' + idx + '" data-tip="Correct answer">'
+		li.innerHTML = correctInputHtml(idx)
 		             + '<input type="text" name="AnswerText[]" placeholder="Answer ' + (idx + 1) + '">'
 		             + '<button type="button" class="qt-remove-btn" data-tip="Remove">&times;</button>';
 		attachRemove(li.querySelector('.qt-remove-btn'));
@@ -259,7 +321,7 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 			vals.forEach(function(text, i) {
 				var li = document.createElement('li');
 				li.className = 'qt-answer-row';
-				li.innerHTML = '<input type="radio" name="IsCorrect" value="' + i + '" data-tip="Correct answer">'
+				li.innerHTML = correctInputHtml(i)
 				             + '<input type="text" name="AnswerText[]" value="' + text + '" placeholder="Answer ' + (i + 1) + '">'
 				             + '<button type="button" class="qt-remove-btn" data-tip="Remove">&times;</button>';
 				attachRemove(li.querySelector('.qt-remove-btn'));
@@ -277,16 +339,26 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 		e.preventDefault();
 		errorBanner.style.display = 'none';
 
+		var mode = currentMode();
 		var questionText = form.querySelector('[name=QuestionText]').value.trim();
-		var checked = form.querySelector('[name=IsCorrect]:checked');
+		var checkedNodes = form.querySelectorAll('.qt-answer-row input[type=radio]:checked, .qt-answer-row input[type=checkbox]:checked');
 		var texts   = Array.from(form.querySelectorAll('[name="AnswerText[]"]')).filter(function(t) { return t.value.trim(); });
 
 		if (!questionText) { showErr('Question text is required.'); return; }
-		if (!checked)      { showErr('Please select the correct answer.'); return; }
+		if (checkedNodes.length === 0) { showErr('Please mark at least one correct answer.'); return; }
+		if (mode === 'multi' && checkedNodes.length < 2) { showErr('Multiple-correct questions need at least 2 correct answers. Switch back to Single, or check another answer.'); return; }
 		if (texts.length < 2) { showErr('At least 2 answer choices are required.'); return; }
 
 		var fd = new FormData(form);
-		fd.set('IsCorrect', checked.value);
+		// Rewrite IsCorrect on the outgoing form data so single sends a scalar
+		// and multi sends an array (server accepts either shape).
+		fd.delete('IsCorrect');
+		fd.delete('IsCorrect[]');
+		if (mode === 'multi') {
+			checkedNodes.forEach(function(n) { fd.append('IsCorrect[]', n.value); });
+		} else {
+			fd.set('IsCorrect', checkedNodes[0].value);
+		}
 
 		fetch('<?= UIR ?>QualTestAjax/savequestion', { method: 'POST', body: fd })
 			.then(function(r) { return r.json(); })

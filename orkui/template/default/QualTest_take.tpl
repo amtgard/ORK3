@@ -932,7 +932,16 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 						</div>
 						<div class="qt-progress-segments" id="qt-progress-segments"></div>
 						<div class="qt-q-text" id="qt-q-text"></div>
+						<!-- Hint shown for multi-correct questions; hidden for single. -->
+						<div class="qt-multi-hint" id="qt-multi-hint" style="display:none;font-size:0.82rem;color:#4a5568;margin:6px 0 10px;">
+							<i class="fas fa-check-square" style="margin-right:5px;color:#2b6cb0;"></i>Select all that apply, then submit.
+						</div>
 						<ul class="qt-answers" id="qt-answers"></ul>
+						<!-- Per-question submit for multi-correct questions.
+						     Single questions submit on click and don't show this. -->
+						<div id="qt-multi-submit-row" style="display:none;margin:0 0 14px;">
+							<button class="qt-nav-btn" id="qt-multi-submit-btn" disabled><i class="fas fa-check"></i> Submit Answer</button>
+						</div>
 						<div class="qt-feedback" id="qt-feedback"></div>
 						<div class="qt-report-area" id="qt-report-area" style="display:none;">
 							<button class="qt-report-toggle-btn" id="qt-report-btn">
@@ -1055,6 +1064,12 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	var questionContent = document.getElementById('qt-question-content');
 	var qTextEl         = document.getElementById('qt-q-text');
 	var answersEl       = document.getElementById('qt-answers');
+	var multiHintEl     = document.getElementById('qt-multi-hint');
+	var multiSubmitRow  = document.getElementById('qt-multi-submit-row');
+	var multiSubmitBtn  = document.getElementById('qt-multi-submit-btn');
+	// Set of currently-checked answer ids for the multi-select question in view.
+	// Rebuilt at the start of each renderQuestion().
+	var multiSelected   = null;
 	var feedbackEl      = document.getElementById('qt-feedback');
 	var reportArea      = document.getElementById('qt-report-area');
 	var reportBtn       = document.getElementById('qt-report-btn');
@@ -1235,6 +1250,12 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			reportThanks.style.display = 'none';
 			reportReason.value = '';
 
+			var isMulti = (q.AnswerMode === 'multi');
+			multiHintEl.style.display    = isMulti ? '' : 'none';
+			multiSubmitRow.style.display = isMulti ? '' : 'none';
+			multiSubmitBtn.disabled      = true;
+			multiSelected = isMulti ? Object.create(null) : null;
+
 			answersEl.innerHTML = '';
 			q.Answers.forEach(function(a) {
 				var li    = document.createElement('li');
@@ -1243,10 +1264,11 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				label.className = 'qt-answer-label';
 				label.dataset.answerId = a.QualAnswerId;
 				label.setAttribute('tabindex', '0');
-				label.setAttribute('role', 'radio');
+				label.setAttribute('role', isMulti ? 'checkbox' : 'radio');
 				label.setAttribute('aria-checked', 'false');
 
-				// Radio circle indicator
+				// Selection indicator — same visual pill, filled per aria-checked
+				// so single (radio) and multi (checkbox) look consistent.
 				var radio = document.createElement('span');
 				radio.className = 'qt-answer-radio';
 				var inner = document.createElement('span');
@@ -1259,10 +1281,31 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				text.textContent = a.AnswerText;
 				label.appendChild(text);
 
-				label.addEventListener('click', function() { checkAnswer(q, a.QualAnswerId); });
-				label.addEventListener('keydown', function(e) {
-					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); checkAnswer(q, a.QualAnswerId); }
-				});
+				if (isMulti) {
+					var toggle = function() {
+						if (isChecking) return;
+						var already = !!multiSelected[a.QualAnswerId];
+						if (already) {
+							delete multiSelected[a.QualAnswerId];
+							label.classList.remove('qt-ans-selected');
+							label.setAttribute('aria-checked', 'false');
+						} else {
+							multiSelected[a.QualAnswerId] = true;
+							label.classList.add('qt-ans-selected');
+							label.setAttribute('aria-checked', 'true');
+						}
+						multiSubmitBtn.disabled = (Object.keys(multiSelected).length === 0);
+					};
+					label.addEventListener('click', toggle);
+					label.addEventListener('keydown', function(e) {
+						if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+					});
+				} else {
+					label.addEventListener('click', function() { checkAnswer(q, a.QualAnswerId); });
+					label.addEventListener('keydown', function(e) {
+						if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); checkAnswer(q, a.QualAnswerId); }
+					});
+				}
 				li.appendChild(label);
 				answersEl.appendChild(li);
 			});
@@ -1275,31 +1318,51 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	}
 
 	var isChecking = false;
-	function checkAnswer(q, selectedId) {
+	// `selected` is a number for single-select and an array of numbers for
+	// multi-select. Both cases funnel through here so the feedback + scoring
+	// pathway is identical.
+	function checkAnswer(q, selected) {
 		if (isChecking) return;
+		var isMulti = Array.isArray(selected);
+		if (isMulti && selected.length === 0) return;
 		isChecking = true;
-		// Visual selection feedback
+
 		var allLabels = answersEl.querySelectorAll('.qt-answer-label');
-		allLabels.forEach(function(l) {
-			l.classList.remove('qt-ans-selected');
-			l.setAttribute('aria-checked', 'false');
-		});
-		var selLabel = answersEl.querySelector('[data-answer-id="' + selectedId + '"]');
-		if (selLabel) {
-			selLabel.classList.add('qt-ans-selected');
-			selLabel.setAttribute('aria-checked', 'true');
+		// Freeze the current visual state — highlight what was picked; for
+		// single, we clear other selections; for multi, keep what's checked.
+		if (isMulti) {
+			// Ensure the aria-checked reflects the current multiSelected set.
+			allLabels.forEach(function(l) {
+				var picked = selected.indexOf(parseInt(l.dataset.answerId, 10)) !== -1;
+				l.classList.toggle('qt-ans-selected', picked);
+				l.setAttribute('aria-checked', picked ? 'true' : 'false');
+			});
+			multiSubmitBtn.disabled = true;
+		} else {
+			allLabels.forEach(function(l) {
+				l.classList.remove('qt-ans-selected');
+				l.setAttribute('aria-checked', 'false');
+			});
+			var selLabel0 = answersEl.querySelector('[data-answer-id="' + selected + '"]');
+			if (selLabel0) {
+				selLabel0.classList.add('qt-ans-selected');
+				selLabel0.setAttribute('aria-checked', 'true');
+			}
 		}
 
-		// Disable all answer labels
-		allLabels.forEach(function(l) {
-			l.classList.add('qt-ans-disabled');
-		});
+		// Disable further clicks while we score.
+		allLabels.forEach(function(l) { l.classList.add('qt-ans-disabled'); });
 
 		var fd = new FormData();
 		fd.append('KingdomId',  KINGDOM_ID);
 		fd.append('TestType',   TEST_TYPE);
 		fd.append('QuestionId', q.QualQuestionId);
-		fd.append('AnswerId',   selectedId);
+		if (isMulti) {
+			selected.forEach(function(id) { fd.append('AnswerIds[]', id); });
+		} else {
+			fd.append('AnswerId', selected);
+			fd.append('AnswerIds[]', selected); // dual-post for forward compat
+		}
 		fetch(BASE_URL + 'QualTestAjax/checkanswer', { method: 'POST', body: fd })
 			.then(function(r) { return r.json(); })
 			.then(function(j) {
@@ -1313,32 +1376,42 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 					return;
 				}
 
-				answers[q.QualQuestionId] = selectedId;
+				answers[q.QualQuestionId] = selected;
 
-				selLabel = answersEl.querySelector('[data-answer-id="' + selectedId + '"]');
-				// correct_answer_id is only returned when the kingdom has opted into
-				// "Display correct answer on incorrect" (or the player got it right).
-				var okLabel = j.correct_answer_id
-					? answersEl.querySelector('[data-answer-id="' + j.correct_answer_id + '"]')
-					: null;
+				// Highlight the RIGHT set (server may return the full set for
+				// multi via correct_answer_ids). For single the legacy
+				// correct_answer_id field still populates a one-element array.
+				var correctIds = Array.isArray(j.correct_answer_ids)
+					? j.correct_answer_ids.map(function(x) { return parseInt(x, 10); })
+					: (j.correct_answer_id ? [parseInt(j.correct_answer_id, 10)] : []);
 
 				if (j.is_correct) {
 					correctCount++;
-					if (selLabel) {
-						selLabel.classList.remove('qt-ans-selected');
-						selLabel.classList.add('qt-ans-correct');
-					}
+					var pickedIds = isMulti ? selected : [selected];
+					pickedIds.forEach(function(id) {
+						var l = answersEl.querySelector('[data-answer-id="' + id + '"]');
+						if (l) { l.classList.remove('qt-ans-selected'); l.classList.add('qt-ans-correct'); }
+					});
 					feedbackEl.className = 'qt-feedback qt-fb-correct';
 					feedbackEl.innerHTML = '<i class="fas fa-check-circle" style="margin-right:6px;"></i> Correct!';
 				} else {
-					if (selLabel) {
-						selLabel.classList.remove('qt-ans-selected');
-						selLabel.classList.add('qt-ans-wrong');
-					}
-					if (okLabel) {
-						okLabel.classList.remove('qt-ans-disabled');
-						okLabel.classList.add('qt-ans-correct');
-					}
+					var pickedIdsW = isMulti ? selected : [selected];
+					pickedIdsW.forEach(function(id) {
+						var l = answersEl.querySelector('[data-answer-id="' + id + '"]');
+						if (!l) return;
+						l.classList.remove('qt-ans-selected');
+						// Wrong pick unless it's also in the correct set — in which
+						// case it was partially right; still show as correct so
+						// the player sees which of their picks was right.
+						if (correctIds.indexOf(id) !== -1) l.classList.add('qt-ans-correct');
+						else                               l.classList.add('qt-ans-wrong');
+					});
+					// Also mark any correct answers the player MISSED.
+					correctIds.forEach(function(id) {
+						if (pickedIdsW.indexOf(id) !== -1) return;
+						var l = answersEl.querySelector('[data-answer-id="' + id + '"]');
+						if (l) { l.classList.remove('qt-ans-disabled'); l.classList.add('qt-ans-correct'); }
+					});
 					feedbackEl.className = 'qt-feedback qt-fb-wrong';
 					feedbackEl.innerHTML = '<i class="fas fa-times-circle" style="margin-right:6px;"></i> Sorry, that\'s not correct.';
 					reportArea.style.display = 'block';
@@ -1355,6 +1428,12 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				// Update progress
 				progressScore.textContent = correctCount + ' correct so far';
 				updateProgressSegments();
+
+				// Hide the multi UI once the answer's locked in — the row
+				// showed the "Submit Answer" affordance during selection;
+				// after submission, Next / Submit Test takes over below.
+				multiSubmitRow.style.display = 'none';
+				multiHintEl.style.display    = 'none';
 
 				if (currentIdx < questions.length - 1) {
 					nextBtn.style.display = 'inline-flex';
@@ -1407,6 +1486,16 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	});
 
 	// Next button
+	// Multi-select submit: flushes the currently-checked answer set through
+	// the same checkAnswer() the single flow uses.
+	multiSubmitBtn.addEventListener('click', function() {
+		if (multiSubmitBtn.disabled) return;
+		var q = questions[currentIdx];
+		var picks = Object.keys(multiSelected || {}).map(function(k) { return parseInt(k, 10); });
+		if (!picks.length) return;
+		checkAnswer(q, picks);
+	});
+
 	nextBtn.addEventListener('click', function() {
 		if (currentIdx < questions.length - 1) renderQuestion(currentIdx + 1);
 	});
