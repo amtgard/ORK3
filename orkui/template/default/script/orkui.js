@@ -14065,6 +14065,48 @@ function resizeImageToLimit(file, maxBytes, onSuccess, onError, preservePng) {
 	attempt(file, MAX_ITERATIONS);
 }
 
+// Gentle guard: only downscale when the longest edge exceeds maxEdge (e.g. 3000).
+// Otherwise the ORIGINAL File/Blob is passed through untouched — no re-encode. The
+// server stores a high-res master and generates renditions, so the client no longer
+// pre-shrinks to a byte budget (that job belongs to resizeImageToLimit, banners only).
+function clampImageIfHuge(file, maxEdge, onReady, onError, preservePng) {
+	var img = new Image();
+	var url = URL.createObjectURL(file);
+	img.onload = function() {
+		var w = img.naturalWidth, h = img.naturalHeight;
+		var longest = Math.max(w, h);
+		if (longest <= maxEdge) {
+			URL.revokeObjectURL(url);
+			onReady(file, w, h); // original bytes untouched
+			return;
+		}
+		var scale = maxEdge / longest;
+		var canvas = document.createElement('canvas');
+		canvas.width  = Math.max(1, Math.round(w * scale));
+		canvas.height = Math.max(1, Math.round(h * scale));
+		var ctx = canvas.getContext('2d');
+		if (!preservePng) {
+			ctx.fillStyle = '#ffffff';
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
+		}
+		ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+		var newW = canvas.width, newH = canvas.height;
+		canvas.toBlob(function(blob) {
+			URL.revokeObjectURL(url);
+			if (!blob) {
+				onError('Could not process the image. Please try a different file.');
+				return;
+			}
+			onReady(blob, newW, newH);
+		}, preservePng ? 'image/png' : 'image/jpeg', 0.92);
+	};
+	img.onerror = function() {
+		URL.revokeObjectURL(url);
+		onError('Could not load image for processing.');
+	};
+	img.src = url;
+}
+
 $(function() {
 	$('.info-container').each(function(k, container) {
 		setExpandMode(container, expandUrl(), k, getExpandMode(container, expandUrl(), k));
@@ -14084,26 +14126,28 @@ $(function() {
 			return;
 		}
 		var file = this.files && this.files[0];
-		if (!file || file.size <= 348836) return;
+		if (!file) return;
 		var originalKB = Math.round(file.size / 1024);
 		var isPng = (file.type === 'image/png');
-		$input.after('<div class="image-resize-notice" style="font-size:10px;color:#888;">Resizing\u2026</div>');
-		resizeImageToLimit(file, 348836,
+		// Gentle guard only: most images now pass through untouched at full quality.
+		// A notice is shown solely when an oversized image is actually downscaled.
+		clampImageIfHuge(file, 3000,
 			function(blob, newW, newH) {
 				if ($input.data('resize-gen') !== generation) return;
+				if (blob === file) return; // untouched original bytes, no notice
 				var resizedKB = Math.round(blob.size / 1024);
 				var dt = new DataTransfer();
 				var outName = isPng ? 'resized.png' : 'resized.jpg';
 				var outType = isPng ? 'image/png' : 'image/jpeg';
 				dt.items.add(new File([blob], outName, {type: outType}));
 				$input[0].files = dt.files;
-				$input.siblings('.image-resize-notice')
-					.css('color', '#555')
-					.text('Resized ' + originalKB + ' KB \u2192 ' + resizedKB + ' KB (' + newW + '\xd7' + newH + ')');
+				$input.after('<div class="image-resize-notice" style="font-size:10px;color:#555;">'
+					+ 'Resized ' + originalKB + ' KB \u2192 ' + resizedKB + ' KB (' + newW + '\xd7' + newH + ')</div>');
 			},
 			function(errMsg) {
 				if ($input.data('resize-gen') !== generation) return;
-				$input.siblings('.image-resize-notice').css('color', 'red').text(errMsg);
+				$input.after('<div class="image-resize-notice" style="font-size:10px;color:red;">'
+					+ errMsg + '</div>');
 				$input.val('');
 			},
 			isPng
@@ -14275,7 +14319,26 @@ $(function() {
 	$('body').append('<div id="ork-lightbox"><img /></div>');
 	$(document).on('click', '.heraldry-img', function() {
 		if ($(this).closest('a').length) return;
-		$('#ork-lightbox img').attr('src', this.src);
+		// The hero <img> now carries a downscaled rendition (thumb/display); the
+		// lightbox must enlarge the full-quality MASTER instead. Prefer an
+		// explicit data-full URL if the template supplies one, otherwise derive
+		// the master from the rendition src by stripping the _thumb/_display
+		// suffix. Renditions are NAME_thumb.<ext>/NAME_display.<ext> (webp|jpg);
+		// the master is NAME.png or NAME.jpg — probe .png first, falling back to
+		// .jpg on error (mirrors Common::resolve_image_ext's 2-way probe).
+		var full = this.getAttribute('data-full');
+		if (!full) {
+			var m = this.src.match(/^(.*)(?:_thumb|_display)\.(?:webp|jpe?g|png)(\?.*)?$/i);
+			full = m ? (m[1] + '.png' + (m[2] || '')) : this.src;
+		}
+		var $lbImg = $('#ork-lightbox img');
+		$lbImg.off('error.orkLightbox').on('error.orkLightbox', function() {
+			var cur = this.getAttribute('src') || '';
+			if (/\.png(\?|$)/i.test(cur)) {
+				this.src = cur.replace(/\.png(\?|$)/i, '.jpg$1');
+			}
+		});
+		$lbImg.attr('src', full);
 		$('#ork-lightbox').fadeIn(150);
 	});
 	$('#ork-lightbox').on('click', function() {

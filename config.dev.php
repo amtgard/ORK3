@@ -21,11 +21,11 @@ define('HTTP_PLAYER_HERALDRY', HTTP_HERALDRY . 'player/');
 define('HTTP_PARK_HERALDRY', HTTP_HERALDRY . 'park/');
 define('HTTP_KINGDOM_HERALDRY', HTTP_HERALDRY . 'kingdom/');
 define('HTTP_EVENT_HERALDRY', HTTP_HERALDRY . 'event/');
-define('HTTP_EVENT_BANNER',   HTTP_HERALDRY . 'event-banner/');
-define('HTTP_PARK_BANNER',    HTTP_HERALDRY . 'park-banner/');
+define('HTTP_EVENT_BANNER', HTTP_HERALDRY . 'event-banner/');
+define('HTTP_PARK_BANNER', HTTP_HERALDRY . 'park-banner/');
 define('HTTP_KINGDOM_BANNER', HTTP_HERALDRY . 'kingdom-banner/');
-define('HTTP_PLAYER_BANNER',  HTTP_HERALDRY . 'player-banner/');
-define('HTTP_UNIT_BANNER',    HTTP_HERALDRY . 'unit-banner/');
+define('HTTP_PLAYER_BANNER', HTTP_HERALDRY . 'player-banner/');
+define('HTTP_UNIT_BANNER', HTTP_HERALDRY . 'unit-banner/');
 define('HTTP_UNIT_HERALDRY', HTTP_HERALDRY . 'unit/');
 
 define('HERALDRY_PLAYER_DEFAULT', HTTP_PLAYER_HERALDRY . '000000.jpg');
@@ -52,13 +52,26 @@ define('DIR_PLAYER_HERALDRY', DIR_HERALDRY . "player/");
 define('DIR_PARK_HERALDRY', DIR_HERALDRY . "park/");
 define('DIR_KINGDOM_HERALDRY', DIR_HERALDRY . "kingdom/");
 define('DIR_EVENT_HERALDRY', DIR_HERALDRY . "event/");
-define('DIR_EVENT_BANNER',   DIR_HERALDRY . "event-banner/");
-define('DIR_PARK_BANNER',    DIR_HERALDRY . "park-banner/");
+define('DIR_EVENT_BANNER', DIR_HERALDRY . "event-banner/");
+define('DIR_PARK_BANNER', DIR_HERALDRY . "park-banner/");
 define('DIR_KINGDOM_BANNER', DIR_HERALDRY . "kingdom-banner/");
-define('DIR_PLAYER_BANNER',  DIR_HERALDRY . "player-banner/");
-define('DIR_UNIT_BANNER',    DIR_HERALDRY . "unit-banner/");
+define('DIR_PLAYER_BANNER', DIR_HERALDRY . "player-banner/");
+define('DIR_UNIT_BANNER', DIR_HERALDRY . "unit-banner/");
 define('DIR_UNIT_HERALDRY', DIR_HERALDRY . "unit/");
 define('DIR_CACHE', DIR_BASENAME . 'cache/');
+
+// Image upload input gate — max length (in bytes) of the base64-encoded image
+// payload accepted before GD ever decodes it. Sized against the ~8 MB transport
+// limit: a ~6 MB image base64-encodes to ~8 MB (4/3 expansion), which passes,
+// while tens-of-MB payloads are rejected up front. Replaces the old scattered
+// 465000 / 1365334 magic caps (call sites migrated separately).
+define('IMAGE_UPLOAD_MAX_BYTES', 8_400_000);
+
+// Authoritative master-image ceiling: max size (in bytes) of a processed master
+// AFTER downscale to <=3000px and GD re-encode. Uploads whose master would exceed
+// this are rejected with a message rather than silently shrunk further. This is
+// the real gate; IMAGE_UPLOAD_MAX_BYTES above is only a cheap pre-decode guard.
+define('IMAGE_MASTER_MAX_BYTES', 6_000_000);
 
 // System
 define('DIR_LIB', DIR_SYSTEM . 'lib/');
@@ -103,7 +116,7 @@ define('BEHOLD_KEY', '');
 // testing pass via docker (-e CF_API_TOKEN=… -e CF_ZONE_ID=…) — the recap
 // code falls back to getenv() when the constants are empty.
 define('CF_API_TOKEN', '');
-define('CF_ZONE_ID',   '');
+define('CF_ZONE_ID', '');
 
 // INCLUDE
 require_once(DIR_LIB . 'mail.php');

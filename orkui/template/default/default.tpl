@@ -11,7 +11,7 @@
 		foreach ($ActiveKingdomSummary['ActiveKingdomsSummaryList'] as $r) {
 			$r['_weekly']   = $r['Attendance'] > 0 ? round($r['Attendance'] / $hmWkCount, 1) : 0;
 			$r['_monthly']  = $r['MonthlyAvg'] > 0 ? $r['MonthlyAvg'] : 0;
-			$r['_heraldry'] = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf('%04d', (int)$r['KingdomId']));
+			$r['_heraldry'] = HTTP_KINGDOM_HERALDRY . Common::resolve_media_ext(DIR_KINGDOM_HERALDRY, sprintf('%04d', (int)$r['KingdomId']), 'thumb');
 			if ((int)$r['ParentKingdomId'] === 0) {
 				$hmKingdoms[]       = $r;
 				$hmTotalParks      += (int)$r['ParkCount'];

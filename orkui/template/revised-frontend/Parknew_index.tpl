@@ -889,7 +889,7 @@
 									<td>
 										<div class="pk-tiny-heraldry">
 											<?php if ($event['HasHeraldry'] == 1): ?>
-												<img src="<?= HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $event['EventId'])) ?>"
+												<img src="<?= HTTP_EVENT_HERALDRY . Common::resolve_media_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $event['EventId']), 'thumb') ?>"
 												     loading="lazy"
 												     onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'">
 											<?php else: ?>
@@ -1017,10 +1017,10 @@
 						$pkRenderCard = function (array $p) {
 							$initial = htmlspecialchars(strtoupper(mb_substr($p['Persona'], 0, 1)));
 							$heraldryBgSrc = $p['HasHeraldry']
-								? HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, sprintf('%06d', $p['MundaneId']))
+								? HTTP_PLAYER_HERALDRY . Common::resolve_media_ext(DIR_PLAYER_HERALDRY, sprintf('%06d', $p['MundaneId']), 'thumb')
 								: null;
 							if ($p['HasImage']) {
-								$avatarSrc = HTTP_PLAYER_IMAGE . Common::resolve_image_ext(DIR_PLAYER_IMAGE, sprintf('%06d', $p['MundaneId']));
+								$avatarSrc = HTTP_PLAYER_IMAGE . Common::resolve_media_ext(DIR_PLAYER_IMAGE, sprintf('%06d', $p['MundaneId']), 'thumb');
 							} elseif ($p['HasHeraldry']) {
 								$avatarSrc = $heraldryBgSrc;
 							} else {
@@ -1180,7 +1180,7 @@
 					   data-name="<?= htmlspecialchars(strtolower($p['Persona'])) ?>"
 					   style="animation-delay:<?= min($_hoaIdx * 18, 600) ?>ms">
 						<img class="pk-hoa-img"
-						     src="<?= HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, sprintf('%06d', $p['MundaneId'])) ?>"
+						     src="<?= HTTP_PLAYER_HERALDRY . Common::resolve_media_ext(DIR_PLAYER_HERALDRY, sprintf('%06d', $p['MundaneId']), 'thumb') ?>"
 						     alt="<?= htmlspecialchars($p['Persona']) ?>"
 						     loading="lazy"
 						     onerror="this.closest('.pk-hoa-card').style.display='none'">
@@ -2635,6 +2635,7 @@ tr:hover .pk-copy-link { opacity: 1; }
 				<small>JPG, GIF, PNG &middot; Accepts transparent images</small>
 			</label>
 			<input type="file" id="pk-heraldry-file-input" accept="image/png,image/jpeg,image/gif" style="display:none">
+			<div id="pk-heraldry-feedback" class="pk-editoff-feedback" style="display:none;margin-top:12px"></div>
 <?php if ($hasHeraldry): ?>
 			<div style="text-align:center;margin-top:14px">
 				<button type="button" id="pk-heraldry-remove-btn" class="pn-btn pn-btn-ghost" style="color:#e53e3e;border-color:#feb2b2;font-size:12px;padding:4px 14px">

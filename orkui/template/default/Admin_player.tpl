@@ -43,7 +43,7 @@
 		</div>
 		<div>
 			<span></span>
-			<span style="font-size: 10px;">Max Size: 340 KB (348836 bytes)</span>
+			<span style="font-size: 10px;">High-resolution welcome &mdash; very large images are optimized automatically</span>
 		</div>
 	</form>
 </div>

@@ -93,7 +93,12 @@
 		<div>
 			<span>Heraldry:</span>
 			<span>
-				<img class='heraldry-img' src='<?=($Unit['Details']['Unit']['HasHeraldry']?$Unit_heraldryurl['Url']:(HTTP_UNIT_HERALDRY.'00000.jpg')) . '?t=' . time() ?>' />
+<?php
+				// Small edit-form preview uses the 256px 'thumb' rendition (master fallback for un-backfilled images).
+				$_admHerFile = Common::resolve_media_ext(DIR_UNIT_HERALDRY, sprintf('%05d', $Unit['Details']['Unit']['UnitId']), 'thumb');
+				$_admHerSrc  = $Unit['Details']['Unit']['HasHeraldry'] ? (HTTP_UNIT_HERALDRY . $_admHerFile) : (HTTP_UNIT_HERALDRY . '00000.jpg');
+?>
+				<img class='heraldry-img' src='<?=$_admHerSrc . '?t=' . time() ?>' />
 				<input type='file' class='restricted-image-type' name='Heraldry' id='Heraldry' />
 			</span>
 		</div>

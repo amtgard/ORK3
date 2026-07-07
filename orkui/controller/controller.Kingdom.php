@@ -244,6 +244,12 @@ class Controller_Kingdom extends Controller
                 continue;
             }
             $start = $evtResult->event_start;
+            $heraldryUrl = $fallbackHeraldry;
+            if ((int)$evtResult->has_heraldry === 1) {
+                $herFile = Common::resolve_media_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $eid), 'thumb');
+                $heraldryUrl = HTTP_EVENT_HERALDRY . $herFile
+                    . (file_exists(DIR_EVENT_HERALDRY . $herFile) ? '?v=' . filemtime(DIR_EVENT_HERALDRY . $herFile) : '');
+            }
             $events[] = [
                 'EventId'        => $eid,
                 'Name'           => $evtResult->name,
@@ -253,9 +259,7 @@ class Controller_Kingdom extends Controller
                     ? date('M j, Y', strtotime($start)) : '',
                 'NextDetailId'   => (int)$evtResult->next_detail_id,
                 'HasHeraldry'    => (int)$evtResult->has_heraldry,
-                'HeraldryUrl'    => ((int)$evtResult->has_heraldry === 1)
-                    ? HTTP_EVENT_HERALDRY . Common::resolve_image_ext(DIR_EVENT_HERALDRY, sprintf('%05d', $eid))
-                    : $fallbackHeraldry,
+                'HeraldryUrl'    => $heraldryUrl,
                 'ParkAbbr'       => $evtResult->park_abbr,
                 'RsvpGoing'      => (int)$evtResult->rsvp_going,
                 'RsvpInterested' => (int)$evtResult->rsvp_interested,
@@ -403,8 +407,20 @@ class Controller_Kingdom extends Controller
                 $midPad  = sprintf('%06d', $mid);
                 $hasImg  = (int)$r->has_image > 0;
                 $hasHer  = (int)$r->has_heraldry > 0;
-                $herUrl  = $hasHer ? HTTP_PLAYER_HERALDRY . Common::resolve_image_ext(DIR_PLAYER_HERALDRY, $midPad) : null;
-                $imgUrl  = $hasImg ? HTTP_PLAYER_IMAGE    . Common::resolve_image_ext(DIR_PLAYER_IMAGE, $midPad) : ($hasHer ? $herUrl : null);
+                $herUrl = null;
+                if ($hasHer) {
+                    $herFile = Common::resolve_media_ext(DIR_PLAYER_HERALDRY, $midPad, 'thumb');
+                    $herUrl  = HTTP_PLAYER_HERALDRY . $herFile
+                        . (file_exists(DIR_PLAYER_HERALDRY . $herFile) ? '?v=' . filemtime(DIR_PLAYER_HERALDRY . $herFile) : '');
+                }
+                $imgUrl = null;
+                if ($hasImg) {
+                    $imgFile = Common::resolve_media_ext(DIR_PLAYER_IMAGE, $midPad, 'thumb');
+                    $imgUrl  = HTTP_PLAYER_IMAGE . $imgFile
+                        . (file_exists(DIR_PLAYER_IMAGE . $imgFile) ? '?v=' . filemtime(DIR_PLAYER_IMAGE . $imgFile) : '');
+                } elseif ($hasHer) {
+                    $imgUrl = $herUrl;
+                }
                 $mn = ((int)$r->restricted === 0) ? trim($r->given_name . ' ' . $r->surname) : '';
                 $players[] = [
                     'id'           => $mid,

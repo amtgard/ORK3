@@ -2665,7 +2665,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 			<label class="pn-upload-area" for="pn-img-file-input">
 				<i class="fas fa-cloud-upload-alt pn-upload-icon"></i>
 				Click to choose an image
-				<small>JPG, GIF, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
+				<small>JPG, GIF, PNG &middot; High-resolution welcome &mdash; very large images are optimized automatically</small>
 			</label>
 			<input type="file" id="pn-img-file-input" accept=".jpg,.jpeg,.gif,.png,image/jpeg,image/gif,image/png" style="display:none;" />
 			<div id="pn-img-resize-notice" style="font-size:12px;color:#888;min-height:16px;"></div>

@@ -14,698 +14,932 @@
  * You must do that on your own time.
  ***/
 
-define( 'CFG_SERVICE', 'Service' );
-define( 'CFG_APP', 'Application' );
-define( 'CFG_KINGDOM', 'Kingdom' );
-define( 'CFG_PARK', 'Park' );
-define( 'CFG_EVENT', 'Event' );
-define( 'CFG_TOURNAMENT', 'Tournament' );
+define('CFG_SERVICE', 'Service');
+define('CFG_APP', 'Application');
+define('CFG_KINGDOM', 'Kingdom');
+define('CFG_PARK', 'Park');
+define('CFG_EVENT', 'Event');
+define('CFG_TOURNAMENT', 'Tournament');
 
-define( 'CFG_ADD', 'Add' );
-define( 'CFG_REMOVE', 'Remove' );
-define( 'CFG_EDIT', 'Edit' );
+define('CFG_ADD', 'Add');
+define('CFG_REMOVE', 'Remove');
+define('CFG_EDIT', 'Edit');
 
-function html_encode( $string )
+function html_encode($string)
 {
-	return htmlentities( $string, ENT_QUOTES | ENT_HTML5, "UTF-8", false );
+    return htmlentities($string, ENT_QUOTES | ENT_HTML5, "UTF-8", false);
 }
 
-function html_decode( $string )
+function html_decode($string)
 {
-	return html_entity_decode( $string, ENT_QUOTES | ENT_HTML5, "UTF-8" );
+    return html_entity_decode($string, ENT_QUOTES | ENT_HTML5, "UTF-8");
 }
 
-function trimlen( $text )
+function trimlen($text)
 {
-	return strlen( trim( $text ) ) > 0;
+    return strlen(trim($text)) > 0;
 }
 
-function valid_id( $id )
+function valid_id($id)
 {
-	return is_numeric( $id ) && $id > 0;
+    return is_numeric($id) && $id > 0;
 }
 
-function push_stack( $a, $e )
+function push_stack($a, $e)
 {
-	array_push( $a, $e );
-	return $a;
+    array_push($a, $e);
+    return $a;
 }
 
-function strip_tags_r( $val )
+function strip_tags_r($val)
 {
-	return is_array( $val ) ?
-		array_map( 'strip_tags_r', $val ) :
-		strip_tags( $val );
+    return is_array($val) ?
+        array_map('strip_tags_r', $val) :
+        strip_tags($val);
 }
 
 // Encode a string to URL-safe base64
-function encodeBase64UrlSafe( $value )
+function encodeBase64UrlSafe($value)
 {
-	return str_replace( [ '+', '/' ], [ '-', '_' ],
-		base64_encode( $value ) );
+    return str_replace(
+        [ '+', '/' ],
+        [ '-', '_' ],
+        base64_encode($value)
+    );
 }
 
 // Decode a string from URL-safe base64
-function decodeBase64UrlSafe( $value )
+function decodeBase64UrlSafe($value)
 {
-	return base64_decode( str_replace( [ '-', '_' ], [ '+', '/' ],
-		$value ) );
+    return base64_decode(str_replace(
+        [ '-', '_' ],
+        [ '+', '/' ],
+        $value
+    ));
 }
 
 // Sign a URL with a given crypto key
 // Note that this URL must be properly URL-encoded
-function signUrl( $myUrlToSign, $privateKey )
+function signUrl($myUrlToSign, $privateKey)
 {
-	return $myUrlToSign;
-	// parse the url
-	$url = parse_url( $myUrlToSign );
+    return $myUrlToSign;
+    // parse the url
+    $url = parse_url($myUrlToSign);
 
-	$urlPartToSign = $url[ 'path' ] . "?" . $url[ 'query' ];
+    $urlPartToSign = $url[ 'path' ] . "?" . $url[ 'query' ];
 
-	// Decode the private key into its binary format
-	$decodedKey = decodeBase64UrlSafe( $privateKey );
+    // Decode the private key into its binary format
+    $decodedKey = decodeBase64UrlSafe($privateKey);
 
-	// Create a signature using the private key and the URL-encoded
-	// string using HMAC SHA1. This signature will be binary.
-	$signature = hash_hmac( "sha1", $urlPartToSign, $decodedKey, true );
+    // Create a signature using the private key and the URL-encoded
+    // string using HMAC SHA1. This signature will be binary.
+    $signature = hash_hmac("sha1", $urlPartToSign, $decodedKey, true);
 
-	$encodedSignature = encodeBase64UrlSafe( $signature );
+    $encodedSignature = encodeBase64UrlSafe($signature);
 
-	return $myUrlToSign . "&signature=" . $encodedSignature;
+    return $myUrlToSign . "&signature=" . $encodedSignature;
 }
 
 class Common
 {
+    public static $rate_limit;
+    public static $init;
 
-  public static $rate_limit;
-  public static $init;
-  
-	public function __construct()
-	{
-      global $DB;
-      global $LOG;
-      $this->log = $LOG;
-      $this->db = $DB;
-      $this->config = new yapo( $this->db, DB_PREFIX . 'configuration' );
-      $this->officer = new yapo( $this->db, DB_PREFIX . 'officer' );
-      $this->authorization = new yapo( $this->db, DB_PREFIX . 'authorization' );
-      if (Common::$init != 'init') {
-        Common::$rate_limit = new yapo( $this->db, DB_PREFIX . 'rate_limit' );
-        Common::$init = 'init';
-      }
-	}
-
-  public static function RateLimit($service, $limit = 20, $per = "+1 week") {
-    Common::$rate_limit->clear();
-    Common::$rate_limit->ip_address = $_SERVER['REMOTE_ADDR'];
-    Common::$rate_limit->service = $service;
-    if (Common::$rate_limit->find()) {
-      if (strtotime(Common::$rate_limit->expires) > time()) {
-        if (Common::$rate_limit->count > $limit) {
-          return false; 
+    public function __construct()
+    {
+        global $DB;
+        global $LOG;
+        $this->log = $LOG;
+        $this->db = $DB;
+        $this->config = new yapo($this->db, DB_PREFIX . 'configuration');
+        $this->officer = new yapo($this->db, DB_PREFIX . 'officer');
+        $this->authorization = new yapo($this->db, DB_PREFIX . 'authorization');
+        if (Common::$init != 'init') {
+            Common::$rate_limit = new yapo($this->db, DB_PREFIX . 'rate_limit');
+            Common::$init = 'init';
         }
-        Common::$rate_limit->count = Common::$rate_limit->count + 1;
+    }
+
+    public static function RateLimit($service, $limit = 20, $per = "+1 week")
+    {
+        Common::$rate_limit->clear();
+        Common::$rate_limit->ip_address = $_SERVER['REMOTE_ADDR'];
+        Common::$rate_limit->service = $service;
+        if (Common::$rate_limit->find()) {
+            if (strtotime(Common::$rate_limit->expires) > time()) {
+                if (Common::$rate_limit->count > $limit) {
+                    return false;
+                }
+                Common::$rate_limit->count = Common::$rate_limit->count + 1;
+                Common::$rate_limit->save();
+                return true;
+            } else {
+                Common::$rate_limit->delete();
+            }
+        }
+        Common::$rate_limit->clear();
+        Common::$rate_limit->ip_address = $_SERVER['REMOTE_ADDR'];
+        Common::$rate_limit->count = 1;
+        Common::$rate_limit->service = $service;
+        Common::$rate_limit->expires = date("Y-m-d H:i:s", strtotime($per));
         Common::$rate_limit->save();
         return true;
-      } else {
-        Common::$rate_limit->delete(); 
-      }
     }
-    Common::$rate_limit->clear();
-    Common::$rate_limit->ip_address = $_SERVER['REMOTE_ADDR'];
-    Common::$rate_limit->count = 1;
-    Common::$rate_limit->service = $service;
-    Common::$rate_limit->expires = date("Y-m-d H:i:s", strtotime($per));
-    Common::$rate_limit->save();
-    return true;
-  }
-  
-	public static function Geocode( $address, $city, $state, $postal_code, $geocode = null ) {
-		$c = new Common();
-		
-		if (!Common::RateLimit('geocode', 1000, $per = "+1 day"))
-			return array( "You have exceeded your rate limit" );
-		
-		logtrace( "Geocode", [ $address, $city, $state, $postal_code, $geocode ] );
-		if ( strlen( $geocode ) > 0 ) {
-			$latlng = urlencode( str_replace( ' ', '', $geocode ) );
-			$geocodeURL = signUrl( "https://maps.googleapis.com/maps/api/geocode/json?latlng=$latlng&sensor=false&key=" . GOOGLE_MAPS_ACCESS_API_KEY, GOOGLE_MAPS_API_KEY );
-		} else {
-			$address = urlencode( $address . ', ' . $city . ', ' . $state . ', ' . $postal_code );
-			$geocodeURL = signUrl( "https://maps.googleapis.com/maps/api/geocode/json?address=$address&sensor=false&key=" . GOOGLE_MAPS_ACCESS_API_KEY, GOOGLE_MAPS_API_KEY );
-		}
-		$ch = curl_init( $geocodeURL );
-		curl_setopt($ch, CURLOPT_REFERER, 'https://amtgard.com/ork');
-		curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
-		curl_setopt( $ch, CURLOPT_RETURNTRANSFER, 1 );
-		$result = curl_exec( $ch );
-		$httpCode = curl_getinfo( $ch, CURLINFO_HTTP_CODE );
-		curl_close( $ch );
-		$details = [ ];
-		logtrace( "Geocode: Processing.", array( $httpCode, $result ));
-		if ( $httpCode == 200 ) {
-			$geocode = json_decode( $result );
-			logtrace( "Geocode: Processing.", $geocode );
-			$lat = $geocode->results[ 0 ]->geometry->location->lat;
-			$lng = $geocode->results[ 0 ]->geometry->location->lng;
-			$formatted_address = $geocode->results[ 0 ]->formatted_address;
-			$details[ 'Address' ] = $formatted_address;
-			$geo_status = $geocode->status;
-			$location_type = $geocode->results[ 0 ]->geometry->location_type;
-			$details[ 'Geocode' ] = $result;
-			$details[ 'Location' ] = json_encode( $geocode->results[ 0 ]->geometry );
-			if ( is_array( $geocode->results[ 0 ]->address_components ) ) {
-				foreach ( $geocode->results[ 0 ]->address_components as $k => $component ) {
-					switch ( $component->types[ 0 ] ) {
-						case 'locality':
-							if ( $component->types[ 1 ] == 'political' )
-								$details[ 'City' ] = $component->long_name;
-							break;
-						case 'administrative_area_level_1':
-							if ( $component->types[ 1 ] == 'political' )
-								$details[ 'Province' ] = $component->long_name;
-							break;
-						case 'postal_code':
-							$details[ 'PostalCode' ] = $component->long_name;
-							break;
-					}
-				}
-			}
-			logtrace( "Geocode: Details.", $details );
-			return $details;
-		} else {
-			logtrace( "Geocode: failed.", [ ] );
-			return false;
-		}
-	}
 
-	public static function replace_links( $text )
-	{
+    public static function Geocode($address, $city, $state, $postal_code, $geocode = null)
+    {
+        $c = new Common();
 
-		return preg_replace( '@(https?://([-\w\.]+[-\w])+(:\d+)?(/([\w/_\.#-]*(\?\S+)?[^\.\s])?)?)@', '<a href="$1" target="_blank">$1</a>', $text );
+        if (!Common::RateLimit('geocode', 1000, $per = "+1 day")) {
+            return array( "You have exceeded your rate limit" );
+        }
 
-	}
+        logtrace("Geocode", [ $address, $city, $state, $postal_code, $geocode ]);
+        if (strlen($geocode) > 0) {
+            $latlng = urlencode(str_replace(' ', '', $geocode));
+            $geocodeURL = signUrl("https://maps.googleapis.com/maps/api/geocode/json?latlng=$latlng&sensor=false&key=" . GOOGLE_MAPS_ACCESS_API_KEY, GOOGLE_MAPS_API_KEY);
+        } else {
+            $address = urlencode($address . ', ' . $city . ', ' . $state . ', ' . $postal_code);
+            $geocodeURL = signUrl("https://maps.googleapis.com/maps/api/geocode/json?address=$address&sensor=false&key=" . GOOGLE_MAPS_ACCESS_API_KEY, GOOGLE_MAPS_API_KEY);
+        }
+        $ch = curl_init($geocodeURL);
+        curl_setopt($ch, CURLOPT_REFERER, 'https://amtgard.com/ork');
+        curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        $result = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        $details = [ ];
+        logtrace("Geocode: Processing.", array( $httpCode, $result ));
+        if ($httpCode == 200) {
+            $geocode = json_decode($result);
+            logtrace("Geocode: Processing.", $geocode);
+            $lat = $geocode->results[ 0 ]->geometry->location->lat;
+            $lng = $geocode->results[ 0 ]->geometry->location->lng;
+            $formatted_address = $geocode->results[ 0 ]->formatted_address;
+            $details[ 'Address' ] = $formatted_address;
+            $geo_status = $geocode->status;
+            $location_type = $geocode->results[ 0 ]->geometry->location_type;
+            $details[ 'Geocode' ] = $result;
+            $details[ 'Location' ] = json_encode($geocode->results[ 0 ]->geometry);
+            if (is_array($geocode->results[ 0 ]->address_components)) {
+                foreach ($geocode->results[ 0 ]->address_components as $k => $component) {
+                    switch ($component->types[ 0 ]) {
+                        case 'locality':
+                            if ($component->types[ 1 ] == 'political') {
+                                $details[ 'City' ] = $component->long_name;
+                            }
+                            break;
+                        case 'administrative_area_level_1':
+                            if ($component->types[ 1 ] == 'political') {
+                                $details[ 'Province' ] = $component->long_name;
+                            }
+                            break;
+                        case 'postal_code':
+                            $details[ 'PostalCode' ] = $component->long_name;
+                            break;
+                    }
+                }
+            }
+            logtrace("Geocode: Details.", $details);
+            return $details;
+        } else {
+            logtrace("Geocode: failed.", [ ]);
+            return false;
+        }
+    }
 
-	public static function url_exists( $url )
-	{
-		// Version 4.x supported
-		$handle = curl_init( $url );
-		if ( false === $handle ) {
-			return false;
-		}
-		curl_setopt( $handle, CURLOPT_HEADER, false );
-		curl_setopt( $handle, CURLOPT_FAILONERROR, true );  // this works
-		curl_setopt( $handle, CURLOPT_HTTPHEADER, [ "User-Agent: Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.15) Gecko/20080623 Firefox/2.0.0.15" ] ); // request as if Firefox
-		curl_setopt( $handle, CURLOPT_NOBODY, true );
-		curl_setopt( $handle, CURLOPT_RETURNTRANSFER, false );
-		$connectable = curl_exec( $handle );
-		curl_close( $handle );
-		return $connectable;
-	}
+    public static function replace_links($text)
+    {
 
-	public static function exif_to_mime( $type, $filename = null )
-	{
-		switch ( $type ) {
-			case IMAGETYPE_GIF:
-				return 'image/gif';
-			case IMAGETYPE_JPEG:
-				return 'image/jpeg';
-			case IMAGETYPE_PNG:
-				return 'image/png';
-		}
-		if ( !is_null( $filename ) ) {
-			$pi = pathinfo( $filename );
-			switch ( strtoupper( $pi[ 'extension' ] ) ) {
-				case 'GIF':
-					return 'image/gif';
-				case 'JPEG':
-				case 'JPG':
-					return 'image/jpeg';
-				case 'PNG':
-					return 'image/png';
-			}
-		}
-		return 'image/fuckyou';
-	}
+        return preg_replace('@(https?://([-\w\.]+[-\w])+(:\d+)?(/([\w/_\.#-]*(\?\S+)?[^\.\s])?)?)@', '<a href="$1" target="_blank">$1</a>', $text);
 
-	public static function is_pdf_mime_type( $type )
-	{
-		switch ( strtoupper( $type ) ) {
-			case 'APPLICATION/PDF':
-			case 'APPLICATION/X-PDF':
-				return true;
-		}
-		return false;
-	}
+    }
 
-	public static function gd_has_transparency( $gd )
-	{
-		// Check palette-based transparency (GIF)
-		if ( imagecolortransparent( $gd ) >= 0 ) {
-			return true;
-		}
-		// Sample a grid of pixels for alpha channel transparency (PNG)
-		$w = imagesx( $gd );
-		$h = imagesy( $gd );
-		$step_x = max( 1, (int)( $w / 16 ) );
-		$step_y = max( 1, (int)( $h / 16 ) );
-		for ( $x = 0; $x < $w; $x += $step_x ) {
-			for ( $y = 0; $y < $h; $y += $step_y ) {
-				$rgba = imagecolorsforindex( $gd, imagecolorat( $gd, $x, $y ) );
-				if ( $rgba['alpha'] > 0 ) {
-					return true;
-				}
-			}
-		}
-		return false;
-	}
+    public static function url_exists($url)
+    {
+        // Version 4.x supported
+        $handle = curl_init($url);
+        if (false === $handle) {
+            return false;
+        }
+        curl_setopt($handle, CURLOPT_HEADER, false);
+        curl_setopt($handle, CURLOPT_FAILONERROR, true);  // this works
+        curl_setopt($handle, CURLOPT_HTTPHEADER, [ "User-Agent: Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.15) Gecko/20080623 Firefox/2.0.0.15" ]); // request as if Firefox
+        curl_setopt($handle, CURLOPT_NOBODY, true);
+        curl_setopt($handle, CURLOPT_RETURNTRANSFER, false);
+        $connectable = curl_exec($handle);
+        curl_close($handle);
+        return $connectable;
+    }
 
-	/**
-	 * Crop fully-transparent rows/columns from the edges of a GD image.
-	 * Pixel-accurate (imagecrop copies verbatim — no resampling, no aspect
-	 * distortion). Returns the original resource untouched if there is no
-	 * transparent border to trim, the image is fully transparent, or any
-	 * step fails. Alpha channel is preserved on the returned resource.
-	 *
-	 * $alpha_threshold: GD alpha is 0 (opaque) to 127 (transparent). A pixel
-	 * counts as "content" if its alpha is LESS than this value. Default 120
-	 * tolerates faint anti-alias fringe without eating real strokes.
-	 */
-	public static function gd_trim_transparent( $gd, $alpha_threshold = 120 )
-	{
-		if ( ! $gd ) return $gd;
-		$w = imagesx( $gd );
-		$h = imagesy( $gd );
-		if ( $w < 2 || $h < 2 ) return $gd;
+    public static function exif_to_mime($type, $filename = null)
+    {
+        switch ($type) {
+            case IMAGETYPE_GIF:
+                return 'image/gif';
+            case IMAGETYPE_JPEG:
+                return 'image/jpeg';
+            case IMAGETYPE_PNG:
+                return 'image/png';
+        }
+        if (!is_null($filename)) {
+            $pi = pathinfo($filename);
+            switch (strtoupper($pi[ 'extension' ])) {
+                case 'GIF':
+                    return 'image/gif';
+                case 'JPEG':
+                case 'JPG':
+                    return 'image/jpeg';
+                case 'PNG':
+                    return 'image/png';
+            }
+        }
+        return 'image/fuckyou';
+    }
 
-		$top = -1; $bottom = -1; $left = $w; $right = -1;
+    public static function is_pdf_mime_type($type)
+    {
+        switch (strtoupper($type)) {
+            case 'APPLICATION/PDF':
+            case 'APPLICATION/X-PDF':
+                return true;
+        }
+        return false;
+    }
 
-		for ( $y = 0; $y < $h; $y++ ) {
-			for ( $x = 0; $x < $w; $x++ ) {
-				$rgba = imagecolorsforindex( $gd, imagecolorat( $gd, $x, $y ) );
-				if ( $rgba['alpha'] < $alpha_threshold ) {
-					if ( $top === -1 ) $top = $y;
-					$bottom = $y;
-					if ( $x < $left )  $left  = $x;
-					if ( $x > $right ) $right = $x;
-				}
-			}
-		}
+    public static function gd_has_transparency($gd)
+    {
+        // Check palette-based transparency (GIF)
+        if (imagecolortransparent($gd) >= 0) {
+            return true;
+        }
+        // Sample a grid of pixels for alpha channel transparency (PNG)
+        $w = imagesx($gd);
+        $h = imagesy($gd);
+        $step_x = max(1, (int)($w / 16));
+        $step_y = max(1, (int)($h / 16));
+        for ($x = 0; $x < $w; $x += $step_x) {
+            for ($y = 0; $y < $h; $y += $step_y) {
+                $rgba = imagecolorsforindex($gd, imagecolorat($gd, $x, $y));
+                if ($rgba['alpha'] > 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 
-		// Fully transparent or nothing found — leave image alone.
-		if ( $top === -1 || $right === -1 ) return $gd;
+    /**
+     * Crop fully-transparent rows/columns from the edges of a GD image.
+     * Pixel-accurate (imagecrop copies verbatim — no resampling, no aspect
+     * distortion). Returns the original resource untouched if there is no
+     * transparent border to trim, the image is fully transparent, or any
+     * step fails. Alpha channel is preserved on the returned resource.
+     *
+     * $alpha_threshold: GD alpha is 0 (opaque) to 127 (transparent). A pixel
+     * counts as "content" if its alpha is LESS than this value. Default 120
+     * tolerates faint anti-alias fringe without eating real strokes.
+     */
+    public static function gd_trim_transparent($gd, $alpha_threshold = 120)
+    {
+        if (! $gd) {
+            return $gd;
+        }
+        $w = imagesx($gd);
+        $h = imagesy($gd);
+        if ($w < 2 || $h < 2) {
+            return $gd;
+        }
 
-		// Already tight — no trim needed.
-		if ( $top === 0 && $left === 0 && $bottom === $h - 1 && $right === $w - 1 ) {
-			return $gd;
-		}
+        $top = -1;
+        $bottom = -1;
+        $left = $w;
+        $right = -1;
 
-		$rect = array(
-			'x'      => $left,
-			'y'      => $top,
-			'width'  => $right - $left + 1,
-			'height' => $bottom - $top + 1,
-		);
+        for ($y = 0; $y < $h; $y++) {
+            for ($x = 0; $x < $w; $x++) {
+                $rgba = imagecolorsforindex($gd, imagecolorat($gd, $x, $y));
+                if ($rgba['alpha'] < $alpha_threshold) {
+                    if ($top === -1) {
+                        $top = $y;
+                    }
+                    $bottom = $y;
+                    if ($x < $left) {
+                        $left  = $x;
+                    }
+                    if ($x > $right) {
+                        $right = $x;
+                    }
+                }
+            }
+        }
 
-		$cropped = imagecrop( $gd, $rect );
-		if ( $cropped === false ) return $gd;
+        // Fully transparent or nothing found — leave image alone.
+        if ($top === -1 || $right === -1) {
+            return $gd;
+        }
 
-		imagealphablending( $cropped, false );
-		imagesavealpha( $cropped, true );
-		return $cropped;
-	}
+        // Already tight — no trim needed.
+        if ($top === 0 && $left === 0 && $bottom === $h - 1 && $right === $w - 1) {
+            return $gd;
+        }
 
-	public static function resolve_image_ext( $dir_base, $name )
-	{
-		if ( file_exists( $dir_base . $name . '.png' ) ) {
-			return $name . '.png';
-		}
-		return $name . '.jpg';
-	}
+        $rect = array(
+            'x'      => $left,
+            'y'      => $top,
+            'width'  => $right - $left + 1,
+            'height' => $bottom - $top + 1,
+        );
 
-	public static function supported_mime_types( $type )
-	{
-		switch ( strtoupper( $type ) ) {
-			case 'IMAGE/JPEG':
-			case 'IMAGE/GIF':
-			case 'IMAGE/PNG':
-				return true;
-			case 'APPLICATION/PDF':
-			case 'APPLICATION/X-PDF':
-				return true;
-		}
-		return false;
-	}
+        $cropped = imagecrop($gd, $rect);
+        if ($cropped === false) {
+            return $gd;
+        }
 
-	public static function make_safe_html( $text )
-	{
-		/*
+        imagealphablending($cropped, false);
+        imagesavealpha($cropped, true);
+        return $cropped;
+    }
+
+    /**
+     * Downscale a GD image so its longest edge is at most $max_edge px,
+     * preserving aspect ratio via imagecopyresampled onto a fresh truecolor
+     * canvas with alpha preserved. NEVER upscales: if the source already
+     * fits within $max_edge the SAME resource is returned untouched (mirrors
+     * gd_trim_transparent's "leave image alone" convention), so callers must
+     * compare identity before destroying the result.
+     */
+    public static function gd_scale_to_max_edge($gd, $max_edge)
+    {
+        if (! $gd) {
+            return $gd;
+        }
+        $w = imagesx($gd);
+        $h = imagesy($gd);
+        $longest = max($w, $h);
+
+        // No upscale — source already within bound, return untouched.
+        if ($longest <= $max_edge) {
+            return $gd;
+        }
+
+        $scale = $max_edge / $longest;
+        $new_w = max(1, (int)round($w * $scale));
+        $new_h = max(1, (int)round($h * $scale));
+
+        $canvas = imagecreatetruecolor($new_w, $new_h);
+        imagealphablending($canvas, false);
+        imagesavealpha($canvas, true);
+        imagecopyresampled($canvas, $gd, 0, 0, 0, 0, $new_w, $new_h, $w, $h);
+        return $canvas;
+    }
+
+    /**
+     * Whether GD was built with WebP encode support. Memoized per request so
+     * the function_exists probe runs at most once.
+     */
+    public static function webp_available()
+    {
+        static $checked = null;
+        if ($checked === null) {
+            $checked = function_exists('imagewebp');
+        }
+        return $checked;
+    }
+
+    /**
+     * Write a GD image to $path_no_ext with the extension implied by $format.
+     * 'png' -> .png (alpha preserved), 'jpeg'/'jpg' -> .jpg (default q92),
+     * 'webp' -> .webp (default q82). Returns the extension string actually
+     * written ('png'|'jpg'|'webp') or false on unknown format / write failure.
+     */
+    public static function write_image($gd, $path_no_ext, $format, $quality = null)
+    {
+        switch (strtolower($format)) {
+            case 'png':
+                imagealphablending($gd, false);
+                imagesavealpha($gd, true);
+                return imagepng($gd, $path_no_ext . '.png') ? 'png' : false;
+            case 'jpeg':
+            case 'jpg':
+                return imagejpeg($gd, $path_no_ext . '.jpg', $quality ?? 92) ? 'jpg' : false;
+            case 'webp':
+                // WebP carries alpha — keep it in case the source is transparent.
+                imagealphablending($gd, false);
+                imagesavealpha($gd, true);
+                return imagewebp($gd, $path_no_ext . '.webp', $quality ?? 82) ? 'webp' : false;
+        }
+        return false;
+    }
+
+    /**
+     * Encode a GD image to an in-memory buffer and return the byte length of
+     * the encoded result WITHOUT writing to disk. Lets storage sites measure
+     * whether a prospective master would exceed the ~6 MB reject ceiling
+     * before committing it. Returns false on unknown format.
+     */
+    public static function encode_size($gd, $format, $quality = null)
+    {
+        ob_start();
+        switch (strtolower($format)) {
+            case 'png':
+                imagealphablending($gd, false);
+                imagesavealpha($gd, true);
+                imagepng($gd, null);
+                break;
+            case 'jpeg':
+            case 'jpg':
+                imagejpeg($gd, null, $quality ?? 92);
+                break;
+            case 'webp':
+                imagealphablending($gd, false);
+                imagesavealpha($gd, true);
+                imagewebp($gd, null, $quality ?? 82);
+                break;
+            default:
+                ob_end_clean();
+                return false;
+        }
+        return strlen(ob_get_clean());
+    }
+
+    /**
+     * Generate the fixed rendition set alongside an already-written master,
+     * working from the same in-memory GD resource. For each tier
+     * (thumb 256px, display 1024px) the image is scaled and written as WebP
+     * when available, JPEG otherwise. Alpha is kept only when $preserve_alpha
+     * is true AND the delivery format carries it (webp); a transparent source
+     * falling back to JPEG is white-flattened first so it isn't composited on
+     * black. The caller's $gd is never destroyed — scaling produces copies,
+     * and the no-upscale case (which returns $gd itself) is left intact.
+     * Returns a map of tier => extension actually written, e.g.
+     * array( 'thumb' => 'webp', 'display' => 'jpg' ).
+     */
+    public static function generate_renditions($gd, $base_path_no_ext, $preserve_alpha)
+    {
+        $tiers = array( 'thumb' => 256, 'display' => 1024 );
+        $written = array();
+        $format = self::webp_available() ? 'webp' : 'jpeg';
+        $alpha_ok = $preserve_alpha && ($format === 'webp' || $format === 'png');
+
+        foreach ($tiers as $tier => $max_edge) {
+            $scaled = self::gd_scale_to_max_edge($gd, $max_edge);
+
+            // JPEG can't carry alpha — white-flatten a transparent source so
+            // it isn't rendered on a black background (same idiom the client
+            // canvas uses for opaque exports).
+            $target = $scaled;
+            $flattened = null;
+            if ($preserve_alpha && ! $alpha_ok) {
+                $fw = imagesx($scaled);
+                $fh = imagesy($scaled);
+                $flattened = imagecreatetruecolor($fw, $fh);
+                $white = imagecolorallocate($flattened, 255, 255, 255);
+                imagefill($flattened, 0, 0, $white);
+                imagecopy($flattened, $scaled, 0, 0, 0, 0, $fw, $fh);
+                $target = $flattened;
+            }
+
+            $ext = self::write_image($target, $base_path_no_ext . '_' . $tier, $format, null);
+            if ($ext !== false) {
+                $written[ $tier ] = $ext;
+            }
+
+            // Free the scaled copy, but never the caller's original resource
+            // (returned as-is by gd_scale_to_max_edge in the no-upscale case).
+            if ($scaled !== $gd) {
+                imagedestroy($scaled);
+            }
+            if ($flattened !== null) {
+                imagedestroy($flattened);
+            }
+        }
+
+        return $written;
+    }
+
+    public static function resolve_image_ext($dir_base, $name)
+    {
+        if (file_exists($dir_base . $name . '.png')) {
+            return $name . '.png';
+        }
+        return $name . '.jpg';
+    }
+
+    /**
+     * Size-aware read-side probe extending resolve_image_ext. $size null or
+     * 'master' behaves identically (probe .png then .jpg). 'thumb'/'display'
+     * probe the WebP rendition, then the JPEG rendition, then fall back to the
+     * master (covers images uploaded before the rendition backfill). Returns
+     * the resolved filename WITH extension, matching resolve_image_ext.
+     */
+    public static function resolve_media_ext($dir_base, $name, $size = null)
+    {
+        if ($size === 'thumb' || $size === 'display') {
+            if (file_exists($dir_base . $name . '_' . $size . '.webp')) {
+                return $name . '_' . $size . '.webp';
+            }
+            if (file_exists($dir_base . $name . '_' . $size . '.jpg')) {
+                return $name . '_' . $size . '.jpg';
+            }
+            // Rendition not yet generated — serve the master.
+            return self::resolve_image_ext($dir_base, $name);
+        }
+        return self::resolve_image_ext($dir_base, $name);
+    }
+
+    // Delete every on-disk variant of a stored image given its base path
+    // (directory + zero-padded name, no extension): both master extensions and
+    // all four rendition files. Used before writing a fresh master (a re-upload
+    // can flip formats) and when removing an image entirely, so no stale master
+    // or rendition lingers to be served by resolve_media_ext.
+    public static function unlink_image_set($base_path_no_ext)
+    {
+        foreach (array( '.jpg', '.png', '_thumb.webp', '_thumb.jpg', '_display.webp', '_display.jpg' ) as $suffix) {
+            if (file_exists($base_path_no_ext . $suffix)) {
+                unlink($base_path_no_ext . $suffix);
+            }
+        }
+    }
+
+    public static function supported_mime_types($type)
+    {
+        switch (strtoupper($type)) {
+            case 'IMAGE/JPEG':
+            case 'IMAGE/GIF':
+            case 'IMAGE/PNG':
+                return true;
+            case 'APPLICATION/PDF':
+            case 'APPLICATION/X-PDF':
+                return true;
+        }
+        return false;
+    }
+
+    public static function make_safe_html($text)
+    {
+        /*
         $text = preg_replace(
-        array( 
-          // Remove invisible content 
-            '@<head[^>]*?>.*?</head>@siu', 
-            '@<style[^>]*?>.*?</style>@siu', 
-            '@<script[^>]*?.*?</script>@siu', 
-            '@<object[^>]*?.*?</object>@siu', 
-            '@<embed[^>]*?.*?</embed>@siu', 
-            '@<applet[^>]*?.*?</applet>@siu', 
-            '@<noframes[^>]*?.*?</noframes>@siu', 
-            '@<noscript[^>]*?.*?</noscript>@siu', 
-            '@<noembed[^>]*?.*?</noembed>@siu', 
-          // Add line breaks before and after blocks 
-            '@</?((address)|(blockquote)|(center)|(del))@iu', 
-            '@</?((div)|(h[1-9])|(ins)|(isindex)|(p)|(pre))@iu', 
-            '@</?((dir)|(dl)|(dt)|(dd)|(li)|(menu)|(ol)|(ul))@iu', 
-            '@</?((table)|(th)|(td)|(caption))@iu', 
-            '@</?((form)|(button)|(fieldset)|(legend)|(input))@iu', 
-            '@</?((label)|(select)|(optgroup)|(option)|(textarea))@iu', 
-            '@</?((frameset)|(frame)|(iframe))@iu', 
-        ), 
-        array( 
-            ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',"$0", "$0", "$0", "$0", "$0", "$0","$0", "$0",), $text ); 
+        array(
+          // Remove invisible content
+            '@<head[^>]*?>.*?</head>@siu',
+            '@<style[^>]*?>.*?</style>@siu',
+            '@<script[^>]*?.*?</script>@siu',
+            '@<object[^>]*?.*?</object>@siu',
+            '@<embed[^>]*?.*?</embed>@siu',
+            '@<applet[^>]*?.*?</applet>@siu',
+            '@<noframes[^>]*?.*?</noframes>@siu',
+            '@<noscript[^>]*?.*?</noscript>@siu',
+            '@<noembed[^>]*?.*?</noembed>@siu',
+          // Add line breaks before and after blocks
+            '@</?((address)|(blockquote)|(center)|(del))@iu',
+            '@</?((div)|(h[1-9])|(ins)|(isindex)|(p)|(pre))@iu',
+            '@</?((dir)|(dl)|(dt)|(dd)|(li)|(menu)|(ol)|(ul))@iu',
+            '@</?((table)|(th)|(td)|(caption))@iu',
+            '@</?((form)|(button)|(fieldset)|(legend)|(input))@iu',
+            '@</?((label)|(select)|(optgroup)|(option)|(textarea))@iu',
+            '@</?((frameset)|(frame)|(iframe))@iu',
+        ),
+        array(
+            ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',"$0", "$0", "$0", "$0", "$0", "$0","$0", "$0",), $text );
       echo $text;
       */
-		$tags = '<p><br><h1><h2><h3><h4><li><ol><ul><b><i><blockquote>';
-		$text = Common::replace_links( Common::strip_attributes( strip_tags( $text, $tags ), $tags ) );
-		return $text;
-	}
+        $tags = '<p><br><h1><h2><h3><h4><li><ol><ul><b><i><blockquote>';
+        $text = Common::replace_links(Common::strip_attributes(strip_tags($text, $tags), $tags));
+        return $text;
+    }
 
-	public static function strip_attributes( $text, $tags )
-	{
+    public static function strip_attributes($text, $tags)
+    {
 
-		preg_match_all( "/<([^>]+)>/i", $tags, $allTags, PREG_PATTERN_ORDER );
+        preg_match_all("/<([^>]+)>/i", $tags, $allTags, PREG_PATTERN_ORDER);
 
-		foreach ( $allTags[ 1 ] as $tag ) {
-			$text = preg_replace( "/<" . $tag . "[^>]*>/i", "<" . $tag . ">", $text );
-		}
+        foreach ($allTags[ 1 ] as $tag) {
+            $text = preg_replace("/<" . $tag . "[^>]*>/i", "<" . $tag . ">", $text);
+        }
 
-		return $text;
-	}
+        return $text;
+    }
 
 
-	public function create_events( $kingdom_id, $park_id )
-	{
-		$this->event = new yapo( $this->db, DB_PREFIX . 'event' );
-		$this->create_event( $kingdom_id, $park_id, 'Summer Crown Qualifications' );
-		$this->create_event( $kingdom_id, $park_id, 'Summer Coronation' );
-		$this->create_event( $kingdom_id, $park_id, 'Summer Weaponmaster' );
-		$this->create_event( $kingdom_id, $park_id, 'Summer Dragonmaster' );
-		$this->create_event( $kingdom_id, $park_id, 'Summer Relic Quest' );
-		$this->create_event( $kingdom_id, $park_id, 'Summer Collegium' );
-		$this->create_event( $kingdom_id, $park_id, 'Summer Midreign' );
+    public function create_events($kingdom_id, $park_id)
+    {
+        $this->event = new yapo($this->db, DB_PREFIX . 'event');
+        $this->create_event($kingdom_id, $park_id, 'Summer Crown Qualifications');
+        $this->create_event($kingdom_id, $park_id, 'Summer Coronation');
+        $this->create_event($kingdom_id, $park_id, 'Summer Weaponmaster');
+        $this->create_event($kingdom_id, $park_id, 'Summer Dragonmaster');
+        $this->create_event($kingdom_id, $park_id, 'Summer Relic Quest');
+        $this->create_event($kingdom_id, $park_id, 'Summer Collegium');
+        $this->create_event($kingdom_id, $park_id, 'Summer Midreign');
 
-		$this->create_event( $kingdom_id, $park_id, 'Winter Crown Qualifications' );
-		$this->create_event( $kingdom_id, $park_id, 'Winter Coronation' );
-		$this->create_event( $kingdom_id, $park_id, 'Winter Weaponmaster' );
-		$this->create_event( $kingdom_id, $park_id, 'Winter Dragonmaster' );
-		$this->create_event( $kingdom_id, $park_id, 'Winter Relic Quest' );
-		$this->create_event( $kingdom_id, $park_id, 'Winter Collegium' );
-		$this->create_event( $kingdom_id, $park_id, 'Winter Midreign' );
-	}
+        $this->create_event($kingdom_id, $park_id, 'Winter Crown Qualifications');
+        $this->create_event($kingdom_id, $park_id, 'Winter Coronation');
+        $this->create_event($kingdom_id, $park_id, 'Winter Weaponmaster');
+        $this->create_event($kingdom_id, $park_id, 'Winter Dragonmaster');
+        $this->create_event($kingdom_id, $park_id, 'Winter Relic Quest');
+        $this->create_event($kingdom_id, $park_id, 'Winter Collegium');
+        $this->create_event($kingdom_id, $park_id, 'Winter Midreign');
+    }
 
-	public function create_event( $kingdom_id, $park_id, $name )
-	{
-		$this->event->clear();
-		$this->event->kingdom_id = $kingdom_id;
-		$this->event->park_id = $park_id;
-		$this->event->name = $name;
-		$this->event->modified = date( 'Y-m-d H:i:s' );
-		$this->event->save();
-	}
+    public function create_event($kingdom_id, $park_id, $name)
+    {
+        $this->event->clear();
+        $this->event->kingdom_id = $kingdom_id;
+        $this->event->park_id = $park_id;
+        $this->event->name = $name;
+        $this->event->modified = date('Y-m-d H:i:s');
+        $this->event->save();
+    }
 
-	public function create_park_titles( $kingdom_id )
-	{
-		$this->parktitle = new yapo( $this->db, DB_PREFIX . 'parktitle' );
-		$titles = [
-			[ 'Outpost', 10, 5, 1, 'month', 6 ],
-			[ 'Shire', 20, 5, 1, 'month', 6 ],
-			[ 'Barony', 30, 15, 13, 'month', 6 ],
-			[ 'Duchy', 40, 30, 28, 'month', 6 ],
-			[ 'Grand Duchy', 50, 60, 56, 'month', 6 ],
-		];
-		foreach ( $titles as $t => $detail ) {
-			$this->create_park_title( $kingdom_id, $detail );
-		}
-	}
+    public function create_park_titles($kingdom_id)
+    {
+        $this->parktitle = new yapo($this->db, DB_PREFIX . 'parktitle');
+        $titles = [
+            [ 'Outpost', 10, 5, 1, 'month', 6 ],
+            [ 'Shire', 20, 5, 1, 'month', 6 ],
+            [ 'Barony', 30, 15, 13, 'month', 6 ],
+            [ 'Duchy', 40, 30, 28, 'month', 6 ],
+            [ 'Grand Duchy', 50, 60, 56, 'month', 6 ],
+        ];
+        foreach ($titles as $t => $detail) {
+            $this->create_park_title($kingdom_id, $detail);
+        }
+    }
 
-	public function create_park_title( $kingdom_id, $detail )
-	{
-		$this->parktitle->clear();
-		$this->parktitle->kingdom_id = $kingdom_id;
-		$this->parktitle->title = $detail[ 0 ];
-		$this->parktitle->class = $detail[ 1 ];
-		$this->parktitle->minimumattendance = $detail[ 2 ];
-		$this->parktitle->minimumcutoff = $detail[ 3 ];
-		$this->parktitle->period = $detail[ 4 ];
-		$this->parktitle->period_length = $detail[ 5 ];
-		$this->parktitle->save();
-	}
+    public function create_park_title($kingdom_id, $detail)
+    {
+        $this->parktitle->clear();
+        $this->parktitle->kingdom_id = $kingdom_id;
+        $this->parktitle->title = $detail[ 0 ];
+        $this->parktitle->class = $detail[ 1 ];
+        $this->parktitle->minimumattendance = $detail[ 2 ];
+        $this->parktitle->minimumcutoff = $detail[ 3 ];
+        $this->parktitle->period = $detail[ 4 ];
+        $this->parktitle->period_length = $detail[ 5 ];
+        $this->parktitle->save();
+    }
 
-  public function find_matching_officer_award( $kingdom_id, $park_id, $role ) {
-    $monarch = array( 92, 70, 71, 72, 73, 74, 75, 76, 227, 234 );
-    $regent = array( 90, 77, 78, 79, 80, 228, 235 );
-    $prime_minister = array( 91, 81, 82, 83, 84, 205, 237 );
-    $champion = array( 89, 85, 86, 87, 88, 236 );
-    
-    $sql = "select ka.award_id, ka.kingdom_award_id, a.name as award_name, ka.name as kingdom_award_name
+    public function find_matching_officer_award($kingdom_id, $park_id, $role)
+    {
+        $monarch = array( 92, 70, 71, 72, 73, 74, 75, 76, 227, 234 );
+        $regent = array( 90, 77, 78, 79, 80, 228, 235 );
+        $prime_minister = array( 91, 81, 82, 83, 84, 205, 237 );
+        $champion = array( 89, 85, 86, 87, 88, 236 );
+
+        $sql = "select ka.award_id, ka.kingdom_award_id, a.name as award_name, ka.name as kingdom_award_name
               from " . DB_PREFIX . "award a left join " . DB_PREFIX . "kingdomaward ka on ka.award_id = a.award_id
             where ka.award_id in ";
-  }
-  
-	public function set_officer( $kingdom_id, $park_id, $new_officer_id, $role, $system = 0 )
-	{
-		$this->officer->clear();
-		if (isset($kingdom_id)) $this->officer->kingdom_id = $kingdom_id;
-		$this->officer->park_id = $park_id;
-		$this->officer->role = $role;
-		$this->officer->system = $system;
-		if ( $this->officer->find() ) {
-			if ( 'Champion' == $role || 'GMR' == $role) {
-				$this->officer->mundane_id = $new_officer_id;
-				$this->officer->save();
-			} else {
-				$this->authorization->clear();
-				$this->authorization->authorization_id = $this->officer->authorization_id;
-				if ( $this->authorization->find() ) {
-					$this->officer->mundane_id = $new_officer_id;
-					$this->authorization->mundane_id = $new_officer_id;
-					$this->officer->save();
-					$this->authorization->save();
-				}
-			}
-		}
-	}
+    }
 
-	public function create_officers( $kingdom_id, $park_id, $principality_id = 0 )
-	{
-		$this->create_officer( $kingdom_id, $park_id, 'Monarch', 'create' );
-		$this->create_officer( $kingdom_id, $park_id, 'Regent', 'create' );
-		$this->create_officer( $kingdom_id, $park_id, 'Prime Minister', 'create' );
-		$this->create_officer( $kingdom_id, $park_id, 'Champion', null );
-		$this->create_officer( $kingdom_id, $park_id, 'GMR', null );
-	}
+    public function set_officer($kingdom_id, $park_id, $new_officer_id, $role, $system = 0)
+    {
+        $this->officer->clear();
+        if (isset($kingdom_id)) {
+            $this->officer->kingdom_id = $kingdom_id;
+        }
+        $this->officer->park_id = $park_id;
+        $this->officer->role = $role;
+        $this->officer->system = $system;
+        if ($this->officer->find()) {
+            if ('Champion' == $role || 'GMR' == $role) {
+                $this->officer->mundane_id = $new_officer_id;
+                $this->officer->save();
+            } else {
+                $this->authorization->clear();
+                $this->authorization->authorization_id = $this->officer->authorization_id;
+                if ($this->authorization->find()) {
+                    $this->officer->mundane_id = $new_officer_id;
+                    $this->authorization->mundane_id = $new_officer_id;
+                    $this->officer->save();
+                    $this->authorization->save();
+                }
+            }
+        }
+    }
 
-	private function create_officer( $kingdom_id, $park_id, $role, $authorization, $system = 0, $principality_id = 0 )
-	{
-		$this->officer->clear();
-		$this->officer->kingdom_id = $kingdom_id;
-		$this->officer->park_id = $park_id;
-		$this->officer->role = $role;
-		$this->officer->system = $system;
-		$this->officer->modified = time();
-		if ( strlen( $authorization ) > 0 ) {
-			$A = new Authorization();
-			$r = $A->add_auth_h( [
-				'MundaneId' => 0,
-				'Type'      => $park_id > 0 ? 'Park' : 'Kingdom',
-				'Role'      => $authorization,
-				'Id'        => $park_id == 0 ? $kingdom_id : $park_id,
-			] );
-			if ( $r[ 'Status' ] == 0 ) {
-				$this->officer->authorization_id = $r[ 'Detail' ];
-			}
-		}
-		$this->officer->save();
-	}
+    public function create_officers($kingdom_id, $park_id, $principality_id = 0)
+    {
+        $this->create_officer($kingdom_id, $park_id, 'Monarch', 'create');
+        $this->create_officer($kingdom_id, $park_id, 'Regent', 'create');
+        $this->create_officer($kingdom_id, $park_id, 'Prime Minister', 'create');
+        $this->create_officer($kingdom_id, $park_id, 'Champion', null);
+        $this->create_officer($kingdom_id, $park_id, 'GMR', null);
+    }
 
-	public static function get_configs( $id, $type = CFG_KINGDOM )
-	{
-		global $DB;
-		$config = new yapo( $DB, DB_PREFIX . 'configuration' );
-		$config->clear();
-		$config->type = $type;
-		$config->id = $id;
-		$response = [ ];
-		if ( $config->find() ) {
-			do {
-				$response[ $config->key ] = [
-					'ConfigurationId' => $config->configuration_id,
-					'Type'            => $config->var_type,
-					'Key'             => $config->key,
-					'Value'           => json_decode( stripslashes( $config->value ) ),
-					'UserSetting'     => $config->user_setting,
-					'AllowedValues'   => json_decode( stripslashes( $config->allowed_values ) ),
-				];
-			} while ( $config->next() );
-		}
-		return $response;
-	}
+    private function create_officer($kingdom_id, $park_id, $role, $authorization, $system = 0, $principality_id = 0)
+    {
+        $this->officer->clear();
+        $this->officer->kingdom_id = $kingdom_id;
+        $this->officer->park_id = $park_id;
+        $this->officer->role = $role;
+        $this->officer->system = $system;
+        $this->officer->modified = time();
+        if (strlen($authorization) > 0) {
+            $A = new Authorization();
+            $r = $A->add_auth_h([
+                'MundaneId' => 0,
+                'Type'      => $park_id > 0 ? 'Park' : 'Kingdom',
+                'Role'      => $authorization,
+                'Id'        => $park_id == 0 ? $kingdom_id : $park_id,
+            ]);
+            if ($r[ 'Status' ] == 0) {
+                $this->officer->authorization_id = $r[ 'Detail' ];
+            }
+        }
+        $this->officer->save();
+    }
 
-	public function add_config( $requester_id, $type, $var_type, $id, $key, $value, $user_setting = 1, $allowed_values = null )
-	{
-		$this->log->Write( 'Configuration', $requester_id, LOG_ADD, [ $type, $id, $key, $value ] );
-		$this->config->clear();
-		$this->config->type = $type;
-		$this->config->var_type = $type;
-		$this->config->id = $id;
-		$this->config->key = $key;
-		$this->config->value = json_encode( $value );
-		$this->config->user_setting = $user_setting ? 1 : 0;
-		$this->config->allowed_values = json_encode( $allowed_values );
-		$this->config->modified = date( "Y-m-d H:i:s", time() );
-		$this->config->save();
-	}
+    public static function get_configs($id, $type = CFG_KINGDOM)
+    {
+        global $DB;
+        $config = new yapo($DB, DB_PREFIX . 'configuration');
+        $config->clear();
+        $config->type = $type;
+        $config->id = $id;
+        $response = [ ];
+        if ($config->find()) {
+            do {
+                $response[ $config->key ] = [
+                    'ConfigurationId' => $config->configuration_id,
+                    'Type'            => $config->var_type,
+                    'Key'             => $config->key,
+                    'Value'           => json_decode(stripslashes($config->value)),
+                    'UserSetting'     => $config->user_setting,
+                    'AllowedValues'   => json_decode(stripslashes($config->allowed_values)),
+                ];
+            } while ($config->next());
+        }
+        return $response;
+    }
 
-	public function remove_config( $requester_id, $config_id, $type, $id, $key )
-	{
-		$this->log->Write( 'Configuration', $requester_id, LOG_REMOVE, $config_id );
-		$this->config->clear();
-		$this->config->configuration_id = $config_id;
-		/* Why, because I like you!  If the caller is careful, we don't have to perform
-		 *	another layer of authentication here ... just hard code the caller's authority
-		 *	context via the appropriate $type, $id, and $key, and we won't be susceptible to cross-calling on configs
-		 * I mean, you didn't let the user specify ALL of this, did you?  Right?  You did the right
-		 *	thing and looked it up based on context?
-		 * I bet you didn't.  Christ, I can only do so much.
-		 */
-		$this->config->type = $type;
-		$this->config->id = $id;
-		$this->config->key = $key;
-		if ( $this->config->find() ) $this->config->delete();
-	}
+    public function add_config($requester_id, $type, $var_type, $id, $key, $value, $user_setting = 1, $allowed_values = null)
+    {
+        $this->log->Write('Configuration', $requester_id, LOG_ADD, [ $type, $id, $key, $value ]);
+        $this->config->clear();
+        $this->config->type = $type;
+        $this->config->var_type = $type;
+        $this->config->id = $id;
+        $this->config->key = $key;
+        $this->config->value = json_encode($value);
+        $this->config->user_setting = $user_setting ? 1 : 0;
+        $this->config->allowed_values = json_encode($allowed_values);
+        $this->config->modified = date("Y-m-d H:i:s", time());
+        $this->config->save();
+    }
 
-	public function update_config( $requester_id, $config_id, $type, $id, $key, $value )
-	{
-		$this->log->Write( 'Configuration', $requester_id, LOG_EDIT, [ $config_id, $type, $id, $key, $value ] );
-		$this->config->clear();
-		$this->config->configuration_id = $config_id;
-		// Ditto, above
-		$this->config->type = strlen( $type ) > 0 ? $type : $this->config->type;
-		$this->config->id = strlen( $id ) > 0 ? $id : $this->config->id;
-		if (strlen( $key ) > 0) {
-			$this->config->key = $key;
-		}
-		if ( $this->config->find() ) {
-			if ( $value !== null ) {
-				$allowed = json_decode( $this->config->allowed_values );
-				if ( is_array( $allowed ) ) {
-					$allow = true;
-					foreach ( $value as $v_key => $v_value ) {
-						foreach ( $allowed as $a_key => $a_value ) {
-							if ( $a_key == $v_key ) {
-								$allow = false;
-								foreach ( $v_key as $k => $allowance ) {
-									if ( $allowance == $v_value ) $allow = true;
-								}
-							}
-							if ( !$allow ) return false;
-						}
-					}
-				}
-				$this->config->value = json_encode( $value );
-			} else {
-				$this->config->value = json_encode( null );
-			}
-			$this->config->modified = date( "Y-m-d H:i:s", time() );
-			$this->config->save();
-		}
-	}
+    public function remove_config($requester_id, $config_id, $type, $id, $key)
+    {
+        $this->log->Write('Configuration', $requester_id, LOG_REMOVE, $config_id);
+        $this->config->clear();
+        $this->config->configuration_id = $config_id;
+        /* Why, because I like you!  If the caller is careful, we don't have to perform
+         *	another layer of authentication here ... just hard code the caller's authority
+         *	context via the appropriate $type, $id, and $key, and we won't be susceptible to cross-calling on configs
+         * I mean, you didn't let the user specify ALL of this, did you?  Right?  You did the right
+         *	thing and looked it up based on context?
+         * I bet you didn't.  Christ, I can only do so much.
+         */
+        $this->config->type = $type;
+        $this->config->id = $id;
+        $this->config->key = $key;
+        if ($this->config->find()) {
+            $this->config->delete();
+        }
+    }
+
+    public function update_config($requester_id, $config_id, $type, $id, $key, $value)
+    {
+        $this->log->Write('Configuration', $requester_id, LOG_EDIT, [ $config_id, $type, $id, $key, $value ]);
+        $this->config->clear();
+        $this->config->configuration_id = $config_id;
+        // Ditto, above
+        $this->config->type = strlen($type) > 0 ? $type : $this->config->type;
+        $this->config->id = strlen($id) > 0 ? $id : $this->config->id;
+        if (strlen($key) > 0) {
+            $this->config->key = $key;
+        }
+        if ($this->config->find()) {
+            if ($value !== null) {
+                $allowed = json_decode($this->config->allowed_values);
+                if (is_array($allowed)) {
+                    $allow = true;
+                    foreach ($value as $v_key => $v_value) {
+                        foreach ($allowed as $a_key => $a_value) {
+                            if ($a_key == $v_key) {
+                                $allow = false;
+                                foreach ($v_key as $k => $allowance) {
+                                    if ($allowance == $v_value) {
+                                        $allow = true;
+                                    }
+                                }
+                            }
+                            if (!$allow) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                $this->config->value = json_encode($value);
+            } else {
+                $this->config->value = json_encode(null);
+            }
+            $this->config->modified = date("Y-m-d H:i:s", time());
+            $this->config->save();
+        }
+    }
 
 }
 
 //http://www.codingforums.com/archive/index.php/t-180473.html
 class shortScale
 {
-	// Source: Wikipedia (http://en.wikipedia.org/wiki/Names_of_large_numbers)
-	private static $scale = [ '', 'thousand', 'million', 'billion', 'trillion', 'quadrillion', 'quintillion', 'sextillion', 'octillion', 'nonillion', 'decillion', 'undecillion', 'duodecillion', 'tredecillion', 'quattuordecillion', 'quindecillion', 'sexdecillion', 'septendecillion', 'octodecillion', 'noverndecillion', 'vigintillion' ];
-	private static $digit = [ '', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen' ];
-	private static $digith = [ '', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth', 'thirteenth', 'fourteenth', 'fiftheenth', 'sixteenth', 'seventeenth', 'eighteenth', 'nineteenth' ];
-	private static $ten = [ '', '', 'twenty', 'thirty', 'fourty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety' ];
-	private static $tenth = [ '', '', 'twentieth', 'thirtieth', 'fortieth', 'fiftieth', 'sixtieth', 'seventieth', 'eightieth', 'ninetieth' ];
+    // Source: Wikipedia (http://en.wikipedia.org/wiki/Names_of_large_numbers)
+    private static $scale = [ '', 'thousand', 'million', 'billion', 'trillion', 'quadrillion', 'quintillion', 'sextillion', 'octillion', 'nonillion', 'decillion', 'undecillion', 'duodecillion', 'tredecillion', 'quattuordecillion', 'quindecillion', 'sexdecillion', 'septendecillion', 'octodecillion', 'noverndecillion', 'vigintillion' ];
+    private static $digit = [ '', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen' ];
+    private static $digith = [ '', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth', 'thirteenth', 'fourteenth', 'fiftheenth', 'sixteenth', 'seventeenth', 'eighteenth', 'nineteenth' ];
+    private static $ten = [ '', '', 'twenty', 'thirty', 'fourty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety' ];
+    private static $tenth = [ '', '', 'twentieth', 'thirtieth', 'fortieth', 'fiftieth', 'sixtieth', 'seventieth', 'eightieth', 'ninetieth' ];
 
-	private static function floatToArray( $number, &$int, &$frac )
-	{
-		// Forced $number as (string), effectively to avoid (float) inprecision
-		@list( , $frac ) = explode( '.', $number );
-		if ( $frac || !is_numeric( $number ) || ( strlen( $number ) > 60 ) ) throw new Exception( 'Not a number or not a supported number type' );
-		// $int = explode(',', number_format(ltrim($number, '0'), 0, '', ',')); -- Buggy
-		$int = str_split( str_pad( $number, ceil( strlen( $number ) / 3 ) * 3, '0', STR_PAD_LEFT ), 3 );
-	}
+    private static function floatToArray($number, &$int, &$frac)
+    {
+        // Forced $number as (string), effectively to avoid (float) inprecision
+        @list(, $frac) = explode('.', $number);
+        if ($frac || !is_numeric($number) || (strlen($number) > 60)) {
+            throw new Exception('Not a number or not a supported number type');
+        }
+        // $int = explode(',', number_format(ltrim($number, '0'), 0, '', ',')); -- Buggy
+        $int = str_split(str_pad($number, ceil(strlen($number) / 3) * 3, '0', STR_PAD_LEFT), 3);
+    }
 
-	/* in retrospect ... this function was pretty easy */
-	public static function toDigith( $number )
-	{
-		if ( $number < 20 ) {
-			return $number . substr( self::$digith[ $number ], -2 );
-		} else {
-			self::floatToArray( $number, $int, $frac );
-			return $number . substr( self::$digith[ substr( $number, -1 ) ], -2 );
-		}
-	}
+    /* in retrospect ... this function was pretty easy */
+    public static function toDigith($number)
+    {
+        if ($number < 20) {
+            return $number . substr(self::$digith[ $number ], -2);
+        } else {
+            self::floatToArray($number, $int, $frac);
+            return $number . substr(self::$digith[ substr($number, -1) ], -2);
+        }
+    }
 
-	private static function thousandToEnglish( $number )
-	{
-		// Gets numbers from 0 to 999 and returns the cardinal English
-		$hundreds = floor( $number / 100 );
-		$tens = $number % 100;
-		$pre = ( $hundreds ? self::$digit[ $hundreds ] . ' hundred' : '' );
-		if ( $tens < 20 )
-			$post = self::$digit[ $tens ];
-		else
-			$post = trim( self::$ten[ floor( $tens / 10 ) ] . ' ' . self::$digit[ $tens % 10 ] );
-		if ( $pre && $post ) return $pre . ' and ' . $post;
-		return $pre . $post;
-	}
+    private static function thousandToEnglish($number)
+    {
+        // Gets numbers from 0 to 999 and returns the cardinal English
+        $hundreds = floor($number / 100);
+        $tens = $number % 100;
+        $pre = ($hundreds ? self::$digit[ $hundreds ] . ' hundred' : '');
+        if ($tens < 20) {
+            $post = self::$digit[ $tens ];
+        } else {
+            $post = trim(self::$ten[ floor($tens / 10) ] . ' ' . self::$digit[ $tens % 10 ]);
+        }
+        if ($pre && $post) {
+            return $pre . ' and ' . $post;
+        }
+        return $pre . $post;
+    }
 
-	private static function cardinalToOrdinal( $cardinal )
-	{
-		// Finds the last word in the cardinal arrays and replaces it with
-		// the entry from the ordinal arrays, or appends "th"
-		$words = explode( ' ', $cardinal );
-		$last = &$words[ count( $words ) - 1 ];
-		if ( in_array( $last, self::$digit ) ) {
-			$last = self::$digith[ array_search( $last, self::$digit ) ];
-		} elseif ( in_array( $last, self::$ten ) ) {
-			$last = self::$tenth[ array_search( $last, self::$ten ) ];
-		} elseif ( substr( $last, -2 ) != 'th' ) {
-			$last .= 'th';
-		}
-		return implode( ' ', $words );
-	}
+    private static function cardinalToOrdinal($cardinal)
+    {
+        // Finds the last word in the cardinal arrays and replaces it with
+        // the entry from the ordinal arrays, or appends "th"
+        $words = explode(' ', $cardinal);
+        $last = &$words[ count($words) - 1 ];
+        if (in_array($last, self::$digit)) {
+            $last = self::$digith[ array_search($last, self::$digit) ];
+        } elseif (in_array($last, self::$ten)) {
+            $last = self::$tenth[ array_search($last, self::$ten) ];
+        } elseif (substr($last, -2) != 'th') {
+            $last .= 'th';
+        }
+        return implode(' ', $words);
+    }
 
-	public static function toOrdinal( $number )
-	{
-		// Converts a xth format number to English. e.g. 22nd to twenty-second.
-		return trim( self::cardinalToOrdinal( self::toCardinal( $number ) ) );
-	}
+    public static function toOrdinal($number)
+    {
+        // Converts a xth format number to English. e.g. 22nd to twenty-second.
+        return trim(self::cardinalToOrdinal(self::toCardinal($number)));
+    }
 
-	public static function toCardinal( $number )
-	{
-		// Converts a number to English. e.g. 22 to twenty-two.
-		self::floatToArray( $number, $int, $frac );
-		$int = array_reverse( $int );
-		$english = [ ];
-		for ( $i = count( $int ) - 1; $i > -1; $i-- ) {
-			$englishnumber = self::thousandToEnglish( $int[ $i ] );
-			if ( $englishnumber )
-				$english[] = $englishnumber . ' ' . self::$scale[ $i ];
-		}
-		$post = array_pop( $english );
-		$pre = implode( ', ', $english );
-		if ( $pre && $post ) return trim( $pre . ' and ' . $post );
-		return trim( $pre . $post );
-	}
+    public static function toCardinal($number)
+    {
+        // Converts a number to English. e.g. 22 to twenty-two.
+        self::floatToArray($number, $int, $frac);
+        $int = array_reverse($int);
+        $english = [ ];
+        for ($i = count($int) - 1; $i > -1; $i--) {
+            $englishnumber = self::thousandToEnglish($int[ $i ]);
+            if ($englishnumber) {
+                $english[] = $englishnumber . ' ' . self::$scale[ $i ];
+            }
+        }
+        $post = array_pop($english);
+        $pre = implode(', ', $english);
+        if ($pre && $post) {
+            return trim($pre . ' and ' . $post);
+        }
+        return trim($pre . $post);
+    }
 }
-
-
-?>

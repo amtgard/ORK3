@@ -3,6 +3,9 @@
 <?php if (strlen($Error) > 0) : ?>
 	<div class='error-message'><?=$Error ?></div>
 <?php endif; ?>
+<?php if (!empty($Message)) : ?>
+	<div class='success-message'><?=$Message ?></div>
+<?php endif; ?>
 	<form class='form-container' method='post' action='<?=UIR ?>Admin/editkingdom/<?=$Kingdom_data['KingdomId'] ?>&Action=details' enctype='multipart/form-data'>
 		<div>
 			<span>Heraldry:</span>

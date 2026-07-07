@@ -425,7 +425,7 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 					<span class='nav-avatar-img-wrap'>
 						<?php if ($__navHasPhoto): ?>
 						<img class='nav-avatar-img'
-							src='<?= HTTP_PLAYER_IMAGE . Common::resolve_image_ext(DIR_PLAYER_IMAGE, $__navImgName) ?>'
+							src='<?= HTTP_PLAYER_IMAGE . Common::resolve_media_ext(DIR_PLAYER_IMAGE, $__navImgName, 'thumb') ?>'
 							onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block';"
 							alt=''
 						/><i class='fas fa-user-circle nav-avatar-fallback-icon'></i>

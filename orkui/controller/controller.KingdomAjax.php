@@ -112,9 +112,15 @@ class Controller_KingdomAjax extends Controller
             }
 
             $r = $this->Kingdom->set_kingdom_details($request);
-            echo $r['Status'] == 0
-                ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            if ($r['Status'] == 0) {
+                $ok = ['status' => 0];
+                if (!empty($r['Warning'])) {
+                    $ok['warning'] = $r['Warning'];
+                }
+                echo json_encode($ok);
+            } else {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            }
 
         } elseif ($action === 'setconfig') {
             $this->load_model('Kingdom');
