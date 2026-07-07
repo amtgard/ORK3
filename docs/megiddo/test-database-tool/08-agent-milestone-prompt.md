@@ -30,6 +30,15 @@ docs/megiddo/test-database-tool/ — read 10-cli-reference.md and 04-safety-vali
 
 Branch: megiddo/td-N. Commit: TD-N: <description>.
 
+## Procedure:
+
+1. Ensure prior working branch has all work staged and committed.
+2. Create a relevant working branch name for this work.
+3. Implement the milestone.
+4. Implement unit tests to 90% coverage and reasonable integ tests to cover this work
+5. Update the milestone checklist
+6. Stage and commit all work for these milestone(s) to the local working branch
+
 ## Do not
 
 - Add --database, --profile, --port, or --host flags to extract/render/apply
@@ -43,4 +52,3 @@ Branch: megiddo/td-N. Commit: TD-N: <description>.
 
 - `use prod` = app points at mirror (19306). `use dev` = app points at sandbox (19307).
 - On production: extract/render/apply/init all refuse; use dev refuses.
-- Maintainer fills ken_walker / avery_krouse mundane_id before TD-3.

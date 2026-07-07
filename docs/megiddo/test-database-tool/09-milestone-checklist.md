@@ -8,7 +8,7 @@
 - [x] No database CLI args on extract/render/apply
 - [x] Deployment tier guard documented
 - [x] `manifests/wiring.json5` — hardcoded mirror + sandbox
-- [ ] Maintainer fills `ken_walker` / `avery_krouse` mundane_id
+- [x] Maintainer fills `ken_walker` / `avery_krouse` mundane_id (43232 / 46193)
 - [ ] Maintainer review
 
 ---
@@ -30,14 +30,18 @@
 
 ## TD-3 — Extract
 
-- [ ] `bin/ork-db extract` — no args — always mirror 19306/ork
-- [ ] Refused on production tier
+- [x] `bin/ork-db extract` — no args — always mirror 19306/ork
+- [x] Refused on production tier
 
 ---
 
 ## TD-4 — Render
 
 - [ ] `bin/ork-db render` — no DB connection
+- [ ] Content seed from `fingerprints.json5` (persisted, not re-rolled per run)
+- [ ] `fixed_embedded` catalogs (e.g. `day_convert.sql`) included in composition
+- [ ] Kingdomaward: clone `ork_award` per fake kingdom + seed-stable extras
+- [ ] Configuration: sample extract + clone to fake kingdoms/parks
 - [ ] Refused on production tier
 
 ---
@@ -64,10 +68,12 @@
 
 ---
 
-## TD-8 — Migration classifier
+## TD-8 — Migration classifier + drift detection
 
 - [ ] `migration-classification.json5` complete
-- [ ] `schema-diff`
+- [ ] `drift-check --strict` — schema fingerprint + catalog hashes + unclassified migrations
+- [ ] CI runs `drift-check --strict` on every build
+- [ ] `schema-diff` — post-apply mirror vs sandbox DDL parity
 
 ---
 

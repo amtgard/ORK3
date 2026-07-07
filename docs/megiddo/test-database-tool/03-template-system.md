@@ -12,7 +12,7 @@ Compositional SQL rendering: stable templates for identity data, parameterized t
 | **Fragment** | A rendered snippet of SQL (one or more statements) |
 | **Composition** | Ordered assembly of fragments into a single apply script |
 | **Anchor date** | `anchor_date` — usually today; all shifting dates computed relative to this |
-| **Render seed** | `TEST_DB_RENDER_SEED` — controls random park/player counts |
+| **Content seed** | Persisted in `fingerprints.json5` — drives all "random" volume/name/assignment choices |
 | **Extract** | Pre-rendered SQL or JSON from dev DB inserted verbatim into templates |
 
 ---
@@ -28,7 +28,8 @@ templates/stable/
   kingdoms.json5          # 5 kingdoms — names, abbreviations, descriptions
   park_names.json5        # name pool for park generation
   fake_players.json5      # persona name pool
-  kingdom_award_clone.json5  # rules for cloning kingdomaward rows
+  kingdom_awards.json5      # clone ork_award → kingdomaward per fake kingdom + extras
+  configuration.json5       # clone sampled config keys to fake kingdoms/parks
 ```
 
 Example `kingdoms.json5`:
@@ -88,6 +89,23 @@ Example `kingdoms.json5`:
 
 Renderer sets `ork_kingdom.name` to `"{moniker} {name}"` (e.g. `Empire of Ashkara`).
 
+Example `kingdom_awards.json5`:
+
+```json5
+{
+  "clone_from_award": true,
+  "kingdom_ids": [9001, 9002, 9003, 9004, 9005],
+  "extras_per_kingdom": { "min": 2, "max": 8 },
+  "extra_name_pool": [
+    "Order of the Golden Quill",
+    "Shield of the Broken Crown",
+    "Mark of the Silent Herald"
+  ]
+}
+```
+
+Renderer emits one `ork_kingdomaward` row per `ork_award` × kingdom, then adds seed-stable extras drawn from the name pool (nonsense kingdom-specific awards for ladder/title tests).
+
 ### 2.2 Shifting (re-rendered per build)
 
 Temporal data expressed as **offsets**, not literals.
@@ -115,16 +133,25 @@ The renderer loops players × months and emits rows. `{{date}}` is computed:
 date = anchor_date - relativedelta(months=months_ago, days=random_weekday_offset)
 ```
 
-### 2.3 Verbatim (extracted catalogs)
+### 2.3 Fixed catalogs (Type 1)
+
+Two sub-sources — see [02-data-model.md](./02-data-model.md) §1:
 
 ```
 templates/catalogs/
   award.sql.tmpl          # body: {{EXTRACT:award}}
   class.sql.tmpl
-  configuration.sql.tmpl
+  day_convert.sql         # embedded static — 7 weekday rows, not extracted
 ```
 
-`{{EXTRACT:award}}` is replaced with contents of `extracted/award.sql` produced by `bin/ork-db extract`. If extract is missing, render fails with a clear error (no silent empty catalog).
+Configuration is **not** a verbatim catalog — see `templates/stable/configuration.json5` and `extracted/configuration_samples.json`.
+
+| Source | Mechanism |
+|--------|-----------|
+| `fixed_extract` | `{{EXTRACT:award}}` replaced with `extracted/award.sql` from `bin/ork-db extract` |
+| `fixed_embedded` | Static `.sql` checked in — render includes verbatim, no extract step |
+
+If an extract-backed catalog is missing, render fails with a clear error (no silent empty catalog).
 
 ### 2.4 Hybrid (real players)
 
@@ -140,9 +167,9 @@ templates/hybrid/
 {
   "players": [
     { "key": "admin", "assign_park": null, "keep_global_admin": true },
-    { "key": "megiddo", "assign_park": "random" },
-    { "key": "ken_walker", "assign_park": "random" },
-    { "key": "avery_krouse", "assign_park": "random" }
+    { "key": "megiddo", "assign_park": "seed" },
+    { "key": "ken_walker", "assign_park": "seed" },
+    { "key": "avery_krouse", "assign_park": "seed" }
   ]
 }
 ```
@@ -163,7 +190,7 @@ Apply script sections must respect FK order. `render.py` emits sections in this 
 | 4 | Schema migrations | filtered schema-only migrations |
 | 5 | T1 catalogs | verbatim extracts |
 | 6 | T2 kingdoms | `stable/kingdoms.json5` |
-| 7 | T2 parks | generated from kingdoms + seed |
+| 7 | T2 parks | generated from kingdoms + content seed |
 | 8 | T2 units (headers) | generated |
 | 9 | T4 real players | hybrid extract + assignment |
 | 10 | T2 fake players | generated |
@@ -173,9 +200,10 @@ Apply script sections must respect FK order. `render.py` emits sections in this 
 | 14 | T3 attendance | shifting `attendance.sql.tmpl` |
 | 15 | T3 unit memberships | generated |
 | 16 | T3 award instances | sparse generation |
-| 17 | T2 kingdomaward clones | stable rules × 5 kingdoms |
-| 18 | Canary + fingerprint rows | `canary.sql.tmpl` |
-| 19 | `SET FOREIGN_KEY_CHECKS=1;` | boilerplate |
+| 17 | T2 kingdomaward | clone `ork_award` × kingdoms 9001–9005 + seed-stable extras |
+| 18 | T2 configuration | sample-clone to fake kingdoms and parks |
+| 19 | Canary + fingerprint rows | `canary.sql.tmpl` |
+| 20 | `SET FOREIGN_KEY_CHECKS=1;` | boilerplate |
 
 ---
 
@@ -199,16 +227,17 @@ Apply script sections must respect FK order. `render.py` emits sections in this 
 ```bash
 bin/ork-db render \
   --anchor-date 2026-07-07 \
-  --seed 42 \
   --output tools/ork-db/rendered/sandbox.sql
 ```
+
+Content seed is read from `manifests/fingerprints.json5`. The default `42` is an arbitrary starting integer for `mt_srand()` — see [02-data-model.md](./02-data-model.md) §3. Override for experiments: `--seed N`. Persist override: `--persist-seed`.
 
 Output header:
 
 ```sql
 -- ORK3 Test Database Render
 -- anchor_date: 2026-07-07
--- seed: 42
+-- content_seed: 42
 -- generated_at: 2026-07-07T08:15:00-05:00
 -- DO NOT APPLY ON PRODUCTION — use bin/ork-db apply on local workstation only
 ```
@@ -217,9 +246,9 @@ Output header:
 
 | Input | Output |
 |-------|--------|
-| Same templates + same anchor + same seed | **Byte-identical** SQL (except `generated_at` timestamp if included — use `--deterministic` to omit) |
-| Same templates + new anchor | Same identities, **shifted dates** |
-| Same templates + new seed | Same kingdoms, **different park/player counts** |
+| Same templates + same content seed + same anchor | **Byte-identical** SQL (except `generated_at` if included — use `--deterministic` to omit) |
+| Same templates + same content seed + new anchor | Same identities and counts, **shifted dates only** |
+| Same templates + new content seed | Same kingdoms, **different park/player counts and assignments** |
 
 ---
 
@@ -271,7 +300,7 @@ Renderer:
 | CLI router | `tools/ork-db/cli.php` — Symfony Console or minimal arg parser |
 | Templates | JSON5 parsed via `colinodell/json5` or hand-rolled; SQL fragments as `.sql.tmpl` with `{{placeholder}}` replace |
 | Dates | `DateTimeImmutable` + `DateInterval` / `modify()` for month offsets |
-| Random | `mt_srand($seed)` before volume generation |
+| Random | `mt_srand($content_seed)` from `fingerprints.json5` before volume generation |
 | Extract | PDO read-only to prod profile (19306) |
 | Validate | PDO probes to dev profile (19307) |
 

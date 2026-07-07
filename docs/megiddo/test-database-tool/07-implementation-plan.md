@@ -16,7 +16,7 @@ Phased delivery for the test database infrastructure, PHP renderer, safety syste
 | **TD-5** | Apply + wipe/replay | `bin/ork-db apply` (sandbox, hardcoded) |
 | **TD-6** | DB profile switcher | `bin/ork-db use prod\|dev` |
 | **TD-7** | PHPUnit integration | `config.test.php`, bootstrap, doc updates |
-| **TD-8** | Migration classifier | `migration-classification.json5` + schema-diff |
+| **TD-8** | Migration classifier + drift detection | `migration-classification.json5` + `drift-check` + `schema-diff` |
 | **TD-9** | Renderer tests | PHPUnit golden files + integration smoke |
 
 ---
@@ -74,7 +74,9 @@ docs/megiddo/refactor/06-test-framework.md  # update prerequisites
 - [x] Architecture, data model, templates, safety, operations docs
 - [x] CLI name `ork-db`, profiles `prod` / `dev`
 - [x] Kingdom monikers + Grand Duchy of Litavia principality
-- [ ] Maintainer fills `ken_walker` / `avery_krouse` `mundane_id` in `extract-sources.json5`
+- [x] Ken Walker (`43232`) / Avery Krouse (`46193`) in `extract-sources.json5`
+- [x] Type 1 vs Type 2 content source classes documented
+- [x] Content seed semantics documented
 - [ ] Review — port 19307, kingdom IDs 9001–9005 confirmed
 
 ### Phase 1 — TD-1 + TD-2
@@ -120,7 +122,8 @@ ENVIRONMENT=TEST sh bin/run-unit-tests.sh
 ### Phase 5 — TD-8 + TD-9
 
 - Full migration classifier
-- `bin/ork-db schema-diff`
+- `bin/ork-db drift-check --strict` in CI (every build)
+- `bin/ork-db schema-diff` (post-apply sandbox parity)
 - PHPUnit golden + apply round-trip
 
 ---
@@ -169,7 +172,10 @@ tools/ork-db/.last-apply.json
 | 5 | Implementation | **PHP 8.2+** |
 | 6 | Production safety | **Tier guard** refuses extract/render/apply on production hosts |
 | 6 | Principality | **Grand Duchy of Litavia** (9005 ⊂ Empire of Ashkara 9001) |
-| 7 | Real player IDs | Maintainer pins in `extract-sources.json5` |
+| 7 | Real player IDs | Ken Walker `43232`, Avery Krouse `46193` in `extract-sources.json5` |
+| 8 | Content seed | Arbitrary integer for `mt_srand()` — persisted in `fingerprints.json5`; default `42` is a stable starting point, not domain-specific |
+| 9 | Type 1 tables | `fixed_extract` + `fixed_embedded` in `extract-sources.json5` |
+| 10 | Drift detection | `bin/ork-db drift-check` — schema + catalog + migration coverage |
 
 ---
 

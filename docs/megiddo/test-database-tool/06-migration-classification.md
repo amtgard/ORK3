@@ -153,12 +153,12 @@ FOR each migration file:
 
 | Table | Schema migrations | Content migrations | Test data source |
 |-------|-------------------|--------------------|------------------|
-| `ork_award` | All `S` | `RC` inserts included OR extract | **Extract verbatim** |
-| `ork_kingdomaward` | All `S` | `ES` excluded | **Clone from extract** for kingdoms 9001–9005 |
+| `ork_award` | All `S` | `RC` inserts included OR extract | **Extract verbatim** (Type 1) |
+| `ork_kingdomaward` | All `S` | `ES` excluded | **Generated** — clone `ork_award` per fake kingdom + seed-stable extras |
 | `ork_awards` | All `S` | `PB` excluded | **Generated** sparse instances |
 | `ork_mundane` | All `S` | **All content excluded** | **Hybrid** extract (4 real) + generated |
-| `ork_class` | All `S` | `RC` | **Extract verbatim** |
-| `ork_configuration` | All `S` | `RC` keys only | **Extract** allowlisted keys |
+| `ork_class` | All `S` | `RC` | **Extract verbatim** (Type 1) |
+| `ork_configuration` | All `S` | `RC` excluded from verbatim apply | **Sample + clone** — extract shape from real kingdom; render for fake kingdoms/parks |
 
 ---
 
@@ -172,7 +172,7 @@ When adding a migration to `db-migrations/`:
 4. If `PB` / `ES` — document exclusion reason in JSON5 comment
 5. If split file — add DDL excerpt to `templates/schema/overrides/`
 
-**CI check (planned TD-7):** Script diffs `db-migrations/` against manifest; fails if unclassified file exists.
+**CI check (planned TD-8):** `bin/ork-db drift-check --strict` on every build; also fails if unclassified migration file exists.
 
 ---
 
@@ -182,4 +182,64 @@ When adding a migration to `db-migrations/`:
 bin/ork-db schema-diff
 ```
 
-Compares `SHOW CREATE TABLE` for all tables between dev `ork` and test `ork_test` (after apply). Reports drift. Sign-off criterion for TD-5.
+Compares `SHOW CREATE TABLE` for all tables between mirror `ork` and sandbox `ork_test` (after apply). Reports DDL drift on the sandbox side. Sign-off criterion for TD-5.
+
+Use alongside `drift-check` (§8): `drift-check` detects upstream prod changes; `schema-diff` verifies sandbox caught up after apply.
+
+---
+
+## 8. Drift detection (schema and Type 1 mutations)
+
+When prod schema or Type 1 catalog data changes, the test database tool must be updated before the next `apply`. Three checks, combined in one command:
+
+```bash
+bin/ork-db drift-check
+```
+
+| Check | What it compares | Action when drift |
+|-------|------------------|-------------------|
+| **Schema fingerprint** | `sha256` of `SHOW CREATE TABLE` for all tables on mirror vs last recorded in `fingerprints.json5` | Re-run `render` + `apply`; update `schema_fingerprint` |
+| **Catalog fingerprint** | `sha256` of each `extracted/{table}.sql` for `fixed_extract` tables vs `fingerprints.json5` `catalog_hashes` | Re-run `bin/ork-db extract`, then `render` + `apply` |
+| **Migration coverage** | Files in `db-migrations/` vs `migration-classification.json5` | Classify new migration; re-render if `S` or `RC` |
+
+### Schema fingerprint
+
+Computed from mirror (19306/ork) after prod import. Stored in `fingerprints.json5`:
+
+```json5
+{
+  "schema_fingerprint": "sha256:abc123…",
+  "schema_fingerprint_at": "2026-07-07"
+}
+```
+
+When `schema_fingerprint` changes, the tool warns that **content seed may need regeneration** (`compose --regenerate-seed`) if volume rules or FK shapes changed.
+
+### Catalog fingerprints
+
+Per-table hashes for Type 1 extract tables:
+
+```json5
+{
+  "catalog_hashes": {
+    "award": "sha256:…",
+    "class": "sha256:…",
+    "parktitle": "sha256:…",
+    "pronoun": "sha256:…"
+  }
+}
+```
+
+`extract` updates hashes in `extracted/manifest.json`. `drift-check` compares live mirror hashes against committed extracts.
+
+### Workflow after prod schema push
+
+```bash
+# After refreshing local mirror from prod
+bin/ork-db drift-check          # reports schema and/or catalog drift
+bin/ork-db extract              # refresh Type 1 extracts if catalog drift
+bin/ork-db render               # rebuild sandbox SQL
+bin/ork-db apply --yes          # reload sandbox
+```
+
+**CI (TD-8):** `drift-check --strict` runs on **every** CI build — not gated on path filters. Fails if unclassified migrations exist, schema/catalog fingerprints are stale relative to mirror, or committed extracts are out of date. Schema drift happens for all sorts of mundane reasons; catching it early is cheap.

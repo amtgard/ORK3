@@ -29,7 +29,7 @@ ORK3 needs a **dedicated test database** with:
 | **Deployment tier guard** | Data commands refused on production hosts before any DB connection |
 | **Composable templates** | Stable identity data (kingdom names) separate from shifting temporal data (dates) |
 | **Schema from repo, content from tiers** | Migrations are classified schema vs content; content migrations may be skipped per table |
-| **Idempotent render** | Same template + same `anchor_date` → same SQL; different `anchor_date` → shifted dates |
+| **Idempotent render** | Same content seed + new `anchor_date` → same identities, shifted dates only |
 | **Single entry CLI** | `bin/ork-db` — profile-aware command palette ([10-cli-reference.md](./10-cli-reference.md)) |
 
 ---

@@ -22,5 +22,10 @@
     "Valley",
     "Wolfs Eye"
   ],
-  "render_seed_default": 42
+  "render_seed_default": 42,
+  // Arbitrary mt_srand() input — persistence matters, not the number. 42 → 23 parks (see park_count_by_seed).
+  "content_seed": 42,
+  "content_seed_basis": null,
+  "schema_fingerprint": null,
+  "catalog_hashes": {}
 }
