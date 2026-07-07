@@ -431,7 +431,7 @@
 
 					<!-- List view -->
 					<div id="kn-parks-list-view" style="display:none">
-						<table class="kn-table kn-sortable kn-parks-dt" id="kn-parks-table">
+						<table class="kn-table kn-parks-dt" id="kn-parks-table">
 							<thead>
 								<tr>
 									<th data-sorttype="text">Park</th>
@@ -539,7 +539,7 @@
 									<span class="kn-prinz-name"><?= htmlspecialchars($prinz['Name']) ?></span>
 									<i class="fas fa-external-link-alt kn-prinz-extlink"></i>
 								</a>
-								<table class="kn-table kn-sortable kn-parks-dt" data-csvname="<?= htmlspecialchars($prinz['Name']) ?> Parks">
+								<table class="kn-table kn-parks-dt" data-csvname="<?= htmlspecialchars($prinz['Name']) ?> Parks">
 									<thead>
 										<tr>
 											<th data-sorttype="text">Park</th>
