@@ -272,3 +272,4 @@ Refactor `SearchService::Search_Event` RSVP subqueries to call `GetRsvpCounts` i
 | [03-implementation-plan.md](./03-implementation-plan.md) | Target ID inventory |
 | [04-milestone-checklist.md](./04-milestone-checklist.md) | DS-01 tracking |
 | [06-test-framework.md](./06-test-framework.md) | Test and Infection commands |
+| [validations/v-01-rsvp-validation.md](./validations/v-01-rsvp-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-01) |

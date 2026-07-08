@@ -59,7 +59,9 @@ Each refactor target must have:
 - **Backend unit tests** covering the moved logic (or existing logic if consolidating duplicates).
 - **Frontend functional tests** verifying the user-facing behavior is unchanged.
 - **Mutation tests** (Infection) scoped to the milestone, passing before sign-off per [05-development-steering.md](./05-development-steering.md) DS-7.
-- **Optional render stability gate** (when [fuzzy-validator](../fuzzy-validator/README.md) FU-11+ is available): `bin/fuzzy-validator validate` against **`test`** (strict) and **`mirror`** (lenient) database profiles — see [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md).
+- **Render stability gate:** `bin/fuzzy-validator validate` against **`test`** (strict) and **`mirror`** (lenient) database profiles — see [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md). Tooling complete through FU-16; artifacts from Phase 1.6 (V-*).
+
+**Phase 1.6 (V-*):** Before each R-* sprint, validation artifacts document canary URLs and dual-profile fuzzy baselines plus test mutation boundaries — [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md).
 
 Authenticated Playwright and fuzzy-validator flows require **configured E2E login credentials** (sandbox `megiddo` / `test-db-player` or mirror dev user) — not the local-only `class.Authorization.php` bypass. See [06-test-framework.md § E2E login credentials (preflight)](./06-test-framework.md#e2e-login-credentials-preflight).
 
@@ -144,9 +146,13 @@ Each discovery sprint produces a short design note linking:
 
 Moved logic must preserve existing semantics unless an explicit product decision documents intentional change.
 
-### NFR-7: E2E login preflight (T-* and R-*)
+### NFR-7: E2E login preflight (T-*, V-*, and R-*)
 
 Milestones that run auth-gated Playwright or fuzzy-validator checks must complete the credential preflight in [06-test-framework.md](./06-test-framework.md#e2e-login-credentials-preflight) before sign-off. Use documented sandbox or mirror passwords via `ORK3_E2E_*` env vars — **never** the uncommitted `class.Authorization.php` login bypass.
+
+### NFR-8: Dual-profile fuzzy validation (V-* and R-*)
+
+V-00 and each V-{nn} produce fuzzy baselines on **test** (sandbox) and **mirror** (local prod-shaped DB). R-* sign-off requires `bin/fuzzy-validator validate` to pass both profiles for canary page ids listed in [validations/v-{nn}-*.md](./validations/).
 
 ## Discovery Sprint Requirements
 
@@ -167,7 +173,7 @@ The refactor is complete when:
 - [ ] All items in [03-implementation-plan.md](./03-implementation-plan.md) marked done
 - [ ] Backend unit test coverage for all moved logic
 - [ ] Frontend functional tests for affected user flows
-- [ ] Optional: fuzzy-validator dual-profile gate passes for touched pages ([fuzzy-validator](../fuzzy-validator/README.md))
+- [ ] Optional: fuzzy-validator dual-profile gate passes for touched pages ([fuzzy-validator](../fuzzy-validator/README.md); canary ids from [validations/](./validations/))
 - [ ] No direct `INSERT`/`UPDATE`/`DELETE` on domain tables from `orkui`
 
 ## Document Index
@@ -179,5 +185,7 @@ The refactor is complete when:
 | [04-milestone-checklist.md](./04-milestone-checklist.md) | Milestones and sprint tracking |
 | [05-development-steering.md](./05-development-steering.md) | Branch, test, mutation, and commit rules |
 | [07-agent-milestone-prompt.md](./07-agent-milestone-prompt.md) | Copy-paste agent prompt per milestone |
+| [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md) | Phase 1.6 — V-* canaries + test mutation boundaries |
+| [validations/README.md](./validations/README.md) | Per-domain validation artifact index |
 | [../fuzzy-validator/README.md](../fuzzy-validator/README.md) | Render stability gate (`bin/fuzzy-validator`) |
 | [../test-database-tool/README.md](../test-database-tool/README.md) | Stable sandbox DB for tests and fuzzy **`test`** profile |

@@ -43,19 +43,16 @@ Refresh sandbox before strict gates: `bin/ork-db deploy-sandbox`.
 
 ### 2. Export env vars (Playwright + fuzzy-validator FU-1+)
 
-Until fuzzy-validator **FU-11** profile auth is wired, both profiles use the same Playwright env pair — set them to match the **active** `bin/ork-db use` target:
+For Playwright capture invoked directly (bypassing profile auth in CLI), export credentials matching the active `bin/ork-db use` target.
 
-```bash
-# Sandbox example (after bin/ork-db use dev && deploy-sandbox)
-export ORK3_E2E_USERNAME=megiddo
-export ORK3_E2E_PASSWORD=test-db-player
+With **FU-11** profile auth (default on `record`/`validate`), credentials come from `manifests/profiles.json5`:
 
-# Mirror example (after bin/ork-db use prod)
-export ORK3_E2E_USERNAME='your-mirror-user'
-export ORK3_E2E_PASSWORD='your-mirror-password'
-```
+| Profile | Login | Password |
+|---------|-------|----------|
+| **`test`** | `megiddo` | `ORK3_E2E_TEST_PASSWORD` (default `test-db-player`) |
+| **`mirror`** | `ORK3_E2E_USERNAME` | `ORK3_E2E_PASSWORD` |
 
-After **FU-11**, the **`test`** profile reads `ORK3_E2E_TEST_PASSWORD` (default `test-db-player`) and **`mirror`** reads `ORK3_E2E_USERNAME` / `ORK3_E2E_PASSWORD` — see [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md).
+See [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md).
 
 ### 3. Verify login works
 
@@ -226,20 +223,21 @@ Discovery sprints document required frontend flows in their test design step.
 
 ---
 
-## Fuzzy render stability gate (optional — R-* sign-off)
+## Fuzzy render stability gate (R-* sign-off)
 
-Complements Playwright e2e behavior tests with **pixel + DOM + asset** stability checks. Tool: **`bin/fuzzy-validator`** ([fuzzy-validator docs](../fuzzy-validator/README.md)).
+Required at **R-* sign-off** after matching **V-*** milestone. Complements Playwright e2e behavior tests with **pixel + DOM + asset** stability on **sandbox and mirror** databases. Tool: **`bin/fuzzy-validator`** ([fuzzy-validator docs](../fuzzy-validator/README.md)).
 
 | Aspect | Plan |
 |--------|------|
-| **When** | Optional at R-* sign-off after FU-11; not a substitute for DS-4 PHPUnit |
-| **Databases** | Runs **both** profiles by default: **`test`** (sandbox, strict) and **`mirror`** (local `ork`, lenient) |
-| **Setup** | `bin/ork-db deploy-sandbox` before validate; E2E credentials per [E2E login credentials (preflight)](./06-test-framework.md#e2e-login-credentials-preflight) |
+| **When** | Every R-* sign-off after V-00 + matching V-{nn} baselines exist |
+| **Databases** | **`test`** (sandbox, strict) and **`mirror`** (local `ork`, lenient) — both required |
+| **Setup** | `bin/ork-db deploy-sandbox`; credentials per [E2E login preflight](#e2e-login-credentials-preflight) |
+| **Page ids** | From [validations/v-{nn}-*.md](./validations/) §1 — not ad-hoc |
 | **Strictness** | `test`: all scores **1.0**; `mirror`: visual **≥ 0.98**, DOM **≥ 0.99**, assets **1.0** |
 | **Command** | `bin/fuzzy-validator validate --pages <ids> --phase all` |
 | **Output** | Exit code + HTML report under `tools/fuzzy-validator/reports/run-{id}/` |
 
-Record baselines once per page on a stable branch: `bin/fuzzy-validator record --pages …`. See [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md).
+Record baselines in **V-00** (global setpoint) and **V-{nn}** (domain canaries): `bin/fuzzy-validator record --pages …`. See [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md) and [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md).
 
 ---
 
@@ -274,4 +272,6 @@ Optional: add `sh bin/run-unit-tests.sh` to personal pre-push hook (not enforced
 | [04-milestone-checklist.md](./04-milestone-checklist.md) | M0.1 checklist |
 | [05-development-steering.md](./05-development-steering.md) | DS-4–DS-7 gates |
 | [../test-database-tool/README.md](../test-database-tool/README.md) | Sandbox DB (`bin/ork-db`) |
+| [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md) | Phase 1.6 V-* validation artifacts |
+| [validations/README.md](./validations/README.md) | Canary URLs + test mutation boundaries |
 | [../fuzzy-validator/README.md](../fuzzy-validator/README.md) | Render gate (`bin/fuzzy-validator`) |

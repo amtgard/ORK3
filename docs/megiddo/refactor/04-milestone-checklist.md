@@ -4,7 +4,7 @@ Track progress here. Check items when complete. Discovery sprint outputs (design
 
 **Development steering:** All milestones must satisfy [05-development-steering.md](./05-development-steering.md) before sign-off (branch naming, full unit suite, one commit, mutation tests, commit message).
 
-**E2E preflight (T-* and R-*):** Before sign-off on milestones with auth-gated Playwright or fuzzy-validator flows, complete [06-test-framework.md § E2E login credentials (preflight)](./06-test-framework.md#e2e-login-credentials-preflight). Do **not** use the local `class.Authorization.php` password bypass.
+**E2E preflight (V-* and R-*):** Before sign-off on milestones with auth-gated Playwright or fuzzy-validator flows, complete [06-test-framework.md § E2E login credentials (preflight)](./06-test-framework.md#e2e-login-credentials-preflight). Do **not** use the local `class.Authorization.php` password bypass.
 
 **Documentation sign-off (every milestone):** Any edits under `docs/megiddo/refactor/` made during the milestone — including checklist checkoffs, design notes, steering, requirements, and implementation-plan updates — must be **committed on the active milestone branch** as part of that milestone's single sign-off commit (DS-6). Do not leave planning docs uncommitted, stashed for a later branch, or split onto a separate docs-only commit after sign-off.
 
@@ -791,26 +791,91 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 ---
 
+## Phase 1.6 — Validation Artifacts
+
+Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for R-* execution. Plan: [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md) · Index: [validations/README.md](./validations/README.md).
+
+**Tools:** `bin/ork-db` (sandbox + mirror) · `bin/fuzzy-validator` (record/validate both profiles)
+
+**Workflow:**
+
+1. **V-00 (global)** — Register major-interface setpoint URLs; capture baselines on **test** + **mirror**.
+2. **V-01 … V-14 (parallel)** — Per domain: 2–4 canary URL variants + document how T-* tests may migrate during R-*.
+
+**Out of scope:** Re-surveying backend (DS-*), writing new characterization tests (T-*), production refactor (R-*).
+
+**Branch pattern:** `megiddo/v-00-fuzzy-setpoint`, `megiddo/v-{nn}-{slug}`
+
+**Validation sprint sign-off (V-00 and every V-*):**
+
+- [ ] [05-development-steering.md](./05-development-steering.md) DS-1, DS-3, DS-6, DS-8 satisfied
+- [ ] Matching DS-{nn} + T-{nn} complete (V-01+ only); V-00 requires T-14 per [v-00-fuzzy-setpoint.md](./validations/v-00-fuzzy-setpoint.md)
+- [ ] [E2E login preflight](./06-test-framework.md#e2e-login-credentials-preflight) complete for capture/validate
+- [ ] Validation doc published under `validations/v-{nn}-*.md` (template: [_template-validation.md](./validations/_template-validation.md))
+- [ ] Canary page ids registered in `tools/fuzzy-validator/manifests/pages.json5`
+- [ ] `bin/fuzzy-validator record` or `setpoint capture` on **test** + **mirror** for milestone page ids
+- [ ] All `docs/megiddo/refactor/` updates committed on milestone branch
+- [ ] Branch squashed to exactly one commit
+
+---
+
+### V-00: Global fuzzy setpoint
+
+**Branch:** `megiddo/v-00-fuzzy-setpoint`
+
+**Spec:** [validations/v-00-fuzzy-setpoint.md](./validations/v-00-fuzzy-setpoint.md)
+
+| Step | Status |
+|------|--------|
+| Preflight 1 — major-interface URL registry (1–3 per class) | [ ] |
+| Preflight 2 — dual-profile fuzzy record (test + mirror) | [ ] |
+| V-00 sign-off gate | [ ] |
+
+---
+
+### V-01 … V-14: Domain validation artifacts
+
+Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines. Pairs with DS/T/R numbering.
+
+| ID | Branch | Validation doc | Depends on | Blocks |
+|----|--------|----------------|------------|--------|
+| V-01 | `megiddo/v-01-rsvp-validation` | [v-01-rsvp-validation.md](./validations/v-01-rsvp-validation.md) | DS-01, T-01, V-00 | R-01 |
+| V-02 | `megiddo/v-02-auth-validation` | *(create)* | DS-02, T-02, V-00 | R-02 |
+| V-03 | `megiddo/v-03-banner-validation` | *(create)* | DS-03, T-03, V-00 | R-03 |
+| V-04 | `megiddo/v-04-eventajax-validation` | *(create)* | DS-04, T-04, V-00 | R-04 |
+| V-05 | `megiddo/v-05-event-validation` | *(create)* | DS-05, T-05, V-00 | R-05 |
+| V-06 | `megiddo/v-06-kingdom-validation` | *(create)* | DS-06, T-06, V-00 | R-06 |
+| V-07 | `megiddo/v-07-park-validation` | *(create)* | DS-07, T-07, V-00 | R-07 |
+| V-08 | `megiddo/v-08-admin-validation` | *(create)* | DS-08, T-08, V-00 | R-08 |
+| V-09 | `megiddo/v-09-player-validation` | *(create)* | DS-09, T-09, V-00 | R-09 |
+| V-10 | `megiddo/v-10-reports-validation` | *(create)* | DS-10, T-10, V-00 | R-10 |
+| V-11 | `megiddo/v-11-search-validation` | *(create)* | DS-11, T-11, V-00 | R-11 |
+| V-12 | `megiddo/v-12-attendance-validation` | *(create)* | DS-12, T-12, V-00 | R-12 |
+| V-13 | `megiddo/v-13-infrastructure-validation` | *(create)* | DS-13, T-13, V-00 | R-13 |
+| V-14 | `megiddo/v-14-lib-service-validation` | *(create)* | DS-14, T-14, V-00 | R-14 |
+
+---
+
 ## Phase 2 — Refactor Execution
 
-Execution sprints begin **after** the corresponding discovery sprint **and test sprint (T-*)** are complete. Order is flexible but recommended:
+Execution sprints begin **after** the corresponding discovery sprint, test sprint, **and validation artifact sprint (V-*)** are complete. Order is flexible but recommended:
 
 | Exec sprint | Depends on | Target IDs |
 |-------------|------------|------------|
-| R-01 | DS-01, T-01, M0.1 | T-RSV-* |
-| R-02 | DS-02, T-02 | T-ADM-11, T-KNA-03, T-PRA-02, T-EVA-06 |
-| R-03 | DS-03, T-03 | Banner targets |
-| R-04 | DS-04, T-04 | T-EVA-* |
-| R-05 | DS-05, T-05 | T-EVT-* |
-| R-06 | DS-06, T-06 | Kingdom targets |
-| R-07 | DS-07, T-07 | Park targets |
-| R-08 | DS-08, T-08 | Admin targets |
-| R-09 | DS-09, T-09 | Player targets |
-| R-10 | DS-10, T-10 | Reports/awards targets |
-| R-11 | DS-11, T-11 | Search targets |
-| R-12 | DS-12, T-12 | Attendance/sign-in targets |
-| R-13 | DS-13, T-13 | Infrastructure targets |
-| R-14 | DS-14, T-14 | Ork3::$Lib migration |
+| R-01 | DS-01, T-01, **V-00, V-01**, M0.1 | T-RSV-* |
+| R-02 | DS-02, T-02, V-00, **V-02** | T-ADM-11, T-KNA-03, T-PRA-02, T-EVA-06 |
+| R-03 | DS-03, T-03, V-00, **V-03** | Banner targets |
+| R-04 | DS-04, T-04, V-00, **V-04** | T-EVA-* |
+| R-05 | DS-05, T-05, V-00, **V-05** | T-EVT-* |
+| R-06 | DS-06, T-06, V-00, **V-06** | Kingdom targets |
+| R-07 | DS-07, T-07, V-00, **V-07** | Park targets |
+| R-08 | DS-08, T-08, V-00, **V-08** | Admin targets |
+| R-09 | DS-09, T-09, V-00, **V-09** | Player targets |
+| R-10 | DS-10, T-10, V-00, **V-10** | Reports/awards targets |
+| R-11 | DS-11, T-11, V-00, **V-11** | Search targets |
+| R-12 | DS-12, T-12, V-00, **V-12** | Attendance/sign-in targets |
+| R-13 | DS-13, T-13, V-00, **V-13** | Infrastructure targets |
+| R-14 | DS-14, T-14, V-00, **V-14** | Ork3::$Lib migration |
 
 **Branch pattern:** `megiddo/r-{nn}-{slug}`
 
@@ -818,11 +883,12 @@ Per execution sprint checklist:
 
 - [ ] [05-development-steering.md](./05-development-steering.md) DS-1 through DS-8 satisfied
 - [ ] Matching T-* test sprint complete (tests already in place; do not defer test writing to R-*)
+- [ ] Matching **V-*** validation doc complete — follow [validations/v-{nn}-*.md](./validations/) §2 migration boundaries
 - [ ] E2E login preflight complete when milestone includes auth-gated Playwright or fuzzy-validator flows ([06-test-framework.md § preflight](./06-test-framework.md#e2e-login-credentials-preflight))
 - [ ] **Full** unit test suite passes (no partial run at sign-off)
 - [ ] Milestone-scoped Infection run passes configured thresholds on refactored code
 - [ ] Frontend functional tests pass (when applicable to milestone)
-- [ ] Optional (when [fuzzy-validator FU-11+](../fuzzy-validator/README.md) is available): `bin/ork-db deploy-sandbox` then `bin/fuzzy-validator validate --pages <touched-pages> --phase all` passes **test** (strict) and **mirror** (lenient) profiles — see [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md)
+- [ ] `bin/ork-db deploy-sandbox` then `bin/fuzzy-validator validate --pages <ids-from-v-NN.md> --phase all` passes **test** (strict) and **mirror** (lenient) — requires V-00 + V-{nn} baselines ([11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md))
 - [ ] Target IDs marked done in [03-implementation-plan.md](./03-implementation-plan.md)
 - [ ] No new `$DB` or unauthorized `Ork3::$Lib` usage introduced in touched files
 - [ ] All `docs/megiddo/refactor/` updates committed on the milestone branch (Documentation sign-off above)
@@ -847,7 +913,8 @@ Per execution sprint checklist:
 | **0** | Test + mutation framework + planning |
 | **1** | Discovery sprints — survey, test design, proposed revision |
 | **1.5** | Test development — implement tests + Infection per DS design notes |
-| **2** | Refactor execution — move code, keep tests green |
+| **1.6** | Validation artifacts — canary URLs, dual-profile fuzzy baselines, test mutation boundaries |
+| **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** R-01 (RSVP refactor — pairs with completed DS-01 and T-01).
+**Next actionable milestone:** V-00 (global fuzzy setpoint), then V-01 … V-14 in parallel, then R-01 (RSVP refactor — DS-01, T-01 complete).
