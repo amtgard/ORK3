@@ -86,29 +86,35 @@ def asset_fingerprints(manifest: dict[str, Any]) -> dict[str, str]:
     return {entry.id: entry.sha256 for entry in parse_assets(manifest)}
 
 
+def asset_content_key(entry: AssetEntry) -> str:
+    if entry.url:
+        return f"{entry.kind}:{entry.url}"
+    return f"inline:{entry.kind}:{entry.sha256}"
+
+
 def compare_asset_manifests(
     baseline: dict[str, Any],
     candidate: dict[str, Any],
 ) -> AssetCompareResult:
-    baseline_by_id = {entry.id: entry for entry in parse_assets(baseline)}
-    candidate_by_id = {entry.id: entry for entry in parse_assets(candidate)}
+    baseline_by_key = {asset_content_key(entry): entry for entry in parse_assets(baseline)}
+    candidate_by_key = {asset_content_key(entry): entry for entry in parse_assets(candidate)}
 
-    baseline_ids = set(baseline_by_id)
-    candidate_ids = set(candidate_by_id)
-    missing_ids = sorted(baseline_ids - candidate_ids)
-    extra_ids = sorted(candidate_ids - baseline_ids)
+    baseline_keys = set(baseline_by_key)
+    candidate_keys = set(candidate_by_key)
+    missing_ids = sorted(baseline_keys - candidate_keys)
+    extra_ids = sorted(candidate_keys - baseline_keys)
     changed_ids: list[str] = []
 
-    for asset_id in sorted(baseline_ids & candidate_ids):
-        base_entry = baseline_by_id[asset_id]
-        candidate_entry = candidate_by_id[asset_id]
+    for key in sorted(baseline_keys & candidate_keys):
+        base_entry = baseline_by_key[key]
+        candidate_entry = candidate_by_key[key]
         if (
             base_entry.sha256 != candidate_entry.sha256
             or base_entry.byte_length != candidate_entry.byte_length
         ):
-            changed_ids.append(asset_id)
+            changed_ids.append(key)
 
-    total = len(baseline_ids)
+    total = len(baseline_keys)
     mismatches = len(missing_ids) + len(extra_ids) + len(changed_ids)
     if total == 0:
         assets_score = 1.0 if mismatches == 0 else 0.0
@@ -129,6 +135,14 @@ def calibration_asset_manifests(calibration_dir: Path) -> list[Path]:
     return sorted(calibration_dir.glob("run-*.assets.json"))
 
 
+def calibration_asset_signature(manifest: dict[str, Any]) -> frozenset[tuple[str, str, int]]:
+    """Multiset of asset content independent of capture-order ids."""
+    return frozenset(
+        (entry.kind, entry.sha256, entry.byte_length)
+        for entry in parse_assets(manifest)
+    )
+
+
 def assert_calibration_asset_stability(calibration_dir: Path) -> None:
     manifests = calibration_asset_manifests(calibration_dir)
     if len(manifests) < 2:
@@ -136,10 +150,10 @@ def assert_calibration_asset_stability(calibration_dir: Path) -> None:
             f"Need at least 2 asset manifests in {calibration_dir}; found {len(manifests)}"
         )
 
-    reference = asset_fingerprints(load_asset_manifest(manifests[0]))
+    reference = calibration_asset_signature(load_asset_manifest(manifests[0]))
     for manifest_path in manifests[1:]:
-        fingerprints = asset_fingerprints(load_asset_manifest(manifest_path))
-        if fingerprints != reference:
+        signature = calibration_asset_signature(load_asset_manifest(manifest_path))
+        if signature != reference:
             raise ValueError(
                 f"Asset manifest drift between calibration runs: {manifest_path.name}"
             )

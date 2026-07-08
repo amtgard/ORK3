@@ -2,7 +2,7 @@
 
 Per-domain **canary URLs** and **test mutation boundaries** for R-* execution sprints. Produced in Phase 1.6 (**V-*** milestones); consumed at R-* sign-off with `bin/fuzzy-validator` and Infection.
 
-**Plan:** [08-phase-16-validation-artifacts.md](../08-phase-16-validation-artifacts.md) · **Checklist:** [04-milestone-checklist.md § Phase 1.6](../04-milestone-checklist.md#phase-16--validation-artifacts)
+**Plan:** [08-phase-16-validation-artifacts.md](../08-phase-16-validation-artifacts.md) · **Checklist:** [04-milestone-checklist.md § Phase 1.6](../04-milestone-checklist.md#phase-16--validation-artifacts) · **Agent prompt:** [09-v-phase-agent-prompt.md](../09-v-phase-agent-prompt.md)
 
 ---
 

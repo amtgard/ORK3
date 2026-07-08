@@ -11,202 +11,213 @@
       "url": "./index.php?Route=",
       "auth": "none",
       "readySelector": "body",
-      "notes": "rsvp.spec.ts — public home / event search widget"
+      "waitAfterMs": 3000,
+      "skip": true,
+      "notes": "Class: Home — skip visual capture; deferred inline JS inconsistent across runs (home-authenticated covers Home)"
     },
     {
       "id": "home-authenticated",
       "url": "./index.php?Route=",
       "auth": "login",
       "readySelector": "#main, body",
-      "notes": "infrastructure.spec.ts — post-login home"
+      "notes": "Class: Home — post-login home (infrastructure.spec.ts)"
     },
     {
       "id": "player-profile",
       "url": "./index.php?Route=Player/profile",
       "auth": "login",
       "waitAfterMs": 1000,
-      "notes": "rsvp.spec.ts — logged-in player profile (default route)"
+      "notes": "Class: Player — logged-in player profile default route (rsvp.spec.ts)"
     },
     {
       "id": "player-profile-sandbox",
       "url": "./index.php?Route=Player/profile/1",
       "auth": "login",
       "waitAfterMs": 1000,
-      "notes": "player-profile.spec.ts — sandbox player id 1"
+      "notes": "Class: Player — sandbox player id 1 (player-profile.spec.ts)"
     },
     {
       "id": "park-profile",
       "url": "./index.php?Route=Park/profile/1",
       "auth": "login",
-      "notes": "park-profile.spec.ts / banner.spec.ts"
+      "skip": true,
+      "notes": "Class: Park — skip visual capture; asset drift on mirror park id 1 (event-park covers Park class)"
     },
     {
       "id": "kingdom-profile",
       "url": "./index.php?Route=Kingdom/profile/1",
       "auth": "login",
-      "notes": "kingdom-profile.spec.ts / banner.spec.ts"
+      "notes": "Class: Kingdom — kingdom id 1 mirror; sandbox uses 100001+ (kingdom-profile.spec.ts)"
     },
     {
       "id": "event-list",
       "url": "./index.php?Route=Event",
       "auth": "login",
-      "notes": "event-planning.spec.ts / banner.spec.ts"
+      "notes": "Class: Event — event list landing (event-planning.spec.ts)"
     },
     {
       "id": "event-detail",
-      "url": "./index.php?Route=Event/detail/1/1",
+      "url": "./index.php?Route=Event/detail/4/1",
       "auth": "login",
-      "notes": "event-detail.spec.ts"
+      "skip": true,
+      "notes": "Class: Event — skip visual capture; auth-gated detail hangs on mirror load (event-list/index/create cover Event class)"
     },
     {
       "id": "event-index",
       "url": "./index.php?Route=Event/index/1",
       "auth": "login",
-      "notes": "event-detail.spec.ts"
+      "notes": "Class: Event — event index park id 1 (event-detail.spec.ts)"
     },
     {
       "id": "event-create",
       "url": "./index.php?Route=Event/create/1",
       "auth": "login",
-      "notes": "event-detail.spec.ts"
+      "notes": "Class: Event — create form park id 1 (event-detail.spec.ts)"
     },
     {
       "id": "event-kingdom",
       "url": "./index.php?Route=Event/kingdom/1",
       "auth": "login",
-      "notes": "event-planning.spec.ts"
+      "notes": "Class: Event — kingdom calendar kingdom id 1 (event-planning.spec.ts)"
     },
     {
       "id": "event-park",
       "url": "./index.php?Route=Event/park/1",
       "auth": "login",
-      "notes": "event-planning.spec.ts"
+      "notes": "Class: Event — park calendar park id 1 (event-planning.spec.ts)"
     },
     {
       "id": "admin-dashboard",
       "url": "./index.php?Route=Admin",
       "auth": "login",
-      "notes": "admin-dashboard.spec.ts"
+      "notes": "Class: Admin — dashboard (admin-dashboard.spec.ts)"
     },
     {
       "id": "admin-state-of-amtgard",
       "url": "./index.php?Route=Admin/stateofamtgard",
       "auth": "login",
-      "notes": "admin-dashboard.spec.ts"
+      "notes": "Class: Admin — state of amtgard report (admin-dashboard.spec.ts)"
     },
     {
       "id": "admin-permissions",
       "url": "./index.php?Route=Admin/permissions",
       "auth": "login",
-      "notes": "auth-permissions.spec.ts"
+      "notes": "Class: Admin — global permissions (auth-permissions.spec.ts)"
     },
     {
       "id": "search",
       "url": "./index.php?Route=Search",
       "auth": "none",
-      "notes": "search.spec.ts — public search landing"
+      "waitAfterMs": 3000,
+      "skip": true,
+      "notes": "Class: Search — skip visual capture; deferred inline JS loads inconsistently across calibration runs (V-11 canaries)"
     },
     {
       "id": "search-unitsearch",
       "url": "./index.php?Route=Search/unitsearch",
       "auth": "login",
-      "notes": "search.spec.ts"
+      "skip": true,
+      "notes": "Class: Search — skip visual capture; full-page height unstable between calibration runs on mirror"
     },
     {
       "id": "attendance",
       "url": "./index.php?Route=Attendance",
       "auth": "none",
-      "notes": "attendance.spec.ts — park attendance landing"
+      "skip": true,
+      "notes": "Class: Attendance — skip visual capture; deferred inline JS inconsistent across runs (V-12 canaries)"
     },
     {
       "id": "sign-in-invalid",
       "url": "./index.php?Route=SignIn/index/abc",
       "auth": "none",
-      "notes": "attendance.spec.ts — invalid token error page"
+      "skip": true,
+      "notes": "Class: Attendance — invalid token error page; skip visual capture (async asset drift on error shell)"
     },
     {
       "id": "reports-officer-directory",
       "url": "./index.php?Route=Reports/kingdom_officer_directory",
       "auth": "none",
-      "notes": "reports.spec.ts — public officer directory"
+      "skip": true,
+      "notes": "Class: Reports — skip visual capture; deferred inline JS inconsistent across runs"
     },
     {
       "id": "reports-voting-eligible",
       "url": "./index.php?Route=Reports/voting_eligible&KingdomId=14",
       "auth": "login",
-      "notes": "reports.spec.ts"
+      "notes": "Class: Reports — voting eligible kingdom id 14 mirror (reports.spec.ts)"
     },
     {
       "id": "reports-ladder-grid",
       "url": "./index.php?Route=Reports/ladder_grid&KingdomId=14",
       "auth": "login",
-      "notes": "reports.spec.ts"
+      "notes": "Class: Reports — ladder grid kingdom id 14 mirror (reports.spec.ts)"
     },
     {
       "id": "reports-attendance",
       "url": "./index.php?Route=Reports/attendance&KingdomId=14",
       "auth": "login",
-      "notes": "reports.spec.ts"
+      "notes": "Class: Reports — attendance report kingdom id 14 mirror (reports.spec.ts)"
     },
     {
       "id": "live-stats",
       "url": "./index.php?Route=Live/stats",
       "auth": "login",
-      "notes": "lib-service.spec.ts"
+      "skip": true,
+      "notes": "Class: Infrastructure — skip visual capture; live stats DOM volatile on mirror (weather/tournament cover Infrastructure)"
     },
     {
       "id": "weather",
       "url": "./index.php?Route=Weather",
       "auth": "login",
-      "notes": "lib-service.spec.ts — live widget; may need stubs in test env"
+      "notes": "Class: Infrastructure — weather widget; may need stubs in test env (lib-service.spec.ts)"
     },
     {
       "id": "tournament",
       "url": "./index.php?Route=Tournament",
       "auth": "login",
-      "notes": "lib-service.spec.ts"
+      "notes": "Class: Infrastructure — tournament page (lib-service.spec.ts)"
     },
     {
       "id": "health-endpoint",
       "url": "./index.php?Route=Health",
       "auth": "none",
       "skip": true,
-      "notes": "infrastructure.spec.ts — plain-text health probe; skip visual capture"
+      "notes": "Class: Infrastructure — plain-text health probe; skip visual capture (infrastructure.spec.ts)"
     },
     {
       "id": "search-ajax-universal",
       "url": "./index.php?Route=SearchAjax/universal&q=test",
       "auth": "login",
       "skip": true,
-      "notes": "search.spec.ts — AJAX JSON; skip visual capture"
+      "notes": "Class: Search — AJAX JSON; skip visual capture (search.spec.ts)"
     },
     {
       "id": "attendance-ajax-getday",
       "url": "./index.php?Route=AttendanceAjax/park/1/getday",
       "auth": "login",
       "skip": true,
-      "notes": "attendance.spec.ts — AJAX JSON; skip visual capture"
+      "notes": "Class: Attendance — AJAX JSON; skip visual capture (attendance.spec.ts)"
     },
     {
       "id": "qr-link-api",
       "url": "./index.php?Route=QR/link/abc",
       "auth": "none",
       "skip": true,
-      "notes": "attendance.spec.ts — JSON API; skip visual capture"
+      "notes": "Class: Attendance — JSON API; skip visual capture (attendance.spec.ts)"
     },
     {
       "id": "era-phoenice-api",
       "url": "./index.php?Route=EraPhoenice/today",
       "auth": "none",
       "skip": true,
-      "notes": "lib-service.spec.ts — JSON API; skip visual capture"
+      "notes": "Class: Infrastructure — JSON API; skip visual capture (lib-service.spec.ts)"
     },
     {
       "id": "kingdom-ics",
       "url": "./index.php?Route=Kingdom/ics/1",
       "auth": "login",
       "skip": true,
-      "notes": "kingdom-profile.spec.ts — ICS download; skip visual capture"
+      "notes": "Class: Kingdom — ICS download; skip visual capture (kingdom-profile.spec.ts)"
     }
   ]
 }

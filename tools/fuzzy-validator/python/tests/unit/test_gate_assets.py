@@ -78,8 +78,8 @@ def test_run_asset_gate_fails_on_one_byte_change(tmp_path: Path):
         tool_root=tool_root,
     )
     assert not result.passed
-    assert result.changed_ids == ["css-000"]
-    assert (diff_dir / "css-000.diff").exists()
+    assert result.changed_ids == ["css:http://localhost/orkui/revised.css"]
+    assert (diff_dir / "css_http___localhost_orkui_revised.css.diff").exists()
 
 
 def test_gate_assets_cli_pass_exit_code(tmp_path: Path):
@@ -181,4 +181,4 @@ def test_run_asset_gate_writes_binary_diff(tmp_path: Path):
         tool_root=tool_root,
     )
     assert not result.passed
-    assert (diff_dir / "js-000.diff").exists()
+    assert (diff_dir / "js_http___localhost_orkui_revised.js.diff").exists()

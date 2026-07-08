@@ -11,6 +11,7 @@ from pathlib import Path
 
 from lib.asset_manifest import (
     AssetCompareResult,
+    asset_content_key,
     compare_asset_manifests,
     load_asset_manifest,
     parse_assets,
@@ -30,13 +31,13 @@ def write_asset_diffs(
     diff_dir: Path,
     tool_root: Path,
 ) -> None:
-    baseline_by_id = {entry.id: entry for entry in parse_assets(baseline)}
-    candidate_by_id = {entry.id: entry for entry in parse_assets(candidate)}
+    baseline_by_key = {asset_content_key(entry): entry for entry in parse_assets(baseline)}
+    candidate_by_key = {asset_content_key(entry): entry for entry in parse_assets(candidate)}
     diff_dir.mkdir(parents=True, exist_ok=True)
 
-    for asset_id in result.changed_ids:
-        base_entry = baseline_by_id[asset_id]
-        candidate_entry = candidate_by_id[asset_id]
+    for asset_key in result.changed_ids:
+        base_entry = baseline_by_key[asset_key]
+        candidate_entry = candidate_by_key[asset_key]
         try:
             base_text = read_baseline_bytes(base_entry, tool_root).decode("utf-8")
         except UnicodeDecodeError:
@@ -51,10 +52,11 @@ def write_asset_diffs(
         diff_lines = difflib.unified_diff(
             base_text.splitlines(keepends=True),
             candidate_text.splitlines(keepends=True),
-            fromfile=f"baseline/{asset_id}",
-            tofile=f"candidate/{asset_id}",
+            fromfile=f"baseline/{base_entry.id}",
+            tofile=f"candidate/{candidate_entry.id}",
         )
-        diff_path = diff_dir / f"{asset_id}.diff"
+        safe_name = asset_key.replace(":", "_").replace("/", "_")
+        diff_path = diff_dir / f"{safe_name}.diff"
         diff_path.write_text("".join(diff_lines), encoding="utf-8")
 
 

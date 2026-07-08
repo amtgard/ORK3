@@ -23,6 +23,8 @@
         "visualMinScore": 0.98
       },
       "auth": {
+        "username": "admin",
+        "passwordDefault": "password",
         "usernameEnv": "ORK3_E2E_USERNAME",
         "passwordEnv": "ORK3_E2E_PASSWORD"
       }

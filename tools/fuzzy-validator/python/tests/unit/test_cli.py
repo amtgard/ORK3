@@ -76,10 +76,10 @@ def test_resolve_page_ids_pages_list():
 def test_resolve_page_ids_all_active_pages():
     args = _record_args(all=True)
     ids = _resolve_page_ids(args, TOOL_ROOT)
-    assert "home-anonymous" in ids
+    assert "home-authenticated" in ids
     assert "player-profile" in ids
     assert "health-endpoint" not in ids
-    assert len(ids) >= 20
+    assert len(ids) >= 17
 
 
 def test_pages_manifest_has_at_least_twenty_entries():

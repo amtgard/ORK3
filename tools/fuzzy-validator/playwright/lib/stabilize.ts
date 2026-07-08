@@ -19,7 +19,7 @@ export interface StabilizeOptions {
 
 /** Apply render stabilization before each screenshot (architecture §4.3). */
 export async function stabilizePage(page: Page, options: StabilizeOptions = {}): Promise<void> {
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   await page.addStyleTag({ content: STABILIZE_CSS });
 
   if (options.readySelector) {

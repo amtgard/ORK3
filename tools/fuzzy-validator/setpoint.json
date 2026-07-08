@@ -10,8 +10,48 @@
         "mirror"
       ],
       "pageCount": 3
+    },
+    "20260708T200305Z-40f4fa2c-63e14e488ffb0074.zip": {
+      "gitSha": "40f4fa2c",
+      "capturedAt": "2026-07-08T20:03:05Z",
+      "contentSha256": "63e14e488ffb0074ab52a612c5bca766e06e5ae252724d406d26eeefd9775252",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 26
+    },
+    "20260708T202710Z-40f4fa2c-475cb1e88995ea50.zip": {
+      "gitSha": "40f4fa2c",
+      "capturedAt": "2026-07-08T20:27:10Z",
+      "contentSha256": "475cb1e88995ea50c9749ebf57a51930ff78dbb875465831fc040e27a30c1214",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 26
+    },
+    "20260708T203739Z-40f4fa2c-f57c83277eff1e3f.zip": {
+      "gitSha": "40f4fa2c",
+      "capturedAt": "2026-07-08T20:37:39Z",
+      "contentSha256": "f57c83277eff1e3fe374ce6648d71ef19f30a60677a707b2b574043b54d21adf",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 26
+    },
+    "20260708T210408Z-40f4fa2c-8c3e8c67a96f30bc.zip": {
+      "gitSha": "40f4fa2c",
+      "capturedAt": "2026-07-08T21:04:08Z",
+      "contentSha256": "8c3e8c67a96f30bcb735fefcf3c701d34ec2259acbf8a624d0cd376651c8f42d",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 26
     }
   },
-  "latestBundle": "20260707T224643Z-608f5b18-1d9fef8a07db63d0.zip",
+  "latestBundle": "20260708T210408Z-40f4fa2c-8c3e8c67a96f30bc.zip",
   "driveFolder": "ORK3 Fuzzy Setpoints"
 }

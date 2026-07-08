@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "pageId": "home-anonymous",
   "imageWidth": 1280,
-  "imageHeight": 1002,
-  "calibratedAt": "2026-07-07T20:47:22Z",
+  "imageHeight": 1838,
+  "calibratedAt": "2026-07-08T20:14:55Z",
   "calibrationRuns": 5,
   "params": {
     "colorThreshold": 20,
@@ -12,5 +12,5 @@
   },
   "fuzzZones": [],
   "manualZones": [],
-  "calibratedFromCommit": "b21295fe"
+  "calibratedFromCommit": "40f4fa2c"
 }

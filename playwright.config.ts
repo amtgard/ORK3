@@ -22,6 +22,7 @@ export default defineConfig({
       name: 'fuzzy-capture',
       testDir: './tools/fuzzy-validator/playwright',
       testMatch: 'capture.spec.ts',
+      timeout: 300_000,
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 },

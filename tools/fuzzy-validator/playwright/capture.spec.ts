@@ -27,6 +27,22 @@ function repeatCount(pageRepeat: number | undefined): number {
   return pageRepeat ?? registry.defaults.repeat ?? 5;
 }
 
+const BLOCKED_ASSET_HOSTS = [
+  'googletagmanager.com',
+  'google-analytics.com',
+  'www.google-analytics.com',
+];
+
+async function blockVolatileThirdPartyAssets(page: import('@playwright/test').Page): Promise<void> {
+  await page.route('**/*', (route) => {
+    const hostname = new URL(route.request().url()).hostname;
+    if (BLOCKED_ASSET_HOSTS.some((host) => hostname === host || hostname.endsWith(`.${host}`))) {
+      return route.abort();
+    }
+    return route.continue();
+  });
+}
+
 for (const pageEntry of capturePages) {
   test(`capture ${pageEntry.id}`, async ({ page, baseURL }, testInfo) => {
     if (!baseURL || !(await appReachable(baseURL))) {
@@ -40,6 +56,7 @@ for (const pageEntry of capturePages) {
 
     const viewport = pageEntry.viewport ?? registry.defaults.viewport;
     await page.setViewportSize(viewport);
+    await blockVolatileThirdPartyAssets(page);
     await page.clock.install({ time: FIXED_CLOCK_TIME });
 
     if (authMode === 'login') {
@@ -57,7 +74,7 @@ for (const pageEntry of capturePages) {
       const captureUrl = new URL(pageEntry.url, baseURL!).href;
       const assetSession = startAssetCapture(page, captureUrl);
 
-      await page.goto(pageEntry.url);
+      await page.goto(pageEntry.url, { waitUntil: 'load' });
       await stabilizePage(page, {
         readySelector: pageEntry.readySelector,
         waitAfterMs,

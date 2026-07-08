@@ -60,7 +60,7 @@ def test_compare_asset_manifests_detects_changed_sha256():
     candidate = _sample_manifest("fixture-page", "body{color:blue}")
     result = compare_asset_manifests(baseline, candidate)
     assert not result.passed
-    assert result.changed_ids == ["css-000"]
+    assert result.changed_ids == ["css:http://localhost/orkui/revised.css"]
     assert result.assets_score < 1.0
 
 
@@ -70,7 +70,7 @@ def test_compare_asset_manifests_detects_missing_and_extra_assets():
         "pageId": "fixture-page",
         "assets": [
             {
-                "id": "js-000",
+                "id": "js-001",
                 "kind": "js",
                 "url": "http://localhost/orkui/revised.js",
                 "inline": False,
@@ -78,7 +78,7 @@ def test_compare_asset_manifests_detects_missing_and_extra_assets():
                 "byteLength": baseline["assets"][1]["byteLength"],
             },
             {
-                "id": "js-001",
+                "id": "js-002",
                 "kind": "js",
                 "url": "http://localhost/orkui/extra.js",
                 "inline": False,
@@ -89,8 +89,35 @@ def test_compare_asset_manifests_detects_missing_and_extra_assets():
     }
     result = compare_asset_manifests(baseline, candidate)
     assert not result.passed
-    assert result.missing_ids == ["css-000"]
-    assert result.extra_ids == ["js-001"]
+    assert result.missing_ids == ["css:http://localhost/orkui/revised.css"]
+    assert result.extra_ids == ["js:http://localhost/orkui/extra.js"]
+
+
+def test_compare_asset_manifests_ignores_id_reordering():
+    baseline = _sample_manifest("fixture-page", "body{}")
+    candidate = {
+        "pageId": "fixture-page",
+        "assets": [
+            {
+                "id": "js-999",
+                "kind": "js",
+                "url": baseline["assets"][1]["url"],
+                "inline": False,
+                "sha256": baseline["assets"][1]["sha256"],
+                "byteLength": baseline["assets"][1]["byteLength"],
+            },
+            {
+                "id": "css-999",
+                "kind": "css",
+                "url": baseline["assets"][0]["url"],
+                "inline": False,
+                "sha256": baseline["assets"][0]["sha256"],
+                "byteLength": baseline["assets"][0]["byteLength"],
+            },
+        ],
+    }
+    result = compare_asset_manifests(baseline, candidate)
+    assert result.passed
 
 
 def test_assert_calibration_asset_stability_passes(tmp_path: Path):
@@ -98,6 +125,34 @@ def test_assert_calibration_asset_stability_passes(tmp_path: Path):
     manifest = _sample_manifest("fixture-page", css)
     for index in range(1, 4):
         save_asset_manifest(tmp_path / f"run-{index:03d}.assets.json", manifest)
+    assert_calibration_asset_stability(tmp_path)
+
+
+def test_assert_calibration_asset_stability_ignores_id_reordering(tmp_path: Path):
+    first = _sample_manifest("fixture-page", "body{}")
+    second = {
+        "pageId": "fixture-page",
+        "assets": [
+            {
+                "id": "css-001",
+                "kind": "css",
+                "url": first["assets"][0]["url"],
+                "inline": False,
+                "sha256": first["assets"][0]["sha256"],
+                "byteLength": first["assets"][0]["byteLength"],
+            },
+            {
+                "id": "js-001",
+                "kind": "js",
+                "url": first["assets"][1]["url"],
+                "inline": False,
+                "sha256": first["assets"][1]["sha256"],
+                "byteLength": first["assets"][1]["byteLength"],
+            },
+        ],
+    }
+    save_asset_manifest(tmp_path / "run-001.assets.json", first)
+    save_asset_manifest(tmp_path / "run-002.assets.json", second)
     assert_calibration_asset_stability(tmp_path)
 
 

@@ -793,7 +793,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 ## Phase 1.6 — Validation Artifacts
 
-Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for R-* execution. Plan: [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md) · Index: [validations/README.md](./validations/README.md).
+Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for R-* execution. Plan: [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md) · Index: [validations/README.md](./validations/README.md) · **Agent prompt:** [09-v-phase-agent-prompt.md](./09-v-phase-agent-prompt.md) (batched G0–G4).
 
 **Tools:** `bin/ork-db` (sandbox + mirror) · `bin/fuzzy-validator` (record/validate both profiles)
 
@@ -808,14 +808,14 @@ Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for
 
 **Validation sprint sign-off (V-00 and every V-*):**
 
-- [ ] [05-development-steering.md](./05-development-steering.md) DS-1, DS-3, DS-6, DS-8 satisfied
-- [ ] Matching DS-{nn} + T-{nn} complete (V-01+ only); V-00 requires T-14 per [v-00-fuzzy-setpoint.md](./validations/v-00-fuzzy-setpoint.md)
-- [ ] [E2E login preflight](./06-test-framework.md#e2e-login-credentials-preflight) complete for capture/validate
-- [ ] Validation doc published under `validations/v-{nn}-*.md` (template: [_template-validation.md](./validations/_template-validation.md))
-- [ ] Canary page ids registered in `tools/fuzzy-validator/manifests/pages.json5`
-- [ ] `bin/fuzzy-validator record` or `setpoint capture` on **test** + **mirror** for milestone page ids
-- [ ] All `docs/megiddo/refactor/` updates committed on milestone branch
-- [ ] Branch squashed to exactly one commit
+- [x] [05-development-steering.md](./05-development-steering.md) DS-1, DS-3, DS-6, DS-8 satisfied
+- [x] Matching DS-{nn} + T-{nn} complete (V-01+ only); V-00 requires T-14 per [v-00-fuzzy-setpoint.md](./validations/v-00-fuzzy-setpoint.md)
+- [x] [E2E login preflight](./06-test-framework.md#e2e-login-credentials-preflight) complete for capture/validate
+- [x] Validation doc published under `validations/v-{nn}-*.md` (template: [_template-validation.md](./validations/_template-validation.md))
+- [x] Canary page ids registered in `tools/fuzzy-validator/manifests/pages.json5`
+- [x] `bin/fuzzy-validator record` or `setpoint capture` on **test** + **mirror** for milestone page ids
+- [x] All `docs/megiddo/refactor/` updates committed on milestone branch
+- [x] Branch squashed to exactly one commit
 
 ---
 
@@ -827,9 +827,9 @@ Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for
 
 | Step | Status |
 |------|--------|
-| Preflight 1 — major-interface URL registry (1–3 per class) | [ ] |
-| Preflight 2 — dual-profile fuzzy record (test + mirror) | [ ] |
-| V-00 sign-off gate | [ ] |
+| Preflight 1 — major-interface URL registry (1–3 per class) | [x] |
+| Preflight 2 — dual-profile fuzzy record (test + mirror) | [x] |
+| V-00 sign-off gate | [x] |
 
 ---
 
@@ -917,4 +917,4 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** V-00 (global fuzzy setpoint), then V-01 … V-14 in parallel, then R-01 (RSVP refactor — DS-01, T-01 complete).
+**Next actionable milestone:** V-01 (RSVP validation artifacts), then V-02 … V-14 in parallel batches, then R-01 (RSVP refactor — DS-01, T-01 complete).
