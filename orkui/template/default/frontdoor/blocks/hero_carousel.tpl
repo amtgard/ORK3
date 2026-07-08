@@ -34,6 +34,9 @@ $ctas       = is_array($ctas)   ? $ctas   : [];
 
     <?php foreach ($slides as $idx => $slide):
         $isFirst   = ($idx === 0);
+        // The first slide's headline is the page H1; later slides (alternate
+        // views of the same hero) use H2 so the page keeps a single H1.
+        $hlTag     = $isFirst ? 'h1' : 'h2';
         $imgSrc    = htmlspecialchars($slide['image']['src'] ?? '', ENT_QUOTES, 'UTF-8');
         $imgAlt    = htmlspecialchars($slide['image']['alt'] ?? '', ENT_QUOTES, 'UTF-8');
         $kicker    = htmlspecialchars($slide['kicker']   ?? '', ENT_QUOTES, 'UTF-8');
@@ -47,7 +50,7 @@ $ctas       = is_array($ctas)   ? $ctas   : [];
             <?php if ($kicker !== ''): ?>
             <div class="fd-kicker" style="margin-bottom:14px"><?= $kicker ?></div>
             <?php endif; ?>
-            <div class="fd-serif fd-hero-headline" style="font-size:58px;line-height:1.0;text-shadow:0 3px 18px rgba(0,0,0,.6);margin-bottom:16px"><?= $headline ?></div>
+            <<?= $hlTag ?> class="fd-serif fd-hero-headline" style="font-size:58px;line-height:1.0;text-shadow:0 3px 18px rgba(0,0,0,.6);margin-bottom:16px"><?= $headline ?></<?= $hlTag ?>>
             <?php if ($subcopy !== ''): ?>
             <p style="margin:0 0 26px;font-size:18px;color:rgba(255,255,255,.88);max-width:470px"><?= $subcopy ?></p>
             <?php endif; ?>
@@ -63,12 +66,18 @@ $ctas       = is_array($ctas)   ? $ctas   : [];
     </div>
     <?php endforeach; ?>
 
-    <?php if (!empty($slides)): ?>
+    <?php if (count($slides) > 1): ?>
     <div class="fd-dots">
         <?php foreach ($slides as $idx => $slide): ?>
-        <button class="fd-dot<?= $idx === 0 ? ' on' : '' ?>"></button>
+        <button type="button" class="fd-dot<?= $idx === 0 ? ' on' : '' ?>"
+                aria-label="Go to slide <?= (int)$idx + 1 ?>"<?= $idx === 0 ? ' aria-current="true"' : '' ?>></button>
         <?php endforeach; ?>
     </div>
+    <?php // Auto-advance pause/play toggle (WCAG 2.2.2). JS wires the behaviour
+          // and swaps the icon/label; starts as "Pause" (playing). ?>
+    <button type="button" class="fd-carousel-toggle" aria-label="Pause slideshow" aria-pressed="false">
+        <i class="fas fa-pause"></i>
+    </button>
     <?php endif; ?>
 
     <!-- Live stat ticker pinned to carousel base -->

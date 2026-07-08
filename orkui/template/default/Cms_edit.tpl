@@ -20,6 +20,7 @@ $blocks  = isset($Blocks) && is_array($Blocks) ? $Blocks : array();
 $isNew   = !empty($IsNew);
 $catalog = isset($BlockCatalog) && is_array($BlockCatalog) ? $BlockCatalog : array();
 $blockAllow = isset($BlockAllow) && is_array($BlockAllow) ? $BlockAllow : array();
+$allTags = isset($AllTags) && is_array($AllTags) ? $AllTags : array();
 $caps    = isset($Caps) && is_array($Caps) ? $Caps : array();
 // Active scope query ('&scope=k:5' or '') threaded onto every intra-admin link
 // so breadcrumbs + post-save redirects stay in the current org scope.
@@ -209,6 +210,13 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var STATE = {
         pageId:  <?= (int)$pageId ?>,
         isNew:   <?= $isNew ? 'true' : 'false' ?>,
+        // C15: optimistic-concurrency token = the row's updated_at at load. Sent
+        // as base_version on every save; the server _fails (status 12) if a newer
+        // stored version exists, and echoes the fresh version back on success.
+        version: <?= json_encode((string)($page['updated_at'] ?? '')) ?>,
+        published: <?= $isPublished ? 'true' : 'false' ?>,
+        origSlug: <?= json_encode($pSlug) ?>,
+        slugWarned: false,
         canEdit:    <?= $canEdit ? 'true' : 'false' ?>,
         canPublish: <?= $canPublish ? 'true' : 'false' ?>
     };
@@ -248,7 +256,17 @@ include __DIR__ . '/cms/_shell_top.tpl';
         if (!slugTouched && !slugInput.readOnly) { slugInput.value = slugify(titleInput.value); }
         markDirty();
     });
-    slugInput.addEventListener('input', function () { slugTouched = true; markDirty(); });
+    slugInput.addEventListener('input', function () { slugTouched = true; maybeWarnSlugChange(); markDirty(); });
+
+    // C17: changing the slug of an already-published page can break inbound links
+    // (the server-side reserved-slug guard + 301 redirect is the other lane). Warn
+    // once, inline (never a native dialog), so the author makes the change knowingly.
+    function maybeWarnSlugChange() {
+        if (STATE.slugWarned || !STATE.published) { return; }
+        if (slugInput.value.trim() === STATE.origSlug) { return; }
+        STATE.slugWarned = true;
+        toast('Heads up: this page is published — changing its slug can break existing links to it until redirects catch up.', 'error');
+    }
 
     // On a NEW page, switching the type re-seeds the starter blocks — but only
     // when the user hasn't authored content yet (avoid clobbering real work).
@@ -285,7 +303,10 @@ include __DIR__ . '/cms/_shell_top.tpl';
         }
         // a JSON-fallback block with broken JSON blocks save
         if (BE.hasJsonError()) {
-            if (!isAuto) { toast('Fix the invalid JSON in a block before saving.', 'error'); }
+            // C20: jump to + flash the offending block (and name it) rather than a
+            // vague toast the author can't act on.
+            if (!isAuto && BE.focusFirstError) { BE.focusFirstError(); }
+            else if (!isAuto) { toast('Fix the invalid JSON in a block before saving.', 'error'); }
             return;
         }
 
@@ -300,18 +321,28 @@ include __DIR__ . '/cms/_shell_top.tpl';
             slug: slugInput.value.trim(),
             type: typeInput.value,
             meta_description: metaInput.value.trim(),
+            base_version: STATE.version || '',   // C15 optimistic-concurrency token
             blocks: JSON.stringify(BE.serialize())
         };
 
         post('savepage', params).then(function (res) {
             saving = false;
             if (saveBtn) { saveBtn.disabled = false; }
+            // C15: concurrent-edit conflict — the stored row is newer than our base.
+            if (res && (res.status === 12 || res.code === 12)) {
+                if (savedHint) { savedHint.textContent = ''; }
+                handleSaveConflict(res, isAuto);
+                return;
+            }
             if (!res || !res.ok) {
                 if (savedHint) { savedHint.textContent = ''; }
                 toast((res && res.error) || 'Save failed.', 'error');
                 return;
             }
             dirty = false;
+            // C15: adopt the fresh version the server echoes so the NEXT save's
+            // base_version matches and doesn't spuriously conflict.
+            if (res.version) { STATE.version = res.version; }
             // capture id for a freshly-created page so later saves are updates
             if (res.is_new && res.page_id) {
                 STATE.pageId = res.page_id;
@@ -319,6 +350,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 params_pageId_synced();
             }
             if (res.slug) { slugInput.value = res.slug; slugTouched = true; }
+            STATE.origSlug = slugInput.value.trim();
+            STATE.published = (STATE.published || res.status === 'published');
             if (savedHint) { savedHint.textContent = 'Saved ' + new Date().toLocaleTimeString(); savedHint.className = 'cms-editbar-hint cms-editbar-hint-saved'; }
             toast('Page saved.', 'ok');
             // Refresh the in-context preview so it reflects the just-saved draft.
@@ -330,6 +363,32 @@ include __DIR__ . '/cms/_shell_top.tpl';
             if (savedHint) { savedHint.textContent = 'Unsaved changes…'; savedHint.className = 'cms-editbar-hint'; }
             toast('Network error.', 'error');
         });
+    }
+
+    // C15: a save was rejected because the stored row is newer than our base
+    // version (someone else saved meanwhile). Offer a clear, non-native
+    // reload-or-overwrite choice. On autosave we stay quiet (just a hint) so the
+    // modal never ambushes the author mid-typing — their next manual save surfaces it.
+    function handleSaveConflict(res, isAuto) {
+        dirty = true;
+        if (savedHint) { savedHint.textContent = 'Save blocked — this page changed elsewhere.'; savedHint.className = 'cms-editbar-hint cms-editbar-hint-dirty'; }
+        if (isAuto) { return; }
+        if (!BE || !BE.confirmDialog) {
+            toast('This page was changed elsewhere. Reload before saving to avoid losing their changes.', 'error');
+            return;
+        }
+        BE.confirmDialog(
+            'This page changed elsewhere',
+            'Someone else saved this page since you opened it. Cancel and reload to keep their version (your unsaved edits will be lost), or overwrite it with your version.',
+            'Overwrite with mine',
+            function () {
+                BE.closeConfirm();
+                // Adopt the server's fresh version so the retry passes the check,
+                // then re-save — deliberately overwriting the other edit.
+                if (res && res.version) { STATE.version = res.version; }
+                doSave(false);
+            }
+        );
     }
 
     // Declared up front so params_pageId_synced (called on first save of a new
@@ -471,6 +530,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             labels:    <?= json_encode($catalogLabels, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             pageTypes: <?= json_encode($pageTypes, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             blockAllow: <?= json_encode($blockAllow, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            tags:      <?= json_encode($allTags, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             pageType:  typeInput ? typeInput.value : <?= json_encode($pType, JSON_HEX_TAG) ?>,
             canEdit:   STATE.canEdit,
             onDirty:   markDirty

@@ -258,6 +258,34 @@ class Controller
         }
         $this->data[ 'FrontDoor' ] = $frontDoorBlocks;
 
+        // C6: per-page canonical + OG for the front-door HOME. The hardcoded ORK
+        // branding in default.theme is now a FALLBACK, overridden here so the home
+        // canonical is the site root and og:image can use the home page's hero
+        // when one is set (else the theme falls back to the ORK default image).
+        $_host   = (string) ($_SERVER['HTTP_HOST'] ?? '');
+        $_https  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || ((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+        $_origin = ($_host !== '') ? (($_https ? 'https://' : 'http://') . $_host) : '';
+        $_ogImage = '';
+        if (!empty($home) && !empty($home['hero_media_id'])) {
+            $this->load_model('CmsMedia');
+            if (isset($this->CmsMedia)) {
+                $_hm = $this->CmsMedia->get_media((int) $home['hero_media_id']);
+                if (is_array($_hm) && !empty($_hm['url'])) {
+                    $_u = (string) $_hm['url'];
+                    $_ogImage = preg_match('#^https?://#i', $_u) ? $_u : ($_origin . '/' . ltrim($_u, '/'));
+                }
+            }
+        }
+        $this->data['PageMeta'] = array(
+            'canonical'   => ($_origin !== '') ? ($_origin . '/') : '',
+            'og_type'     => 'website',
+            'og_title'    => 'ORK 3 - Amtgard Online Record Keeper',
+            'og_desc'     => 'The Online Record Keeper for the Amtgard International LARP.',
+            'og_image'    => $_ogImage,
+            'og_sitename' => 'ORK 3 - Amtgard Online Record Keeper',
+        );
+
         // Display name for the member bar (logged-in only)
         $this->data[ 'ViewerName' ] = '';
         if ($this->data['LoggedIn'] && isset($this->session->user_id)) {

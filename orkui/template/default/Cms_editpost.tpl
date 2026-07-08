@@ -26,6 +26,7 @@ $blocks  = isset($Blocks) && is_array($Blocks) ? $Blocks : array();
 $isNew   = !empty($IsNew);
 $catalog = isset($BlockCatalog) && is_array($BlockCatalog) ? $BlockCatalog : array();
 $blockAllow = isset($BlockAllow) && is_array($BlockAllow) ? $BlockAllow : array();
+$allTags = isset($AllTags) && is_array($AllTags) ? $AllTags : array();
 $caps    = isset($Caps) && is_array($Caps) ? $Caps : array();
 $heroRef = (isset($HeroRef) && is_array($HeroRef)) ? $HeroRef : null;
 // Active scope query ('&scope=k:5' or '') threaded onto every intra-admin link
@@ -205,6 +206,10 @@ include __DIR__ . '/cms/_shell_top.tpl';
         isNew:   <?= $isNew ? 'true' : 'false' ?>,
         heroId:  <?= (int)($post['hero_media_id'] ?? 0) ?>,
         slug:    <?= json_encode($pSlug) ?>,
+        // C15: optimistic-concurrency token = the row's updated_at at load. Sent as
+        // base_version on save; the server _fails (status 12) on a stale base and
+        // echoes the fresh version back on success.
+        version: <?= json_encode((string)($post['updated_at'] ?? '')) ?>,
         canEdit:    <?= $canEdit ? 'true' : 'false' ?>,
         canPublish: <?= $canPublish ? 'true' : 'false' ?>
     };
@@ -309,7 +314,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
             return;
         }
         if (BE.hasJsonError()) {
-            if (!isAuto) { toast('Fix the invalid JSON in a block before saving.', 'error'); }
+            // C20: jump to + name the offending block instead of a vague toast.
+            if (!isAuto && BE.focusFirstError) { BE.focusFirstError(); }
+            else if (!isAuto) { toast('Fix the invalid JSON in a block before saving.', 'error'); }
             return;
         }
 
@@ -325,18 +332,27 @@ include __DIR__ . '/cms/_shell_top.tpl';
             excerpt: excerptInput.value.trim(),
             hero_media_id: STATE.heroId || 0,
             tags: tagsInput.value,
+            base_version: STATE.version || '',   // C15 optimistic-concurrency token
             blocks: JSON.stringify(BE.serialize())
         };
 
         post('savepost', params).then(function (res) {
             saving = false;
             if (saveBtn) { saveBtn.disabled = false; }
+            // C15: concurrent-edit conflict — the stored row is newer than our base.
+            if (res && (res.status === 12 || res.code === 12)) {
+                if (savedHint) { savedHint.textContent = ''; }
+                handleSaveConflict(res, isAuto);
+                return;
+            }
             if (!res || !res.ok) {
                 if (savedHint) { savedHint.textContent = ''; }
                 toast((res && res.error) || 'Save failed.', 'error');
                 return;
             }
             dirty = false;
+            // C15: adopt the fresh version so the NEXT save doesn't spuriously conflict.
+            if (res.version) { STATE.version = res.version; }
             if (res.is_new && res.post_id) {
                 STATE.postId = res.post_id;
                 STATE.isNew = false;
@@ -357,6 +373,28 @@ include __DIR__ . '/cms/_shell_top.tpl';
             if (savedHint) { savedHint.textContent = 'Unsaved changes…'; savedHint.className = 'cms-editbar-hint'; }
             toast('Network error.', 'error');
         });
+    }
+
+    // C15: save rejected because the stored row is newer than our base version.
+    // Non-native reload-or-overwrite choice; stays quiet on autosave.
+    function handleSaveConflict(res, isAuto) {
+        dirty = true;
+        if (savedHint) { savedHint.textContent = 'Save blocked — this post changed elsewhere.'; savedHint.className = 'cms-editbar-hint cms-editbar-hint-dirty'; }
+        if (isAuto) { return; }
+        if (!BE || !BE.confirmDialog) {
+            toast('This post was changed elsewhere. Reload before saving to avoid losing their changes.', 'error');
+            return;
+        }
+        BE.confirmDialog(
+            'This post changed elsewhere',
+            'Someone else saved this post since you opened it. Cancel and reload to keep their version (your unsaved edits will be lost), or overwrite it with your version.',
+            'Overwrite with mine',
+            function () {
+                BE.closeConfirm();
+                if (res && res.version) { STATE.version = res.version; }
+                doSave(false);
+            }
+        );
     }
 
     // Declared up front so previewSlugSynced (called on first save of a new
@@ -497,6 +535,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             labels:    <?= json_encode($catalogLabels, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             pageTypes: [],
             blockAllow: <?= json_encode($blockAllow, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
+            tags:      <?= json_encode($allTags, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             pageType:  'post',
             canEdit:   STATE.canEdit,
             onDirty:   markDirty

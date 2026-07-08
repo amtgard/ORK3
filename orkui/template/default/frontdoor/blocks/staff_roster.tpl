@@ -2,7 +2,12 @@
 /**
  * Partial: staff_roster.tpl
  * Receives: $blockFields (kicker, heading, subheading, presentation, people[]), UIR
- * people[] each: image['src','alt'], persona_name, mundane_name, role, bio, mundane_id, href
+ * people[] each: image['src','alt'], persona_name, mundane_name, role, bio, mundane_id, href, show_mundane
+ *
+ * PII/consent (C21): a person's real (mundane) name is PUBLISHED ONLY when they
+ * have explicitly opted in via show_mundane. Without that consent the card shows
+ * the Amtgard persona alone — even when the block's presentation is "Real name
+ * leads" — so a roster can never expose a member's legal name without opt-in.
  */
 $kicker       = $blockFields['kicker']       ?? '';
 $heading      = $blockFields['heading']      ?? '';
@@ -16,7 +21,7 @@ $people       = $blockFields['people']       ?? [];
             <div class="fd-kicker fd-kicker-d" style="margin-bottom:8px;"><?= htmlspecialchars($kicker, ENT_QUOTES) ?></div>
         <?php endif; ?>
         <?php if (!empty($heading)): ?>
-            <h3 class="fd-sec-title"><?= htmlspecialchars($heading, ENT_QUOTES) ?></h3>
+            <h2 class="fd-sec-title"><?= htmlspecialchars($heading, ENT_QUOTES) ?></h2>
         <?php endif; ?>
         <?php if (!empty($subheading)): ?>
             <p style="color:#667;margin:6px 0 0;font-size:15px;text-align:center;"><?= htmlspecialchars($subheading, ENT_QUOTES) ?></p>
@@ -36,12 +41,21 @@ $people       = $blockFields['people']       ?? [];
                 $mid     = (int)($person['mundane_id'] ?? 0);
                 $href    = trim((string)($person['href'] ?? ''));
 
-                if ($presentation === 'mundane') {
-                    $primary   = ($mundane !== '') ? $mundane : $persona;
-                    $secondary = ($mundane !== '') ? $persona : '';
+                // C21 consent gate: the real name is publishable ONLY when opted in.
+                // Legacy rows (authored before the opt-in existed) carry no
+                // show_mundane key and therefore default to withheld.
+                $showMundane = !empty($person['show_mundane']);
+                $mundanePub  = $showMundane ? $mundane : '';
+
+                if ($presentation === 'mundane' && $mundanePub !== '') {
+                    // Real name leads only when it's actually publishable.
+                    $primary   = $mundanePub;
+                    $secondary = $persona;
                 } else {
-                    $primary   = ($persona !== '') ? $persona : $mundane;
-                    $secondary = ($persona !== '') ? $mundane : '';
+                    // Persona leads — and is the forced fallback whenever the real
+                    // name is withheld (no consent) so it never leaks as secondary.
+                    $primary   = ($persona !== '') ? $persona : $mundanePub;
+                    $secondary = ($persona !== '' && $mundanePub !== '') ? $mundanePub : '';
                 }
                 if ($primary === '') { continue; }
 

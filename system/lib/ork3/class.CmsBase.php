@@ -15,9 +15,111 @@
 
 class CmsBase extends Ork3
 {
+    /**
+     * Per-request memo of whether ork_cms_audit exists. null = not yet probed.
+     * Keeps _cmsAudit() silent (no repeated SHOW TABLES, no warnings) both
+     * before the C14 migration has run and after. FPM resets statics per
+     * request so this never leaks across requests.
+     */
+    private static $_auditTableExists = null;
+
+    /**
+     * Per-request guard so the lazy scheduled→published promotion (C7) runs at
+     * most once per request. FPM resets statics between requests.
+     */
+    private static $_promotedThisRequest = false;
+
     public function __construct()
     {
         parent::__construct();
+    }
+
+    /**
+     * Lazy scheduling (C7): promote any scheduled page/post whose published_at
+     * has arrived to 'published'. Runs at most once per request (both tables in
+     * one pass) so no cron is needed — the next public read sees them live.
+     * Best-effort: a failure here never blocks the read. Shared by CmsPage and
+     * CmsPost so either read path triggers the flip.
+     */
+    protected function _promoteScheduled()
+    {
+        global $DB;
+
+        if (self::$_promotedThisRequest) {
+            return;
+        }
+        self::$_promotedThisRequest = true;
+
+        try {
+            $DB->Clear();
+            $DB->Execute(
+                'UPDATE ' . DB_PREFIX . 'cms_page'
+                . " SET status = 'published'"
+                . " WHERE status = 'scheduled' AND published_at IS NOT NULL AND published_at <= NOW()"
+            );
+            $DB->Clear();
+            $DB->Execute(
+                'UPDATE ' . DB_PREFIX . 'cms_post'
+                . " SET status = 'published'"
+                . " WHERE status = 'scheduled' AND published_at IS NOT NULL AND published_at <= NOW()"
+            );
+        } catch (\Throwable $e) {
+            // Non-fatal — a scheduled row simply stays scheduled until the next read.
+        }
+    }
+
+    /**
+     * Append a fire-and-forget row to the CMS audit trail (ork_cms_audit).
+     *
+     * Never blocks or fails the calling mutation: a missing table (pre-migration)
+     * is detected once per request and skipped silently, and any write error is
+     * swallowed. Callers should invoke this AFTER their primary write succeeds.
+     *
+     * @param int    $actorId    acting mundane_id (0/unknown → stored NULL)
+     * @param string $action     short verb, e.g. 'publish'|'unpublish'|'delete'|'grant'|'revoke'
+     * @param string $entityType 'page'|'post'|'media'|'grant'|...
+     * @param int    $entityId   primary key of the affected entity
+     * @param string $scopeType  'global'|'kingdom'|'park'
+     * @param int    $scopeId    scope owner id (0 for global)
+     * @return void
+     */
+    protected function _cmsAudit($actorId, $action, $entityType, $entityId, $scopeType = 'global', $scopeId = 0)
+    {
+        global $DB;
+
+        try {
+            // Probe the table once per request so this stays silent (and cheap)
+            // before the migration has been applied.
+            if (self::$_auditTableExists === null) {
+                $DB->Clear();
+                $probe = $this->_firstRow($DB->DataSet(
+                    "SHOW TABLES LIKE '" . DB_PREFIX . "cms_audit'"
+                ));
+                self::$_auditTableExists = ($probe !== null);
+            }
+            if (self::$_auditTableExists !== true) {
+                return;
+            }
+
+            $actorId = (int)$actorId;
+
+            $DB->Clear();
+            $DB->actor_id    = $actorId > 0 ? $actorId : null;
+            $DB->action      = substr((string)$action, 0, 40);
+            $DB->entity_type = substr((string)$entityType, 0, 24);
+            $DB->entity_id   = (int)$entityId;
+            $DB->scope_type  = $this->_normalizeScopeType($scopeType);
+            $DB->scope_id    = (int)$scopeId;
+            $DB->at          = date('Y-m-d H:i:s');
+            $DB->Execute(
+                'INSERT INTO ' . DB_PREFIX . 'cms_audit'
+                . ' (actor_id, action, entity_type, entity_id, scope_type, scope_id, `at`)'
+                . ' VALUES (:actor_id, :action, :entity_type, :entity_id, :scope_type, :scope_id, :at)'
+            );
+        } catch (\Throwable $e) {
+            // Best-effort only — an audit-write failure must never surface to
+            // (or roll back) the primary mutation.
+        }
     }
 
     /**

@@ -18,9 +18,9 @@ $cards      = $blockFields['cards']      ?? [];
         <?php endif; ?>
 
         <?php if (!empty($heading)): ?>
-            <h3 class="fd-sec-title">
+            <h2 class="fd-sec-title">
                 <?= htmlspecialchars($heading, ENT_QUOTES) ?>
-            </h3>
+            </h2>
         <?php endif; ?>
 
         <?php if (!empty($subheading)): ?>

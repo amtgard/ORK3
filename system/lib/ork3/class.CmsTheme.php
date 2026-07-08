@@ -29,7 +29,7 @@ class CmsTheme extends CmsBase
         $DB->scope_type = $scopeType;
         $DB->scope_id   = $scopeId;
         $row = $this->_firstRow($DB->DataSet(
-            'SELECT id, name, tokens_json, is_active FROM ' . DB_PREFIX . 'cms_theme'
+            'SELECT id, name, tokens_json, is_active, updated_at FROM ' . DB_PREFIX . 'cms_theme'
             . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND is_active = 1 LIMIT 1'
         ));
         if ($row === null) {
@@ -42,14 +42,47 @@ class CmsTheme extends CmsBase
         return $row;
     }
 
-    /** The <style> inner CSS for the active theme, or '' when none. */
+    /**
+     * The <style> inner CSS for the active theme, or '' when none.
+     *
+     * C5: the resolved CSS is cached in GhettoCache keyed by (scope, updated_at)
+     * so every anonymous public hit no longer re-reads the theme row AND re-runs
+     * the token→CSS compile. The key embeds the active theme's updated_at, which
+     * MariaDB bumps (ON UPDATE CURRENT_TIMESTAMP) on any SaveTheme / SetActive /
+     * ResetActive write — so a theme edit self-busts the cache with no explicit
+     * invalidation. A missing/deactivated theme ('' result) is not cached (cheap).
+     */
     public function GetActiveCss($scopeType = 'global', $scopeId = 0)
     {
         $t = $this->GetActiveTheme($scopeType, $scopeId);
         if ($t === null) {
             return '';
         }
+
+        $cache = $this->_cache();
+        if ($cache !== null) {
+            $key    = $this->_normalizeScopeType($scopeType) . '.' . (int)$scopeId
+                . '.' . (string)($t['updated_at'] ?? '') . '.' . (int)($t['id'] ?? 0);
+            $cached = $cache->get(__CLASS__ . '.GetActiveCss', $key, 1800);
+            if ($cached !== false) {
+                return (string)$cached;
+            }
+            $css = CmsThemeTokens::ToCss($t['tokens']);
+            return (string)$cache->cache(__CLASS__ . '.GetActiveCss', $key, $css);
+        }
+
         return CmsThemeTokens::ToCss($t['tokens']);
+    }
+
+    /** GhettoCache handle, or null when the memcache layer isn't wired up. */
+    private function _cache()
+    {
+        if (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache)
+            && is_object(Ork3::$Lib->ghettocache)
+        ) {
+            return Ork3::$Lib->ghettocache;
+        }
+        return null;
     }
 
     /**

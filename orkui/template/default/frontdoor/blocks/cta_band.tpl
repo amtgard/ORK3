@@ -17,9 +17,9 @@ $links   = $blockFields['links']   ?? '';
     <?php endif; ?>
 
     <?php if (!empty($heading)): ?>
-        <h3 class="fd-serif" style="font-size:32px;color:var(--fd-primary-contrast);margin:0 0 8px;">
+        <h2 class="fd-serif" style="font-size:32px;color:var(--fd-primary-contrast);margin:0 0 8px;">
             <?= htmlspecialchars($heading, ENT_QUOTES) ?>
-        </h3>
+        </h2>
     <?php endif; ?>
 
     <?php if (!empty($subcopy)): ?>

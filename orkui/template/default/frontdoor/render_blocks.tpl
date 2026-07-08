@@ -9,6 +9,11 @@
  */
 $fdBlocks    = isset( $fdBlocks ) && is_array( $fdBlocks ) ? $fdBlocks : [];
 $fdBlockDir  = DIR_TEMPLATE . 'default/frontdoor/blocks/';
+// Shared "emit this block's inline <style> at most once per request" flag.
+// Partials are include()d into this scope, so an assignment they make here
+// persists across the loop below (and dedupes repeated block types). Keyed by
+// block type, e.g. $fdStyleOnce['heading'].
+$fdStyleOnce = isset( $fdStyleOnce ) && is_array( $fdStyleOnce ) ? $fdStyleOnce : [];
 foreach ( $fdBlocks as $block ) {
 	if ( empty( $block['enabled'] ) ) { continue; }
 	$type = preg_replace( '/[^a-z_]/', '', (string) $block['type'] );

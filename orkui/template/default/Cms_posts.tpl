@@ -193,6 +193,33 @@ include __DIR__ . '/cms/_shell_top.tpl';
         </table>
     </div>
 
+    <?php if ($canDelete): ?>
+    <?php /* ---- Trash: soft-deleted posts, restorable (C2). Lazy-loaded on open
+            via CmsAjax/listtrashedposts; each row offers Restore (restorepost). ---- */ ?>
+    <div class="cms-trash-section" style="margin-top:22px;">
+        <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsTrashToggle" aria-expanded="false" aria-controls="cmsTrashPanel">
+            <i class="fas fa-trash-alt"></i> Trash <span class="cms-muted" id="cmsTrashCount"></span>
+        </button>
+        <div class="cms-trash-panel" id="cmsTrashPanel" hidden style="margin-top:12px;">
+            <div class="cms-table-wrap">
+                <table class="cms-table" id="cms-trash-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Title</th>
+                            <th scope="col">Author</th>
+                            <th scope="col">Tags</th>
+                            <th scope="col" style="text-align:right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cmsTrashBody">
+                        <tr><td colspan="4"><div class="cms-empty"><div class="cms-empty-copy"><span class="cms-spin"></span> Loading…</div></div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
 <?php include __DIR__ . '/cms/_shell_bottom.tpl'; ?>
 
 <?php /* ---- Confirm modal (Delete) ---- */ ?>
@@ -259,6 +286,30 @@ include __DIR__ . '/cms/_shell_top.tpl';
         toastEl.className = 'cms-toast cms-show' + (kind ? ' cms-toast-' + kind : '');
         clearTimeout(toastTimer);
         toastTimer = setTimeout(function () { toastEl.className = 'cms-toast'; }, 3200);
+    }
+
+    /* ---- C2: undoable toast — delete is a soft-delete (deleted_at), so the row
+       can be brought back. Show an Undo affordance that calls restorepost
+       (longer dwell, styled inline so it needs no CSS class). Mirrors Cms_index.tpl. ---- */
+    function undoableToast(msg, undoFn) {
+        if (!toastEl) { return; }
+        toastEl.innerHTML = '';
+        var span = document.createElement('span');
+        span.textContent = msg + ' ';
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = 'Undo';
+        btn.style.cssText = 'background:none;border:none;color:inherit;text-decoration:underline;cursor:pointer;font:inherit;padding:0;margin-left:4px;';
+        btn.addEventListener('click', function () {
+            clearTimeout(toastTimer);
+            toastEl.className = 'cms-toast';
+            undoFn();
+        });
+        toastEl.appendChild(span);
+        toastEl.appendChild(btn);
+        toastEl.className = 'cms-toast cms-show cms-toast-ok';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toastEl.className = 'cms-toast'; }, 7000);
     }
 
     /* ---- modal helpers ---- */
@@ -347,7 +398,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         btn.addEventListener('click', function () {
             var pid = btn.getAttribute('data-post-id');
             var title = btn.getAttribute('data-title') || 'this post';
-            askConfirm('Delete "' + title + '"? This removes the post and all of its content blocks. This cannot be undone.', function () {
+            askConfirm('Delete "' + title + '"? This moves the post to the Trash, where it can be restored.', function () {
                 var okEl = confirmOk;
                 if (okEl) { okEl.disabled = true; }
                 post('deletepost', { post_id: pid }).then(function (res) {
@@ -356,7 +407,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     if (!res || !res.ok) { toast((res && res.error) || 'Delete failed.', 'error'); return; }
                     var row = document.querySelector('tr[data-post-id="' + pid + '"]');
                     if (row && dt) { dt.row(row).remove().draw(false); } else if (row) { row.parentNode.removeChild(row); }
-                    toast('Post deleted.', 'ok');
+                    // C2: soft-delete → offer Undo (restorepost). Restoring re-reads
+                    // the list so the row (and its DataTables state) comes back clean.
+                    undoableToast('Post deleted.', function () {
+                        post('restorepost', { post_id: pid }).then(function (r) {
+                            if (r && r.ok) { toast('Post restored.', 'ok'); window.location.reload(); }
+                            else { toast((r && r.error) || 'Restore failed.', 'error'); }
+                        }).catch(function () { toast('Network error.', 'error'); });
+                    });
                 }).catch(function () { if (okEl) { okEl.disabled = false; } toast('Network error.', 'error'); });
             });
         });
@@ -515,12 +573,102 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 runBulk('unpublishpost', ids, 'Unpublished', false);
             } else if (act === 'delete') {
                 var n = ids.length;
-                askConfirm('Delete ' + n + ' post' + (n === 1 ? '' : 's') + '? This cannot be undone.', function () {
+                askConfirm('Delete ' + n + ' post' + (n === 1 ? '' : 's') + '? They move to the Trash, where they can be restored.', function () {
                     closeModal(confirmModal);
                     runBulk('deletepost', ids, 'Deleted', true);
                 });
             }
         });
     });
+
+    /* ====================================================================
+     * Trash panel — lazy-load soft-deleted posts; Restore brings them back.
+     * Reads via CmsAjax/listtrashedposts (GET); Restore via restorepost (POST).
+     * ==================================================================== */
+    <?php if ($canDelete): ?>
+    (function () {
+        var toggle  = document.getElementById('cmsTrashToggle');
+        var panel   = document.getElementById('cmsTrashPanel');
+        var trBody  = document.getElementById('cmsTrashBody');
+        var countEl = document.getElementById('cmsTrashCount');
+        if (!toggle || !panel || !trBody) { return; }
+        var loaded = false;
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+
+        function renderRows(posts) {
+            if (countEl) { countEl.textContent = posts.length ? '(' + posts.length + ')' : ''; }
+            if (!posts.length) {
+                trBody.innerHTML = '<tr><td colspan="4"><div class="cms-empty"><div class="cms-empty-copy">The Trash is empty.</div></div></td></tr>';
+                return;
+            }
+            trBody.innerHTML = '';
+            posts.forEach(function (p) {
+                var tr = document.createElement('tr');
+                tr.setAttribute('data-trash-post-id', p.post_id);
+                var tags = (p.tags || []).map(function (t) {
+                    return '<span class="cms-badge cms-badge-scope">' + esc(t.name || '') + '</span>';
+                }).join(' ') || '<span class="cms-muted">—</span>';
+                tr.innerHTML =
+                    '<td data-label="Title"><div class="cms-pg-title">' + esc(p.title || '(untitled)') + '</div>' +
+                    (p.slug ? '<div class="cms-pg-slug">/' + esc(p.slug) + '</div>' : '') + '</td>' +
+                    '<td data-label="Author" class="cms-muted">' + (p.author_name ? esc(p.author_name) : '—') + '</td>' +
+                    '<td data-label="Tags">' + tags + '</td>' +
+                    '<td data-label="Actions" style="text-align:right;">' +
+                        '<button type="button" class="cms-btn cms-btn-sm cms-btn-primary cms-trash-restore" data-post-id="' + esc(p.post_id) + '"><i class="fas fa-trash-restore"></i> Restore</button>' +
+                    '</td>';
+                trBody.appendChild(tr);
+            });
+        }
+
+        function load() {
+            trBody.innerHTML = '<tr><td colspan="4"><div class="cms-empty"><div class="cms-empty-copy"><span class="cms-spin"></span> Loading…</div></div></td></tr>';
+            var url = AJAX + 'listtrashedposts' + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '');
+            fetch(url, { credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (!res || !res.ok) {
+                        trBody.innerHTML = '<tr><td colspan="4"><div class="cms-empty"><div class="cms-empty-copy">' +
+                            esc((res && res.error) || 'Could not load the Trash.') + '</div></div></td></tr>';
+                        return;
+                    }
+                    loaded = true;
+                    renderRows(res.posts || []);
+                })
+                .catch(function () {
+                    trBody.innerHTML = '<tr><td colspan="4"><div class="cms-empty"><div class="cms-empty-copy">Network error.</div></div></td></tr>';
+                });
+        }
+
+        toggle.addEventListener('click', function () {
+            if (panel.hasAttribute('hidden')) {
+                panel.removeAttribute('hidden');
+                toggle.setAttribute('aria-expanded', 'true');
+                if (!loaded) { load(); }
+            } else {
+                panel.setAttribute('hidden', '');
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        trBody.addEventListener('click', function (e) {
+            var btn = e.target.closest('.cms-trash-restore');
+            if (!btn) { return; }
+            var pid = btn.getAttribute('data-post-id');
+            btn.disabled = true;
+            post('restorepost', { post_id: pid }).then(function (res) {
+                if (!res || !res.ok) { btn.disabled = false; toast((res && res.error) || 'Restore failed.', 'error'); return; }
+                toast('Post restored.', 'ok');
+                // Reload so the restored row rejoins the main list (and its
+                // DataTables state) cleanly — mirrors the Undo path.
+                window.location.reload();
+            }).catch(function () { btn.disabled = false; toast('Network error.', 'error'); });
+        });
+    })();
+    <?php endif; ?>
 })();
 </script>

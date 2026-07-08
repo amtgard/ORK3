@@ -54,6 +54,18 @@
     justify-content: flex-end;
 }
 
+/* ---- Keyboard focus (WCAG 2.4.7) for org-site controls ----- */
+/* frontdoor.css supplies the generic .fd-page ring; these tune offset/radius
+   for the org chrome (buttons, pager links, footer tie-back). */
+.org-btn:focus-visible,
+.org-pager a:focus-visible,
+.org-footer-tie:focus-visible,
+.fd-org-brand:focus-visible {
+    outline: 3px solid var(--fd-accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+}
+
 /* ---- Notice cards (coming soon / 404 / empty) -------------- */
 .org-notice {
     display: flex;

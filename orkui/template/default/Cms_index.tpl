@@ -208,9 +208,12 @@ include __DIR__ . '/cms/_shell_top.tpl';
             <p class="cms-muted" style="margin-top:0;font-size:13px;">Pick a starting layout. You can add or remove any block afterward.</p>
             <div class="cms-typegrid">
                 <?php foreach ($pageTypes as $pt): ?>
+                    <?php // Plain-language description only — never the raw type slug (dev jargon). ?>
                     <a class="cms-typecard" href="<?= UIR ?>Cms/edit/new&type=<?= $h($pt['type']) ?><?= $scopeQ ?>">
                         <strong><?= $h($pt['label']) ?></strong>
-                        <span><?= $h($pt['type']) ?></span>
+                        <?php if (!empty($pt['description'])): ?>
+                            <span><?= $h($pt['description']) ?></span>
+                        <?php endif; ?>
                     </a>
                 <?php endforeach; ?>
             </div>
@@ -282,6 +285,30 @@ include __DIR__ . '/cms/_shell_top.tpl';
         toastEl.className = 'cms-toast cms-show' + (kind ? ' cms-toast-' + kind : '');
         clearTimeout(toastTimer);
         toastTimer = setTimeout(function () { toastEl.className = 'cms-toast'; }, 3200);
+    }
+
+    /* ---- C2: undoable toast — delete is a soft-delete (deleted_at), so the row
+       can be brought back. Show an Undo affordance that calls the restore endpoint
+       (longer dwell, styled inline so it needs no CSS class). ---- */
+    function undoableToast(msg, undoFn) {
+        if (!toastEl) { return; }
+        toastEl.innerHTML = '';
+        var span = document.createElement('span');
+        span.textContent = msg + ' ';
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = 'Undo';
+        btn.style.cssText = 'background:none;border:none;color:inherit;text-decoration:underline;cursor:pointer;font:inherit;padding:0;margin-left:4px;';
+        btn.addEventListener('click', function () {
+            clearTimeout(toastTimer);
+            toastEl.className = 'cms-toast';
+            undoFn();
+        });
+        toastEl.appendChild(span);
+        toastEl.appendChild(btn);
+        toastEl.className = 'cms-toast cms-show cms-toast-ok';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toastEl.className = 'cms-toast'; }, 7000);
     }
 
     /* ---- modal helpers ---- */
@@ -381,7 +408,14 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     if (!res || !res.ok) { toast((res && res.error) || 'Delete failed.', 'error'); return; }
                     var row = document.querySelector('tr[data-page-id="' + pid + '"]');
                     if (row && dt) { dt.row(row).remove().draw(false); } else if (row) { row.parentNode.removeChild(row); }
-                    toast('Page deleted.', 'ok');
+                    // C2: soft-delete → offer Undo (restorepage). Restoring re-reads
+                    // the list so the row (and its DataTables state) comes back clean.
+                    undoableToast('Page deleted.', function () {
+                        post('restorepage', { page_id: pid }).then(function (r) {
+                            if (r && r.ok) { toast('Page restored.', 'ok'); window.location.reload(); }
+                            else { toast((r && r.error) || 'Restore failed.', 'error'); }
+                        }).catch(function () { toast('Network error.', 'error'); });
+                    });
                 }).catch(function () { if (okBtn) { okBtn.disabled = false; } toast('Network error.', 'error'); });
             });
         });

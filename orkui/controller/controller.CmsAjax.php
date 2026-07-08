@@ -20,8 +20,12 @@ require_once __DIR__ . '/trait.CmsScope.php';
  *
  * Listed in the no-token-skip set in class.Controller.php (the *Ajax pattern),
  * so the single-device token check does not bounce these XHR calls. Conventions:
- * thin controller (DB work lives in the libs); rich_text/raw_html block bodies
- * run through CmsSanitizer::Clean before save (defense-in-depth at render too).
+ * thin controller (DB work lives in the libs). Rich-text/HTML block fields are
+ * sanitized AUTHORITATIVELY in CmsPage::ReplaceBlocks — the storage choke point
+ * every writer passes through (editor, imports, seeding) — so stored content is
+ * always clean regardless of entry path. The controller's own _sanitizeFields()
+ * pass below is redundant belt-and-suspenders, NOT the sole defense, and there
+ * is deliberately no reliance on re-sanitizing at render time.
  */
 class Controller_CmsAjax extends Controller
 {
@@ -75,8 +79,38 @@ class Controller_CmsAjax extends Controller
 
         $pageId = (int)($_POST['page_id'] ?? 0);
         $isNew  = ($pageId <= 0);
-        $needed = $isNew ? 'page.create' : 'page.edit';
-        $this->_require($uid, $needed, $scope);
+
+        // ---- Authorization ----
+        // New page → page.create. Existing page → page.edit OR page.edit_own on a
+        // page the user created (C16: page.edit_own was granted to contributors
+        // but never honored, locking them out of their own draft after creating it).
+        $existing = null;
+        if ($isNew) {
+            $this->_require($uid, 'page.create', $scope);
+        } else {
+            // Pre-gate so a wholly-unauthorized user gets a uniform 403 and can't
+            // use the not-found vs not-authorized responses as an existence oracle.
+            if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
+                && !$this->CmsAuth->cms_can($uid, 'page.edit_own', $scope)
+            ) {
+                $this->_fail('You are not authorized to perform this action.', 5);
+            }
+            $existing = $this->CmsPage->get_page($pageId);
+            if (empty($existing)) {
+                $this->_fail('Page not found.', 4);
+            }
+            // IDOR guard: the existing page must belong to the resolved scope.
+            $this->_requireOwned($existing, $scope);
+            // If the user only holds page.edit_own, it must be THEIR page.
+            if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
+                && (int)($existing['created_by'] ?? 0) !== $uid
+            ) {
+                $this->_fail('You can only edit pages you created.', 5);
+            }
+            // C15: optimistic-concurrency guard — reject if the stored row is
+            // newer than the version the client loaded.
+            $this->_guardConcurrency($existing);
+        }
 
         // ---- Page meta ----
         $title = trim((string)($_POST['title'] ?? ''));
@@ -89,6 +123,12 @@ class Controller_CmsAjax extends Controller
         }
         if ($slug === '') {
             $this->_fail('A page slug is required.');
+        }
+        // C17: reject a router-shadowed slug (blog/post/k/p) up front with a
+        // specific message — such a page would be unreachable behind the pretty
+        // URLs. (CmsPage::CreatePage/UpdatePage also enforce this authoritatively.)
+        if ($this->CmsPage->IsReservedPageSlug($slug)) {
+            $this->_fail('The slug "' . $slug . '" is reserved by the site router. Please choose another.', 3);
         }
 
         // ---- Blocks (posted as a JSON array string) ----
@@ -120,22 +160,21 @@ class Controller_CmsAjax extends Controller
                 $this->_fail('Could not create the page (the slug may already be in use).');
             }
         } else {
-            $existing = $this->CmsPage->get_page($pageId);
-            if (empty($existing)) {
-                $this->_fail('Page not found.', 4);
-            }
-            // IDOR guard: the existing page must belong to the resolved scope.
-            $this->_requireOwned($existing, $scope);
             $this->CmsPage->update_page($pageId, $meta);
         }
 
         $count = (int)$this->CmsPage->replace_blocks('page', $pageId, $blocks);
+
+        // Echo the fresh version token so the client can send it back as
+        // base_version on its next save (C15 concurrency contract).
+        $fresh = $this->CmsPage->get_page($pageId);
 
         $this->_ok(array(
             'page_id'     => $pageId,
             'slug'        => $slug,
             'block_count' => $count,
             'is_new'      => $isNew,
+            'version'     => (is_array($fresh) && isset($fresh['updated_at'])) ? $fresh['updated_at'] : null,
             'saved_at'    => date('c'),
         ));
     }
@@ -157,12 +196,14 @@ class Controller_CmsAjax extends Controller
         }
         $this->_requireOwned($row, $scope);
 
-        $this->CmsPage->set_status($pageId, 'published', $uid);
+        // C7: a future published_at schedules the page instead of publishing now;
+        // the read path promotes it to 'published' once that time passes.
+        $status = $this->_applyPublish('page', $pageId, $uid);
         $row = $this->CmsPage->get_page($pageId);
 
         $this->_ok(array(
             'page_id'      => $pageId,
-            'status'       => 'published',
+            'status'       => $status,
             'published_at' => isset($row['published_at']) ? $row['published_at'] : null,
         ));
     }
@@ -209,12 +250,13 @@ class Controller_CmsAjax extends Controller
             $this->_fail('System pages cannot be deleted.', 3);
         }
 
-        $deleted = (bool)$this->CmsPage->delete_page($pageId, (string)$scope['type'], (int)$scope['id']);
+        $deleted = (bool)$this->CmsPage->delete_page($pageId, (string)$scope['type'], (int)$scope['id'], $uid);
         if (!$deleted) {
             $this->_fail('Could not delete the page.');
         }
 
-        $this->_ok(array('page_id' => $pageId, 'deleted' => true));
+        // Soft-delete (C2): the page is moved to Trash, recoverable via restore.
+        $this->_ok(array('page_id' => $pageId, 'deleted' => true, 'trashed' => true));
     }
 
     /* ================================================================== *
@@ -233,8 +275,30 @@ class Controller_CmsAjax extends Controller
 
         $postId = (int)($_POST['post_id'] ?? 0);
         $isNew  = ($postId <= 0);
-        $needed = $isNew ? 'page.create' : 'page.edit';
-        $this->_require($uid, $needed, $scope);
+
+        // ---- Authorization (mirrors savepage; C16 page.edit_own honored) ----
+        $existing = null;
+        if ($isNew) {
+            $this->_require($uid, 'page.create', $scope);
+        } else {
+            if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
+                && !$this->CmsAuth->cms_can($uid, 'page.edit_own', $scope)
+            ) {
+                $this->_fail('You are not authorized to perform this action.', 5);
+            }
+            $existing = $this->CmsPost->get_post($postId);
+            if (empty($existing)) {
+                $this->_fail('Post not found.', 4);
+            }
+            $this->_requireOwned($existing, $scope);
+            if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
+                && (int)($existing['created_by'] ?? 0) !== $uid
+            ) {
+                $this->_fail('You can only edit posts you created.', 5);
+            }
+            // C15: optimistic-concurrency guard.
+            $this->_guardConcurrency($existing);
+        }
 
         // ---- Post meta ----
         $title   = trim((string)($_POST['title'] ?? ''));
@@ -277,12 +341,7 @@ class Controller_CmsAjax extends Controller
                 $this->_fail('Could not create the post (the slug may already be in use).');
             }
         } else {
-            $existing = $this->CmsPost->get_post($postId);
-            if (empty($existing)) {
-                $this->_fail('Post not found.', 4);
-            }
-            // IDOR guard: the existing post must belong to the resolved scope.
-            $this->_requireOwned($existing, $scope);
+            // Authorization + IDOR + concurrency were enforced above.
             $this->CmsPost->update_post($postId, $meta);
         }
 
@@ -303,12 +362,16 @@ class Controller_CmsAjax extends Controller
         // Echo back the resolved tag set (slugified/deduped) for the editor.
         $tags = $this->CmsPost->get_tags($postId);
 
+        // Fresh version token for the C15 concurrency contract.
+        $fresh = $this->CmsPost->get_post($postId);
+
         $this->_ok(array(
             'post_id'     => $postId,
             'slug'        => $slug,
             'block_count' => $count,
             'is_new'      => $isNew,
             'tags'        => $tags,
+            'version'     => (is_array($fresh) && isset($fresh['updated_at'])) ? $fresh['updated_at'] : null,
             'saved_at'    => date('c'),
         ));
     }
@@ -330,12 +393,13 @@ class Controller_CmsAjax extends Controller
         }
         $this->_requireOwned($row, $scope);
 
-        $this->CmsPost->set_status($postId, 'published', $uid);
+        // C7: a future published_at schedules the post instead of publishing now.
+        $status = $this->_applyPublish('post', $postId, $uid);
         $row = $this->CmsPost->get_post($postId);
 
         $this->_ok(array(
             'post_id'      => $postId,
-            'status'       => 'published',
+            'status'       => $status,
             'published_at' => isset($row['published_at']) ? $row['published_at'] : null,
         ));
     }
@@ -379,12 +443,217 @@ class Controller_CmsAjax extends Controller
         // IDOR guard: never delete a post belonging to another scope.
         $this->_requireOwned($row, $scope);
 
-        $deleted = (bool)$this->CmsPost->delete_post($postId, (string)$scope['type'], (int)$scope['id']);
+        $deleted = (bool)$this->CmsPost->delete_post($postId, (string)$scope['type'], (int)$scope['id'], $uid);
         if (!$deleted) {
             $this->_fail('Could not delete the post.');
         }
 
-        $this->_ok(array('post_id' => $postId, 'deleted' => true));
+        // Soft-delete (C2): the post is moved to Trash, recoverable via restore.
+        $this->_ok(array('post_id' => $postId, 'deleted' => true, 'trashed' => true));
+    }
+
+    /* ================================================================== *
+     * REVISIONS (C2) — capped block-set history + restore. Shared by pages
+     * and posts (the block store is polymorphic). Editor-lane UI wires these.
+     * ================================================================== */
+
+    /**
+     * List an owner's block revisions. GET/POST: owner_type=page|post, owner_id.
+     * Gated the same as editing (page.edit / page.edit_own + scope ownership).
+     */
+    public function revisions($action = null)
+    {
+        $uid = $this->_begin();
+        $scope = $this->_scope($uid);
+
+        $ownerType = ((string)($_GET['owner_type'] ?? $_POST['owner_type'] ?? 'page') === 'post') ? 'post' : 'page';
+        $ownerId   = (int)($_GET['owner_id'] ?? $_POST['owner_id'] ?? 0);
+        $this->_requireOwnerEditable($uid, $ownerType, $ownerId, $scope);
+
+        $list = $this->CmsPage->ListRevisions($ownerType, $ownerId);
+        if (!is_array($list)) {
+            $list = array();
+        }
+        $this->_ok(array('revisions' => $list, 'count' => count($list)));
+    }
+
+    /**
+     * Restore an owner's blocks from a revision. POST: owner_type, owner_id,
+     * revision_id. Same gating as editing.
+     */
+    public function restorerevision($action = null)
+    {
+        $uid = $this->_begin();
+        $scope = $this->_scope($uid);
+
+        $ownerType  = ((string)($_POST['owner_type'] ?? 'page') === 'post') ? 'post' : 'page';
+        $ownerId    = (int)($_POST['owner_id'] ?? 0);
+        $revisionId = (int)($_POST['revision_id'] ?? 0);
+        $this->_requireOwnerEditable($uid, $ownerType, $ownerId, $scope);
+
+        if ($revisionId <= 0) {
+            $this->_fail('A revision id is required.', 4);
+        }
+        $ok = (bool)$this->CmsPage->RestoreRevision($revisionId, $ownerType, $ownerId);
+        if (!$ok) {
+            $this->_fail('Could not restore that revision.');
+        }
+        $this->_ok(array('owner_type' => $ownerType, 'owner_id' => $ownerId, 'restored' => $revisionId));
+    }
+
+    /* ================================================================== *
+     * TRASH / UNDO (C2) — restore soft-deleted pages/posts/media + purge.
+     * The editor lane's Trash/Undo UI calls these exact route names. All are
+     * POST + CSRF-guarded (via _begin) and scope-IDOR-guarded (the lib restore
+     * methods re-check the caller's scope where they carry one).
+     * ================================================================== */
+
+    /** Restore a trashed page. POST: page_id. Gated page.delete in scope. */
+    public function restorepage($action = null)
+    {
+        $uid   = $this->_begin();
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'page.delete', $scope);
+
+        $pageId = (int)($_POST['page_id'] ?? 0);
+        if ($pageId <= 0) {
+            $this->_fail('Page not found.', 4);
+        }
+        // The lib enforces the scope IDOR guard (must belong to this org).
+        $ok = (bool)$this->CmsPage->RestorePage($pageId, (string)$scope['type'], (int)$scope['id'], $uid);
+        if (!$ok) {
+            $this->_fail('Could not restore the page (it may not be in the Trash).');
+        }
+        $this->_ok(array('page_id' => $pageId, 'restored' => true));
+    }
+
+    /** Restore a trashed post. POST: post_id. Gated page.delete in scope (posts
+     *  share the page.delete capability — mirrors deletepost). */
+    public function restorepost($action = null)
+    {
+        $uid   = $this->_begin();
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'page.delete', $scope);
+
+        $postId = (int)($_POST['post_id'] ?? 0);
+        if ($postId <= 0) {
+            $this->_fail('Post not found.', 4);
+        }
+        $this->load_model('CmsPost');
+        $ok = (bool)$this->CmsPost->RestorePost($postId, (string)$scope['type'], (int)$scope['id'], $uid);
+        if (!$ok) {
+            $this->_fail('Could not restore the post (it may not be in the Trash).');
+        }
+        $this->_ok(array('post_id' => $postId, 'restored' => true));
+    }
+
+    /** Restore a trashed media item. POST: media_id. Gated media.manage in scope. */
+    public function restoremedia($action = null)
+    {
+        $uid   = $this->_begin();
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'media.manage', $scope);
+
+        $mediaId = (int)($_POST['media_id'] ?? 0);
+        if ($mediaId <= 0) {
+            $this->_fail('Media not found.', 4);
+        }
+        $this->load_model('CmsMedia');
+        $ok = (bool)$this->CmsMedia->RestoreMedia($mediaId, $uid);
+        if (!$ok) {
+            $this->_fail('Could not restore the media (it may not be in the Trash).');
+        }
+        $this->_ok(array('media_id' => $mediaId, 'restored' => true));
+    }
+
+    /** Permanently purge a trashed media item. POST: media_id. Gated media.manage. */
+    public function purgemedia($action = null)
+    {
+        $uid   = $this->_begin();
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'media.manage', $scope);
+
+        $mediaId = (int)($_POST['media_id'] ?? 0);
+        if ($mediaId <= 0) {
+            $this->_fail('Media not found.', 4);
+        }
+        $this->load_model('CmsMedia');
+        $ok = (bool)$this->CmsMedia->PurgeMedia($mediaId, $uid);
+        if (!$ok) {
+            $this->_fail('Could not purge the media.');
+        }
+        $this->_ok(array('media_id' => $mediaId, 'purged' => true));
+    }
+
+    /**
+     * List trashed posts for the Trash view. GET/POST: none (scope-derived).
+     * Gated page.delete in scope (posts share the page.delete capability —
+     * mirrors deletepost/restorepost). Returns the same row shape the Posts
+     * list renders, minus the C2 deleted_at IS NULL gate.
+     */
+    public function listtrashedposts($action = null)
+    {
+        $uid   = $this->_begin();
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'page.delete', $scope);
+
+        $this->load_model('CmsPost');
+        // PascalCase routes through Model::__call → the lib (no model.* snake-case
+        // forwarder exists for this method), same path restorepost/restoremedia use.
+        $list = $this->CmsPost->ListTrashed((string)$scope['type'], (int)$scope['id']);
+        if (!is_array($list)) {
+            $list = array();
+        }
+        $this->_ok(array('posts' => $list, 'count' => count($list)));
+    }
+
+    /**
+     * List trashed media for the Trash view. Gated media.manage in scope
+     * (mirrors medialist/restoremedia/purgemedia). Returns media-refs enriched
+     * with filename/alt, minus the C2 deleted_at IS NULL gate.
+     */
+    public function listtrashedmedia($action = null)
+    {
+        $uid   = $this->_begin();
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'media.manage', $scope);
+
+        $limit = (int)($_GET['limit'] ?? $_POST['limit'] ?? 200);
+        if ($limit <= 0 || $limit > 500) {
+            $limit = 200;
+        }
+
+        $this->load_model('CmsMedia');
+        // PascalCase routes through Model::__call → the lib (mirrors restoremedia).
+        $list = $this->CmsMedia->ListTrashed((string)$scope['type'], (int)$scope['id'], $limit);
+        if (!is_array($list)) {
+            $list = array();
+        }
+        $this->_ok(array('media' => $list, 'count' => count($list)));
+    }
+
+    /**
+     * Update a media item's metadata (alt text today). POST: media_id, alt.
+     * Gated media.manage in scope. Called by the media library's inline alt
+     * editor (Cms_media.tpl); '' is a valid decorative-image alt, never NULL.
+     */
+    public function mediaupdate($action = null)
+    {
+        $uid   = $this->_begin();
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'media.manage', $scope);
+
+        $mediaId = (int)($_POST['media_id'] ?? 0);
+        if ($mediaId <= 0) {
+            $this->_fail('Media not found.', 4);
+        }
+        $data = array('alt' => (string)($_POST['alt'] ?? ''));
+        $this->load_model('CmsMedia');
+        $ok = (bool)$this->CmsMedia->Update($mediaId, $data, $uid);
+        if (!$ok) {
+            $this->_fail('Could not update the media (it may not exist or be in the Trash).');
+        }
+        $this->_ok(array('media_id' => $mediaId, 'alt' => $data['alt']));
     }
 
     /* ================================================================== *
@@ -922,6 +1191,11 @@ class Controller_CmsAjax extends Controller
             $fields = (isset($block['fields']) && is_array($block['fields'])) ? $block['fields'] : array();
             $fields = $this->_sanitizeFields($fields);
             $out[] = array(
+                // C15: carry the STABLE block id so CmsPage::ReplaceBlocks can
+                // upsert in place (preserve the row) instead of delete-all/reinsert.
+                // 0/absent = a brand-new block. Editor contract: echo back each
+                // block's server id and resend it on the next save.
+                'id'      => isset($block['id']) ? (int)$block['id'] : 0,
                 'type'    => (string)$block['type'],
                 'enabled' => array_key_exists('enabled', $block) ? (int)(bool)$block['enabled'] : 1,
                 'order'   => isset($block['order']) ? (int)$block['order']
@@ -982,5 +1256,110 @@ class Controller_CmsAjax extends Controller
         $allowed = array('page', 'post', 'url', 'dynamic');
         $linkType = strtolower(trim((string)$linkType));
         return in_array($linkType, $allowed, true) ? $linkType : 'page';
+    }
+
+    /**
+     * C15 optimistic-concurrency guard. The client sends the version token it
+     * loaded (base_version = the owner row's updated_at at load time). If the
+     * stored row is NEWER, someone else saved in the meantime → reject with a
+     * conflict (status 12) instead of a silent last-write-wins. A missing token
+     * (legacy client) skips the check.
+     *
+     * Editor contract (seam): read `version` from every load AND every save
+     * response, and resend it as POST `base_version` on the next save.
+     *
+     * @param array $existing the loaded owner row (carries updated_at)
+     * @return void
+     */
+    private function _guardConcurrency($existing)
+    {
+        $baseVersion = trim((string)($_POST['base_version'] ?? ''));
+        if ($baseVersion === '') {
+            return;   // no token supplied — preserve legacy behavior
+        }
+        $stored = (is_array($existing) && isset($existing['updated_at'])) ? (string)$existing['updated_at'] : '';
+        if ($stored === '') {
+            return;
+        }
+        $storedTs = strtotime($stored);
+        $baseTs   = strtotime($baseVersion);
+        if ($storedTs !== false && $baseTs !== false && $storedTs > $baseTs) {
+            $this->_fail(
+                'This content was changed by someone else after you loaded it. '
+                . 'Reload to get the latest version before saving.',
+                12
+            );
+        }
+    }
+
+    /**
+     * Publish-or-schedule a page/post from a posted published_at (C7). A future
+     * timestamp schedules (status='scheduled', promoted to published on read once
+     * due); a past/empty timestamp publishes immediately. Returns the resulting
+     * status so the caller can echo it.
+     *
+     * @param string $kind 'page' | 'post'
+     * @param int    $id
+     * @param int    $uid  acting mundane_id
+     * @return string 'published' | 'scheduled'
+     */
+    private function _applyPublish($kind, $id, $uid)
+    {
+        $model = ($kind === 'post') ? $this->CmsPost : $this->CmsPage;
+
+        $rawWhen = trim((string)($_POST['published_at'] ?? ''));
+        $when = ($rawWhen !== '') ? strtotime($rawWhen) : false;
+
+        if ($when !== false && $when > time()) {
+            // NOTE: call the lib's 4-param SetStatus (via __call), NOT the model's
+            // set_status wrapper — that wrapper is 3-param and silently DROPS the
+            // published_at timestamp, which would schedule with published_at=NOW
+            // (immediate go-live on the next read) instead of the requested future
+            // time, defeating C7 scheduling entirely.
+            $model->SetStatus((int)$id, 'scheduled', (int)$uid, date('Y-m-d H:i:s', $when));
+            return 'scheduled';
+        }
+        $model->SetStatus((int)$id, 'published', (int)$uid);
+        return 'published';
+    }
+
+    /**
+     * Load an editable page/post owner or emit a JSON error + exit. Enforces the
+     * same gate as savepage/savepost: page.edit, OR page.edit_own on content the
+     * user created (C16), plus the scope-ownership IDOR guard. Returns the row.
+     *
+     * @param int    $uid
+     * @param string $ownerType 'page' | 'post'
+     * @param int    $ownerId
+     * @param array  $scope
+     * @return array the owner row
+     */
+    private function _requireOwnerEditable($uid, $ownerType, $ownerId, $scope)
+    {
+        $ownerType = ($ownerType === 'post') ? 'post' : 'page';
+        $ownerId = (int)$ownerId;
+        $label = ($ownerType === 'post') ? 'Post' : 'Page';
+
+        if ($ownerId <= 0) {
+            $this->_fail($label . ' not found.', 4);
+        }
+        if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
+            && !$this->CmsAuth->cms_can($uid, 'page.edit_own', $scope)
+        ) {
+            $this->_fail('You are not authorized to perform this action.', 5);
+        }
+        $row = ($ownerType === 'post')
+            ? $this->CmsPost->get_post($ownerId)
+            : $this->CmsPage->get_page($ownerId);
+        if (empty($row)) {
+            $this->_fail($label . ' not found.', 4);
+        }
+        $this->_requireOwned($row, $scope);
+        if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
+            && (int)($row['created_by'] ?? 0) !== $uid
+        ) {
+            $this->_fail('You can only edit content you created.', 5);
+        }
+        return $row;
     }
 }

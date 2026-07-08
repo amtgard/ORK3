@@ -80,28 +80,43 @@ class CmsNav extends CmsBase
 
         $rows = $this->_fetchItems($menu, $scopeType, $scopeId, true);
 
-        // Split into top-level + children-by-parent, preserving SQL ordering.
-        $top = array();
-        $childrenByParent = array();
+        // C22: build a TWO-level dropdown tree (top → child → grandchild), up from
+        // the previous one-level-only split. Resolve every enabled row once, index
+        // its children by parent id (0 = top level), then attach recursively with a
+        // hard depth cap of 2 levels of nesting so a stray deep chain (or a parent
+        // cycle) can never runaway-recurse. Orphans whose parent is disabled/missing
+        // are dropped — they are simply never reached from the root.
+        $resolved = array();          // nav_id => resolved item (with empty children)
+        $childrenByParent = array();  // parent nav_id (0=top) => [child nav_id, ...]
         foreach ($rows as $row) {
-            if ($row['parent_id'] === null || (int)$row['parent_id'] === 0) {
-                $top[] = $this->_resolveItem($row);
-            } else {
-                $pid = (int)$row['parent_id'];
-                if (!isset($childrenByParent[$pid])) {
-                    $childrenByParent[$pid] = array();
-                }
-                $childrenByParent[$pid][] = $this->_resolveItem($row);
-            }
+            $navId = (int)$row['nav_id'];
+            $item = $this->_resolveItem($row);
+            $item['children'] = array();
+            $resolved[$navId] = $item;
+            $pid = ($row['parent_id'] === null) ? 0 : (int)$row['parent_id'];
+            $childrenByParent[$pid][] = $navId;
         }
 
-        // Attach children to their parents (orphans whose parent is disabled
-        // or missing are simply dropped — they never appear at top level).
-        foreach ($top as &$item) {
-            $nid = (int)$item['nav_id'];
-            $item['children'] = isset($childrenByParent[$nid]) ? $childrenByParent[$nid] : array();
-        }
-        unset($item);
+        // $depth 0 = top level; recurse into children while depth < 2 so a
+        // grandchild (depth 2) is the deepest node that keeps its own children
+        // pruned. SQL ordering is preserved because childrenByParent is filled in
+        // row order.
+        $attach = function ($parentId, $depth) use (&$attach, $resolved, $childrenByParent) {
+            $out = array();
+            if (empty($childrenByParent[$parentId])) {
+                return $out;
+            }
+            foreach ($childrenByParent[$parentId] as $childId) {
+                if (!isset($resolved[$childId])) {
+                    continue;
+                }
+                $node = $resolved[$childId];
+                $node['children'] = ($depth < 2) ? $attach($childId, $depth + 1) : array();
+                $out[] = $node;
+            }
+            return $out;
+        };
+        $top = $attach(0, 0);
 
         self::$menuCache[$cacheKey] = $top;
         return $top;

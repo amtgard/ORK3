@@ -58,6 +58,8 @@ if (class_exists('APIModel')) {
 }
 $keRows = array_slice($keRows, 0, $keLimit);
 ?>
+<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
+<?php if (empty($fdStyleOnce['kingdom_events'])) : $fdStyleOnce['kingdom_events'] = true; ?>
 <style>
 .ke-block { background: var(--fd-bg); }
 .ke-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; gap: 12px; }
@@ -87,14 +89,15 @@ html[data-theme="dark"] .ke-card-name { color: #eef2fa; }
 html[data-theme="dark"] .ke-card-sub { color: #b6c0d4; }
 html[data-theme="dark"] .ke-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45); }
 </style>
-<div class="fd-pad fd-section-light ke-block" style="background:#fff;">
+<?php endif; ?>
+<div class="fd-pad fd-section-light ke-block">
     <div class="ke-head">
         <div>
             <?php if ($keKicker !== ''): ?>
                 <div class="fd-kicker fd-kicker-d"><?= htmlspecialchars($keKicker, ENT_QUOTES) ?></div>
             <?php endif; ?>
             <?php if ($keHeading !== ''): ?>
-                <h3 class="ke-title fd-sec-title"><?= htmlspecialchars($keHeading, ENT_QUOTES) ?></h3>
+                <h2 class="ke-title fd-sec-title"><?= htmlspecialchars($keHeading, ENT_QUOTES) ?></h2>
             <?php endif; ?>
         </div>
         <?php if ($keMoreHref !== ''): ?>

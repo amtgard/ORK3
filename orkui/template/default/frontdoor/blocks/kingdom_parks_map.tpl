@@ -94,11 +94,13 @@ if (empty($kpmParks)) {
 }
 
 $kpmId  = 'kpm-' . substr(md5(uniqid('', true)), 0, 10);
-// Match the Atlas page's key. GOOGLE_MAPS_API_KEY may be DEFINED-but-empty in
-// some envs, so fall back to the Atlas literal whenever it isn't a real value.
+// Per-env Maps key only — NO hardcoded fallback. Shipping a literal key in public
+// page source exposes a shared credential to quota abuse across every kingdom site.
+// When the key is missing/empty we render a graceful "map unavailable" fallback
+// rather than injecting a broken Maps <script> that 403s in the browser.
 $kpmKey = (defined('GOOGLE_MAPS_API_KEY') && GOOGLE_MAPS_API_KEY !== '')
-    ? GOOGLE_MAPS_API_KEY
-    : 'AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8';
+    ? (string) GOOGLE_MAPS_API_KEY
+    : '';
 ?>
 <style>
 .kpm-block { background: #fff; }
@@ -108,6 +110,9 @@ html[data-theme="dark"] .kpm-block { background: transparent; }
 .kpm-layout { display: grid; grid-template-columns: 1.9fr 1fr; gap: 16px; align-items: stretch; }
 .kpm-map { width: 100%; height: 62vh; min-height: 380px; border-radius: 12px; overflow: hidden; border: 1px solid #e4e8f0; }
 .kpm-loading { display: flex; align-items: center; gap: 10px; justify-content: center; height: 62vh; min-height: 380px; color: #718096; border: 1px dashed #cbd5e0; border-radius: 12px; }
+.kpm-unavailable { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; height: 62vh; min-height: 380px; color: #8a97ad; border: 1px dashed #cbd5e0; border-radius: 12px; padding: 24px; }
+.kpm-unavailable-icon { font-size: 30px; color: #c3ccdb; }
+html[data-theme="dark"] .kpm-unavailable { border-color: #2c3650; }
 .kpm-sidebar { border: 1px solid #e4e8f0; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; min-height: 380px; background: #fff; }
 .kpm-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; color: #8a97ad; padding: 28px; flex: 1; }
 .kpm-empty-icon { font-size: 30px; color: #c3ccdb; }
@@ -146,9 +151,16 @@ html[data-theme="dark"] .kpm-title { color: #eef2fa; }
     <?php endif; ?>
     <div class="kpm-layout">
         <div>
-            <div class="kpm-loading" data-kpm-loading><i class="fas fa-spinner fa-spin"></i> Loading map&hellip;</div>
-            <div class="kpm-map" data-kpm-map style="display:none;"></div>
-            <div class="kpm-hint"><i class="fas fa-hand-point-up"></i> Click a park pin for details.</div>
+            <?php if ($kpmKey === ''): ?>
+                <div class="kpm-unavailable">
+                    <div class="kpm-unavailable-icon"><i class="fas fa-map-marked-alt"></i></div>
+                    <p>The interactive map is temporarily unavailable.</p>
+                </div>
+            <?php else: ?>
+                <div class="kpm-loading" data-kpm-loading><i class="fas fa-spinner fa-spin"></i> Loading map&hellip;</div>
+                <div class="kpm-map" data-kpm-map style="display:none;"></div>
+                <div class="kpm-hint"><i class="fas fa-hand-point-up"></i> Click a park pin for details.</div>
+            <?php endif; ?>
         </div>
         <div class="kpm-sidebar">
             <div class="kpm-empty" data-kpm-empty>
@@ -162,6 +174,7 @@ html[data-theme="dark"] .kpm-title { color: #eef2fa; }
         </div>
     </div>
 </div>
+<?php if ($kpmKey !== ''): ?>
 <script>
 (function () {
     var ROOT = document.getElementById('<?= $kpmId ?>');
@@ -224,10 +237,14 @@ html[data-theme="dark"] .kpm-title { color: #eef2fa; }
         if (LOCS.length === 1) { map.setCenter(bounds.getCenter()); map.setZoom(11); }
         else { map.fitBounds(bounds, 48); }
     }
-    // One-time Maps loader shared by every kpm block on the page.
-    if (window.google && window.google.maps && window.google.maps.importLibrary) {
-        init();
-    } else {
+    // One-time Maps loader shared by every kpm block on the page. The Maps CDN
+    // <script> is only injected once the map scrolls into view (IntersectionObserver),
+    // so an off-screen map never blocks the page on a third-party request.
+    function loadMaps() {
+        if (window.google && window.google.maps && window.google.maps.importLibrary) {
+            init();
+            return;
+        }
         (window.__kpmQueue = window.__kpmQueue || []).push(init);
         if (!window.__kpmLoading) {
             window.__kpmLoading = true;
@@ -238,5 +255,18 @@ html[data-theme="dark"] .kpm-title { color: #eef2fa; }
             document.head.appendChild(s);
         }
     }
+    // Lazy-load: defer the Maps CDN until this block is near the viewport.
+    var observeTarget = ROOT.querySelector('[data-kpm-map]') || ROOT;
+    if ('IntersectionObserver' in window) {
+        var io = new IntersectionObserver(function (entries, obs) {
+            for (var i = 0; i < entries.length; i++) {
+                if (entries[i].isIntersecting) { obs.disconnect(); loadMaps(); return; }
+            }
+        }, { rootMargin: '200px' });
+        io.observe(observeTarget);
+    } else {
+        loadMaps();
+    }
 })();
 </script>
+<?php endif; ?>

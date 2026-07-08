@@ -72,7 +72,7 @@ if (!empty($navFromStore)) {
         <?php foreach ($items as $item): ?>
             <div class="fd-navitem">
                 <?php if (!empty($item['children'])): ?>
-                    <a href="<?= htmlspecialchars(CmsSanitizer::IsSafeUrl($item['href'] ?? '') ? ($item['href'] ?? '#') : '#', ENT_QUOTES) ?>"<?= !empty($item['target']) ? ' target="' . htmlspecialchars($item['target'], ENT_QUOTES) . '" rel="noopener"' : '' ?>>
+                    <a href="<?= htmlspecialchars(CmsSanitizer::IsSafeUrl($item['href'] ?? '') ? ($item['href'] ?? '#') : '#', ENT_QUOTES) ?>"<?= !empty($item['target']) ? ' target="' . htmlspecialchars($item['target'], ENT_QUOTES) . '" rel="noopener"' : '' ?> aria-haspopup="true" aria-expanded="false">
                         <?= htmlspecialchars($item['label'] ?? '', ENT_QUOTES) ?> &#9660;
                     </a>
                     <div class="fd-dropdown">

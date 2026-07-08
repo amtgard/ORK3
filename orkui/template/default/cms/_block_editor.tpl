@@ -97,6 +97,16 @@ $beHeading   = isset($beHeading) ? (string)$beHeading : 'Blocks';
                 <div style="margin-top:6px;">Click or drop an image to upload (JPG, PNG, GIF, WebP — max 8MB)</div>
                 <input type="file" id="cmsUploadInput" accept="image/jpeg,image/png,image/gif,image/webp">
             </label>
+            <?php /* C1: alt text is authored at upload time (kept OUT of the drop
+                    <label> so clicking the field never re-triggers the file picker). */ ?>
+            <div class="cms-upload-meta">
+                <div class="cms-field" style="margin-bottom:6px;">
+                    <label class="cms-label" for="cmsUploadAlt">Alt text (image description)</label>
+                    <input type="text" class="cms-input" id="cmsUploadAlt" placeholder="Describe this image for screen-reader users">
+                </div>
+                <label class="cms-check-inline"><input type="checkbox" id="cmsUploadDecorative"> This image is decorative (no alt text)</label>
+                <div class="cms-help">Alt text lets screen-reader users and search engines understand the image. Mark an image “decorative” only when it carries no information (a texture, border, or purely ornamental flourish) — that intentionally saves an empty alt so assistive tech skips it.</div>
+            </div>
             <div class="cms-media-toolbar">
                 <input type="text" class="cms-input" id="cmsMediaSearch" placeholder="Search media…">
                 <button type="button" class="cms-btn cms-btn-sm" id="cmsMediaSearchBtn"><i class="fas fa-search"></i> Search</button>
@@ -127,22 +137,54 @@ $beHeading   = isset($beHeading) ? (string)$beHeading : 'Blocks';
 
 <div class="cms-toast" id="cmsToast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/tinymce@7.6.0/tinymce.min.js" referrerpolicy="origin"></script>
+<?php
+/* TinyMCE source — prefer a self-hosted, vendored bundle if one exists under the
+ * template's static assets; otherwise fall back to the pinned CDN build. Vendoring
+ * the 7.6.0 bundle removes the third-party dependency + the silent-degradation risk
+ * (a CDN outage otherwise turns every rich-text field into a raw-HTML textarea with
+ * no warning). See the C25 seam note: dropping tinymce.min.js at the path below is
+ * an asset-add, not a template change. */
+$beTinyLocalFs = __DIR__ . '/../script/tinymce/tinymce.min.js';
+$beTinyBaseUrl = defined('HTTP_TEMPLATE') ? HTTP_TEMPLATE : '';
+$beTinySrc     = is_file($beTinyLocalFs)
+    ? ($beTinyBaseUrl . 'default/script/tinymce/tinymce.min.js')
+    : 'https://cdn.jsdelivr.net/npm/tinymce@7.6.0/tinymce.min.js';
+?>
+<script src="<?= htmlspecialchars($beTinySrc, ENT_QUOTES, 'UTF-8') ?>" referrerpolicy="origin"></script>
+
+<?php /* ---- Server-dynamic bootstrap: the ONLY PHP the engine below needs.
+       Everything after this tiny <script> is static and can be lifted verbatim
+       into a standalone asset (see the C27 extraction seam banner). ---- */ ?>
+<script>
+window.CmsBlockEditorBoot = {
+    UIR: <?= json_encode(UIR) ?>,
+    tinymceSrc: <?= json_encode($beTinySrc) ?>
+};
+</script>
 <script>
 /* ============================================================================
+ * >>> EXTRACTION SEAM (C27) <<<
  * window.CmsBlockEditor — shared block-body editor engine (pages + posts).
+ * This entire <script> body is STATIC (contains no PHP): its only server-provided
+ * values arrive via window.CmsBlockEditorBoot (set in the tiny bootstrap above).
+ * It can therefore be moved verbatim into a lintable/testable static asset — e.g.
+ * template/default/script/cms-block-editor.js — keeping just the bootstrap inline.
+ * Left inline for now because adding a new .js asset is outside this template's
+ * change scope (recorded as a follow-up seam).
  * The host template calls CmsBlockEditor.init(opts) after the DOM is ready.
  * ========================================================================== */
 window.CmsBlockEditor = (function () {
     'use strict';
 
-    var UIR  = <?= json_encode(UIR) ?>;
+    var BOOT = window.CmsBlockEditorBoot || {};
+    var UIR  = BOOT.UIR || '';
     var AJAX = UIR + 'CmsAjax/';
 
     var model = [];
     var catalog = [];
     var labels = {};
     var pageTypes = [];
+    var tagCatalog = [];        // C22: existing tags [{slug,name,post_count}] for blog_feed picker
     var blockAllow = {};        // page-type key -> [allowed block types]
     var pageType = '';          // current page type ('post' for blog bodies)
     var showAllBlocks = false;  // chooser "Show all blocks" toggle state
@@ -256,6 +298,11 @@ window.CmsBlockEditor = (function () {
        Both spellings are accepted on read (see summarize() / buildBlockBody()). */
     function normBlock(b) {
         return {
+            // C15: carry the stable server row id so a save round-trips it and the
+            // ReplaceBlocks upsert preserves the row (rather than delete+reinsert,
+            // which would churn ids and lose per-block history). New/duplicated/
+            // preset blocks have no id → 0, so the server assigns a fresh row.
+            id:      (b.id != null && b.id !== '') ? (parseInt(b.id, 10) || 0) : 0,
             type:    String(b.type || ''),
             enabled: (b.enabled === undefined ? true : !!b.enabled),
             source:  (b.source === 'dynamic' ? 'dynamic' : 'authored'),
@@ -347,9 +394,19 @@ window.CmsBlockEditor = (function () {
     /* ================= TinyMCE ================= */
     var tinyReady = (typeof tinymce !== 'undefined');
     var tinyCounter = 0;
+    var tinyDegradedWarned = false;
+
+    function currentIsDark() {
+        return document.documentElement.getAttribute('data-theme') === 'dark';
+    }
+    // Skin the editor at construction time; tracked so a runtime theme flip can
+    // detect the change and reinit (TinyMCE can't hot-swap skin/content_css).
+    var lastTinyDark = currentIsDark();
+
     function initTiny(textarea) {
         if (!tinyReady || !textarea) { return; }
-        var isDark = (document.documentElement.getAttribute('data-theme') === 'dark');
+        var isDark = currentIsDark();
+        lastTinyDark = isDark;
         tinymce.init({
             target: textarea,
             menubar: false,
@@ -411,6 +468,50 @@ window.CmsBlockEditor = (function () {
             var ed = tinymce.get(ta.id);
             if (ed) { ed.remove(); }
         });
+    }
+
+    /* ---- C31: reinit open editors when the app theme flips at runtime ----
+     * initTiny freezes skin/content_css at construction, so a light↔dark toggle
+     * would otherwise leave stale editor chrome until a full renderList. On a real
+     * theme change we save each open editor's content, remove it, and rebuild it —
+     * which re-reads currentIsDark(). Caret/scroll reset is acceptable for a
+     * deliberate, infrequent theme toggle (and only affects rich-text fields). */
+    function reinitTinySkins() {
+        if (!tinyReady || !tinymce.editors) { return; }
+        var isDark = currentIsDark();
+        if (isDark === lastTinyDark) { return; }
+        lastTinyDark = isDark;
+        var textareas = [];
+        tinymce.editors.slice().forEach(function (ed) {
+            try { ed.save(); } catch (e) {}
+            var ta = ed.targetElm || document.getElementById(ed.id);
+            if (ta) { textareas.push(ta); }
+        });
+        textareas.forEach(function (ta) {
+            var ed = tinymce.get(ta.id);
+            if (ed) { ed.remove(); }
+        });
+        textareas.forEach(function (ta) { initTiny(ta); });
+    }
+
+    function observeTheme() {
+        if (typeof MutationObserver === 'undefined') { return; }
+        var obs = new MutationObserver(function (muts) {
+            for (var i = 0; i < muts.length; i++) {
+                if (muts[i].attributeName === 'data-theme') { reinitTinySkins(); break; }
+            }
+        });
+        obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    }
+
+    /* ---- C25: warn (once) when the TinyMCE bundle failed to load, so authors
+     * know a rich-text field has silently degraded to a raw-HTML textarea and
+     * don't unknowingly save mangled markup. ---- */
+    function warnTinyDegradedIfNeeded() {
+        if (tinyReady || tinyDegradedWarned) { return; }
+        if (!listEl || !listEl.querySelector('textarea[data-tiny]')) { return; }
+        tinyDegradedWarned = true;
+        toast('Rich-text editor didn’t load — those fields show raw HTML. Check your connection before saving.', 'error');
     }
 
     /* ================= field builders ================= */
@@ -476,6 +577,12 @@ window.CmsBlockEditor = (function () {
         ta.addEventListener('input', function () { block.fields[key] = ta.value; markDirty(); });
         host.appendChild(ta);
         wrap.appendChild(host);
+        // C25: if TinyMCE never loaded, this is a raw-HTML textarea — say so inline.
+        if (!tinyReady) {
+            wrap.appendChild(el('div', 'cms-help-warn',
+                '<i class="fas fa-exclamation-triangle"></i> <span>Rich-text editing is unavailable (the editor didn’t load). '
+                + 'You’re editing raw HTML — save with care.</span>'));
+        }
         return wrap;
     }
 
@@ -748,6 +855,81 @@ window.CmsBlockEditor = (function () {
         return wrap;
     }
 
+    /* ---- C22: validated tag picker (blog_feed) — a select over EXISTING tags
+     * instead of a free-text field (a typo silently rendered an empty feed). Warns
+     * inline when the chosen tag currently has no posts, and preserves any stored
+     * legacy free-text value as a flagged "unknown tag" option rather than dropping
+     * it. Binds obj[key] to the tag SLUG (what ListPosts filters on). ---- */
+    function tagPickerField(obj, key, label, help) {
+        var wrap = el('div', 'cms-field');
+        wrap.appendChild(el('label', 'cms-label', esc(label)));
+        var cur = (obj[key] != null) ? String(obj[key]) : '';
+        var sel = el('select', 'cms-select');
+
+        var opt0 = el('option'); opt0.value = ''; opt0.textContent = 'All posts (no tag filter)';
+        if (cur === '') { opt0.selected = true; }
+        sel.appendChild(opt0);
+
+        var known = {};
+        (tagCatalog || []).forEach(function (t) {
+            var slug = String(t.slug || '');
+            if (!slug) { return; }
+            known[slug] = t;
+            var op = el('option');
+            op.value = slug;
+            op.textContent = (t.name || slug) + ' (' + (Number(t.post_count) || 0) + ')';
+            if (cur === slug) { op.selected = true; }
+            sel.appendChild(op);
+        });
+        // A stored value not in the current tag library (legacy free-text/typo):
+        // keep it selectable so a save doesn't silently discard it, but flag it.
+        if (cur !== '' && !known[cur]) {
+            var opX = el('option');
+            opX.value = cur; opX.textContent = cur + ' — unknown tag';
+            opX.selected = true;
+            sel.appendChild(opX);
+        }
+
+        var warn = el('div', 'cms-help-warn');
+        warn.style.display = 'none';
+        warn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span></span>';
+        function refreshWarn() {
+            var v = sel.value, msg = '';
+            if (v !== '') {
+                if (!known[v]) {
+                    msg = 'No tag named “' + v + '” exists — this feed will render empty until a post uses it.';
+                } else if ((Number(known[v].post_count) || 0) === 0) {
+                    msg = 'The “' + (known[v].name || v) + '” tag has no published posts yet — this feed will render empty for now.';
+                }
+            }
+            if (msg) { warn.querySelector('span').textContent = msg; warn.style.display = ''; }
+            else { warn.style.display = 'none'; }
+        }
+        sel.addEventListener('change', function () { obj[key] = sel.value; markDirty(); refreshWarn(); });
+        if (obj[key] == null) { obj[key] = cur; }
+
+        wrap.appendChild(sel);
+        wrap.appendChild(warn);
+        if (help) { wrap.appendChild(el('div', 'cms-help', help)); }
+        refreshWarn();
+        return wrap;
+    }
+
+    /* ---- checkbox bound to obj[key] (stored as a JS boolean) ---- */
+    function checkBound(obj, key, label, help) {
+        var wrap = el('div', 'cms-field'); wrap.style.marginBottom = '8px';
+        var lab = el('label', 'cms-check-inline');
+        var cb = el('input'); cb.type = 'checkbox';
+        cb.checked = !!obj[key];
+        if (obj[key] === undefined) { obj[key] = false; }
+        cb.addEventListener('change', function () { obj[key] = cb.checked; markDirty(); });
+        lab.appendChild(cb);
+        lab.appendChild(document.createTextNode(' ' + label));
+        wrap.appendChild(lab);
+        if (help) { wrap.appendChild(el('div', 'cms-help', help)); }
+        return wrap;
+    }
+
     /* ================= declarative block-schema registry =================
      * Each entry is a list of field specs the generic renderer walks:
      *   { key, type, label, help?, placeholder?, options?, of? }
@@ -833,7 +1015,8 @@ window.CmsBlockEditor = (function () {
         blog_feed: [
             { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Latest News' },
             { key: 'limit', type: 'number', label: 'Max posts shown', placeholder: '3' },
-            { key: 'tag', type: 'text', label: 'Filter by tag (optional)', placeholder: 'Leave blank for all posts' }
+            { key: 'tag', type: 'tagpicker', label: 'Filter by tag (optional)',
+              help: 'Pick from tags that already exist. “All posts” shows every published post.' }
         ],
         kingdom_officers: [
             { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Our Officers' },
@@ -864,6 +1047,12 @@ window.CmsBlockEditor = (function () {
         ],
         member_bar: []  // pure info card; no knobs
     };
+
+    /* C20: block types that only expose a bare-JSON editor (no friendly form).
+     * These are a footgun for non-technical authors, so they're hidden from the
+     * Add-block chooser. An existing block of one of these types still renders its
+     * JSON editor — we only prevent adding NEW ones from the chooser. */
+    var JSON_ONLY_TYPES = { columns: true };
 
     /* dynamic block types render an info card (icon + description) above any knobs */
     var DYNAMIC_TYPES = {
@@ -978,6 +1167,10 @@ window.CmsBlockEditor = (function () {
             case 'number':
                 node = numberBound(obj, spec.key, spec.label, spec.placeholder);
                 break;
+
+            case 'tagpicker':
+                // Self-contained (renders its own help/warning) → return directly.
+                return tagPickerField(obj, spec.key, spec.label, spec.help);
 
             case 'table_rows':
                 return tableRowsField({ fields: obj }, spec);
@@ -1120,7 +1313,7 @@ window.CmsBlockEditor = (function () {
             body.appendChild(el('div', 'cms-help', 'Choose which name leads on every card. Link a persona to auto-fill names; you can still edit them.'));
             body.appendChild(el('div', 'cms-label', 'People'));
             body.appendChild(repeater(block, 'people', 'Person',
-                { image: {}, persona_name: '', mundane_name: '', role: '', bio: '', mundane_id: 0, href: '' },
+                { image: {}, persona_name: '', mundane_name: '', role: '', bio: '', mundane_id: 0, href: '', show_mundane: false },
                 function (person) {
                     var box = el('div', null);
                     box.appendChild(imageBound(person, 'image', 'Photo'));
@@ -1135,6 +1328,11 @@ window.CmsBlockEditor = (function () {
                     }));
                     box.appendChild(personaField);
                     box.appendChild(mundaneField);
+                    // C21: real-name consent gate. Off by default — the public roster
+                    // suppresses a person's mundane name unless this is explicitly
+                    // checked (even when the block's presentation is "Real name leads").
+                    box.appendChild(checkBound(person, 'show_mundane', 'Publish this person’s real name',
+                        'Off by default for privacy. Only turn this on with the person’s consent — otherwise the public card shows their Amtgard name only.'));
                     box.appendChild(textBound(person, 'role', 'Role / title'));
                     box.appendChild(textBoundArea(person, 'bio', 'Bio'));
                     box.appendChild(textBound(person, 'href', 'Manual link (used only if no persona is linked)'));
@@ -1253,16 +1451,19 @@ window.CmsBlockEditor = (function () {
      * Finds the rendered card for this block and reflects block._jsonError
      * without a full rerender (keeps the textarea focus + caret intact). */
     function reflectBlockError(block) {
-        var idx = model.indexOf(block);
-        if (idx < 0 || !listEl) { return; }
-        var cards = listEl.querySelectorAll('.cms-block-card');
-        var card = cards[idx];
+        if (!listEl) { return; }
+        var row = rowForBlock(block);
+        var card = row ? row.querySelector('.cms-block-card') : null;
         if (!card) { return; }
         card.classList.toggle('cms-block-error', !!block._jsonError);
         if (card._errMsg) { card._errMsg.style.display = block._jsonError ? '' : 'none'; }
     }
 
-    /* ---- shared JSON editor field (columns-advanced + last-resort fallback) ---- */
+    /* ---- shared JSON editor field (columns-advanced + last-resort fallback) ----
+     * C20: an invalid-JSON block sets block._jsonError, which the host uses to
+     * BLOCK the whole page save. That used to be silent — the author got no cue
+     * which block was at fault. We now (a) toast the moment JSON goes invalid,
+     * naming the block, and (b) drive a loud inline banner via reflectBlockError. */
     function jsonField(block, label, help) {
         var wrap = el('div', 'cms-field');
         wrap.appendChild(el('label', 'cms-label', label));
@@ -1270,6 +1471,7 @@ window.CmsBlockEditor = (function () {
         ta.style.minHeight = '160px';
         ta.style.fontFamily = 'ui-monospace, Menlo, Consolas, monospace';
         ta.value = JSON.stringify(block.fields || {}, null, 2);
+        var prevErr = !!block._jsonError;
         ta.addEventListener('input', function () {
             try {
                 var parsed = JSON.parse(ta.value);
@@ -1285,6 +1487,13 @@ window.CmsBlockEditor = (function () {
                 block._jsonError = true;
             }
             reflectBlockError(block);
+            // Loud, once-per-transition: warn on valid→invalid; reassure on fix.
+            if (block._jsonError && !prevErr) {
+                toast('The “' + labelFor(block.type) + '” block has invalid JSON — fix it before saving.', 'error');
+            } else if (!block._jsonError && prevErr) {
+                toast('JSON fixed — the “' + labelFor(block.type) + '” block can save again.', 'ok');
+            }
+            prevErr = !!block._jsonError;
             markDirty();
         });
         wrap.appendChild(ta);
@@ -1298,125 +1507,242 @@ window.CmsBlockEditor = (function () {
         return (ent && ent.icon) ? ent.icon : 'fa-cube';
     }
 
-    /* ---- a thin hover-reveal "+" inserter zone that opens the chooser at idx --- */
-    function inserterZone(idx) {
+    /* ---- a thin hover-reveal "+" inserter zone that opens the chooser ----
+     * Anchored to a BLOCK (insert BEFORE it), not a fixed index, so it keeps
+     * pointing at the right slot after surgical reorders. anchorBlock == null →
+     * the trailing zone that appends at the end. */
+    function inserterZone(anchorBlock) {
         var zone = el('div', 'cms-inserter');
         zone.setAttribute('data-tip', 'Insert a block here');
         var btn = el('button', 'cms-inserter-btn', '<i class="fas fa-plus"></i>');
         btn.type = 'button';
         btn.setAttribute('aria-label', 'Insert a block here');
-        btn.addEventListener('click', function () { openAddChooser(idx); });
+        btn.addEventListener('click', function () {
+            var at = (anchorBlock == null) ? model.length : model.indexOf(anchorBlock);
+            openAddChooser(at < 0 ? model.length : at);
+        });
         zone.appendChild(btn);
         return zone;
     }
 
-    /* ---- render the whole block list ---- */
+    /* ================= surgical DOM helpers (C9) =================
+     * Each block is rendered as a "row" = [insert-before zone, card] wrapped in a
+     * display:contents div (adds no layout box). Reorder/insert/remove touch a
+     * SINGLE row node so we never destroy+rebuild every card — which is what tore
+     * down every open TinyMCE editor on any change. Full renderList() is reserved
+     * for replaceModel()/seedFromPreset(). */
+    function rowNodes() {
+        return Array.prototype.slice.call(listEl.querySelectorAll('.cms-block-row'));
+    }
+    function trailingInserter() {
+        return listEl.querySelector('.cms-inserter-trailing');
+    }
+    function rowForBlock(block) {
+        var rows = rowNodes();
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i]._block === block) { return rows[i]; }
+        }
+        return null;
+    }
+    // Keep every card's up/down disabled state honest after a structural change.
+    function refreshRowChrome() {
+        var rows = rowNodes();
+        rows.forEach(function (r, i) {
+            var card = r.querySelector('.cms-block-card');
+            if (!card) { return; }
+            if (card._upBtn) { card._upBtn.disabled = (i === 0); }
+            if (card._downBtn) { card._downBtn.disabled = (i === rows.length - 1); }
+        });
+    }
+    // Reorder existing row nodes to match model order (moves nodes, no rebuild).
+    function syncRowOrder() {
+        var rows = rowNodes();
+        var trailing = trailingInserter();
+        model.forEach(function (block) {
+            for (var i = 0; i < rows.length; i++) {
+                if (rows[i]._block === block) { listEl.insertBefore(rows[i], trailing); break; }
+            }
+        });
+    }
+    // Build one row (insert-before zone + card) bound to a block.
+    function buildRow(block) {
+        var row = el('div', 'cms-block-row');
+        row._block = block;
+        row.appendChild(inserterZone(block));
+        row.appendChild(buildCard(block));
+        return row;
+    }
+    // Insert a freshly-built row for `block` (already spliced into model at `at`),
+    // init only its own TinyMCE, and refresh chrome — no global teardown.
+    function insertRowAt(block, at, scroll) {
+        var rows = rowNodes();               // DOM rows BEFORE inserting the new one
+        var trailing = trailingInserter();
+        if (!trailing) {                     // list may have been empty
+            trailing = inserterZone(null);
+            trailing.classList.add('cms-inserter-trailing');
+            listEl.appendChild(trailing);
+        }
+        var row = buildRow(block);
+        var ref = (at < rows.length) ? rows[at] : trailing;
+        listEl.insertBefore(row, ref);
+        emptyEl.style.display = model.length ? 'none' : '';
+        row.querySelectorAll('textarea[data-tiny]').forEach(function (ta) { initTiny(ta); });
+        refreshRowChrome();
+        if (scroll) {
+            var card = row.querySelector('.cms-block-card');
+            if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        }
+        return row;
+    }
+    // Move a block within the model, then move its single row node.
+    function moveBlock(from, to) {
+        if (from === to || from < 0 || to < 0 || from >= model.length || to >= model.length) { return; }
+        var moved = model.splice(from, 1)[0];
+        model.splice(to, 0, moved);
+        syncRowOrder();
+        refreshRowChrome();
+        markDirty();
+    }
+    // Remove a block + its single row node (destroying only that row's editors).
+    function removeBlock(block) {
+        var i = model.indexOf(block);
+        if (i < 0) { return; }
+        model.splice(i, 1);
+        var row = rowForBlock(block);
+        if (row) { destroyTinyIn(row); row.remove(); }
+        if (!model.length) {
+            var trailing = trailingInserter();
+            if (trailing) { trailing.remove(); }
+        }
+        emptyEl.style.display = model.length ? 'none' : '';
+        refreshRowChrome();
+        markDirty();
+    }
+
+    /* ---- build one block card (bound to the block object, not an index, so its
+     * handlers survive surgical reorders) ---- */
+    function buildCard(block) {
+        var card = el('div', 'cms-block-card' + (block.enabled ? '' : ' cms-block-disabled') + (block._jsonError ? ' cms-block-error' : ''));
+        card._block = block;
+        // draggable is enabled only while the drag handle is pressed (wireDrag),
+        // so text selection inside field inputs never starts a card drag.
+        card.setAttribute('draggable', 'false');
+
+        var head = el('div', 'cms-block-head');
+
+        var handle = el('span', 'cms-drag-handle', '<i class="fas fa-grip-vertical"></i>');
+        handle.setAttribute('data-tip', 'Drag to reorder');
+        head.appendChild(handle);
+
+        var collapseBtn = iconBtn('fa-chevron-down', 'Collapse / expand', false);
+        head.appendChild(collapseBtn);
+        head.appendChild(el('span', 'cms-block-icon', '<i class="fas ' + esc(iconFor(block.type)) + '"></i>'));
+        head.appendChild(el('span', 'cms-block-type', esc(labelFor(block.type))));
+        head.appendChild(el('span', 'cms-block-typekey', esc(block.type)));
+        head.appendChild(el('span', 'cms-block-summary', esc(summarize(block))));
+
+        var tools = el('div', 'cms-block-tools');
+        var up = iconBtn('fa-arrow-up', 'Move up', false);
+        var down = iconBtn('fa-arrow-down', 'Move down', false);
+        card._upBtn = up;
+        card._downBtn = down;
+        up.addEventListener('click', function () {
+            var i = model.indexOf(block);
+            if (i > 0) { moveBlock(i, i - 1); }
+        });
+        down.addEventListener('click', function () {
+            var i = model.indexOf(block);
+            if (i > -1 && i < model.length - 1) { moveBlock(i, i + 1); }
+        });
+
+        var dup = iconBtn('fa-clone', 'Duplicate block', false);
+        dup.addEventListener('click', function () { duplicateBlock(block); });
+
+        var sw = el('label', 'cms-switch');
+        var cb = el('input'); cb.type = 'checkbox'; cb.checked = block.enabled;
+        function syncSwitchAria() {
+            cb.setAttribute('aria-label', cb.checked
+                ? 'Block enabled, click to disable'
+                : 'Block disabled, click to enable');
+        }
+        syncSwitchAria();
+        cb.addEventListener('change', function () {
+            block.enabled = cb.checked;
+            card.classList.toggle('cms-block-disabled', !block.enabled);
+            syncSwitchAria();
+            markDirty();
+        });
+        sw.appendChild(cb);
+        sw.appendChild(el('span', 'cms-slider'));
+
+        var del = iconBtn('fa-trash', 'Delete block', false, true);
+        del.addEventListener('click', function () { askDeleteBlock(block); });
+
+        tools.appendChild(up);
+        tools.appendChild(down);
+        tools.appendChild(dup);
+        tools.appendChild(sw);
+        tools.appendChild(del);
+        head.appendChild(tools);
+        card.appendChild(head);
+
+        var body = el('div', 'cms-block-body');
+        // loud inline error message (shown only when this block blocks the save)
+        var errMsg = el('div', 'cms-block-error-msg', '<i class="fas fa-exclamation-triangle"></i> <span>This block has invalid JSON and won’t be saved until you fix it.</span>');
+        errMsg.style.display = block._jsonError ? '' : 'none';
+        card._errMsg = errMsg;
+        body.appendChild(errMsg);
+        body.appendChild(buildBlockBody(block));
+        card.appendChild(body);
+
+        collapseBtn.addEventListener('click', function () {
+            body.classList.toggle('cms-collapsed');
+            var icon = collapseBtn.querySelector('i');
+            if (icon) { icon.className = body.classList.contains('cms-collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down'; }
+        });
+
+        wireDrag(card, handle, block);
+        return card;
+    }
+
+    /* ---- render the whole block list (full rebuild — replaceModel/seed only) ---- */
     function renderList() {
         destroyTinyIn(listEl);
         listEl.innerHTML = '';
         emptyEl.style.display = model.length ? 'none' : '';
 
-        if (model.length) { listEl.appendChild(inserterZone(0)); }
+        model.forEach(function (block) { listEl.appendChild(buildRow(block)); });
 
-        model.forEach(function (block, idx) {
-            var card = el('div', 'cms-block-card' + (block.enabled ? '' : ' cms-block-disabled') + (block._jsonError ? ' cms-block-error' : ''));
-            // draggable is enabled only while the drag handle is pressed (wireDrag),
-            // so text selection inside field inputs never starts a card drag.
-            card.setAttribute('draggable', 'false');
-
-            var head = el('div', 'cms-block-head');
-
-            var handle = el('span', 'cms-drag-handle', '<i class="fas fa-grip-vertical"></i>');
-            handle.setAttribute('data-tip', 'Drag to reorder');
-            head.appendChild(handle);
-
-            var collapseBtn = iconBtn('fa-chevron-down', 'Collapse / expand', false);
-            head.appendChild(collapseBtn);
-            head.appendChild(el('span', 'cms-block-icon', '<i class="fas ' + esc(iconFor(block.type)) + '"></i>'));
-            head.appendChild(el('span', 'cms-block-type', esc(labelFor(block.type))));
-            head.appendChild(el('span', 'cms-block-typekey', esc(block.type)));
-            head.appendChild(el('span', 'cms-block-summary', esc(summarize(block))));
-
-            var tools = el('div', 'cms-block-tools');
-            var up = iconBtn('fa-arrow-up', 'Move up', idx === 0);
-            var down = iconBtn('fa-arrow-down', 'Move down', idx === model.length - 1);
-            up.addEventListener('click', function () { swap(model, idx, idx - 1); renderList(); markDirty(); });
-            down.addEventListener('click', function () { swap(model, idx, idx + 1); renderList(); markDirty(); });
-
-            var dup = iconBtn('fa-clone', 'Duplicate block', false);
-            dup.addEventListener('click', function () { duplicateBlock(idx); });
-
-            var sw = el('label', 'cms-switch');
-            var cb = el('input'); cb.type = 'checkbox'; cb.checked = block.enabled;
-            function syncSwitchAria() {
-                cb.setAttribute('aria-label', cb.checked
-                    ? 'Block enabled, click to disable'
-                    : 'Block disabled, click to enable');
-            }
-            syncSwitchAria();
-            cb.addEventListener('change', function () {
-                block.enabled = cb.checked;
-                card.classList.toggle('cms-block-disabled', !block.enabled);
-                syncSwitchAria();
-                markDirty();
-            });
-            sw.appendChild(cb);
-            sw.appendChild(el('span', 'cms-slider'));
-
-            var del = iconBtn('fa-trash', 'Delete block', false, true);
-            del.addEventListener('click', function () { askDeleteBlock(idx); });
-
-            tools.appendChild(up);
-            tools.appendChild(down);
-            tools.appendChild(dup);
-            tools.appendChild(sw);
-            tools.appendChild(del);
-            head.appendChild(tools);
-            card.appendChild(head);
-
-            var body = el('div', 'cms-block-body');
-            // quiet inline error message (shown only when this block blocks autosave)
-            var errMsg = el('div', 'cms-block-error-msg', '<i class="fas fa-exclamation-triangle"></i> <span>This block has invalid input and won’t be saved until it’s fixed.</span>');
-            errMsg.style.display = block._jsonError ? '' : 'none';
-            card._errMsg = errMsg;
-            body.appendChild(errMsg);
-            body.appendChild(buildBlockBody(block));
-            card.appendChild(body);
-
-            collapseBtn.addEventListener('click', function () {
-                body.classList.toggle('cms-collapsed');
-                var icon = collapseBtn.querySelector('i');
-                if (icon) { icon.className = body.classList.contains('cms-collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down'; }
-            });
-
-            wireDrag(card, handle, idx);
-
-            listEl.appendChild(card);
-            listEl.appendChild(inserterZone(idx + 1));
-        });
+        if (model.length) {
+            var trailing = inserterZone(null);
+            trailing.classList.add('cms-inserter-trailing');
+            listEl.appendChild(trailing);
+        }
 
         listEl.querySelectorAll('textarea[data-tiny]').forEach(function (ta) { initTiny(ta); });
+        refreshRowChrome();
+        warnTinyDegradedIfNeeded();
     }
 
     /* ================= HTML5 drag-and-drop reorder ================= */
-    var dragFromIdx = null;
-    function wireDrag(card, handle, idx) {
+    var dragFromBlock = null;
+    function wireDrag(card, handle, block) {
         // Only the handle initiates a drag (keeps text selection in field inputs).
         handle.addEventListener('mousedown', function () { card.setAttribute('draggable', 'true'); });
         handle.addEventListener('mouseup', function () { card.setAttribute('draggable', 'false'); });
         card.addEventListener('dragstart', function (e) {
-            dragFromIdx = idx;
+            dragFromBlock = block;
             card.classList.add('cms-dragging');
-            try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(idx)); } catch (err) {}
+            try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(model.indexOf(block))); } catch (err) {}
         });
         card.addEventListener('dragend', function () {
             card.classList.remove('cms-dragging');
             card.setAttribute('draggable', 'false');
             listEl.querySelectorAll('.cms-drag-over').forEach(function (n) { n.classList.remove('cms-drag-over'); });
-            dragFromIdx = null;
+            dragFromBlock = null;
         });
         card.addEventListener('dragover', function (e) {
-            if (dragFromIdx === null) { return; }
+            if (dragFromBlock === null) { return; }
             e.preventDefault();
             try { e.dataTransfer.dropEffect = 'move'; } catch (err) {}
             card.classList.add('cms-drag-over');
@@ -1425,28 +1751,32 @@ window.CmsBlockEditor = (function () {
         card.addEventListener('drop', function (e) {
             e.preventDefault();
             card.classList.remove('cms-drag-over');
-            if (dragFromIdx === null || dragFromIdx === idx) { return; }
-            var moved = model.splice(dragFromIdx, 1)[0];
-            var dest = (dragFromIdx < idx) ? idx - 1 : idx;
+            if (dragFromBlock === null || dragFromBlock === block) { dragFromBlock = null; return; }
+            var from = model.indexOf(dragFromBlock);
+            var target = model.indexOf(block);
+            dragFromBlock = null;
+            if (from < 0 || target < 0 || from === target) { return; }
+            var moved = model.splice(from, 1)[0];
+            var dest = (from < target) ? target - 1 : target;
             model.splice(dest, 0, moved);
-            dragFromIdx = null;
-            renderList();
+            syncRowOrder();
+            refreshRowChrome();
             markDirty();
         });
     }
 
-    /* ---- duplicate a block (deep copy of its fields) at idx+1 ---- */
-    function duplicateBlock(idx) {
-        var src = model[idx];
-        if (!src) { return; }
+    /* ---- duplicate a block (deep copy of its fields) right after it ---- */
+    function duplicateBlock(block) {
+        var i = model.indexOf(block);
+        if (i < 0) { return; }
         var copy = {
-            type:    src.type,
-            enabled: src.enabled,
-            source:  src.source,
-            fields:  JSON.parse(JSON.stringify(src.fields || {}))
+            type:    block.type,
+            enabled: block.enabled,
+            source:  block.source,
+            fields:  JSON.parse(JSON.stringify(block.fields || {}))
         };
-        model.splice(idx + 1, 0, copy);
-        renderList();
+        model.splice(i + 1, 0, copy);
+        insertRowAt(copy, i + 1, false);
         markDirty();
         toast('Block duplicated.', 'ok');
     }
@@ -1464,13 +1794,11 @@ window.CmsBlockEditor = (function () {
         openModal(confirmModal);
     }
 
-    function askDeleteBlock(idx) {
-        var label = labelFor(model[idx].type);
+    function askDeleteBlock(block) {
+        var label = labelFor(block.type);
         confirmDialog('Remove block', 'Remove the "' + label + '" block? You can re-add it later.', 'Remove', function () {
             closeModal(confirmModal);
-            model.splice(idx, 1);
-            renderList();
-            markDirty();
+            removeBlock(block);
         });
     }
 
@@ -1490,18 +1818,13 @@ window.CmsBlockEditor = (function () {
             source: c.dynamic ? 'dynamic' : 'authored',
             fields: {}
         };
-        if (addInsertAt === null || addInsertAt < 0 || addInsertAt > model.length) {
-            model.push(nb);
-        } else {
-            model.splice(addInsertAt, 0, nb);
-        }
+        var at = (addInsertAt === null || addInsertAt < 0 || addInsertAt > model.length)
+            ? model.length : addInsertAt;
+        model.splice(at, 0, nb);
         closeModal(addModal);
-        renderList();
+        // Surgical insert of just this card (keeps every other TinyMCE editor alive).
+        insertRowAt(nb, at, true);
         markDirty();
-        // scroll the newly-added card into view
-        var cards = listEl.querySelectorAll('.cms-block-card');
-        var pos = (addInsertAt === null) ? cards.length - 1 : addInsertAt;
-        if (cards[pos]) { cards[pos].scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     }
 
     function typeCard(c) {
@@ -1542,8 +1865,10 @@ window.CmsBlockEditor = (function () {
         addGroupsEl.innerHTML = '';
         var q = (filter || '').trim().toLowerCase();
 
-        // All addable catalog entries (legacy/non-addable always excluded).
-        var addable = (catalog || []).filter(function (c) { return c.addable !== false; });
+        // All addable catalog entries (legacy/non-addable + JSON-only always excluded).
+        var addable = (catalog || []).filter(function (c) {
+            return c.addable !== false && !JSON_ONLY_TYPES[c.type];
+        });
 
         // Scope to the page type unless searching or "Show all" is on. When the
         // user is typing a query we search across ALL blocks so anything is
@@ -1664,7 +1989,7 @@ window.CmsBlockEditor = (function () {
     }
 
     /* ================= Media picker ================= */
-    var mediaModal, mediaGrid, mediaSearch, mediaSearchBtn, uploadInput, uploadDrop;
+    var mediaModal, mediaGrid, mediaSearch, mediaSearchBtn, uploadInput, uploadDrop, uploadAlt, uploadDecorative;
     var mediaCallback = null;
 
     function openMediaPicker(cb) {
@@ -1709,16 +2034,31 @@ window.CmsBlockEditor = (function () {
             .catch(function () { mediaGrid.innerHTML = '<div class="cms-media-empty">Network error.</div>'; });
     }
 
+    // C1: alt text authored at upload. A "decorative" tick INTENTIONALLY sends an
+    // empty alt (assistive tech then skips the image) — distinct from simply
+    // forgetting to describe it, which is why the choice is explicit.
+    function uploadAltValue() {
+        if (uploadDecorative && uploadDecorative.checked) { return ''; }
+        return uploadAlt ? uploadAlt.value.trim() : '';
+    }
+    function resetUploadMeta() {
+        if (uploadAlt) { uploadAlt.value = ''; }
+        if (uploadDecorative) { uploadDecorative.checked = false; }
+        if (uploadAlt) { uploadAlt.disabled = false; }
+    }
+
     function doUpload(file) {
         if (!file) { return; }
         if (file.size > 8 * 1024 * 1024) { toast('Image is larger than 8MB.', 'error'); return; }
+        var alt = uploadAltValue();
         var reader = new FileReader();
         reader.onerror = function () { toast('Could not read file.', 'error'); loadMedia(''); };
         reader.onload = function () {
             mediaGrid.innerHTML = '<div class="cms-media-empty"><span class="cms-spin"></span> Uploading…</div>';
-            post('mediaupload', { data: reader.result, filename: file.name, alt: '' }).then(function (res) {
+            post('mediaupload', { data: reader.result, filename: file.name, alt: alt }).then(function (res) {
                 if (!res || !res.ok) { toast((res && res.error) || 'Upload failed.', 'error'); loadMedia(''); return; }
                 toast('Image uploaded.', 'ok');
+                resetUploadMeta();
                 loadMedia('');
             }).catch(function () { toast('Network error.', 'error'); loadMedia(''); });
         };
@@ -1732,7 +2072,17 @@ window.CmsBlockEditor = (function () {
         mediaSearchBtn = document.getElementById('cmsMediaSearchBtn');
         uploadInput = document.getElementById('cmsUploadInput');
         uploadDrop = document.getElementById('cmsUploadDrop');
+        uploadAlt = document.getElementById('cmsUploadAlt');
+        uploadDecorative = document.getElementById('cmsUploadDecorative');
         if (!mediaModal) { return; }
+
+        // A decorative image needs no description — grey the alt field to teach why.
+        if (uploadDecorative && uploadAlt) {
+            uploadDecorative.addEventListener('change', function () {
+                uploadAlt.disabled = uploadDecorative.checked;
+                if (uploadDecorative.checked) { uploadAlt.value = ''; }
+            });
+        }
 
         if (mediaSearchBtn) {
             mediaSearchBtn.addEventListener('click', function () { loadMedia(mediaSearch.value.trim()); });
@@ -1775,6 +2125,7 @@ window.CmsBlockEditor = (function () {
         catalog   = Array.isArray(opts.catalog) ? opts.catalog : [];
         labels    = (opts.labels && typeof opts.labels === 'object') ? opts.labels : {};
         pageTypes = Array.isArray(opts.pageTypes) ? opts.pageTypes : [];
+        tagCatalog = Array.isArray(opts.tags) ? opts.tags : [];
         blockAllow = (opts.blockAllow && typeof opts.blockAllow === 'object') ? opts.blockAllow : {};
         pageType  = (typeof opts.pageType === 'string') ? opts.pageType : '';
         canEdit   = !!opts.canEdit;
@@ -1802,6 +2153,7 @@ window.CmsBlockEditor = (function () {
         wireAddBlock();
         wireMediaPicker();
         renderList();
+        observeTheme();   // C31: reskin open editors when the app theme flips
     }
 
     return {
@@ -1810,6 +2162,9 @@ window.CmsBlockEditor = (function () {
             syncTiny();
             return model.map(function (b, i) {
                 return {
+                    // C15: send the stable id (0 = new row) so the server upsert
+                    // matches existing rows instead of recreating them.
+                    id:      b.id || 0,
                     type:    b.type,
                     enabled: b.enabled ? 1 : 0,
                     order:   i * 10,
@@ -1839,6 +2194,24 @@ window.CmsBlockEditor = (function () {
         isEmpty: function () { return model.length === 0; },
         hasJsonError: function () {
             return model.some(function (b) { return b._jsonError; });
+        },
+        // C20: jump the author to the first save-blocking (invalid-JSON) block and
+        // name it — call this from the host's save handler when hasJsonError() is
+        // true so the block is loud + recoverable instead of a silent failed save.
+        focusFirstError: function () {
+            for (var i = 0; i < model.length; i++) {
+                if (!model[i]._jsonError) { continue; }
+                var row = rowForBlock(model[i]);
+                var card = row ? row.querySelector('.cms-block-card') : null;
+                if (card) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    card.classList.add('cms-block-error-flash');
+                    setTimeout(function (c) { return function () { c.classList.remove('cms-block-error-flash'); }; }(card), 1500);
+                }
+                toast('The “' + labelFor(model[i].type) + '” block has invalid JSON — fix it, then save again.', 'error');
+                return true;
+            }
+            return false;
         },
         confirmDialog: confirmDialog,
         closeConfirm: function () { closeModal(confirmModal); },

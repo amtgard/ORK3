@@ -13,7 +13,7 @@ $cta     = $blockFields['cta']     ?? [];
 $textAlign  = ($align === 'center') ? 'text-align:center;' : '';
 $marginAuto = ($align === 'center') ? 'margin:0 auto;' : '';
 ?>
-<div class="fd-pad fd-section-light" style="background:#fff;<?= $textAlign ?>">
+<div class="fd-pad fd-section-light" style="<?= $textAlign ?>">
     <?php if (!empty($kicker)): ?>
         <div class="fd-kicker fd-kicker-d" style="margin-bottom:10px;">
             <?= htmlspecialchars($kicker, ENT_QUOTES) ?>
@@ -21,9 +21,9 @@ $marginAuto = ($align === 'center') ? 'margin:0 auto;' : '';
     <?php endif; ?>
 
     <?php if (!empty($heading)): ?>
-        <h3 class="fd-sec-title" style="font-size:34px;margin-bottom:14px;">
+        <h2 class="fd-sec-title" style="font-size:34px;margin-bottom:14px;">
             <?= htmlspecialchars($heading, ENT_QUOTES) ?>
-        </h3>
+        </h2>
     <?php endif; ?>
 
     <?php if (!empty($body)): ?>

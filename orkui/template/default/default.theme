@@ -21,7 +21,27 @@
 		<?php endif ; ?>
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="description" content="<?= htmlspecialchars(!empty($meta_description) ? $meta_description : 'The Online Record Keeper for the Amtgard International LARP.', ENT_QUOTES) ?>">
-		<?php if ($page_title === 'Home') : ?>
+		<?php
+		// C6: per-page canonical + Open Graph. A controller (Controller_Site for
+		// org sites, Controller::index for the front-door HOME) may publish a
+		// $PageMeta block { canonical, og_type, og_title, og_desc, og_image,
+		// og_sitename }. When present it OVERRIDES the hardcoded global ORK
+		// branding below, so an org page no longer leaks the ORK-International
+		// title/description/image into link previews. Absent → the legacy Home
+		// fallback still applies (no behavior change for existing pages).
+		$_pm = (isset($PageMeta) && is_array($PageMeta)) ? $PageMeta : null;
+		?>
+		<?php if ($_pm !== null): ?>
+		<?php if (!empty($_pm['canonical'])): ?>
+		<link rel="canonical" href="<?= htmlspecialchars((string)$_pm['canonical'], ENT_QUOTES) ?>">
+		<meta property="og:url" content="<?= htmlspecialchars((string)$_pm['canonical'], ENT_QUOTES) ?>">
+		<?php endif; ?>
+		<meta property="og:type" content="<?= htmlspecialchars(!empty($_pm['og_type']) ? (string)$_pm['og_type'] : 'website', ENT_QUOTES) ?>">
+		<meta property="og:site_name" content="<?= htmlspecialchars(!empty($_pm['og_sitename']) ? (string)$_pm['og_sitename'] : 'ORK 3 - Amtgard Online Record Keeper', ENT_QUOTES) ?>">
+		<meta property="og:title" content="<?= htmlspecialchars(!empty($_pm['og_title']) ? (string)$_pm['og_title'] : ucwords((string)$page_title), ENT_QUOTES) ?>">
+		<meta property="og:description" content="<?= htmlspecialchars(!empty($_pm['og_desc']) ? (string)$_pm['og_desc'] : (!empty($meta_description) ? (string)$meta_description : 'The Online Record Keeper for the Amtgard International LARP.'), ENT_QUOTES) ?>">
+		<meta property="og:image" content="<?= htmlspecialchars(!empty($_pm['og_image']) ? (string)$_pm['og_image'] : (HTTP_ASSETS . 'images/clippy_large.png'), ENT_QUOTES) ?>">
+		<?php elseif ($page_title === 'Home') : ?>
 		<meta property="og:type" content="website">
 		<meta property="og:site_name" content="ORK 3 - Amtgard Online Record Keeper">
 		<meta property="og:title" content="ORK 3 - Amtgard Online Record Keeper">

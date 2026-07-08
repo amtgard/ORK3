@@ -12,7 +12,7 @@ $moreHref = $blockFields['more_href'] ?? '';
 $hasRows = is_array($EventSummary) && count($EventSummary) > 0;
 $rows    = $hasRows ? array_slice($EventSummary, 0, $limit) : [];
 ?>
-<div class="fd-pad fd-section-light" style="background:#fff;">
+<div class="fd-pad fd-section-light">
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;">
         <div>
             <?php if (!empty($kicker)): ?>
@@ -21,9 +21,9 @@ $rows    = $hasRows ? array_slice($EventSummary, 0, $limit) : [];
                 </div>
             <?php endif; ?>
             <?php if (!empty($heading)): ?>
-                <h3 class="fd-sec-title">
+                <h2 class="fd-sec-title">
                     <?= htmlspecialchars($heading, ENT_QUOTES) ?>
-                </h3>
+                </h2>
             <?php endif; ?>
         </div>
         <?php if (!empty($moreHref)): ?>

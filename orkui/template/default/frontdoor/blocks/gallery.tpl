@@ -166,7 +166,7 @@ html[data-theme="dark"] .fdb-gallery-cap { color: #9aa6c0; }
         <div class="fdb-gallery-cap"><?= htmlspecialchars($fdbCaption, ENT_QUOTES) ?></div>
     <?php endif; ?>
 
-    <div class="fdb-gallery-lb" id="<?= htmlspecialchars($fdbGid, ENT_QUOTES) ?>-lb" role="dialog" aria-modal="true" aria-label="Image viewer">
+    <div class="fdb-gallery-lb" id="<?= htmlspecialchars($fdbGid, ENT_QUOTES) ?>-lb" role="dialog" aria-modal="true" aria-label="Image viewer" tabindex="-1">
         <button type="button" class="fdb-gallery-lb-close" aria-label="Close">&times;</button>
         <button type="button" class="fdb-gallery-lb-btn fdb-gallery-lb-prev" aria-label="Previous">&#10094;</button>
         <img src="" alt="">
@@ -181,10 +181,12 @@ html[data-theme="dark"] .fdb-gallery-cap { color: #9aa6c0; }
     if (!grid || !lb || grid.dataset.fdbBound) { return; }
     grid.dataset.fdbBound = '1';
 
-    var thumbs  = Array.prototype.slice.call(grid.querySelectorAll('.fdb-gallery-thumb'));
-    var lbImg   = lb.querySelector('img');
-    var lbCount = lb.querySelector('.fdb-gallery-lb-count');
-    var cur     = 0;
+    var thumbs   = Array.prototype.slice.call(grid.querySelectorAll('.fdb-gallery-thumb'));
+    var lbImg    = lb.querySelector('img');
+    var lbCount  = lb.querySelector('.fdb-gallery-lb-count');
+    var closeBtn = lb.querySelector('.fdb-gallery-lb-close');
+    var cur      = 0;
+    var lastFocused = null;
 
     function show(i) {
         if (!thumbs.length) { return; }
@@ -194,19 +196,40 @@ html[data-theme="dark"] .fdb-gallery-cap { color: #9aa6c0; }
         lbImg.alt = t.getAttribute('data-fdb-alt') || '';
         lbCount.textContent = (cur + 1) + ' / ' + thumbs.length;
     }
+    // Currently-visible focusable controls inside the dialog (for the Tab trap).
+    function focusables() {
+        return Array.prototype.slice.call(lb.querySelectorAll('button'))
+            .filter(function (el) { return el.offsetParent !== null; });
+    }
     function open(i) {
+        lastFocused = document.activeElement;
         show(i);
         lb.classList.add('fdb-gallery-open');
-        document.addEventListener('keydown', onKey);
+        document.addEventListener('keydown', onKey, true);
+        // Move focus into the dialog so keyboard users land inside it.
+        (closeBtn || lb).focus();
     }
     function close() {
         lb.classList.remove('fdb-gallery-open');
-        document.removeEventListener('keydown', onKey);
+        document.removeEventListener('keydown', onKey, true);
+        // Restore focus to the thumb (or whatever) that opened the lightbox.
+        if (lastFocused && typeof lastFocused.focus === 'function') { lastFocused.focus(); }
     }
     function onKey(e) {
-        if (e.key === 'Escape') { close(); }
-        else if (e.key === 'ArrowLeft') { show(cur - 1); }
-        else if (e.key === 'ArrowRight') { show(cur + 1); }
+        if (e.key === 'Escape') { close(); return; }
+        if (e.key === 'ArrowLeft') { show(cur - 1); return; }
+        if (e.key === 'ArrowRight') { show(cur + 1); return; }
+        if (e.key === 'Tab') {
+            // Trap Tab within the dialog.
+            var f = focusables();
+            if (!f.length) { e.preventDefault(); return; }
+            var first = f[0], last = f[f.length - 1], active = document.activeElement;
+            if (e.shiftKey) {
+                if (active === first || !lb.contains(active)) { e.preventDefault(); last.focus(); }
+            } else {
+                if (active === last || !lb.contains(active)) { e.preventDefault(); first.focus(); }
+            }
+        }
     }
 
     thumbs.forEach(function (t) {
@@ -216,7 +239,7 @@ html[data-theme="dark"] .fdb-gallery-cap { color: #9aa6c0; }
     });
     lb.querySelector('.fdb-gallery-lb-prev').addEventListener('click', function (e) { e.stopPropagation(); show(cur - 1); });
     lb.querySelector('.fdb-gallery-lb-next').addEventListener('click', function (e) { e.stopPropagation(); show(cur + 1); });
-    lb.querySelector('.fdb-gallery-lb-close').addEventListener('click', close);
+    closeBtn.addEventListener('click', close);
     lb.addEventListener('click', function (e) {
         // click on the backdrop (not the image or nav buttons) closes
         if (e.target === lb) { close(); }

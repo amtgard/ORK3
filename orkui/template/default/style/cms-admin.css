@@ -823,6 +823,34 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
     border: 1px solid var(--ork-badge-red-text, #c0392b);
 }
 
+/* A block "row" wraps an insert-before zone + its card WITHOUT adding a layout
+   box (display:contents), so a single-block reorder / insert / remove can move
+   one node instead of rebuilding the whole list — which is what tears down every
+   open TinyMCE editor. Full renderList is reserved for replaceModel/seed. */
+.cms-block-row { display: contents; }
+
+/* Brief highlight when jumping the author to a save-blocking (invalid-JSON) block. */
+.cms-block-card.cms-block-error-flash { animation: cmsErrFlash 1.4s ease; }
+@keyframes cmsErrFlash {
+    0%, 100% { box-shadow: 0 0 0 1px var(--ork-badge-red-text, #c0392b); }
+    30% { box-shadow: 0 0 0 4px rgba(192, 57, 43, .5); }
+}
+
+/* Degraded rich-text warning — shown when the TinyMCE bundle fails to load and
+   a rich-text field silently falls back to a raw-HTML textarea (theme-aware). */
+.cms-help-warn {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    font-size: 12px;
+    margin-top: 4px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    background: var(--ork-badge-orange-bg, #feebc8);
+    color: var(--ork-badge-orange-text, #9c4221);
+    border: 1px solid var(--ork-badge-orange-text, #9c4221);
+}
+
 /* Insert-between hover-reveal "+" zone */
 .cms-inserter {
     position: relative;

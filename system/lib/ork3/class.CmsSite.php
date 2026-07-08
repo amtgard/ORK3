@@ -701,9 +701,22 @@ class CmsSite extends CmsBase
                 ? null : (int)$fields['logo_media_id'];
         }
         if (array_key_exists('home_page_id', $fields)) {
-            $set[] = 'home_page_id = :home_page_id';
-            $binds['home_page_id'] = ($fields['home_page_id'] === null || $fields['home_page_id'] === '')
+            $homeId = ($fields['home_page_id'] === null || $fields['home_page_id'] === '')
                 ? null : (int)$fields['home_page_id'];
+            // C30: a non-null home pointer MUST reference a real (non-trashed) page
+            // that belongs to THIS site's own scope — otherwise a published site
+            // could point its landing page at an unbuilt/cross-scope id and silently
+            // fall through to the "being built" interstitial. Validated inline
+            // before the write; an invalid id returns a friendly error and writes
+            // nothing. (Read scope off the site row; no binds are on $DB yet.)
+            if ($homeId !== null) {
+                $err = $this->_validateHomePage($siteId, $homeId);
+                if ($err !== true) {
+                    return $err;
+                }
+            }
+            $set[] = 'home_page_id = :home_page_id';
+            $binds['home_page_id'] = $homeId;
         }
 
         if (count($set) === 0) {
@@ -794,6 +807,55 @@ class CmsSite extends CmsBase
             return 'That web address is already in use. Please choose another.';
         }
 
+        return true;
+    }
+
+    /**
+     * C30: validate a proposed home_page_id for a site. The page must exist, not
+     * be trashed, and share the site's exact (scope_type, scope_id) so a public
+     * visitor can never be pointed at a cross-scope or missing page. Returns true
+     * when acceptable, or a human-readable error string.
+     *
+     * @param int $siteId
+     * @param int $pageId
+     * @return true|string
+     */
+    private function _validateHomePage($siteId, $pageId)
+    {
+        global $DB;
+
+        $siteId = (int)$siteId;
+        $pageId = (int)$pageId;
+        if ($pageId <= 0) {
+            return true; // caller only invokes with a non-null id, but be safe
+        }
+
+        // Read this site's scope (no binds are staged on $DB at the call site).
+        $DB->Clear();
+        $DB->site_id = $siteId;
+        $siteRow = $this->_firstRow($DB->DataSet(
+            'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_site'
+            . ' WHERE site_id = :site_id LIMIT 1'
+        ));
+        if ($siteRow === null) {
+            return 'Invalid site.';
+        }
+
+        // Read the candidate page (excluding trashed rows).
+        $DB->Clear();
+        $DB->page_id = $pageId;
+        $pageRow = $this->_firstRow($DB->DataSet(
+            'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_page'
+            . ' WHERE page_id = :page_id AND deleted_at IS NULL LIMIT 1'
+        ));
+        if ($pageRow === null) {
+            return 'That page no longer exists. Pick another home page.';
+        }
+        if ((string)$pageRow['scope_type'] !== (string)$siteRow['scope_type']
+            || (int)$pageRow['scope_id'] !== (int)$siteRow['scope_id']
+        ) {
+            return 'The home page must be one of this site\'s own pages.';
+        }
         return true;
     }
 

@@ -37,20 +37,80 @@ if ($koLimit > 24) {
     $koLimit = 24;
 }
 
-$koRows = [];
-if (class_exists('APIModel')) {
-    try {
-        $koModel  = new APIModel('Kingdom');
-        // Token '' → public view: only Persona is exposed (real names suppressed).
-        $koResult = $koModel->GetOfficers(['KingdomId' => $koKingdomId, 'Token' => '']);
-        if (is_array($koResult) && isset($koResult['Officers']) && is_array($koResult['Officers'])) {
-            $koRows = $koResult['Officers'];
-        }
-    } catch (\Throwable $e) {
-        $koRows = [];
+// C5: this DYNAMIC block runs on every anonymous public hit and previously did
+// an N+1 — one GetHeraldryUrl call PER officer — inside the render loop below,
+// on top of the GetOfficers query. Resolve the roster AND every avatar up front
+// in ONE pass, then cache the fully-hydrated result in GhettoCache keyed by
+// (kingdom, limit). Public officer data (Token '') is safe to share across
+// viewers; a short TTL keeps it fresh. Cached hits render with ZERO model calls.
+// $koResolved: list of ['persona','role','mundane_id','avatar'].
+$koResolved = null;
+$koCache    = (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache) && is_object(Ork3::$Lib->ghettocache))
+    ? Ork3::$Lib->ghettocache : null;
+$koCacheKey = 'k' . $koKingdomId . '.l' . $koLimit;
+if ($koCache !== null) {
+    $koHit = $koCache->get('frontdoor.kingdom_officers', $koCacheKey, 300);
+    if (is_array($koHit)) {
+        $koResolved = $koHit;
     }
 }
-$koRows = array_slice($koRows, 0, $koLimit);
+
+if ($koResolved === null) {
+    $koRows = [];
+    if (class_exists('APIModel')) {
+        try {
+            $koModel  = new APIModel('Kingdom');
+            // Token '' → public view: only Persona is exposed (real names suppressed).
+            $koResult = $koModel->GetOfficers(['KingdomId' => $koKingdomId, 'Token' => '']);
+            if (is_array($koResult) && isset($koResult['Officers']) && is_array($koResult['Officers'])) {
+                $koRows = $koResult['Officers'];
+            }
+        } catch (\Throwable $e) {
+            $koRows = [];
+        }
+    }
+    $koRows = array_slice($koRows, 0, $koLimit);
+
+    // Optional per-officer avatar from PLAYER heraldry (hidden on load error).
+    // Guarded: a construction failure must not 500 the whole page (the block
+    // degrades to icon avatars).
+    try {
+        $koHeraldry = class_exists('APIModel') ? new APIModel('Heraldry') : null;
+    } catch (\Throwable $e) {
+        $koHeraldry = null;
+    }
+
+    $koResolved = [];
+    foreach ($koRows as $koRow) {
+        $koPersona = trim((string) ($koRow['Persona'] ?? ''));
+        $koRole    = trim((string) ($koRow['OfficerRole'] ?? $koRow['Role'] ?? ''));
+        if ($koPersona === '' && $koRole === '') {
+            continue;
+        }
+        $koMundaneId = (int) ($koRow['MundaneId'] ?? 0);
+        $koAvatarUrl = '';
+        if ($koHeraldry !== null && $koMundaneId > 0) {
+            try {
+                $koH = $koHeraldry->GetHeraldryUrl(['Type' => 'Player', 'Id' => $koMundaneId]);
+                if (is_array($koH) && !empty($koH['Url'])) {
+                    $koAvatarUrl = (string) $koH['Url'];
+                }
+            } catch (\Throwable $e) {
+                $koAvatarUrl = '';
+            }
+        }
+        $koResolved[] = [
+            'persona'    => $koPersona,
+            'role'       => $koRole,
+            'mundane_id' => $koMundaneId,
+            'avatar'     => $koAvatarUrl,
+        ];
+    }
+
+    if ($koCache !== null) {
+        $koCache->cache('frontdoor.kingdom_officers', $koCacheKey, $koResolved);
+    }
+}
 
 // Role label normalization: prod stores capitalized ENUM roles, but the shared
 // local DB was migrated to lowercase canonical keys — match case-insensitively.
@@ -61,82 +121,31 @@ $koRoleLabels = [
     'champion'       => 'Champion',
     'gmr'            => 'GMR',
 ];
-
-// Optional per-officer avatar from PLAYER heraldry (hidden on load error).
-// Guarded: a construction failure must not 500 the whole page (the block
-// degrades to icon avatars).
-try {
-    $koHeraldry = class_exists('APIModel') ? new APIModel('Heraldry') : null;
-} catch (\Throwable $e) {
-    $koHeraldry = null;
-}
 ?>
-<style>
-.ko-block { background: var(--fd-bg); }
-.ko-head { margin-bottom: 18px; }
-.ko-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; margin: 0; font-size: 24px; }
-.ko-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-.ko-card {
-    background: var(--fd-bg); border: 1px solid #e4e8f0; border-radius: 10px;
-    padding: 18px 14px; text-align: center;
-}
-.ko-avatar {
-    width: 72px; height: 72px; margin: 0 auto 10px; border-radius: 50%;
-    background: #eef1f6; border: 2px solid var(--gold, #d4af37); overflow: hidden;
-    display: flex; align-items: center; justify-content: center;
-}
-.ko-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.ko-avatar i { font-size: 28px; color: #b8bfce; }
-.ko-role { font-size: 12px; color: #b8860b; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
-.ko-name { font-weight: 700; font-size: 15px; margin-top: 4px; color: var(--fd-text); }
-.ko-empty { color: #8899aa; font-style: italic; text-align: center; padding: 18px; }
-
-@media (max-width: 900px) { .ko-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 520px) { .ko-grid { grid-template-columns: 1fr; } }
-
-html[data-theme="dark"] .ko-block { background: transparent; }
-html[data-theme="dark"] .ko-card { background: #1b2233; border-color: #2c3650; }
-html[data-theme="dark"] .ko-avatar { background: #232c42; }
-html[data-theme="dark"] .ko-name { color: #eef2fa; }
-html[data-theme="dark"] .ko-avatar i { color: #7d8aa5; }
-</style>
-<div class="fd-pad fd-section-light ko-block" style="background:#fff;">
+<?php // Static .ko-* CSS lives in frontdoor.css (loaded under orgsite.css on org
+      // sites) — no per-render inline <style>. ?>
+<div class="fd-pad fd-section-light ko-block">
     <div class="ko-head">
         <?php if ($koKicker !== ''): ?>
             <div class="fd-kicker fd-kicker-d"><?= htmlspecialchars($koKicker, ENT_QUOTES) ?></div>
         <?php endif; ?>
         <?php if ($koHeading !== ''): ?>
-            <h3 class="ko-title fd-sec-title"><?= htmlspecialchars($koHeading, ENT_QUOTES) ?></h3>
+            <h2 class="ko-title fd-sec-title"><?= htmlspecialchars($koHeading, ENT_QUOTES) ?></h2>
         <?php endif; ?>
     </div>
 
-    <?php if (empty($koRows)): ?>
+    <?php if (empty($koResolved)): ?>
         <div class="ko-empty">Officer roster coming soon.</div>
     <?php else: ?>
         <div class="ko-grid">
-            <?php foreach ($koRows as $koRow): ?>
+            <?php foreach ($koResolved as $koRow): ?>
                 <?php
-                $koPersona = trim((string) ($koRow['Persona'] ?? ''));
-                $koRole    = trim((string) ($koRow['OfficerRole'] ?? $koRow['Role'] ?? ''));
-                if ($koPersona === '' && $koRole === '') {
-                    continue;
-                }
-                $koMundaneId = (int) ($koRow['MundaneId'] ?? 0);
+                $koPersona   = (string) ($koRow['persona'] ?? '');
+                $koRole      = (string) ($koRow['role'] ?? '');
+                $koAvatarUrl = (string) ($koRow['avatar'] ?? '');
                 $koRoleLabel = $koRoleLabels[strtolower($koRole)] ?? $koRole;
                 $koNameOut   = htmlspecialchars(stripslashes($koPersona !== '' ? $koPersona : 'Officer'), ENT_QUOTES);
                 $koRoleOut   = htmlspecialchars(stripslashes($koRoleLabel), ENT_QUOTES);
-
-                $koAvatarUrl = '';
-                if ($koHeraldry !== null && $koMundaneId > 0) {
-                    try {
-                        $koH = $koHeraldry->GetHeraldryUrl(['Type' => 'Player', 'Id' => $koMundaneId]);
-                        if (is_array($koH) && !empty($koH['Url'])) {
-                            $koAvatarUrl = (string) $koH['Url'];
-                        }
-                    } catch (\Throwable $e) {
-                        $koAvatarUrl = '';
-                    }
-                }
                 ?>
                 <div class="ko-card">
                     <div class="ko-avatar">

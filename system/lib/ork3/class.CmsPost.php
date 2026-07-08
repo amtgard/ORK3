@@ -66,12 +66,24 @@ class CmsPost extends CmsBase
 
         $scopeType = $this->_normalizeScopeType($scopeType);
 
-        $sql = 'SELECT p.*, COALESCE(NULLIF(m.persona, \'\'), m.given_name) AS author_name'
+        // C7: flip any due scheduled rows to published before the read gate.
+        if ($publishedOnly) {
+            $this->_promoteScheduled();
+        }
+
+        // C21: never leak a real given_name into a public byline / RSS. When the
+        // author has no persona (or the author row is gone — orphaned authorship
+        // after a role revoke, see CmsAuth::RevokeRole), fall back to a neutral
+        // org-scoped label ('Staff' globally, 'Kingdom' for an org site) rather
+        // than the person's mundane given name.
+        $sql = 'SELECT p.*, COALESCE(NULLIF(m.persona, \'\'), ' . $this->_neutralAuthorSql() . ') AS author_name'
             . ' FROM ' . DB_PREFIX . 'cms_post p'
             . ' LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = p.author_id'
-            . ' WHERE p.slug = :slug AND p.scope_type = :scope_type AND p.scope_id = :scope_id';
+            . ' WHERE p.slug = :slug AND p.scope_type = :scope_type AND p.scope_id = :scope_id'
+            . ' AND p.deleted_at IS NULL';   // C2: never serve a trashed post
         if ($publishedOnly) {
-            $sql .= " AND p.status = 'published'";
+            // C7: live only once the (optional) schedule time has passed.
+            $sql .= " AND p.status = 'published' AND (p.published_at IS NULL OR p.published_at <= NOW())";
         }
         $sql .= ' LIMIT 1';
 
@@ -127,9 +139,17 @@ class CmsPost extends CmsBase
         $includeDrafts = !empty($opts['includeDrafts']);
         $tag = isset($opts['tag']) && $opts['tag'] !== '' ? (string)$opts['tag'] : '';
 
-        $where = array('p.scope_type = :scope_type', 'p.scope_id = :scope_id');
+        // C7: flip any due scheduled rows before the public read gate.
         if (!$includeDrafts) {
+            $this->_promoteScheduled();
+        }
+
+        // C2: trashed posts never appear (admin or public).
+        $where = array('p.scope_type = :scope_type', 'p.scope_id = :scope_id', 'p.deleted_at IS NULL');
+        if (!$includeDrafts) {
+            // C7: live only once the (optional) schedule time has passed.
             $where[] = "p.status = 'published'";
+            $where[] = '(p.published_at IS NULL OR p.published_at <= NOW())';
         }
 
         $join = ' LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = p.author_id';
@@ -160,7 +180,7 @@ class CmsPost extends CmsBase
             }
         }
 
-        $sql = 'SELECT p.*, COALESCE(NULLIF(m.persona, \'\'), m.given_name) AS author_name'
+        $sql = 'SELECT p.*, COALESCE(NULLIF(m.persona, \'\'), ' . $this->_neutralAuthorSql() . ') AS author_name'
             . ' FROM ' . DB_PREFIX . 'cms_post p'
             . $join
             . ' WHERE ' . implode(' AND ', $where)
@@ -207,6 +227,66 @@ class CmsPost extends CmsBase
         $result = array('rows' => $rows, 'total' => $total);
         self::$_listCache[$cacheKey] = $result;
         return $result;
+    }
+
+    /**
+     * List TRASHED posts (deleted_at IS NOT NULL) for a scope — the mirror of
+     * ListPosts for the Trash view. Newest-trashed-first, decorated with
+     * author_name + tags so the admin Trash surface can show Restore. Never
+     * touched by public reads (those all gate deleted_at IS NULL).
+     *
+     * @param string $scopeType 'global' | 'kingdom' | 'park'
+     * @param int    $scopeId   scope owner id (0 for global)
+     * @return array list of post rows + author_name + 'tags' => [['name','slug'],...]
+     */
+    public function ListTrashed($scopeType = 'global', $scopeId = 0)
+    {
+        global $DB;
+
+        $scopeType = $this->_normalizeScopeType($scopeType);
+        $scopeId   = (int)$scopeId;
+
+        $sql = 'SELECT p.*, COALESCE(NULLIF(m.persona, \'\'), ' . $this->_neutralAuthorSql() . ') AS author_name'
+            . ' FROM ' . DB_PREFIX . 'cms_post p'
+            . ' LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = p.author_id'
+            . ' WHERE p.scope_type = :scope_type AND p.scope_id = :scope_id'
+            . ' AND p.deleted_at IS NOT NULL'
+            . ' ORDER BY p.deleted_at DESC, p.post_id DESC';
+
+        $DB->Clear();
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = $scopeId;
+        $rows = array();
+        foreach ($this->_eachRow($DB->DataSet($sql)) as $row) {
+            $rows[] = $row;
+        }
+
+        // Bulk-fetch tags in ONE query (avoids N+1), mirroring ListPosts.
+        if (!empty($rows)) {
+            $postIds = array();
+            foreach ($rows as $r) {
+                $postIds[] = (int)$r['post_id'];
+            }
+            $inList = implode(',', $postIds);
+            $DB->Clear();
+            $tagsByPost = array();
+            foreach ($this->_eachRow($DB->DataSet(
+                'SELECT pt.post_id, t.name, t.slug FROM ' . DB_PREFIX . 'cms_post_tag pt'
+                . ' JOIN ' . DB_PREFIX . 'cms_tag t ON t.tag_id = pt.tag_id'
+                . ' WHERE pt.post_id IN (' . $inList . ')'
+                . ' ORDER BY t.name ASC'
+            )) as $tr) {
+                $pid = (int)$tr['post_id'];
+                $tagsByPost[$pid][] = array('name' => $tr['name'], 'slug' => $tr['slug']);
+            }
+            foreach ($rows as &$row) {
+                $pid = (int)$row['post_id'];
+                $row['tags'] = isset($tagsByPost[$pid]) ? $tagsByPost[$pid] : array();
+            }
+            unset($row);
+        }
+
+        return $rows;
     }
 
     /**
@@ -259,7 +339,10 @@ class CmsPost extends CmsBase
         foreach ($names as $n) {
             $placeholders[] = ':' . $n;
         }
-        $sql = 'INSERT INTO ' . DB_PREFIX . 'cms_post (`' . implode('`, `', $names) . '`)'
+        // INSERT IGNORE so a concurrent racer that already claimed this unique
+        // (scope_type, scope_id, slug) tuple makes OUR insert a silent no-op
+        // rather than an error, and ROW_COUNT() then tells us whether WE won.
+        $sql = 'INSERT IGNORE INTO ' . DB_PREFIX . 'cms_post (`' . implode('`, `', $names) . '`)'
             . ' VALUES (' . implode(', ', $placeholders) . ')';
 
         // Pre-check for duplicate (scope_type, scope_id, slug) to avoid the
@@ -281,6 +364,17 @@ class CmsPost extends CmsBase
             $DB->$field = $value;
         }
         $DB->Execute($sql);
+
+        // C29: ROW_COUNT() reflects the preceding INSERT on this connection —
+        // 1 = we inserted, 0 = a concurrent racer already claimed the slug
+        // between our pre-check and INSERT. If we did NOT create the row, return
+        // 0 so the caller FAILS the save instead of adopting the winner's
+        // post_id and clobbering it. (Clear() only resets bound params.)
+        $DB->Clear();
+        $rc = $this->_firstRow($DB->DataSet('SELECT ROW_COUNT() AS rc'));
+        if ($rc === null || (int)$rc['rc'] < 1) {
+            return 0;   // lost the race — signal collision
+        }
 
         // Authoritative read-back by the unique tuple (lastInsertId unreliable
         // under PDO ERRMODE_WARNING on duplicate key).
@@ -314,11 +408,13 @@ class CmsPost extends CmsBase
 
         $DB->Clear();
         $DB->post_id = $postId;
+        // C2: a trashed post is invisible to editor/publish/delete surfaces;
+        // restore reads the trashed row directly (see RestorePost()).
         $row = $this->_firstRow($DB->DataSet(
-            'SELECT p.*, COALESCE(NULLIF(m.persona, \'\'), m.given_name) AS author_name'
+            'SELECT p.*, COALESCE(NULLIF(m.persona, \'\'), ' . $this->_neutralAuthorSql() . ') AS author_name'
             . ' FROM ' . DB_PREFIX . 'cms_post p'
             . ' LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = p.author_id'
-            . ' WHERE p.post_id = :post_id LIMIT 1'
+            . ' WHERE p.post_id = :post_id AND p.deleted_at IS NULL LIMIT 1'
         ));
 
         if ($row === null) {
@@ -372,7 +468,12 @@ class CmsPost extends CmsBase
                 ? null : (int)$data['author_id'];
         }
         if (array_key_exists('status', $data)) {
-            $status = ((string)$data['status'] === 'published') ? 'published' : 'draft';
+            // C7: 'scheduled' is a first-class status (promoted to published on
+            // read once published_at arrives); anything else clamps to draft.
+            $status = (string)$data['status'];
+            if ($status !== 'published' && $status !== 'scheduled') {
+                $status = 'draft';
+            }
             $set[] = 'status = :status';
             $DB->status = $status;
         }
@@ -419,49 +520,90 @@ class CmsPost extends CmsBase
      * Set a post's publish status, stamping published_at on publish (only when
      * currently empty; unpublishing leaves the historical stamp intact).
      *
-     * @param int    $postId
-     * @param string $status 'published' | 'draft'
-     * @param int    $uid    actor mundane_id (0 to skip)
+     * When $status is 'scheduled' a future $publishedAt is required (the read
+     * path promotes it to 'published' once that time passes — see C7).
+     *
+     * @param int         $postId
+     * @param string      $status      'published' | 'draft' | 'scheduled'
+     * @param int         $uid         actor mundane_id (0 to skip)
+     * @param string|null $publishedAt explicit publish timestamp (scheduling)
      * @return bool
      */
-    public function SetStatus($postId, $status, $uid = 0)
+    public function SetStatus($postId, $status, $uid = 0, $publishedAt = null)
     {
+        global $DB;
+
         $postId = (int)$postId;
         if ($postId <= 0) {
             return false;
         }
-        $status = ((string)$status === 'published') ? 'published' : 'draft';
+        $status = (string)$status;
+        if ($status !== 'published' && $status !== 'scheduled') {
+            $status = 'draft';
+        }
 
         $data = array('status' => $status);
         if ((int)$uid > 0) {
             $data['updated_by'] = (int)$uid;
         }
 
-        if ($status === 'published') {
-            // Targeted single-column read (GetPost would also JOIN the author +
-            // run a second tags query, both discarded here).
-            global $DB;
-            $DB->Clear();
-            $DB->post_id = $postId;
-            $row = $this->_firstRow($DB->DataSet(
-                'SELECT published_at FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
-            ));
-            if ($row !== null && empty($row['published_at'])) {
-                $data['published_at'] = date('Y-m-d H:i:s');
+        $publishedAt = ($publishedAt === null || $publishedAt === '') ? null : (string)$publishedAt;
+
+        if ($status === 'scheduled') {
+            $data['published_at'] = ($publishedAt !== null) ? $publishedAt : date('Y-m-d H:i:s');
+        } elseif ($status === 'published') {
+            if ($publishedAt !== null) {
+                $data['published_at'] = $publishedAt;
+            } else {
+                // Targeted single-column read (GetPost would also JOIN the author +
+                // run a second tags query, both discarded here).
+                $DB->Clear();
+                $DB->post_id = $postId;
+                $row = $this->_firstRow($DB->DataSet(
+                    'SELECT published_at FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
+                ));
+                if ($row !== null && empty($row['published_at'])) {
+                    $data['published_at'] = date('Y-m-d H:i:s');
+                }
             }
         }
 
-        return $this->UpdatePost($postId, $data);
+        $ok = $this->UpdatePost($postId, $data);
+
+        // C14: audit the publish-lifecycle transition (fire-and-forget).
+        if ($ok) {
+            $DB->Clear();
+            $DB->post_id = $postId;
+            $scopeRow = $this->_firstRow($DB->DataSet(
+                'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
+            ));
+            $action = ($status === 'draft') ? 'unpublish' : $status; // publish|unpublish|scheduled
+            $this->_cmsAudit(
+                (int)$uid,
+                $action,
+                'post',
+                $postId,
+                $scopeRow !== null ? (string)$scopeRow['scope_type'] : 'global',
+                $scopeRow !== null ? (int)$scopeRow['scope_id'] : 0
+            );
+        }
+
+        return $ok;
     }
 
     /**
-     * Delete a post, its body blocks (via ReplaceBlocks('post',id,[])), and its
-     * tag links. Returns true when the post existed and was removed.
+     * Trash a post (C2 soft-delete): stamp deleted_at instead of physically
+     * DELETEing, so the post, its body blocks, tag links and revisions survive
+     * for restore. Within the same transaction it NULLs any ork_cms_nav_item.post_id
+     * pointing here (C8; the ON DELETE SET NULL FK does not fire on a soft-delete).
      *
-     * @param int $postId
-     * @return bool
+     * @param int         $postId
+     * @param string|null $scopeType IDOR guard: caller's intended scope_type
+     * @param int|null    $scopeId   IDOR guard: caller's intended scope_id
+     * @param int         $actorId   acting mundane_id (for the audit trail)
+     * @return bool true when the post existed and was trashed
      */
-    public function DeletePost($postId, $scopeType = null, $scopeId = null)
+    public function DeletePost($postId, $scopeType = null, $scopeId = null, $actorId = 0)
     {
         global $DB;
 
@@ -471,12 +613,13 @@ class CmsPost extends CmsBase
         }
 
         // Existence check — read the scope too so we can enforce the ownership
-        // guard in the same lookup (a targeted read; GetPost would also JOIN the
-        // author + fetch tags, all unused on the delete path).
+        // guard in the same lookup. Skip already-trashed rows so a double-delete
+        // reports false.
         $DB->Clear();
         $DB->post_id = $postId;
         $exists = $this->_firstRow($DB->DataSet(
-            'SELECT post_id, scope_type, scope_id FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
+            'SELECT post_id, scope_type, scope_id FROM ' . DB_PREFIX . 'cms_post'
+            . ' WHERE post_id = :post_id AND deleted_at IS NULL LIMIT 1'
         ));
         if ($exists === null) {
             return false;
@@ -491,41 +634,35 @@ class CmsPost extends CmsBase
             }
         }
 
-        // Wrap the three DELETEs in one transaction so a failure partway can't
-        // leave orphaned blocks/tags or a half-deleted post. Read the post row
-        // back before committing (Execute() is void + ERRMODE_WARNING swallows
-        // failures) and ROLLBACK if it survived. Mirrors CmsNav::DeleteItem.
+        $now = date('Y-m-d H:i:s');
+
         $DB->Clear();
         $DB->Execute('START TRANSACTION');
 
-        // Remove body blocks.
-        $DB->Clear();
-        $DB->owner_id = $postId;
-        $DB->Execute(
-            'DELETE FROM ' . DB_PREFIX . 'cms_block'
-            . " WHERE owner_type = 'post' AND owner_id = :owner_id"
-        );
-
-        // Remove tag links.
+        // C8: detach inbound nav references (SET NULL FK does not fire on a
+        // soft-delete). A nav item pointing here resolves to '#'.
         $DB->Clear();
         $DB->post_id = $postId;
         $DB->Execute(
-            'DELETE FROM ' . DB_PREFIX . 'cms_post_tag WHERE post_id = :post_id'
+            'UPDATE ' . DB_PREFIX . 'cms_nav_item SET post_id = NULL WHERE post_id = :post_id'
         );
 
-        // Remove the post row.
+        // Stamp the trash marker (blocks/tags/revisions are retained for restore).
         $DB->Clear();
+        $DB->deleted_at = $now;
         $DB->post_id = $postId;
         $DB->Execute(
-            'DELETE FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id'
+            'UPDATE ' . DB_PREFIX . 'cms_post SET deleted_at = :deleted_at'
+            . ' WHERE post_id = :post_id AND deleted_at IS NULL'
         );
 
+        // Confirm the marker landed before committing.
         $DB->Clear();
         $DB->post_id = $postId;
-        $still = $this->_firstRow($DB->DataSet(
-            'SELECT post_id FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
+        $check = $this->_firstRow($DB->DataSet(
+            'SELECT deleted_at FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
         ));
-        if ($still !== null) {
+        if ($check === null || empty($check['deleted_at'])) {
             $DB->Clear();
             $DB->Execute('ROLLBACK');
             return false;
@@ -533,6 +670,58 @@ class CmsPost extends CmsBase
 
         $DB->Clear();
         $DB->Execute('COMMIT');
+
+        // C14: audit the trash (fire-and-forget).
+        $this->_cmsAudit((int)$actorId, 'delete', 'post', $postId, (string)$exists['scope_type'], (int)$exists['scope_id']);
+
+        $this->_invalidateListCache();
+        return true;
+    }
+
+    /**
+     * Restore a trashed post (clear deleted_at). Optional IDOR scope guard.
+     * Detached nav references are NOT re-linked (they were cleared on trash).
+     *
+     * @param int         $postId
+     * @param string|null $scopeType IDOR guard: caller's intended scope_type
+     * @param int|null    $scopeId   IDOR guard: caller's intended scope_id
+     * @param int         $actorId   acting mundane_id (for the audit trail)
+     * @return bool
+     */
+    public function RestorePost($postId, $scopeType = null, $scopeId = null, $actorId = 0)
+    {
+        global $DB;
+
+        $postId = (int)$postId;
+        if ($postId <= 0) {
+            return false;
+        }
+
+        // Read the trashed row directly (GetPost() hides deleted rows).
+        $DB->Clear();
+        $DB->post_id = $postId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT post_id, scope_type, scope_id, deleted_at FROM ' . DB_PREFIX . 'cms_post'
+            . ' WHERE post_id = :post_id LIMIT 1'
+        ));
+        if ($row === null || empty($row['deleted_at'])) {
+            return false;
+        }
+
+        if ($scopeType !== null) {
+            $wantType = $this->_normalizeScopeType($scopeType);
+            if ((string)$row['scope_type'] !== $wantType || (int)$row['scope_id'] !== (int)$scopeId) {
+                return false;
+            }
+        }
+
+        $DB->Clear();
+        $DB->post_id = $postId;
+        $DB->Execute(
+            'UPDATE ' . DB_PREFIX . 'cms_post SET deleted_at = NULL WHERE post_id = :post_id'
+        );
+
+        $this->_cmsAudit((int)$actorId, 'restore', 'post', $postId, (string)$row['scope_type'], (int)$row['scope_id']);
 
         $this->_invalidateListCache();
         return true;
@@ -666,6 +855,89 @@ class CmsPost extends CmsBase
             );
         }
         return $out;
+    }
+
+    /**
+     * A single tag row by slug (for a per-tag landing header). Null when unknown.
+     *
+     * @param string $slug tag slug
+     * @return array|null ['tag_id','name','slug'] or null
+     */
+    public function GetTagBySlug($slug)
+    {
+        global $DB;
+
+        $slug = $this->_slugify($slug);
+        if ($slug === '') {
+            return null;
+        }
+
+        $DB->Clear();
+        $DB->slug = $slug;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT tag_id, name, slug FROM ' . DB_PREFIX . 'cms_tag WHERE slug = :slug LIMIT 1'
+        ));
+        if ($row === null) {
+            return null;
+        }
+        return array(
+            'tag_id' => (int)$row['tag_id'],
+            'name'   => (string)$row['name'],
+            'slug'   => (string)$row['slug'],
+        );
+    }
+
+    /**
+     * Browsable per-tag landing data: the tag header plus the published posts
+     * carrying it, newest-first, scope-filtered. Reuses ListPosts (which enforces
+     * the C2 trash + C7 schedule gates) so the landing can never surface a
+     * trashed/unpublished post. The RENDER ROUTE lives in the other lane
+     * (controller.Blog); this method only exposes the data + is the seam.
+     *
+     * @param string $tagSlug   tag slug
+     * @param string $scopeType 'global' | 'kingdom' | 'park'
+     * @param int    $scopeId   scope owner id (0 for global)
+     * @param int    $limit     max posts (0 = ListPosts default paging)
+     * @param int    $offset    paging offset
+     * @return array ['tag'=>['name','slug']|null, 'posts'=>[...], 'total'=>int]
+     */
+    public function GetTagLanding($tagSlug, $scopeType = 'global', $scopeId = 0, $limit = 0, $offset = 0)
+    {
+        $tag = $this->GetTagBySlug($tagSlug);
+        if ($tag === null) {
+            // Unknown tag: an empty landing (never leak another tag's posts).
+            return array('tag' => null, 'posts' => array(), 'total' => 0);
+        }
+
+        $opts = array(
+            'tag'        => $tag['slug'],
+            'scope_type' => $scopeType,
+            'scope_id'   => (int)$scopeId,
+        );
+        if ((int)$limit > 0) {
+            $opts['limit']  = (int)$limit;
+            $opts['offset'] = (int)$offset;
+        }
+
+        $res = $this->ListPosts($opts);
+        return array(
+            'tag'   => array('name' => $tag['name'], 'slug' => $tag['slug']),
+            'posts' => (isset($res['rows']) && is_array($res['rows'])) ? $res['rows'] : array(),
+            'total' => isset($res['total']) ? (int)$res['total'] : 0,
+        );
+    }
+
+    /**
+     * SQL fragment for the neutral byline fallback used when a post has no
+     * persona author (blank persona OR an orphaned/removed author row). Emits a
+     * scope-aware label: 'Staff' on the global front door, 'Kingdom' on an org
+     * site — never a member's real given name (C21 PII).
+     *
+     * @return string a CASE expression (references p.scope_type)
+     */
+    private function _neutralAuthorSql()
+    {
+        return "CASE WHEN p.scope_type = 'global' THEN 'Staff' ELSE 'Kingdom' END";
     }
 
     /**

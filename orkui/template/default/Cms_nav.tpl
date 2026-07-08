@@ -188,7 +188,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     <option value="page">CMS Page</option>
                     <option value="post">Blog Post</option>
                     <option value="url">External URL</option>
-                    <option value="dynamic">Internal Route</option>
+                    <option value="dynamic">Link to an ORK app page (advanced)</option>
                 </select>
             </div>
 
@@ -229,9 +229,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
             </div>
 
             <div class="cms-field cms-nav-picker" data-picker="dynamic">
-                <label class="cms-label" for="navFieldRoute">Internal route</label>
-                <input type="text" class="cms-input" id="navFieldRoute" maxlength="512" placeholder="Directory/index">
-                <div class="cms-help">An ORK route key, e.g. <code>Directory/index</code>.</div>
+                <label class="cms-label" for="navFieldRoute">ORK app page</label>
+                <input type="text" class="cms-input" id="navFieldRoute" maxlength="512" placeholder="e.g. Directory/index">
+                <div class="cms-help">Links to a built-in ORK application page (not a CMS page). Enter the page's internal address, for example <code>Directory/index</code>. Most menus should use a <strong>CMS Page</strong> or <strong>External URL</strong> instead.</div>
             </div>
 
             <div class="cms-field">

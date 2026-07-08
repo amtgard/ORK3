@@ -22,9 +22,9 @@ $bgStyle = $isDark ? 'background:var(--navy);color:var(--fd-primary-contrast);' 
         <?php endif; ?>
 
         <?php if (!empty($heading)): ?>
-            <h3 class="fd-sec-title fd-serif" style="<?= $isDark ? 'color:var(--fd-primary-contrast);' : '' ?>">
+            <h2 class="fd-sec-title fd-serif" style="<?= $isDark ? 'color:var(--fd-primary-contrast);' : '' ?>">
                 <?= htmlspecialchars($heading, ENT_QUOTES) ?>
-            </h3>
+            </h2>
         <?php endif; ?>
     </div>
 

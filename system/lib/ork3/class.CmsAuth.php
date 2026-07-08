@@ -341,7 +341,15 @@ class CmsAuth extends CmsBase
             . ' AND scope_type = :scope_type AND scope_id = :scope_id LIMIT 1'
         ));
 
-        return $row ? (int)$row['grant_id'] : 0;
+        $grantId = $row ? (int)$row['grant_id'] : 0;
+
+        // C14: audit the grant (fire-and-forget). entity_id = the grantee uid so
+        // the trail reads "actor granted <role> to <uid> at <scope>".
+        if ($grantId > 0) {
+            $this->_cmsAudit((int)$grantedBy, 'grant.' . $role, 'grant', $uid, $scopeType, $scopeId);
+        }
+
+        return $grantId;
     }
 
     /**
@@ -409,7 +417,74 @@ class CmsAuth extends CmsBase
             . ' AND scope_type = :scope_type AND scope_id = :scope_id LIMIT 1'
         ));
 
-        return $row === null;
+        $revoked = ($row === null);
+
+        // C14: audit the revoke (fire-and-forget). entity_id = the grantee uid.
+        if ($revoked) {
+            $this->_cmsAudit((int)$actorUid, 'revoke.' . $role, 'grant', $uid, $scopeType, $scopeId);
+
+            // C21: orphaned-authorship guard. If this was the grantee's LAST grant
+            // in this scope, they can no longer manage content here — reassign any
+            // posts they authored in this scope to a neutral author (author_id NULL)
+            // so the public byline reads the scope label ('Staff'/'Kingdom') instead
+            // of continuing to credit a departed member (see CmsPost::_neutralAuthorSql).
+            if (empty($this->GetUserGrants($uid, $scopeType, $scopeId))) {
+                $this->_reassignAuthoredPosts($uid, $scopeType, $scopeId, (int)$actorUid);
+            }
+        }
+
+        return $revoked;
+    }
+
+    /**
+     * Detach a departed member from the posts they authored in a scope: NULL out
+     * author_id so the byline falls back to the neutral scope label. Bulk single
+     * UPDATE; scope-bound so it never touches another org's content. Fire-and-forget
+     * audit of the reassignment count.
+     *
+     * @param int    $uid       grantee whose grants were just fully revoked here
+     * @param string $scopeType normalized scope_type
+     * @param int    $scopeId   scope_id
+     * @param int    $actorUid  acting admin (audit trail)
+     * @return void
+     */
+    private function _reassignAuthoredPosts($uid, $scopeType, $scopeId, $actorUid)
+    {
+        global $DB;
+
+        $uid = (int)$uid;
+        if ($uid <= 0) {
+            return;
+        }
+
+        // Count first so the audit records how many bylines were neutralized (and
+        // so we skip the write + audit entirely when there's nothing to reassign).
+        $DB->Clear();
+        $DB->author_id = $uid;
+        $DB->scope_type = $scopeType;
+        $DB->scope_id = (int)$scopeId;
+        $countRow = $this->_firstRow($DB->DataSet(
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_post'
+            . ' WHERE author_id = :author_id AND scope_type = :scope_type AND scope_id = :scope_id'
+        ));
+        $affected = ($countRow !== null && isset($countRow['c'])) ? (int)$countRow['c'] : 0;
+        if ($affected <= 0) {
+            return;
+        }
+
+        // Literal NULL in the SQL (not a bound param) — yapo drops null bindings
+        // from an UPDATE, which would silently no-op the clear.
+        $DB->Clear();
+        $DB->author_id = $uid;
+        $DB->scope_type = $scopeType;
+        $DB->scope_id = (int)$scopeId;
+        $DB->Execute(
+            'UPDATE ' . DB_PREFIX . 'cms_post SET author_id = NULL'
+            . ' WHERE author_id = :author_id AND scope_type = :scope_type AND scope_id = :scope_id'
+        );
+
+        // C14: audit the bulk reassignment (fire-and-forget). entity_id = grantee.
+        $this->_cmsAudit((int)$actorUid, 'reassign_author.' . $affected, 'post', $uid, $scopeType, (int)$scopeId);
     }
 
     /**

@@ -28,6 +28,14 @@ class CmsMedia extends CmsBase
     /** Hard upload ceiling: 8 MB of decoded image bytes. */
     private static $MAX_BYTES = 8388608; // 8 * 1024 * 1024
 
+    /**
+     * Hard pixel-area ceiling (~40 megapixels). GD allocates ~4 bytes/pixel on
+     * decode, so a small highly-compressed file declaring, e.g., 30000x30000
+     * would try to allocate ~3.6 GB and kill the FPM worker (decompression bomb,
+     * C18). We reject on declared dimensions BEFORE imagecreatefromstring().
+     */
+    private static $MAX_PIXELS = 40000000; // 40 * 1000 * 1000
+
     /** Thumbnail max width in pixels. */
     private static $THUMB_MAX_W = 480;
 
@@ -90,6 +98,13 @@ class CmsMedia extends CmsBase
         $ext    = $this->_extForMime($mime);
         if ($ext === null) {
             // Not an image type we can write back out.
+            return null;
+        }
+
+        // C18: decompression-bomb guard. Reject an image whose declared pixel
+        // area exceeds the ceiling BEFORE decoding — the compressed byte cap does
+        // NOT bound decoded size (a few KB can declare hundreds of megapixels).
+        if ($width * $height > self::$MAX_PIXELS) {
             return null;
         }
 
@@ -232,7 +247,8 @@ class CmsMedia extends CmsBase
     {
         global $DB;
 
-        $where = array('1 = 1');
+        // C2: never list trashed media.
+        $where = array('deleted_at IS NULL');
 
         $DB->Clear();
 
@@ -282,6 +298,50 @@ class CmsMedia extends CmsBase
     }
 
     /**
+     * List TRASHED media (deleted_at IS NOT NULL) for a scope — the mirror of
+     * ListMedia for the Trash view. Newest-trashed-first, returned as media refs
+     * enriched with id/filename/alt so the admin Trash surface can offer
+     * Restore + Purge. Never surfaced to public pickers (those gate deleted_at
+     * IS NULL).
+     *
+     * @param string $scopeType 'global' | 'kingdom' | 'park'
+     * @param int    $scopeId   scope owner id (0 for global)
+     * @param int    $limit     max rows (default 200, clamped)
+     * @return array list of media-ref + {media_id,filename,alt,created_at}
+     */
+    public function ListTrashed($scopeType = 'global', $scopeId = 0, $limit = 200)
+    {
+        global $DB;
+
+        $DB->Clear();
+        $DB->scope_type = $this->_normalizeScopeType($scopeType);
+        $DB->scope_id   = (int)$scopeId;
+
+        $limitSql = ' LIMIT ' . ($this->_clampLimit($limit));
+
+        $sql = 'SELECT media_id, filename, path, mime, width, height, bytes,'
+            . ' alt, title, focal, thumb_path, scope_type, scope_id, uploaded_by, created_at, deleted_at'
+            . ' FROM ' . DB_PREFIX . 'cms_media'
+            . ' WHERE deleted_at IS NOT NULL AND scope_type = :scope_type AND scope_id = :scope_id'
+            . ' ORDER BY deleted_at DESC, media_id DESC'
+            . $limitSql;
+
+        $r = $DB->DataSet($sql);
+
+        $out = array();
+        foreach ($this->_eachRow($r) as $row) {
+            $ref = $this->ToMediaRef($row);
+            $ref['media_id']   = (int)$row['media_id'];
+            $ref['filename']   = isset($row['filename']) ? (string)$row['filename'] : '';
+            $ref['alt']        = isset($row['alt']) ? (string)$row['alt'] : '';
+            $ref['created_at'] = isset($row['created_at']) ? $row['created_at'] : null;
+            $ref['title']      = isset($row['title']) ? (string)$row['title'] : '';
+            $out[] = $ref;
+        }
+        return $out;
+    }
+
+    /**
      * Fetch a single media row, enriched with url + thumb_url + media-ref.
      *
      * @param int $mediaId
@@ -298,8 +358,9 @@ class CmsMedia extends CmsBase
 
         $DB->Clear();
         $DB->media_id = $mediaId;
+        // C2: a trashed media row is invisible to pickers/consumers.
         $row = $this->_firstRow($DB->DataSet(
-            'SELECT * FROM ' . DB_PREFIX . 'cms_media WHERE media_id = :media_id LIMIT 1'
+            'SELECT * FROM ' . DB_PREFIX . 'cms_media WHERE media_id = :media_id AND deleted_at IS NULL LIMIT 1'
         ));
         if ($row === null) {
             return null;
@@ -327,13 +388,75 @@ class CmsMedia extends CmsBase
     }
 
     /**
-     * Delete a media row and unlink its files. The unlink is guarded so it can
-     * only ever remove paths inside assets/cms-media/.
+     * Update a media row's authored metadata (C1: alt + title). Only the keys
+     * present in $data are written; anything else is untouched. Both columns are
+     * cleared with '' (not NULL) so an author who intentionally marks an image
+     * DECORATIVE (alt='') is persisted rather than dropped by the yapo null-skip.
+     *
+     * Alt text is authored copy, so it is stored verbatim (the front-door image
+     * partial escapes it with htmlspecialchars on render — see image.tpl).
+     *
+     * @param int   $mediaId
+     * @param array $data    subset: 'alt' (string, '' = decorative), 'title' (string)
+     * @param int   $actorId acting mundane_id (for the audit trail)
+     * @return bool true when a valid, non-trashed row was updated
+     */
+    public function Update($mediaId, $data, $actorId = 0)
+    {
+        global $DB;
+
+        $mediaId = (int)$mediaId;
+        if ($mediaId <= 0 || !is_array($data)) {
+            return false;
+        }
+
+        // Confirm the row exists and is not trashed (also grabs scope for audit).
+        $DB->Clear();
+        $DB->media_id = $mediaId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT media_id, scope_type, scope_id FROM ' . DB_PREFIX . 'cms_media'
+            . ' WHERE media_id = :media_id AND deleted_at IS NULL LIMIT 1'
+        ));
+        if ($row === null) {
+            return false;
+        }
+
+        $set = array();
+        $DB->Clear();
+        if (array_key_exists('alt', $data)) {
+            $set[] = 'alt = :alt';
+            // '' is a first-class value here (decorative image); never coerce to NULL.
+            $DB->alt = (string)$data['alt'];
+        }
+        if (array_key_exists('title', $data)) {
+            $set[] = 'title = :title';
+            $DB->title = (string)$data['title'];
+        }
+        if (count($set) === 0) {
+            return false;
+        }
+
+        $DB->media_id = $mediaId;
+        $DB->Execute(
+            'UPDATE ' . DB_PREFIX . 'cms_media SET ' . implode(', ', $set)
+            . ' WHERE media_id = :media_id AND deleted_at IS NULL'
+        );
+
+        $this->_cmsAudit((int)$actorId, 'update', 'media', $mediaId, (string)$row['scope_type'], (int)$row['scope_id']);
+        return true;
+    }
+
+    /**
+     * Trash a media row (C2 soft-delete). Files are KEPT so a restore can bring
+     * the asset back. REFUSES (C8) when the media is still referenced anywhere —
+     * a page/post hero, a site logo, or inside any block's fields_json — so a
+     * live page can never end up pointing at a vanished image.
      *
      * @param int $mediaId
-     * @return bool true when the row existed and was deleted
+     * @param int $actorId acting mundane_id (for the audit trail)
+     * @return bool true when the row existed, was unreferenced, and was trashed
      */
-    public function DeleteMedia($mediaId)
+    public function DeleteMedia($mediaId, $actorId = 0)
     {
         global $DB;
 
@@ -342,36 +465,129 @@ class CmsMedia extends CmsBase
             return false;
         }
 
-        // Read the row first so we know which files to remove.
+        // Read the (non-trashed) row + its scope for the audit entry.
         $DB->Clear();
         $DB->media_id = $mediaId;
         $row = $this->_firstRow($DB->DataSet(
-            'SELECT media_id, path, thumb_path FROM ' . DB_PREFIX . 'cms_media'
-            . ' WHERE media_id = :media_id LIMIT 1'
+            'SELECT media_id, scope_type, scope_id FROM ' . DB_PREFIX . 'cms_media'
+            . ' WHERE media_id = :media_id AND deleted_at IS NULL LIMIT 1'
         ));
         if ($row === null) {
             return false;
         }
 
-        // Delete the DB row.
+        // C8: where-used check. Refuse while any reference remains.
+        if ($this->_referenceCount($mediaId) > 0) {
+            return false;
+        }
+
+        // Soft-delete: stamp the trash marker; keep the files for restore.
+        $DB->Clear();
+        $DB->deleted_at = date('Y-m-d H:i:s');
+        $DB->media_id = $mediaId;
+        $DB->Execute(
+            'UPDATE ' . DB_PREFIX . 'cms_media SET deleted_at = :deleted_at'
+            . ' WHERE media_id = :media_id AND deleted_at IS NULL'
+        );
+
+        // Confirm the marker landed (Execute() is void under ERRMODE_WARNING).
+        $DB->Clear();
+        $DB->media_id = $mediaId;
+        $check = $this->_firstRow($DB->DataSet(
+            'SELECT deleted_at FROM ' . DB_PREFIX . 'cms_media WHERE media_id = :media_id LIMIT 1'
+        ));
+        if ($check === null || empty($check['deleted_at'])) {
+            return false;
+        }
+
+        $this->_cmsAudit((int)$actorId, 'delete', 'media', $mediaId, (string)$row['scope_type'], (int)$row['scope_id']);
+        return true;
+    }
+
+    /**
+     * Restore a trashed media row (clear deleted_at).
+     *
+     * @param int $mediaId
+     * @param int $actorId acting mundane_id (for the audit trail)
+     * @return bool
+     */
+    public function RestoreMedia($mediaId, $actorId = 0)
+    {
+        global $DB;
+
+        $mediaId = (int)$mediaId;
+        if ($mediaId <= 0) {
+            return false;
+        }
+
+        $DB->Clear();
+        $DB->media_id = $mediaId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT media_id, scope_type, scope_id, deleted_at FROM ' . DB_PREFIX . 'cms_media'
+            . ' WHERE media_id = :media_id LIMIT 1'
+        ));
+        if ($row === null || empty($row['deleted_at'])) {
+            return false;
+        }
+
+        $DB->Clear();
+        $DB->media_id = $mediaId;
+        $DB->Execute(
+            'UPDATE ' . DB_PREFIX . 'cms_media SET deleted_at = NULL WHERE media_id = :media_id'
+        );
+
+        $this->_cmsAudit((int)$actorId, 'restore', 'media', $mediaId, (string)$row['scope_type'], (int)$row['scope_id']);
+        return true;
+    }
+
+    /**
+     * Permanently remove a TRASHED media row and unlink its files (empty-trash).
+     * Only operates on rows already soft-deleted; refuses if still referenced.
+     * The unlink is guarded so it can only ever remove paths inside cms-media/.
+     *
+     * @param int $mediaId
+     * @param int $actorId acting mundane_id (for the audit trail)
+     * @return bool true when a trashed, unreferenced row was purged
+     */
+    public function PurgeMedia($mediaId, $actorId = 0)
+    {
+        global $DB;
+
+        $mediaId = (int)$mediaId;
+        if ($mediaId <= 0) {
+            return false;
+        }
+
+        // Only purge rows already in the trash.
+        $DB->Clear();
+        $DB->media_id = $mediaId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT media_id, path, thumb_path, scope_type, scope_id, deleted_at FROM ' . DB_PREFIX . 'cms_media'
+            . ' WHERE media_id = :media_id LIMIT 1'
+        ));
+        if ($row === null || empty($row['deleted_at'])) {
+            return false;
+        }
+
+        // Belt-and-suspenders: never purge something a live surface still uses.
+        if ($this->_referenceCount($mediaId) > 0) {
+            return false;
+        }
+
         $DB->Clear();
         $DB->media_id = $mediaId;
         $DB->Execute('DELETE FROM ' . DB_PREFIX . 'cms_media WHERE media_id = :media_id');
 
-        // Execute() is void; under ERRMODE_WARNING a failed DELETE is silent.
-        // Read the row back — only unlink files once the row is actually gone,
-        // so we never orphan a surviving DB row whose files we removed.
+        // Only unlink once the row is actually gone (Execute() is void).
         $DB->Clear();
         $DB->media_id = $mediaId;
-        $check = $this->_firstRow($DB->DataSet(
-            'SELECT media_id FROM ' . DB_PREFIX . 'cms_media'
-            . ' WHERE media_id = :media_id LIMIT 1'
+        $stillThere = $this->_firstRow($DB->DataSet(
+            'SELECT media_id FROM ' . DB_PREFIX . 'cms_media WHERE media_id = :media_id LIMIT 1'
         ));
-        if ($check !== null) {
-            return false; // DELETE didn't take — leave files in place.
+        if ($stillThere !== null) {
+            return false;
         }
 
-        // Unlink files (guarded to assets/cms-media/).
         if (!empty($row['path'])) {
             $this->_safeUnlink((string)$row['path']);
         }
@@ -379,7 +595,76 @@ class CmsMedia extends CmsBase
             $this->_safeUnlink((string)$row['thumb_path']);
         }
 
+        $this->_cmsAudit((int)$actorId, 'purge', 'media', $mediaId, (string)$row['scope_type'], (int)$row['scope_id']);
         return true;
+    }
+
+    /**
+     * Count everywhere a media id is still referenced: page/post hero images,
+     * site logos, and any block that embeds it (matched on the media_id value
+     * inside fields_json). Used by DeleteMedia/PurgeMedia's where-used guard.
+     *
+     * @param int $mediaId
+     * @return int total references (0 = safe to trash/purge)
+     */
+    private function _referenceCount($mediaId)
+    {
+        global $DB;
+
+        $mediaId = (int)$mediaId;
+        if ($mediaId <= 0) {
+            return 0;
+        }
+
+        // A media ref inside a block is stored as {"media_id":<id>, "key":"m<id>", ...};
+        // match the numeric media_id bounded by a non-digit (or end) so 12 never
+        // matches 123. REGEXP over fields_json; NULL never matches.
+        $pattern = '"media_id"[[:space:]]*:[[:space:]]*' . $mediaId . '([^0-9]|$)';
+
+        // Independent counts (summed) so a missing table in a partial schema
+        // (e.g. ork_cms_site absent) can't zero the WHOLE guard and let a
+        // still-referenced image be trashed — each source fails closed to 0
+        // only for itself.
+        $total = 0;
+        $total += $this->_countOne(
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_page WHERE hero_media_id = :mid',
+            $mediaId
+        );
+        $total += $this->_countOne(
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_post WHERE hero_media_id = :mid',
+            $mediaId
+        );
+        $total += $this->_countOne(
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_site WHERE logo_media_id = :mid',
+            $mediaId
+        );
+        $total += $this->_countOne(
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_block WHERE fields_json REGEXP :pat',
+            null,
+            $pattern
+        );
+
+        return $total;
+    }
+
+    /**
+     * Run a single COUNT(*) AS c query bound with either an int :mid or a
+     * string :pat, returning the count (0 on any failure). Helper for
+     * _referenceCount so each source is isolated.
+     */
+    private function _countOne($sql, $mid = null, $pat = null)
+    {
+        global $DB;
+
+        $DB->Clear();
+        if ($mid !== null) {
+            $DB->mid = (int)$mid;
+        }
+        if ($pat !== null) {
+            $DB->pat = (string)$pat;
+        }
+        $row = $this->_firstRow($DB->DataSet($sql));
+        return ($row !== null && isset($row['c'])) ? (int)$row['c'] : 0;
     }
 
     /* ------------------------------------------------------------------ *

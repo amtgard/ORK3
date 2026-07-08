@@ -116,6 +116,8 @@ $kpHeraldryUrl = static function ($parkId, $hasHeraldry) {
     return $file !== '' ? HTTP_PARK_HERALDRY . $file : '';
 };
 ?>
+<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
+<?php if (empty($fdStyleOnce['kingdom_parks'])) : $fdStyleOnce['kingdom_parks'] = true; ?>
 <style>
 .kp-block { background: var(--fd-bg); }
 .kp-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; gap: 12px; }
@@ -151,14 +153,15 @@ html[data-theme="dark"] .kp-crest { background: #222c42; }
 html[data-theme="dark"] .kp-badge { color: #e6cf92; background: #33291140; border-color: #5c4a1f; }
 html[data-theme="dark"] .kp-card:hover { box-shadow: 0 8px 22px rgba(0,0,0,.5); }
 </style>
-<div class="fd-pad fd-section-light kp-block" style="background:#fff;">
+<?php endif; ?>
+<div class="fd-pad fd-section-light kp-block">
     <div class="kp-head">
         <div>
             <?php if ($kpKicker !== ''): ?>
                 <div class="fd-kicker fd-kicker-d"><?= htmlspecialchars($kpKicker, ENT_QUOTES) ?></div>
             <?php endif; ?>
             <?php if ($kpHeading !== ''): ?>
-                <h3 class="kp-title fd-sec-title"><?= htmlspecialchars($kpHeading, ENT_QUOTES) ?></h3>
+                <h2 class="kp-title fd-sec-title"><?= htmlspecialchars($kpHeading, ENT_QUOTES) ?></h2>
             <?php endif; ?>
         </div>
         <?php if ($kpMoreHref !== ''): ?>
