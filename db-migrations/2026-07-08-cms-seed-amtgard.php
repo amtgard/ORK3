@@ -195,7 +195,12 @@ $copyDoc = function ($slug, $file, $label, $name) use ($STG, $docsDir) {
     if (!is_file("$docsDir/$safe")) {
         @copy($abs, "$docsDir/$safe");
     }
-    return array('label' => $label ?: ($name ?: 'Download'), 'url' => '/assets/cms-docs/' . $safe);
+    // file_download.tpl reads files[] each: { title, url, filetype?, description? }.
+    return array(
+        'title' => $label ?: ($name ?: 'Download'),
+        'url' => '/assets/cms-docs/' . $safe,
+        'filetype' => strtolower(pathinfo($safe, PATHINFO_EXTENSION)),
+    );
 };
 
 // Resolve a raw spec block into a persisted CMS block (assets -> refs/urls,
