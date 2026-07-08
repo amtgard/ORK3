@@ -12,6 +12,11 @@
  * image URLs could not be reliably attributed) — they render the block's
  * fallback avatar; add headshots via the media library when desired.
  */
+// Web-reachable file: refuse any non-CLI (HTTP) invocation.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('CLI only');
+}
 chdir('/var/www/ork.amtgard.com/orkui');
 define('DONOTWEBSERVICE', true);
 if (empty($_SERVER['HTTP_HOST'])) {

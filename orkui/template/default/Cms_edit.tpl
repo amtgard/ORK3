@@ -432,6 +432,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 pubBtn.disabled = false;
                 if (!res || !res.ok) { toast((res && res.error) || 'Action failed.', 'error'); return; }
                 var nowPub = (res.status === 'published');
+                STATE.published = nowPub;
+                if (res.version) { STATE.version = res.version; }
                 pubBtn.setAttribute('data-status', nowPub ? 'published' : 'draft');
                 pubBtn.innerHTML = nowPub ? '<i class="fas fa-eye-slash"></i> Unpublish' : '<i class="fas fa-globe"></i> Publish';
                 if (statusBadge) {

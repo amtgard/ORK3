@@ -165,7 +165,11 @@ html[data-theme="dark"] .kpm-title { color: #eef2fa; }
         <div class="kpm-sidebar">
             <div class="kpm-empty" data-kpm-empty>
                 <div class="kpm-empty-icon"><i class="fas fa-map-marker-alt"></i></div>
-                <p>Click any park pin on the map to see its details here.</p>
+                <?php if ($kpmKey === ''): ?>
+                    <p>Park details are temporarily unavailable.</p>
+                <?php else: ?>
+                    <p>Click any park pin on the map to see its details here.</p>
+                <?php endif; ?>
             </div>
             <div class="kpm-park" data-kpm-park>
                 <div class="kpm-hero" data-kpm-hero></div>

@@ -1286,16 +1286,14 @@ class Controller_Cms extends Controller
     private function _starter($type)
     {
         // Dynamic blocks (pull data at render time) are flagged source=dynamic.
-        $dynamicTypes = array(
-            'member_bar'      => true,
-            'events_feed'     => true,
-            'kingdoms_teaser' => true,
-            'blog_feed'       => true,
-            'kingdom_officers' => true,
-            'kingdom_parks'   => true,
-            'kingdom_parks_map' => true,
-            'kingdom_events'  => true,
-        );
+        // Derive the set from the catalog's `dynamic` flag so it stays in sync
+        // with a single source of truth rather than a duplicated hand-list.
+        $dynamicTypes = array();
+        foreach ($this->_blockCatalog() as $c) {
+            if (!empty($c['dynamic'])) {
+                $dynamicTypes[$c['type']] = true;
+            }
+        }
 
         // Empty field defaults keyed to each partial's consumed fields.
         $defaults = array(

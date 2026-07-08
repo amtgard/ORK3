@@ -95,7 +95,7 @@ if ($navScopeId > 0 && class_exists('APIModel')) {
         <?php foreach ($items as $item) : ?>
             <div class="fd-navitem">
                 <?php if (!empty($item['children'])) : ?>
-                    <a href="<?= htmlspecialchars($safeHref($item['href']), ENT_QUOTES) ?>"<?= !empty($item['target']) ? ' target="' . htmlspecialchars($item['target'], ENT_QUOTES) . '" rel="noopener"' : '' ?>>
+                    <a href="<?= htmlspecialchars($safeHref($item['href']), ENT_QUOTES) ?>"<?= !empty($item['target']) ? ' target="' . htmlspecialchars($item['target'], ENT_QUOTES) . '" rel="noopener"' : '' ?> aria-haspopup="true" aria-expanded="false">
                         <?= htmlspecialchars($item['label'], ENT_QUOTES) ?> &#9660;
                     </a>
                     <div class="fd-dropdown">

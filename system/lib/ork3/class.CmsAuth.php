@@ -56,6 +56,7 @@ class CmsAuth extends CmsBase
      */
     private static $_grantCache = array();
     private static $_superAdminCache = array();
+    private static $_bridgeCache = array();
 
     public function __construct()
     {
@@ -244,7 +245,16 @@ class CmsAuth extends CmsBase
         if (($scopeType === 'kingdom' || $scopeType === 'park') && $scopeId > 0 && is_object(Ork3::$Lib->authorization)) {
             $authType = ($scopeType === 'kingdom') ? AUTH_KINGDOM : AUTH_PARK;
             $authRole = in_array($capability, self::$ADMIN_BRIDGE_CAPS, true) ? AUTH_ADMIN : AUTH_EDIT;
-            if (Ork3::$Lib->authorization->HasAuthority($uid, $authType, $scopeId, $authRole)) {
+
+            // Per-request memoization of the HasAuthority bridge — CmsCan() is hit
+            // repeatedly per action and this authority probe is otherwise a repeated
+            // round-trip. Keyed to the full HasAuthority signature.
+            $bridgeKey = $uid . '|' . $authType . '|' . $scopeId . '|' . $authRole;
+            if (!isset(self::$_bridgeCache[$bridgeKey])) {
+                self::$_bridgeCache[$bridgeKey] =
+                    (bool)Ork3::$Lib->authorization->HasAuthority($uid, $authType, $scopeId, $authRole);
+            }
+            if (self::$_bridgeCache[$bridgeKey]) {
                 return true;
             }
         }
@@ -326,8 +336,9 @@ class CmsAuth extends CmsBase
             . ' VALUES (:mundane_id, :role, :scope_type, :scope_id, NULLIF(:granted_by, 0), :created_at)'
         );
 
-        // The grant set changed; drop the per-request memo so later reads see it.
+        // The grant set changed; drop the per-request memos so later reads see it.
         self::$_grantCache = array();
+        self::$_bridgeCache = array();
 
         // Authoritative read-back by the unique tuple.
         $DB->Clear();
@@ -359,12 +370,11 @@ class CmsAuth extends CmsBase
      * @param string $role
      * @param string $scopeType
      * @param int    $scopeId
-     * @param int    $actorUid  acting user; when > 0 the actor must hold
-     *                          roles.manage on the target scope (revoke is
-     *                          denied otherwise). Defaults to 0 to preserve
-     *                          legacy internal callers that have already
-     *                          authorized the operation upstream — new callers
-     *                          should always pass the real actor.
+     * @param int    $actorUid  acting user; REQUIRED. Fail-closed: a missing or
+     *                          zero actor is always denied (returns false), never
+     *                          a bypass. When > 0 the actor must additionally hold
+     *                          roles.manage on the target scope or the revoke is
+     *                          denied. Every caller must pass the real actor uid.
      * @return bool true when the input was valid and the DELETE executed
      */
     public function RevokeRole($uid, $role, $scopeType, $scopeId, $actorUid = 0)
@@ -401,8 +411,9 @@ class CmsAuth extends CmsBase
             . ' AND scope_type = :scope_type AND scope_id = :scope_id'
         );
 
-        // The grant set changed; drop the per-request memo so later reads see it.
+        // The grant set changed; drop the per-request memos so later reads see it.
         self::$_grantCache = array();
+        self::$_bridgeCache = array();
 
         // Execute() is void; confirm the DELETE took by reading the row back
         // on the same unique tuple (row gone → success, still present → fail).

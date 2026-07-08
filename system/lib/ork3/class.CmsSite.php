@@ -696,9 +696,21 @@ class CmsSite extends CmsBase
             $binds['slug'] = $slug;
         }
         if (array_key_exists('logo_media_id', $fields)) {
-            $set[] = 'logo_media_id = :logo_media_id';
-            $binds['logo_media_id'] = ($fields['logo_media_id'] === null || $fields['logo_media_id'] === '')
+            $logoId = ($fields['logo_media_id'] === null || $fields['logo_media_id'] === '')
                 ? null : (int)$fields['logo_media_id'];
+            // IDOR: a non-null logo pointer MUST reference a real (non-trashed)
+            // media asset that belongs to THIS site's own scope — otherwise a site
+            // manager could point the logo at a cross-scope asset id. Validated
+            // inline before the write; an invalid id returns a friendly error and
+            // writes nothing. (Read scope off the site row; no binds on $DB yet.)
+            if ($logoId !== null) {
+                $err = $this->_validateLogoMedia($siteId, $logoId);
+                if ($err !== true) {
+                    return $err;
+                }
+            }
+            $set[] = 'logo_media_id = :logo_media_id';
+            $binds['logo_media_id'] = $logoId;
         }
         if (array_key_exists('home_page_id', $fields)) {
             $homeId = ($fields['home_page_id'] === null || $fields['home_page_id'] === '')
@@ -855,6 +867,55 @@ class CmsSite extends CmsBase
             || (int)$pageRow['scope_id'] !== (int)$siteRow['scope_id']
         ) {
             return 'The home page must be one of this site\'s own pages.';
+        }
+        return true;
+    }
+
+    /**
+     * IDOR guard: validate a proposed logo_media_id for a site. The media asset
+     * must exist, not be trashed, and share the site's exact (scope_type,
+     * scope_id) so a manager can never point a site's logo at a cross-scope
+     * asset. Returns true when acceptable, or a human-readable error string.
+     *
+     * @param int $siteId
+     * @param int $mediaId
+     * @return true|string
+     */
+    private function _validateLogoMedia($siteId, $mediaId)
+    {
+        global $DB;
+
+        $siteId  = (int)$siteId;
+        $mediaId = (int)$mediaId;
+        if ($mediaId <= 0) {
+            return true; // caller only invokes with a non-null id, but be safe
+        }
+
+        // Read this site's scope (no binds are staged on $DB at the call site).
+        $DB->Clear();
+        $DB->site_id = $siteId;
+        $siteRow = $this->_firstRow($DB->DataSet(
+            'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_site'
+            . ' WHERE site_id = :site_id LIMIT 1'
+        ));
+        if ($siteRow === null) {
+            return 'Invalid site.';
+        }
+
+        // Read the candidate media asset (excluding trashed rows).
+        $DB->Clear();
+        $DB->media_id = $mediaId;
+        $mediaRow = $this->_firstRow($DB->DataSet(
+            'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_media'
+            . ' WHERE media_id = :media_id AND deleted_at IS NULL LIMIT 1'
+        ));
+        if ($mediaRow === null) {
+            return 'That image no longer exists. Pick another logo.';
+        }
+        if ((string)$mediaRow['scope_type'] !== (string)$siteRow['scope_type']
+            || (int)$mediaRow['scope_id'] !== (int)$siteRow['scope_id']
+        ) {
+            return 'The logo must be one of this site\'s own images.';
         }
         return true;
     }

@@ -9,6 +9,11 @@
  * Author is resolved by persona at run time (falls back to the lowest mundane
  * id, then NULL) so the post is portable across testers' databases.
  */
+// Web-reachable file: refuse any non-CLI (HTTP) invocation.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('CLI only');
+}
 chdir('/var/www/ork.amtgard.com/orkui');
 define('DONOTWEBSERVICE', true);
 if (empty($_SERVER['HTTP_HOST'])) {

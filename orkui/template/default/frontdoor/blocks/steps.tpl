@@ -29,7 +29,10 @@ $bgStyle = $isDark ? 'background:var(--navy);color:var(--fd-primary-contrast);' 
     </div>
 
     <?php if (!empty($steps)): ?>
-        <div style="display:grid;grid-template-columns:repeat(<?= count($steps) ?>,1fr);gap:20px;">
+        <style>
+            @media (max-width:680px){.fdb-steps-grid{grid-template-columns:1fr !important;}}
+        </style>
+        <div class="fdb-steps-grid" style="display:grid;grid-template-columns:repeat(<?= count($steps) ?>,1fr);gap:20px;">
             <?php foreach ($steps as $step): ?>
                 <?php
                 $n     = (int)($step['n']     ?? 0);

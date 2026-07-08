@@ -442,7 +442,7 @@ class Controller_Site extends Controller
 
         // Mismatch → 301 to the correct prefix, preserving the rest of the path
         // and query string. Swap only the leading /k/ or /p/ segment.
-        $correct = ($actualType === 'park') ? 'p' : 'k';
+        $correct = $this->_prefixFor($actualType);
         $uri     = (string) ($_SERVER['REQUEST_URI'] ?? '');
         // Strip the &_pfx hint we injected (it isn't part of the pretty URL).
         $uri = preg_replace('/([?&])_pfx=[kp](&|$)/', '$1', $uri);
@@ -459,10 +459,16 @@ class Controller_Site extends Controller
         exit;
     }
 
+    /** The single-letter URL/scope prefix for a scope_type: park → 'p', everything else → 'k'. */
+    private function _prefixFor($scopeType)
+    {
+        return ((string) $scopeType === 'park') ? 'p' : 'k';
+    }
+
     /** The '&scope=k:17' / '&scope=p:3' fragment for linking into the scoped CMS admin. */
     private function _scopeQ($site)
     {
-        $prefix = ((string) ($site['scope_type'] ?? 'kingdom') === 'park') ? 'p' : 'k';
+        $prefix = $this->_prefixFor($site['scope_type'] ?? 'kingdom');
         return '&scope=' . $prefix . ':' . (int) ($site['scope_id'] ?? 0);
     }
 
@@ -547,7 +553,7 @@ class Controller_Site extends Controller
     /** The pretty-URL base for this site: {origin}/{k|p}/{slug} (no trailing slash). */
     private function _siteBaseUrl($site)
     {
-        $prefix = ((string) ($site['scope_type'] ?? 'kingdom') === 'park') ? 'p' : 'k';
+        $prefix = $this->_prefixFor($site['scope_type'] ?? 'kingdom');
         $slug   = rawurlencode((string) ($site['slug'] ?? ''));
         return $this->_origin() . '/' . $prefix . '/' . $slug;
     }

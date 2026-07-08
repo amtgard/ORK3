@@ -146,11 +146,15 @@ $beHeading   = isset($beHeading) ? (string)$beHeading : 'Blocks';
  * an asset-add, not a template change. */
 $beTinyLocalFs = __DIR__ . '/../script/tinymce/tinymce.min.js';
 $beTinyBaseUrl = defined('HTTP_TEMPLATE') ? HTTP_TEMPLATE : '';
-$beTinySrc     = is_file($beTinyLocalFs)
+$beTinyLocal   = is_file($beTinyLocalFs);
+$beTinySrc     = $beTinyLocal
     ? ($beTinyBaseUrl . 'default/script/tinymce/tinymce.min.js')
     : 'https://cdn.jsdelivr.net/npm/tinymce@7.6.0/tinymce.min.js';
+// SRI: pin the third-party CDN build so a tampered/substituted file is rejected by
+// the browser. The self-hosted bundle is same-origin — no integrity/crossorigin needed.
+$beTinyIntegrity = 'sha384-tra1rGs8OanGKq1dD4jTW195QKiytSZz7fE5gSASuwkxuhlG+KjvAVlyHOB2Mlva';
 ?>
-<script src="<?= htmlspecialchars($beTinySrc, ENT_QUOTES, 'UTF-8') ?>" referrerpolicy="origin"></script>
+<script src="<?= htmlspecialchars($beTinySrc, ENT_QUOTES, 'UTF-8') ?>"<?php if (!$beTinyLocal): ?> integrity="<?= $beTinyIntegrity ?>" crossorigin="anonymous"<?php endif; ?> referrerpolicy="origin"></script>
 
 <?php /* ---- Server-dynamic bootstrap: the ONLY PHP the engine below needs.
        Everything after this tiny <script> is static and can be lifted verbatim
@@ -586,12 +590,15 @@ window.CmsBlockEditor = (function () {
         return wrap;
     }
 
-    function fieldImage(block, container, key, label) {
+    function fieldImage(container, key, label) {
         var wrap = el('div', 'cms-field');
         wrap.appendChild(el('label', 'cms-label', esc(label)));
         var row = el('div', 'cms-media-field');
 
         var ref = (container[key] && typeof container[key] === 'object') ? container[key] : null;
+        // An empty {} ref is "no image chosen" — only treat it as selected when it
+        // actually carries an image (thumb/src). Gates the name label + Clear button.
+        var hasImage = ref && (ref.thumb || ref.src);
         var thumb;
         if (ref && ref.thumb) {
             thumb = el('img', 'cms-media-thumb');
@@ -601,7 +608,7 @@ window.CmsBlockEditor = (function () {
         }
 
         var meta = el('div', 'cms-media-meta');
-        var nameEl = el('div', 'cms-media-name', ref ? esc(ref.alt || 'Selected image') : '<span class="cms-muted">No image selected</span>');
+        var nameEl = el('div', 'cms-media-name', hasImage ? esc(ref.alt || 'Selected image') : '<span class="cms-muted">No image selected</span>');
         var btnRow = el('div', null);
         btnRow.style.marginTop = '6px';
         var chooseBtn = el('button', 'cms-btn cms-btn-sm', '<i class="fas fa-image"></i> Choose image');
@@ -609,10 +616,11 @@ window.CmsBlockEditor = (function () {
         var clearBtn = el('button', 'cms-btn cms-btn-sm cms-btn-ghost', 'Clear');
         clearBtn.type = 'button';
         clearBtn.style.marginLeft = '6px';
-        if (!ref) { clearBtn.style.display = 'none'; }
+        if (!hasImage) { clearBtn.style.display = 'none'; }
 
         function render(newRef) {
             container[key] = newRef || {};
+            var newHasImage = newRef && (newRef.thumb || newRef.src);
             var fresh;
             if (newRef && newRef.thumb) {
                 fresh = el('img', 'cms-media-thumb');
@@ -622,8 +630,8 @@ window.CmsBlockEditor = (function () {
             }
             row.replaceChild(fresh, thumb);
             thumb = fresh;
-            nameEl.innerHTML = newRef ? esc(newRef.alt || 'Selected image') : '<span class="cms-muted">No image selected</span>';
-            clearBtn.style.display = newRef ? '' : 'none';
+            nameEl.innerHTML = newHasImage ? esc(newRef.alt || 'Selected image') : '<span class="cms-muted">No image selected</span>';
+            clearBtn.style.display = newHasImage ? '' : 'none';
             markDirty();
         }
 
@@ -743,7 +751,7 @@ window.CmsBlockEditor = (function () {
     }
     function imageBound(obj, key, label) {
         if (!obj[key] || typeof obj[key] !== 'object') { obj[key] = {}; }
-        return fieldImage({ fields: obj }, obj, key, label);
+        return fieldImage(obj, key, label);
     }
 
     function tnFixedAcPosition(input, dropdown) {
@@ -806,7 +814,12 @@ window.CmsBlockEditor = (function () {
         function search(term) {
             if (ctrl) { ctrl.abort(); }
             ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-            var url = UIR + 'KingdomAjax/playersearch/0&scope=all&include_inactive=1&q=' + encodeURIComponent(term);
+            // Scope the persona search to the current CMS site (same as personlookup /
+            // medialist) instead of scope=all — cross-org scope=all leaked banned/inactive
+            // personas into the picker. Drop include_inactive=1 for the same reason.
+            var url = UIR + 'KingdomAjax/playersearch/0'
+                + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '')
+                + '&q=' + encodeURIComponent(term);
             fetch(url, ctrl ? { signal: ctrl.signal } : undefined)
                 .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
                 .then(function (rows) {
@@ -1200,7 +1213,7 @@ window.CmsBlockEditor = (function () {
                     }));
                 } else {
                     var blank = {};
-                    (spec.of || []).forEach(function (sub) { blank[sub.key] = (sub.type === 'number') ? '' : ''; });
+                    (spec.of || []).forEach(function (sub) { blank[sub.key] = ''; });
                     groupWrap.appendChild(repeater(block, spec.key, spec.singular || 'Item', blank, function (item) {
                         var ibox = el('div', null);
                         (spec.of || []).forEach(function (sub) {
@@ -1255,7 +1268,7 @@ window.CmsBlockEditor = (function () {
 
         if (t === 'image') {
             if (!block.fields.image || typeof block.fields.image !== 'object') { block.fields.image = {}; }
-            body.appendChild(fieldImage(block, block.fields, 'image', 'Image'));
+            body.appendChild(fieldImage(block.fields, 'image', 'Image'));
             body.appendChild(fieldText(block, 'caption', 'Caption', { placeholder: 'Optional caption' }));
             body.appendChild(fieldText(block, 'href', 'Link (optional)', { placeholder: 'https://…' }));
             return body;

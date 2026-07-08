@@ -346,9 +346,48 @@ class CmsPage extends CmsBase
         // they would wipe the accumulated placeholders.
         $preEditRow  = null;
         $preEditPath = '';
+        $newSlug     = null; // normalized target slug, computed up front when set
         if (array_key_exists('slug', $data)) {
             $preEditRow  = $this->GetPage($pageId);
             $preEditPath = $this->PagePath($pageId);
+
+            // Normalize the incoming slug here (before any binds accumulate on
+            // $DB) so we can dup-check it up front — the check runs its own
+            // Clear()/DataSet() and must precede the bind loop below.
+            $newSlug = preg_replace('/[^a-z0-9\-]+/', '', strtolower((string)$data['slug']));
+
+            // Dup pre-check (mirrors CreatePage): a genuine rename to a slug
+            // already claimed by ANOTHER page in the same target scope is a
+            // collision — refuse rather than let the UPDATE silently drop against
+            // the UNIQUE(scope_type, scope_id, slug) key. Empty/reserved slugs are
+            // handled below (existing slug kept), so they skip the check.
+            if (
+                $newSlug !== '' && !$this->IsReservedPageSlug($newSlug)
+                && $preEditRow !== null && $newSlug !== (string)$preEditRow['slug']
+            ) {
+                // Effective target scope: an in-flight scope change wins, else the
+                // page's current scope.
+                $chkType = array_key_exists('scope_type', $data)
+                    ? $this->_normalizeScopeType($data['scope_type'])
+                    : (string)$preEditRow['scope_type'];
+                $chkId = array_key_exists('scope_id', $data)
+                    ? (int)$data['scope_id']
+                    : (int)$preEditRow['scope_id'];
+
+                $DB->Clear();
+                $DB->slug       = $newSlug;
+                $DB->scope_type = $chkType;
+                $DB->scope_id   = $chkId;
+                $DB->page_id    = $pageId;
+                $dup = $this->_firstRow($DB->DataSet(
+                    'SELECT page_id FROM ' . DB_PREFIX . 'cms_page'
+                    . ' WHERE scope_type = :scope_type AND scope_id = :scope_id'
+                    . ' AND slug = :slug AND page_id <> :page_id LIMIT 1'
+                ));
+                if ($dup !== null) {
+                    return false;   // slug already in use in this scope — collision
+                }
+            }
         }
 
         // Whitelist of editable columns + their normalizers.
@@ -361,7 +400,7 @@ class CmsPage extends CmsBase
             $DB->title = (string)$data['title'];
         }
         if (array_key_exists('slug', $data)) {
-            $newSlug = preg_replace('/[^a-z0-9\-]+/', '', strtolower((string)$data['slug']));
+            // $newSlug was normalized (and dup-checked) up front.
             // C17: never persist a router-shadowed slug (blog/post/k/p) or an
             // empty one — silently keep the existing slug (the controller
             // pre-validates and surfaces a friendly message). When it genuinely
@@ -372,6 +411,7 @@ class CmsPage extends CmsBase
                 if ($preEditRow !== null && $newSlug !== (string)$preEditRow['slug']) {
                     $slugChange = array(
                         'old_path'   => $preEditPath,
+                        'new_slug'   => $newSlug,
                         'scope_type' => (string)$preEditRow['scope_type'],
                         'scope_id'   => (int)$preEditRow['scope_id'],
                         'actor'      => (isset($data['updated_by']) && (int)$data['updated_by'] > 0) ? (int)$data['updated_by'] : 0,
@@ -443,17 +483,33 @@ class CmsPage extends CmsBase
             . ' WHERE page_id = :page_id'
         );
 
-        // C17: after a successful slug change, 301 the OLD path to this page so
-        // inbound links / bookmarks keep resolving. Best-effort (never fails save).
-        if ($slugChange !== null && $slugChange['old_path'] !== '') {
-            $this->RecordRedirect(
-                $slugChange['scope_type'],
-                $slugChange['scope_id'],
-                $slugChange['old_path'],
-                $pageId,
-                null,
-                $slugChange['actor']
-            );
+        // C17: after a slug change, verify the new slug actually LANDED before
+        // trusting the rename. Execute() is void under ERRMODE_WARNING, so a
+        // silently-dropped UPDATE (e.g. a racing writer claimed the tuple between
+        // the pre-check and the write) leaves the old slug in place — recording a
+        // 301 from the old path or reporting success would both be wrong. Read the
+        // slug back and only then record the redirect / report success.
+        if ($slugChange !== null) {
+            $DB->Clear();
+            $DB->page_id = $pageId;
+            $verify = $this->_firstRow($DB->DataSet(
+                'SELECT slug FROM ' . DB_PREFIX . 'cms_page WHERE page_id = :page_id LIMIT 1'
+            ));
+            if ($verify === null || (string)$verify['slug'] !== (string)$slugChange['new_slug']) {
+                return false;   // rename didn't take — no bogus redirect, signal failure
+            }
+            // 301 the OLD path to this page so inbound links / bookmarks keep
+            // resolving. Best-effort (never fails the save).
+            if ($slugChange['old_path'] !== '') {
+                $this->RecordRedirect(
+                    $slugChange['scope_type'],
+                    $slugChange['scope_id'],
+                    $slugChange['old_path'],
+                    $pageId,
+                    null,
+                    $slugChange['actor']
+                );
+            }
         }
 
         return true;
@@ -486,6 +542,9 @@ class CmsPage extends CmsBase
         $cursor  = $pageId;
         $guard   = 0;
         while ($guard++ < 25) {
+            // One fetch per level: read the cursor node, then advance to its
+            // parent. The node fetched this iteration becomes the ancestor added
+            // next iteration — no separate parent round trip.
             $DB->Clear();
             $DB->page_id = (int)$cursor;
             $row = $this->_firstRow($DB->DataSet(
@@ -495,20 +554,15 @@ class CmsPage extends CmsBase
             if ($row === null) {
                 break;
             }
+            // The first node is the page itself (not an ancestor); every later
+            // node is a real ancestor, prepended so the chain stays root-first.
+            if ((int)$row['page_id'] !== $pageId) {
+                array_unshift($chain, $row);
+            }
             $parentId = (int)($row['parent_id'] ?? 0);
             if ($parentId <= 0 || isset($seen[$parentId])) {
                 break; // reached a root, or a cycle — stop
             }
-            $DB->Clear();
-            $DB->page_id = $parentId;
-            $parent = $this->_firstRow($DB->DataSet(
-                'SELECT page_id, parent_id, slug, title, status FROM ' . DB_PREFIX . 'cms_page'
-                . ' WHERE page_id = :page_id AND deleted_at IS NULL LIMIT 1'
-            ));
-            if ($parent === null) {
-                break;
-            }
-            array_unshift($chain, $parent);
             $seen[$parentId] = true;
             $cursor = $parentId;
         }
@@ -1058,6 +1112,7 @@ class CmsPage extends CmsBase
 
         // ---- Upsert: UPDATE knowns in place, collect unknowns for batch insert ----
         $kept = array();
+        $keptFields = array();
         $inserts = array();
         foreach ($normalized as $n) {
             if ($n['id'] > 0 && isset($existingIds[$n['id']])) {
@@ -1077,6 +1132,7 @@ class CmsPage extends CmsBase
                     . ' WHERE block_id = :block_id AND owner_type = :owner_type AND owner_id = :owner_id'
                 );
                 $kept[$n['id']] = true;
+                $keptFields[$n['id']] = $n['fields_json'];
             } else {
                 $inserts[] = $n;
             }
@@ -1145,6 +1201,33 @@ class CmsPage extends CmsBase
             $DB->Clear();
             $DB->Execute('ROLLBACK');
             return -1;
+        }
+
+        // A same-count set can still hide a silently-dropped UPDATE on an existing
+        // block (the row stays, so COUNT(*) is unchanged) under ERRMODE_WARNING.
+        // Read each kept block's fields_json back and ROLLBACK if the stored value
+        // isn't what we intended to write. fields_json is LONGTEXT (stored verbatim,
+        // no engine normalization), so an exact string compare is reliable here.
+        if (!empty($keptFields)) {
+            $keptIdList = implode(',', array_map('intval', array_keys($keptFields)));
+            $DB->Clear();
+            $DB->owner_type = $ownerType;
+            $DB->owner_id = $ownerId;
+            $storedFields = array();
+            foreach ($this->_eachRow($DB->DataSet(
+                'SELECT block_id, fields_json FROM ' . DB_PREFIX . 'cms_block'
+                . ' WHERE owner_type = :owner_type AND owner_id = :owner_id'
+                . ' AND block_id IN (' . $keptIdList . ')'
+            )) as $vr) {
+                $storedFields[(int)$vr['block_id']] = isset($vr['fields_json']) ? $vr['fields_json'] : null;
+            }
+            foreach ($keptFields as $bid => $intended) {
+                if (!array_key_exists((int)$bid, $storedFields) || $storedFields[(int)$bid] !== $intended) {
+                    $DB->Clear();
+                    $DB->Execute('ROLLBACK');
+                    return -1;
+                }
+            }
         }
 
         // C2: snapshot the state we just wrote (inside the txn so a rollback

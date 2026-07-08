@@ -315,9 +315,12 @@ include __DIR__ . '/cms/_shell_top.tpl';
             <p class="cms-muted" style="margin-top:0;font-size:13px;">Pick a starting layout. You can add or remove any block afterward.</p>
             <div class="cms-typegrid">
                 <?php foreach ($pageTypes as $pt): ?>
+                    <?php // Plain-language description only — never the raw type slug (dev jargon). ?>
                     <a class="cms-typecard" href="<?= UIR ?>Cms/edit/new&type=<?= $h($pt['type']) ?><?= $scopeQ ?>">
                         <strong><?= $h($pt['label']) ?></strong>
-                        <span><?= $h($pt['type']) ?></span>
+                        <?php if (!empty($pt['description'])): ?>
+                            <span><?= $h($pt['description']) ?></span>
+                        <?php endif; ?>
                     </a>
                 <?php endforeach; ?>
             </div>

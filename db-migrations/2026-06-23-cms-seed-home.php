@@ -24,6 +24,12 @@
  * No destructive operations; safe to run repeatedly.
  */
 
+// Web-reachable file: refuse any non-CLI (HTTP) invocation.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('CLI only');
+}
+
 // ---------------------------------------------------------------------------
 // Minimal app bootstrap (CLI). startup.php loads the DB + all libs but does
 // NOT define UIR or a web HTTP host. Model_FrontDoor::GetContent() references

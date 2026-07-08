@@ -200,29 +200,7 @@ class CmsPost extends CmsBase
         }
 
         // Bulk-fetch tags for all materialized posts in ONE query (avoids N+1).
-        if (!empty($rows)) {
-            $postIds = array();
-            foreach ($rows as $r) {
-                $postIds[] = (int)$r['post_id'];
-            }
-            $inList = implode(',', $postIds);
-            $DB->Clear();
-            $tagsByPost = array();
-            foreach ($this->_eachRow($DB->DataSet(
-                'SELECT pt.post_id, t.name, t.slug FROM ' . DB_PREFIX . 'cms_post_tag pt'
-                . ' JOIN ' . DB_PREFIX . 'cms_tag t ON t.tag_id = pt.tag_id'
-                . ' WHERE pt.post_id IN (' . $inList . ')'
-                . ' ORDER BY t.name ASC'
-            )) as $tr) {
-                $pid = (int)$tr['post_id'];
-                $tagsByPost[$pid][] = array('name' => $tr['name'], 'slug' => $tr['slug']);
-            }
-            foreach ($rows as &$row) {
-                $pid = (int)$row['post_id'];
-                $row['tags'] = isset($tagsByPost[$pid]) ? $tagsByPost[$pid] : array();
-            }
-            unset($row);
-        }
+        $rows = $this->_attachTags($rows);
 
         $result = array('rows' => $rows, 'total' => $total);
         self::$_listCache[$cacheKey] = $result;
@@ -262,29 +240,48 @@ class CmsPost extends CmsBase
         }
 
         // Bulk-fetch tags in ONE query (avoids N+1), mirroring ListPosts.
-        if (!empty($rows)) {
-            $postIds = array();
-            foreach ($rows as $r) {
-                $postIds[] = (int)$r['post_id'];
-            }
-            $inList = implode(',', $postIds);
-            $DB->Clear();
-            $tagsByPost = array();
-            foreach ($this->_eachRow($DB->DataSet(
-                'SELECT pt.post_id, t.name, t.slug FROM ' . DB_PREFIX . 'cms_post_tag pt'
-                . ' JOIN ' . DB_PREFIX . 'cms_tag t ON t.tag_id = pt.tag_id'
-                . ' WHERE pt.post_id IN (' . $inList . ')'
-                . ' ORDER BY t.name ASC'
-            )) as $tr) {
-                $pid = (int)$tr['post_id'];
-                $tagsByPost[$pid][] = array('name' => $tr['name'], 'slug' => $tr['slug']);
-            }
-            foreach ($rows as &$row) {
-                $pid = (int)$row['post_id'];
-                $row['tags'] = isset($tagsByPost[$pid]) ? $tagsByPost[$pid] : array();
-            }
-            unset($row);
+        $rows = $this->_attachTags($rows);
+
+        return $rows;
+    }
+
+    /**
+     * Bulk-fetch tags for a set of post rows in ONE query (avoids N+1) and
+     * decorate each row with 'tags' => [['name','slug'],...]. Shared by
+     * ListPosts and ListTrashed. Returns the rows unchanged when empty.
+     *
+     * @param array $rows post rows, each carrying 'post_id'
+     * @return array the same rows, each with a 'tags' key
+     */
+    private function _attachTags(array $rows)
+    {
+        global $DB;
+
+        if (empty($rows)) {
+            return $rows;
         }
+
+        $postIds = array();
+        foreach ($rows as $r) {
+            $postIds[] = (int)$r['post_id'];
+        }
+        $inList = implode(',', $postIds);
+        $DB->Clear();
+        $tagsByPost = array();
+        foreach ($this->_eachRow($DB->DataSet(
+            'SELECT pt.post_id, t.name, t.slug FROM ' . DB_PREFIX . 'cms_post_tag pt'
+            . ' JOIN ' . DB_PREFIX . 'cms_tag t ON t.tag_id = pt.tag_id'
+            . ' WHERE pt.post_id IN (' . $inList . ')'
+            . ' ORDER BY t.name ASC'
+        )) as $tr) {
+            $pid = (int)$tr['post_id'];
+            $tagsByPost[$pid][] = array('name' => $tr['name'], 'slug' => $tr['slug']);
+        }
+        foreach ($rows as &$row) {
+            $pid = (int)$row['post_id'];
+            $row['tags'] = isset($tagsByPost[$pid]) ? $tagsByPost[$pid] : array();
+        }
+        unset($row);
 
         return $rows;
     }
@@ -786,6 +783,21 @@ class CmsPost extends CmsBase
                 'INSERT INTO ' . DB_PREFIX . 'cms_post_tag (post_id, tag_id)'
                 . ' VALUES ' . implode(', ', $rows)
             );
+        }
+
+        // Post-write verification before COMMIT (mirrors ReplaceBlocks): confirm
+        // exactly the resolved link count landed. A silent partial INSERT under
+        // ERRMODE_WARNING would otherwise leave a truncated tag set post-DELETE.
+        $DB->Clear();
+        $DB->post_id = $postId;
+        $countRow = $this->_firstRow($DB->DataSet(
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_post_tag WHERE post_id = :post_id'
+        ));
+        $written = ($countRow !== null && isset($countRow['c'])) ? (int)$countRow['c'] : -1;
+        if ($written !== count($tagIds)) {
+            $DB->Clear();
+            $DB->Execute('ROLLBACK');
+            return false;
         }
 
         $DB->Clear();

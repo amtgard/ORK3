@@ -151,10 +151,29 @@ class CmsTheme extends CmsBase
     public function SetActive($scopeType, $scopeId, $id)
     {
         global $DB;
+        $id         = (int)$id;
+        $scopeType  = $this->_normalizeScopeType($scopeType);
+        $scopeId    = (int)$scopeId;
+
+        // Guard: the id must belong to this scope, otherwise IF(id=:id,1,0)
+        // would silently deactivate every theme in the scope without ever
+        // activating the target row.
         $DB->Clear();
-        $DB->id         = (int)$id;
-        $DB->scope_type = $this->_normalizeScopeType($scopeType);
-        $DB->scope_id   = (int)$scopeId;
+        $DB->id         = $id;
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = $scopeId;
+        $owned = $this->_firstRow($DB->DataSet(
+            'SELECT id FROM ' . DB_PREFIX . 'cms_theme'
+            . ' WHERE id = :id AND scope_type = :scope_type AND scope_id = :scope_id LIMIT 1'
+        ));
+        if ($owned === null) {
+            return false;
+        }
+
+        $DB->Clear();
+        $DB->id         = $id;
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = $scopeId;
         $DB->Execute(
             'UPDATE ' . DB_PREFIX . 'cms_theme'
             . ' SET is_active = IF(id = :id, 1, 0)'

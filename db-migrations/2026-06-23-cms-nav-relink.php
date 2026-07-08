@@ -30,6 +30,12 @@
  * No destructive operations; safe to run repeatedly.
  */
 
+// Web-reachable file: refuse any non-CLI (HTTP) invocation.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('CLI only');
+}
+
 if (empty($_SERVER['HTTP_HOST'])) {
     $_SERVER['HTTP_HOST'] = 'localhost:19080';
 }

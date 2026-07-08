@@ -9,6 +9,7 @@ $kicker   = $blockFields['kicker']    ?? '';
 $heading  = $blockFields['heading']   ?? '';
 $limit    = (int)($blockFields['limit'] ?? 12);
 $moreHref = $blockFields['more_href'] ?? '';
+$moreHref = (is_string($moreHref) && $moreHref !== '' && CmsSanitizer::IsSafeUrl($moreHref)) ? $moreHref : '';
 
 // Filter to parent kingdoms only
 $allKingdoms = [];

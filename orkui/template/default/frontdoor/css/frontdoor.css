@@ -869,3 +869,105 @@ html[data-theme="dark"] .bf-card { background: #1b2233; border-color: #2c3650; }
 html[data-theme="dark"] .bf-card-title { color: #eef2fa; }
 html[data-theme="dark"] .bf-card-excerpt { color: #b6c0d4; }
 html[data-theme="dark"] .bf-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+
+/* ---- Blog feed page (Blog_index.tpl; scoped under .fd-page) -------------- */
+.blog-wrap { max-width: 1100px; margin: 0 auto; padding: 32px 20px 56px; }
+.blog-head { display: flex; justify-content: space-between; align-items: flex-end;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 26px; }
+.blog-title {
+    background: transparent; border: none; padding: 0; border-radius: 0;
+    text-shadow: none; margin: 0; font-size: 30px; line-height: 1.1;
+}
+.blog-rss {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: #b8860b; font-weight: 700; font-size: 13px; text-decoration: none;
+}
+.blog-rss:hover { text-decoration: underline; }
+.blog-tagnote { font-size: 13px; color: #667; margin: -14px 0 22px; }
+.blog-tagnote a { color: #1d4ed8; text-decoration: none; }
+.blog-tagnote a:hover { text-decoration: underline; }
+
+.blog-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+}
+.blog-card {
+    display: flex; flex-direction: column; text-decoration: none; color: inherit;
+    background: #fff; border: 1px solid #e4e8f0; border-radius: 12px;
+    overflow: hidden; transition: box-shadow .15s ease, transform .15s ease;
+}
+.blog-card:hover { box-shadow: 0 8px 24px rgba(20,30,60,.12); transform: translateY(-2px); }
+.blog-card-accent { height: 6px; background: var(--gold, #d4af37); }
+.blog-card-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.blog-card-meta { font-size: 12px; color: #8a93a6; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+.blog-card-title { font-size: 18px; font-weight: 700; line-height: 1.25; margin: 0; color: #1a2236; }
+.blog-card-excerpt { font-size: 14px; color: #50596e; line-height: 1.5; margin: 0; }
+.blog-card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 6px; }
+.blog-tag {
+    font-size: 11px; font-weight: 600; color: #475063;
+    background: #eef1f7; border: 1px solid #dde2ec; border-radius: 999px;
+    padding: 2px 9px; text-decoration: none;
+}
+.blog-tag:hover { background: #e3e8f3; }
+
+.blog-pager { display: flex; justify-content: center; align-items: center; gap: 14px; margin-top: 36px; }
+.blog-pager-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid #d3d9e6; border-radius: 8px; padding: 8px 16px;
+    font-weight: 600; font-size: 14px; color: #1a2236; text-decoration: none; background: #fff;
+}
+.blog-pager-btn:hover { background: #f3f5fa; }
+.blog-pager-btn.is-disabled { opacity: .4; pointer-events: none; }
+.blog-pager-info { font-size: 13px; color: #667; }
+
+@media (max-width: 860px) { .blog-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .blog-grid { grid-template-columns: 1fr; } }
+
+html[data-theme="dark"] .blog-card { background: #1b2233; border-color: #2c3650; }
+html[data-theme="dark"] .blog-card-title { color: #eef2fa; }
+html[data-theme="dark"] .blog-card-excerpt { color: #b6c0d4; }
+html[data-theme="dark"] .blog-card-meta { color: #8794ad; }
+html[data-theme="dark"] .blog-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+html[data-theme="dark"] .blog-tag { color: #c4cde0; background: #232c42; border-color: #34405e; }
+html[data-theme="dark"] .blog-tag:hover { background: #2c3650; }
+html[data-theme="dark"] .blog-tagnote { color: #9aa6bd; }
+html[data-theme="dark"] .blog-pager-btn { background: #1b2233; border-color: #2c3650; color: #eef2fa; }
+html[data-theme="dark"] .blog-pager-btn:hover { background: #232c42; }
+html[data-theme="dark"] .blog-pager-info { color: #9aa6bd; }
+
+/* ---- Blog entry — single post (was per-render inline <style> in Blog_post.tpl)
+   Scoped under .fd-page. Post bodies reuse the front-door block renderer, so
+   they inherit front-door block styling; these .blogp-* rules cover the chrome
+   (title/meta/tags/hero) around that body. */
+.blogp-wrap { max-width: 820px; margin: 0 auto; padding: 28px 20px 8px; }
+.blogp-back {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: #1d4ed8; font-weight: 600; font-size: 14px; text-decoration: none; margin-bottom: 20px;
+}
+.blogp-back:hover { text-decoration: underline; }
+.blogp-title {
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+    margin: 0 0 10px; font-size: 34px; line-height: 1.15; color: #16203a;
+}
+.blogp-meta { font-size: 14px; color: #6b7488; margin-bottom: 14px; }
+.blogp-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 8px; }
+.blogp-tag {
+    font-size: 12px; font-weight: 600; color: #475063;
+    background: #eef1f7; border: 1px solid #dde2ec; border-radius: 999px;
+    padding: 3px 11px; text-decoration: none;
+}
+.blogp-tag:hover { background: #e3e8f3; }
+.blogp-hero {
+    margin: 18px 0 6px; border-radius: 14px; overflow: hidden;
+    border: 1px solid #e4e8f0; background: #f2f4f8;
+}
+.blogp-hero img { display: block; width: 100%; height: auto; }
+.blogp-body { margin-top: 8px; }
+.blogp-empty { padding: 2rem; text-align: center; color: #8899aa; }
+.blogp-footer { max-width: 820px; margin: 0 auto; padding: 8px 20px 48px; }
+
+html[data-theme="dark"] .blogp-title { color: #eef2fa; }
+html[data-theme="dark"] .blogp-meta { color: #9aa6bd; }
+html[data-theme="dark"] .blogp-tag { color: #c4cde0; background: #232c42; border-color: #34405e; }
+html[data-theme="dark"] .blogp-tag:hover { background: #2c3650; }
+html[data-theme="dark"] .blogp-hero { background: #1b2233; border-color: #2c3650; }
+html[data-theme="dark"] .blogp-empty { color: #9aa6bd; }

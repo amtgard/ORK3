@@ -6,6 +6,11 @@
  * same slug, then recreates it published at global scope. Run once:
  *   docker exec ork3-php8-app php /var/www/ork.amtgard.com/db-migrations/2026-06-23-cms-seed-exemplars.php
  */
+// Web-reachable file: refuse any non-CLI (HTTP) invocation.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('CLI only');
+}
 chdir('/var/www/ork.amtgard.com/orkui');
 define('DONOTWEBSERVICE', true);
 if (empty($_SERVER['HTTP_HOST'])) {

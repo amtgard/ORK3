@@ -31,13 +31,6 @@ class Controller_CmsAjax extends Controller
 {
     use CmsScopeContext;
 
-    /**
-     * Default scope when no ?scope= selector is present — the global front door.
-     * Phase 3 threads a per-request scope via _resolveScope() / _scope(); this
-     * constant is only the fallback shape (byte-for-byte legacy behavior).
-     */
-    private static $SCOPE = array('type' => 'global', 'id' => 0);
-
     /** Block field bodies that hold authored HTML → must be sanitized on save. */
     private static $HTML_FIELDS = array('body', 'html');
 
@@ -160,7 +153,9 @@ class Controller_CmsAjax extends Controller
                 $this->_fail('Could not create the page (the slug may already be in use).');
             }
         } else {
-            $this->CmsPage->update_page($pageId, $meta);
+            if (!$this->CmsPage->update_page($pageId, $meta)) {
+                $this->_fail('Could not save the page (the slug may already be in use).');
+            }
         }
 
         $count = (int)$this->CmsPage->replace_blocks('page', $pageId, $blocks);
@@ -342,7 +337,9 @@ class Controller_CmsAjax extends Controller
             }
         } else {
             // Authorization + IDOR + concurrency were enforced above.
-            $this->CmsPost->update_post($postId, $meta);
+            if (!$this->CmsPost->update_post($postId, $meta)) {
+                $this->_fail('Could not save the post (the slug may already be in use).');
+            }
         }
 
         // Tags arrive as a comma-separated string.
@@ -559,6 +556,9 @@ class Controller_CmsAjax extends Controller
             $this->_fail('Media not found.', 4);
         }
         $this->load_model('CmsMedia');
+        // IDOR guard: the target must be in THIS scope's trash. get_media can't be
+        // used (it hides trashed rows), so verify against the scope-filtered trash.
+        $this->_requireTrashedMediaOwned($mediaId, $scope);
         $ok = (bool)$this->CmsMedia->RestoreMedia($mediaId, $uid);
         if (!$ok) {
             $this->_fail('Could not restore the media (it may not be in the Trash).');
@@ -578,6 +578,9 @@ class Controller_CmsAjax extends Controller
             $this->_fail('Media not found.', 4);
         }
         $this->load_model('CmsMedia');
+        // IDOR guard: the target must be in THIS scope's trash. get_media can't be
+        // used (it hides trashed rows), so verify against the scope-filtered trash.
+        $this->_requireTrashedMediaOwned($mediaId, $scope);
         $ok = (bool)$this->CmsMedia->PurgeMedia($mediaId, $uid);
         if (!$ok) {
             $this->_fail('Could not purge the media.');
@@ -649,6 +652,9 @@ class Controller_CmsAjax extends Controller
         }
         $data = array('alt' => (string)($_POST['alt'] ?? ''));
         $this->load_model('CmsMedia');
+        // IDOR guard: never alter a media row belonging to another scope. Update
+        // itself only touches non-trashed rows, which get_media also returns.
+        $this->_requireOwned($this->CmsMedia->get_media($mediaId), $scope);
         $ok = (bool)$this->CmsMedia->Update($mediaId, $data, $uid);
         if (!$ok) {
             $this->_fail('Could not update the media (it may not exist or be in the Trash).');
@@ -1144,6 +1150,30 @@ class Controller_CmsAjax extends Controller
         }
     }
 
+    /**
+     * IDOR guard for trashed media (restore/purge). GetMedia hides trashed rows,
+     * so ownership is verified against the scope-filtered trash list: a media id
+     * not in THIS scope's trash (foreign org, or not trashed) is rejected.
+     *
+     * @param int   $mediaId
+     * @param array $scope the resolved, authorized request scope
+     * @return void
+     */
+    private function _requireTrashedMediaOwned($mediaId, $scope)
+    {
+        $mediaId = (int)$mediaId;
+        $this->load_model('CmsMedia');
+        $trashed = $this->CmsMedia->ListTrashed((string)$scope['type'], (int)$scope['id'], 1000);
+        if (is_array($trashed)) {
+            foreach ($trashed as $row) {
+                if ((int)($row['media_id'] ?? 0) === $mediaId) {
+                    return;
+                }
+            }
+        }
+        $this->_fail('You are not authorized to modify this content.', 5);
+    }
+
     /** Emit {ok:true, ...$extra} and exit. */
     private function _ok($extra = array())
     {
@@ -1224,7 +1254,8 @@ class Controller_CmsAjax extends Controller
             } elseif (is_string($val) && in_array($key, self::$HTML_FIELDS, true)) {
                 $fields[$key] = $this->CmsSanitizer->clean($val);
             } elseif (is_string($val) && in_array($key, self::$URL_FIELDS, true)) {
-                $fields[$key] = CmsSanitizer::IsSafeUrl($val) ? $val : '#';
+                // Leave an empty optional URL empty; only rewrite non-empty unsafe values.
+                $fields[$key] = ($val === '' || CmsSanitizer::IsSafeUrl($val)) ? $val : '#';
             }
         }
         return $fields;

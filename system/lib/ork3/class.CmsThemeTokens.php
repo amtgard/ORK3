@@ -69,17 +69,17 @@ class CmsThemeTokens
             if (!isset($catalog[$k]) || $catalog[$k]['input'] === 'derived') {
                 continue; // unknown or auto-only
             }
-            $group = $catalog[$k]['input'];
-            if ($group === 'color') {
+            $input = $catalog[$k]['input'];
+            if ($input === 'color') {
                 $val = strtolower(trim((string)$raw));
                 if (preg_match('/^#([0-9a-f]{3}|[0-9a-f]{6})$/', $val)) {
                     $out[$k] = $val;
                 }
-            } elseif ($group === 'font') {
+            } elseif ($input === 'font') {
                 if (in_array((string)$raw, self::FontAllowlist(), true)) {
                     $out[$k] = (string)$raw;
                 }
-            } elseif ($group === 'shadow') {
+            } elseif ($input === 'shadow') {
                 if (in_array((string)$raw, self::$SHADOWS, true)) {
                     $out[$k] = (string)$raw;
                 }

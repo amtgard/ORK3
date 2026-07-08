@@ -230,6 +230,25 @@ class CmsMedia extends CmsBase
         );
     }
 
+    /**
+     * Enrich a raw list row (from ListMedia/ListTrashed) into the media-ref
+     * shape plus the id/filename/alt/title/created_at fields the picker + Trash
+     * surfaces consume. Shared so the two list mappings stay in lockstep.
+     *
+     * @param array $row associative ork_cms_media row
+     * @return array media-ref + {media_id,filename,alt,created_at,title}
+     */
+    private function _mediaListRow($row)
+    {
+        $ref = $this->ToMediaRef($row);
+        $ref['media_id']   = isset($row['media_id']) ? (int)$row['media_id'] : 0;
+        $ref['filename']   = isset($row['filename']) ? (string)$row['filename'] : '';
+        $ref['alt']        = isset($row['alt']) ? (string)$row['alt'] : '';
+        $ref['created_at'] = isset($row['created_at']) ? $row['created_at'] : null;
+        $ref['title']      = isset($row['title']) ? (string)$row['title'] : '';
+        return $ref;
+    }
+
     /* ------------------------------------------------------------------ *
      * Reads
      * ------------------------------------------------------------------ */
@@ -286,13 +305,7 @@ class CmsMedia extends CmsBase
 
         $out = array();
         foreach ($this->_eachRow($r) as $row) {
-            $ref = $this->ToMediaRef($row);
-            $ref['media_id']   = (int)$row['media_id'];
-            $ref['filename']   = isset($row['filename']) ? (string)$row['filename'] : '';
-            $ref['alt']        = isset($row['alt']) ? (string)$row['alt'] : '';
-            $ref['created_at'] = isset($row['created_at']) ? $row['created_at'] : null;
-            $ref['title']      = isset($row['title']) ? (string)$row['title'] : '';
-            $out[] = $ref;
+            $out[] = $this->_mediaListRow($row);
         }
         return $out;
     }
@@ -330,13 +343,7 @@ class CmsMedia extends CmsBase
 
         $out = array();
         foreach ($this->_eachRow($r) as $row) {
-            $ref = $this->ToMediaRef($row);
-            $ref['media_id']   = (int)$row['media_id'];
-            $ref['filename']   = isset($row['filename']) ? (string)$row['filename'] : '';
-            $ref['alt']        = isset($row['alt']) ? (string)$row['alt'] : '';
-            $ref['created_at'] = isset($row['created_at']) ? $row['created_at'] : null;
-            $ref['title']      = isset($row['title']) ? (string)$row['title'] : '';
-            $out[] = $ref;
+            $out[] = $this->_mediaListRow($row);
         }
         return $out;
     }
@@ -396,12 +403,14 @@ class CmsMedia extends CmsBase
      * Alt text is authored copy, so it is stored verbatim (the front-door image
      * partial escapes it with htmlspecialchars on render — see image.tpl).
      *
-     * @param int   $mediaId
-     * @param array $data    subset: 'alt' (string, '' = decorative), 'title' (string)
-     * @param int   $actorId acting mundane_id (for the audit trail)
-     * @return bool true when a valid, non-trashed row was updated
+     * @param int         $mediaId
+     * @param array       $data      subset: 'alt' (string, '' = decorative), 'title' (string)
+     * @param int         $actorId   acting mundane_id (for the audit trail)
+     * @param string|null $scopeType optional ownership guard: only touch a row in this scope
+     * @param int|null    $scopeId   optional ownership guard: scope owner id
+     * @return bool true when a valid, non-trashed, owned row was updated
      */
-    public function Update($mediaId, $data, $actorId = 0)
+    public function Update($mediaId, $data, $actorId = 0, $scopeType = null, $scopeId = null)
     {
         global $DB;
 
@@ -418,6 +427,11 @@ class CmsMedia extends CmsBase
             . ' WHERE media_id = :media_id AND deleted_at IS NULL LIMIT 1'
         ));
         if ($row === null) {
+            return false;
+        }
+
+        // IDOR guard: refuse when the caller's scope doesn't own this row.
+        if (!$this->_scopeOwns($row, $scopeType, $scopeId)) {
             return false;
         }
 
@@ -452,11 +466,13 @@ class CmsMedia extends CmsBase
      * a page/post hero, a site logo, or inside any block's fields_json — so a
      * live page can never end up pointing at a vanished image.
      *
-     * @param int $mediaId
-     * @param int $actorId acting mundane_id (for the audit trail)
-     * @return bool true when the row existed, was unreferenced, and was trashed
+     * @param int         $mediaId
+     * @param int         $actorId   acting mundane_id (for the audit trail)
+     * @param string|null $scopeType optional ownership guard: only touch a row in this scope
+     * @param int|null    $scopeId   optional ownership guard: scope owner id
+     * @return bool true when the row existed, was owned, unreferenced, and was trashed
      */
-    public function DeleteMedia($mediaId, $actorId = 0)
+    public function DeleteMedia($mediaId, $actorId = 0, $scopeType = null, $scopeId = null)
     {
         global $DB;
 
@@ -473,6 +489,11 @@ class CmsMedia extends CmsBase
             . ' WHERE media_id = :media_id AND deleted_at IS NULL LIMIT 1'
         ));
         if ($row === null) {
+            return false;
+        }
+
+        // IDOR guard: refuse when the caller's scope doesn't own this row.
+        if (!$this->_scopeOwns($row, $scopeType, $scopeId)) {
             return false;
         }
 
@@ -507,11 +528,13 @@ class CmsMedia extends CmsBase
     /**
      * Restore a trashed media row (clear deleted_at).
      *
-     * @param int $mediaId
-     * @param int $actorId acting mundane_id (for the audit trail)
+     * @param int         $mediaId
+     * @param int         $actorId   acting mundane_id (for the audit trail)
+     * @param string|null $scopeType optional ownership guard: only touch a row in this scope
+     * @param int|null    $scopeId   optional ownership guard: scope owner id
      * @return bool
      */
-    public function RestoreMedia($mediaId, $actorId = 0)
+    public function RestoreMedia($mediaId, $actorId = 0, $scopeType = null, $scopeId = null)
     {
         global $DB;
 
@@ -530,6 +553,11 @@ class CmsMedia extends CmsBase
             return false;
         }
 
+        // IDOR guard: refuse when the caller's scope doesn't own this row.
+        if (!$this->_scopeOwns($row, $scopeType, $scopeId)) {
+            return false;
+        }
+
         $DB->Clear();
         $DB->media_id = $mediaId;
         $DB->Execute(
@@ -545,11 +573,13 @@ class CmsMedia extends CmsBase
      * Only operates on rows already soft-deleted; refuses if still referenced.
      * The unlink is guarded so it can only ever remove paths inside cms-media/.
      *
-     * @param int $mediaId
-     * @param int $actorId acting mundane_id (for the audit trail)
-     * @return bool true when a trashed, unreferenced row was purged
+     * @param int         $mediaId
+     * @param int         $actorId   acting mundane_id (for the audit trail)
+     * @param string|null $scopeType optional ownership guard: only touch a row in this scope
+     * @param int|null    $scopeId   optional ownership guard: scope owner id
+     * @return bool true when a trashed, owned, unreferenced row was purged
      */
-    public function PurgeMedia($mediaId, $actorId = 0)
+    public function PurgeMedia($mediaId, $actorId = 0, $scopeType = null, $scopeId = null)
     {
         global $DB;
 
@@ -566,6 +596,11 @@ class CmsMedia extends CmsBase
             . ' WHERE media_id = :media_id LIMIT 1'
         ));
         if ($row === null || empty($row['deleted_at'])) {
+            return false;
+        }
+
+        // IDOR guard: refuse when the caller's scope doesn't own this row.
+        if (!$this->_scopeOwns($row, $scopeType, $scopeId)) {
             return false;
         }
 
@@ -597,6 +632,28 @@ class CmsMedia extends CmsBase
 
         $this->_cmsAudit((int)$actorId, 'purge', 'media', $mediaId, (string)$row['scope_type'], (int)$row['scope_id']);
         return true;
+    }
+
+    /**
+     * Ownership guard: does a fetched media row belong to the given scope?
+     * Mirrors CmsNav::_ownsItem — a caller that passes a scope (non-null
+     * $scopeType) may only touch rows whose scope_type/scope_id match, so a
+     * kingdom manager can never mutate global or another org's media (IDOR).
+     * A null $scopeType means "no ownership constraint" (trusted/legacy caller).
+     *
+     * @param array       $row       row with scope_type/scope_id columns
+     * @param string|null $scopeType 'global'|'kingdom'|'park', or null to skip
+     * @param int|null    $scopeId   scope owner id
+     * @return bool true when the caller is allowed to act on the row
+     */
+    private function _scopeOwns($row, $scopeType, $scopeId)
+    {
+        if ($scopeType === null) {
+            return true; // no ownership constraint requested
+        }
+        return $this->_normalizeScopeType((string)$row['scope_type'])
+                === $this->_normalizeScopeType((string)$scopeType)
+            && (int)$row['scope_id'] === (int)$scopeId;
     }
 
     /**
@@ -692,7 +749,17 @@ class CmsMedia extends CmsBase
         }
         $DB->Execute($sql);
 
-        return (int)$DB->GetLastInsertId();
+        // GetLastInsertId() is unreliable on this stack (a failed INSERT returns
+        // a stale prior id). Read the row back by its `path` — which carries a
+        // crypto-random unique component (_uniqueBase), so it identifies exactly
+        // this INSERT. Returns 0 when the row didn't land; Upload() treats 0 as
+        // failure and cleans up the orphaned files.
+        $DB->Clear();
+        $DB->path = isset($cols['path']) ? (string)$cols['path'] : '';
+        $check = $this->_firstRow($DB->DataSet(
+            'SELECT media_id FROM ' . DB_PREFIX . 'cms_media WHERE path = :path LIMIT 1'
+        ));
+        return ($check !== null && isset($check['media_id'])) ? (int)$check['media_id'] : 0;
     }
 
     /* ------------------------------------------------------------------ *
