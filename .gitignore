@@ -50,3 +50,10 @@ config.tmpprod.php
 # CMS media uploads (runtime; keep dir via .gitkeep)
 assets/cms-media/*
 !assets/cms-media/.gitkeep
+
+# CMS document downloads (runtime, self-hosted PDFs; keep dir via .gitkeep)
+assets/cms-docs/*
+!assets/cms-docs/.gitkeep
+
+# amtgard.com replication seed staging (regenerable extract; docker-mounted)
+db-migrations/.amtgard-assets/
