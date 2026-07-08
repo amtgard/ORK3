@@ -37,6 +37,9 @@ class Controller_Page extends Controller
 
         $this->template = 'Page_view.tpl';
         $this->data['IsFrontDoor'] = false;
+        // Distinct from the front-door home: still a CMS-styled public page, so the
+        // brand serif (MedievalSharp) must load (default.theme gates on this flag).
+        $this->data['IsCmsPage'] = true;
 
         $slug = trim((string) $slug);
         $this->load_model('CmsPage');
@@ -54,6 +57,11 @@ class Controller_Page extends Controller
         $this->data['FrontDoor']  = $this->CmsPage->get_page_blocks((int) $page['page_id']);
         $this->_attachFrontDoorTheme();
         $this->data['page_title'] = $page['title'];
+
+        // Wayfinding: breadcrumbs (root → current) + active-nav matching.
+        $this->data['CurrentSlug']  = $slug;
+        $this->data['CurrentPage']  = $page;
+        $this->data['PageAncestors'] = $this->CmsPage->GetPageAncestors((int) $page['page_id']);
 
         // Show the floating editor FAB to CMS editors (rendered by default.theme).
         $uid = (int) ($this->session->user_id ?? 0);

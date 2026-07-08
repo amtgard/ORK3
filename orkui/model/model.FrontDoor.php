@@ -66,8 +66,8 @@ class Model_FrontDoor extends Model
                     ['image' => ['key' => 'hero-7', 'src' => $img . 'hero-7.jpg', 'alt' => ''], 'kicker' => 'From First-Timers to Great Wars', 'headline' => 'Answer the Call.', 'subcopy' => 'Hundreds of chapters worldwide. Your first day on the field is always free.'],
                 ],
                 'ctas' => [
-                    ['label' => 'Find Amtgard Near You', 'href' => '#', 'style' => 'gold'],
-                    ['label' => 'Watch & Learn', 'href' => '#', 'style' => 'ghost'],
+                    ['label' => 'Find Amtgard Near You', 'href' => $uir . 'Atlas', 'style' => 'gold'],
+                    ['label' => 'Watch & Learn', 'href' => $uir . 'Page/view/learn-the-basics', 'style' => 'ghost'],
                 ],
             ],
         ];
@@ -77,7 +77,7 @@ class Model_FrontDoor extends Model
             'fields' => [
                 'kicker' => 'New here?', 'heading' => 'What is Amtgard?', 'align' => 'center',
                 'body' => 'Amtgard is a world-wide organization dedicated to medieval and fantasy combat sports and recreation. We use padded weapons, fantasy and authentic clothing, and imagination to immerse players in a world of heroic combat, quests, crafts, and more.',
-                'cta' => ['label' => 'The full story →', 'href' => '#'],
+                'cta' => ['label' => 'The full story →', 'href' => $uir . 'Page/view/about'],
             ],
         ];
 
@@ -87,12 +87,12 @@ class Model_FrontDoor extends Model
                 'kicker' => 'There\'s a place for you', 'heading' => 'Find Your Path',
                 'subheading' => 'However you like to play, Amtgard has a role for you.',
                 'cards' => [
-                    ['image' => ['key' => 'hero-1', 'src' => $img . 'hero-1.jpg', 'alt' => ''], 'icon' => 'fa-shield-alt', 'title' => 'The Warrior', 'blurb' => 'Sword, shield, and the front line', 'href' => '#'],
-                    ['image' => ['key' => 'hero-2', 'src' => $img . 'hero-2.jpg', 'alt' => ''], 'icon' => 'fa-bullseye', 'title' => 'The Archer', 'blurb' => 'Ranged skill and battlefield control', 'href' => '#'],
-                    ['image' => ['key' => 'hero-5', 'src' => $img . 'hero-5.jpg', 'alt' => ''], 'icon' => 'fa-hat-wizard', 'title' => 'The Caster', 'blurb' => 'Spells, healing, and the magic classes', 'href' => '#'],
-                    ['image' => ['key' => 'hero-6', 'src' => $img . 'hero-6.jpg', 'alt' => ''], 'icon' => 'fa-palette', 'title' => 'The Artisan', 'blurb' => 'Garb, armor, and craft (A&S)', 'href' => '#'],
-                    ['image' => ['key' => 'hero-3', 'src' => $img . 'hero-3.jpg', 'alt' => ''], 'icon' => 'fa-dragon', 'title' => 'The Monster', 'blurb' => 'Quests, role-play, and the wilds', 'href' => '#'],
-                    ['image' => ['key' => 'hero-8', 'src' => $img . 'hero-8.jpg', 'alt' => ''], 'icon' => 'fa-crown', 'title' => 'The Leader', 'blurb' => 'Reeving, office, and running the realm', 'href' => '#'],
+                    ['image' => ['key' => 'hero-1', 'src' => $img . 'hero-1.jpg', 'alt' => ''], 'icon' => 'fa-shield-alt', 'title' => 'The Warrior', 'blurb' => 'Sword, shield, and the front line', 'href' => $uir . 'Page/view/learn-the-basics'],
+                    ['image' => ['key' => 'hero-2', 'src' => $img . 'hero-2.jpg', 'alt' => ''], 'icon' => 'fa-bullseye', 'title' => 'The Archer', 'blurb' => 'Ranged skill and battlefield control', 'href' => $uir . 'Page/view/learn-the-basics'],
+                    ['image' => ['key' => 'hero-5', 'src' => $img . 'hero-5.jpg', 'alt' => ''], 'icon' => 'fa-hat-wizard', 'title' => 'The Caster', 'blurb' => 'Spells, healing, and the magic classes', 'href' => $uir . 'Page/view/learn-the-basics'],
+                    ['image' => ['key' => 'hero-6', 'src' => $img . 'hero-6.jpg', 'alt' => ''], 'icon' => 'fa-palette', 'title' => 'The Artisan', 'blurb' => 'Garb, armor, and craft (A&S)', 'href' => $uir . 'Page/view/learn-the-basics'],
+                    ['image' => ['key' => 'hero-3', 'src' => $img . 'hero-3.jpg', 'alt' => ''], 'icon' => 'fa-dragon', 'title' => 'The Monster', 'blurb' => 'Quests, role-play, and the wilds', 'href' => $uir . 'Page/view/learn-the-basics'],
+                    ['image' => ['key' => 'hero-8', 'src' => $img . 'hero-8.jpg', 'alt' => ''], 'icon' => 'fa-crown', 'title' => 'The Leader', 'blurb' => 'Reeving, office, and running the realm', 'href' => $uir . 'Page/view/join'],
                 ],
             ],
         ];
@@ -106,7 +106,7 @@ class Model_FrontDoor extends Model
                     ['n' => 2, 'title' => 'Just show up', 'body' => 'No experience or gear needed. Wear comfy clothes and bring water.'],
                     ['n' => 3, 'title' => 'Borrow a sword', 'body' => 'Chapters have loaner weapons. Take the field — your first day is free.'],
                 ],
-                'cta' => ['label' => 'Find Amtgard Near You', 'href' => '#'],
+                'cta' => ['label' => 'Find Amtgard Near You', 'href' => $uir . 'Atlas'],
             ],
         ];
 
@@ -140,8 +140,8 @@ class Model_FrontDoor extends Model
                 'heading' => 'Ready to take up arms?',
                 'subcopy' => 'There\'s a chapter near you, and your first day on the field is always free.',
                 'ctas' => [
-                    ['label' => 'Find Amtgard Near You', 'href' => '#', 'style' => 'gold'],
-                    ['label' => 'Official Resources', 'href' => '#', 'style' => 'ghost'],
+                    ['label' => 'Find Amtgard Near You', 'href' => $uir . 'Atlas', 'style' => 'gold'],
+                    ['label' => 'Official Resources', 'href' => $uir . 'Page/view/resources', 'style' => 'ghost'],
                 ],
                 'links' => 'amtgard.com · play.amtgard.com · Online Record Keeper',
             ],

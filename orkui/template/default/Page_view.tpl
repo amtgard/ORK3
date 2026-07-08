@@ -19,6 +19,23 @@ $fdBlocks    = isset( $FrontDoor ) && is_array( $FrontDoor ) ? $FrontDoor : [];
 <?php else : ?>
 <div class="fd-page">
 <?php include $fdDir . 'site_header.tpl'; ?>
+<?php
+// Wayfinding breadcrumbs: Home › ancestors › current (current is plain text).
+$fdCrumbAncestors = (isset($PageAncestors) && is_array($PageAncestors)) ? $PageAncestors : [];
+$fdCrumbCurrent   = (isset($CurrentPage) && is_array($CurrentPage)) ? (string) ($CurrentPage['title'] ?? '') : '';
+if ($fdCrumbCurrent !== ''):
+?>
+<nav class="fd-breadcrumbs" aria-label="Breadcrumb">
+	<a href="/orkui/index.php">Home</a>
+	<?php foreach ($fdCrumbAncestors as $fdAnc): ?>
+		<?php if (!is_array($fdAnc)) { continue; } ?>
+		<span class="fd-crumb-sep" aria-hidden="true">&rsaquo;</span>
+		<a href="<?= htmlspecialchars(UIR . 'Page/view/' . rawurlencode((string) ($fdAnc['slug'] ?? '')), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($fdAnc['title'] ?? ''), ENT_QUOTES) ?></a>
+	<?php endforeach; ?>
+	<span class="fd-crumb-sep" aria-hidden="true">&rsaquo;</span>
+	<span class="fd-crumb-current" aria-current="page"><?= htmlspecialchars($fdCrumbCurrent, ENT_QUOTES) ?></span>
+</nav>
+<?php endif; ?>
 <?php include $fdDir . 'render_blocks.tpl'; ?>
 </div>
 <?php endif; ?>

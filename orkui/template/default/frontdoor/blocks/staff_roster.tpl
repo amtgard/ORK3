@@ -72,7 +72,17 @@ $people       = $blockFields['people']       ?? [];
                     <?php if (!empty($img['src'])): ?>
                         <img class="fd-roster-photo" src="<?= htmlspecialchars($img['src'], ENT_QUOTES) ?>" alt="<?= htmlspecialchars(($img['alt'] ?? '') !== '' ? $img['alt'] : $primary, ENT_QUOTES) ?>">
                     <?php else: ?>
-                        <div class="fd-roster-photo fd-roster-photo-empty"><i class="fas fa-user"></i></div>
+                        <?php
+                        // Monogram fallback: initials from the first up-to-two words
+                        // of the (consent-safe) display name.
+                        $nameParts = preg_split('/\s+/', trim($primary), -1, PREG_SPLIT_NO_EMPTY);
+                        $initials  = '';
+                        foreach (array_slice($nameParts, 0, 2) as $np) {
+                            $initials .= mb_strtoupper(mb_substr($np, 0, 1));
+                        }
+                        if ($initials === '') { $initials = '?'; }
+                        ?>
+                        <div class="fd-roster-photo fd-roster-photo-empty" aria-hidden="true"><?= htmlspecialchars($initials, ENT_QUOTES) ?></div>
                     <?php endif; ?>
                     <div class="fd-roster-name fd-serif"><?= htmlspecialchars($primary, ENT_QUOTES) ?></div>
                     <?php if ($secondary !== ''): ?>
