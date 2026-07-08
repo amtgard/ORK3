@@ -147,7 +147,19 @@ $uploadImage = function ($slug, $file, $alt) use ($media, $DB, $by, $STG, $toRel
         fwrite(STDERR, "  missing image $slug/$file\n");
         return null;
     }
-    $fname = 'amtg-' . $slug . '-' . preg_replace('/[^A-Za-z0-9._-]/', '_', $file);
+    // Build the dedup filename with the MIME-canonical extension, because
+    // CmsMedia::Upload stores filename via _safeFilename() which re-appends the
+    // mime-derived ext (e.g. a source .jpeg is stored as .jpg). Matching the
+    // source ext here would miss the dedup and re-upload on every run.
+    $canonExt = array(
+        'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif', 'image/webp' => 'webp',
+    );
+    $info = @getimagesize($abs);
+    $ext = ($info && isset($canonExt[$info['mime']]))
+        ? $canonExt[$info['mime']]
+        : strtolower(pathinfo($file, PATHINFO_EXTENSION));
+    $base = preg_replace('/[^A-Za-z0-9._-]/', '_', pathinfo($file, PATHINFO_FILENAME));
+    $fname = 'amtg-' . $slug . '-' . $base . '.' . $ext;
     // Dedup: reuse an existing global media row with this filename.
     $DB->Clear();
     $DB->filename = $fname;
@@ -264,7 +276,12 @@ $resolveBlock = function ($slug, $b) use ($uploadImage, $copyDoc) {
     // Inline bare-filename references (card_grid cards[].image,
     // hero_carousel slides[].image, staff_roster people[].image, etc.):
     // replace any leaf string that is a downloaded image filename with a ref.
-    array_walk_recursive($f, function (&$v) use ($slug, $altOf, $uploadImage) {
+    array_walk_recursive($f, function (&$v, $k) use ($slug, $altOf, $uploadImage) {
+        // Never rewrite keys that belong to an already-resolved media ref
+        // (guards against an alt/caption that happens to be a bare filename).
+        if (in_array($k, array('alt', 'src', 'thumb', 'key', 'focal', 'media_id'), true)) {
+            return;
+        }
         if (is_string($v) && preg_match('/^[\w.\- ]+\.(jpg|jpeg|png|gif|webp)$/i', $v)) {
             $ref = $uploadImage($slug, $v, isset($altOf[$v]) ? $altOf[$v] : '');
             if ($ref) {
