@@ -325,3 +325,4 @@ flowchart TD
 | DS-09 player discovery | [ds-09-player-discovery.md](./ds-09-player-discovery.md) |
 | Implementation plan | [03-implementation-plan.md](./03-implementation-plan.md) |
 | Test framework | [06-test-framework.md](./06-test-framework.md) |
+| [validations/v-10-reports-validation.md](./validations/v-10-reports-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-10) |
