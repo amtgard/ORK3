@@ -1028,6 +1028,21 @@ Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for
 
 ---
 
+### V-14: Lib-service validation artifacts
+
+**Branch:** `megiddo/v-14-lib-service-validation`
+
+**Spec:** [validations/v-14-lib-service-validation.md](./validations/v-14-lib-service-validation.md)
+
+| Step | Status |
+|------|--------|
+| Canary URLs (live/era skip; gate weather + tournament) | [x] |
+| Test mutation boundaries (§2) | [x] |
+| Dual-profile fuzzy validate (4/4) | [x] |
+| V-14 sign-off gate | [x] |
+
+---
+
 ### V-01 … V-14: Domain validation artifacts
 
 Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines. Pairs with DS/T/R numbering.
@@ -1047,7 +1062,7 @@ Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines.
 | V-11 | `megiddo/v-11-search-validation` | [v-11-search-validation.md](./validations/v-11-search-validation.md) | DS-11, T-11, V-00 | R-11 |
 | V-12 | `megiddo/v-12-attendance-validation` | [v-12-attendance-validation.md](./validations/v-12-attendance-validation.md) | DS-12, T-12, V-00 | R-12 |
 | V-13 | `megiddo/v-13-infrastructure-validation` | [v-13-infrastructure-validation.md](./validations/v-13-infrastructure-validation.md) | DS-13, T-13, V-00 | R-13 |
-| V-14 | `megiddo/v-14-lib-service-validation` | *(create)* | DS-14, T-14, V-00 | R-14 |
+| V-14 | `megiddo/v-14-lib-service-validation` | [v-14-lib-service-validation.md](./validations/v-14-lib-service-validation.md) | DS-14, T-14, V-00 | R-14 |
 
 ---
 
@@ -1112,4 +1127,4 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** V-14 (lib-service validation), then R-01 (RSVP refactor — DS-01, T-01, V-01 complete).
+**Next actionable milestone:** R-01 (RSVP refactor — DS-01, T-01, V-00, V-01 complete). Phase 1.6 (V-00…V-14) complete.

@@ -24,7 +24,7 @@ Per-domain **canary URLs** and **test mutation boundaries** for R-* execution sp
 | V-11 | [v-11-search-validation.md](./v-11-search-validation.md) | Search | R-11 |
 | V-12 | [v-12-attendance-validation.md](./v-12-attendance-validation.md) | Attendance / sign-in | R-12 |
 | V-13 | [v-13-infrastructure-validation.md](./v-13-infrastructure-validation.md) | Infrastructure | R-13 |
-| V-14 | *(planned)* | Ork3::$Lib / lib-service | R-14 |
+| V-14 | [v-14-lib-service-validation.md](./v-14-lib-service-validation.md) | Ork3::$Lib / lib-service | R-14 |
 
 **Template:** [_template-validation.md](./_template-validation.md)
 

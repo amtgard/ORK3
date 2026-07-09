@@ -338,3 +338,14 @@ R-14 is **large** if all ~128 HasAuthority sites move at once. Recommended:
 - [ ] Proposed service API and migration policy documented (§3)
 - [ ] HasAuthority inventory and template violations recorded
 - [ ] Cross-refs to DS-07/DS-08/DS-12 (weather), DS-13 (Controller menu gates)
+
+---
+
+## Related documents
+
+| Doc | Link |
+|-----|------|
+| Implementation plan | [03-implementation-plan.md](./03-implementation-plan.md) |
+| Test framework | [06-test-framework.md](./06-test-framework.md) |
+| DS-13 infrastructure discovery | [ds-13-infrastructure-discovery.md](./ds-13-infrastructure-discovery.md) |
+| [validations/v-14-lib-service-validation.md](./validations/v-14-lib-service-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-14) |
