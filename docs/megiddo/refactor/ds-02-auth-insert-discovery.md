@@ -271,3 +271,4 @@ $authId = (int)$r['Detail'];
 | [04-milestone-checklist.md](./04-milestone-checklist.md) | DS-02 tracking |
 | [06-test-framework.md](./06-test-framework.md) | Test and Infection commands |
 | [ds-01-rsvp-discovery.md](./ds-01-rsvp-discovery.md) | Prior discovery sprint format reference |
+| [validations/v-02-auth-validation.md](./validations/v-02-auth-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-02) |

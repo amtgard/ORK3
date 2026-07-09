@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "park-auth-sandbox",
+  "calibratedAt": "2026-07-09T11:56:41Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "1a9074bd"
+}

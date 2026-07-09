@@ -848,6 +848,21 @@ Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for
 
 ---
 
+### V-02: Authorization INSERT validation artifacts
+
+**Branch:** `megiddo/v-02-auth-validation`
+
+**Spec:** [validations/v-02-auth-validation.md](./validations/v-02-auth-validation.md)
+
+| Step | Status |
+|------|--------|
+| Canary URLs + `pages.json5` (`kingdom-auth-sandbox`, `park-auth-sandbox`) | [x] |
+| Test mutation boundaries (§2) | [x] |
+| Dual-profile fuzzy record + validate | [x] |
+| V-02 sign-off gate | [x] |
+
+---
+
 ### V-01 … V-14: Domain validation artifacts
 
 Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines. Pairs with DS/T/R numbering.
@@ -855,7 +870,7 @@ Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines.
 | ID | Branch | Validation doc | Depends on | Blocks |
 |----|--------|----------------|------------|--------|
 | V-01 | `megiddo/v-01-rsvp-validation` | [v-01-rsvp-validation.md](./validations/v-01-rsvp-validation.md) | DS-01, T-01, V-00 | R-01 |
-| V-02 | `megiddo/v-02-auth-validation` | *(create)* | DS-02, T-02, V-00 | R-02 |
+| V-02 | `megiddo/v-02-auth-validation` | [v-02-auth-validation.md](./validations/v-02-auth-validation.md) | DS-02, T-02, V-00 | R-02 |
 | V-03 | `megiddo/v-03-banner-validation` | *(create)* | DS-03, T-03, V-00 | R-03 |
 | V-04 | `megiddo/v-04-eventajax-validation` | *(create)* | DS-04, T-04, V-00 | R-04 |
 | V-05 | `megiddo/v-05-event-validation` | *(create)* | DS-05, T-05, V-00 | R-05 |
