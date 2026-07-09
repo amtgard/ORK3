@@ -94,6 +94,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-RSV-08 | `Model_Event` | `get_upcoming_rsvps` | 159–184 | Upcoming RSVP query |
 | T-RSV-09 | `Model_Event` | `get_kingdom_upcoming_events` | 186–215 | Kingdom upcoming events query |
 
+**R-01 complete (2026-07-09):** T-RSV-01…T-RSV-09, T-INF-06 migrated to `class.Event.php` / EventService; `orkui/` RSVP paths use `APIModel('Event')`.
+
 ---
 
 ## Kingdom

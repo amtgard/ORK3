@@ -182,23 +182,14 @@ class Controller_EventAjax extends Controller
         $interested = 0;
         $myRsvp = '';
         if ($detailId > 0) {
-            $DB->Clear();
-            $rs = $DB->DataSet("
-				SELECT
-					SUM(CASE WHEN status = 'going'      THEN 1 ELSE 0 END) AS g,
-					SUM(CASE WHEN status = 'interested' THEN 1 ELSE 0 END) AS i
-				FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = {$detailId}");
-            if ($rs && $rs->Next()) {
-                $going = (int)$rs->g;
-                $interested = (int)$rs->i;
-            }
+            $this->load_model('Event');
+            $counts = $this->Event->get_rsvp_count($detailId);
+            $going = (int)($counts['going'] ?? 0);
+            $interested = (int)($counts['interested'] ?? 0);
             if ($uid > 0) {
-                $DB->Clear();
-                $mrs = $DB->DataSet("
-					SELECT status FROM " . DB_PREFIX . "event_rsvp
-					WHERE event_calendardetail_id = {$detailId} AND mundane_id = {$uid} LIMIT 1");
-                if ($mrs && $mrs->Next()) {
-                    $myRsvp = (string)$mrs->status;
+                $status = $this->Event->get_rsvp($detailId, $uid);
+                if ($status !== false) {
+                    $myRsvp = (string)$status;
                 }
             }
         }

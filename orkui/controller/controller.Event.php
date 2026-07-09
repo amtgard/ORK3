@@ -71,37 +71,14 @@ class Controller_Event extends Controller
             $detailIds = array_map(function ($d) {
                 return (int)$d['EventCalendarDetailId'];
             }, $allDetails);
-            $idList    = implode(',', $detailIds);
-            global $DB;
-            $DB->Clear();
-            $countResult = $DB->DataSet("SELECT event_calendardetail_id, status, COUNT(*) AS cnt FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id IN ($idList) GROUP BY event_calendardetail_id, status");
-            $rsvpCounts = [];
-            if ($countResult) {
-                while ($countResult->Next()) {
-                    $did = (int)$countResult->event_calendardetail_id;
-                    if (!isset($rsvpCounts[$did])) {
-                        $rsvpCounts[$did] = ['going' => 0, 'interested' => 0, 'total' => 0];
-                    }
-                    $rsvpCounts[$did][$countResult->status] = (int)$countResult->cnt;
-                    $rsvpCounts[$did]['total'] += (int)$countResult->cnt;
-                }
-            }
-            $userRsvp = [];
-            if ($uid > 0) {
-                $DB->Clear();
-                $userResult = $DB->DataSet("SELECT event_calendardetail_id, status FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id IN ($idList) AND mundane_id = " . $uid);
-                if ($userResult) {
-                    while ($userResult->Next()) {
-                        $userRsvp[(int)$userResult->event_calendardetail_id] = $userResult->status;
-                    }
-                }
-            }
+            $summary = $this->Event->get_rsvp_summary_batch($detailIds, $uid);
             foreach ($allDetails as $detail) {
                 $did = (int)$detail['EventCalendarDetailId'];
-                $counts = $rsvpCounts[$did] ?? ['going' => 0, 'interested' => 0, 'total' => 0];
+                $counts = $summary[$did] ?? ['going' => 0, 'interested' => 0, 'total' => 0, 'status' => ''];
+                $userStatus = $counts['status'] !== '' ? $counts['status'] : false;
                 $rsvp_data[$did] = [
                     'Count'         => $counts['total'],
-                    'UserAttending' => $userRsvp[$did] ?? false,
+                    'UserAttending' => $userStatus,
                     'List'          => $can_manage ? $this->Event->get_rsvp_list($did) : [],
                 ];
             }
@@ -182,16 +159,7 @@ class Controller_Event extends Controller
         $allCds = array_merge($upcoming, $past);
         if (!empty($allCds)) {
             $detailIds = array_map(fn ($cd) => (int)$cd['EventCalendarDetailId'], $allCds);
-            $idList    = implode(',', $detailIds);
-            global $DB;
-            $DB->Clear();
-            $rsvpResult = $DB->DataSet("SELECT event_calendardetail_id, COUNT(*) AS cnt FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id IN ($idList) GROUP BY event_calendardetail_id");
-            $rsvpCounts = [];
-            if ($rsvpResult) {
-                while ($rsvpResult->Next()) {
-                    $rsvpCounts[(int)$rsvpResult->event_calendardetail_id] = (int)$rsvpResult->cnt;
-                }
-            }
+            $rsvpCounts = $this->Event->get_rsvp_total_counts_batch($detailIds);
             foreach ($upcoming as &$cd) {
                 $cd['_RsvpCount'] = $rsvpCounts[(int)$cd['EventCalendarDetailId']] ?? 0;
             }

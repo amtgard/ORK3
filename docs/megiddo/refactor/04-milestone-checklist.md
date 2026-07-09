@@ -1129,4 +1129,10 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** R-01 (RSVP refactor — DS-01, T-01, V-00, V-01 complete). Phase 1.6 (V-00…V-14) complete.
+**Next actionable milestone:** R-02 (Auth INSERT refactor — R-01 complete on `megiddo/r-01-rsvp-refactor`). Phase 1.6 (V-00…V-14) complete.
+
+### R-01 complete (2026-07-09)
+
+- [x] Branch `megiddo/r-01-rsvp-refactor` — RSVP domain methods on `class.Event.php`, EventService SOAP handlers, `Model_Event` + controllers migrated off `$DB`
+- [x] Targets closed: T-RSV-01…T-RSV-09, T-INF-06; inline batch reads in `Controller_Event`, `Controller_EventAjax::preview`, `class.Controller`
+- [x] Gates: PHPUnit 204/204 pass; Infection MSI 17% / covered 55%; fuzzy 8/8; Playwright auth + rsvp specs pass

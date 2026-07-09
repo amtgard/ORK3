@@ -14,7 +14,7 @@ final class EventRsvpValidationTest extends TestCase
      */
     public function testValidStatusAccepted(string $status): void
     {
-        $this->assertTrue($this->isAllowedStatus($status));
+        $this->assertTrue(Event::IsAllowedRsvpStatus($status));
     }
 
     /**
@@ -33,7 +33,7 @@ final class EventRsvpValidationTest extends TestCase
      */
     public function testInvalidStatusRejected(string $status): void
     {
-        $this->assertFalse($this->isAllowedStatus($status));
+        $this->assertFalse(Event::IsAllowedRsvpStatus($status));
     }
 
     /**
@@ -51,12 +51,7 @@ final class EventRsvpValidationTest extends TestCase
 
     public function testModelCoercesInvalidStatusToGoing(): void
     {
-        $status = in_array('maybe', ['going', 'interested']) ? 'maybe' : 'going';
+        $status = Event::IsAllowedRsvpStatus('maybe') ? 'maybe' : 'going';
         $this->assertSame('going', $status);
-    }
-
-    private function isAllowedStatus(string $status): bool
-    {
-        return in_array($status, ['going', 'interested'], true);
     }
 }

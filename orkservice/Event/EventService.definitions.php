@@ -2,237 +2,572 @@
 
 /******************
 
-	Inventory Service Definitions
+    Inventory Service Definitions
 
 ******************/
 
 
 $server->wsdl->addComplexType(
-		'CreateEventRequest',
-		'complexType',
-		'struct',
-		'all',
-		'',
-		array(
-				'Token'=>array('name'=>'Token','type'=>'xsd:string'),
-				'KingdomId'=>array('name'=>'KingdomId','type'=>'xsd:int'),
-				'ParkId'=>array('name'=>'ParkId','type'=>'xsd:int'),
-				'MundaneId'=>array('name'=>'MundaneId','type'=>'xsd:int'),
-				'UnitId'=>array('name'=>'UnitId','type'=>'xsd:int'),
-				'Name'=>array('name'=>'Name','type'=>'xsd:string'),
-				'HeraldryUrl'=>array('name'=>'HeraldryUrl','type'=>'xsd:string'),
-				'Heraldry'=>array('name'=>'Heraldry','type'=>'xsd:string'),
-				'HeraldryMimeType'=>array('name'=>'HeraldryMimeType','type'=>'xsd:string')
-			)
-	);
+    'CreateEventRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
+                'KingdomId' => array('name' => 'KingdomId','type' => 'xsd:int'),
+                'ParkId' => array('name' => 'ParkId','type' => 'xsd:int'),
+                'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int'),
+                'UnitId' => array('name' => 'UnitId','type' => 'xsd:int'),
+                'Name' => array('name' => 'Name','type' => 'xsd:string'),
+                'HeraldryUrl' => array('name' => 'HeraldryUrl','type' => 'xsd:string'),
+                'Heraldry' => array('name' => 'Heraldry','type' => 'xsd:string'),
+                'HeraldryMimeType' => array('name' => 'HeraldryMimeType','type' => 'xsd:string')
+            )
+);
 
 
 $server->wsdl->addComplexType(
-		'GetEventRequest',
-		'complexType',
-		'struct',
-		'all',
-		'',
-		array(
-				'EventId'=>array('name'=>'EventId','type'=>'xsd:int')
-			)
-	);
-	
+    'GetEventRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int')
+            )
+);
+
 $server->wsdl->addComplexType(
-		'GetEventResponse',
-		'complexType',
-		'struct',
-		'all',
-		'',
-		array(
-				'Status'=>array('name'=>'Status','type'=>'tns:StatusType'),
-				'KingdomId'=>array('name'=>'KingdomId','type'=>'xsd:int'),
-				'ParkId'=>array('name'=>'ParkId','type'=>'xsd:int'),
-				'MundaneId'=>array('name'=>'MundaneId','type'=>'xsd:int'),
-				'UnitId'=>array('name'=>'UnitId','type'=>'xsd:int'),
-				'Name'=>array('name'=>'Name','type'=>'xsd:string'),
-				'HeraldryUrl'=>array('name'=>'HeraldryUrl','type'=>'xsd:string'),
-				'HasHeraldry'=>array('name'=>'HasHeraldry','type'=>'xsd:int')
-			)
-	);
+    'GetEventResponse',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Status' => array('name' => 'Status','type' => 'tns:StatusType'),
+                'KingdomId' => array('name' => 'KingdomId','type' => 'xsd:int'),
+                'ParkId' => array('name' => 'ParkId','type' => 'xsd:int'),
+                'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int'),
+                'UnitId' => array('name' => 'UnitId','type' => 'xsd:int'),
+                'Name' => array('name' => 'Name','type' => 'xsd:string'),
+                'HeraldryUrl' => array('name' => 'HeraldryUrl','type' => 'xsd:string'),
+                'HasHeraldry' => array('name' => 'HasHeraldry','type' => 'xsd:int')
+            )
+);
 
 
 $server->wsdl->addComplexType(
-		'GetEventDetailRequest',
-		'complexType',
-		'struct',
-		'all',
-		'',
-		array(
-				'EventCalendarDetailId'=>array('name'=>'EventCalendarDetailId','type'=>'xsd:int')
-			)
-	);
-	
-$server->wsdl->addComplexType(
-		'GetEventDetailItemType',
-		'complexType',
-		'struct',
-		'all',
-		'',
-		array(
-				'EventCalendarDetailId'=>array('name'=>'EventCalendarDetailId','type'=>'xsd:int'),
-				'EventId'=>array('name'=>'EventId','type'=>'xsd:int'),
-				'Current'=>array('name'=>'Current','type'=>'xsd:int'),
-				'Price'=>array('name'=>'Price','type'=>'xsd:double'),
-				'EventStart'=>array('name'=>'EventStart','type'=>'xsd:dateTime'),
-				'EventEnd'=>array('name'=>'EventEnd','type'=>'xsd:dateTime'),
-				'Description'=>array('name'=>'Description','type'=>'xsd:string'),
-				'Url'=>array('name'=>'Url','type'=>'xsd:string'),
-				'UrlName'=>array('name'=>'UrlName','type'=>'xsd:string'),
-				'Address'=>array('name'=>'Address','type'=>'xsd:string'),
-				'Province'=>array('name'=>'Province','type'=>'xsd:string'),
-				'PostalCode'=>array('name'=>'PostalCode','type'=>'xsd:string'),
-				'City'=>array('name'=>'City','type'=>'xsd:string'),
-				'Country'=>array('name'=>'Country','type'=>'xsd:string'),
-				'MapURL'=>array('name'=>'MapURL','type'=>'xsd:string'),
-				'MapUrlName'=>array('name'=>'MapUrlName','type'=>'xsd:string'),
-				'Modified'=>array('name'=>'Modified','type'=>'xsd:dateTime')
-			)
-	);	
-	
+    'GetEventDetailRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int')
+            )
+);
 
 $server->wsdl->addComplexType(
-		'EventCalendarDetailsList',
-		'complexType',
-		'array',
-		'',
-		'SOAP-ENC:Array',
-		array(),
-		array(
-			array('ref'=>'SOAP-ENC:arrayType', 'wsdl:arrayType'=> 'tns:GetEventDetailItemType[]')
-			),
-		'tns:GetEventDetailItemType'
-	);
-	
-$server->wsdl->addComplexType(
-		'GetEventDetailResponse',
-		'complexType',
-		'struct',
-		'all',
-		'',
-		array(
-				'Status'=>array('name'=>'Status','type'=>'tns:StatusType'),
-				'CalendarEventDetails'=>array('name'=>'CalendarEventDetails','type'=>'tns:EventCalendarDetailsList')
-			)
-	);
-	
+    'GetEventDetailItemType',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
+                'Current' => array('name' => 'Current','type' => 'xsd:int'),
+                'Price' => array('name' => 'Price','type' => 'xsd:double'),
+                'EventStart' => array('name' => 'EventStart','type' => 'xsd:dateTime'),
+                'EventEnd' => array('name' => 'EventEnd','type' => 'xsd:dateTime'),
+                'Description' => array('name' => 'Description','type' => 'xsd:string'),
+                'Url' => array('name' => 'Url','type' => 'xsd:string'),
+                'UrlName' => array('name' => 'UrlName','type' => 'xsd:string'),
+                'Address' => array('name' => 'Address','type' => 'xsd:string'),
+                'Province' => array('name' => 'Province','type' => 'xsd:string'),
+                'PostalCode' => array('name' => 'PostalCode','type' => 'xsd:string'),
+                'City' => array('name' => 'City','type' => 'xsd:string'),
+                'Country' => array('name' => 'Country','type' => 'xsd:string'),
+                'MapURL' => array('name' => 'MapURL','type' => 'xsd:string'),
+                'MapUrlName' => array('name' => 'MapUrlName','type' => 'xsd:string'),
+                'Modified' => array('name' => 'Modified','type' => 'xsd:dateTime')
+            )
+);
+
 
 $server->wsdl->addComplexType(
-		'CreateEventDetailsRequest',
-		'complexType',
-		'struct',
-		'all',
-		'',
-		array(
-				'Token'=>array('name'=>'Token','type'=>'xsd:string'),
-				'EventId'=>array('name'=>'EventId','type'=>'xsd:int'),
-				'AtParkId'=>array('name'=>'AtParkId','type'=>'xsd:int'),
-				'Current'=>array('name'=>'Current','type'=>'xsd:int'),
-				'Price'=>array('name'=>'Price','type'=>'xsd:double'),
-				'EventStart'=>array('name'=>'EventStart','type'=>'xsd:dateTime'),
-				'EventEnd'=>array('name'=>'EventEnd','type'=>'xsd:dateTime'),
-				'Description'=>array('name'=>'Description','type'=>'xsd:string'),
-				'Url'=>array('name'=>'Url','type'=>'xsd:string'),
-				'UrlName'=>array('name'=>'UrlName','type'=>'xsd:string'),
-				'Address'=>array('name'=>'Address','type'=>'xsd:string'),
-				'Province'=>array('name'=>'Province','type'=>'xsd:string'),
-				'PostalCode'=>array('name'=>'PostalCode','type'=>'xsd:string'),
-				'City'=>array('name'=>'City','type'=>'xsd:string'),
-				'Country'=>array('name'=>'Country','type'=>'xsd:string'),
-				'MapURL'=>array('name'=>'MapURL','type'=>'xsd:string'),
-				'MapUrlName'=>array('name'=>'MapUrlName','type'=>'xsd:string')
-			)
-	);
-	
+    'EventCalendarDetailsList',
+    'complexType',
+    'array',
+    '',
+    'SOAP-ENC:Array',
+    array(),
+    array(
+            array('ref' => 'SOAP-ENC:arrayType', 'wsdl:arrayType' => 'tns:GetEventDetailItemType[]')
+            ),
+    'tns:GetEventDetailItemType'
+);
 
 $server->wsdl->addComplexType(
-		'SetCurrentRequest',
-		'complexType',
-		'struct',
-		'all',
-		'',
-		array(
-				'Token'=>array('name'=>'Token','type'=>'xsd:string'),
-				'EventCalendarDetailId'=>array('name'=>'EventCalendarDetailId','type'=>'xsd:int'),
-				'Current'=>array('name'=>'Current','type'=>'xsd:boolean')
-			)
-	);
+    'GetEventDetailResponse',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Status' => array('name' => 'Status','type' => 'tns:StatusType'),
+                'CalendarEventDetails' => array('name' => 'CalendarEventDetails','type' => 'tns:EventCalendarDetailsList')
+            )
+);
+
 
 $server->wsdl->addComplexType(
-		'DeleteEventDetailRequest',
-		'complexType',
-		'struct',
-		'all',
-		'',
-		array(
-				'Token'=>array('name'=>'Token','type'=>'xsd:string'),
-				'EventCalendarDetailId'=>array('name'=>'EventCalendarDetailId','type'=>'xsd:int')
-			)
-	);
-	
+    'CreateEventDetailsRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
+                'AtParkId' => array('name' => 'AtParkId','type' => 'xsd:int'),
+                'Current' => array('name' => 'Current','type' => 'xsd:int'),
+                'Price' => array('name' => 'Price','type' => 'xsd:double'),
+                'EventStart' => array('name' => 'EventStart','type' => 'xsd:dateTime'),
+                'EventEnd' => array('name' => 'EventEnd','type' => 'xsd:dateTime'),
+                'Description' => array('name' => 'Description','type' => 'xsd:string'),
+                'Url' => array('name' => 'Url','type' => 'xsd:string'),
+                'UrlName' => array('name' => 'UrlName','type' => 'xsd:string'),
+                'Address' => array('name' => 'Address','type' => 'xsd:string'),
+                'Province' => array('name' => 'Province','type' => 'xsd:string'),
+                'PostalCode' => array('name' => 'PostalCode','type' => 'xsd:string'),
+                'City' => array('name' => 'City','type' => 'xsd:string'),
+                'Country' => array('name' => 'Country','type' => 'xsd:string'),
+                'MapURL' => array('name' => 'MapURL','type' => 'xsd:string'),
+                'MapUrlName' => array('name' => 'MapUrlName','type' => 'xsd:string')
+            )
+);
+
 
 $server->wsdl->addComplexType(
-		'SetEventDetailsRequest',
-		'complexType',
-		'struct',
-		'all',
-		'',
-		array(
-				'Token'=>array('name'=>'Token','type'=>'xsd:string'),
-				'EventCalendarDetailId'=>array('name'=>'EventCalendarDetailId','type'=>'xsd:int'),
-				'EventId'=>array('name'=>'EventId','type'=>'xsd:int'),
-				'Current'=>array('name'=>'Current','type'=>'xsd:int'),
-				'Price'=>array('name'=>'Price','type'=>'xsd:double'),
-				'EventStart'=>array('name'=>'EventStart','type'=>'xsd:dateTime'),
-				'EventEnd'=>array('name'=>'EventEnd','type'=>'xsd:dateTime'),
-				'Description'=>array('name'=>'Description','type'=>'xsd:string'),
-				'Url'=>array('name'=>'Url','type'=>'xsd:string'),
-				'UrlName'=>array('name'=>'UrlName','type'=>'xsd:string'),
-				'Address'=>array('name'=>'Address','type'=>'xsd:string'),
-				'Province'=>array('name'=>'Province','type'=>'xsd:string'),
-				'PostalCode'=>array('name'=>'PostalCode','type'=>'xsd:string'),
-				'City'=>array('name'=>'City','type'=>'xsd:string'),
-				'Country'=>array('name'=>'Country','type'=>'xsd:string'),
-				'MapURL'=>array('name'=>'MapURL','type'=>'xsd:string'),
-				'MapUrlName'=>array('name'=>'MapUrlName','type'=>'xsd:string')
-			)
-	);
-	
+    'SetCurrentRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'Current' => array('name' => 'Current','type' => 'xsd:boolean')
+            )
+);
 
 $server->wsdl->addComplexType(
-		'DeleteEventRequest',
-		'complexType',
-		'struct',
-		'all',
-		'',
-		array(
-				'Token'   => array('name' => 'Token',   'type' => 'xsd:string'),
-				'EventId' => array('name' => 'EventId', 'type' => 'xsd:int')
-			)
-	);
+    'DeleteEventDetailRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int')
+            )
+);
+
 
 $server->wsdl->addComplexType(
-		'SetEventRequest',
-		'complexType',
-		'struct',
-		'all',
-		'',
-		array(
-				'Token'=>array('name'=>'Token','type'=>'xsd:string'),
-				'EventId'=>array('name'=>'EventId','type'=>'xsd:string'),
-				'KingdomId'=>array('name'=>'KingdomId','type'=>'xsd:int'),
-				'ParkId'=>array('name'=>'ParkId','type'=>'xsd:int'),
-				'MundaneId'=>array('name'=>'MundaneId','type'=>'xsd:int'),
-				'UnitId'=>array('name'=>'UnitId','type'=>'xsd:int'),
-				'Name'=>array('name'=>'Name','type'=>'xsd:string'),
-				'HeraldryUrl'=>array('name'=>'HeraldryUrl','type'=>'xsd:string'),
-				'Heraldry'=>array('name'=>'Heraldry','type'=>'xsd:string'),
-				'HeraldryMimeType'=>array('name'=>'HeraldryMimeType','type'=>'xsd:string')
-			)
-	);
-?>
+    'SetEventDetailsRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
+                'Current' => array('name' => 'Current','type' => 'xsd:int'),
+                'Price' => array('name' => 'Price','type' => 'xsd:double'),
+                'EventStart' => array('name' => 'EventStart','type' => 'xsd:dateTime'),
+                'EventEnd' => array('name' => 'EventEnd','type' => 'xsd:dateTime'),
+                'Description' => array('name' => 'Description','type' => 'xsd:string'),
+                'Url' => array('name' => 'Url','type' => 'xsd:string'),
+                'UrlName' => array('name' => 'UrlName','type' => 'xsd:string'),
+                'Address' => array('name' => 'Address','type' => 'xsd:string'),
+                'Province' => array('name' => 'Province','type' => 'xsd:string'),
+                'PostalCode' => array('name' => 'PostalCode','type' => 'xsd:string'),
+                'City' => array('name' => 'City','type' => 'xsd:string'),
+                'Country' => array('name' => 'Country','type' => 'xsd:string'),
+                'MapURL' => array('name' => 'MapURL','type' => 'xsd:string'),
+                'MapUrlName' => array('name' => 'MapUrlName','type' => 'xsd:string')
+            )
+);
+
+
+$server->wsdl->addComplexType(
+    'DeleteEventRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token'   => array('name' => 'Token',   'type' => 'xsd:string'),
+                'EventId' => array('name' => 'EventId', 'type' => 'xsd:int')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'SetEventRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
+                'EventId' => array('name' => 'EventId','type' => 'xsd:string'),
+                'KingdomId' => array('name' => 'KingdomId','type' => 'xsd:int'),
+                'ParkId' => array('name' => 'ParkId','type' => 'xsd:int'),
+                'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int'),
+                'UnitId' => array('name' => 'UnitId','type' => 'xsd:int'),
+                'Name' => array('name' => 'Name','type' => 'xsd:string'),
+                'HeraldryUrl' => array('name' => 'HeraldryUrl','type' => 'xsd:string'),
+                'Heraldry' => array('name' => 'Heraldry','type' => 'xsd:string'),
+                'HeraldryMimeType' => array('name' => 'HeraldryMimeType','type' => 'xsd:string')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'GetRsvpStatusRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'GetRsvpStatusResponse',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Status' => array('name' => 'Status','type' => 'tns:StatusType'),
+                'RsvpStatus' => array('name' => 'RsvpStatus','type' => 'xsd:string')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'SetRsvpRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int'),
+                'Status' => array('name' => 'Status','type' => 'xsd:string'),
+                'AllowToggleOff' => array('name' => 'AllowToggleOff','type' => 'xsd:boolean'),
+                'CoerceInvalidStatus' => array('name' => 'CoerceInvalidStatus','type' => 'xsd:boolean'),
+                'EndDateGate' => array('name' => 'EndDateGate','type' => 'xsd:string')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'SetRsvpResponse',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Status' => array('name' => 'Status','type' => 'tns:StatusType'),
+                'MyStatus' => array('name' => 'MyStatus','type' => 'xsd:string'),
+                'ToggledOff' => array('name' => 'ToggledOff','type' => 'xsd:boolean'),
+                'Going' => array('name' => 'Going','type' => 'xsd:int'),
+                'Interested' => array('name' => 'Interested','type' => 'xsd:int'),
+                'Total' => array('name' => 'Total','type' => 'xsd:int')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'WithdrawRsvpRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'WithdrawRsvpResponse',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Status' => array('name' => 'Status','type' => 'tns:StatusType'),
+                'MyStatus' => array('name' => 'MyStatus','type' => 'xsd:string'),
+                'Going' => array('name' => 'Going','type' => 'xsd:int'),
+                'Interested' => array('name' => 'Interested','type' => 'xsd:int'),
+                'Total' => array('name' => 'Total','type' => 'xsd:int')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'RemoveRsvpRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'TargetMundaneId' => array('name' => 'TargetMundaneId','type' => 'xsd:int')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'GetRsvpCountsRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'GetRsvpCountsResponse',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Status' => array('name' => 'Status','type' => 'tns:StatusType'),
+                'Going' => array('name' => 'Going','type' => 'xsd:int'),
+                'Interested' => array('name' => 'Interested','type' => 'xsd:int'),
+                'Total' => array('name' => 'Total','type' => 'xsd:int')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'IntList',
+    'complexType',
+    'array',
+    '',
+    'SOAP-ENC:Array',
+    array(),
+    array(
+            array('ref' => 'SOAP-ENC:arrayType', 'wsdl:arrayType' => 'xsd:int[]')
+            ),
+    'xsd:int'
+);
+
+$server->wsdl->addComplexType(
+    'GetRsvpBatchRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventCalendarDetailIds' => array('name' => 'EventCalendarDetailIds','type' => 'tns:IntList'),
+                'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'RsvpCountItemType',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'Going' => array('name' => 'Going','type' => 'xsd:int'),
+                'Interested' => array('name' => 'Interested','type' => 'xsd:int'),
+                'Total' => array('name' => 'Total','type' => 'xsd:int'),
+                'RsvpStatus' => array('name' => 'RsvpStatus','type' => 'xsd:string')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'RsvpCountItemList',
+    'complexType',
+    'array',
+    '',
+    'SOAP-ENC:Array',
+    array(),
+    array(
+            array('ref' => 'SOAP-ENC:arrayType', 'wsdl:arrayType' => 'tns:RsvpCountItemType[]')
+            ),
+    'tns:RsvpCountItemType'
+);
+
+$server->wsdl->addComplexType(
+    'GetRsvpBatchResponse',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Status' => array('name' => 'Status','type' => 'tns:StatusType'),
+                'Items' => array('name' => 'Items','type' => 'tns:RsvpCountItemList')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'RsvpPlayerItemType',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int'),
+                'Persona' => array('name' => 'Persona','type' => 'xsd:string'),
+                'Status' => array('name' => 'Status','type' => 'xsd:string'),
+                'Waivered' => array('name' => 'Waivered','type' => 'xsd:boolean'),
+                'KingdomId' => array('name' => 'KingdomId','type' => 'xsd:int'),
+                'KingdomAbbr' => array('name' => 'KingdomAbbr','type' => 'xsd:string'),
+                'ParkId' => array('name' => 'ParkId','type' => 'xsd:int'),
+                'ParkAbbr' => array('name' => 'ParkAbbr','type' => 'xsd:string'),
+                'LastClassId' => array('name' => 'LastClassId','type' => 'xsd:int'),
+                'LastClassName' => array('name' => 'LastClassName','type' => 'xsd:string')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'RsvpPlayerList',
+    'complexType',
+    'array',
+    '',
+    'SOAP-ENC:Array',
+    array(),
+    array(
+            array('ref' => 'SOAP-ENC:arrayType', 'wsdl:arrayType' => 'tns:RsvpPlayerItemType[]')
+            ),
+    'tns:RsvpPlayerItemType'
+);
+
+$server->wsdl->addComplexType(
+    'GetRsvpListResponse',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Status' => array('name' => 'Status','type' => 'tns:StatusType'),
+                'RsvpPlayers' => array('name' => 'RsvpPlayers','type' => 'tns:RsvpPlayerList')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'UpcomingRsvpItemType',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
+                'EventName' => array('name' => 'EventName','type' => 'xsd:string'),
+                'EventStart' => array('name' => 'EventStart','type' => 'xsd:dateTime'),
+                'EventEnd' => array('name' => 'EventEnd','type' => 'xsd:dateTime')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'UpcomingRsvpList',
+    'complexType',
+    'array',
+    '',
+    'SOAP-ENC:Array',
+    array(),
+    array(
+            array('ref' => 'SOAP-ENC:arrayType', 'wsdl:arrayType' => 'tns:UpcomingRsvpItemType[]')
+            ),
+    'tns:UpcomingRsvpItemType'
+);
+
+$server->wsdl->addComplexType(
+    'GetUpcomingRsvpsRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'GetUpcomingRsvpsResponse',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Status' => array('name' => 'Status','type' => 'tns:StatusType'),
+                'UpcomingRsvps' => array('name' => 'UpcomingRsvps','type' => 'tns:UpcomingRsvpList')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'KingdomEventItemType',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
+                'EventName' => array('name' => 'EventName','type' => 'xsd:string'),
+                'EventStart' => array('name' => 'EventStart','type' => 'xsd:dateTime'),
+                'EventEnd' => array('name' => 'EventEnd','type' => 'xsd:dateTime'),
+                'ParkAbbreviation' => array('name' => 'ParkAbbreviation','type' => 'xsd:string')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'KingdomEventList',
+    'complexType',
+    'array',
+    '',
+    'SOAP-ENC:Array',
+    array(),
+    array(
+            array('ref' => 'SOAP-ENC:arrayType', 'wsdl:arrayType' => 'tns:KingdomEventItemType[]')
+            ),
+    'tns:KingdomEventItemType'
+);
+
+$server->wsdl->addComplexType(
+    'GetKingdomEventsWithoutRsvpRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'KingdomId' => array('name' => 'KingdomId','type' => 'xsd:int'),
+                'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int'),
+                'Limit' => array('name' => 'Limit','type' => 'xsd:int')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'GetKingdomEventsWithoutRsvpResponse',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Status' => array('name' => 'Status','type' => 'tns:StatusType'),
+                'KingdomEvents' => array('name' => 'KingdomEvents','type' => 'tns:KingdomEventList')
+            )
+);

@@ -111,7 +111,9 @@ sh bin/run-infection.sh \
 
 ## 3. R-01 sign-off checklist
 
-- [ ] §1 domain page ids pass `bin/fuzzy-validator validate --phase all` (test + mirror)
-- [ ] Test edits within §2.3
-- [ ] Full unit suite green
-- [ ] Infection per §2.4
+- [x] §1 domain page ids pass `bin/fuzzy-validator validate --phase all` (test + mirror)
+- [x] Test edits within §2.3
+- [x] Full unit suite green
+- [x] Infection per §2.4
+
+**R-01 capture notes (2026-07-09):** Post-refactor validate required test-profile re-record for `event-index-rsvp,event-index-rsvp-gok` after `deploy-sandbox` (pre-record dom 0.94 on sandbox date text). Final gate 8/8 pass test+mirror. Infection MSI 17% / covered 55% on `class.Event.php` + EventService.

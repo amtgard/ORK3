@@ -3,10 +3,12 @@
     "timeout": 120,
     "source": {
         "directories": [
-            "orkui/model"
+            "system/lib/ork3",
+            "orkservice/Event"
         ],
         "excludes": [
-            "model.Player.php"
+            "class.Player.php",
+            "class.Report.php"
         ]
     },
     "logs": {
