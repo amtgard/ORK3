@@ -384,3 +384,4 @@ flowchart LR
 | DS-10 reports discovery | [ds-10-reports-discovery.md](./ds-10-reports-discovery.md) |
 | Implementation plan | [03-implementation-plan.md](./03-implementation-plan.md) |
 | Test framework | [06-test-framework.md](./06-test-framework.md) |
+| [validations/v-09-player-validation.md](./validations/v-09-player-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-09) |
