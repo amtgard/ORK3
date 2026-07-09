@@ -542,6 +542,13 @@ class Event extends Ork3
             // Bailout without committing
             return NoAuthorization();
         }
+
+        $eventStatus = (string)($request['Status'] ?? 'published');
+        if ($eventStatus === 'draft') {
+            $this->event->status = 'draft';
+            $this->event->save();
+        }
+
         Ork3::$Lib->heraldry->SetEventHeraldry($request);
 
         return Success($this->event->event_id);

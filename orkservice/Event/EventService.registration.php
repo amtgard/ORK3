@@ -146,3 +146,73 @@ $server->register(
     array('return' => 'tns:GetKingdomEventsWithoutRsvpResponse'),
     $namespace
 );
+
+$server->register(
+    'Event.SetEventStatus',
+    array('SetEventStatusRequest' => 'tns:SetEventStatusRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.GetEventPreview',
+    array('GetEventPreviewRequest' => 'tns:GetEventPreviewRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.AddEventStaff',
+    array('EventStaffRequest' => 'tns:EventStaffRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.RemoveEventStaff',
+    array('EventStaffRequest' => 'tns:EventStaffRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.AddEventSchedule',
+    array('EventScheduleRequest' => 'tns:EventScheduleRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.UpdateEventSchedule',
+    array('EventScheduleRequest' => 'tns:EventScheduleRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.RemoveEventSchedule',
+    array('EventScheduleRequest' => 'tns:EventScheduleRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.ListCopySourceEvents',
+    array('ListCopySourceEventsRequest' => 'tns:ListCopySourceEventsRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.CreateEventWithCopy',
+    array('CreateEventWithCopyRequest' => 'tns:CreateEventWithCopyRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.RemoveEventHeraldry',
+    array('RemoveEventHeraldryRequest' => 'tns:RemoveEventHeraldryRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);

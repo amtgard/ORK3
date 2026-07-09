@@ -3,7 +3,7 @@
   "pageId": "event-index-rsvp",
   "imageWidth": 1280,
   "imageHeight": 776,
-  "calibratedAt": "2026-07-09T21:02:03Z",
+  "calibratedAt": "2026-07-09T23:44:54Z",
   "calibrationRuns": 5,
   "params": {
     "colorThreshold": 20,
@@ -12,5 +12,5 @@
   },
   "fuzzZones": [],
   "manualZones": [],
-  "calibratedFromCommit": "05bc1973"
+  "calibratedFromCommit": "910cb0dc"
 }

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "event-index-rsvp-gok",
-  "calibratedAt": "2026-07-09T21:02:04Z",
+  "calibratedAt": "2026-07-09T23:44:55Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "05bc1973"
+  "calibratedFromCommit": "910cb0dc"
 }

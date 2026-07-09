@@ -20,6 +20,7 @@ $server->wsdl->addComplexType(
                 'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int'),
                 'UnitId' => array('name' => 'UnitId','type' => 'xsd:int'),
                 'Name' => array('name' => 'Name','type' => 'xsd:string'),
+                'Status' => array('name' => 'Status','type' => 'xsd:string'),
                 'HeraldryUrl' => array('name' => 'HeraldryUrl','type' => 'xsd:string'),
                 'Heraldry' => array('name' => 'Heraldry','type' => 'xsd:string'),
                 'HeraldryMimeType' => array('name' => 'HeraldryMimeType','type' => 'xsd:string')
@@ -569,5 +570,122 @@ $server->wsdl->addComplexType(
     array(
                 'Status' => array('name' => 'Status','type' => 'tns:StatusType'),
                 'KingdomEvents' => array('name' => 'KingdomEvents','type' => 'tns:KingdomEventList')
+            )
+);
+
+$server->wsdl->addComplexType(
+    'SetEventStatusRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
+                'Status' => array('name' => 'Status','type' => 'xsd:string'),
+            )
+);
+
+$server->wsdl->addComplexType(
+    'GetEventPreviewRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int'),
+            )
+);
+
+$server->wsdl->addComplexType(
+    'EventStaffRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'StaffId' => array('name' => 'StaffId','type' => 'xsd:int'),
+                'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int'),
+                'RoleName' => array('name' => 'RoleName','type' => 'xsd:string'),
+                'CanManage' => array('name' => 'CanManage','type' => 'xsd:int'),
+                'CanAttendance' => array('name' => 'CanAttendance','type' => 'xsd:int'),
+                'CanSchedule' => array('name' => 'CanSchedule','type' => 'xsd:int'),
+                'CanFeast' => array('name' => 'CanFeast','type' => 'xsd:int'),
+            )
+);
+
+$server->wsdl->addComplexType(
+    'EventScheduleRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'ScheduleId' => array('name' => 'ScheduleId','type' => 'xsd:int'),
+                'Title' => array('name' => 'Title','type' => 'xsd:string'),
+                'StartTime' => array('name' => 'StartTime','type' => 'xsd:string'),
+                'EndTime' => array('name' => 'EndTime','type' => 'xsd:string'),
+                'Location' => array('name' => 'Location','type' => 'xsd:string'),
+                'Description' => array('name' => 'Description','type' => 'xsd:string'),
+                'Category' => array('name' => 'Category','type' => 'xsd:string'),
+                'SecondaryCategory' => array('name' => 'SecondaryCategory','type' => 'xsd:string'),
+                'Menu' => array('name' => 'Menu','type' => 'xsd:string'),
+                'Cost' => array('name' => 'Cost','type' => 'xsd:string'),
+                'Dietary' => array('name' => 'Dietary','type' => 'xsd:string'),
+                'Allergens' => array('name' => 'Allergens','type' => 'xsd:string'),
+                'Leads' => array('name' => 'Leads','type' => 'xsd:string'),
+            )
+);
+
+$server->wsdl->addComplexType(
+    'ListCopySourceEventsRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'KingdomId' => array('name' => 'KingdomId','type' => 'xsd:int'),
+                'ParkId' => array('name' => 'ParkId','type' => 'xsd:int'),
+                'Query' => array('name' => 'Query','type' => 'xsd:string'),
+                'ExcludeEventId' => array('name' => 'ExcludeEventId','type' => 'xsd:int'),
+            )
+);
+
+$server->wsdl->addComplexType(
+    'CreateEventWithCopyRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
+                'Name' => array('name' => 'Name','type' => 'xsd:string'),
+                'KingdomId' => array('name' => 'KingdomId','type' => 'xsd:int'),
+                'ParkId' => array('name' => 'ParkId','type' => 'xsd:int'),
+                'SourceEventId' => array('name' => 'SourceEventId','type' => 'xsd:int'),
+                'NewStart' => array('name' => 'NewStart','type' => 'xsd:string'),
+                'NewEnd' => array('name' => 'NewEnd','type' => 'xsd:string'),
+                'Modules' => array('name' => 'Modules','type' => 'xsd:string'),
+                'Status' => array('name' => 'Status','type' => 'xsd:string'),
+            )
+);
+
+$server->wsdl->addComplexType(
+    'RemoveEventHeraldryRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
             )
 );

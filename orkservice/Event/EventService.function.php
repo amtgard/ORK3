@@ -65,3 +65,63 @@ function GetKingdomUpcomingEventsWithoutRsvp($request)
     $E = new Event();
     return $E->GetKingdomUpcomingEventsWithoutRsvp($request);
 }
+
+function SetEventStatus($request)
+{
+    $EP = new EventPlanning();
+    return $EP->SetEventStatus($request);
+}
+
+function GetEventPreview($request)
+{
+    $EP = new EventPlanning();
+    return $EP->GetEventPreview($request);
+}
+
+function AddEventStaff($request)
+{
+    $EP = new EventPlanning();
+    return $EP->AddEventStaff($request);
+}
+
+function RemoveEventStaff($request)
+{
+    $EP = new EventPlanning();
+    return $EP->RemoveEventStaff($request);
+}
+
+function AddEventSchedule($request)
+{
+    $EP = new EventPlanning();
+    return $EP->AddEventSchedule($request);
+}
+
+function UpdateEventSchedule($request)
+{
+    $EP = new EventPlanning();
+    return $EP->UpdateEventSchedule($request);
+}
+
+function RemoveEventSchedule($request)
+{
+    $EP = new EventPlanning();
+    return $EP->RemoveEventSchedule($request);
+}
+
+function ListCopySourceEvents($request)
+{
+    $EP = new EventPlanning();
+    return $EP->ListCopySourceEvents($request);
+}
+
+function CreateEventWithCopy($request)
+{
+    $EP = new EventPlanning();
+    return $EP->CreateEventWithCopy($request);
+}
+
+function RemoveEventHeraldry($request)
+{
+    $H = new Heraldry();
+    return $H->RemoveEventHeraldry($request);
+}

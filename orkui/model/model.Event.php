@@ -13,9 +13,17 @@ class Model_Event extends Model
         $this->Log = $LOG;
     }
 
-    public function create_event($token, $kingdom_id, $park_id, $mundane_id, $unit_id, $name)
+    public function create_event($token, $kingdom_id, $park_id, $mundane_id, $unit_id, $name, $status = 'published')
     {
-        $request = array('Token' => $token, 'KingdomId' => $kingdom_id, 'ParkId' => $park_id, 'MundaneId' => $mundane_id, 'UnitId' => $unit_id, 'Name' => $name);
+        $request = array(
+            'Token' => $token,
+            'KingdomId' => $kingdom_id,
+            'ParkId' => $park_id,
+            'MundaneId' => $mundane_id,
+            'UnitId' => $unit_id,
+            'Name' => $name,
+            'Status' => $status,
+        );
         logtrace("create_event()", $request);
         $r = $this->Event->CreateEvent($request);
         return $r;
