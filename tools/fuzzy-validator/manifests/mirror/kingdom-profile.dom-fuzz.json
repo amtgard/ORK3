@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "kingdom-profile",
-  "calibratedAt": "2026-07-08T21:04:01Z",
+  "calibratedAt": "2026-07-09T12:29:16Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "40f4fa2c"
+  "calibratedFromCommit": "e72ab1d8"
 }
