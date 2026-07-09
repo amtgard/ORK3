@@ -3,7 +3,7 @@
   "pageId": "home-authenticated",
   "imageWidth": 1280,
   "imageHeight": 1002,
-  "calibratedAt": "2026-07-08T21:01:43Z",
+  "calibratedAt": "2026-07-09T14:50:14Z",
   "calibrationRuns": 5,
   "params": {
     "colorThreshold": 20,
@@ -12,5 +12,5 @@
   },
   "fuzzZones": [],
   "manualZones": [],
-  "calibratedFromCommit": "40f4fa2c"
+  "calibratedFromCommit": "6aeea50e"
 }

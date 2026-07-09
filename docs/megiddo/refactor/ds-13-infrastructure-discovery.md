@@ -259,3 +259,14 @@ Register JSON endpoints where AJAX or high-frequency reads benefit; SOAP optiona
 - [ ] Test design documented (§2)
 - [ ] Proposed API revision documented (§3)
 - [ ] Cross-refs to DS-01 (T-INF-06) and DS-14 (menu HasAuthority) recorded
+
+---
+
+## Related documents
+
+| Doc | Link |
+|-----|------|
+| Implementation plan | [03-implementation-plan.md](./03-implementation-plan.md) |
+| Test framework | [06-test-framework.md](./06-test-framework.md) |
+| DS-14 lib-service discovery | [ds-14-lib-service-discovery.md](./ds-14-lib-service-discovery.md) |
+| [validations/v-13-infrastructure-validation.md](./validations/v-13-infrastructure-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-13) |
