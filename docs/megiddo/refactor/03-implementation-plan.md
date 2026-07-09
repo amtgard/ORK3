@@ -10,12 +10,12 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 | ID | Class | Method / Block | Lines | Description |
 |----|-------|----------------|-------|-------------|
-| T-INF-01 | *(file)* | `orkui/index.php` health route | 11 | `SELECT 1 AS ok` liveness check |
-| T-INF-02 | *(file)* | `orkui/index.php` event redirect | 71 | `SELECT name, kingdom_id FROM ork_event` for legacy URL |
-| T-INF-03 | `Controller` | `__construct` (session token) | 51–68 | `SELECT token FROM ork_mundane` session validation |
-| T-INF-04 | `Controller` | `__construct` (font prefs) | 76–84 | `SELECT basic_fonts, dyslexia_fonts FROM ork_mundane` |
-| T-INF-05 | `Controller` | `__construct` (home kingdom) | 97–140 | Home-kingdom lookup SQL |
-| T-INF-06 | `Controller` | `__construct` (RSVP widget) | 167–182 | RSVP count aggregate for home widget |
+| T-INF-01 | *(file)* | `orkui/index.php` health route | 8–21 | `SELECT 1 AS ok` liveness check |
+| T-INF-02 | *(file)* | `orkui/index.php` event redirect | 69–76 | `SELECT name, kingdom_id FROM ork_event` for legacy URL |
+| T-INF-03 | `Controller` | `__construct` (session token) | 40–68 | `SELECT token FROM ork_mundane` session validation |
+| T-INF-04 | `Controller` | `__construct` (font prefs) | 73–85 | `SELECT basic_fonts, dyslexia_fonts FROM ork_mundane` |
+| T-INF-05 | `Controller` | `index` (home kingdom) | 137–152 | Home-kingdom lookup SQL |
+| T-INF-06 | `Controller` | `index` (RSVP widget) | 166–184 | RSVP count aggregate for home widget |
 
 *File: `system/lib/system/class.Controller.php` (base class for all frontend controllers)*
 
@@ -239,7 +239,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-UNT-01 | `Controller_UnitAjax` | `banner` | 9–150 | Unit banner CRUD on `ork_unit` |
 | T-UNT-02 | `Controller_Unit` | *(officer grant)* | 150 | `Ork3::$Lib->dangeraudit->audit` on auth add |
 | T-UNT-03 | `Controller_Unit` | *(throughout)* | 220–265 | `Ork3::$Lib->authorization`, `player->player_info` |
-| T-WN-01 | `Controller_WnAjax` | `dismiss` | 18–19 | **Direct INSERT** `ork_whats_new_seen` |
+| T-WN-01 | `Controller_WnAjax` | `dismiss` | 17–19 | **Direct INSERT** `ork_whats_new_seen` |
 
 ---
 
@@ -253,7 +253,7 @@ These controllers use models/services for data but still call domain libs direct
 | T-LIB-02 | `Controller_Weather` | all actions | 34–76 | `weather->daily_summary`, `play_for_date`, etc. |
 | T-LIB-03 | `Controller_CalendarItemAjax` | edit gate | 108–110 | `authorization->HasAuthority` |
 | T-LIB-04 | `Controller_Tournament` | index | 33 | `authorization->HasAuthority` |
-| T-LIB-05 | `Controller_EraPhoenice` | *(date math)* | — | `EraPhoenice` lib (verify at discovery) |
+| T-LIB-05 | `Controller_EraPhoenice` | `emit`, `holidays` | 58–93 | `EraPhoenice` static date math |
 
 *Note: `HasAuthority` appears in 15+ controllers. Discovery sprint DS-12 will treat authorization gating as a cross-cutting API design question.*
 

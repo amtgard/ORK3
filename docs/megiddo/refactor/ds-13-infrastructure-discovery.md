@@ -55,7 +55,7 @@ Infrastructure violations live in **shared frontend bootstrap** code that runs o
 
 | Lines | Behavior |
 |-------|----------|
-| 69–77 | `SELECT name, kingdom_id FROM ork_event WHERE event_id = ?` → 302 to `Reports/event_attendance/Kingdom/{kid}&filter={name}` |
+| 69–76 | `SELECT name, kingdom_id FROM ork_event WHERE event_id = ?` → 302 to `Reports/event_attendance/Kingdom/{kid}&filter={name}` |
 
 **Existing backend:** `Event::GetEvent`, `SearchService::Event` — name and kingdom available via API.
 
@@ -69,7 +69,7 @@ Infrastructure violations live in **shared frontend bootstrap** code that runs o
 
 | Lines | Behavior |
 |-------|----------|
-| 38–68 | For logged-in users (except AJAX/login skip list), `SELECT token FROM ork_mundane` — if mismatch, destroy session and redirect to login with `msg=session_replaced` |
+| 40–68 | For logged-in users (except AJAX/login skip list), `SELECT token FROM ork_mundane` — if mismatch, destroy session and redirect to login with `msg=session_replaced` |
 
 **Existing backend:** `Authorization::IsAuthorized($token)` validates token exists and user not penalized — **does not** compare session token to DB for multi-device logout.
 
@@ -101,7 +101,7 @@ Infrastructure violations live in **shared frontend bootstrap** code that runs o
 
 | Lines | Behavior |
 |-------|----------|
-| 165–184 | After `Search_Event`, batch `SELECT event_calendardetail_id, COUNT(*) … FROM ork_event_rsvp GROUP BY …` to attach `RsvpCount` |
+| 166–184 | After `Search_Event`, batch `SELECT event_calendardetail_id, COUNT(*) … FROM ork_event_rsvp GROUP BY …` to attach `RsvpCount` |
 
 **Existing backend:** None registered; DS-01 proposes `Event.GetRsvpCountsBatch`.
 
@@ -117,7 +117,7 @@ Infrastructure violations live in **shared frontend bootstrap** code that runs o
 
 **Existing backend:** Table used in `Player` merge path and `Report` KPI queries — **no** dismiss/read API.
 
-**Gap:** `Player.DismissWhatsNew($mundaneId, $version)` and `Player.HasSeenWhatsNew($mundaneId, $version): bool` (or combined `GetWhatsNewState`). Replace template `$DB` read in `default.theme` (lines 675–677) with controller-provided flag set in `__construct` or View data.
+**Gap:** `Player.DismissWhatsNew($mundaneId, $version)` and `Player.HasSeenWhatsNew($mundaneId, $version): bool` (or combined `GetWhatsNewState`). Replace template `$DB` read in `default.theme` (lines 673–677) with controller-provided flag set in `__construct` or View data.
 
 **Security:** Version is sanitized with `preg_replace` in controller — domain must re-validate alphanumeric + hyphen/underscore.
 
@@ -250,6 +250,8 @@ Register JSON endpoints where AJAX or high-frequency reads benefit; SOAP optiona
 - Moving `HasAuthority` menu gates (DS-14 / R-14).
 - Refactoring `orkui/index.php` session timing / `Ork3::$Lib->session` (not `$DB` violations).
 - Template audit beyond whats_new (Phase 3).
+
+**Post-rebase (RB-D4, 2026-07-09):** §1 line ranges verified against `orkui/` and `class.Controller.php` at base `e6417645` (`origin/master`). Minor drift in event redirect (69–76), session token skip list (40–68), RSVP widget batch (166–184), whats_new template read (673–677); no upstream gap closures; §3 revision unchanged.
 
 ---
 

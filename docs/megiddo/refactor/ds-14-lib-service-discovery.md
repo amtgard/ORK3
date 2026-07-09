@@ -86,7 +86,7 @@ After `$DB` removal, the largest remaining frontend violation class is **direct 
 
 | Location | Count (approx.) | Pattern |
 |----------|-----------------|---------|
-| `system/lib/system/class.Controller.php` | 4 | Menu admin links (global, kingdom, park scope) |
+| `system/lib/system/class.Controller.php` | 3 | Menu admin links (global, kingdom, park scope) — lines 92, 98, 105 |
 | AJAX controllers | ~70 | Gate before mutating actions |
 | Page controllers | ~50 | `$this->data['CanEdit']`, row-level flags |
 | Templates | ~20 | Inline UI gates (heraldry, roster, admin tabs) |
@@ -328,6 +328,8 @@ R-14 is **large** if all ~128 HasAuthority sites move at once. Recommended:
 - Moving all ghettocache usage (continues in R-06–R-12).
 - Replacing every `player`/`kingdom` lib call (R-06, R-09).
 - Changing HasAuthority semantics (role inheritance, KPM bypass) — API exposes existing behavior only.
+
+**Post-rebase (RB-D4, 2026-07-09):** §1 line ranges verified against `orkui/` and `class.Controller.php` at base `e6417645` (`origin/master`). Minor drift in Controller menu HasAuthority (92, 98, 105); T-LIB-01–05 line tables unchanged; no upstream gap closures; §3 revision unchanged.
 
 ---
 

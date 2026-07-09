@@ -160,8 +160,10 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 
 | Domain | ds-* | plan lines | v-* | tests | Infection | Done |
 |--------|------|------------|-----|-------|-----------|------|
-| 13 Infrastructure | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| 14 Lib-service | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| 13 Infrastructure | [x] | [x] | [x] | [x] | [x] | [x] |
+| 14 Lib-service | [x] | [x] | [x] | [x] | [x] | [x] |
+
+**RB-D4 notes (2026-07-09):** Base `e6417645`; §1 verified against current `orkui/` and `class.Controller.php`. Domains 13–14 had minor line drift (infra redirect/session/RSVP/widget/template; lib-service Controller menu HasAuthority 92/98/105; plan T-INF-05/06 method→`index`, T-LIB-05 lines). §3 gaps unchanged. PHPUnit domain filter: 21 tests, exit 0. Infection: t13 MSI 13% (Player+profile batch); t14 pass A MSI 18%; t14 pass B MSI 28% (all ≥15 floor).
 
 ---
 
@@ -215,4 +217,4 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 | 5 | RB-F |
 | 6 | RB-Z |
 
-**Next unchecked:** **RB-D4** — Domains 13–14 (infrastructure, lib-service)
+**Next unchecked:** **RB-F** — Fuzzy baselines and setpoint
