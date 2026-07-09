@@ -14,7 +14,7 @@ Per-domain **canary URLs** and **test mutation boundaries** for R-* execution sp
 | V-01 | [v-01-rsvp-validation.md](./v-01-rsvp-validation.md) | RSVP / events | R-01 |
 | V-02 | [v-02-auth-validation.md](./v-02-auth-validation.md) | Authorization INSERT | R-02 |
 | V-03 | [v-03-banner-validation.md](./v-03-banner-validation.md) | Banners | R-03 |
-| V-04 | *(planned)* | EventAjax | R-04 |
+| V-04 | [v-04-eventajax-validation.md](./v-04-eventajax-validation.md) | EventAjax | R-04 |
 | V-05 | *(planned)* | Event controller | R-05 |
 | V-06 | *(planned)* | Kingdom | R-06 |
 | V-07 | *(planned)* | Park | R-07 |
