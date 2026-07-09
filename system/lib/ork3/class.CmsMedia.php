@@ -262,7 +262,7 @@ class CmsMedia extends CmsBase
      * @param string|null $search optional LIKE over filename/alt/title
      * @return array list of media-ref + {media_id,filename,alt,created_at}
      */
-    public function ListMedia($scope = null, $limit = 200, $search = null)
+    public function ListMedia($scope = null, $limit = 200, $search = null, $offset = 0)
     {
         global $DB;
 
@@ -292,7 +292,12 @@ class CmsMedia extends CmsBase
             $DB->search_ti  = $like;
         }
 
-        $limitSql = ' LIMIT ' . ($this->_clampLimit($limit));
+        // SQL-level windowed paging: LIMIT <offset>, <count>. Both operands are
+        // ints (offset sanitized here, count via _clampLimit) so no injection.
+        // This replaces the caller's old over-fetch+slice, which collided with
+        // _clampLimit's ceiling and broke has_more past ~1000 rows.
+        $offset   = max(0, (int)$offset);
+        $limitSql = ' LIMIT ' . $offset . ', ' . ($this->_clampLimit($limit));
 
         $sql = 'SELECT media_id, filename, path, mime, width, height, bytes,'
             . ' alt, title, focal, thumb_path, scope_type, scope_id, uploaded_by, created_at'
@@ -403,8 +408,13 @@ class CmsMedia extends CmsBase
      * Alt text is authored copy, so it is stored verbatim (the front-door image
      * partial escapes it with htmlspecialchars on render — see image.tpl).
      *
+     * A 'filename' key RENAMES the display filename only (the on-disk path is an
+     * opaque unique base and is never touched); the canonical extension of the
+     * stored asset is preserved so the display name can't misrepresent the type.
+     * An empty/blank filename is ignored (a rename can't clear the name to '').
+     *
      * @param int         $mediaId
-     * @param array       $data      subset: 'alt' (string, '' = decorative), 'title' (string)
+     * @param array       $data      subset: 'alt' (string, '' = decorative), 'title' (string), 'filename' (string, rename)
      * @param int         $actorId   acting mundane_id (for the audit trail)
      * @param string|null $scopeType optional ownership guard: only touch a row in this scope
      * @param int|null    $scopeId   optional ownership guard: scope owner id
@@ -419,11 +429,12 @@ class CmsMedia extends CmsBase
             return false;
         }
 
-        // Confirm the row exists and is not trashed (also grabs scope for audit).
+        // Confirm the row exists and is not trashed (also grabs scope for audit +
+        // the current filename/path so a rename can preserve the canonical ext).
         $DB->Clear();
         $DB->media_id = $mediaId;
         $row = $this->_firstRow($DB->DataSet(
-            'SELECT media_id, scope_type, scope_id FROM ' . DB_PREFIX . 'cms_media'
+            'SELECT media_id, filename, path, scope_type, scope_id FROM ' . DB_PREFIX . 'cms_media'
             . ' WHERE media_id = :media_id AND deleted_at IS NULL LIMIT 1'
         ));
         if ($row === null) {
@@ -445,6 +456,23 @@ class CmsMedia extends CmsBase
         if (array_key_exists('title', $data)) {
             $set[] = 'title = :title';
             $DB->title = (string)$data['title'];
+        }
+        if (array_key_exists('filename', $data)) {
+            $newName = trim((string)$data['filename']);
+            // A blank rename is a no-op (never let a display name become empty).
+            if ($newName !== '') {
+                // Preserve the stored asset's canonical extension so a rename can't
+                // lie about the type; fall back to the opaque path, then 'jpg'.
+                $ext = $this->_extFromName((string)($row['filename'] ?? ''));
+                if ($ext === '') {
+                    $ext = $this->_extFromName((string)($row['path'] ?? ''));
+                }
+                if ($ext === '') {
+                    $ext = 'jpg';
+                }
+                $set[] = 'filename = :filename';
+                $DB->filename = $this->_safeFilename($newName, $ext);
+            }
         }
         if (count($set) === 0) {
             return false;
@@ -657,6 +685,54 @@ class CmsMedia extends CmsBase
     }
 
     /**
+     * Public where-used breakdown for the media library UI: how many pages,
+     * posts, site logos, and content blocks still reference a media id, plus the
+     * total. Surfaced by CmsAjax/mediausage so an officer can see whether an
+     * image is in use BEFORE deleting (and so the delete confirm can warn).
+     *
+     * Unlike _referenceCount (the delete/purge hot-path guard, which short-
+     * circuits on the cheap FK checks and skips the block REGEXP scan), this
+     * ALWAYS runs every source because the UI wants the full per-source counts.
+     * It is only ever called on demand for a single media id — never in a loop
+     * over the library — so the unbounded block scan cost is acceptable here.
+     *
+     * @param int $mediaId
+     * @return array{pages:int,posts:int,logos:int,blocks:int,total:int}
+     */
+    public function ReferenceUsage($mediaId)
+    {
+        $mediaId = (int)$mediaId;
+        $out = array('pages' => 0, 'posts' => 0, 'logos' => 0, 'blocks' => 0, 'total' => 0);
+        if ($mediaId <= 0) {
+            return $out;
+        }
+
+        $out['pages'] = $this->_countOne(
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_page WHERE hero_media_id = :mid',
+            $mediaId
+        );
+        $out['posts'] = $this->_countOne(
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_post WHERE hero_media_id = :mid',
+            $mediaId
+        );
+        $out['logos'] = $this->_countOne(
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_site WHERE logo_media_id = :mid',
+            $mediaId
+        );
+        // Same media-ref pattern _referenceCount uses (see its note): match the
+        // numeric media_id bounded by a non-digit so 12 never matches 123.
+        $pattern = '"media_id"[[:space:]]*:[[:space:]]*' . $mediaId . '([^0-9]|$)';
+        $out['blocks'] = $this->_countOne(
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_block WHERE fields_json REGEXP :pat',
+            null,
+            $pattern
+        );
+
+        $out['total'] = $out['pages'] + $out['posts'] + $out['logos'] + $out['blocks'];
+        return $out;
+    }
+
+    /**
      * Count everywhere a media id is still referenced: page/post hero images,
      * site logos, and any block that embeds it (matched on the media_id value
      * inside fields_json). Used by DeleteMedia/PurgeMedia's where-used guard.
@@ -666,42 +742,59 @@ class CmsMedia extends CmsBase
      */
     private function _referenceCount($mediaId)
     {
-        global $DB;
-
         $mediaId = (int)$mediaId;
         if ($mediaId <= 0) {
             return 0;
         }
 
-        // A media ref inside a block is stored as {"media_id":<id>, "key":"m<id>", ...};
-        // match the numeric media_id bounded by a non-digit (or end) so 12 never
-        // matches 123. REGEXP over fields_json; NULL never matches.
-        $pattern = '"media_id"[[:space:]]*:[[:space:]]*' . $mediaId . '([^0-9]|$)';
-
+        // Cheap, indexed FK checks first (page/post hero, site logo). Both callers
+        // (DeleteMedia/PurgeMedia) only ever test this result against > 0, so if any
+        // of these already matches we return immediately and SKIP the expensive
+        // unbounded REGEXP full-table scan over ork_cms_block.fields_json below.
         // Independent counts (summed) so a missing table in a partial schema
         // (e.g. ork_cms_site absent) can't zero the WHOLE guard and let a
         // still-referenced image be trashed — each source fails closed to 0
         // only for itself.
-        $total = 0;
-        $total += $this->_countOne(
+        $fk = 0;
+        $fk += $this->_countOne(
             'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_page WHERE hero_media_id = :mid',
             $mediaId
         );
-        $total += $this->_countOne(
+        $fk += $this->_countOne(
             'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_post WHERE hero_media_id = :mid',
             $mediaId
         );
-        $total += $this->_countOne(
+        $fk += $this->_countOne(
             'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_site WHERE logo_media_id = :mid',
             $mediaId
         );
-        $total += $this->_countOne(
+        if ($fk > 0) {
+            // Already referenced — the where-used guard fails closed without paying
+            // for the block scan (callers only compare against > 0).
+            return $fk;
+        }
+
+        // No hero/logo reference — fall back to the block-embed scan. A media ref
+        // inside a block is stored as {"media_id":<id>, "key":"m<id>", ...}; match
+        // the numeric media_id bounded by a non-digit (or end) so 12 never matches
+        // 123. REGEXP over fields_json; NULL never matches.
+        //
+        // NOT scope-narrowed (deliberate): ork_cms_block carries NO scope_type/
+        // scope_id — only owner_type/owner_id (→ page/post) — and the block save
+        // path (controller.CmsAjax::_sanitizeFields) sanitizes HTML/URLs but does
+        // NOT validate that an embedded media_id belongs to the page's scope, so a
+        // block in ANOTHER scope can legitimately (or via a forged POST / legacy
+        // data) reference this media. Bounding the scan to the media's own scope
+        // would let such a cross-scope reference slip past the guard and orphan a
+        // live image. The where-used guard's correctness (fail-safe: never trash an
+        // in-use asset) outranks the scan cost; a safe narrowing would require a
+        // denormalized scope column on ork_cms_block (see this change's report).
+        $pattern = '"media_id"[[:space:]]*:[[:space:]]*' . $mediaId . '([^0-9]|$)';
+        return $this->_countOne(
             'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_block WHERE fields_json REGEXP :pat',
             null,
             $pattern
         );
-
-        return $total;
     }
 
     /**
@@ -930,6 +1023,22 @@ class CmsMedia extends CmsBase
             $name = substr($name, 0, 200);
         }
         return $name . '.' . $ext;
+    }
+
+    /**
+     * Extract a lowercase file extension from a filename or stored path, or ''
+     * when none/unrecognized. Used by Update() to pin a rename to the stored
+     * asset's real extension (a rename must not change the type on disk).
+     */
+    private function _extFromName($name)
+    {
+        $name = basename(str_replace('\\', '/', (string)$name));
+        $dot = strrpos($name, '.');
+        if ($dot === false || $dot === strlen($name) - 1) {
+            return '';
+        }
+        $ext = strtolower(substr($name, $dot + 1));
+        return preg_match('/^[a-z0-9]{1,5}$/', $ext) ? $ext : '';
     }
 
     /**

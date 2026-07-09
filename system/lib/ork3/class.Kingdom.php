@@ -1,140 +1,170 @@
 <?php
 
-class Kingdom  extends Ork3 {
+class Kingdom extends Ork3
+{
+    // Per-request memo caches for the principality-rollup helpers. These are read
+    // dozens of times per kingdom-scoped report page; the Kingdom lib is a single
+    // instance per request (see startup.php), so caching here is safe and avoids
+    // redundant DB hits — most notably for ordinary kingdoms that have no children.
+    private $childPrincipalityCache = array();
+    private $statsIncludesPrincipalityCache = array();
 
-	// Per-request memo caches for the principality-rollup helpers. These are read
-	// dozens of times per kingdom-scoped report page; the Kingdom lib is a single
-	// instance per request (see startup.php), so caching here is safe and avoids
-	// redundant DB hits — most notably for ordinary kingdoms that have no children.
-	private $childPrincipalityCache = array();
-	private $statsIncludesPrincipalityCache = array();
-
-	public function __construct() {
-		parent::__construct();
-		$this->kingdom = new yapo($this->db, DB_PREFIX . 'kingdom');
-		$this->kingdomaward = new yapo($this->db, DB_PREFIX . 'kingdomaward');
-	}
-	
-  public function GetKingdomByAbbreviation($request) {
-    if (trimlen($request['Abbreviation']) < 2 || trimlen($request['Abbreviation']) > 3)
-      return null;
-    
-    $this->kingdom->clear();
-    $this->kingdom->abbreviation = strtoupper(trim($request['Abbreviation']));
-    if ($this->kingdom->find()) {
-      return $this->kingdom->kingdom_id; 
+    public function __construct()
+    {
+        parent::__construct();
+        $this->kingdom = new yapo($this->db, DB_PREFIX . 'kingdom');
+        $this->kingdomaward = new yapo($this->db, DB_PREFIX . 'kingdomaward');
     }
-    return null;
-  }
-  
-	public function GetKingdomShortInfo($request) {
-		$this->kingdom->clear();
-		$this->kingdom->kingdom_id = $request['KingdomId'];
-		$response = array();
-		if ($this->kingdom->find()) {
-			$response['Status'] = Success();
-			$response['KingdomInfo'] = array();
-			$response['KingdomInfo']['KingdomId'] = $this->kingdom->kingdom_id;
-			$response['KingdomInfo']['KingdomName'] = $this->kingdom->name;
-			$response['KingdomInfo']['Abbreviation'] = $this->kingdom->abbreviation;
-			$response['KingdomInfo']['HasHeraldry'] = $this->kingdom->has_heraldry;
-			global $DB;
-			$DB->Clear();
-			$_bn = $DB->DataSet("SELECT has_banner, banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ork_kingdom WHERE kingdom_id = " . (int)$this->kingdom->kingdom_id);
-			if ($_bn && $_bn->Next()) {
-				$response['KingdomInfo']['HasBanner']      = (int)$_bn->has_banner;
-				$response['KingdomInfo']['BannerShowLogo'] = (int)$_bn->banner_show_logo;
-				$response['KingdomInfo']['BannerVignette'] = (int)$_bn->banner_vignette;
-				$response['KingdomInfo']['BannerOffsetX']  = (int)$_bn->banner_offset_x;
-				$response['KingdomInfo']['BannerOffsetY']  = (int)$_bn->banner_offset_y;
-			}
-			$response['KingdomInfo']['IsPrincipality'] = $this->kingdom->parent_kingdom_id>0?1:0;
-			$response['KingdomInfo']['ParentKingdomId'] = $this->kingdom->parent_kingdom_id;
-			$response['KingdomInfo']['Active'] = $this->kingdom->active;
-			$response['KingdomInfo']['Description'] = $this->kingdom->description ?? '';
-			$response['KingdomInfo']['Url'] = $this->kingdom->url ?? '';
-		} else {
-			$response['Status'] = InvalidParameter();
-		}
-		return $response;
-	}
-	
-/*
-	public function SetKingdomAwards($request) {
-		$response = array();
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
-			$this->log->Write('Kingdom', $mundane_id, LOG_EDIT, $request);
-			if (is_array($request['KingdomAwards'])) {
-					$this->kingdomaward->clear();
-					$this->kingdomaward->award_id = $kingdomaward['AwardId'];
-					$this->kingdomaward->kingdom_id = $request['KingdomId'];
-					switch ($kingdomaward['Action']) {
-						case CFG_REMOVE:
-							if (valid_id($request['AwardId']) && $this->kingdomaward->find()) {
-								if (valid_id($this->kingdomaward->award_id)) {
-									$response['Status'] = InvalidParameter('You may not delete basic Awards.  Take it up with the CoM.');
-									return $response;
-								}
 
-								$awards = new yapo($this->db, DB_PREFIX . 'mundane_award');
-								$award->clear();
-								$awards->kingdomaward_id = $this->kingdomaward->kingdomaward_id;
-								if (valid_id($request['AwardId'] && $awards->find())) {
-									$response['Status'] = InvalidParameter('You may not delete basic a Kingdom Award which is assigned to a Player.  Remove all awards first.');
-									return $response;
-								}
-								
-								$this->kingdomaward->delete();
-							}
-							break;
-						case CFG_EDIT:
-							if (valid_id($request['AwardId']) && $this->kingdomaward->find()) {
-								$this->kingdomaward->name = trimlen($kingdomaward['Name'])>0?$kingdomaward['Name']:$this->kingdomaward->name;
-								$this->kingdomaward->reign_limit = trimlen($kingdomaward['ReignLimit'])>0?$kingdomaward['ReignLimit']:$this->kingdomaward->reign_limit;
-								$this->kingdomaward->month_limit = trimlen($kingdomaward['MonthLimit'])>0?$kingdomaward['MonthLimit']:$this->kingdomaward->month_limit;
-								$this->kingdomaward->is_title = trimlen($kingdomaward['IsTitle'])>0?$kingdomaward['IsTitle']:$this->kingdomaward->title;
-								$this->kingdomaward->title_class = trimlen($kingdomaward['TitleClass'])>0?$kingdomaward['TitleClass']:$this->kingdomaward->title_class;
-								$this->kingdomaward->save();
-							}
-							break;
-						case CFG_ADD:
-								$this->kingdomaward->name = $kingdomaward['Name'];
-								$this->kingdomaward->reign_limit = $kingdomaward['ReignLimit'];
-								$this->kingdomaward->month_limit = $kingdomaward['MonthLimit'];
-								$this->kingdomaward->is_title = $kingdomaward['IsTitle'];
-								$this->kingdomaward->title_class = $kingdomaward['TitleClass'];
-								$this->kingdomaward->save();
-							break;
-					}
-				}
-			}
-			$response = Success();
-		} else {
-			$response = NoAuthorization(null, $mundane_id);
-		}
-		return $response;
-	}
-*/
-	private static function awardNameLooksLikeOfficer($name) {
-		if (!is_string($name) || $name === '') return false;
-		$prefix = '(Provincial|Baronial|Ducal|Grand\s+Ducal|Shire|Kingdom|Imperial|Principality|Barony|Duchy|Grand\s+Duchy)';
-		$suffix = '(Monarch|Regent|Prime\s+Minister|Champion|Defender|Seneschal|Chancellor|Clerk|GMR|Guildmaster\s+of\s+Reeves|Guild\s+Master\s+of\s+Reeves|General\s+Minister|Sheriff|Baron(ess)?|Grand\s+Duke|Grand\s+Duchess|Duke|Duchess)';
-		return preg_match('/^' . $prefix . '\s+' . $suffix . '\b/i', trim($name)) === 1;
-	}
+    /**
+     * Lightweight single-column read of a kingdom's display name (or '' when the
+     * id is unknown). Keeps raw $DB out of the CMS controller/trait layer — the
+     * admin scope-context banner calls this via the model pass-through.
+     *
+     * @param int $id kingdom_id
+     * @return string
+     */
+    public function GetName($id)
+    {
+        $id = (int)$id;
+        if ($id <= 0) {
+            return '';
+        }
+        $this->kingdom->clear();
+        $this->kingdom->kingdom_id = $id;
+        if ($this->kingdom->find()) {
+            return (string)$this->kingdom->name;
+        }
+        return '';
+    }
 
-	public function GetAwardList($request) {
-		if ($request['IsLadder'] == 'Ladder') {
-			$ladder_clause = " and ka.is_ladder = 1";
-		} else if ($request['IsLadder'] == 'NonLadder') {
-			$ladder_clause = " and ka.is_ladder = 0";
-		}
-		if ($request['IsTitle'] == 'Title') {
-			$ladder_clause = " and is_title = 1";
-		} else if ($request['IsTitle'] == 'NonTitle') {
-			$ladder_clause = " and is_title = 0";
-		}
-		$sql = "select kingdomaward_id, ifnull(ka.name, a.name) as kingdom_awardname, ka.reign_limit, ka.month_limit, a.name as award_name, 
+    public function GetKingdomByAbbreviation($request)
+    {
+        if (trimlen($request['Abbreviation']) < 2 || trimlen($request['Abbreviation']) > 3) {
+            return null;
+        }
+
+        $this->kingdom->clear();
+        $this->kingdom->abbreviation = strtoupper(trim($request['Abbreviation']));
+        if ($this->kingdom->find()) {
+            return $this->kingdom->kingdom_id;
+        }
+        return null;
+    }
+
+    public function GetKingdomShortInfo($request)
+    {
+        $this->kingdom->clear();
+        $this->kingdom->kingdom_id = $request['KingdomId'];
+        $response = array();
+        if ($this->kingdom->find()) {
+            $response['Status'] = Success();
+            $response['KingdomInfo'] = array();
+            $response['KingdomInfo']['KingdomId'] = $this->kingdom->kingdom_id;
+            $response['KingdomInfo']['KingdomName'] = $this->kingdom->name;
+            $response['KingdomInfo']['Abbreviation'] = $this->kingdom->abbreviation;
+            $response['KingdomInfo']['HasHeraldry'] = $this->kingdom->has_heraldry;
+            global $DB;
+            $DB->Clear();
+            $_bn = $DB->DataSet("SELECT has_banner, banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ork_kingdom WHERE kingdom_id = " . (int)$this->kingdom->kingdom_id);
+            if ($_bn && $_bn->Next()) {
+                $response['KingdomInfo']['HasBanner']      = (int)$_bn->has_banner;
+                $response['KingdomInfo']['BannerShowLogo'] = (int)$_bn->banner_show_logo;
+                $response['KingdomInfo']['BannerVignette'] = (int)$_bn->banner_vignette;
+                $response['KingdomInfo']['BannerOffsetX']  = (int)$_bn->banner_offset_x;
+                $response['KingdomInfo']['BannerOffsetY']  = (int)$_bn->banner_offset_y;
+            }
+            $response['KingdomInfo']['IsPrincipality'] = $this->kingdom->parent_kingdom_id > 0 ? 1 : 0;
+            $response['KingdomInfo']['ParentKingdomId'] = $this->kingdom->parent_kingdom_id;
+            $response['KingdomInfo']['Active'] = $this->kingdom->active;
+            $response['KingdomInfo']['Description'] = $this->kingdom->description ?? '';
+            $response['KingdomInfo']['Url'] = $this->kingdom->url ?? '';
+        } else {
+            $response['Status'] = InvalidParameter();
+        }
+        return $response;
+    }
+
+    /*
+        public function SetKingdomAwards($request) {
+            $response = array();
+            if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+                    && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+                $this->log->Write('Kingdom', $mundane_id, LOG_EDIT, $request);
+                if (is_array($request['KingdomAwards'])) {
+                        $this->kingdomaward->clear();
+                        $this->kingdomaward->award_id = $kingdomaward['AwardId'];
+                        $this->kingdomaward->kingdom_id = $request['KingdomId'];
+                        switch ($kingdomaward['Action']) {
+                            case CFG_REMOVE:
+                                if (valid_id($request['AwardId']) && $this->kingdomaward->find()) {
+                                    if (valid_id($this->kingdomaward->award_id)) {
+                                        $response['Status'] = InvalidParameter('You may not delete basic Awards.  Take it up with the CoM.');
+                                        return $response;
+                                    }
+
+                                    $awards = new yapo($this->db, DB_PREFIX . 'mundane_award');
+                                    $award->clear();
+                                    $awards->kingdomaward_id = $this->kingdomaward->kingdomaward_id;
+                                    if (valid_id($request['AwardId'] && $awards->find())) {
+                                        $response['Status'] = InvalidParameter('You may not delete basic a Kingdom Award which is assigned to a Player.  Remove all awards first.');
+                                        return $response;
+                                    }
+
+                                    $this->kingdomaward->delete();
+                                }
+                                break;
+                            case CFG_EDIT:
+                                if (valid_id($request['AwardId']) && $this->kingdomaward->find()) {
+                                    $this->kingdomaward->name = trimlen($kingdomaward['Name'])>0?$kingdomaward['Name']:$this->kingdomaward->name;
+                                    $this->kingdomaward->reign_limit = trimlen($kingdomaward['ReignLimit'])>0?$kingdomaward['ReignLimit']:$this->kingdomaward->reign_limit;
+                                    $this->kingdomaward->month_limit = trimlen($kingdomaward['MonthLimit'])>0?$kingdomaward['MonthLimit']:$this->kingdomaward->month_limit;
+                                    $this->kingdomaward->is_title = trimlen($kingdomaward['IsTitle'])>0?$kingdomaward['IsTitle']:$this->kingdomaward->title;
+                                    $this->kingdomaward->title_class = trimlen($kingdomaward['TitleClass'])>0?$kingdomaward['TitleClass']:$this->kingdomaward->title_class;
+                                    $this->kingdomaward->save();
+                                }
+                                break;
+                            case CFG_ADD:
+                                    $this->kingdomaward->name = $kingdomaward['Name'];
+                                    $this->kingdomaward->reign_limit = $kingdomaward['ReignLimit'];
+                                    $this->kingdomaward->month_limit = $kingdomaward['MonthLimit'];
+                                    $this->kingdomaward->is_title = $kingdomaward['IsTitle'];
+                                    $this->kingdomaward->title_class = $kingdomaward['TitleClass'];
+                                    $this->kingdomaward->save();
+                                break;
+                        }
+                    }
+                }
+                $response = Success();
+            } else {
+                $response = NoAuthorization(null, $mundane_id);
+            }
+            return $response;
+        }
+    */
+    private static function awardNameLooksLikeOfficer($name)
+    {
+        if (!is_string($name) || $name === '') {
+            return false;
+        }
+        $prefix = '(Provincial|Baronial|Ducal|Grand\s+Ducal|Shire|Kingdom|Imperial|Principality|Barony|Duchy|Grand\s+Duchy)';
+        $suffix = '(Monarch|Regent|Prime\s+Minister|Champion|Defender|Seneschal|Chancellor|Clerk|GMR|Guildmaster\s+of\s+Reeves|Guild\s+Master\s+of\s+Reeves|General\s+Minister|Sheriff|Baron(ess)?|Grand\s+Duke|Grand\s+Duchess|Duke|Duchess)';
+        return preg_match('/^' . $prefix . '\s+' . $suffix . '\b/i', trim($name)) === 1;
+    }
+
+    public function GetAwardList($request)
+    {
+        if ($request['IsLadder'] == 'Ladder') {
+            $ladder_clause = " and ka.is_ladder = 1";
+        } elseif ($request['IsLadder'] == 'NonLadder') {
+            $ladder_clause = " and ka.is_ladder = 0";
+        }
+        if ($request['IsTitle'] == 'Title') {
+            $ladder_clause = " and is_title = 1";
+        } elseif ($request['IsTitle'] == 'NonTitle') {
+            $ladder_clause = " and is_title = 0";
+        }
+        $sql = "select kingdomaward_id, ifnull(ka.name, a.name) as kingdom_awardname, ka.reign_limit, ka.month_limit, a.name as award_name, 
 						a.award_id, a.is_ladder, ka.is_title as is_title, ka.title_class as title_class,
             a.officer_role, a.peerage
 					from " . DB_PREFIX . "kingdomaward ka
@@ -145,546 +175,577 @@ class Kingdom  extends Ork3 {
             
 						and ka.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'
 					order by is_ladder, ka.is_title, ka.title_class desc, ka.name, a.name";
-		$r = $this->db->query($sql);
-		
-  	logtrace('GetAwardList', array($sql, $request));
-		$response = array();
-		if ($r !== false && $r->size() > 0) {
-			$response['Awards'] = array();
-			while ($r->next()) {
-				$isOfficerRole = !in_array($r->officer_role, ['none', null]);
-				// Some kingdomaward rows are mapped to a non-officer system award (e.g. Custom Award)
-				// or are orphaned (LEFT JOIN -> NULL officer_role) but are clearly officer titles by
-				// name — e.g. "Baronial Guild Master of Reeves", "Imperial Monarch", "Shire Regent".
-				// Treat those as officers so they bucket into the Officers list, not Awards.
-				if (!$isOfficerRole && self::awardNameLooksLikeOfficer($r->kingdom_awardname)) {
-					$isOfficerRole = true;
-				}
-				if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Awards' && $isOfficerRole) {
-					continue;
-				} else if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Officers' && !$isOfficerRole) {
-					continue;
-				}
+        $r = $this->db->query($sql);
 
-				$response['Awards'][$r->kingdomaward_id] = array(
-					'KingdomAwardId' => $r->kingdomaward_id,
-					'KingdomAwardName' => $r->kingdom_awardname,
-					'ReignLimit' => $r->reign_limit,
-					'MonthLimit' => $r->month_limit,
-					'AwardName' => $r->award_name,
-					'AwardId' => $r->award_id,
-					'IsLadder' => $r->is_ladder,
-					'IsTitle' => $r->is_title,
-					'TitleClass' => $r->title_class,
-					'OfficerRole' => $r->officer_role,
-					'Peerage' => $r->peerage
-				);
-			}
-			$response['Status'] = Success();
-		} else {
-			$response['Status'] = InvalidParameter(NULL, 'Problem processing request.');
-		}
-		return $response;
-	}
+        logtrace('GetAwardList', array($sql, $request));
+        $response = array();
+        if ($r !== false && $r->size() > 0) {
+            $response['Awards'] = array();
+            while ($r->next()) {
+                $isOfficerRole = !in_array($r->officer_role, ['none', null]);
+                // Some kingdomaward rows are mapped to a non-officer system award (e.g. Custom Award)
+                // or are orphaned (LEFT JOIN -> NULL officer_role) but are clearly officer titles by
+                // name — e.g. "Baronial Guild Master of Reeves", "Imperial Monarch", "Shire Regent".
+                // Treat those as officers so they bucket into the Officers list, not Awards.
+                if (!$isOfficerRole && self::awardNameLooksLikeOfficer($r->kingdom_awardname)) {
+                    $isOfficerRole = true;
+                }
+                if (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Awards' && $isOfficerRole) {
+                    continue;
+                } elseif (isset($request['OfficerRole']) && $request['OfficerRole'] == 'Officers' && !$isOfficerRole) {
+                    continue;
+                }
 
-	public function CreateAward($request) {
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
-			$this->log->Write('Award', $mundane_id, LOG_ADD, $request);
-			$this->kingdomaward->clear();
-			$this->kingdomaward->kingdom_id = $request['KingdomId'];
-			$this->kingdomaward->award_id = $request['AwardId'];
-			$this->kingdomaward->name = $request['Name'];
-			$this->kingdomaward->reign_limit = $request['ReignLimit'];
-			$this->kingdomaward->month_limit = $request['MonthLimit'];
-			$this->kingdomaward->is_title = $request['IsTitle'];
-			$this->kingdomaward->title_class = $request['TitleClass'];
-			$this->kingdomaward->save();
-			
-		} else {
-			return NoAuthorization();
-		}
-	}
+                $response['Awards'][$r->kingdomaward_id] = array(
+                    'KingdomAwardId' => $r->kingdomaward_id,
+                    'KingdomAwardName' => $r->kingdom_awardname,
+                    'ReignLimit' => $r->reign_limit,
+                    'MonthLimit' => $r->month_limit,
+                    'AwardName' => $r->award_name,
+                    'AwardId' => $r->award_id,
+                    'IsLadder' => $r->is_ladder,
+                    'IsTitle' => $r->is_title,
+                    'TitleClass' => $r->title_class,
+                    'OfficerRole' => $r->officer_role,
+                    'Peerage' => $r->peerage
+                );
+            }
+            $response['Status'] = Success();
+        } else {
+            $response['Status'] = InvalidParameter(null, 'Problem processing request.');
+        }
+        return $response;
+    }
 
-	public function EditAward($request) {
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
-			$this->log->Write('Award', $mundane_id, LOG_EDIT, $request);
-			$this->kingdomaward->clear();
-			$this->kingdomaward->kingdom_id = $request['KingdomId'];
-			$this->kingdomaward->kingdomaward_id = $request['KingdomAwardId'];
-			if ($this->kingdomaward->find()) {
-				$this->kingdomaward->name = $request['Name'];
-				$this->kingdomaward->reign_limit = $request['ReignLimit'];
-				$this->kingdomaward->month_limit = $request['MonthLimit'];
-				$this->kingdomaward->is_title = $request['IsTitle'];
-				$this->kingdomaward->title_class = $request['TitleClass'];
-				$this->kingdomaward->save();
-			} else {
-				return InvalidParameter();
-			}
-		} else {
-			return NoAuthorization();
-		}
-	}
+    public function CreateAward($request)
+    {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
+            $this->log->Write('Award', $mundane_id, LOG_ADD, $request);
+            $this->kingdomaward->clear();
+            $this->kingdomaward->kingdom_id = $request['KingdomId'];
+            $this->kingdomaward->award_id = $request['AwardId'];
+            $this->kingdomaward->name = $request['Name'];
+            $this->kingdomaward->reign_limit = $request['ReignLimit'];
+            $this->kingdomaward->month_limit = $request['MonthLimit'];
+            $this->kingdomaward->is_title = $request['IsTitle'];
+            $this->kingdomaward->title_class = $request['TitleClass'];
+            $this->kingdomaward->save();
 
-	public function RemoveAward($request) {
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
-			$this->log->Write('Award', $mundane_id, LOG_REMOVE, $request);
-			$this->kingdomaward->kingdom_id = $request['KingdomId'];
-			$this->kingdomaward->kingdomaward_id = $request['KingdomAwardId'];
-			if ($this->kingdomaward->find()) {
-				$prior_state = [
-					'kingdomaward_id' => (int)$this->kingdomaward->kingdomaward_id,
-					'kingdom_id'      => (int)$this->kingdomaward->kingdom_id,
-					'name'            => $this->kingdomaward->name,
-					'award_id'        => (int)$this->kingdomaward->award_id,
-					'is_title'        => (int)$this->kingdomaward->is_title,
-					'reign_limit'     => (int)$this->kingdomaward->reign_limit,
-					'month_limit'     => (int)$this->kingdomaward->month_limit,
-				];
-				$this->kingdomaward->delete();
-				Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Kingdom', (int)$request['KingdomId'], $prior_state);
-			}
-			return Success();
-		}
-		return NoAuthorization();
-	}
-		
-	public function create_kingdom_awards($kingdom_id) {
-		$sql = "insert into " . DB_PREFIX . "kingdomaward (kingdom_id, award_id, name, is_title, title_class) select " . mysql_real_escape_string($kingdom_id) .", award_id, name, is_title, title_class from " . DB_PREFIX . "award";
-		$this->db->query($sql);
-	}
-	
-	public function GetKingdomParkTitles($request) {
-		$parktitle = new yapo($this->db, DB_PREFIX . 'parktitle');
-		$parktitle->clear();
-		$parktitle->kingdom_id = $request['KingdomId'];
-		$response['ParkTitles'] = array();
-		if ($parktitle->find(array('class desc'))) {
-			do {
-				$response['ParkTitles'][] = array(
-						'ParkTitleId'=>$parktitle->parktitle_id,
-						'Title'=>$parktitle->title,
-						'Class'=>$parktitle->class,
-						'MinimumAttendance'=>$parktitle->minimumattendance,
-						'MinimumCutoff'=>$parktitle->minimumcutoff,
-						'Period'=>$parktitle->period,
-						'Length'=>$parktitle->period_length
-					);
-			} while ($parktitle->next());
-		}
-		$response['Status'] = Success();
-		return $response;
-	}
-	
-	/*
-	public function GetKingdomAwardList($request) {
-		return $this->GetAwardList(array( 'IsLadder' => 'Both', 'IsTitle' => 'Both', 'KingdomId' => $request['KingdomId'] ));
-	}
-	*/
-	
-	public function GetKingdomDetails($request) {
-		$this->kingdom->clear();
-		$this->kingdom->kingdom_id = $request['KingdomId'];
-		$response = array();
-		if ($request['KingdomId'] > 0 && $this->kingdom->find()) {
-			$response['Status'] = Success();
-			$response['KingdomInfo'] = array();
-			$response['KingdomInfo']['KingdomId'] = $this->kingdom->kingdom_id;
-			$response['KingdomInfo']['KingdomName'] = $this->kingdom->name;
-			$response['KingdomInfo']['Abbreviation'] = $this->kingdom->abbreviation;
-			$response['KingdomInfo']['Active'] = $this->kingdom->active;
-			$response['KingdomInfo']['IsPrincipality'] = $this->kingdom->parent_kingdom_id>0?1:0;
-			$response['KingdomInfo']['ParentKingdomId'] = $this->kingdom->parent_kingdom_id;
-			$response['KingdomInfo']['Description'] = $this->kingdom->description ?? '';
-			$response['KingdomInfo']['Url'] = $this->kingdom->url ?? '';
-			
-			// Fetch configs
-			$response['KingdomConfiguration'] = Common::get_configs($request['KingdomId']);
-			
-			$pt = $this->GetKingdomParkTitles($request);
-			
-			$response['ParkTitles'] = $pt['ParkTitles'];
-			
-			$response['Awards'] = $this->GetAwardList(array( 'IsLadder' => 'Both', 'IsTitle' => 'Both', 'KingdomId' => $request['KingdomId'] ));
-		} else {
-			$response['Status'] = InvalidParameter();
-		}
-		return $response;
-	}
-	
-	public function GetKingdomAuthorizations($request) {
-		$sql = "select authorization_id, username, a.mundane_id, role from ".DB_PREFIX."authorization a left join ".DB_PREFIX."mundane m on a.mundane_id = m.mundane_id where a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
-		$r = $this->db->query($sql);
-		$response = array();
-		$response['Authorizations'] = array();
-		if ($r !== false && $r->size() > 0) {
-			$response['Status'] = Success();
-			while ($r->next()) {
-				$response['Authorizations'][] = array( 
-						'AuthorizationId' => $r->authorization_id,
-						'UserName' => $r->username,
-						'MundaneId' => $r->mundane_id,
-						'Role' => $r->role
-					);
-			}
-		} else {
-			$response['Status'] = InvalidParameter(null, 'Problem processing request.');
-		}
-		return $response;
-	}
-	
-	public function CreateKingdom($request) {
-		$response = array();
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
-			$this->log->Write('Kingdom', $mundane_id, LOG_ADD, $request);
-			$this->kingdom->clear();
-			$this->kingdom->name = $request['Name'];
-			if ($this->kingdom->find()) {
-				$response = InvalidParameter('Duplicate Kingdom Name');
-				return $response;
-			}
-			$this->kingdom->clear();
-			$this->kingdom->name = $request['Name'];
-			$this->kingdom->abbreviation = $request['Abbreviation'];
-			$this->kingdom->active = 'Active';
-			$this->kingdom->parent_kingdom_id = $request['ParentKingdomId'];
-			$this->kingdom->modified = date("Y-m-d H:i:s", time());
-			$this->kingdom->save();
-			
-			$c = new Common();
-			$c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'AveragePeriod', 
-				array('Type'=>$request['AttendancePeriodType'],'Period'=>$request['AttendancePeriod']), 1, array('Type'=>array('month','week')));
-			$c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'AttendanceWeeklyMinimum', $request['AttendanceWeeklyMinimum']);
-    		$c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'AttendanceDailyMinimum', $request['AttendanceDailyMinimum']);
-			$c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'AttendanceCreditMinimum', $request['AttendanceCreditMinimum']);
-    		$c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'MonthlyCreditMaximum', $request['MonthlyCreditMaximum']);
-			$c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'DuesPeriod', array('Type'=>$request['DuesPeriodType'],'Period'=>$request['DuesPeriod']), 1, array('Type'=>array('month','week')));
-			$c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'DuesAmount', $request['DuesAmount']);
-			$c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'KingdomDuesTake', $request['KingdomDuesTake']);
-    		$c->add_config($mundane_id, CFG_KINGDOM, 'color', $this->kingdom->kingdom_id, 'AtlasColor', 'FE7569');
-			$c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'AwardRecsPublic', '1');
-			$c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'IncludePrincipalityInStatistics', '0');
+        } else {
+            return NoAuthorization();
+        }
+    }
 
-			$c->create_officers($this->kingdom->kingdom_id, 0);
-			
-			$c->create_park_titles($this->kingdom->kingdom_id);
-			
-			$c->create_events($this->kingdom->kingdom_id, 0);
-			
-			$this->create_kingdom_awards($this->kingdom->kingdom_id);
-			
-			Ork3::$Lib->treasury->create_accounts($mundane_id, 'kingdom', $this->kingdom->kingdom_id, $this->kingdom->kingdom_id);
-			
-			$request['KingdomId'] = $this->kingdom->kingdom_id;
-			Ork3::$Lib->heraldry->SetKingdomHeraldry($request);
-			Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $request, 'Kingdom', (int)$this->kingdom->kingdom_id, null, [
-				'kingdom_id'        => (int)$this->kingdom->kingdom_id,
-				'name'              => $request['Name'],
-				'abbreviation'      => $request['Abbreviation'],
-				'parent_kingdom_id' => (int)$request['ParentKingdomId'],
-			]);
-			$response = Success($this->kingdom->kingdom_id);
-			$this->_flushPrincipalityCaches();
-		} else {
-			$response = NoAuthorization();
-		}
-		return $response;
-	}
+    public function EditAward($request)
+    {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
+            $this->log->Write('Award', $mundane_id, LOG_EDIT, $request);
+            $this->kingdomaward->clear();
+            $this->kingdomaward->kingdom_id = $request['KingdomId'];
+            $this->kingdomaward->kingdomaward_id = $request['KingdomAwardId'];
+            if ($this->kingdomaward->find()) {
+                $this->kingdomaward->name = $request['Name'];
+                $this->kingdomaward->reign_limit = $request['ReignLimit'];
+                $this->kingdomaward->month_limit = $request['MonthLimit'];
+                $this->kingdomaward->is_title = $request['IsTitle'];
+                $this->kingdomaward->title_class = $request['TitleClass'];
+                $this->kingdomaward->save();
+            } else {
+                return InvalidParameter();
+            }
+        } else {
+            return NoAuthorization();
+        }
+    }
 
-	// Full memcache flush after any change that alters the kingdom-family tree
-	// (created / reparented / deactivated kingdoms or principalities). Lots of
-	// derived caches across averages / events / recs / recap / officer directory
-	// key off principality membership; enumerating every dependent key is
-	// whack-a-mole, and these mutations are rare admin actions so the wipe cost
-	// is acceptable.
-	private function _flushPrincipalityCaches() {
-		if (isset(Ork3::$Lib->ghettocache) && isset(Ork3::$Lib->ghettocache->memcache)) {
-			Ork3::$Lib->ghettocache->memcache->flush();
-		}
-	}
+    public function RemoveAward($request)
+    {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_CREATE)) {
+            $this->log->Write('Award', $mundane_id, LOG_REMOVE, $request);
+            $this->kingdomaward->kingdom_id = $request['KingdomId'];
+            $this->kingdomaward->kingdomaward_id = $request['KingdomAwardId'];
+            if ($this->kingdomaward->find()) {
+                $prior_state = [
+                    'kingdomaward_id' => (int)$this->kingdomaward->kingdomaward_id,
+                    'kingdom_id'      => (int)$this->kingdomaward->kingdom_id,
+                    'name'            => $this->kingdomaward->name,
+                    'award_id'        => (int)$this->kingdomaward->award_id,
+                    'is_title'        => (int)$this->kingdomaward->is_title,
+                    'reign_limit'     => (int)$this->kingdomaward->reign_limit,
+                    'month_limit'     => (int)$this->kingdomaward->month_limit,
+                ];
+                $this->kingdomaward->delete();
+                Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Kingdom', (int)$request['KingdomId'], $prior_state);
+            }
+            return Success();
+        }
+        return NoAuthorization();
+    }
 
-	public function GetPrincipalities($request) {
-		$this->kingdom->clear();
-		$this->kingdom->parent_kingdom_id = $request['KingdomId'];
-		$this->kingdom->active = 'Active';
-		$result = array('Status' => Success(), 'Principalities' => array());
-		if ($this->kingdom->find()) {
-			do {
-				$result['Principalities'][] = array(
-						'KingdomId' => $this->kingdom->kingdom_id,
-						'Name' => $this->kingdom->name,
-						'IsPrincipality' => 1,
-						'ParentKingdomId' => $this->kingdom->parent_kingdom_id
-					);
-			} while ($this->kingdom->next());
-		}
-		return $result;
-	}
-	
-	public function GetParks($request) {
-		// Optional 'KingdomIds' array → WHERE p.kingdom_id IN (...). Default keeps
-		// single-'KingdomId' behavior unchanged.
-		if (isset($request['KingdomIds']) && is_array($request['KingdomIds']) && count($request['KingdomIds']) > 0) {
-			$ids = implode(',', array_map('intval', $request['KingdomIds']));
-			$kingdom_clause = "p.kingdom_id IN ($ids)";
-		} else {
-			$kingdom_clause = "p.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
-		}
-		$sql = "select * 
+    public function create_kingdom_awards($kingdom_id)
+    {
+        $sql = "insert into " . DB_PREFIX . "kingdomaward (kingdom_id, award_id, name, is_title, title_class) select " . mysql_real_escape_string($kingdom_id) .", award_id, name, is_title, title_class from " . DB_PREFIX . "award";
+        $this->db->query($sql);
+    }
+
+    public function GetKingdomParkTitles($request)
+    {
+        $parktitle = new yapo($this->db, DB_PREFIX . 'parktitle');
+        $parktitle->clear();
+        $parktitle->kingdom_id = $request['KingdomId'];
+        $response['ParkTitles'] = array();
+        if ($parktitle->find(array('class desc'))) {
+            do {
+                $response['ParkTitles'][] = array(
+                        'ParkTitleId' => $parktitle->parktitle_id,
+                        'Title' => $parktitle->title,
+                        'Class' => $parktitle->class,
+                        'MinimumAttendance' => $parktitle->minimumattendance,
+                        'MinimumCutoff' => $parktitle->minimumcutoff,
+                        'Period' => $parktitle->period,
+                        'Length' => $parktitle->period_length
+                    );
+            } while ($parktitle->next());
+        }
+        $response['Status'] = Success();
+        return $response;
+    }
+
+    /*
+    public function GetKingdomAwardList($request) {
+        return $this->GetAwardList(array( 'IsLadder' => 'Both', 'IsTitle' => 'Both', 'KingdomId' => $request['KingdomId'] ));
+    }
+    */
+
+    public function GetKingdomDetails($request)
+    {
+        $this->kingdom->clear();
+        $this->kingdom->kingdom_id = $request['KingdomId'];
+        $response = array();
+        if ($request['KingdomId'] > 0 && $this->kingdom->find()) {
+            $response['Status'] = Success();
+            $response['KingdomInfo'] = array();
+            $response['KingdomInfo']['KingdomId'] = $this->kingdom->kingdom_id;
+            $response['KingdomInfo']['KingdomName'] = $this->kingdom->name;
+            $response['KingdomInfo']['Abbreviation'] = $this->kingdom->abbreviation;
+            $response['KingdomInfo']['Active'] = $this->kingdom->active;
+            $response['KingdomInfo']['IsPrincipality'] = $this->kingdom->parent_kingdom_id > 0 ? 1 : 0;
+            $response['KingdomInfo']['ParentKingdomId'] = $this->kingdom->parent_kingdom_id;
+            $response['KingdomInfo']['Description'] = $this->kingdom->description ?? '';
+            $response['KingdomInfo']['Url'] = $this->kingdom->url ?? '';
+
+            // Fetch configs
+            $response['KingdomConfiguration'] = Common::get_configs($request['KingdomId']);
+
+            $pt = $this->GetKingdomParkTitles($request);
+
+            $response['ParkTitles'] = $pt['ParkTitles'];
+
+            $response['Awards'] = $this->GetAwardList(array( 'IsLadder' => 'Both', 'IsTitle' => 'Both', 'KingdomId' => $request['KingdomId'] ));
+        } else {
+            $response['Status'] = InvalidParameter();
+        }
+        return $response;
+    }
+
+    public function GetKingdomAuthorizations($request)
+    {
+        $sql = "select authorization_id, username, a.mundane_id, role from ".DB_PREFIX."authorization a left join ".DB_PREFIX."mundane m on a.mundane_id = m.mundane_id where a.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+        $r = $this->db->query($sql);
+        $response = array();
+        $response['Authorizations'] = array();
+        if ($r !== false && $r->size() > 0) {
+            $response['Status'] = Success();
+            while ($r->next()) {
+                $response['Authorizations'][] = array(
+                        'AuthorizationId' => $r->authorization_id,
+                        'UserName' => $r->username,
+                        'MundaneId' => $r->mundane_id,
+                        'Role' => $r->role
+                    );
+            }
+        } else {
+            $response['Status'] = InvalidParameter(null, 'Problem processing request.');
+        }
+        return $response;
+    }
+
+    public function CreateKingdom($request)
+    {
+        $response = array();
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
+            $this->log->Write('Kingdom', $mundane_id, LOG_ADD, $request);
+            $this->kingdom->clear();
+            $this->kingdom->name = $request['Name'];
+            if ($this->kingdom->find()) {
+                $response = InvalidParameter('Duplicate Kingdom Name');
+                return $response;
+            }
+            $this->kingdom->clear();
+            $this->kingdom->name = $request['Name'];
+            $this->kingdom->abbreviation = $request['Abbreviation'];
+            $this->kingdom->active = 'Active';
+            $this->kingdom->parent_kingdom_id = $request['ParentKingdomId'];
+            $this->kingdom->modified = date("Y-m-d H:i:s", time());
+            $this->kingdom->save();
+
+            $c = new Common();
+            $c->add_config(
+                $mundane_id,
+                CFG_KINGDOM,
+                'fixed',
+                $this->kingdom->kingdom_id,
+                'AveragePeriod',
+                array('Type' => $request['AttendancePeriodType'],'Period' => $request['AttendancePeriod']),
+                1,
+                array('Type' => array('month','week'))
+            );
+            $c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'AttendanceWeeklyMinimum', $request['AttendanceWeeklyMinimum']);
+            $c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'AttendanceDailyMinimum', $request['AttendanceDailyMinimum']);
+            $c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'AttendanceCreditMinimum', $request['AttendanceCreditMinimum']);
+            $c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'MonthlyCreditMaximum', $request['MonthlyCreditMaximum']);
+            $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'DuesPeriod', array('Type' => $request['DuesPeriodType'],'Period' => $request['DuesPeriod']), 1, array('Type' => array('month','week')));
+            $c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'DuesAmount', $request['DuesAmount']);
+            $c->add_config($mundane_id, CFG_KINGDOM, 'number', $this->kingdom->kingdom_id, 'KingdomDuesTake', $request['KingdomDuesTake']);
+            $c->add_config($mundane_id, CFG_KINGDOM, 'color', $this->kingdom->kingdom_id, 'AtlasColor', 'FE7569');
+            $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'AwardRecsPublic', '1');
+            $c->add_config($mundane_id, CFG_KINGDOM, 'fixed', $this->kingdom->kingdom_id, 'IncludePrincipalityInStatistics', '0');
+
+            $c->create_officers($this->kingdom->kingdom_id, 0);
+
+            $c->create_park_titles($this->kingdom->kingdom_id);
+
+            $c->create_events($this->kingdom->kingdom_id, 0);
+
+            $this->create_kingdom_awards($this->kingdom->kingdom_id);
+
+            Ork3::$Lib->treasury->create_accounts($mundane_id, 'kingdom', $this->kingdom->kingdom_id, $this->kingdom->kingdom_id);
+
+            $request['KingdomId'] = $this->kingdom->kingdom_id;
+            Ork3::$Lib->heraldry->SetKingdomHeraldry($request);
+            Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $request, 'Kingdom', (int)$this->kingdom->kingdom_id, null, [
+                'kingdom_id'        => (int)$this->kingdom->kingdom_id,
+                'name'              => $request['Name'],
+                'abbreviation'      => $request['Abbreviation'],
+                'parent_kingdom_id' => (int)$request['ParentKingdomId'],
+            ]);
+            $response = Success($this->kingdom->kingdom_id);
+            $this->_flushPrincipalityCaches();
+        } else {
+            $response = NoAuthorization();
+        }
+        return $response;
+    }
+
+    // Full memcache flush after any change that alters the kingdom-family tree
+    // (created / reparented / deactivated kingdoms or principalities). Lots of
+    // derived caches across averages / events / recs / recap / officer directory
+    // key off principality membership; enumerating every dependent key is
+    // whack-a-mole, and these mutations are rare admin actions so the wipe cost
+    // is acceptable.
+    private function _flushPrincipalityCaches()
+    {
+        if (isset(Ork3::$Lib->ghettocache) && isset(Ork3::$Lib->ghettocache->memcache)) {
+            Ork3::$Lib->ghettocache->memcache->flush();
+        }
+    }
+
+    public function GetPrincipalities($request)
+    {
+        $this->kingdom->clear();
+        $this->kingdom->parent_kingdom_id = $request['KingdomId'];
+        $this->kingdom->active = 'Active';
+        $result = array('Status' => Success(), 'Principalities' => array());
+        if ($this->kingdom->find()) {
+            do {
+                $result['Principalities'][] = array(
+                        'KingdomId' => $this->kingdom->kingdom_id,
+                        'Name' => $this->kingdom->name,
+                        'IsPrincipality' => 1,
+                        'ParentKingdomId' => $this->kingdom->parent_kingdom_id
+                    );
+            } while ($this->kingdom->next());
+        }
+        return $result;
+    }
+
+    public function GetParks($request)
+    {
+        // Optional 'KingdomIds' array → WHERE p.kingdom_id IN (...). Default keeps
+        // single-'KingdomId' behavior unchanged.
+        if (isset($request['KingdomIds']) && is_array($request['KingdomIds']) && count($request['KingdomIds']) > 0) {
+            $ids = implode(',', array_map('intval', $request['KingdomIds']));
+            $kingdom_clause = "p.kingdom_id IN ($ids)";
+        } else {
+            $kingdom_clause = "p.kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
+        }
+        $sql = "select * 
 					from " . DB_PREFIX . "park p
 						left join " . DB_PREFIX . "parktitle pt on p.parktitle_id = pt.parktitle_id
 					where $kingdom_clause
 					order by pt.class desc, p.name asc";
-		$r = $this->db->query($sql);
-		if ($r !== false && $r->size() > 0) {
-			$response = array('Status' => Success(), 'Parks' => array());
-			while ($r->next()) {
-				$response['Parks'][] = array(
-						'ParkId' => $r->park_id,
-						'KingdomId' => $r->kingdom_id,
-						'Name' => $r->name,
-						'Abbreviation' => $r->abbreviation,
-						'Location' => $r->location,
-						'Url' => $r->url,
-						'Directions' => stripslashes(nl2br($r->directions)),
-    					'Description' => stripslashes(nl2br($r->description)),
-						'ParkTitleId' => $r->parktitle_id,
-						'Active' => $r->active,
-						'Title' => $r->title,
-						'Class' => $r->class,
+        $r = $this->db->query($sql);
+        if ($r !== false && $r->size() > 0) {
+            $response = array('Status' => Success(), 'Parks' => array());
+            while ($r->next()) {
+                $response['Parks'][] = array(
+                        'ParkId' => $r->park_id,
+                        'KingdomId' => $r->kingdom_id,
+                        'Name' => $r->name,
+                        'Abbreviation' => $r->abbreviation,
+                        'Location' => $r->location,
+                        'Url' => $r->url,
+                        'Directions' => stripslashes(nl2br($r->directions)),
+                        'Description' => stripslashes(nl2br($r->description)),
+                        'ParkTitleId' => $r->parktitle_id,
+                        'Active' => $r->active,
+                        'Title' => $r->title,
+                        'Class' => $r->class,
                         'HasHeraldry' => $r->has_heraldry,
                         'City' => $r->city,
                         'Province' => $r->province
-					);
-			}
-		} else {
-			$response['Status'] = InvalidParameter();
-		}
-		return $response;
-	}
-	
-	public function SetKingdomParkTitles($request) {
-		$response = array();
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
-			$this->log->Write('Kingdom', $mundane_id, LOG_EDIT, $request);
-			if (is_array($request['ParkTitles'])) {
-				$parktitle = new yapo($this->db, DB_PREFIX . 'parktitle');
-				foreach ($request['ParkTitles'] as $k => $title) {
-					switch ($title['Action']) {
-						case CFG_REMOVE:
-							$parktitle->clear();
-							$parktitle->parktitle_id = $title['ParkTitleId'];
-							if (valid_id($title['ParkTitleId']) && $parktitle->find()) {
-								if ($parktitle->kingdom_id != $request['KingdomId']) {
-									$response['Status'] = NoAuthorization('You cannot edit the park titles of another kingdom.');
-									return $response;
-								}									
-								$parktitle->delete();
-							}
-							break;
-						case CFG_EDIT:
-							$parktitle->clear();
-							$parktitle->parktitle_id = $title['ParkTitleId'];
-							if (valid_id($title['ParkTitleId']) && $parktitle->find()) {
-								if ($parktitle->kingdom_id != $request['KingdomId']) {
-									$response['Status'] = NoAuthorization('You cannot edit the park titles of another kingdom.');
-									return $response;
-								}									
-								$parktitle->title = strlen($title['Title'])?$title['Title']:$parktitle->title;
-								$parktitle->class = strlen($title['Class'])?$title['Class']:$parktitle->class;
-								$parktitle->minimumattendance = strlen($title['MinimumAttendance'])?$title['MinimumAttendance']:$parktitle->minimumattendance;
-								$parktitle->minimumcutoff = strlen($title['MinimumCutoff'])?$title['MinimumCutoff']:$parktitle->minimumcutoff;
-								$parktitle->period = strlen($title['Period'])?$title['Period']:$parktitle->period;
-								$parktitle->period_length = strlen($title['PeriodLength'])?$title['PeriodLength']:$parktitle->period_length;
-								$parktitle->save();
-							}
-							break;
-						case CFG_ADD:
-							$parktitle->clear();
-							$parktitle->kingdom_id = $request['KingdomId'];
-							$parktitle->title = $title['Title'];
-							$parktitle->class = $title['Class'];
-							$parktitle->minimumattendance = $title['MinimumAttendance'];
-							$parktitle->minimumcutoff = $title['MinimumCutoff'];
-							$parktitle->period = $title['Period'];
-							$parktitle->period_length = $title['PeriodLength'];
-							$parktitle->save();
-							break;
-					}
-				}
-			}
-			$response = Success();
-		} else {
-			$response = NoAuthorization(null, $mundane_id);
-		}
-		return $response;
-	}
-	
-	public function SetKingdomDetails($request) {
-		$response = array();
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
-			$this->log->Write('Kingdom', $mundane_id, LOG_EDIT, $request);
-			$this->kingdom->clear();
-			$this->kingdom->kingdom_id = $request['KingdomId'];
-			if ($this->kingdom->find()) {
-				$this->kingdom->name = strlen($request['Name'])>0?$request['Name']:$this->kingdom->name;
-				$this->kingdom->abbreviation = strlen($request['Abbreviation'])>0?$request['Abbreviation']:$this->kingdom->abbreviation;
-				if (isset($request['Description'])) $this->kingdom->description = $request['Description'];
-				if (isset($request['Url'])) $this->kingdom->url = $request['Url'];
-				$this->kingdom->modified = date("Y-m-d H:i:s", time());
-				$this->kingdom->save();
-				
-				Ork3::$Lib->heraldry->SetKingdomHeraldry($request);
-				
-				$c = new Common();
-				if (is_array($request['KingdomConfiguration'])) {
-					foreach ($request['KingdomConfiguration'] as $k => $config) {
-						switch ($config['Action']) {
-							case CFG_REMOVE:
-								$c->remove_config($mundane_id, $config['ConfigurationId'], CFG_KINGDOM, $this->kingdom->kingdom_id, $config['Key']);
-								break;
-							case CFG_EDIT:
-								$c->update_config($mundane_id, $config['ConfigurationId'], CFG_KINGDOM, $this->kingdom->kingdom_id, $config['Key'], $config['Value']);
-								break;
-							case CFG_ADD:
-								$c->add_config($mundane_id, CFG_KINGDOM, $config['Type'], $this->kingdom->kingdom_id, $config['Key'], $config['Value'], $config['UserSetting'], $config['AllowedValues']);
-								break;
-						}
-					}
-				}
-				$response = Success();
-			} else {
-				$response = InvalidParameter(NULL, 'Problem processing request');
-			}
-		} else {
-			$response = NoAuthorization(null, $mundane_id);
-		}
-		return $response;
-	}
+                    );
+            }
+        } else {
+            $response['Status'] = InvalidParameter();
+        }
+        return $response;
+    }
 
-	public function SetKingdomParent($request) {
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
-			$kingdom_id = (int)$request['KingdomId'];
-			$parent_id  = (int)$request['ParentKingdomId'];
-			// Cannot make a kingdom its own parent or create a circular reference
-			if ($parent_id === $kingdom_id) {
-				return InvalidParameter('A kingdom cannot be its own parent.');
-			}
-			$this->kingdom->clear();
-			$this->kingdom->kingdom_id = $kingdom_id;
-			if (!$this->kingdom->find()) {
-				return InvalidParameter('Kingdom not found.');
-			}
-			if ($parent_id > 0) {
-				$this->kingdom->clear();
-				$this->kingdom->kingdom_id = $parent_id;
-				if (!$this->kingdom->find()) {
-					return InvalidParameter('Parent kingdom not found.');
-				}
-				// Cycle prevention: walk the proposed parent's ancestor chain. If we
-				// reach $kingdom_id, the proposed parent is a descendant of the
-				// kingdom we are reparenting → that would create a loop. Reject it.
-				$walker  = new yapo($this->db, DB_PREFIX . 'kingdom');
-				$cursor  = $parent_id;
-				$visited = array();
-				while ($cursor > 0) {
-					if ($cursor === $kingdom_id) {
-						return InvalidParameter('A kingdom cannot be made a child of one of its own descendants.');
-					}
-					if (isset($visited[$cursor])) {
-						break; // pre-existing cycle in data — stop walking
-					}
-					$visited[$cursor] = true;
-					$walker->clear();
-					$walker->kingdom_id = $cursor;
-					if (!$walker->find()) {
-						break;
-					}
-					$cursor = (int)$walker->parent_kingdom_id;
-				}
-				$this->kingdom->clear();
-				$this->kingdom->kingdom_id = $kingdom_id;
-				$this->kingdom->find();
-			}
-			$this->log->Write('Kingdom', $mundane_id, LOG_EDIT, $request);
-			$this->kingdom->parent_kingdom_id = $parent_id;
-			$this->kingdom->modified = date('Y-m-d H:i:s', time());
-			$this->kingdom->save();
-			$this->_flushPrincipalityCaches();
-			return Success();
-		}
-		return NoAuthorization();
-	}
+    public function SetKingdomParkTitles($request)
+    {
+        $response = array();
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+            $this->log->Write('Kingdom', $mundane_id, LOG_EDIT, $request);
+            if (is_array($request['ParkTitles'])) {
+                $parktitle = new yapo($this->db, DB_PREFIX . 'parktitle');
+                foreach ($request['ParkTitles'] as $k => $title) {
+                    switch ($title['Action']) {
+                        case CFG_REMOVE:
+                            $parktitle->clear();
+                            $parktitle->parktitle_id = $title['ParkTitleId'];
+                            if (valid_id($title['ParkTitleId']) && $parktitle->find()) {
+                                if ($parktitle->kingdom_id != $request['KingdomId']) {
+                                    $response['Status'] = NoAuthorization('You cannot edit the park titles of another kingdom.');
+                                    return $response;
+                                }
+                                $parktitle->delete();
+                            }
+                            break;
+                        case CFG_EDIT:
+                            $parktitle->clear();
+                            $parktitle->parktitle_id = $title['ParkTitleId'];
+                            if (valid_id($title['ParkTitleId']) && $parktitle->find()) {
+                                if ($parktitle->kingdom_id != $request['KingdomId']) {
+                                    $response['Status'] = NoAuthorization('You cannot edit the park titles of another kingdom.');
+                                    return $response;
+                                }
+                                $parktitle->title = strlen($title['Title']) ? $title['Title'] : $parktitle->title;
+                                $parktitle->class = strlen($title['Class']) ? $title['Class'] : $parktitle->class;
+                                $parktitle->minimumattendance = strlen($title['MinimumAttendance']) ? $title['MinimumAttendance'] : $parktitle->minimumattendance;
+                                $parktitle->minimumcutoff = strlen($title['MinimumCutoff']) ? $title['MinimumCutoff'] : $parktitle->minimumcutoff;
+                                $parktitle->period = strlen($title['Period']) ? $title['Period'] : $parktitle->period;
+                                $parktitle->period_length = strlen($title['PeriodLength']) ? $title['PeriodLength'] : $parktitle->period_length;
+                                $parktitle->save();
+                            }
+                            break;
+                        case CFG_ADD:
+                            $parktitle->clear();
+                            $parktitle->kingdom_id = $request['KingdomId'];
+                            $parktitle->title = $title['Title'];
+                            $parktitle->class = $title['Class'];
+                            $parktitle->minimumattendance = $title['MinimumAttendance'];
+                            $parktitle->minimumcutoff = $title['MinimumCutoff'];
+                            $parktitle->period = $title['Period'];
+                            $parktitle->period_length = $title['PeriodLength'];
+                            $parktitle->save();
+                            break;
+                    }
+                }
+            }
+            $response = Success();
+        } else {
+            $response = NoAuthorization(null, $mundane_id);
+        }
+        return $response;
+    }
 
-	// Active child-principality kingdom ids of $kingdomId ([] if none). Uses the
-	// same criteria as GetPrincipalities (parent_kingdom_id = $kingdomId AND
-	// active = 'Active').
-	public function GetChildPrincipalityIds($kingdomId) {
-		$kingdomId = (int)$kingdomId;
-		$ids = array();
-		if ($kingdomId <= 0) {
-			return $ids;
-		}
-		if (isset($this->childPrincipalityCache[$kingdomId])) {
-			return $this->childPrincipalityCache[$kingdomId];
-		}
-		$child = new yapo($this->db, DB_PREFIX . 'kingdom');
-		$child->clear();
-		$child->parent_kingdom_id = $kingdomId;
-		$child->active = 'Active';
-		if ($child->find()) {
-			do {
-				$ids[] = (int)$child->kingdom_id;
-			} while ($child->next());
-		}
-		$this->childPrincipalityCache[$kingdomId] = $ids;
-		return $ids;
-	}
+    public function SetKingdomDetails($request)
+    {
+        $response = array();
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+            $this->log->Write('Kingdom', $mundane_id, LOG_EDIT, $request);
+            $this->kingdom->clear();
+            $this->kingdom->kingdom_id = $request['KingdomId'];
+            if ($this->kingdom->find()) {
+                $this->kingdom->name = strlen($request['Name']) > 0 ? $request['Name'] : $this->kingdom->name;
+                $this->kingdom->abbreviation = strlen($request['Abbreviation']) > 0 ? $request['Abbreviation'] : $this->kingdom->abbreviation;
+                if (isset($request['Description'])) {
+                    $this->kingdom->description = $request['Description'];
+                }
+                if (isset($request['Url'])) {
+                    $this->kingdom->url = $request['Url'];
+                }
+                $this->kingdom->modified = date("Y-m-d H:i:s", time());
+                $this->kingdom->save();
 
-	// [$kingdomId, ...child principality ids] — ALWAYS includes children.
-	// Structural scoping (parks dropdown, player search) uses THIS.
-	public function GetFamilyKingdomIds($kingdomId) {
-		$kingdomId = (int)$kingdomId;
-		return array_merge(array($kingdomId), $this->GetChildPrincipalityIds($kingdomId));
-	}
+                Ork3::$Lib->heraldry->SetKingdomHeraldry($request);
 
-	// True iff the IncludePrincipalityInStatistics config flag for $kingdomId is '1'.
-	public function StatsIncludesPrincipalities($kingdomId) {
-		$kingdomId = (int)$kingdomId;
-		if (isset($this->statsIncludesPrincipalityCache[$kingdomId])) {
-			return $this->statsIncludesPrincipalityCache[$kingdomId];
-		}
-		$configs = Common::get_configs($kingdomId, CFG_KINGDOM);
-		$enabled = isset($configs['IncludePrincipalityInStatistics'])
-			&& (int)$configs['IncludePrincipalityInStatistics']['Value'] === 1;
-		$this->statsIncludesPrincipalityCache[$kingdomId] = $enabled;
-		return $enabled;
-	}
+                $c = new Common();
+                if (is_array($request['KingdomConfiguration'])) {
+                    foreach ($request['KingdomConfiguration'] as $k => $config) {
+                        switch ($config['Action']) {
+                            case CFG_REMOVE:
+                                $c->remove_config($mundane_id, $config['ConfigurationId'], CFG_KINGDOM, $this->kingdom->kingdom_id, $config['Key']);
+                                break;
+                            case CFG_EDIT:
+                                $c->update_config($mundane_id, $config['ConfigurationId'], CFG_KINGDOM, $this->kingdom->kingdom_id, $config['Key'], $config['Value']);
+                                break;
+                            case CFG_ADD:
+                                $c->add_config($mundane_id, CFG_KINGDOM, $config['Type'], $this->kingdom->kingdom_id, $config['Key'], $config['Value'], $config['UserSetting'], $config['AllowedValues']);
+                                break;
+                        }
+                    }
+                }
+                $response = Success();
+            } else {
+                $response = InvalidParameter(null, 'Problem processing request');
+            }
+        } else {
+            $response = NoAuthorization(null, $mundane_id);
+        }
+        return $response;
+    }
 
-	// GetFamilyKingdomIds($kingdomId) when StatsIncludesPrincipalities is true AND
-	// there are children; otherwise [$kingdomId]. STATS/REPORT scoping uses THIS.
-	public function GetStatsKingdomIds($kingdomId) {
-		$kingdomId = (int)$kingdomId;
-		$children = $this->GetChildPrincipalityIds($kingdomId);
-		if (count($children) > 0 && $this->StatsIncludesPrincipalities($kingdomId)) {
-			return array_merge(array($kingdomId), $children);
-		}
-		return array($kingdomId);
-	}
+    public function SetKingdomParent($request)
+    {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            $kingdom_id = (int)$request['KingdomId'];
+            $parent_id  = (int)$request['ParentKingdomId'];
+            // Cannot make a kingdom its own parent or create a circular reference
+            if ($parent_id === $kingdom_id) {
+                return InvalidParameter('A kingdom cannot be its own parent.');
+            }
+            $this->kingdom->clear();
+            $this->kingdom->kingdom_id = $kingdom_id;
+            if (!$this->kingdom->find()) {
+                return InvalidParameter('Kingdom not found.');
+            }
+            if ($parent_id > 0) {
+                $this->kingdom->clear();
+                $this->kingdom->kingdom_id = $parent_id;
+                if (!$this->kingdom->find()) {
+                    return InvalidParameter('Parent kingdom not found.');
+                }
+                // Cycle prevention: walk the proposed parent's ancestor chain. If we
+                // reach $kingdom_id, the proposed parent is a descendant of the
+                // kingdom we are reparenting → that would create a loop. Reject it.
+                $walker  = new yapo($this->db, DB_PREFIX . 'kingdom');
+                $cursor  = $parent_id;
+                $visited = array();
+                while ($cursor > 0) {
+                    if ($cursor === $kingdom_id) {
+                        return InvalidParameter('A kingdom cannot be made a child of one of its own descendants.');
+                    }
+                    if (isset($visited[$cursor])) {
+                        break; // pre-existing cycle in data — stop walking
+                    }
+                    $visited[$cursor] = true;
+                    $walker->clear();
+                    $walker->kingdom_id = $cursor;
+                    if (!$walker->find()) {
+                        break;
+                    }
+                    $cursor = (int)$walker->parent_kingdom_id;
+                }
+                $this->kingdom->clear();
+                $this->kingdom->kingdom_id = $kingdom_id;
+                $this->kingdom->find();
+            }
+            $this->log->Write('Kingdom', $mundane_id, LOG_EDIT, $request);
+            $this->kingdom->parent_kingdom_id = $parent_id;
+            $this->kingdom->modified = date('Y-m-d H:i:s', time());
+            $this->kingdom->save();
+            $this->_flushPrincipalityCaches();
+            return Success();
+        }
+        return NoAuthorization();
+    }
 
-	public function GetOfficers($request) {
-		$kingdom_id = mysql_real_escape_string($request['KingdomId']);
-		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-		$is_authorized = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT);
+    // Active child-principality kingdom ids of $kingdomId ([] if none). Uses the
+    // same criteria as GetPrincipalities (parent_kingdom_id = $kingdomId AND
+    // active = 'Active').
+    public function GetChildPrincipalityIds($kingdomId)
+    {
+        $kingdomId = (int)$kingdomId;
+        $ids = array();
+        if ($kingdomId <= 0) {
+            return $ids;
+        }
+        if (isset($this->childPrincipalityCache[$kingdomId])) {
+            return $this->childPrincipalityCache[$kingdomId];
+        }
+        $child = new yapo($this->db, DB_PREFIX . 'kingdom');
+        $child->clear();
+        $child->parent_kingdom_id = $kingdomId;
+        $child->active = 'Active';
+        if ($child->find()) {
+            do {
+                $ids[] = (int)$child->kingdom_id;
+            } while ($child->next());
+        }
+        $this->childPrincipalityCache[$kingdomId] = $ids;
+        return $ids;
+    }
 
-		$sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.mundane_id as m_mundane_id, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id
+    // [$kingdomId, ...child principality ids] — ALWAYS includes children.
+    // Structural scoping (parks dropdown, player search) uses THIS.
+    public function GetFamilyKingdomIds($kingdomId)
+    {
+        $kingdomId = (int)$kingdomId;
+        return array_merge(array($kingdomId), $this->GetChildPrincipalityIds($kingdomId));
+    }
+
+    // True iff the IncludePrincipalityInStatistics config flag for $kingdomId is '1'.
+    public function StatsIncludesPrincipalities($kingdomId)
+    {
+        $kingdomId = (int)$kingdomId;
+        if (isset($this->statsIncludesPrincipalityCache[$kingdomId])) {
+            return $this->statsIncludesPrincipalityCache[$kingdomId];
+        }
+        $configs = Common::get_configs($kingdomId, CFG_KINGDOM);
+        $enabled = isset($configs['IncludePrincipalityInStatistics'])
+            && (int)$configs['IncludePrincipalityInStatistics']['Value'] === 1;
+        $this->statsIncludesPrincipalityCache[$kingdomId] = $enabled;
+        return $enabled;
+    }
+
+    // GetFamilyKingdomIds($kingdomId) when StatsIncludesPrincipalities is true AND
+    // there are children; otherwise [$kingdomId]. STATS/REPORT scoping uses THIS.
+    public function GetStatsKingdomIds($kingdomId)
+    {
+        $kingdomId = (int)$kingdomId;
+        $children = $this->GetChildPrincipalityIds($kingdomId);
+        if (count($children) > 0 && $this->StatsIncludesPrincipalities($kingdomId)) {
+            return array_merge(array($kingdomId), $children);
+        }
+        return array($kingdomId);
+    }
+
+    public function GetOfficers($request)
+    {
+        $kingdom_id = mysql_real_escape_string($request['KingdomId']);
+        $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+        $is_authorized = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT);
+
+        $sql = "select a.*, p.name as park_name, k.name as kingdom_name, e.name as event_name, u.name as unit_name, m.mundane_id as m_mundane_id, m.username, m.given_name, m.surname, m.persona, m.restricted, o.role as officer_role, o.officer_id
 					from " . DB_PREFIX . "officer o
 						left join " . DB_PREFIX . "mundane m on o.mundane_id = m.mundane_id
 						left join " . DB_PREFIX . "authorization a on a.authorization_id = o.authorization_id
@@ -695,166 +756,180 @@ class Kingdom  extends Ork3 {
 				where o.kingdom_id = '" . $kingdom_id . "' and o.park_id = 0
 				order by FIELD(o.role, 'Monarch', 'Regent', 'Prime Minister', 'Champion', 'GMR'), o.role
 			";
-		$r = $this->db->query($sql);
-		$response = array();
-		$response['Officers'] = array();
-		if ($r !== false && $r->size() > 0) {
-			$response['Status'] = Success();
-			while ($r->next()) {
-				$fetchprivate = true;
-				if ($mundane_id > 0 && $is_authorized) {
-					$fetchprivate = false;
-				}
-				$response['Officers'][] = array(
-							'AuthorizationId' => $r->authorization_id,
-							'MundaneId' => $r->m_mundane_id,
-							'ParkId' => $r->park_id,
-							'KingdomId' => $r->kingdom_id,
-							'EventId' => $r->event_id,
-							'UnitId' => $r->unit_id,
-							'Role' => $r->role,
-							'ParkName' => $r->park_name,
-							'KingdomName' => $r->kingdom_name,
-							'EventName' => $r->event_name,
-							'UnitName' => $r->unit_name,
-							'Restricted' => $r->restricted,
-							'UserName' => $r->username,
-							'GivenName' => $fetchprivate?"":$r->given_name,
-							'Surname' => $fetchprivate?"":$r->surname,
-							'Persona' => $r->persona,
-							'OfficerId' => $r->officer_id,
-							'OfficerRole' => $r->officer_role
-						);
-			}
-			$response['Status'] = Success();
-		} else {
-			$response['Status'] = InvalidParameter();
-		}
-		return $response;
-	}
-	
-	public function SetOfficer($request) {
-		$response = array();
-		$mundane = Ork3::$Lib->player->player_info($request['MundaneId']);
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
-			if ($mundane['KingdomId'] == $request['KingdomId']) {
-				// Look up prior holder so the audit can show before/after,
-				// and so we can suppress no-op re-saves of the same assignment.
-				$_priorOfficer = new yapo($this->db, DB_PREFIX . 'officer');
-				$_priorOfficer->clear();
-				$_priorOfficer->kingdom_id = (int)$request['KingdomId'];
-				$_priorOfficer->park_id    = 0;
-				$_priorOfficer->role       = $request['Role'];
-				$_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
+        $r = $this->db->query($sql);
+        $response = array();
+        $response['Officers'] = array();
+        if ($r !== false && $r->size() > 0) {
+            $response['Status'] = Success();
+            while ($r->next()) {
+                $fetchprivate = true;
+                if ($mundane_id > 0 && $is_authorized) {
+                    $fetchprivate = false;
+                }
+                $response['Officers'][] = array(
+                            'AuthorizationId' => $r->authorization_id,
+                            'MundaneId' => $r->m_mundane_id,
+                            'ParkId' => $r->park_id,
+                            'KingdomId' => $r->kingdom_id,
+                            'EventId' => $r->event_id,
+                            'UnitId' => $r->unit_id,
+                            'Role' => $r->role,
+                            'ParkName' => $r->park_name,
+                            'KingdomName' => $r->kingdom_name,
+                            'EventName' => $r->event_name,
+                            'UnitName' => $r->unit_name,
+                            'Restricted' => $r->restricted,
+                            'UserName' => $r->username,
+                            'GivenName' => $fetchprivate ? "" : $r->given_name,
+                            'Surname' => $fetchprivate ? "" : $r->surname,
+                            'Persona' => $r->persona,
+                            'OfficerId' => $r->officer_id,
+                            'OfficerRole' => $r->officer_role
+                        );
+            }
+            $response['Status'] = Success();
+        } else {
+            $response['Status'] = InvalidParameter();
+        }
+        return $response;
+    }
 
-				$officer = new yapo($this->db, DB_PREFIX . 'officer');
-				$c = new Common();
-				$c->set_officer($request['KingdomId'], 0, $request['MundaneId'], $request['Role']);
+    public function SetOfficer($request)
+    {
+        $response = array();
+        $mundane = Ork3::$Lib->player->player_info($request['MundaneId']);
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+            if ($mundane['KingdomId'] == $request['KingdomId']) {
+                // Look up prior holder so the audit can show before/after,
+                // and so we can suppress no-op re-saves of the same assignment.
+                $_priorOfficer = new yapo($this->db, DB_PREFIX . 'officer');
+                $_priorOfficer->clear();
+                $_priorOfficer->kingdom_id = (int)$request['KingdomId'];
+                $_priorOfficer->park_id    = 0;
+                $_priorOfficer->role       = $request['Role'];
+                $_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
 
-				if ($_priorMundaneId !== (int)$request['MundaneId']) {
-					$_audit_req = $request;
-					unset($_audit_req['Token']);
-					Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $_audit_req, 'Kingdom', (int)$request['KingdomId'],
-						['MundaneId' => $_priorMundaneId, 'Role' => $request['Role']],
-						[
-							'KingdomId' => (int)$request['KingdomId'],
-							'MundaneId' => (int)$request['MundaneId'],
-							'Role'      => $request['Role'],
-						]
-					);
-				}
-			} else {
-				return InvalidParameter(null, "The new officer must be a member of this Kingdom.");
-			}
-		} else {
-			$response = NoAuthorization();
-		}
-		return $response;
-	}
+                $officer = new yapo($this->db, DB_PREFIX . 'officer');
+                $c = new Common();
+                $c->set_officer($request['KingdomId'], 0, $request['MundaneId'], $request['Role']);
 
-	public function VacateOfficer($request) {
-		$response = array();
-		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-		if ($mundane_id > 0) {
-			if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
-				$_priorOfficer = new yapo($this->db, DB_PREFIX . 'officer');
-				$_priorOfficer->clear();
-				$_priorOfficer->kingdom_id = (int)$request['KingdomId'];
-				$_priorOfficer->park_id    = 0;
-				$_priorOfficer->role       = $request['Role'];
-				$_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
+                if ($_priorMundaneId !== (int)$request['MundaneId']) {
+                    $_audit_req = $request;
+                    unset($_audit_req['Token']);
+                    Ork3::$Lib->dangeraudit->audit(
+                        __CLASS__ . '::' . __FUNCTION__,
+                        $_audit_req,
+                        'Kingdom',
+                        (int)$request['KingdomId'],
+                        ['MundaneId' => $_priorMundaneId, 'Role' => $request['Role']],
+                        [
+                            'KingdomId' => (int)$request['KingdomId'],
+                            'MundaneId' => (int)$request['MundaneId'],
+                            'Role'      => $request['Role'],
+                        ]
+                    );
+                }
+            } else {
+                return InvalidParameter(null, "The new officer must be a member of this Kingdom.");
+            }
+        } else {
+            $response = NoAuthorization();
+        }
+        return $response;
+    }
 
-				$c = new Common();
-				$c->set_officer($request['KingdomId'], 0, 0, $request['Role']);
+    public function VacateOfficer($request)
+    {
+        $response = array();
+        $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+        if ($mundane_id > 0) {
+            if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+                $_priorOfficer = new yapo($this->db, DB_PREFIX . 'officer');
+                $_priorOfficer->clear();
+                $_priorOfficer->kingdom_id = (int)$request['KingdomId'];
+                $_priorOfficer->park_id    = 0;
+                $_priorOfficer->role       = $request['Role'];
+                $_priorMundaneId = $_priorOfficer->find() ? (int)$_priorOfficer->mundane_id : 0;
 
-				if ($_priorMundaneId > 0) {
-					$_audit_req = $request;
-					unset($_audit_req['Token']);
-					Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::' . __FUNCTION__, $_audit_req, 'Kingdom', (int)$request['KingdomId'],
-						['MundaneId' => $_priorMundaneId, 'Role' => $request['Role']],
-						[
-							'KingdomId' => (int)$request['KingdomId'],
-							'Role'      => $request['Role'],
-						]
-					);
-				}
-			} else {
-				$response = NoAuthorization();
-			}
-		} else {
-			$response = NoAuthorization();
-		}
-		return $response;
-	}
+                $c = new Common();
+                $c->set_officer($request['KingdomId'], 0, 0, $request['Role']);
 
-	public function RetireKingdom($request) {
-		return $this->WaffleKingdom($request, 'Retired');
-	}
-	
-	public function RestoreKingdom($request) {
-		return $this->WaffleKingdom($request, 'Active');
-	}
-	
-	public function WaffleKingdom($request, $waffle) {
-		$response = array();
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-				&& Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
-			$this->log->Write('Kingdom', $mundane_id, 'Active'==$waffle?LOG_RESTORE:LOG_RETIRE, $request);
-			$this->kingdom->clear();
-			$this->kingdom->kingdom_id = $request['KingdomId'];
-			if ($this->kingdom->find()) {
-				$this->kingdom->active = $waffle;
-				$this->kingdom->save();
-				$this->_flushPrincipalityCaches();
-				$response = Success();
-			} else {
-				$response = InvalidParameter(NULL, 'Problem processing request.');
-			}
-		} else {
-			$response = NoAuthorization();
-		}
-		return $response;
-	}
-    
-    public function GetKingdoms($request) {
-        $response = array('Status'=>Success(), 'Kingdoms' => array());
+                if ($_priorMundaneId > 0) {
+                    $_audit_req = $request;
+                    unset($_audit_req['Token']);
+                    Ork3::$Lib->dangeraudit->audit(
+                        __CLASS__ . '::' . __FUNCTION__,
+                        $_audit_req,
+                        'Kingdom',
+                        (int)$request['KingdomId'],
+                        ['MundaneId' => $_priorMundaneId, 'Role' => $request['Role']],
+                        [
+                            'KingdomId' => (int)$request['KingdomId'],
+                            'Role'      => $request['Role'],
+                        ]
+                    );
+                }
+            } else {
+                $response = NoAuthorization();
+            }
+        } else {
+            $response = NoAuthorization();
+        }
+        return $response;
+    }
+
+    public function RetireKingdom($request)
+    {
+        return $this->WaffleKingdom($request, 'Retired');
+    }
+
+    public function RestoreKingdom($request)
+    {
+        return $this->WaffleKingdom($request, 'Active');
+    }
+
+    public function WaffleKingdom($request, $waffle)
+    {
+        $response = array();
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
+                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+            $this->log->Write('Kingdom', $mundane_id, 'Active' == $waffle ? LOG_RESTORE : LOG_RETIRE, $request);
+            $this->kingdom->clear();
+            $this->kingdom->kingdom_id = $request['KingdomId'];
+            if ($this->kingdom->find()) {
+                $this->kingdom->active = $waffle;
+                $this->kingdom->save();
+                $this->_flushPrincipalityCaches();
+                $response = Success();
+            } else {
+                $response = InvalidParameter(null, 'Problem processing request.');
+            }
+        } else {
+            $response = NoAuthorization();
+        }
+        return $response;
+    }
+
+    public function GetKingdoms($request)
+    {
+        $response = array('Status' => Success(), 'Kingdoms' => array());
         $this->kingdom->clear();
         $this->kingdom->active = 'Active';
-        if ($this->kingdom->find()) do {
-    		$config = Common::get_configs($this->kingdom->kingdom_id);
-            $response['Kingdoms'][$this->kingdom->kingdom_id] = array(
-                    'KingdomId' => $this->kingdom->kingdom_id,
-                    'KingdomName' => $this->kingdom->name,
-                    'Abbreviation' => $this->kingdom->abbreviation,
-                    'KingdomColor' => $config['AtlasColor']['Value'],
-										'ParentKingdomId' => $this->kingdom->parent_kingdom_id,
-										'Active' => $this->kingdom->active
-                );
-        } while ($this->kingdom->next());
+        if ($this->kingdom->find()) {
+            do {
+                $config = Common::get_configs($this->kingdom->kingdom_id);
+                $response['Kingdoms'][$this->kingdom->kingdom_id] = array(
+                        'KingdomId' => $this->kingdom->kingdom_id,
+                        'KingdomName' => $this->kingdom->name,
+                        'Abbreviation' => $this->kingdom->abbreviation,
+                        'KingdomColor' => $config['AtlasColor']['Value'],
+                                            'ParentKingdomId' => $this->kingdom->parent_kingdom_id,
+                                            'Active' => $this->kingdom->active
+                    );
+            } while ($this->kingdom->next());
+        }
         return $response;
     }
 
 }
-
-?>

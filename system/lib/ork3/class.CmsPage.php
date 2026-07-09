@@ -46,10 +46,12 @@ class CmsPage extends CmsBase
     private static $RESERVED_PAGE_SLUGS = array('blog', 'post', 'p', 'k');
 
     /**
-     * Per-request memo: whether ork_cms_redirect exists (keeps redirect recording
-     * + lookup silent before the C17 migration runs). null = not yet probed.
+     * Per-request memo of the ancestor chain, keyed by page_id (C13). PagePath()
+     * + GetPageByPath() re-walk the parent chain per render; this collapses the
+     * repeats. Mirrors the static-memo pattern used for table-existence probes.
+     * Invalidated whenever a parent link changes (UpdatePage/DeletePage).
      */
-    private static $_redirectTableExists = null;
+    private static $_ancestorMemo = array();
 
     /**
      * C17: is $slug a reserved top-level page slug (would be unreachable behind
@@ -200,12 +202,24 @@ class CmsPage extends CmsBase
      */
     public function CreatePage($data)
     {
-        global $DB;
-
         $now = date('Y-m-d H:i:s');
 
         $cols = array(
-            'slug'             => preg_replace('/[^a-z0-9\-]+/', '', strtolower((string)(isset($data['slug']) ? $data['slug'] : ''))),
+            // Shared canonical derivation (CmsBase::_normalizeSlug): 'My Page' ->
+            // 'my-page'. Previously stripped non-alphanumerics to nothing
+            // ('mypage'); now hyphenated to match CmsSite and produce readable
+            // slugs. Only affects slugs DERIVED here for new pages — stored slugs
+            // are untouched, and the reserved-slug guard below still applies.
+            'slug'             => $this->_normalizeSlug(isset($data['slug']) ? $data['slug'] : ''),
+            // NOTE: 'type' is AUTHOR-FACING editor metadata, not a render input.
+            // It records which editor preset a page was created from (see
+            // Controller_Cms::_pageTypes — 'composed'|'article'|'media'|'about'|
+            // 'resource'|'blog_index') and labels the admin list's Type column. The
+            // PUBLIC renderer (frontdoor/render_blocks.tpl) is driven entirely by
+            // per-BLOCK type + the site meta og_type literal, and never reads this
+            // column. Kept for editor/admin ergonomics; intentionally inert at
+            // render time. If a future need arises to drive layout/meta from it,
+            // do it in the Site render path, not here.
             'type'             => isset($data['type']) ? (string)$data['type'] : 'composed',
             'title'            => isset($data['title']) ? (string)$data['title'] : '',
             'status'           => isset($data['status']) ? (string)$data['status'] : 'draft',
@@ -236,63 +250,11 @@ class CmsPage extends CmsBase
             return 0;
         }
 
-        // Guard against duplicate (scope_type, scope_id, slug) BEFORE inserting.
-        // lastInsertId() is unreliable on dup-key under ERRMODE_WARNING — a stale
-        // id would let ReplaceBlocks silently overwrite a different page's blocks.
-        $DB->Clear();
-        $DB->slug       = $cols['slug'];
-        $DB->scope_type = $cols['scope_type'];
-        $DB->scope_id   = $cols['scope_id'];
-        $existing = $this->_firstRow($DB->DataSet(
-            'SELECT page_id FROM ' . DB_PREFIX . 'cms_page'
-            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND slug = :slug LIMIT 1'
-        ));
-        if ($existing !== null) {
-            return 0;   // slug already in use — signal collision to caller
-        }
-
-        $names = array_keys($cols);
-        $placeholders = array();
-        foreach ($names as $n) {
-            $placeholders[] = ':' . $n;
-        }
-        // INSERT IGNORE so a concurrent racer that already claimed this unique
-        // (scope_type, scope_id, slug) tuple makes OUR insert a silent no-op
-        // rather than an error. We then read ROW_COUNT() on the same connection
-        // to learn whether WE created the row (C29): the pre-check above closes
-        // the common case, but two simultaneous "new" saves both pass it, and
-        // only the winner's INSERT actually lands.
-        $sql = 'INSERT IGNORE INTO ' . DB_PREFIX . 'cms_page (`' . implode('`, `', $names) . '`)'
-            . ' VALUES (' . implode(', ', $placeholders) . ')';
-
-        $DB->Clear();
-        foreach ($cols as $field => $value) {
-            $DB->$field = $value;
-        }
-        $DB->Execute($sql);
-
-        // ROW_COUNT() reflects the row-count of the immediately-preceding INSERT
-        // on this connection: 1 = we inserted, 0 = the tuple already existed (a
-        // concurrent winner). If we did NOT create it, return 0 so the caller
-        // FAILS the save instead of adopting the winner's page_id and clobbering
-        // its blocks. (Clear() only resets bound params, not connection state.)
-        $DB->Clear();
-        $rc = $this->_firstRow($DB->DataSet('SELECT ROW_COUNT() AS rc'));
-        if ($rc === null || (int)$rc['rc'] < 1) {
-            return 0;   // lost the race (or nothing inserted) — signal collision
-        }
-
-        // Read back by the unique tuple instead of trusting GetLastInsertId().
-        $DB->Clear();
-        $DB->slug       = $cols['slug'];
-        $DB->scope_type = $cols['scope_type'];
-        $DB->scope_id   = $cols['scope_id'];
-        $row = $this->_firstRow($DB->DataSet(
-            'SELECT page_id FROM ' . DB_PREFIX . 'cms_page'
-            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND slug = :slug LIMIT 1'
-        ));
-
-        return $row ? (int)$row['page_id'] : 0;
+        // Shared dup-guarded insert (C29 + live-slug reuse). The dup pre-check,
+        // INSERT IGNORE, ROW_COUNT() race arbitration and authoritative
+        // read-back-by-live-tuple all live in CmsBase::_insertWithDupGuard so
+        // CreatePage/CreatePost stay in lockstep.
+        return $this->_insertWithDupGuard('cms_page', 'page_id', $cols);
     }
 
     /**
@@ -326,17 +288,45 @@ class CmsPage extends CmsBase
      * published_at, scope_type, scope_id, updated_by). updated_at is always
      * stamped. Returns true when a valid id was supplied and the UPDATE ran.
      *
-     * @param int   $pageId
-     * @param array $data subset of editable columns
+     * @param int         $pageId
+     * @param array       $data      subset of editable columns
+     * @param string|null $scopeType IDOR guard: caller's intended scope_type
+     * @param int|null    $scopeId   IDOR guard: caller's intended scope_id
      * @return bool
      */
-    public function UpdatePage($pageId, $data)
+    public function UpdatePage($pageId, $data, $scopeType = null, $scopeId = null)
     {
         global $DB;
 
         $pageId = (int)$pageId;
         if ($pageId <= 0 || !is_array($data)) {
             return false;
+        }
+
+        // IDOR guard (opt-in, mirrors DeletePage/RestorePage): when the caller
+        // supplies its intended scope, refuse to touch a page in a different org
+        // AND refuse to relocate this page OUT of the guarded scope. Runs its own
+        // Clear()/DataSet(), so it must precede the bind loop below.
+        if ($scopeType !== null) {
+            $wantType = $this->_normalizeScopeType($scopeType);
+            $DB->Clear();
+            $DB->page_id = $pageId;
+            $cur = $this->_firstRow($DB->DataSet(
+                'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_page WHERE page_id = :page_id LIMIT 1'
+            ));
+            if (
+                $cur === null
+                || (string)$cur['scope_type'] !== $wantType
+                || (int)$cur['scope_id'] !== (int)$scopeId
+            ) {
+                return false;
+            }
+            if (array_key_exists('scope_type', $data) && $this->_normalizeScopeType($data['scope_type']) !== $wantType) {
+                return false;
+            }
+            if (array_key_exists('scope_id', $data) && (int)$data['scope_id'] !== (int)$scopeId) {
+                return false;
+            }
         }
 
         // C17: if the slug is changing, read the pre-edit row AND its current full
@@ -353,14 +343,19 @@ class CmsPage extends CmsBase
 
             // Normalize the incoming slug here (before any binds accumulate on
             // $DB) so we can dup-check it up front — the check runs its own
-            // Clear()/DataSet() and must precede the bind loop below.
-            $newSlug = preg_replace('/[^a-z0-9\-]+/', '', strtolower((string)$data['slug']));
+            // Clear()/DataSet() and must precede the bind loop below. Uses the
+            // shared canonical derivation (hyphenated, matching CreatePage/CmsSite);
+            // _normalizeSlug is idempotent on an already-valid slug, so re-saving a
+            // page without changing its slug is a no-op (no spurious rename/redirect).
+            $newSlug = $this->_normalizeSlug($data['slug']);
 
             // Dup pre-check (mirrors CreatePage): a genuine rename to a slug
-            // already claimed by ANOTHER page in the same target scope is a
+            // already claimed by ANOTHER LIVE page in the same target scope is a
             // collision — refuse rather than let the UPDATE silently drop against
-            // the UNIQUE(scope_type, scope_id, slug) key. Empty/reserved slugs are
-            // handled below (existing slug kept), so they skip the check.
+            // the uq_page_scope_slug_live key. Trashed rows (deleted_at NOT NULL)
+            // have slug_live=NULL and so free the slug for reuse — they must NOT
+            // block a rename. Empty/reserved slugs are handled below (existing
+            // slug kept), so they skip the check.
             if (
                 $newSlug !== '' && !$this->IsReservedPageSlug($newSlug)
                 && $preEditRow !== null && $newSlug !== (string)$preEditRow['slug']
@@ -382,7 +377,8 @@ class CmsPage extends CmsBase
                 $dup = $this->_firstRow($DB->DataSet(
                     'SELECT page_id FROM ' . DB_PREFIX . 'cms_page'
                     . ' WHERE scope_type = :scope_type AND scope_id = :scope_id'
-                    . ' AND slug = :slug AND page_id <> :page_id LIMIT 1'
+                    . ' AND slug = :slug AND page_id <> :page_id'
+                    . ' AND deleted_at IS NULL LIMIT 1'
                 ));
                 if ($dup !== null) {
                     return false;   // slug already in use in this scope — collision
@@ -483,6 +479,11 @@ class CmsPage extends CmsBase
             . ' WHERE page_id = :page_id'
         );
 
+        // C13: a parent-link change invalidates any memoized ancestor chains.
+        if (array_key_exists('parent_id', $data)) {
+            self::$_ancestorMemo = array();
+        }
+
         // C17: after a slug change, verify the new slug actually LANDED before
         // trusting the rename. Execute() is void under ERRMODE_WARNING, so a
         // silently-dropped UPDATE (e.g. a racing writer claimed the tuple between
@@ -537,6 +538,12 @@ class CmsPage extends CmsBase
             return array();
         }
 
+        // Per-request memo: PagePath() + GetPageByPath() re-walk this chain per
+        // render. Invalidated on any parent-link change (UpdatePage/DeletePage).
+        if (array_key_exists($pageId, self::$_ancestorMemo)) {
+            return self::$_ancestorMemo[$pageId];
+        }
+
         $chain   = array();
         $seen    = array($pageId => true);
         $cursor  = $pageId;
@@ -566,6 +573,7 @@ class CmsPage extends CmsBase
             $seen[$parentId] = true;
             $cursor = $parentId;
         }
+        self::$_ancestorMemo[$pageId] = $chain;
         return $chain;
     }
 
@@ -702,6 +710,15 @@ class CmsPage extends CmsBase
         $toUrl     = ($toUrl === null || $toUrl === '') ? null : (string)$toUrl;
         $code      = ((int)$code === 302) ? 302 : 301;
 
+        // Open-redirect guard: a to_url is an admin-supplied target that the
+        // public router 30x-redirects to. Reject any unsafe scheme (javascript:,
+        // data:, etc.) rather than persist it — the same allowlist used at the
+        // block-field choke point. A rejected to_url with no to_page_id makes the
+        // whole row targetless (LookupRedirect skips it → 404), which is correct.
+        if ($toUrl !== null && !CmsSanitizer::IsSafeUrl($toUrl)) {
+            $toUrl = null;
+        }
+
         try {
             // Upsert on the UNIQUE(scope_type, scope_id, from_path) key.
             $DB->Clear();
@@ -788,20 +805,7 @@ class CmsPage extends CmsBase
     /** Per-request probe: does ork_cms_redirect exist yet? (C17 migration gate.) */
     private function _redirectTableAvailable()
     {
-        global $DB;
-
-        if (self::$_redirectTableExists === null) {
-            try {
-                $DB->Clear();
-                $probe = $this->_firstRow($DB->DataSet(
-                    "SHOW TABLES LIKE '" . DB_PREFIX . "cms_redirect'"
-                ));
-                self::$_redirectTableExists = ($probe !== null);
-            } catch (\Throwable $e) {
-                self::$_redirectTableExists = false;
-            }
-        }
-        return self::$_redirectTableExists === true;
+        return $this->_tableExists(DB_PREFIX . 'cms_redirect');
     }
 
     /**
@@ -822,54 +826,21 @@ class CmsPage extends CmsBase
     public function SetStatus($pageId, $status, $updatedBy = 0, $publishedAt = null)
     {
         $pageId = (int)$pageId;
-        if ($pageId <= 0) {
-            return false;
-        }
-        $status = (string)$status;
-        if ($status !== 'published' && $status !== 'scheduled') {
-            $status = 'draft';
-        }
-
-        $data = array('status' => $status);
-        if ((int)$updatedBy > 0) {
-            $data['updated_by'] = (int)$updatedBy;
-        }
-
-        $publishedAt = ($publishedAt === null || $publishedAt === '') ? null : (string)$publishedAt;
-
-        if ($status === 'scheduled') {
-            // Scheduling needs a target time; fall back to now (== publish now).
-            $data['published_at'] = ($publishedAt !== null) ? $publishedAt : date('Y-m-d H:i:s');
-        } elseif ($status === 'published') {
-            if ($publishedAt !== null) {
-                $data['published_at'] = $publishedAt;
-            } else {
-                // Stamp published_at only if not already set.
-                $row = $this->GetPage($pageId);
-                if ($row !== null && empty($row['published_at'])) {
-                    $data['published_at'] = date('Y-m-d H:i:s');
-                }
+        // Shared publish-lifecycle skeleton (status clamp, published_at stamping,
+        // C14 audit) lives in CmsBase::_setStatus; the column write delegates back
+        // to UpdatePage so its whitelist/verify path still runs.
+        return $this->_setStatus(
+            'cms_page',
+            'page_id',
+            'page',
+            $pageId,
+            $status,
+            $updatedBy,
+            $publishedAt,
+            function ($data) use ($pageId) {
+                return $this->UpdatePage($pageId, $data);
             }
-        }
-
-        $ok = $this->UpdatePage($pageId, $data);
-
-        // C14: audit the publish-lifecycle transition (fire-and-forget). Read
-        // the scope off the row so the audit entry is scope-attributed.
-        if ($ok) {
-            $row = $this->GetPage($pageId);
-            $action = ($status === 'draft') ? 'unpublish' : $status; // publish|unpublish|scheduled
-            $this->_cmsAudit(
-                (int)$updatedBy,
-                $action,
-                'page',
-                $pageId,
-                $row !== null ? (string)$row['scope_type'] : 'global',
-                $row !== null ? (int)$row['scope_id'] : 0
-            );
-        }
-
-        return $ok;
+        );
     }
 
     /**
@@ -887,91 +858,67 @@ class CmsPage extends CmsBase
      */
     public function DeletePage($pageId, $scopeType = null, $scopeId = null, $actorId = 0)
     {
-        global $DB;
-
         $pageId = (int)$pageId;
         if ($pageId <= 0) {
             return false;
         }
 
+        // System pages (e.g. the home page) are protected — checked here rather
+        // than in the shared skeleton since is_system is page-only.
         $row = $this->GetPage($pageId);   // already filters trashed rows
         if ($row === null) {
             return false;
         }
         if (!empty($row['is_system'])) {
-            // System pages (e.g. the home page) are protected.
             return false;
         }
 
-        // IDOR guard (opt-in, mirrors CmsNav::DeleteItem): when the caller supplies
-        // an intended scope, reject a page that belongs to a different org.
-        if ($scopeType !== null) {
-            $wantType = $this->_normalizeScopeType($scopeType);
-            if ((string)$row['scope_type'] !== $wantType || (int)$row['scope_id'] !== (int)$scopeId) {
-                return false;
+        // Shared soft-delete skeleton (existence + IDOR guard, transactional
+        // stamp, verify, C14 audit). The $refCleanup hook carries the page-only
+        // inbound-reference detach (C8) + child flatten (C13) — the ON DELETE SET
+        // NULL FKs do NOT fire on a soft-delete, so they run explicitly inside the
+        // transaction before the trash marker is stamped.
+        $ok = $this->_softDelete(
+            'cms_page',
+            'page_id',
+            $pageId,
+            $scopeType,
+            $scopeId,
+            $actorId,
+            'page',
+            function ($id) {
+                global $DB;
+
+                // A site whose home page is trashed reverts to no home page.
+                $DB->Clear();
+                $DB->home_page_id = $id;
+                $DB->Execute(
+                    'UPDATE ' . DB_PREFIX . 'cms_site SET home_page_id = NULL WHERE home_page_id = :home_page_id'
+                );
+
+                // Nav items pointing here resolve to '#'.
+                $DB->Clear();
+                $DB->page_id = $id;
+                $DB->Execute(
+                    'UPDATE ' . DB_PREFIX . 'cms_nav_item SET page_id = NULL WHERE page_id = :page_id'
+                );
+
+                // C13: flatten child pages so a trashed parent leaves them as
+                // top-level pages rather than pointing at a hidden parent.
+                $DB->Clear();
+                $DB->parent_id = $id;
+                $DB->Execute(
+                    'UPDATE ' . DB_PREFIX . 'cms_page SET parent_id = NULL WHERE parent_id = :parent_id'
+                );
             }
+        );
+
+        // A parent-link change (child flatten) invalidates memoized ancestor chains.
+        if ($ok) {
+            self::$_ancestorMemo = array();
         }
 
-        // Soft-delete + reference cleanup atomically. If the deleted_at write is
-        // silently dropped (ERRMODE_WARNING), ROLLBACK so we don't orphan the
-        // reference NULLs against a still-live page.
-        $now = date('Y-m-d H:i:s');
-
-        $DB->Clear();
-        $DB->Execute('START TRANSACTION');
-
-        // C8: detach inbound references (mirrors the ON DELETE SET NULL FKs, which
-        // do NOT fire on a soft-delete). A site whose home page is trashed reverts
-        // to no home page; nav items pointing here resolve to '#'.
-        $DB->Clear();
-        $DB->home_page_id = $pageId;
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'cms_site SET home_page_id = NULL WHERE home_page_id = :home_page_id'
-        );
-
-        $DB->Clear();
-        $DB->page_id = $pageId;
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'cms_nav_item SET page_id = NULL WHERE page_id = :page_id'
-        );
-
-        // C13: flatten any child pages (the ON DELETE SET NULL self-FK only fires
-        // on a hard DELETE, not this soft-delete) so a trashed parent leaves its
-        // children as top-level pages rather than pointing at a hidden parent.
-        $DB->Clear();
-        $DB->parent_id = $pageId;
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'cms_page SET parent_id = NULL WHERE parent_id = :parent_id'
-        );
-
-        // Stamp the trash marker.
-        $DB->Clear();
-        $DB->deleted_at = $now;
-        $DB->page_id = $pageId;
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'cms_page SET deleted_at = :deleted_at'
-            . ' WHERE page_id = :page_id AND deleted_at IS NULL'
-        );
-
-        // Confirm the marker landed before committing.
-        $DB->Clear();
-        $DB->page_id = $pageId;
-        $check = $this->_firstRow($DB->DataSet(
-            'SELECT deleted_at FROM ' . DB_PREFIX . 'cms_page WHERE page_id = :page_id LIMIT 1'
-        ));
-        if ($check === null || empty($check['deleted_at'])) {
-            $DB->Clear();
-            $DB->Execute('ROLLBACK');
-            return false;
-        }
-
-        $DB->Clear();
-        $DB->Execute('COMMIT');
-
-        // C14: audit the trash (fire-and-forget).
-        $this->_cmsAudit((int)$actorId, 'delete', 'page', $pageId, (string)$row['scope_type'], (int)$row['scope_id']);
-
-        return true;
+        return $ok;
     }
 
     /**
@@ -987,40 +934,22 @@ class CmsPage extends CmsBase
      */
     public function RestorePage($pageId, $scopeType = null, $scopeId = null, $actorId = 0)
     {
-        global $DB;
+        // Shared restore skeleton: existence/IDOR guard, live-slug collision guard
+        // (a live page may have claimed this slug while we were trashed — see
+        // CmsBase::_restore), verified un-trash, C14 audit.
+        return $this->_restore('cms_page', 'page_id', $pageId, $scopeType, $scopeId, $actorId, 'page');
+    }
 
-        $pageId = (int)$pageId;
-        if ($pageId <= 0) {
-            return false;
-        }
-
-        // Read the trashed row directly (GetPage() hides deleted rows).
-        $DB->Clear();
-        $DB->page_id = $pageId;
-        $row = $this->_firstRow($DB->DataSet(
-            'SELECT page_id, scope_type, scope_id, deleted_at FROM ' . DB_PREFIX . 'cms_page'
-            . ' WHERE page_id = :page_id LIMIT 1'
-        ));
-        if ($row === null || empty($row['deleted_at'])) {
-            return false;   // not found or not trashed
-        }
-
-        if ($scopeType !== null) {
-            $wantType = $this->_normalizeScopeType($scopeType);
-            if ((string)$row['scope_type'] !== $wantType || (int)$row['scope_id'] !== (int)$scopeId) {
-                return false;
-            }
-        }
-
-        $DB->Clear();
-        $DB->page_id = $pageId;
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'cms_page SET deleted_at = NULL WHERE page_id = :page_id'
-        );
-
-        $this->_cmsAudit((int)$actorId, 'restore', 'page', $pageId, (string)$row['scope_type'], (int)$row['scope_id']);
-
-        return true;
+    /**
+     * Did RestorePage() fail specifically because a LIVE page now holds the
+     * trashed page's slug? Callers use this only to choose an error message.
+     *
+     * @param int $pageId
+     * @return bool
+     */
+    public function RestoreSlugConflict($pageId)
+    {
+        return $this->_slugConflictForTrashed('cms_page', 'page_id', $pageId);
     }
 
     /**
@@ -1054,7 +983,51 @@ class CmsPage extends CmsBase
         $ownerType = ($ownerType === 'post') ? 'post' : 'page';
         $ownerId = (int)$ownerId;
 
-        // ---- Normalize + sanitize (C3) up front, outside the transaction ----
+        // C3: normalize + sanitize up front, outside the transaction.
+        $normalized = $this->_normalizeBlocks($blocksArray);
+
+        $DB->Clear();
+        $DB->Execute('START TRANSACTION');
+
+        // C15: existing block ids for this owner (the upsert candidate set).
+        $existingIds = $this->_existingBlockIds($ownerType, $ownerId);
+
+        // C15: UPDATE knowns in place, DELETE only the removed, batch-INSERT new.
+        $upsert = $this->_upsertKnownBlocks($ownerType, $ownerId, $normalized, $existingIds);
+        $this->_deleteRemovedBlocks($ownerType, $ownerId, $existingIds, $upsert['kept']);
+        $this->_insertNewBlocks($ownerType, $ownerId, $upsert['inserts']);
+
+        // Verify the write landed exactly as intended (total count + per-block
+        // fields). Execute() is void under ERRMODE_WARNING, so a silently-dropped
+        // write is only visible via a read-back inside the transaction → ROLLBACK.
+        $expected = count($upsert['kept']) + count($upsert['inserts']);
+        if (!$this->_verifyBlockCount($ownerType, $ownerId, $expected, $upsert['keptFields'])) {
+            $DB->Clear();
+            $DB->Execute('ROLLBACK');
+            return -1;
+        }
+
+        // C2: snapshot the state we just wrote (inside the txn so a rollback
+        // would discard it too), then prune to the retention cap.
+        $this->_snapshotRevision($ownerType, $ownerId, $normalized);
+
+        $DB->Clear();
+        $DB->Execute('COMMIT');
+
+        return $expected;
+    }
+
+    /**
+     * C3/C15: normalize + sanitize the incoming block list into the internal
+     * shape ReplaceBlocks persists. Skips non-array / typeless entries; accepts
+     * 'order' (renderer shape) or 'ordering' (column); sanitizes every fields
+     * array at the authoritative choke point. Pure (no DB) — runs outside the txn.
+     *
+     * @param mixed $blocksArray ordered list of block definitions (or non-array)
+     * @return array list of normalized block rows
+     */
+    private function _normalizeBlocks($blocksArray)
+    {
         $normalized = array();
         $i = 0;
         foreach ((is_array($blocksArray) ? $blocksArray : array()) as $block) {
@@ -1094,11 +1067,21 @@ class CmsPage extends CmsBase
             );
             $i++;
         }
+        return $normalized;
+    }
 
-        $DB->Clear();
-        $DB->Execute('START TRANSACTION');
+    /**
+     * The set of existing block ids for an owner (upsert candidate set), as a
+     * map [block_id => true]. Called inside the ReplaceBlocks transaction.
+     *
+     * @param string $ownerType
+     * @param int    $ownerId
+     * @return array map of existing block_id => true
+     */
+    private function _existingBlockIds($ownerType, $ownerId)
+    {
+        global $DB;
 
-        // Existing block ids for this owner (the upsert candidate set).
         $DB->Clear();
         $DB->owner_type = $ownerType;
         $DB->owner_id = $ownerId;
@@ -1109,8 +1092,25 @@ class CmsPage extends CmsBase
         )) as $er) {
             $existingIds[(int)$er['block_id']] = true;
         }
+        return $existingIds;
+    }
 
-        // ---- Upsert: UPDATE knowns in place, collect unknowns for batch insert ----
+    /**
+     * C15: UPDATE each block carrying a known existing id in place, and collect
+     * brand-new blocks for the batch insert. Called inside the ReplaceBlocks
+     * transaction. Returns ['kept'=>[id=>true], 'keptFields'=>[id=>fields_json],
+     * 'inserts'=>[normalized,...]].
+     *
+     * @param string $ownerType
+     * @param int    $ownerId
+     * @param array  $normalized
+     * @param array  $existingIds map of existing block_id => true
+     * @return array
+     */
+    private function _upsertKnownBlocks($ownerType, $ownerId, $normalized, $existingIds)
+    {
+        global $DB;
+
         $kept = array();
         $keptFields = array();
         $inserts = array();
@@ -1137,57 +1137,103 @@ class CmsPage extends CmsBase
                 $inserts[] = $n;
             }
         }
+        return array('kept' => $kept, 'keptFields' => $keptFields, 'inserts' => $inserts);
+    }
 
-        // ---- Delete only the blocks the editor actually removed ----
+    /**
+     * Delete only the blocks the editor actually removed (existing ids no longer
+     * present in the kept set). Called inside the ReplaceBlocks transaction.
+     *
+     * @param string $ownerType
+     * @param int    $ownerId
+     * @param array  $existingIds map of existing block_id => true
+     * @param array  $kept        map of kept block_id => true
+     * @return void
+     */
+    private function _deleteRemovedBlocks($ownerType, $ownerId, $existingIds, $kept)
+    {
+        global $DB;
+
         $toDelete = array();
         foreach ($existingIds as $eid => $_unused) {
             if (!isset($kept[$eid])) {
                 $toDelete[] = (int)$eid;
             }
         }
-        if (!empty($toDelete)) {
-            $DB->Clear();
-            $DB->owner_type = $ownerType;
-            $DB->owner_id = $ownerId;
-            // Code-controlled ints only; IN() can't be a bound list.
-            $idList = implode(',', array_map('intval', $toDelete));
-            $DB->Execute(
-                'DELETE FROM ' . DB_PREFIX . 'cms_block'
-                . ' WHERE owner_type = :owner_type AND owner_id = :owner_id'
-                . ' AND block_id IN (' . $idList . ')'
-            );
+        if (empty($toDelete)) {
+            return;
         }
+        $DB->Clear();
+        $DB->owner_type = $ownerType;
+        $DB->owner_id = $ownerId;
+        // Code-controlled ints only; IN() can't be a bound list.
+        $idList = implode(',', array_map('intval', $toDelete));
+        $DB->Execute(
+            'DELETE FROM ' . DB_PREFIX . 'cms_block'
+            . ' WHERE owner_type = :owner_type AND owner_id = :owner_id'
+            . ' AND block_id IN (' . $idList . ')'
+        );
+    }
 
-        // ---- Batch-insert the new blocks as ONE multi-VALUES statement (C15) ----
-        if (!empty($inserts)) {
-            $rows = array();
-            $j = 0;
-            $DB->Clear();
-            foreach ($inserts as $n) {
-                // Distinct placeholders per row (emulated prepares forbid reusing
-                // a name), so every value is bound — nothing is concatenated raw.
-                $rows[] = '(:ot_' . $j . ', :oid_' . $j . ', :type_' . $j . ', :ord_' . $j
-                    . ', :en_' . $j . ', :src_' . $j . ', :fj_' . $j . ')';
-                $DB->{'ot_' . $j}   = $ownerType;
-                $DB->{'oid_' . $j}  = $ownerId;
-                $DB->{'type_' . $j} = $n['type'];
-                $DB->{'ord_' . $j}  = $n['ordering'];
-                $DB->{'en_' . $j}   = $n['enabled'];
-                $DB->{'src_' . $j}  = $n['source'];
-                $DB->{'fj_' . $j}   = $n['fields_json'];
-                $j++;
-            }
-            $DB->Execute(
-                'INSERT INTO ' . DB_PREFIX . 'cms_block'
-                . ' (owner_type, owner_id, type, ordering, enabled, source, fields_json)'
-                . ' VALUES ' . implode(', ', $rows)
-            );
+    /**
+     * C15: batch-insert the brand-new blocks as ONE multi-VALUES statement.
+     * Called inside the ReplaceBlocks transaction.
+     *
+     * @param string $ownerType
+     * @param int    $ownerId
+     * @param array  $inserts list of normalized new-block rows
+     * @return void
+     */
+    private function _insertNewBlocks($ownerType, $ownerId, $inserts)
+    {
+        global $DB;
+
+        if (empty($inserts)) {
+            return;
         }
+        $rows = array();
+        $j = 0;
+        $DB->Clear();
+        foreach ($inserts as $n) {
+            // Distinct placeholders per row (emulated prepares forbid reusing
+            // a name), so every value is bound — nothing is concatenated raw.
+            $rows[] = '(:ot_' . $j . ', :oid_' . $j . ', :type_' . $j . ', :ord_' . $j
+                . ', :en_' . $j . ', :src_' . $j . ', :fj_' . $j . ')';
+            $DB->{'ot_' . $j}   = $ownerType;
+            $DB->{'oid_' . $j}  = $ownerId;
+            $DB->{'type_' . $j} = $n['type'];
+            $DB->{'ord_' . $j}  = $n['ordering'];
+            $DB->{'en_' . $j}   = $n['enabled'];
+            $DB->{'src_' . $j}  = $n['source'];
+            $DB->{'fj_' . $j}   = $n['fields_json'];
+            $j++;
+        }
+        $DB->Execute(
+            'INSERT INTO ' . DB_PREFIX . 'cms_block'
+            . ' (owner_type, owner_id, type, ordering, enabled, source, fields_json)'
+            . ' VALUES ' . implode(', ', $rows)
+        );
+    }
 
-        // Verify the resulting count matches intent (kept + inserted). Execute()
-        // is void under ERRMODE_WARNING, so a silently-dropped write is only
-        // visible via a read-back inside the transaction → ROLLBACK if it differs.
-        $expected = count($kept) + count($inserts);
+    /**
+     * Verify the persisted block set matches intent before COMMIT: (1) the total
+     * COUNT(*) equals kept+inserted, and (2) each kept block's fields_json was
+     * stored verbatim (catches a silently-dropped UPDATE that leaves the row —
+     * and thus the count — unchanged under ERRMODE_WARNING). fields_json is
+     * LONGTEXT (stored verbatim, no engine normalization), so an exact string
+     * compare is reliable. Returns false to signal the caller must ROLLBACK.
+     * Called inside the ReplaceBlocks transaction.
+     *
+     * @param string $ownerType
+     * @param int    $ownerId
+     * @param int    $expected   count(kept) + count(inserts)
+     * @param array  $keptFields map of kept block_id => intended fields_json
+     * @return bool true when the write verified; false → caller ROLLBACKs
+     */
+    private function _verifyBlockCount($ownerType, $ownerId, $expected, $keptFields)
+    {
+        global $DB;
+
         $DB->Clear();
         $DB->owner_type = $ownerType;
         $DB->owner_id = $ownerId;
@@ -1196,18 +1242,10 @@ class CmsPage extends CmsBase
             . ' WHERE owner_type = :owner_type AND owner_id = :owner_id'
         ));
         $actual = $countRow ? (int)$countRow['c'] : 0;
-
         if ($actual !== $expected) {
-            $DB->Clear();
-            $DB->Execute('ROLLBACK');
-            return -1;
+            return false;
         }
 
-        // A same-count set can still hide a silently-dropped UPDATE on an existing
-        // block (the row stays, so COUNT(*) is unchanged) under ERRMODE_WARNING.
-        // Read each kept block's fields_json back and ROLLBACK if the stored value
-        // isn't what we intended to write. fields_json is LONGTEXT (stored verbatim,
-        // no engine normalization), so an exact string compare is reliable here.
         if (!empty($keptFields)) {
             $keptIdList = implode(',', array_map('intval', array_keys($keptFields)));
             $DB->Clear();
@@ -1223,21 +1261,12 @@ class CmsPage extends CmsBase
             }
             foreach ($keptFields as $bid => $intended) {
                 if (!array_key_exists((int)$bid, $storedFields) || $storedFields[(int)$bid] !== $intended) {
-                    $DB->Clear();
-                    $DB->Execute('ROLLBACK');
-                    return -1;
+                    return false;
                 }
             }
         }
 
-        // C2: snapshot the state we just wrote (inside the txn so a rollback
-        // would discard it too), then prune to the retention cap.
-        $this->_snapshotRevision($ownerType, $ownerId, $normalized);
-
-        $DB->Clear();
-        $DB->Execute('COMMIT');
-
-        return $expected;
+        return true;
     }
 
     /* ------------------------------------------------------------------ *
@@ -1272,12 +1301,6 @@ class CmsPage extends CmsBase
      * ------------------------------------------------------------------ */
 
     /**
-     * Per-request memo: whether ork_cms_revision exists (keeps snapshotting
-     * silent before the C2 migration runs). null = not yet probed.
-     */
-    private static $_revisionTableExists = null;
-
-    /**
      * Snapshot the just-written block set as a revision row, then prune the
      * owner's history to $MAX_REVISIONS. Best-effort: never aborts the save.
      *
@@ -1291,14 +1314,7 @@ class CmsPage extends CmsBase
         global $DB;
 
         try {
-            if (self::$_revisionTableExists === null) {
-                $DB->Clear();
-                $probe = $this->_firstRow($DB->DataSet(
-                    "SHOW TABLES LIKE '" . DB_PREFIX . "cms_revision'"
-                ));
-                self::$_revisionTableExists = ($probe !== null);
-            }
-            if (self::$_revisionTableExists !== true) {
+            if (!$this->_tableExists(DB_PREFIX . 'cms_revision')) {
                 return;
             }
 
@@ -1537,6 +1553,39 @@ class CmsPage extends CmsBase
         $out = array();
         foreach ($this->_eachRow($r) as $row) {
             $out[] = $row;
+        }
+        return $out;
+    }
+
+    /**
+     * Status-broken-down live page counts for a scope, via a single GROUP BY
+     * (no full-row fetch). Only non-trashed rows are counted (deleted_at IS NULL).
+     * Lets admin surfaces show "N drafts / M published" without materializing the
+     * rows. Statuses with no rows are simply absent from the map.
+     *
+     * @param string $scopeType 'global' | 'kingdom' | 'park'
+     * @param int    $scopeId   scope owner id (0 for global)
+     * @return array ['total' => int, '<status>' => int, ...] e.g.
+     *               ['total'=>7,'draft'=>2,'published'=>4,'scheduled'=>1]
+     */
+    public function CountPages($scopeType, $scopeId)
+    {
+        global $DB;
+
+        $scopeType = $this->_normalizeScopeType($scopeType);
+
+        $DB->Clear();
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = (int)$scopeId;
+        $out = array('total' => 0);
+        foreach ($this->_eachRow($DB->DataSet(
+            'SELECT status, COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_page'
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND deleted_at IS NULL'
+            . ' GROUP BY status'
+        )) as $row) {
+            $c = (int)$row['c'];
+            $out[(string)$row['status']] = $c;
+            $out['total'] += $c;
         }
         return $out;
     }

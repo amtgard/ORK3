@@ -47,7 +47,7 @@ class Controller_CmsAjax extends Controller
         'steps', 'events_feed', 'photo_mosaic', 'kingdoms_teaser', 'cta_band',
         'staff_roster', 'rich_text', 'heading', 'divider', 'spacer', 'accordion',
         'quote', 'table', 'image', 'gallery', 'video_embed', 'file_download',
-        'columns', 'raw_html', 'stat_ticker', 'tournaments_feed', 'recap_highlight',
+        'columns', 'raw_html',
         'blog_feed', 'kingdom_officers', 'kingdom_parks', 'kingdom_parks_map', 'kingdom_events',
     );
 
@@ -77,31 +77,14 @@ class Controller_CmsAjax extends Controller
         // New page → page.create. Existing page → page.edit OR page.edit_own on a
         // page the user created (C16: page.edit_own was granted to contributors
         // but never honored, locking them out of their own draft after creating it).
+        // _requireOwnerEditable encapsulates the full existing-content gate
+        // (auth → not-found → IDOR scope → edit_own ownership) used identically by
+        // savepost/revisions; then C15 optimistic-concurrency on the loaded row.
         $existing = null;
         if ($isNew) {
             $this->_require($uid, 'page.create', $scope);
         } else {
-            // Pre-gate so a wholly-unauthorized user gets a uniform 403 and can't
-            // use the not-found vs not-authorized responses as an existence oracle.
-            if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
-                && !$this->CmsAuth->cms_can($uid, 'page.edit_own', $scope)
-            ) {
-                $this->_fail('You are not authorized to perform this action.', 5);
-            }
-            $existing = $this->CmsPage->get_page($pageId);
-            if (empty($existing)) {
-                $this->_fail('Page not found.', 4);
-            }
-            // IDOR guard: the existing page must belong to the resolved scope.
-            $this->_requireOwned($existing, $scope);
-            // If the user only holds page.edit_own, it must be THEIR page.
-            if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
-                && (int)($existing['created_by'] ?? 0) !== $uid
-            ) {
-                $this->_fail('You can only edit pages you created.', 5);
-            }
-            // C15: optimistic-concurrency guard — reject if the stored row is
-            // newer than the version the client loaded.
+            $existing = $this->_requireOwnerEditable($uid, 'page', $pageId, $scope);
             $this->_guardConcurrency($existing);
         }
 
@@ -272,26 +255,13 @@ class Controller_CmsAjax extends Controller
         $isNew  = ($postId <= 0);
 
         // ---- Authorization (mirrors savepage; C16 page.edit_own honored) ----
+        // Same shared gate as savepage via _requireOwnerEditable (auth → not-found
+        // → IDOR scope → edit_own ownership), then the C15 concurrency guard.
         $existing = null;
         if ($isNew) {
             $this->_require($uid, 'page.create', $scope);
         } else {
-            if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
-                && !$this->CmsAuth->cms_can($uid, 'page.edit_own', $scope)
-            ) {
-                $this->_fail('You are not authorized to perform this action.', 5);
-            }
-            $existing = $this->CmsPost->get_post($postId);
-            if (empty($existing)) {
-                $this->_fail('Post not found.', 4);
-            }
-            $this->_requireOwned($existing, $scope);
-            if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
-                && (int)($existing['created_by'] ?? 0) !== $uid
-            ) {
-                $this->_fail('You can only edit posts you created.', 5);
-            }
-            // C15: optimistic-concurrency guard.
+            $existing = $this->_requireOwnerEditable($uid, 'post', $postId, $scope);
             $this->_guardConcurrency($existing);
         }
 
@@ -351,7 +321,12 @@ class Controller_CmsAjax extends Controller
                 $tagNames[] = $name;
             }
         }
-        $this->CmsPost->set_tags($postId, $tagNames);
+        // set_tags replaces the tag set atomically in the lib (transaction +
+        // post-write verification). A false return means the set was NOT fully
+        // applied — fail loudly instead of reporting a partially-applied save.
+        if (!$this->CmsPost->set_tags($postId, $tagNames)) {
+            $this->_fail('Could not save the post tags. Please try again.');
+        }
 
         // Body blocks live in the shared polymorphic store under owner_type='post'.
         $count = (int)$this->CmsPage->replace_blocks('post', $postId, $blocks);
@@ -519,6 +494,9 @@ class Controller_CmsAjax extends Controller
         // The lib enforces the scope IDOR guard (must belong to this org).
         $ok = (bool)$this->CmsPage->RestorePage($pageId, (string)$scope['type'], (int)$scope['id'], $uid);
         if (!$ok) {
+            if ($this->CmsPage->RestoreSlugConflict($pageId)) {
+                $this->_fail('A live page already uses this address (slug). Rename that page, then restore this one.');
+            }
             $this->_fail('Could not restore the page (it may not be in the Trash).');
         }
         $this->_ok(array('page_id' => $pageId, 'restored' => true));
@@ -539,6 +517,9 @@ class Controller_CmsAjax extends Controller
         $this->load_model('CmsPost');
         $ok = (bool)$this->CmsPost->RestorePost($postId, (string)$scope['type'], (int)$scope['id'], $uid);
         if (!$ok) {
+            if ($this->CmsPost->RestoreSlugConflict($postId)) {
+                $this->_fail('A live post already uses this address (slug). Rename that post, then restore this one.');
+            }
             $this->_fail('Could not restore the post (it may not be in the Trash).');
         }
         $this->_ok(array('post_id' => $postId, 'restored' => true));
@@ -636,9 +617,11 @@ class Controller_CmsAjax extends Controller
     }
 
     /**
-     * Update a media item's metadata (alt text today). POST: media_id, alt.
-     * Gated media.manage in scope. Called by the media library's inline alt
-     * editor (Cms_media.tpl); '' is a valid decorative-image alt, never NULL.
+     * Update a media item's authored metadata. POST: media_id + any of
+     * alt / title / filename (only the keys PRESENT in the request are written,
+     * so the inline alt editor and the full edit form share this endpoint).
+     * Gated media.manage in scope. '' is a valid decorative-image alt, never
+     * NULL; a blank filename is ignored (a rename can't clear the name).
      */
     public function mediaupdate($action = null)
     {
@@ -650,7 +633,23 @@ class Controller_CmsAjax extends Controller
         if ($mediaId <= 0) {
             $this->_fail('Media not found.', 4);
         }
-        $data = array('alt' => (string)($_POST['alt'] ?? ''));
+
+        // Build the update from only the fields the caller actually sent, so a
+        // request that edits just the alt doesn't blank the title (and vice versa).
+        $data = array();
+        if (array_key_exists('alt', $_POST)) {
+            $data['alt'] = (string)$_POST['alt'];
+        }
+        if (array_key_exists('title', $_POST)) {
+            $data['title'] = (string)$_POST['title'];
+        }
+        if (array_key_exists('filename', $_POST)) {
+            $data['filename'] = (string)$_POST['filename'];
+        }
+        if (empty($data)) {
+            $this->_fail('Nothing to update.', 4);
+        }
+
         $this->load_model('CmsMedia');
         // IDOR guard: never alter a media row belonging to another scope. Update
         // itself only touches non-trashed rows, which get_media also returns.
@@ -659,7 +658,139 @@ class Controller_CmsAjax extends Controller
         if (!$ok) {
             $this->_fail('Could not update the media (it may not exist or be in the Trash).');
         }
-        $this->_ok(array('media_id' => $mediaId, 'alt' => $data['alt']));
+
+        // Echo the fresh row so the client can reflect the sanitized filename.
+        $fresh = $this->CmsMedia->get_media($mediaId);
+        $this->_ok(array(
+            'media_id' => $mediaId,
+            'alt'      => isset($fresh['alt']) ? (string)$fresh['alt'] : ($data['alt'] ?? ''),
+            'title'    => isset($fresh['title']) ? (string)$fresh['title'] : ($data['title'] ?? ''),
+            'filename' => isset($fresh['filename']) ? (string)$fresh['filename'] : ($data['filename'] ?? ''),
+        ));
+    }
+
+    /**
+     * Report where a media item is still used (pages/posts/logos/blocks + total).
+     * GET or POST: media_id. Gated media.manage in scope. Read-only — surfaced by
+     * the library's "Where used" affordance and the delete confirm so an officer
+     * can see references BEFORE trying to delete an in-use image.
+     */
+    public function mediausage($action = null)
+    {
+        $uid   = $this->_begin();
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'media.manage', $scope);
+
+        $mediaId = (int)($_GET['media_id'] ?? $_POST['media_id'] ?? 0);
+        if ($mediaId <= 0) {
+            $this->_fail('Media not found.', 4);
+        }
+        $this->load_model('CmsMedia');
+        // IDOR guard: never disclose usage for a row belonging to another scope.
+        $this->_requireOwned($this->CmsMedia->get_media($mediaId), $scope);
+
+        $usage = $this->CmsMedia->ReferenceUsage($mediaId);
+        if (!is_array($usage)) {
+            $usage = array('pages' => 0, 'posts' => 0, 'logos' => 0, 'blocks' => 0, 'total' => 0);
+        }
+        $this->_ok(array('media_id' => $mediaId, 'usage' => $usage));
+    }
+
+    /**
+     * Soft-delete (move to Trash) a media item. POST: media_id. Gated
+     * media.manage in scope. REFUSES an in-use image (the lib's where-used
+     * guard); on that refusal we return the usage breakdown so the UI can say
+     * exactly where it's still referenced.
+     */
+    public function mediadelete($action = null)
+    {
+        $uid   = $this->_begin();
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'media.manage', $scope);
+
+        $mediaId = (int)($_POST['media_id'] ?? 0);
+        if ($mediaId <= 0) {
+            $this->_fail('Media not found.', 4);
+        }
+        $this->load_model('CmsMedia');
+        // IDOR guard: never delete a media row belonging to another scope.
+        $this->_requireOwned($this->CmsMedia->get_media($mediaId), $scope);
+
+        $ok = (bool)$this->CmsMedia->DeleteMedia($mediaId, $uid);
+        if (!$ok) {
+            // Most likely cause: still referenced. Surface the where-used breakdown
+            // so the officer knows what to detach first (fail-safe: never orphan a
+            // live image). A zero total means an unexpected write failure.
+            $usage = $this->CmsMedia->ReferenceUsage($mediaId);
+            $total = is_array($usage) ? (int)($usage['total'] ?? 0) : 0;
+            if ($total > 0) {
+                echo json_encode(array(
+                    'ok'     => false,
+                    'status' => 8,
+                    'error'  => 'This image is still used in ' . $total . ' place' . ($total === 1 ? '' : 's')
+                        . '. Remove those references before deleting it.',
+                    'usage'  => $usage,
+                ));
+                exit;
+            }
+            $this->_fail('Could not delete the media (it may not exist or be in the Trash).');
+        }
+
+        // Soft-delete (C2): the media is moved to Trash, recoverable via restore.
+        $this->_ok(array('media_id' => $mediaId, 'deleted' => true, 'trashed' => true));
+    }
+
+    /**
+     * Bulk soft-delete media. POST: media_ids (JSON array or comma-separated).
+     * Gated media.manage in scope. Each id is scope-checked (IDOR) and passed
+     * through the same where-used guard as mediadelete: in-use or foreign ids are
+     * SKIPPED (never silently deleted), and the response reports what happened.
+     */
+    public function mediabulkdelete($action = null)
+    {
+        $uid   = $this->_begin();
+        $scope = $this->_scope($uid);
+        $this->_require($uid, 'media.manage', $scope);
+
+        $ids = $this->_parseIdList($_POST['media_ids'] ?? $_POST['ids'] ?? null);
+        if (empty($ids)) {
+            $this->_fail('No media were selected.', 4);
+        }
+
+        $this->load_model('CmsMedia');
+        $deleted = array();
+        $inUse   = array();
+        $failed  = array();
+        foreach ($ids as $mediaId) {
+            // Per-id IDOR guard: a row not owned by this scope is skipped, not fatal
+            // (so one forged id can't abort the whole batch). get_media hides
+            // trashed rows, so a null (foreign/absent/trashed) row → skip.
+            $row = $this->CmsMedia->get_media($mediaId);
+            if (!$this->_rowInScope($row, $scope)) {
+                $failed[] = $mediaId;
+                continue;
+            }
+            if ($this->CmsMedia->DeleteMedia($mediaId, $uid)) {
+                $deleted[] = $mediaId;
+                continue;
+            }
+            // Refused — classify (in-use vs. other) for an accurate summary.
+            $usage = $this->CmsMedia->ReferenceUsage($mediaId);
+            if (is_array($usage) && (int)($usage['total'] ?? 0) > 0) {
+                $inUse[] = $mediaId;
+            } else {
+                $failed[] = $mediaId;
+            }
+        }
+
+        $this->_ok(array(
+            'deleted'       => $deleted,
+            'deleted_count' => count($deleted),
+            'in_use'        => $inUse,
+            'in_use_count'  => count($inUse),
+            'failed'        => $failed,
+            'failed_count'  => count($failed),
+        ));
     }
 
     /* ================================================================== *
@@ -687,8 +818,10 @@ class Controller_CmsAjax extends Controller
 
         $linkType = $this->_normalizeNavLinkType((string)($_POST['link_type'] ?? 'page'));
 
-        // Resolve the link target for the chosen link_type; clear the others so
-        // a type-switch never leaves a stale page_id/post_id/url around.
+        // Resolve the link target for the chosen link_type. Clearing the OTHER
+        // columns on a type-switch is the lib's job now: passing a null through
+        // yapo is a no-op (yapo drops nulls from the UPDATE), so CmsNav::UpdateItem
+        // authoritatively NULLs the unused link columns based on $data['link_type'].
         $pageId = null;
         $postId = null;
         $url    = null;
@@ -762,18 +895,27 @@ class Controller_CmsAjax extends Controller
             }
         }
 
+        // Only the ACTIVE target column is passed; link_type tells the lib which
+        // columns are unused so UpdateItem can clear them (yapo can't clear via a
+        // null, so the controller no longer tries to). On create the omitted
+        // columns simply default to NULL.
         $data = array(
             'menu'      => 'marketing',
             'label'     => $label,
             'link_type' => $linkType,
-            'page_id'   => $pageId,
-            'post_id'   => $postId,
-            'url'       => $url,
             'parent_id' => $parentId,
             'enabled'   => $enabled,
             'scope_type' => (string)$scope['type'],
             'scope_id'  => (int)$scope['id'],
         );
+        if ($linkType === 'page') {
+            $data['page_id'] = $pageId;
+        } elseif ($linkType === 'post') {
+            $data['post_id'] = $postId;
+        } else {
+            // 'url' and 'dynamic' both store their target in the url column.
+            $data['url'] = $url;
+        }
 
         if ($isNew) {
             $navId = (int)$this->CmsNav->create_item($data);
@@ -919,14 +1061,31 @@ class Controller_CmsAjax extends Controller
         if ($limit <= 0 || $limit > 500) {
             $limit = 200;
         }
-
-        $this->load_model('CmsMedia');
-        $list = $this->CmsMedia->list_media($scope, $limit, $search);
-        if (!is_array($list)) {
-            $list = array();
+        // Optional windowed paging for the block-editor media picker's lazy-load.
+        // Backward compatible: an absent (or 0) offset yields the original window.
+        $offset = (int)($_GET['offset'] ?? $_POST['offset'] ?? 0);
+        if ($offset < 0) {
+            $offset = 0;
         }
 
-        $this->_ok(array('media' => $list, 'count' => count($list)));
+        $this->load_model('CmsMedia');
+        // SQL-level windowed paging: fetch limit+1 rows AT the offset (not a giant
+        // over-fetch), so a scope with >1000 media stays fully reachable and the +1
+        // sentinel reports has_more correctly. list_media applies LIMIT offset,count.
+        $rows = $this->CmsMedia->list_media($scope, $limit + 1, $search, $offset);
+        if (!is_array($rows)) {
+            $rows = array();
+        }
+        $hasMore = count($rows) > $limit;
+        $page    = array_slice($rows, 0, $limit);
+
+        $this->_ok(array(
+            'media'    => $page,
+            'count'    => count($page),
+            'offset'   => $offset,
+            'limit'    => $limit,
+            'has_more' => $hasMore,
+        ));
     }
 
     /* ------------------------------------------------------------------ *
@@ -1068,6 +1227,35 @@ class Controller_CmsAjax extends Controller
     /* ------------------------------------------------------------------ *
      * Internal helpers
      * ------------------------------------------------------------------ */
+
+    /**
+     * Parse a posted id list into a de-duplicated array of positive ints.
+     * Accepts a JSON array (["1","2"]), a PHP array, or a comma-separated
+     * string ("1,2,3"). Non-numeric / <=0 entries are dropped. Capped at 200
+     * so a single bulk request can't fan out into an unbounded scan.
+     */
+    private function _parseIdList($raw)
+    {
+        if ($raw === null || $raw === '') {
+            return array();
+        }
+        $list = is_array($raw) ? $raw : json_decode((string)$raw, true);
+        if (!is_array($list)) {
+            // Fall back to comma-separated parsing for a plain string.
+            $list = explode(',', (string)$raw);
+        }
+        $out = array();
+        foreach ($list as $v) {
+            $id = (int)$v;
+            if ($id > 0 && !in_array($id, $out, true)) {
+                $out[] = $id;
+                if (count($out) >= 200) {
+                    break;
+                }
+            }
+        }
+        return $out;
+    }
 
     /** Decode posted tokens JSON into an assoc array (validation happens in the lib). */
     private function _themeTokensFromPost()

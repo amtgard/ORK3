@@ -64,7 +64,7 @@ $bgStyle = $isDark ? 'background:var(--navy);color:var(--fd-primary-contrast);' 
 
     <?php if (!empty($cta['label'])): ?>
         <div style="text-align:center;margin-top:26px;">
-            <a class="fd-btn-gold" href="<?= htmlspecialchars((!empty($cta['href']) && CmsSanitizer::IsSafeUrl($cta['href'])) ? $cta['href'] : '#', ENT_QUOTES) ?>">
+            <a class="fd-btn-gold" href="<?= htmlspecialchars(CmsSanitizer::SafeHrefOrHash($cta['href'] ?? ''), ENT_QUOTES) ?>">
                 <?= htmlspecialchars($cta['label'], ENT_QUOTES) ?>
             </a>
         </div>

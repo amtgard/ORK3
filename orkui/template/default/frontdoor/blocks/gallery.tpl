@@ -46,11 +46,16 @@ if (empty($fdbItems)) {
 // Unique id so multiple gallery blocks on one page don't collide.
 $fdbGid = 'fdbgal-' . substr(md5(uniqid('', true)), 0, 8);
 ?>
+<?php // Emit this block's generic static CSS at most once per request (dedupes
+      // repeats), matching kingdom_parks.tpl / kingdom_events.tpl. The per-instance
+      // column count rides on a --fdb-cols custom property set inline on each grid,
+      // so the shared rule stays static AND the responsive breakpoints still win. ?>
+<?php if (empty($fdStyleOnce['gallery'])) : $fdStyleOnce['gallery'] = true; ?>
 <style>
 /* scoped: fdb-gallery */
 .fdb-gallery-grid {
     display: grid;
-    grid-template-columns: repeat(<?= (int) $fdbCols ?>, 1fr);
+    grid-template-columns: repeat(var(--fdb-cols, 3), 1fr);
     gap: 10px;
 }
 @media (max-width: 760px) {
@@ -148,8 +153,9 @@ $fdbGid = 'fdbgal-' . substr(md5(uniqid('', true)), 0, 8);
 html[data-theme="dark"] .fdb-gallery-thumb { background: #1b2236; }
 html[data-theme="dark"] .fdb-gallery-cap { color: #9aa6c0; }
 </style>
+<?php endif; ?>
 <div class="fd-pad">
-    <div class="fdb-gallery-grid" id="<?= htmlspecialchars($fdbGid, ENT_QUOTES) ?>">
+    <div class="fdb-gallery-grid" id="<?= htmlspecialchars($fdbGid, ENT_QUOTES) ?>" style="--fdb-cols:<?= (int) $fdbCols ?>;">
         <?php foreach ($fdbItems as $fdbIdx => $fdbItem): ?>
             <button type="button" class="fdb-gallery-thumb"
                     data-fdb-full="<?= htmlspecialchars($fdbItem['full'], ENT_QUOTES) ?>"

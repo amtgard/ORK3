@@ -122,13 +122,7 @@ html[data-theme="dark"] .ke-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45);
                 $keName     = htmlspecialchars(stripslashes((string) ($keRow['Name'] ?? '')), ENT_QUOTES);
                 $keParkName = htmlspecialchars(stripslashes((string) ($keRow['ParkName'] ?? '')), ENT_QUOTES);
                 $keRsvp     = (int) ($keRow['RsvpGoing'] ?? 0);
-                $keDateOut  = '';
-                if (!empty($keRow['NextDate'])) {
-                    $keTs = strtotime((string) $keRow['NextDate']);
-                    if ($keTs !== false) {
-                        $keDateOut = date('D · M j', $keTs);
-                    }
-                }
+                $keDateOut  = fdFormatDate($keRow['NextDate'] ?? '', 'D · M j');
                 ?>
                 <a class="ke-card" href="<?= UIR ?>Event/detail/<?= $keEventId ?>/<?= $keDetailId ?>">
                     <div class="ke-card-accent"></div>

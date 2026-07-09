@@ -16,7 +16,6 @@
  *     pageTypes:  [...],   // presets ([{type,label,blocks:[...]}]) — may be []
  *     blockAllow: {...},   // page-type key → [allowed block types] (scoped add-block chooser)
  *     pageType:   '…',     // current page type key ('post' for blog bodies)
- *     canEdit:    bool,
  *     ajaxUrl:    '…/CmsAjax/',
  *     onDirty:    function(){}      // host marks its own meta form dirty/autosave
  *   });
@@ -32,7 +31,6 @@
  *   $beCatalog   block catalog                         — defaults to []
  *   $beLabels    type→label map                        — defaults to {}
  *   $bePageTypes page-type presets                     — defaults to []
- *   $beCanEdit   bool                                  — defaults to false
  *   $beHeading   blocks-column heading text            — defaults to 'Blocks'
  *   UIR (constant)
  */
@@ -41,7 +39,6 @@ $beBlocks    = isset($beBlocks) && is_array($beBlocks) ? $beBlocks : array();
 $beCatalog   = isset($beCatalog) && is_array($beCatalog) ? $beCatalog : array();
 $beLabels    = isset($beLabels) && is_array($beLabels) ? $beLabels : array();
 $bePageTypes = isset($bePageTypes) && is_array($bePageTypes) ? $bePageTypes : array();
-$beCanEdit   = !empty($beCanEdit);
 $beHeading   = isset($beHeading) ? (string)$beHeading : 'Blocks';
 ?>
 <?php /* ---- Blocks column ---- */ ?>
@@ -49,6 +46,7 @@ $beHeading   = isset($beHeading) ? (string)$beHeading : 'Blocks';
     <div class="cms-blocks-head">
         <h2><?= htmlspecialchars($beHeading, ENT_QUOTES, 'UTF-8') ?></h2>
         <span class="cms-spacer"></span>
+        <button type="button" class="cms-btn cms-btn-ghost cms-btn-sm" id="cmsCollapseAll" data-tip="Collapse or expand every block" style="display:none;"><i class="fas fa-angle-double-up"></i> Collapse all</button>
         <button type="button" class="cms-btn cms-btn-primary cms-btn-sm" id="cmsAddBlockBtn"><i class="fas fa-plus"></i> Add block</button>
     </div>
 
@@ -83,6 +81,64 @@ $beHeading   = isset($beHeading) ? (string)$beHeading : 'Blocks';
         </div>
     </div>
 </div>
+
+<?php /* ---- Block-editor enhancement styles (inline alt editor + Load-more).
+        Uses ORK theme vars so light/dark are handled without extra overrides.
+        Scoped to #cmsMediaGrid so it only affects THIS picker. ---- */ ?>
+<style>
+/* Widen picker tiles enough to hold the inline alt editor comfortably. */
+#cmsMediaGrid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+#cmsMediaGrid .cms-media-tile { cursor: default; }
+#cmsMediaGrid .cms-media-tile img,
+#cmsMediaGrid .cms-media-tile .cms-media-cap { cursor: pointer; }
+.cms-media-alt {
+    padding: 7px 8px;
+    border-top: 1px solid var(--ork-border);
+    background: var(--ork-bg-tertiary);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.cms-media-alt-row { display: flex; gap: 6px; align-items: center; }
+.cms-media-alt-input { flex: 1 1 auto; min-width: 0; font-size: 12px; padding: 4px 6px; }
+.cms-media-alt-save { flex: 0 0 auto; }
+.cms-media-alt-deco { font-size: 11px; color: var(--ork-text-secondary); display: flex; align-items: center; gap: 4px; }
+.cms-media-alt-deco input { margin: 0; }
+.cms-media-more { display: block; margin: 12px auto 2px; }
+</style>
+
+<?php /* ---- Columns visual splitter (enh #16) — theme-aware via ORK vars. ---- */ ?>
+<style>
+.cms-cols-countrow { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; flex-wrap: wrap; }
+.cms-cols-countrow .cms-label { margin: 0; }
+.cms-cols-seg { display: inline-flex; gap: 6px; }
+.cms-cols-seg .cms-btn { min-width: 42px; justify-content: center; }
+.cms-cols-seg .cms-cols-seg-active {
+    background: var(--cms-gold, #f0b429);
+    border-color: var(--cms-gold, #f0b429);
+    color: #1a1205;
+}
+.cms-cols-grid { display: grid; gap: 12px; align-items: start; }
+.cms-cols-grid-2 { grid-template-columns: 1fr 1fr; }
+.cms-cols-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 720px) { .cms-cols-grid-2, .cms-cols-grid-3 { grid-template-columns: 1fr; } }
+.cms-cols-col {
+    border: 1px dashed var(--ork-border-dark);
+    border-radius: 8px;
+    padding: 8px;
+    background: var(--ork-bg-secondary);
+    min-width: 0;
+}
+.cms-cols-col-head {
+    font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--ork-text-secondary); margin-bottom: 8px;
+}
+.cms-cols-childlist { display: flex; flex-direction: column; gap: 8px; }
+.cms-cols-childcard { margin: 0; background: var(--ork-bg); }
+.cms-cols-childcard .cms-block-body { padding: 8px 10px; }
+.cms-cols-empty { font-size: 12.5px; font-style: italic; color: var(--ork-text-muted); padding: 4px 2px; }
+.cms-cols-add { align-self: flex-start; }
+</style>
 
 <?php /* ---- Media picker modal ---- */ ?>
 <div class="cms-modal-overlay" id="cmsMediaModal">
@@ -193,10 +249,9 @@ window.CmsBlockEditor = (function () {
     var pageType = '';          // current page type ('post' for blog bodies)
     var showAllBlocks = false;  // chooser "Show all blocks" toggle state
     var addGroupCollapsed = {}; // chooser: per-group collapsed state (by group name)
-    var canEdit = false;
     var onDirty = function () {};
 
-    var listEl, emptyEl;
+    var listEl, emptyEl, collapseAllBtn;
 
     /* ================= small helpers ================= */
     function el(tag, cls, html) {
@@ -1006,7 +1061,8 @@ window.CmsBlockEditor = (function () {
         ],
         table: [
             { key: 'caption', type: 'text', label: 'Caption', placeholder: 'Optional table caption' },
-            { key: 'header_first_row', type: 'bool', label: 'First row is a header' },
+            { key: 'header_first_row', type: 'bool', label: 'First row is a header',
+              help: 'On by default. When “Yes”, the first row you enter becomes bold column headers so screen-reader users hear which column each value belongs to. Turn it off only for a table that has no header row.' },
             { key: 'rows', type: 'table_rows', label: 'Rows',
               help: 'One row per line. Separate cells with a vertical bar  |  — e.g.  Column A | Column B | Column C' }
         ],
@@ -1061,11 +1117,13 @@ window.CmsBlockEditor = (function () {
         member_bar: []  // pure info card; no knobs
     };
 
-    /* C20: block types that only expose a bare-JSON editor (no friendly form).
-     * These are a footgun for non-technical authors, so they're hidden from the
-     * Add-block chooser. An existing block of one of these types still renders its
-     * JSON editor — we only prevent adding NEW ones from the chooser. */
-    var JSON_ONLY_TYPES = { columns: true };
+    /* C20: block types that only expose a bare-JSON editor (no friendly form) are
+     * a footgun for non-technical authors, so they're hidden from the Add-block
+     * chooser. (enh #16: 'columns' now has a real visual splitter editor, so it is
+     * no longer JSON-only and IS addable — the server already allows it.) An existing
+     * block of a JSON-only type still renders its JSON editor; we only keep NEW ones
+     * out of the chooser. */
+    var JSON_ONLY_TYPES = {};
 
     /* dynamic block types render an info card (icon + description) above any knobs */
     var DYNAMIC_TYPES = {
@@ -1397,6 +1455,8 @@ window.CmsBlockEditor = (function () {
                 [{ value: 'youtube', label: 'YouTube' }, { value: 'vimeo', label: 'Vimeo' }], 'youtube'));
             body.appendChild(fieldText(block, 'url', 'Video URL', { placeholder: 'Paste the watch/share URL' }));
             body.appendChild(fieldText(block, 'video_id', 'Video ID (optional)', { placeholder: 'Used if no URL given' }));
+            body.appendChild(fieldText(block, 'title', 'Video title', { placeholder: 'What is this video? e.g. Kingdom Coronation 2026' }));
+            body.appendChild(el('div', 'cms-help', 'Names the player for screen-reader users and browser tabs. A clear title (“Kingdom Coronation 2026”) is far more useful than the generic “YouTube video player”.'));
             body.appendChild(fieldText(block, 'caption', 'Caption', { placeholder: 'Optional caption' }));
             return body;
         }
@@ -1447,10 +1507,21 @@ window.CmsBlockEditor = (function () {
             return body;
         }
 
-        // ----- columns: nested-block editing is genuinely hard → advanced JSON -----
+        // ----- columns: visual 2/3-column splitter (enh #16) -----
+        // Representable structures get the visual editor (which only ever emits a
+        // valid array-of-arrays-of-blocks, so it can never trip the JSON autosave
+        // block). A legacy/edge structure the splitter can't represent degrades to
+        // the JSON editor for THIS instance so no data is lost.
         if (t === 'columns') {
-            body.appendChild(jsonField(block, 'Columns — advanced',
-                'Each column is a list of blocks. Nested-block editing isn’t available here yet — edit the column structure as JSON. Parsed on save; invalid JSON keeps the last valid value.'));
+            if (columnsRepresentable(block)) {
+                body.appendChild(columnsEditor(block));
+            } else {
+                body.appendChild(el('div', 'cms-note',
+                    '<i class="fas fa-info-circle"></i> This Columns block has a custom structure the visual editor can’t show '
+                    + '(only 2- and 3-column layouts are visual). Edit it as JSON below — your content is preserved.'));
+                body.appendChild(jsonField(block, 'Columns — advanced (custom structure)',
+                    'Each column is a list of blocks. Parsed on save; invalid JSON keeps the last valid value.'));
+            }
             return body;
         }
 
@@ -1514,6 +1585,226 @@ window.CmsBlockEditor = (function () {
         return wrap;
     }
 
+    /* ================= columns: visual 2/3-column splitter (enh #16) =================
+     * Replaces the raw-JSON textarea for the `columns` LAYOUT block with a visual
+     * editor: choose 2 or 3 columns, and fill each with a mini stack of child blocks
+     * that REUSE the same per-block card chrome (icon + label + summary + enable /
+     * reorder / remove) and the same field forms (buildBlockBody) as the page list.
+     *
+     * Data shape — matched EXACTLY to frontdoor/blocks/columns.tpl:
+     *   block.fields.columns = [ [child, …], [child, …] (, [child, …]) ]
+     *   child = { type, enabled, source, fields }  (renderer shape; render_blocks.tpl
+     *   walks each column's array IN ORDER and skips !enabled / unknown types).
+     *
+     * The editor mutates block.fields.columns IN PLACE and never rebuilds the
+     * surrounding fields object, so any unmodelled sibling field is preserved. It
+     * only ever writes a valid array-of-arrays-of-objects, so a columns block edited
+     * visually can never set block._jsonError (never blocks autosave).
+     *
+     * Nesting is bounded: the child add-chooser hides 'columns' (addExcludeColumns),
+     * and an existing columns-in-columns child is edited as JSON, not a recursive
+     * visual editor. */
+
+    // True when the visual splitter can safely represent this block (else → JSON).
+    function columnsRepresentable(block) {
+        var cols = (block.fields || {}).columns;
+        if (cols === undefined || cols === null) { return true; } // new/blank → default 2
+        if (!Array.isArray(cols)) { return false; }
+        if (cols.length === 0) { return true; }                   // empty → default 2
+        if (cols.length !== 2 && cols.length !== 3) { return false; }
+        for (var i = 0; i < cols.length; i++) {
+            if (!Array.isArray(cols[i])) { return false; }
+            for (var j = 0; j < cols[i].length; j++) {
+                var ch = cols[i][j];
+                if (!ch || typeof ch !== 'object' || Array.isArray(ch)) { return false; }
+                if (typeof ch.type !== 'string' || ch.type === '') { return false; }
+            }
+        }
+        return true;
+    }
+
+    // Normalize one child block to the renderer shape. No server id — children live
+    // inside the parent columns block's fields JSON, not their own rows. The fields
+    // object is kept BY REFERENCE so in-place edits (buildBlockBody) reach serialize.
+    function normColChild(c) {
+        return {
+            type:    String((c && c.type) || ''),
+            enabled: !(c && (c.enabled === false || c.enabled === 0 || c.enabled === '0')),
+            source:  (c && c.source === 'dynamic') ? 'dynamic' : 'authored',
+            fields:  (c && c.fields && typeof c.fields === 'object' && !Array.isArray(c.fields)) ? c.fields : {}
+        };
+    }
+
+    function askDeleteChild(child, onOk) {
+        confirmDialog('Remove block',
+            'Remove the “' + labelFor(child.type) + '” block from this column? You can re-add it later.',
+            'Remove', function () { closeModal(confirmModal); onOk(); });
+    }
+
+    // A child block's field editor. Bounds nesting: a columns-in-columns child is
+    // edited as JSON (not a recursive visual editor); everything else reuses the
+    // exact same field forms as the page-level list.
+    function childBlockBody(child) {
+        if (child.type === 'columns') {
+            return jsonField(child, 'Nested columns — advanced (JSON)',
+                'A columns block inside a column is edited as JSON to keep layouts from nesting without bound. Parsed on save; invalid JSON keeps the last valid value.');
+        }
+        return buildBlockBody(child);
+    }
+
+    // One child card — the SAME card chrome as a page-level block, bound to its slot
+    // in the column array. `rebuild` re-renders only this column (surgical TinyMCE
+    // teardown/init), never the whole page.
+    function buildChildCard(colArr, idx, rebuild) {
+        var child = colArr[idx];
+        var card = el('div', 'cms-block-card cms-cols-childcard' + (child.enabled ? '' : ' cms-block-disabled'));
+
+        var head = el('div', 'cms-block-head');
+        head.appendChild(el('span', 'cms-block-icon', '<i class="fas ' + esc(iconFor(child.type)) + '"></i>'));
+        head.appendChild(el('span', 'cms-block-type', esc(labelFor(child.type))));
+        head.appendChild(el('span', 'cms-block-summary', esc(summarize(child))));
+
+        var tools = el('div', 'cms-block-tools');
+        var up = iconBtn('fa-arrow-up', 'Move up', idx === 0);
+        var down = iconBtn('fa-arrow-down', 'Move down', idx === colArr.length - 1);
+        up.addEventListener('click', function () { swap(colArr, idx, idx - 1); rebuild(); markDirty(); });
+        down.addEventListener('click', function () { swap(colArr, idx, idx + 1); rebuild(); markDirty(); });
+
+        var sw = el('label', 'cms-switch');
+        var cb = el('input'); cb.type = 'checkbox'; cb.checked = child.enabled;
+        cb.setAttribute('aria-label', child.enabled ? 'Block enabled, click to disable' : 'Block disabled, click to enable');
+        cb.addEventListener('change', function () {
+            child.enabled = cb.checked;
+            card.classList.toggle('cms-block-disabled', !child.enabled);
+            cb.setAttribute('aria-label', cb.checked ? 'Block enabled, click to disable' : 'Block disabled, click to enable');
+            markDirty();
+        });
+        sw.appendChild(cb); sw.appendChild(el('span', 'cms-slider'));
+
+        var del = iconBtn('fa-trash', 'Remove block', false, true);
+        del.addEventListener('click', function () {
+            askDeleteChild(child, function () { colArr.splice(idx, 1); rebuild(); markDirty(); });
+        });
+
+        tools.appendChild(up); tools.appendChild(down); tools.appendChild(sw); tools.appendChild(del);
+        head.appendChild(tools);
+        card.appendChild(head);
+
+        var body = el('div', 'cms-block-body');
+        body.appendChild(childBlockBody(child));
+        card.appendChild(body);
+        return card;
+    }
+
+    // One column panel: its own child list + an "Add block" that opens the shared
+    // chooser routed to append into THIS column. The initial rebuild does NOT init
+    // TinyMCE (the caller — renderList/insertRowAt or renderGrid — inits the batch);
+    // later user-triggered rebuilds self-init their new editors.
+    function buildColumnPanel(cols, ci) {
+        var panel = el('div', 'cms-cols-col');
+        var colArr = cols[ci];
+        var ready = false;
+
+        panel.appendChild(el('div', 'cms-cols-col-head', 'Column ' + (ci + 1)));
+        var listWrap = el('div', 'cms-cols-childlist');
+        panel.appendChild(listWrap);
+
+        function rebuildChildren() {
+            destroyTinyIn(listWrap);
+            listWrap.innerHTML = '';
+            if (!colArr.length) {
+                listWrap.appendChild(el('div', 'cms-cols-empty', 'No blocks in this column yet.'));
+            }
+            colArr.forEach(function (child, idx) {
+                listWrap.appendChild(buildChildCard(colArr, idx, rebuildChildren));
+            });
+            var add = el('button', 'cms-btn cms-btn-sm cms-cols-add', '<i class="fas fa-plus"></i> Add block');
+            add.type = 'button';
+            add.addEventListener('click', function () {
+                openAddChooserForHandler(function (c) {
+                    colArr.push({ type: c.type, enabled: true, source: c.dynamic ? 'dynamic' : 'authored', fields: {} });
+                    rebuildChildren(); markDirty();
+                });
+            });
+            listWrap.appendChild(add);
+            if (ready) {
+                listWrap.querySelectorAll('textarea[data-tiny]').forEach(function (ta) { initTiny(ta); });
+            }
+        }
+
+        rebuildChildren();   // ready=false → caller inits the initial batch
+        ready = true;        // subsequent rebuilds self-init their new editors
+        return panel;
+    }
+
+    // The columns visual editor body (only called for representable blocks).
+    function columnsEditor(block) {
+        var wrap = el('div', 'cms-cols-editor');
+
+        // Normalize IN PLACE (preserves any sibling fields on the block).
+        if (!Array.isArray(block.fields.columns)) { block.fields.columns = []; }
+        var cols = block.fields.columns;
+        for (var i = 0; i < cols.length; i++) {
+            cols[i] = (Array.isArray(cols[i]) ? cols[i] : []).map(normColChild);
+        }
+        while (cols.length < 2) { cols.push([]); }   // new/blank → 2 columns
+        if (cols.length > 3) { cols.length = 3; }     // (representable-check already caps this)
+
+        wrap.appendChild(el('div', 'cms-help',
+            'Split this row into side-by-side columns, each holding its own stack of blocks. Columns stack vertically on narrow screens.'));
+
+        var countRow = el('div', 'cms-cols-countrow');
+        countRow.appendChild(el('span', 'cms-label', 'Columns'));
+        var seg = el('div', 'cms-cols-seg');
+        [2, 3].forEach(function (n) {
+            var b = el('button', 'cms-btn cms-btn-sm', String(n));
+            b.type = 'button';
+            b.setAttribute('data-n', String(n));
+            b.setAttribute('data-tip', n + ' columns');
+            b.addEventListener('click', function () { setCount(n); });
+            seg.appendChild(b);
+        });
+        countRow.appendChild(seg);
+        wrap.appendChild(countRow);
+
+        var grid = el('div', 'cms-cols-grid');
+        wrap.appendChild(grid);
+
+        function syncChrome() {
+            Array.prototype.forEach.call(seg.children, function (b) {
+                b.classList.toggle('cms-cols-seg-active', Number(b.getAttribute('data-n')) === cols.length);
+            });
+            grid.className = 'cms-cols-grid cms-cols-grid-' + cols.length;
+        }
+
+        function renderGrid(firstBuild) {
+            destroyTinyIn(grid);
+            grid.innerHTML = '';
+            cols.forEach(function (colArr, ci) { grid.appendChild(buildColumnPanel(cols, ci)); });
+            syncChrome();
+            // On the very first build the outer machinery (renderList/insertRowAt)
+            // inits every data-tiny in the row; a later count change inits here.
+            if (!firstBuild) {
+                grid.querySelectorAll('textarea[data-tiny]').forEach(function (ta) { initTiny(ta); });
+            }
+        }
+
+        function setCount(n) {
+            if (n === cols.length || (n !== 2 && n !== 3)) { return; }
+            if (n === 3) {
+                cols.push([]);                  // 2 → 3: append a new empty column
+            } else {
+                var third = cols.pop();         // 3 → 2: merge column 3 into column 2 (lossless)
+                cols[1] = cols[1].concat(third);
+            }
+            renderGrid(false);
+            markDirty();
+        }
+
+        renderGrid(true);
+        return wrap;
+    }
+
     /* ---- icon for a block type (from the catalog) ---- */
     function iconFor(type) {
         var ent = catalogEntry(type);
@@ -1566,6 +1857,7 @@ window.CmsBlockEditor = (function () {
             if (card._upBtn) { card._upBtn.disabled = (i === 0); }
             if (card._downBtn) { card._downBtn.disabled = (i === rows.length - 1); }
         });
+        updateCollapseAllBtn();
     }
     // Reorder existing row nodes to match model order (moves nodes, no rebuild).
     function syncRowOrder() {
@@ -1708,14 +2000,48 @@ window.CmsBlockEditor = (function () {
         body.appendChild(buildBlockBody(block));
         card.appendChild(body);
 
+        card._body = body;
+        card._collapseBtn = collapseBtn;
         collapseBtn.addEventListener('click', function () {
             body.classList.toggle('cms-collapsed');
             var icon = collapseBtn.querySelector('i');
             if (icon) { icon.className = body.classList.contains('cms-collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-down'; }
+            updateCollapseAllBtn();
         });
 
         wireDrag(card, handle, block);
         return card;
+    }
+
+    /* ================= collapse-all / expand-all ================= */
+    // The header button toggles every card at once; its label reflects the NEXT
+    // action based on whether any card is currently expanded (so it stays honest
+    // even after cards are collapsed one at a time).
+    function anyBlockExpanded() {
+        return rowNodes().some(function (r) {
+            var card = r.querySelector('.cms-block-card');
+            return card && card._body && !card._body.classList.contains('cms-collapsed');
+        });
+    }
+    function setAllCollapsed(collapse) {
+        rowNodes().forEach(function (r) {
+            var card = r.querySelector('.cms-block-card');
+            if (!card || !card._body) { return; }
+            card._body.classList.toggle('cms-collapsed', collapse);
+            if (card._collapseBtn) {
+                var ic = card._collapseBtn.querySelector('i');
+                if (ic) { ic.className = collapse ? 'fas fa-chevron-right' : 'fas fa-chevron-down'; }
+            }
+        });
+        updateCollapseAllBtn();
+    }
+    function updateCollapseAllBtn() {
+        if (!collapseAllBtn) { return; }
+        // Only worth showing once there's more than one block to act on.
+        collapseAllBtn.style.display = (model.length > 1) ? '' : 'none';
+        collapseAllBtn.innerHTML = anyBlockExpanded()
+            ? '<i class="fas fa-angle-double-up"></i> Collapse all'
+            : '<i class="fas fa-angle-double-down"></i> Expand all';
     }
 
     /* ---- render the whole block list (full rebuild — replaceModel/seed only) ---- */
@@ -1737,12 +2063,79 @@ window.CmsBlockEditor = (function () {
         warnTinyDegradedIfNeeded();
     }
 
-    /* ================= HTML5 drag-and-drop reorder ================= */
+    /* ================= drag-and-drop reorder =================
+     * Mouse: native HTML5 DnD (well-tested, integrates with dragover highlighting).
+     * Touch / pen: native DnD never fires, so a Pointer-Events fallback reorders by
+     * hit-testing the card under the finger. We branch on pointerType at pointerdown
+     * so the mouse path is unchanged and touch devices gain reorder for the first
+     * time. (Nav-manager drag lives in Cms_nav.tpl — tracked as a separate follow-up.) */
     var dragFromBlock = null;
+
+    // Touch/pen reorder: track the finger, highlight the card underneath, and move
+    // the dragged block onto it on release (same splice semantics as the mouse drop).
+    function startPointerDrag(card, handle, block, downEvt) {
+        var pointerId = downEvt.pointerId;
+        var lastOver = null;
+        card.classList.add('cms-dragging');
+        try { handle.setPointerCapture(pointerId); } catch (e) {}
+
+        function clearOver() {
+            if (lastOver) { lastOver.classList.remove('cms-drag-over'); lastOver = null; }
+        }
+        function onMove(ev) {
+            if (ev.pointerId !== pointerId) { return; }
+            ev.preventDefault();
+            var under = document.elementFromPoint(ev.clientX, ev.clientY);
+            var overCard = under ? under.closest('.cms-block-card') : null;
+            if (!overCard || overCard === card || !listEl.contains(overCard)) { clearOver(); return; }
+            if (overCard !== lastOver) { clearOver(); overCard.classList.add('cms-drag-over'); lastOver = overCard; }
+        }
+        function teardown() {
+            handle.removeEventListener('pointermove', onMove);
+            handle.removeEventListener('pointerup', onUp);
+            handle.removeEventListener('pointercancel', onCancel);
+            try { handle.releasePointerCapture(pointerId); } catch (e) {}
+            card.classList.remove('cms-dragging');
+        }
+        function onUp() {
+            var target = lastOver;
+            teardown();
+            clearOver();
+            if (!target || target === card) { return; }
+            var from = model.indexOf(block);
+            var to   = model.indexOf(target._block);
+            if (from < 0 || to < 0 || from === to) { return; }
+            var moved = model.splice(from, 1)[0];
+            var dest = (from < to) ? to - 1 : to;
+            model.splice(dest, 0, moved);
+            syncRowOrder();
+            refreshRowChrome();
+            markDirty();
+        }
+        function onCancel() { teardown(); clearOver(); }
+
+        handle.addEventListener('pointermove', onMove);
+        handle.addEventListener('pointerup', onUp);
+        handle.addEventListener('pointercancel', onCancel);
+    }
+
     function wireDrag(card, handle, block) {
+        // touch-action:none lets the handle capture the drag gesture instead of the
+        // browser scrolling the page out from under a touch reorder.
+        handle.style.touchAction = 'none';
         // Only the handle initiates a drag (keeps text selection in field inputs).
-        handle.addEventListener('mousedown', function () { card.setAttribute('draggable', 'true'); });
-        handle.addEventListener('mouseup', function () { card.setAttribute('draggable', 'false'); });
+        handle.addEventListener('pointerdown', function (e) {
+            if (e.pointerType === 'mouse') {
+                // Enable native HTML5 DnD for this mouse drag (handlers below).
+                card.setAttribute('draggable', 'true');
+                return;
+            }
+            // Touch / pen: run the Pointer-Events reorder fallback.
+            e.preventDefault();
+            startPointerDrag(card, handle, block, e);
+        });
+        handle.addEventListener('pointerup', function () { card.setAttribute('draggable', 'false'); });
+        handle.addEventListener('pointercancel', function () { card.setAttribute('draggable', 'false'); });
         card.addEventListener('dragstart', function (e) {
             dragFromBlock = block;
             card.classList.add('cms-dragging');
@@ -1819,7 +2212,12 @@ window.CmsBlockEditor = (function () {
      * The chooser is searchable + grouped + icon'd, and can insert a new block
      * at a specific index (insertAt). insertAt === null → append at the end. */
     var addModal, addGroupsEl, addSearchEl, addNoMatchEl, addShowAllWrap, addShowAllBtn;
-    var addInsertAt = null;   // index to splice at, or null to append
+    var addInsertAt = null;      // index to splice at, or null to append
+    // enh #16: when set, the chooser routes the picked catalog entry to this handler
+    // (a columns child add) instead of inserting a new block into the page model.
+    var addPickHandler = null;
+    // enh #16: hide the 'columns' block from the chooser (prevents columns-in-columns).
+    var addExcludeColumns = false;
 
     // Stable group order for the chooser sections.
     var GROUP_ORDER = ['Layout', 'Content', 'Media', 'Dynamic', 'Advanced'];
@@ -1859,7 +2257,16 @@ window.CmsBlockEditor = (function () {
                 '<span class="cms-typecard-key">' + esc(c.type) + '</span>' +
             '</span>';
         if (c.available) {
-            cardBtn.addEventListener('click', function () { insertNewBlock(c); });
+            cardBtn.addEventListener('click', function () {
+                if (addPickHandler) {
+                    // enh #16: route into the columns-child add flow, not the page model.
+                    var h = addPickHandler; addPickHandler = null;
+                    closeModal(addModal);
+                    h(c);
+                } else {
+                    insertNewBlock(c);
+                }
+            });
         }
         return cardBtn;
     }
@@ -1879,8 +2286,10 @@ window.CmsBlockEditor = (function () {
         var q = (filter || '').trim().toLowerCase();
 
         // All addable catalog entries (legacy/non-addable + JSON-only always excluded).
+        // enh #16: a columns child add also excludes 'columns' (no nested columns).
         var addable = (catalog || []).filter(function (c) {
-            return c.addable !== false && !JSON_ONLY_TYPES[c.type];
+            return c.addable !== false && !JSON_ONLY_TYPES[c.type]
+                && !(addExcludeColumns && c.type === 'columns');
         });
 
         // Scope to the page type unless searching or "Show all" is on. When the
@@ -1958,7 +2367,23 @@ window.CmsBlockEditor = (function () {
 
     function openAddChooser(insertAt) {
         addInsertAt = (insertAt === undefined) ? null : insertAt;
+        addPickHandler = null;      // page-level add: default insert behavior
+        addExcludeColumns = false;  // columns allowed at the page level
         showAllBlocks = false; // always reopen in scoped view
+        if (addSearchEl) { addSearchEl.value = ''; }
+        renderAddChooser('');
+        openModal(addModal);
+        if (addSearchEl) { setTimeout(function () { addSearchEl.focus(); }, 30); }
+    }
+
+    // enh #16: open the same chooser for a columns child add. The picked catalog
+    // entry is passed to `handler` (which appends it into a column) instead of the
+    // page model, and 'columns' is hidden so a column can't itself hold columns.
+    function openAddChooserForHandler(handler) {
+        addInsertAt = null;
+        addPickHandler = handler;
+        addExcludeColumns = true;
+        showAllBlocks = false;
         if (addSearchEl) { addSearchEl.value = ''; }
         renderAddChooser('');
         openModal(addModal);
@@ -2004,6 +2429,12 @@ window.CmsBlockEditor = (function () {
     /* ================= Media picker ================= */
     var mediaModal, mediaGrid, mediaSearch, mediaSearchBtn, uploadInput, uploadDrop, uploadAlt, uploadDecorative;
     var mediaCallback = null;
+    // Lazy-load paging state. A large media library used to be fetched + rendered in
+    // one shot; now the picker pulls one page at a time (medialist offset/limit) and
+    // appends more as the author scrolls (IntersectionObserver) or clicks "Load more".
+    var MEDIA_PAGE = 24;
+    var mediaQuery = '', mediaOffset = 0, mediaHasMore = false, mediaLoading = false;
+    var mediaMoreBtn = null, mediaMoreIO = null;
 
     function openMediaPicker(cb) {
         mediaCallback = cb;
@@ -2011,40 +2442,172 @@ window.CmsBlockEditor = (function () {
         loadMedia('');
     }
 
-    function renderMediaList(items) {
-        mediaGrid.innerHTML = '';
-        if (!items || !items.length) {
+    // Build one picker tile: click the image/caption to pick it; edit its alt inline
+    // (writes through to the media row) without picking.
+    function buildMediaTile(m) {
+        var tile = el('div', 'cms-media-tile');
+        var img = el('img');
+        img.src = m.thumb || m.src;
+        img.alt = m.alt || '';
+        var cap = el('div', 'cms-media-cap', esc(m.alt || m.filename || ('#' + (m.media_id || ''))));
+
+        function pick() {
+            if (mediaCallback) { mediaCallback(m); }
+            closeModal(mediaModal);
+        }
+        img.addEventListener('click', pick);
+        cap.addEventListener('click', pick);
+
+        tile.appendChild(img);
+        tile.appendChild(cap);
+        // #05 + #17: inline alt editing in the picker. Editing here writes the
+        // description back to the shared media row (CmsAjax/mediaupdate — CSRF- and
+        // scope-guarded via post()), so it's reusable everywhere the image appears.
+        if (m.media_id) { tile.appendChild(buildAltEditor(m, cap, img)); }
+        return tile;
+    }
+
+    // Inline alt editor for a picker tile. The "decorative" tick INTENTIONALLY saves
+    // an empty alt (assistive tech then skips the image) — the same teaching pattern
+    // as the upload panel, but applied to an existing library image.
+    function buildAltEditor(m, cap, img) {
+        var box = el('div', 'cms-media-alt');
+        // Interacting with the editor must not trigger the tile's "pick" click.
+        box.addEventListener('click', function (e) { e.stopPropagation(); });
+
+        var input = el('input', 'cms-input cms-media-alt-input');
+        input.type = 'text';
+        input.placeholder = 'Describe this image…';
+        input.value = m.alt || '';
+
+        var saveBtn = el('button', 'cms-btn cms-btn-sm cms-media-alt-save', 'Save');
+        saveBtn.type = 'button';
+        saveBtn.setAttribute('data-tip', 'Save this description to the media library');
+
+        var decoLab = el('label', 'cms-check-inline cms-media-alt-deco');
+        var deco = el('input'); deco.type = 'checkbox';
+        decoLab.appendChild(deco);
+        decoLab.appendChild(document.createTextNode(' Decorative (no alt text)'));
+
+        deco.addEventListener('change', function () {
+            input.disabled = deco.checked;
+            if (deco.checked) { input.value = ''; }
+        });
+
+        function save() {
+            var alt = deco.checked ? '' : input.value.trim();
+            var prev = saveBtn.textContent;
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving…';
+            // post() sends X-CSRF-Token (window.CMS_CSRF) + the active scope.
+            post('mediaupdate', { media_id: m.media_id, alt: alt }).then(function (res) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = prev;
+                if (!res || !res.ok) { toast((res && res.error) || 'Could not save the description.', 'error'); return; }
+                // Reflect the sanitized value the server echoed back.
+                m.alt = (res.alt != null) ? String(res.alt) : alt;
+                input.value = m.alt;
+                if (img) { img.alt = m.alt; }
+                if (cap) { cap.textContent = m.alt || m.filename || ('#' + (m.media_id || '')); }
+                toast(deco.checked ? 'Marked decorative — empty alt saved.' : 'Description saved.', 'ok');
+            }).catch(function () {
+                saveBtn.disabled = false;
+                saveBtn.textContent = prev;
+                toast('Network error saving the description.', 'error');
+            });
+        }
+        saveBtn.addEventListener('click', save);
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+
+        var row = el('div', 'cms-media-alt-row');
+        row.appendChild(input);
+        row.appendChild(saveBtn);
+        box.appendChild(row);
+        box.appendChild(decoLab);
+        return box;
+    }
+
+    // Append a page of tiles. `reset` clears the grid first (new search / reopen).
+    function appendMediaTiles(items, reset) {
+        if (reset) { mediaGrid.innerHTML = ''; }
+        if (reset && (!items || !items.length)) {
             mediaGrid.appendChild(el('div', 'cms-media-empty', 'No media yet. Upload an image above.'));
             return;
         }
-        items.forEach(function (m) {
-            var tile = el('div', 'cms-media-tile');
-            var img = el('img');
-            img.src = m.thumb || m.src;
-            img.alt = m.alt || '';
-            tile.appendChild(img);
-            tile.appendChild(el('div', 'cms-media-cap', esc(m.alt || m.filename || ('#' + (m.media_id || '')))));
-            tile.addEventListener('click', function () {
-                if (mediaCallback) { mediaCallback(m); }
-                closeModal(mediaModal);
-            });
-            mediaGrid.appendChild(tile);
-        });
+        (items || []).forEach(function (m) { mediaGrid.appendChild(buildMediaTile(m)); });
     }
 
-    function loadMedia(q) {
-        mediaGrid.innerHTML = '<div class="cms-media-empty">Loading…</div>';
-        // AJAX already ends in '...?Route=CmsAjax/', so the query must be joined
-        // with '&' — a second '?' would corrupt the Route param (empties $_GET).
-        var url = AJAX + 'medialist' + (q ? '&' + new URLSearchParams({ q: q }).toString() : '')
+    // Create (once) the "Load more" control + its IntersectionObserver, then reflect
+    // the current paging state onto it.
+    function syncMediaMore() {
+        if (!mediaMoreBtn && mediaGrid && mediaGrid.parentNode) {
+            mediaMoreBtn = el('button', 'cms-btn cms-btn-sm cms-btn-ghost cms-media-more', 'Load more images');
+            mediaMoreBtn.type = 'button';
+            mediaMoreBtn.style.display = 'none';
+            mediaMoreBtn.addEventListener('click', function () { loadMediaPage(false); });
+            mediaGrid.parentNode.insertBefore(mediaMoreBtn, mediaGrid.nextSibling);
+            // Auto-load the next page when the button scrolls into view inside the
+            // modal body. The manual click above is the fallback if IO is unavailable.
+            if (typeof IntersectionObserver !== 'undefined') {
+                mediaMoreIO = new IntersectionObserver(function (entries) {
+                    if (entries[0] && entries[0].isIntersecting) { loadMediaPage(false); }
+                }, { root: mediaGrid.parentNode, rootMargin: '150px' });
+                mediaMoreIO.observe(mediaMoreBtn);
+            }
+        }
+        if (!mediaMoreBtn) { return; }
+        mediaMoreBtn.style.display = mediaHasMore ? '' : 'none';
+        mediaMoreBtn.disabled = mediaLoading;
+        mediaMoreBtn.textContent = mediaLoading ? 'Loading…' : 'Load more images';
+    }
+
+    // Fetch one page. `reset` starts over (offset 0, new/blank search).
+    function loadMediaPage(reset) {
+        if (mediaLoading) { return; }
+        if (!reset && !mediaHasMore) { return; }
+        if (reset) {
+            mediaOffset = 0;
+            mediaHasMore = false;
+            if (mediaMoreBtn) { mediaMoreBtn.style.display = 'none'; }
+            mediaGrid.innerHTML = '<div class="cms-media-empty">Loading…</div>';
+        }
+        mediaLoading = true;
+        syncMediaMore();
+
+        // AJAX already ends in '...?Route=CmsAjax/', so params must be joined with
+        // '&' — a second '?' would corrupt the Route param (empties $_GET).
+        var params = { limit: String(MEDIA_PAGE), offset: String(mediaOffset) };
+        if (mediaQuery) { params.q = mediaQuery; }
+        var url = AJAX + 'medialist&' + new URLSearchParams(params).toString()
             + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '');
         fetch(url, { credentials: 'same-origin' })
             .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
             .then(function (res) {
-                if (!res || !res.ok) { mediaGrid.innerHTML = '<div class="cms-media-empty">' + esc((res && res.error) || 'Could not load media.') + '</div>'; return; }
-                renderMediaList(res.media || []);
+                mediaLoading = false;
+                if (!res || !res.ok) {
+                    if (reset) { mediaGrid.innerHTML = '<div class="cms-media-empty">' + esc((res && res.error) || 'Could not load media.') + '</div>'; }
+                    else { toast((res && res.error) || 'Could not load more media.', 'error'); }
+                    syncMediaMore();
+                    return;
+                }
+                var items = res.media || [];
+                mediaHasMore = !!res.has_more;
+                mediaOffset += items.length;
+                appendMediaTiles(items, reset);
+                syncMediaMore();
             })
-            .catch(function () { mediaGrid.innerHTML = '<div class="cms-media-empty">Network error.</div>'; });
+            .catch(function () {
+                mediaLoading = false;
+                if (reset) { mediaGrid.innerHTML = '<div class="cms-media-empty">Network error.</div>'; }
+                else { toast('Network error loading more media.', 'error'); }
+                syncMediaMore();
+            });
+    }
+
+    // Back-compat entry point: (re)load the picker from the top for query `q`.
+    function loadMedia(q) {
+        mediaQuery = (q == null) ? '' : String(q);
+        loadMediaPage(true);
     }
 
     // C1: alt text authored at upload. A "decorative" tick INTENTIONALLY sends an
@@ -2141,7 +2704,6 @@ window.CmsBlockEditor = (function () {
         tagCatalog = Array.isArray(opts.tags) ? opts.tags : [];
         blockAllow = (opts.blockAllow && typeof opts.blockAllow === 'object') ? opts.blockAllow : {};
         pageType  = (typeof opts.pageType === 'string') ? opts.pageType : '';
-        canEdit   = !!opts.canEdit;
         if (typeof opts.onDirty === 'function') { onDirty = opts.onDirty; }
         if (opts.ajaxUrl) { AJAX = opts.ajaxUrl; }
 
@@ -2160,6 +2722,14 @@ window.CmsBlockEditor = (function () {
                 var fn = confirmAction;
                 confirmAction = null;
                 if (fn) { fn(); }
+            });
+        }
+
+        collapseAllBtn = document.getElementById('cmsCollapseAll');
+        if (collapseAllBtn) {
+            collapseAllBtn.addEventListener('click', function () {
+                // Any expanded → collapse them all; all already collapsed → expand all.
+                setAllCollapsed(anyBlockExpanded());
             });
         }
 

@@ -151,6 +151,13 @@ include __DIR__ . '/cms/_shell_top.tpl';
         </div>
     </div>
 
+    <?php if ($canEdit && !$canPublish): ?>
+    <div class="cms-note" role="note">
+        <i class="fas fa-lock"></i>
+        <span>Saved as a draft &mdash; a monarch or regent needs to publish this page before it's visible to the public.</span>
+    </div>
+    <?php endif; ?>
+
     <?php if ($isFrontDoor): ?>
     <div class="cms-frontdoor-banner" role="note">
         <span class="cms-frontdoor-mark"><i class="fas fa-home"></i></span>
@@ -169,7 +176,6 @@ include __DIR__ . '/cms/_shell_top.tpl';
         $beCatalog   = $catalog;
         $beLabels    = $catalogLabels;
         $bePageTypes = $pageTypes;
-        $beCanEdit   = $canEdit;
         $beHeading   = 'Blocks';
         include DIR_TEMPLATE . 'default/cms/_block_editor.tpl';
         ?>
@@ -534,7 +540,6 @@ include __DIR__ . '/cms/_shell_top.tpl';
             blockAllow: <?= json_encode($blockAllow, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             tags:      <?= json_encode($allTags, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             pageType:  typeInput ? typeInput.value : <?= json_encode($pType, JSON_HEX_TAG) ?>,
-            canEdit:   STATE.canEdit,
             onDirty:   markDirty
         });
         // For a brand-new page that arrived with no blocks, seed from the type preset.

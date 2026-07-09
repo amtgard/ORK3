@@ -2205,3 +2205,132 @@ html[data-theme="dark"] .te-contrast-warn-inline {
     background: #27200a;
     border-color: #78500a;
 }
+
+/* ============================================================================
+   Dashboard (Cms_dashboard.tpl) — moved out of the page's inline <style> so the
+   rules are fetched once and cached across CMS admin views. Reuses cms-/ork-
+   tokens; dark-mode via those vars + explicit html[data-theme] overrides.
+   ============================================================================ */
+.cms-dash-greet {
+    font-family: inherit;
+    font-size: 22px;
+    color: var(--cms-gold, #f0b429);
+    margin: 0 0 4px;
+    background: transparent; border: none; padding: 0; border-radius: 0;
+    text-shadow: none;
+}
+.cms-dash-lede { color: var(--ork-text-muted); font-size: 14px; margin: 0 0 22px; }
+
+.cms-dash-section-title {
+    font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--ork-text-muted); font-weight: 700; margin: 0 0 12px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
+}
+.cms-dash-block { margin-bottom: 30px; }
+
+/* Quick-create cards */
+.cms-quick-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;
+}
+.cms-quick-card {
+    display: flex; align-items: center; gap: 14px;
+    border: 1px solid var(--ork-border-dark); border-radius: 11px;
+    background: var(--ork-bg-secondary); padding: 16px 18px;
+    text-decoration: none; color: var(--ork-text);
+    transition: border-color .12s, transform .08s, box-shadow .12s; cursor: pointer;
+}
+.cms-quick-card:hover {
+    border-color: var(--cms-gold, #f0b429); transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
+}
+.cms-quick-ico {
+    flex: 0 0 auto; width: 42px; height: 42px; border-radius: 10px;
+    display: grid; place-items: center; font-size: 18px;
+    background: linear-gradient(180deg, var(--cms-gold, #f0b429), #e0a420); color: #1a1205;
+}
+.cms-quick-text strong { display: block; font-size: 15px; }
+.cms-quick-text span { font-size: 12.5px; color: var(--ork-text-muted); }
+
+/* Stat tiles */
+.cms-stat-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px;
+}
+.cms-stat-tile {
+    border: 1px solid var(--ork-border); border-radius: 11px;
+    background: var(--ork-bg-secondary); padding: 16px 18px;
+    text-decoration: none; color: var(--ork-text); display: block;
+    transition: border-color .12s;
+}
+a.cms-stat-tile:hover { border-color: var(--cms-gold-deep, #caa23a); }
+.cms-stat-num { font-size: 28px; font-weight: 800; line-height: 1; color: var(--ork-text); }
+.cms-stat-lbl { font-size: 12.5px; color: var(--ork-text-muted); margin-top: 6px; }
+.cms-stat-tile-drafts .cms-stat-num { color: var(--cms-gold-deep, #caa23a); }
+
+/* Continue-editing list */
+.cms-recent-list { display: flex; flex-direction: column; border: 1px solid var(--ork-border); border-radius: 11px; overflow: hidden; }
+.cms-recent-item {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+    border-bottom: 1px solid var(--ork-border); background: var(--ork-bg);
+}
+.cms-recent-item:last-child { border-bottom: none; }
+.cms-recent-item:hover { background: var(--ork-bg-secondary); }
+.cms-recent-kind {
+    flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+    background: var(--ork-bg-tertiary); color: var(--ork-text-muted); font-size: 13px;
+}
+.cms-recent-main { flex: 1 1 auto; min-width: 0; }
+.cms-recent-title { font-weight: 600; color: var(--ork-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cms-recent-meta { font-size: 12px; color: var(--ork-text-muted); }
+.cms-recent-actions { flex: 0 0 auto; }
+
+/* Public-site status card (Multi-Site) */
+.cms-sitecard {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    border: 1px solid var(--ork-border-dark); border-left: 4px solid var(--cms-gold, #f0b429);
+    border-radius: 11px; background: var(--ork-bg-secondary); padding: 16px 18px;
+}
+.cms-sitecard-main { flex: 1 1 260px; min-width: 0; }
+.cms-sitecard-title { font-size: 15.5px; font-weight: 700; color: var(--ork-text); display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.cms-sitecard-title .fa-globe-americas { color: var(--cms-gold-deep, #caa23a); }
+.cms-sitecard-sub { font-size: 13px; color: var(--ork-text-muted); margin-top: 5px; }
+.cms-sitecard-sub code { background: var(--ork-bg-tertiary); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
+.cms-sitecard-badge { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+.cms-sitecard-badge-pub { background: #1f7a3d; color: #fff; }
+.cms-sitecard-badge-draft { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); border: 1px solid var(--ork-border); }
+.cms-sitecard-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
+.cms-sitecard-note { font-size: 13px; color: var(--ork-text-muted); display: inline-flex; align-items: center; gap: 7px; }
+.cms-sitecard-note .fa-lock { color: var(--cms-gold-deep, #caa23a); }
+html[data-theme="dark"] .cms-sitecard-badge-pub { background: #2e9d55; }
+
+.cms-dash-livelink { display: inline-flex; align-items: center; gap: 7px; color: var(--ork-text-muted); text-decoration: none; font-size: 13.5px; }
+.cms-dash-livelink:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
+html[data-theme="dark"] .cms-dash-livelink:hover { color: var(--cms-gold, #f0b429); }
+
+@media (max-width: 560px) {
+    .cms-recent-actions .cms-btn-label { display: none; }
+}
+
+/* ============================================================================
+   Scope-context banner (cms/_shell_top.tpl) — moved out of the shell's inline
+   <style> so it isn't duplicated on every scoped admin render. Dark-mode via
+   html[data-theme].
+   ============================================================================ */
+.cms-scope-banner {
+    display: flex; align-items: center; gap: 10px;
+    margin: 0 0 18px; padding: 10px 14px;
+    border: 1px solid var(--cms-gold-deep, #caa23a);
+    border-left-width: 4px;
+    border-radius: 9px;
+    background: #fff8e6; color: #4a3b12;
+    font-size: 13.5px; line-height: 1.35;
+}
+.cms-scope-banner .fa-globe-americas,
+.cms-scope-banner .cms-scope-ico { color: var(--cms-gold-deep, #caa23a); font-size: 16px; }
+.cms-scope-banner strong { font-weight: 700; }
+.cms-scope-banner .cms-scope-hint { color: #6b5a29; }
+html[data-theme="dark"] .cms-scope-banner {
+    background: rgba(240, 180, 41, .10);
+    border-color: var(--cms-gold, #f0b429);
+    color: var(--ork-text, #e8e2d0);
+}
+html[data-theme="dark"] .cms-scope-banner .cms-scope-hint { color: var(--ork-text-muted, #b8ae90); }

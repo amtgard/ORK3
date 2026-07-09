@@ -15,6 +15,17 @@ $recent = isset($Recent) && is_array($Recent) ? $Recent : array();
 $stats  = isset($Stats) && is_array($Stats) ? $Stats : array();
 $caps   = isset($Caps) && is_array($Caps) ? $Caps : array();
 
+// #09 usage analytics (view counts).
+$viewSummary = isset($ViewSummary) && is_array($ViewSummary) ? $ViewSummary : array();
+$topViewed   = isset($TopViewed) && is_array($TopViewed) ? $TopViewed : array();
+$viewTotal   = (int)($viewSummary['total'] ?? 0);
+$viewRecent  = (int)($viewSummary['recent'] ?? 0);
+$viewDays    = (int)($viewSummary['recent_days'] ?? 30);
+// Human-readable thousands separators for the tallies.
+$nf = function ($n) {
+    return number_format((int)$n);
+};
+
 $pageTypes = isset($PageTypes) && is_array($PageTypes) ? $PageTypes : array(
     array('type' => 'composed',   'label' => 'Composed / Landing'),
     array('type' => 'article',    'label' => 'Article / Text'),
@@ -57,108 +68,8 @@ $dashCanPublish = !empty($CanPublishSite);
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 
-<style>
-/* ---- Dashboard-only styling (reuses cms- tokens; dark-mode via vars) ---- */
-.cms-dash-greet {
-    font-family: inherit;
-    font-size: 22px;
-    color: var(--cms-gold, #f0b429);
-    margin: 0 0 4px;
-    background: transparent; border: none; padding: 0; border-radius: 0;
-    text-shadow: none;
-}
-.cms-dash-lede { color: var(--ork-text-muted); font-size: 14px; margin: 0 0 22px; }
-
-.cms-dash-section-title {
-    font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
-    color: var(--ork-text-muted); font-weight: 700; margin: 0 0 12px;
-    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
-}
-.cms-dash-block { margin-bottom: 30px; }
-
-/* Quick-create cards */
-.cms-quick-row {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;
-}
-.cms-quick-card {
-    display: flex; align-items: center; gap: 14px;
-    border: 1px solid var(--ork-border-dark); border-radius: 11px;
-    background: var(--ork-bg-secondary); padding: 16px 18px;
-    text-decoration: none; color: var(--ork-text);
-    transition: border-color .12s, transform .08s, box-shadow .12s; cursor: pointer;
-}
-.cms-quick-card:hover {
-    border-color: var(--cms-gold, #f0b429); transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
-}
-.cms-quick-ico {
-    flex: 0 0 auto; width: 42px; height: 42px; border-radius: 10px;
-    display: grid; place-items: center; font-size: 18px;
-    background: linear-gradient(180deg, var(--cms-gold, #f0b429), #e0a420); color: #1a1205;
-}
-.cms-quick-text strong { display: block; font-size: 15px; }
-.cms-quick-text span { font-size: 12.5px; color: var(--ork-text-muted); }
-
-/* Stat tiles */
-.cms-stat-row {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px;
-}
-.cms-stat-tile {
-    border: 1px solid var(--ork-border); border-radius: 11px;
-    background: var(--ork-bg-secondary); padding: 16px 18px;
-    text-decoration: none; color: var(--ork-text); display: block;
-    transition: border-color .12s;
-}
-a.cms-stat-tile:hover { border-color: var(--cms-gold-deep, #caa23a); }
-.cms-stat-num { font-size: 28px; font-weight: 800; line-height: 1; color: var(--ork-text); }
-.cms-stat-lbl { font-size: 12.5px; color: var(--ork-text-muted); margin-top: 6px; }
-.cms-stat-tile-drafts .cms-stat-num { color: var(--cms-gold-deep, #caa23a); }
-
-/* Continue-editing list */
-.cms-recent-list { display: flex; flex-direction: column; border: 1px solid var(--ork-border); border-radius: 11px; overflow: hidden; }
-.cms-recent-item {
-    display: flex; align-items: center; gap: 12px; padding: 12px 14px;
-    border-bottom: 1px solid var(--ork-border); background: var(--ork-bg);
-}
-.cms-recent-item:last-child { border-bottom: none; }
-.cms-recent-item:hover { background: var(--ork-bg-secondary); }
-.cms-recent-kind {
-    flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
-    background: var(--ork-bg-tertiary); color: var(--ork-text-muted); font-size: 13px;
-}
-.cms-recent-main { flex: 1 1 auto; min-width: 0; }
-.cms-recent-title { font-weight: 600; color: var(--ork-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cms-recent-meta { font-size: 12px; color: var(--ork-text-muted); }
-.cms-recent-actions { flex: 0 0 auto; }
-
-/* Public-site status card (Multi-Site) */
-.cms-sitecard {
-    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-    border: 1px solid var(--ork-border-dark); border-left: 4px solid var(--cms-gold, #f0b429);
-    border-radius: 11px; background: var(--ork-bg-secondary); padding: 16px 18px;
-}
-.cms-sitecard-main { flex: 1 1 260px; min-width: 0; }
-.cms-sitecard-title { font-size: 15.5px; font-weight: 700; color: var(--ork-text); display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
-.cms-sitecard-title .fa-globe-americas { color: var(--cms-gold-deep, #caa23a); }
-.cms-sitecard-sub { font-size: 13px; color: var(--ork-text-muted); margin-top: 5px; }
-.cms-sitecard-sub code { background: var(--ork-bg-tertiary); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
-.cms-sitecard-badge { font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
-.cms-sitecard-badge-pub { background: #1f7a3d; color: #fff; }
-.cms-sitecard-badge-draft { background: var(--ork-bg-tertiary); color: var(--ork-text-muted); border: 1px solid var(--ork-border); }
-.cms-sitecard-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
-.cms-sitecard-note { font-size: 13px; color: var(--ork-text-muted); display: inline-flex; align-items: center; gap: 7px; }
-.cms-sitecard-note .fa-lock { color: var(--cms-gold-deep, #caa23a); }
-html[data-theme="dark"] .cms-sitecard-badge-pub { background: #2e9d55; }
-
-.cms-dash-livelink { display: inline-flex; align-items: center; gap: 7px; color: var(--ork-text-muted); text-decoration: none; font-size: 13.5px; }
-.cms-dash-livelink:hover { color: var(--cms-gold-deep, #caa23a); text-decoration: underline; }
-html[data-theme="dark"] .cms-dash-livelink:hover { color: var(--cms-gold, #f0b429); }
-
-@media (max-width: 560px) {
-    .cms-recent-actions .cms-btn-label { display: none; }
-}
-</style>
-
+<?php // Dashboard-specific styling (.cms-dash-*/.cms-sitecard-*) lives in the
+      // shared, cacheable cms-admin.css (loaded above) — no per-render inline block. ?>
 <?php
 /* ---- CMS shell setup (persistent rail + masthead) ---- */
 $cmsActive  = 'dashboard';
@@ -251,7 +162,49 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 <div class="cms-stat-num"><?= $statDrafts ?></div>
                 <div class="cms-stat-lbl"><i class="fas fa-pencil-ruler"></i> Draft<?= $statDrafts === 1 ? '' : 's' ?> in progress</div>
             </a>
+            <?php // #09: scope-wide view rollup. Not a link (no analytics drill-down yet). ?>
+            <div class="cms-stat-tile" data-tip="<?= $h($nf($viewTotal)) ?> total views all-time on published pages &amp; posts">
+                <div class="cms-stat-num"><?= $h($nf($viewRecent)) ?></div>
+                <div class="cms-stat-lbl"><i class="fas fa-chart-line"></i> View<?= $viewRecent === 1 ? '' : 's' ?> (last <?= (int)$viewDays ?> days)</div>
+            </div>
         </div>
+    </div>
+
+    <?php // #09: most-viewed content — closes the "does anyone see this?" loop. ?>
+    <div class="cms-dash-block">
+        <h3 class="cms-dash-section-title">Most viewed</h3>
+        <?php if (empty($topViewed)): ?>
+            <div class="cms-empty">
+                <div class="cms-empty-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="cms-empty-copy">No views recorded yet — once your published pages and posts are visited, your most-read content will appear here.</div>
+            </div>
+        <?php else: ?>
+            <div class="cms-recent-list">
+                <?php foreach ($topViewed as $tv):
+                    $isPage = (($tv['kind'] ?? 'page') === 'page');
+                    $title  = (string)($tv['title'] ?? '(untitled)');
+                    $href   = (string)($tv['edit_href'] ?? '#');
+                    $total  = (int)($tv['total'] ?? 0);
+                    $recent = (int)($tv['recent'] ?? 0);
+                ?>
+                    <div class="cms-recent-item">
+                        <span class="cms-recent-kind" data-tip="<?= $isPage ? 'Page' : 'Post' ?>">
+                            <i class="fas <?= $isPage ? 'fa-file-alt' : 'fa-newspaper' ?>"></i>
+                        </span>
+                        <div class="cms-recent-main">
+                            <div class="cms-recent-title"><?= $h($title) ?></div>
+                            <div class="cms-recent-meta">
+                                <strong><?= $h($nf($total)) ?></strong> total view<?= $total === 1 ? '' : 's' ?>
+                                &nbsp;·&nbsp; <?= $h($nf($recent)) ?> in the last <?= (int)$viewDays ?> days
+                            </div>
+                        </div>
+                        <div class="cms-recent-actions">
+                            <a class="cms-btn cms-btn-sm" href="<?= $h($href) ?>"><i class="fas fa-pen"></i> <span class="cms-btn-label">Edit</span></a>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
     </div>
 
     <div class="cms-dash-block">

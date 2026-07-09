@@ -18,6 +18,7 @@
  *   Site/page/{slug}/{pageSlug}     → page("{slug}/{pageSlug}")  scoped page
  *   Site/blog/{slug}                → blog($slug)   scoped blog index
  *   Site/post/{slug}/{postSlug}     → post("{slug}/{postSlug}")  scoped post
+ *   Site/rss/{slug}                 → rss($slug)    scoped RSS 2.0 feed
  *
  * Pretty URLs (via nginx `location ^~ /k/` and `^~ /p/` — see nginx.ork3.config).
  * /k/ is the KINGDOM namespace, /p/ the PARK namespace (C23); each rewrite adds
@@ -25,6 +26,7 @@
  * prefix to its canonical one. The page form is multi-segment (C13 nested pages):
  *   /k/{slug}                       → Site/view/{slug}
  *   /k/{slug}/blog                  → Site/blog/{slug}
+ *   /k/{slug}/rss                   → Site/rss/{slug}
  *   /k/{slug}/post/{postSlug}       → Site/post/{slug}/{postSlug}
  *   /k/{slug}/{a}/{b}/…             → Site/page/{slug}/{a}/{b}/…  (nested path)
  *   /p/{slug}/…                     → same, park scope
@@ -141,6 +143,9 @@ class Controller_Site extends Controller
             // C6: canonical + OG for the site home (type=website).
             if (!empty($homePage) && $homeUsable) {
                 $this->_setPageMeta($site, $homePage, 'website', true);
+                // #09: tally a public view of the home page (best-effort; the
+                // home is a real published in-scope page here).
+                $this->_recordCmsView($site, 'page', $homePageId);
             }
             $this->_cmsFab($site, UIR . 'Cms/edit/' . $homePageId . $this->_scopeQ($site), 'Edit this page');
         }
@@ -194,6 +199,9 @@ class Controller_Site extends Controller
         // C6: per-page canonical + OG derived from the page (hero image → og:image).
         $this->_setPageMeta($site, $page, 'article');
 
+        // #09: tally a public view of this page (best-effort; gated internally).
+        $this->_recordCmsView($site, 'page', $pageId);
+
         $this->_cmsFab($site, UIR . 'Cms/edit/' . $pageId . $this->_scopeQ($site), 'Edit this page');
     }
 
@@ -235,6 +243,17 @@ class Controller_Site extends Controller
         $pages = ($perPage > 0) ? (int) ceil($total / $perPage) : 1;
         if ($pages < 1) {
             $pages = 1;
+        }
+
+        // Clamp an out-of-range page so the OFFSET can never exceed the result
+        // set (mirrors Controller_Blog::index). Refetch the last valid page's
+        // rows only when the requested page number was too high.
+        if ($pageNo > $pages) {
+            $pageNo            = $pages;
+            $listArgs['offset'] = ($pageNo - 1) * $perPage;
+            $result = $this->CmsPost->list_posts($listArgs);
+            $rows   = (isset($result['rows']) && is_array($result['rows'])) ? $result['rows'] : array();
+            $total  = isset($result['total']) ? (int) $result['total'] : $total;
         }
 
         $this->data['SiteMode']       = 'blog';
@@ -305,7 +324,53 @@ class Controller_Site extends Controller
         // C6: per-post canonical + OG (hero image → og:image; type=article).
         $this->_setPostMeta($site, $post);
 
+        // #09: tally a public view of this post (best-effort; gated internally).
+        $this->_recordCmsView($site, 'post', (int) $post['post_id']);
+
         $this->_cmsFab($site, UIR . 'Cms/editpost/' . (int) $post['post_id'] . $this->_scopeQ($site), 'Edit this post', true);
+    }
+
+    /**
+     * The scoped RSS 2.0 feed: Site/rss/{slug} (→ /k|/p/{slug}/rss).
+     * Reuses the shared CmsPost feed builder with the site's RESOLVED scope, so
+     * aggregators hitting an org site get its own posts instead of a dead end.
+     *
+     * Only a PUBLISHED public site is served: an unknown / unbuilt / draft slug
+     * gets a clean 404, and a preview (an officer viewing an unpublished site)
+     * is deliberately NOT given a feed — a feed is inherently public/indexable,
+     * so it must never expose pre-launch content (mirrors the noindex/preview
+     * discipline of the HTML routes).
+     */
+    public function rss($slug = null)
+    {
+        $site = $this->_resolveSite($slug);
+        if ($site === null || (string) ($site['status'] ?? 'unbuilt') !== 'published') {
+            $this->_renderRssNotFound();
+            return;
+        }
+        // Honor the /k vs /p canonical-prefix 301 like the HTML routes (no-op on
+        // a raw Site/rss route with no &_pfx hint).
+        if ($this->_enforcePrefix($site)) {
+            return;
+        }
+
+        $scopeType = (string) $site['scope_type'];
+        $scopeId   = (int) $site['scope_id'];
+        $siteName  = trim((string) ($site['site_name'] ?? ''));
+        $base      = $this->_siteBaseUrl($site);
+
+        $this->load_model('CmsPost');
+        $xml = $this->CmsPost->RssFeedXml($scopeType, $scopeId, array(
+            'title'       => ($siteName !== '' ? $siteName . ' — News' : 'News'),
+            'description' => ($siteName !== '' ? 'Latest news from ' . $siteName . '.' : 'Latest news.'),
+            'index_link'  => $base . '/blog',
+            'self_link'   => $base . '/rss',
+            'post_base'   => $base . '/post',
+        ));
+
+        header('Content-Type: application/rss+xml; charset=utf-8');
+        echo $xml;
+        exit;
     }
 
     /* ==================================================================
@@ -421,6 +486,82 @@ class Controller_Site extends Controller
     }
 
     /**
+     * #09 usage analytics: record ONE public view of a page/post for this site's
+     * scope. Best-effort and non-blocking — it must never slow or break the
+     * render, so it fires exactly once per request on a successful in-scope
+     * PUBLISHED fetch and swallows every error.
+     *
+     * EXCLUSIONS (a view is only counted when ALL hold):
+     *   - NOT a preview render ($this->_isPreview) — an officer previewing their
+     *     own unpublished/draft content is not a public visitor.
+     *   - a GET request — POST/HEAD/etc. are never a content view.
+     *   - NOT an obvious bot/crawler/link-unfurler (user-agent heuristic).
+     *
+     * The lib (CmsView::RecordView) is ALSO best-effort (missing-table probe +
+     * swallowed errors); this is the policy gate in front of it.
+     *
+     * @param array  $site       resolved site row (authoritative scope)
+     * @param string $entityType 'page'|'post'
+     * @param int    $entityId
+     * @return void
+     */
+    private function _recordCmsView($site, $entityType, $entityId)
+    {
+        if ($this->_isPreview) {
+            return;   // officer preview — not a public view
+        }
+        $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        if ($method !== 'GET') {
+            return;   // only a GET render counts as a view
+        }
+        if ($this->_isProbablyBot()) {
+            return;   // crawlers / unfurlers / monitors don't count
+        }
+
+        $entityId = (int) $entityId;
+        if ($entityId <= 0 || !is_array($site)) {
+            return;
+        }
+
+        try {
+            $this->load_model('CmsView');
+            $this->CmsView->record_view(
+                (string) ($site['scope_type'] ?? 'global'),
+                (int) ($site['scope_id'] ?? 0),
+                (string) $entityType,
+                $entityId
+            );
+        } catch (\Throwable $e) {
+            // Best-effort only — analytics must never surface to the visitor.
+        }
+    }
+
+    /**
+     * Lightweight user-agent bot heuristic for the #09 view counter. Deliberately
+     * simple (no third-party lists): matches common crawler / link-unfurler /
+     * uptime-monitor / scripting tokens, and treats a MISSING user-agent as
+     * non-human (bots and scripts routinely omit it). False negatives are
+     * acceptable — the goal is directional feedback, not audited analytics.
+     *
+     * @return bool
+     */
+    private function _isProbablyBot()
+    {
+        $ua = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+        if (trim($ua) === '') {
+            return true;
+        }
+        return (bool) preg_match(
+            '~(bot|crawl|spider|slurp|mediapartners|facebookexternalhit|embedly|'
+            . 'quora link preview|pinterest|slackbot|twitterbot|telegrambot|whatsapp|'
+            . 'discordbot|linkedinbot|skypeuripreview|preview|monitor|uptime|pingdom|'
+            . 'statuscake|curl|wget|python-requests|python-urllib|go-http-client|'
+            . 'java/|okhttp|headless|phantomjs|lighthouse|scrapy|apache-httpclient)~i',
+            $ua
+        );
+    }
+
+    /**
      * C23: canonical-prefix guard. Returns true (and issues a 301) when the URL
      * prefix the visitor used (&_pfx=k|p) does not match the resolved site's real
      * scope_type — the caller should then return. No hint (raw route) → no-op.
@@ -524,11 +665,19 @@ class Controller_Site extends Controller
         $this->data['page_title']       = $siteName !== '' ? $siteName : 'Kingdom Site';
 
         // Per-org theme tokens (scoped to the site's own scope, not global).
+        // GetActiveCss caches the resolved CSS in GhettoCache keyed by
+        // (scope, theme updated_at) so this no longer recompiles on every hit.
         $this->load_model('CmsTheme');
         $css = (string) $this->CmsTheme->get_active_css($scopeType, $scopeId);
         if ($css !== '') {
             $this->data['fdThemeCss'] = $css;
         }
+
+        // RSS auto-discovery: every org-site page advertises the org's scoped
+        // feed (Site/rss/{slug} → /k|/p/{slug}/rss) so readers/aggregators can
+        // find it. default.theme emits the <link rel="alternate"> when set.
+        $this->data['rss_feed_url']   = $this->_siteBaseUrl($site) . '/rss';
+        $this->data['rss_feed_title'] = ($siteName !== '' ? $siteName . ' — News' : 'News');
     }
 
     /* ==================================================================
@@ -755,6 +904,19 @@ class Controller_Site extends Controller
         $this->data['no_index']   = true;
         $this->data['Message']    = 'This page could not be found.';
         $this->data['page_title'] = 'Not found';
+    }
+
+    /**
+     * A bare, non-HTML 404 for the RSS endpoint: an aggregator wants a feed, not
+     * the branded HTML shell. Keeps an in-progress / unknown site indistinguish-
+     * able (no name/logo leak) and emits nothing indexable.
+     */
+    private function _renderRssNotFound()
+    {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Not found';
+        exit;
     }
 
     /**

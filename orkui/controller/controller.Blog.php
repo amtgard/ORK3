@@ -6,7 +6,11 @@
  * Routes:
  *   Blog            / Blog/index        → index()  list of published posts (paginated; ?p=, ?tag=)
  *   Blog/post/{slug}                    → post($slug)  single published entry
- *   Blog/rss                            → rss()  RSS 2.0 feed of the latest published posts
+ *   Blog/rss                            → rss()  RSS 2.0 feed (GLOBAL scope) of the latest published posts
+ *
+ * The feed XML + its per-scope 300s ghettocache live in the CmsPost lib
+ * (CmsPost::RssFeedXml) so this GLOBAL feed and the per-org feeds in
+ * Controller_Site::rss share ONE builder; rss() here only supplies channel meta.
  *
  * Posts come from the CmsPost lib (via Model_CmsPost). A post's BODY is stored as
  * blocks in the shared polymorphic block store (owner_type='post') and renders
@@ -22,9 +26,6 @@ class Controller_Blog extends Controller
 {
     /** Posts per page on the index feed. */
     public const PER_PAGE = 12;
-
-    /** Max items in the RSS feed. */
-    public const RSS_LIMIT = 20;
 
     /** v2 CMS-auth scope: org-wide. */
     private static $SCOPE = array('type' => 'global', 'id' => 0);
@@ -69,6 +70,17 @@ class Controller_Blog extends Controller
         $pages   = ($perPage > 0) ? (int) ceil($total / $perPage) : 1;
         if ($pages < 1) {
             $pages = 1;
+        }
+
+        // Clamp an out-of-range page so the OFFSET can never exceed the result
+        // set (an unbounded ?p= would otherwise scan the whole set for nothing).
+        // Refetch the last valid page's rows only when the request was too high.
+        if ($page > $pages) {
+            $page          = $pages;
+            $opts['offset'] = ($page - 1) * $perPage;
+            $result = $this->CmsPost->list_posts($opts);
+            $rows   = isset($result['rows']) && is_array($result['rows']) ? $result['rows'] : array();
+            $total  = isset($result['total']) ? (int) $result['total'] : $total;
         }
 
         $this->data['posts']       = $rows;
@@ -132,99 +144,21 @@ class Controller_Blog extends Controller
      */
     public function rss($action = null)
     {
-        $gc       = Ork3::$Lib->ghettocache;
-        $cacheKey = $gc->key(['scope_type' => 'global', 'scope_id' => 0, 'limit' => self::RSS_LIMIT]);
-        $cached   = $gc->get(__CLASS__ . '.rss_xml', $cacheKey, 300);
-        if ($cached !== false) {
-            header('Content-Type: application/rss+xml; charset=utf-8');
-            echo $cached;
-            exit;
-        }
-
+        // The XML shape + per-scope ghettocache live in the CmsPost lib so the
+        // GLOBAL feed here and the org feeds in Controller_Site::rss share ONE
+        // builder. This controller only supplies the channel meta and emits.
         $this->load_model('CmsPost');
-
-        $result = $this->CmsPost->list_posts(array(
-            'limit'      => self::RSS_LIMIT,
-            'offset'     => 0,
-            'scope_type' => 'global',
-            'scope_id'   => 0,
+        $xml = $this->CmsPost->RssFeedXml('global', 0, array(
+            'title'       => 'Amtgard News',
+            'description' => 'Latest news and announcements from the Amtgard Online Record Keeper.',
+            'index_link'  => UIR . 'Blog/index',
+            'self_link'   => UIR . 'Blog/rss',
+            'post_base'   => UIR . 'Blog/post',
         ));
-        $rows = isset($result['rows']) && is_array($result['rows']) ? $result['rows'] : array();
-
-        $indexLink  = UIR . 'Blog/index';
-        $selfLink   = UIR . 'Blog/rss';
-        $buildDate  = date('r');
-
-        $xml  = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
-        $xml .= '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">' . "\n";
-        $xml .= "<channel>\n";
-        $xml .= '<title>' . $this->_xml('Amtgard News') . "</title>\n";
-        $xml .= '<link>' . $this->_xml($indexLink) . "</link>\n";
-        $xml .= '<description>' . $this->_xml('Latest news and announcements from the Amtgard Online Record Keeper.') . "</description>\n";
-        $xml .= '<language>en-us</language>' . "\n";
-        $xml .= '<lastBuildDate>' . $this->_xml($buildDate) . "</lastBuildDate>\n";
-        $xml .= '<atom:link href="' . $this->_xml($selfLink) . '" rel="self" type="application/rss+xml" />' . "\n";
-
-        foreach ($rows as $row) {
-            $slug    = isset($row['slug']) ? (string) $row['slug'] : '';
-            $title   = isset($row['title']) ? (string) $row['title'] : '';
-            $excerpt = isset($row['excerpt']) ? (string) $row['excerpt'] : '';
-            $link    = UIR . 'Blog/post/' . rawurlencode($slug);
-
-            $pubDate = '';
-            if (!empty($row['published_at'])) {
-                $ts = strtotime((string) $row['published_at']);
-                if ($ts !== false) {
-                    $pubDate = date('r', $ts);
-                }
-            }
-
-            $xml .= "<item>\n";
-            $xml .= '<title>' . $this->_xml($title) . "</title>\n";
-            $xml .= '<link>' . $this->_xml($link) . "</link>\n";
-            $xml .= '<guid isPermaLink="true">' . $this->_xml($link) . "</guid>\n";
-            if ($pubDate !== '') {
-                $xml .= '<pubDate>' . $this->_xml($pubDate) . "</pubDate>\n";
-            }
-            if (isset($row['author_name']) && $row['author_name'] !== '') {
-                $xml .= '<dc:creator>' . $this->_xml((string) $row['author_name']) . "</dc:creator>\n";
-            }
-            $xml .= '<description><![CDATA[' . $this->_cdata($excerpt) . "]]></description>\n";
-            if (!empty($row['tags']) && is_array($row['tags'])) {
-                foreach ($row['tags'] as $t) {
-                    if (!empty($t['name'])) {
-                        $xml .= '<category>' . $this->_xml((string) $t['name']) . "</category>\n";
-                    }
-                }
-            }
-            $xml .= "</item>\n";
-        }
-
-        $xml .= "</channel>\n";
-        $xml .= "</rss>\n";
-
-        $gc->cache(__CLASS__ . '.rss_xml', $cacheKey, $xml);
 
         header('Content-Type: application/rss+xml; charset=utf-8');
         echo $xml;
         exit;
-    }
-
-    /**
-     * Escape a string for safe inclusion in an XML text node / attribute.
-     */
-    private function _xml($text)
-    {
-        return htmlspecialchars((string) $text, ENT_QUOTES | ENT_XML1, 'UTF-8');
-    }
-
-    /**
-     * Make a string safe to nest inside a CDATA section (the only sequence that
-     * can break out of CDATA is "]]>").
-     */
-    private function _cdata($text)
-    {
-        return str_replace(']]>', ']]&gt;', (string) $text);
     }
 
     /**

@@ -62,13 +62,7 @@ $bfMoreHref = UIR . 'Blog/index' . ($bfTag !== '' ? ('&tag=' . rawurlencode($bfT
                 }
                 $bfTitle   = htmlspecialchars((string) ($bfp['title'] ?? ''), ENT_QUOTES);
                 $bfExcerpt = htmlspecialchars((string) ($bfp['excerpt'] ?? ''), ENT_QUOTES);
-                $bfDate    = '';
-                if (!empty($bfp['published_at'])) {
-                    $bfTs = strtotime((string) $bfp['published_at']);
-                    if ($bfTs !== false) {
-                        $bfDate = date('M j, Y', $bfTs);
-                    }
-                }
+                $bfDate    = fdFormatDate($bfp['published_at'] ?? '', 'M j, Y');
                 $bfHref = UIR . 'Blog/post/' . rawurlencode($bfSlug);
                 ?>
                 <a class="bf-card" href="<?= htmlspecialchars($bfHref, ENT_QUOTES) ?>">

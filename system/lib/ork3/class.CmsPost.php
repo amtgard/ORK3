@@ -24,6 +24,19 @@ class CmsPost extends CmsBase
     /** @var array per-request memo of ListPosts results, keyed by opts hash */
     private static $_listCache = array();
 
+    /** Max items in a scoped RSS feed. Single source of truth for feed + cache. */
+    public const RSS_LIMIT = 20;
+
+    /**
+     * Ghettocache "call" namespace for the rendered RSS XML. Shared by the feed
+     * writer (RssFeedXml) and the invalidators (_bustRssCache) so a publish /
+     * unpublish / delete busts the EXACT key the feed cached under.
+     */
+    public const RSS_CACHE_CALL = 'CmsPost.rss_xml';
+
+    /** RSS feed cache TTL (seconds). */
+    private const RSS_CACHE_TTL = 300;
+
     public function __construct()
     {
         parent::__construct();
@@ -295,6 +308,292 @@ class CmsPost extends CmsBase
         self::$_listCache = array();
     }
 
+    /* ==================================================================
+     * RSS feed — shared, scope-parameterized XML builder + cache.
+     *
+     * Both Controller_Blog::rss (global scope) and Controller_Site::rss (a
+     * resolved org scope) call RssFeedXml() so the feed shape lives in ONE
+     * place — the two controllers only supply channel meta + emit headers.
+     * The rendered XML is ghettocached PER-SCOPE (RssCacheKeyArgs) so a bust
+     * on one scope never nukes another's; publish/unpublish/delete/restore
+     * mirror that key via _bustRssCache().
+     * ================================================================== */
+
+    /**
+     * The Ghettocache key ARGS for a scope's RSS feed. The writer and the
+     * invalidator build the cache key from this SAME array shape — order
+     * matters (Ghettocache::key() implodes the values), so a bust always
+     * lands on the key the feed stored under.
+     *
+     * @param string $scopeType 'global' | 'kingdom' | 'park'
+     * @param int    $scopeId   scope owner id (0 for global)
+     * @return array
+     */
+    public static function RssCacheKeyArgs($scopeType, $scopeId)
+    {
+        return array(
+            'scope_type' => (string)$scopeType,
+            'scope_id'   => (int)$scopeId,
+            'limit'      => self::RSS_LIMIT,
+        );
+    }
+
+    /** GhettoCache handle, or null when the memcache layer isn't wired up. */
+    private function _cache()
+    {
+        if (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache)
+            && is_object(Ork3::$Lib->ghettocache)
+        ) {
+            return Ork3::$Lib->ghettocache;
+        }
+        return null;
+    }
+
+    /**
+     * Rendered RSS 2.0 XML for one scope's latest published posts, served from
+     * (and stored into) the per-scope ghettocache with a 300s TTL. On a cache
+     * miss it renders fresh via _renderRssXml() and caches the result. The
+     * controller owns the HTTP concerns (Content-Type header + echo + exit);
+     * this returns a string so no headers/exit leak into the lib layer.
+     *
+     * @param string $scopeType 'global' | 'kingdom' | 'park'
+     * @param int    $scopeId   scope owner id (0 for global)
+     * @param array  $channel   ['title','description','index_link','self_link']
+     * @return string
+     */
+    public function RssFeedXml($scopeType, $scopeId, array $channel)
+    {
+        $scopeType = $this->_normalizeScopeType($scopeType);
+        $scopeId   = (int)$scopeId;
+
+        $gc  = $this->_cache();
+        $key = null;
+        if ($gc !== null) {
+            $key    = $gc->key(self::RssCacheKeyArgs($scopeType, $scopeId));
+            $cached = $gc->get(self::RSS_CACHE_CALL, $key, self::RSS_CACHE_TTL);
+            if ($cached !== false) {
+                return (string)$cached;
+            }
+        }
+
+        $xml = $this->_renderRssXml($scopeType, $scopeId, $channel);
+
+        if ($gc !== null && $key !== null) {
+            $gc->cache(self::RSS_CACHE_CALL, $key, $xml);
+        }
+        return $xml;
+    }
+
+    /**
+     * Build the RSS 2.0 document for a scope's latest published posts. Public
+     * read gate only (ListPosts default = published, non-trashed, schedule-due).
+     * The <description> uses the curated excerpt, falling back to a plain-text
+     * snippet of the post body when the excerpt is empty (RssDescription).
+     *
+     * @param string $scopeType normalized scope type
+     * @param int    $scopeId   scope owner id
+     * @param array  $channel   ['title','description','index_link','self_link']
+     * @return string
+     */
+    private function _renderRssXml($scopeType, $scopeId, array $channel)
+    {
+        $result = $this->ListPosts(array(
+            'limit'      => self::RSS_LIMIT,
+            'offset'     => 0,
+            'scope_type' => $scopeType,
+            'scope_id'   => $scopeId,
+        ));
+        $rows = (isset($result['rows']) && is_array($result['rows'])) ? $result['rows'] : array();
+
+        $title     = (string)(isset($channel['title']) ? $channel['title'] : 'Amtgard News');
+        $descr     = (string)(isset($channel['description']) ? $channel['description'] : '');
+        $indexLink = (string)(isset($channel['index_link']) ? $channel['index_link'] : '');
+        $selfLink  = (string)(isset($channel['self_link']) ? $channel['self_link'] : '');
+        $postBase  = (string)(isset($channel['post_base']) ? $channel['post_base'] : $indexLink);
+        $buildDate = date('r');
+
+        $xml  = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+        $xml .= '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">' . "\n";
+        $xml .= "<channel>\n";
+        $xml .= '<title>' . $this->_xmlEscape($title) . "</title>\n";
+        $xml .= '<link>' . $this->_xmlEscape($indexLink) . "</link>\n";
+        $xml .= '<description>' . $this->_xmlEscape($descr) . "</description>\n";
+        $xml .= '<language>en-us</language>' . "\n";
+        $xml .= '<lastBuildDate>' . $this->_xmlEscape($buildDate) . "</lastBuildDate>\n";
+        if ($selfLink !== '') {
+            $xml .= '<atom:link href="' . $this->_xmlEscape($selfLink) . '" rel="self" type="application/rss+xml" />' . "\n";
+        }
+
+        foreach ($rows as $row) {
+            $slug  = isset($row['slug']) ? (string)$row['slug'] : '';
+            $ptitle = isset($row['title']) ? (string)$row['title'] : '';
+            $link  = $this->_rssItemLink($postBase, $slug);
+            $descText = $this->RssDescription($row);
+
+            $pubDate = '';
+            if (!empty($row['published_at'])) {
+                $ts = strtotime((string)$row['published_at']);
+                if ($ts !== false) {
+                    $pubDate = date('r', $ts);   // RFC-822
+                }
+            }
+
+            $xml .= "<item>\n";
+            $xml .= '<title>' . $this->_xmlEscape($ptitle) . "</title>\n";
+            $xml .= '<link>' . $this->_xmlEscape($link) . "</link>\n";
+            $xml .= '<guid isPermaLink="true">' . $this->_xmlEscape($link) . "</guid>\n";
+            if ($pubDate !== '') {
+                $xml .= '<pubDate>' . $this->_xmlEscape($pubDate) . "</pubDate>\n";
+            }
+            if (isset($row['author_name']) && $row['author_name'] !== '') {
+                $xml .= '<dc:creator>' . $this->_xmlEscape((string)$row['author_name']) . "</dc:creator>\n";
+            }
+            $xml .= '<description><![CDATA[' . $this->_cdataSafe($descText) . "]]></description>\n";
+            if (!empty($row['tags']) && is_array($row['tags'])) {
+                foreach ($row['tags'] as $t) {
+                    if (!empty($t['name'])) {
+                        $xml .= '<category>' . $this->_xmlEscape((string)$t['name']) . "</category>\n";
+                    }
+                }
+            }
+            $xml .= "</item>\n";
+        }
+
+        $xml .= "</channel>\n";
+        $xml .= "</rss>\n";
+        return $xml;
+    }
+
+    /** Join a post-base URL and a slug into an item permalink. */
+    private function _rssItemLink($postBase, $slug)
+    {
+        $postBase = rtrim((string)$postBase, '/');
+        return $postBase . '/' . rawurlencode((string)$slug);
+    }
+
+    /**
+     * The RSS <description> for a post: the curated excerpt when present, else
+     * a plain-text snippet rendered from the post body blocks (tags stripped,
+     * whitespace collapsed, capped). '' when the post has neither.
+     *
+     * @param array $row post row (carries 'excerpt' and 'post_id')
+     * @return string
+     */
+    public function RssDescription($row)
+    {
+        $excerpt = isset($row['excerpt']) ? trim((string)$row['excerpt']) : '';
+        if ($excerpt !== '') {
+            return $excerpt;
+        }
+        $postId = isset($row['post_id']) ? (int)$row['post_id'] : 0;
+        if ($postId <= 0) {
+            return '';
+        }
+        return $this->_bodySnippet($this->GetPostBlocks($postId), 300);
+    }
+
+    /**
+     * Derive a plain-text snippet from a post's body blocks: pull the prose
+     * fields (in reading order) across the block library, strip markup, decode
+     * entities, collapse whitespace, and cap at $maxLen on a word boundary.
+     *
+     * @param array $blocks GetPostBlocks() output ([...,'fields'=>[...]])
+     * @param int   $maxLen character cap for the snippet
+     * @return string
+     */
+    private function _bodySnippet($blocks, $maxLen = 300)
+    {
+        if (!is_array($blocks)) {
+            return '';
+        }
+        // Prose-bearing field keys across the CMS block library, in a rough
+        // reading order. Non-prose blocks (image/spacer/divider/…) add nothing.
+        $proseKeys = array('kicker', 'heading', 'text', 'body', 'quote', 'cite', 'caption', 'subtitle', 'html');
+        $parts = array();
+        foreach ($blocks as $block) {
+            $fields = (isset($block['fields']) && is_array($block['fields'])) ? $block['fields'] : array();
+            foreach ($proseKeys as $k) {
+                if (isset($fields[$k]) && is_string($fields[$k]) && trim($fields[$k]) !== '') {
+                    $parts[] = $fields[$k];
+                }
+            }
+        }
+        if (empty($parts)) {
+            return '';
+        }
+
+        $text = strip_tags(implode(' ', $parts));
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = trim(preg_replace('/\s+/u', ' ', $text));
+        if ($text === '') {
+            return '';
+        }
+
+        if (mb_strlen($text, 'UTF-8') <= $maxLen) {
+            return $text;
+        }
+        $cut = mb_substr($text, 0, $maxLen, 'UTF-8');
+        $sp  = mb_strrpos($cut, ' ', 0, 'UTF-8');
+        if ($sp !== false && $sp > 0) {
+            $cut = mb_substr($cut, 0, $sp, 'UTF-8');
+        }
+        return rtrim($cut) . '…';
+    }
+
+    /** Escape a string for an XML text node / attribute. */
+    private function _xmlEscape($text)
+    {
+        return htmlspecialchars((string)$text, ENT_QUOTES | ENT_XML1, 'UTF-8');
+    }
+
+    /** Make a string safe to nest inside CDATA (only "]]>" can break out). */
+    private function _cdataSafe($text)
+    {
+        return str_replace(']]>', ']]&gt;', (string)$text);
+    }
+
+    /**
+     * Bust the ghettocached RSS XML for the GLOBAL feed AND the post's own org
+     * scope. ListPosts' per-request memo aside, RssFeedXml() 300s-caches the
+     * rendered feed; without this an unpublished / trashed post would keep
+     * serving (with a now-404 link) for up to five minutes. Called on
+     * publish / unpublish / delete / restore. No-op when memcache isn't wired up.
+     *
+     * @param int $postId
+     * @return void
+     */
+    private function _bustRssCache($postId)
+    {
+        $gc = $this->_cache();
+        if ($gc === null) {
+            return;
+        }
+
+        // Always bust global; add the post's own scope when it isn't global.
+        $scopes = array(array('global', 0));
+
+        $postId = (int)$postId;
+        if ($postId > 0) {
+            global $DB;
+            $DB->Clear();
+            $DB->post_id = $postId;
+            $row = $this->_firstRow($DB->DataSet(
+                'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
+            ));
+            if ($row !== null) {
+                $sType = $this->_normalizeScopeType($row['scope_type']);
+                $sId   = (int)$row['scope_id'];
+                if ($sType !== 'global' || $sId !== 0) {
+                    $scopes[] = array($sType, $sId);
+                }
+            }
+        }
+
+        foreach ($scopes as $s) {
+            $gc->bust(self::RSS_CACHE_CALL, $gc->key(self::RssCacheKeyArgs($s[0], $s[1])));
+        }
+    }
+
     /**
      * Insert a post row.
      *
@@ -304,12 +603,10 @@ class CmsPost extends CmsBase
      */
     public function CreatePost($data)
     {
-        global $DB;
-
         $now = date('Y-m-d H:i:s');
 
         $cols = array(
-            'slug'          => preg_replace('/[^a-z0-9\-]+/', '', strtolower((string)(isset($data['slug']) ? $data['slug'] : ''))),
+            'slug'          => $this->_normalizeSlug((string)(isset($data['slug']) ? $data['slug'] : '')),
             'title'         => isset($data['title']) ? (string)$data['title'] : '',
             'excerpt'       => isset($data['excerpt']) ? $data['excerpt'] : null,
             'hero_media_id' => (isset($data['hero_media_id']) && $data['hero_media_id'] !== '') ? (int)$data['hero_media_id'] : null,
@@ -331,60 +628,13 @@ class CmsPost extends CmsBase
             $cols['published_at'] = $now;
         }
 
-        $names = array_keys($cols);
-        $placeholders = array();
-        foreach ($names as $n) {
-            $placeholders[] = ':' . $n;
-        }
-        // INSERT IGNORE so a concurrent racer that already claimed this unique
-        // (scope_type, scope_id, slug) tuple makes OUR insert a silent no-op
-        // rather than an error, and ROW_COUNT() then tells us whether WE won.
-        $sql = 'INSERT IGNORE INTO ' . DB_PREFIX . 'cms_post (`' . implode('`, `', $names) . '`)'
-            . ' VALUES (' . implode(', ', $placeholders) . ')';
-
-        // Pre-check for duplicate (scope_type, scope_id, slug) to avoid the
-        // stale-lastInsertId hazard under PDO ERRMODE_WARNING.
-        $DB->Clear();
-        $DB->slug       = $cols['slug'];
-        $DB->scope_type = $cols['scope_type'];
-        $DB->scope_id   = (int)$cols['scope_id'];
-        $dup = $this->_firstRow($DB->DataSet(
-            'SELECT post_id FROM ' . DB_PREFIX . 'cms_post'
-            . ' WHERE slug = :slug AND scope_type = :scope_type AND scope_id = :scope_id LIMIT 1'
-        ));
-        if ($dup !== null) {
-            return 0;
-        }
-
-        $DB->Clear();
-        foreach ($cols as $field => $value) {
-            $DB->$field = $value;
-        }
-        $DB->Execute($sql);
-
-        // C29: ROW_COUNT() reflects the preceding INSERT on this connection —
-        // 1 = we inserted, 0 = a concurrent racer already claimed the slug
-        // between our pre-check and INSERT. If we did NOT create the row, return
-        // 0 so the caller FAILS the save instead of adopting the winner's
-        // post_id and clobbering it. (Clear() only resets bound params.)
-        $DB->Clear();
-        $rc = $this->_firstRow($DB->DataSet('SELECT ROW_COUNT() AS rc'));
-        if ($rc === null || (int)$rc['rc'] < 1) {
-            return 0;   // lost the race — signal collision
-        }
-
-        // Authoritative read-back by the unique tuple (lastInsertId unreliable
-        // under PDO ERRMODE_WARNING on duplicate key).
-        $DB->Clear();
-        $DB->slug       = $cols['slug'];
-        $DB->scope_type = $cols['scope_type'];
-        $DB->scope_id   = (int)$cols['scope_id'];
-        $row = $this->_firstRow($DB->DataSet(
-            'SELECT post_id FROM ' . DB_PREFIX . 'cms_post'
-            . ' WHERE slug = :slug AND scope_type = :scope_type AND scope_id = :scope_id LIMIT 1'
-        ));
+        // Shared dup-guarded insert (C29 + live-slug reuse): the dup pre-check is
+        // scoped to LIVE rows only, so a new post CAN reuse a TRASHED post's slug.
+        // INSERT IGNORE + ROW_COUNT() race arbitration + authoritative
+        // read-back-by-live-tuple all live in CmsBase::_insertWithDupGuard.
+        $id = $this->_insertWithDupGuard('cms_post', 'post_id', $cols);
         $this->_invalidateListCache();
-        return ($row !== null && isset($row['post_id'])) ? (int)$row['post_id'] : 0;
+        return $id;
     }
 
     /**
@@ -425,18 +675,89 @@ class CmsPost extends CmsBase
      * Update editable post meta. Only provided keys are written; updated_at is
      * always stamped. Returns true when a valid id was supplied and UPDATE ran.
      *
-     * @param int   $postId
-     * @param array $data subset: title, slug, excerpt, hero_media_id, author_id,
-     *                    status, published_at, scope_type, scope_id, updated_by
+     * @param int         $postId
+     * @param array       $data      subset: title, slug, excerpt, hero_media_id,
+     *                               author_id, status, published_at, scope_type,
+     *                               scope_id, updated_by
+     * @param string|null $scopeType IDOR guard: caller's intended scope_type
+     * @param int|null    $scopeId   IDOR guard: caller's intended scope_id
      * @return bool
      */
-    public function UpdatePost($postId, $data)
+    public function UpdatePost($postId, $data, $scopeType = null, $scopeId = null)
     {
         global $DB;
 
         $postId = (int)$postId;
         if ($postId <= 0 || !is_array($data)) {
             return false;
+        }
+
+        // IDOR guard (opt-in, mirrors UpdatePage/DeletePost): refuse to touch a
+        // post in a different org, and refuse to relocate it OUT of the guarded
+        // scope. Runs its own Clear()/DataSet(), so it precedes the bind loop.
+        if ($scopeType !== null) {
+            $wantType = $this->_normalizeScopeType($scopeType);
+            $DB->Clear();
+            $DB->post_id = $postId;
+            $cur = $this->_firstRow($DB->DataSet(
+                'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
+            ));
+            if (
+                $cur === null
+                || (string)$cur['scope_type'] !== $wantType
+                || (int)$cur['scope_id'] !== (int)$scopeId
+            ) {
+                return false;
+            }
+            if (array_key_exists('scope_type', $data) && $this->_normalizeScopeType($data['scope_type']) !== $wantType) {
+                return false;
+            }
+            if (array_key_exists('scope_id', $data) && (int)$data['scope_id'] !== (int)$scopeId) {
+                return false;
+            }
+        }
+
+        // Dup-slug pre-check when the slug is genuinely changing (mirrors
+        // UpdatePage): refuse a rename onto a slug already held by ANOTHER LIVE
+        // post in the target scope, so the UPDATE can't silently drop against
+        // uq_post_scope_slug_live. Both this check and the normalize run their own
+        // Clear()/DataSet(), so they precede the bind loop below.
+        $newSlug     = null;   // normalized target slug, computed up front when set
+        $slugChanged = false;
+        if (array_key_exists('slug', $data)) {
+            $newSlug = $this->_normalizeSlug((string)$data['slug']);
+
+            $DB->Clear();
+            $DB->post_id = $postId;
+            $preRow = $this->_firstRow($DB->DataSet(
+                'SELECT scope_type, scope_id, slug FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
+            ));
+            $slugChanged = ($preRow !== null && $newSlug !== (string)$preRow['slug']);
+
+            if ($newSlug !== '' && $slugChanged) {
+                // Effective target scope: an in-flight scope change wins, else the
+                // post's current scope.
+                $chkType = array_key_exists('scope_type', $data)
+                    ? $this->_normalizeScopeType($data['scope_type'])
+                    : (string)$preRow['scope_type'];
+                $chkId = array_key_exists('scope_id', $data)
+                    ? (int)$data['scope_id']
+                    : (int)$preRow['scope_id'];
+
+                $DB->Clear();
+                $DB->slug       = $newSlug;
+                $DB->scope_type = $chkType;
+                $DB->scope_id   = $chkId;
+                $DB->post_id    = $postId;
+                $dup = $this->_firstRow($DB->DataSet(
+                    'SELECT post_id FROM ' . DB_PREFIX . 'cms_post'
+                    . ' WHERE scope_type = :scope_type AND scope_id = :scope_id'
+                    . ' AND slug = :slug AND post_id <> :post_id AND deleted_at IS NULL LIMIT 1'
+                ));
+                if ($dup !== null) {
+                    return false;   // slug already in use in this scope — collision
+                }
+            }
         }
 
         $set = array();
@@ -447,8 +768,9 @@ class CmsPost extends CmsBase
             $DB->title = (string)$data['title'];
         }
         if (array_key_exists('slug', $data)) {
+            // $newSlug was normalized (and dup-checked) up front.
             $set[] = 'slug = :slug';
-            $DB->slug = preg_replace('/[^a-z0-9\-]+/', '', strtolower((string)$data['slug']));
+            $DB->slug = $newSlug;
         }
         if (array_key_exists('excerpt', $data)) {
             $set[] = 'excerpt = :excerpt';
@@ -508,6 +830,21 @@ class CmsPost extends CmsBase
             . ' WHERE post_id = :post_id'
         );
 
+        // After a slug rename, verify the new slug actually LANDED before
+        // reporting success. Execute() is void under ERRMODE_WARNING, so a
+        // silently-dropped UPDATE (e.g. a racing writer claimed the tuple between
+        // the pre-check and the write) would otherwise report a false success.
+        if ($slugChanged) {
+            $DB->Clear();
+            $DB->post_id = $postId;
+            $verify = $this->_firstRow($DB->DataSet(
+                'SELECT slug FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
+            ));
+            if ($verify === null || (string)$verify['slug'] !== (string)$newSlug) {
+                return false;   // rename didn't take — signal failure
+            }
+        }
+
         // Covers SetStatus too (it delegates here).
         $this->_invalidateListCache();
         return true;
@@ -528,63 +865,28 @@ class CmsPost extends CmsBase
      */
     public function SetStatus($postId, $status, $uid = 0, $publishedAt = null)
     {
-        global $DB;
-
         $postId = (int)$postId;
-        if ($postId <= 0) {
-            return false;
-        }
-        $status = (string)$status;
-        if ($status !== 'published' && $status !== 'scheduled') {
-            $status = 'draft';
-        }
-
-        $data = array('status' => $status);
-        if ((int)$uid > 0) {
-            $data['updated_by'] = (int)$uid;
-        }
-
-        $publishedAt = ($publishedAt === null || $publishedAt === '') ? null : (string)$publishedAt;
-
-        if ($status === 'scheduled') {
-            $data['published_at'] = ($publishedAt !== null) ? $publishedAt : date('Y-m-d H:i:s');
-        } elseif ($status === 'published') {
-            if ($publishedAt !== null) {
-                $data['published_at'] = $publishedAt;
-            } else {
-                // Targeted single-column read (GetPost would also JOIN the author +
-                // run a second tags query, both discarded here).
-                $DB->Clear();
-                $DB->post_id = $postId;
-                $row = $this->_firstRow($DB->DataSet(
-                    'SELECT published_at FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
-                ));
-                if ($row !== null && empty($row['published_at'])) {
-                    $data['published_at'] = date('Y-m-d H:i:s');
-                }
+        // Shared publish-lifecycle skeleton (status clamp, published_at stamping,
+        // C14 audit) lives in CmsBase::_setStatus; the column write delegates back
+        // to UpdatePost so its whitelist/verify/cache path still runs.
+        $ok = $this->_setStatus(
+            'cms_post',
+            'post_id',
+            'post',
+            $postId,
+            $status,
+            $uid,
+            $publishedAt,
+            function ($data) use ($postId) {
+                return $this->UpdatePost($postId, $data);
             }
-        }
-
-        $ok = $this->UpdatePost($postId, $data);
-
-        // C14: audit the publish-lifecycle transition (fire-and-forget).
+        );
         if ($ok) {
-            $DB->Clear();
-            $DB->post_id = $postId;
-            $scopeRow = $this->_firstRow($DB->DataSet(
-                'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
-            ));
-            $action = ($status === 'draft') ? 'unpublish' : $status; // publish|unpublish|scheduled
-            $this->_cmsAudit(
-                (int)$uid,
-                $action,
-                'post',
-                $postId,
-                $scopeRow !== null ? (string)$scopeRow['scope_type'] : 'global',
-                $scopeRow !== null ? (int)$scopeRow['scope_id'] : 0
-            );
+            // Publish/unpublish changes what the public feed contains — bust the
+            // 300s ghettocache so a just-unpublished post stops serving (and a
+            // just-published one appears) immediately.
+            $this->_bustRssCache($postId);
         }
-
         return $ok;
     }
 
@@ -602,77 +904,38 @@ class CmsPost extends CmsBase
      */
     public function DeletePost($postId, $scopeType = null, $scopeId = null, $actorId = 0)
     {
-        global $DB;
+        // Shared soft-delete skeleton (existence + IDOR guard, transactional
+        // stamp, verify, C14 audit). The $refCleanup hook carries the post-only
+        // inbound-nav detach (C8) — the ON DELETE SET NULL FK does not fire on a
+        // soft-delete, so it runs explicitly inside the transaction before the
+        // trash marker is stamped. Body blocks/tags/revisions are retained.
+        $ok = $this->_softDelete(
+            'cms_post',
+            'post_id',
+            $postId,
+            $scopeType,
+            $scopeId,
+            $actorId,
+            'post',
+            function ($id) {
+                global $DB;
 
-        $postId = (int)$postId;
-        if ($postId <= 0) {
-            return false;
-        }
-
-        // Existence check — read the scope too so we can enforce the ownership
-        // guard in the same lookup. Skip already-trashed rows so a double-delete
-        // reports false.
-        $DB->Clear();
-        $DB->post_id = $postId;
-        $exists = $this->_firstRow($DB->DataSet(
-            'SELECT post_id, scope_type, scope_id FROM ' . DB_PREFIX . 'cms_post'
-            . ' WHERE post_id = :post_id AND deleted_at IS NULL LIMIT 1'
-        ));
-        if ($exists === null) {
-            return false;
-        }
-
-        // IDOR guard (opt-in, mirrors CmsNav::DeleteItem): reject a cross-scope
-        // delete when the caller supplies its intended scope.
-        if ($scopeType !== null) {
-            $wantType = $this->_normalizeScopeType($scopeType);
-            if ((string)$exists['scope_type'] !== $wantType || (int)$exists['scope_id'] !== (int)$scopeId) {
-                return false;
+                // A nav item pointing here resolves to '#'.
+                $DB->Clear();
+                $DB->post_id = $id;
+                $DB->Execute(
+                    'UPDATE ' . DB_PREFIX . 'cms_nav_item SET post_id = NULL WHERE post_id = :post_id'
+                );
             }
-        }
-
-        $now = date('Y-m-d H:i:s');
-
-        $DB->Clear();
-        $DB->Execute('START TRANSACTION');
-
-        // C8: detach inbound nav references (SET NULL FK does not fire on a
-        // soft-delete). A nav item pointing here resolves to '#'.
-        $DB->Clear();
-        $DB->post_id = $postId;
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'cms_nav_item SET post_id = NULL WHERE post_id = :post_id'
         );
 
-        // Stamp the trash marker (blocks/tags/revisions are retained for restore).
-        $DB->Clear();
-        $DB->deleted_at = $now;
-        $DB->post_id = $postId;
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'cms_post SET deleted_at = :deleted_at'
-            . ' WHERE post_id = :post_id AND deleted_at IS NULL'
-        );
-
-        // Confirm the marker landed before committing.
-        $DB->Clear();
-        $DB->post_id = $postId;
-        $check = $this->_firstRow($DB->DataSet(
-            'SELECT deleted_at FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
-        ));
-        if ($check === null || empty($check['deleted_at'])) {
-            $DB->Clear();
-            $DB->Execute('ROLLBACK');
-            return false;
+        if ($ok) {
+            $this->_invalidateListCache();
+            // A trashed post must vanish from the feed at once (its /post/ link
+            // now 404s) — bust the cached XML rather than waiting out the TTL.
+            $this->_bustRssCache($postId);
         }
-
-        $DB->Clear();
-        $DB->Execute('COMMIT');
-
-        // C14: audit the trash (fire-and-forget).
-        $this->_cmsAudit((int)$actorId, 'delete', 'post', $postId, (string)$exists['scope_type'], (int)$exists['scope_id']);
-
-        $this->_invalidateListCache();
-        return true;
+        return $ok;
     }
 
     /**
@@ -687,41 +950,29 @@ class CmsPost extends CmsBase
      */
     public function RestorePost($postId, $scopeType = null, $scopeId = null, $actorId = 0)
     {
-        global $DB;
-
-        $postId = (int)$postId;
-        if ($postId <= 0) {
-            return false;
+        // Shared restore skeleton: existence/IDOR guard, live-slug collision guard
+        // (a live post may have claimed this slug while we were trashed — see
+        // CmsBase::_restore), verified un-trash, C14 audit.
+        $ok = $this->_restore('cms_post', 'post_id', $postId, $scopeType, $scopeId, $actorId, 'post');
+        if ($ok) {
+            $this->_invalidateListCache();
+            // A restored (published) post may re-enter the feed — bust so it
+            // reappears without waiting out the TTL.
+            $this->_bustRssCache($postId);
         }
+        return $ok;
+    }
 
-        // Read the trashed row directly (GetPost() hides deleted rows).
-        $DB->Clear();
-        $DB->post_id = $postId;
-        $row = $this->_firstRow($DB->DataSet(
-            'SELECT post_id, scope_type, scope_id, deleted_at FROM ' . DB_PREFIX . 'cms_post'
-            . ' WHERE post_id = :post_id LIMIT 1'
-        ));
-        if ($row === null || empty($row['deleted_at'])) {
-            return false;
-        }
-
-        if ($scopeType !== null) {
-            $wantType = $this->_normalizeScopeType($scopeType);
-            if ((string)$row['scope_type'] !== $wantType || (int)$row['scope_id'] !== (int)$scopeId) {
-                return false;
-            }
-        }
-
-        $DB->Clear();
-        $DB->post_id = $postId;
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'cms_post SET deleted_at = NULL WHERE post_id = :post_id'
-        );
-
-        $this->_cmsAudit((int)$actorId, 'restore', 'post', $postId, (string)$row['scope_type'], (int)$row['scope_id']);
-
-        $this->_invalidateListCache();
-        return true;
+    /**
+     * Did RestorePost() fail specifically because a LIVE post now holds the
+     * trashed post's slug? Callers use this only to choose an error message.
+     *
+     * @param int $postId
+     * @return bool
+     */
+    public function RestoreSlugConflict($postId)
+    {
+        return $this->_slugConflictForTrashed('cms_post', 'post_id', $postId);
     }
 
     /**
@@ -1022,6 +1273,39 @@ class CmsPost extends CmsBase
             $text = rtrim(substr($text, 0, 80), '-');
         }
         return $text;
+    }
+
+    /**
+     * Status-broken-down live post counts for a scope, via a single GROUP BY (no
+     * full-row fetch). Only non-trashed rows are counted (deleted_at IS NULL).
+     * Lets admin surfaces show "N drafts / M published" without materializing the
+     * rows. Statuses with no rows are simply absent from the map.
+     *
+     * @param string $scopeType 'global' | 'kingdom' | 'park'
+     * @param int    $scopeId   scope owner id (0 for global)
+     * @return array ['total' => int, '<status>' => int, ...] e.g.
+     *               ['total'=>5,'draft'=>1,'published'=>3,'scheduled'=>1]
+     */
+    public function CountPosts($scopeType, $scopeId)
+    {
+        global $DB;
+
+        $scopeType = $this->_normalizeScopeType($scopeType);
+
+        $DB->Clear();
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = (int)$scopeId;
+        $out = array('total' => 0);
+        foreach ($this->_eachRow($DB->DataSet(
+            'SELECT status, COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_post'
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND deleted_at IS NULL'
+            . ' GROUP BY status'
+        )) as $row) {
+            $c = (int)$row['c'];
+            $out[(string)$row['status']] = $c;
+            $out['total'] += $c;
+        }
+        return $out;
     }
 
 }

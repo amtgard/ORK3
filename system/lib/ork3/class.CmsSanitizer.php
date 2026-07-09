@@ -323,6 +323,21 @@ class CmsSanitizer
     }
 
     /**
+     * Front-door CTA/link href guard: return $href when it passes IsSafeUrl(),
+     * otherwise the inert '#'. Centralizes the ternary that block partials
+     * (richtext, steps, cta_band, card_grid, hero_carousel, marketing_nav, …)
+     * previously copy-pasted, so the safe-href policy lives in one place.
+     *
+     * @param mixed $href author-supplied URL (may be null/empty)
+     * @return string the href if safe, else '#'
+     */
+    public static function SafeHrefOrHash($href)
+    {
+        $href = (string) $href;
+        return ($href !== '' && self::IsSafeUrl($href)) ? $href : '#';
+    }
+
+    /**
      * Replace an element with its children (unwrap), preserving order.
      */
     private static function unwrap(DOMElement $el)

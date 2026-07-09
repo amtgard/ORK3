@@ -45,14 +45,7 @@ $rows    = $hasRows ? array_slice($EventSummary, 0, $limit) : [];
                 $rsvpGoing  = (int)($row['RsvpGoing'] ?? $row['RsvpCount'] ?? 0);
                 $name       = htmlspecialchars(stripslashes($row['Name'] ?? ''), ENT_QUOTES);
                 $kingdomName = htmlspecialchars(stripslashes($row['KingdomName'] ?? ''), ENT_QUOTES);
-                $nextDate   = $row['NextDate'] ?? '';
-                $dateLabel  = '';
-                if (!empty($nextDate)) {
-                    $ts = strtotime($nextDate);
-                    if ($ts !== false) {
-                        $dateLabel = date('D · M j', $ts);
-                    }
-                }
+                $dateLabel  = fdFormatDate($row['NextDate'] ?? '', 'D · M j');
                 ?>
                 <a class="fd-card" href="<?= UIR ?>Event/detail/<?= $eventId ?>/<?= $detailId ?>"
                    style="text-decoration:none;color:inherit;display:block;">

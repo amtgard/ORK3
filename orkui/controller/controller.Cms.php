@@ -58,15 +58,13 @@ class Controller_Cms extends Controller
     public function dashboard($action = null)
     {
         $uid = $this->_uid();
-        $scope = $this->_scopeOrDeny($uid);
+        // The dashboard is visible to anyone holding ANY CMS capability (or super-admin).
+        $scope = $this->_scopeOrDenyWithCap($uid, function ($uid, $scope) {
+            return $this->_hasAnyCmsCapability($uid, $scope);
+        });
         if ($scope === false) {
             return;
         }
-        // The dashboard is visible to anyone holding ANY CMS capability (or super-admin).
-        if (!$this->_hasAnyCmsCapability($uid, $scope)) {
-            return $this->_denyRedirect();
-        }
-        $this->_applyScopeData($scope);
 
         // Entry point: opening the dashboard in a non-global org scope lazily
         // provisions the org's site row (status='unbuilt'; seeding is Phase 5).
@@ -78,29 +76,30 @@ class Controller_Cms extends Controller
         $this->template = 'Cms_dashboard.tpl';
         $this->data['page_title'] = 'Content Management';
 
-        // ---- Pages overview (list_pages is already ORDER BY updated_at DESC) ----
-        $pages = $this->CmsPage->list_pages($this->_scopeFilters($scope));
+        $sf = $this->_scopeFilters($scope);
+
+        // ---- Pages/posts overview: status-broken-down counts via a lightweight
+        //      aggregate (GROUP BY status) instead of fetching every row just to
+        //      tally. Each returns an assoc status=>count plus a 'total'; drafts =
+        //      everything not published (matches the prior count semantics).
+        $pageCounts = $this->CmsPage->CountPages($sf['scope_type'], $sf['scope_id']);
+        $pageCounts = is_array($pageCounts) ? $pageCounts : array();
+        $pageCount  = (int)($pageCounts['total'] ?? array_sum(array_map('intval', $pageCounts)));
+        $pageDrafts = max(0, $pageCount - (int)($pageCounts['published'] ?? 0));
+
+        $postCounts = $this->CmsPost->CountPosts($sf['scope_type'], $sf['scope_id']);
+        $postCounts = is_array($postCounts) ? $postCounts : array();
+        $postCount  = (int)($postCounts['total'] ?? array_sum(array_map('intval', $postCounts)));
+        $postDrafts = max(0, $postCount - (int)($postCounts['published'] ?? 0));
+
+        // ---- "Continue editing": newest pages + posts. Fetch only what the card
+        //      renders (6 each, already ORDER BY updated_at DESC) — a bounded read,
+        //      not the whole set. ----
+        $pages = $this->CmsPage->list_pages($sf + array('limit' => 6));
         $pages = is_array($pages) ? $pages : array();
 
-        $pageCount  = count($pages);
-        $pageDrafts = 0;
-        foreach ($pages as $p) {
-            if ((string)($p['status'] ?? 'draft') !== 'published') {
-                $pageDrafts++;
-            }
-        }
-
-        // ---- Posts overview ----
-        $postsRes = $this->CmsPost->list_posts(array('includeDrafts' => true) + $this->_scopeFilters($scope));
+        $postsRes = $this->CmsPost->list_posts(array('includeDrafts' => true, 'limit' => 6) + $sf);
         $posts    = (is_array($postsRes) && isset($postsRes['rows']) && is_array($postsRes['rows'])) ? $postsRes['rows'] : array();
-
-        $postCount  = count($posts);
-        $postDrafts = 0;
-        foreach ($posts as $p) {
-            if ((string)($p['status'] ?? 'draft') !== 'published') {
-                $postDrafts++;
-            }
-        }
 
         // ---- "Continue editing": merge newest pages + posts by updated_at, take ~6 ----
         $recent = array();
@@ -129,6 +128,40 @@ class Controller_Cms extends Controller
             return strcmp((string)$b['updated_at'], (string)$a['updated_at']);
         });
         $recent = array_slice($recent, 0, 6);
+
+        // ---- #09 usage analytics: scope rollup + most-viewed content. Reads are
+        //      best-effort in the lib (pre-migration → zeros/empty), so this never
+        //      breaks the dashboard. "Most viewed" links into the editor, mirroring
+        //      the recent-items list, so an officer can act on the feedback. ----
+        $this->load_model('CmsView');
+        $viewSummary = $this->CmsView->get_scope_view_summary($sf['scope_type'], $sf['scope_id']);
+        $viewSummary = is_array($viewSummary) ? $viewSummary : array();
+
+        $topRows = $this->CmsView->get_view_stats($sf['scope_type'], $sf['scope_id'], 8);
+        $topRows = is_array($topRows) ? $topRows : array();
+        $topViewed = array();
+        foreach ($topRows as $tv) {
+            $kind = ((string)($tv['entity_type'] ?? 'page') === 'post') ? 'post' : 'page';
+            $id   = (int)($tv['entity_id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $topViewed[] = array(
+                'kind'      => $kind,
+                'id'        => $id,
+                'title'     => (string)($tv['title'] ?? '(untitled)'),
+                'total'     => (int)($tv['total'] ?? 0),
+                'recent'    => (int)($tv['recent'] ?? 0),
+                'edit_href' => UIR . ($kind === 'post' ? 'Cms/editpost/' : 'Cms/edit/') . $id . $this->_scopeQuery($scope),
+            );
+        }
+
+        $this->data['ViewSummary'] = array(
+            'total'       => (int)($viewSummary['total'] ?? 0),
+            'recent'      => (int)($viewSummary['recent'] ?? 0),
+            'recent_days' => (int)($viewSummary['recent_days'] ?? 30),
+        );
+        $this->data['TopViewed'] = $topViewed;
 
         $this->data['Recent'] = $recent;
         $this->data['Stats']  = array(
@@ -314,16 +347,14 @@ class Controller_Cms extends Controller
     public function media($action = null)
     {
         $uid = $this->_uid();
-        $scope = $this->_scopeOrDeny($uid);
+        // Media management is its own capability (super-admins pass via _capFlags).
+        $scope = $this->_scopeOrDenyWithCap($uid, function ($uid, $scope) {
+            return !empty($this->_capFlags($uid, $scope)['media']);
+        });
         if ($scope === false) {
             return;
         }
-        $caps = $this->_capFlags($uid, $scope);
-        // Media management is its own capability (super-admins pass via _capFlags).
-        if (empty($caps['media'])) {
-            return $this->_denyRedirect();
-        }
-        $this->_applyScopeData($scope);
+        $caps = $this->_capFlags($uid, $scope); // cached; no extra DB round-trip
 
         $this->load_model('CmsMedia');
 
@@ -345,15 +376,13 @@ class Controller_Cms extends Controller
     public function index($action = null)
     {
         $uid = $this->_uid();
-        $scope = $this->_scopeOrDeny($uid);
+        // The list is visible to anyone holding ANY CMS capability (or super-admin).
+        $scope = $this->_scopeOrDenyWithCap($uid, function ($uid, $scope) {
+            return $this->_hasAnyCmsCapability($uid, $scope);
+        });
         if ($scope === false) {
             return;
         }
-        // The list is visible to anyone holding ANY CMS capability (or super-admin).
-        if (!$this->_hasAnyCmsCapability($uid, $scope)) {
-            return $this->_denyRedirect();
-        }
-        $this->_applyScopeData($scope);
 
         $this->template = 'Cms_index.tpl';
         $this->data['page_title'] = 'Content Management';
@@ -403,18 +432,14 @@ class Controller_Cms extends Controller
         }
 
         $uid    = $this->_uid();
-        $scope  = $this->_scopeOrDeny($uid);
-        if ($scope === false) {
-            return;
-        }
         $id     = (string)$id;
         $isNew  = ($id === 'new' || $id === '' || $id === '0');
         $needed = $isNew ? 'page.create' : 'page.edit';
 
-        if (!$this->CmsAuth->cms_can($uid, $needed, $scope)) {
-            return $this->_denyRedirect();
+        $scope = $this->_scopeOrDenyWithCap($uid, $needed);
+        if ($scope === false) {
+            return;
         }
-        $this->_applyScopeData($scope);
 
         $this->template = 'Cms_edit.tpl';
 
@@ -479,14 +504,10 @@ class Controller_Cms extends Controller
         }
 
         $uid = $this->_uid();
-        $scope = $this->_scopeOrDeny($uid);
+        $scope = $this->_scopeOrDenyWithCap($uid, 'page.edit');
         if ($scope === false) {
             return;
         }
-        if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)) {
-            return $this->_denyRedirect();
-        }
-        $this->_applyScopeData($scope);
 
         $this->template = 'Cms_preview.tpl';
         $this->data['IsFrontDoor'] = false;
@@ -524,14 +545,10 @@ class Controller_Cms extends Controller
         }
 
         $uid = $this->_uid();
-        $scope = $this->_scopeOrDeny($uid);
+        $scope = $this->_scopeOrDenyWithCap($uid, 'page.edit');
         if ($scope === false) {
             return;
         }
-        if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)) {
-            return $this->_denyRedirect();
-        }
-        $this->_applyScopeData($scope);
 
         $this->template = 'Cms_preview.tpl';
         $this->data['IsFrontDoor'] = false;
@@ -562,15 +579,13 @@ class Controller_Cms extends Controller
     public function posts($action = null)
     {
         $uid = $this->_uid();
-        $scope = $this->_scopeOrDeny($uid);
+        // Same gate as the page list: visible to anyone holding ANY CMS capability.
+        $scope = $this->_scopeOrDenyWithCap($uid, function ($uid, $scope) {
+            return $this->_hasAnyCmsCapability($uid, $scope);
+        });
         if ($scope === false) {
             return;
         }
-        // Same gate as the page list: visible to anyone holding ANY CMS capability.
-        if (!$this->_hasAnyCmsCapability($uid, $scope)) {
-            return $this->_denyRedirect();
-        }
-        $this->_applyScopeData($scope);
 
         $this->template = 'Cms_posts.tpl';
         $this->data['page_title'] = 'Blog Posts';
@@ -597,15 +612,11 @@ class Controller_Cms extends Controller
     public function nav($action = null)
     {
         $uid = $this->_uid();
-        $scope = $this->_scopeOrDeny($uid);
+        // Navigation management is an admin-only capability.
+        $scope = $this->_scopeOrDenyWithCap($uid, 'nav.manage');
         if ($scope === false) {
             return;
         }
-        // Navigation management is an admin-only capability.
-        if (!$this->CmsAuth->cms_can($uid, 'nav.manage', $scope)) {
-            return $this->_denyRedirect();
-        }
-        $this->_applyScopeData($scope);
 
         $this->template = 'Cms_nav.tpl';
         $this->data['page_title'] = 'Navigation';
@@ -634,14 +645,10 @@ class Controller_Cms extends Controller
     public function theme($action = null)
     {
         $uid = $this->_uid();
-        $scope = $this->_scopeOrDeny($uid);
+        $scope = $this->_scopeOrDenyWithCap($uid, 'theme.manage');
         if ($scope === false) {
             return;
         }
-        if (!$this->CmsAuth->cms_can($uid, 'theme.manage', $scope)) {
-            return $this->_denyRedirect();
-        }
-        $this->_applyScopeData($scope);
         $this->load_model('CmsTheme');
 
         $active       = $this->CmsTheme->get_active_theme((string)$scope['type'], (int)$scope['id']);
@@ -670,18 +677,14 @@ class Controller_Cms extends Controller
         }
 
         $uid    = $this->_uid();
-        $scope  = $this->_scopeOrDeny($uid);
-        if ($scope === false) {
-            return;
-        }
         $id     = (string)$id;
         $isNew  = ($id === 'new' || $id === '' || $id === '0');
         $needed = $isNew ? 'page.create' : 'page.edit';
 
-        if (!$this->CmsAuth->cms_can($uid, $needed, $scope)) {
-            return $this->_denyRedirect();
+        $scope = $this->_scopeOrDenyWithCap($uid, $needed);
+        if ($scope === false) {
+            return;
         }
-        $this->_applyScopeData($scope);
 
         $this->template = 'Cms_editpost.tpl';
 
@@ -890,6 +893,38 @@ class Controller_Cms extends Controller
     }
 
     /**
+     * The page-surface preamble every scoped action shares: resolve+authorize the
+     * request scope, gate a capability, then publish the scope to the template
+     * layer. Returns the resolved scope on success, or false after arranging the
+     * deny (the caller must `return;` on false — identical to the old inline
+     * three-liner + gate).
+     *
+     * $capability is either a capability string checked via CmsAuth->cms_can(),
+     * or a callable(int $uid, array $scope):bool for the non-cms_can gates
+     * (e.g. _hasAnyCmsCapability, or the media _capFlags check).
+     *
+     * @param int             $uid
+     * @param string|callable $capability
+     * @return array{type:string,id:int}|false
+     */
+    private function _scopeOrDenyWithCap($uid, $capability)
+    {
+        $scope = $this->_scopeOrDeny($uid);
+        if ($scope === false) {
+            return false; // deny already arranged by _scopeOrDeny
+        }
+        $ok = is_string($capability)
+            ? (bool)$this->CmsAuth->cms_can($uid, $capability, $scope)
+            : (bool)$capability($uid, $scope);
+        if (!$ok) {
+            $this->_denyRedirect();
+            return false;
+        }
+        $this->_applyScopeData($scope);
+        return $scope;
+    }
+
+    /**
      * Publish the resolved scope's context to the template layer: the shell
      * reads these to thread scope onto rail links, emit window.CMS_SCOPE, and
      * render the "Editing: {Org} — public site" banner. No-ops to empty for
@@ -972,9 +1007,18 @@ class Controller_Cms extends Controller
             return '';
         }
         $isHome = ($site && (int)($site['home_page_id'] ?? 0) === (int)$pageId) || $pageSlug === 'home';
-        return $isHome
-            ? UIR . 'Site/view/' . rawurlencode($siteSlug)
-            : UIR . 'Site/page/' . rawurlencode($siteSlug) . '/' . rawurlencode($pageSlug);
+        if ($isHome) {
+            return UIR . 'Site/view/' . rawurlencode($siteSlug);
+        }
+        // Nested pages live at their FULL slug path (parent/child/…), not the bare
+        // leaf slug — resolve it via PagePath so the live link matches the public
+        // Site/page route (which walks parent_id). Fall back to the leaf slug.
+        $path = (string)$this->CmsPage->PagePath((int)$pageId);
+        if ($path === '') {
+            $path = $pageSlug;
+        }
+        $encPath = implode('/', array_map('rawurlencode', explode('/', $path)));
+        return UIR . 'Site/page/' . rawurlencode($siteSlug) . '/' . $encPath;
     }
 
     /**
@@ -1096,11 +1140,11 @@ class Controller_Cms extends Controller
             'quote'           => array('Quote',              'Content',  false, 'fa-quote-right',   'A pull-quote with an optional attribution.'),
             'table'           => array('Table',              'Content',  false, 'fa-table',         'A simple data table with an optional caption and header row.'),
             'image'           => array('Image',              'Media',    false, 'fa-image',         'A single image with an optional caption and link.'),
-            'gallery'         => array('Gallery',            'Media',    false, 'fa-photo-video',   'A multi-column grid of images.'),
+            'gallery'         => array('Gallery',            'Media',    false, 'fa-images',        'A multi-column grid of images.'),
             'video_embed'     => array('Video Embed',        'Media',    false, 'fa-play-circle',   'An embedded YouTube or Vimeo video.'),
             'file_download'   => array('File Download',      'Content',  false, 'fa-file-download', 'A list of downloadable files with titles and metadata.'),
             'columns'         => array('Columns',            'Layout',   false, 'fa-columns',       'Multiple side-by-side columns, each holding its own blocks.'),
-            'raw_html'        => array('Raw HTML',           'Advanced', false, 'fa-code',          'Custom HTML, sanitized on save.'),
+            'raw_html'        => array('Custom HTML (limited)', 'Advanced', false, 'fa-code',        'Custom HTML — script/style/iframe/form are stripped on save; use Video Embed for embeds.'),
             'blog_feed'       => array('Blog Feed',          'Dynamic',  true,  'fa-rss',           'Shows the latest published blog posts live as linked cards. Optionally filtered to a single tag.'),
             // Phase 4 org-scoped dynamic blocks (kingdom sites): pull live ORK data for the page's owning kingdom.
             'kingdom_officers' => array('Officers (live)',   'Dynamic',  true,  'fa-user-shield',   'Live grid of the kingdom’s current officers from ORK data (office + persona). Pair with a Staff Roster for your Board of Directors.'),

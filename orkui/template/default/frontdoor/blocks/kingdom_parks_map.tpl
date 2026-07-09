@@ -44,47 +44,72 @@ if (!function_exists('kpm_map_markdown') && is_file(DIR_LIB . 'Parsedown.php')) 
     }
 }
 
-$kpmParks = [];
-if (class_exists('APIModel')) {
-    try {
-        $kpmModel  = new APIModel('Map');
-        $kpmResult = $kpmModel->GetParkLocations(['KingdomId' => $kpmKingdomId]);
-        foreach ((array) ($kpmResult['Parks'] ?? []) as $details) {
-            $loc = @json_decode(stripslashes((string) ($details['Location'] ?? '')));
-            if (!$loc) {
-                continue;
+// C5-style caching (mirrors kingdom_officers.tpl / kingdom_parks.tpl): this
+// DYNAMIC block runs on every anonymous public hit and previously re-queried
+// GetParkLocations, re-ran Parsedown on each park's Directions/Description, AND
+// did a per-row file_exists() heraldry probe. Resolve the whole $kpmParks array
+// (post markdown-render, post heraldry-URL-resolve) once and cache it in
+// GhettoCache keyed by kingdom_id. Public park geo is safe to share across
+// viewers; a short TTL keeps it fresh. Cached hits skip the DB, Parsedown, and
+// disk probes entirely.
+$kpmParks    = null;
+$kpmCache    = (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache) && is_object(Ork3::$Lib->ghettocache))
+    ? Ork3::$Lib->ghettocache : null;
+$kpmCacheKey = 'k' . $kpmKingdomId;
+if ($kpmCache !== null) {
+    $kpmHit = $kpmCache->get('frontdoor.kingdom_parks_map', $kpmCacheKey, 300);
+    if (is_array($kpmHit)) {
+        $kpmParks = $kpmHit;
+    }
+}
+
+if ($kpmParks === null) {
+    $kpmParks = [];
+    if (class_exists('APIModel')) {
+        try {
+            $kpmModel  = new APIModel('Map');
+            $kpmResult = $kpmModel->GetParkLocations(['KingdomId' => $kpmKingdomId]);
+            foreach ((array) ($kpmResult['Parks'] ?? []) as $details) {
+                $loc = @json_decode(stripslashes((string) ($details['Location'] ?? '')));
+                if (!$loc) {
+                    continue;
+                }
+                $latlng = isset($loc->location) ? $loc->location
+                    : (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
+                if (!$latlng || !isset($latlng->lat, $latlng->lng)
+                    || !is_numeric($latlng->lat) || !is_numeric($latlng->lng)) {
+                    continue;
+                }
+                $parkId   = (int) ($details['ParkId'] ?? 0);
+                if ($parkId <= 0) {
+                    continue;
+                }
+                $heraldry = '';
+                if (!empty($details['HasHeraldry']) && defined('HTTP_PARK_HERALDRY')
+                    && defined('DIR_PARK_HERALDRY') && class_exists('Common')) {
+                    $file = Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $parkId));
+                    $heraldry = $file !== '' ? HTTP_PARK_HERALDRY . $file : '';
+                }
+                $kpmParks[] = [
+                    'name'     => htmlspecialchars(ucwords((string) ($details['Name'] ?? '')), ENT_QUOTES),
+                    'lat'      => (float) $latlng->lat,
+                    'lng'      => (float) $latlng->lng,
+                    'id'       => $parkId,
+                    'color'    => ltrim((string) ($details['KingdomColor'] ?? '718096'), '#'),
+                    'city'     => htmlspecialchars(trim((string) ($details['City'] ?? ''))),
+                    'province' => htmlspecialchars(trim((string) ($details['Province'] ?? ''))),
+                    'heraldry' => $heraldry,
+                    'dir'      => function_exists('kpm_map_markdown') ? kpm_map_markdown($details['Directions'] ?? '') : '',
+                    'desc'     => function_exists('kpm_map_markdown') ? kpm_map_markdown($details['Description'] ?? '') : '',
+                ];
             }
-            $latlng = isset($loc->location) ? $loc->location
-                : (isset($loc->bounds->northeast) ? $loc->bounds->northeast : null);
-            if (!$latlng || !isset($latlng->lat, $latlng->lng)
-                || !is_numeric($latlng->lat) || !is_numeric($latlng->lng)) {
-                continue;
-            }
-            $parkId   = (int) ($details['ParkId'] ?? 0);
-            if ($parkId <= 0) {
-                continue;
-            }
-            $heraldry = '';
-            if (!empty($details['HasHeraldry']) && defined('HTTP_PARK_HERALDRY')
-                && defined('DIR_PARK_HERALDRY') && class_exists('Common')) {
-                $file = Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', $parkId));
-                $heraldry = $file !== '' ? HTTP_PARK_HERALDRY . $file : '';
-            }
-            $kpmParks[] = [
-                'name'     => htmlspecialchars(ucwords((string) ($details['Name'] ?? '')), ENT_QUOTES),
-                'lat'      => (float) $latlng->lat,
-                'lng'      => (float) $latlng->lng,
-                'id'       => $parkId,
-                'color'    => ltrim((string) ($details['KingdomColor'] ?? '718096'), '#'),
-                'city'     => htmlspecialchars(trim((string) ($details['City'] ?? ''))),
-                'province' => htmlspecialchars(trim((string) ($details['Province'] ?? ''))),
-                'heraldry' => $heraldry,
-                'dir'      => function_exists('kpm_map_markdown') ? kpm_map_markdown($details['Directions'] ?? '') : '',
-                'desc'     => function_exists('kpm_map_markdown') ? kpm_map_markdown($details['Description'] ?? '') : '',
-            ];
+        } catch (\Throwable $e) {
+            $kpmParks = [];
         }
-    } catch (\Throwable $e) {
-        $kpmParks = [];
+    }
+
+    if ($kpmCache !== null) {
+        $kpmCache->cache('frontdoor.kingdom_parks_map', $kpmCacheKey, $kpmParks);
     }
 }
 

@@ -8,6 +8,8 @@
  *   video_id  string — preferred; the bare id
  *   url       string — fallback; a pasted watch/share URL we parse for the id
  *   caption?  string — optional caption (escaped)
+ *   title?    string — optional author-supplied iframe title for accessibility
+ *             (falls back to a generic "<provider> video player")
  *
  * Responsive 16:9 iframe. YouTube uses the privacy-enhanced youtube-nocookie
  * domain. The extracted id is hard-validated to [A-Za-z0-9_-] only before it is
@@ -69,6 +71,14 @@ if ($fdbProvider === 'youtube') {
 } else {
     $fdbEmbed = 'https://player.vimeo.com/video/' . $fdbId;
     $fdbTitle = 'Vimeo video player';
+}
+
+// Prefer the author-supplied title so assistive tech announces what the video IS
+// (e.g. "Kingdom Coronation 2026") instead of the generic "<provider> video
+// player". Escaped into the attribute below.
+$fdbUserTitle = trim((string) ($blockFields['title'] ?? ''));
+if ($fdbUserTitle !== '') {
+    $fdbTitle = $fdbUserTitle;
 }
 ?>
 <style>

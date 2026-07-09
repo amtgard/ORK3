@@ -221,6 +221,18 @@ class CmsSite extends CmsBase
             return class_exists('CmsSanitizer') ? CmsSanitizer::Clean($html) : (string) $html;
         };
 
+        // Every seeded content page (all but Home) opens with an identical centered
+        // H2 heading block — only the text differs. One factory instead of four
+        // copy-pasted literals; the field values below are the exact values each
+        // page previously inlined (source=authored, enabled=1, order=10, level=2,
+        // align=center).
+        $heading = function ($text) {
+            return array(
+                'type' => 'heading', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
+                'fields' => array('text' => $text, 'level' => 2, 'align' => 'center'),
+            );
+        };
+
         // Attributes shared by every seeded page. Seed as PUBLISHED: the
         // site-level status (unbuilt→draft→published) is the real go-live gate —
         // nothing is public until an AUTH_ADMIN officer publishes the SITE — and
@@ -308,10 +320,7 @@ class CmsSite extends CmsBase
                 'meta_description' => 'About our kingdom and its history.',
             ),
             array(
-                array(
-                    'type' => 'heading', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
-                    'fields' => array('text' => 'About Us', 'level' => 2, 'align' => 'center'),
-                ),
+                $heading('About Us'),
                 array(
                     'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
                     'fields' => array(
@@ -333,10 +342,7 @@ class CmsSite extends CmsBase
                 'meta_description' => 'Find a park near you.',
             ),
             array(
-                array(
-                    'type' => 'heading', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
-                    'fields' => array('text' => 'Our Parks', 'level' => 2, 'align' => 'center'),
-                ),
+                $heading('Our Parks'),
                 array(
                     'type' => 'kingdom_parks_map', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
                     'fields' => array(
@@ -366,10 +372,7 @@ class CmsSite extends CmsBase
                 'meta_description' => 'Meet the officers who keep the kingdom running.',
             ),
             array(
-                array(
-                    'type' => 'heading', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
-                    'fields' => array('text' => 'Officers', 'level' => 2, 'align' => 'center'),
-                ),
+                $heading('Officers'),
                 array(
                     'type' => 'kingdom_officers', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
                     'fields' => array(
@@ -410,10 +413,7 @@ class CmsSite extends CmsBase
                 'meta_description' => 'Kingdom documents, bylaws, and resources.',
             ),
             array(
-                array(
-                    'type' => 'heading', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
-                    'fields' => array('text' => 'Documents & Resources', 'level' => 2, 'align' => 'center'),
-                ),
+                $heading('Documents & Resources'),
                 array(
                     'type' => 'file_download', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
                     'fields' => array('files' => array()),
@@ -426,16 +426,48 @@ class CmsSite extends CmsBase
         // resolved Page/view href onto this site's own /Site/page/ route. Same
         // scope as the pages so CmsNav's scope-bound page join resolves the slug.
         //
-        // CreateItem is NOT UNIQUE-guarded (unlike CreatePage), so guard the nav
-        // seed on an empty menu — this keeps nav idempotent even in the (extremely
-        // narrow) concurrency window where two EnsureSite calls both read back the
-        // same freshly-INSERTed site row (the DB UNIQUE(scope) key collapses their
-        // INSERTs to one row, but both could still reach this seed). Mirrors the
-        // 2026-06-23-cms-seed-nav.php "skip if the menu already has rows" idiom.
+        // CreateItem is NOT UNIQUE-guarded (unlike CreatePage), so the previous
+        // check-then-insert guard on an empty menu was a TOCTOU: two concurrent
+        // first-load EnsureSite calls could BOTH read the menu empty and BOTH seed
+        // it, duplicating every nav row. Close the race with a real concurrency
+        // guard. Both racing calls resolve to the SAME site row (the DB
+        // UNIQUE(scope) key collapses their site INSERTs to one), so serialize them
+        // on that row: open a transaction and SELECT ... FOR UPDATE the site row
+        // BEFORE the empty-menu check. The first seeder holds the lock, finds the
+        // menu empty, inserts, and COMMITs (releasing the lock); the second then
+        // acquires the lock, sees the now-non-empty menu, and skips.
+        //
+        // Only the nav critical section is transacted — NOT the CmsPage seed above,
+        // which issues its own COMMITs (ReplaceBlocks) that would prematurely
+        // release an outer lock. The nav inserts (CmsNav::CreateItem) run plain
+        // Execute()s with no inner transaction, so they nest cleanly here.
+        global $DB;
+
+        $DB->Clear();
+        $DB->Execute('START TRANSACTION');
+
+        // Row-lock the site row so concurrent first-loads serialize at this point.
+        $DB->Clear();
+        $DB->site_id = (int) $siteId;
+        $lockRow = $this->_firstRow($DB->DataSet(
+            'SELECT site_id FROM ' . DB_PREFIX . 'cms_site WHERE site_id = :site_id LIMIT 1 FOR UPDATE'
+        ));
+        if ($lockRow === null) {
+            // Site row vanished (shouldn't happen on the create path) — abort the
+            // seed cleanly rather than insert orphaned nav rows.
+            $DB->Clear();
+            $DB->Execute('ROLLBACK');
+            return;
+        }
+
+        // Now-safe empty-menu check: we hold the row lock, so no racing seeder can
+        // interleave between this read and our inserts+COMMIT below.
         $existingNav = $nav->ListItems('marketing', $scopeType, $scopeId);
         if (is_array($existingNav) && count($existingNav) > 0) {
-            // Menu already seeded (or hand-edited) — leave it untouched, but still
-            // ensure home_page_id is set below.
+            // Menu already seeded (or hand-edited) — leave it untouched. Release the
+            // lock before UpdateSite (its own statement) still sets home_page_id.
+            $DB->Clear();
+            $DB->Execute('COMMIT');
             if ($homeId > 0) {
                 $this->UpdateSite($siteId, array('home_page_id' => $homeId), $uid);
             }
@@ -467,6 +499,11 @@ class CmsSite extends CmsBase
                 'scope_id'   => $scopeId,
             ));
         }
+
+        // Commit the nav inserts (releasing the row lock) BEFORE the home_page_id
+        // write so the lock isn't held across UpdateSite's own UPDATE.
+        $DB->Clear();
+        $DB->Execute('COMMIT');
 
         // ---- Point the site's landing page at the seeded home ----
         if ($homeId > 0) {
@@ -761,10 +798,10 @@ class CmsSite extends CmsBase
      */
     public function DeriveSlug($name)
     {
-        $slug = strtolower(trim((string)$name));
-        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
-        $slug = preg_replace('/-+/', '-', $slug);
-        $slug = trim($slug, '-');
+        // Shared canonical derivation (CmsBase::_normalizeSlug) + this class's own
+        // column-width clamp on top. The normalization is now identical to the one
+        // CmsPage uses for page slugs.
+        $slug = $this->_normalizeSlug($name);
         if (strlen($slug) > 160) {
             $slug = rtrim(substr($slug, 0, 160), '-');
         }

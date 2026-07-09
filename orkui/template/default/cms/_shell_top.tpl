@@ -139,28 +139,9 @@ window.CMS_SCOPE = <?= json_encode($shScopeSel, JSON_HEX_TAG) ?>;
         </div>
 
         <?php if ($shScopeLabel !== ''): ?>
-            <style>
-            /* Scope-context banner (CMS Multi-Site). Dark-mode via html[data-theme]. */
-            .cms-scope-banner {
-                display: flex; align-items: center; gap: 10px;
-                margin: 0 0 18px; padding: 10px 14px;
-                border: 1px solid var(--cms-gold-deep, #caa23a);
-                border-left-width: 4px;
-                border-radius: 9px;
-                background: #fff8e6; color: #4a3b12;
-                font-size: 13.5px; line-height: 1.35;
-            }
-            .cms-scope-banner .fa-globe-americas,
-            .cms-scope-banner .cms-scope-ico { color: var(--cms-gold-deep, #caa23a); font-size: 16px; }
-            .cms-scope-banner strong { font-weight: 700; }
-            .cms-scope-banner .cms-scope-hint { color: #6b5a29; }
-            html[data-theme="dark"] .cms-scope-banner {
-                background: rgba(240, 180, 41, .10);
-                border-color: var(--cms-gold, #f0b429);
-                color: var(--ork-text, #e8e2d0);
-            }
-            html[data-theme="dark"] .cms-scope-banner .cms-scope-hint { color: var(--ork-text-muted, #b8ae90); }
-            </style>
+            <?php // .cms-scope-banner styling lives in the shared cms-admin.css
+                  // (the surrounding CMS admin surfaces already load it) — no
+                  // per-render inline <style> duplicated on every scoped page. ?>
             <div class="cms-scope-banner" role="status">
                 <i class="fas fa-globe-americas cms-scope-ico" aria-hidden="true"></i>
                 <span>

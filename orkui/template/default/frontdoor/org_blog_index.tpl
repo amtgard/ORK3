@@ -7,6 +7,7 @@
  *
  * In scope: $SitePosts, $SitePostsPage, $SitePostsPages, $SiteSlug, UIR.
  */
+require_once DIR_TEMPLATE . 'default/frontdoor/_helpers.tpl'; // fdFormatDate
 $uir      = defined('UIR') ? UIR : '';
 $slug     = isset($SiteSlug) ? (string) $SiteSlug : '';
 $posts    = isset($SitePosts) && is_array($SitePosts) ? $SitePosts : [];
@@ -28,11 +29,9 @@ $blogBase = $uir . 'Site/blog/' . rawurlencode($slug);
                             <?= htmlspecialchars(isset($post['title']) ? (string) $post['title'] : '', ENT_QUOTES) ?>
                         </a>
                     </h2>
-                    <?php if (!empty($post['published_at'])) : ?>
-                        <?php $__ts = strtotime((string) $post['published_at']); ?>
-                        <?php if ($__ts !== false) : ?>
-                            <div class="org-blog-card-meta"><?= htmlspecialchars(date('F j, Y', $__ts)) ?></div>
-                        <?php endif; ?>
+                    <?php $__dateLabel = fdFormatDate($post['published_at'] ?? '', 'F j, Y'); ?>
+                    <?php if ($__dateLabel !== '') : ?>
+                        <div class="org-blog-card-meta"><?= htmlspecialchars($__dateLabel) ?></div>
                     <?php endif; ?>
                     <?php if (!empty($post['excerpt'])) : ?>
                         <p class="org-blog-card-excerpt"><?= htmlspecialchars((string) $post['excerpt']) ?></p>

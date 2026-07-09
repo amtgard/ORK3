@@ -15,6 +15,10 @@
 $fdDir       = DIR_TEMPLATE . 'default/frontdoor/';
 $fdAssetBase = HTTP_TEMPLATE . 'default/frontdoor/';
 
+// Shared PLAIN-PHP helpers (fdFormatDate). The post header formats its date
+// before render_blocks.tpl is included below, so load the helper up front.
+require_once $fdDir . '_helpers.tpl';
+
 $postFound = isset($post) && is_array($post) && !empty($post);
 $fdBlocks  = (isset($post_blocks) && is_array($post_blocks)) ? $post_blocks : [];
 $heroRef   = (isset($hero) && is_array($hero)) ? $hero : null;
@@ -33,13 +37,7 @@ $heroRef   = (isset($hero) && is_array($hero)) ? $hero : null;
     $title   = htmlspecialchars((string) ($post['title'] ?? ''), ENT_QUOTES);
     $author  = htmlspecialchars((string) ($post['author_name'] ?? ''), ENT_QUOTES);
     $tags    = (isset($post['tags']) && is_array($post['tags'])) ? $post['tags'] : [];
-    $dateLabel = '';
-    if (!empty($post['published_at'])) {
-        $ts = strtotime((string) $post['published_at']);
-        if ($ts !== false) {
-            $dateLabel = date('F j, Y', $ts);
-        }
-    }
+    $dateLabel = fdFormatDate($post['published_at'] ?? '', 'F j, Y');
     $heroSrc   = $heroRef ? (string) ($heroRef['src'] ?? '') : '';
     $heroAlt   = $heroRef ? (string) ($heroRef['alt'] ?? '') : '';
     $heroFocal = $heroRef ? (string) ($heroRef['focal'] ?? '50% 50%') : '';

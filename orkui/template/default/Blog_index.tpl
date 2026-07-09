@@ -16,6 +16,10 @@
 $fdDir       = DIR_TEMPLATE . 'default/frontdoor/';
 $fdAssetBase = HTTP_TEMPLATE . 'default/frontdoor/';
 
+// Shared PLAIN-PHP helpers (fdFormatDate). This page formats dates outside the
+// block-render loop, so it loads the helper itself (guarded / require_once).
+require_once $fdDir . '_helpers.tpl';
+
 $blogPosts = isset($posts) && is_array($posts) ? $posts : [];
 $blogPage  = isset($page) ? (int) $page : 1;
 $blogPages = isset($total_pages) ? (int) $total_pages : 1;
@@ -67,13 +71,7 @@ $blogPageHref = function ($p) use ($blogTag) {
                 $excerpt = htmlspecialchars((string) ($bp['excerpt'] ?? ''), ENT_QUOTES);
                 $author  = htmlspecialchars((string) ($bp['author_name'] ?? ''), ENT_QUOTES);
                 $tags    = (isset($bp['tags']) && is_array($bp['tags'])) ? $bp['tags'] : [];
-                $dateLabel = '';
-                if (!empty($bp['published_at'])) {
-                    $ts = strtotime((string) $bp['published_at']);
-                    if ($ts !== false) {
-                        $dateLabel = date('M j, Y', $ts);
-                    }
-                }
+                $dateLabel = fdFormatDate($bp['published_at'] ?? '', 'M j, Y');
                 $postHref = UIR . 'Blog/post/' . rawurlencode($slug);
                 ?>
                 <a class="blog-card" href="<?= htmlspecialchars($postHref, ENT_QUOTES) ?>">

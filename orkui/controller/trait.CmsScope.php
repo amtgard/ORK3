@@ -145,8 +145,9 @@ trait CmsScopeContext
     }
 
     /**
-     * Human org label for the CMS context banner ('' for global). Looks up the
-     * org name directly (thin read; no model needed for a single name column).
+     * Human org label for the CMS context banner ('' for global). The org-name
+     * read is pushed into the Kingdom/Park libs (via the model pass-through) so
+     * this controller trait carries no raw $DB (architecture-layer rule).
      *
      * @param array $scope
      * @return string e.g. 'Kingdom of Foo' name, or '' for global
@@ -156,20 +157,22 @@ trait CmsScopeContext
         if ($this->_scopeIsGlobal($scope)) {
             return '';
         }
-        global $DB;
         $type = (string)$scope['type'];
         $id   = (int)$scope['id'];
-        $table = ($type === 'park') ? 'park' : 'kingdom';
-        $idCol = ($type === 'park') ? 'park_id' : 'kingdom_id';
-        $DB->Clear();
-        $DB->oid = $id;
-        $r = $DB->DataSet(
-            'SELECT name FROM ' . DB_PREFIX . $table . ' WHERE ' . $idCol . ' = :oid LIMIT 1'
-        );
-        if ($r && $r->Next()) {
-            return (string)$r->name;
+        if ($id <= 0) {
+            return '';
         }
-        return '';
+        if ($type === 'park') {
+            // Park has no single-column name getter; the existing short-info
+            // read carries the name and already lives in the Park lib.
+            $this->load_model('Park');
+            $info = $this->Park->GetParkShortInfo(array('ParkId' => $id));
+            return (is_array($info) && isset($info['ParkInfo']['ParkName']))
+                ? (string)$info['ParkInfo']['ParkName']
+                : '';
+        }
+        $this->load_model('Kingdom');
+        return (string)$this->Kingdom->GetName($id);
     }
 
     /**

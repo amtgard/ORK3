@@ -104,6 +104,13 @@ include __DIR__ . '/cms/_shell_top.tpl';
         </div>
     </div>
 
+    <?php if ($canEdit && !$canPublish): ?>
+    <div class="cms-note" role="note">
+        <i class="fas fa-lock"></i>
+        <span>Saved as a draft &mdash; a monarch or regent needs to publish this post before it's visible to the public.</span>
+    </div>
+    <?php endif; ?>
+
     <div class="cms-editor cms-editor-haspreview" id="cmsEditorGrid">
 
         <?php /* ---- Meta panel ---- */ ?>
@@ -165,7 +172,6 @@ include __DIR__ . '/cms/_shell_top.tpl';
         $beCatalog   = $catalog;
         $beLabels    = $catalogLabels;
         $bePageTypes = array(); // posts have no page-type presets
-        $beCanEdit   = $canEdit;
         $beHeading   = 'Post body';
         include DIR_TEMPLATE . 'default/cms/_block_editor.tpl';
         ?>
@@ -537,7 +543,6 @@ include __DIR__ . '/cms/_shell_top.tpl';
             blockAllow: <?= json_encode($blockAllow, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             tags:      <?= json_encode($allTags, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
             pageType:  'post',
-            canEdit:   STATE.canEdit,
             onDirty:   markDirty
         });
     }

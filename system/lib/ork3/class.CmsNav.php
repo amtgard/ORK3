@@ -72,10 +72,47 @@ class CmsNav extends CmsBase
         // Per-request memo: this is called on every front-door page render, often
         // more than once per request. Key on the normalized scope so callers that
         // pass equivalent-but-unnormalized scope still share an entry.
-        $cacheKey = $this->_clampMenu($menu) . '|'
-            . $this->_normalizeScopeType($scopeType) . '|' . (int)$scopeId;
+        $menuName  = $this->_clampMenu($menu);
+        $normScope = $this->_normalizeScopeType($scopeType);
+        $scopeId   = (int)$scopeId;
+        $cacheKey  = $menuName . '|' . $normScope . '|' . $scopeId;
         if (array_key_exists($cacheKey, self::$menuCache)) {
             return self::$menuCache[$cacheKey];
+        }
+
+        // C-perf: cross-request GhettoCache for the RESOLVED tree. The menu changes
+        // only on an officer edit, yet was rebuilt (LEFT JOIN to page/post + PHP
+        // tree assembly) on every anonymous public pageview of an org site. Cache
+        // the built tree keyed by (menu, scope) + a content SIGNATURE of the scope's
+        // nav rows. ork_cms_nav_item has no updated_at column, so the signature
+        // (row count + MAX(nav_id) + SUM(CRC32(row fields))) IS the version signal:
+        // any insert / delete / reorder / label / link-retarget / enable-toggle
+        // changes it, so the key self-busts with no explicit invalidation. The
+        // signature probe is a single indexed aggregate (one row, no joins), far
+        // cheaper than the full fetch + resolve + tree build it lets us skip on hit.
+        //
+        // KNOWN EDGE: the signature covers nav-row fields only, NOT the JOINed
+        // page/post SLUGS. A page/post slug RENAME (a separate CMS entity edit) can
+        // leave a stale resolved href in this cache for up to the 1800s TTL. That is
+        // a bounded, documented trade-off; a slug-edit-driven bust would live in the
+        // page/post write path (a different owner) — see report.
+        $ckey  = null;
+        $cache = $this->_cache();
+        if ($cache !== null) {
+            $sig = $this->_navSignature($menuName, $normScope, $scopeId);
+            // Skip caching entirely when the signature probe failed (null) so a
+            // transient DB error can't pin an empty tree under a bogus key.
+            if ($sig !== null) {
+                $ckey   = $menuName . '.' . $normScope . '.' . $scopeId . '.' . $sig;
+                $cached = $cache->get(__CLASS__ . '.GetMenu', $ckey, 1800);
+                // Memcached returns the stored value (an array — possibly []) on a
+                // hit, or false on a miss; is_array() distinguishes a genuinely
+                // empty cached menu from a miss.
+                if (is_array($cached)) {
+                    self::$menuCache[$cacheKey] = $cached;
+                    return $cached;
+                }
+            }
         }
 
         $rows = $this->_fetchItems($menu, $scopeType, $scopeId, true);
@@ -118,8 +155,61 @@ class CmsNav extends CmsBase
         };
         $top = $attach(0, 0);
 
+        // Store into the cross-request cache under the signature key computed above
+        // (only when the probe succeeded → $ckey is set).
+        if ($cache !== null && $ckey !== null) {
+            $cache->cache(__CLASS__ . '.GetMenu', $ckey, $top);
+        }
+
         self::$menuCache[$cacheKey] = $top;
         return $top;
+    }
+
+    /**
+     * A content signature of a menu/scope's nav rows, used as the cross-request
+     * cache version key (see GetMenu). Single indexed aggregate over
+     * ork_cms_nav_item — no joins — returning "cnt-maxid-crcsum". Covers ALL rows
+     * (enabled and disabled) so an enable/disable toggle also busts. Returns null
+     * on a failed probe so the caller skips caching rather than key on garbage.
+     *
+     * @param string $menu      already-clamped menu name
+     * @param string $scopeType already-normalized scope type
+     * @param int    $scopeId
+     * @return string|null
+     */
+    private function _navSignature($menu, $scopeType, $scopeId)
+    {
+        global $DB;
+
+        $DB->Clear();
+        $DB->menu       = $menu;
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = (int)$scopeId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT COUNT(*) AS cnt, COALESCE(MAX(nav_id), 0) AS mx,'
+            . " COALESCE(SUM(CRC32(CONCAT_WS('|', nav_id, label, link_type,"
+            . " IFNULL(page_id, 0), IFNULL(post_id, 0), IFNULL(url, ''),"
+            . ' IFNULL(parent_id, 0), ordering, enabled))), 0) AS sig'
+            . ' FROM ' . DB_PREFIX . 'cms_nav_item'
+            . ' WHERE menu = :menu AND scope_type = :scope_type AND scope_id = :scope_id'
+        ));
+        if ($row === null) {
+            return null;
+        }
+        return (string)(int)$row['cnt'] . '-'
+            . (string)(int)$row['mx'] . '-'
+            . (string)$row['sig'];
+    }
+
+    /** GhettoCache handle, or null when the memcache layer isn't wired up. */
+    private function _cache()
+    {
+        if (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache)
+            && is_object(Ork3::$Lib->ghettocache)
+        ) {
+            return Ork3::$Lib->ghettocache;
+        }
+        return null;
     }
 
     /**
@@ -202,7 +292,31 @@ class CmsNav extends CmsBase
         // A same-request read must not serve a pre-write tree.
         self::$menuCache = array();
 
-        return (int)$DB->GetLastInsertId();
+        // Verify the INSERT actually landed by reading the row back on the exact
+        // tuple we just wrote — NOT GetLastInsertId(), which returns a stale prior
+        // id on a silently-dropped/dup INSERT under ERRMODE_WARNING (lastInsertId
+        // is not a reliable success/dup signal). cms_nav_item has no UNIQUE key on
+        // the insert tuple, so match every column we wrote and take the newest
+        // nav_id (AUTO_INCREMENT ⇒ our just-inserted row, or a concurrent identical
+        // one — still a valid freshly-created id). Mirrors the read-back verify used
+        // by DeleteItem/Reorder here and _insertRow in class.CmsMedia.php. Returns
+        // 0 when nothing matched → the INSERT failed.
+        $where = array();
+        $DB->Clear();
+        foreach ($cols as $field => $value) {
+            if ($value === null) {
+                $where[] = '`' . $field . '` IS NULL';
+            } else {
+                $where[] = '`' . $field . '` = :' . $field;
+                $DB->$field = $value;
+            }
+        }
+        $check = $this->_firstRow($DB->DataSet(
+            'SELECT nav_id FROM ' . DB_PREFIX . 'cms_nav_item'
+            . ' WHERE ' . implode(' AND ', $where)
+            . ' ORDER BY nav_id DESC LIMIT 1'
+        ));
+        return ($check !== null && isset($check['nav_id'])) ? (int)$check['nav_id'] : 0;
     }
 
     /**
@@ -256,21 +370,55 @@ class CmsNav extends CmsBase
             $set[] = 'label = :label';
             $DB->label = $this->_clampLabel($data['label']);
         }
+        // When the link TYPE is (re)set, the target columns the OTHER types use
+        // become dead. This method is AUTHORITATIVE about clearing them: yapo drops
+        // null from an UPDATE, so the controller cannot null them by assignment —
+        // instead we append raw `col = NULL` clauses (constant literal, no bind, no
+        // injection) for every link column the new type does not use, in the SAME
+        // UPDATE. A stale value in an unused column is overwritten, and a caller no
+        // longer has to clear them manually (Agent C: savenavitem can stop hacking
+        // nulls). Columns CLEARED per link_type (the used column is kept):
+        //   page    -> clears post_id, url      (uses page_id)
+        //   post    -> clears page_id, url      (uses post_id)
+        //   url     -> clears page_id, post_id  (uses url)
+        //   dynamic -> clears page_id, post_id  (uses url as the route key)
+        // Clearing only fires when link_type is in $data; a partial update that
+        // doesn't touch the type leaves all target columns alone.
+        $clearCols = array();
         if (array_key_exists('link_type', $data)) {
+            $newLinkType = $this->_normalizeLinkType($data['link_type']);
             $set[] = 'link_type = :link_type';
-            $DB->link_type = $this->_normalizeLinkType($data['link_type']);
+            $DB->link_type = $newLinkType;
+            switch ($newLinkType) {
+                case 'page':
+                    $clearCols = array('post_id', 'url');
+                    break;
+                case 'post':
+                    $clearCols = array('page_id', 'url');
+                    break;
+                case 'url':
+                case 'dynamic':
+                    $clearCols = array('page_id', 'post_id');
+                    break;
+            }
         }
-        if (array_key_exists('page_id', $data)) {
+        // Skip a $data-driven SET for any column we are about to force to NULL —
+        // the clear (below) is authoritative and must win over a stale posted value.
+        if (array_key_exists('page_id', $data) && !in_array('page_id', $clearCols, true)) {
             $set[] = 'page_id = :page_id';
             $DB->page_id = ($data['page_id'] === null || $data['page_id'] === '') ? null : (int)$data['page_id'];
         }
-        if (array_key_exists('post_id', $data)) {
+        if (array_key_exists('post_id', $data) && !in_array('post_id', $clearCols, true)) {
             $set[] = 'post_id = :post_id';
             $DB->post_id = ($data['post_id'] === null || $data['post_id'] === '') ? null : (int)$data['post_id'];
         }
-        if (array_key_exists('url', $data)) {
+        if (array_key_exists('url', $data) && !in_array('url', $clearCols, true)) {
             $set[] = 'url = :url';
             $DB->url = ($data['url'] === null || $data['url'] === '') ? null : $this->_clampUrl($data['url']);
+        }
+        // Force the now-unused link columns to NULL (yapo can't; raw literal does).
+        foreach ($clearCols as $clearCol) {
+            $set[] = '`' . $clearCol . '` = NULL';
         }
         if (array_key_exists('parent_id', $data)) {
             $set[] = 'parent_id = :parent_id';

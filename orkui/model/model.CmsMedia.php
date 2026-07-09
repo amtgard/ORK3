@@ -27,9 +27,9 @@ class Model_CmsMedia extends Model
         return $this->CmsMedia->ToMediaRef($mediaRow);
     }
 
-    public function list_media($scope = null, $limit = 200, $search = null)
+    public function list_media($scope = null, $limit = 200, $search = null, $offset = 0)
     {
-        return $this->CmsMedia->ListMedia($scope, $limit, $search);
+        return $this->CmsMedia->ListMedia($scope, $limit, $search, $offset);
     }
 
     public function get_media($mediaId)

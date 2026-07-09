@@ -50,71 +50,117 @@ if ($kpMoreHref === '#') {
     $kpMoreHref = '';
 }
 
-$kpRows = [];
-if (class_exists('APIModel')) {
-    try {
-        $kpModel  = new APIModel('Kingdom');
-        $kpResult = $kpModel->GetParks(['KingdomId' => $kpKingdomId]);
-        if (is_array($kpResult) && isset($kpResult['Parks']) && is_array($kpResult['Parks'])) {
-            foreach ($kpResult['Parks'] as $kpPark) {
-                // GetParks does NOT filter status — keep only active parks.
-                if (strcasecmp(trim((string) ($kpPark['Active'] ?? '')), 'Active') === 0) {
-                    $kpRows[] = $kpPark;
-                }
-            }
-        }
-    } catch (\Throwable $e) {
-        $kpRows = [];
+// C5-style caching (mirrors kingdom_officers.tpl): this DYNAMIC block runs on
+// every anonymous public hit and previously re-queried GetParks AND did a per-row
+// file_exists() heraldry probe inside the render loop. Resolve the park list
+// (filter → sort → slice) AND every crest URL up front in ONE pass, then cache
+// the fully-hydrated result in GhettoCache keyed by (kingdom, limit, sort,
+// show_heraldry). Public park data is safe to share across viewers; a short TTL
+// keeps it fresh. Cached hits render with ZERO model calls and ZERO disk probes.
+// $kpResolved: list of ['park_id','name','loc','title','crest'].
+$kpResolved = null;
+$kpCache    = (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache) && is_object(Ork3::$Lib->ghettocache))
+    ? Ork3::$Lib->ghettocache : null;
+$kpCacheKey = 'k' . $kpKingdomId . '.l' . $kpLimit . '.s' . $kpSort . '.h' . ($kpShowHeraldry ? 1 : 0);
+if ($kpCache !== null) {
+    $kpHit = $kpCache->get('frontdoor.kingdom_parks', $kpCacheKey, 300);
+    if (is_array($kpHit)) {
+        $kpResolved = $kpHit;
     }
 }
 
-// Sort per the chosen mode. 'city' falls back to name; 'state' falls back to
-// city then name. Case-insensitive; empty keys sort last within their tier.
-$kpCmp = static function ($x) {
-    $x = strtolower(trim((string) $x));
-    // Empty values sort after non-empty ones.
-    return $x === '' ? "\xff" . $x : $x;
-};
-usort($kpRows, function ($a, $b) use ($kpSort, $kpCmp) {
-    $an = $kpCmp($a['Name'] ?? '');
-    $bn = $kpCmp($b['Name'] ?? '');
-    if ($kpSort === 'state') {
-        $ap = $kpCmp($a['Province'] ?? '');
-        $bp = $kpCmp($b['Province'] ?? '');
-        if ($ap !== $bp) {
-            return strcmp($ap, $bp);
+if ($kpResolved === null) {
+    $kpRows = [];
+    if (class_exists('APIModel')) {
+        try {
+            $kpModel  = new APIModel('Kingdom');
+            $kpResult = $kpModel->GetParks(['KingdomId' => $kpKingdomId]);
+            if (is_array($kpResult) && isset($kpResult['Parks']) && is_array($kpResult['Parks'])) {
+                foreach ($kpResult['Parks'] as $kpPark) {
+                    // GetParks does NOT filter status — keep only active parks.
+                    if (strcasecmp(trim((string) ($kpPark['Active'] ?? '')), 'Active') === 0) {
+                        $kpRows[] = $kpPark;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            $kpRows = [];
         }
-        $ac = $kpCmp($a['City'] ?? '');
-        $bc = $kpCmp($b['City'] ?? '');
-        if ($ac !== $bc) {
-            return strcmp($ac, $bc);
-        }
-        return strcmp($an, $bn);
     }
-    if ($kpSort === 'city') {
-        $ac = $kpCmp($a['City'] ?? '');
-        $bc = $kpCmp($b['City'] ?? '');
-        if ($ac !== $bc) {
-            return strcmp($ac, $bc);
-        }
-        return strcmp($an, $bn);
-    }
-    return strcmp($an, $bn);
-});
-$kpRows = array_slice($kpRows, 0, $kpLimit);
 
-// Resolve a park's heraldry crest URL (only when the park flags it + the image
-// helper is available). Mirrors the Atlas map's park-heraldry resolution.
-$kpHeraldryUrl = static function ($parkId, $hasHeraldry) {
-    if (empty($hasHeraldry) || (int) $parkId <= 0) {
-        return '';
+    // Sort per the chosen mode. 'city' falls back to name; 'state' falls back to
+    // city then name. Case-insensitive; empty keys sort last within their tier.
+    $kpCmp = static function ($x) {
+        $x = strtolower(trim((string) $x));
+        // Empty values sort after non-empty ones.
+        return $x === '' ? "\xff" . $x : $x;
+    };
+    usort($kpRows, function ($a, $b) use ($kpSort, $kpCmp) {
+        $an = $kpCmp($a['Name'] ?? '');
+        $bn = $kpCmp($b['Name'] ?? '');
+        if ($kpSort === 'state') {
+            $ap = $kpCmp($a['Province'] ?? '');
+            $bp = $kpCmp($b['Province'] ?? '');
+            if ($ap !== $bp) {
+                return strcmp($ap, $bp);
+            }
+            $ac = $kpCmp($a['City'] ?? '');
+            $bc = $kpCmp($b['City'] ?? '');
+            if ($ac !== $bc) {
+                return strcmp($ac, $bc);
+            }
+            return strcmp($an, $bn);
+        }
+        if ($kpSort === 'city') {
+            $ac = $kpCmp($a['City'] ?? '');
+            $bc = $kpCmp($b['City'] ?? '');
+            if ($ac !== $bc) {
+                return strcmp($ac, $bc);
+            }
+            return strcmp($an, $bn);
+        }
+        return strcmp($an, $bn);
+    });
+    $kpRows = array_slice($kpRows, 0, $kpLimit);
+
+    // Resolve a park's heraldry crest URL (only when the park flags it + the image
+    // helper is available). Mirrors the Atlas map's park-heraldry resolution. The
+    // file_exists()-backed resolve_image_ext() probe runs here once (cache-miss),
+    // never in the render loop.
+    $kpHeraldryUrl = static function ($parkId, $hasHeraldry) {
+        if (empty($hasHeraldry) || (int) $parkId <= 0) {
+            return '';
+        }
+        if (!defined('HTTP_PARK_HERALDRY') || !defined('DIR_PARK_HERALDRY') || !class_exists('Common')) {
+            return '';
+        }
+        $file = Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', (int) $parkId));
+        return $file !== '' ? HTTP_PARK_HERALDRY . $file : '';
+    };
+
+    $kpResolved = [];
+    foreach ($kpRows as $kpRow) {
+        $kpParkId = (int) ($kpRow['ParkId'] ?? 0);
+        $kpName   = trim((string) ($kpRow['Name'] ?? ''));
+        if ($kpParkId <= 0 || $kpName === '') {
+            continue;
+        }
+        $kpCity     = trim((string) ($kpRow['City'] ?? ''));
+        $kpProvince = trim((string) ($kpRow['Province'] ?? ''));
+        $kpLocParts = array_filter([$kpCity, $kpProvince], static fn ($v) => $v !== '');
+        $kpResolved[] = [
+            'park_id' => $kpParkId,
+            'name'    => $kpName,
+            'loc'     => implode(', ', $kpLocParts),
+            'title'   => trim((string) ($kpRow['Title'] ?? '')),
+            'crest'   => $kpShowHeraldry ? $kpHeraldryUrl($kpParkId, $kpRow['HasHeraldry'] ?? 0) : '',
+        ];
     }
-    if (!defined('HTTP_PARK_HERALDRY') || !defined('DIR_PARK_HERALDRY') || !class_exists('Common')) {
-        return '';
+
+    if ($kpCache !== null) {
+        $kpCache->cache('frontdoor.kingdom_parks', $kpCacheKey, $kpResolved);
     }
-    $file = Common::resolve_image_ext(DIR_PARK_HERALDRY, sprintf('%05d', (int) $parkId));
-    return $file !== '' ? HTTP_PARK_HERALDRY . $file : '';
-};
+}
 ?>
 <?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
 <?php if (empty($fdStyleOnce['kingdom_parks'])) : $fdStyleOnce['kingdom_parks'] = true; ?>
@@ -169,27 +215,18 @@ html[data-theme="dark"] .kp-card:hover { box-shadow: 0 8px 22px rgba(0,0,0,.5); 
         <?php endif; ?>
     </div>
 
-    <?php if (empty($kpRows)): ?>
+    <?php if (empty($kpResolved)): ?>
         <div class="kp-empty">No active parks to show yet.</div>
     <?php else: ?>
         <div class="kp-grid">
-            <?php foreach ($kpRows as $kpRow): ?>
+            <?php foreach ($kpResolved as $kpRow): ?>
                 <?php
-                $kpParkId = (int) ($kpRow['ParkId'] ?? 0);
-                $kpName   = trim((string) ($kpRow['Name'] ?? ''));
-                if ($kpParkId <= 0 || $kpName === '') {
-                    continue;
-                }
-                $kpCity     = trim((string) ($kpRow['City'] ?? ''));
-                $kpProvince = trim((string) ($kpRow['Province'] ?? ''));
-                $kpTitle    = trim((string) ($kpRow['Title'] ?? ''));
-                $kpLocParts = array_filter([$kpCity, $kpProvince], static fn ($v) => $v !== '');
-                $kpLoc      = implode(', ', $kpLocParts);
-                $kpNameOut  = htmlspecialchars(stripslashes($kpName), ENT_QUOTES);
-                $kpLocOut   = htmlspecialchars(stripslashes($kpLoc), ENT_QUOTES);
-                $kpTitleOut = htmlspecialchars(stripslashes($kpTitle), ENT_QUOTES);
+                $kpParkId   = (int) ($kpRow['park_id'] ?? 0);
+                $kpNameOut  = htmlspecialchars(stripslashes((string) ($kpRow['name'] ?? '')), ENT_QUOTES);
+                $kpLocOut   = htmlspecialchars(stripslashes((string) ($kpRow['loc'] ?? '')), ENT_QUOTES);
+                $kpTitleOut = htmlspecialchars(stripslashes((string) ($kpRow['title'] ?? '')), ENT_QUOTES);
                 $kpHref     = UIR . 'Park/profile/' . $kpParkId;
-                $kpCrest    = $kpShowHeraldry ? $kpHeraldryUrl($kpParkId, $kpRow['HasHeraldry'] ?? 0) : '';
+                $kpCrest    = (string) ($kpRow['crest'] ?? '');
                 ?>
                 <a class="kp-card" href="<?= htmlspecialchars($kpHref, ENT_QUOTES) ?>">
                     <div class="kp-card-accent"></div>
