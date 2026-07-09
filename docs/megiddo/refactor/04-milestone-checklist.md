@@ -893,6 +893,21 @@ Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for
 
 ---
 
+### V-05: Event controller validation artifacts
+
+**Branch:** `megiddo/v-05-event-validation`
+
+**Spec:** [validations/v-05-event-validation.md](./validations/v-05-event-validation.md)
+
+| Step | Status |
+|------|--------|
+| Canary URLs (`event-template` skip; gate reuses index RSVP + create) | [x] |
+| Test mutation boundaries (§2) | [x] |
+| Dual-profile fuzzy validate (6/6) | [x] |
+| V-05 sign-off gate | [x] |
+
+---
+
 ### V-01 … V-14: Domain validation artifacts
 
 Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines. Pairs with DS/T/R numbering.
@@ -903,7 +918,7 @@ Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines.
 | V-02 | `megiddo/v-02-auth-validation` | [v-02-auth-validation.md](./validations/v-02-auth-validation.md) | DS-02, T-02, V-00 | R-02 |
 | V-03 | `megiddo/v-03-banner-validation` | [v-03-banner-validation.md](./validations/v-03-banner-validation.md) | DS-03, T-03, V-00 | R-03 |
 | V-04 | `megiddo/v-04-eventajax-validation` | [v-04-eventajax-validation.md](./validations/v-04-eventajax-validation.md) | DS-04, T-04, V-00 | R-04 |
-| V-05 | `megiddo/v-05-event-validation` | *(create)* | DS-05, T-05, V-00 | R-05 |
+| V-05 | `megiddo/v-05-event-validation` | [v-05-event-validation.md](./validations/v-05-event-validation.md) | DS-05, T-05, V-00 | R-05 |
 | V-06 | `megiddo/v-06-kingdom-validation` | *(create)* | DS-06, T-06, V-00 | R-06 |
 | V-07 | `megiddo/v-07-park-validation` | *(create)* | DS-07, T-07, V-00 | R-07 |
 | V-08 | `megiddo/v-08-admin-validation` | *(create)* | DS-08, T-08, V-00 | R-08 |
@@ -977,4 +992,4 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** V-05 (event validation artifacts), then G2 (V-05…V-08), then R-01 (RSVP refactor — DS-01, T-01, V-01 complete).
+**Next actionable milestone:** V-06 (kingdom validation artifacts), then remainder of G2 (V-07…V-08), then R-01 (RSVP refactor — DS-01, T-01, V-01 complete).

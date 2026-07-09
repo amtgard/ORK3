@@ -105,6 +105,14 @@
       "notes": "V-01 RSVP — Gathering of Kingdoms index variant; sandbox event 80003; mirror → home chrome"
     },
     {
+      "id": "event-template",
+      "url": "./index.php?Route=Event/template/80000",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "skip": true,
+      "notes": "V-05 Event — skip visual capture; Playwright page.goto hang on load (curl 200). T-EVT-02 covered by EventRsvpBatchTest + event-detail.spec.ts"
+    },
+    {
       "id": "event-index",
       "url": "./index.php?Route=Event/index/1",
       "auth": "login",

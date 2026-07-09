@@ -291,3 +291,4 @@ flowchart LR
 | DS-04 EventAjax discovery | [ds-04-eventajax-discovery.md](./ds-04-eventajax-discovery.md) |
 | Implementation plan | [03-implementation-plan.md](./03-implementation-plan.md) |
 | Test framework | [06-test-framework.md](./06-test-framework.md) |
+| [validations/v-05-event-validation.md](./validations/v-05-event-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-05) |
