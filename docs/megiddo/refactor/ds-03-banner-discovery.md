@@ -53,11 +53,11 @@ All five targets expose the same three actions via path segment: `{EntityAjax}/b
 
 | ID | Controller | Method | Lines | Entity table | Auth gate |
 |----|------------|--------|-------|--------------|-----------|
-| T-PLA-06 | `Controller_PlayerAjax` | `banner` | 832–999 | `ork_mundane` (+ `mundane_design`) | Self, park EDIT, kingdom EDIT, or global admin |
-| T-PRA-04 | `Controller_ParkAjax` | `banner` | 657–805 | `ork_park` | `AUTH_PARK` / `$park_id` / `AUTH_EDIT` |
-| T-KNA-08 | `Controller_KingdomAjax` | `banner` | 1225–1364 | `ork_kingdom` | `AUTH_KINGDOM` / `$kingdom_id` / `AUTH_EDIT` |
-| T-UNT-01 | `Controller_UnitAjax` | `banner` | 9–149 | `ork_unit` | `AUTH_UNIT` / `$unit_id` / `AUTH_EDIT` |
-| T-EVA-14 | `Controller_EventAjax` | `banner` | 1741–1883 | `ork_event` | `AUTH_EVENT` / `AUTH_EDIT` **or** any `event_staff.can_manage` on event |
+| T-PLA-06 | `Controller_PlayerAjax` | `banner` | 832–1000 | `ork_mundane` (+ `mundane_design`) | Self, park EDIT, kingdom EDIT, or global admin |
+| T-PRA-04 | `Controller_ParkAjax` | `banner` | 657–817 | `ork_park` | `AUTH_PARK` / `$park_id` / `AUTH_EDIT` |
+| T-KNA-08 | `Controller_KingdomAjax` | `banner` | 1225–1376 | `ork_kingdom` | `AUTH_KINGDOM` / `$kingdom_id` / `AUTH_EDIT` |
+| T-UNT-01 | `Controller_UnitAjax` | `banner` | 9–150 | `ork_unit` | `AUTH_UNIT` / `$unit_id` / `AUTH_EDIT` |
+| T-EVA-14 | `Controller_EventAjax` | `banner` | 1741–1881 | `ork_event` | `AUTH_EVENT` / `AUTH_EDIT` **or** any `event_staff.can_manage` on event |
 
 **Shared write behavior (all five):**
 
@@ -241,6 +241,8 @@ Register `Banner` in `orkservice/Json/index.php` for JSON API parity.
 | Heraldry upload (`Controller_*::heraldry`) | Separate; event heraldry partial fix in R-04 (T-EVA-11) |
 
 ### 3.6 Execution order (R-03)
+
+**Post-rebase (RB-D1, 2026-07-09):** §1 line ranges verified against `orkui/` at base `e6417645` (`origin/master`). No upstream gap closures; §3 revision unchanged.
 
 1. Implement `class.Banner.php` with unit-testable static helpers (path resolution, validation).
 2. Add integration tests against domain directly.

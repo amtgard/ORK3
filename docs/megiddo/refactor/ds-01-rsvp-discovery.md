@@ -241,6 +241,8 @@ Refactor `SearchService::Search_Event` RSVP subqueries to call `GetRsvpCounts` i
 
 ### 3.5 Migration order (R-01)
 
+**Post-rebase (RB-D1, 2026-07-09):** §1 line ranges verified against `orkui/` at base `e6417645` (`origin/master`). No upstream gap closures; §3 revision unchanged.
+
 1. Implement domain methods + unit/integration tests (green suite).
 2. Register EventService SOAP/JSON endpoints.
 3. Switch `Model_Event` RSVP methods to API (single choke point).

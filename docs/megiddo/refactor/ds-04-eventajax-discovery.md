@@ -100,27 +100,27 @@ Migrations: [`2026-03-16-add-event-staff.sql`](../../../db-migrations/2026-03-16
 
 | Lines | Behavior |
 |-------|----------|
-| 704–779 | Auth: same as add_staff; DELETE with prior-state capture; danger audit |
+| 704–771 | Auth: same as add_staff; DELETE with prior-state capture; danger audit |
 
 #### T-EVA-09: `add_schedule`
 
 | Lines | Behavior |
 |-------|----------|
-| 781–929 | Auth: event EDIT **or** staff capabilities (`can_schedule`, `can_feast`, feast category rules); INSERT schedule + `event_schedule_lead` rows |
+| 773–929 | Auth: event EDIT **or** staff capabilities (`can_schedule`, `can_feast`, feast category rules); INSERT schedule + `event_schedule_lead` rows |
 
-**Related (not in inventory ID):** `remove_schedule` (931–979) — DELETE schedule row; same auth pattern. Include in R-04 domain API.
+**Related (not in inventory ID):** `remove_schedule` (931–980) — DELETE schedule row; same auth pattern. Include in R-04 domain API.
 
 #### T-EVA-10: `update_schedule`
 
 | Lines | Behavior |
 |-------|----------|
-| 982–1176 | Auth: feast vs schedule permission split; selective SET clauses; UPDATE schedule; DELETE+re-INSERT leads |
+| 982–1168 | Auth: feast vs schedule permission split; selective SET clauses; UPDATE schedule; DELETE+re-INSERT leads |
 
 #### T-EVA-11: `heraldry`
 
 | Lines | Behavior |
 |-------|----------|
-| 1178–1260 | Auth: event EDIT **or** staff `can_manage`; **`remove`:** raw UPDATE `has_heraldry=0` + unlink files + cache bust; **`update`:** delegates to `Ork3::$Lib->heraldry->SetEventHeraldry` ✓ |
+| 1171–1260 | Auth: event EDIT **or** staff `can_manage`; **`remove`:** raw UPDATE `has_heraldry=0` + unlink files + cache bust; **`update`:** delegates to `Ork3::$Lib->heraldry->SetEventHeraldry` ✓ |
 
 **Gap:** Remove path bypasses `HeraldryService`; upload path is already canonical.
 
@@ -366,6 +366,8 @@ Also refactor `remove_schedule` (same sprint, same domain class).
 | `cancel` method | Uses `delete_event` API already — optional cleanup only |
 
 ### 3.7 Execution order (R-04)
+
+**Post-rebase (RB-D1, 2026-07-09):** §1 line ranges verified against `orkui/` at base `e6417645` (`origin/master`). Staff/schedule/heraldry blocks shifted slightly (e.g. `add_schedule` 773+, `heraldry` 1171+); no upstream gap closures; §3 revision unchanged.
 
 1. Implement `CanManageEventDetail` + tests.
 2. `SetEventStatus` / extend `CreateEvent` (T-EVA-01, T-EVA-02).

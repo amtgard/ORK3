@@ -97,11 +97,11 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 
 ### Shared sign-off (every RB-D\* / RB-D-{nn})
 
-- [ ] Discovery + implementation-plan lines updated for domains in scope
-- [ ] Validation docs paths/ids still valid
-- [ ] Domain tests green (or gap noted)
-- [ ] Infection gate pass for domains in scope (or gap noted + user aware)
-- [ ] Checklist checked; one commit `RB-D1: …` (or `RB-D-01: …`)
+- [x] Discovery + implementation-plan lines updated for domains in scope
+- [x] Validation docs paths/ids still valid
+- [x] Domain tests green (or gap noted)
+- [x] Infection gate pass for domains in scope (or gap noted + user aware)
+- [x] Checklist checked; one commit `RB-D1: …` (or `RB-D-01: …`)
 
 ---
 
@@ -112,10 +112,12 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 
 | Domain | ds-* | plan lines | v-* | tests | Infection | Done |
 |--------|------|------------|-----|-------|-----------|------|
-| 01 RSVP | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| 02 Auth | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| 03 Banner | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| 04 EventAjax | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| 01 RSVP | [x] | [x] | [x] | [x] | [x] | [x] |
+| 02 Auth | [x] | [x] | [x] | [x] | [x] | [x] |
+| 03 Banner | [x] | [x] | [x] | [x] | [x] | [x] |
+| 04 EventAjax | [x] | [x] | [x] | [x] | [x] | [x] |
+
+**RB-D1 notes (2026-07-09):** Base `e6417645`; §1 verified against current `orkui/`. Domains 03–04 had minor line drift (banner end lines; EventAjax staff/schedule/heraldry blocks). §3 gaps unchanged. PHPUnit domain filter: 67 tests, 1 skipped, exit 0. Infection: t01 MSI 55%/covered 59%; t02 MSI 42%; t03 MSI 58%; t04 MSI 48% (all ≥15 floor). Auth-gated Playwright still deferred (RB-2 carry-forward).
 
 ---
 
@@ -209,4 +211,4 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 | 5 | RB-F |
 | 6 | RB-Z |
 
-**Next unchecked:** **RB-D1** — Domains 01–04 (RSVP, auth, banner, EventAjax)
+**Next unchecked:** **RB-D2** — Domains 05–08 (event, kingdom, park, admin)

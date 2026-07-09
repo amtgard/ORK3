@@ -15,7 +15,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-INF-03 | `Controller` | `__construct` (session token) | 51–68 | `SELECT token FROM ork_mundane` session validation |
 | T-INF-04 | `Controller` | `__construct` (font prefs) | 76–84 | `SELECT basic_fonts, dyslexia_fonts FROM ork_mundane` |
 | T-INF-05 | `Controller` | `__construct` (home kingdom) | 97–140 | Home-kingdom lookup SQL |
-| T-INF-06 | `Controller` | `__construct` (RSVP widget) | 171–172 | RSVP count aggregate for home widget |
+| T-INF-06 | `Controller` | `__construct` (RSVP widget) | 167–182 | RSVP count aggregate for home widget |
 
 *File: `system/lib/system/class.Controller.php` (base class for all frontend controllers)*
 
@@ -35,7 +35,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-ADM-08 | `Controller_Admin` | weather admin actions | 2567–2573+ | `SELECT MAX(fetched_at) FROM ork_park_weather`; `Ork3::$Lib->weather->refresh_all_active_parks()` |
 | T-ADM-09 | `Controller_Admin` | `stateofamtgard` | 2646–2650+ | Attendance date range SQL; `Ork3::$Lib->stateofamtgard->getActiveKingdoms()` |
 | T-ADM-10 | `Controller_AdminAjax` | `global` → `playersearch` | 29–41 | Player search SQL on `ork_mundane` |
-| T-ADM-11 | `Controller_AdminAjax` | `global` → `addauth` | 58–64 | **Direct INSERT** into `ork_authorization` |
+| T-ADM-11 | `Controller_AdminAjax` | `global` → `addauth` | 55–72 | **Direct INSERT** into `ork_authorization` |
 | T-ADM-12 | `Controller_AdminAjax` | `stateofamtgard` | 91+ | State-of-Amtgard JSON chart endpoints; date validation in controller |
 
 ---
@@ -59,39 +59,40 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
-| T-EVA-01 | `Controller_EventAjax` | `create` | 43–44 | Post-create `UPDATE ork_event SET status='draft'` |
-| T-EVA-02 | `Controller_EventAjax` | `set_status` | 78–100 | Staff permission check; status UPDATE; future dates query |
-| T-EVA-03 | `Controller_EventAjax` | `preview` | 134–198 | Full event preview queries (event, details, RSVP) |
-| T-EVA-04 | `Controller_EventAjax` | `add_attendance` | 277–319 | Staff auth; attendance row JOIN |
-| T-EVA-05 | `Controller_EventAjax` | `delete_rsvp` | 367–368 | Staff permission check |
-| T-EVA-06 | `Controller_EventAjax` | `auth` | 447–509 | Player search; **direct authorization INSERT** |
-| T-EVA-07 | `Controller_EventAjax` | `add_staff` | 576–662 | Staff CRUD; danger audit |
-| T-EVA-08 | `Controller_EventAjax` | `remove_staff` | 730–755 | Staff DELETE; danger audit |
-| T-EVA-09 | `Controller_EventAjax` | `add_schedule` | 791–908 | Schedule INSERT; schedule_lead INSERTs |
-| T-EVA-10 | `Controller_EventAjax` | `update_schedule` | 954–1146 | Schedule UPDATE; lead DELETE+INSERT |
-| T-EVA-11 | `Controller_EventAjax` | `heraldry` | 1193–1205 | Heraldry flag UPDATE; `Ork3::$Lib->heraldry` |
-| T-EVA-12 | `Controller_EventAjax` | `copy_source_list` | 1298–1316 | Source event list query |
-| T-EVA-13 | `Controller_EventAjax` | `create_with_copy` | 1392–1455+ | Event clone: read source; cascade DELETE/INSERT copies |
-| T-EVA-14 | `Controller_EventAjax` | `banner` | 1741+ | Event banner upload + DB updates |
+| T-EVA-01 | `Controller_EventAjax` | `create` | 5–51 | Post-create `UPDATE ork_event SET status='draft'` |
+| T-EVA-02 | `Controller_EventAjax` | `set_status` | 54–115 | Staff permission check; status UPDATE; future dates query |
+| T-EVA-03 | `Controller_EventAjax` | `preview` | 119–252 | Full event preview queries (event, details, RSVP) |
+| T-EVA-04 | `Controller_EventAjax` | `add_attendance` | 254–343 | Staff auth; attendance row JOIN |
+| T-EVA-05 | `Controller_EventAjax` | `delete_rsvp` | 345–379 | Staff permission check |
+| T-EVA-06 | `Controller_EventAjax` | `auth` | 414–548 | Player search; **direct authorization INSERT** (addauth 493–528) |
+| T-EVA-07 | `Controller_EventAjax` | `add_staff` | 552–702 | Staff CRUD; danger audit |
+| T-EVA-08 | `Controller_EventAjax` | `remove_staff` | 704–771 | Staff DELETE; danger audit |
+| T-EVA-09 | `Controller_EventAjax` | `add_schedule` | 773–929 | Schedule INSERT; schedule_lead INSERTs |
+| T-EVA-10 | `Controller_EventAjax` | `update_schedule` | 982–1168 | Schedule UPDATE; lead DELETE+INSERT |
+| T-EVA-11 | `Controller_EventAjax` | `heraldry` | 1171–1260 | Heraldry flag UPDATE; `Ork3::$Lib->heraldry` |
+| T-EVA-12 | `Controller_EventAjax` | `copy_source_list` | 1262–1331 | Source event list query |
+| T-EVA-13 | `Controller_EventAjax` | `create_with_copy` | 1334–1738+ | Event clone: read source; cascade DELETE/INSERT copies |
+| T-EVA-14 | `Controller_EventAjax` | `banner` | 1741–1881 | Event banner upload + DB updates |
 
 ### `Controller_EventRsvpAjax`
 
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
-| T-RSV-01 | `Controller_EventRsvpAjax` | `counts` (private) | 14–20 | Aggregate RSVP counts |
-| T-RSV-02 | `Controller_EventRsvpAjax` | `set` | 44–61 | End-date gate; INSERT ON DUPLICATE KEY UPDATE on `event_rsvp` |
-| T-RSV-03 | `Controller_EventRsvpAjax` | `withdraw` | 85–88 | DELETE from `event_rsvp` |
+| T-RSV-01 | `Controller_EventRsvpAjax` | `counts` (private) | 12–27 | Aggregate RSVP counts |
+| T-RSV-02 | `Controller_EventRsvpAjax` | `set` | 29–71 | End-date gate; INSERT ON DUPLICATE KEY UPDATE on `event_rsvp` |
+| T-RSV-03 | `Controller_EventRsvpAjax` | `withdraw` | 73–98 | DELETE from `event_rsvp` |
 
 ### `Model_Event`
 
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
-| T-RSV-04 | `Model_Event` | `get_rsvp` | 81–82 | SELECT RSVP status |
-| T-RSV-05 | `Model_Event` | `set_rsvp` / toggle | 91–113 | Transactional RSVP INSERT/UPDATE/DELETE |
-| T-RSV-06 | `Model_Event` | `get_rsvp_count` | 136–137 | RSVP count aggregate |
-| T-RSV-07 | `Model_Event` | `get_rsvp_list` | 148–151 | RSVP list with player JOINs |
-| T-RSV-08 | `Model_Event` | `get_upcoming_rsvps` | 161–162 | Upcoming RSVP query |
-| T-RSV-09 | `Model_Event` | `get_kingdom_upcoming_events` | 188–189 | Kingdom upcoming events query |
+| T-RSV-04 | `Model_Event` | `get_rsvp` | 79–85 | SELECT RSVP status |
+| T-RSV-05 | `Model_Event` | `set_rsvp` / toggle | 88–115 | Transactional RSVP INSERT/UPDATE/DELETE |
+| T-RSV-05 | `Model_Event` | `remove_rsvp` | 121–132 | yapo DELETE (staff path via EventAjax) |
+| T-RSV-06 | `Model_Event` | `get_rsvp_count` | 134–144 | RSVP count aggregate |
+| T-RSV-07 | `Model_Event` | `get_rsvp_list` | 146–157 | RSVP list with player JOINs |
+| T-RSV-08 | `Model_Event` | `get_upcoming_rsvps` | 159–184 | Upcoming RSVP query |
+| T-RSV-09 | `Model_Event` | `get_kingdom_upcoming_events` | 186–215 | Kingdom upcoming events query |
 
 ---
 
@@ -117,12 +118,12 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 |----|-------|--------|-------|-------------|
 | T-KNA-01 | `Controller_KingdomAjax` | `kingdom` → move player | 385–418 | Kingdom/park lookup; abbreviation conflict |
 | T-KNA-02 | `Controller_KingdomAjax` | `kingdom` → award recs public | 603–611 | **Direct INSERT/UPDATE** on `ork_configuration` |
-| T-KNA-03 | `Controller_KingdomAjax` | `kingdom` → addauth | 631–635 | **Direct INSERT** into `ork_authorization` |
+| T-KNA-03 | `Controller_KingdomAjax` | `kingdom` → addauth | 615–654 | **Direct INSERT** into `ork_authorization` |
 | T-KNA-04 | `Controller_KingdomAjax` | `kingdom` → checkabbr | 716–718 | Kingdom abbreviation uniqueness |
 | T-KNA-05 | `Controller_KingdomAjax` | `calendar` | 759–945 | Royal officers, events, calendar items, park days |
 | T-KNA-06 | `Controller_KingdomAjax` | `playersearch` | 1069–1125 | Scoped player search with abbr resolution |
 | T-KNA-07 | `Controller_KingdomAjax` | `suspendplayer` | 1183 | Read suspension state from `ork_mundane` |
-| T-KNA-08 | `Controller_KingdomAjax` | `banner` | 1254–1364 | Kingdom banner CRUD on `ork_kingdom` |
+| T-KNA-08 | `Controller_KingdomAjax` | `banner` | 1225–1376 | Kingdom banner CRUD on `ork_kingdom` |
 
 ---
 
@@ -141,9 +142,9 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
 | T-PRA-01 | `Controller_ParkAjax` | `park` → playersearch | 198–251 | Abbr resolution; player search SQL |
-| T-PRA-02 | `Controller_ParkAjax` | `park` → addauth | 427–431 | **Direct INSERT** into `ork_authorization` |
+| T-PRA-02 | `Controller_ParkAjax` | `park` → addauth | 411–450 | **Direct INSERT** into `ork_authorization` |
 | T-PRA-03 | `Controller_ParkAjax` | `kingdom` → checkabbr | 602–645 | Park abbreviation uniqueness within kingdom |
-| T-PRA-04 | `Controller_ParkAjax` | `banner` | 689–805 | Park banner CRUD on `ork_park` |
+| T-PRA-04 | `Controller_ParkAjax` | `banner` | 657–817 | Park banner CRUD on `ork_park` |
 
 ---
 
@@ -169,7 +170,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-PLA-03 | `Controller_PlayerAjax` | `merge` | 548–594 | Player kingdom/park lookup; merge auth mirror |
 | T-PLA-04 | `Controller_PlayerAjax` | `save_my_email` | 724–726 | **Direct UPDATE** `ork_mundane SET email` |
 | T-PLA-05 | `Controller_PlayerAjax` | `add_second` | 755–756 | Persona lookup |
-| T-PLA-06 | `Controller_PlayerAjax` | `banner` | 854–988 | Player banner CRUD on `ork_mundane`, `ork_mundane_design` |
+| T-PLA-06 | `Controller_PlayerAjax` | `banner` | 832–1000 | Player banner CRUD on `ork_mundane`, `ork_mundane_design` |
 
 ### `Model_Player`
 
@@ -235,7 +236,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
-| T-UNT-01 | `Controller_UnitAjax` | `banner` | 36–138 | Unit banner CRUD on `ork_unit` |
+| T-UNT-01 | `Controller_UnitAjax` | `banner` | 9–150 | Unit banner CRUD on `ork_unit` |
 | T-UNT-02 | `Controller_Unit` | *(officer grant)* | 150 | `Ork3::$Lib->dangeraudit->audit` on auth add |
 | T-UNT-03 | `Controller_Unit` | *(throughout)* | 220–265 | `Ork3::$Lib->authorization`, `player->player_info` |
 | T-WN-01 | `Controller_WnAjax` | `dismiss` | 18–19 | **Direct INSERT** `ork_whats_new_seen` |

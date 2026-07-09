@@ -248,6 +248,8 @@ $authId = (int)$r['Detail'];
 
 ### 3.4 Migration order (R-02)
 
+**Post-rebase (RB-D1, 2026-07-09):** §1 line ranges verified against `orkui/` at base `e6417645` (`origin/master`). No upstream gap closures; §3 revision unchanged.
+
 1. Add `AuthorizationAddTest` integration tests against existing `AddAuthorization` (green before controller changes).
 2. Replace INSERT in `AdminAjax`, `KingdomAjax`, `ParkAjax`, `EventAjax` one file at a time; full suite after each.
 3. Add danger-audit to `AdminAjax` global addauth.
