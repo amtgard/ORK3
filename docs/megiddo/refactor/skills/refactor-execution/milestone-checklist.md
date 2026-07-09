@@ -12,7 +12,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-02-auth-insert-refactor` @ `578f2f2f` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-03-banner-refactor` @ `4b0d8448` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -22,7 +22,8 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 | R-* | Branch | Commit |
 |-----|--------|--------|
 | R-01 | `megiddo/r-01-rsvp-refactor` | `bc626ce8` |
-| R-02 | `megiddo/r-02-auth-insert-refactor` | `578f2f2f` |
+| R-02 | `megiddo/r-02-auth-insert-refactor` | `516ac063` |
+| R-03 | `megiddo/r-03-banner-refactor` | `4b0d8448` |
 | … | | |
 
 ---
@@ -89,16 +90,16 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Prior R-* hygiene | [ ] |
-| Refactor banner targets | [ ] |
-| PHPUnit | [ ] |
-| Infection §2.4 | [ ] |
-| Fuzzy: `kingdom-auth-sandbox,park-auth-sandbox,player-profile` | [ ] |
-| Playwright: `banner.spec.ts` | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-03: …` | [ ] |
+| Prior R-* hygiene | [x] |
+| Refactor banner targets | [x] |
+| PHPUnit | [x] |
+| Infection §2.4 | [x] |
+| Fuzzy: `kingdom-auth-sandbox,park-auth-sandbox,player-profile` | [x] |
+| Playwright: `banner.spec.ts` | [x] |
+| Docs + plan | [x] |
+| Commit: `R-03: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-03-banner-refactor` @ `4b0d8448` stacked on R-02 @ `516ac063`. Added `class.Banner.php`, BannerService, `Model_Banner`; thin adapters on five `*Ajax::banner`. PHPUnit 204/204 pass. Infection `infection.t03-banner.json5`: MSI 51%, covered MSI 74%. Fuzzy 6/6 pass; re-recorded test baselines for `kingdom-auth-sandbox,park-auth-sandbox` after sandbox redeploy. Playwright: auth smoke + `banner.spec.ts` 5/5 pass.
 
 ---
 
@@ -320,4 +321,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | … | … | … |
 | 14 | R-14 | Phase 3 audit |
 
-**Next unchecked:** R-03
+**Next unchecked:** R-04

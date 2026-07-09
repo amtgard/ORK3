@@ -92,7 +92,7 @@ sh bin/run-infection.sh \
 
 ## 3. R-03 sign-off checklist
 
-- [ ] §1 page ids pass `bin/fuzzy-validator validate --phase all` (test + mirror)
-- [ ] Test edits within §2.3
-- [ ] Full unit suite green
-- [ ] Infection per §2.4
+- [x] §1 page ids pass `bin/fuzzy-validator validate --phase all` (test + mirror)
+- [x] Test edits within §2.3
+- [x] Full unit suite green
+- [x] Infection per §2.4

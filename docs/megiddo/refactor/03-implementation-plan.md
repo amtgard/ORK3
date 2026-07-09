@@ -98,6 +98,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 **R-02 complete (2026-07-09):** T-ADM-11, T-KNA-03, T-PRA-02, T-EVA-06 (addauth) route through `Model_Authorization::add_auth`; zero `INSERT INTO … authorization` in `orkui/`; global admin grant adds danger-audit.
 
+**R-03 complete (2026-07-09):** T-PLA-06, T-PRA-04, T-KNA-08, T-UNT-01, T-EVA-14 migrated to `class.Banner.php` / BannerService; five `*Ajax::banner` controllers are thin `Model_Banner` adapters; zero banner `$DB` in `orkui/`.
+
 ---
 
 ## Kingdom

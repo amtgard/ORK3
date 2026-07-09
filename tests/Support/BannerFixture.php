@@ -120,11 +120,15 @@ final class BannerFixture
         ];
     }
 
-    public function createPlayerWithGradient(string $suffix = 'player'): int
+    /**
+     * @return array{mundane_id: int, token: string}
+     */
+    public function createPlayerWithGradient(string $suffix = 'player'): array
     {
         $kingdomId = $this->firstKingdomId();
         $parkId = $this->firstParkId();
-        $mundaneId = $this->insertMundane($suffix, $parkId, $kingdomId);
+        $token = md5(self::MARKER . $suffix . bin2hex(random_bytes(8)));
+        $mundaneId = $this->insertMundane($suffix, $parkId, $kingdomId, $token);
 
         $this->pdo->prepare(
             'INSERT INTO ' . DB_PREFIX . 'mundane_design (mundane_id, hero_gradient)
@@ -132,7 +136,10 @@ final class BannerFixture
              ON DUPLICATE KEY UPDATE hero_gradient = VALUES(hero_gradient)'
         )->execute([$mundaneId, '#ff0000']);
 
-        return $mundaneId;
+        return [
+            'mundane_id' => $mundaneId,
+            'token' => $token,
+        ];
     }
 
     /**

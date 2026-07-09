@@ -5,14 +5,13 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 /**
- * Characterization tests for hero banner CRUD (T-PLA-06, T-PRA-04, T-KNA-08, T-UNT-01, T-EVA-14).
- *
- * Pre-refactor write logic lives in orkui/controller/*Ajax::banner; R-03 will move
- * these behaviors to class.Banner.php and BannerService.
+ * Integration tests for hero banner CRUD (T-PLA-06, T-PRA-04, T-KNA-08, T-UNT-01, T-EVA-14).
  */
 final class BannerTest extends TestCase
 {
     private BannerFixture $fixture;
+
+    private Banner $banner;
 
     private Park $parkDomain;
 
@@ -25,6 +24,7 @@ final class BannerTest extends TestCase
         unset($_SESSION['is_authorized_mundane_id']);
 
         $this->fixture = BannerFixture::create();
+        $this->banner = new Banner();
         $this->parkDomain = new Park();
     }
 
@@ -40,10 +40,22 @@ final class BannerTest extends TestCase
     public function testSetParkBannerUpload(): void
     {
         $parkId = $this->fixture->firstParkId();
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $parkId, AUTH_EDIT, 'park-upload');
         $tmp = $this->fixture->createTempJpeg();
         $this->fixture->trackBannerFile($tmp);
 
-        $this->mirrorParkBannerUpload($parkId, $tmp, showLogo: 1, vignette: 0, offsetX: 25, offsetY: 75);
+        $r = $this->banner->SetBanner([
+            'Token' => $grantor['token'],
+            'Type' => 'Park',
+            'Id' => $parkId,
+            'Banner' => base64_encode((string) file_get_contents($tmp)),
+            'BannerMimeType' => 'image/jpeg',
+            'ShowLogo' => 1,
+            'Vignette' => 0,
+            'OffsetX' => 25,
+            'OffsetY' => 75,
+        ]);
+        $this->assertSame(ServiceErrorIds::Success, $r['Status']);
 
         $row = $this->fixture->fetchParkBanner($parkId);
         $this->assertNotNull($row);
@@ -71,6 +83,7 @@ final class BannerTest extends TestCase
     public function testSetParkBannerRejectsRetiredPark(): void
     {
         $parkId = $this->fixture->firstParkId();
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $parkId, AUTH_EDIT, 'park-retired');
         $this->fixture->setParkRetired($parkId);
 
         $this->assertFalse($this->fixture->parkIsActive($parkId));
@@ -78,27 +91,42 @@ final class BannerTest extends TestCase
         $tmp = $this->fixture->createTempJpeg();
         $this->fixture->trackBannerFile($tmp);
 
-        $blocked = !$this->fixture->parkIsActive($parkId);
-        $this->assertTrue($blocked);
+        $r = $this->banner->SetBanner([
+            'Token' => $grantor['token'],
+            'Type' => 'Park',
+            'Id' => $parkId,
+            'Banner' => base64_encode((string) file_get_contents($tmp)),
+            'BannerMimeType' => 'image/jpeg',
+            'ShowLogo' => 1,
+            'Vignette' => 1,
+            'OffsetX' => 50,
+            'OffsetY' => 50,
+        ]);
+        $this->assertSame(ServiceErrorIds::InvalidParameter, $r['Status']);
+        $this->assertStringContainsString('retired', (string) ($r['Detail'] ?? ''));
 
         $base = DIR_PARK_BANNER . sprintf('%05d', $parkId) . '.jpg';
-        if (!$this->mirrorParkBannerUploadAllowed($parkId)) {
-            $this->assertFalse(file_exists($base));
-        }
+        $this->assertFalse(file_exists($base));
     }
 
     public function testRemoveParkBannerResetsDefaults(): void
     {
         $parkId = $this->fixture->firstParkId();
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $parkId, AUTH_EDIT, 'park-remove');
         $tmp = $this->fixture->createTempJpeg();
-        $this->mirrorParkBannerUpload($parkId, $tmp, 1, 1, 10, 20);
+        $this->uploadParkBanner($grantor['token'], $parkId, $tmp, 1, 1, 10, 20);
 
         $base = DIR_PARK_BANNER . sprintf('%05d', $parkId);
         if (file_exists($base . '.jpg')) {
             $this->fixture->trackBannerFile($base . '.jpg');
         }
 
-        $this->mirrorParkBannerRemove($parkId);
+        $r = $this->banner->RemoveBanner([
+            'Token' => $grantor['token'],
+            'Type' => 'Park',
+            'Id' => $parkId,
+        ]);
+        $this->assertSame(ServiceErrorIds::Success, $r['Status']);
 
         $row = $this->fixture->fetchParkBanner($parkId);
         $this->assertNotNull($row);
@@ -114,19 +142,37 @@ final class BannerTest extends TestCase
     public function testUpdateParkBannerConfig(): void
     {
         $parkId = $this->fixture->firstParkId();
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $parkId, AUTH_EDIT, 'park-config');
 
-        $error = $this->mirrorParkBannerConfig($parkId, 0, 0, 30, 40);
-        $this->assertSame('Upload a banner first before saving settings.', $error);
+        $r = $this->banner->UpdateBannerConfig([
+            'Token' => $grantor['token'],
+            'Type' => 'Park',
+            'Id' => $parkId,
+            'ShowLogo' => 0,
+            'Vignette' => 0,
+            'OffsetX' => 30,
+            'OffsetY' => 40,
+        ]);
+        $this->assertSame(ServiceErrorIds::InvalidParameter, $r['Status']);
+        $this->assertSame('Upload a banner first before saving settings.', $r['Detail']);
 
         $tmp = $this->fixture->createTempJpeg();
-        $this->mirrorParkBannerUpload($parkId, $tmp, 1, 1, 50, 50);
+        $this->uploadParkBanner($grantor['token'], $parkId, $tmp, 1, 1, 50, 50);
         $base = DIR_PARK_BANNER . sprintf('%05d', $parkId);
         if (file_exists($base . '.jpg')) {
             $this->fixture->trackBannerFile($base . '.jpg');
         }
 
-        $error = $this->mirrorParkBannerConfig($parkId, 0, 0, 30, 40);
-        $this->assertNull($error);
+        $r = $this->banner->UpdateBannerConfig([
+            'Token' => $grantor['token'],
+            'Type' => 'Park',
+            'Id' => $parkId,
+            'ShowLogo' => 0,
+            'Vignette' => 0,
+            'OffsetX' => 30,
+            'OffsetY' => 40,
+        ]);
+        $this->assertSame(ServiceErrorIds::Success, $r['Status']);
 
         $row = $this->fixture->fetchParkBanner($parkId);
         $this->assertSame(0, (int) $row['banner_show_logo']);
@@ -137,19 +183,30 @@ final class BannerTest extends TestCase
 
     public function testSetPlayerBannerClearsHeroGradient(): void
     {
-        $mundaneId = $this->fixture->createPlayerWithGradient('gradient-player');
-        $this->assertNotNull($this->fixture->fetchPlayerGradient($mundaneId));
+        $player = $this->fixture->createPlayerWithGradient('gradient-player');
+        $this->assertNotNull($this->fixture->fetchPlayerGradient($player['mundane_id']));
 
         $tmp = $this->fixture->createTempJpeg();
-        $this->mirrorPlayerBannerUpload($mundaneId, $tmp, 1, 1, 50, 50);
+        $r = $this->banner->SetBanner([
+            'Token' => $player['token'],
+            'Type' => 'Player',
+            'Id' => $player['mundane_id'],
+            'Banner' => base64_encode((string) file_get_contents($tmp)),
+            'BannerMimeType' => 'image/jpeg',
+            'ShowLogo' => 1,
+            'Vignette' => 1,
+            'OffsetX' => 50,
+            'OffsetY' => 50,
+        ]);
+        $this->assertSame(ServiceErrorIds::Success, $r['Status']);
 
-        $base = DIR_PLAYER_BANNER . sprintf('%06d', $mundaneId);
+        $base = DIR_PLAYER_BANNER . sprintf('%06d', $player['mundane_id']);
         if (file_exists($base . '.jpg')) {
             $this->fixture->trackBannerFile($base . '.jpg');
         }
 
-        $this->assertNull($this->fixture->fetchPlayerGradient($mundaneId));
-        $row = $this->fixture->fetchPlayerBanner($mundaneId);
+        $this->assertNull($this->fixture->fetchPlayerGradient($player['mundane_id']));
+        $row = $this->fixture->fetchPlayerBanner($player['mundane_id']);
         $this->assertSame(1, (int) $row['has_banner']);
     }
 
@@ -157,23 +214,41 @@ final class BannerTest extends TestCase
     {
         $kingdomId = $this->fixture->firstKingdomId();
         $grantor = $this->fixture->createGrantorWithoutAuth('kingdom-no-edit');
+        $tmp = $this->fixture->createTempJpeg();
 
-        unset($_SESSION['is_authorized_mundane_id']);
-        $authorized = Ork3::$Lib->authorization->HasAuthority(
-            $grantor['mundane_id'],
-            AUTH_KINGDOM,
-            $kingdomId,
-            AUTH_EDIT,
-        );
-
-        $this->assertEmpty($authorized);
+        $r = $this->banner->SetBanner([
+            'Token' => $grantor['token'],
+            'Type' => 'Kingdom',
+            'Id' => $kingdomId,
+            'Banner' => base64_encode((string) file_get_contents($tmp)),
+            'BannerMimeType' => 'image/jpeg',
+            'ShowLogo' => 1,
+            'Vignette' => 1,
+            'OffsetX' => 50,
+            'OffsetY' => 50,
+        ]);
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $r['Status']);
     }
 
-    public function testSetUnitBannerRejectsOversize(): void
+    public function testSetBannerRejectsOversize(): void
     {
-        $size = 1024 * 1024 + 1;
-        $this->assertTrue($size > 1024 * 1024);
-        $this->assertSame('File too large (max 1 MB).', $this->mirrorUnitBannerSizeError($size));
+        $parkId = $this->fixture->firstParkId();
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $parkId, AUTH_EDIT, 'park-oversize');
+        $oversize = str_repeat('A', Banner::maxBannerBytes() + 1);
+
+        $r = $this->banner->SetBanner([
+            'Token' => $grantor['token'],
+            'Type' => 'Park',
+            'Id' => $parkId,
+            'Banner' => base64_encode($oversize),
+            'BannerMimeType' => 'image/jpeg',
+            'ShowLogo' => 1,
+            'Vignette' => 1,
+            'OffsetX' => 50,
+            'OffsetY' => 50,
+        ]);
+        $this->assertSame(ServiceErrorIds::InvalidParameter, $r['Status']);
+        $this->assertSame('File too large (max 1 MB).', $r['Detail']);
     }
 
     public function testSetEventBannerBustsSearchCache(): void
@@ -181,10 +256,15 @@ final class BannerTest extends TestCase
         $ctx = $this->fixture->createEvent('cache-bust');
         $grantor = $this->fixture->createGrantorWithAuth(AUTH_EVENT, $ctx['event_id'], AUTH_EDIT, 'event-admin');
 
-        unset($_SESSION['is_authorized_mundane_id']);
         Ork3::$Lib->ghettocache->bust_event_search($ctx['event_id']);
 
-        $this->mirrorEventBannerRemove($ctx['event_id']);
+        $r = $this->banner->RemoveBanner([
+            'Token' => $grantor['token'],
+            'Type' => 'Event',
+            'Id' => $ctx['event_id'],
+        ]);
+        $this->assertSame(ServiceErrorIds::Success, $r['Status']);
+
         $row = $this->fixture->fetchEventBanner($ctx['event_id']);
         $this->assertSame(0, (int) $row['has_banner']);
         $this->assertTrue(
@@ -198,23 +278,23 @@ final class BannerTest extends TestCase
         $staff = $this->fixture->createGrantorWithoutAuth('staff-mgr');
         $this->fixture->insertEventStaff($ctx['detail_id'], $staff['mundane_id'], canManage: true);
 
-        unset($_SESSION['is_authorized_mundane_id']);
         $hasEdit = Ork3::$Lib->authorization->HasAuthority($staff['mundane_id'], AUTH_EVENT, $ctx['event_id'], AUTH_EDIT);
         $this->assertEmpty($hasEdit);
 
-        global $DB;
-        $DB->Clear();
-        $staffRow = $DB->DataSet(
-            'SELECT 1 FROM ' . DB_PREFIX . 'event_staff s
-             JOIN ' . DB_PREFIX . 'event_calendardetail cd ON cd.event_calendardetail_id = s.event_calendardetail_id
-             WHERE cd.event_id = ' . (int) $ctx['event_id']
-            . ' AND s.mundane_id = ' . (int) $staff['mundane_id']
-            . ' AND s.can_manage = 1 LIMIT 1'
-        );
-        $this->assertTrue($staffRow && $staffRow->Next());
-
         $tmp = $this->fixture->createTempJpeg();
-        $this->mirrorEventBannerUpload($ctx['event_id'], $tmp, 1, 1, 50, 50);
+        $r = $this->banner->SetBanner([
+            'Token' => $staff['token'],
+            'Type' => 'Event',
+            'Id' => $ctx['event_id'],
+            'Banner' => base64_encode((string) file_get_contents($tmp)),
+            'BannerMimeType' => 'image/jpeg',
+            'ShowLogo' => 1,
+            'Vignette' => 1,
+            'OffsetX' => 50,
+            'OffsetY' => 50,
+        ]);
+        $this->assertSame(ServiceErrorIds::Success, $r['Status']);
+
         $base = DIR_EVENT_BANNER . sprintf('%05d', $ctx['event_id']);
         if (file_exists($base . '.jpg')) {
             $this->fixture->trackBannerFile($base . '.jpg');
@@ -225,8 +305,9 @@ final class BannerTest extends TestCase
     public function testRemoveBannerVerifyRollback(): void
     {
         $parkId = $this->fixture->firstParkId();
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $parkId, AUTH_EDIT, 'park-rollback');
         $tmp = $this->fixture->createTempJpeg();
-        $this->mirrorParkBannerUpload($parkId, $tmp, 1, 1, 50, 50);
+        $this->uploadParkBanner($grantor['token'], $parkId, $tmp, 1, 1, 50, 50);
 
         $base = DIR_PARK_BANNER . sprintf('%05d', $parkId) . '.jpg';
         $this->assertTrue(file_exists($base));
@@ -235,32 +316,19 @@ final class BannerTest extends TestCase
         global $DB;
         $DB->Clear();
         $DB->Execute('UPDATE ' . DB_PREFIX . 'park SET has_banner = 1 WHERE park_id = ' . $parkId);
-        $DB->Clear();
-        $removeCheck = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $parkId);
-        $this->assertTrue($removeCheck && $removeCheck->Next());
-        $this->assertSame(1, (int) $removeCheck->has_banner);
 
-        $this->mirrorParkBannerRemove($parkId);
+        $r = $this->banner->RemoveBanner([
+            'Token' => $grantor['token'],
+            'Type' => 'Park',
+            'Id' => $parkId,
+        ]);
+        $this->assertSame(ServiceErrorIds::Success, $r['Status']);
         $this->assertSame(0, (int) $this->fixture->fetchParkBanner($parkId)['has_banner']);
         $this->assertFalse(file_exists($base));
     }
 
-    /**
-     * Mirrors Controller_ParkAjax::banner active-park guard (lines 688–694).
-     */
-    private function mirrorParkBannerUploadAllowed(int $parkId): bool
-    {
-        if (!$this->fixture->parkIsActive($parkId)) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Mirrors Controller_ParkAjax::banner update branch (lines 752–812) using copy() for CLI.
-     */
-    private function mirrorParkBannerUpload(
+    private function uploadParkBanner(
+        string $token,
         int $parkId,
         string $tmpPath,
         int $showLogo,
@@ -268,196 +336,17 @@ final class BannerTest extends TestCase
         int $offsetX,
         int $offsetY,
     ): void {
-        $detectedType = exif_imagetype($tmpPath);
-        $this->assertContains($detectedType, [IMAGETYPE_JPEG, IMAGETYPE_PNG]);
-
-        if (!is_dir(DIR_PARK_BANNER)) {
-            @mkdir(DIR_PARK_BANNER, 0775, true);
-        }
-
-        $ext = ($detectedType === IMAGETYPE_PNG) ? 'png' : 'jpg';
-        $base = DIR_PARK_BANNER . sprintf('%05d', $parkId);
-        if (file_exists($base . '.jpg')) {
-            @unlink($base . '.jpg');
-        }
-        if (file_exists($base . '.png')) {
-            @unlink($base . '.png');
-        }
-        copy($tmpPath, $base . '.' . $ext);
-
-        global $DB;
-        $offX = max(0, min(100, $offsetX));
-        $offY = max(0, min(100, $offsetY));
-        $DB->Clear();
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'park SET has_banner = 1, banner_show_logo = ' . $showLogo
-            . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX
-            . ', banner_offset_y = ' . $offY . ' WHERE park_id = ' . $parkId
-        );
-        $DB->Clear();
-        $verify = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $parkId);
-        if (!$verify || !$verify->Next() || (int) $verify->has_banner !== 1) {
-            @unlink($base . '.' . $ext);
-            $this->fail('Saved file but could not update the database.');
-        }
-    }
-
-    /**
-     * Mirrors Controller_ParkAjax::banner remove branch (lines 697–719).
-     */
-    private function mirrorParkBannerRemove(int $parkId): void
-    {
-        global $DB;
-        $DB->Clear();
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'park SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1, banner_offset_x = 50, banner_offset_y = 50 WHERE park_id = ' . $parkId
-        );
-        $DB->Clear();
-        $removeCheck = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $parkId);
-        if (!$removeCheck || !$removeCheck->Next() || (int) $removeCheck->has_banner !== 0) {
-            $this->fail('Could not clear banner flag in database.');
-        }
-        $base = DIR_PARK_BANNER . sprintf('%05d', $parkId);
-        if (file_exists($base . '.jpg')) {
-            unlink($base . '.jpg');
-        }
-        if (file_exists($base . '.png')) {
-            unlink($base . '.png');
-        }
-    }
-
-    /**
-     * Mirrors Controller_ParkAjax::banner config branch (lines 722–749).
-     *
-     * @return string|null Error message when config rejected; null on success.
-     */
-    private function mirrorParkBannerConfig(
-        int $parkId,
-        int $showLogo,
-        int $vignette,
-        int $offsetX,
-        int $offsetY,
-    ): ?string {
-        global $DB;
-        $DB->Clear();
-        $row = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $parkId);
-        if (!$row || !$row->Next() || (int) $row->has_banner !== 1) {
-            return 'Upload a banner first before saving settings.';
-        }
-
-        $offX = max(0, min(100, $offsetX));
-        $offY = max(0, min(100, $offsetY));
-        $DB->Clear();
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'park SET banner_show_logo = ' . $showLogo
-            . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX
-            . ', banner_offset_y = ' . $offY . ' WHERE park_id = ' . $parkId
-        );
-        $DB->Clear();
-        $cfgVerify = $DB->DataSet(
-            'SELECT banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM '
-            . DB_PREFIX . 'park WHERE park_id = ' . $parkId
-        );
-        if (!$cfgVerify || !$cfgVerify->Next()
-            || (int) $cfgVerify->banner_show_logo !== $showLogo
-            || (int) $cfgVerify->banner_vignette !== $vignette
-            || (int) $cfgVerify->banner_offset_x !== $offX
-            || (int) $cfgVerify->banner_offset_y !== $offY) {
-            return 'Could not save banner settings. Please try again.';
-        }
-
-        return null;
-    }
-
-    /**
-     * Mirrors Controller_PlayerAjax::banner update + gradient clear (lines 977–982).
-     */
-    private function mirrorPlayerBannerUpload(
-        int $mundaneId,
-        string $tmpPath,
-        int $showLogo,
-        int $vignette,
-        int $offsetX,
-        int $offsetY,
-    ): void {
-        if (!is_dir(DIR_PLAYER_BANNER)) {
-            @mkdir(DIR_PLAYER_BANNER, 0775, true);
-        }
-        $ext = 'jpg';
-        $base = DIR_PLAYER_BANNER . sprintf('%06d', $mundaneId);
-        copy($tmpPath, $base . '.' . $ext);
-
-        global $DB;
-        $offX = max(0, min(100, $offsetX));
-        $offY = max(0, min(100, $offsetY));
-        $DB->Clear();
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'mundane SET has_banner = 1, banner_show_logo = ' . $showLogo
-            . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX
-            . ', banner_offset_y = ' . $offY . ' WHERE mundane_id = ' . $mundaneId
-        );
-        $DB->Clear();
-        $DB->Execute('UPDATE ' . DB_PREFIX . 'mundane_design SET hero_gradient = NULL WHERE mundane_id = ' . $mundaneId);
-    }
-
-    /**
-     * Mirrors Controller_UnitAjax::banner size check (lines 99–102).
-     */
-    private function mirrorUnitBannerSizeError(int $size): string
-    {
-        if ($size > 1024 * 1024) {
-            return 'File too large (max 1 MB).';
-        }
-
-        return '';
-    }
-
-    /**
-     * Mirrors Controller_EventAjax::banner update branch (lines 1811–1875).
-     */
-    private function mirrorEventBannerUpload(
-        int $eventId,
-        string $tmpPath,
-        int $showLogo,
-        int $vignette,
-        int $offsetX,
-        int $offsetY,
-    ): void {
-        if (!is_dir(DIR_EVENT_BANNER)) {
-            @mkdir(DIR_EVENT_BANNER, 0775, true);
-        }
-        $base = DIR_EVENT_BANNER . sprintf('%05d', $eventId);
-        copy($tmpPath, $base . '.jpg');
-
-        global $DB;
-        $offX = max(0, min(100, $offsetX));
-        $offY = max(0, min(100, $offsetY));
-        $DB->Clear();
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'event SET has_banner = 1, banner_show_logo = ' . $showLogo
-            . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX
-            . ', banner_offset_y = ' . $offY . ' WHERE event_id = ' . $eventId
-        );
-        Ork3::$Lib->ghettocache->bust_event_search($eventId);
-    }
-
-    /**
-     * Mirrors Controller_EventAjax::banner remove branch (lines 1774–1788).
-     */
-    private function mirrorEventBannerRemove(int $eventId): void
-    {
-        global $DB;
-        $DB->Clear();
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'event SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1, banner_offset_x = 50, banner_offset_y = 50 WHERE event_id = ' . $eventId
-        );
-        $base = DIR_EVENT_BANNER . sprintf('%05d', $eventId);
-        if (file_exists($base . '.jpg')) {
-            unlink($base . '.jpg');
-        }
-        if (file_exists($base . '.png')) {
-            unlink($base . '.png');
-        }
-        Ork3::$Lib->ghettocache->bust_event_search($eventId);
+        $r = $this->banner->SetBanner([
+            'Token' => $token,
+            'Type' => 'Park',
+            'Id' => $parkId,
+            'Banner' => base64_encode((string) file_get_contents($tmpPath)),
+            'BannerMimeType' => 'image/jpeg',
+            'ShowLogo' => $showLogo,
+            'Vignette' => $vignette,
+            'OffsetX' => $offsetX,
+            'OffsetY' => $offsetY,
+        ]);
+        $this->assertSame(ServiceErrorIds::Success, $r['Status']);
     }
 }

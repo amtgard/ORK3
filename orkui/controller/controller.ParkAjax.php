@@ -677,148 +677,15 @@ class Controller_ParkAjax extends Controller
             exit;
         }
 
-        $uid = (int)$this->session->user_id;
-        $canEdit = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_EDIT);
-        if (!$canEdit) {
-            echo json_encode(['status' => 5, 'error' => 'Not authorized to edit this park.']);
-            exit;
-        }
-
-        global $DB;
-
-        // I2 fix: refuse banner uploads / config changes on retired parks.
-        // The canonical "is active" check elsewhere compares park.active to 'Active'
-        // (see system/lib/ork3/class.Park.php). Block update + config; remove is allowed
-        // so admins can still clear stale banners after retirement.
-        if ($action === 'update' || $action === 'config') {
-            $DB->Clear();
-            $activeRow = $DB->DataSet('SELECT active FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
-            if ($activeRow && $activeRow->Next() && trim((string)$activeRow->active) !== 'Active') {
-                echo json_encode(['status' => 1, 'error' => 'This park is retired. Restore the park before changing its banner.']);
-                exit;
-            }
-        }
-
-        if ($action === 'remove') {
-            $DB->Clear();
-            // Reset display toggles AND framing offsets to defaults so a future
-            // upload starts fresh instead of inheriting the removed banner's config.
-            $DB->Execute('UPDATE ' . DB_PREFIX . 'park SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1, banner_offset_x = 50, banner_offset_y = 50 WHERE park_id = ' . $park_id);
-            // I4 fix: verify the UPDATE landed before deleting the file.
-            // If the DB update silently failed and we delete the file, the
-            // banner column stays 1 but the file is gone -> broken banner.
-            $DB->Clear();
-            $removeCheck = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
-            if (!$removeCheck || !$removeCheck->Next() || (int)$removeCheck->has_banner !== 0) {
-                echo json_encode(['status' => 1, 'error' => 'Could not clear banner flag in database. Please try again.']);
-                exit;
-            }
-            $base = DIR_PARK_BANNER . sprintf('%05d', $park_id);
-            if (file_exists($base . '.jpg')) {
-                unlink($base . '.jpg');
-            }
-            if (file_exists($base . '.png')) {
-                unlink($base . '.png');
-            }
-            echo json_encode(['status' => 0]);
-            exit;
-        }
-
-        if ($action === 'config') {
-            // Refuse silent no-ops: config only meaningful with a banner present.
-            $DB->Clear();
-            $row = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
-            if (!$row || !$row->Next() || (int)$row->has_banner !== 1) {
-                echo json_encode(['status' => 1, 'error' => 'Upload a banner first before saving settings.']);
-                exit;
-            }
-            $showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
-            $vignette = !empty($_POST['Vignette']) ? 1 : 0;
-            $offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
-            $offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
-            $DB->Clear();
-            $DB->Execute('UPDATE ' . DB_PREFIX . 'park SET banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE park_id = ' . $park_id);
-            // F1 fix: verify-after-write — mirror update/remove branches. YapoMysql
-            // can swallow failures silently; re-read one column to confirm the write.
-            $DB->Clear();
-            $cfgVerify = $DB->DataSet('SELECT banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
-            if (!$cfgVerify || !$cfgVerify->Next()
-                || (int)$cfgVerify->banner_show_logo !== $showLogo
-                || (int)$cfgVerify->banner_vignette  !== $vignette
-                || (int)$cfgVerify->banner_offset_x  !== $offX
-                || (int)$cfgVerify->banner_offset_y  !== $offY) {
-                echo json_encode(['status' => 1, 'error' => 'Could not save banner settings. Please try again.']);
-                exit;
-            }
-            echo json_encode(['status' => 0]);
-            exit;
-        }
-
-        if ($action === 'update') {
-            if (empty($_FILES['Banner']['tmp_name'])) {
-                echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
-                exit;
-            }
-            // I2 fix: validate the upload came via a real HTTP file upload (prevents spoofing).
-            if (!is_uploaded_file($_FILES['Banner']['tmp_name'])) {
-                echo json_encode(['status' => 1, 'error' => 'Invalid upload.']);
-                exit;
-            }
-            // I5 fix: server-side file size check (JS resize can be bypassed via curl).
-            if (($_FILES['Banner']['size'] ?? 0) > 1024 * 1024) {
-                echo json_encode(['status' => 1, 'error' => 'File too large (max 1 MB).']);
-                exit;
-            }
-            $tmp  = $_FILES['Banner']['tmp_name'];
-            // I3 fix: use exif_imagetype() (magic-byte check) instead of the
-            // browser-supplied MIME type, which is trivially spoofable.
-            $detectedType = exif_imagetype($tmp);
-            if ($detectedType !== IMAGETYPE_JPEG && $detectedType !== IMAGETYPE_PNG) {
-                echo json_encode(['status' => 1, 'error' => 'Only JPEG and PNG images are supported.']);
-                exit;
-            }
-            $mime = ($detectedType === IMAGETYPE_PNG) ? 'image/png' : 'image/jpeg';
-            if (!is_dir(DIR_PARK_BANNER)) {
-                @mkdir(DIR_PARK_BANNER, 0775, true);
-            }
-            $ext  = ($mime === 'image/png') ? 'png' : 'jpg';
-            $base = DIR_PARK_BANNER . sprintf('%05d', $park_id);
-            // Delete any previous banner files (both extensions) before saving the
-            // new one so we never leave the old image behind when the user switches
-            // formats. resolve_image_ext picks whichever file survives.
-            if (file_exists($base . '.jpg')) {
-                @unlink($base . '.jpg');
-            }
-            if (file_exists($base . '.png')) {
-                @unlink($base . '.png');
-            }
-            if (!@move_uploaded_file($tmp, $base . '.' . $ext)) {
-                echo json_encode(['status' => 1, 'error' => 'Could not save uploaded file.']);
-                exit;
-            }
-            $showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
-            $vignette = !empty($_POST['Vignette']) ? 1 : 0;
-            $offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
-            $offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
-            $DB->Clear();
-            $DB->Execute('UPDATE ' . DB_PREFIX . 'park SET has_banner = 1, banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE park_id = ' . $park_id);
-            // $DB->Execute() is void; the YapoMysql layer can silently swallow
-            // failures (sql_mode=STRICT etc). Verify the update landed by
-            // re-reading has_banner. If it didn't, roll back the file so we
-            // don't leave an orphan whose flag is still 0.
-            $DB->Clear();
-            $verify = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
-            if (!$verify || !$verify->Next() || (int)$verify->has_banner !== 1) {
-                @unlink($base . '.' . $ext);
-                echo json_encode(['status' => 1, 'error' => 'Saved file but could not update the database. Please try again.']);
-                exit;
-            }
-            echo json_encode(['status' => 0]);
-            exit;
-        }
-
-        echo json_encode(['status' => 1, 'error' => 'Unknown action.']);
-        exit;
+        $this->load_model('Banner');
+        $this->Banner->handle_ajax(
+            'Park',
+            $action,
+            $park_id,
+            $this->session->token,
+            $_POST,
+            $_FILES,
+        );
     }
 
 }

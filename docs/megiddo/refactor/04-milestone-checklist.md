@@ -1129,7 +1129,7 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** R-03 (Banner refactor — R-02 complete on `megiddo/r-02-auth-insert-refactor`). Phase 1.6 (V-00…V-14) complete.
+**Next actionable milestone:** R-04 (EventAjax refactor — R-03 complete on `megiddo/r-03-banner-refactor`). Phase 1.6 (V-00…V-14) complete.
 
 ### R-01 complete (2026-07-09)
 
@@ -1142,3 +1142,9 @@ Per execution sprint checklist:
 - [x] Branch `megiddo/r-02-auth-insert-refactor` stacked on `megiddo/r-01-rsvp-refactor` — AJAX addauth paths use `Model_Authorization::add_auth`; danger-audit added for global admin grant
 - [x] Targets closed: T-ADM-11, T-KNA-03, T-PRA-02, T-EVA-06 (addauth)
 - [x] Gates: PHPUnit 204/204 pass; Infection MSI 42% / covered 42%; fuzzy 10/10; Playwright auth smoke + `auth-permissions.spec.ts` 3/3 pass
+
+### R-03 complete (2026-07-09)
+
+- [x] Branch `megiddo/r-03-banner-refactor` stacked on `megiddo/r-02-auth-insert-refactor` — hero banner CRUD consolidated in `class.Banner.php` / BannerService; five `*Ajax::banner` are thin `Model_Banner` adapters
+- [x] Targets closed: T-PLA-06, T-PRA-04, T-KNA-08, T-UNT-01, T-EVA-14
+- [x] Gates: PHPUnit 204/204 pass; Infection MSI 51% / covered 74%; fuzzy 6/6; Playwright auth smoke + `banner.spec.ts` 5/5 pass
