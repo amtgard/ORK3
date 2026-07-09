@@ -8,6 +8,8 @@ Track progress here. Check items when complete. Discovery sprint outputs (design
 
 **Documentation sign-off (every milestone):** Any edits under `docs/megiddo/refactor/` made during the milestone — including checklist checkoffs, design notes, steering, requirements, and implementation-plan updates — must be **committed on the active milestone branch** as part of that milestone's single sign-off commit (DS-6). Do not leave planning docs uncommitted, stashed for a later branch, or split onto a separate docs-only commit after sign-off.
 
+**Last rebase (2026-07-09):** Megiddo line rebased onto `origin/master` @ `e6417645` on branch `megiddo/rebase-20260709` ([rebase-and-redocument](./skills/rebase-and-redocument/milestone-checklist.md) RB-0…RB-Z complete). Fuzzy setpoint `20260709T173049Z-1591950d-6b22e991bb478256.zip`; validate 42/42 pass (test+mirror).
+
 ---
 
 ## Phase 0 — Foundation

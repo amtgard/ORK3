@@ -5,7 +5,7 @@
 **Target IDs:** *(from [03-implementation-plan.md](../03-implementation-plan.md))*  
 **Depends on:** DS-{NN}, T-{NN}, V-00  
 **Execution sprint:** R-{NN}  
-**Discovery source:** [ds-{nn}-{slug}-discovery.md §1](../ds-{nn}-{slug}-discovery.md)
+**Discovery source:** `ds-{nn}-{slug}-discovery.md` §1
 
 ---
 

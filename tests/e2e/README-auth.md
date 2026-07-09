@@ -12,17 +12,16 @@ npx playwright install chromium
 
 ## Run
 
-```bash
-# Smoke only (permissions route) — no credentials required
-npx playwright test tests/e2e/auth-permissions.spec.ts
+Canonical credentials: [06-test-framework.md § E2E login credentials](../../docs/megiddo/refactor/06-test-framework.md#e2e-login-credentials-preflight) — **local docker only**.
 
-# Authenticated flows — set dev ORK admin login
-export ORK3_E2E_USERNAME='your-dev-admin'
-export ORK3_E2E_PASSWORD='your-dev-password'
+```bash
+export ORK3_E2E_BASE_URL=http://127.0.0.1:19080/orkui/
+bin/ork-db use prod
+export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
+
+# Authenticated flows (required for milestone sign-off)
 npx playwright test tests/e2e/auth-permissions.spec.ts
 ```
-
-Override base URL if needed: `ORK3_E2E_BASE_URL=http://localhost:19080/orkui/`
 
 ## Flows mapped to DS-02 §2.4
 

@@ -58,7 +58,7 @@ Credentials (local docker only):
 | Profile | Login | Password |
 |---------|-------|----------|
 | **test** | `megiddo` | `test-db-player` (default via `profiles.json5`) |
-| **mirror** | `admin` | `password` (local-only; set in `ork_credential` on mirror + sandbox) |
+| **mirror** | `admin` | `password` | Local docker (`ork` @ 19306) only — set on `ork_credential` after mirror refresh; see [06-test-framework.md § Applying passwords](../refactor/06-test-framework.md#2-applying-passwords-on-local-databases) |
 
 ```bash
 bin/ork-db deploy-sandbox

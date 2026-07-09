@@ -178,7 +178,7 @@ Credentials come from `manifests/profiles.json5`, not a single global env pair.
 | Profile | Typical login | Password |
 |---------|---------------|----------|
 | **`test`** | `megiddo` (sandbox operator) | `test-db-player` or `ORK3_E2E_TEST_PASSWORD` |
-| **`mirror`** | Your mirror dev user | `ORK3_E2E_USERNAME` / `ORK3_E2E_PASSWORD` |
+| **`mirror`** | `admin` | `password` (or `ORK3_E2E_USERNAME` / `ORK3_E2E_PASSWORD`) |
 
 Override per run: `--username`, `--password` (applies to active profile pass only).
 
@@ -191,7 +191,7 @@ Override per run: `--username`, `--password` (applies to active profile pass onl
 ```bash
 docker compose -f docker-compose.php8.yml up -d
 bin/ork-db deploy-sandbox
-export ORK3_E2E_USERNAME=… ORK3_E2E_PASSWORD=…   # mirror profile auth
+export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
 
 bin/fuzzy-validator record --pages home-anonymous,player-profile --phase all
 # Commits baselines/test/* and baselines/mirror/* + manifests/

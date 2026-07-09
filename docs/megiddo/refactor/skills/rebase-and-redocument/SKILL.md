@@ -98,10 +98,10 @@ From [05-development-steering.md](../../05-development-steering.md):
 
 ## Exit criteria (whole skill)
 
-- [ ] All RB-* on the checklist complete (or waived in writing)
-- [ ] `sh bin/run-unit-tests.sh` green
-- [ ] In-scope Infection gates green (or gaps listed)
-- [ ] Fuzzy validate pass test+mirror for agreed page set / setpoint published
-- [ ] `ds-*` / implementation-plan / validations refreshed for in-scope domains
-- [ ] Checklist records **Last rebase** date + base SHA
-- [ ] Ready for [R-01](../../04-milestone-checklist.md)
+- [x] All RB-* on the checklist complete (or waived in writing)
+- [x] `sh bin/run-unit-tests.sh` green
+- [x] In-scope Infection gates green (or gaps listed)
+- [x] Fuzzy validate pass test+mirror for agreed page set / setpoint published
+- [x] `ds-*` / implementation-plan / validations refreshed for in-scope domains
+- [x] Checklist records **Last rebase** date + base SHA
+- [x] Ready for [R-01](../../04-milestone-checklist.md)

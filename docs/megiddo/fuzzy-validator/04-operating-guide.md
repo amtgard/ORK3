@@ -38,9 +38,8 @@ docker compose -f docker-compose.php8.yml up -d
 bin/ork-db deploy-sandbox              # stable test dataset (required for test profile)
 
 export ORK3_E2E_BASE_URL=http://localhost:19080/orkui/
-export ORK3_E2E_USERNAME=your-mirror-user      # mirror profile
-export ORK3_E2E_PASSWORD=your-mirror-password
-export ORK3_E2E_TEST_PASSWORD=test-db-player   # test profile (optional override)
+export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password   # mirror (local docker)
+export ORK3_E2E_TEST_PASSWORD=test-db-player               # test profile (optional override)
 ```
 
 ---

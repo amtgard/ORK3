@@ -94,6 +94,8 @@ Stored in `tools/fuzzy-validator/manifests/profiles.json5`. **Test is always str
         "visualMinScore": 0.98
       },
       "auth": {
+        "username": "admin",
+        "passwordDefault": "password",
         "usernameEnv": "ORK3_E2E_USERNAME",
         "passwordEnv": "ORK3_E2E_PASSWORD"
       }

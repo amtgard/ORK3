@@ -71,9 +71,9 @@ bin/ork-db use dev
 export ORK3_E2E_USERNAME=megiddo ORK3_E2E_PASSWORD=test-db-player
 bin/fuzzy-validator record --all --phase all --profile test
 
-# mirror profile (ork @ 19306)
+# mirror profile (ork @ 19306) — local docker only
 bin/ork-db use prod
-export ORK3_E2E_USERNAME=… ORK3_E2E_PASSWORD=…   # mirror user
+export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
 bin/fuzzy-validator record --all --phase all --profile mirror
 ```
 

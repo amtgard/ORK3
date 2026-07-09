@@ -89,7 +89,7 @@ Record the chosen milestone ID, branch name, and target IDs (from `03-implementa
 **V-00**
 
 1. Preflight step 1 — expand `tools/fuzzy-validator/manifests/pages.json5` with major-interface setpoint URLs (1–3 per class: home, kingdom, park, admin, …).
-2. Preflight step 2 — `bin/fuzzy-validator record --all --phase all` on **test** (`bin/ork-db use dev`, `megiddo` / `test-db-player`) and **mirror** (`bin/ork-db use prod`, mirror credentials).
+2. Preflight step 2 — `bin/fuzzy-validator record --all --phase all` on **test** (`bin/ork-db use dev`, `megiddo` / `test-db-player`) and **mirror** (`bin/ork-db use prod`, `admin` / `password`).
 3. Commit baselines + manifests; verify `validate` passes on same commit.
 
 **V-01 … V-14**

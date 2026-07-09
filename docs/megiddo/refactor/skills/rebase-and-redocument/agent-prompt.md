@@ -170,7 +170,7 @@ Prerequisite: RB-1 complete.
 2. bin/ork-db deploy-sandbox — fix migration/schema drift if deploy fails
 3. sh bin/run-unit-tests.sh until exit 0 (fix tests/fixtures for upstream API/schema/UI drift)
 4. Prefer fixing coverage over deleting it; list any deferred domain-specific failures for RB-D*
-5. E2E preflight before auth-gated Playwright; smoke or defer e2e with notes
+5. E2E preflight per 06-test-framework.md — export `admin`/`password` (mirror) or `megiddo`/`test-db-player` (sandbox); run auth Playwright (`infrastructure.spec.ts` login + `tests/e2e/`); do not sign off smoke-only or defer without user waiver
 6. Check off RB-2; commit: RB-2: Repair tests after Megiddo rebase
 
 Out of scope: systematic ds-* line audits (RB-D*), fuzzy setpoint (RB-F), R-* refactors.

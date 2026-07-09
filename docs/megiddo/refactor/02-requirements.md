@@ -63,7 +63,7 @@ Each refactor target must have:
 
 **Phase 1.6 (V-*):** Before each R-* sprint, validation artifacts document canary URLs and dual-profile fuzzy baselines plus test mutation boundaries — [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md).
 
-Authenticated Playwright and fuzzy-validator flows require **configured E2E login credentials** (sandbox `megiddo` / `test-db-player` or mirror dev user) — not the local-only `class.Authorization.php` bypass. See [06-test-framework.md § E2E login credentials (preflight)](./06-test-framework.md#e2e-login-credentials-preflight).
+Authenticated Playwright and fuzzy-validator flows require **configured E2E login credentials** (sandbox `megiddo` / `test-db-player`; mirror `admin` / `password` on local docker) — not the local-only `class.Authorization.php` bypass. See [06-test-framework.md § E2E login credentials (preflight)](./06-test-framework.md#e2e-login-credentials-preflight).
 
 Test design is part of discovery sprints (Phase 1). Test **implementation** and Infection validation happen in matching test sprints (Phase 1.5, milestones T-01 … T-14) **before** the corresponding refactor execution sprint (R-*).
 

@@ -50,7 +50,7 @@ From `docs/megiddo/refactor/05-development-steering.md` — apply what fits V-* 
 - **DS-6:** Exactly **one squashed commit** per V-* branch.
 - **DS-8:** Commit title matches milestone: `V-03: Banner validation artifacts and fuzzy canaries`.
 - **Doc sign-off:** All checklist + validation doc updates in the same commit as deliverables.
-- **E2E preflight:** Complete before any auth-gated capture — sandbox `megiddo` / `test-db-player`; mirror via `ORK3_E2E_*`. Never use `class.Authorization.php` bypass.
+- **E2E preflight:** Complete before any auth-gated capture — sandbox `megiddo` / `test-db-player`; mirror `admin` / `password` (local docker). Export `ORK3_E2E_*` for Playwright. Never use `class.Authorization.php` bypass.
 - **DS-4/DS-5:** Full PHPUnit suite must pass before each commit if you touch non-doc files (e.g. `pages.json5` loader tests). Doc-only V-* commits may skip if no code changed.
 
 **Out of scope:** R-* refactor, new T-* tests, FU-* tool development, amending completed DS/T branches.

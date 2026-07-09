@@ -25,36 +25,72 @@ Playwright specs (`tests/e2e/`) and **`bin/fuzzy-validator`** auth-gated pages p
 
 **Do not** rely on the local-only `class.Authorization.php` login bypass (`true ||` hack). That file is never committed, is invalid for milestone sign-off, and must not be substituted for configured test credentials.
 
-Before any **T-*** or **R-*** milestone that runs authenticated frontend tests (or optional fuzzy-validator gates on login pages), configure credentials once per shell session:
+**Do not** sign off RB-*, T-*, R-*, or V-* milestones with auth-gated Playwright by running smoke-only specs. Export the documented credentials below and confirm authenticated specs **run** (not skip).
 
-### 1. Stack and database profile
+Before any **T-*** or **R-*** milestone that runs authenticated frontend tests (or fuzzy-validator gates on login pages), configure credentials once per shell session.
+
+### 1. Canonical accounts (local docker only)
+
+These passwords are **intentionally weak** and apply only to **local MariaDB** in `docker-compose.php8.yml` (`localhost:19306` mirror, `localhost:19307` sandbox). **Never** set these on remote production hosts.
+
+| Profile | `bin/ork-db` | DB | Username | Password | Used by |
+|---------|--------------|-----|----------|----------|---------|
+| **Sandbox / test** | `use dev` | `ork_test` @ 19307 | `megiddo` | `test-db-player` | Fuzzy **test** profile; sandbox Playwright when app points at dev DB |
+| **Mirror / prod-local** | `use prod` | `ork` @ 19306 | `admin` | `password` | Fuzzy **mirror** profile; default Playwright auth flows |
+
+Defaults are also in `tools/fuzzy-validator/manifests/profiles.json5`. Fuzzy-validator reads those defaults on `record`/`validate`. **Playwright always requires explicit env vars** (next section).
+
+Refresh sandbox before strict gates: `bin/ork-db deploy-sandbox`.
+
+### 2. Applying passwords on local databases
+
+After a **mirror import/refresh** or first sandbox setup, ensure the accounts above can log in through the normal Login route:
+
+| Account | Mirror (`ork` @ 19306) | Sandbox (`ork_test` @ 19307) |
+|---------|------------------------|--------------------------------|
+| **`admin` / `password`** | Set `admin` password to `password` in local mirror (UI password change or direct update to `ork_credential` / `ork_mundane` password fields). Required for mirror fuzzy + admin Playwright specs. | Same overwrite on sandbox if admin specs run against dev DB. |
+| **`megiddo` / `test-db-player`** | Optional on mirror (not the default Playwright user). | Fake players get `test-db-player` from `bin/ork-db apply`. Real extracted `megiddo` may still have mirror credentials — set to `test-db-player` if login fails after `deploy-sandbox`. |
+
+Verify manually once per DB refresh:
+
+```bash
+export ORK3_E2E_BASE_URL=http://127.0.0.1:19080/orkui/
+bin/ork-db use prod   # or use dev for sandbox
+export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
+npx playwright test tests/e2e/infrastructure.spec.ts -g "home route loads after login"
+```
+
+### 3. Stack + export env vars
 
 ```bash
 docker compose -f docker-compose.php8.yml up -d
 export ORK3_E2E_BASE_URL=http://127.0.0.1:19080/orkui/
 ```
 
-| Active DB profile | `bin/ork-db` | Login user | Password |
-|-------------------|--------------|------------|----------|
-| **Sandbox** (`ork_test` @ 19307) | `use dev` | `megiddo` | `test-db-player` (documented sandbox password — [test-database-tool §4.3](../test-database-tool/02-data-model.md#43-players-ork_mundane)) |
-| **Mirror** (`ork` @ 19306) | `use prod` | Your local mirror account | Your local mirror password |
+**Playwright (required every session):**
 
-Refresh sandbox before strict gates: `bin/ork-db deploy-sandbox`.
+```bash
+# Mirror / prod-local (default for most tests/e2e/*.spec.ts)
+bin/ork-db use prod
+export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
 
-### 2. Export env vars (Playwright + fuzzy-validator FU-1+)
+# Sandbox-only Playwright (when explicitly testing against ork_test)
+bin/ork-db use dev
+export ORK3_E2E_USERNAME=megiddo ORK3_E2E_PASSWORD=test-db-player
+```
 
-For Playwright capture invoked directly (bypassing profile auth in CLI), export credentials matching the active `bin/ork-db use` target.
+**Fuzzy-validator** uses `profiles.json5` defaults when env overrides are unset:
 
-With **FU-11** profile auth (default on `record`/`validate`), credentials come from `manifests/profiles.json5`:
+| Profile | Login | Password env | Default |
+|---------|-------|----------------|---------|
+| **`test`** | `megiddo` | `ORK3_E2E_TEST_PASSWORD` | `test-db-player` |
+| **`mirror`** | `admin` | `ORK3_E2E_USERNAME` / `ORK3_E2E_PASSWORD` | `admin` / `password` |
 
-| Profile | Login | Password |
-|---------|-------|----------|
-| **`test`** | `megiddo` | `ORK3_E2E_TEST_PASSWORD` (default `test-db-player`) |
-| **`mirror`** | `ORK3_E2E_USERNAME` | `ORK3_E2E_PASSWORD` |
+Optional explicit override (same values): `export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password ORK3_E2E_TEST_PASSWORD=test-db-player`
 
 See [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md).
 
-### 3. Verify login works
+### 4. Verify login works (sign-off gate)
 
 ```bash
 # Smoke — no auth required
@@ -62,11 +98,14 @@ npx playwright test tests/e2e/infrastructure.spec.ts -g "health route"
 
 # Auth — must not skip
 npx playwright test tests/e2e/infrastructure.spec.ts -g "home route loads after login"
+
+# Full auth-gated suite (RB-2 / R-* sign-off)
+npx playwright test tests/e2e/
 ```
 
 If authenticated specs report **skipped** (`Set ORK3_E2E_USERNAME and ORK3_E2E_PASSWORD`), preflight is incomplete — do not sign off frontend functional tests.
 
-**Never** commit credentials, `.ork3-db.local`, or local `class.Authorization.php` overrides.
+**Never** commit `.ork3-db.local` or local `class.Authorization.php` overrides.
 
 ---
 

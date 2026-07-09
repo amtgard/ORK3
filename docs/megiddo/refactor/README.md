@@ -7,6 +7,8 @@ Migrate business logic and `$DB` access out of `orkui/` into `system/lib/ork3/` 
 
 Phases 0–1.6 (framework, discovery, characterization tests, validation artifacts) and supporting tools (`ork-db`, fuzzy-validator) are **complete**.
 
+**Last rebase:** 2026-07-09 onto `origin/master` @ `e6417645` (`megiddo/rebase-20260709`; [RB checklist](./skills/rebase-and-redocument/milestone-checklist.md) complete).
+
 ---
 
 ## Start here

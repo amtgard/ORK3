@@ -12,17 +12,21 @@ npx playwright install chromium
 
 ## Run
 
+Canonical credentials: [06-test-framework.md § E2E login credentials](../../docs/megiddo/refactor/06-test-framework.md#e2e-login-credentials-preflight) — **local docker only**.
+
 ```bash
-# Smoke only (home page) — no credentials required
+export ORK3_E2E_BASE_URL=http://127.0.0.1:19080/orkui/
+bin/ork-db use prod
+export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
+
+# Full authenticated flows (default — do not sign off with smoke-only)
 npx playwright test tests/e2e/rsvp.spec.ts
 
-# Full authenticated flows — set dev login credentials
-export ORK3_E2E_USERNAME='your-dev-user'
-export ORK3_E2E_PASSWORD='your-dev-password'
-npx playwright test tests/e2e/rsvp.spec.ts
+# Full e2e suite
+npx playwright test tests/e2e/
 ```
 
-Override base URL if needed: `ORK3_E2E_BASE_URL=http://localhost:19080/orkui/`
+Sandbox (`ork_test`): `bin/ork-db use dev` and `ORK3_E2E_USERNAME=megiddo ORK3_E2E_PASSWORD=test-db-player`.
 
 ## Flows mapped to DS-01 §2.4
 

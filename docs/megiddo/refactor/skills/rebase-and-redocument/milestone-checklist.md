@@ -196,13 +196,15 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 
 | Step | Status |
 |------|--------|
-| Re-run `sh bin/run-unit-tests.sh` | [ ] |
-| Spot-check Infection gaps closed or listed | [ ] |
-| Fuzzy still green (no accidental doc-only breakage) | [ ] |
-| Write **Last rebase** note on [04-milestone-checklist.md](../../04-milestone-checklist.md) / [README.md](../../README.md) | [ ] |
-| Fix broken links under `docs/megiddo/refactor/` | [ ] |
-| Final report table to user | [ ] |
-| Commit: `RB-Z: Close Megiddo rebase and redocument` | [ ] |
+| Re-run `sh bin/run-unit-tests.sh` | [x] |
+| Spot-check Infection gaps closed or listed | [x] |
+| Fuzzy still green (no accidental doc-only breakage) | [x] |
+| Write **Last rebase** note on [04-milestone-checklist.md](../../04-milestone-checklist.md) / [README.md](../../README.md) | [x] |
+| Fix broken links under `docs/megiddo/refactor/` | [x] |
+| Final report table to user | [x] |
+| Commit: `RB-Z: Close Megiddo rebase and redocument` | [x] |
+
+**RB-Z notes (2026-07-09):** Base `e6417645` @ branch `megiddo/rebase-20260709`. PHPUnit: 204 tests, 627 assertions, 2 skipped, exit 0. Fuzzy validate **42/42 pass** (21 pages × test+mirror); setpoint `20260709T173049Z-1591950d-6b22e991bb478256.zip`. Infection gaps carried forward (documented): auth-gated Playwright deferred; t08 Player/Weather excluded; t13 MSI 13% (domain floor); search/attendance/banner page hosts remain `skip: true` per V-00. Archive README links fixed; template placeholder de-linked.
 
 **Exit:** Skill complete → next is **R-01**.
 
@@ -219,4 +221,4 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 | 5 | RB-F |
 | 6 | RB-Z |
 
-**Next unchecked:** **RB-Z** — Sign-off
+**Next unchecked:** *(none — rebase skill complete)* → **R-01**
