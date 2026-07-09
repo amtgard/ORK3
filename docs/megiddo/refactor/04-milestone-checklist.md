@@ -863,6 +863,21 @@ Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for
 
 ---
 
+### V-03: Banner validation artifacts
+
+**Branch:** `megiddo/v-03-banner-validation`
+
+**Spec:** [validations/v-03-banner-validation.md](./validations/v-03-banner-validation.md)
+
+| Step | Status |
+|------|--------|
+| Canary URLs (reuse V-00/V-02 hosts; no new pages.json5 rows) | [x] |
+| Test mutation boundaries (§2) | [x] |
+| Dual-profile fuzzy validate (domain-critical ids) | [x] |
+| V-03 sign-off gate | [x] |
+
+---
+
 ### V-01 … V-14: Domain validation artifacts
 
 Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines. Pairs with DS/T/R numbering.
@@ -871,7 +886,7 @@ Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines.
 |----|--------|----------------|------------|--------|
 | V-01 | `megiddo/v-01-rsvp-validation` | [v-01-rsvp-validation.md](./validations/v-01-rsvp-validation.md) | DS-01, T-01, V-00 | R-01 |
 | V-02 | `megiddo/v-02-auth-validation` | [v-02-auth-validation.md](./validations/v-02-auth-validation.md) | DS-02, T-02, V-00 | R-02 |
-| V-03 | `megiddo/v-03-banner-validation` | *(create)* | DS-03, T-03, V-00 | R-03 |
+| V-03 | `megiddo/v-03-banner-validation` | [v-03-banner-validation.md](./validations/v-03-banner-validation.md) | DS-03, T-03, V-00 | R-03 |
 | V-04 | `megiddo/v-04-eventajax-validation` | *(create)* | DS-04, T-04, V-00 | R-04 |
 | V-05 | `megiddo/v-05-event-validation` | *(create)* | DS-05, T-05, V-00 | R-05 |
 | V-06 | `megiddo/v-06-kingdom-validation` | *(create)* | DS-06, T-06, V-00 | R-06 |

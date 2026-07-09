@@ -258,3 +258,4 @@ Register `Banner` in `orkservice/Json/index.php` for JSON API parity.
 | Hero banner port spec | [`docs/superpowers/specs/2026-05-17-hero-banner-port-design.md`](../../superpowers/specs/2026-05-17-hero-banner-port-design.md) |
 | Implementation plan | [03-implementation-plan.md](./03-implementation-plan.md) |
 | Test framework | [06-test-framework.md](./06-test-framework.md) |
+| [validations/v-03-banner-validation.md](./validations/v-03-banner-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-03) |
