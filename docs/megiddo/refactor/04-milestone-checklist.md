@@ -923,6 +923,21 @@ Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for
 
 ---
 
+### V-07: Park validation artifacts
+
+**Branch:** `megiddo/v-07-park-validation`
+
+**Spec:** [validations/v-07-park-validation.md](./validations/v-07-park-validation.md)
+
+| Step | Status |
+|------|--------|
+| Canary URLs (reuse sandbox park + `event-park`; `park-profile` skip) | [x] |
+| Test mutation boundaries (§2) | [x] |
+| Dual-profile fuzzy validate (4/4) | [x] |
+| V-07 sign-off gate | [x] |
+
+---
+
 ### V-01 … V-14: Domain validation artifacts
 
 Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines. Pairs with DS/T/R numbering.
@@ -935,7 +950,7 @@ Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines.
 | V-04 | `megiddo/v-04-eventajax-validation` | [v-04-eventajax-validation.md](./validations/v-04-eventajax-validation.md) | DS-04, T-04, V-00 | R-04 |
 | V-05 | `megiddo/v-05-event-validation` | [v-05-event-validation.md](./validations/v-05-event-validation.md) | DS-05, T-05, V-00 | R-05 |
 | V-06 | `megiddo/v-06-kingdom-validation` | [v-06-kingdom-validation.md](./validations/v-06-kingdom-validation.md) | DS-06, T-06, V-00 | R-06 |
-| V-07 | `megiddo/v-07-park-validation` | *(create)* | DS-07, T-07, V-00 | R-07 |
+| V-07 | `megiddo/v-07-park-validation` | [v-07-park-validation.md](./validations/v-07-park-validation.md) | DS-07, T-07, V-00 | R-07 |
 | V-08 | `megiddo/v-08-admin-validation` | *(create)* | DS-08, T-08, V-00 | R-08 |
 | V-09 | `megiddo/v-09-player-validation` | *(create)* | DS-09, T-09, V-00 | R-09 |
 | V-10 | `megiddo/v-10-reports-validation` | *(create)* | DS-10, T-10, V-00 | R-10 |
@@ -1007,4 +1022,4 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** V-07 (park validation artifacts), then V-08, then R-01 (RSVP refactor — DS-01, T-01, V-01 complete).
+**Next actionable milestone:** V-08 (admin validation artifacts), then G3 (V-09…V-12), then R-01 (RSVP refactor — DS-01, T-01, V-01 complete).

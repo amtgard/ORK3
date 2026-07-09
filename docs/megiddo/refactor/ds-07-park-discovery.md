@@ -263,3 +263,4 @@ flowchart LR
 | DS-03 banner discovery | [ds-03-banner-discovery.md](./ds-03-banner-discovery.md) |
 | Implementation plan | [03-implementation-plan.md](./03-implementation-plan.md) |
 | Test framework | [06-test-framework.md](./06-test-framework.md) |
+| [validations/v-07-park-validation.md](./validations/v-07-park-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-07) |
