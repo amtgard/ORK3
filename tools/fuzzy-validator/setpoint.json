@@ -100,8 +100,18 @@
         "mirror"
       ],
       "pageCount": 30
+    },
+    "20260709T132003Z-9ee7e50f-534b10cf31f823bd.zip": {
+      "gitSha": "9ee7e50f",
+      "capturedAt": "2026-07-09T13:20:03Z",
+      "contentSha256": "534b10cf31f823bd48c37157f6183db12e7ea9a70c08114277442e900651ea76",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
     }
   },
-  "latestBundle": "20260709T131018Z-e72ab1d8-4c7384d15f151fc2.zip",
+  "latestBundle": "20260709T132003Z-9ee7e50f-534b10cf31f823bd.zip",
   "driveFolder": "ORK3 Fuzzy Setpoints"
 }

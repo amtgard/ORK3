@@ -3,7 +3,7 @@
   "pageId": "admin-permissions",
   "imageWidth": 1280,
   "imageHeight": 1976,
-  "calibratedAt": "2026-07-08T21:03:54Z",
+  "calibratedAt": "2026-07-09T13:13:38Z",
   "calibrationRuns": 5,
   "params": {
     "colorThreshold": 20,
@@ -12,5 +12,5 @@
   },
   "fuzzZones": [],
   "manualZones": [],
-  "calibratedFromCommit": "40f4fa2c"
+  "calibratedFromCommit": "9ee7e50f"
 }

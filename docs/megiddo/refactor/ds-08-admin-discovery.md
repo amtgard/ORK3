@@ -350,3 +350,4 @@ flowchart LR
 | DS-07 park discovery | [ds-07-park-discovery.md](./ds-07-park-discovery.md) |
 | Implementation plan | [03-implementation-plan.md](./03-implementation-plan.md) |
 | Test framework | [06-test-framework.md](./06-test-framework.md) |
+| [validations/v-08-admin-validation.md](./validations/v-08-admin-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-08) |

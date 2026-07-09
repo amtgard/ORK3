@@ -18,7 +18,7 @@ Per-domain **canary URLs** and **test mutation boundaries** for R-* execution sp
 | V-05 | [v-05-event-validation.md](./v-05-event-validation.md) | Event controller | R-05 |
 | V-06 | [v-06-kingdom-validation.md](./v-06-kingdom-validation.md) | Kingdom | R-06 |
 | V-07 | [v-07-park-validation.md](./v-07-park-validation.md) | Park | R-07 |
-| V-08 | *(planned)* | Admin | R-08 |
+| V-08 | [v-08-admin-validation.md](./v-08-admin-validation.md) | Admin | R-08 |
 | V-09 | *(planned)* | Player | R-09 |
 | V-10 | *(planned)* | Reports / awards | R-10 |
 | V-11 | *(planned)* | Search | R-11 |
