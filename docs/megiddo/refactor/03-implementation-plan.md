@@ -121,7 +121,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-KNA-03 | `Controller_KingdomAjax` | `kingdom` → addauth | 615–654 | **Direct INSERT** into `ork_authorization` |
 | T-KNA-04 | `Controller_KingdomAjax` | `kingdom` → checkabbr | 715–721 | Kingdom abbreviation uniqueness |
 | T-KNA-05 | `Controller_KingdomAjax` | `calendar` | 759–945 | Royal officers, events, calendar items, park days |
-| T-KNA-06 | `Controller_KingdomAjax` | `playersearch` | 1069–1125 | Scoped player search with abbr resolution |
+| T-KNA-06 | `Controller_KingdomAjax` | `playersearch` | 1032–1143 | Scoped player search with abbr resolution |
 | T-KNA-07 | `Controller_KingdomAjax` | `suspendplayer` | 1183 | Read suspension state from `ork_mundane` |
 | T-KNA-08 | `Controller_KingdomAjax` | `banner` | 1225–1376 | Kingdom banner CRUD on `ork_kingdom` |
 
@@ -141,7 +141,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
-| T-PRA-01 | `Controller_ParkAjax` | `park` → playersearch | 198–251 | Abbr resolution; player search SQL |
+| T-PRA-01 | `Controller_ParkAjax` | `park` → playersearch | 178–268 | Abbr resolution; player search SQL |
 | T-PRA-02 | `Controller_ParkAjax` | `park` → addauth | 411–450 | **Direct INSERT** into `ork_authorization` |
 | T-PRA-03 | `Controller_ParkAjax` | `kingdom` → checkabbr | 602–645 | Park abbreviation uniqueness within kingdom |
 | T-PRA-04 | `Controller_ParkAjax` | `banner` | 657–817 | Park banner CRUD on `ork_park` |
@@ -152,24 +152,24 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
-| T-PLR-01 | `Controller_Player` | `profile` (custom title) | 386–387 | Custom Title sentinel award lookup |
-| T-PLR-02 | `Controller_Player` | `profile` (notes count) | 402–403 | Note count query |
-| T-PLR-03 | `Controller_Player` | `profile` (officers) | 418–432 | Officer roles SQL |
-| T-PLR-04 | `Controller_Player` | `profile` (recommendations) | 465–466 | Recommendation query |
-| T-PLR-05 | `Controller_Player` | `profile` (admin auth) | 485–506 | Admin role checks and grants |
-| T-PLR-06 | `Controller_Player` | `profile` (peerage) | 599–746 | Peerage, beltline, title, association queries |
-| T-PLR-07 | `Controller_Player` | `profile` (additional) | 996–997 | Additional profile SQL block |
+| T-PLR-01 | `Controller_Player` | `profile` (custom title) | 386–393 | Custom Title sentinel award lookup |
+| T-PLR-02 | `Controller_Player` | `profile` (notes count) | 403–404 | Note count query |
+| T-PLR-03 | `Controller_Player` | `profile` (officers) | 418–443 | Officer roles SQL |
+| T-PLR-04 | `Controller_Player` | `profile` (recommendations) | 411–413 | Lazy AJAX — no raw SQL (Model_Reports backend) |
+| T-PLR-05 | `Controller_Player` | `profile` (admin auth) | 486–529 | Admin role checks and grants |
+| T-PLR-06 | `Controller_Player` | `profile` (peerage) | 600–764 | Peerage, beltline, title, association queries |
+| T-PLR-07 | `Controller_Player` | `reconcile` (award map) | 998–1004 | Kingdomaward map SQL |
 | T-PLR-08 | `Controller_Player` | *(throughout)* | various | `Ork3::$Lib->authorization` gates |
 
 ### `Controller_PlayerAjax`
 
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
-| T-PLA-01 | `Controller_PlayerAjax` | `check_username` | 33–35 | Username uniqueness check |
-| T-PLA-02 | `Controller_PlayerAjax` | `player` (awards) | 378–395 | Max award rank; persona lookup |
-| T-PLA-03 | `Controller_PlayerAjax` | `merge` | 548–594 | Player kingdom/park lookup; merge auth mirror |
-| T-PLA-04 | `Controller_PlayerAjax` | `save_my_email` | 724–726 | **Direct UPDATE** `ork_mundane SET email` |
-| T-PLA-05 | `Controller_PlayerAjax` | `add_second` | 755–756 | Persona lookup |
+| T-PLA-01 | `Controller_PlayerAjax` | `check_username` / `username_check_payload` | 26–37 | Username uniqueness check |
+| T-PLA-02 | `Controller_PlayerAjax` | `player` (awards) | 376–400 | Max award rank; persona lookup |
+| T-PLA-03 | `Controller_PlayerAjax` | `merge` | 547–571 | Player kingdom/park lookup; merge auth mirror |
+| T-PLA-04 | `Controller_PlayerAjax` | `save_my_email` | 723–726 | **Direct UPDATE** `ork_mundane SET email` |
+| T-PLA-05 | `Controller_PlayerAjax` | `add_second` | 754–759 | Persona lookup |
 | T-PLA-06 | `Controller_PlayerAjax` | `banner` | 832–1000 | Player banner CRUD on `ork_mundane`, `ork_mundane_design` |
 
 ### `Model_Player`
@@ -187,15 +187,15 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
-| T-RPT-01 | `Controller_Reports` | `ladder_grid` | 1064–1284 | Scope name queries; ladder grid multi-query assembly |
+| T-RPT-01 | `Controller_Reports` | `ladder_grid` | 1064–1302 | Scope name queries; ladder grid multi-query assembly |
 | T-RPT-02 | `Controller_Reports` | *(throughout)* | 77–1409 | `Ork3::$Lib->authorization`, `park->GetParkKingdomId`, `ghettocache` |
-| T-RPT-03 | `Model_Reports` | `get_attendance_dates` | 145–146 | Distinct attendance dates SQL |
-| T-RPT-04 | `Model_Reports` | `_all_voting_rules` | 334–474 | **Hardcoded kingdom voting eligibility rules** |
+| T-RPT-03 | `Model_Reports` | `get_attendance_dates` | 140–153 | Distinct attendance dates SQL |
+| T-RPT-04 | `Model_Reports` | `_all_voting_rules` | 336–474 | **Hardcoded kingdom voting eligibility rules** |
 | T-RPT-05 | `Model_Reports` | `_voting_rules` | 324–328 | Single-kingdom rule lookup |
 | T-RPT-06 | `Model_Reports` | `supported_voting_kingdom_ids` | 319–322 | Supported kingdom list from rules |
-| T-RPT-07 | `Model_Reports` | `get_voting_eligible` | 477+ | Voting eligibility (uses `_voting_rules`) |
-| T-RPT-08 | `Model_Reports` | `get_voting_eligible_for_player` | 492+ | Per-player voting eligibility |
-| T-RPT-09 | `Model_Reports` | `kingdom_officer_directory` | 519–520 | `Ork3::$Lib->kingdom->StatsIncludesPrincipalities`, `GetPrincipalities` |
+| T-RPT-07 | `Model_Reports` | `get_voting_eligible` | 477–490 | Voting eligibility (uses `_voting_rules`) |
+| T-RPT-08 | `Model_Reports` | `get_voting_eligible_for_player` | 492–499 | Per-player voting eligibility |
+| T-RPT-09 | `Model_Reports` | `kingdom_officer_directory` | 519–529 | `Ork3::$Lib->kingdom->StatsIncludesPrincipalities`, `GetPrincipalities` |
 
 ### `Model_Award`
 
@@ -209,8 +209,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
-| T-SRC-01 | `Controller_Search` | `unitactivity` | 108–109 | Unit activity SQL; `Ork3::$Lib->ghettocache` (97–112) |
-| T-SRC-02 | `Controller_SearchAjax` | `universal` | 29–148 | Abbr resolution; universal player search; ORK admin flag |
+| T-SRC-01 | `Controller_Search` | `unitactivity` | 103–112 | Unit activity SQL; `Ork3::$Lib->ghettocache` (97–112) |
+| T-SRC-02 | `Controller_SearchAjax` | `universal` | 5–169 | Abbr resolution; universal player search; ORK admin flag |
 
 ---
 
@@ -218,17 +218,17 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
-| T-ATT-01 | `Controller_AttendanceAjax` | `park` | 35–39 | **Direct UPDATE** `ork_mundane SET active=1` on sign-in |
-| T-ATT-02 | `Controller_AttendanceAjax` | `attendance` | 161–162 | Editor persona lookup |
+| T-ATT-01 | `Controller_AttendanceAjax` | `park` → `add` | 36–39 | **Direct UPDATE** `ork_mundane SET active=1` on sign-in |
+| T-ATT-02 | `Controller_AttendanceAjax` | `attendance` → `edit` | 162–164 | Editor persona lookup |
 | T-ATT-03 | `Controller_AttendanceAjax` | `weather_at` | 86, 119 | `Ork3::$Lib->weather->archive_for_date/coords` |
 | T-ATT-04 | `Controller_Attendance` | *(throughout)* | 53–229 | `Ork3::$Lib->authorization`, `event->GetActiveEventsAtScope` |
-| T-ATT-05 | `Model_Attendance` | `get_adjacent_park_dates` | 148–156 | Prev/next attendance dates for park |
-| T-ATT-06 | `Model_Attendance` | cache | 70 | `Ork3::$Lib->ghettocache` |
-| T-SIN-01 | `Controller_SignIn` | `index` (event name) | 43–44 | Event name lookup for link scope |
-| T-SIN-02 | `Controller_SignIn` | `index` (last class) | 103–104 | Last attendance class query |
-| T-SIN-03 | `Controller_SignIn` | `index` (credits) | 122–130 | Per-class credit totals from attendance + reconciliation |
-| T-SIN-04 | `Controller_SignIn` | `index` (levels) | 137–149 | **Class level calculation** (thresholds 5/12/21/34/53) |
-| T-QR-01 | `Controller_QR` | `link` | 19–20 | Attendance link token validation SQL |
+| T-ATT-05 | `Model_Attendance` | `get_adjacent_park_dates` | 143–160 | Prev/next attendance dates for park |
+| T-ATT-06 | `Model_Attendance` | cache | 70–77 | `Ork3::$Lib->ghettocache` |
+| T-SIN-01 | `Controller_SignIn` | `index` (event name) | 44–46 | Event name lookup for link scope |
+| T-SIN-02 | `Controller_SignIn` | `index` (last class) | 104 | Last attendance class query |
+| T-SIN-03 | `Controller_SignIn` | `index` (credits) | 123–135 | Per-class credit totals from attendance + reconciliation |
+| T-SIN-04 | `Controller_SignIn` | `index` (levels) | 139–162 | **Class level calculation** (thresholds 5/12/21/34/53) |
+| T-QR-01 | `Controller_QR` | `link` | 20–26 | Attendance link token validation SQL |
 
 ---
 

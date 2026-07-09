@@ -15,8 +15,8 @@
 
 Reports frontend violations span three files:
 
-- **`controller.Reports.php`** (~1,400 lines) — ladder grid report with direct SQL; 29 `Ork3::$Lib` call sites for auth gates, park lookup, and cache.
-- **`model.Reports.php`** (~530 lines) — hardcoded kingdom voting rules, voting eligibility orchestration, attendance dates SQL, officer directory principality merge.
+- **`controller.Reports.php`** (~1,421 lines) — ladder grid report with direct SQL; 29 `Ork3::$Lib` call sites for auth gates, park lookup, and cache.
+- **`model.Reports.php`** (~598 lines) — hardcoded kingdom voting rules, voting eligibility orchestration, attendance dates SQL, officer directory principality merge.
 - **`model.Award.php`** (~120 lines) — award dropdown HTML with pseudo-ladder IDs and peerage categorization rules.
 
 **Call chain (voting):** Controller → `Model_Reports::_all_voting_rules()` (frontend config) → `get_voting_eligible*` → `APIModel('Report')->GetVotingEligible()` → `Report::GetVotingEligible()` (backend engine).
@@ -45,7 +45,7 @@ Reports frontend violations span three files:
 
 | Lines | Behavior |
 |-------|----------|
-| 1032–1303 | Six direct `$DB->DataSet()` queries; hardcoded `$knightGroupMap`, `$ladderToMasterMap` (subset of `Award::GetLadderMasterMap()`); presentation logic; `ghettocache` read/write |
+| 1064–1302 | Six direct `$DB->DataSet()` queries; hardcoded `$knightGroupMap`, `$ladderToMasterMap` (subset of `Award::GetLadderMasterMap()`); presentation logic; `ghettocache` read/write |
 
 **Existing backend:** `Award::GetLadderMasterMap()` — fuller map with `MaxRank`; no `Report::*LadderGrid*` method.
 
@@ -71,7 +71,7 @@ Reports frontend violations span three files:
 
 | Lines | Behavior |
 |-------|----------|
-| 140–154 | Direct `$DB` SQL: `SELECT DISTINCT DATE(date) … FROM ork_attendance` scoped by kingdom_id or park_id |
+| 140–153 | Direct `$DB` SQL: `SELECT DISTINCT DATE(date) … FROM ork_attendance` scoped by kingdom_id or park_id |
 
 **Existing backend:** No dedicated "distinct dates" method.
 
@@ -81,7 +81,7 @@ Reports frontend violations span three files:
 
 | Lines | Behavior |
 |-------|----------|
-| 334–474 | **Hardcoded kingdom-specific business rules** — 16 kingdom entries with flags: `AttendanceMode`, `ProvinceMode`, `KingdomEventBonus`, `HomeParkOnly`, `ExcludeOnline`, `ExcludeEvents`, `ActiveKnightThreshold`, `MaxOutsideKingdomCredits`, etc. |
+| 336–474 | **Hardcoded kingdom-specific business rules** — 16 kingdom entries with flags: `AttendanceMode`, `ProvinceMode`, `KingdomEventBonus`, `HomeParkOnly`, `ExcludeOnline`, `ExcludeEvents`, `ActiveKnightThreshold`, `MaxOutsideKingdomCredits`, etc. |
 
 **Existing backend:** `Report::GetVotingEligible()` **implements** all rule flags in SQL but **expects rules passed in** — no kingdom→config lookup in backend.
 
@@ -127,7 +127,7 @@ Reports frontend violations span three files:
 
 | Lines | Behavior |
 |-------|----------|
-| 511–530 | `Ork3::$Lib->kingdom->StatsIncludesPrincipalities` + `GetPrincipalities`; N+1 calls to `Report->KingdomOfficerDirectory` per principality |
+| 519–529 | `Ork3::$Lib->kingdom->StatsIncludesPrincipalities` + `GetPrincipalities`; N+1 calls to `Report->KingdomOfficerDirectory` per principality |
 
 **Existing backend:** `Report::KingdomOfficerDirectory($request)` — SQL pivot for officers per park/kingdom.
 
@@ -315,6 +315,8 @@ flowchart TD
   T09[T-RPT-09 Officer dir] --> ReportKOD[Report::KingdomOfficerDirectory]
   T02[T-RPT-02 Auth/cache] -. DS-14 .-> T07
 ```
+
+**Post-rebase (RB-D3, 2026-07-09):** §1 line ranges verified against `orkui/` at base `e6417645` (`origin/master`). Minor drift in ladder_grid block (1064–1302), attendance dates (140–153), voting rules (336–474), officer directory merge (519–529); no upstream gap closures; §3 revision unchanged.
 
 ---
 

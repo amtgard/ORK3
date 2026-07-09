@@ -15,8 +15,8 @@
 
 Player frontend violations span three files:
 
-- **`controller.Player.php`** (~1,050 lines) — revised player profile (`profile`), legacy `index`, reconcile sub-view.
-- **`controller.PlayerAjax.php`** (~990 lines) — profile AJAX (awards, merge, email, username check, recommendations).
+- **`controller.Player.php`** (~1,009 lines) — revised player profile (`profile`), legacy `index`, reconcile sub-view.
+- **`controller.PlayerAjax.php`** (~1,069 lines) — profile AJAX (awards, merge, email, username check, recommendations).
 - **`model.Player.php`** (~250 lines) — thin wrappers with cache busting and direct `Ork3::$Lib` bypasses.
 
 The **revised player profile** (`profile` → `Playernew_index.tpl`) performs **heavy synchronous `$DB` reads** for display data that either has no SOAP surface or is duplicated from `class.Report`. AJAX endpoints are **partially migrated**: writes like `updateprofile`/`merge` delegate to `Model_Player`, but several reads/writes still hit `$DB` directly.
@@ -43,7 +43,7 @@ The **revised player profile** (`profile` → `Playernew_index.tpl`) performs **
 
 | Lines | Behavior |
 |-------|----------|
-| 384–393 | Direct `SELECT award_id … name='Custom Title'` for sentinel ID; hardcoded fallback `CustomAwardId = 94` |
+| 386–393 | Direct `SELECT award_id … name='Custom Title'` for sentinel ID; hardcoded fallback `CustomAwardId = 94` |
 
 **Existing backend:** `Player::getCustomTitleAwardId()` (cached private lookup).
 
@@ -53,7 +53,7 @@ The **revised player profile** (`profile` → `Playernew_index.tpl`) performs **
 
 | Lines | Behavior |
 |-------|----------|
-| 401–404 | Direct `COUNT(*)` on notes for tab visibility |
+| 403–404 | Direct `COUNT(*)` on notes for tab visibility |
 
 **Existing backend:** `Player::GetNotes()` returns full bodies; `PlayerAjax::notes` loads via model.
 
@@ -63,7 +63,7 @@ The **revised player profile** (`profile` → `Playernew_index.tpl`) performs **
 
 | Lines | Behavior |
 |-------|----------|
-| 417–443 | Direct officer-roles SQL (kingdom/park scope, active filter, entity labels) |
+| 418–443 | Direct officer-roles SQL (kingdom/park scope, active filter, entity labels) |
 
 **Existing backend:** `Kingdom::GetOfficers`, `Park::GetOfficers` — current officers only, different shape.
 
@@ -83,7 +83,7 @@ The **revised player profile** (`profile` → `Playernew_index.tpl`) performs **
 
 | Lines | Behavior |
 |-------|----------|
-| 485–529 | Direct SQL: global ORK-admin check + scoped admin/create grant badges |
+| 486–529 | Direct SQL: global ORK-admin check + scoped admin/create grant badges |
 
 **Existing backend:** `Authorization::HasAuthority()` for viewer gate.
 
@@ -93,7 +93,7 @@ The **revised player profile** (`profile` → `Playernew_index.tpl`) performs **
 
 | Lines | Behavior |
 |-------|----------|
-| 598–764 | Three direct peerage/beltline/title SQL blocks + dedupe logic |
+| 600–764 | Three direct peerage/beltline/title SQL blocks + dedupe logic |
 
 **Existing backend:** `Report::BeltlineData()` (kingdom-wide, alias-aware peerage).
 
@@ -103,7 +103,7 @@ The **revised player profile** (`profile` → `Playernew_index.tpl`) performs **
 
 | Lines | Behavior |
 |-------|----------|
-| 994–1006 | Direct `SELECT kingdomaward_id, award_id … kingdom_id` map |
+| 998–1004 | Direct `SELECT kingdomaward_id, award_id … kingdom_id` map |
 
 **Existing backend:** `Model_Award::fetch_award_option_list` (different shape — DS-10).
 
@@ -123,7 +123,7 @@ The **revised player profile** (`profile` → `Playernew_index.tpl`) performs **
 
 | Lines | Behavior |
 |-------|----------|
-| 32–37 | Direct `SELECT mundane_id … username` |
+| 26–37 | Direct `SELECT mundane_id … username` (`username_check_payload`) |
 
 **Existing backend:** `UpdatePlayer` uniqueness check; `unique_username()` on create only.
 
@@ -143,7 +143,7 @@ The **revised player profile** (`profile` → `Playernew_index.tpl`) performs **
 
 | Lines | Behavior |
 |-------|----------|
-| 547–581 | Direct kingdom/park lookup for both players; mirrors 3-tier auth before delegating |
+| 547–571 | Direct kingdom/park lookup for both players; mirrors 3-tier auth before delegating |
 
 **Existing backend:** `MergePlayer` enforces identical auth tier.
 
@@ -153,7 +153,7 @@ The **revised player profile** (`profile` → `Playernew_index.tpl`) performs **
 
 | Lines | Behavior |
 |-------|----------|
-| 722–727 | **Direct `UPDATE ork_mundane SET email`** — no token, no audit |
+| 723–726 | **Direct `UPDATE ork_mundane SET email`** — no token, no audit |
 
 **Existing backend:** `UpdatePlayer` sets email with auth + validation side effects.
 
@@ -163,7 +163,7 @@ The **revised player profile** (`profile` → `Playernew_index.tpl`) performs **
 
 | Lines | Behavior |
 |-------|----------|
-| 753–759 | Post-success persona `SELECT` after `AddSecondToRecommendation` |
+| 754–759 | Post-success persona `SELECT` after `AddSecondToRecommendation` |
 
 **Existing backend:** Domain method exists; `player_info()` available.
 
@@ -191,7 +191,7 @@ The **revised player profile** (`profile` → `Playernew_index.tpl`) performs **
 
 | Lines | Behavior |
 |-------|----------|
-| 38–64 | Direct `Ork3::$Lib->ghettocache` get/cache/bust |
+| 39–86 | Direct `Ork3::$Lib->ghettocache` get/cache/bust |
 
 **Gap:** Frontend owns cache keys/TTLs (60s details, 20min roster); FR-7 infrastructure cleanup.
 
@@ -199,7 +199,7 @@ The **revised player profile** (`profile` → `Playernew_index.tpl`) performs **
 
 | Lines | Behavior |
 |-------|----------|
-| 221–246 | Direct `GetCustomMilestones`, `get_*_attendance_date` |
+| 222–246 | Direct `GetCustomMilestones`, `get_*_attendance_date` |
 
 **Existing backend:** All four methods in `class.Player.php` with ghettocache on dates.
 
@@ -373,6 +373,8 @@ flowchart LR
   DS09[DS-09 design] --> R09
   DS10 --> R10[R-10 Reports]
 ```
+
+**Post-rebase (RB-D3, 2026-07-09):** §1 line ranges verified against `orkui/` at base `e6417645` (`origin/master`). Minor drift in profile custom title (386–393), officers (418–443), admin badges (486–529), beltline block (600–764), reconcile map (998–1004); PlayerAjax username helper (26–37), merge auth (547–571), email (723–726); no upstream gap closures; §3 revision unchanged.
 
 ---
 

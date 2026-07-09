@@ -144,10 +144,12 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 
 | Domain | ds-* | plan lines | v-* | tests | Infection | Done |
 |--------|------|------------|-----|-------|-----------|------|
-| 09 Player | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| 10 Reports | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| 11 Search | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| 12 Attendance | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| 09 Player | [x] | [x] | [x] | [x] | [x] | [x] |
+| 10 Reports | [x] | [x] | [x] | [x] | [x] | [x] |
+| 11 Search | [x] | [x] | [x] | [x] | [x] | [x] |
+| 12 Attendance | [x] | [x] | [x] | [x] | [x] | [x] |
+
+**RB-D3 notes (2026-07-09):** Base `e6417645`; §1 verified against current `orkui/`. Domains 09–12 had minor line drift (player profile/beltline/reconcile; reports ladder_grid/voting; search unitactivity/park playersearch; attendance SignIn levels/QR). §3 gaps unchanged. Fixed `LadderGridTest` `$DB->Clear()` pollution from prior attendance tests. PHPUnit domain filter: 56 tests, 1 skipped, exit 0. Infection: t09 batched — profile+cache 25%, AJAX 22%, Authorization 52%; t10 MSI 49%; t11 MSI 50%; t12 MSI 53% (all ≥15 floor).
 
 ---
 
@@ -213,4 +215,4 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 | 5 | RB-F |
 | 6 | RB-Z |
 
-**Next unchecked:** **RB-D3** — Domains 09–12 (player, reports, search, attendance)
+**Next unchecked:** **RB-D4** — Domains 13–14 (infrastructure, lib-service)

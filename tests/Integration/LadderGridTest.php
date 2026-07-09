@@ -95,9 +95,11 @@ final class LadderGridTest extends TestCase
     private function mirrorLadderGrid(string $type, int $kingdomId, int $parkId): array
     {
         global $DB;
+        $DB->Clear();
 
         $scopeName = '';
         if ($parkId > 0) {
+            $DB->Clear();
             $nr = $DB->DataSet(
                 'SELECT p.name AS park_name, k.name AS kingdom_name
                  FROM ' . DB_PREFIX . 'park p
@@ -108,6 +110,7 @@ final class LadderGridTest extends TestCase
                 $scopeName = $nr->kingdom_name . ' — ' . $nr->park_name;
             }
         } elseif ($kingdomId > 0) {
+            $DB->Clear();
             $nr = $DB->DataSet('SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . (int) $kingdomId . ' LIMIT 1');
             if ($nr && $nr->Next()) {
                 $scopeName = $nr->name;
@@ -140,20 +143,19 @@ final class LadderGridTest extends TestCase
             'Order of the Owl' => 'Serpent',
         ];
 
+        $DB->Clear();
         $awardResult = $DB->DataSet($kSql);
         $awardCols = [];
-        if ($awardResult && $awardResult->Size() > 0) {
-            do {
-                if (!$awardResult->award_id) {
-                    continue;
-                }
-                $name = $awardResult->award_name;
-                $awardCols[(int) $awardResult->award_id] = [
-                    'Name' => $name,
-                    'DisplayName' => preg_replace('/^Order of (?:the )?/i', '', $name),
-                    'KnightGroup' => $knightGroupMap[$name] ?? '',
-                ];
-            } while ($awardResult->Next());
+        while ($awardResult && $awardResult->Next()) {
+            if (!$awardResult->award_id) {
+                continue;
+            }
+            $name = $awardResult->award_name;
+            $awardCols[(int) $awardResult->award_id] = [
+                'Name' => $name,
+                'DisplayName' => preg_replace('/^Order of (?:the )?/i', '', $name),
+                'KnightGroup' => $knightGroupMap[$name] ?? '',
+            ];
         }
 
         if ($awardCols === []) {
@@ -179,27 +181,26 @@ final class LadderGridTest extends TestCase
                     GROUP BY m.mundane_id, a.award_id
                     ORDER BY m.persona";
 
+        $DB->Clear();
         $dataResult = $DB->DataSet($dataSql);
         $playerData = [];
-        if ($dataResult && $dataResult->Size() > 0) {
-            do {
-                $mid = (int) $dataResult->mundane_id;
-                $aid = (int) $dataResult->award_id;
-                if (!$mid || !$aid) {
-                    continue;
-                }
-                if (!isset($playerData[$mid])) {
-                    $playerData[$mid] = [
-                        'MundaneId' => $mid,
-                        'Persona' => $dataResult->persona,
-                        'ParkId' => (int) $dataResult->park_id,
-                        'ParkName' => $dataResult->park_name ?? '',
-                        'Awards' => [],
-                    ];
-                }
-                $val = (int) $dataResult->award_count;
-                $playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
-            } while ($dataResult->Next());
+        while ($dataResult && $dataResult->Next()) {
+            $mid = (int) $dataResult->mundane_id;
+            $aid = (int) $dataResult->award_id;
+            if (!$mid || !$aid) {
+                continue;
+            }
+            if (!isset($playerData[$mid])) {
+                $playerData[$mid] = [
+                    'MundaneId' => $mid,
+                    'Persona' => $dataResult->persona,
+                    'ParkId' => (int) $dataResult->park_id,
+                    'ParkName' => $dataResult->park_name ?? '',
+                    'Awards' => [],
+                ];
+            }
+            $val = (int) $dataResult->award_count;
+            $playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
         }
 
         return [

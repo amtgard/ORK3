@@ -80,8 +80,8 @@ Attendance/sign-in frontend violations span **five files**:
 
 | Pattern | Lines | Behavior |
 |---------|-------|----------|
-| `HasAuthority` gates | 52–53, 183–184 | `CanAddAttendance` for kingdom/park EDIT auth |
-| `GetActiveEventsAtScope` | 94–95, 229–230 | Active event banner on attendance day pages |
+| `HasAuthority` gates | 53, 184 | `CanAddAttendance` for kingdom/park EDIT auth |
+| `GetActiveEventsAtScope` | 94, 229 | Active event banner on attendance day pages |
 
 **Existing backend:** `Authorization::HasAuthority`; `Event::GetActiveEventsAtScope` — both domain-only.
 
@@ -103,7 +103,7 @@ Attendance/sign-in frontend violations span **five files**:
 
 | Lines | Behavior |
 |-------|----------|
-| 64–77 | `Ork3::$Lib->ghettocache->bust` for player attendance caches after writes |
+| 70–77 | `Ork3::$Lib->ghettocache->bust` for player attendance caches after writes |
 
 **Existing backend:** `Attendance::AddAttendance` / `SetAttendance` / `RemoveAttendance` / `UseAttendanceLink` already bust `Player.GetPlayerClasses` in domain. Model duplicates bust keys for `Model_Player.*` frontend cache namespaces.
 
@@ -135,7 +135,7 @@ Attendance/sign-in frontend violations span **five files**:
 
 | Lines | Behavior |
 |-------|----------|
-| 120–136 | SUM credits from `ork_attendance` + add `ork_class_reconciliation.reconciled` per class |
+| 122–136 | SUM credits from `ork_attendance` + add `ork_class_reconciliation.reconciled` per class |
 
 **Existing backend:** `Player::GetPlayerClasses` — sophisticated dedupe-by-date credit totals **including reconciliation** (cached).
 
@@ -145,7 +145,7 @@ Attendance/sign-in frontend violations span **five files**:
 
 | Lines | Behavior |
 |-------|----------|
-| 137–164 | **Class level calculation** with hardcoded thresholds `[5, 12, 21, 34, 53]`; computes Level 1–6 and credits-to-next |
+| 137–163 | **Class level calculation** with hardcoded thresholds `[5, 12, 21, 34, 53]`; computes Level 1–6 and credits-to-next |
 
 **Existing backend:** No shared `ComputeClassLevel()` helper. Thresholds duplicated in:
 
@@ -160,7 +160,7 @@ Attendance/sign-in frontend violations span **five files**:
 
 | Lines | Behavior |
 |-------|----------|
-| 18–26 | Direct SELECT validates token exists and `expires_at > NOW()` before generating QR PNG |
+| 20–26 | Direct SELECT validates token exists and `expires_at > NOW()` before generating QR PNG |
 
 **Existing backend:** `GetAttendanceLinkInfo` — full validation including revoked check.
 
@@ -329,6 +329,8 @@ flowchart TD
   ActiveEvent[GetActiveEventsAtScope service] --> ATT04[T-ATT-04]
   Cache[Domain cache bust unify] --> ATT06[T-ATT-06]
 ```
+
+**Post-rebase (RB-D3, 2026-07-09):** §1 line ranges verified against `orkui/` at base `e6417645` (`origin/master`). Minor drift in Attendance auth/active-event gates (53/94/184/229), model cache bust (70–77), SignIn credits/levels (122–163), QR validation (20–26); no upstream gap closures; §3 revision unchanged.
 
 ---
 

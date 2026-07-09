@@ -51,7 +51,7 @@ Universal search (`SearchAjax::universal`) adds **typographic punctuation foldin
 
 | Lines | Behavior |
 |-------|----------|
-| 92–114 | Accept comma-separated `unit_id` list (max 25); `ghettocache` 300s TTL; SQL counts distinct members with attendance in last 12 months per unit |
+| 103–112 | SQL counts distinct members with attendance in last 12 months per unit |
 
 **Existing backend:** `Unit` service list via `Model_Unit::get_unit_list` (used by `unitsearch`) — no activity-count companion API.
 
@@ -89,7 +89,7 @@ Universal search (`SearchAjax::universal`) adds **typographic punctuation foldin
 
 | Lines | Behavior |
 |-------|----------|
-| 178–251 | Scope `own` / `exclude` / `all` relative to park; `prioritize` ordering; abbr prefix override; include inactive/suspended |
+| 178–268 | Scope `own` / `exclude` / `all` relative to park; `prioritize` ordering; abbr prefix override; include inactive/suspended |
 
 **Gap:** Park-scoped exclude/own semantics not on SearchService.
 
@@ -253,6 +253,8 @@ flowchart TD
   Punct[punct folding helper] --> Scoped
   Punct --> Universal
 ```
+
+**Post-rebase (RB-D3, 2026-07-09):** §1 line ranges verified against `orkui/` at base `e6417645` (`origin/master`). Minor drift in unitactivity SQL (103–112), ParkAjax playersearch end (268); universal/admin/kingdom/event search blocks unchanged; no upstream gap closures; §3 revision unchanged.
 
 ---
 
