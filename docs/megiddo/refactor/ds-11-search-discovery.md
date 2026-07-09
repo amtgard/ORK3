@@ -266,3 +266,4 @@ flowchart TD
 | DS-04 eventajax discovery | [ds-04-eventajax-discovery.md](./ds-04-eventajax-discovery.md) |
 | Implementation plan | [03-implementation-plan.md](./03-implementation-plan.md) |
 | Test framework | [06-test-framework.md](./06-test-framework.md) |
+| [validations/v-11-search-validation.md](./validations/v-11-search-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-11) |
