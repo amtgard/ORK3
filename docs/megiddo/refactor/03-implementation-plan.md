@@ -96,6 +96,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 **R-01 complete (2026-07-09):** T-RSV-01…T-RSV-09, T-INF-06 migrated to `class.Event.php` / EventService; `orkui/` RSVP paths use `APIModel('Event')`.
 
+**R-02 complete (2026-07-09):** T-ADM-11, T-KNA-03, T-PRA-02, T-EVA-06 (addauth) route through `Model_Authorization::add_auth`; zero `INSERT INTO … authorization` in `orkui/`; global admin grant adds danger-audit.
+
 ---
 
 ## Kingdom

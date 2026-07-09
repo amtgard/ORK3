@@ -10,11 +10,20 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 
 | Field | Value |
 |-------|--------|
-| Integration line (post RB-Z) | `megiddo/rebase-20260709` @ `e6417645` |
-| Branching mode | `merge-to-integration` *(or `stack-on-prior-R` — set before R-02)* |
+| Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
+| Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-02-auth-insert-refactor` @ `578f2f2f` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
+
+**Stack chain** (branch @ commit — worker appends each milestone):
+
+| R-* | Branch | Commit |
+|-----|--------|--------|
+| R-01 | `megiddo/r-01-rsvp-refactor` | `bc626ce8` |
+| R-02 | `megiddo/r-02-auth-insert-refactor` | `578f2f2f` |
+| … | | |
 
 ---
 
@@ -22,8 +31,8 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 
 Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
-- [ ] Prior R-* (if any) committed — one squashed commit on prior branch; no WIP left behind
-- [ ] Branch created from agreed base (integration or stack)
+- [ ] Prior R-* branch committed on its own branch (one squashed commit, clean tree) — stack base for this milestone
+- [ ] New stacked branch `megiddo/r-{nn}-{slug}` created from integration (R-01) or prior R-* tip (R-02+)
 - [ ] Refactor scope matches DS-{nn} §3 + `03-implementation-plan.md` targets only
 - [ ] `sh bin/run-unit-tests.sh` exit 0 (full suite)
 - [ ] Infection per `validations/v-{nn}-*.md` §2.4 — MSI ≥ documented floor
@@ -50,7 +59,7 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | Docs + plan targets | [x] |
 | Commit: `R-01: …` | [x] |
 
-**Notes:** Branch `megiddo/r-01-rsvp-refactor` @ `be192dd8`. Base `05bc1973` (`megiddo/rebase-20260709`). PHPUnit 204 tests, 0 failures (2 skipped). Infection `infection.t01-rsvp.json5`: MSI 17%, covered MSI 55% (floors 15/15). Fuzzy test+mirror 8/8 pass; re-recorded test baselines for `event-index-rsvp*` after sandbox redeploy (dom 0.94 pre-record). Playwright: infrastructure auth smoke + `rsvp.spec.ts` 2/2 pass.
+**Notes:** Branch `megiddo/r-01-rsvp-refactor` @ `bc626ce8`. Base `05bc1973` (`megiddo/rebase-20260709`). PHPUnit 204 tests, 0 failures (2 skipped). Infection `infection.t01-rsvp.json5`: MSI 17%, covered MSI 55% (floors 15/15). Fuzzy test+mirror 8/8 pass; re-recorded test baselines for `event-index-rsvp*` after sandbox redeploy (dom 0.94 pre-record). Playwright: infrastructure auth smoke + `rsvp.spec.ts` 2/2 pass.
 
 ---
 
@@ -61,16 +70,16 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| R-01 branch committed / merged per metadata | [ ] |
-| Refactor T-ADM-11, T-KNA-03, T-PRA-02, T-EVA-06 (per plan) | [ ] |
-| PHPUnit | [ ] |
-| Infection §2.4 | [ ] |
-| Fuzzy: per v-02 §1 | [ ] |
-| Playwright: `auth-permissions.spec.ts` | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-02: …` | [ ] |
+| Stack base: `megiddo/r-01-rsvp-refactor` @ `bc626ce8` | [x] |
+| Refactor T-ADM-11, T-KNA-03, T-PRA-02, T-EVA-06 (per plan) | [x] |
+| PHPUnit | [x] |
+| Infection §2.4 | [x] |
+| Fuzzy: per v-02 §1 | [x] |
+| Playwright: `auth-permissions.spec.ts` | [x] |
+| Docs + plan | [x] |
+| Commit: `R-02: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-02-auth-insert-refactor` @ `578f2f2f` stacked on R-01 @ `bc626ce8`. Replaced raw INSERT in AdminAjax/KingdomAjax/ParkAjax/EventAjax addauth with `Model_Authorization::add_auth`; added danger-audit on global admin grant. PHPUnit 204/204 pass. Infection `infection.t02-auth-insert.json5`: MSI 42%, covered MSI 42%. Fuzzy 10/10 pass; re-recorded test manifests for `kingdom-auth-sandbox,park-auth-sandbox` after sandbox redeploy. Playwright: auth smoke + `auth-permissions.spec.ts` 3/3 pass.
 
 ---
 
@@ -311,4 +320,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | … | … | … |
 | 14 | R-14 | Phase 3 audit |
 
-**Next unchecked:** R-02
+**Next unchecked:** R-03

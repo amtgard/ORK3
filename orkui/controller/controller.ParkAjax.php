@@ -423,19 +423,24 @@ class Controller_ParkAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Invalid player.']);
                 exit;
             }
+            $this->load_model('Authorization');
+            $r = $this->Authorization->add_auth([
+                'Token'     => $this->session->token,
+                'MundaneId' => $mid,
+                'Type'      => AUTH_PARK,
+                'Id'        => $park_id,
+                'Role'      => $role,
+            ]);
+            if ($r['Status'] != 0) {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . (isset($r['Detail']) && $r['Detail'] !== '' ? ': ' . $r['Detail'] : '')]);
+                exit;
+            }
+            $authId = (int)($r['Detail'] ?? 0);
             global $DB;
             $DB->Clear();
-            $DB->Execute("INSERT INTO ork_authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
-				VALUES ({$mid}, {$park_id}, 0, 0, 0, '{$role}', NOW())");
-            $DB->Clear();
-            $rs = $DB->DataSet("SELECT a.authorization_id, m.persona FROM ork_authorization a
-				LEFT JOIN ork_mundane m ON m.mundane_id = a.mundane_id
-				WHERE a.mundane_id = {$mid} AND a.park_id = {$park_id}
-				ORDER BY a.authorization_id DESC LIMIT 1");
-            $authId = 0;
+            $rs = $DB->DataSet("SELECT m.persona FROM ork_mundane m WHERE m.mundane_id = {$mid}");
             $persona = '';
             if ($rs && $rs->Next()) {
-                $authId = (int)$rs->authorization_id;
                 $persona = $rs->persona;
             }
             Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_PARK, 'Id' => $park_id, 'Role' => $role], 'Player', $mid, null, [
