@@ -56,7 +56,7 @@ $ctas       = is_array($ctas)   ? $ctas   : [];
             <?php endif; ?>
             <?php foreach ($ctas as $ctaIdx => $cta):
                 $ctaLabel = htmlspecialchars($cta['label'] ?? '', ENT_QUOTES, 'UTF-8');
-                $ctaHref  = htmlspecialchars((!empty($cta['href']) && CmsSanitizer::IsSafeUrl($cta['href'])) ? $cta['href'] : '#', ENT_QUOTES, 'UTF-8');
+                $ctaHref  = htmlspecialchars(CmsSanitizer::SafeHrefOrHash($cta['href'] ?? ''), ENT_QUOTES, 'UTF-8');
                 $ctaClass = ($cta['style'] ?? '') === 'ghost' ? 'fd-btn-ghost' : 'fd-btn-gold';
                 $ctaStyle = $ctaIdx > 0 ? ' style="margin-left:10px"' : '';
             ?>
@@ -80,6 +80,10 @@ $ctas       = is_array($ctas)   ? $ctas   : [];
     </button>
     <?php endif; ?>
 
+    <?php /* Live stat ticker: only the real HOME action injects $ActiveKingdomSummary.
+              Sub-page heroes (CMS pages) leave it unset → omit the ticker rather
+              than render zeros. */ ?>
+    <?php if (isset($ActiveKingdomSummary)): ?>
     <!-- Live stat ticker pinned to carousel base -->
     <div class="fd-stat-ticker">
         <div class="fd-stat-ticker-cell">
@@ -99,5 +103,6 @@ $ctas       = is_array($ctas)   ? $ctas   : [];
             <div class="fd-stat-label">Events</div>
         </div>
     </div>
+    <?php endif; ?>
 
 </div>

@@ -11,7 +11,9 @@ $align   = $blockFields['align']   ?? 'left';
 $cta     = $blockFields['cta']     ?? [];
 
 $textAlign  = ($align === 'center') ? 'text-align:center;' : '';
-$marginAuto = ($align === 'center') ? 'margin:0 auto;' : '';
+// Constrained single-column body is ALWAYS centered on the page (margin:0 auto);
+// text-align (above) stays independent so copy can still be left- or centered.
+$marginAuto = 'margin:0 auto;';
 ?>
 <div class="fd-pad fd-section-light" style="<?= $textAlign ?>">
     <?php if (!empty($kicker)): ?>
@@ -35,7 +37,7 @@ $marginAuto = ($align === 'center') ? 'margin:0 auto;' : '';
 
     <?php if (!empty($cta['label'])): ?>
         <div style="margin-top:18px;">
-            <a class="fd-link" href="<?= htmlspecialchars((!empty($cta['href']) && CmsSanitizer::IsSafeUrl($cta['href'])) ? $cta['href'] : '#', ENT_QUOTES) ?>">
+            <a class="fd-link" href="<?= htmlspecialchars(CmsSanitizer::SafeHrefOrHash($cta['href'] ?? ''), ENT_QUOTES) ?>">
                 <?= htmlspecialchars($cta['label'], ENT_QUOTES) ?>
             </a>
         </div>

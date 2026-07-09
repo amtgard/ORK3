@@ -23,7 +23,11 @@
     --fd-shadow: 0 12px 50px rgba(0, 0, 0, .4);
 
     /* Legacy aliases (existing rules still reference these) */
-    --navy:  var(--fd-primary);
+    /* STATIC navy — NOT aliased to --fd-primary, which dark mode redefines to a
+       periwinkle (#3b62c2). The always-dark brand bands (steps dark band,
+       photo_mosaic caption, kingdoms_teaser "+N more", cta_band, nav dropdown)
+       must stay navy in both themes. */
+    --navy:  #0b1120;
     --navy2: #121a30;
     --gold:  var(--fd-accent);
     --ink:   var(--fd-text);
@@ -78,6 +82,18 @@
 
 .fd-body-text { color: #3a4356; }
 
+/* Lists keep left-aligned contents even inside a center-aligned rich_text block
+   (otherwise bullets ragged-center). */
+.fd-body-text ul,
+.fd-body-text ol { text-align: left; }
+
+/* Outbound-link affordance on off-site links in body copy. */
+.fd-body-text a[href^="http"]::after {
+    content: " \2197";
+    font-size: .85em;
+    opacity: .7;
+}
+
 .fd-pad {
     padding: 42px 44px;
 }
@@ -88,6 +104,14 @@
    blog_feed / kingdom_* section wrappers. */
 .fd-section-light {
     background: #fff;
+}
+
+/* Muted band — the soft off-white used by card_grid / kingdoms_teaser section
+   wrappers. Real base rule (not a fragile inline `style="background:#f7f8fb"`
+   coupled to an attribute-selector dark override); the dark-mode override for
+   `.fd-section-muted` lives with the other section overrides below. */
+.fd-section-muted {
+    background: #f7f8fb;
 }
 
 /* ---- Buttons & links --------------------------------------- */
@@ -351,15 +375,42 @@
     transform: scale(1.06);
 }
 
+/* Disabled ("Coming soon") card: not a link, so no hover zoom / pointer. */
+.fd-path-disabled {
+    cursor: default;
+}
+
+.fd-path-disabled:hover img {
+    transform: none;
+}
+
+/* Stronger low/mid stops so titles stay legible over pale card imagery. */
 .fd-path-scrim {
     position: absolute;
     inset: 0;
-    background: linear-gradient(to top, rgba(11, 17, 32, .9) 0%, rgba(11, 17, 32, .2) 60%, rgba(11, 17, 32, 0) 100%);
+    background: linear-gradient(to top, rgba(11, 17, 32, .95) 0%, rgba(11, 17, 32, .45) 60%, rgba(11, 17, 32, 0) 100%);
 }
 
 .fd-path-label {
     position: relative;
     padding: 14px 16px;
+}
+
+/* "Coming soon" pill — gold-on-navy, sits inline after the card title. */
+.fd-path-badge {
+    display: inline-block;
+    margin-left: 8px;
+    vertical-align: middle;
+    background: var(--navy);
+    color: var(--gold);
+    font-family: var(--fd-font-body);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(240, 180, 41, .5);
 }
 
 /* ---- Marketing nav ----------------------------------------- */
@@ -404,6 +455,13 @@
 .fd-navitem > a:hover {
     background: #f2f4f8;
     color: #b8860b;
+}
+
+/* Active top-level nav item (current page or one of its children). */
+.fd-navitem > a.is-active {
+    color: #b8860b;
+    box-shadow: inset 0 -2px 0 var(--gold);
+    border-radius: 6px 6px 0 0;
 }
 
 .fd-dropdown {
@@ -478,6 +536,59 @@
     margin-left: auto;
 }
 
+/* ---- Wayfinding breadcrumbs (CMS Page_view) ---------------- */
+.fd-breadcrumbs {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 14px 44px 0;
+    font-size: 12.5px;
+    color: var(--fd-text-muted);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.fd-breadcrumbs a {
+    color: var(--fd-text-muted);
+    text-decoration: none;
+}
+
+.fd-breadcrumbs a:hover {
+    color: var(--gold);
+    text-decoration: underline;
+}
+
+.fd-crumb-sep {
+    color: #aeb6c4;
+}
+
+.fd-crumb-current {
+    color: var(--fd-text);
+    font-weight: 600;
+}
+
+html[data-theme="dark"] .fd-breadcrumbs,
+html[data-theme="dark"] .fd-breadcrumbs a {
+    color: #9aa6bd;
+}
+
+html[data-theme="dark"] .fd-breadcrumbs a:hover {
+    color: var(--gold);
+}
+
+html[data-theme="dark"] .fd-crumb-current {
+    color: #dce3f3;
+}
+
+@media (max-width: 900px) {
+    .fd-breadcrumbs { padding: 12px 24px 0; }
+}
+
+@media (max-width: 680px) {
+    .fd-breadcrumbs { padding: 10px 16px 0; }
+}
+
 /* ---- Announcement / annotation banner --------------------- */
 .fd-ann {
     background: rgba(240, 180, 41, .12);
@@ -548,6 +659,10 @@ html[data-theme="dark"] .fd-navitem > a {
 
 html[data-theme="dark"] .fd-navitem > a:hover {
     background: #1e2a3e;
+    color: var(--gold);
+}
+
+html[data-theme="dark"] .fd-navitem > a.is-active {
     color: var(--gold);
 }
 
@@ -748,8 +863,9 @@ html[data-theme="dark"] .fd-btn-ghost {
         width: 100%;
     }
 
-    /* Member bar: wrap items */
+    /* Member bar: home-only chrome; hide on mobile to reclaim above-the-fold. */
     .fd-member-bar {
+        display: none;
         flex-wrap: wrap;
         gap: 8px 14px;
         padding: 10px 16px;
@@ -791,20 +907,22 @@ html[data-theme="dark"] .fd-btn-ghost {
 }
 
 /* ---- staff_roster block ---- */
-.fd-roster-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px;max-width:1100px;margin:0 auto;}
+.fd-roster-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,260px));justify-content:center;gap:18px;max-width:1100px;margin:0 auto;}
 .fd-roster-card{display:flex;flex-direction:column;align-items:center;text-align:center;background:var(--fd-bg);border:1px solid #e6e8ef;border-radius:12px;padding:20px 16px;text-decoration:none;color:inherit;transition:box-shadow .15s ease,transform .15s ease;}
 a.fd-roster-card:hover{box-shadow:0 6px 18px rgba(20,30,60,.12);transform:translateY(-2px);}
 .fd-roster-photo{width:96px;height:96px;border-radius:50%;object-fit:cover;margin-bottom:12px;background:#eef0f6;}
-.fd-roster-photo-empty{display:flex;align-items:center;justify-content:center;color:#9aa3b8;font-size:34px;}
+.fd-roster-photo-empty{display:flex;align-items:center;justify-content:center;background:var(--navy);color:var(--gold);font-weight:700;font-size:32px;line-height:1;font-family:var(--fd-font-body);}
 .fd-roster-name{font-size:19px;font-weight:600;color:#1b2a4a;}
 .fd-roster-secondary{font-size:13px;color:#6b7488;margin-top:2px;}
 .fd-roster-role{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--gold);margin-top:6px;font-weight:600;}
-.fd-roster-bio{font-size:14px;color:#4a5168;margin-top:10px;line-height:1.5;}
+.fd-roster-bio{font-size:14px;color:#4a5168;margin-top:10px;line-height:1.5;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:6;overflow:hidden;}
 html[data-theme="dark"] .fd-roster-card{background:#1c2333;border-color:#2c3650;}
 html[data-theme="dark"] .fd-roster-name{color:#eef1f8;}
 html[data-theme="dark"] .fd-roster-secondary{color:#9aa3b8;}
 html[data-theme="dark"] .fd-roster-bio{color:#c3c9d8;}
 html[data-theme="dark"] .fd-roster-photo{background:#2c3650;}
+/* Keep the monogram tile navy+gold in dark mode (beats the generic photo bg). */
+html[data-theme="dark"] .fd-roster-photo-empty{background:var(--navy);color:var(--gold);}
 
 /* ---- kingdom_officers block (was per-render inline <style>) ----
    Moved here so it is downloaded once, cacheable, and not duplicated when the
@@ -899,15 +1017,18 @@ html[data-theme="dark"] .bf-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45);
 .blog-card-accent { height: 6px; background: var(--gold, #d4af37); }
 .blog-card-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .blog-card-meta { font-size: 12px; color: #8a93a6; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
-.blog-card-title { font-size: 18px; font-weight: 700; line-height: 1.25; margin: 0; color: #1a2236; }
+.blog-card-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; font-size: 18px; font-weight: 700; line-height: 1.25; margin: 0; color: #1a2236; }
 .blog-card-excerpt { font-size: 14px; color: #50596e; line-height: 1.5; margin: 0; }
 .blog-card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 6px; }
-.blog-tag {
-    font-size: 11px; font-weight: 600; color: #475063;
+/* Tag pill — shared by the blog index (.blog-tag) and single-post (.blogp-tag)
+   chrome so the pill styling lives in one place; only size/padding differ. */
+.blog-tag, .blogp-tag {
+    font-weight: 600; color: #475063;
     background: #eef1f7; border: 1px solid #dde2ec; border-radius: 999px;
-    padding: 2px 9px; text-decoration: none;
+    text-decoration: none;
 }
-.blog-tag:hover { background: #e3e8f3; }
+.blog-tag { font-size: 11px; padding: 2px 9px; }
+.blog-tag:hover, .blogp-tag:hover { background: #e3e8f3; }
 
 .blog-pager { display: flex; justify-content: center; align-items: center; gap: 14px; margin-top: 36px; }
 .blog-pager-btn {
@@ -927,8 +1048,10 @@ html[data-theme="dark"] .blog-card-title { color: #eef2fa; }
 html[data-theme="dark"] .blog-card-excerpt { color: #b6c0d4; }
 html[data-theme="dark"] .blog-card-meta { color: #8794ad; }
 html[data-theme="dark"] .blog-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,.45); }
-html[data-theme="dark"] .blog-tag { color: #c4cde0; background: #232c42; border-color: #34405e; }
-html[data-theme="dark"] .blog-tag:hover { background: #2c3650; }
+html[data-theme="dark"] .blog-tag,
+html[data-theme="dark"] .blogp-tag { color: #c4cde0; background: #232c42; border-color: #34405e; }
+html[data-theme="dark"] .blog-tag:hover,
+html[data-theme="dark"] .blogp-tag:hover { background: #2c3650; }
 html[data-theme="dark"] .blog-tagnote { color: #9aa6bd; }
 html[data-theme="dark"] .blog-pager-btn { background: #1b2233; border-color: #2c3650; color: #eef2fa; }
 html[data-theme="dark"] .blog-pager-btn:hover { background: #232c42; }
@@ -950,12 +1073,9 @@ html[data-theme="dark"] .blog-pager-info { color: #9aa6bd; }
 }
 .blogp-meta { font-size: 14px; color: #6b7488; margin-bottom: 14px; }
 .blogp-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 8px; }
-.blogp-tag {
-    font-size: 12px; font-weight: 600; color: #475063;
-    background: #eef1f7; border: 1px solid #dde2ec; border-radius: 999px;
-    padding: 3px 11px; text-decoration: none;
-}
-.blogp-tag:hover { background: #e3e8f3; }
+/* .blogp-tag shares the pill base with .blog-tag (grouped above); only the
+   slightly larger size/padding is post-specific. */
+.blogp-tag { font-size: 12px; padding: 3px 11px; }
 .blogp-hero {
     margin: 18px 0 6px; border-radius: 14px; overflow: hidden;
     border: 1px solid #e4e8f0; background: #f2f4f8;
@@ -967,7 +1087,6 @@ html[data-theme="dark"] .blog-pager-info { color: #9aa6bd; }
 
 html[data-theme="dark"] .blogp-title { color: #eef2fa; }
 html[data-theme="dark"] .blogp-meta { color: #9aa6bd; }
-html[data-theme="dark"] .blogp-tag { color: #c4cde0; background: #232c42; border-color: #34405e; }
-html[data-theme="dark"] .blogp-tag:hover { background: #2c3650; }
+/* .blogp-tag dark styling is grouped with .blog-tag above. */
 html[data-theme="dark"] .blogp-hero { background: #1b2233; border-color: #2c3650; }
 html[data-theme="dark"] .blogp-empty { color: #9aa6bd; }

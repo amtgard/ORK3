@@ -9,7 +9,7 @@ $heading    = $blockFields['heading']    ?? '';
 $subheading = $blockFields['subheading'] ?? '';
 $cards      = $blockFields['cards']      ?? [];
 ?>
-<div class="fd-pad fd-section-muted" style="background:#f7f8fb;">
+<div class="fd-pad fd-section-muted">
     <div style="text-align:center;margin-bottom:22px;">
         <?php if (!empty($kicker)): ?>
             <div class="fd-kicker fd-kicker-d" style="margin-bottom:8px;">
@@ -24,7 +24,7 @@ $cards      = $blockFields['cards']      ?? [];
         <?php endif; ?>
 
         <?php if (!empty($subheading)): ?>
-            <p style="color:#667;margin:6px 0 0;font-size:15px;">
+            <p class="fd-body-text" style="margin:6px 0 0;font-size:15px;">
                 <?= htmlspecialchars($subheading, ENT_QUOTES) ?>
             </p>
         <?php endif; ?>
@@ -38,9 +38,15 @@ $cards      = $blockFields['cards']      ?? [];
                 $icon  = $card['icon']  ?? '';
                 $title = $card['title'] ?? '';
                 $blurb = $card['blurb'] ?? '';
-                $href  = (!empty($card['href']) && CmsSanitizer::IsSafeUrl($card['href'])) ? $card['href'] : '#';
+                // Empty/'#' href → render a non-link "Coming soon" card (no dead #-link).
+                // (CmsSanitizer stores an unusable/empty href as '#'.)
+                $rawHref  = (string) ($card['href'] ?? '');
+                $hasHref  = ($rawHref !== '' && $rawHref !== '#');
+                $href     = CmsSanitizer::SafeHrefOrHash($rawHref);
+                $fdcTag   = $hasHref ? 'a' : 'div';
+                $fdcClass = $hasHref ? 'fd-path' : 'fd-path fd-path-disabled';
                 ?>
-                <a class="fd-path" href="<?= htmlspecialchars($href, ENT_QUOTES) ?>">
+                <<?= $fdcTag ?> class="<?= $fdcClass ?>"<?php if ($hasHref): ?> href="<?= htmlspecialchars($href, ENT_QUOTES) ?>"<?php endif; ?>>
                     <?php if (!empty($img['src'])): ?>
                         <img src="<?= htmlspecialchars($img['src'], ENT_QUOTES) ?>"
                              alt="<?= htmlspecialchars($img['alt'] ?? '', ENT_QUOTES) ?>">
@@ -50,6 +56,7 @@ $cards      = $blockFields['cards']      ?? [];
                         <div class="fd-serif" style="font-size:22px;">
                             <?php if (!empty($icon)): ?><i class="fas <?= htmlspecialchars($icon, ENT_QUOTES) ?>" style="margin-right:7px;color:var(--gold);"></i><?php endif; ?>
                             <?= htmlspecialchars($title, ENT_QUOTES) ?>
+                            <?php if (!$hasHref): ?><span class="fd-path-badge">Coming soon</span><?php endif; ?>
                         </div>
                         <?php if (!empty($blurb)): ?>
                             <div style="font-size:12px;opacity:.85;">
@@ -57,7 +64,7 @@ $cards      = $blockFields['cards']      ?? [];
                             </div>
                         <?php endif; ?>
                     </div>
-                </a>
+                </<?= $fdcTag ?>>
             <?php endforeach; ?>
         </div>
     <?php endif; ?>
