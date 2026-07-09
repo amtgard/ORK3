@@ -477,11 +477,6 @@ final class EventOccurrenceTest extends TestCase
             'UPDATE ' . DB_PREFIX . 'attendance SET event_calendardetail_id = ' . $newDetailId
             . ' WHERE event_calendardetail_id = ' . $detailId . " AND date < '" . $today . "'"
         );
-        $DB->Clear();
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'attendance_myisam SET event_calendardetail_id = ' . $newDetailId
-            . ' WHERE event_calendardetail_id = ' . $detailId . " AND date < '" . $today . "'"
-        );
 
         return $newDetailId;
     }

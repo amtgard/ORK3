@@ -70,12 +70,14 @@ Track **RB-*** progress here. **Preferred:** one [orchestrator](agent-prompt.md)
 
 | Step | Status |
 |------|--------|
-| `docker compose -f docker-compose.php8.yml up -d` | [ ] |
-| `bin/ork-db deploy-sandbox` (fix schema/migration drift if needed) | [ ] |
-| E2E preflight when touching auth-gated specs | [ ] |
-| `sh bin/run-unit-tests.sh` exit 0 | [ ] |
-| Critical e2e smoke (or document deferrals to RB-D\*) | [ ] |
-| Commit: `RB-2: Repair tests after Megiddo rebase` | [ ] |
+| `docker compose -f docker-compose.php8.yml up -d` | [x] |
+| `bin/ork-db deploy-sandbox` (fix schema/migration drift if needed) | [x] |
+| E2E preflight when touching auth-gated specs | [x] |
+| `sh bin/run-unit-tests.sh` exit 0 | [x] |
+| Critical e2e smoke (or document deferrals to RB-D\*) | [x] |
+| Commit: `RB-2: Repair tests after Megiddo rebase` | [x] |
+
+**RB-2 notes (2026-07-09):** Sandbox schema drift vs mirror — added google-maps lat/lng override, InnoDB engine parity in `baseline-gaps.sql`, test-park coords in Render; removed stale `attendance_myisam` fixture refs. PHPUnit: 204 tests, 627 assertions, 2 skipped, exit 0. E2E: health-route smoke pass; auth-gated Playwright deferred to RB-D\* (credentials preflight per `06-test-framework.md`).
 
 **Exit:** Full PHPUnit green. Domain-specific assertion tweaks may continue in RB-D\* if isolated and listed under “deferred”.
 
@@ -207,4 +209,4 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 | 5 | RB-F |
 | 6 | RB-Z |
 
-**Next unchecked:** **RB-2** — Full suite green
+**Next unchecked:** **RB-D1** — Domains 01–04 (RSVP, auth, banner, EventAjax)

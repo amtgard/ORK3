@@ -411,7 +411,6 @@ final class EventPlanningFixture
 
         foreach ($this->detailIds as $id) {
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'attendance WHERE event_calendardetail_id = ' . (int) $id);
-            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'attendance_myisam WHERE event_calendardetail_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_fees WHERE event_calendardetail_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_rsvp WHERE event_calendardetail_id = ' . (int) $id);

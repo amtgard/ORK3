@@ -12,7 +12,7 @@
     "2018-06-17-fix-unit-owner.sql": { "class": "PB", "render": "skip" },
     "2018-06-18-crown-points.sql": { "class": "S", "render": "override", "override": "2018-06-18-crown-points.sql" },
     "2018-06-24-ducal-crown-points.sql": { "class": "PB", "render": "skip", "notes": "Award crown_points data fix" },
-    "2018-10-30-google-maps-api-update-please-dont-kill-my-credit-card": { "class": "PB", "render": "skip" },
+    "2018-10-30-google-maps-api-update-please-dont-kill-my-credit-card": { "class": "PB", "render": "override", "override": "2018-10-30-google-maps-lat-lng.sql", "notes": "Schema only; geocode backfill omitted" },
     "2018-10-31-ghetto-rate-limiting": { "class": "S", "render": "override", "override": "2018-10-31-ghetto-rate-limiting.sql" },
     "2018-11-12-officer-roles": { "class": "S+RC", "render": "override", "override": "2018-11-12-officer-roles.sql" },
     "2019-06-25-add-events-at-local-parks": { "class": "S", "render": "full" },
