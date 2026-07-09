@@ -51,11 +51,11 @@ Track **RB-*** progress here. **Preferred:** one [orchestrator](agent-prompt.md)
 
 | Step | Status |
 |------|--------|
-| `git rebase origin/master` (or agreed base) | [ ] |
-| Conflicts resolved per playbook | [ ] |
-| Rebase completed; tip is ancestor-based on base | [ ] |
-| Smoke: `composer install` / obvious syntax breakage noted for RB-2 | [ ] |
-| Commit: `RB-1: Rebase Megiddo line onto master` | [ ] |
+| `git rebase origin/master` (or agreed base) | [x] |
+| Conflicts resolved per playbook | [x] |
+| Rebase completed; tip is ancestor-based on base | [x] |
+| Smoke: `composer install` / obvious syntax breakage noted for RB-2 | [x] |
+| Commit: `RB-1: Rebase Megiddo line onto master` | [x] |
 
 **Exit:** Clean rebase (or user-approved alternate strategy). No requirement that PHPUnit is green yet.
 
@@ -207,4 +207,4 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 | 5 | RB-F |
 | 6 | RB-Z |
 
-**Next unchecked:** **RB-1** — Rebase onto base
+**Next unchecked:** **RB-2** — Full suite green
