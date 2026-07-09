@@ -43,8 +43,8 @@ Backend **`class.Event.php`** covers core event/calendar-detail lifecycle but ha
 
 | Lines | Behavior |
 |-------|----------|
-| 51–59 | RSVP toggle: raw ownership check on `event_calendardetail` before `toggle_rsvp` |
-| 75–98 | Batch RSVP COUNT GROUP BY status + per-user status for all calendar details |
+| 51–62 | RSVP toggle: raw ownership check on `event_calendardetail` before `toggle_rsvp` |
+| 68–98 | Batch RSVP COUNT GROUP BY status + per-user status for all calendar details |
 
 **Gap:** Duplicates DS-01 RSVP aggregation; batch API should replace inline SQL.
 
@@ -52,7 +52,7 @@ Backend **`class.Event.php`** covers core event/calendar-detail lifecycle but ha
 
 | Lines | Behavior |
 |-------|----------|
-| 186–188 | Single-query COUNT per detail for template upcoming/past lists |
+| 181–194 | Single-query COUNT per detail for template upcoming/past lists |
 
 **Overlap:** Same RSVP count pattern as T-EVT-01; consolidate in R-01 RSVP API.
 
@@ -61,11 +61,11 @@ Backend **`class.Event.php`** covers core event/calendar-detail lifecycle but ha
 | Lines | Behavior |
 |-------|----------|
 | 241–265 | Pick next/past occurrence when `detail_id` omitted — raw SELECT |
-| 308–316 | Load caller's `event_staff` capabilities for this occurrence |
+| 307–317 | Load caller's `event_staff` capabilities for this occurrence |
 | 325–363 | `deletedetail`: attendance/RSVP count guards; kingdom/park redirect scope |
 | 365–383 | `rsvp` action: ownership preflight |
 | 636–651 | At-park address SELECT |
-| 691–721 | Event draft status + creator; calendar detail count |
+| 690–712 | Event draft status + creator; calendar detail count |
 | 718–927 | Staff list, schedule+leads, fees, links, dietary summary — all raw SQL |
 
 **Gap:** No domain `GetEventOccurrencePageData` DTO; staff/schedule reads duplicate DS-04 inventory.
@@ -82,7 +82,7 @@ Backend **`class.Event.php`** covers core event/calendar-detail lifecycle but ha
 
 | Lines | Behavior |
 |-------|----------|
-| 515–595 | `reconcile`: create new detail via API, then raw UPDATE attendance rows to new `detail_id` |
+| 515–584 | `reconcile`: create new detail via API, then raw UPDATE attendance rows to new `detail_id` |
 
 **Gap:** Reconcile is domain orchestration (attendance integrity); no backend method.
 
@@ -94,7 +94,7 @@ Same as T-EVT-03 display block (637–927): park address, draft gate, staff, sch
 
 | Lines | Behavior |
 |-------|----------|
-| 988–1090 | Park name lookup; post-`add_event_detail` fees/links transactional sync |
+| 988–1091 | Park name lookup; post-`add_event_detail` fees/links transactional sync |
 
 **Gap:** Identical fees/links SQL as T-EVT-04; should call shared domain method.
 
@@ -103,7 +103,7 @@ Same as T-EVT-03 display block (637–927): park address, draft gate, staff, sch
 | Pattern | Lines (examples) |
 |---------|------------------|
 | `Ork3::$Lib->authorization->HasAuthority` | 29, 65, 136, 213, 326, 391, 516, 681–688, 710, 995 |
-| `Ork3::$Lib->ghettocache->bust*` | 404–442, 579–583, 1032 |
+| `Ork3::$Lib->ghettocache->bust*` | 404–442, 579–583, 1032–1090 |
 
 **Note:** Authorization lib calls deferred to DS-14; cache bust should move with write domain methods.
 
@@ -292,3 +292,5 @@ flowchart LR
 | Implementation plan | [03-implementation-plan.md](./03-implementation-plan.md) |
 | Test framework | [06-test-framework.md](./06-test-framework.md) |
 | [validations/v-05-event-validation.md](./validations/v-05-event-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-05) |
+
+**Post-rebase (RB-D2, 2026-07-09):** §1 line ranges verified against `orkui/` at base `e6417645` (`origin/master`). Minor drift in RSVP batch (68–98), template counts (181–194), staff lookup (307–317), reconcile end (584), create fees/links (1091); no upstream gap closures; §3 revision unchanged.

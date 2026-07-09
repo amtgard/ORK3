@@ -128,10 +128,12 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 
 | Domain | ds-* | plan lines | v-* | tests | Infection | Done |
 |--------|------|------------|-----|-------|-----------|------|
-| 05 Event | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| 06 Kingdom | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| 07 Park | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
-| 08 Admin | [ ] | [ ] | [ ] | [ ] | [ ] | [ ] |
+| 05 Event | [x] | [x] | [x] | [x] | [x] | [x] |
+| 06 Kingdom | [x] | [x] | [x] | [x] | [x] | [x] |
+| 07 Park | [x] | [x] | [x] | [x] | [x] | [x] |
+| 08 Admin | [x] | [x] | [x] | [x] | [x] | [x] |
+
+**RB-D2 notes (2026-07-09):** Base `e6417645`; §1 verified against current `orkui/`. Domains 05–08 had minor line drift (event RSVP/template/reconcile; kingdom player-count/ICS; park draft clause; admin suspend/abbr). §3 gaps unchanged. PHPUnit domain filter: 48 tests, exit 0. Infection: t05 MSI 26%; t06 MSI 43%; t07 MSI 24%; t08 batched — Report 88%, StateOfAmtgard 89%, Park 24%, DangerAudit 15% (Player/Weather domain excluded per pre-refactor gap).
 
 ---
 
@@ -211,4 +213,4 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 | 5 | RB-F |
 | 6 | RB-Z |
 
-**Next unchecked:** **RB-D2** — Domains 05–08 (event, kingdom, park, admin)
+**Next unchecked:** **RB-D3** — Domains 09–12 (player, reports, search, attendance)

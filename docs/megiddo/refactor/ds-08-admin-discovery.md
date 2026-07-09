@@ -15,7 +15,7 @@
 
 Admin frontend violations cluster in two controllers:
 
-- **`controller.Admin.php`** (~2,660 lines) — dashboard (`index`), permissions listings, danger audit log, server health page + `ajax` JSON actions, State of Amtgard page shell.
+- **`controller.Admin.php`** (~2,666 lines) — dashboard (`index`), permissions listings, danger audit log, server health page + `ajax` JSON actions, State of Amtgard page shell.
 - **`controller.AdminAjax.php`** (~175 lines) — global permissions AJAX and State of Amtgard chart JSON endpoints.
 
 **Partially idiomatic today:** `index` uses `APIModel('Report')->GetActiveKingdomsSummary()`; inactive kingdoms/parks, top parks, and many write paths use `Model_Admin` → Report service. **Violations** are direct `$DB` SQL, ops/infra reads in controller, domain business rules in controller (suspension by-id, date caps), and `Ork3::$Lib` calls that bypass a service façade.
@@ -96,7 +96,7 @@ Per milestone scope, **T-ADM-11** (auth INSERT) is **out of R-08** (DS-02). **T-
 
 | Lines | Behavior |
 |-------|----------|
-| 2207–2219 | Reads `suspended_by_id, suspended` from `ork_mundane`; infers `SuspendedById` in controller before `Model_Player->suspend_player()` |
+| 2207–2220 | Reads `suspended_by_id, suspended` from `ork_mundane`; infers `SuspendedById` in controller before `Model_Player->suspend_player()` |
 
 **Existing backend:** `Player::SetPlayerSuspension()` accepts `SuspendedById` but does not infer it.
 
@@ -106,7 +106,7 @@ Per milestone scope, **T-ADM-11** (auth INSERT) is **out of R-08** (DS-02). **T-
 
 | Lines | Behavior |
 |-------|----------|
-| 2265–2279 | Park abbreviation uniqueness within kingdom among Active parks, excluding self |
+| 2265–2278 | Park abbreviation uniqueness within kingdom among Active parks, excluding self |
 
 **Existing backend:** `Park::GetParkInKingdomByAbbreviation()` — lookup only, no exclude-current.
 
@@ -351,3 +351,5 @@ flowchart LR
 | Implementation plan | [03-implementation-plan.md](./03-implementation-plan.md) |
 | Test framework | [06-test-framework.md](./06-test-framework.md) |
 | [validations/v-08-admin-validation.md](./validations/v-08-admin-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-08) |
+
+**Post-rebase (RB-D2, 2026-07-09):** §1 line ranges verified against `orkui/` at base `e6417645` (`origin/master`). Admin controller 2666 lines; suspend inference 2207–2220; checkparkabbr 2265–2278; no upstream gap closures; §3 revision unchanged.

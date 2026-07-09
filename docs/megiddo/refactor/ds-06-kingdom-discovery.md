@@ -109,13 +109,13 @@ Per milestone scope, **T-KNA-03** (auth INSERT), **T-KNA-08** (banner CRUD), and
 
 | Lines | Behavior |
 |-------|----------|
-| 923–1007 | User home park lookup; park-level auth EXISTS; player COUNT with cache |
+| 923–1008 | User home park lookup; park-level auth EXISTS; player COUNT with cache |
 
 #### T-KNG-10: `ics`
 
 | Lines | Behavior |
 |-------|----------|
-| 1121–1199 | Raw event occurrence SELECT; ICS formatting in controller |
+| 1134–1199 | Raw event occurrence SELECT; ICS formatting in controller |
 
 **Gap:** Export logic belongs in domain or dedicated export service.
 
@@ -149,7 +149,7 @@ Per milestone scope, **T-KNA-03** (auth INSERT), **T-KNA-08** (banner CRUD), and
 
 | Lines | Behavior |
 |-------|----------|
-| 716–718 | Kingdom abbreviation uniqueness query |
+| 715–721 | Kingdom abbreviation uniqueness query |
 
 **Gap:** `Kingdom->GetKingdomByAbbreviation` exists but uniqueness-with-exclude not exposed.
 
@@ -369,3 +369,5 @@ flowchart LR
 | Implementation plan | [03-implementation-plan.md](./03-implementation-plan.md) |
 | Test framework | [06-test-framework.md](./06-test-framework.md) |
 | [validations/v-06-kingdom-validation.md](./validations/v-06-kingdom-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-06) |
+
+**Post-rebase (RB-D2, 2026-07-09):** §1 line ranges verified against `orkui/` at base `e6417645` (`origin/master`). Player-count cache block extends to 1008; ICS SQL at 1134+; `checkabbr` 715–721; no upstream gap closures; §3 revision unchanged.

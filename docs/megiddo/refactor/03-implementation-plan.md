@@ -27,13 +27,13 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 |----|-------|--------|-------|-------------|
 | T-ADM-01 | `Controller_Admin` | `index` | 43–90 | YoY stats: awards, attendance, recommendations aggregates |
 | T-ADM-02 | `Controller_Admin` | `permissions` | 803–1018 | Authorization listings with multi-table JOINs |
-| T-ADM-03 | `Controller_Admin` | `auditlog` | 1992–2088 | Danger audit pagination; kingdom list; method filter |
-| T-ADM-04 | `Controller_Admin` | `serverhealth` | 2177, 2376–2454 | `SHOW GLOBAL STATUS`, `PROCESSLIST`, weather/attendance/event stats |
-| T-ADM-05 | `Controller_Admin` | `ajax` → `suspendplayer` | 2209–2210 | Read `suspended_by_id, suspended` before service call |
-| T-ADM-06 | `Controller_Admin` | `ajax` → `checkparkabbr` | 2270–2276 | Park abbreviation uniqueness |
-| T-ADM-07 | `Controller_Admin` | `ajax` → `checkkingdomabbr` | 2317–2319 | Kingdom abbreviation uniqueness |
-| T-ADM-08 | `Controller_Admin` | weather admin actions | 2567–2573+ | `SELECT MAX(fetched_at) FROM ork_park_weather`; `Ork3::$Lib->weather->refresh_all_active_parks()` |
-| T-ADM-09 | `Controller_Admin` | `stateofamtgard` | 2646–2650+ | Attendance date range SQL; `Ork3::$Lib->stateofamtgard->getActiveKingdoms()` |
+| T-ADM-03 | `Controller_Admin` | `auditlog` | 2021–2107 | Danger audit pagination; kingdom list; method filter |
+| T-ADM-04 | `Controller_Admin` | `serverhealth` | 2176–2183, 2351–2561 | `SHOW GLOBAL STATUS`, `PROCESSLIST`, weather/attendance/event stats |
+| T-ADM-05 | `Controller_Admin` | `ajax` → `suspendplayer` | 2207–2220 | Read `suspended_by_id, suspended` before service call |
+| T-ADM-06 | `Controller_Admin` | `ajax` → `checkparkabbr` | 2265–2278 | Park abbreviation uniqueness |
+| T-ADM-07 | `Controller_Admin` | `ajax` → `checkkingdomabbr` | 2312–2322 | Kingdom abbreviation uniqueness |
+| T-ADM-08 | `Controller_Admin` | weather admin actions | 2567–2588 | `SELECT MAX(fetched_at) FROM ork_park_weather`; `Ork3::$Lib->weather->refresh_all_active_parks()` |
+| T-ADM-09 | `Controller_Admin` | `stateofamtgard` | 2646–2659 | Attendance date range SQL; `Ork3::$Lib->stateofamtgard->getActiveKingdoms()` |
 | T-ADM-10 | `Controller_AdminAjax` | `global` → `playersearch` | 29–41 | Player search SQL on `ork_mundane` |
 | T-ADM-11 | `Controller_AdminAjax` | `global` → `addauth` | 55–72 | **Direct INSERT** into `ork_authorization` |
 | T-ADM-12 | `Controller_AdminAjax` | `stateofamtgard` | 91+ | State-of-Amtgard JSON chart endpoints; date validation in controller |
@@ -46,14 +46,14 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
-| T-EVT-01 | `Controller_Event` | `index` | 55–92 | Calendar detail ownership check; RSVP counts and user status |
-| T-EVT-02 | `Controller_Event` | `template` | 187–188 | RSVP counts per calendar detail |
-| T-EVT-03 | `Controller_Event` | `detail` (reads) | 243–347 | Detail row, staff permissions, attendance/RSVP guards, event scope |
+| T-EVT-01 | `Controller_Event` | `index` | 51–98 | Calendar detail ownership check; RSVP counts and user status |
+| T-EVT-02 | `Controller_Event` | `template` | 181–194 | RSVP counts per calendar detail |
+| T-EVT-03 | `Controller_Event` | `detail` (reads) | 241–363 | Detail row, staff permissions, attendance/RSVP guards, event scope |
 | T-EVT-04 | `Controller_Event` | `detail` (writes) | 391–496 | Event type UPDATE; transactional fees/links DELETE+INSERT |
-| T-EVT-05 | `Controller_Event` | `detail` (schedule copy) | 519–583 | Calendar detail duplicate INSERTs |
-| T-EVT-06 | `Controller_Event` | `detail` (display load) | 637–863 | Park address, event status, staff, schedule, fees, links, dietary |
-| T-EVT-07 | `Controller_Event` | `detail` (new detail fees/links) | 990–1090 | Fees/links CRUD on newly created calendar detail |
-| T-EVT-08 | `Controller_Event` | *(throughout)* | 29–1032 | `Ork3::$Lib->authorization`, `ghettocache` bust calls |
+| T-EVT-05 | `Controller_Event` | `detail` (schedule copy) | 515–584 | Calendar detail duplicate INSERTs |
+| T-EVT-06 | `Controller_Event` | `detail` (display load) | 636–927 | Park address, event status, staff, schedule, fees, links, dietary |
+| T-EVT-07 | `Controller_Event` | `detail` (new detail fees/links) | 988–1091 | Fees/links CRUD on newly created calendar detail |
+| T-EVT-08 | `Controller_Event` | *(throughout)* | 29–1090 | `Ork3::$Lib->authorization`, `ghettocache` bust calls |
 
 ### `Controller_EventAjax`
 
@@ -107,19 +107,19 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-KNG-05 | `Controller_Kingdom` | `profile` (officers) | 581–587 | Monarch/regent lookup from `ork_officer` |
 | T-KNG-06 | `Controller_Kingdom` | `profile` (events) | 643–660 | Events list; staff permission per row |
 | T-KNG-07 | `Controller_Kingdom` | `profile` (calendar) | 695–769 | Calendar items; detail batch; host coords |
-| T-KNG-08 | `Controller_Kingdom` | `profile` (park days) | 851–871 | Park day queries |
-| T-KNG-09 | `Controller_Kingdom` | `profile` (auth/counts) | 924–1001 | User park lookup; auth check; player count |
-| T-KNG-10 | `Controller_Kingdom` | `ics` | 1149–1150 | Calendar ICS export SQL |
+| T-KNG-08 | `Controller_Kingdom` | `profile` (park days) | 862–915 | Park day queries |
+| T-KNG-09 | `Controller_Kingdom` | `profile` (auth/counts) | 923–1008 | User park lookup; auth check; player count |
+| T-KNG-10 | `Controller_Kingdom` | `ics` | 1134–1199 | Calendar ICS export SQL |
 | T-KNG-11 | `Controller_Kingdom` | *(throughout)* | 29–1007 | `Ork3::$Lib->authorization`, `ghettocache`, `player->GetCircleAwardIds` |
 
 ### `Controller_KingdomAjax`
 
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
-| T-KNA-01 | `Controller_KingdomAjax` | `kingdom` → move player | 385–418 | Kingdom/park lookup; abbreviation conflict |
+| T-KNA-01 | `Controller_KingdomAjax` | `kingdom` → move player | 384–400 | Kingdom/park lookup; abbreviation conflict |
 | T-KNA-02 | `Controller_KingdomAjax` | `kingdom` → award recs public | 603–611 | **Direct INSERT/UPDATE** on `ork_configuration` |
 | T-KNA-03 | `Controller_KingdomAjax` | `kingdom` → addauth | 615–654 | **Direct INSERT** into `ork_authorization` |
-| T-KNA-04 | `Controller_KingdomAjax` | `kingdom` → checkabbr | 716–718 | Kingdom abbreviation uniqueness |
+| T-KNA-04 | `Controller_KingdomAjax` | `kingdom` → checkabbr | 715–721 | Kingdom abbreviation uniqueness |
 | T-KNA-05 | `Controller_KingdomAjax` | `calendar` | 759–945 | Royal officers, events, calendar items, park days |
 | T-KNA-06 | `Controller_KingdomAjax` | `playersearch` | 1069–1125 | Scoped player search with abbr resolution |
 | T-KNA-07 | `Controller_KingdomAjax` | `suspendplayer` | 1183 | Read suspension state from `ork_mundane` |
@@ -131,7 +131,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
-| T-PRK-01 | `Controller_Park` | `profile` (events) | 181–197 | Events list; staff permission per row |
+| T-PRK-01 | `Controller_Park` | `profile` (events) | 136–218 | Events list; staff permission per row |
 | T-PRK-02 | `Controller_Park` | `profile` (calendar) | 233–306 | Calendar items; detail batch; host coords |
 | T-PRK-03 | `Controller_Park` | `profile` (roster) | 386–387 | Roster SQL (also cached via ghettocache 338–415) |
 | T-PRK-04 | `Controller_Park` | `profile` (averages) | 429–457 | Monthly/weekly attendance averages |

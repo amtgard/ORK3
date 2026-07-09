@@ -42,7 +42,7 @@ Park frontend violations span:
 
 | Lines | Behavior |
 |-------|----------|
-| 139–218 | Park-scoped event query: draft clause, RSVP aggregate JOIN, my_rsvp subquery, per-row staff/draft PHP filter |
+| 136–218 | Park-scoped event query: draft clause, RSVP aggregate JOIN, my_rsvp subquery, per-row staff/draft PHP filter |
 
 **Overlap:** Same pattern as DS-06 `GetKingdomEventSummary` with `park_id` / `at_park_id` scope.
 
@@ -264,3 +264,5 @@ flowchart LR
 | Implementation plan | [03-implementation-plan.md](./03-implementation-plan.md) |
 | Test framework | [06-test-framework.md](./06-test-framework.md) |
 | [validations/v-07-park-validation.md](./validations/v-07-park-validation.md) | Phase 1.6 — canary URLs + test mutation boundaries (V-07) |
+
+**Post-rebase (RB-D2, 2026-07-09):** §1 line ranges verified against `orkui/` at base `e6417645` (`origin/master`). Event summary draft clause starts at 136; other ranges match; no upstream gap closures; §3 revision unchanged.
