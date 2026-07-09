@@ -4533,7 +4533,7 @@ class Report extends Ork3
         // ====================================================================
         // Every Rose table/column below is new this release, so these are pure
         // post-launch adoption counts. A before/after activity-impact pass (like
-        // Dragon's) is intentionally deferred: Rose ships 2026-06-14, so an
+        // Dragon's) is intentionally deferred: Rose ships 2026-07-01, so an
         // "after" window of ~0 days would be noise, not signal. Add it once the
         // release has accrued a meaningful post-launch window.
 
@@ -4844,7 +4844,7 @@ class Report extends Ork3
         $release353 = array(
             'version' => '3.5.3',
             'name'    => 'Rose',
-            'date'    => '2026-06-14',
+            'date'    => '2026-07-01',
             'blurb'   => 'Event Planning Expansion: schedule, staff, fees and feast on the event page, day-of QR sign-in and self-registration, custom hero banners, and a smarter calendar.',
             'features' => array(
                 $featSchedule,
