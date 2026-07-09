@@ -833,6 +833,21 @@ Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for
 
 ---
 
+### V-01: RSVP validation artifacts
+
+**Branch:** `megiddo/v-01-rsvp-validation`
+
+**Spec:** [validations/v-01-rsvp-validation.md](./validations/v-01-rsvp-validation.md)
+
+| Step | Status |
+|------|--------|
+| Canary URLs + `pages.json5` (`event-index-rsvp`, `event-index-rsvp-gok`; detail ids skipped) | [x] |
+| Test mutation boundaries (§2) | [x] |
+| Dual-profile fuzzy record + validate (4/4 pass) | [x] |
+| V-01 sign-off gate | [x] |
+
+---
+
 ### V-01 … V-14: Domain validation artifacts
 
 Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines. Pairs with DS/T/R numbering.
@@ -917,4 +932,4 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** V-01 (RSVP validation artifacts), then V-02 … V-14 in parallel batches, then R-01 (RSVP refactor — DS-01, T-01 complete).
+**Next actionable milestone:** V-02 (auth INSERT validation), then V-03 … V-14 in parallel batches (G1 remainder), then R-01 (RSVP refactor — DS-01, T-01, V-01 complete).

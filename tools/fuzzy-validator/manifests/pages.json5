@@ -63,6 +63,34 @@
       "notes": "Class: Event — skip visual capture; auth-gated detail hangs on mirror load (event-list/index/create cover Event class)"
     },
     {
+      "id": "event-detail-rsvp",
+      "url": "./index.php?Route=Event/detail/80000/1",
+      "auth": "none",
+      "skip": true,
+      "notes": "V-01 RSVP — skip visual capture; Event/detail fullPage hang (same class as event-detail). Sandbox pin event 80000 / detail 1 for R-01 e2e"
+    },
+    {
+      "id": "event-detail-auth-rsvp",
+      "url": "./index.php?Route=Event/detail/80000/1",
+      "auth": "login",
+      "skip": true,
+      "notes": "V-01 RSVP — skip visual capture; auth detail hang. Use EventRsvpAjaxTest + rsvp.spec.ts for behavior"
+    },
+    {
+      "id": "event-index-rsvp",
+      "url": "./index.php?Route=Event/index/80000",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "notes": "V-01 RSVP — Spring War index RSVP batch counts; sandbox event 80000; mirror id absent → home chrome"
+    },
+    {
+      "id": "event-index-rsvp-gok",
+      "url": "./index.php?Route=Event/index/80003",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "notes": "V-01 RSVP — Gathering of Kingdoms index variant; sandbox event 80003; mirror → home chrome"
+    },
+    {
       "id": "event-index",
       "url": "./index.php?Route=Event/index/1",
       "auth": "login",
