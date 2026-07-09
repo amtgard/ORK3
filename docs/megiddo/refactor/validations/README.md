@@ -22,7 +22,7 @@ Per-domain **canary URLs** and **test mutation boundaries** for R-* execution sp
 | V-09 | [v-09-player-validation.md](./v-09-player-validation.md) | Player | R-09 |
 | V-10 | [v-10-reports-validation.md](./v-10-reports-validation.md) | Reports / awards | R-10 |
 | V-11 | [v-11-search-validation.md](./v-11-search-validation.md) | Search | R-11 |
-| V-12 | *(planned)* | Attendance / sign-in | R-12 |
+| V-12 | [v-12-attendance-validation.md](./v-12-attendance-validation.md) | Attendance / sign-in | R-12 |
 | V-13 | *(planned)* | Infrastructure | R-13 |
 | V-14 | *(planned)* | Ork3::$Lib / lib-service | R-14 |
 

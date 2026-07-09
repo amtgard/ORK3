@@ -998,6 +998,21 @@ Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for
 
 ---
 
+### V-12: Attendance validation artifacts
+
+**Branch:** `megiddo/v-12-attendance-validation`
+
+**Spec:** [validations/v-12-attendance-validation.md](./validations/v-12-attendance-validation.md)
+
+| Step | Status |
+|------|--------|
+| Canary URLs (attendance pages skip; gate park hosts) | [x] |
+| Test mutation boundaries (§2) | [x] |
+| Dual-profile fuzzy validate (4/4) | [x] |
+| V-12 sign-off gate | [x] |
+
+---
+
 ### V-01 … V-14: Domain validation artifacts
 
 Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines. Pairs with DS/T/R numbering.
@@ -1015,7 +1030,7 @@ Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines.
 | V-09 | `megiddo/v-09-player-validation` | [v-09-player-validation.md](./validations/v-09-player-validation.md) | DS-09, T-09, V-00 | R-09 |
 | V-10 | `megiddo/v-10-reports-validation` | [v-10-reports-validation.md](./validations/v-10-reports-validation.md) | DS-10, T-10, V-00 | R-10 |
 | V-11 | `megiddo/v-11-search-validation` | [v-11-search-validation.md](./validations/v-11-search-validation.md) | DS-11, T-11, V-00 | R-11 |
-| V-12 | `megiddo/v-12-attendance-validation` | *(create)* | DS-12, T-12, V-00 | R-12 |
+| V-12 | `megiddo/v-12-attendance-validation` | [v-12-attendance-validation.md](./validations/v-12-attendance-validation.md) | DS-12, T-12, V-00 | R-12 |
 | V-13 | `megiddo/v-13-infrastructure-validation` | *(create)* | DS-13, T-13, V-00 | R-13 |
 | V-14 | `megiddo/v-14-lib-service-validation` | *(create)* | DS-14, T-14, V-00 | R-14 |
 
@@ -1082,4 +1097,4 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** G3 remainder (V-12), then G4 (V-13…V-14), then R-01 (RSVP refactor — DS-01, T-01, V-01 complete).
+**Next actionable milestone:** G4 (V-13…V-14), then R-01 (RSVP refactor — DS-01, T-01, V-01 complete).
