@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "event-create",
-  "calibratedAt": "2026-07-09T12:01:40Z",
+  "calibratedAt": "2026-07-09T17:27:15Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "f3803e49"
+  "calibratedFromCommit": "1591950d"
 }

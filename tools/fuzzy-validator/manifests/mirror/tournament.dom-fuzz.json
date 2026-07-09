@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "tournament",
-  "calibratedAt": "2026-07-09T14:52:27Z",
+  "calibratedAt": "2026-07-09T17:30:49Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "5f9f17e6"
+  "calibratedFromCommit": "1591950d"
 }

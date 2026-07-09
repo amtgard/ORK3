@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "reports-voting-eligible",
-  "calibratedAt": "2026-07-09T13:26:02Z",
+  "calibratedAt": "2026-07-09T17:30:45Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "12127a82"
+  "calibratedFromCommit": "1591950d"
 }

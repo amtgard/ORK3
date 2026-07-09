@@ -68,13 +68,15 @@ bin/fuzzy-validator setpoint publish --bundle tools/fuzzy-validator/setpoints/ou
 bin/fuzzy-validator validate --all --phase all
 ```
 
-**Published setpoint:** `setpoint.json` → `latestBundle` = `20260708T210408Z-40f4fa2c-8c3e8c67a96f30bc.zip` (bootstrap copy under `setpoints/bootstrap/`).
+**Published setpoint:** `setpoint.json` → `latestBundle` = `20260709T173049Z-1591950d-6b22e991bb478256.zip` (bootstrap copy under `setpoints/bootstrap/`; gitSha `1591950d` post-RB-D4).
+
+**RB-F rebase note (2026-07-09):** Sandbox `--force-refresh` during RB-F preflight shifted test-profile page heights (e.g. `park-auth-sandbox` 937→961px). Full `setpoint capture` + `publish` on `megiddo/rebase-20260709`; validate **42/42 pass** (21 pages × 2 profiles), exit 0.
 
 ### Exit criteria (step 2)
 
 - [x] Every active setpoint page id has baselines under `baselines/test/` and `baselines/mirror/`
 - [x] Pixel fuzz manifests committed under `manifests/test/` and `manifests/mirror/`
-- [x] `bin/fuzzy-validator validate --all --phase all` passes on same commit (both profiles) — **34/34 pass** (17 pages × 2 profiles), exit 0
+- [x] `bin/fuzzy-validator validate --all --phase all` passes on same commit (both profiles) — **42/42 pass** (21 pages × 2 profiles), exit 0
 - [x] Human review of calibration overlays for unexpected full-page drift
 
 ---

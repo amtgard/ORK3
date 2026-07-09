@@ -176,12 +176,14 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 
 | Step | Status |
 |------|--------|
-| E2E preflight for capture profiles | [ ] |
-| `bin/fuzzy-validator validate --all --phase all` (or restore setpoint first) | [ ] |
-| Re-record / `setpoint capture` + `publish` if upstream render drift | [ ] |
-| Update `validations/v-00-*.md` + affected `v-{nn}` capture notes / `latestBundle` | [ ] |
-| Validate pass **test** + **mirror** | [ ] |
-| Commit: `RB-F: Recapture fuzzy baselines after rebase` | [ ] |
+| E2E preflight for capture profiles | [x] |
+| `bin/fuzzy-validator validate --all --phase all` (or restore setpoint first) | [x] |
+| Re-record / `setpoint capture` + `publish` if upstream render drift | [x] |
+| Update `validations/v-00-*.md` + affected `v-{nn}` capture notes / `latestBundle` | [x] |
+| Validate pass **test** + **mirror** | [x] |
+| Commit: `RB-F: Recapture fuzzy baselines after rebase` | [x] |
+
+**RB-F notes (2026-07-09):** Base `e6417645` @ commit `1591950d`. Sandbox `--force-refresh` caused test-profile dimension drift (`park-auth-sandbox` 937→961px; `player-profile-sandbox`, `kingdom-auth-sandbox`, RSVP hosts). Full `setpoint capture` → `20260709T173049Z-1591950d-6b22e991bb478256.zip`; bootstrap copy committed. Validate **42/42 pass** (21 pages × test+mirror), exit 0. E2E preflight: health + auth (`admin`/`password`).
 
 ---
 
@@ -217,4 +219,4 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 | 5 | RB-F |
 | 6 | RB-Z |
 
-**Next unchecked:** **RB-F** — Fuzzy baselines and setpoint
+**Next unchecked:** **RB-Z** — Sign-off

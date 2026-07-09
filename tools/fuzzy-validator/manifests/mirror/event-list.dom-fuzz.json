@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "event-list",
-  "calibratedAt": "2026-07-09T12:02:10Z",
+  "calibratedAt": "2026-07-09T17:30:43Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "f3803e49"
+  "calibratedFromCommit": "1591950d"
 }

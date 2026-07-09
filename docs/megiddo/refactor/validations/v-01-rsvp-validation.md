@@ -56,7 +56,7 @@ bin/fuzzy-validator validate --pages event-index-rsvp,event-index-rsvp-gok --pha
 ```
 
 **V-01 capture result (2026-07-09):** validate exit **0** — test + mirror, both page ids, assets/dom/visual all 1.00.  
-**Setpoint:** `setpoint.json` `latestBundle` = `20260709T115402Z-e3424d8d-ff8a75e835fae324.zip` (bootstrap copy; pageCount 28).
+**Setpoint:** `setpoint.json` `latestBundle` = `20260709T173049Z-1591950d-6b22e991bb478256.zip` (RB-F full recapture; pageCount 30).
 
 R-01 full RSVP gate:
 

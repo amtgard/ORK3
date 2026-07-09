@@ -46,6 +46,7 @@ bin/fuzzy-validator validate --pages kingdom-auth-sandbox,park-auth-sandbox --ph
 ```
 
 **V-02 capture result:** validate exit **0** on domain ids (test + mirror).  
+**RB-F (2026-07-09):** `park-auth-sandbox` / `kingdom-auth-sandbox` re-captured in full setpoint `20260709T173049Z-1591950d-6b22e991bb478256.zip` after sandbox refresh dimension drift.  
 At R-02, also re-validate V-00 hosts after `setpoint restore` if local baselines drifted:
 
 ```bash

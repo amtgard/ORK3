@@ -3,7 +3,7 @@
   "pageId": "player-profile",
   "imageWidth": 1280,
   "imageHeight": 1002,
-  "calibratedAt": "2026-07-09T11:59:09Z",
+  "calibratedAt": "2026-07-09T17:27:04Z",
   "calibrationRuns": 5,
   "params": {
     "colorThreshold": 20,
@@ -12,5 +12,5 @@
   },
   "fuzzZones": [],
   "manualZones": [],
-  "calibratedFromCommit": "ace42b47"
+  "calibratedFromCommit": "1591950d"
 }

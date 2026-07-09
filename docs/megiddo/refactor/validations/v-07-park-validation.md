@@ -43,7 +43,8 @@ No new `pages.json5` rows for V-07.
 bin/fuzzy-validator validate --pages park-auth-sandbox,event-park --phase all
 ```
 
-**V-07 capture result:** validate exit **0** (4/4).
+**V-07 capture result:** validate exit **0** (4/4).  
+**RB-F (2026-07-09):** `park-auth-sandbox` in setpoint `20260709T173049Z-1591950d-6b22e991bb478256.zip` (sandbox refresh height drift).
 
 ---
 

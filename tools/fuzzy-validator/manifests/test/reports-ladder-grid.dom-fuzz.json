@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "reports-ladder-grid",
-  "calibratedAt": "2026-07-09T13:25:35Z",
+  "calibratedAt": "2026-07-09T17:27:16Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "12127a82"
+  "calibratedFromCommit": "1591950d"
 }
