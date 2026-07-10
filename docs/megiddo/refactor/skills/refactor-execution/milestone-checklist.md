@@ -12,7 +12,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-05-event-refactor` @ `20264fa9` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-06-kingdom-refactor` @ `85a9667c` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -26,6 +26,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 | R-03 | `megiddo/r-03-banner-refactor` | `910cb0dc` |
 | R-04 | `megiddo/r-04-eventajax-refactor` | `810eceb3` |
 | R-05 | `megiddo/r-05-event-refactor` | `20264fa9` |
+| R-06 | `megiddo/r-06-kingdom-refactor` | `85a9667c` |
 | … | | |
 
 ---
@@ -149,16 +150,16 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Prior R-* hygiene | [ ] |
-| Refactor kingdom targets | [ ] |
-| PHPUnit | [ ] |
-| Infection §2.4 | [ ] |
-| Fuzzy: `kingdom-profile,kingdom-auth-sandbox` | [ ] |
-| Playwright: `kingdom-profile.spec.ts` | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-06: …` | [ ] |
+| Prior R-* hygiene | [x] |
+| Refactor kingdom targets | [x] |
+| PHPUnit | [x] |
+| Infection §2.4 | [x] |
+| Fuzzy: `kingdom-profile,kingdom-auth-sandbox` | [x] |
+| Playwright: `kingdom-profile.spec.ts` | [x] |
+| Docs + plan | [x] |
+| Commit: `R-06: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-06-kingdom-refactor` stacked on R-05 @ `15897315`. New `KingdomProfile` domain + `Report.GetKingdomExtendedParkAverages`; thinned `Controller_Kingdom` (no `$DB`) and `Controller_KingdomAjax` T-KNG/T-KNA migrated paths. PHPUnit 214/214 pass. Infection `infection.t06-kingdom.json5` `--only-covered`: MSI 21%, covered MSI 21%. Fuzzy 4/4 pass (re-recorded DOM + test `kingdom-auth-sandbox` assets; validate with `--pages kingdom-auth-sandbox,kingdom-profile` avoids capture-order flake). Playwright: auth smoke + `kingdom-profile.spec.ts` 2/2 (ICS via `page.request`).
 
 ---
 
@@ -323,4 +324,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | … | … | … |
 | 14 | R-14 | Phase 3 audit |
 
-**Next unchecked:** R-06
+**Next unchecked:** R-07

@@ -3,7 +3,7 @@
   "pageId": "kingdom-profile",
   "imageWidth": 1280,
   "imageHeight": 1060,
-  "calibratedAt": "2026-07-09T17:30:31Z",
+  "calibratedAt": "2026-07-10T02:33:24Z",
   "calibrationRuns": 5,
   "params": {
     "colorThreshold": 20,
@@ -12,5 +12,5 @@
   },
   "fuzzZones": [],
   "manualZones": [],
-  "calibratedFromCommit": "1591950d"
+  "calibratedFromCommit": "15897315"
 }

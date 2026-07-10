@@ -1129,7 +1129,7 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** R-06 (Kingdom refactor — R-05 complete on `megiddo/r-05-event-refactor`). Phase 1.6 (V-00…V-14) complete.
+**Next actionable milestone:** R-07 (Park refactor — R-06 complete on `megiddo/r-06-kingdom-refactor`). Phase 1.6 (V-00…V-14) complete.
 
 ### R-01 complete (2026-07-09)
 

@@ -38,8 +38,9 @@ test.describe('authenticated kingdom flows', () => {
     await page.waitForLoadState('networkidle');
   });
 
-  test('kingdom ICS route responds after login', async ({ page }) => {
-    const response = await page.goto('./index.php?Route=Kingdom/ics/1');
-    expect(response?.status()).toBeLessThan(500);
+  test('kingdom ICS route responds after login', async ({ page, baseURL }) => {
+    const icsUrl = new URL('./index.php?Route=Kingdom/ics/1', baseURL!).toString();
+    const response = await page.request.get(icsUrl);
+    expect(response.status()).toBeLessThan(500);
   });
 });

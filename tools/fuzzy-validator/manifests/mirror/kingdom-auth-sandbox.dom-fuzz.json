@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "kingdom-auth-sandbox",
-  "calibratedAt": "2026-07-09T22:31:01Z",
+  "calibratedAt": "2026-07-10T02:26:02Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "bc626ce8"
+  "calibratedFromCommit": "15897315"
 }

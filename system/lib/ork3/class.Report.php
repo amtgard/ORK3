@@ -1716,6 +1716,139 @@ class Report extends Ork3
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $response);
     }
 
+    /**
+     * Extended kingdom park averages overlay (T-KNG-02): tp/tm per park + kingdom dedup totals.
+     *
+     * @param array{KingdomId?: int, IsAdmin?: bool} $request
+     * @return array<string, array<string, int|float>>
+     */
+    public function GetKingdomExtendedParkAverages($request)
+    {
+        $kid = (int) ($request['KingdomId'] ?? 0);
+        $isAdmin = !empty($request['IsAdmin']);
+        $cacheKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kid, 'IsAdmin' => (int) $isAdmin]);
+        if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetKingdomExtendedParkAverages', $cacheKey, 1200)) !== false) {
+            return $cached;
+        }
+
+        $wkStart = date('Y-m-d', strtotime('-6 month'));
+        $wkEnd = date('Y-m-d');
+        $wkCount = max(1, (int) ceil((strtotime($wkEnd) - strtotime($wkStart)) / (7 * 86400)));
+        $statsKids = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetStatsKingdomIds($kid)));
+
+        $weekly = $this->GetKingdomParkAverages(['KingdomId' => $kid, 'AverageMonths' => 6]);
+        $monthly = $this->GetKingdomParkMonthlyAverages(['KingdomId' => $kid]);
+        $result = [];
+        foreach ((array) ($weekly['KingdomParkAveragesSummary'] ?? []) as $park) {
+            $result[$park['ParkId']] = ['att' => (int) $park['AttendanceCount'], 'mo' => 0, 'tp' => 0, 'tm' => 0];
+        }
+        foreach ((array) ($monthly['KingdomParkMonthlySummary'] ?? []) as $park) {
+            if (isset($result[$park['ParkId']])) {
+                $result[$park['ParkId']]['mo'] = (float) $park['MonthlyAvg'];
+            } else {
+                $result[$park['ParkId']] = ['att' => 0, 'mo' => (float) $park['MonthlyAvg'], 'tp' => 0, 'tm' => 0];
+            }
+        }
+
+        $pcSql = "SELECT a.park_id,
+                COUNT(DISTINCT a.mundane_id) AS total_players,
+                COUNT(DISTINCT CASE WHEN m.park_id = a.park_id THEN a.mundane_id END) AS total_members
+            FROM " . DB_PREFIX . "attendance a
+            INNER JOIN " . DB_PREFIX . "park p  ON p.park_id  = a.park_id  AND p.kingdom_id IN ({$statsKids})
+            INNER JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = a.mundane_id AND m.suspended = 0 AND m.active = 1
+            WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) AND a.mundane_id > 0
+            GROUP BY a.park_id";
+        $this->db->Clear();
+        $pcResult = $this->db->DataSet($pcSql);
+        if ($pcResult && $pcResult->Size() > 0) {
+            while ($pcResult->Next()) {
+                $pid = (int) $pcResult->park_id;
+                if (isset($result[$pid])) {
+                    $result[$pid]['tp'] = (int) $pcResult->total_players;
+                    $result[$pid]['tm'] = (int) $pcResult->total_members;
+                } else {
+                    $result[$pid] = ['att' => 0, 'mo' => 0, 'tp' => (int) $pcResult->total_players, 'tm' => (int) $pcResult->total_members];
+                }
+            }
+        }
+
+        $knSql = "SELECT COUNT(*) AS katt FROM (
+                SELECT a.mundane_id FROM " . DB_PREFIX . "attendance a
+                INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
+                WHERE a.date >= '{$wkStart}'
+                    AND a.mundane_id > 0
+                GROUP BY a.date_year, a.date_week3, a.mundane_id
+            ) t";
+        $this->db->Clear();
+        $knResult = $this->db->DataSet($knSql);
+        $katt = ($knResult && $knResult->Next()) ? (int) $knResult->katt : 0;
+
+        $knMoSql = "SELECT AVG(monthly_unique) AS kmo FROM (
+                SELECT a.date_year, a.date_month, COUNT(DISTINCT a.mundane_id) AS monthly_unique
+                FROM " . DB_PREFIX . "attendance a
+                INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
+                WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+                    AND a.mundane_id > 0
+                GROUP BY a.date_year, a.date_month
+            ) sub";
+        $this->db->Clear();
+        $knMoResult = $this->db->DataSet($knMoSql);
+        $kmo = ($knMoResult && $knMoResult->Next()) ? round((float) $knMoResult->kmo, 1) : 0;
+        $result['_kingdom'] = ['att' => $katt, 'mo' => $kmo, 'wk_count' => $wkCount];
+
+        if ($isAdmin) {
+            $this->db->Clear();
+            $prevWkResult = $this->db->DataSet(
+                "SELECT COUNT(mw.mundane_id) AS att, p.park_id
+                 FROM " . DB_PREFIX . "park p
+                 LEFT JOIN (
+                     SELECT a.mundane_id, a.park_id
+                     FROM " . DB_PREFIX . "attendance a
+                     INNER JOIN " . DB_PREFIX . "park pk ON pk.park_id = a.park_id AND pk.kingdom_id IN ({$statsKids})
+                     WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+                       AND a.date <  DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+                       AND a.mundane_id > 0
+                     GROUP BY date_year, date_week3, mundane_id, a.park_id
+                 ) mw ON p.park_id = mw.park_id
+                 WHERE p.kingdom_id IN ({$statsKids}) AND p.active = 'Active'
+                 GROUP BY p.park_id"
+            );
+            if ($prevWkResult) {
+                while ($prevWkResult->Next()) {
+                    $pid = (int) $prevWkResult->park_id;
+                    if (isset($result[$pid])) {
+                        $result[$pid]['prev_att'] = (int) $prevWkResult->att;
+                    }
+                }
+            }
+            $this->db->Clear();
+            $prevMoResult = $this->db->DataSet(
+                "SELECT AVG(monthly_unique) AS mo, park_id
+                 FROM (
+                     SELECT a.date_year, a.date_month, a.park_id,
+                            COUNT(DISTINCT a.mundane_id) AS monthly_unique
+                     FROM " . DB_PREFIX . "attendance a
+                     INNER JOIN " . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id IN ({$statsKids})
+                     WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
+                       AND a.date <  DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+                       AND a.mundane_id > 0
+                     GROUP BY a.date_year, a.date_month, a.park_id
+                 ) mm
+                 GROUP BY park_id"
+            );
+            if ($prevMoResult) {
+                while ($prevMoResult->Next()) {
+                    $pid = (int) $prevMoResult->park_id;
+                    if (isset($result[$pid])) {
+                        $result[$pid]['prev_mo'] = round((float) $prevMoResult->mo, 2);
+                    }
+                }
+            }
+        }
+
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.GetKingdomExtendedParkAverages', $cacheKey, $result);
+    }
+
     public function GetTopParksByAttendance($request = null)
     {
         $key = Ork3::$Lib->ghettocache->key($request);

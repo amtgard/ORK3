@@ -365,6 +365,7 @@ class Controller_KingdomAjax extends Controller
         } elseif ($action === 'moveplayer') {
             $uid = (int)$this->session->user_id;
             $this->load_model('Player');
+            $this->load_model('KingdomProfile');
             $mundane_id   = (int)($_POST['MundaneId']  ?? 0);
             $dest_park_id = (int)($_POST['DestParkId'] ?? 0);
             if (!valid_id($mundane_id)) {
@@ -375,22 +376,10 @@ class Controller_KingdomAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Select a destination park.']);
                 exit;
             }
-            // Auth: allow the move when the actor has kingdom-level authority over EITHER the
-            // player's current (source) kingdom — moving/releasing one of your own members — OR
-            // the destination park's kingdom — claiming a player into your kingdom. This mirrors
-            // Player::MovePlayer (and the Park/Player move endpoints), which authorize on
-            // destination OR source. A source-only check wrongly blocked officers from claiming
-            // players who belong to another kingdom.
-            global $DB;
-            $DB->Clear();
-            $plrKingdom = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mundane_id} LIMIT 1");
-            $player_kingdom_id = ($plrKingdom && $plrKingdom->Next()) ? (int)$plrKingdom->kingdom_id : 0;
-            $DB->Clear();
-            $destKingdom = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$dest_park_id} LIMIT 1");
-            $dest_kingdom_id = ($destKingdom && $destKingdom->Next()) ? (int)$destKingdom->kingdom_id : 0;
-            $canSource = $player_kingdom_id && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT);
-            $canDest   = $dest_kingdom_id   && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $dest_kingdom_id, AUTH_EDIT);
-            if (!$canSource && !$canDest) {
+            $ctx = (new KingdomProfile())->GetPlayerSuspensionContext($mundane_id);
+            $player_kingdom_id = (int)($ctx['kingdom_id'] ?? 0);
+            $dest_kingdom_id = (new KingdomProfile())->GetParkKingdomId($dest_park_id);
+            if (!$this->KingdomProfile->authorize_move_player($uid, $player_kingdom_id, $dest_kingdom_id)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized to move this player.']);
                 exit;
             }
@@ -597,19 +586,9 @@ class Controller_KingdomAjax extends Controller
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
-            $value = (int)($_POST['Value'] ?? 1) ? '1' : '0';
-            global $DB;
-            $kid = (int)$kingdom_id;
-            $DB->Clear();
-            $existing = $DB->DataSet("SELECT configuration_id FROM " . DB_PREFIX . "configuration WHERE type='Kingdom' AND id=$kid AND `key`='AwardRecsPublic' LIMIT 1");
-            if ($existing && $existing->Next()) {
-                $cid = (int)$existing->configuration_id;
-                $DB->Clear();
-                $DB->Execute("UPDATE " . DB_PREFIX . "configuration SET value='" . json_encode($value) . "', modified=NOW() WHERE configuration_id=$cid");
-            } else {
-                $DB->Clear();
-                $DB->Execute("INSERT INTO " . DB_PREFIX . "configuration (type, var_type, id, `key`, value, user_setting, allowed_values, modified) VALUES ('Kingdom', 'fixed', $kid, 'AwardRecsPublic', '" . json_encode($value) . "', 1, 'null', NOW())");
-            }
+            $value = (int)($_POST['Value'] ?? 1) ? true : false;
+            $this->load_model('KingdomProfile');
+            $this->KingdomProfile->set_award_recs_public((int)$kingdom_id, $value);
             echo json_encode(['status' => 0]);
 
         } elseif ($action === 'addauth') {
@@ -717,12 +696,10 @@ class Controller_KingdomAjax extends Controller
                 echo json_encode(['status' => 0, 'taken' => false]);
                 exit;
             }
-            global $DB;
-            $DB->Clear();
-            $excludeClause = $excludeId > 0 ? " AND kingdom_id != {$excludeId}" : '';
-            $rs = $DB->DataSet("SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$abbr}'{$excludeClause} LIMIT 1");
-            echo ($rs && $rs->Next())
-                ? json_encode(['status' => 0, 'taken' => true,  'name' => $rs->name])
+            $this->load_model('KingdomProfile');
+            $conflictName = (new KingdomProfile())->GetKingdomAbbreviationConflict($abbr, $excludeId);
+            echo $conflictName !== null
+                ? json_encode(['status' => 0, 'taken' => true, 'name' => $conflictName])
                 : json_encode(['status' => 0, 'taken' => false]);
 
         } else {
@@ -749,286 +726,10 @@ class Controller_KingdomAjax extends Controller
             exit;
         }
 
-        $kid    = (int)$kingdom_id;
         $kn_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        global $DB;
-        $events = [];
-        $this->load_model('Kingdom');
-        // G1: scope events to family kingdoms (parent + principalities when flag on), matching profile().
-        $statsEvtKids = implode(',', array_map('intval', $this->Kingdom->GetStatsKingdomIds($kid)));
-
-        // Royal-attendance detection across the family (parent kingdom + principalities, "up and down").
-        // Most-recent Monarch + Regent per family kingdom.
-        $familyRoyals = []; // kingdom_id => ['monarch'=>id, 'regent'=>id]
-        $allRoyalIds  = [];
-        $DB->Clear();
-        $royRes = $DB->DataSet("SELECT o.kingdom_id, o.role, o.mundane_id FROM ork_officer o
-			INNER JOIN (SELECT kingdom_id, role, MAX(officer_id) AS max_oid FROM ork_officer
-			            WHERE kingdom_id IN ({$statsEvtKids}) AND park_id = 0 AND role IN ('Monarch','Regent') AND mundane_id > 0
-			            GROUP BY kingdom_id, role) latest ON latest.max_oid = o.officer_id");
-        if ($royRes) {
-            while ($royRes->Next()) {
-                $rk = (int)$royRes->kingdom_id;
-                $rid = (int)$royRes->mundane_id;
-                if (!isset($familyRoyals[$rk])) {
-                    $familyRoyals[$rk] = ['monarch' => 0, 'regent' => 0];
-                }
-                $familyRoyals[$rk][$royRes->role === 'Monarch' ? 'monarch' : 'regent'] = $rid;
-                if ($rid > 0) {
-                    $allRoyalIds[$rid] = true;
-                }
-            }
-        }
-        $kingdomMonarchId = $familyRoyals[$kid]['monarch'] ?? 0;
-        $kingdomRegentId  = $familyRoyals[$kid]['regent'] ?? 0;
-        // Pre-aggregating LEFT JOIN: per detail, the set of family-royal mundane_ids who RSVP'd.
-        if (!empty($allRoyalIds)) {
-            $royalIdList     = implode(',', array_map('intval', array_keys($allRoyalIds)));
-            $royalSelectCols = 'royal.royal_rsvps AS royal_rsvps';
-            $royalJoinSql    = "LEFT JOIN (SELECT event_calendardetail_id, GROUP_CONCAT(mundane_id) AS royal_rsvps FROM ork_event_rsvp WHERE mundane_id IN ({$royalIdList}) GROUP BY event_calendardetail_id) royal ON royal.event_calendardetail_id = cd.event_calendardetail_id";
-        } else {
-            $royalSelectCols = 'NULL AS royal_rsvps';
-            $royalJoinSql    = '';
-        }
-        $kn_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $kn_isAdmin = ($kn_uid > 0) ? Ork3::$Lib->authorization->HasAuthority($kn_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
-        $kn_draftClause = $kn_isAdmin ? '' : ($kn_uid > 0 ? "AND (e.status = 'published' OR e.mundane_id = {$kn_uid})" : "AND e.status = 'published'");
-
-        // Events in range (all calendar-detail occurrences within window)
-        $evtSql = "
-			SELECT e.event_id, e.name, e.park_id, e.kingdom_id, e.status, e.mundane_id AS event_creator,
-			       p.abbreviation AS park_abbr,
-			       cd.event_start, cd.event_end, cd.event_calendardetail_id AS detail_id,
-			       {$royalSelectCols}
-			FROM ork_event e
-			LEFT JOIN ork_park p ON p.park_id = e.park_id
-			INNER JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
-			{$royalJoinSql}
-			WHERE e.kingdom_id IN ({$statsEvtKids})
-			  AND cd.event_start >= '{$start}'
-			  AND cd.event_start < '{$end}'
-			  {$kn_draftClause}
-			ORDER BY cd.event_start";
-        $DB->Clear();
-        $evtResult = $DB->DataSet($evtSql);
-        if ($evtResult && $evtResult->Size() > 0) {
-            while ($evtResult->Next()) {
-                $evStatus = (string)($evtResult->status ?? 'published');
-                // Per-row draft check (covers AUTH_EVENT/AUTH_EDIT users beyond simple creator/admin filter above)
-                if ($evStatus !== 'published' && !$kn_isAdmin && (int)$evtResult->event_creator !== $kn_uid) {
-                    $canEditRow = ($kn_uid > 0) && Ork3::$Lib->authorization->HasAuthority($kn_uid, AUTH_EVENT, (int)$evtResult->event_id, AUTH_EDIT);
-                    if (!$canEditRow) {
-                        continue;
-                    }
-                }
-                $isPark    = (int)$evtResult->park_id > 0;
-                $abbr      = ($isPark && $evtResult->park_abbr) ? $evtResult->park_abbr . ': ' : '';
-                $eid       = (int)$evtResult->event_id;
-                $did       = (int)$evtResult->detail_id;
-                $evKid   = (int)$evtResult->kingdom_id;
-                $rsvpRaw = (string)($evtResult->royal_rsvps ?? '');
-                $royal   = [];
-                // Only an event with at least one royal RSVP can carry a crown — skip the rest otherwise.
-                if ($rsvpRaw !== '') {
-                    $rsvpSet = array_flip(array_map('intval', explode(',', $rsvpRaw)));
-                    if ($kingdomMonarchId && isset($rsvpSet[$kingdomMonarchId])) {
-                        $royal['km'] = true;
-                    }
-                    if ($kingdomRegentId && isset($rsvpSet[$kingdomRegentId])) {
-                        $royal['kr'] = true;
-                    }
-                    if ($evKid !== $kid && isset($familyRoyals[$evKid])) {
-                        $pmId = $familyRoyals[$evKid]['monarch'];
-                        $prId = $familyRoyals[$evKid]['regent'];
-                        if ($pmId && isset($rsvpSet[$pmId])) {
-                            $royal['pm'] = true;
-                        }
-                        if ($prId && isset($rsvpSet[$prId])) {
-                            $royal['pr'] = true;
-                        }
-                    }
-                }
-                $ev = [
-                    'title' => $abbr . $evtResult->name,
-                    'start' => $evtResult->event_start,
-                    'url'   => $did ? UIR . "Event/detail/{$eid}/{$did}" : '',
-                    'color' => $isPark ? '#6b46c1' : '#0891b2',
-                    'type'  => $isPark ? 'park-event' : 'kingdom-event',
-                    'extendedProps' => [
-                        'eventId'  => $eid,
-                        'detailId' => $did,
-                        'isDraft'  => $evStatus === 'draft',
-                    ],
-                ];
-                // A10: FullCalendar strips unrecognized top-level keys — royalPresence MUST live in extendedProps.
-                // Object with up to 4 flags: km/kr (kingdom monarch/regent), pm/pr (principality monarch/regent).
-                if (!empty($royal)) {
-                    if (!isset($ev['extendedProps']) || !is_array($ev['extendedProps'])) {
-                        $ev['extendedProps'] = [];
-                    }
-                    $ev['extendedProps']['royalPresence'] = $royal;
-                }
-                $endRaw = $evtResult->event_end ?? '';
-                if ($endRaw && substr($endRaw, 0, 10) > substr($evtResult->event_start, 0, 10)) {
-                    $endDt = new DateTime(substr($endRaw, 0, 10));
-                    $endDt->modify('+1 day');
-                    $ev['end'] = $endDt->format('Y-m-d');
-                }
-                $events[] = $ev;
-            }
-        }
-
-        // Calendar items (kingdom- or park-scoped) overlapping the range.
-        // is_officer_only / is_locals_only must be filtered via CalendarItem::CanSee
-        // before emitting — otherwise officer-only items leak to any kingdom-calendar
-        // viewer regardless of role (matches the filter already applied in the page-
-        // render path at controller.Kingdom.php).
-        $ciSql = "
-			SELECT ci.calendar_item_id, ci.name, ci.description, ci.all_day,
-			       ci.event_start, ci.event_end, ci.park_id, ci.kingdom_id,
-			       ci.is_officer_only, ci.is_locals_only, ci.color,
-			       p.abbreviation AS park_abbr
-			FROM " . DB_PREFIX . "calendar_item ci
-			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = ci.park_id
-			WHERE ci.kingdom_id = {$kid}
-			  AND ci.event_start < '{$end}'
-			  AND ci.event_end   >= '{$start}'
-			ORDER BY ci.event_start";
-        $DB->Clear();
-        $ciResult = $DB->DataSet($ciSql);
-        if ($ciResult && $ciResult->Size() > 0) {
-            while ($ciResult->Next()) {
-                $ci_isOfficerOnly = (int)$ciResult->is_officer_only;
-                $ci_isLocalsOnly  = (int)$ciResult->is_locals_only;
-                if (!CalendarItem::CanSee($kn_uid, (int)$ciResult->kingdom_id, (int)$ciResult->park_id, $ci_isOfficerOnly, $ci_isLocalsOnly)) {
-                    continue;
-                }
-                $isPark = (int)$ciResult->park_id > 0;
-                $abbr   = ($isPark && $ciResult->park_abbr) ? $ciResult->park_abbr . ': ' : '';
-                $allDay = (int)$ciResult->all_day === 1;
-                $ev = [
-                    'title'         => $abbr . $ciResult->name,
-                    'start'         => $allDay ? substr($ciResult->event_start, 0, 10) : $ciResult->event_start,
-                    'color'         => $ciResult->color ?: '#64748b',
-                    'textColor'     => CalendarItem::TextColorFor($ciResult->color ?: '#64748b'),
-                    'type'          => 'calendar-item',
-                    'allDay'        => $allDay,
-                    'extendedProps' => [
-                        'calendarItemId' => (int)$ciResult->calendar_item_id,
-                        'description'    => (string)$ciResult->description,
-                        'parkId'         => (int)$ciResult->park_id,
-                        'kingdomId'      => (int)$ciResult->kingdom_id,
-                        'parkAbbr'       => $ciResult->park_abbr ?? '',
-                        'rawStart'       => $ciResult->event_start,
-                        'rawEnd'         => $ciResult->event_end,
-                    ],
-                ];
-                // Multi-day: emit an exclusive end for FullCalendar (next day after the end date for all-day).
-                $startDate = substr($ciResult->event_start, 0, 10);
-                $endDate   = substr($ciResult->event_end, 0, 10);
-                if ($endDate > $startDate) {
-                    $endDt = new DateTime($endDate);
-                    if ($allDay) {
-                        $endDt->modify('+1 day');
-                    }
-                    $ev['end'] = $allDay ? $endDt->format('Y-m-d') : $ciResult->event_end;
-                } elseif (!$allDay) {
-                    $ev['end'] = $ciResult->event_end;
-                }
-                $events[] = $ev;
-            }
-        }
-
-        // Park day recurrences expanded for the requested range
-        $pdSql = "
-			SELECT pd.park_id, pd.recurrence, pd.week_day, pd.week_of_month,
-			       pd.month_day, pd.start_date, pd.week_interval, pd.time, pd.purpose, p.abbreviation AS park_abbr
-			FROM ork_parkday pd
-			JOIN ork_park p ON p.park_id = pd.park_id
-			WHERE p.kingdom_id = {$kid} AND p.active = 'Active'";
-        $DB->Clear();
-        $pdResult = $DB->DataSet($pdSql);
-        if ($pdResult && $pdResult->Size() > 0) {
-            $dayNames   = ['Sunday' => 0,'Monday' => 1,'Tuesday' => 2,'Wednesday' => 3,'Thursday' => 4,'Friday' => 5,'Saturday' => 6];
-            $rangeStart = new DateTime($start);
-            $rangeEnd   = new DateTime($end);
-            while ($pdResult->Next()) {
-                switch ($pdResult->purpose) {
-                    case 'fighter-practice': $purposeLabel = 'Fighter Practice';
-                        break;
-                    case 'arts-day':         $purposeLabel = 'A&S Day';
-                        break;
-                    case 'park-day':         $purposeLabel = 'Park Day';
-                        break;
-                    default:                 $purposeLabel = ucwords(str_replace('-', ' ', $pdResult->purpose));
-                }
-                $abbr    = $pdResult->park_abbr ? $pdResult->park_abbr . ': ' : '';
-                $title   = $abbr . $purposeLabel;
-                $url     = UIR . 'Park/profile/' . (int)$pdResult->park_id;
-                $timeStr = ($pdResult->time && $pdResult->time !== '00:00:00') ? 'T' . $pdResult->time : '';
-                $rec     = $pdResult->recurrence;
-
-                if ($rec === 'weekly') {
-                    $targetWd = $dayNames[$pdResult->week_day] ?? -1;
-                    if ($targetWd < 0) {
-                        continue;
-                    }
-                    $cur = clone $rangeStart;
-                    while ((int)$cur->format('w') !== $targetWd) {
-                        $cur->modify('+1 day');
-                    }
-                    while ($cur < $rangeEnd) {
-                        $events[] = ['title' => $title,'start' => $cur->format('Y-m-d').$timeStr,'url' => $url,'color' => '#b7791f','type' => 'park-day'];
-                        $cur->modify('+7 days');
-                    }
-                } elseif ($rec === 'week-of-month') {
-                    $targetWd = $dayNames[$pdResult->week_day] ?? -1;
-                    $nth = (int)$pdResult->week_of_month;
-                    if ($targetWd < 0 || $nth < 1) {
-                        continue;
-                    }
-                    $curMonth = clone $rangeStart;
-                    $curMonth->modify('first day of this month');
-                    while ($curMonth < $rangeEnd) {
-                        $cnt = 0;
-                        $cur = clone $curMonth;
-                        $mn  = (int)$curMonth->format('n');
-                        while ((int)$cur->format('n') === $mn) {
-                            if ((int)$cur->format('w') === $targetWd && ++$cnt === $nth) {
-                                if ($cur >= $rangeStart && $cur < $rangeEnd) {
-                                    $events[] = ['title' => $title,'start' => $cur->format('Y-m-d').$timeStr,'url' => $url,'color' => '#b7791f','type' => 'park-day'];
-                                }
-                                break;
-                            }
-                            $cur->modify('+1 day');
-                        }
-                        $curMonth->modify('first day of next month');
-                    }
-                } elseif ($rec === 'monthly') {
-                    $dayNum = (int)$pdResult->month_day;
-                    if ($dayNum < 1) {
-                        continue;
-                    }
-                    $curMonth = clone $rangeStart;
-                    $curMonth->modify('first day of this month');
-                    while ($curMonth < $rangeEnd) {
-                        $mEnd = clone $curMonth;
-                        $mEnd->modify('last day of this month');
-                        $d    = min($dayNum, (int)$mEnd->format('d'));
-                        $cur  = new DateTime($curMonth->format('Y-m-') . sprintf('%02d', $d));
-                        if ($cur >= $rangeStart && $cur < $rangeEnd) {
-                            $events[] = ['title' => $title,'start' => $cur->format('Y-m-d').$timeStr,'url' => $url,'color' => '#b7791f','type' => 'park-day'];
-                        }
-                        $curMonth->modify('first day of next month');
-                    }
-                } elseif ($rec === 'every-x-weeks') {
-                    $occs = Park::ExpandEveryXWeeks($pdResult->start_date, (int)$pdResult->week_interval, $rangeStart, $rangeEnd);
-                    foreach ($occs as $occ) {
-                        $events[] = ['title' => $title,'start' => $occ.$timeStr,'url' => $url,'color' => '#b7791f','type' => 'park-day'];
-                    }
-                }
-            }
-        }
+        $this->load_model('KingdomProfile');
+        $events = $this->KingdomProfile->calendar_feed((int)$kingdom_id, $start, $end, $kn_uid, $kn_isAdmin);
 
         echo json_encode(['status' => 0, 'events' => $events]);
         exit;
@@ -1184,15 +885,15 @@ class Controller_KingdomAjax extends Controller
         }
 
         // Determine the player's kingdom so we can check auth
-        global $DB;
-        $rs = $DB->DataSet("SELECT kingdom_id, suspended_by_id, suspended FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mid} LIMIT 1");
-        if (!$rs || !$rs->Next()) {
+        $this->load_model('KingdomProfile');
+        $context = $this->KingdomProfile->suspension_context($mid);
+        if ($context['kingdom_id'] <= 0) {
             echo json_encode(['status' => 1, 'error' => 'Player not found.']);
             exit;
         }
-        $player_kingdom_id        = (int)$rs->kingdom_id;
-        $existing_suspended_by_id = (int)$rs->suspended_by_id;
-        $is_currently_suspended   = (bool)$rs->suspended;
+        $player_kingdom_id        = (int)$context['kingdom_id'];
+        $existing_suspended_by_id = (int)($context['suspended_by_id'] ?? 0);
+        $is_currently_suspended   = (bool)$context['suspended'];
 
         $isAdmin = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $isKingdomEditor = valid_id($player_kingdom_id)
