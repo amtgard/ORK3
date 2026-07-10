@@ -193,7 +193,8 @@ class Controller_ParkAjax extends Controller
                 $scopeKey = 'park_all';
             }
 
-            $results = Ork3::$Lib->searchservice->ScopedPlayerSearch([
+            $this->load_model('Search');
+            $results = $this->Search->scoped_player_search([
                 'Query'            => $q,
                 'Scope'            => $scopeKey,
                 'ParkId'           => (int)$park_id,
@@ -377,7 +378,7 @@ class Controller_ParkAjax extends Controller
             $authId = (int)($r['Detail'] ?? 0);
             $this->load_model('Player');
             $persona = $this->Player->get_persona($mid);
-            Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_PARK, 'Id' => $park_id, 'Role' => $role], 'Player', $mid, null, [
+            (new Dangeraudit())->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_PARK, 'Id' => $park_id, 'Role' => $role], 'Player', $mid, null, [
                 'authorization_id' => $authId,
                 'mundane_id'       => $mid,
                 'park_id'          => (int)$park_id,

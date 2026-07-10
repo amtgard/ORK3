@@ -12,7 +12,8 @@ class Controller_SearchAjax extends Controller
             exit;
         }
 
-        $results = Ork3::$Lib->searchservice->UniversalSearch([
+        $this->load_model('Search');
+        $results = $this->Search->universal_search([
             'Query'           => $q,
             'Kid'             => (int)($_GET['kid'] ?? 0),
             'Pid'             => (int)($_GET['pid'] ?? 0),

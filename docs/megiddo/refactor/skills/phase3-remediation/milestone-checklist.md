@@ -166,10 +166,16 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 ## R-19c: `ParkAjax`, `SearchAjax`, `Search`
 
-- [ ] Zero `Ork3::$Lib` in the 3 files above; prior hops still clean
-- [ ] PHPUnit + hop gates
-- [ ] `03-implementation-plan.md` R-19c note
-- [ ] One commit; stack chain updated
+- [x] Zero `Ork3::$Lib` in the 3 files above; prior hops still clean
+- [x] PHPUnit + hop gates (Infection pass C MSI 40%; Playwright 5/5; fuzzy pre-existing drift — test assets 0.93/dom 0.95, mirror visual 0.743)
+- [x] `03-implementation-plan.md` R-19c note
+- [x] One commit; stack chain updated
+
+**Branch:** `megiddo/r-19c-residual-lib-refactor` @ `3849a58b`
+
+**Stack base:** `megiddo/r-19b-residual-lib-refactor` @ `c9d0ef87`
+
+**Migration:** T-LIB-12 — `ParkAjax` scoped player search + park auth audit → `Model_Search`, `new Dangeraudit()`; T-LIB-13 — `SearchAjax` universal search → `Model_Search::universal_search`; T-LIB-14 — `Search` unit activity → `Model_Search::get_unit_activity_counts`. **4 `$Lib` sites cleared** in 3 files; **3 remain** in 3 files → R-19d.
 
 ---
 

@@ -104,7 +104,8 @@ class Controller_Search extends Controller
             exit;
         }
         $ids = array_slice($ids, 0, 25);
-        $out = Ork3::$Lib->searchservice->GetUnitActivityCounts($ids);
+        $this->load_model('Search');
+        $out = $this->Search->get_unit_activity_counts($ids);
         echo json_encode($out, JSON_FORCE_OBJECT);
         exit;
     }
