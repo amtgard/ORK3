@@ -291,6 +291,25 @@ These controllers use models/services for data but still call domain libs direct
 | T-LIB-04 | `Controller_Tournament` | index | 33 | `authorization->HasAuthority` |
 | T-LIB-05 | `Controller_EraPhoenice` | `emit`, `holidays` | 58–93 | `EraPhoenice` static date math |
 
+### Residual lib bypass (Phase 3 — DS-19 / R-19a…d)
+
+41 sites in 12 files remain after R-18 (Phase 3 audit). Tracked for R-19 execution hops; see [ds-19-residual-lib-discovery.md](./ds-19-residual-lib-discovery.md).
+
+| ID | Class / File | Method / Area | Lines | Lib / Call | Hop |
+|----|--------------|---------------|-------|------------|-----|
+| T-LIB-06 | `Model_Player` | milestones, beltline, notes, grants, username, cache bust | 83, 278–346 | `player->*` (12 sites) | R-19a |
+| T-LIB-07 | `orkui/index.php` | Health, legacy redirect, session timing | 9, 65, 74–125 | `health`, `event`, `session` | R-19a |
+| T-LIB-08 | `Controller_KingdomAjax` | auth audit, kingdom lists, player search | 596, 624–763 | `dangeraudit`, `kingdom`, `searchservice` | R-19a |
+| T-LIB-09 | `Controller_EventAjax` | player search, auth audit, heraldry | 293, 328, 417, 479, 668 | `searchservice`, `dangeraudit`, `heraldry` | R-19b |
+| T-LIB-10 | `Controller_AdminAjax` | player search, admin audit, SoA | 33, 62, 99 | `searchservice`, `dangeraudit`, `stateofamtgard` | R-19b |
+| T-LIB-11 | `Controller_Admin` | weather admin refresh/stats | 2335, 2342 | `weather->AdminRefreshWithPrior`, `api_stats` | R-19b |
+| T-LIB-12 | `Controller_ParkAjax` | player search, auth audit | 196, 380 | `searchservice`, `dangeraudit` | R-19c |
+| T-LIB-13 | `Controller_SearchAjax` | universal search | 15 | `searchservice->UniversalSearch` | R-19c |
+| T-LIB-14 | `Controller_Search` | unit activity counts | 107 | `searchservice->GetUnitActivityCounts` | R-19c |
+| T-LIB-15 | `Controller_PlayerAjax` | username check | 32 | `player->CheckUsernameAvailable` | R-19d |
+| T-LIB-16 | `Controller_WnAjax` | dismiss whats-new | 18 | `player->DismissWhatsNew` | R-19d |
+| T-LIB-17 | `Model_AdminDashboard` | SoA bootstrap | 127 | `stateofamtgard->GetPageBootstrap` | R-19d |
+
 *Note: `HasAuthority` appears in 15+ controllers. Discovery sprint DS-12 will treat authorization gating as a cross-cutting API design question.*
 
 ---
@@ -310,7 +329,8 @@ These controllers use models/services for data but still call domain libs direct
 | Attendance & sign-in | 11 |
 | Unit & misc | 4 |
 | Ork3::$Lib bypass | 5+ (many more via HasAuthority) |
-| **Total tracked IDs** | **~119** |
+| Residual Ork3::$Lib (Phase 3) | 12 (T-LIB-06 … T-LIB-17) |
+| **Total tracked IDs** | **~131** |
 
 ---
 
@@ -334,6 +354,7 @@ Targets are batched into discovery sprints (see [04-milestone-checklist.md](./04
 | DS-12 | T-ATT-*, T-SIN-*, T-QR-01 | Attendance & sign-in |
 | DS-13 | T-INF-*, T-WN-01 | Infrastructure & misc |
 | DS-14 | T-LIB-* + HasAuthority cross-cut | Ork3::$Lib service migration |
+| DS-19 | T-LIB-06 … T-LIB-17 | Residual Ork3::$Lib bypass (41 sites / 12 files) |
 
 Each discovery sprint produces: backend survey, test plan, proposed API revision — **not** implementation.
 
@@ -359,5 +380,6 @@ Each test sprint implements the test plan from its matching discovery sprint (se
 | T-12 | DS-12 | T-ATT-*, T-SIN-*, T-QR-01 | Attendance & sign-in tests |
 | T-13 | DS-13 | T-INF-*, T-WN-01 | Infrastructure & misc tests |
 | T-14 | DS-14 | T-LIB-* + HasAuthority cross-cut | Ork3::$Lib service migration tests |
+| T-19 | DS-19 | T-LIB-06 … T-LIB-17 | Residual Ork3::$Lib bypass tests (R-19a…d) |
 
 Each test sprint delivers: backend tests, frontend functional tests (when applicable), and passing milestone-scoped Infection — **not** production refactor.

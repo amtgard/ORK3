@@ -463,6 +463,29 @@ Each discovery sprint follows the same workflow for its target IDs (from [03-imp
 
 ---
 
+### DS-19: Residual Ork3::$Lib bypass
+
+**Branch:** `megiddo/ds-19-residual-lib-discovery`
+
+**Targets:** T-LIB-06 through T-LIB-17; 41 sites in 12 files → R-19a … R-19d
+
+| Step | Status | Output link |
+|------|--------|-------------|
+| Backend survey | [x] | [ds-19-residual-lib-discovery.md §1](./ds-19-residual-lib-discovery.md#1-backend-survey) |
+| Test design | [x] | [ds-19-residual-lib-discovery.md §2](./ds-19-residual-lib-discovery.md#2-test-design) |
+| Proposed revision | [x] | [ds-19-residual-lib-discovery.md §3](./ds-19-residual-lib-discovery.md#3-proposed-revision) |
+
+#### DS-19 sign-off gate
+
+- [x] [05-development-steering.md](./05-development-steering.md) DS-1, DS-2, DS-3, DS-6, DS-8 satisfied
+- [x] Full unit test suite passes (DS-4, DS-5)
+- [x] Infection scope documented in test design (implement in T-19)
+- [x] Path A — zero exemptions goal documented (no `02-requirements.md` carve-outs)
+- [x] R-19a…d file split table in §3.2
+- [x] Branch `megiddo/ds-19-residual-lib-discovery` — one commit
+
+---
+
 ## Phase 1.5 — Test Development
 
 Test sprints implement the test plans from Phase 1 discovery **before** refactor execution. Each **T-{nn}** milestone pairs with the matching **DS-{nn}** / **R-{nn}** sprint.

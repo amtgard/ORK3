@@ -16,8 +16,8 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 2 | FIX-03 | `megiddo/p3-fix-03-playwright-heraldry` | `6766aaac` | [x] |
 | 3 | FIX-04 | `megiddo/p3-fix-04-fuzzy-park-auth` | `b973c6a1` | [x] |
 | 4 | FIX-05 | `megiddo/p3-fix-05-doc-hygiene` | `69fd2ac1` | [x] |
-| 5 | BACKFILL | `megiddo/p3-backfill-tvds-r14-r18` | `ce30d359` | [x] |
-| 6 | DS-19 | | | [ ] |
+| 5 | BACKFILL | `megiddo/p3-backfill-tvds-r14-r18` | `7f9576eb` | [x] |
+| 6 | DS-19 | `megiddo/ds-19-residual-lib-discovery` | `39f47f22` | [x] |
 | 7 | T-19 | | | [ ] |
 | 8 | V-19 | | | [ ] |
 | 9 | R-19a | | | [ ] |
@@ -26,7 +26,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 12 | R-19d | | | [ ] |
 | 13 | VALIDATE-20 | | | [ ] |
 
-**Next actionable hop:** DS-19
+**Next actionable hop:** T-19
 
 ---
 
@@ -96,11 +96,15 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 ## DS-19: Residual lib bypass discovery
 
-- [ ] `ds-19-residual-lib-discovery.md` — inventory of 41 `Ork3::$Lib` sites in 12 files
-- [ ] §3 split into **R-19a, R-19b, R-19c, R-19d** (3 files per hop — see SKILL.md table)
-- [ ] T-19 test design section in design note
-- [ ] Infection scope documented per hop
-- [ ] Checklist + commit on stacked branch
+- [x] `ds-19-residual-lib-discovery.md` — inventory of 41 `Ork3::$Lib` sites in 12 files
+- [x] §3 split into **R-19a, R-19b, R-19c, R-19d** (3 files per hop — see SKILL.md table)
+- [x] T-19 test design section in design note (§2)
+- [x] Infection scope documented per hop (§2.3)
+- [x] T-LIB-06 … T-LIB-17 in `03-implementation-plan.md`
+- [x] `04-milestone-checklist.md` DS-19 section + sign-off gate
+- [x] Path A zero-exemptions documented
+- [x] Gate: `sh bin/run-unit-tests.sh` exit 0
+- [x] Checklist + commit on stacked branch
 
 ---
 
