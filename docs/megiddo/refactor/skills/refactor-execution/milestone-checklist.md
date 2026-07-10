@@ -12,7 +12,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-11-search-refactor` @ `bdbc86d7` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-12-attendance-refactor` @ `6fcc6ce0` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -32,6 +32,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 | R-09 | `megiddo/r-09-player-refactor` | `4a7b1f8c` |
 | R-10 | `megiddo/r-10-reports-refactor` | `ea46a630` |
 | R-11 | `megiddo/r-11-search-refactor` | `bdbc86d7` |
+| R-12 | `megiddo/r-12-attendance-refactor` | `6fcc6ce0` |
 
 ---
 
@@ -268,16 +269,16 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Prior R-* hygiene | [ ] |
-| Refactor attendance targets | [ ] |
-| PHPUnit | [ ] |
-| Infection §2.4 | [ ] |
-| Fuzzy: `park-auth-sandbox,event-park` | [ ] |
-| Playwright: `attendance.spec.ts` | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-12: …` | [ ] |
+| Prior R-* hygiene | [x] |
+| Refactor attendance targets | [x] |
+| PHPUnit | [x] |
+| Infection §2.4 | [x] |
+| Fuzzy: `park-auth-sandbox,event-park` | [x] |
+| Playwright: `attendance.spec.ts` | [x] |
+| Docs + plan | [x] |
+| Commit: `R-12: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-12-attendance-refactor` @ `6fcc6ce0` stacked on R-11 @ `d9def14b`. Added `ClassLevel` helper, `Player::ComputeClassProgress`, `Attendance` reactivate/adjacent-dates/link enrichment/cache bust, `Weather` archive JSON wrappers; thinned AttendanceAjax/SignIn/QR/Attendance controllers and `Model_Attendance` off `$DB`/`Ork3::$Lib` on migrated paths. PHPUnit 215/215 pass (2 skipped). Infection `infection.t12-attendance.json5` `--only-covered`: MSI 51%, covered MSI 51%. Fuzzy test+mirror 4/4 pass (re-recorded `park-auth-sandbox` DOM/visual/assets + `event-park` DOM baselines). Playwright: auth smoke + `attendance.spec.ts` 4/4 pass.
 
 ---
 
@@ -328,4 +329,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | … | … | … |
 | 14 | R-14 | Phase 3 audit |
 
-**Next unchecked:** R-12
+**Next unchecked:** R-13

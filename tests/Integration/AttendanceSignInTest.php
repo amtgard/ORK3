@@ -5,7 +5,7 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 /**
- * Characterization tests for attendance sign-in and link flows (T-ATT-01, T-SIN-01–03, T-QR-01).
+ * Integration tests for attendance sign-in and link flows (T-ATT-01, T-SIN-01–03, T-QR-01).
  */
 final class AttendanceSignInTest extends TestCase
 {
@@ -51,11 +51,11 @@ final class AttendanceSignInTest extends TestCase
             'Date' => date('Y-m-d'),
         ]);
         $this->assertSame(0, $add['Status']);
+        $this->assertSame(1, (int) ($add['Reactivated'] ?? 0));
         if (!empty($add['Detail'])) {
             $this->fixture->trackAttendance((int) $add['Detail']);
         }
 
-        $this->mirrorAttendanceAjaxReactivate($player['mundane_id']);
         $this->assertSame(1, $this->fixture->fetchActive($player['mundane_id']));
     }
 
@@ -75,7 +75,6 @@ final class AttendanceSignInTest extends TestCase
         ]);
         $this->assertSame(0, $use['Status']);
 
-        $this->mirrorAttendanceAjaxReactivate($player['mundane_id']);
         $this->assertSame(1, $this->fixture->fetchActive($player['mundane_id']));
     }
 
@@ -90,11 +89,13 @@ final class AttendanceSignInTest extends TestCase
         $this->fixture->insertParkAttendance($parkId, $kingdomId, $player['mundane_id'], '2099-06-15', $classId);
         $this->fixture->insertParkAttendance($parkId, $kingdomId, $player['mundane_id'], '2099-06-29', $classId);
 
-        $model = new Model_Attendance();
-        $adjacent = $model->get_adjacent_park_dates($parkId, '2099-06-15');
-
-        $this->assertSame('2099-06-01', $adjacent['prev']);
-        $this->assertSame('2099-06-29', $adjacent['next']);
+        $adjacent = $this->attendanceDomain->GetAdjacentParkDates([
+            'ParkId' => $parkId,
+            'Date' => '2099-06-15',
+        ]);
+        $this->assertSame(0, $adjacent['Status']);
+        $this->assertSame('2099-06-01', $adjacent['Detail']['prev']);
+        $this->assertSame('2099-06-29', $adjacent['Detail']['next']);
     }
 
     public function testGetAttendanceLinkInfoIncludesEventName(): void
@@ -114,9 +115,8 @@ final class AttendanceSignInTest extends TestCase
         $info = $this->attendanceDomain->GetAttendanceLinkInfo(['LinkToken' => $link['token']]);
         $this->assertSame(0, $info['Status']);
         $this->assertSame($event['event_id'], (int) ($info['Detail']['EventId'] ?? 0));
-
-        $eventName = $this->mirrorSignInEventName((int) $info['Detail']['EventId']);
-        $this->assertSame($event['name'], $eventName);
+        $this->assertSame($event['name'], (string) ($info['Detail']['EventName'] ?? ''));
+        $this->assertSame('event', (string) ($info['Detail']['ScopeType'] ?? ''));
     }
 
     public function testGetPlayerLastClass(): void
@@ -130,8 +130,8 @@ final class AttendanceSignInTest extends TestCase
         $this->fixture->insertParkAttendance($parkId, $kingdomId, $player['mundane_id'], '2098-01-01', $classA);
         $this->fixture->insertParkAttendance($parkId, $kingdomId, $player['mundane_id'], '2098-02-01', $classB);
 
-        $expected = $this->mirrorSignInLastClass($player['mundane_id']);
-        $this->assertSame($classB, $expected);
+        $lastClass = (int) $this->attendanceDomain->GetPlayerLastClass(['MundaneId' => $player['mundane_id']]);
+        $this->assertSame($classB, $lastClass);
     }
 
     public function testSignInClassProgressionUsesGetPlayerClasses(): void
@@ -152,23 +152,19 @@ final class AttendanceSignInTest extends TestCase
         );
         $this->fixture->insertReconciliation($player['mundane_id'], $classId, 2.0);
 
-        $signInCredits = $this->mirrorSignInCreditsSum($player['mundane_id'], $classId);
-        $this->assertSame(4.0, $signInCredits);
-
         $playerDomain = new Player();
-        $response = $playerDomain->GetPlayerClasses(['MundaneId' => $player['mundane_id']]);
-        $this->assertSame(0, $response['Status']['Status']);
+        $progress = $playerDomain->ComputeClassProgress(['MundaneId' => $player['mundane_id']]);
+        $this->assertSame(0, $progress['Status']);
 
         $domainCredits = null;
-        foreach ($response['Classes'] ?? [] as $row) {
+        foreach ($progress['Detail'] ?? [] as $row) {
             if ((int) ($row['ClassId'] ?? 0) === $classId) {
-                $domainCredits = (float) ($row['Credits'] ?? 0) + (float) ($row['Reconciled'] ?? 0);
+                $domainCredits = (float) ($row['Credits'] ?? 0);
                 break;
             }
         }
 
         $this->assertNotNull($domainCredits);
-        $this->assertNotSame($signInCredits, $domainCredits);
         $this->assertSame(3.0, $domainCredits);
     }
 
@@ -183,11 +179,6 @@ final class AttendanceSignInTest extends TestCase
         $revoked = $this->fixture->insertParkLink($parkId, $kingdomId, $officer['mundane_id']);
         $this->fixture->revokeLink($revoked['link_id']);
 
-        $this->assertTrue($this->mirrorQrTokenValid($valid['token']));
-        $this->assertFalse($this->mirrorQrTokenValid($expired['token']));
-        // QR route only checks expiry — revoked links still pass until R-12 uses GetAttendanceLinkInfo.
-        $this->assertTrue($this->mirrorQrTokenValid($revoked['token']));
-
         $validInfo = $this->attendanceDomain->GetAttendanceLinkInfo(['LinkToken' => $valid['token']]);
         $expiredInfo = $this->attendanceDomain->GetAttendanceLinkInfo(['LinkToken' => $expired['token']]);
         $revokedInfo = $this->attendanceDomain->GetAttendanceLinkInfo(['LinkToken' => $revoked['token']]);
@@ -196,56 +187,6 @@ final class AttendanceSignInTest extends TestCase
         $this->assertNotSame(0, $expiredInfo['Status']);
         $this->assertNotSame(0, $revokedInfo['Status']);
         $this->assertStringContainsString('revoked', strtolower((string) ($revokedInfo['Detail'] ?? '')));
-    }
-
-    private function mirrorAttendanceAjaxReactivate(int $mundaneId): void
-    {
-        if ($mundaneId <= 0) {
-            return;
-        }
-
-        global $DB;
-        $DB->Clear();
-        $chk = $DB->DataSet(
-            'SELECT active FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundaneId . ' LIMIT 1'
-        );
-        if ($chk && $chk->Size() > 0 && $chk->Next() && (int) $chk->active === 0) {
-            $DB->Clear();
-            $DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET active = 1 WHERE mundane_id = ' . $mundaneId);
-        }
-    }
-
-    private function mirrorSignInEventName(int $eventId): string
-    {
-        if (!valid_id($eventId)) {
-            return '';
-        }
-
-        global $DB;
-        $DB->Clear();
-        $row = $DB->DataSet(
-            'SELECT name FROM ' . DB_PREFIX . 'event WHERE event_id = ' . $eventId . ' LIMIT 1'
-        );
-        if ($row && $row->Next()) {
-            return (string) ($row->name ?: '');
-        }
-
-        return '';
-    }
-
-    private function mirrorSignInLastClass(int $mundaneId): int
-    {
-        global $DB;
-        $DB->Clear();
-        $lastRow = $DB->DataSet(
-            'SELECT class_id FROM ' . DB_PREFIX . 'attendance WHERE mundane_id = ' . $mundaneId
-            . ' ORDER BY date DESC, attendance_id DESC LIMIT 1'
-        );
-        if ($lastRow && $lastRow->Next() && (int) $lastRow->class_id > 0) {
-            return (int) $lastRow->class_id;
-        }
-
-        return 0;
     }
 
     private function pdoInsertDuplicateAttendance(
@@ -286,46 +227,5 @@ final class AttendanceSignInTest extends TestCase
             (int) date('W', $ts),
         ]);
         $this->fixture->trackAttendance((int) $pdo->lastInsertId());
-    }
-
-    private function mirrorSignInCreditsSum(int $mundaneId, int $classId): float
-    {
-        global $DB;
-        $perClass = [];
-        $DB->Clear();
-        $rs = $DB->DataSet(
-            'SELECT class_id, SUM(credits) AS c FROM ' . DB_PREFIX . 'attendance WHERE mundane_id = '
-            . $mundaneId . ' GROUP BY class_id'
-        );
-        if ($rs) {
-            while ($rs->Next()) {
-                $perClass[(int) $rs->class_id] = (float) $rs->c;
-            }
-        }
-        $DB->Clear();
-        $rs = $DB->DataSet(
-            'SELECT class_id, reconciled AS c FROM ' . DB_PREFIX . 'class_reconciliation WHERE mundane_id = '
-            . $mundaneId
-        );
-        if ($rs) {
-            while ($rs->Next()) {
-                $cid = (int) $rs->class_id;
-                $perClass[$cid] = ($perClass[$cid] ?? 0) + (float) $rs->c;
-            }
-        }
-
-        return (float) ($perClass[$classId] ?? 0.0);
-    }
-
-    private function mirrorQrTokenValid(string $token): bool
-    {
-        global $DB;
-        $DB->Clear();
-        $rs = $DB->DataSet(
-            'SELECT link_id FROM ' . DB_PREFIX . "attendance_link WHERE token = '" . $token
-            . "' AND expires_at > NOW() LIMIT 1"
-        );
-
-        return (bool) ($rs && $rs->Next() && (int) $rs->link_id > 0);
     }
 }

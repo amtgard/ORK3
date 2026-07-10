@@ -954,6 +954,41 @@ class Player extends Ork3
         return array_values(array_map('intval', array_keys($set)));
     }
 
+    /**
+     * Per-class credits, level, and credits-to-next using GetPlayerClasses semantics (T-SIN-03, T-SIN-04).
+     */
+    public function ComputeClassProgress($request)
+    {
+        $mundaneId = (int)($request['MundaneId'] ?? 0);
+        if (!valid_id($mundaneId)) {
+            return InvalidParameter();
+        }
+
+        $classesResponse = $this->GetPlayerClasses(['MundaneId' => $mundaneId]);
+        if (($classesResponse['Status']['Status'] ?? 1) != 0) {
+            return $classesResponse['Status'];
+        }
+
+        $progress = [];
+        foreach ($classesResponse['Classes'] ?? [] as $row) {
+            $classId = (int)($row['ClassId'] ?? 0);
+            if ($classId <= 0) {
+                continue;
+            }
+            $credits = (float)($row['Credits'] ?? 0) + (float)($row['Reconciled'] ?? 0);
+            $levelInfo = ClassLevel::computeClassLevel($credits);
+            $progress[] = [
+                'ClassId'   => $classId,
+                'ClassName' => (string)($row['ClassName'] ?? ''),
+                'Credits'   => $credits,
+                'Level'     => $levelInfo['Level'],
+                'ToNext'    => $levelInfo['ToNext'],
+            ];
+        }
+
+        return Success($progress);
+    }
+
     public function GetPlayerClasses($request)
     {
         // Cold-cache the dedupe-by-date subquery costs ~185ms for the busiest player

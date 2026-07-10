@@ -100,10 +100,8 @@ final class AttendanceWriteTest extends TestCase
             'ClassId' => $this->fixture->secondClassId($this->fixture->firstClassId()),
         ]);
         $this->assertSame(0, $update['Status']);
-
-        $payload = $this->mirrorAttendanceAjaxEditResponse($officer['mundane_id']);
-        $this->assertSame($officer['mundane_id'], $payload['editor_id']);
-        $this->assertSame($this->fixture->fetchPersona($officer['mundane_id']), $payload['editor_persona']);
+        $this->assertSame($officer['mundane_id'], (int) ($update['EditorId'] ?? 0));
+        $this->assertSame($this->fixture->fetchPersona($officer['mundane_id']), (string) ($update['EditorPersona'] ?? ''));
     }
 
     public function testCacheBustOnWrite(): void
@@ -140,23 +138,5 @@ final class AttendanceWriteTest extends TestCase
         $this->assertFalse($this->cache->has('Player.get_latest_attendance_date', $idKey));
         $this->assertFalse($this->cache->has('Player.get_earliest_attendance_date', $idKey));
         $this->assertFalse($this->cache->has('Player.GetPlayerClasses', $assocKey));
-    }
-
-    /**
-     * @return array{editor_id: int, editor_persona: string}
-     */
-    private function mirrorAttendanceAjaxEditResponse(int $editorId): array
-    {
-        $editorPersona = '';
-        global $DB;
-        $DB->Clear();
-        $row = $DB->DataSet(
-            'SELECT persona FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $editorId . ' LIMIT 1'
-        );
-        if ($row && $row->Size() > 0 && $row->Next()) {
-            $editorPersona = (string) $row->persona;
-        }
-
-        return ['editor_id' => $editorId, 'editor_persona' => $editorPersona];
     }
 }

@@ -355,6 +355,35 @@ class Weather extends Ork3
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.archive_for_coords', $key, $result);
     }
 
+    public function GetArchiveForPark($request)
+    {
+        $parkId = (int)($request['ParkId'] ?? 0);
+        $date = (string)($request['Date'] ?? '');
+        if (!valid_id($parkId)) {
+            return InvalidParameter('Invalid park ID');
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return InvalidParameter('Invalid date');
+        }
+
+        return Success(['Weather' => $this->archive_for_date($parkId, $date)]);
+    }
+
+    public function GetArchiveForCoords($request)
+    {
+        $lat = $request['Lat'] ?? null;
+        $lng = $request['Lng'] ?? null;
+        $date = (string)($request['Date'] ?? '');
+        if (!is_numeric($lat) || !is_numeric($lng)) {
+            return InvalidParameter('Invalid coordinates');
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return InvalidParameter('Invalid date');
+        }
+
+        return Success(['Weather' => $this->archive_for_coords((float)$lat, (float)$lng, $date)]);
+    }
+
     /**
      * Convenience: look up a park's forecast for a date AND its 7-day daily
      * block in one call, return the badges for that date with week-relative

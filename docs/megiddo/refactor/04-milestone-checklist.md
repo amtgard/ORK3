@@ -1129,7 +1129,7 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** R-12 (Attendance refactor — R-11 complete on `megiddo/r-11-search-refactor`). Phase 1.6 (V-00…V-14) complete.
+**Next actionable milestone:** R-13 (Infrastructure refactor — R-12 complete on `megiddo/r-12-attendance-refactor`). Phase 1.6 (V-00…V-14) complete.
 
 ### R-01 complete (2026-07-09)
 
@@ -1196,3 +1196,9 @@ Per execution sprint checklist:
 - [x] Branch `megiddo/r-11-search-refactor` stacked on `megiddo/r-10-reports-refactor` — universal/scoped player search and unit activity counts in `SearchService`; thinned `SearchAjax`, `Search`, `AdminAjax`, `KingdomAjax`, `ParkAjax`, `EventAjax` playersearch paths off `$DB`
 - [x] Targets closed: T-SRC-01, T-SRC-02, T-ADM-10, T-KNA-06, T-PRA-01, T-EVA-06 (search portion; addauth → R-02)
 - [x] Gates: PHPUnit 215/215 pass; Infection `infection.t11-search.json5` `--only-covered` MSI 40%; fuzzy admin-permissions/kingdom-auth-sandbox/park-auth-sandbox 6/6; Playwright auth smoke + `search.spec.ts` 3/3 pass
+
+### R-12 complete (2026-07-10)
+
+- [x] Branch `megiddo/r-12-attendance-refactor` stacked on `megiddo/r-11-search-refactor` — attendance reactivate/adjacent dates/link enrichment, class level helper, weather archive JSON, active-event model reads in domain; thinned `AttendanceAjax`, `SignIn`, `QR`, `Attendance` controllers and `Model_Attendance` off `$DB`/`Ork3::$Lib` on migrated paths
+- [x] Targets closed: T-ATT-01 through T-ATT-06, T-SIN-01 through T-SIN-04, T-QR-01
+- [x] Gates: PHPUnit 215/215 pass; Infection `infection.t12-attendance.json5` `--only-covered` MSI 51%; fuzzy park-auth-sandbox/event-park 4/4; Playwright auth smoke + `attendance.spec.ts` 4/4 pass

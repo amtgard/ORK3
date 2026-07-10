@@ -151,9 +151,11 @@ class Attendance extends Ork3
         ));
 
         if ($this->attendance->attendance_id) {
-            $ck = Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$this->attendance->mundane_id]);
-            Ork3::$Lib->ghettocache->bust('Player.GetPlayerClasses', $ck);
-            return Success($this->attendance->attendance_id);
+            $reactivated = $this->reactivateInactiveMundane((int)$this->attendance->mundane_id);
+            $this->bustPlayerAttendanceCaches((int)$this->attendance->mundane_id);
+            $response = Success($this->attendance->attendance_id);
+            $response['Reactivated'] = $reactivated;
+            return $response;
         }
         logtrace("AddAttendance: falling through to InvalidParameter", array('att_id' => $this->attendance->attendance_id));
         return InvalidParameter();
@@ -210,12 +212,15 @@ class Attendance extends Ork3
         // Bust both old and (possibly different) new owner — admin reassigns happen.
         foreach (array_unique([(int)$attendance->mundane_id, (int)$request['MundaneId']]) as $_mid) {
             if ($_mid > 0) {
-                $_ck = Ork3::$Lib->ghettocache->key(['MundaneId' => $_mid]);
-                Ork3::$Lib->ghettocache->bust('Player.GetPlayerClasses', $_ck);
+                $this->bustPlayerAttendanceCaches($_mid);
             }
         }
 
-        return Success($this->attendance->attendance_id);
+        $editorId = (int)Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+        $response = Success($this->attendance->attendance_id);
+        $response['EditorId'] = $editorId;
+        $response['EditorPersona'] = $this->fetchEditorPersona($editorId);
+        return $response;
     }
 
     public function HasAttendance($request)
@@ -334,8 +339,7 @@ class Attendance extends Ork3
         $this->attendance->delete();
 
         if ((int)$attendance->mundane_id > 0) {
-            $_ck = Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$attendance->mundane_id]);
-            Ork3::$Lib->ghettocache->bust('Player.GetPlayerClasses', $_ck);
+            $this->bustPlayerAttendanceCaches((int)$attendance->mundane_id);
         }
 
         return Success($this->attendance->attendance_id);
@@ -375,6 +379,84 @@ class Attendance extends Ork3
         ];
     }
 
+    private function reactivateInactiveMundane(int $mundaneId): int
+    {
+        if ($mundaneId <= 0) {
+            return 0;
+        }
+        $this->db->Clear();
+        $chk = $this->db->DataSet(
+            'SELECT active FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundaneId . ' LIMIT 1'
+        );
+        if (!$chk || !$chk->Next() || (int)$chk->active !== 0) {
+            return 0;
+        }
+        $this->db->Clear();
+        $this->db->Execute('UPDATE ' . DB_PREFIX . 'mundane SET active = 1 WHERE mundane_id = ' . $mundaneId);
+        return 1;
+    }
+
+    private function fetchEditorPersona(int $mundaneId): string
+    {
+        if ($mundaneId <= 0) {
+            return '';
+        }
+        $this->db->Clear();
+        $row = $this->db->DataSet(
+            'SELECT persona FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundaneId . ' LIMIT 1'
+        );
+        if ($row && $row->Size() > 0 && $row->Next()) {
+            return (string)$row->persona;
+        }
+        return '';
+    }
+
+    private function bustPlayerAttendanceCaches(int $mundaneId): void
+    {
+        if ($mundaneId <= 0) {
+            return;
+        }
+        $cache = Ork3::$Lib->ghettocache;
+        $assocKey = $cache->key(['MundaneId' => $mundaneId]);
+        $idKey = $cache->key([$mundaneId]);
+        $cache->bust('Model_Player.fetch_player_details', $assocKey);
+        $cache->bust('Model_Player.fetch_player_attendance', $assocKey);
+        $cache->bust('Player.get_latest_attendance_date', $idKey);
+        $cache->bust('Player.get_earliest_attendance_date', $idKey);
+        $cache->bust('Player.GetPlayerClasses', $assocKey);
+    }
+
+    public function GetAdjacentParkDates($request)
+    {
+        $parkId = (int)($request['ParkId'] ?? 0);
+        $date = date('Y-m-d', strtotime((string)($request['Date'] ?? '')));
+        if (!valid_id($parkId) || !$date) {
+            return InvalidParameter();
+        }
+
+        $prev = null;
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT DATE(date) AS att_date FROM ' . DB_PREFIX . 'attendance WHERE park_id = ' . $parkId
+            . " AND date < '" . $date . "' ORDER BY date DESC LIMIT 1"
+        );
+        if ($r && $r->Next()) {
+            $prev = $r->att_date;
+        }
+
+        $next = null;
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT DATE(date) AS att_date FROM ' . DB_PREFIX . 'attendance WHERE park_id = ' . $parkId
+            . " AND date > '" . $date . "' ORDER BY date ASC LIMIT 1"
+        );
+        if ($r && $r->Next()) {
+            $next = $r->att_date;
+        }
+
+        return Success(['prev' => $prev, 'next' => $next]);
+    }
+
 
 
     public function GetPlayerLastClass($request)
@@ -384,8 +466,14 @@ class Attendance extends Ork3
             return 0;
         }
         $this->db->Clear();
-        $r = $this->db->query('SELECT class_id FROM ' . DB_PREFIX . 'attendance WHERE mundane_id = ' . $mundane_id . ' ORDER BY date DESC, attendance_id DESC LIMIT 1');
-        return ($r && isset($r->class_id)) ? (int)$r->class_id : 0;
+        $r = $this->db->DataSet(
+            'SELECT class_id FROM ' . DB_PREFIX . 'attendance WHERE mundane_id = ' . $mundane_id
+            . ' ORDER BY date DESC, attendance_id DESC LIMIT 1'
+        );
+        if ($r && $r->Next() && (int)$r->class_id > 0) {
+            return (int)$r->class_id;
+        }
+        return 0;
     }
 
     public function CreateAttendanceLink($request)
@@ -532,14 +620,31 @@ class Attendance extends Ork3
             return InvalidParameter('This sign-in link has expired.');
         }
 
+        $parkId = (int)$this->attendance_link->park_id;
+        $kingdomId = (int)$this->attendance_link->kingdom_id;
+        $eventId = (int)$this->attendance_link->event_id;
+        $scopeType = 'park';
+        $eventName = '';
+        if (valid_id($eventId)) {
+            $scopeType = 'event';
+            $ev = Ork3::$Lib->event->GetEvent(['EventId' => $eventId]);
+            $eventName = (string)($ev['Name'] ?? '');
+        } elseif (valid_id($parkId)) {
+            $scopeType = 'park';
+        } elseif (valid_id($kingdomId)) {
+            $scopeType = 'kingdom';
+        }
+
         return Success([
             'LinkId'                 => (int)$this->attendance_link->link_id,
-            'ParkId'                 => (int)$this->attendance_link->park_id,
-            'KingdomId'              => (int)$this->attendance_link->kingdom_id,
-            'EventId'                => (int)$this->attendance_link->event_id,
+            'ParkId'                 => $parkId,
+            'KingdomId'              => $kingdomId,
+            'EventId'                => $eventId,
             'EventCalendarDetailId'  => (int)$this->attendance_link->event_calendardetail_id,
             'Credits'                => (float)$this->attendance_link->credits,
             'ExpiresAt'              => $this->attendance_link->expires_at,
+            'EventName'              => $eventName,
+            'ScopeType'              => $scopeType,
         ]);
     }
 
@@ -666,10 +771,8 @@ class Attendance extends Ork3
             $this->db->query(
                 'UPDATE ' . DB_PREFIX . 'attendance SET date_year = YEAR(`date`), date_month = MONTH(`date`), date_week3 = WEEK(`date`, 3), date_week6 = WEEK(`date`, 6) WHERE attendance_id = ' . $this->attendance->attendance_id
             );
-            // B6: Bust player caches so newly-recorded attendance appears immediately.
-            $_ck = Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$mundane_id]);
-            Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $_ck);
-            Ork3::$Lib->ghettocache->bust('Player.GetPlayerClasses', $_ck);
+            $this->reactivateInactiveMundane($mundane_id);
+            $this->bustPlayerAttendanceCaches($mundane_id);
             return Success($this->attendance->attendance_id);
         }
         return InvalidParameter('Could not save attendance. You may have already signed in today.');
