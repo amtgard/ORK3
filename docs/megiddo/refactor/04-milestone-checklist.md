@@ -1023,7 +1023,35 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 #### T-19 sign-off gate
 
 - [x] Test sprint sign-off checklist (above) satisfied
-- [x] Branch `megiddo/t-19-residual-lib-tests` squashed to exactly one commit (`fc557480`)
+- [x] Branch `megiddo/t-19-residual-lib-tests` squashed to exactly one commit (`c684604c`)
+
+---
+
+### V-19: Residual Ork3::$Lib bypass validation artifacts
+
+**Branch:** `megiddo/v-19-residual-lib-validation`
+
+**Depends on:** DS-19, T-19, V-00, V-14
+
+**Spec:** [validations/v-19-residual-lib-validation.md](./validations/v-19-residual-lib-validation.md)
+
+**Targets:** T-LIB-06 through T-LIB-17; per-hop gates for R-19a … R-19d
+
+| Step | Status |
+|------|--------|
+| §2.3 semantic test boundaries | [x] |
+| §2.4 Infection scope + MSI floors per hop | [x] |
+| §2.5 Fuzzy + Playwright gate table per hop | [x] |
+| §3 R-19d full-suite gate list | [x] |
+| `r-milestone-smoke-matrix.html` R-19a…d stubs | [x] |
+
+#### V-19 sign-off gate
+
+- [x] Validation doc published — [v-19-residual-lib-validation.md](./validations/v-19-residual-lib-validation.md)
+- [x] Per-hop fuzzy + Playwright + Infection boundaries for R-19a…d
+- [x] `infection.t19-residual-lib.json5` referenced (from T-19)
+- [x] Full unit test suite passes (DS-4, DS-5)
+- [x] Branch `megiddo/v-19-residual-lib-validation` — one commit (`025cc2e3`)
 
 ---
 
@@ -1339,7 +1367,7 @@ Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for
 
 ---
 
-### V-01 … V-18: Domain validation artifacts
+### V-01 … V-19: Domain validation artifacts
 
 Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines. Pairs with DS/T/R numbering.
 
@@ -1363,6 +1391,7 @@ Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines.
 | V-16 | `megiddo/v-16-ghettocache-validation` | [v-16-ghettocache-validation.md](./validations/v-16-ghettocache-validation.md) | DS-16, T-16, V-00, V-14 | R-16 |
 | V-17 | `megiddo/v-17-lib-bypass-validation` | [v-17-lib-bypass-validation.md](./validations/v-17-lib-bypass-validation.md) | DS-17, T-17, V-00, V-14 | R-17 |
 | V-18 | `megiddo/v-18-residual-db-validation` | [v-18-residual-db-validation.md](./validations/v-18-residual-db-validation.md) | DS-18, T-18, V-00 | R-18 |
+| V-19 | `megiddo/v-19-residual-lib-validation` | [v-19-residual-lib-validation.md](./validations/v-19-residual-lib-validation.md) | DS-19, T-19, V-00, V-14 | R-19a … R-19d |
 
 ---
 

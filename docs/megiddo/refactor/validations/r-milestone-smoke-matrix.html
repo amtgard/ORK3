@@ -28,7 +28,7 @@
 <body>
 
 <h1>Megiddo R-* Manual Smoke Validation Matrix</h1>
-<p>One smoke test per refactor milestone (R-01 … R-18). Use after each R-* sign-off or as Phase 3 human verification (<a href="../11-phase-3-closeout.md">11-phase-3-closeout.md</a> P3-1 / P3-4).</p>
+<p>One smoke test per refactor milestone (R-01 … R-18; R-19a … R-19d for residual lib). Use after each R-* sign-off or as Phase 3 human verification (<a href="../11-phase-3-closeout.md">11-phase-3-closeout.md</a> P3-1 / P3-4).</p>
 
 <div class="preflight">
   <strong>Preflight</strong> (mirror profile, local docker):<br>
@@ -59,6 +59,10 @@
     <li><a href="#r-16">R-16 GhettoCache</a></li>
     <li><a href="#r-17">R-17 Lib bypass</a></li>
     <li><a href="#r-18">R-18 Residual DB</a></li>
+    <li><a href="#r-19a">R-19a Player/bootstrap</a></li>
+    <li><a href="#r-19b">R-19b Event/admin</a></li>
+    <li><a href="#r-19c">R-19c Park/search</a></li>
+    <li><a href="#r-19d">R-19d Final lib zero</a></li>
   </ul>
 </nav>
 
@@ -461,6 +465,102 @@
     <li>Confirm no database error strings anywhere.</li>
   </ol>
   <div class="verify"><strong>Verify:</strong> Clean navigation; <code>rg '\$DB->' orkui/</code> already zero before this smoke.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-19a -->
+<section class="milestone" id="r-19a">
+  <h2>R-19a — Residual lib: player, bootstrap, kingdom (stub)</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-19a-residual-lib-refactor</code></dd>
+    <dt>Files</dt><dd><code>model.Player.php</code>, <code>index.php</code>, <code>KingdomAjax.php</code></dd>
+    <dt>Canary</dt><dd><code>player-profile</code>, <code>kingdom-auth-sandbox</code>, <code>home-authenticated</code></dd>
+    <dt>Playwright</dt><dd><code>player-profile.spec.ts</code>, <code>kingdom-profile.spec.ts</code>, <code>infrastructure.spec.ts</code></dd>
+    <dt>Validation</dt><dd><a href="v-19-residual-lib-validation.md">v-19 §2.5 R-19a</a></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/player-profile.png" alt="Baseline player-profile R-19a" width="640">
+    <figcaption>Fuzzy baseline — player profile (milestone CRUD + read helpers off $Lib)</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong> (mirror) or <strong>megiddo</strong> / <strong>test-db-player</strong> (sandbox).</li>
+    <li>Open player profile — confirm milestones section loads; add/edit/delete a custom milestone if permitted.</li>
+    <li>Hit <code>index.php?Route=Health</code> — plain-text <strong>OK</strong> (no $Lib session fatal).</li>
+    <li>Kingdom admin → scoped player search — JSON results, no stack trace.</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> <code>rg 'Ork3::\$Lib'</code> on the three R-19a files → zero; fuzzy gate 6/6 pass.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-19b -->
+<section class="milestone" id="r-19b">
+  <h2>R-19b — Residual lib: event &amp; admin (stub)</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-19b-residual-lib-refactor</code></dd>
+    <dt>Files</dt><dd><code>EventAjax.php</code>, <code>AdminAjax.php</code>, <code>Admin.php</code></dd>
+    <dt>Canary</dt><dd><code>event-index-rsvp</code>, <code>admin-dashboard</code>, <code>admin-permissions</code></dd>
+    <dt>Playwright</dt><dd><code>event-detail.spec.ts</code>, <code>event-planning.spec.ts</code>, <code>admin-dashboard.spec.ts</code></dd>
+    <dt>Validation</dt><dd><a href="v-19-residual-lib-validation.md">v-19 §2.5 R-19b</a></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/admin-dashboard.png" alt="Baseline admin-dashboard R-19b" width="640">
+    <figcaption>Fuzzy baseline — admin dashboard (weather + SoA paths off $Lib)</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Event planning → set heraldry on a sandbox event (or mirror event) — image URL updates.</li>
+    <li>Admin permissions → grant a role — confirm audit side effect (no direct <code>$Lib->dangeraudit</code>).</li>
+    <li>Admin weather panel → refresh — stats JSON loads.</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> R-19a files still $Lib-free; R-19b three files clean; fuzzy gate 6/6 pass.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-19c -->
+<section class="milestone" id="r-19c">
+  <h2>R-19c — Residual lib: park &amp; search (stub)</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-19c-residual-lib-refactor</code></dd>
+    <dt>Files</dt><dd><code>ParkAjax.php</code>, <code>SearchAjax.php</code>, <code>Search.php</code></dd>
+    <dt>Canary</dt><dd><code>park-auth-sandbox</code></dd>
+    <dt>Playwright</dt><dd><code>search.spec.ts</code>, <code>park-profile.spec.ts</code></dd>
+    <dt>Validation</dt><dd><a href="v-19-residual-lib-validation.md">v-19 §2.5 R-19c</a></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/park-auth-sandbox.png" alt="Baseline park-auth-sandbox R-19c" width="640">
+    <figcaption>Fuzzy baseline — park auth (scoped search + audit off $Lib)</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>megiddo</strong> / <strong>test-db-player</strong> (sandbox park ids).</li>
+    <li>Universal search bar — query returns JSON results.</li>
+    <li>Park admin → grant role via AJAX — audit log entry present.</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Prior R-19a/b files still clean; R-19c three files $Lib-free; fuzzy 2/2 pass.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-19d -->
+<section class="milestone" id="r-19d">
+  <h2>R-19d — Residual lib: final zero (complete at sign-off)</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-19d-residual-lib-refactor</code></dd>
+    <dt>Files</dt><dd><code>PlayerAjax.php</code>, <code>WnAjax.php</code>, <code>model.AdminDashboard.php</code></dd>
+    <dt>Canary</dt><dd>Full gate list — <a href="v-19-residual-lib-validation.md#32-fuzzy--full-gate-list">v-19 §3.2</a> (8 pages × 2 profiles)</dd>
+    <dt>Playwright</dt><dd>Full <code>tests/e2e/</code> per FIX-03 (mirror + sandbox heraldry)</dd>
+    <dt>Static</dt><dd><code>rg 'Ork3::\$Lib' orkui/</code> → <strong>zero</strong> (all 12 files)</dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/admin-state-of-amtgard.png" alt="Baseline admin-state-of-amtgard R-19d" width="640">
+    <figcaption>Fuzzy baseline — State of Amtgard admin (SoA bootstrap off $Lib)</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Player new / AJAX username check — <code>{ available: bool }</code> JSON.</li>
+    <li>Dismiss What's New banner — seen row persisted (<code>residual-lib.spec.ts</code>).</li>
+    <li>Admin home → SoA widget renders bootstrap payload.</li>
+    <li>Walk cumulative smokes R-19a…c — all still pass.</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Repo-wide <code>rg 'Ork3::\$Lib' orkui/</code> zero; fuzzy 16/16 (or <code>--all</code> at VALIDATE-20); Playwright full suite exit 0. <em>Fill pass/fail after R-19d commit.</em></div>
   <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
 </section>
 

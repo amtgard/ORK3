@@ -25,6 +25,7 @@ Per-domain **canary URLs** and **test mutation boundaries** for R-* execution sp
 | V-12 | [v-12-attendance-validation.md](./v-12-attendance-validation.md) | Attendance / sign-in | R-12 |
 | V-13 | [v-13-infrastructure-validation.md](./v-13-infrastructure-validation.md) | Infrastructure | R-13 |
 | V-14 | [v-14-lib-service-validation.md](./v-14-lib-service-validation.md) | Ork3::$Lib / lib-service | R-14 |
+| V-19 | [v-19-residual-lib-validation.md](./v-19-residual-lib-validation.md) | Residual Ork3::$Lib bypass (41 sites) | R-19a … R-19d |
 
 **Template:** [_template-validation.md](./_template-validation.md)
 

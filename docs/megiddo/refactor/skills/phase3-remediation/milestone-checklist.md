@@ -18,15 +18,15 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 4 | FIX-05 | `megiddo/p3-fix-05-doc-hygiene` | `69fd2ac1` | [x] |
 | 5 | BACKFILL | `megiddo/p3-backfill-tvds-r14-r18` | `7f9576eb` | [x] |
 | 6 | DS-19 | `megiddo/ds-19-residual-lib-discovery` | `39f47f22` | [x] |
-| 7 | T-19 | `megiddo/t-19-residual-lib-tests` | `fc557480` | [x] |
-| 8 | V-19 | | | [ ] |
+| 7 | T-19 | `megiddo/t-19-residual-lib-tests` | `c684604c` | [x] |
+| 8 | V-19 | `megiddo/v-19-residual-lib-validation` | `025cc2e3` | [x] |
 | 9 | R-19a | | | [ ] |
 | 10 | R-19b | | | [ ] |
 | 11 | R-19c | | | [ ] |
 | 12 | R-19d | | | [ ] |
 | 13 | VALIDATE-20 | | | [ ] |
 
-**Next actionable hop:** V-19
+**Next actionable hop:** R-19a
 
 ---
 
@@ -125,9 +125,14 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 ## V-19: Residual lib validation
 
-- [ ] `validations/v-19-residual-lib-validation.md`
-- [ ] Fuzzy + Playwright + Infection boundaries **per R-19a…d hop**
-- [ ] Checklist + commit on stacked branch
+- [x] `validations/v-19-residual-lib-validation.md` — §2.3, §2.4, §2.5, §3 full gate list
+- [x] Fuzzy + Playwright + Infection boundaries **per R-19a…d hop**
+- [x] `validations/r-milestone-smoke-matrix.html` — R-19a…d stubs (R-19d completion note)
+- [x] `04-milestone-checklist.md` § V-19 updated
+- [x] Gate: `sh bin/run-unit-tests.sh` exit 0
+- [x] Checklist + commit on stacked branch
+
+**Branch:** `megiddo/v-19-residual-lib-validation` @ `025cc2e3`
 
 ---
 
