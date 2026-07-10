@@ -39,6 +39,8 @@ DS-14 §1.3–1.5 is the authoritative inventory for cross-cutting patterns. R-1
 
 Orchestrated workers updated checklists in commits but left **`skills/refactor-execution/workers/`** untracked on the R-14 branch. Close-out commit adds worker prompts + this continuation plan.
 
+**DS/T/V backfill (2026-07-10):** Phase 3 remediation **BACKFILL** hop retroactively published [ds-15](./ds-15-hasauthority-discovery.md) … [ds-18](./ds-18-residual-db-discovery.md), T-15 … T-18 (§2 in each DS-*), and [v-15](./validations/v-15-hasauthority-validation.md) … [v-18](./validations/v-18-residual-db-validation.md). Gap audit: [p3-backfill-tvds-audit.md](./p3-backfill-tvds-audit.md). R-14 DS-14/T-14/V-14 verified complete — no new R-14 docs.
+
 ---
 
 ## Execution sprints (R-15 … R-18)

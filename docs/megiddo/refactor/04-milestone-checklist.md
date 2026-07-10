@@ -387,6 +387,82 @@ Each discovery sprint follows the same workflow for its target IDs (from [03-imp
 
 ---
 
+### DS-15: HasAuthority rollout
+
+**Branch:** `megiddo/ds-15-hasauthority-discovery` (retroactive — [p3-backfill-tvds-audit.md](./p3-backfill-tvds-audit.md))
+
+**Targets:** HasAuthority portion of T-EVT-08, T-KNG-11, T-PRK-05, T-PLR-08, T-RPT-02, T-ATT-04, T-UNT-03; template auth flags
+
+| Step | Status | Output link |
+|------|--------|-------------|
+| Backend survey | [x] | [ds-15-hasauthority-discovery.md §1](./ds-15-hasauthority-discovery.md#1-backend-survey) |
+| Test design | [x] | [ds-15-hasauthority-discovery.md §2](./ds-15-hasauthority-discovery.md#2-test-design) |
+| Proposed revision | [x] | [ds-15-hasauthority-discovery.md §3](./ds-15-hasauthority-discovery.md#3-proposed-revision) |
+
+#### DS-15 sign-off gate
+
+- [x] Survey + test design + revision documented (retroactive backfill)
+- [x] Cross-refs DS-14 §1.3 and R-15 execution sign-off
+
+---
+
+### DS-16: GhettoCache migration
+
+**Branch:** `megiddo/ds-16-ghettocache-discovery` (retroactive — [p3-backfill-tvds-audit.md](./p3-backfill-tvds-audit.md))
+
+**Targets:** Ghettocache portion of T-EVT-08, T-KNG-11, T-RPT-02, T-PLM-03, T-ATT-06, T-SRC-01
+
+| Step | Status | Output link |
+|------|--------|-------------|
+| Backend survey | [x] | [ds-16-ghettocache-discovery.md §1](./ds-16-ghettocache-discovery.md#1-backend-survey) |
+| Test design | [x] | [ds-16-ghettocache-discovery.md §2](./ds-16-ghettocache-discovery.md#2-test-design) |
+| Proposed revision | [x] | [ds-16-ghettocache-discovery.md §3](./ds-16-ghettocache-discovery.md#3-proposed-revision) |
+
+#### DS-16 sign-off gate
+
+- [x] Survey + test design + revision documented (retroactive backfill)
+- [x] Cross-refs DS-14 §1.4 and R-16 execution sign-off
+
+---
+
+### DS-17: Residual domain lib bypass
+
+**Branch:** `megiddo/ds-17-lib-bypass-discovery` (retroactive — [p3-backfill-tvds-audit.md](./p3-backfill-tvds-audit.md))
+
+**Targets:** T-EVT-08 (weather templates), T-KNG-11, T-PRK-05, T-PLR-08, T-RPT-02, T-UNT-02, T-UNT-03
+
+| Step | Status | Output link |
+|------|--------|-------------|
+| Backend survey | [x] | [ds-17-lib-bypass-discovery.md §1](./ds-17-lib-bypass-discovery.md#1-backend-survey) |
+| Test design | [x] | [ds-17-lib-bypass-discovery.md §2](./ds-17-lib-bypass-discovery.md#2-test-design) |
+| Proposed revision | [x] | [ds-17-lib-bypass-discovery.md §3](./ds-17-lib-bypass-discovery.md#3-proposed-revision) |
+
+#### DS-17 sign-off gate
+
+- [x] Survey + test design + revision documented (retroactive backfill)
+- [x] Consolidates DS-14 §1.5 carryover; R-17 execution sign-off
+
+---
+
+### DS-18: Residual `$DB` in `orkui/`
+
+**Branch:** `megiddo/ds-18-residual-db-discovery` (retroactive — [p3-backfill-tvds-audit.md](./p3-backfill-tvds-audit.md))
+
+**Targets:** All remaining `$DB->` in `orkui/`
+
+| Step | Status | Output link |
+|------|--------|-------------|
+| Backend survey | [x] | [ds-18-residual-db-discovery.md §1](./ds-18-residual-db-discovery.md#1-backend-survey) |
+| Test design | [x] | [ds-18-residual-db-discovery.md §2](./ds-18-residual-db-discovery.md#2-test-design) |
+| Proposed revision | [x] | [ds-18-residual-db-discovery.md §3](./ds-18-residual-db-discovery.md#3-proposed-revision) |
+
+#### DS-18 sign-off gate
+
+- [x] Survey + test design + revision documented (retroactive backfill)
+- [x] R-18 execution sign-off — `rg '\$DB->' orkui/` zero
+
+---
+
 ## Phase 1.5 — Test Development
 
 Test sprints implement the test plans from Phase 1 discovery **before** refactor execution. Each **T-{nn}** milestone pairs with the matching **DS-{nn}** / **R-{nn}** sprint.
@@ -793,6 +869,114 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 ---
 
+### T-15: HasAuthority rollout tests
+
+**Branch:** `megiddo/t-15-hasauthority-tests` (retroactive — [p3-backfill-tvds-audit.md](./p3-backfill-tvds-audit.md))
+
+**Depends on:** DS-15, R-14 T-14 auth tests
+
+**Design source:** [ds-15-hasauthority-discovery.md §2](./ds-15-hasauthority-discovery.md#2-test-design)
+
+**Targets:** HasAuthority portion of T-EVT-08, T-KNG-11, T-PRK-05, T-PLR-08, T-RPT-02, T-ATT-04, T-UNT-03
+
+| Step | Status |
+|------|--------|
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** Reuses `tests/Integration/AuthorizationLibTest.php`, `tests/e2e/auth-permissions.spec.ts`
+
+**Infection (R-15 sign-off):** `infection.t14-lib-auth-era.json5` pass A — MSI **18%**
+
+#### T-15 sign-off gate
+
+- [x] Test design documented in DS-15 §2 (retroactive backfill)
+- [x] R-15 gates satisfied per [v-15-hasauthority-validation.md §3](./validations/v-15-hasauthority-validation.md#3-r-15-sign-off-checklist)
+
+---
+
+### T-16: GhettoCache migration tests
+
+**Branch:** `megiddo/t-16-ghettocache-tests` (retroactive — [p3-backfill-tvds-audit.md](./p3-backfill-tvds-audit.md))
+
+**Depends on:** DS-16
+
+**Design source:** [ds-16-ghettocache-discovery.md §2](./ds-16-ghettocache-discovery.md#2-test-design)
+
+**Targets:** Ghettocache portion of T-EVT-08, T-KNG-11, T-RPT-02, T-PLM-03, T-ATT-06, T-SRC-01
+
+| Step | Status |
+|------|--------|
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Integration/KingdomProfileTest.php`, `ModelPlayerCacheTest.php`, `ReportTest.php`, `tests/e2e/kingdom-profile.spec.ts`, `tests/e2e/reports.spec.ts`
+
+**Infection (R-16 sign-off):** pass A MSI **18%**, pass B MSI **27%**
+
+#### T-16 sign-off gate
+
+- [x] Test design documented in DS-16 §2 (retroactive backfill)
+- [x] R-16 gates satisfied per [v-16-ghettocache-validation.md §3](./validations/v-16-ghettocache-validation.md#3-r-16-sign-off-checklist)
+
+---
+
+### T-17: Residual domain lib bypass tests
+
+**Branch:** `megiddo/t-17-lib-bypass-tests` (retroactive — [p3-backfill-tvds-audit.md](./p3-backfill-tvds-audit.md))
+
+**Depends on:** DS-17
+
+**Design source:** [ds-17-lib-bypass-discovery.md §2](./ds-17-lib-bypass-discovery.md#2-test-design)
+
+**Targets:** T-EVT-08, T-KNG-11, T-PRK-05, T-PLR-08, T-RPT-02, T-UNT-02, T-UNT-03
+
+| Step | Status |
+|------|--------|
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Integration/WeatherServiceTest.php`, `PlayerProfileTest.php`, `ReportTest.php`, `tests/e2e/event-detail.spec.ts`, `player-profile.spec.ts`, `reports.spec.ts`
+
+**Infection (R-17 sign-off):** pass A MSI **18%**, pass B MSI **27%**
+
+#### T-17 sign-off gate
+
+- [x] Test design documented in DS-17 §2 (retroactive backfill)
+- [x] R-17 gates satisfied per [v-17-lib-bypass-validation.md §3](./validations/v-17-lib-bypass-validation.md#3-r-17-sign-off-checklist)
+
+---
+
+### T-18: Residual `$DB` elimination tests
+
+**Branch:** `megiddo/t-18-residual-db-tests` (retroactive — [p3-backfill-tvds-audit.md](./p3-backfill-tvds-audit.md))
+
+**Depends on:** DS-18, V-00
+
+**Design source:** [ds-18-residual-db-discovery.md §2](./ds-18-residual-db-discovery.md#2-test-design)
+
+**Targets:** All residual `$DB->` in `orkui/`
+
+| Step | Status |
+|------|--------|
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** Full PHPUnit suite; `tests/e2e/auth-permissions.spec.ts`, `player-profile.spec.ts`, `event-detail.spec.ts`
+
+**Infection (R-18 sign-off):** spot-check Player MSI **20%**, DangerAudit MSI **50%**
+
+#### T-18 sign-off gate
+
+- [x] Test design documented in DS-18 §2 (retroactive backfill)
+- [x] R-18 gates satisfied per [v-18-residual-db-validation.md §3](./validations/v-18-residual-db-validation.md#3-r-18-sign-off-checklist)
+
+---
+
 ## Phase 1.6 — Validation Artifacts
 
 Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for R-* execution. Plan: [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md) · Index: [validations/README.md](./validations/README.md) · **Agent prompt:** [09-v-phase-agent-prompt.md](./09-v-phase-agent-prompt.md) (batched G0–G4).
@@ -1045,7 +1229,67 @@ Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for
 
 ---
 
-### V-01 … V-14: Domain validation artifacts
+### V-15: HasAuthority validation artifacts
+
+**Branch:** `megiddo/v-15-hasauthority-validation` (retroactive — [p3-backfill-tvds-audit.md](./p3-backfill-tvds-audit.md))
+
+**Spec:** [validations/v-15-hasauthority-validation.md](./validations/v-15-hasauthority-validation.md)
+
+| Step | Status |
+|------|--------|
+| Canary URLs (reuse V-06/V-07/V-08/V-09 auth hosts) | [x] |
+| Test mutation boundaries (§2) | [x] |
+| Dual-profile fuzzy validate (8/8) | [x] |
+| V-15 sign-off gate | [x] |
+
+---
+
+### V-16: GhettoCache validation artifacts
+
+**Branch:** `megiddo/v-16-ghettocache-validation` (retroactive — [p3-backfill-tvds-audit.md](./p3-backfill-tvds-audit.md))
+
+**Spec:** [validations/v-16-ghettocache-validation.md](./validations/v-16-ghettocache-validation.md)
+
+| Step | Status |
+|------|--------|
+| Canary URLs (kingdom-profile, park-auth-sandbox, reports-ladder-grid) | [x] |
+| Test mutation boundaries (§2) | [x] |
+| Dual-profile fuzzy validate (6/6) | [x] |
+| V-16 sign-off gate | [x] |
+
+---
+
+### V-17: Lib bypass validation artifacts
+
+**Branch:** `megiddo/v-17-lib-bypass-validation` (retroactive — [p3-backfill-tvds-audit.md](./p3-backfill-tvds-audit.md))
+
+**Spec:** [validations/v-17-lib-bypass-validation.md](./validations/v-17-lib-bypass-validation.md)
+
+| Step | Status |
+|------|--------|
+| Canary URLs (event-index-rsvp, player-profile, reports-voting-eligible) | [x] |
+| Test mutation boundaries (§2) | [x] |
+| Dual-profile fuzzy validate (6/6; re-recorded) | [x] |
+| V-17 sign-off gate | [x] |
+
+---
+
+### V-18: Residual `$DB` validation artifacts
+
+**Branch:** `megiddo/v-18-residual-db-validation` (retroactive — [p3-backfill-tvds-audit.md](./p3-backfill-tvds-audit.md))
+
+**Spec:** [validations/v-18-residual-db-validation.md](./validations/v-18-residual-db-validation.md)
+
+| Step | Status |
+|------|--------|
+| Canary URLs (V-00 active set — full regression) | [x] |
+| Test mutation boundaries (§2) | [x] |
+| Dual-profile fuzzy validate (34/34) | [x] |
+| V-18 sign-off gate | [x] |
+
+---
+
+### V-01 … V-18: Domain validation artifacts
 
 Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines. Pairs with DS/T/R numbering.
 
@@ -1065,6 +1309,10 @@ Each row: canary URLs (§1) + test mutation boundaries (§2) + domain baselines.
 | V-12 | `megiddo/v-12-attendance-validation` | [v-12-attendance-validation.md](./validations/v-12-attendance-validation.md) | DS-12, T-12, V-00 | R-12 |
 | V-13 | `megiddo/v-13-infrastructure-validation` | [v-13-infrastructure-validation.md](./validations/v-13-infrastructure-validation.md) | DS-13, T-13, V-00 | R-13 |
 | V-14 | `megiddo/v-14-lib-service-validation` | [v-14-lib-service-validation.md](./validations/v-14-lib-service-validation.md) | DS-14, T-14, V-00 | R-14 |
+| V-15 | `megiddo/v-15-hasauthority-validation` | [v-15-hasauthority-validation.md](./validations/v-15-hasauthority-validation.md) | DS-15, T-15, V-00, V-14 | R-15 |
+| V-16 | `megiddo/v-16-ghettocache-validation` | [v-16-ghettocache-validation.md](./validations/v-16-ghettocache-validation.md) | DS-16, T-16, V-00, V-14 | R-16 |
+| V-17 | `megiddo/v-17-lib-bypass-validation` | [v-17-lib-bypass-validation.md](./validations/v-17-lib-bypass-validation.md) | DS-17, T-17, V-00, V-14 | R-17 |
+| V-18 | `megiddo/v-18-residual-db-validation` | [v-18-residual-db-validation.md](./validations/v-18-residual-db-validation.md) | DS-18, T-18, V-00 | R-18 |
 
 ---
 
@@ -1088,10 +1336,10 @@ Execution sprints begin **after** the corresponding discovery sprint, test sprin
 | R-12 | DS-12, T-12, V-00, **V-12** | Attendance/sign-in targets |
 | R-13 | DS-13, T-13, V-00, **V-13** | Infrastructure targets |
 | R-14 | DS-14, T-14, V-00, **V-14** | Ork3::$Lib service surfaces (T-LIB-01–05) |
-| R-15 | R-14, V-14 | HasAuthority rollout (controllers + templates) |
-| R-16 | R-15, V-14 | GhettoCache read/bust migration |
-| R-17 | R-16, V-14 | Residual domain `Ork3::$Lib` bypass |
-| R-18 | R-17, V-00 | Residual `$DB` in `orkui/` |
+| R-15 | DS-15, T-15, V-00, **V-15** | HasAuthority rollout (controllers + templates) |
+| R-16 | DS-16, T-16, V-00, **V-16** | GhettoCache read/bust migration |
+| R-17 | DS-17, T-17, V-00, **V-17** | Residual domain `Ork3::$Lib` bypass |
+| R-18 | DS-18, T-18, V-00, **V-18** | Residual `$DB` in `orkui/` |
 
 **Branch pattern:** `megiddo/r-{nn}-{slug}`
 

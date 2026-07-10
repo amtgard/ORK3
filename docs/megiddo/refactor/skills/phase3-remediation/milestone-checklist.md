@@ -16,7 +16,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 2 | FIX-03 | `megiddo/p3-fix-03-playwright-heraldry` | `6766aaac` | [x] |
 | 3 | FIX-04 | `megiddo/p3-fix-04-fuzzy-park-auth` | `b973c6a1` | [x] |
 | 4 | FIX-05 | `megiddo/p3-fix-05-doc-hygiene` | `69fd2ac1` | [x] |
-| 5 | BACKFILL | | | [ ] |
+| 5 | BACKFILL | `megiddo/p3-backfill-tvds-r14-r18` | `ce30d359` | [x] |
 | 6 | DS-19 | | | [ ] |
 | 7 | T-19 | | | [ ] |
 | 8 | V-19 | | | [ ] |
@@ -26,7 +26,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 12 | R-19d | | | [ ] |
 | 13 | VALIDATE-20 | | | [ ] |
 
-**Next actionable hop:** BACKFILL
+**Next actionable hop:** DS-19
 
 ---
 
@@ -84,12 +84,13 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 ## BACKFILL: DS/T/V for R-14 … R-18
 
-- [ ] Gap audit: which DS/T/V artifacts missing for R-14 … R-18
-- [ ] `ds-15` … `ds-18` design notes (or consolidated backfill doc) committed
-- [ ] `t-15` … `t-18` test-design sections committed
-- [ ] `v-15` … `v-18` validation docs committed
-- [ ] `04-milestone-checklist.md` Phase 1 / 1.5 / 1.6 rows updated
-- [ ] Checklist + commit on stacked branch
+- [x] Gap audit: [p3-backfill-tvds-audit.md](../../p3-backfill-tvds-audit.md)
+- [x] `ds-15` … `ds-18` design notes committed
+- [x] `t-15` … `t-18` test-design sections committed (§2 in each ds-*)
+- [x] `v-15` … `v-18` validation docs committed
+- [x] `04-milestone-checklist.md` Phase 1 / 1.5 / 1.6 rows updated
+- [x] `10-phase-2-continuation.md` § Worker hygiene — backfill complete pointer
+- [x] Checklist + commit on stacked branch
 
 ---
 

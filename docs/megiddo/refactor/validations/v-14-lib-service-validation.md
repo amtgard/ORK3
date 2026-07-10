@@ -119,25 +119,25 @@ sh bin/run-infection.sh \
 - [x] Infection per §2.4 (both passes)
 - [x] No new `Ork3::$Lib` in Live / Weather / Tournament / EraPhoenice / CalendarItemAjax / Controller base menu paths for migrated targets
 
-**R-15 … R-18:** Remaining HasAuthority, ghettocache, domain lib bypass, and residual `$DB` — see [10-phase-2-continuation.md](../10-phase-2-continuation.md). Reuse §2.3–2.4 boundaries where scope overlaps; add per-sprint notes under §3 as each continuation milestone completes.
+**R-15 … R-18:** Dedicated validation docs published in BACKFILL hop — [v-15](./v-15-hasauthority-validation.md), [v-16](./v-16-ghettocache-validation.md), [v-17](./v-17-lib-bypass-validation.md), [v-18](./v-18-residual-db-validation.md). Reuse §2.3–2.4 boundaries where scope overlaps. Summary sign-off retained below; full gate detail in each V-* doc.
 
-### R-15 (2026-07-10)
+### R-15 (2026-07-10) — see [v-15-hasauthority-validation.md §3](./v-15-hasauthority-validation.md#3-r-15-sign-off-checklist)
 
 - [x] Controllers/AJAX: zero `Ork3::$Lib->authorization->HasAuthority` in `orkui/` — all gates use `Model_Authorization::has_authority` / `AuthorizationGate`
 - [x] Templates: precomputed auth flags in controllers; zero auth `Ork3::$Lib` in `orkui/template/`
 - [x] Infection pass A MSI 18%; fuzzy gate `admin-permissions,kingdom-auth-sandbox,park-auth-sandbox,player-profile` 8/8
 
-### R-16 (2026-07-10)
+### R-16 (2026-07-10) — see [v-16-ghettocache-validation.md §3](./v-16-ghettocache-validation.md#3-r-16-sign-off-checklist)
 
 - [x] Zero `Ork3::$Lib->ghettocache` in `orkui/` — read-through cache in domain (`Player`, `Award`, `SearchService`, `KingdomProfile`, `ParkProfile`, `Report`); write bust on domain writes (`Event`, `Report`, `Park`, `Kingdom`, `Heraldry`, `Attendance`)
 - [x] Infection pass A MSI 18%, pass B MSI 27%; fuzzy gate `kingdom-profile,park-auth-sandbox,reports-ladder-grid` 6/6
 
-### R-17 (2026-07-10)
+### R-17 (2026-07-10) — see [v-17-lib-bypass-validation.md §3](./v-17-lib-bypass-validation.md#3-r-17-sign-off-checklist)
 
 - [x] T-EVT-08, T-KNG-11, T-PRK-05, T-PLR-08, T-RPT-02, T-UNT-02/03 domain lib bypass removed from target controllers; Event/Park/Attendance weather templates use `wx_*` helpers (no `Ork3::$Lib` in templates)
 - [x] Infection pass A MSI 18%, pass B MSI 27%; fuzzy gate `event-index-rsvp,player-profile,reports-voting-eligible` 6/6 (re-recorded baselines)
 
-### R-18 (2026-07-10)
+### R-18 (2026-07-10) — see [v-18-residual-db-validation.md §3](./v-18-residual-db-validation.md#3-r-18-sign-off-checklist)
 
 - [x] Zero `$DB->` in `orkui/` — domain APIs on `Player`, `Dangeraudit`, `Weather`, `ParkProfile`, `Event`, `Administration`; `nav_view_helpers.php` + `wx_coords_for_calendar_detail`
 - [x] Infection spot-check: Player MSI 20%, DangerAudit MSI 50%; fuzzy V-00 active pages 34/34 pass (17 × 2 profiles)
