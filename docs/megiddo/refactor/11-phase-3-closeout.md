@@ -1,6 +1,6 @@
 # Phase 3 — Audit and Close-out
 
-**Status:** In progress — automated audit run 2026-07-10 ([phase3-audit-report.md](./phase3-audit-report.md); **failed** pending lib bypass + heraldry/asset fixes)  
+**Status:** In progress — automated audit run 2026-07-10 @ `1d8d8455` ([phase3-audit-report.md](./phase3-audit-report.md); **failed** pending lib bypass + heraldry/asset fixes)  
 **Prerequisite:** R-01 … R-18 complete on stack tip  
 **Phase 2 continuation:** [10-phase-2-continuation.md](./10-phase-2-continuation.md)  
 **Master checklist:** [04-milestone-checklist.md](./04-milestone-checklist.md) § Phase 3
@@ -104,6 +104,7 @@ Copy of verification items — check in [04-milestone-checklist.md](./04-milesto
 | Purpose | Path |
 |---------|------|
 | Finish Phase 2 continuation (R-15 … R-18) | [skills/refactor-execution/orchestrator-phase2-continuation.prompt](./skills/refactor-execution/orchestrator-phase2-continuation.prompt) |
-| Phase 3 automated close-out | [skills/phase3-closeout/orchestrator.prompt](./skills/phase3-closeout/orchestrator.prompt) |
+| Phase 3 remediation (after failed audit) | [skills/phase3-remediation/orchestrator.prompt](./skills/phase3-remediation/orchestrator.prompt) — ends with **VALIDATE-20** |
+| Phase 3 automated close-out (standalone) | [skills/phase3-closeout/orchestrator.prompt](./skills/phase3-closeout/orchestrator.prompt) — same gates as VALIDATE-20 |
 
 Open the file → Ctrl+A → Ctrl+C → paste into a new agent chat. File contents are **agent-language only** (no wrapper markdown).

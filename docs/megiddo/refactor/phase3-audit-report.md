@@ -1,23 +1,23 @@
 # Phase 3 Automated Audit Report
 
-**Timestamp:** 2026-07-10T14:50:00Z (local run)  
+**Timestamp:** 2026-07-10T16:40:05Z  
 **Branch:** `megiddo/r-18-residual-db-refactor`  
-**Commit:** `5a9b0c70`  
+**Commit:** `1d8d8455`  
 **Orchestrator:** [skills/phase3-closeout/orchestrator.prompt](./skills/phase3-closeout/orchestrator.prompt)
 
 ## Prerequisite
 
-- **R-18:** Complete on stack tip (`04-milestone-checklist.md`, `skills/refactor-execution/milestone-checklist.md`).
+- **R-18:** Complete on stack tip (`04-milestone-checklist.md` § Phase 2 continuation).
 
 ## Environment
 
 | Step | Result | Notes |
 |------|--------|-------|
 | `docker compose -f docker-compose.php8.yml up -d` | pass | `ork3-php8-db`, `ork3-php8-test-db`, `ork3-php8-app` running |
-| `bin/ork-db deploy-sandbox` | **fail** | Post-apply asset validation: 110 missing player heraldry files. Remediation attempted: `bin/ork-db generate-assets` + `bin/ork-db deploy-assets` (108 files). Re-deploy still aborts on asset manifest mismatch. |
+| `bin/ork-db deploy-sandbox` | **fail** | Post-apply asset validation: 110 missing player heraldry files (`player/100021253`, `player/100050279`, …). Deploy aborted after `deploy-assets` (108 files). |
 | `bin/fuzzy-validator setpoint restore` | pass | Bundle `20260709T173049Z-1591950d-6b22e991bb478256.zip` (1349 files) |
 
-**Credentials (documented):** Playwright and fuzzy mirror use `admin` / `password` (`ORK3_E2E_USERNAME` / `ORK3_E2E_PASSWORD`). Playwright run switched to **prod** profile per orchestrator (`bin/ork-db use prod`).
+**Credentials (documented):** Playwright and fuzzy mirror use `admin` / `password` (`ORK3_E2E_USERNAME` / `ORK3_E2E_PASSWORD`). Playwright run used **prod** profile per orchestrator (`bin/ork-db use prod`).
 
 ---
 
@@ -42,16 +42,16 @@ rg 'Ork3::\$Lib' orkui/
 
 | Metric | Value |
 |--------|-------|
-| Matches | **41** across **12 files** |
+| Matches | **42** across **12 files** |
 | Result | **fail** |
 
-**Files (41 matches):**
+**Files (42 matches):**
 
 | File | Count | Domains / notes |
 |------|-------|-----------------|
 | `orkui/model/model.Player.php` | 12 | `player` thin wrappers (milestones, notes, beltline, etc.) |
 | `orkui/index.php` | 7 | `health`, `event`, `session` bootstrap / timing |
-| `orkui/controller/controller.KingdomAjax.php` | 5 | `searchservice`, `dangeraudit`, `kingdom` |
+| `orkui/controller/controller.KingdomAjax.php` | 6 | `searchservice`, `dangeraudit`, `kingdom` |
 | `orkui/controller/controller.EventAjax.php` | 5 | `searchservice`, `dangeraudit`, `heraldry` |
 | `orkui/controller/controller.AdminAjax.php` | 3 | `searchservice`, `dangeraudit`, `stateofamtgard` |
 | `orkui/controller/controller.Admin.php` | 2 | `weather` admin refresh/stats |
@@ -61,6 +61,17 @@ rg 'Ork3::\$Lib' orkui/
 | `orkui/controller/controller.PlayerAjax.php` | 1 | `player` username check |
 | `orkui/controller/controller.WnAjax.php` | 1 | `player` dismiss |
 | `orkui/model/model.AdminDashboard.php` | 1 | `stateofamtgard` bootstrap |
+
+### Raw DML in `orkui/*.php`
+
+```bash
+rg -i 'INSERT INTO|UPDATE [a-z_]+ SET|DELETE FROM' orkui/ --glob '*.php'
+```
+
+| Metric | Value |
+|--------|-------|
+| Matches | **0** |
+| Result | **pass** |
 
 No documented exemptions in [02-requirements.md](./02-requirements.md) § Success Criteria. R-17/R-18 carryover notes referenced deferred lib sites (`searchservice`, `heraldry`, `index.php`) but did not close them.
 
@@ -131,7 +142,7 @@ All **~119** tracked T-* IDs have R-* completion notes in either [03-implementat
 | Gap type | Detail |
 |----------|--------|
 | Doc prose | `03-implementation-plan.md` lacks inline **R-05, R-06, R-07, R-12** completion paragraphs (present only in checklist). |
-| Code vs plan | **41** residual `Ork3::$Lib` call sites remain despite R-17/R-18 “domain lib bypass” sign-off; inventory rows (e.g. T-PLM-02/04, T-EVA-11, T-ADM-08/09, T-INF-01/02, T-SRC-*) still describe lib bypass in table text. |
+| Code vs plan | **42** residual `Ork3::$Lib` call sites remain despite R-17/R-18 “domain lib bypass” sign-off; inventory rows (e.g. T-PLM-02/04, T-EVA-11, T-ADM-08/09, T-INF-01/02, T-SRC-*) still describe lib bypass in table text. |
 
 **Result:** **pass** (all targets assigned to R-* milestones) with **code-state caveat** (lib bypass not fully eliminated).
 
@@ -144,8 +155,8 @@ Updated [04-milestone-checklist.md](./04-milestone-checklist.md) § Phase 3:
 - [x] P3-2 agent automated audit (this report)
 - [x] `rg '\$DB->' orkui/` → zero
 - [x] PHPUnit full suite green
-- [ ] `rg 'Ork3::\$Lib' orkui/` → zero (**41 matches**)
-- [ ] Full PHPUnit + fuzzy `--all` + Playwright green
+- [ ] `rg 'Ork3::\$Lib' orkui/` → zero (**42 matches**)
+- [ ] Full fuzzy `--all` + Playwright green
 - [ ] Success criteria in `02-requirements.md` fully satisfied
 - [ ] P3-4 manual smoke matrix walk-through (human)
 - [ ] P3-5 retrospective (human; draft below)
@@ -171,7 +182,7 @@ export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
 
 ### P3-5 — Retrospective (draft for human edit)
 
-- **Residual lib bypass:** Phase 2 sign-off claimed R-17/R-18 closed domain lib migration, but static audit finds 41 `Ork3::$Lib` sites (search, heraldry, dangeraudit, player wrappers, index session). Decide: new R-19 scope vs documented exemptions in `02-requirements.md`.
+- **Residual lib bypass:** Phase 2 sign-off claimed R-17/R-18 closed domain lib migration, but static audit finds 42 `Ork3::$Lib` sites (search, heraldry, dangeraudit, player wrappers, index session). Decide: new R-19 scope vs documented exemptions in `02-requirements.md`.
 - **Asset pipeline:** `deploy-sandbox` aborts on 110 missing player heraldry files; Playwright `heraldry.spec.ts` and fuzzy `park-auth-sandbox` failures may share root cause. Run `bin/ork-db generate-assets && bin/ork-db deploy-assets` and reconcile manifest expectations.
 - **Fuzzy dimension drift:** `park-auth-sandbox` height 961→937 — re-record baseline or investigate layout regression from R-15+ template changes.
 - **Doc hygiene:** Add R-05/06/07/12 completion paragraphs to `03-implementation-plan.md` for single-source traceability.
@@ -188,10 +199,13 @@ Merge stack tip `megiddo/r-18-residual-db-refactor` → `megiddo/rebase-20260709
 | Gate | Result |
 |------|--------|
 | P3-A `$DB` | pass (0) |
-| P3-A `Ork3::$Lib` | **fail** (41 / 12 files) |
+| P3-A `Ork3::$Lib` | **fail** (42 / 12 files) |
+| P3-A DML | pass (0) |
 | PHPUnit | pass |
 | Fuzzy | **fail** (`park-auth-sandbox` dimension) |
 | Playwright | **fail** (3 heraldry tests) |
 | Plan completeness | pass (with lib-bypass caveat) |
 
 **Overall status:** `failed` — R-18 prerequisite met; automated close-out blocked on residual lib bypass, asset/heraldry deployment, and visual regression gates.
+
+**Remediation orchestrator:** [skills/phase3-remediation/orchestrator.prompt](./skills/phase3-remediation/orchestrator.prompt) — serialized FIX-02…R-19d queue; **VALIDATE-20** final re-audit.

@@ -34,3 +34,5 @@ Runs **after R-18**. Canonical plan: [11-phase-3-closeout.md](../../11-phase-3-c
 
 - [10-phase-2-continuation.md](../../10-phase-2-continuation.md) — R-15 … R-18
 - [orchestrator-phase2-continuation.prompt](../refactor-execution/orchestrator-phase2-continuation.prompt) — finish Phase 2 first
+- [phase3-remediation](../phase3-remediation/orchestrator.prompt) — if audit **failed**, run remediation queue (ends with **VALIDATE-20**)
+- [phase3-closeout/orchestrator.prompt](./orchestrator.prompt) — standalone re-audit anytime (same gates as VALIDATE-20)

@@ -25,9 +25,10 @@ Phase 3 runs **after R-18**. It is **audit and verification** — no refactor im
 ```bash
 rg '\$DB->' orkui/
 rg 'Ork3::\$Lib' orkui/
+rg -i 'INSERT INTO|UPDATE [a-z_]+ SET|DELETE FROM' orkui/ --glob '*.php'
 ```
 
-Record file counts and paths. Pass = zero matches (or only documented exemptions in 02-requirements).
+Record file counts and paths. Pass = zero matches on all three (or only documented exemptions in 02-requirements).
 
 ### P3-B — PHPUnit
 
@@ -90,6 +91,7 @@ branch: …
 commit: …
 p3a_db: pass|fail (count)
 p3a_lib: pass|fail (count)
+p3a_dml: pass|fail (count)
 phpunit: …
 fuzzy: …
 playwright: …

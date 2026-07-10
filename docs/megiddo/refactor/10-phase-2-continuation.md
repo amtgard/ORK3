@@ -65,6 +65,27 @@ Orchestrated workers updated checklists in commits but left **`skills/refactor-e
 
 ---
 
+## Phase 2 extension — R-19a … R-19d (residual lib bypass)
+
+**Trigger:** Phase 3 audit failed — 41 `Ork3::$Lib` sites in 12 files ([phase3-audit-report.md](./phase3-audit-report.md)).
+
+**Orchestrator:** [skills/phase3-remediation/orchestrator.prompt](./skills/phase3-remediation/orchestrator.prompt) — runs FIX hops, BACKFILL, DS-19, T-19, V-19, then **R-19a … R-19d** serialized.
+
+**Planning:** DS-19 → T-19 → V-19 before implementation (Path A). Backfill missing DS/T/V for R-14 … R-18 in BACKFILL hop.
+
+| Sprint | Branch slug | Depends on | Files (3 each) | ~Sites |
+|--------|-------------|------------|----------------|-------:|
+| **R-19a** | `r-19a-residual-lib-refactor` | V-19 | `model.Player.php`, `index.php`, `KingdomAjax.php` | 24 |
+| **R-19b** | `r-19b-residual-lib-refactor` | R-19a | `EventAjax.php`, `AdminAjax.php`, `Admin.php` | 10 |
+| **R-19c** | `r-19c-residual-lib-refactor` | R-19b | `ParkAjax.php`, `SearchAjax.php`, `Search.php` | 4 |
+| **R-19d** | `r-19d-residual-lib-refactor` | R-19c | `PlayerAjax.php`, `WnAjax.php`, `model.AdminDashboard.php` | 3 |
+
+**Exit:** `rg 'Ork3::\$Lib' orkui/` → zero after R-19d. **VALIDATE-20** (remediation hop 13) runs full success-criteria re-audit. Human P3-4/P3-5 after `status=ok`.
+
+**Worker prompts:** [skills/phase3-remediation/workers/](./skills/phase3-remediation/workers/)
+
+---
+
 ## Phase 3 — Audit and close-out
 
 **Canonical plan:** [11-phase-3-closeout.md](./11-phase-3-closeout.md) (deliverables, agent vs human, prompts, cross-reference index).
@@ -100,4 +121,5 @@ Optional: merge stack tip → `megiddo/rebase-20260709`.
 | [04-milestone-checklist.md](./04-milestone-checklist.md) | R-15 … R-18 progress + Phase 3 checkboxes |
 | [ds-14-lib-service-discovery.md](./ds-14-lib-service-discovery.md) | Cross-cutting inventory (§1.3–1.5) |
 | [skills/refactor-execution/](./skills/refactor-execution/) | Orchestrator + worker prompts for R-15+ |
+| [skills/phase3-remediation/](./skills/phase3-remediation/) | Phase 3 remediation + R-19a…d workers |
 | [11-phase-3-closeout.md](./11-phase-3-closeout.md) | Phase 3 audit plan + HTML matrix + prompts |
