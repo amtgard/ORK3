@@ -21,12 +21,12 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 7 | T-19 | `megiddo/t-19-residual-lib-tests` | `c684604c` | [x] |
 | 8 | V-19 | `megiddo/v-19-residual-lib-validation` | `5872aa92` | [x] |
 | 9 | R-19a | `megiddo/r-19a-residual-lib-refactor` | `0088e6f2` | [x] |
-| 10 | R-19b | | | [ ] |
+| 10 | R-19b | `megiddo/r-19b-residual-lib-refactor` | `b2527caa` | [x] |
 | 11 | R-19c | | | [ ] |
 | 12 | R-19d | | | [ ] |
 | 13 | VALIDATE-20 | | | [ ] |
 
-**Next actionable hop:** R-19b
+**Next actionable hop:** R-19c
 
 ---
 
@@ -151,10 +151,16 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 ## R-19b: `EventAjax`, `AdminAjax`, `Admin`
 
-- [ ] Zero `Ork3::$Lib` in the 3 files above; R-19a files still clean
-- [ ] PHPUnit + hop gates
-- [ ] `03-implementation-plan.md` R-19b note
-- [ ] One commit; stack chain updated
+- [x] Zero `Ork3::$Lib` in the 3 files above; R-19a files still clean
+- [x] PHPUnit + hop gates (Infection pass B: 0 mutants in filtered scope, exit 0; Playwright 9/9 + auth smoke; fuzzy pre-existing drift — test DOM 0.94–0.98, mirror visual 0.743)
+- [x] `03-implementation-plan.md` R-19b note
+- [x] One commit; stack chain updated
+
+**Branch:** `megiddo/r-19b-residual-lib-refactor` @ `b2527caa`
+
+**Stack base:** `megiddo/r-19a-residual-lib-refactor` @ `66216658`
+
+**Migration:** T-LIB-09 — `EventAjax` search/audit/heraldry → `Model_Search`, `new Dangeraudit()`, `new Heraldry()`; T-LIB-10 — `AdminAjax` search/audit/SoA → `Model_Search`, `new Dangeraudit()`, `new StateOfAmtgard()`; T-LIB-11 — `Admin` weather admin → `new Weather()`. **10 `$Lib` sites cleared** in 3 files; **14 remain** in 6 files → R-19c…d.
 
 ---
 

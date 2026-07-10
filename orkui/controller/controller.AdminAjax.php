@@ -30,7 +30,8 @@ class Controller_AdminAjax extends Controller
                 echo json_encode([]);
                 exit;
             }
-            $results = Ork3::$Lib->searchservice->ScopedPlayerSearch([
+            $this->load_model('Search');
+            $results = $this->Search->scoped_player_search([
                 'Query' => $q,
                 'Scope' => 'global',
                 'Limit' => 20,
@@ -59,7 +60,7 @@ class Controller_AdminAjax extends Controller
             $authId = (int)($r['Detail'] ?? 0);
             $this->load_model('Player');
             $persona = $this->Player->get_persona($mid);
-            Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_ADMIN, 'Id' => 0, 'Role' => AUTH_ADMIN], 'Player', $mid, null, [
+            (new Dangeraudit())->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_ADMIN, 'Id' => 0, 'Role' => AUTH_ADMIN], 'Player', $mid, null, [
                 'authorization_id' => $authId,
                 'mundane_id'       => $mid,
                 'park_id'          => 0,
@@ -96,7 +97,7 @@ class Controller_AdminAjax extends Controller
         }
         // stateofamtgard endpoints are open to all logged-in users
 
-        $sor = Ork3::$Lib->stateofamtgard;
+        $sor = new StateOfAmtgard();
         $validated = $sor->ValidateDateRange($_GET['start'] ?? null, $_GET['end'] ?? null);
         if (!$validated['ok']) {
             http_response_code($validated['httpCode'] ?? 400);

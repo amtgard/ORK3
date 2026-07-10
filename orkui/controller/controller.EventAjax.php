@@ -290,7 +290,8 @@ class Controller_EventAjax extends Controller
                 echo json_encode([]);
                 exit;
             }
-            $results = Ork3::$Lib->searchservice->ScopedPlayerSearch([
+            $this->load_model('Search');
+            $results = $this->Search->scoped_player_search([
                 'Query'   => $q,
                 'Scope'   => 'event_prioritized',
                 'EventId' => $event_id,
@@ -325,7 +326,7 @@ class Controller_EventAjax extends Controller
             $authId = (int)($r['Detail'] ?? 0);
             $this->load_model('Player');
             $persona = $this->Player->get_persona($mid);
-            Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_EVENT, 'Id' => $event_id, 'Role' => $role], 'Player', $mid, null, [
+            (new Dangeraudit())->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_EVENT, 'Id' => $event_id, 'Role' => $role], 'Player', $mid, null, [
                 'authorization_id' => $authId,
                 'mundane_id'       => $mid,
                 'park_id'          => 0,
@@ -414,7 +415,7 @@ class Controller_EventAjax extends Controller
 
         $priorState = $r['PriorState'] ?? null;
         $staff = $r['Staff'] ?? [];
-        Ork3::$Lib->dangeraudit->audit(
+        (new Dangeraudit())->audit(
             $priorState ? 'EventStaff::Update' : 'EventStaff::Add',
             [
                 'EventId'       => $event_id,
@@ -476,7 +477,7 @@ class Controller_EventAjax extends Controller
 
         $priorState = $r['PriorState'] ?? null;
         if ($priorState) {
-            Ork3::$Lib->dangeraudit->audit(
+            (new Dangeraudit())->audit(
                 'EventStaff::Remove',
                 ['EventId' => $event_id, 'DetailId' => $detail_id, 'StaffId' => $staff_id],
                 'Event',
@@ -665,7 +666,7 @@ class Controller_EventAjax extends Controller
                 exit;
             }
             $mime = ($detectedType === IMAGETYPE_PNG) ? 'image/png' : 'image/jpeg';
-            $r = Ork3::$Lib->heraldry->SetEventHeraldry([
+            $r = (new Heraldry())->SetEventHeraldry([
                 'Token'            => $this->session->token,
                 'EventId'          => $event_id,
                 'Heraldry'         => base64_encode(file_get_contents($tmp)),

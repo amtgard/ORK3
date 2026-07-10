@@ -2332,14 +2332,14 @@ class Controller_Admin extends Controller
             echo json_encode($out);
 
         } elseif ($action === 'serverhealth_weather_refresh') {
-            $refresh = Ork3::$Lib->weather->AdminRefreshWithPrior();
+            $refresh = (new Weather())->AdminRefreshWithPrior();
             echo json_encode([
                 'status'  => 0,
                 'weather' => $refresh,
             ]);
 
         } elseif ($action === 'serverhealth_weather_stats') {
-            $stats = Ork3::$Lib->weather->api_stats(3);
+            $stats = (new Weather())->api_stats(3);
             echo json_encode(['status' => 0, 'wx' => $stats]);
 
         } else {
