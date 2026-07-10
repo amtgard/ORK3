@@ -1139,12 +1139,13 @@ Run only after **R-18**. No code migration.
 
 - [x] P3-1 HTML smoke matrix available ([r-milestone-smoke-matrix.html](./validations/r-milestone-smoke-matrix.html))
 - [ ] P3-4 Human manual walk-through — all 18 R-* smokes pass
-- [ ] P3-2 Agent automated audit — [skills/phase3-closeout/orchestrator.prompt](./skills/phase3-closeout/orchestrator.prompt)
-- [ ] All ~119 target IDs in [03-implementation-plan.md](./03-implementation-plan.md) marked done
-- [ ] `rg '\$DB->' orkui/` → zero matches
-- [ ] `rg 'Ork3::\$Lib' orkui/` → zero matches
+- [x] P3-2 Agent automated audit — [skills/phase3-closeout/orchestrator.prompt](./skills/phase3-closeout/orchestrator.prompt) ([phase3-audit-report.md](./phase3-audit-report.md) 2026-07-10: **failed** — 41 `Ork3::$Lib`, fuzzy `park-auth-sandbox`, Playwright heraldry×3)
+- [x] All ~119 target IDs in [03-implementation-plan.md](./03-implementation-plan.md) marked done (R-* notes; residual lib bypass in code)
+- [x] `rg '\$DB->' orkui/` → zero matches
+- [ ] `rg 'Ork3::\$Lib' orkui/` → zero matches (**41** in 12 files — see audit report)
 - [ ] Success criteria in [02-requirements.md](./02-requirements.md) satisfied
-- [ ] Full PHPUnit + fuzzy `--all` + Playwright green
+- [x] PHPUnit full suite green (215 tests, 2 skipped — 2026-07-10)
+- [ ] Full fuzzy `--all` + Playwright green (fuzzy: `park-auth-sandbox` dimension; Playwright: heraldry×3)
 - [ ] P3-5 Retrospective recorded (`phase3-audit-report.md` or checklist notes)
 
 Optional: merge stack tip into integration line `megiddo/rebase-20260709`.

@@ -1,6 +1,6 @@
 # Phase 3 — Audit and Close-out
 
-**Status:** Planned (runs after **R-18**)  
+**Status:** In progress — automated audit run 2026-07-10 ([phase3-audit-report.md](./phase3-audit-report.md); **failed** pending lib bypass + heraldry/asset fixes)  
 **Prerequisite:** R-01 … R-18 complete on stack tip  
 **Phase 2 continuation:** [10-phase-2-continuation.md](./10-phase-2-continuation.md)  
 **Master checklist:** [04-milestone-checklist.md](./04-milestone-checklist.md) § Phase 3
@@ -29,8 +29,8 @@ Phase 3 verifies the refactor target state. It is **not** an implementation phas
 | ID | Owner | Artifact | Status |
 |----|-------|----------|--------|
 | **P3-1** | Human (+ agent may refresh baselines) | [validations/r-milestone-smoke-matrix.html](./validations/r-milestone-smoke-matrix.html) — one manual smoke per R-* (R-01 … R-18) | [x] |
-| **P3-2** | Agent | Automated audit report (`rg`, PHPUnit, fuzzy, Playwright) | [ ] |
-| **P3-3** | Agent | Checklist sign-off in `04-milestone-checklist.md` § Phase 3 | [ ] |
+| **P3-2** | Agent | Automated audit report (`rg`, PHPUnit, fuzzy, Playwright) | [x] ([phase3-audit-report.md](./phase3-audit-report.md) — partial pass) |
+| **P3-3** | Agent | Checklist sign-off in `04-milestone-checklist.md` § Phase 3 | [x] (automated items only) |
 | **P3-4** | Human | Manual walk-through of P3-1 matrix (mark pass/fail in browser) | [ ] |
 | **P3-5** | Human (+ agent draft) | Retrospective notes (orchestrator hygiene, hash drift, commit gaps) | [ ] |
 | **P3-6** | Human (optional) | Merge stack tip → `megiddo/rebase-20260709` | [ ] |
