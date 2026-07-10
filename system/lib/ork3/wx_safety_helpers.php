@@ -88,6 +88,13 @@ if (!function_exists('wx_coords_for_park')) {
     }
 }
 
+if (!function_exists('wx_coords_for_calendar_detail')) {
+    function wx_coords_for_calendar_detail($detail_id)
+    {
+        return _wx_domain()->coords_for_calendar_detail((int) $detail_id);
+    }
+}
+
 if (!function_exists('wx_forecast_for_date')) {
     function wx_forecast_for_date($park_id, $date)
     {

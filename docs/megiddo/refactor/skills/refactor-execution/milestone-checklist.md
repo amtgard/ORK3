@@ -12,7 +12,7 @@ Track **R-01 … R-18** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-17-lib-bypass-refactor` @ `e6e469b3` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-18-residual-db-refactor` @ `d3f29fc7` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -37,7 +37,8 @@ Track **R-01 … R-18** Phase 2 sprints. Orchestrator and workers update this fi
 | R-14 | `megiddo/r-14-lib-service-refactor` | `a389b247` |
 | R-15 | `megiddo/r-15-hasauthority-refactor` | `446e7c42` |
 | R-16 | `megiddo/r-16-ghettocache-refactor` | `86d5cbed` |
-| R-17 | `megiddo/r-17-lib-bypass-refactor` | `e6e469b3` |
+| R-17 | `megiddo/r-17-lib-bypass-refactor` | `28a2f390` |
+| R-18 | `megiddo/r-18-residual-db-refactor` | `d3f29fc7` |
 
 ---
 
@@ -389,15 +390,15 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Prior R-* hygiene | [ ] |
-| Zero `$DB->` in `orkui/` | [ ] |
-| PHPUnit | [ ] |
-| Fuzzy: V-00 active pages | [ ] |
-| Playwright: smoke + touched domain specs | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-18: …` | [ ] |
+| Prior R-* hygiene | [x] |
+| Zero `$DB->` in `orkui/` | [x] |
+| PHPUnit | [x] |
+| Fuzzy: V-00 active pages | [x] |
+| Playwright: smoke + touched domain specs | [x] |
+| Docs + plan | [x] |
+| Commit: `R-18: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-18-residual-db-refactor` stacked on R-17 @ `28a2f390`. Eliminated all residual `$DB->` in `orkui/`: domain APIs on `Player`, `Dangeraudit`, `Weather`, `ParkProfile`, `Event`, `Administration`; nav helpers (`nav_view_helpers.php`, `wx_coords_for_calendar_detail`); thinned Admin/Player/*Ajax controllers + `Admin_auditlog.tpl`, `default.theme`, `Eventnew_index.tpl`. PHPUnit 215/215 pass (2 skipped). Infection spot-check: `class.Player.php` MSI 20%, `class.DangerAudit.php` MSI 50%. Fuzzy V-00 active pages 34/34 pass (17 pages × 2 profiles). Playwright: auth smoke + `auth-permissions.spec.ts` 3/3 + `player-profile.spec.ts` 2/2 + `event-detail.spec.ts` 3/3 pass. **Phase 2 complete** — stack ready for Phase 3 audit.
 
 ---
 
@@ -414,4 +415,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | 17 | R-17 | R-18 |
 | 18 | R-18 | Phase 3 audit |
 
-**Next unchecked:** R-18
+**Next unchecked:** Phase 3 audit ([11-phase-3-closeout.md](../../11-phase-3-closeout.md))

@@ -4084,4 +4084,138 @@ class Player extends Ork3
         return (bool) ($rs && $rs->Next());
     }
 
+    /**
+     * Display persona for a mundane id (R-18 residual $DB removal).
+     */
+    public function GetPersona(int $mundaneId): string
+    {
+        if (!valid_id($mundaneId)) {
+            return '';
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT persona FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
+        );
+        if ($rs && $rs->Next() && $rs->persona !== null && $rs->persona !== '') {
+            return (string) $rs->persona;
+        }
+
+        return '';
+    }
+
+    /**
+     * Whether the logged-in viewer should see the email prompt modal.
+     */
+    public function NeedsEmailPrompt(int $mundaneId): bool
+    {
+        if (!valid_id($mundaneId)) {
+            return false;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT email FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
+        );
+
+        return $rs && $rs->Next() && trim((string) ($rs->email ?? '')) === '';
+    }
+
+    /**
+     * Home kingdom/park quick-link context for nav chrome (T-INF-05 extension).
+     *
+     * @return array{
+     *   park_id: int,
+     *   park_name: string,
+     *   kingdom_id: int,
+     *   kingdom_name: string,
+     *   parent_kingdom_id: int,
+     *   parent_kingdom_name: string
+     * }|null
+     */
+    public function GetHomeNavContext(int $mundaneId): ?array
+    {
+        if (!valid_id($mundaneId)) {
+            return null;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT p.park_id, p.name AS park_name, k.kingdom_id, k.name AS kingdom_name,
+                    k.parent_kingdom_id, pk.name AS parent_kingdom_name
+             FROM ' . DB_PREFIX . 'mundane m
+             LEFT JOIN ' . DB_PREFIX . 'park p ON m.park_id = p.park_id
+             LEFT JOIN ' . DB_PREFIX . 'kingdom k ON p.kingdom_id = k.kingdom_id
+             LEFT JOIN ' . DB_PREFIX . 'kingdom pk ON k.parent_kingdom_id = pk.kingdom_id
+             WHERE m.mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
+        );
+        if (!$rs || !$rs->Next() || !(int) $rs->park_id) {
+            return null;
+        }
+
+        return [
+            'park_id' => (int) $rs->park_id,
+            'park_name' => (string) $rs->park_name,
+            'kingdom_id' => (int) $rs->kingdom_id,
+            'kingdom_name' => (string) $rs->kingdom_name,
+            'parent_kingdom_id' => (int) $rs->parent_kingdom_id,
+            'parent_kingdom_name' => (string) ($rs->parent_kingdom_name ?? ''),
+        ];
+    }
+
+    /**
+     * Revoked awards and titles stripped from a player profile (editor view).
+     *
+     * @return array{RevokedAwards: list<array<string, mixed>>, RevokedTitles: list<array<string, mixed>>}
+     */
+    public function GetRevokedAwardsForPlayer(int $mundaneId): array
+    {
+        if (!valid_id($mundaneId)) {
+            return ['RevokedAwards' => [], 'RevokedTitles' => []];
+        }
+        $baseSql = 'SELECT a.awards_id, a.rank, a.date, a.revoked_at, a.revocation,
+                COALESCE(NULLIF(a.custom_name,\'\'), ka.name, aw.name) AS award_name,
+                m.persona AS revoked_by
+            FROM ' . DB_PREFIX . 'awards a
+            LEFT JOIN ' . DB_PREFIX . 'kingdomaward ka ON a.kingdomaward_id = ka.kingdomaward_id
+            LEFT JOIN ' . DB_PREFIX . 'award aw ON a.award_id = aw.award_id
+            LEFT JOIN ' . DB_PREFIX . 'mundane m ON a.revoked_by_id = m.mundane_id
+            WHERE a.stripped_from = ' . (int) $mundaneId . '
+              AND a.revoked = 1';
+        $awardsSql = $baseSql . "
+              AND (aw.officer_role = 'none' OR aw.officer_role IS NULL)
+              AND (ka.is_title IS NULL OR ka.is_title = 0)
+            ORDER BY a.revoked_at DESC, a.date DESC";
+        $titlesSql = $baseSql . "
+              AND (aw.officer_role != 'none' OR ka.is_title = 1)
+            ORDER BY a.revoked_at DESC, a.date DESC";
+
+        return [
+            'RevokedAwards' => $this->fetchRevokedAwardRows($awardsSql),
+            'RevokedTitles' => $this->fetchRevokedAwardRows($titlesSql),
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function fetchRevokedAwardRows(string $sql): array
+    {
+        $this->db->Clear();
+        $result = $this->db->DataSet($sql);
+        $rows = [];
+        if ($result && $result->Size() > 0) {
+            while ($result->Next()) {
+                $rows[] = [
+                    'AwardsId' => (int) $result->awards_id,
+                    'AwardName' => (string) $result->award_name,
+                    'Rank' => $result->rank,
+                    'Date' => $result->date,
+                    'RevokedAt' => $result->revoked_at,
+                    'Revocation' => $result->revocation,
+                    'RevokedBy' => $result->revoked_by,
+                ];
+            }
+        }
+
+        return $rows;
+    }
+
 }

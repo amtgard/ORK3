@@ -23,7 +23,6 @@ class Controller_AdminAjax extends Controller
         }
 
         $action = trim($p ?? '');
-        global $DB;
 
         if ($action === 'playersearch') {
             $q = trim($_GET['q'] ?? '');
@@ -58,14 +57,8 @@ class Controller_AdminAjax extends Controller
                 exit;
             }
             $authId = (int)($r['Detail'] ?? 0);
-            $DB->Clear();
-            $rs = $DB->DataSet(
-                "SELECT m.persona FROM " . DB_PREFIX . "mundane m WHERE m.mundane_id = {$mid}"
-            );
-            $persona = '';
-            if ($rs && $rs->Next()) {
-                $persona = $rs->persona;
-            }
+            $this->load_model('Player');
+            $persona = $this->Player->get_persona($mid);
             Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_ADMIN, 'Id' => 0, 'Role' => AUTH_ADMIN], 'Player', $mid, null, [
                 'authorization_id' => $authId,
                 'mundane_id'       => $mid,

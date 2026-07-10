@@ -136,3 +136,8 @@ sh bin/run-infection.sh \
 
 - [x] T-EVT-08, T-KNG-11, T-PRK-05, T-PLR-08, T-RPT-02, T-UNT-02/03 domain lib bypass removed from target controllers; Event/Park/Attendance weather templates use `wx_*` helpers (no `Ork3::$Lib` in templates)
 - [x] Infection pass A MSI 18%, pass B MSI 27%; fuzzy gate `event-index-rsvp,player-profile,reports-voting-eligible` 6/6 (re-recorded baselines)
+
+### R-18 (2026-07-10)
+
+- [x] Zero `$DB->` in `orkui/` — domain APIs on `Player`, `Dangeraudit`, `Weather`, `ParkProfile`, `Event`, `Administration`; `nav_view_helpers.php` + `wx_coords_for_calendar_detail`
+- [x] Infection spot-check: Player MSI 20%, DangerAudit MSI 50%; fuzzy V-00 active pages 34/34 pass (17 × 2 profiles)

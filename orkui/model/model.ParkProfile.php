@@ -29,4 +29,11 @@ class Model_ParkProfile extends Model
 
         return $profile->CheckParkAbbreviationTaken($kingdomId, $abbr, $excludeParkId);
     }
+
+    public function park_belongs_to_kingdom(int $parkId, int $kingdomId): bool
+    {
+        $profile = new ParkProfile();
+
+        return $profile->ParkBelongsToKingdom($parkId, $kingdomId);
+    }
 }

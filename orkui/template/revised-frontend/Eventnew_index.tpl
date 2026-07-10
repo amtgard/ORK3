@@ -944,14 +944,10 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 		// forecast cache keyed by park_id (event-specific coords don't have a
 		// per-park forecast cache, so they fall back to the at_park/park).
 		$evWxLat = null; $evWxLng = null;
-		global $DB; $DB->Clear();
-		$_evCdCo = $DB->DataSet("SELECT latitude, longitude FROM " . DB_PREFIX . "event_calendardetail
-			WHERE event_calendardetail_id = " . (int)($cd['EventCalendarDetailId'] ?? $detail_id ?? 0) . " LIMIT 1");
-		if ($_evCdCo && $_evCdCo->Size() > 0 && $_evCdCo->Next()
-			&& (float)$_evCdCo->latitude !== 0.0 && (float)$_evCdCo->longitude !== 0.0
-			&& $_evCdCo->latitude !== null && $_evCdCo->longitude !== null) {
-			$evWxLat = (float)$_evCdCo->latitude;
-			$evWxLng = (float)$_evCdCo->longitude;
+		$_evCdCo = wx_coords_for_calendar_detail((int)($cd['EventCalendarDetailId'] ?? $detail_id ?? 0));
+		if ($_evCdCo !== null) {
+			$evWxLat = $_evCdCo[0];
+			$evWxLng = $_evCdCo[1];
 		}
 		if (($evWxLat === null || $evWxLng === null) && $evWxParkId) {
 			// Park coords with the same scalar→JSON fallback used everywhere else.

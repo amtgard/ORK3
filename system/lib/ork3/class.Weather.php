@@ -479,6 +479,33 @@ class Weather extends Ork3
     }
 
     /**
+     * Event occurrence coordinates when set on event_calendardetail (R-18).
+     *
+     * @return array{0: float, 1: float}|null
+     */
+    public function coords_for_calendar_detail(int $detailId): ?array
+    {
+        $detailId = (int) $detailId;
+        if ($detailId <= 0) {
+            return null;
+        }
+        $rs = $this->db->query(
+            'SELECT latitude, longitude FROM ' . DB_PREFIX . 'event_calendardetail
+             WHERE event_calendardetail_id = ' . $detailId . ' LIMIT 1'
+        );
+        if (!$rs || $rs->size() === 0 || !$rs->next()) {
+            return null;
+        }
+        $lat = (float) $rs->latitude;
+        $lng = (float) $rs->longitude;
+        if ($lat === 0.0 && $lng === 0.0) {
+            return null;
+        }
+
+        return [$lat, $lng];
+    }
+
+    /**
      * Park IDs that have an in-person park day on the given date.
      * Evaluates all three recurrence flavors (weekly, week-of-month, monthly).
      * Excludes online-marked entries — only in-field play counts.

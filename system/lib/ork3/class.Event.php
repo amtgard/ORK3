@@ -616,6 +616,38 @@ class Event extends Ork3
         return ['Name' => '', 'KingdomId' => 0];
     }
 
+    /**
+     * Kingdom-scoped event templates for tournament creation UI (R-18).
+     *
+     * @return list<array{EventId: int, Name: string, ParkId: int, ParkName: string}>
+     */
+    public function GetEventTemplatesForKingdom(int $kingdomId): array
+    {
+        if (!valid_id($kingdomId)) {
+            return [];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT e.event_id, e.name, p.park_id, p.name AS park_name
+             FROM ' . DB_PREFIX . 'event e
+             LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = e.park_id
+             WHERE e.kingdom_id = ' . (int) $kingdomId . ' ORDER BY e.name'
+        );
+        $templates = [];
+        if ($rs && $rs->Size() > 0) {
+            while ($rs->Next()) {
+                $templates[] = [
+                    'EventId' => (int) $rs->event_id,
+                    'Name' => (string) $rs->name,
+                    'ParkId' => (int) $rs->park_id,
+                    'ParkName' => (string) ($rs->park_name ?? ''),
+                ];
+            }
+        }
+
+        return $templates;
+    }
+
     public function GetEvent($request)
     {
         $this->event->clear();

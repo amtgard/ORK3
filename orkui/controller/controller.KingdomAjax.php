@@ -386,19 +386,18 @@ class Controller_KingdomAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Missing park ID.']);
                 exit;
             }
-            global $DB;
-            $DB->Clear();
-            $rs = $DB->DataSet("SELECT abbreviation FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} LIMIT 1");
-            if (!$rs || !$rs->Next()) {
-                echo json_encode(['status' => 1, 'error' => 'Park not found.']);
+            $this->load_model('AdminDashboard');
+            $abbrCheck = $this->AdminDashboard->park_abbr_check($park_id, $kingdom_id);
+            if (($abbrCheck['status'] ?? 1) !== 0) {
+                echo json_encode(['status' => 1, 'error' => $abbrCheck['error'] ?? 'Park not found.']);
                 exit;
             }
-            $abbr = strtoupper($rs->abbreviation);
-            $DB->Clear();
-            $abbrEsc = mysql_real_escape_string($abbr);
-            $rs2 = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "park WHERE kingdom_id = {$kingdom_id} AND abbreviation = '{$abbrEsc}' AND park_id != {$park_id} AND active = 'Active' LIMIT 1");
-            $taken = ($rs2 && $rs2->Next());
-            echo json_encode(['status' => 0, 'abbr' => $abbr, 'taken' => $taken, 'conflictName' => $taken ? $rs2->name : '']);
+            echo json_encode([
+                'status' => 0,
+                'abbr' => $abbrCheck['abbr'],
+                'taken' => $abbrCheck['taken'],
+                'conflictName' => $abbrCheck['conflictName'],
+            ]);
             exit;
 
         } elseif ($action === 'claimpark') {
@@ -502,24 +501,8 @@ class Controller_KingdomAjax extends Controller
                 : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
         } elseif ($action === 'geteventtemplates') {
-            global $DB;
-            $kid = $kingdom_id;
-            $sql = "SELECT e.event_id, e.name, p.park_id, p.name AS park_name
-			        FROM ork_event e
-			        LEFT JOIN ork_park p ON p.park_id = e.park_id
-			        WHERE e.kingdom_id = $kid ORDER BY e.name";
-            $rs        = $DB->DataSet($sql);
-            $templates = [];
-            if ($rs && $rs->Size() > 0) {
-                while ($rs->Next()) {
-                    $templates[] = [
-                        'EventId'  => (int)$rs->event_id,
-                        'Name'     => $rs->name,
-                        'ParkId'   => (int)$rs->park_id,
-                        'ParkName' => $rs->park_name ?? '',
-                    ];
-                }
-            }
+            $this->load_model('Event');
+            $templates = $this->Event->get_event_templates_for_kingdom($kingdom_id);
             echo json_encode(['status' => 0, 'templates' => $templates]);
 
         } elseif ($action === 'createtournament') {
@@ -608,13 +591,8 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
             $authId = (int)($r['Detail'] ?? 0);
-            global $DB;
-            $DB->Clear();
-            $rs = $DB->DataSet("SELECT m.persona FROM ork_mundane m WHERE m.mundane_id = {$mid}");
-            $persona = '';
-            if ($rs && $rs->Next()) {
-                $persona = $rs->persona;
-            }
+            $this->load_model('Player');
+            $persona = $this->Player->get_persona($mid);
             Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_KINGDOM, 'Id' => $kingdom_id, 'Role' => $role], 'Player', $mid, null, [
                 'authorization_id' => $authId,
                 'mundane_id'       => $mid,

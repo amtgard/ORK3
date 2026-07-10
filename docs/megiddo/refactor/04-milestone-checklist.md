@@ -1123,11 +1123,11 @@ Deferred cross-cutting work from R-01 … R-14. **Implementation** — not Phase
 | R-15 HasAuthority | `megiddo/r-15-hasauthority-refactor` | [x] |
 | R-16 GhettoCache | `megiddo/r-16-ghettocache-refactor` | [x] |
 | R-17 Lib bypass | `megiddo/r-17-lib-bypass-refactor` | [x] |
-| R-18 Residual `$DB` | `megiddo/r-18-residual-db-refactor` | [ ] |
+| R-18 Residual `$DB` | `megiddo/r-18-residual-db-refactor` | [x] |
 
-**Stack tip after R-17:** `megiddo/r-17-lib-bypass-refactor` @ `e6e469b3` (stacked on R-16 @ `86d5cbed`)
+**Stack tip after R-18:** `megiddo/r-18-residual-db-refactor` @ `d3f29fc7` (stacked on R-17 @ `28a2f390`)
 
-**Next actionable milestone:** **R-18** (`megiddo/r-18-residual-db-refactor` stacked on `megiddo/r-17-lib-bypass-refactor` branch tip). Phase 1.6 (V-00…V-14) complete.
+**Next actionable milestone:** **Phase 3 audit** ([11-phase-3-closeout.md](./11-phase-3-closeout.md)). Phase 2 continuation (R-15 … R-18) complete.
 
 ---
 
@@ -1163,7 +1163,7 @@ Optional: merge stack tip into integration line `megiddo/rebase-20260709`.
 | **2 cont.** | Refactor execution R-15 … R-18 — cross-cutting HasAuthority, cache, residual lib/`$DB` ([10-phase-2-continuation.md](./10-phase-2-continuation.md)) |
 | **3** | **Audit and close-out** — [11-phase-3-closeout.md](./11-phase-3-closeout.md): automated gates + [manual smoke matrix](./validations/r-milestone-smoke-matrix.html) |
 
-**Next actionable milestone:** **R-18** (`megiddo/r-18-residual-db-refactor` stacked on `megiddo/r-17-lib-bypass-refactor` branch tip).
+**Next actionable milestone:** **Phase 3 audit** ([11-phase-3-closeout.md](./11-phase-3-closeout.md)).
 
 ### R-01 complete (2026-07-09)
 
@@ -1266,3 +1266,9 @@ Optional: merge stack tip into integration line `megiddo/rebase-20260709`.
 - [x] Branch `megiddo/r-17-lib-bypass-refactor` stacked on `megiddo/r-16-ghettocache-refactor` @ `86d5cbed` — residual domain lib bypass via model/domain wrappers (`Model_Player`, `Model_Weather`, `Model_Reports`, `Model_Kingdom`); `Controller_Kingdom`, `Controller_Park`, `Controller_Reports`, `Controller_Unit` off `Ork3::$Lib`; Event/Park/Attendance weather templates via `wx_*` helpers
 - [x] Targets closed: T-EVT-08 (weather templates), T-KNG-11, T-PRK-05, T-PLR-08 (auth R-15), T-RPT-02, T-UNT-02/03; Principality already APIModel-only; **residual `$DB` + deferred lib** → **R-18**
 - [x] Gates: PHPUnit 215/215 pass (2 skipped); Infection pass A MSI 18%, pass B MSI 27%; fuzzy `event-index-rsvp,player-profile,reports-voting-eligible` 6/6; Playwright auth smoke + `event-detail.spec.ts` 3/3 + `player-profile.spec.ts` 2/2 + `reports.spec.ts` 4/4 pass
+
+### R-18 complete (2026-07-10)
+
+- [x] Branch `megiddo/r-18-residual-db-refactor` stacked on `megiddo/r-17-lib-bypass-refactor` @ `28a2f390` — zero `$DB->` in `orkui/`; domain APIs on `Player`, `Dangeraudit`, `Weather`, `ParkProfile`, `Event`, `Administration`; nav/weather view helpers
+- [x] Targets: all residual `$DB` in controllers, models, templates (`Admin`, `Player`, `*Ajax`, `Admin_auditlog.tpl`, `default.theme`, `Eventnew_index.tpl`)
+- [x] Gates: PHPUnit 215/215 pass (2 skipped); Infection spot-check Player MSI 20%, DangerAudit MSI 50%; fuzzy V-00 active pages 34/34; Playwright auth smoke + `auth-permissions.spec.ts` 3/3 + `player-profile.spec.ts` 2/2 + `event-detail.spec.ts` 3/3 pass

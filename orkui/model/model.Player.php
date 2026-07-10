@@ -354,4 +354,14 @@ class Model_Player extends Model
             'Email' => $email,
         ]);
     }
+
+    public function get_persona(int $mundaneId): string
+    {
+        return $this->Player->GetPersona($mundaneId);
+    }
+
+    public function get_revoked_awards(int $mundaneId): array
+    {
+        return $this->Player->GetRevokedAwardsForPlayer($mundaneId);
+    }
 }

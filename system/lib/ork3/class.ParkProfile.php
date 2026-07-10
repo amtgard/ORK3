@@ -299,6 +299,20 @@ class ParkProfile extends Ork3
         return ($rs && $rs->Next()) ? (string) $rs->name : null;
     }
 
+    public function ParkBelongsToKingdom(int $parkId, int $kingdomId): bool
+    {
+        if (!valid_id($parkId) || !valid_id($kingdomId)) {
+            return false;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT park_id FROM ' . DB_PREFIX . 'park
+             WHERE park_id = ' . (int) $parkId . ' AND kingdom_id = ' . (int) $kingdomId . ' LIMIT 1'
+        );
+
+        return (bool) ($rs && $rs->Next());
+    }
+
     private function draftClause(int $mundaneId, bool $isAdmin): string
     {
         if ($isAdmin || $mundaneId === 0) {

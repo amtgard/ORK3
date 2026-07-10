@@ -487,4 +487,25 @@ class Administration
             'kingdomName' => $inheritedKingdomName,
         ];
     }
+
+    /**
+     * All kingdom id => name pairs ordered by name (admin inactive parks filter).
+     *
+     * @return array<int, string>
+     */
+    public function ListAllKingdomNames(): array
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT kingdom_id, name FROM ' . DB_PREFIX . 'kingdom ORDER BY name'
+        );
+        $kingdoms = [];
+        if ($rs && $rs->Size() > 0) {
+            do {
+                $kingdoms[(int) $rs->kingdom_id] = (string) $rs->name;
+            } while ($rs->Next());
+        }
+
+        return $kingdoms;
+    }
 }

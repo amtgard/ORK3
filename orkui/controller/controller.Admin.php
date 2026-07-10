@@ -1835,16 +1835,8 @@ class Controller_Admin extends Controller
         $this->data['Parks']      = $result['Parks'] ?? [];
         $this->data['KingdomId']  = $kingdom_id;
 
-        global $DB;
-        $DB->Clear();
-        $_kr = $DB->DataSet("SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom ORDER BY name");
-        $kingdoms = [];
-        if ($_kr && $_kr->Size() > 0) {
-            do {
-                $kingdoms[(int)$_kr->kingdom_id] = $_kr->name;
-            } while ($_kr->Next());
-        }
-        $this->data['Kingdoms'] = $kingdoms;
+        $this->load_model('AdminDashboard');
+        $this->data['Kingdoms'] = $this->AdminDashboard->list_all_kingdom_names();
     }
 
     public function topparks($limit = null)
@@ -1922,6 +1914,16 @@ class Controller_Admin extends Controller
         $this->data['ByWhomFilter'] = $bywhom_filter;
         $this->data['EntityFilter'] = $entity_filter;
         $this->data['EntityTypeFilter'] = $entity_type_filter;
+        $maps = $this->AdminDashboard->audit_display_maps($rows, $bywhom_filter, $entity_filter, $entity_type_filter);
+        $this->data['AuditParkMap'] = $maps['parkMap'];
+        $this->data['AuditKingdomMap'] = $maps['kingdomMap'];
+        $this->data['AuditMundaneMap'] = $maps['mundaneMap'];
+        $this->data['AuditEventMap'] = $maps['eventMap'];
+        $this->data['AuditKawardMap'] = $maps['kawardMap'];
+        $this->data['AuditUnitMap'] = $maps['unitMap'];
+        $this->data['AuditClassMap'] = $maps['classMap'];
+        $this->data['AuditFilterPlayerNames'] = $maps['filterPlayerNames'];
+        $this->data['AuditEntityFilterName'] = $maps['entityFilterName'];
         $this->data['page_title']   = 'Audit Log';
     }
 

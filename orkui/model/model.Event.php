@@ -395,4 +395,9 @@ class Model_Event extends Model
         return $this->_eventApiOk($r) && !empty($r['Blocked']);
 }
 
+    public function get_event_templates_for_kingdom(int $kingdomId): array
+    {
+        return $this->Event->GetEventTemplatesForKingdom($kingdomId);
+    }
+
 }

@@ -114,7 +114,9 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 **R-16 complete (2026-07-10):** Ghettocache read-through + write bust migrated into domain services; zero `Ork3::$Lib->ghettocache` in `orkui/`. **Carryover on same files:** residual `park`/`player`/`weather` lib bypass → R-17; residual `$DB` → R-18.
 
-**R-17 complete (2026-07-10):** Residual domain `Ork3::$Lib` bypass on T-EVT-08 (Event/Park/Attendance weather templates via `wx_*` helpers), T-KNG-11 (`GetCircleAwardIds`), T-PRK-05 (`for_park`, `GetCircleAwardIds`), T-PLR-08 (auth done R-15), T-RPT-02 (`GetParkKingdomId`), T-UNT-02/03 (`Dangeraudit`, `player_info`, `GetKingdoms`); Principality already on APIModel. **Carryover:** residual `$DB` in `orkui/` → R-18; other deferred lib sites (searchservice, heraldry, index.php session) remain for R-18 or domain sprints.
+**R-17 complete (2026-07-10):** Residual domain `Ork3::$Lib` bypass on T-EVT-08 (Event/Park/Attendance weather templates via `wx_*` helpers), T-KNG-11 (`GetCircleAwardIds`), T-PRK-05 (`for_park`, `GetCircleAwardIds`), T-PLR-08 (auth done R-15), T-RPT-02 (`GetParkKingdomId`), T-UNT-02/03 (`Dangeraudit`, `player_info`, `GetKingdoms`); Principality already on APIModel. **Carryover:** residual `$DB` in `orkui/` → R-18.
+
+**R-18 complete (2026-07-10):** Zero `$DB->` in `orkui/` — residual call sites migrated to `Player`, `Dangeraudit`, `Weather`, `ParkProfile`, `Event`, `Administration` domain APIs; nav/weather view helpers; controllers and templates thinned. **Phase 2 complete** — Phase 3 audit next ([11-phase-3-closeout.md](./11-phase-3-closeout.md)).
 
 **R-03 complete (2026-07-09):** T-PLA-06, T-PRA-04, T-KNA-08, T-UNT-01, T-EVA-14 migrated to `class.Banner.php` / BannerService; five `*Ajax::banner` controllers are thin `Model_Banner` adapters; zero banner `$DB` in `orkui/`.
 

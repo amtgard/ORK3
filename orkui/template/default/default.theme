@@ -350,21 +350,8 @@ $downtime_note  = 'Potential ORK downtime to migrate to the Walker 3.5.4 Release
 			<!-- Home Kingdom / Home Park quick-links -->
 <?php if ($this->__session->token != null) : ?>
 <?php
-	global $DB;
 	$__huid = (int)$this->__session->user_id;
-	$DB->Clear();
-	$__homeResult = $DB->DataSet("SELECT p.park_id, p.name as park_name, k.kingdom_id, k.name as kingdom_name, k.parent_kingdom_id, pk.name as parent_kingdom_name FROM ork_mundane m LEFT JOIN ork_park p ON m.park_id = p.park_id LEFT JOIN ork_kingdom k ON p.kingdom_id = k.kingdom_id LEFT JOIN ork_kingdom pk ON k.parent_kingdom_id = pk.kingdom_id WHERE m.mundane_id = $__huid LIMIT 1");
-	$__home = null;
-	if ($__homeResult && $__homeResult->Next() && $__homeResult->park_id) {
-		$__home = [
-			'park_id'             => $__homeResult->park_id,
-			'park_name'           => $__homeResult->park_name,
-			'kingdom_id'          => $__homeResult->kingdom_id,
-			'kingdom_name'        => $__homeResult->kingdom_name,
-			'parent_kingdom_id'   => (int)$__homeResult->parent_kingdom_id,
-			'parent_kingdom_name' => $__homeResult->parent_kingdom_name,
-		];
-	}
+	$__home = nav_home_context($__huid);
 ?>
 <?php if ($__home) : ?>
 <?php if ($__home['parent_kingdom_id'] > 0) : ?>
@@ -414,11 +401,7 @@ $downtime_note  = 'Potential ORK downtime to migrate to the Walker 3.5.4 Release
 	$__navUid      = (int)$this->__session->user_id;
 	$__navImgName  = sprintf('%06d', $__navUid);
 	$__navHasPhoto = file_exists(DIR_PLAYER_IMAGE . $__navImgName . '.png') || file_exists(DIR_PLAYER_IMAGE . $__navImgName . '.jpg');
-	$DB->Clear();
-	$__personaRow  = $DB->DataSet("SELECT persona FROM ork_mundane WHERE mundane_id = $__navUid LIMIT 1");
-	$__navPersona  = ($__personaRow && $__personaRow->Next() && $__personaRow->persona)
-		? $__personaRow->persona
-		: $this->__session->user_name;
+	$__navPersona  = nav_persona($__navUid, $this->__session->user_name);
 ?>
 			<div class='nav-dropdown-wrap' id='nav-avatar-wrap'>
 				<button class='nav-avatar-btn' onclick="document.getElementById('nav-avatar-wrap').classList.toggle('open')">
@@ -728,9 +711,7 @@ document.getElementById('wn-overlay').addEventListener('click', function(e) {
 // Show once per browser session (sessionStorage) to players with no email.
 if ($this->__session->token != null):
 	$__empUid = (int)$this->__session->user_id;
-	$DB->Clear();
-	$__empRow = $DB->DataSet("SELECT email FROM ork_mundane WHERE mundane_id = $__empUid LIMIT 1");
-	$__showEmailPrompt = $__empRow && $__empRow->Next() && empty(trim($__empRow->email ?? ''));
+	$__showEmailPrompt = nav_needs_email_prompt($__empUid);
 endif;
 ?>
 <?php if (!empty($__showEmailPrompt)): ?>

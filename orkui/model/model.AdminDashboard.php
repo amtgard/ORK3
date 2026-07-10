@@ -126,4 +126,18 @@ class Model_AdminDashboard extends Model
     {
         return Ork3::$Lib->stateofamtgard->GetPageBootstrap();
     }
+
+    public function audit_display_maps(array $auditRows, int $byWhomFilter, int $entityFilter, string $entityTypeFilter): array
+    {
+        $audit = new Dangeraudit();
+
+        return $audit->ResolveAuditDisplayMaps($auditRows, $byWhomFilter, $entityFilter, $entityTypeFilter);
+    }
+
+    public function list_all_kingdom_names(): array
+    {
+        $admin = new Administration();
+
+        return $admin->ListAllKingdomNames();
+    }
 }

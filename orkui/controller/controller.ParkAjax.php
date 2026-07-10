@@ -375,13 +375,8 @@ class Controller_ParkAjax extends Controller
                 exit;
             }
             $authId = (int)($r['Detail'] ?? 0);
-            global $DB;
-            $DB->Clear();
-            $rs = $DB->DataSet("SELECT m.persona FROM ork_mundane m WHERE m.mundane_id = {$mid}");
-            $persona = '';
-            if ($rs && $rs->Next()) {
-                $persona = $rs->persona;
-            }
+            $this->load_model('Player');
+            $persona = $this->Player->get_persona($mid);
             Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_PARK, 'Id' => $park_id, 'Role' => $role], 'Player', $mid, null, [
                 'authorization_id' => $authId,
                 'mundane_id'       => $mid,
@@ -539,10 +534,8 @@ class Controller_ParkAjax extends Controller
                 exit;
             }
             // Verify the park belongs to this kingdom
-            global $DB;
-            $DB->Clear();
-            $pkCheck = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} AND kingdom_id = {$kingdom_id} LIMIT 1");
-            if (!$pkCheck || !$pkCheck->Next()) {
+            $this->load_model('ParkProfile');
+            if (!$this->ParkProfile->park_belongs_to_kingdom($park_id, $kingdom_id)) {
                 echo json_encode(['status' => 1, 'error' => 'Park does not belong to this kingdom.']);
                 exit;
             }
