@@ -12,8 +12,8 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 | Hop | ID | Branch | Commit | Status |
 |-----|-----|--------|--------|--------|
-| 1 | FIX-02 | `megiddo/p3-fix-02-assets` | | [x] |
-| 2 | FIX-03 | | | [ ] |
+| 1 | FIX-02 | `megiddo/p3-fix-02-assets` | `6e7bb487` | [x] |
+| 2 | FIX-03 | `megiddo/p3-fix-03-playwright-heraldry` | `6766aaac` | [x] |
 | 3 | FIX-04 | | | [ ] |
 | 4 | FIX-05 | | | [ ] |
 | 5 | BACKFILL | | | [ ] |
@@ -26,7 +26,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 12 | R-19d | | | [ ] |
 | 13 | VALIDATE-20 | | | [ ] |
 
-**Next actionable hop:** FIX-03
+**Next actionable hop:** FIX-04
 
 ---
 
@@ -46,10 +46,15 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 ## FIX-03: Playwright heraldry profile
 
-- [ ] `tests/e2e/heraldry.spec.ts` runs against correct DB profile (sandbox test IDs)
-- [ ] `06-test-framework.md` documents heraldry spec profile requirements
-- [ ] `npx playwright test tests/e2e/heraldry.spec.ts` exit 0 (after FIX-02)
-- [ ] Checklist + commit on stacked branch
+**Root cause:** Phase 3 close-out ran `npx playwright test tests/e2e/` on mirror (`use prod`); `heraldry.spec.ts` asserts sandbox fake IDs (kingdom `100001`, park `1000001`, players `≥100000000`) that do not exist on mirror.
+
+**Fix:** Wrap heraldry in `test.describe('sandbox heraldry')` with `beforeEach` sandbox roster probe (skips with clear message on mirror). Document mirror vs sandbox split in `06-test-framework.md` § Playwright DB profiles; update Phase 3 close-out orchestrator to two-gate Playwright (mirror `--grep-invert heraldry` + sandbox heraldry).
+
+- [x] `tests/e2e/heraldry.spec.ts` runs against correct DB profile (sandbox test IDs)
+- [x] `06-test-framework.md` documents heraldry spec profile requirements
+- [x] `npx playwright test tests/e2e/heraldry.spec.ts` exit 0 (after FIX-02)
+- [x] Mirror suite `npx playwright test tests/e2e/ --grep-invert heraldry` exit 0
+- [x] Checklist + commit on stacked branch
 
 ---
 

@@ -70,7 +70,7 @@ Run on stack tip after R-18:
 | No lib bypass | `rg 'Ork3::\$Lib' orkui/` | exit 1 (no matches) |
 | PHPUnit | `sh bin/run-unit-tests.sh` | exit 0 |
 | Fuzzy regression | `bin/fuzzy-validator validate --all --phase all` | exit 0 test + mirror |
-| Playwright smoke | `npx playwright test tests/e2e/` | exit 0 (with credentials) |
+| Playwright smoke | Mirror: `npx playwright test tests/e2e/ --grep-invert heraldry`; sandbox: `npx playwright test tests/e2e/heraldry.spec.ts` | both exit 0 (credentials per `06-test-framework.md` § Playwright DB profiles) |
 | Plan complete | grep `03-implementation-plan.md` open targets | all T-* marked done in prose |
 
 Agent orchestrator: [skills/phase3-closeout/orchestrator.prompt](./skills/phase3-closeout/orchestrator.prompt)

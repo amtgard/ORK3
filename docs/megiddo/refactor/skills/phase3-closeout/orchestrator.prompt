@@ -50,14 +50,23 @@ Pass = exit 0 (test + mirror).
 
 ### P3-D — Playwright
 
+Mirror-profile specs and sandbox heraldry run as **two gates** (see `06-test-framework.md` § Playwright DB profiles):
+
 ```bash
 export ORK3_E2E_BASE_URL=http://127.0.0.1:19080/orkui/
+
+# Mirror suite (all e2e except heraldry)
 bin/ork-db use prod
 export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
-npx playwright test tests/e2e/
+npx playwright test tests/e2e/ --grep-invert heraldry
+
+# Sandbox heraldry (fake kingdom/park IDs + player avatars)
+bin/ork-db use dev
+export ORK3_E2E_USERNAME=megiddo ORK3_E2E_PASSWORD=test-db-player
+npx playwright test tests/e2e/heraldry.spec.ts
 ```
 
-Pass = exit 0 (note skipped specs).
+Pass = both exit 0 (note skipped specs on mirror heraldry probe is a failure — heraldry must run on dev).
 
 ### P3-E — Plan completeness
 

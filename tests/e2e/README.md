@@ -22,11 +22,11 @@ export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
 # Full authenticated flows (default — do not sign off with smoke-only)
 npx playwright test tests/e2e/rsvp.spec.ts
 
-# Full e2e suite
-npx playwright test tests/e2e/
+# Full mirror-profile e2e suite (excludes sandbox heraldry)
+npx playwright test tests/e2e/ --grep-invert heraldry
 ```
 
-Sandbox (`ork_test`): `bin/ork-db use dev` and `ORK3_E2E_USERNAME=megiddo ORK3_E2E_PASSWORD=test-db-player`.
+**Sandbox heraldry** (`tests/e2e/heraldry.spec.ts` only): `bin/ork-db deploy-sandbox`, `bin/ork-db use dev`, `ORK3_E2E_USERNAME=megiddo ORK3_E2E_PASSWORD=test-db-player`, then `npx playwright test tests/e2e/heraldry.spec.ts`. See [06-test-framework.md § Playwright DB profiles](../../docs/megiddo/refactor/06-test-framework.md#5-playwright-db-profiles-mirror-vs-sandbox).
 
 ## Flows mapped to DS-01 §2.4
 

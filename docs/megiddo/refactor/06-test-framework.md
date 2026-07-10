@@ -99,13 +99,45 @@ npx playwright test tests/e2e/infrastructure.spec.ts -g "health route"
 # Auth — must not skip
 npx playwright test tests/e2e/infrastructure.spec.ts -g "home route loads after login"
 
-# Full auth-gated suite (RB-2 / R-* sign-off)
-npx playwright test tests/e2e/
+# Full mirror-profile suite (RB-2 / R-* sign-off — excludes sandbox heraldry)
+bin/ork-db use prod
+export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
+npx playwright test tests/e2e/ --grep-invert heraldry
 ```
 
 If authenticated specs report **skipped** (`Set ORK3_E2E_USERNAME and ORK3_E2E_PASSWORD`), preflight is incomplete — do not sign off frontend functional tests.
 
 **Never** commit `.ork3-db.local` or local `class.Authorization.php` overrides.
+
+### 5. Playwright DB profiles (mirror vs sandbox)
+
+Most `tests/e2e/*.spec.ts` files target the **mirror** (`bin/ork-db use prod`, `admin` / `password`). One file requires the **sandbox** fake-data profile because it asserts on seeded IDs and heraldry assets that do not exist on mirror.
+
+| Spec | DB profile | `bin/ork-db` | Credentials | Notes |
+|------|------------|--------------|-------------|-------|
+| `tests/e2e/*.spec.ts` **except** `heraldry.spec.ts` | Mirror / prod-local | `use prod` | `admin` / `password` | Default Phase 3 close-out and R-* sign-off |
+| `tests/e2e/heraldry.spec.ts` | Sandbox / test | `use dev` | `megiddo` / `test-db-player` | Kingdom `100001`, park `1000001`, fake players `≥100000000`; run after `deploy-sandbox` |
+
+`heraldry.spec.ts` probes the sandbox roster in `beforeEach` and **skips with a clear message** when the app points at mirror — it does not silently pass on the wrong profile.
+
+**Mirror suite (default):**
+
+```bash
+bin/ork-db use prod
+export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
+npx playwright test tests/e2e/ --grep-invert heraldry
+```
+
+**Sandbox heraldry (separate gate):**
+
+```bash
+bin/ork-db deploy-sandbox
+bin/ork-db use dev
+export ORK3_E2E_USERNAME=megiddo ORK3_E2E_PASSWORD=test-db-player
+npx playwright test tests/e2e/heraldry.spec.ts
+```
+
+**Full Playwright sign-off** (VALIDATE-20 / post-FIX-03): both commands above must exit 0.
 
 ---
 
