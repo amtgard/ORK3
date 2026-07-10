@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "event-index-rsvp",
-  "calibratedAt": "2026-07-10T00:41:31Z",
+  "calibratedAt": "2026-07-10T14:20:32Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "810eceb3"
+  "calibratedFromCommit": "86d5cbed"
 }

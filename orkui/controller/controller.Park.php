@@ -85,7 +85,8 @@ class Controller_Park extends Controller
             header('Location: ' . UIR);
             exit;
         }
-        $this->data['park_weather']     = Ork3::$Lib->weather->for_park($park_id);
+        $this->load_model('Weather');
+        $this->data['park_weather']     = $this->Weather->for_park($park_id);
         $this->data['park_officers']    = $this->Park->GetOfficers(['ParkId' => $park_id, 'Token' => $this->session->token]);
         $this->data['park_tournaments'] = $this->Reports->get_tournaments(null, null, $park_id);
 
@@ -181,7 +182,8 @@ class Controller_Park extends Controller
 
         // "My Circles" filter: the viewer's peerage voting circle, as a set of award_ids.
         // Empty for non-peers (the button is then not rendered).
-        $this->data['ViewerCircleAwardIds'] = $uid > 0 ? Ork3::$Lib->player->GetCircleAwardIds($uid) : array();
+        $this->load_model('Player');
+        $this->data['ViewerCircleAwardIds'] = $uid > 0 ? $this->Player->get_circle_award_ids($uid) : array();
         $this->data['ViewerHasCircle']      = !empty($this->data['ViewerCircleAwardIds']);
 
         $this->data['PronounList']          = $this->Pronoun->fetch_pronoun_list();

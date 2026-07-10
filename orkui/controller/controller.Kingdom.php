@@ -133,7 +133,8 @@ class Controller_Kingdom extends Controller
 
         // "My Circles" filter: the viewer's peerage voting circle, as a set of award_ids.
         // Empty for non-peers (the button is then not rendered).
-        $ViewerCircleAwardIds = $uid > 0 ? Ork3::$Lib->player->GetCircleAwardIds($uid) : array();
+        $this->load_model('Player');
+        $ViewerCircleAwardIds = $uid > 0 ? $this->Player->get_circle_award_ids($uid) : array();
         $ViewerHasCircle      = !empty($ViewerCircleAwardIds);
 
         header('Content-Type: text/html; charset=utf-8');

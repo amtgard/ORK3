@@ -131,3 +131,8 @@ sh bin/run-infection.sh \
 
 - [x] Zero `Ork3::$Lib->ghettocache` in `orkui/` — read-through cache in domain (`Player`, `Award`, `SearchService`, `KingdomProfile`, `ParkProfile`, `Report`); write bust on domain writes (`Event`, `Report`, `Park`, `Kingdom`, `Heraldry`, `Attendance`)
 - [x] Infection pass A MSI 18%, pass B MSI 27%; fuzzy gate `kingdom-profile,park-auth-sandbox,reports-ladder-grid` 6/6
+
+### R-17 (2026-07-10)
+
+- [x] T-EVT-08, T-KNG-11, T-PRK-05, T-PLR-08, T-RPT-02, T-UNT-02/03 domain lib bypass removed from target controllers; Event/Park/Attendance weather templates use `wx_*` helpers (no `Ork3::$Lib` in templates)
+- [x] Infection pass A MSI 18%, pass B MSI 27%; fuzzy gate `event-index-rsvp,player-profile,reports-voting-eligible` 6/6 (re-recorded baselines)

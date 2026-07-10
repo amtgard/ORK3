@@ -198,7 +198,7 @@ class Controller_Reports extends Controller
             $id = $this->request->ParkId;
         }
         $_scopeKingdomId = ($type ?? '') === 'Park'
-            ? (int)Ork3::$Lib->park->GetParkKingdomId((int)($id ?? 0))
+            ? $this->Reports->get_park_kingdom_id((int)($id ?? 0))
             : (int)($id ?? 0);
         $_knConfigs  = Common::get_configs($_scopeKingdomId, CFG_KINGDOM);
         $_recsPublic = isset($_knConfigs['AwardRecsPublic'])

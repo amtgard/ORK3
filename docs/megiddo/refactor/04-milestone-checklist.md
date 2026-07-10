@@ -1122,12 +1122,12 @@ Deferred cross-cutting work from R-01 … R-14. **Implementation** — not Phase
 |--------|--------|--------|
 | R-15 HasAuthority | `megiddo/r-15-hasauthority-refactor` | [x] |
 | R-16 GhettoCache | `megiddo/r-16-ghettocache-refactor` | [x] |
-| R-17 Lib bypass | `megiddo/r-17-lib-bypass-refactor` | [ ] |
+| R-17 Lib bypass | `megiddo/r-17-lib-bypass-refactor` | [x] |
 | R-18 Residual `$DB` | `megiddo/r-18-residual-db-refactor` | [ ] |
 
-**Stack tip after R-16:** `megiddo/r-16-ghettocache-refactor` @ `e8bbf428` (stacked on R-15 @ `446e7c42`)
+**Stack tip after R-17:** `megiddo/r-17-lib-bypass-refactor` @ `e6e469b3` (stacked on R-16 @ `86d5cbed`)
 
-**Next actionable milestone:** **R-17** (`megiddo/r-17-lib-bypass-refactor` stacked on `megiddo/r-16-ghettocache-refactor` branch tip). Phase 1.6 (V-00…V-14) complete.
+**Next actionable milestone:** **R-18** (`megiddo/r-18-residual-db-refactor` stacked on `megiddo/r-17-lib-bypass-refactor` branch tip). Phase 1.6 (V-00…V-14) complete.
 
 ---
 
@@ -1163,7 +1163,7 @@ Optional: merge stack tip into integration line `megiddo/rebase-20260709`.
 | **2 cont.** | Refactor execution R-15 … R-18 — cross-cutting HasAuthority, cache, residual lib/`$DB` ([10-phase-2-continuation.md](./10-phase-2-continuation.md)) |
 | **3** | **Audit and close-out** — [11-phase-3-closeout.md](./11-phase-3-closeout.md): automated gates + [manual smoke matrix](./validations/r-milestone-smoke-matrix.html) |
 
-**Next actionable milestone:** **R-17** (`megiddo/r-17-lib-bypass-refactor` stacked on `megiddo/r-16-ghettocache-refactor` branch tip).
+**Next actionable milestone:** **R-18** (`megiddo/r-18-residual-db-refactor` stacked on `megiddo/r-17-lib-bypass-refactor` branch tip).
 
 ### R-01 complete (2026-07-09)
 
@@ -1260,3 +1260,9 @@ Optional: merge stack tip into integration line `megiddo/rebase-20260709`.
 - [x] Branch `megiddo/r-16-ghettocache-refactor` stacked on `megiddo/r-15-hasauthority-refactor` @ `446e7c42` — moved ghettocache read-through + write bust into domain (`Player`, `Award`, `SearchService`, `Event`, `Report`, `Park`, `Kingdom`, `Heraldry`, `Attendance`); thinned `Model_Player`, `Model_Award`, `Controller_Search`, `Controller_Event`, `Controller_EventAjax`, `Controller_Reports`, `Controller_KingdomAjax`, `Controller_ParkAjax` off `Ork3::$Lib->ghettocache`
 - [x] Targets: ghettocache portion of T-EVT-08, T-KNG-11, T-RPT-02, T-PLM-03, T-ATT-06, T-SRC-01; **residual domain lib bypass** on those files → **R-17**
 - [x] Gates: PHPUnit 215/215 pass (2 skipped); Infection pass A MSI 18%, pass B MSI 27%; fuzzy `kingdom-profile,park-auth-sandbox,reports-ladder-grid` 6/6; Playwright auth smoke + `kingdom-profile.spec.ts` 2/2 + `reports.spec.ts` 4/4 pass
+
+### R-17 complete (2026-07-10)
+
+- [x] Branch `megiddo/r-17-lib-bypass-refactor` stacked on `megiddo/r-16-ghettocache-refactor` @ `86d5cbed` — residual domain lib bypass via model/domain wrappers (`Model_Player`, `Model_Weather`, `Model_Reports`, `Model_Kingdom`); `Controller_Kingdom`, `Controller_Park`, `Controller_Reports`, `Controller_Unit` off `Ork3::$Lib`; Event/Park/Attendance weather templates via `wx_*` helpers
+- [x] Targets closed: T-EVT-08 (weather templates), T-KNG-11, T-PRK-05, T-PLR-08 (auth R-15), T-RPT-02, T-UNT-02/03; Principality already APIModel-only; **residual `$DB` + deferred lib** → **R-18**
+- [x] Gates: PHPUnit 215/215 pass (2 skipped); Infection pass A MSI 18%, pass B MSI 27%; fuzzy `event-index-rsvp,player-profile,reports-voting-eligible` 6/6; Playwright auth smoke + `event-detail.spec.ts` 3/3 + `player-profile.spec.ts` 2/2 + `reports.spec.ts` 4/4 pass

@@ -1,6 +1,6 @@
 # Phase 2 Continuation — R-15 … R-18
 
-**Status:** In progress (stack tip `megiddo/r-16-ghettocache-refactor` @ `e8bbf428`)  
+**Status:** In progress (stack tip `megiddo/r-17-lib-bypass-refactor` @ `e6e469b3`)  
 **Master checklist:** [04-milestone-checklist.md](./04-milestone-checklist.md)  
 **Prerequisite:** R-01 … R-14 complete (domain migrations + T-LIB-01–05 JSON surfaces)
 

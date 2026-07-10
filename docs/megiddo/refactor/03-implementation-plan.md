@@ -53,7 +53,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-EVT-05 | `Controller_Event` | `detail` (schedule copy) | 515–584 | Calendar detail duplicate INSERTs |
 | T-EVT-06 | `Controller_Event` | `detail` (display load) | 636–927 | Park address, event status, staff, schedule, fees, links, dietary |
 | T-EVT-07 | `Controller_Event` | `detail` (new detail fees/links) | 988–1091 | Fees/links CRUD on newly created calendar detail |
-| T-EVT-08 | `Controller_Event` | *(throughout)* | 29–1090 | `Ork3::$Lib->authorization`, `ghettocache` bust calls |
+| T-EVT-08 | `Controller_Event` | *(throughout)* | 29–1090 | ~~`Ork3::$Lib`~~ — R-15 auth, R-16 ghettocache, R-17 weather templates (`wx_*` helpers) |
 
 ### `Controller_EventAjax`
 
@@ -114,6 +114,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 **R-16 complete (2026-07-10):** Ghettocache read-through + write bust migrated into domain services; zero `Ork3::$Lib->ghettocache` in `orkui/`. **Carryover on same files:** residual `park`/`player`/`weather` lib bypass → R-17; residual `$DB` → R-18.
 
+**R-17 complete (2026-07-10):** Residual domain `Ork3::$Lib` bypass on T-EVT-08 (Event/Park/Attendance weather templates via `wx_*` helpers), T-KNG-11 (`GetCircleAwardIds`), T-PRK-05 (`for_park`, `GetCircleAwardIds`), T-PLR-08 (auth done R-15), T-RPT-02 (`GetParkKingdomId`), T-UNT-02/03 (`Dangeraudit`, `player_info`, `GetKingdoms`); Principality already on APIModel. **Carryover:** residual `$DB` in `orkui/` → R-18; other deferred lib sites (searchservice, heraldry, index.php session) remain for R-18 or domain sprints.
+
 **R-03 complete (2026-07-09):** T-PLA-06, T-PRA-04, T-KNA-08, T-UNT-01, T-EVA-14 migrated to `class.Banner.php` / BannerService; five `*Ajax::banner` controllers are thin `Model_Banner` adapters; zero banner `$DB` in `orkui/`.
 
 **R-04 complete (2026-07-09):** T-EVA-01–T-EVA-13 migrated to `class.EventPlanning.php` / EventService + `Model_EventPlanning`; `CreateEvent` accepts optional draft status; `RemoveEventHeraldry` in Heraldry domain; EventAjax planning methods are thin adapters (auth addauth/playersearch and banner unchanged).
@@ -134,7 +136,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-KNG-08 | `Controller_Kingdom` | `profile` (park days) | 862–915 | Park day queries |
 | T-KNG-09 | `Controller_Kingdom` | `profile` (auth/counts) | 923–1008 | User park lookup; auth check; player count |
 | T-KNG-10 | `Controller_Kingdom` | `ics` | 1134–1199 | Calendar ICS export SQL |
-| T-KNG-11 | `Controller_Kingdom` | *(throughout)* | 29–1007 | `Ork3::$Lib->authorization`, `ghettocache`, `player->GetCircleAwardIds` |
+| T-KNG-11 | `Controller_Kingdom` | *(throughout)* | 29–1007 | ~~`Ork3::$Lib`~~ — R-15 auth/ghettocache, R-17 `GetCircleAwardIds` via `Model_Player` |
 
 ### `Controller_KingdomAjax`
 
@@ -159,7 +161,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-PRK-02 | `Controller_Park` | `profile` (calendar) | 233–306 | Calendar items; detail batch; host coords |
 | T-PRK-03 | `Controller_Park` | `profile` (roster) | 386–387 | Roster SQL (also cached via ghettocache 338–415) |
 | T-PRK-04 | `Controller_Park` | `profile` (averages) | 429–457 | Monthly/weekly attendance averages |
-| T-PRK-05 | `Controller_Park` | *(throughout)* | 37–507 | `Ork3::$Lib->authorization`, `weather->for_park`, `player->GetCircleAwardIds` |
+| T-PRK-05 | `Controller_Park` | *(throughout)* | 37–507 | ~~`Ork3::$Lib`~~ — R-15 auth, R-17 `for_park`/`GetCircleAwardIds` via models; Park template weather via `wx_*` |
 
 ### `Controller_ParkAjax`
 
@@ -183,7 +185,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-PLR-05 | `Controller_Player` | `profile` (admin auth) | 486–529 | Admin role checks and grants |
 | T-PLR-06 | `Controller_Player` | `profile` (peerage) | 600–764 | Peerage, beltline, title, association queries |
 | T-PLR-07 | `Controller_Player` | `reconcile` (award map) | 998–1004 | Kingdomaward map SQL |
-| T-PLR-08 | `Controller_Player` | *(throughout)* | various | `Ork3::$Lib->authorization` gates |
+| T-PLR-08 | `Controller_Player` | *(throughout)* | various | ~~`Ork3::$Lib->authorization`~~ — R-15 `AuthorizationGate` |
 
 ### `Controller_PlayerAjax`
 
@@ -212,7 +214,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
 | T-RPT-01 | `Controller_Reports` | `ladder_grid` | 1064–1302 | Scope name queries; ladder grid multi-query assembly |
-| T-RPT-02 | `Controller_Reports` | *(throughout)* | 77–1409 | `Ork3::$Lib->authorization`, `park->GetParkKingdomId`, `ghettocache` |
+| T-RPT-02 | `Controller_Reports` | *(throughout)* | 77–1409 | ~~`Ork3::$Lib`~~ — R-15 auth/ghettocache, R-17 `GetParkKingdomId` via `Model_Reports` |
 | T-RPT-03 | `Model_Reports` | `get_attendance_dates` | 140–153 | Distinct attendance dates SQL |
 | T-RPT-04 | `Model_Reports` | `_all_voting_rules` | 336–474 | **Hardcoded kingdom voting eligibility rules** |
 | T-RPT-05 | `Model_Reports` | `_voting_rules` | 324–328 | Single-kingdom rule lookup |
@@ -261,8 +263,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | ID | Class | Method | Lines | Description |
 |----|-------|--------|-------|-------------|
 | T-UNT-01 | `Controller_UnitAjax` | `banner` | 9–150 | Unit banner CRUD on `ork_unit` |
-| T-UNT-02 | `Controller_Unit` | *(officer grant)* | 150 | `Ork3::$Lib->dangeraudit->audit` on auth add |
-| T-UNT-03 | `Controller_Unit` | *(throughout)* | 220–265 | `Ork3::$Lib->authorization`, `player->player_info` |
+| T-UNT-02 | `Controller_Unit` | *(officer grant)* | 150 | ~~`Ork3::$Lib->dangeraudit`~~ — R-17 `Dangeraudit` domain on auth add |
+| T-UNT-03 | `Controller_Unit` | *(throughout)* | 220–265 | ~~`Ork3::$Lib`~~ — R-15 auth, R-17 `player_info`/`GetKingdoms` via models |
 | T-WN-01 | `Controller_WnAjax` | `dismiss` | 17–19 | **Direct INSERT** `ork_whats_new_seen` |
 
 ---

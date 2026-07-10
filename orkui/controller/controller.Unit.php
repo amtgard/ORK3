@@ -150,7 +150,7 @@ class Controller_Unit extends Controller
                         // so the audit call lives here to mirror the pattern used by
                         // the raw-INSERT paths. Anchored to the grantee so the entry
                         // shows on the affected player's audit history.
-                        Ork3::$Lib->dangeraudit->audit(
+                        (new Dangeraudit())->audit(
                             'Authorization::AddAuthorization',
                             ['MundaneId' => $_grantee_mid, 'Type' => AUTH_UNIT, 'Id' => $unit_id_int, 'Role' => AUTH_CREATE],
                             'Player',
@@ -266,7 +266,8 @@ class Controller_Unit extends Controller
         $_scope_kingdom_id = null;
         $_scope_park_id    = null;
         if ($_uid > 0) {
-            $_pinfo        = Ork3::$Lib->player->player_info($this->session->token);
+            $this->load_model('Player');
+            $_pinfo        = $this->Player->player_info($this->session->token);
             $_home_kingdom = isset($_pinfo['KingdomId']) ? (int)$_pinfo['KingdomId'] : 0;
             $_home_park    = isset($_pinfo['ParkId']) ? (int)$_pinfo['ParkId'] : 0;
             if ($_home_kingdom > 0) {
@@ -324,8 +325,8 @@ class Controller_Unit extends Controller
         // manager search. Sorted by name for the dropdown.
         $this->data['FilterKingdoms'] = array();
         if ($_show_addmgr) {
-            $_kd = Ork3::$Lib->kingdom->GetKingdoms(array());
-            $_kingdoms = array_values($_kd['Kingdoms'] ?? array());
+            $this->load_model('Kingdom');
+            $_kingdoms = $this->Kingdom->list_kingdoms();
             usort($_kingdoms, function ($a, $b) {
                 return strcasecmp($a['KingdomName'] ?? '', $b['KingdomName'] ?? '');
             });

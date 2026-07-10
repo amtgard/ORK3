@@ -955,7 +955,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 		}
 		if (($evWxLat === null || $evWxLng === null) && $evWxParkId) {
 			// Park coords with the same scalar→JSON fallback used everywhere else.
-			$_evParkCoords = Ork3::$Lib->weather->coords_for_park($evWxParkId);
+			$_evParkCoords = wx_coords_for_park($evWxParkId);
 			if ($_evParkCoords !== null) {
 				$evWxLat = $_evParkCoords[0];
 				$evWxLng = $_evParkCoords[1];
@@ -967,7 +967,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			$_evEndDay   = $eventEnd ? substr($eventEnd, 0, 10) : $_evStartDay;
 			// "Today" in the park's local timezone — not server time (Chicago).
 			$_today    = date('Y-m-d');
-			$_parkRow  = Ork3::$Lib->weather->for_park($evWxParkId);
+			$_parkRow  = wx_for_park($evWxParkId);
 			if (!empty($_parkRow['forecast_json'])) {
 				$_pwx = @json_decode($_parkRow['forecast_json'], true);
 				if (!empty($_pwx['timezone'])) {
@@ -994,10 +994,10 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 		$evFC = null;
 		if ($evWxMode === 'live' || $evWxMode === 'forecast') {
 			if ($evWxLat !== null) {
-				$evFC = Ork3::$Lib->weather->forecast_for_coords($evWxLat, $evWxLng, $evWxDate, false);
+				$evFC = wx_forecast_for_coords($evWxLat, $evWxLng, $evWxDate, false);
 			}
 			if ($evFC === null && $evWxParkId) {
-				$evFC = Ork3::$Lib->weather->forecast_for_date($evWxParkId, $evWxDate);
+				$evFC = wx_forecast_for_date($evWxParkId, $evWxDate);
 			}
 		}
 		if ($evFC && $evFC['hi_f'] !== null):
@@ -1006,7 +1006,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			$evHiC = round(($evFC['hi_f']-32)*5/9);
 			$evLoC = $evFC['lo_f'] !== null ? round(($evFC['lo_f']-32)*5/9) : null;
 	?>
-	<?php $evBadges = Ork3::$Lib->weather->badges_for_date($evWxParkId, $evWxDate); ?>
+	<?php $evBadges = wx_badges_for_date($evWxParkId, $evWxDate); ?>
 	<div class="ev-stat-card">
 		<div class="ev-stat-icon"><?= $evIc ?></div>
 		<div class="ev-stat-value" style="font-size:15px;padding-top:3px">

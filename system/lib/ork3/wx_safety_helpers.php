@@ -62,3 +62,56 @@ if (!function_exists('wx_safety_icon_html')) {
         return ' <i class="fas fa-info-circle" style="margin-left:3px;opacity:0.8;font-size:0.9em"></i>';
     }
 }
+
+if (!function_exists('_wx_domain')) {
+    function _wx_domain()
+    {
+        static $weather = null;
+        if ($weather === null) {
+            $weather = new Weather();
+        }
+        return $weather;
+    }
+}
+
+if (!function_exists('wx_for_park')) {
+    function wx_for_park($park_id)
+    {
+        return _wx_domain()->for_park($park_id);
+    }
+}
+
+if (!function_exists('wx_coords_for_park')) {
+    function wx_coords_for_park($park_id)
+    {
+        return _wx_domain()->coords_for_park($park_id);
+    }
+}
+
+if (!function_exists('wx_forecast_for_date')) {
+    function wx_forecast_for_date($park_id, $date)
+    {
+        return _wx_domain()->forecast_for_date($park_id, $date);
+    }
+}
+
+if (!function_exists('wx_forecast_for_coords')) {
+    function wx_forecast_for_coords($lat, $lng, $date, $fetch_if_missing = true)
+    {
+        return _wx_domain()->forecast_for_coords($lat, $lng, $date, $fetch_if_missing);
+    }
+}
+
+if (!function_exists('wx_badges_for_date')) {
+    function wx_badges_for_date($park_id, $date)
+    {
+        return _wx_domain()->badges_for_date($park_id, $date);
+    }
+}
+
+if (!function_exists('wx_park_has_coords')) {
+    function wx_park_has_coords($park_id)
+    {
+        return _wx_domain()->park_has_coords($park_id);
+    }
+}

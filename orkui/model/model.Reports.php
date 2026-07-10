@@ -310,6 +310,13 @@ class Model_Reports extends Model
         return VotingRules::supportedKingdomIds();
     }
 
+    public function get_park_kingdom_id($park_id)
+    {
+        $profile = new KingdomProfile();
+
+        return $profile->GetParkKingdomId((int) $park_id);
+    }
+
     public function get_voting_eligible($type, $id)
     {
         $kingdom_id = $type === 'Kingdom' ? (int) $id : 0;

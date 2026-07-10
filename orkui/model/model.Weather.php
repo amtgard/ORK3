@@ -32,4 +32,11 @@ class Model_Weather extends Model
     {
         return $this->Weather->GetStripSeverities(json_encode(array_values($dates)));
     }
+
+    public function for_park($park_id)
+    {
+        $weather = new Weather();
+
+        return $weather->for_park($park_id);
+    }
 }

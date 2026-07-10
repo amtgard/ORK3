@@ -12,7 +12,7 @@ Track **R-01 … R-18** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-16-ghettocache-refactor` @ `e8bbf428` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-17-lib-bypass-refactor` @ `e6e469b3` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -36,7 +36,8 @@ Track **R-01 … R-18** Phase 2 sprints. Orchestrator and workers update this fi
 | R-13 | `megiddo/r-13-infrastructure-refactor` | `758b8566` |
 | R-14 | `megiddo/r-14-lib-service-refactor` | `a389b247` |
 | R-15 | `megiddo/r-15-hasauthority-refactor` | `446e7c42` |
-| R-16 | `megiddo/r-16-ghettocache-refactor` | `e8bbf428` |
+| R-16 | `megiddo/r-16-ghettocache-refactor` | `86d5cbed` |
+| R-17 | `megiddo/r-17-lib-bypass-refactor` | `e6e469b3` |
 
 ---
 
@@ -369,16 +370,16 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Prior R-* hygiene | [ ] |
-| Residual `Ork3::$Lib` domain helpers (T-EVT-08, T-KNG-11, T-PRK-05, T-PLR-08, T-RPT-02, T-UNT-02/03, …) | [ ] |
-| PHPUnit | [ ] |
-| Infection | [ ] |
-| Fuzzy: `event-index-rsvp,player-profile,reports-voting-eligible` | [ ] |
-| Playwright: domain specs + auth smoke | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-17: …` | [ ] |
+| Prior R-* hygiene | [x] |
+| Residual `Ork3::$Lib` domain helpers (T-EVT-08, T-KNG-11, T-PRK-05, T-PLR-08, T-RPT-02, T-UNT-02/03, …) | [x] |
+| PHPUnit | [x] |
+| Infection | [x] |
+| Fuzzy: `event-index-rsvp,player-profile,reports-voting-eligible` | [x] |
+| Playwright: domain specs + auth smoke | [x] |
+| Docs + plan | [x] |
+| Commit: `R-17: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-17-lib-bypass-refactor` stacked on R-16 @ `86d5cbed`. Migrated residual domain lib bypass: `Model_Player`/`Model_Weather`/`Model_Reports`/`Model_Kingdom` wrappers; `Controller_Kingdom`, `Controller_Park`, `Controller_Reports`, `Controller_Unit` off `Ork3::$Lib`; Event/Park/Attendance weather templates via `wx_*` helpers in `wx_safety_helpers.php`. Principality already APIModel-only. PHPUnit 215/215 pass (2 skipped). Infection pass A MSI 18%, pass B MSI 27%. Fuzzy 6/6 pass (test+mirror; re-recorded gate baselines). Playwright auth smoke + `event-detail.spec.ts` 3/3 + `player-profile.spec.ts` 2/2 + `reports.spec.ts` 4/4 pass. **Carryover:** residual `$DB` + deferred lib sites (searchservice, heraldry, index.php) → R-18.
 
 ---
 
@@ -413,4 +414,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | 17 | R-17 | R-18 |
 | 18 | R-18 | Phase 3 audit |
 
-**Next unchecked:** R-17
+**Next unchecked:** R-18

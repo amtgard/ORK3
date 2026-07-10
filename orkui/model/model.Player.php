@@ -253,6 +253,20 @@ class Model_Player extends Model
         return $this->Player->RemoveImage($request);
     }
 
+    public function get_circle_award_ids($mundane_id)
+    {
+        $player = new Player();
+
+        return $player->GetCircleAwardIds($mundane_id);
+    }
+
+    public function player_info($token_or_id)
+    {
+        $player = new Player();
+
+        return $player->player_info($token_or_id);
+    }
+
     public function get_custom_milestones($mundane_id)
     {
         $player = new Player();
