@@ -39,7 +39,7 @@ final class GenerateAssetsTest extends TestCase
             'output_root' => $outputRoot,
         ]);
 
-        $heraldryIds = $render->fakeMundaneHeraldryIdsForSeed(42);
+        $heraldryIds = $render->mundaneHeraldryIdsForSeed(42);
         $allFakeIds = $render->fakeMundaneIdsForSeed(42);
 
         $this->assertSame(5, $result['kingdom_count']);

@@ -166,6 +166,37 @@ final class Validate
         }
     }
 
+    /**
+     * True when sandbox ork_mundane.has_heraldry rows differ from the render manifest.
+     *
+     * @param list<int> $expectedMundaneIds
+     */
+    public function heraldryManifestDrifted(array $expectedMundaneIds): bool
+    {
+        try {
+            $credentials = $this->wiring->credentials();
+            $pdo = $this->connectSandbox($credentials['user'], $credentials['password']);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        if (!$this->tableExists($pdo, 'ork_mundane')
+            || !$this->columnExists($pdo, 'ork_mundane', 'has_heraldry')) {
+            return false;
+        }
+
+        $actual = array_map(
+            'intval',
+            $pdo->query('SELECT mundane_id FROM ork_mundane WHERE has_heraldry = 1 ORDER BY mundane_id')
+                ->fetchAll(PDO::FETCH_COLUMN)
+        );
+        $expected = array_values(array_unique(array_map('intval', $expectedMundaneIds)));
+        sort($actual, SORT_NUMERIC);
+        sort($expected, SORT_NUMERIC);
+
+        return $actual !== $expected;
+    }
+
     public function connectSandbox(string $user, string $password): PDO
     {
         if ($this->pdoFactory !== null) {

@@ -134,6 +134,19 @@ final class Render
         return $ids;
     }
 
+    /**
+     * Mundane IDs that receive has_heraldry=1 in the sandbox render for this seed.
+     *
+     * @return list<int>
+     */
+    public function mundaneHeraldryIdsForSeed(int $seed): array
+    {
+        $ids = array_merge($this->realMundaneHeraldryIds(), $this->fakeMundaneHeraldryIdsForSeed($seed));
+        sort($ids, SORT_NUMERIC);
+
+        return array_values(array_unique($ids));
+    }
+
     /** @return list<int> */
     public function fakeMundaneHeraldryIdsForSeed(int $seed): array
     {
@@ -161,6 +174,31 @@ final class Render
                 }
                 $this->nextFakeMundaneId++;
             }
+        }
+
+        return $ids;
+    }
+
+    /** @return list<int> */
+    private function realMundaneHeraldryIds(): array
+    {
+        $path = $this->toolRoot . '/extracted/mundane_real.json';
+        if (!is_readable($path)) {
+            return [];
+        }
+
+        $bundle = json_decode((string) file_get_contents($path), true);
+        if (!is_array($bundle)) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($bundle['players'] ?? [] as $player) {
+            $mundane = $player['mundane'] ?? null;
+            if (!is_array($mundane) || !isset($mundane['mundane_id'])) {
+                continue;
+            }
+            $ids[] = (int) $mundane['mundane_id'];
         }
 
         return $ids;

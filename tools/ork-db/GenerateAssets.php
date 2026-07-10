@@ -87,13 +87,7 @@ final class GenerateAssets
         $files[] = $defaultHeraldryPath;
         $files[] = $defaultPortraitPath;
 
-        foreach ($this->render->fakeMundaneHeraldryIdsForSeed($seed) as $mundaneId) {
-            $heraldryPath = $outputRoot . '/player/' . $this->playerAssetBasename($mundaneId) . '.jpg';
-            $this->writeJpeg($playerSvg, $heraldryPath);
-            $files[] = $heraldryPath;
-        }
-
-        foreach ($this->realPlayerIds() as $mundaneId) {
+        foreach ($this->render->mundaneHeraldryIdsForSeed($seed) as $mundaneId) {
             $heraldryPath = $outputRoot . '/player/' . $this->playerAssetBasename($mundaneId) . '.jpg';
             $this->writeJpeg($playerSvg, $heraldryPath);
             $files[] = $heraldryPath;
@@ -179,31 +173,6 @@ final class GenerateAssets
         $fingerprints = Json5::decodeFile($this->toolRoot . '/manifests/fingerprints.json5');
 
         return (int) ($fingerprints['content_seed'] ?? $fingerprints['render_seed_default'] ?? 42);
-    }
-
-    /** @return list<int> */
-    private function realPlayerIds(): array
-    {
-        $path = $this->toolRoot . '/extracted/mundane_real.json';
-        if (!is_readable($path)) {
-            return [];
-        }
-
-        $bundle = json_decode((string) file_get_contents($path), true);
-        if (!is_array($bundle)) {
-            return [];
-        }
-
-        $ids = [];
-        foreach ($bundle['players'] ?? [] as $player) {
-            $mundane = $player['mundane'] ?? null;
-            if (!is_array($mundane) || !isset($mundane['mundane_id'])) {
-                continue;
-            }
-            $ids[] = (int) $mundane['mundane_id'];
-        }
-
-        return $ids;
     }
 
     private function wrapShield(string $fieldColor, string $overlay, ?string $borderColor = null): string

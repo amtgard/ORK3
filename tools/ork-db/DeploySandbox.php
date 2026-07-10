@@ -92,8 +92,13 @@ final class DeploySandbox
             }
         }
 
-        if (LastRender::isStale($this->toolRoot, $forceRefresh, $this->clock)) {
-            $lines[] = 'Deploy:       daily refresh (render anchor stale)';
+        $anchorStale = LastRender::isStale($this->toolRoot, $forceRefresh, $this->clock);
+        $heraldryDrift = !$anchorStale && $this->heraldryManifestNeedsRefresh();
+
+        if ($anchorStale || $heraldryDrift) {
+            $lines[] = $heraldryDrift && !$anchorStale
+                ? 'Deploy:       heraldry drift detected — forcing SQL refresh'
+                : 'Deploy:       daily refresh (render anchor stale)';
             $extractResult = $this->extract->run();
             $lines[] = 'Deploy:       extract complete from ' . $extractResult['source'];
 
@@ -210,6 +215,7 @@ final class DeploySandbox
             $hints[] = 'Remediation:  inspect tools/ork-db/rendered/sandbox.sql and re-run apply';
         }
         if (str_contains($text, 'Assets:       FAIL')) {
+            $hints[] = 'Remediation:  bin/ork-db deploy-sandbox --force-refresh';
             $hints[] = 'Remediation:  bin/ork-db generate-assets && bin/ork-db deploy-assets';
         }
 
@@ -241,5 +247,17 @@ final class DeploySandbox
         }
 
         return $lines;
+    }
+
+    private function heraldryManifestNeedsRefresh(): bool
+    {
+        $metadata = LastRender::read($this->toolRoot);
+        if ($metadata === null) {
+            return false;
+        }
+
+        return $this->validate->heraldryManifestDrifted(
+            $this->render->mundaneHeraldryIdsForSeed((int) $metadata['content_seed'])
+        );
     }
 }

@@ -460,6 +460,34 @@ final class ValidateTest extends TestCase
         $this->assertStringContainsString('Assets:       SKIP (no heraldry flags in schema)', $output);
     }
 
+    public function testHeraldryManifestDriftedDetectsMismatch(): void
+    {
+        $toolRoot = $this->makeTempToolRootWithSandboxPort(19307);
+        $pdo = $this->makePostApplyPdoWithHeraldryFlags();
+        $pdo->exec('INSERT INTO ork_mundane VALUES (100099999, 1, 0)');
+
+        $render = new \OrkDb\Render(ORK3_ROOT . '/tools/ork-db', ORK3_ROOT);
+        $validate = new Validate(new Wiring($toolRoot), $toolRoot, fn (): PDO => $pdo);
+
+        $this->assertTrue($validate->heraldryManifestDrifted($render->mundaneHeraldryIdsForSeed(42)));
+        $this->removeTree($toolRoot);
+    }
+
+    public function testHeraldryManifestDriftedPassesWhenAligned(): void
+    {
+        $toolRoot = $this->makeTempToolRootWithSandboxPort(19307);
+        $pdo = $this->makePostApplyPdoWithHeraldryFlags();
+        $render = new \OrkDb\Render(ORK3_ROOT . '/tools/ork-db', ORK3_ROOT);
+        $validate = new Validate(new Wiring($toolRoot), $toolRoot, fn (): PDO => $pdo);
+
+        foreach (array_slice($render->mundaneHeraldryIdsForSeed(42), 0, 3) as $id) {
+            $pdo->exec(sprintf('INSERT INTO ork_mundane VALUES (%d, 1, 0)', $id));
+        }
+
+        $this->assertFalse($validate->heraldryManifestDrifted($render->mundaneHeraldryIdsForSeed(42)));
+        $this->removeTree($toolRoot);
+    }
+
     public function testPostApplyFailsWhenKingdomAssetMissing(): void
     {
         $toolRoot = $this->makeTempToolRootWithSandboxPort(19307);

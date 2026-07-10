@@ -108,6 +108,45 @@ final class RenderTest extends TestCase
         $heraldryIds = $render->fakeMundaneHeraldryIdsForSeed(42);
         $this->assertNotEmpty($heraldryIds);
         $this->assertLessThan(count($render->fakeMundaneIdsForSeed(42)), count($heraldryIds));
+        $this->assertSame($render->mundaneHeraldryIdsForSeed(42), $render->mundaneHeraldryIdsForSeed(42));
+    }
+
+    public function testMundaneHeraldryIdsForSeedMatchRenderedSql(): void
+    {
+        $render = new Render($this->toolRoot, $this->repoRoot);
+        $output = $this->toolRoot . '/rendered/heraldry-manifest.sql';
+        $render->run([
+            'anchor_date' => '2026-07-07',
+            'seed' => 42,
+            'output' => $output,
+            'deterministic' => true,
+        ]);
+
+        $sql = (string) file_get_contents($output);
+        $sqlHeraldry = [];
+        preg_match_all(
+            '/INSERT INTO `ork_mundane` \(([^)]+)\) VALUES \((.+)\);/U',
+            $sql,
+            $matches,
+            PREG_SET_ORDER
+        );
+        foreach ($matches as $match) {
+            $cols = array_map(static fn (string $c): string => trim($c, " `"), explode(',', $match[1]));
+            $heraldryIdx = array_search('has_heraldry', $cols, true);
+            $idIdx = array_search('mundane_id', $cols, true);
+            if ($heraldryIdx === false || $idIdx === false) {
+                continue;
+            }
+
+            $vals = str_getcsv($match[2], ',', "'", '\\');
+            if ((int) ($vals[$heraldryIdx] ?? 0) === 1) {
+                $sqlHeraldry[] = (int) $vals[$idIdx];
+            }
+        }
+
+        sort($sqlHeraldry, SORT_NUMERIC);
+        $expected = $render->mundaneHeraldryIdsForSeed(42);
+        $this->assertSame($expected, $sqlHeraldry);
     }
 
     public function testAttendanceDatesStayInsideThreeYearWindow(): void

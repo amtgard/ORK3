@@ -107,7 +107,9 @@ final class DeploySandboxTest extends TestCase
         $deploy = $this->makeDeploySandbox();
         $hints = $deploy->remediationHints(['Assets:       FAIL (missing 3 files: kingdom/100001)'], true);
 
-        $this->assertStringContainsString('generate-assets && bin/ork-db deploy-assets', implode("\n", $hints));
+        $text = implode("\n", $hints);
+        $this->assertStringContainsString('--force-refresh', $text);
+        $this->assertStringContainsString('generate-assets && bin/ork-db deploy-assets', $text);
     }
 
     public function testRunAbortsOnPreflightFailure(): void

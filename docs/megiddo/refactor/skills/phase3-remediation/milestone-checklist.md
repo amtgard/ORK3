@@ -12,7 +12,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 | Hop | ID | Branch | Commit | Status |
 |-----|-----|--------|--------|--------|
-| 1 | FIX-02 | | | [ ] |
+| 1 | FIX-02 | `megiddo/p3-fix-02-assets` | | [x] |
 | 2 | FIX-03 | | | [ ] |
 | 3 | FIX-04 | | | [ ] |
 | 4 | FIX-05 | | | [ ] |
@@ -26,17 +26,21 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 12 | R-19d | | | [ ] |
 | 13 | VALIDATE-20 | | | [ ] |
 
-**Next actionable hop:** FIX-02
+**Next actionable hop:** FIX-03
 
 ---
 
 ## FIX-02: Asset pipeline
 
-- [ ] Root cause documented (bootstrap `has_heraldry` vs `generate-assets` ID lists)
-- [ ] `bin/ork-db deploy-sandbox` exits 0 (asset validation PASS)
-- [ ] `bin/ork-db generate-assets` + `deploy-assets` aligned with validator
-- [ ] PHPUnit unchanged or pass
-- [ ] Checklist + commit on stacked branch
+**Root cause:** Stale sandbox DB retained ~194 `has_heraldry=1` mundanes from an older render while `generate-assets` correctly emitted 82 files for the current seed-42 manifest (77 fake + 4 real + default). Fresh `sandbox.sql` and `Render::mundaneHeraldryIdsForSeed()` already matched; `deploy-sandbox` skipped SQL re-apply when render was anchored today, so post-apply asset validation failed (~110 missing files).
+
+**Fix:** Single heraldry manifest via `Render::mundaneHeraldryIdsForSeed()`; `GenerateAssets` consumes it; `DeploySandbox` detects heraldry drift and forces SQL refresh before deploy-assets.
+
+- [x] Root cause documented (bootstrap `has_heraldry` vs `generate-assets` ID lists)
+- [x] `bin/ork-db deploy-sandbox` exits 0 (asset validation PASS)
+- [x] `bin/ork-db generate-assets` + `deploy-assets` aligned with validator
+- [x] PHPUnit unchanged or pass
+- [x] Checklist + commit on stacked branch
 
 ---
 
