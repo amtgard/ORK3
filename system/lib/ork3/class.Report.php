@@ -1593,6 +1593,34 @@ class Report extends Ork3
         return $response;
     }
 
+    public function bustKingdomParkAverageCaches(int $kingdomId): void
+    {
+        if ($kingdomId <= 0) {
+            return;
+        }
+        $cache = Ork3::$Lib->ghettocache;
+        $bustKey = $cache->key(['KingdomId' => $kingdomId]);
+        $cache->bust(__CLASS__ . '.GetKingdomParkAverages', $bustKey);
+        $cache->bust(__CLASS__ . '.GetKingdomParkMonthlyAverages', $bustKey);
+        foreach ([0, 1] as $isAdmin) {
+            $cache->bust(
+                __CLASS__ . '.GetKingdomExtendedParkAverages',
+                $cache->key(['KingdomId' => $kingdomId, 'IsAdmin' => $isAdmin])
+            );
+        }
+    }
+
+    public function bustPlayerStatusReconciliationCaches(int $parkId, int $kingdomId): void
+    {
+        $cache = Ork3::$Lib->ghettocache;
+        if ($parkId > 0) {
+            $cache->bust(__CLASS__ . '.GetPlayerStatusReconciliation', $cache->key(['ParkId' => $parkId]));
+        }
+        if ($kingdomId > 0) {
+            $cache->bust(__CLASS__ . '.GetPlayerStatusReconciliation', $cache->key(['KingdomId' => $kingdomId]));
+        }
+    }
+
     public function GetKingdomParkAverages($request)
     {
         $key = Ork3::$Lib->ghettocache->key($request);
@@ -3557,6 +3585,8 @@ class Report extends Ork3
 
         $mundane->active = $active;
         $mundane->save();
+        Ork3::$Lib->player->bustPlayerProfileCaches($mundane_id);
+        $this->bustPlayerStatusReconciliationCaches((int) $mundane->park_id, (int) $mundane->kingdom_id);
         return Success();
     }
 

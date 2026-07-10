@@ -140,14 +140,6 @@ class Controller_KingdomAjax extends Controller
                 'KingdomId'            => $kingdom_id,
                 'KingdomConfiguration' => $configList,
             ]);
-            if ($r['Status'] == 0) {
-                // Kingdom config can change which kingdoms roll up into stats
-                // (IncludePrincipalityInStatistics) and a lot of other derived
-                // values across reports / averages / recap. Cheapest correct
-                // fix is a full memcached flush — config saves are infrequent
-                // admin actions, not worth enumerating every dependent cache key.
-                Ork3::$Lib->ghettocache->memcache->flush();
-            }
             echo $r['Status'] == 0
                 ? json_encode(['status' => 0])
                 : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
@@ -424,9 +416,6 @@ class Controller_KingdomAjax extends Controller
             $new_abbr = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
             $r = $this->Park->TransferPark(['Token' => $this->session->token, 'ParkId' => $park_id, 'KingdomId' => $dest_kingdom_id, 'Abbreviation' => $new_abbr]);
             if ($r['Status'] == 0) {
-                $bustKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $dest_kingdom_id]);
-                Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkAverages', $bustKey);
-                Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkMonthlyAverages', $bustKey);
                 echo json_encode(['status' => 0]);
             } else {
                 echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);

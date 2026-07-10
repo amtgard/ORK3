@@ -545,6 +545,11 @@ class SearchService extends Ork3
             return [];
         }
         $unitIds = array_slice($unitIds, 0, 25);
+        $cacheKey = Ork3::$Lib->ghettocache->key($unitIds);
+        if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetUnitActivityCounts', $cacheKey, 300)) !== false) {
+            return $cached;
+        }
+
         $in      = implode(',', $unitIds);
         $sql     = "SELECT um.unit_id, COUNT(DISTINCT um.mundane_id) AS active_count
 				FROM " . DB_PREFIX . "unit_mundane um
@@ -561,7 +566,7 @@ class SearchService extends Ork3
             }
         }
 
-        return $out;
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.GetUnitActivityCounts', $cacheKey, $out);
     }
 
     /**

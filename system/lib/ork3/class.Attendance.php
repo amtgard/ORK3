@@ -416,11 +416,10 @@ class Attendance extends Ork3
         if ($mundaneId <= 0) {
             return;
         }
+        Ork3::$Lib->player->bustPlayerProfileCaches($mundaneId);
         $cache = Ork3::$Lib->ghettocache;
         $assocKey = $cache->key(['MundaneId' => $mundaneId]);
         $idKey = $cache->key([$mundaneId]);
-        $cache->bust('Model_Player.fetch_player_details', $assocKey);
-        $cache->bust('Model_Player.fetch_player_attendance', $assocKey);
         $cache->bust('Player.get_latest_attendance_date', $idKey);
         $cache->bust('Player.get_earliest_attendance_date', $idKey);
         $cache->bust('Player.GetPlayerClasses', $assocKey);

@@ -83,10 +83,10 @@ final class ModelPlayerCacheTest extends TestCase
         $kKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $player['kingdom_id']]);
         $pKey = Ork3::$Lib->ghettocache->key(['ParkId' => $player['park_id']]);
 
-        $this->cache->cache('Controller_Kingdom.players_json', $kKey, ['cached' => true]);
-        $this->cache->cache('Controller_Park.park_players', $pKey, ['cached' => true]);
-        $this->assertTrue($this->cache->has('Controller_Kingdom.players_json', $kKey));
-        $this->assertTrue($this->cache->has('Controller_Park.park_players', $pKey));
+        $this->cache->cache('KingdomProfile.GetKingdomPlayersRoster', $kKey, ['cached' => true]);
+        $this->cache->cache('ParkProfile.GetParkPlayersRoster', $pKey, ['cached' => true]);
+        $this->assertTrue($this->cache->has('KingdomProfile.GetKingdomPlayersRoster', $kKey));
+        $this->assertTrue($this->cache->has('ParkProfile.GetParkPlayersRoster', $pKey));
 
         $model = new Model_Player();
         $ref = new ReflectionClass($model);
@@ -94,8 +94,8 @@ final class ModelPlayerCacheTest extends TestCase
         $method->setAccessible(true);
         $method->invoke($model, ['MundaneId' => $player['mundane_id']]);
 
-        $this->assertFalse($this->cache->has('Controller_Kingdom.players_json', $kKey));
-        $this->assertFalse($this->cache->has('Controller_Park.park_players', $pKey));
+        $this->assertFalse($this->cache->has('KingdomProfile.GetKingdomPlayersRoster', $kKey));
+        $this->assertFalse($this->cache->has('ParkProfile.GetParkPlayersRoster', $pKey));
     }
 
     public function testEditNoteViaService(): void

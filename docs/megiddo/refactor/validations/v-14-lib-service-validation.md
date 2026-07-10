@@ -126,3 +126,8 @@ sh bin/run-infection.sh \
 - [x] Controllers/AJAX: zero `Ork3::$Lib->authorization->HasAuthority` in `orkui/` — all gates use `Model_Authorization::has_authority` / `AuthorizationGate`
 - [x] Templates: precomputed auth flags in controllers; zero auth `Ork3::$Lib` in `orkui/template/`
 - [x] Infection pass A MSI 18%; fuzzy gate `admin-permissions,kingdom-auth-sandbox,park-auth-sandbox,player-profile` 8/8
+
+### R-16 (2026-07-10)
+
+- [x] Zero `Ork3::$Lib->ghettocache` in `orkui/` — read-through cache in domain (`Player`, `Award`, `SearchService`, `KingdomProfile`, `ParkProfile`, `Report`); write bust on domain writes (`Event`, `Report`, `Park`, `Kingdom`, `Heraldry`, `Attendance`)
+- [x] Infection pass A MSI 18%, pass B MSI 27%; fuzzy gate `kingdom-profile,park-auth-sandbox,reports-ladder-grid` 6/6

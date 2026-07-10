@@ -12,7 +12,7 @@ Track **R-01 … R-18** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-15-hasauthority-refactor` @ `a5639704` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-16-ghettocache-refactor` @ `e8bbf428` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -35,7 +35,8 @@ Track **R-01 … R-18** Phase 2 sprints. Orchestrator and workers update this fi
 | R-12 | `megiddo/r-12-attendance-refactor` | `6fcc6ce0` |
 | R-13 | `megiddo/r-13-infrastructure-refactor` | `758b8566` |
 | R-14 | `megiddo/r-14-lib-service-refactor` | `a389b247` |
-| R-15 | `megiddo/r-15-hasauthority-refactor` | `a5639704` |
+| R-15 | `megiddo/r-15-hasauthority-refactor` | `446e7c42` |
+| R-16 | `megiddo/r-16-ghettocache-refactor` | `e8bbf428` |
 
 ---
 
@@ -349,16 +350,16 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Prior R-* hygiene | [ ] |
-| Move read-through cache + write bust into domain | [ ] |
-| PHPUnit | [ ] |
-| Infection | [ ] |
-| Fuzzy: `kingdom-profile,park-auth-sandbox,reports-ladder-grid` | [ ] |
-| Playwright: domain specs + auth smoke | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-16: …` | [ ] |
+| Prior R-* hygiene | [x] |
+| Move read-through cache + write bust into domain | [x] |
+| PHPUnit | [x] |
+| Infection | [x] |
+| Fuzzy: `kingdom-profile,park-auth-sandbox,reports-ladder-grid` | [x] |
+| Playwright: domain specs + auth smoke | [x] |
+| Docs + plan | [x] |
+| Commit: `R-16: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-16-ghettocache-refactor` stacked on R-15 @ `446e7c42`. Moved ghettocache read-through + write bust into domain (`Player`, `Award`, `SearchService`, `Event`, `Report`, `Park`, `Kingdom`, `Heraldry`, `Attendance`); thinned `Model_Player`, `Model_Award`, `Controller_Search`, `Controller_Event`, `Controller_EventAjax`, `Controller_Reports`, `Controller_KingdomAjax`, `Controller_ParkAjax` off `Ork3::$Lib->ghettocache`. Zero `ghettocache` in `orkui/` (comment-only in `Controller_Recap`). PHPUnit 215/215 pass (2 skipped). Infection pass A MSI 18%, pass B MSI 27%. Fuzzy 6/6 pass (test+mirror). Playwright auth smoke + `kingdom-profile.spec.ts` 2/2 + `reports.spec.ts` 4/4 pass. **Carryover:** residual domain lib bypass → R-17.
 
 ---
 
@@ -412,4 +413,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | 17 | R-17 | R-18 |
 | 18 | R-18 | Phase 3 audit |
 
-**Next unchecked:** R-16
+**Next unchecked:** R-17

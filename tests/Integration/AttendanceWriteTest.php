@@ -112,8 +112,8 @@ final class AttendanceWriteTest extends TestCase
         $assocKey = Ork3::$Lib->ghettocache->key(['MundaneId' => $player['mundane_id']]);
         $idKey = Ork3::$Lib->ghettocache->key([$player['mundane_id']]);
 
-        $this->cache->cache('Model_Player.fetch_player_details', $assocKey, ['cached' => true]);
-        $this->cache->cache('Model_Player.fetch_player_attendance', $assocKey, ['cached' => true]);
+        $this->cache->cache('Player.GetPlayerProfileDetails', $assocKey, ['cached' => true]);
+        $this->cache->cache('Player.GetPlayerAttendanceList', $assocKey, ['cached' => true]);
         $this->cache->cache('Player.get_latest_attendance_date', $idKey, ['cached' => true]);
         $this->cache->cache('Player.get_earliest_attendance_date', $idKey, ['cached' => true]);
         $this->cache->cache('Player.GetPlayerClasses', $assocKey, ['cached' => true]);
@@ -133,8 +133,8 @@ final class AttendanceWriteTest extends TestCase
             $this->fixture->trackAttendance((int) $add['Detail']);
         }
 
-        $this->assertFalse($this->cache->has('Model_Player.fetch_player_details', $assocKey));
-        $this->assertFalse($this->cache->has('Model_Player.fetch_player_attendance', $assocKey));
+        $this->assertFalse($this->cache->has('Player.GetPlayerProfileDetails', $assocKey));
+        $this->assertFalse($this->cache->has('Player.GetPlayerAttendanceList', $assocKey));
         $this->assertFalse($this->cache->has('Player.get_latest_attendance_date', $idKey));
         $this->assertFalse($this->cache->has('Player.get_earliest_attendance_date', $idKey));
         $this->assertFalse($this->cache->has('Player.GetPlayerClasses', $assocKey));

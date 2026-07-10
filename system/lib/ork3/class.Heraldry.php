@@ -364,6 +364,7 @@ class Heraldry extends Ork3
                 $request = $this->fetch_url_heraldry($request);
                 $this->store_heraldry($request, DIR_EVENT_HERALDRY, 5, 'event');
                 $this->event->save();
+                Ork3::$Lib->ghettocache->bust_event_search((int) $request['EventId']);
                 return Success();
             } else {
                 return InvalidParameter();

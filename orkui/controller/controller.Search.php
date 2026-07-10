@@ -104,13 +104,7 @@ class Controller_Search extends Controller
             exit;
         }
         $ids = array_slice($ids, 0, 25);
-        $cache_key = Ork3::$Lib->ghettocache->key($ids);
-        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.unitactivity', $cache_key, 300)) !== false) {
-            echo json_encode($cache, JSON_FORCE_OBJECT);
-            exit;
-        }
         $out = Ork3::$Lib->searchservice->GetUnitActivityCounts($ids);
-        Ork3::$Lib->ghettocache->cache(__CLASS__ . '.unitactivity', $cache_key, $out);
         echo json_encode($out, JSON_FORCE_OBJECT);
         exit;
     }

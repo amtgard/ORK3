@@ -423,6 +423,63 @@ class Award extends Ork3
         ];
     }
 
+    public function GetAwardOptionListHtml(int $kingdomId = 0, $officerRole = null)
+    {
+        $cacheKey = Ork3::$Lib->ghettocache->key([
+            'KingdomId' => (int) $kingdomId,
+            'OfficerRole' => $officerRole,
+        ]);
+        if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetAwardOptionListHtml', $cacheKey, 1200)) !== false) {
+            return $cached;
+        }
+
+        $grouped = $this->GetAwardOptionGroups([
+            'KingdomId' => (int) $kingdomId,
+            'OfficerRole' => $officerRole,
+        ]);
+        if (($grouped['Status']['Status'] ?? 1) != 0) {
+            return false;
+        }
+
+        $pseudoLadderIds = $grouped['PseudoLadderIds'] ?? self::pseudoLadderKingdomAwardIds();
+        $options = '';
+
+        foreach ($grouped['StandaloneOptions'] ?? [] as $award) {
+            $sysName = $award['AwardName'] ?? $award['KingdomAwardName'];
+            $kaName = $award['KingdomAwardName'] ?? $sysName;
+            $dataAttrs = '';
+            if ($sysName === 'Custom Title' && $kaName === 'Custom Title') {
+                $dataAttrs = " data-custom-title='1' data-award-id='" . htmlspecialchars($award['AwardId'], ENT_QUOTES) . "'";
+            } elseif ($sysName === 'Custom Award' && $kaName === 'Custom Award') {
+                $dataAttrs = " data-custom-award='1' data-award-id='" . htmlspecialchars($award['AwardId'], ENT_QUOTES) . "'";
+            }
+            $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'" . $dataAttrs . ">" . htmlspecialchars($kaName, ENT_QUOTES) . "</option>";
+        }
+
+        foreach ($grouped['Groups'] ?? [] as $group) {
+            $label = $group['Label'] ?? '';
+            $items = $group['Items'] ?? [];
+            if ($items === []) {
+                continue;
+            }
+            $options .= "<optgroup label='" . htmlspecialchars($label, ENT_QUOTES) . "'>";
+            foreach ($items as $award) {
+                $extra = '';
+                if ($label === 'Ladder Awards') {
+                    $isPseudo = in_array((int) ($award['KingdomAwardId'] ?? 0), $pseudoLadderIds, true);
+                    $awardId = $isPseudo ? 0 : ($award['AwardId'] ?? 0);
+                    $extra = " data-is-ladder='1' data-award-id='" . htmlspecialchars($awardId, ENT_QUOTES) . "'";
+                } elseif ($label === 'Masterhoods') {
+                    $extra = " data-award-id='" . htmlspecialchars((int) ($award['AwardId'] ?? 0), ENT_QUOTES) . "' data-peerage='Master'";
+                }
+                $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'{$extra}>" . htmlspecialchars($award['KingdomAwardName'], ENT_QUOTES) . "</option>";
+            }
+            $options .= "</optgroup>";
+        }
+
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.GetAwardOptionListHtml', $cacheKey, $options);
+    }
+
     /**
      * @return list<int>
      */

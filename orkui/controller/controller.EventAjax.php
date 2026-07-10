@@ -677,7 +677,6 @@ class Controller_EventAjax extends Controller
                 'HeraldryMimeType' => $mime,
             ]);
             if (isset($r['Status']) && $r['Status'] == 0) {
-                $this->_bustEventSearchCache($event_id);
                 echo json_encode(['status' => 0]);
             } else {
                 echo json_encode(['status' => 1, 'error' => $r['Error'] ?? 'Upload failed.']);
@@ -794,15 +793,6 @@ class Controller_EventAjax extends Controller
         ]);
         exit;
     }
-
-    private function _bustEventSearchCache($event_id)
-    {
-        // get_event_info() now calls Search->Event with the full 12-arg signature,
-        // so the cache is keyed on all 12 args (draft-inclusive + draft-exclusive).
-        // Delegate to the shared buster that mirrors those keys exactly.
-        Ork3::$Lib->ghettocache->bust_event_search($event_id);
-    }
-
 
     public function banner($p = null)
     {

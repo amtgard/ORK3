@@ -314,7 +314,6 @@ class Controller_Event extends Controller
                     $newName = trim($this->request->Eventnew_edit->EventName ?? '');
                     if ($newName) {
                         $this->Event->update_event($this->session->token, $event_id, null, null, null, null, $newName, '', '');
-                        Ork3::$Lib->ghettocache->bust_event_search($event_id);
                     }
                     $r = $this->Event->update_event_detail([
                         'Token'                 => $this->session->token,
@@ -340,7 +339,6 @@ class Controller_Event extends Controller
                     $this->Event->set_calendar_detail_event_type($event_id, $detail_id, $_evType);
                     if ($r['Status'] == 0) {
                         $this->request->clear('Eventnew_edit');
-                        Ork3::$Lib->ghettocache->bust_event_search($event_id);
                         $_feesJson = trim($_POST['Fees'] ?? '');
                         $_feesIn = ($_feesJson !== '') ? json_decode($_feesJson, true) : [];
                         $_linksJson = trim($_POST['ExternalLinks'] ?? '');
@@ -618,7 +616,6 @@ class Controller_Event extends Controller
                         $new_id = max(array_map('intval', array_column($all, 'EventCalendarDetailId')));
                     }
                 }
-                Ork3::$Lib->ghettocache->bust_event_search($event_id);
                 $_feesJson = trim($_POST['Fees'] ?? '');
                 $_feesIn = ($_feesJson !== '') ? json_decode($_feesJson, true) : [];
                 $_linksJson2 = trim($_POST['ExternalLinks'] ?? '');

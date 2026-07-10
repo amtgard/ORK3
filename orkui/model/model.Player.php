@@ -47,33 +47,16 @@ class Model_Player extends Model
 
     public function fetch_player_details($mundane_id)
     {
-        $key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
-        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false) {
-            return $cache;
-        }
-        $awards = $this->Player->AwardsForPlayer(array( 'MundaneId' => $mundane_id ));
-        if ($awards['Status']['Status'] != 0) {
-            return $awards;
-        }
-        $classes = $this->Player->GetPlayerClasses(array( 'MundaneId' => $mundane_id ));
-        if ($classes['Status']['Status'] != 0) {
-            return $classes;
-        }
-        $details = array( 'Awards' => $awards['Awards'], 'Attendance' => [], 'Classes' => $classes['Classes'] );
-        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $details);
+        $player = new Player();
+
+        return $player->GetPlayerProfileDetails((int) $mundane_id);
     }
 
     public function fetch_player_attendance($mundane_id)
     {
-        $key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
-        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false) {
-            return $cache;
-        }
-        $attendance = $this->Player->AttendanceForPlayer(array( 'MundaneId' => $mundane_id ));
-        if ($attendance['Status']['Status'] != 0) {
-            return [];
-        }
-        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $attendance['Attendance'] ?? []);
+        $player = new Player();
+
+        return $player->GetPlayerAttendanceList((int) $mundane_id);
     }
 
     private function bust_player_details_cache($request)
@@ -82,8 +65,8 @@ class Model_Player extends Model
         if (!$mundane_id) {
             return;
         }
-        $key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
-        Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $key);
+        $player = new Player();
+        $player->bustPlayerProfileCaches((int) $mundane_id);
     }
 
     // Bust the kingdom + park roster caches for the player's current home.

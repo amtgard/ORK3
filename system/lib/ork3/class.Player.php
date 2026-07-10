@@ -320,12 +320,60 @@ class Player extends Ork3
         $pid = (int) ($info['ParkId'] ?? 0);
         if ($kid > 0) {
             $kKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kid]);
-            Ork3::$Lib->ghettocache->bust('Controller_Kingdom.players_json', $kKey);
+            Ork3::$Lib->ghettocache->bust('KingdomProfile.GetKingdomPlayersRoster', $kKey);
         }
         if ($pid > 0) {
             $pKey = Ork3::$Lib->ghettocache->key(['ParkId' => $pid]);
-            Ork3::$Lib->ghettocache->bust('Controller_Park.park_players', $pKey);
+            Ork3::$Lib->ghettocache->bust('ParkProfile.GetParkPlayersRoster', $pKey);
         }
+    }
+
+    public function bustPlayerProfileCaches(int $mundaneId): void
+    {
+        if ($mundaneId <= 0) {
+            return;
+        }
+        $cache = Ork3::$Lib->ghettocache;
+        $assocKey = $cache->key(['MundaneId' => $mundaneId]);
+        $cache->bust('Player.GetPlayerProfileDetails', $assocKey);
+        $cache->bust('Player.GetPlayerAttendanceList', $assocKey);
+    }
+
+    public function GetPlayerProfileDetails(int $mundaneId)
+    {
+        $key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundaneId]);
+        if (($cache = Ork3::$Lib->ghettocache->get('Player.GetPlayerProfileDetails', $key, 60)) !== false) {
+            return $cache;
+        }
+        $awards = $this->AwardsForPlayer(['MundaneId' => $mundaneId]);
+        if (($awards['Status']['Status'] ?? 1) != 0) {
+            return $awards;
+        }
+        $classes = $this->GetPlayerClasses(['MundaneId' => $mundaneId]);
+        if (($classes['Status']['Status'] ?? 1) != 0) {
+            return $classes;
+        }
+        $details = [
+            'Awards' => $awards['Awards'],
+            'Attendance' => [],
+            'Classes' => $classes['Classes'],
+        ];
+
+        return Ork3::$Lib->ghettocache->cache('Player.GetPlayerProfileDetails', $key, $details);
+    }
+
+    public function GetPlayerAttendanceList(int $mundaneId): array
+    {
+        $key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundaneId]);
+        if (($cache = Ork3::$Lib->ghettocache->get('Player.GetPlayerAttendanceList', $key, 60)) !== false) {
+            return $cache;
+        }
+        $attendance = $this->AttendanceForPlayer(['MundaneId' => $mundaneId]);
+        if (($attendance['Status']['Status'] ?? 1) != 0) {
+            return [];
+        }
+
+        return Ork3::$Lib->ghettocache->cache('Player.GetPlayerAttendanceList', $key, $attendance['Attendance'] ?? []);
     }
 
     /**
@@ -1547,8 +1595,8 @@ class Player extends Ork3
     // Bust caches affected by a change to this player's recommendation data:
     //   - Report.PlayerAwardRecommendations under the three scopes (player,
     //     kingdom, park) that could hold this player's row.
-    //   - Model_Player.fetch_player_details — recommendation/second changes
-    //     show up on the player's awards tab and the 60-min cache there
+    //   - Player.GetPlayerProfileDetails — recommendation/second changes
+    //     show up on the player's awards tab and the 60s cache there
     //     needs invalidating.
     // Pass kingdom_id/park_id when the caller already knows them (e.g.
     // merge/delete after the row is gone); otherwise we look them up.
@@ -1585,10 +1633,7 @@ class Player extends Ork3
                 Ork3::$Lib->ghettocache->key($kd)
             );
         }
-        Ork3::$Lib->ghettocache->bust(
-            'Model_Player.fetch_player_details',
-            Ork3::$Lib->ghettocache->key(['MundaneId' => $mid])
-        );
+        $this->bustPlayerProfileCaches($mid);
     }
 
     public function MergePlayer($request)
@@ -2872,10 +2917,7 @@ class Player extends Ork3
                 }
                 Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $_audit_mundane, $_audit_prior, $_audit_after);
 
-                Ork3::$Lib->ghettocache->bust(
-                    'Model_Player.fetch_player_details',
-                    Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$_audit_mundane])
-                );
+                $this->bustPlayerProfileCaches((int) $_audit_mundane);
 
                 return Success($set_awards_id);
             } else {
@@ -2958,10 +3000,7 @@ class Player extends Ork3
                 }
                 Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $_audit_mundane, $_audit_prior, $_audit_after);
 
-                Ork3::$Lib->ghettocache->bust(
-                    'Model_Player.fetch_player_details',
-                    Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$_audit_mundane])
-                );
+                $this->bustPlayerProfileCaches((int) $_audit_mundane);
 
                 return Success($set_awards_id);
             } else {

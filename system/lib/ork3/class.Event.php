@@ -782,6 +782,7 @@ class Event extends Ork3
             $newDetail->latitude       = $latitude;
             $newDetail->longitude      = $longitude;
             $newDetail->save();
+            Ork3::$Lib->ghettocache->bust_event_search((int) $request['EventId']);
             return Success($newDetail->event_calendardetail_id);
         } else {
             return NoAuthorization();
@@ -1086,6 +1087,7 @@ class Event extends Ork3
                     $this->SetCurrent(array( 'Token' => $request['Token'], 'EventCalendarDetailId' => $request['EventCalendarDetailId'], 'Current' => 1));
                 }
                 logtrace('SetEventDetails', $request);
+                Ork3::$Lib->ghettocache->bust_event_search((int) $request['EventId']);
                 return Success();
             } else {
                 return InvalidParameter('');
@@ -1161,6 +1163,7 @@ class Event extends Ork3
                 $this->event->save();
                 Ork3::$Lib->heraldry->SetEventHeraldry($request);
                 logtrace("SetEvent", array($request, $this->event));
+                Ork3::$Lib->ghettocache->bust_event_search((int) $request['EventId']);
                 return Success();
             } else {
                 return InvalidParameter('Event Id is not a valid id.');
