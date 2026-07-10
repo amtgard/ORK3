@@ -108,6 +108,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 **R-13 complete (2026-07-10):** T-INF-01 through T-INF-05, T-WN-01 migrated to `Health`, `Event`, `SessionToken`, `Player` domain APIs; thinned `orkui/index.php`, `class.Controller`, `controller.WnAjax`, `default.theme` whats_new read off `$DB` (T-INF-06 → R-01 `GetRsvpCountsBatch`; menu `HasAuthority` → R-14).
 
+**R-14 complete (2026-07-10):** T-LIB-01 through T-LIB-05 + Controller base menu `HasAuthority` migrated to `LiveService`, `WeatherService`, `EraPhoeniceService`, `AuthorizationGate` / `Authorization.HasAuthority`; thinned `Controller_Live`, `Controller_Weather`, `Controller_EraPhoenice`, `Controller_Tournament`, `Controller_CalendarItemAjax`, `class.Controller` off `Ork3::$Lib` on migrated paths.
+
 **R-03 complete (2026-07-09):** T-PLA-06, T-PRA-04, T-KNA-08, T-UNT-01, T-EVA-14 migrated to `class.Banner.php` / BannerService; five `*Ajax::banner` controllers are thin `Model_Banner` adapters; zero banner `$DB` in `orkui/`.
 
 **R-04 complete (2026-07-09):** T-EVA-01–T-EVA-13 migrated to `class.EventPlanning.php` / EventService + `Model_EventPlanning`; `CreateEvent` accepts optional draft status; `RemoveEventHeraldry` in Heraldry domain; EventAjax planning methods are thin adapters (auth addauth/playersearch and banner unchanged).

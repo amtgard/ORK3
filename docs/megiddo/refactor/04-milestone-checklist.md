@@ -1129,7 +1129,7 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** R-14 (Lib-service refactor — R-13 complete on `megiddo/r-13-infrastructure-refactor`). Phase 1.6 (V-00…V-14) complete.
+**Next actionable milestone:** Phase 3 audit (R-14 complete on `megiddo/r-14-lib-service-refactor`). Phase 1.6 (V-00…V-14) complete.
 
 ### R-01 complete (2026-07-09)
 
@@ -1208,3 +1208,9 @@ Per execution sprint checklist:
 - [x] Branch `megiddo/r-13-infrastructure-refactor` stacked on `megiddo/r-12-attendance-refactor` — health ping, session token, viewer prefs, home kingdom, What's New, legacy event redirect in `Health`/`SessionToken`/`Player`/`Event` domain; thinned `orkui/index.php`, `class.Controller`, `controller.WnAjax`, `default.theme` off `$DB` on migrated paths (T-INF-06 → R-01; menu `HasAuthority` → R-14)
 - [x] Targets closed: T-INF-01 through T-INF-05, T-WN-01
 - [x] Gates: PHPUnit 215/215 pass (2 skipped); Infection `infection.t13-infrastructure.json5` `--only-covered` MSI 33%; fuzzy `home-authenticated` 2/2 (re-recorded baselines); Playwright auth smoke + `infrastructure.spec.ts` 3/3 pass
+
+### R-14 complete (2026-07-10)
+
+- [x] Branch `megiddo/r-14-lib-service-refactor` stacked on `megiddo/r-13-infrastructure-refactor` — `AuthorizationGate`, `LiveService`, `WeatherService`, `EraPhoeniceService` JSON surfaces; `Authorization.HasAuthority` SOAP; thinned Live/Weather/EraPhoenice/Tournament/CalendarItemAjax controllers and Controller base menu gates off `Ork3::$Lib` on migrated paths
+- [x] Targets closed: T-LIB-01 through T-LIB-05; Controller base menu HasAuthority (DS-14 cross-cut partial — remaining ~120 sites deferred to domain R-* / Phase 3)
+- [x] Gates: PHPUnit 215/215 pass (2 skipped); Infection pass A MSI 18%, pass B MSI 27%; fuzzy `weather`/`tournament` 4/4 (re-recorded baselines); Playwright auth smoke + `lib-service.spec.ts` 4/4 pass

@@ -12,7 +12,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-13-infrastructure-refactor` @ `51dc8948` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-14-lib-service-refactor` @ `b38db249` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -33,7 +33,8 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 | R-10 | `megiddo/r-10-reports-refactor` | `ea46a630` |
 | R-11 | `megiddo/r-11-search-refactor` | `bdbc86d7` |
 | R-12 | `megiddo/r-12-attendance-refactor` | `6fcc6ce0` |
-| R-13 | `megiddo/r-13-infrastructure-refactor` | `51dc8948` |
+| R-13 | `megiddo/r-13-infrastructure-refactor` | `758b8566` |
+| R-14 | `megiddo/r-14-lib-service-refactor` | `b38db249` |
 
 ---
 
@@ -308,16 +309,16 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Prior R-* hygiene | [ ] |
-| Refactor Ork3::$Lib / lib-service targets | [ ] |
-| PHPUnit | [ ] |
-| Infection §2.4 (pass A + B) | [ ] |
-| Fuzzy: `weather,tournament` | [ ] |
-| Playwright: `lib-service.spec.ts` | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-14: …` | [ ] |
+| Prior R-* hygiene | [x] |
+| Refactor Ork3::$Lib / lib-service targets | [x] |
+| PHPUnit | [x] |
+| Infection §2.4 (pass A + B) | [x] |
+| Fuzzy: `weather,tournament` | [x] |
+| Playwright: `lib-service.spec.ts` | [x] |
+| Docs + plan | [x] |
+| Commit: `R-14: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-14-lib-service-refactor` stacked on R-13 @ `758b8566`. Added `AuthorizationGate`, `LiveService`, `WeatherService`, `EraPhoeniceService` + JSON registrations; `Authorization.HasAuthority` SOAP/JSON; thinned `Controller_Live`, `Controller_Weather`, `Controller_EraPhoenice`, `Controller_Tournament`, `Controller_CalendarItemAjax`, `class.Controller` menu gates off `Ork3::$Lib` on migrated paths. PHPUnit 215/215 pass (2 skipped). Infection pass A MSI 18%, pass B MSI 27% (floors 15/15). Fuzzy test+mirror 4/4 pass (re-recorded `weather`/`tournament` baselines). Playwright: auth smoke + `lib-service.spec.ts` 4/4 pass.
 
 ---
 
@@ -330,4 +331,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | … | … | … |
 | 14 | R-14 | Phase 3 audit |
 
-**Next unchecked:** R-14
+**Next unchecked:** Phase 3 audit

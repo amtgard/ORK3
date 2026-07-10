@@ -20,14 +20,17 @@ $J = new JsonServer(array(
     'Administration',
     'Attendance',
     'Authorization',
+    'AuthorizationGate',
     'Banner',
     'Award',
     'Calendar',
     'DataSet',
+    'EraPhoeniceService',
     'Event',
     'Game',
     'Heraldry',
     'Kingdom',
+    'LiveService',
     'Map',
     'Park',
     'Player',
@@ -36,7 +39,8 @@ $J = new JsonServer(array(
     'SearchService',
     'Tournament',
     'Treasury',
-    'Unit'
+    'Unit',
+    'WeatherService',
 ));
 $J->JsonHeader();
 $J->RunServer();

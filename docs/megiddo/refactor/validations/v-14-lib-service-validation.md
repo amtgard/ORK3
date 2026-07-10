@@ -113,8 +113,8 @@ sh bin/run-infection.sh \
 
 ## 3. R-14 sign-off checklist
 
-- [ ] §1 page ids pass `bin/fuzzy-validator validate --phase all` (test + mirror)
-- [ ] Test edits within §2.3
-- [ ] Full unit suite green
-- [ ] Infection per §2.4 (both passes)
-- [ ] No new `Ork3::$Lib` in Live / Weather / Tournament / EraPhoenice / CalendarItemAjax / Controller base menu paths for migrated targets
+- [x] §1 page ids pass `bin/fuzzy-validator validate --phase all` (test + mirror)
+- [x] Test edits within §2.3
+- [x] Full unit suite green
+- [x] Infection per §2.4 (both passes)
+- [x] No new `Ork3::$Lib` in Live / Weather / Tournament / EraPhoenice / CalendarItemAjax / Controller base menu paths for migrated targets
