@@ -6,7 +6,7 @@ define('UIR', HTTP_UI_REMOTE . 'index.php?Route=');
 ini_set("error_reporting", E_ALL & ~E_DEPRECATED & ~E_NOTICE & ~E_WARNING);
 
 if (isset($_REQUEST['Route']) && $_REQUEST['Route'] === 'Health') {
-    $ok = Ork3::$Lib->health->PingDb();
+    $ok = (new Health())->PingDb();
     http_response_code($ok ? 200 : 503);
     if ($_SERVER['REQUEST_METHOD'] !== 'HEAD') {
         header('Content-Type: text/plain');
@@ -62,7 +62,7 @@ foreach ($_legacyRedirects as $_old => $_new) {
 // Redirect Event/index/{id} to the kingdom event attendance report with the event name as filter
 if (preg_match('#^Event/index/(\d+)#i', $_REQUEST['Route'], $_m)) {
     $_event_id = (int)$_m[1];
-    $_summary = Ork3::$Lib->event->GetEventSummaryForRedirect($_event_id);
+    $_summary = (new Event())->GetEventSummaryForRedirect($_event_id);
     if ($_summary['KingdomId'] > 0 && $_summary['Name'] !== '') {
         header('Location: ' . UIR . 'Reports/event_attendance/Kingdom/' . $_summary['KingdomId'] . '&filter=' . rawurlencode($_summary['Name']), true, 302);
         exit;
@@ -71,8 +71,7 @@ if (preg_match('#^Event/index/(\d+)#i', $_REQUEST['Route'], $_m)) {
 
 $route = explode('/', $_REQUEST[ "Route" ]);
 logtrace('Index: Route', $route);
-Ork3::$Lib->session = $Session;
-Ork3::$Lib->session->times[ 'Route' ] = time();
+$Session->times['Route'] = time();
 if (file_exists(DIR_CONTROLLER . 'controller.' . trim($route[ 0 ]) . '.php')) {
     include_once(DIR_CONTROLLER . 'controller.' . trim($route[ 0 ]) . '.php');
     $class = 'Controller_' . trim($route[ 0 ]);
@@ -114,15 +113,15 @@ if (file_exists(DIR_CONTROLLER . 'controller.' . trim($route[ 0 ]) . '.php')) {
     $C = new Controller("index");
     $C->index();
 }
-Ork3::$Lib->session->times[ 'Route Complete' ] = time();
+$Session->times['Route Complete'] = time();
 
 $CONTENT = $C->view();
 
-Ork3::$Lib->session->times[ 'Composite' ] = time();
+$Session->times['Composite'] = time();
 
 echo $CONTENT;
 
-logtrace("Timing Information", Ork3::$Lib->session->times);
+logtrace("Timing Information", $Session->times);
 
 if (DUMPTRACE) {
     logtrace('Session', $_SESSION);

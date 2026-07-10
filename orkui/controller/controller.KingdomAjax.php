@@ -593,7 +593,7 @@ class Controller_KingdomAjax extends Controller
             $authId = (int)($r['Detail'] ?? 0);
             $this->load_model('Player');
             $persona = $this->Player->get_persona($mid);
-            Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_KINGDOM, 'Id' => $kingdom_id, 'Role' => $role], 'Player', $mid, null, [
+            (new Dangeraudit())->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_KINGDOM, 'Id' => $kingdom_id, 'Role' => $role], 'Player', $mid, null, [
                 'authorization_id' => $authId,
                 'mundane_id'       => $mid,
                 'park_id'          => 0,
@@ -621,7 +621,8 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'getparks') {
             // Always return family parks (kingdom + child principalities) for dropdowns.
-            $r = Ork3::$Lib->kingdom->GetParks(['KingdomIds' => Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id)]);
+            $this->load_model('Kingdom');
+            $r = $this->Kingdom->get_family_parks($kingdom_id);
             $parks = [];
             foreach ($r['Parks'] ?? [] as $park) {
                 $parks[] = ['ParkId' => $park['ParkId'], 'Name' => $park['Name']];
@@ -632,7 +633,8 @@ class Controller_KingdomAjax extends Controller
             });
             echo json_encode(['status' => 0, 'parks' => $parks]);
         } elseif ($action === 'parktitles') {
-            $result = Ork3::$Lib->kingdom->GetKingdomParkTitles(['KingdomId' => $kingdom_id]);
+            $this->load_model('Kingdom');
+            $result = $this->Kingdom->get_kingdom_park_titles($kingdom_id);
             $titles = [];
             foreach ($result['ParkTitles'] ?? [] as $pt) {
                 $titles[] = ['ParkTitleId' => (int)$pt['ParkTitleId'], 'Title' => $pt['Title']];
@@ -736,7 +738,8 @@ class Controller_KingdomAjax extends Controller
             $scopeKey = 'kingdom_all';
         }
 
-        $results = Ork3::$Lib->searchservice->ScopedPlayerSearch([
+        $this->load_model('Search');
+        $results = $this->Search->scoped_player_search([
             'Query'            => $q,
             'Scope'            => $scopeKey,
             'KingdomId'        => $kingdom_id,
@@ -760,7 +763,8 @@ class Controller_KingdomAjax extends Controller
             echo json_encode([]);
             exit;
         }
-        $r = Ork3::$Lib->kingdom->GetKingdoms(array());
+        $this->load_model('Kingdom');
+        $r = $this->Kingdom->get_kingdoms_response();
         $kingdoms = [];
         foreach ($r['Kingdoms'] ?? [] as $k) {
             $kingdoms[] = ['KingdomId' => (int)$k['KingdomId'], 'KingdomName' => $k['KingdomName'], 'Abbreviation' => $k['Abbreviation']];

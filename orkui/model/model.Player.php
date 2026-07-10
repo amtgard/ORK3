@@ -80,7 +80,8 @@ class Model_Player extends Model
         if (!$mundane_id) {
             return;
         }
-        Ork3::$Lib->player->bustRosterCachesForPlayer($mundane_id);
+        $player = new Player();
+        $player->bustRosterCachesForPlayer($mundane_id);
     }
 
     public function delete_player_award($request)
@@ -275,17 +276,20 @@ class Model_Player extends Model
 
     public function add_custom_milestone($request)
     {
-        return Ork3::$Lib->player->AddCustomMilestone($request);
+        $player = new Player();
+        return $player->AddCustomMilestone($request);
     }
 
     public function update_custom_milestone($request)
     {
-        return Ork3::$Lib->player->UpdateCustomMilestone($request);
+        $player = new Player();
+        return $player->UpdateCustomMilestone($request);
     }
 
     public function delete_custom_milestone($request)
     {
-        return Ork3::$Lib->player->DeleteCustomMilestone($request);
+        $player = new Player();
+        return $player->DeleteCustomMilestone($request);
     }
 
     public function get_latest_attendance_date($mundane_id)
@@ -308,42 +312,50 @@ class Model_Player extends Model
 
     public function get_custom_title_award_id()
     {
-        return Ork3::$Lib->player->getCustomTitleAwardId();
+        $player = new Player();
+        return $player->getCustomTitleAwardId();
     }
 
     public function has_notes($mundane_id)
     {
-        return Ork3::$Lib->player->GetNotesCount($mundane_id);
+        $player = new Player();
+        return $player->GetNotesCount($mundane_id);
     }
 
     public function get_officer_roles($mundane_id)
     {
-        return Ork3::$Lib->player->GetOfficerRoles($mundane_id);
+        $player = new Player();
+        return $player->GetOfficerRoles($mundane_id);
     }
 
     public function get_display_grants($mundane_id)
     {
-        return Ork3::$Lib->player->GetDisplayGrants($mundane_id);
+        $player = new Player();
+        return $player->GetDisplayGrants($mundane_id);
     }
 
     public function get_beltline_for_player($mundane_id, $viewer_mundane_id = 0)
     {
-        return Ork3::$Lib->player->GetBeltlineForPlayer($mundane_id, $viewer_mundane_id);
+        $player = new Player();
+        return $player->GetBeltlineForPlayer($mundane_id, $viewer_mundane_id);
     }
 
     public function get_reconcile_award_map($kingdom_id)
     {
-        return Ork3::$Lib->player->GetReconcileAwardMap($kingdom_id);
+        $player = new Player();
+        return $player->GetReconcileAwardMap($kingdom_id);
     }
 
     public function check_username_available($username, $exclude_mundane_id = 0)
     {
-        return Ork3::$Lib->player->CheckUsernameAvailable($username, $exclude_mundane_id);
+        $player = new Player();
+        return $player->CheckUsernameAvailable($username, $exclude_mundane_id);
     }
 
     public function get_award_max_ranks($mundane_id)
     {
-        return Ork3::$Lib->player->GetAwardMaxRanks($mundane_id);
+        $player = new Player();
+        return $player->GetAwardMaxRanks($mundane_id);
     }
 
     public function save_own_email($email)

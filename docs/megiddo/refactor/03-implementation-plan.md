@@ -118,6 +118,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 **R-18 complete (2026-07-10):** Zero `$DB->` in `orkui/` — residual call sites migrated to `Player`, `Dangeraudit`, `Weather`, `ParkProfile`, `Event`, `Administration` domain APIs; nav/weather view helpers; controllers and templates thinned. **Phase 2 complete** — Phase 3 audit next ([11-phase-3-closeout.md](./11-phase-3-closeout.md)).
 
+**R-19a complete (2026-07-10):** T-LIB-06 (`Model_Player` 12 player wrappers → `new Player()`), T-LIB-07 (`index.php` health/redirect/session timing → `Health`/`Event` domain + request-scoped `$Session->times`), T-LIB-08 (`KingdomAjax` kingdom lists/search/audit → `Model_Kingdom`, `Model_Search`, `new Dangeraudit()`); supporting wrappers in `model.Kingdom.php`, `model.Search.php`. **17 `$Lib` sites cleared** in 3 files; **24 remain** in 9 files → R-19b…d.
+
 **R-03 complete (2026-07-09):** T-PLA-06, T-PRA-04, T-KNA-08, T-UNT-01, T-EVA-14 migrated to `class.Banner.php` / BannerService; five `*Ajax::banner` controllers are thin `Model_Banner` adapters; zero banner `$DB` in `orkui/`.
 
 **R-04 complete (2026-07-09):** T-EVA-01–T-EVA-13 migrated to `class.EventPlanning.php` / EventService + `Model_EventPlanning`; `CreateEvent` accepts optional draft status; `RemoveEventHeraldry` in Heraldry domain; EventAjax planning methods are thin adapters (auth addauth/playersearch and banner unchanged).

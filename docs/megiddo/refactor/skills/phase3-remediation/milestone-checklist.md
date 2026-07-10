@@ -19,14 +19,14 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 5 | BACKFILL | `megiddo/p3-backfill-tvds-r14-r18` | `7f9576eb` | [x] |
 | 6 | DS-19 | `megiddo/ds-19-residual-lib-discovery` | `39f47f22` | [x] |
 | 7 | T-19 | `megiddo/t-19-residual-lib-tests` | `c684604c` | [x] |
-| 8 | V-19 | `megiddo/v-19-residual-lib-validation` | `025cc2e3` | [x] |
-| 9 | R-19a | | | [ ] |
+| 8 | V-19 | `megiddo/v-19-residual-lib-validation` | `5872aa92` | [x] |
+| 9 | R-19a | `megiddo/r-19a-residual-lib-refactor` | `0088e6f2` | [x] |
 | 10 | R-19b | | | [ ] |
 | 11 | R-19c | | | [ ] |
 | 12 | R-19d | | | [ ] |
 | 13 | VALIDATE-20 | | | [ ] |
 
-**Next actionable hop:** R-19a
+**Next actionable hop:** R-19b
 
 ---
 
@@ -138,10 +138,14 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 ## R-19a: `model.Player`, `index.php`, `KingdomAjax`
 
-- [ ] Zero `Ork3::$Lib` in the 3 files above
-- [ ] PHPUnit + hop gates per v-19 / worker
-- [ ] `03-implementation-plan.md` R-19a note
-- [ ] One commit; stack chain updated
+- [x] Zero `Ork3::$Lib` in the 3 files above
+- [x] PHPUnit + hop gates per v-19 / worker (Infection pass A MSI 28%; Playwright 7/7; fuzzy pre-existing drift on v-19 base)
+- [x] `03-implementation-plan.md` R-19a note
+- [x] One commit; stack chain updated
+
+**Branch:** `megiddo/r-19a-residual-lib-refactor` @ `0088e6f2`
+
+**Migration:** T-LIB-06 — `Model_Player` player wrappers via `new Player()`; T-LIB-07 — `Health`/`Event` domain + `$Session->times`; T-LIB-08 — `Model_Kingdom`/`Model_Search`/`Dangeraudit` in KingdomAjax.
 
 ---
 

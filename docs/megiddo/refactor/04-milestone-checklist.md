@@ -1600,3 +1600,9 @@ Optional: merge stack tip into integration line `megiddo/rebase-20260709`.
 - [x] Branch `megiddo/r-18-residual-db-refactor` stacked on `megiddo/r-17-lib-bypass-refactor` @ `28a2f390` — zero `$DB->` in `orkui/`; domain APIs on `Player`, `Dangeraudit`, `Weather`, `ParkProfile`, `Event`, `Administration`; nav/weather view helpers
 - [x] Targets: all residual `$DB` in controllers, models, templates (`Admin`, `Player`, `*Ajax`, `Admin_auditlog.tpl`, `default.theme`, `Eventnew_index.tpl`)
 - [x] Gates: PHPUnit 215/215 pass (2 skipped); Infection spot-check Player MSI 20%, DangerAudit MSI 50%; fuzzy V-00 active pages 34/34; Playwright auth smoke + `auth-permissions.spec.ts` 3/3 + `player-profile.spec.ts` 2/2 + `event-detail.spec.ts` 3/3 pass
+
+### R-19a complete (2026-07-10)
+
+- [x] Branch `megiddo/r-19a-residual-lib-refactor` stacked on `megiddo/v-19-residual-lib-validation` @ `5872aa92` — zero `Ork3::$Lib` in `model.Player.php`, `index.php`, `KingdomAjax.php`; `Model_Kingdom`/`Model_Search` wrappers for kingdom AJAX paths
+- [x] Targets closed: T-LIB-06, T-LIB-07, T-LIB-08 (17 sites in 3 files)
+- [x] Gates: static `rg` clean on 3 files + `$DB` still zero; PHPUnit 230/230 pass (2 skipped); Infection pass A MSI 28%; Playwright `player-profile`/`kingdom-profile`/`infrastructure` 7/7 pass; fuzzy hop pages — pre-existing baseline drift on v-19 base (mirror visual 0.743, test dom 0.98), not introduced by R-19a

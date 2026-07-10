@@ -110,6 +110,26 @@ class Model_Kingdom extends Model
         return array();
     }
 
+    public function get_family_parks($kingdom_id)
+    {
+        $kingdom = new Kingdom();
+        return $kingdom->GetParks([
+            'KingdomIds' => $kingdom->GetFamilyKingdomIds($kingdom_id),
+        ]);
+    }
+
+    public function get_kingdom_park_titles($kingdom_id)
+    {
+        $kingdom = new Kingdom();
+        return $kingdom->GetKingdomParkTitles(['KingdomId' => $kingdom_id]);
+    }
+
+    public function get_kingdoms_response()
+    {
+        $kingdom = new Kingdom();
+        return $kingdom->GetKingdoms(array());
+    }
+
     public function get_kingdom_name($kingdom_id)
     {
         $r = $this->Kingdom->GetKingdomShortInfo(array('KingdomId' => $kingdom_id));
