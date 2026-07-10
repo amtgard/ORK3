@@ -122,6 +122,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 **R-04 complete (2026-07-09):** T-EVA-01–T-EVA-13 migrated to `class.EventPlanning.php` / EventService + `Model_EventPlanning`; `CreateEvent` accepts optional draft status; `RemoveEventHeraldry` in Heraldry domain; EventAjax planning methods are thin adapters (auth addauth/playersearch and banner unchanged).
 
+**R-05 complete (2026-07-09):** T-EVT-01 through T-EVT-07 (page-render paths) migrated to `EventPlanning` domain — occurrence page DTO, fees/links, reconcile, dietary; thinned `Controller_Event` off `$DB` (**T-EVT-08** → R-15/R-16/R-17 auth/ghettocache/weather templates; [10-phase-2-continuation.md](./10-phase-2-continuation.md)).
+
 ---
 
 ## Kingdom
@@ -153,6 +155,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-KNA-07 | `Controller_KingdomAjax` | `suspendplayer` | 1183 | Read suspension state from `ork_mundane` |
 | T-KNA-08 | `Controller_KingdomAjax` | `banner` | 1225–1376 | Kingdom banner CRUD on `ork_kingdom` |
 
+**R-06 complete (2026-07-09):** T-KNG-01 through T-KNG-10, T-KNA-01–07, T-KNA-09 migrated to `KingdomProfile` domain + `Report.GetKingdomExtendedParkAverages`; thinned `Controller_Kingdom` and `Controller_KingdomAjax` migrated paths off `$DB` (**T-KNG-11** → R-15/R-16/R-17; [10-phase-2-continuation.md](./10-phase-2-continuation.md)).
+
 ---
 
 ## Park
@@ -173,6 +177,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-PRA-02 | `Controller_ParkAjax` | `park` → addauth | 411–450 | **Direct INSERT** into `ork_authorization` |
 | T-PRA-03 | `Controller_ParkAjax` | `kingdom` → checkabbr | 602–645 | Park abbreviation uniqueness within kingdom |
 | T-PRA-04 | `Controller_ParkAjax` | `banner` | 657–817 | Park banner CRUD on `ork_park` |
+
+**R-07 complete (2026-07-09):** T-PRK-01 through T-PRK-04, T-PRA-03 migrated to `ParkProfile` domain + `Model_ParkProfile`; thinned `Controller_Park::profile` and `Controller_ParkAjax` off `$DB` (**T-PRK-05** → R-15/R-17; T-PRA-01/02/04 → R-02/R-11/R-03; [10-phase-2-continuation.md](./10-phase-2-continuation.md)).
 
 ---
 
@@ -257,6 +263,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-SIN-03 | `Controller_SignIn` | `index` (credits) | 123–135 | Per-class credit totals from attendance + reconciliation |
 | T-SIN-04 | `Controller_SignIn` | `index` (levels) | 139–162 | **Class level calculation** (thresholds 5/12/21/34/53) |
 | T-QR-01 | `Controller_QR` | `link` | 20–26 | Attendance link token validation SQL |
+
+**R-12 complete (2026-07-10):** T-ATT-01 through T-ATT-06, T-SIN-01 through T-SIN-04, T-QR-01 migrated to attendance domain APIs — reactivate/adjacent dates/link enrichment, class level helper, weather archive JSON, active-event model reads; thinned `AttendanceAjax`, `SignIn`, `QR`, `Attendance` controllers and `Model_Attendance` off `$DB`/`Ork3::$Lib` on migrated paths.
 
 ---
 

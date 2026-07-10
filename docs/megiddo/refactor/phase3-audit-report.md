@@ -137,11 +137,11 @@ Likely related to prod/mirror heraldry asset deployment (aligns with sandbox `de
 
 ## P3-E — Plan completeness
 
-All **~119** tracked T-* IDs have R-* completion notes in either [03-implementation-plan.md](./03-implementation-plan.md) (R-01…R-04, R-08…R-18) or [04-milestone-checklist.md](./04-milestone-checklist.md) (R-05…R-07, R-12).
+All **~119** tracked T-* IDs have R-* completion notes in [03-implementation-plan.md](./03-implementation-plan.md) (R-01…R-18) and [04-milestone-checklist.md](./04-milestone-checklist.md).
 
 | Gap type | Detail |
 |----------|--------|
-| Doc prose | `03-implementation-plan.md` lacks inline **R-05, R-06, R-07, R-12** completion paragraphs (present only in checklist). |
+| Doc prose | ~~`03-implementation-plan.md` lacks inline **R-05, R-06, R-07, R-12** completion paragraphs~~ — closed by FIX-05 (2026-07-10). |
 | Code vs plan | **42** residual `Ork3::$Lib` call sites remain despite R-17/R-18 “domain lib bypass” sign-off; inventory rows (e.g. T-PLM-02/04, T-EVA-11, T-ADM-08/09, T-INF-01/02, T-SRC-*) still describe lib bypass in table text. |
 
 **Result:** **pass** (all targets assigned to R-* milestones) with **code-state caveat** (lib bypass not fully eliminated).
@@ -185,7 +185,7 @@ export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
 - **Residual lib bypass:** Phase 2 sign-off claimed R-17/R-18 closed domain lib migration, but static audit finds 42 `Ork3::$Lib` sites (search, heraldry, dangeraudit, player wrappers, index session). Decide: new R-19 scope vs documented exemptions in `02-requirements.md`.
 - **Asset pipeline:** `deploy-sandbox` aborts on 110 missing player heraldry files; Playwright `heraldry.spec.ts` and fuzzy `park-auth-sandbox` failures may share root cause. Run `bin/ork-db generate-assets && bin/ork-db deploy-assets` and reconcile manifest expectations.
 - **Fuzzy dimension drift:** `park-auth-sandbox` height 961→937 — re-record baseline or investigate layout regression from R-15+ template changes.
-- **Doc hygiene:** Add R-05/06/07/12 completion paragraphs to `03-implementation-plan.md` for single-source traceability.
+- ~~**Doc hygiene:** Add R-05/06/07/12 completion paragraphs to `03-implementation-plan.md` for single-source traceability.~~ — done (FIX-05).
 - **Orchestrator:** Prod-profile Playwright requires explicit approval in constrained environments; document in `06-test-framework.md` if recurring.
 
 ### P3-6 — Optional merge

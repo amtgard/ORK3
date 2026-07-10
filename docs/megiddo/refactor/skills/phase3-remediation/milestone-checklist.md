@@ -15,7 +15,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 1 | FIX-02 | `megiddo/p3-fix-02-assets` | `6e7bb487` | [x] |
 | 2 | FIX-03 | `megiddo/p3-fix-03-playwright-heraldry` | `6766aaac` | [x] |
 | 3 | FIX-04 | `megiddo/p3-fix-04-fuzzy-park-auth` | `b973c6a1` | [x] |
-| 4 | FIX-05 | | | [ ] |
+| 4 | FIX-05 | `megiddo/p3-fix-05-doc-hygiene` | `69fd2ac1` | [x] |
 | 5 | BACKFILL | | | [ ] |
 | 6 | DS-19 | | | [ ] |
 | 7 | T-19 | | | [ ] |
@@ -26,7 +26,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 12 | R-19d | | | [ ] |
 | 13 | VALIDATE-20 | | | [ ] |
 
-**Next actionable hop:** FIX-05
+**Next actionable hop:** BACKFILL
 
 ---
 
@@ -73,9 +73,12 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 ## FIX-05: Doc hygiene
 
-- [ ] `03-implementation-plan.md` has R-05, R-06, R-07, R-12 completion paragraphs
-- [ ] Cross-links from `04-milestone-checklist.md` if needed
-- [ ] Checklist + commit on stacked branch
+**Scope:** Documentation only — backfill inline R-05, R-06, R-07, R-12 completion paragraphs in `03-implementation-plan.md` adjacent to Event, Kingdom, Park, and Attendance inventory sections; cross-link [10-phase-2-continuation.md](../../10-phase-2-continuation.md) on R-15+ carryover references.
+
+- [x] `03-implementation-plan.md` has R-05, R-06, R-07, R-12 completion paragraphs
+- [x] Cross-links to `10-phase-2-continuation.md` on R-15+ carryover (R-05 T-EVT-08, R-06 T-KNG-11, R-07 T-PRK-05)
+- [x] `phase3-audit-report.md` § P3-E prose gap marked closed
+- [x] Checklist + commit on stacked branch
 
 ---
 
