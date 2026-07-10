@@ -1129,7 +1129,7 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** R-05 (Event refactor — R-04 complete on `megiddo/r-04-eventajax-refactor`). Phase 1.6 (V-00…V-14) complete.
+**Next actionable milestone:** R-06 (Kingdom refactor — R-05 complete on `megiddo/r-05-event-refactor`). Phase 1.6 (V-00…V-14) complete.
 
 ### R-01 complete (2026-07-09)
 
@@ -1154,3 +1154,9 @@ Per execution sprint checklist:
 - [x] Branch `megiddo/r-04-eventajax-refactor` stacked on `megiddo/r-03-banner-refactor` — EventAjax planning core in `class.EventPlanning.php` / EventService + `Model_EventPlanning`; auth addauth/playersearch and banner unchanged
 - [x] Targets closed: T-EVA-01…T-EVA-13 (excl. addauth/playersearch, banner); `CreateEvent` draft status; `RemoveEventHeraldry`
 - [x] Gates: PHPUnit 204/204 pass; Infection MSI 67% / covered 98% (`class.EventPlanning.php`); fuzzy 6/6; Playwright auth smoke + `event-planning.spec.ts` 3/3 pass
+
+### R-05 complete (2026-07-09)
+
+- [x] Branch `megiddo/r-05-event-refactor` stacked on `megiddo/r-04-eventajax-refactor` — occurrence page DTO, fees/links, reconcile, dietary in `EventPlanning`; `Controller_Event` T-EVT-01–08 off `$DB`
+- [x] Targets closed: T-EVT-01 through T-EVT-08 (page-render paths; auth lib deferred DS-14)
+- [x] Gates: PHPUnit 214/214 pass; Infection `--only-covered` MSI 44%; fuzzy 6/6; Playwright auth smoke + `event-detail.spec.ts` 3/3 + `event-planning.spec.ts` 3/3 pass

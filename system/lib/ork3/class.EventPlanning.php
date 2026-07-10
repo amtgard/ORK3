@@ -192,6 +192,778 @@ class EventPlanning extends Ork3
         ];
     }
 
+    /** @var list<string> */
+    private const CALENDAR_DETAIL_EVENT_TYPES = [
+        'Coronation', 'Midreign', 'Endreign', 'Crown Qualifications', 'Day Event', 'Park Raid',
+        'Meeting', 'Althing', 'Interkingdom Event', 'Weaponmaster', 'Warmaster', 'Dragonmaster', 'Other',
+    ];
+
+    /** @var list<string> */
+    private const ALLOWED_LINK_ICONS = [
+        'fab fa-facebook', 'fab fa-discord', 'fas fa-globe', 'far fa-clipboard', 'fas fa-link', 'fas fa-ticket-alt',
+    ];
+
+    public function GetDefaultOccurrenceId($request)
+    {
+        $eventId = (int) ($request['EventId'] ?? 0);
+        if (!valid_id($eventId)) {
+            return InvalidParameter('Invalid event id');
+        }
+
+        return [
+            'Status' => Success(),
+            'EventCalendarDetailId' => $this->resolveDefaultOccurrenceId($eventId),
+        ];
+    }
+
+    public function AssertDetailBelongsToEvent($request)
+    {
+        $eventId = (int) ($request['EventId'] ?? 0);
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+        if (!valid_id($eventId) || !valid_id($detailId)) {
+            return InvalidParameter('Invalid event or detail id');
+        }
+
+        return [
+            'Status' => Success(),
+            'Belongs' => $this->detailBelongsToEvent($detailId, $eventId),
+        ];
+    }
+
+    public function GetOccurrencePageData($request)
+    {
+        $eventId = (int) ($request['EventId'] ?? 0);
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+        $mundaneId = (int) ($request['MundaneId'] ?? 0);
+        $includeDietary = !empty($request['IncludeDietary']);
+
+        if (!valid_id($eventId) || !valid_id($detailId)) {
+            return InvalidParameter('Invalid event or detail id');
+        }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return InvalidParameter('Detail does not belong to event');
+        }
+
+        $this->db->Clear();
+        $evtStatusRow = $this->db->DataSet(
+            'SELECT status, mundane_id, kingdom_id, park_id FROM ' . DB_PREFIX . 'event
+             WHERE event_id = ' . $eventId . ' LIMIT 1'
+        );
+        $eventStatus = 'published';
+        $creatorId = 0;
+        $kingdomId = 0;
+        $parkId = 0;
+        if ($evtStatusRow && $evtStatusRow->Next()) {
+            $eventStatus = (string) ($evtStatusRow->status ?? 'published');
+            $creatorId = (int) ($evtStatusRow->mundane_id ?? 0);
+            $kingdomId = (int) ($evtStatusRow->kingdom_id ?? 0);
+            $parkId = (int) ($evtStatusRow->park_id ?? 0);
+        }
+
+        $staffCaps = $this->fetchSelfStaffCaps($detailId, $mundaneId);
+        $this->db->Clear();
+        $cdCountRow = $this->db->DataSet(
+            'SELECT COUNT(*) AS cnt FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_id = ' . $eventId . ' LIMIT 1'
+        );
+        $calendarDetailCount = ($cdCountRow && $cdCountRow->Next()) ? (int) $cdCountRow->cnt : 1;
+
+        $atParkId = (int) ($request['AtParkId'] ?? 0);
+        $fallbackParkId = (int) ($request['FallbackParkId'] ?? $parkId);
+        $parkLookupId = $atParkId > 0 ? $atParkId : $fallbackParkId;
+        $atPark = $this->fetchAtParkDisplay($parkLookupId);
+
+        return [
+            'Status' => Success(),
+            'EventStatus' => $eventStatus,
+            'CreatorId' => $creatorId,
+            'KingdomId' => $kingdomId,
+            'ParkId' => $parkId,
+            'CalendarDetailCount' => $calendarDetailCount,
+            'StaffCaps' => $staffCaps,
+            'StaffList' => $this->fetchStaffList($detailId),
+            'ScheduleList' => $this->fetchScheduleList($detailId),
+            'EventFees' => $this->fetchFeeList($detailId),
+            'ExternalLinks' => $this->fetchLinkList($detailId),
+            'AtPark' => $atPark,
+            'DietarySummary' => $includeDietary ? $this->fetchDietarySummary($detailId) : [],
+        ];
+    }
+
+    public function GetSchedule($request)
+    {
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+        if (!valid_id($detailId)) {
+            return InvalidParameter('Invalid event occurrence id');
+        }
+
+        return [
+            'Status' => Success(),
+            'ScheduleList' => $this->fetchScheduleList($detailId),
+        ];
+    }
+
+    public function SetCalendarDetailFeesAndLinks($request)
+    {
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+        if (!valid_id($detailId)) {
+            return InvalidParameter('Invalid detail id');
+        }
+
+        $feesIn = is_array($request['Fees'] ?? null) ? $request['Fees'] : [];
+        $linksIn = is_array($request['Links'] ?? null) ? $request['Links'] : [];
+        $sync = $this->syncCalendarDetailFeesAndLinks($detailId, $feesIn, $linksIn);
+
+        if ($sync['feesOk'] && $sync['linksOk']) {
+            $eventId = (int) ($request['EventId'] ?? 0);
+            if (valid_id($eventId)) {
+                $this->bustCalendarDetailCaches($eventId, $detailId);
+            } else {
+                Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', Ork3::$Lib->ghettocache->key([$detailId]));
+            }
+        }
+
+        return [
+            'Status' => Success(),
+            'FeesOk' => $sync['feesOk'],
+            'LinksOk' => $sync['linksOk'],
+        ];
+    }
+
+    public function SetCalendarDetailEventType($request)
+    {
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+        $eventType = trim((string) ($request['EventType'] ?? ''));
+        if (!valid_id($detailId)) {
+            return InvalidParameter('Invalid detail id');
+        }
+        if ($eventType !== '' && !in_array($eventType, self::CALENDAR_DETAIL_EVENT_TYPES, true)) {
+            return InvalidParameter('Invalid event type');
+        }
+
+        $typeSql = ($eventType === '') ? 'NULL' : "'" . $this->sq($eventType) . "'";
+        $this->db->Clear();
+        $this->db->Execute(
+            'UPDATE ' . DB_PREFIX . 'event_calendardetail SET event_type = ' . $typeSql
+            . ' WHERE event_calendardetail_id = ' . $detailId
+        );
+
+        $eventId = (int) ($request['EventId'] ?? 0);
+        if (valid_id($eventId)) {
+            Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', Ork3::$Lib->ghettocache->key([$detailId]));
+        }
+
+        return ['Status' => Success()];
+    }
+
+    public function ReconcilePastAttendance($request)
+    {
+        $token = (string) ($request['Token'] ?? '');
+        $eventId = (int) ($request['EventId'] ?? 0);
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($token);
+
+        if ($mundaneId <= 0) {
+            return BadToken();
+        }
+        if (!valid_id($eventId) || !valid_id($detailId)) {
+            return InvalidParameter('Invalid event or detail id');
+        }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return InvalidParameter('Detail does not belong to event');
+        }
+        if (!Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_CREATE)) {
+            return NoAuthorization();
+        }
+
+        $today = date('Y-m-d');
+        $this->db->Clear();
+        $pastCountRow = $this->db->DataSet(
+            'SELECT COUNT(*) AS cnt FROM ' . DB_PREFIX . 'attendance
+             WHERE event_calendardetail_id = ' . $detailId . " AND date < '" . $today . "' LIMIT 1"
+        );
+        $pastCount = ($pastCountRow && $pastCountRow->Next()) ? (int) $pastCountRow->cnt : 0;
+        if ($pastCount <= 0) {
+            return [
+                'Status' => InvalidParameter('No past-dated attendance found to reconcile'),
+                'Detail' => '',
+            ];
+        }
+
+        $this->db->Clear();
+        $cdRow = $this->db->DataSet(
+            'SELECT at_park_id, price, description, url, url_name, address, province, postal_code, city, country, map_url, map_url_name
+             FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = ' . $detailId . ' LIMIT 1'
+        );
+        if (!$cdRow || !$cdRow->Next()) {
+            return InvalidParameter('Occurrence not found');
+        }
+
+        $this->db->Clear();
+        $dateRows = $this->db->DataSet(
+            'SELECT date FROM ' . DB_PREFIX . 'attendance
+             WHERE event_calendardetail_id = ' . $detailId . " AND date < '" . $today . "'"
+        );
+        $dates = [];
+        while ($dateRows && $dateRows->Next()) {
+            $dates[] = strtotime((string) $dateRows->date);
+        }
+        if ($dates === []) {
+            return [
+                'Status' => InvalidParameter('No past-dated attendance found to reconcile'),
+                'Detail' => '',
+            ];
+        }
+        $minDate = date('Y-m-d', min($dates)) . ' 12:00:00';
+        $maxDate = date('Y-m-d', max($dates)) . ' 18:00:00';
+        $atParkId = (int) ($cdRow->at_park_id ?? 0);
+
+        $eventApi = new Event();
+        $r = $eventApi->CreateEventDetails([
+            'Token' => $token,
+            'EventId' => $eventId,
+            'AtParkId' => valid_id($atParkId) ? $atParkId : null,
+            'Current' => 0,
+            'Price' => $cdRow->price ?? '',
+            'EventStart' => $minDate,
+            'EventEnd' => $maxDate,
+            'Description' => $cdRow->description ?? '',
+            'Url' => $cdRow->url ?? '',
+            'UrlName' => $cdRow->url_name ?? '',
+            'Address' => $cdRow->address ?? '',
+            'Province' => $cdRow->province ?? '',
+            'PostalCode' => $cdRow->postal_code ?? '',
+            'City' => $cdRow->city ?? '',
+            'Country' => $cdRow->country ?? '',
+            'MapUrl' => $cdRow->map_url ?? '',
+            'MapUrlName' => $cdRow->map_url_name ?? '',
+        ]);
+        if (($r['Status'] ?? 1) != 0) {
+            return $r;
+        }
+
+        $newDetailId = (int) ($r['Detail'] ?? 0);
+        if (!$newDetailId) {
+            $fresh = $eventApi->GetEventDetails(['EventId' => $eventId]);
+            $all = $fresh['CalendarEventDetails'] ?? [];
+            if ($all) {
+                $newDetailId = max(array_map('intval', array_column($all, 'EventCalendarDetailId')));
+            }
+        }
+        if (!$newDetailId) {
+            return InvalidParameter('Reconciliation failed: could not determine the new occurrence ID.');
+        }
+
+        $this->db->Clear();
+        $this->db->Execute(
+            'UPDATE ' . DB_PREFIX . 'attendance SET event_calendardetail_id = ' . $newDetailId
+            . ' WHERE event_calendardetail_id = ' . $detailId . " AND date < '" . $today . "'"
+        );
+        $this->db->Clear();
+        $this->db->Execute(
+            'UPDATE ' . DB_PREFIX . 'attendance_myisam SET event_calendardetail_id = ' . $newDetailId
+            . ' WHERE event_calendardetail_id = ' . $detailId . " AND date < '" . $today . "'"
+        );
+
+        $oldKey = Ork3::$Lib->ghettocache->key([$detailId]);
+        $newKey = Ork3::$Lib->ghettocache->key([$newDetailId]);
+        Ork3::$Lib->ghettocache->bust_event_search($eventId);
+        Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $oldKey);
+        Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $newKey);
+
+        return [
+            'Status' => Success(),
+            'NewEventCalendarDetailId' => $newDetailId,
+        ];
+    }
+
+    public function GetDietarySummaryForOccurrence($request)
+    {
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+        if ($detailId <= 0) {
+            return [
+                'Status' => Success(),
+                'Items' => [],
+            ];
+        }
+
+        return [
+            'Status' => Success(),
+            'Items' => $this->fetchDietarySummary($detailId),
+        ];
+    }
+
+    public function GetDetailDependencyCounts($request)
+    {
+        $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
+        if (!valid_id($detailId)) {
+            return InvalidParameter('Invalid detail id');
+        }
+
+        $this->db->Clear();
+        $checkAtt = $this->db->DataSet(
+            'SELECT COUNT(*) AS cnt FROM ' . DB_PREFIX . 'attendance WHERE event_calendardetail_id = '
+            . $detailId . ' LIMIT 1'
+        );
+        $attCnt = ($checkAtt && $checkAtt->Next()) ? (int) $checkAtt->cnt : 0;
+        $this->db->Clear();
+        $checkRsvp = $this->db->DataSet(
+            'SELECT COUNT(*) AS cnt FROM ' . DB_PREFIX . 'event_rsvp WHERE event_calendardetail_id = '
+            . $detailId . ' LIMIT 1'
+        );
+        $rsvpCnt = ($checkRsvp && $checkRsvp->Next()) ? (int) $checkRsvp->cnt : 0;
+
+        return [
+            'Status' => Success(),
+            'AttendanceCount' => $attCnt,
+            'RsvpCount' => $rsvpCnt,
+        ];
+    }
+
+    public function GetEventRedirectScope($request)
+    {
+        $eventId = (int) ($request['EventId'] ?? 0);
+        if (!valid_id($eventId)) {
+            return InvalidParameter('Invalid event id');
+        }
+
+        $this->db->Clear();
+        $evRow = $this->db->DataSet(
+            'SELECT kingdom_id, park_id FROM ' . DB_PREFIX . 'event WHERE event_id = ' . $eventId . ' LIMIT 1'
+        );
+        $kingdomId = 0;
+        $parkId = 0;
+        if ($evRow && $evRow->Next()) {
+            $kingdomId = (int) $evRow->kingdom_id;
+            $parkId = (int) $evRow->park_id;
+        }
+
+        return [
+            'Status' => Success(),
+            'KingdomId' => $kingdomId,
+            'ParkId' => $parkId,
+        ];
+    }
+
+    public function GetParkName($request)
+    {
+        $parkId = (int) ($request['ParkId'] ?? 0);
+        if (!valid_id($parkId)) {
+            return [
+                'Status' => Success(),
+                'Name' => '',
+            ];
+        }
+
+        $this->db->Clear();
+        $row = $this->db->DataSet(
+            'SELECT name FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $parkId . ' LIMIT 1'
+        );
+
+        return [
+            'Status' => Success(),
+            'Name' => ($row && $row->Next()) ? (string) $row->name : '',
+        ];
+    }
+
+    public function IsDraftBlockedForViewer($request)
+    {
+        $eventStatus = (string) ($request['EventStatus'] ?? 'published');
+        $creatorId = (int) ($request['CreatorId'] ?? 0);
+        $mundaneId = (int) ($request['MundaneId'] ?? 0);
+        $canManage = !empty($request['CanManageEvent']);
+        $staffCaps = is_array($request['StaffCaps'] ?? null) ? $request['StaffCaps'] : [];
+
+        if ($eventStatus === 'published' || $canManage) {
+            return ['Status' => Success(), 'Blocked' => false];
+        }
+        if ($mundaneId === $creatorId) {
+            return ['Status' => Success(), 'Blocked' => false];
+        }
+        if ($mundaneId > 0 && Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_ADMIN, 0, AUTH_CREATE)) {
+            return ['Status' => Success(), 'Blocked' => false];
+        }
+        foreach (['CanManage', 'CanAttendance', 'CanSchedule', 'CanFeast'] as $cap) {
+            if (!empty($staffCaps[$cap])) {
+                return ['Status' => Success(), 'Blocked' => false];
+            }
+        }
+
+        return ['Status' => Success(), 'Blocked' => true];
+    }
+
+    private function resolveDefaultOccurrenceId(int $eventId): int
+    {
+        $this->db->Clear();
+        $cdRow = $this->db->DataSet(
+            'SELECT event_calendardetail_id FROM ' . DB_PREFIX . 'event_calendardetail
+             WHERE event_id = ' . $eventId . ' AND event_start >= NOW()
+             ORDER BY event_start ASC LIMIT 1'
+        );
+        if (!$cdRow || !$cdRow->Next()) {
+            $this->db->Clear();
+            $cdRow = $this->db->DataSet(
+                'SELECT event_calendardetail_id FROM ' . DB_PREFIX . 'event_calendardetail
+                 WHERE event_id = ' . $eventId . ' ORDER BY event_start DESC LIMIT 1'
+            );
+            if ($cdRow) {
+                $cdRow->Next();
+            }
+        }
+
+        return ($cdRow && isset($cdRow->event_calendardetail_id))
+            ? (int) $cdRow->event_calendardetail_id
+            : 0;
+    }
+
+    private function detailBelongsToEvent(int $detailId, int $eventId): bool
+    {
+        $this->db->Clear();
+        $ownRow = $this->db->DataSet(
+            'SELECT event_id FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = '
+            . $detailId . ' LIMIT 1'
+        );
+
+        return (bool) ($ownRow && $ownRow->Next() && (int) $ownRow->event_id === $eventId);
+    }
+
+    /** @return array{CanManage: bool, CanAttendance: bool, CanSchedule: bool, CanFeast: bool} */
+    private function fetchSelfStaffCaps(int $detailId, int $mundaneId): array
+    {
+        $caps = [
+            'CanManage' => false,
+            'CanAttendance' => false,
+            'CanSchedule' => false,
+            'CanFeast' => false,
+        ];
+        if ($mundaneId <= 0 || !valid_id($detailId)) {
+            return $caps;
+        }
+
+        $this->db->Clear();
+        $selfStaff = $this->db->DataSet(
+            'SELECT can_manage, can_attendance, can_schedule, can_feast FROM ' . DB_PREFIX . 'event_staff
+             WHERE event_calendardetail_id = ' . $detailId . ' AND mundane_id = ' . $mundaneId . ' LIMIT 1'
+        );
+        if ($selfStaff && $selfStaff->Next()) {
+            $caps['CanManage'] = (bool) (int) $selfStaff->can_manage;
+            $caps['CanAttendance'] = (bool) (int) $selfStaff->can_attendance;
+            $caps['CanSchedule'] = (bool) (int) $selfStaff->can_schedule;
+            $caps['CanFeast'] = (bool) (int) $selfStaff->can_feast;
+        }
+
+        return $caps;
+    }
+
+    /** @return array{Name: string, Address: string, City: string, Province: string, PostalCode: string, Location: string} */
+    private function fetchAtParkDisplay(int $parkId): array
+    {
+        $empty = [
+            'Name' => '', 'Address' => '', 'City' => '', 'Province' => '', 'PostalCode' => '', 'Location' => '',
+        ];
+        if ($parkId <= 0) {
+            return $empty;
+        }
+
+        $this->db->Clear();
+        $row = $this->db->DataSet(
+            'SELECT name, address, city, province, postal_code, location FROM ' . DB_PREFIX . 'park
+             WHERE park_id = ' . $parkId . ' LIMIT 1'
+        );
+        if (!$row || !$row->Next()) {
+            return $empty;
+        }
+
+        return [
+            'Name' => (string) $row->name,
+            'Address' => (string) $row->address,
+            'City' => (string) $row->city,
+            'Province' => (string) $row->province,
+            'PostalCode' => (string) $row->postal_code,
+            'Location' => (string) $row->location,
+        ];
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function fetchStaffList(int $detailId): array
+    {
+        $this->db->Clear();
+        $staffRows = $this->db->DataSet(
+            'SELECT s.event_staff_id AS EventStaffId, s.mundane_id AS MundaneId, m.persona AS Persona,
+                    s.role_name AS RoleName, s.can_manage AS CanManage, s.can_attendance AS CanAttendance,
+                    s.can_schedule AS CanSchedule, s.can_feast AS CanFeast
+             FROM ' . DB_PREFIX . 'event_staff s
+             LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id
+             WHERE s.event_calendardetail_id = ' . $detailId . '
+             ORDER BY s.role_name, m.persona'
+        );
+        $staffList = [];
+        while ($staffRows && $staffRows->Next()) {
+            $staffList[] = [
+                'EventStaffId' => (int) $staffRows->EventStaffId,
+                'MundaneId' => (int) $staffRows->MundaneId,
+                'Persona' => $staffRows->Persona,
+                'RoleName' => $staffRows->RoleName,
+                'CanManage' => (int) $staffRows->CanManage,
+                'CanAttendance' => (int) $staffRows->CanAttendance,
+                'CanSchedule' => (int) $staffRows->CanSchedule,
+                'CanFeast' => (int) $staffRows->CanFeast,
+            ];
+        }
+
+        return $staffList;
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function fetchScheduleList(int $detailId): array
+    {
+        $this->db->Clear();
+        $scheduleRows = $this->db->DataSet(
+            'SELECT event_schedule_id AS EventScheduleId, title AS Title,
+                    start_time AS StartTime, end_time AS EndTime,
+                    location AS Location, description AS Description, category AS Category,
+                    secondary_category AS SecondaryCategory,
+                    menu AS Menu, cost AS Cost, dietary AS Dietary, allergens AS Allergens
+             FROM ' . DB_PREFIX . 'event_schedule
+             WHERE event_calendardetail_id = ' . $detailId . '
+             ORDER BY start_time'
+        );
+        $scheduleList = [];
+        while ($scheduleRows && $scheduleRows->Next()) {
+            $scheduleList[] = [
+                'EventScheduleId' => (int) $scheduleRows->EventScheduleId,
+                'Title' => $scheduleRows->Title,
+                'StartTime' => $scheduleRows->StartTime,
+                'EndTime' => $scheduleRows->EndTime,
+                'Location' => $scheduleRows->Location,
+                'Description' => $scheduleRows->Description,
+                'Category' => $scheduleRows->Category,
+                'SecondaryCategory' => $scheduleRows->SecondaryCategory ?? '',
+                'Menu' => $scheduleRows->Menu,
+                'Cost' => $scheduleRows->Cost !== null ? (float) $scheduleRows->Cost : null,
+                'Dietary' => $scheduleRows->Dietary,
+                'Allergens' => $scheduleRows->Allergens,
+            ];
+        }
+
+        if ($scheduleList !== []) {
+            $slIds = implode(',', array_map('intval', array_column($scheduleList, 'EventScheduleId')));
+            $this->db->Clear();
+            $leadRows = $this->db->DataSet(
+                'SELECT sl.event_schedule_id AS EventScheduleId, m.mundane_id AS MundaneId, m.persona AS Persona
+                 FROM ' . DB_PREFIX . 'event_schedule_lead sl
+                 JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = sl.mundane_id
+                 WHERE sl.event_schedule_id IN (' . $slIds . ')
+                 ORDER BY m.persona'
+            );
+            $leadsMap = [];
+            while ($leadRows && $leadRows->Next()) {
+                $leadsMap[(int) $leadRows->EventScheduleId][] = [
+                    'MundaneId' => (int) $leadRows->MundaneId,
+                    'Persona' => $leadRows->Persona,
+                ];
+            }
+            foreach ($scheduleList as &$schItem) {
+                $schItem['Leads'] = $leadsMap[(int) $schItem['EventScheduleId']] ?? [];
+            }
+            unset($schItem);
+        }
+
+        return $scheduleList;
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function fetchFeeList(int $detailId): array
+    {
+        $this->db->Clear();
+        $feeRows = $this->db->DataSet(
+            'SELECT event_fees_id AS EventFeesId, admission_type AS AdmissionType, cost AS Cost, sort_order AS SortOrder
+             FROM ' . DB_PREFIX . 'event_fees
+             WHERE event_calendardetail_id = ' . $detailId . '
+             ORDER BY sort_order, event_fees_id'
+        );
+        $feeList = [];
+        while ($feeRows && $feeRows->Next()) {
+            $feeList[] = [
+                'EventFeesId' => (int) $feeRows->EventFeesId,
+                'AdmissionType' => $feeRows->AdmissionType,
+                'Cost' => (float) $feeRows->Cost,
+                'SortOrder' => (int) $feeRows->SortOrder,
+            ];
+        }
+
+        return $feeList;
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function fetchLinkList(int $detailId): array
+    {
+        $this->db->Clear();
+        $linkRows = $this->db->DataSet(
+            'SELECT event_links_id AS EventLinkId, title AS Title, url AS Url, icon AS Icon, sort_order AS SortOrder
+             FROM ' . DB_PREFIX . 'event_links
+             WHERE event_calendardetail_id = ' . $detailId . '
+             ORDER BY sort_order, event_links_id'
+        );
+        $linkList = [];
+        while ($linkRows && $linkRows->Next()) {
+            $linkList[] = [
+                'EventLinkId' => (int) $linkRows->EventLinkId,
+                'Title' => $linkRows->Title,
+                'Url' => $linkRows->Url,
+                'Icon' => $linkRows->Icon,
+                'SortOrder' => (int) $linkRows->SortOrder,
+            ];
+        }
+
+        return $linkList;
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function fetchDietarySummary(int $detailId): array
+    {
+        if ($detailId <= 0) {
+            return [];
+        }
+
+        $this->db->Clear();
+        $dsRows = $this->db->DataSet(
+            'SELECT m.mundane_id AS MundaneId, m.persona AS Persona,
+                    IF(a.mundane_id IS NOT NULL, 1, 0) AS CheckedIn,
+                    d.is_anonymous, d.no_restrictions, d.diet_vegetarian, d.diet_vegan, d.diet_halal, d.diet_kosher,
+                    d.diet_keto, d.diet_paleo, d.restrict_dairy, d.restrict_eggs, d.restrict_fish, d.restrict_honey,
+                    d.restrict_poultry, d.restrict_beef, d.restrict_pork, d.restrict_shellfish,
+                    d.allergen_milk, d.allergen_eggs, d.allergen_fish, d.allergen_shellfish, d.allergen_treenuts,
+                    d.allergen_peanuts, d.allergen_wheat, d.allergen_soy, d.allergen_sesame, d.allergen_garlic,
+                    d.allergen_gluten, d.allergen_onion, d.allergen_mushroom, d.allergen_corn, d.allergen_coconut,
+                    d.allergen_cocoa
+             FROM (
+                 SELECT mundane_id FROM ' . DB_PREFIX . "event_rsvp
+                 WHERE event_calendardetail_id = {$detailId} AND status = 'going'
+                 UNION
+                 SELECT mundane_id FROM " . DB_PREFIX . "attendance
+                 WHERE event_calendardetail_id = {$detailId}
+             ) src
+             JOIN " . DB_PREFIX . 'mundane m ON m.mundane_id = src.mundane_id
+             LEFT JOIN ' . DB_PREFIX . 'mundane_dietary d ON d.mundane_id = src.mundane_id
+             LEFT JOIN (SELECT DISTINCT mundane_id FROM ' . DB_PREFIX . "attendance WHERE event_calendardetail_id = {$detailId}) a
+                 ON a.mundane_id = src.mundane_id
+             ORDER BY m.persona"
+        );
+        $dsList = [];
+        while ($dsRows && $dsRows->Next()) {
+            $dsList[] = [
+                'MundaneId' => (int) $dsRows->MundaneId,
+                'Persona' => (string) $dsRows->Persona,
+                'CheckedIn' => (bool) (int) $dsRows->CheckedIn,
+                'HasPrefs' => $dsRows->is_anonymous !== null,
+                'NoRestrictions' => (bool) (int) ($dsRows->no_restrictions ?? 0),
+                'IsAnonymous' => (int) ($dsRows->is_anonymous ?? 1),
+                'DietVegetarian' => (int) ($dsRows->diet_vegetarian ?? 0),
+                'DietVegan' => (int) ($dsRows->diet_vegan ?? 0),
+                'DietHalal' => (int) ($dsRows->diet_halal ?? 0),
+                'DietKosher' => (int) ($dsRows->diet_kosher ?? 0),
+                'DietKeto' => (int) ($dsRows->diet_keto ?? 0),
+                'DietPaleo' => (int) ($dsRows->diet_paleo ?? 0),
+                'RestrictDairy' => (int) ($dsRows->restrict_dairy ?? 0),
+                'RestrictEggs' => (int) ($dsRows->restrict_eggs ?? 0),
+                'RestrictFish' => (int) ($dsRows->restrict_fish ?? 0),
+                'RestrictHoney' => (int) ($dsRows->restrict_honey ?? 0),
+                'RestrictPoultry' => (int) ($dsRows->restrict_poultry ?? 0),
+                'RestrictBeef' => (int) ($dsRows->restrict_beef ?? 0),
+                'RestrictPork' => (int) ($dsRows->restrict_pork ?? 0),
+                'RestrictShellfish' => (int) ($dsRows->restrict_shellfish ?? 0),
+                'AllergenMilk' => (int) ($dsRows->allergen_milk ?? 0),
+                'AllergenEggs' => (int) ($dsRows->allergen_eggs ?? 0),
+                'AllergenFish' => (int) ($dsRows->allergen_fish ?? 0),
+                'AllergenShellfish' => (int) ($dsRows->allergen_shellfish ?? 0),
+                'AllergenTreenuts' => (int) ($dsRows->allergen_treenuts ?? 0),
+                'AllergenPeanuts' => (int) ($dsRows->allergen_peanuts ?? 0),
+                'AllergenWheat' => (int) ($dsRows->allergen_wheat ?? 0),
+                'AllergenSoy' => (int) ($dsRows->allergen_soy ?? 0),
+                'AllergenSesame' => (int) ($dsRows->allergen_sesame ?? 0),
+                'AllergenGarlic' => (int) ($dsRows->allergen_garlic ?? 0),
+                'AllergenGluten' => (int) ($dsRows->allergen_gluten ?? 0),
+                'AllergenOnion' => (int) ($dsRows->allergen_onion ?? 0),
+                'AllergenMushroom' => (int) ($dsRows->allergen_mushroom ?? 0),
+                'AllergenCorn' => (int) ($dsRows->allergen_corn ?? 0),
+                'AllergenCoconut' => (int) ($dsRows->allergen_coconut ?? 0),
+                'AllergenCocoa' => (int) ($dsRows->allergen_cocoa ?? 0),
+            ];
+        }
+
+        return $dsList;
+    }
+
+    /**
+     * @param list<array{AdmissionType?: string, Cost?: float|int}> $feesIn
+     * @param list<array{Title?: string, Url?: string, Icon?: string}> $linksIn
+     *
+     * @return array{feesOk: bool, linksOk: bool}
+     */
+    private function syncCalendarDetailFeesAndLinks(int $detailId, array $feesIn, array $linksIn): array
+    {
+        $this->db->Clear();
+        $this->db->Execute('START TRANSACTION');
+        $feesOk = ($this->db->Execute(
+            'DELETE FROM ' . DB_PREFIX . 'event_fees WHERE event_calendardetail_id = ' . $detailId
+        ) !== false);
+        if ($feesOk) {
+            foreach ($feesIn as $fi => $fee) {
+                $at = trim((string) ($fee['AdmissionType'] ?? ''));
+                $cost = round((float) ($fee['Cost'] ?? 0), 2);
+                $this->db->Clear();
+                if ($this->db->Execute(
+                    'INSERT INTO ' . DB_PREFIX . 'event_fees (event_calendardetail_id, admission_type, cost, sort_order) VALUES ('
+                    . $detailId . ", '" . $this->sq($at) . "', " . $cost . ', ' . $fi . ')'
+                ) === false) {
+                    $feesOk = false;
+                    break;
+                }
+            }
+        }
+        $this->db->Execute($feesOk ? 'COMMIT' : 'ROLLBACK');
+
+        $this->db->Clear();
+        $this->db->Execute('START TRANSACTION');
+        $linksOk = ($this->db->Execute(
+            'DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . $detailId
+        ) !== false);
+        if ($linksOk) {
+            foreach ($linksIn as $li => $link) {
+                $lt = trim((string) ($link['Title'] ?? ''));
+                $luRaw = trim((string) ($link['Url'] ?? ''));
+                if ($luRaw !== '') {
+                    $scheme = strtolower((string) parse_url($luRaw, PHP_URL_SCHEME));
+                    if (!in_array($scheme, ['http', 'https', 'mailto'], true)) {
+                        $luRaw = '';
+                    }
+                }
+                $icRaw = trim((string) ($link['Icon'] ?? ''));
+                if (!in_array($icRaw, self::ALLOWED_LINK_ICONS, true)) {
+                    $icRaw = 'fas fa-link';
+                }
+                $this->db->Clear();
+                if ($this->db->Execute(
+                    'INSERT INTO ' . DB_PREFIX . 'event_links (event_calendardetail_id, title, url, icon, sort_order) VALUES ('
+                    . $detailId . ", '" . $this->sq($lt) . "', '" . $this->sq($luRaw) . "', '"
+                    . $this->sq($icRaw) . "', " . $li . ')'
+                ) === false) {
+                    $linksOk = false;
+                    break;
+                }
+            }
+        }
+        $this->db->Execute($linksOk ? 'COMMIT' : 'ROLLBACK');
+
+        return ['feesOk' => $feesOk, 'linksOk' => $linksOk];
+    }
+
+    private function bustCalendarDetailCaches(int $eventId, int $detailId): void
+    {
+        Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', Ork3::$Lib->ghettocache->key([$detailId]));
+        Ork3::$Lib->ghettocache->bust_event_search($eventId);
+    }
+
     public function CanAddAttendance(int $mundaneId, int $eventId, int $detailId): bool
     {
         return $this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'attendance');

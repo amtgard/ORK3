@@ -11,7 +11,7 @@ final class EventOccurrenceTest extends TestCase
 {
     private EventPlanningFixture $fixture;
 
-    private Event $eventDomain;
+    private EventPlanning $planning;
 
     protected function setUp(): void
     {
@@ -22,7 +22,7 @@ final class EventOccurrenceTest extends TestCase
         unset($_SESSION['is_authorized_mundane_id']);
 
         $this->fixture = EventPlanningFixture::create();
-        $this->eventDomain = new Event();
+        $this->planning = new EventPlanning();
     }
 
     protected function tearDown(): void
@@ -44,7 +44,7 @@ final class EventOccurrenceTest extends TestCase
         $this->fixture->insertFee($ctx['detail_id'], 'Adult', 10.0);
         $this->fixture->insertLink($ctx['detail_id'], 'Tickets', 'https://example.test/tix', 'fas fa-ticket-alt');
 
-        $dto = $this->mirrorOccurrencePageData($ctx['detail_id']);
+        $dto = $this->occurrencePageData($ctx['event_id'], $ctx['detail_id']);
 
         $this->assertCount(1, $dto['staff']);
         $this->assertSame('Gate', $dto['staff'][0]['RoleName']);
@@ -70,7 +70,7 @@ final class EventOccurrenceTest extends TestCase
             date('Y-m-d H:i:s', strtotime('-30 days +6 hours')),
         );
 
-        $picked = $this->mirrorResolveDefaultOccurrenceId($ctx['event_id']);
+        $picked = $this->defaultOccurrenceId($ctx['event_id']);
         $this->assertSame($ctx['detail_id'], $picked);
 
         global $DB;
@@ -79,7 +79,7 @@ final class EventOccurrenceTest extends TestCase
             'DELETE FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = ' . (int) $ctx['detail_id']
         );
 
-        $next = $this->mirrorResolveDefaultOccurrenceId($ctx['event_id']);
+        $next = $this->defaultOccurrenceId($ctx['event_id']);
         $this->assertSame($futureId, $next);
 
         $DB->Clear();
@@ -87,7 +87,7 @@ final class EventOccurrenceTest extends TestCase
             'DELETE FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = ' . (int) $futureId
         );
 
-        $fallback = $this->mirrorResolveDefaultOccurrenceId($ctx['event_id']);
+        $fallback = $this->defaultOccurrenceId($ctx['event_id']);
         $this->assertSame($pastId, $fallback);
     }
 
@@ -96,8 +96,8 @@ final class EventOccurrenceTest extends TestCase
         $ctxA = $this->fixture->createPublishedEvent('own-a');
         $ctxB = $this->fixture->createPublishedEvent('own-b');
 
-        $this->assertTrue($this->mirrorDetailBelongsToEvent($ctxA['detail_id'], $ctxA['event_id']));
-        $this->assertFalse($this->mirrorDetailBelongsToEvent($ctxB['detail_id'], $ctxA['event_id']));
+        $this->assertTrue($this->detailBelongsToEvent($ctxA['detail_id'], $ctxA['event_id']));
+        $this->assertFalse($this->detailBelongsToEvent($ctxB['detail_id'], $ctxA['event_id']));
     }
 
     public function testSetCalendarDetailFeesLinks(): void
@@ -105,17 +105,21 @@ final class EventOccurrenceTest extends TestCase
         $ctx = $this->fixture->createPublishedEvent('fees-links');
         $this->fixture->insertFee($ctx['detail_id'], 'Old', 5.0);
 
-        $this->mirrorSetCalendarDetailFeesAndLinks(
-            $ctx['detail_id'],
-            [
+        $sync = $this->planning->SetCalendarDetailFeesAndLinks([
+            'EventId' => $ctx['event_id'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+            'Fees' => [
                 ['AdmissionType' => 'Member', 'Cost' => 8.5],
                 ['AdmissionType' => 'Guest', 'Cost' => 12.0],
             ],
-            [
+            'Links' => [
                 ['Title' => 'Site', 'Url' => 'https://example.test', 'Icon' => 'fas fa-globe'],
                 ['Title' => 'Bad', 'Url' => 'javascript:alert(1)', 'Icon' => 'not-allowed'],
             ],
-        );
+        ]);
+        $this->assertSame(0, $sync['Status']['Status']);
+        $this->assertTrue($sync['FeesOk']);
+        $this->assertTrue($sync['LinksOk']);
 
         $fees = $this->fixture->fetchFees($ctx['detail_id']);
         $this->assertCount(2, $fees);
@@ -150,7 +154,12 @@ final class EventOccurrenceTest extends TestCase
             $this->fixture->trackAttendance((int) $add['Detail']);
         }
 
-        $this->mirrorSetCalendarDetailEventType($ctx['detail_id'], 'Day Event');
+        $r = $this->planning->SetCalendarDetailEventType([
+            'EventId' => $ctx['event_id'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+            'EventType' => 'Day Event',
+        ]);
+        $this->assertSame(0, $r['Status']['Status']);
 
         global $DB;
         $DB->Clear();
@@ -192,8 +201,15 @@ final class EventOccurrenceTest extends TestCase
             $this->fixture->trackAttendance((int) $add['Detail']);
         }
 
-        $newDetailId = $this->mirrorReconcilePastAttendance($ctx['event_id'], $ctx['detail_id'], $grantor['token']);
+        $r = $this->planning->ReconcilePastAttendance([
+            'Token' => $grantor['token'],
+            'EventId' => $ctx['event_id'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+        ]);
+        $newDetailId = (int) ($r['NewEventCalendarDetailId'] ?? 0);
+        $this->fixture->trackDetail($newDetailId);
 
+        $this->assertSame(0, $r['Status']['Status']);
         $this->assertGreaterThan(0, $newDetailId);
         $this->assertSame(0, $this->fixture->countAttendanceOnDetail($ctx['detail_id']));
         $this->assertGreaterThanOrEqual(1, $this->fixture->countAttendanceOnDetail($newDetailId));
@@ -204,8 +220,13 @@ final class EventOccurrenceTest extends TestCase
         $ctx = $this->fixture->createPublishedEvent('reconcile-empty');
         $grantor = $this->fixture->createGrantorWithAuth(AUTH_EVENT, $ctx['event_id'], AUTH_CREATE, 'reconcile-empty-auth');
 
-        $result = $this->mirrorReconcilePastAttendance($ctx['event_id'], $ctx['detail_id'], $grantor['token']);
-        $this->assertSame(0, $result);
+        $r = $this->planning->ReconcilePastAttendance([
+            'Token' => $grantor['token'],
+            'EventId' => $ctx['event_id'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+        ]);
+        $this->assertNotSame(0, $r['Status']['Status']);
+        $this->assertSame(0, (int) ($r['NewEventCalendarDetailId'] ?? 0));
     }
 
     public function testGetDietarySummary(): void
@@ -214,27 +235,25 @@ final class EventOccurrenceTest extends TestCase
         $player = $this->fixture->createPlayer('diet-player');
         $this->fixture->insertRsvp($ctx['detail_id'], $player, 'going');
 
-        $summaryZero = $this->mirrorDietarySummary(0, true);
-        $this->assertSame([], $summaryZero);
+        $summaryZero = $this->planning->GetDietarySummaryForOccurrence(['EventCalendarDetailId' => 0]);
+        $this->assertSame([], $summaryZero['Items']);
 
-        $summary = $this->mirrorDietarySummary($ctx['detail_id'], true);
-        $this->assertNotEmpty($summary);
-        $this->assertSame($player, $summary[0]['MundaneId']);
+        $summary = $this->planning->GetDietarySummaryForOccurrence(['EventCalendarDetailId' => $ctx['detail_id']]);
+        $this->assertNotEmpty($summary['Items']);
+        $this->assertSame($player, $summary['Items'][0]['MundaneId']);
     }
 
     public function testDraftOccurrenceHiddenFromAnonymous(): void
     {
         $ctx = $this->fixture->createPublishedEvent('draft-anon', 'draft');
-        $blocked = $this->mirrorDraftBlocked(
-            eventId: $ctx['event_id'],
-            detailId: $ctx['detail_id'],
-            uid: 0,
-            eventStatus: 'draft',
-            creatorId: $ctx['mundane_id'],
-            canManage: false,
-            staffCaps: [false, false, false, false],
-        );
-        $this->assertTrue($blocked);
+        $blocked = $this->planning->IsDraftBlockedForViewer([
+            'EventStatus' => 'draft',
+            'CreatorId' => $ctx['mundane_id'],
+            'MundaneId' => 0,
+            'CanManageEvent' => 0,
+            'StaffCaps' => [],
+        ]);
+        $this->assertTrue($blocked['Blocked']);
     }
 
     public function testDraftVisibleToStaffDelegate(): void
@@ -243,312 +262,150 @@ final class EventOccurrenceTest extends TestCase
         $staff = $this->fixture->createGrantorWithoutAuth('draft-sched');
         $this->fixture->insertStaff($ctx['detail_id'], $staff['mundane_id'], 'Sched', canSchedule: true);
 
-        $blocked = $this->mirrorDraftBlocked(
-            eventId: $ctx['event_id'],
-            detailId: $ctx['detail_id'],
-            uid: $staff['mundane_id'],
-            eventStatus: 'draft',
-            creatorId: $ctx['mundane_id'],
-            canManage: false,
-            staffCaps: [false, false, true, false],
-        );
-        $this->assertFalse($blocked);
+        $blocked = $this->planning->IsDraftBlockedForViewer([
+            'EventStatus' => 'draft',
+            'CreatorId' => $ctx['mundane_id'],
+            'MundaneId' => $staff['mundane_id'],
+            'CanManageEvent' => 0,
+            'StaffCaps' => ['CanSchedule' => true],
+        ]);
+        $this->assertFalse($blocked['Blocked']);
+    }
+
+    public function testGetDetailDependencyCounts(): void
+    {
+        $ctx = $this->fixture->createPublishedEvent('dep-counts');
+        $player = $this->fixture->createPlayer('dep-rsvp');
+        $this->fixture->insertRsvp($ctx['detail_id'], $player, 'going');
+
+        $counts = $this->planning->GetDetailDependencyCounts([
+            'EventCalendarDetailId' => $ctx['detail_id'],
+        ]);
+        $this->assertSame(0, $counts['Status']['Status']);
+        $this->assertSame(0, $counts['AttendanceCount']);
+        $this->assertSame(1, $counts['RsvpCount']);
+    }
+
+    public function testGetEventRedirectScope(): void
+    {
+        $ctx = $this->fixture->createPublishedEvent('redirect-scope');
+        $scope = $this->planning->GetEventRedirectScope(['EventId' => $ctx['event_id']]);
+        $this->assertSame(0, $scope['Status']['Status']);
+        $this->assertGreaterThan(0, $scope['KingdomId']);
+    }
+
+    public function testGetParkName(): void
+    {
+        $ctx = $this->fixture->createPublishedEvent('park-name');
+        $this->assertSame('', $this->planning->GetParkName(['ParkId' => 0])['Name']);
+
+        $name = $this->planning->GetParkName(['ParkId' => $ctx['park_id']]);
+        $this->assertSame(0, $name['Status']['Status']);
+        $this->assertNotSame('', $name['Name']);
+    }
+
+    public function testDraftNotBlockedWhenPublished(): void
+    {
+        $blocked = $this->planning->IsDraftBlockedForViewer([
+            'EventStatus' => 'published',
+            'CreatorId' => 1,
+            'MundaneId' => 0,
+            'CanManageEvent' => 0,
+            'StaffCaps' => [],
+        ]);
+        $this->assertFalse($blocked['Blocked']);
+    }
+
+    public function testGetDefaultOccurrenceIdInvalidEvent(): void
+    {
+        $r = $this->planning->GetDefaultOccurrenceId(['EventId' => 0]);
+        $this->assertNotSame(0, $r['Status']['Status']);
+    }
+
+    public function testAssertDetailBelongsToEventInvalidIds(): void
+    {
+        $r = $this->planning->AssertDetailBelongsToEvent(['EventId' => 0, 'EventCalendarDetailId' => 0]);
+        $this->assertNotSame(0, $r['Status']['Status']);
+    }
+
+    public function testSetCalendarDetailEventTypeRejectsInvalid(): void
+    {
+        $ctx = $this->fixture->createPublishedEvent('bad-type');
+        $r = $this->planning->SetCalendarDetailEventType([
+            'EventId' => $ctx['event_id'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+            'EventType' => 'Not A Real Type',
+        ]);
+        $this->assertNotSame(0, $r['Status']['Status']);
+    }
+
+    public function testGetOccurrencePageDataRejectsForeignDetail(): void
+    {
+        $ctxA = $this->fixture->createPublishedEvent('page-a');
+        $ctxB = $this->fixture->createPublishedEvent('page-b');
+        $r = $this->planning->GetOccurrencePageData([
+            'EventId' => $ctxA['event_id'],
+            'EventCalendarDetailId' => $ctxB['detail_id'],
+            'MundaneId' => 0,
+        ]);
+        $this->assertNotSame(0, $r['Status']['Status']);
+    }
+
+    public function testOccurrencePageDataIncludesDietaryWhenRequested(): void
+    {
+        $ctx = $this->fixture->createPublishedEvent('page-diet');
+        $player = $this->fixture->createPlayer('page-diet-player');
+        $this->fixture->insertRsvp($ctx['detail_id'], $player, 'going');
+
+        $r = $this->planning->GetOccurrencePageData([
+            'EventId' => $ctx['event_id'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+            'MundaneId' => 0,
+            'IncludeDietary' => 1,
+        ]);
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertNotEmpty($r['DietarySummary']);
     }
 
     /**
      * @return array{staff: list<array<string, mixed>>, schedule: list<array<string, mixed>>, fees: list<array<string, mixed>>, links: list<array<string, mixed>>}
      */
-    private function mirrorOccurrencePageData(int $detailId): array
+    private function occurrencePageData(int $eventId, int $detailId): array
     {
-        global $DB;
-
-        $DB->Clear();
-        $staffRows = $DB->DataSet(
-            'SELECT s.event_staff_id AS EventStaffId, s.mundane_id AS MundaneId, m.persona AS Persona,
-                    s.role_name AS RoleName
-             FROM ' . DB_PREFIX . 'event_staff s
-             LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = s.mundane_id
-             WHERE s.event_calendardetail_id = ' . $detailId . ' ORDER BY s.role_name, m.persona'
-        );
-        $staff = [];
-        while ($staffRows && $staffRows->Next()) {
-            $staff[] = [
-                'EventStaffId' => (int) $staffRows->EventStaffId,
-                'MundaneId' => (int) $staffRows->MundaneId,
-                'Persona' => $staffRows->Persona,
-                'RoleName' => $staffRows->RoleName,
-            ];
-        }
-
-        $DB->Clear();
-        $scheduleRows = $DB->DataSet(
-            'SELECT event_schedule_id AS EventScheduleId, title AS Title
-             FROM ' . DB_PREFIX . 'event_schedule
-             WHERE event_calendardetail_id = ' . $detailId . ' ORDER BY start_time'
-        );
-        $schedule = [];
-        while ($scheduleRows && $scheduleRows->Next()) {
-            $schedule[] = [
-                'EventScheduleId' => (int) $scheduleRows->EventScheduleId,
-                'Title' => $scheduleRows->Title,
-            ];
-        }
+        $r = $this->planning->GetOccurrencePageData([
+            'EventId' => $eventId,
+            'EventCalendarDetailId' => $detailId,
+            'MundaneId' => 0,
+        ]);
+        $this->assertSame(0, $r['Status']['Status']);
 
         return [
-            'staff' => $staff,
-            'schedule' => $schedule,
-            'fees' => $this->fixture->fetchFees($detailId),
-            'links' => $this->fixture->fetchLinks($detailId),
+            'staff' => $r['StaffList'] ?? [],
+            'schedule' => array_map(
+                static fn ($row) => ['EventScheduleId' => $row['EventScheduleId'], 'Title' => $row['Title']],
+                $r['ScheduleList'] ?? []
+            ),
+            'fees' => $r['EventFees'] ?? [],
+            'links' => $r['ExternalLinks'] ?? [],
         ];
     }
 
-    private function mirrorResolveDefaultOccurrenceId(int $eventId): int
+    private function defaultOccurrenceId(int $eventId): int
     {
-        global $DB;
-        $DB->Clear();
-        $_cdRow = $DB->DataSet(
-            'SELECT event_calendardetail_id FROM ' . DB_PREFIX . 'event_calendardetail
-             WHERE event_id = ' . $eventId . ' AND event_start >= NOW()
-             ORDER BY event_start ASC LIMIT 1'
-        );
-        if (!$_cdRow || !$_cdRow->Next()) {
-            $DB->Clear();
-            $_cdRow = $DB->DataSet(
-                'SELECT event_calendardetail_id FROM ' . DB_PREFIX . 'event_calendardetail
-                 WHERE event_id = ' . $eventId . ' ORDER BY event_start DESC LIMIT 1'
-            );
-            if ($_cdRow) {
-                $_cdRow->Next();
-            }
-        }
+        $r = $this->planning->GetDefaultOccurrenceId(['EventId' => $eventId]);
+        $this->assertSame(0, $r['Status']['Status']);
 
-        return ($_cdRow && isset($_cdRow->event_calendardetail_id))
-            ? (int) $_cdRow->event_calendardetail_id
-            : 0;
+        return (int) ($r['EventCalendarDetailId'] ?? 0);
     }
 
-    private function mirrorDetailBelongsToEvent(int $detailId, int $eventId): bool
+    private function detailBelongsToEvent(int $detailId, int $eventId): bool
     {
-        global $DB;
-        $DB->Clear();
-        $_ownRow = $DB->DataSet(
-            'SELECT event_id FROM ' . DB_PREFIX . 'event_calendardetail WHERE event_calendardetail_id = '
-            . $detailId . ' LIMIT 1'
-        );
-
-        return (bool) ($_ownRow && $_ownRow->Next() && (int) $_ownRow->event_id === $eventId);
-    }
-
-    /**
-     * @param list<array{AdmissionType?: string, Cost?: float|int}> $feesIn
-     * @param list<array{Title?: string, Url?: string, Icon?: string}> $linksIn
-     */
-    private function mirrorSetCalendarDetailFeesAndLinks(int $detailId, array $feesIn, array $linksIn): void
-    {
-        global $DB;
-        $_allowedIcons = ['fab fa-facebook', 'fab fa-discord', 'fas fa-globe', 'far fa-clipboard', 'fas fa-link', 'fas fa-ticket-alt'];
-
-        $DB->Clear();
-        $DB->Execute('START TRANSACTION');
-        $_feesOk = ($DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_fees WHERE event_calendardetail_id = ' . $detailId) !== false);
-        if ($_feesOk) {
-            foreach ($feesIn as $_fi => $_fee) {
-                $_at = trim($_fee['AdmissionType'] ?? '');
-                $_atSafe = str_replace(["'", '\\'], ["''", '\\\\'], $_at);
-                $_cost = round((float) ($_fee['Cost'] ?? 0), 2);
-                $DB->Clear();
-                if ($DB->Execute(
-                    'INSERT INTO ' . DB_PREFIX . 'event_fees (event_calendardetail_id, admission_type, cost, sort_order) VALUES ('
-                    . $detailId . ", '" . $_atSafe . "', " . $_cost . ', ' . $_fi . ')'
-                ) === false) {
-                    $_feesOk = false;
-                    break;
-                }
-            }
-        }
-        $DB->Execute($_feesOk ? 'COMMIT' : 'ROLLBACK');
-
-        $DB->Clear();
-        $DB->Execute('START TRANSACTION');
-        $_linksOk = ($DB->Execute('DELETE FROM ' . DB_PREFIX . 'event_links WHERE event_calendardetail_id = ' . $detailId) !== false);
-        if ($_linksOk) {
-            foreach ($linksIn as $_li => $_link) {
-                $_lt = str_replace(["'", '\\'], ["''", '\\\\'], trim($_link['Title'] ?? ''));
-                $_luRaw = trim($_link['Url'] ?? '');
-                if ($_luRaw !== '') {
-                    $_scheme = strtolower((string) parse_url($_luRaw, PHP_URL_SCHEME));
-                    if (!in_array($_scheme, ['http', 'https', 'mailto'], true)) {
-                        $_luRaw = '';
-                    }
-                }
-                $_lu = str_replace(["'", '\\'], ["''", '\\\\'], $_luRaw);
-                $_icRaw = trim($_link['Icon'] ?? '');
-                if (!in_array($_icRaw, $_allowedIcons, true)) {
-                    $_icRaw = 'fas fa-link';
-                }
-                $_lic = str_replace(["'", '\\'], ["''", '\\\\'], $_icRaw);
-                $DB->Clear();
-                if ($DB->Execute(
-                    'INSERT INTO ' . DB_PREFIX . 'event_links (event_calendardetail_id, title, url, icon, sort_order) VALUES ('
-                    . $detailId . ", '" . $_lt . "', '" . $_lu . "', '" . $_lic . "', " . $_li . ')'
-                ) === false) {
-                    $_linksOk = false;
-                    break;
-                }
-            }
-        }
-        $DB->Execute($_linksOk ? 'COMMIT' : 'ROLLBACK');
-    }
-
-    private function mirrorSetCalendarDetailEventType(int $detailId, string $eventType): void
-    {
-        global $DB;
-        $_etAllowed = ['Coronation', 'Midreign', 'Endreign', 'Crown Qualifications', 'Day Event', 'Park Raid', 'Meeting', 'Althing', 'Interkingdom Event', 'Weaponmaster', 'Warmaster', 'Dragonmaster', 'Other'];
-        if (!in_array($eventType, $_etAllowed, true)) {
-            return;
-        }
-        $_evTypeSql = "'" . str_replace(["'", '\\'], ["''", '\\\\'], $eventType) . "'";
-        $DB->Clear();
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'event_calendardetail SET event_type = ' . $_evTypeSql
-            . ' WHERE event_calendardetail_id = ' . $detailId
-        );
-    }
-
-    private function mirrorReconcilePastAttendance(int $eventId, int $detailId, string $token): int
-    {
-        $attendanceModel = new Model_Attendance();
-        $attData = $attendanceModel->get_attendance_for_event($eventId, $detailId);
-        $today = date('Y-m-d');
-        $pastAtt = array_filter(
-            $attData['Attendance'] ?? [],
-            static fn ($a) => !empty($a['Date']) && strtotime($a['Date']) < strtotime($today),
-        );
-        if (empty($pastAtt)) {
-            return 0;
-        }
-
-        $cdInfo = $attendanceModel->get_eventdetail_info($detailId);
-        $dates = array_map(static fn ($a) => strtotime($a['Date']), $pastAtt);
-        $minDate = date('Y-m-d', min($dates)) . ' 12:00:00';
-        $maxDate = date('Y-m-d', max($dates)) . ' 18:00:00';
-
-        unset($_SESSION['is_authorized_mundane_id']);
-        $r = $this->eventDomain->CreateEventDetails([
-            'Token' => $token,
+        $r = $this->planning->AssertDetailBelongsToEvent([
             'EventId' => $eventId,
-            'AtParkId' => valid_id($cdInfo['AtParkId'] ?? 0) ? $cdInfo['AtParkId'] : null,
-            'Current' => 0,
-            'Price' => $cdInfo['Price'] ?? '',
-            'EventStart' => $minDate,
-            'EventEnd' => $maxDate,
-            'Description' => $cdInfo['Description'] ?? '',
-            'Url' => $cdInfo['Url'] ?? '',
-            'UrlName' => $cdInfo['UrlName'] ?? '',
-            'Address' => $cdInfo['Address'] ?? '',
-            'Province' => $cdInfo['Province'] ?? '',
-            'PostalCode' => $cdInfo['PostalCode'] ?? '',
-            'City' => $cdInfo['City'] ?? '',
-            'Country' => $cdInfo['Country'] ?? '',
-            'MapUrl' => $cdInfo['MapUrl'] ?? '',
-            'MapUrlName' => $cdInfo['MapUrlName'] ?? '',
+            'EventCalendarDetailId' => $detailId,
         ]);
-        if ($r['Status'] != 0) {
-            return 0;
-        }
+        $this->assertSame(0, $r['Status']['Status']);
 
-        $newDetailId = (int) ($r['Detail'] ?? 0);
-        if (!$newDetailId) {
-            $fresh = $this->eventDomain->GetEventDetails(['EventId' => $eventId]);
-            $all = $fresh['CalendarEventDetails'] ?? [];
-            if ($all) {
-                $newDetailId = max(array_map('intval', array_column($all, 'EventCalendarDetailId')));
-            }
-        }
-        if (!$newDetailId) {
-            return 0;
-        }
-
-        $this->fixture->trackDetail($newDetailId);
-
-        global $DB;
-        $DB->Clear();
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'attendance SET event_calendardetail_id = ' . $newDetailId
-            . ' WHERE event_calendardetail_id = ' . $detailId . " AND date < '" . $today . "'"
-        );
-
-        return $newDetailId;
-    }
-
-    /**
-     * @return list<array{MundaneId: int, Persona: string, CheckedIn: bool}>
-     */
-    private function mirrorDietarySummary(int $detailId, bool $canManageFeast): array
-    {
-        if (!$canManageFeast || $detailId <= 0) {
-            return [];
-        }
-
-        global $DB;
-        $DB->Clear();
-        $dsRows = $DB->DataSet(
-            'SELECT m.mundane_id AS MundaneId, m.persona AS Persona,
-                    IF(a.mundane_id IS NOT NULL, 1, 0) AS CheckedIn
-             FROM (
-                 SELECT mundane_id FROM ' . DB_PREFIX . "event_rsvp
-                 WHERE event_calendardetail_id = {$detailId} AND status = 'going'
-                 UNION
-                 SELECT mundane_id FROM " . DB_PREFIX . "attendance
-                 WHERE event_calendardetail_id = {$detailId}
-             ) src
-             JOIN " . DB_PREFIX . 'mundane m ON m.mundane_id = src.mundane_id
-             LEFT JOIN (SELECT DISTINCT mundane_id FROM ' . DB_PREFIX . "attendance WHERE event_calendardetail_id = {$detailId}) a ON a.mundane_id = src.mundane_id
-             ORDER BY m.persona"
-        );
-        $dsList = [];
-        while ($dsRows && $dsRows->Next()) {
-            $dsList[] = [
-                'MundaneId' => (int) $dsRows->MundaneId,
-                'Persona' => (string) $dsRows->Persona,
-                'CheckedIn' => (bool) (int) $dsRows->CheckedIn,
-            ];
-        }
-
-        return $dsList;
-    }
-
-    /**
-     * @param array{0: bool, 1: bool, 2: bool, 3: bool} $staffCaps manage, attendance, schedule, feast
-     */
-    private function mirrorDraftBlocked(
-        int $eventId,
-        int $detailId,
-        int $uid,
-        string $eventStatus,
-        int $creatorId,
-        bool $canManage,
-        array $staffCaps,
-    ): bool {
-        unset($eventId, $detailId);
-        [$canManageStaff, $canAttendance, $canSchedule, $canFeast] = $staffCaps;
-
-        if ($eventStatus === 'published') {
-            return false;
-        }
-        if ($canManage) {
-            return false;
-        }
-        if ($canManageStaff || $canAttendance || $canSchedule || $canFeast) {
-            return false;
-        }
-        if ($uid === $creatorId) {
-            return false;
-        }
-        if ($uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_CREATE)) {
-            return false;
-        }
-
-        return true;
+        return (bool) ($r['Belongs'] ?? false);
     }
 }

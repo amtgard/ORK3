@@ -216,3 +216,87 @@ $server->register(
     array('return' => 'tns:StatusType'),
     $namespace
 );
+
+$server->register(
+    'Event.GetDefaultOccurrenceId',
+    array('OccurrenceScopeRequest' => 'tns:OccurrenceScopeRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.AssertDetailBelongsToEvent',
+    array('OccurrenceScopeRequest' => 'tns:OccurrenceScopeRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.GetOccurrencePageData',
+    array('OccurrencePageDataRequest' => 'tns:OccurrencePageDataRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.GetSchedule',
+    array('OccurrenceScopeRequest' => 'tns:OccurrenceScopeRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.SetCalendarDetailFeesAndLinks',
+    array('CalendarDetailFeesLinksRequest' => 'tns:CalendarDetailFeesLinksRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.SetCalendarDetailEventType',
+    array('CalendarDetailEventTypeRequest' => 'tns:CalendarDetailEventTypeRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.ReconcilePastAttendance',
+    array('ReconcilePastAttendanceRequest' => 'tns:ReconcilePastAttendanceRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.GetDietarySummaryForOccurrence',
+    array('OccurrenceDetailRequest' => 'tns:OccurrenceDetailRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.GetDetailDependencyCounts',
+    array('OccurrenceDetailRequest' => 'tns:OccurrenceDetailRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.GetEventRedirectScope',
+    array('GetEventRequest' => 'tns:GetEventRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.GetParkName',
+    array('GetParkNameRequest' => 'tns:GetParkNameRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
+    'Event.IsDraftBlockedForViewer',
+    array('DraftBlockedRequest' => 'tns:DraftBlockedRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);

@@ -125,3 +125,75 @@ function RemoveEventHeraldry($request)
     $H = new Heraldry();
     return $H->RemoveEventHeraldry($request);
 }
+
+function GetDefaultOccurrenceId($request)
+{
+    $EP = new EventPlanning();
+    return $EP->GetDefaultOccurrenceId($request);
+}
+
+function AssertDetailBelongsToEvent($request)
+{
+    $EP = new EventPlanning();
+    return $EP->AssertDetailBelongsToEvent($request);
+}
+
+function GetOccurrencePageData($request)
+{
+    $EP = new EventPlanning();
+    return $EP->GetOccurrencePageData($request);
+}
+
+function GetSchedule($request)
+{
+    $EP = new EventPlanning();
+    return $EP->GetSchedule($request);
+}
+
+function SetCalendarDetailFeesAndLinks($request)
+{
+    $EP = new EventPlanning();
+    return $EP->SetCalendarDetailFeesAndLinks($request);
+}
+
+function SetCalendarDetailEventType($request)
+{
+    $EP = new EventPlanning();
+    return $EP->SetCalendarDetailEventType($request);
+}
+
+function ReconcilePastAttendance($request)
+{
+    $EP = new EventPlanning();
+    return $EP->ReconcilePastAttendance($request);
+}
+
+function GetDietarySummaryForOccurrence($request)
+{
+    $EP = new EventPlanning();
+    return $EP->GetDietarySummaryForOccurrence($request);
+}
+
+function GetDetailDependencyCounts($request)
+{
+    $EP = new EventPlanning();
+    return $EP->GetDetailDependencyCounts($request);
+}
+
+function GetEventRedirectScope($request)
+{
+    $EP = new EventPlanning();
+    return $EP->GetEventRedirectScope($request);
+}
+
+function GetParkName($request)
+{
+    $EP = new EventPlanning();
+    return $EP->GetParkName($request);
+}
+
+function IsDraftBlockedForViewer($request)
+{
+    $EP = new EventPlanning();
+    return $EP->IsDraftBlockedForViewer($request);
+}

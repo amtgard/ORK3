@@ -12,7 +12,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-04-eventajax-refactor` @ `64563604` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-05-event-refactor` @ `20264fa9` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -24,7 +24,8 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 | R-01 | `megiddo/r-01-rsvp-refactor` | `bc626ce8` |
 | R-02 | `megiddo/r-02-auth-insert-refactor` | `516ac063` |
 | R-03 | `megiddo/r-03-banner-refactor` | `910cb0dc` |
-| R-04 | `megiddo/r-04-eventajax-refactor` | `64563604` |
+| R-04 | `megiddo/r-04-eventajax-refactor` | `810eceb3` |
+| R-05 | `megiddo/r-05-event-refactor` | `20264fa9` |
 | … | | |
 
 ---
@@ -129,16 +130,16 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Prior R-* hygiene | [ ] |
-| Refactor T-EVT-* targets | [ ] |
-| PHPUnit | [ ] |
-| Infection §2.4 | [ ] |
-| Fuzzy: `event-index-rsvp,event-index-rsvp-gok,event-create` | [ ] |
-| Playwright: `event-detail.spec.ts`, `event-planning.spec.ts` | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-05: …` | [ ] |
+| Prior R-* hygiene | [x] |
+| Refactor T-EVT-* targets | [x] |
+| PHPUnit | [x] |
+| Infection §2.4 | [x] |
+| Fuzzy: `event-index-rsvp,event-index-rsvp-gok,event-create` | [x] |
+| Playwright: `event-detail.spec.ts`, `event-planning.spec.ts` | [x] |
+| Docs + plan | [x] |
+| Commit: `R-05: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-05-event-refactor` @ `20264fa9` stacked on R-04 @ `810eceb3`. Extended `EventPlanning` with occurrence page DTO, fees/links, reconcile, dietary APIs; thinned `Controller_Event` T-EVT-01–08 (no `$DB` in migrated paths). PHPUnit 214/214 pass. Infection `infection.t05-event.json5` `--only-covered`: MSI 44%, covered MSI 44%. Fuzzy test+mirror 6/6 pass (re-recorded `event-index-rsvp*`). Playwright: auth smoke + `event-detail.spec.ts` 3/3 + `event-planning.spec.ts` 3/3 pass.
 
 ---
 
@@ -322,4 +323,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | … | … | … |
 | 14 | R-14 | Phase 3 audit |
 
-**Next unchecked:** R-05
+**Next unchecked:** R-06

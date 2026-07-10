@@ -262,72 +262,137 @@ class Model_Event extends Model
         return $r;
     }
 
-	/**
-	 * Schedule items for a single event occurrence (event_calendardetail_id),
-	 * ordered by start time, each with its leads attached. Shared by the event
-	 * page and the public embed endpoint so both draw from one query.
-	 */
-	function get_schedule($detail_id) {
-		global $DB;
-		$detail_id = (int)$detail_id;
-		if ($detail_id <= 0) return array();
+    /**
+     * Schedule items for one event occurrence. The query remains in
+     * EventPlanning so the event page and public embed share a thin model API.
+     */
+    public function get_schedule($detail_id)
+    {
+        $r = $this->Event->GetSchedule([
+            'EventCalendarDetailId' => (int) $detail_id,
+        ]);
+        return $this->_eventApiOk($r) ? ($r['ScheduleList'] ?? []) : [];
+    }
 
-		$DB->Clear();
-		$scheduleRows = $DB->DataSet(
-			'SELECT event_schedule_id AS EventScheduleId, title AS Title,
-			        start_time AS StartTime, end_time AS EndTime,
-			        location AS Location, description AS Description, category AS Category,
-			        secondary_category AS SecondaryCategory,
-			        menu AS Menu, cost AS Cost, dietary AS Dietary, allergens AS Allergens
-			FROM ' . DB_PREFIX . 'event_schedule
-			WHERE event_calendardetail_id = ' . $detail_id . '
-			ORDER BY start_time'
-		);
-		$scheduleList = array();
-		if ($scheduleRows) {
-			while ($scheduleRows->Next()) {
-				$scheduleList[] = array(
-					'EventScheduleId'   => (int)$scheduleRows->EventScheduleId,
-					'Title'             => $scheduleRows->Title,
-					'StartTime'         => $scheduleRows->StartTime,
-					'EndTime'           => $scheduleRows->EndTime,
-					'Location'          => $scheduleRows->Location,
-					'Description'       => $scheduleRows->Description,
-					'Category'          => $scheduleRows->Category,
-					'SecondaryCategory' => $scheduleRows->SecondaryCategory ?? '',
-					'Menu'              => $scheduleRows->Menu,
-					'Cost'              => $scheduleRows->Cost !== null ? (float)$scheduleRows->Cost : null,
-					'Dietary'           => $scheduleRows->Dietary,
-					'Allergens'         => $scheduleRows->Allergens,
-				);
-			}
-		}
-		// Batch-load leads for all schedule items
-		if (!empty($scheduleList)) {
-			$slIds = implode(',', array_map('intval', array_column($scheduleList, 'EventScheduleId')));
-			$DB->Clear();
-			$leadRows = $DB->DataSet(
-				'SELECT sl.event_schedule_id AS EventScheduleId, m.mundane_id AS MundaneId, m.persona AS Persona
-				FROM ' . DB_PREFIX . 'event_schedule_lead sl
-				JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = sl.mundane_id
-				WHERE sl.event_schedule_id IN (' . $slIds . ')
-				ORDER BY m.persona'
-			);
-			$leadsMap = array();
-			if ($leadRows) {
-				while ($leadRows->Next()) {
-					$leadsMap[(int)$leadRows->EventScheduleId][] = array(
-						'MundaneId' => (int)$leadRows->MundaneId,
-						'Persona'   => $leadRows->Persona,
-					);
-				}
-			}
-			foreach ($scheduleList as &$schItem) {
-				$schItem['Leads'] = $leadsMap[(int)$schItem['EventScheduleId']] ?? array();
-			}
-			unset($schItem);
-		}
-		return $scheduleList;
-	}
+    public function detail_belongs_to_event($event_id, $detail_id)
+    {
+        $r = $this->Event->AssertDetailBelongsToEvent([
+            'EventId' => (int) $event_id,
+            'EventCalendarDetailId' => (int) $detail_id,
+        ]);
+        return $this->_eventApiOk($r) && !empty($r['Belongs']);
+    }
+
+    public function get_default_occurrence_id($event_id)
+    {
+        $r = $this->Event->GetDefaultOccurrenceId(['EventId' => (int) $event_id]);
+        if (!$this->_eventApiOk($r)) {
+            return 0;
+        }
+        return (int) ($r['EventCalendarDetailId'] ?? 0);
+    }
+
+    public function get_occurrence_page_data($event_id, $detail_id, $mundane_id = 0, $at_park_id = 0, $fallback_park_id = 0, $include_dietary = false)
+    {
+        $r = $this->Event->GetOccurrencePageData([
+            'EventId' => (int) $event_id,
+            'EventCalendarDetailId' => (int) $detail_id,
+            'MundaneId' => (int) $mundane_id,
+            'AtParkId' => (int) $at_park_id,
+            'FallbackParkId' => (int) $fallback_park_id,
+            'IncludeDietary' => $include_dietary ? 1 : 0,
+        ]);
+        if (!$this->_eventApiOk($r)) {
+            return null;
+        }
+        return $r;
+    }
+
+    public function set_calendar_detail_fees_and_links($event_id, $detail_id, $fees, $links)
+    {
+        $r = $this->Event->SetCalendarDetailFeesAndLinks([
+            'EventId' => (int) $event_id,
+            'EventCalendarDetailId' => (int) $detail_id,
+            'Fees' => is_array($fees) ? $fees : [],
+            'Links' => is_array($links) ? $links : [],
+        ]);
+        if (!$this->_eventApiOk($r)) {
+            return ['feesOk' => false, 'linksOk' => false];
+        }
+        return [
+            'feesOk' => !empty($r['FeesOk']),
+            'linksOk' => !empty($r['LinksOk']),
+        ];
+    }
+
+    public function set_calendar_detail_event_type($event_id, $detail_id, $event_type)
+    {
+        $r = $this->Event->SetCalendarDetailEventType([
+            'EventId' => (int) $event_id,
+            'EventCalendarDetailId' => (int) $detail_id,
+            'EventType' => (string) $event_type,
+        ]);
+        return $this->_eventApiOk($r);
+    }
+
+    public function reconcile_past_attendance($token, $event_id, $detail_id)
+    {
+        $r = $this->Event->ReconcilePastAttendance([
+            'Token' => $token,
+            'EventId' => (int) $event_id,
+            'EventCalendarDetailId' => (int) $detail_id,
+        ]);
+        if (!$this->_eventApiOk($r)) {
+            return 0;
+        }
+        return (int) ($r['NewEventCalendarDetailId'] ?? 0);
+    }
+
+    public function get_detail_dependency_counts($detail_id)
+    {
+        $r = $this->Event->GetDetailDependencyCounts([
+            'EventCalendarDetailId' => (int) $detail_id,
+        ]);
+        if (!$this->_eventApiOk($r)) {
+            return ['attendance' => 0, 'rsvp' => 0];
+        }
+        return [
+            'attendance' => (int) ($r['AttendanceCount'] ?? 0),
+            'rsvp' => (int) ($r['RsvpCount'] ?? 0),
+        ];
+    }
+
+    public function get_event_redirect_scope($event_id)
+    {
+        $r = $this->Event->GetEventRedirectScope(['EventId' => (int) $event_id]);
+        if (!$this->_eventApiOk($r)) {
+            return ['kingdom_id' => 0, 'park_id' => 0];
+        }
+        return [
+            'kingdom_id' => (int) ($r['KingdomId'] ?? 0),
+            'park_id' => (int) ($r['ParkId'] ?? 0),
+        ];
+    }
+
+    public function get_park_name($park_id)
+    {
+        $r = $this->Event->GetParkName(['ParkId' => (int) $park_id]);
+        if (!$this->_eventApiOk($r)) {
+            return '';
+        }
+        return (string) ($r['Name'] ?? '');
+    }
+
+    public function is_draft_blocked_for_viewer($event_status, $creator_id, $mundane_id, $can_manage, $staff_caps)
+    {
+        $r = $this->Event->IsDraftBlockedForViewer([
+            'EventStatus' => (string) $event_status,
+            'CreatorId' => (int) $creator_id,
+            'MundaneId' => (int) $mundane_id,
+            'CanManageEvent' => $can_manage ? 1 : 0,
+            'StaffCaps' => is_array($staff_caps) ? $staff_caps : [],
+        ]);
+        return $this->_eventApiOk($r) && !empty($r['Blocked']);
+}
 
 }

@@ -689,3 +689,108 @@ $server->wsdl->addComplexType(
                 'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
             )
 );
+
+$server->wsdl->addComplexType(
+    'OccurrenceScopeRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+            )
+);
+
+$server->wsdl->addComplexType(
+    'OccurrenceDetailRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+            )
+);
+
+$server->wsdl->addComplexType(
+    'OccurrencePageDataRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int'),
+                'AtParkId' => array('name' => 'AtParkId','type' => 'xsd:int'),
+                'FallbackParkId' => array('name' => 'FallbackParkId','type' => 'xsd:int'),
+                'IncludeDietary' => array('name' => 'IncludeDietary','type' => 'xsd:int'),
+            )
+);
+
+$server->wsdl->addComplexType(
+    'CalendarDetailFeesLinksRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'Fees' => array('name' => 'Fees','type' => 'xsd:string'),
+                'Links' => array('name' => 'Links','type' => 'xsd:string'),
+            )
+);
+
+$server->wsdl->addComplexType(
+    'CalendarDetailEventTypeRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+                'EventType' => array('name' => 'EventType','type' => 'xsd:string'),
+            )
+);
+
+$server->wsdl->addComplexType(
+    'ReconcilePastAttendanceRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
+                'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
+            )
+);
+
+$server->wsdl->addComplexType(
+    'GetParkNameRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'ParkId' => array('name' => 'ParkId','type' => 'xsd:int'),
+            )
+);
+
+$server->wsdl->addComplexType(
+    'DraftBlockedRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'EventStatus' => array('name' => 'EventStatus','type' => 'xsd:string'),
+                'CreatorId' => array('name' => 'CreatorId','type' => 'xsd:int'),
+                'MundaneId' => array('name' => 'MundaneId','type' => 'xsd:int'),
+                'CanManageEvent' => array('name' => 'CanManageEvent','type' => 'xsd:int'),
+                'StaffCaps' => array('name' => 'StaffCaps','type' => 'xsd:string'),
+            )
+);
