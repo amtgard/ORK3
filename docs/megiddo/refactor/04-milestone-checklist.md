@@ -1087,11 +1087,17 @@ Execution sprints begin **after** the corresponding discovery sprint, test sprin
 | R-11 | DS-11, T-11, V-00, **V-11** | Search targets |
 | R-12 | DS-12, T-12, V-00, **V-12** | Attendance/sign-in targets |
 | R-13 | DS-13, T-13, V-00, **V-13** | Infrastructure targets |
-| R-14 | DS-14, T-14, V-00, **V-14** | Ork3::$Lib migration |
+| R-14 | DS-14, T-14, V-00, **V-14** | Ork3::$Lib service surfaces (T-LIB-01–05) |
+| R-15 | R-14, V-14 | HasAuthority rollout (controllers + templates) |
+| R-16 | R-15, V-14 | GhettoCache read/bust migration |
+| R-17 | R-16, V-14 | Residual domain `Ork3::$Lib` bypass |
+| R-18 | R-17, V-00 | Residual `$DB` in `orkui/` |
 
 **Branch pattern:** `megiddo/r-{nn}-{slug}`
 
-Per execution sprint checklist:
+**Continuation plan:** [10-phase-2-continuation.md](./10-phase-2-continuation.md) — carryover audit, R-15 … R-18 scope, Phase 3 definition.
+
+Per execution sprint checklist (R-01 … R-14 complete; template applies to R-15+):
 
 - [ ] [05-development-steering.md](./05-development-steering.md) DS-1 through DS-8 satisfied
 - [ ] Matching T-* test sprint complete (tests already in place; do not defer test writing to R-*)
@@ -1108,13 +1114,38 @@ Per execution sprint checklist:
 
 ---
 
-## Phase 3 — Completion
+## Phase 2 — Continuation (R-15 … R-18)
 
-- [ ] All ~119 target IDs in implementation plan addressed
-- [ ] Zero `$DB` in `orkui/` verified by audit (`rg '\$DB->' orkui/`)
-- [ ] Zero unauthorized `Ork3::$Lib` in `orkui/` verified by audit
-- [ ] Requirements success criteria in [02-requirements.md](./02-requirements.md) met
-- [ ] Retrospective: lessons for future sprint hygiene
+Deferred cross-cutting work from R-01 … R-14. **Implementation** — not Phase 3. See [10-phase-2-continuation.md](./10-phase-2-continuation.md) for carryover audit and suggested fuzzy gates.
+
+| Sprint | Branch | Status |
+|--------|--------|--------|
+| R-15 HasAuthority | `megiddo/r-15-hasauthority-refactor` | [ ] |
+| R-16 GhettoCache | `megiddo/r-16-ghettocache-refactor` | [ ] |
+| R-17 Lib bypass | `megiddo/r-17-lib-bypass-refactor` | [ ] |
+| R-18 Residual `$DB` | `megiddo/r-18-residual-db-refactor` | [ ] |
+
+**Stack tip after R-14:** `megiddo/r-14-lib-service-refactor` — branch tip `395b6d06` (code commit `76758e2c` + docs close-out; squash before R-15 if enforcing DS-6)
+
+---
+
+## Phase 3 — Audit and close-out
+
+**Canonical plan:** [11-phase-3-closeout.md](./11-phase-3-closeout.md) · **Manual smokes:** [validations/r-milestone-smoke-matrix.html](./validations/r-milestone-smoke-matrix.html)
+
+Run only after **R-18**. No code migration.
+
+- [x] P3-1 HTML smoke matrix available ([r-milestone-smoke-matrix.html](./validations/r-milestone-smoke-matrix.html))
+- [ ] P3-4 Human manual walk-through — all 18 R-* smokes pass
+- [ ] P3-2 Agent automated audit — [skills/phase3-closeout/orchestrator.prompt](./skills/phase3-closeout/orchestrator.prompt)
+- [ ] All ~119 target IDs in [03-implementation-plan.md](./03-implementation-plan.md) marked done
+- [ ] `rg '\$DB->' orkui/` → zero matches
+- [ ] `rg 'Ork3::\$Lib' orkui/` → zero matches
+- [ ] Success criteria in [02-requirements.md](./02-requirements.md) satisfied
+- [ ] Full PHPUnit + fuzzy `--all` + Playwright green
+- [ ] P3-5 Retrospective recorded (`phase3-audit-report.md` or checklist notes)
+
+Optional: merge stack tip into integration line `megiddo/rebase-20260709`.
 
 ---
 
@@ -1126,10 +1157,11 @@ Per execution sprint checklist:
 | **1** | Discovery sprints — survey, test design, proposed revision |
 | **1.5** | Test development — implement tests + Infection per DS design notes |
 | **1.6** | Validation artifacts — canary URLs, dual-profile fuzzy baselines, test mutation boundaries |
-| **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
-| **3** | Audit and close-out |
+| **2** | Refactor execution R-01 … R-14 — domain migrations per DS-* |
+| **2 cont.** | Refactor execution R-15 … R-18 — cross-cutting HasAuthority, cache, residual lib/`$DB` ([10-phase-2-continuation.md](./10-phase-2-continuation.md)) |
+| **3** | **Audit and close-out** — [11-phase-3-closeout.md](./11-phase-3-closeout.md): automated gates + [manual smoke matrix](./validations/r-milestone-smoke-matrix.html) |
 
-**Next actionable milestone:** Phase 3 audit (R-14 complete on `megiddo/r-14-lib-service-refactor`). Phase 1.6 (V-00…V-14) complete.
+**Next actionable milestone:** **R-15** (`megiddo/r-15-hasauthority-refactor` stacked on `megiddo/r-14-lib-service-refactor` branch tip). Phase 1.6 (V-00…V-14) complete.
 
 ### R-01 complete (2026-07-09)
 
@@ -1158,19 +1190,19 @@ Per execution sprint checklist:
 ### R-05 complete (2026-07-09)
 
 - [x] Branch `megiddo/r-05-event-refactor` stacked on `megiddo/r-04-eventajax-refactor` — occurrence page DTO, fees/links, reconcile, dietary in `EventPlanning`; `Controller_Event` T-EVT-01–08 off `$DB`
-- [x] Targets closed: T-EVT-01 through T-EVT-08 (page-render paths; auth lib deferred DS-14)
+- [x] Targets closed: T-EVT-01 through T-EVT-07 (page-render paths); **T-EVT-08** → R-16/R-17 (auth + ghettocache)
 - [x] Gates: PHPUnit 214/214 pass; Infection `--only-covered` MSI 44%; fuzzy 6/6; Playwright auth smoke + `event-detail.spec.ts` 3/3 + `event-planning.spec.ts` 3/3 pass
 
 ### R-06 complete (2026-07-09)
 
 - [x] Branch `megiddo/r-06-kingdom-refactor` stacked on `megiddo/r-05-event-refactor` — `KingdomProfile` domain + `Report.GetKingdomExtendedParkAverages`; thinned `Controller_Kingdom` and `Controller_KingdomAjax` migrated paths off `$DB`
-- [x] Targets closed: T-KNG-01 through T-KNG-10 (excl. deferred lib-service); T-KNA-01–07, T-KNA-09
+- [x] Targets closed: T-KNG-01 through T-KNG-10; T-KNA-01–07, T-KNA-09; **T-KNG-11** → R-15/R-16/R-17
 - [x] Gates: PHPUnit 214/214 pass; Infection `--only-covered` MSI 21%; fuzzy 4/4; Playwright auth smoke + `kingdom-profile.spec.ts` 2/2 pass
 
 ### R-07 complete (2026-07-09)
 
 - [x] Branch `megiddo/r-07-park-refactor` stacked on `megiddo/r-06-kingdom-refactor` — `ParkProfile` domain + `Model_ParkProfile`; thinned `Controller_Park::profile` and `Controller_ParkAjax` T-PRA-03 off `$DB`
-- [x] Targets closed: T-PRK-01 through T-PRK-04, T-PRA-03 (T-PRK-05 auth/weather/circles deferred DS-14; T-PRA-01/02/04 out of scope)
+- [x] Targets closed: T-PRK-01 through T-PRK-04, T-PRA-03; **T-PRK-05** → R-15/R-17; T-PRA-01/02/04 → R-02/R-11/R-03
 - [x] Gates: PHPUnit 214/214 pass; Infection `--only-covered` MSI 39% (`class.ParkProfile.php`); fuzzy 4/4; Playwright auth smoke + `park-profile.spec.ts` 2/2 pass
 
 ### R-08 complete (2026-07-09)
@@ -1182,13 +1214,13 @@ Per execution sprint checklist:
 ### R-09 complete (2026-07-09)
 
 - [x] Branch `megiddo/r-09-player-refactor` stacked on `megiddo/r-08-admin-refactor` — player profile reads, AJAX probes, and model cache bust in `Player` / `Authorization` domain; thinned `Controller_Player`, `Controller_PlayerAjax`, `Model_Player` migrated paths off `$DB`
-- [x] Targets closed: T-PLR-01 through T-PLR-07, T-PLA-01 through T-PLA-05, T-PLM-01 through T-PLM-04 (T-PLR-08 → DS-14; T-PLA-06 → R-03)
+- [x] Targets closed: T-PLR-01 through T-PLR-07, T-PLA-01 through T-PLA-05, T-PLM-01 through T-PLM-04; **T-PLR-08** → R-15; T-PLA-06 → R-03
 - [x] Gates: PHPUnit 214/214 pass; Infection `infection.t09-player.json5` `--only-covered` MSI 46% (Player+Authorization); fuzzy player-profile/player-profile-sandbox 4/4; Playwright auth smoke + `player-profile.spec.ts` 2/2 pass
 
 ### R-10 complete (2026-07-10)
 
 - [x] Branch `megiddo/r-10-reports-refactor` stacked on `megiddo/r-09-player-refactor` — voting rules config, ladder grid, attendance dates, officer directory merge, award option groups in `VotingRules` / `Report` / `Award` domain; thinned `Controller_Reports::ladder_grid`, `Model_Reports`, `Model_Award`, `Controller_PlayerAjax::voting_eligible` off `$DB`
-- [x] Targets closed: T-RPT-01, T-RPT-03 through T-RPT-09, T-AWD-01 (T-RPT-02 auth/cache edge → DS-14)
+- [x] Targets closed: T-RPT-01, T-RPT-03 through T-RPT-09, T-AWD-01; **T-RPT-02** → R-15/R-16/R-17
 - [x] Gates: PHPUnit 215/215 pass; Infection `infection.t10-reports.json5` `--only-covered` MSI 47%; fuzzy reports-voting-eligible/reports-ladder-grid/reports-attendance 6/6; Playwright auth smoke + `reports.spec.ts` 4/4 pass
 
 ### R-11 complete (2026-07-10)
@@ -1212,5 +1244,5 @@ Per execution sprint checklist:
 ### R-14 complete (2026-07-10)
 
 - [x] Branch `megiddo/r-14-lib-service-refactor` stacked on `megiddo/r-13-infrastructure-refactor` — `AuthorizationGate`, `LiveService`, `WeatherService`, `EraPhoeniceService` JSON surfaces; `Authorization.HasAuthority` SOAP; thinned Live/Weather/EraPhoenice/Tournament/CalendarItemAjax controllers and Controller base menu gates off `Ork3::$Lib` on migrated paths
-- [x] Targets closed: T-LIB-01 through T-LIB-05; Controller base menu HasAuthority (DS-14 cross-cut partial — remaining ~120 sites deferred to domain R-* / Phase 3)
+- [x] Targets closed: T-LIB-01 through T-LIB-05; Controller base menu HasAuthority; **~120 remaining HasAuthority + templates** → **R-15**; ghettocache → **R-16**; domain lib bypass → **R-17**; residual `$DB` → **R-18**
 - [x] Gates: PHPUnit 215/215 pass (2 skipped); Infection pass A MSI 18%, pass B MSI 27%; fuzzy `weather`/`tournament` 4/4 (re-recorded baselines); Playwright auth smoke + `lib-service.spec.ts` 4/4 pass

@@ -4,7 +4,7 @@
 **Branch:** `megiddo/v-14-lib-service-validation`  
 **Target IDs:** T-LIB-01 through T-LIB-05; cross-cutting HasAuthority / remaining `Ork3::$Lib` policy  
 **Depends on:** DS-14, T-14, V-00  
-**Execution sprint:** R-14  
+**Execution sprint:** R-14 (T-LIB-01–05); **continuation:** R-15 … R-18 reuse §2 boundaries per [10-phase-2-continuation.md](../10-phase-2-continuation.md)  
 **Discovery source:** [ds-14-lib-service-discovery.md §1](../ds-14-lib-service-discovery.md#1-backend-survey)
 
 ---
@@ -118,3 +118,5 @@ sh bin/run-infection.sh \
 - [x] Full unit suite green
 - [x] Infection per §2.4 (both passes)
 - [x] No new `Ork3::$Lib` in Live / Weather / Tournament / EraPhoenice / CalendarItemAjax / Controller base menu paths for migrated targets
+
+**R-15 … R-18:** Remaining HasAuthority, ghettocache, domain lib bypass, and residual `$DB` — see [10-phase-2-continuation.md](../10-phase-2-continuation.md). Reuse §2.3–2.4 boundaries where scope overlaps; add per-sprint notes under §3 as each continuation milestone completes.

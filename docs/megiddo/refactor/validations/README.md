@@ -28,6 +28,8 @@ Per-domain **canary URLs** and **test mutation boundaries** for R-* execution sp
 
 **Template:** [_template-validation.md](./_template-validation.md)
 
+**Phase 3 manual smokes:** [r-milestone-smoke-matrix.html](./r-milestone-smoke-matrix.html) — one smoke per R-* (P3-1 / P3-4 in [11-phase-3-closeout.md](../11-phase-3-closeout.md))
+
 ---
 
 ## Registry locations (implementation)

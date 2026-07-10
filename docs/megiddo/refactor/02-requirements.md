@@ -164,9 +164,11 @@ Before implementing any refactor target group, a discovery sprint must:
 
 Discovery sprint outputs are appended to [04-milestone-checklist.md](./04-milestone-checklist.md) as they complete.
 
+**Phase map:** Phase 2 (R-01 … R-14) + Phase 2 continuation (R-15 … R-18) implement migrations; **Phase 3** after R-18 — [11-phase-3-closeout.md](./11-phase-3-closeout.md).
+
 ## Success Criteria
 
-The refactor is complete when:
+The refactor is complete when **R-18** and **Phase 3 audit** pass:
 
 - [ ] Zero `$DB` usage in `orkui/` (including models and `index.php`)
 - [ ] Zero direct `Ork3::$Lib->{domain}` calls in `orkui/` except where explicitly exempted (if any)
@@ -183,6 +185,8 @@ The refactor is complete when:
 | [01-code-decomposition.md](./01-code-decomposition.md) | Architecture map |
 | [03-implementation-plan.md](./03-implementation-plan.md) | Target inventory |
 | [04-milestone-checklist.md](./04-milestone-checklist.md) | Milestones and sprint tracking |
+| [10-phase-2-continuation.md](./10-phase-2-continuation.md) | R-15 … R-18 + short Phase 3 pointer |
+| [11-phase-3-closeout.md](./11-phase-3-closeout.md) | **Phase 3** — full audit plan, HTML matrix, prompts |
 | [05-development-steering.md](./05-development-steering.md) | Branch, test, mutation, and commit rules |
 | [07-agent-milestone-prompt.md](./07-agent-milestone-prompt.md) | Copy-paste agent prompt per milestone |
 | [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md) | Phase 1.6 — V-* canaries + test mutation boundaries |

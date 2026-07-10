@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Megiddo R-* Manual Smoke Validation Matrix</title>
+  <style>
+    :root { --border: #c8d0d8; --bg: #f6f8fa; --accent: #1a5276; }
+    body { font-family: system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 1.5rem; line-height: 1.45; color: #222; }
+    h1 { color: var(--accent); border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; }
+    h2 { margin-top: 2rem; color: var(--accent); scroll-margin-top: 1rem; }
+    h3 { margin: 0.5rem 0; font-size: 1rem; }
+    nav { background: var(--bg); border: 1px solid var(--border); padding: 1rem; border-radius: 6px; margin: 1rem 0 2rem; }
+    nav ul { columns: 2; margin: 0.5rem 0 0; padding-left: 1.2rem; }
+    .milestone { border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; background: #fff; }
+    .meta { display: grid; grid-template-columns: 7rem 1fr; gap: 0.25rem 1rem; font-size: 0.9rem; margin: 0.75rem 0; }
+    .meta dt { font-weight: 600; color: #555; }
+    ol.steps { margin: 0.5rem 0; padding-left: 1.4rem; }
+    ol.steps li { margin: 0.35rem 0; }
+    .verify { background: #eef9ee; border-left: 4px solid #2e7d32; padding: 0.6rem 0.9rem; margin: 0.75rem 0; font-size: 0.95rem; }
+    .baseline { margin: 1rem 0; text-align: center; }
+    .baseline img { max-width: 100%; border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    .baseline figcaption { font-size: 0.8rem; color: #666; margin-top: 0.35rem; }
+    .pass { margin-top: 0.75rem; font-weight: 600; }
+    .preflight { background: #fff8e6; border: 1px solid #e6c200; padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.9rem; }
+    code { background: #eee; padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.88em; }
+  </style>
+</head>
+<body>
+
+<h1>Megiddo R-* Manual Smoke Validation Matrix</h1>
+<p>One smoke test per refactor milestone (R-01 … R-18). Use after each R-* sign-off or as Phase 3 human verification (<a href="../11-phase-3-closeout.md">11-phase-3-closeout.md</a> P3-1 / P3-4).</p>
+
+<div class="preflight">
+  <strong>Preflight</strong> (mirror profile, local docker):<br>
+  <code>docker compose -f docker-compose.php8.yml up -d</code><br>
+  <code>export ORK3_E2E_BASE_URL=http://127.0.0.1:19080/orkui/</code><br>
+  <code>bin/ork-db use prod</code> · <code>export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password</code><br>
+  Baseline images: <code>tools/fuzzy-validator/baselines/test/*.png</code> (run <code>bin/fuzzy-validator setpoint restore</code> if missing).
+</div>
+
+<nav>
+  <strong>Jump to milestone</strong>
+  <ul>
+    <li><a href="#r-01">R-01 RSVP</a></li>
+    <li><a href="#r-02">R-02 Auth INSERT</a></li>
+    <li><a href="#r-03">R-03 Banner</a></li>
+    <li><a href="#r-04">R-04 EventAjax</a></li>
+    <li><a href="#r-05">R-05 Event</a></li>
+    <li><a href="#r-06">R-06 Kingdom</a></li>
+    <li><a href="#r-07">R-07 Park</a></li>
+    <li><a href="#r-08">R-08 Admin</a></li>
+    <li><a href="#r-09">R-09 Player</a></li>
+    <li><a href="#r-10">R-10 Reports</a></li>
+    <li><a href="#r-11">R-11 Search</a></li>
+    <li><a href="#r-12">R-12 Attendance</a></li>
+    <li><a href="#r-13">R-13 Infrastructure</a></li>
+    <li><a href="#r-14">R-14 Lib-service</a></li>
+    <li><a href="#r-15">R-15 HasAuthority</a></li>
+    <li><a href="#r-16">R-16 GhettoCache</a></li>
+    <li><a href="#r-17">R-17 Lib bypass</a></li>
+    <li><a href="#r-18">R-18 Residual DB</a></li>
+  </ul>
+</nav>
+
+<!-- R-01 -->
+<section class="milestone" id="r-01">
+  <h2>R-01 — RSVP</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-01-rsvp-refactor</code></dd>
+    <dt>Canary</dt><dd><code>event-index-rsvp</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Event/index/80000</code></dd>
+    <dt>Playwright</dt><dd><code>tests/e2e/rsvp.spec.ts</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/event-index-rsvp.png" alt="Baseline event-index-rsvp" width="640">
+    <figcaption>Fuzzy baseline (test profile) — reference render before/after RSVP refactor</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Open <code>{BASE}/index.php?Route=Login</code>. Enter <strong>admin</strong> / <strong>password</strong>. Click <strong>Log in</strong>.</li>
+    <li>Wait for home to load (network idle).</li>
+    <li>Navigate to <code>Event/index/80000</code> (Spring War sandbox index).</li>
+    <li>Scroll the event index body — confirm the page renders without PHP/SQL error text.</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Body visible; no stack trace; RSVP-related index chrome present (counts or event title area). Mirror may show home chrome if event 80000 absent — still pass if page loads cleanly.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-02 -->
+<section class="milestone" id="r-02">
+  <h2>R-02 — Auth INSERT</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-02-auth-insert-refactor</code></dd>
+    <dt>Canary</dt><dd><code>admin-permissions</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Admin/permissions</code></dd>
+    <dt>Playwright</dt><dd><code>tests/e2e/auth-permissions.spec.ts</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/admin-permissions.png" alt="Baseline admin-permissions" width="640">
+    <figcaption>Fuzzy baseline — global permissions host (addauth paths use service layer)</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Go to <code>Admin/permissions</code>.</li>
+    <li>Confirm permissions / global admin UI text appears (heading or table region).</li>
+    <li>Optional: open kingdom host <code>Kingdom/profile/100001</code> — permissions/banner chrome loads (sandbox).</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Page contains text matching <em>permission</em>, <em>admin</em>, or <em>global</em>; no raw SQL error. AJAX addauth not exercised in this smoke — covered by integration tests.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-03 -->
+<section class="milestone" id="r-03">
+  <h2>R-03 — Banner</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-03-banner-refactor</code></dd>
+    <dt>Canary</dt><dd><code>park-auth-sandbox</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Park/profile/1000001</code></dd>
+    <dt>Playwright</dt><dd><code>tests/e2e/banner.spec.ts</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/park-auth-sandbox.png" alt="Baseline park-auth-sandbox" width="640">
+    <figcaption>Fuzzy baseline — Silver Fen park profile (hero banner host)</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Navigate to <code>Park/profile/1000001</code>.</li>
+    <li>Locate the hero/banner region at top of park profile (image band or gradient).</li>
+    <li>Confirm park profile body loads (park name or profile sections visible).</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Park profile renders; banner area present or empty state (no PHP fatal). Do not edit banner in this smoke.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-04 -->
+<section class="milestone" id="r-04">
+  <h2>R-04 — EventAjax</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-04-eventajax-refactor</code></dd>
+    <dt>Canary</dt><dd><code>event-list</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Event</code></dd>
+    <dt>Playwright</dt><dd><code>tests/e2e/event-planning.spec.ts</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/event-list.png" alt="Baseline event-list" width="640">
+    <figcaption>Fuzzy baseline — event list landing (planning AJAX hosts)</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Click or navigate to <code>Event</code> (event list).</li>
+    <li>Confirm list/calendar chrome loads.</li>
+    <li>Navigate to <code>Event/index/80000</code> — index RSVP area still loads (cross-check R-01 surface).</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Event list and index pages load without error; planning UI shell visible.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-05 -->
+<section class="milestone" id="r-05">
+  <h2>R-05 — Event</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-05-event-refactor</code></dd>
+    <dt>Canary</dt><dd><code>event-create</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Event/create/1</code></dd>
+    <dt>Playwright</dt><dd><code>tests/e2e/event-detail.spec.ts</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/event-create.png" alt="Baseline event-create" width="640">
+    <figcaption>Fuzzy baseline — event create form</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Go to <code>Event/create/1</code> (create form for park 1).</li>
+    <li>Confirm create form fields or headings render.</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Create form visible; no DB error text; submit not required for smoke.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-06 -->
+<section class="milestone" id="r-06">
+  <h2>R-06 — Kingdom</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-06-kingdom-refactor</code></dd>
+    <dt>Canary</dt><dd><code>kingdom-profile</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Kingdom/profile/1</code></dd>
+    <dt>Playwright</dt><dd><code>tests/e2e/kingdom-profile.spec.ts</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/kingdom-profile.png" alt="Baseline kingdom-profile" width="640">
+    <figcaption>Fuzzy baseline — kingdom profile aggregates</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Navigate to <code>Kingdom/profile/1</code>.</li>
+    <li>Confirm kingdom header/name and profile sections render.</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Kingdom profile body visible; park list or stats region present.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-07 -->
+<section class="milestone" id="r-07">
+  <h2>R-07 — Park</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-07-park-refactor</code></dd>
+    <dt>Canary</dt><dd><code>event-park</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Event/park/1</code></dd>
+    <dt>Playwright</dt><dd><code>tests/e2e/park-profile.spec.ts</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/event-park.png" alt="Baseline event-park" width="640">
+    <figcaption>Fuzzy baseline — park calendar (park profile reads framed here)</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Open <code>Event/park/1</code> (park event calendar).</li>
+    <li>Confirm calendar/list chrome loads.</li>
+    <li>Optional: <code>Park/profile/1</code> — profile loads.</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Park calendar page renders without fatal error.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-08 -->
+<section class="milestone" id="r-08">
+  <h2>R-08 — Admin</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-08-admin-refactor</code></dd>
+    <dt>Canary</dt><dd><code>admin-dashboard</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Admin</code></dd>
+    <dt>Playwright</dt><dd><code>tests/e2e/admin-dashboard.spec.ts</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/admin-dashboard.png" alt="Baseline admin-dashboard" width="640">
+    <figcaption>Fuzzy baseline — admin dashboard YoY stats</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Go to <code>Admin</code> (dashboard).</li>
+    <li>Confirm dashboard widgets or admin navigation visible.</li>
+    <li>Optional: <code>Admin/stateofamtgard</code> loads.</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Admin dashboard renders; stats or admin menu present.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-09 -->
+<section class="milestone" id="r-09">
+  <h2>R-09 — Player</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-09-player-refactor</code></dd>
+    <dt>Canary</dt><dd><code>player-profile</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Player/profile</code></dd>
+    <dt>Playwright</dt><dd><code>tests/e2e/player-profile.spec.ts</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/player-profile.png" alt="Baseline player-profile" width="640">
+    <figcaption>Fuzzy baseline — logged-in player profile</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Navigate to <code>Player/profile</code> (your profile).</li>
+    <li>Confirm profile content (name, tabs, or player sections).</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Body contains <em>profile</em> or <em>player</em> text; page interactive.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-10 -->
+<section class="milestone" id="r-10">
+  <h2>R-10 — Reports</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-10-reports-refactor</code></dd>
+    <dt>Canary</dt><dd><code>reports-voting-eligible</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Reports/voting_eligible&amp;KingdomId=14</code></dd>
+    <dt>Playwright</dt><dd><code>tests/e2e/reports.spec.ts</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/reports-voting-eligible.png" alt="Baseline reports-voting-eligible" width="640">
+    <figcaption>Fuzzy baseline — voting eligible report</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Open voting eligible report (URL above).</li>
+    <li>Confirm report shell/table region loads.</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Report page renders; no SQL error; voting rules UI present.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-11 -->
+<section class="milestone" id="r-11">
+  <h2>R-11 — Search</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-11-search-refactor</code></dd>
+    <dt>Canary</dt><dd><code>admin-permissions</code> (playersearch chrome)</dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Admin/permissions</code></dd>
+    <dt>Playwright</dt><dd><code>tests/e2e/search.spec.ts</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/admin-permissions.png" alt="Baseline admin-permissions for search" width="640">
+    <figcaption>Fuzzy baseline — admin host embeds playersearch UI (search page capture skipped per V-11)</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Open <code>Admin/permissions</code>.</li>
+    <li>Locate player search input or autocomplete on permissions admin UI.</li>
+    <li>Type two characters in search — confirm no JS console fatal (optional: results dropdown).</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Permissions page loads; search field present and accepts input.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-12 -->
+<section class="milestone" id="r-12">
+  <h2>R-12 — Attendance</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-12-attendance-refactor</code></dd>
+    <dt>Canary</dt><dd><code>event-park</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Event/park/1</code></dd>
+    <dt>Playwright</dt><dd><code>tests/e2e/attendance.spec.ts</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/event-park.png" alt="Baseline event-park attendance frame" width="640">
+    <figcaption>Fuzzy baseline — park calendar frames attendance workflows</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Open <code>Event/park/1</code>.</li>
+    <li>In a second tab, hit <code>AttendanceAjax/park/1/getday&amp;date={today}</code> — confirm HTTP &lt; 500.</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Park calendar loads; attendance AJAX endpoint responds (JSON or HTML, not 500).</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-13 -->
+<section class="milestone" id="r-13">
+  <h2>R-13 — Infrastructure</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-13-infrastructure-refactor</code></dd>
+    <dt>Canary</dt><dd><code>home-authenticated</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=</code></dd>
+    <dt>Playwright</dt><dd><code>tests/e2e/infrastructure.spec.ts</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/home-authenticated.png" alt="Baseline home-authenticated" width="640">
+    <figcaption>Fuzzy baseline — post-login home (session, prefs, menu)</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Land on home <code>Route=</code>.</li>
+    <li>Confirm main content <code>#main</code> or body visible; top navigation present.</li>
+    <li>Check admin/kingdom/park menu links match your roles (no PHP error in menu).</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Authenticated home loads; navigation chrome intact.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-14 -->
+<section class="milestone" id="r-14">
+  <h2>R-14 — Lib-service</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-14-lib-service-refactor</code></dd>
+    <dt>Canary</dt><dd><code>weather</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Weather</code></dd>
+    <dt>Playwright</dt><dd><code>tests/e2e/lib-service.spec.ts</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/weather.png" alt="Baseline weather" width="640">
+    <figcaption>Fuzzy baseline — weather dashboard (Live/Tournament also in gate)</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Navigate to <code>Weather</code>.</li>
+    <li>Confirm weather rundown or date pills visible.</li>
+    <li>Optional: <code>Tournament</code> page loads (CanEdit flag for park officer).</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Weather page HTTP 200 shell; no <code>Ork3::$Lib</code> fatal; JSON endpoints optional.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-15 -->
+<section class="milestone" id="r-15">
+  <h2>R-15 — HasAuthority (planned)</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-15-hasauthority-refactor</code></dd>
+    <dt>Canary</dt><dd><code>kingdom-auth-sandbox</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Kingdom/profile/100001</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/kingdom-auth-sandbox.png" alt="Baseline kingdom-auth-sandbox" width="640">
+    <figcaption>Fuzzy baseline — sandbox kingdom permissions chrome</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong> (or kingdom editor test account).</li>
+    <li>Open <code>Kingdom/profile/100001</code>.</li>
+    <li>Compare edit/admin links and tabs to baseline image — visible only when authorized.</li>
+    <li>Repeat on <code>Park/profile/1000001</code> for park-scoped gates.</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Auth-gated UI matches role; no template <code>Ork3::$Lib</code> errors.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-16 -->
+<section class="milestone" id="r-16">
+  <h2>R-16 — GhettoCache (planned)</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-16-ghettocache-refactor</code></dd>
+    <dt>Canary</dt><dd><code>reports-ladder-grid</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Reports/ladder_grid&amp;KingdomId=14</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/reports-ladder-grid.png" alt="Baseline reports-ladder-grid" width="640">
+    <figcaption>Fuzzy baseline — ladder grid (cache read-through)</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Open ladder grid report (URL above).</li>
+    <li>Reload page twice — grid still renders (cache hit/miss transparent).</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Ladder grid stable across reload; no stale empty grid after refresh.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-17 -->
+<section class="milestone" id="r-17">
+  <h2>R-17 — Lib bypass (planned)</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-17-lib-bypass-refactor</code></dd>
+    <dt>Canary</dt><dd><code>event-index-rsvp</code></dd>
+    <dt>Route</dt><dd><code>./index.php?Route=Event/index/80000</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/event-index-rsvp.png" alt="Baseline event-index-rsvp lib bypass" width="640">
+    <figcaption>Fuzzy baseline — event index (residual lib calls removed)</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Open <code>Event/index/80000</code> and <code>Player/profile</code>.</li>
+    <li>Confirm both pages match baseline chrome (no new errors).</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Pages load; devtools network free of direct lib fatals.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<!-- R-18 -->
+<section class="milestone" id="r-18">
+  <h2>R-18 — Residual $DB (planned)</h2>
+  <dl class="meta">
+    <dt>Branch</dt><dd><code>megiddo/r-18-residual-db-refactor</code></dd>
+    <dt>Canary</dt><dd><code>home-authenticated</code> (regression sweep)</dd>
+    <dt>Route</dt><dd><code>./index.php?Route=</code></dd>
+  </dl>
+  <figure class="baseline">
+    <img src="../../../tools/fuzzy-validator/baselines/test/home-authenticated.png" alt="Baseline home final regression" width="640">
+    <figcaption>Fuzzy baseline — final home smoke after zero-$DB audit</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>Log in as <strong>admin</strong> / <strong>password</strong>.</li>
+    <li>Walk home → player profile → admin dashboard (3-click regression).</li>
+    <li>Confirm no database error strings anywhere.</li>
+  </ol>
+  <div class="verify"><strong>Verify:</strong> Clean navigation; <code>rg '\$DB->' orkui/</code> already zero before this smoke.</div>
+  <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
+</section>
+
+<footer style="margin-top:3rem;font-size:0.85rem;color:#666;border-top:1px solid var(--border);padding-top:1rem;">
+  Megiddo Phase 3 P3-1 · Setpoint <code>20260709T173049Z-1591950d-6b22e991bb478256.zip</code> ·
+  <a href="../11-phase-3-closeout.md">11-phase-3-closeout.md</a>
+</footer>
+
+</body>
+</html>

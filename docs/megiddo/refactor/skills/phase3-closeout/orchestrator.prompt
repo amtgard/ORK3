@@ -1,0 +1,103 @@
+You are the **Megiddo Phase 3 close-out ORCHESTRATOR**.
+
+Phase 3 runs **after R-18**. It is **audit and verification** — no refactor implementation. You run **automated gates** and update checklists. You do **not** replace the human manual smoke walk-through (P3-4).
+
+## Read first
+
+- docs/megiddo/refactor/11-phase-3-closeout.md (canonical Phase 3 plan)
+- docs/megiddo/refactor/04-milestone-checklist.md § Phase 3
+- docs/megiddo/refactor/02-requirements.md § Success Criteria
+- docs/megiddo/refactor/06-test-framework.md (credentials, fuzzy, PHPUnit)
+- docs/megiddo/refactor/validations/r-milestone-smoke-matrix.html (P3-1 — human walks this; you may verify file exists)
+
+## Hard rules
+
+1. **No production refactors.** If `rg` finds violations, report them — do not fix code unless user explicitly asks.
+2. **Prerequisite:** Confirm R-18 checked off on milestone-checklist.md. If not → `status=blocked`, tell user to run Phase 2 continuation orchestrator first.
+3. **Environment:** `docker compose -f docker-compose.php8.yml up -d`, `bin/ork-db deploy-sandbox`, fuzzy setpoint restore if needed.
+4. **Credentials:** mirror `admin`/`password` for Playwright + fuzzy mirror; document in report.
+5. **Commits:** Only doc/checklist updates for Phase 3 sign-off — one commit on current stack tip branch if you update checklists. Stage all doc changes.
+
+## Automated tasks (run in order)
+
+### P3-A — Static audit
+
+```bash
+rg '\$DB->' orkui/
+rg 'Ork3::\$Lib' orkui/
+```
+
+Record file counts and paths. Pass = zero matches (or only documented exemptions in 02-requirements).
+
+### P3-B — PHPUnit
+
+```bash
+sh bin/run-unit-tests.sh
+```
+
+Pass = exit 0.
+
+### P3-C — Fuzzy regression
+
+```bash
+bin/ork-db deploy-sandbox
+bin/fuzzy-validator setpoint restore
+bin/fuzzy-validator validate --all --phase all
+```
+
+Pass = exit 0 (test + mirror).
+
+### P3-D — Playwright
+
+```bash
+export ORK3_E2E_BASE_URL=http://127.0.0.1:19080/orkui/
+bin/ork-db use prod
+export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
+npx playwright test tests/e2e/
+```
+
+Pass = exit 0 (note skipped specs).
+
+### P3-E — Plan completeness
+
+Read docs/megiddo/refactor/03-implementation-plan.md — confirm all T-* targets have completion notes (R-* or R-15+). List any open rows.
+
+### P3-F — Checklist + report
+
+- Check off applicable items in `04-milestone-checklist.md` § Phase 3 (P3-2 automated items).
+- Leave **P3-4** (manual HTML matrix walk-through) and **P3-5** (retrospective) unchecked — human completes.
+- Write `docs/megiddo/refactor/phase3-audit-report.md` with: timestamp, branch, commit, P3-A through P3-E results, failure details, human follow-ups.
+
+### P3-G — Commit (if docs changed)
+
+```bash
+git add docs/megiddo/refactor/
+git commit -m "Phase 3: Automated audit report and checklist sign-off."
+```
+
+## Human-only (remind user, do not claim done)
+
+- **P3-4:** Open `docs/megiddo/refactor/validations/r-milestone-smoke-matrix.html` in browser; walk R-01 … R-18; mark pass/fail.
+- **P3-5:** Retrospective (you may draft bullets in audit report § Retrospective draft).
+- **P3-6:** Optional merge stack tip → integration.
+
+## Return report
+
+```
+status: ok|blocked|failed
+phase: 3
+branch: …
+commit: …
+p3a_db: pass|fail (count)
+p3a_lib: pass|fail (count)
+phpunit: …
+fuzzy: …
+playwright: …
+plan_gaps: …
+checklist_updated: yes|no
+audit_report: docs/megiddo/refactor/phase3-audit-report.md
+human_next: P3-4 manual smoke matrix + P3-5 retrospective
+blockers: …
+```
+
+Begin: verify R-18 complete, then run P3-A through P3-G.

@@ -1,16 +1,17 @@
 ---
 name: refactor-execution
 description: >-
-  Execute Megiddo Phase 2 refactor sprints R-01 through R-14 as serialized
+  Execute Megiddo Phase 2 refactor sprints R-01 through R-18 as serialized
   sub-agents: branch hygiene, domain migration, PHPUnit, Infection, fuzzy-validator,
   Playwright, docs, and one commit per milestone. Use when starting or continuing
-  R-* execution after rebase-and-redocument (RB-Z) is complete.
+  R-* execution after rebase-and-redocument (RB-Z) is complete. Phase 3 is audit-only
+  after R-18 — see 10-phase-2-continuation.md.
 disable-model-invocation: true
 ---
 
 # Megiddo — Refactor Execution (R-01 … R-14)
 
-Phase **2** — migrate business logic and `$DB` out of `orkui/` per discovery (DS-*), tests (T-*), and validation artifacts (V-*). Prefer **one orchestrator chat** that drives **serialized sub-agents** per **R-*** milestone.
+Phase **2** — migrate business logic and `$DB` out of `orkui/` per discovery (DS-*), tests (T-*), and validation artifacts (V-*). **R-01 … R-14** cover domain sprints; **R-15 … R-18** cover cross-cutting carryover ([10-phase-2-continuation.md](../../10-phase-2-continuation.md)). **Phase 3** is audit-only after R-18.
 
 **Prerequisite:** [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete (or user waives). **Not** the RB-* rebase skill — that repairs docs/tests/baselines only.
 
@@ -91,11 +92,11 @@ From [05-development-steering.md](../../05-development-steering.md):
 
 ## Exit criteria (whole skill)
 
-- [ ] R-01 … R-14 checked on [milestone-checklist.md](milestone-checklist.md)
+- [ ] R-01 … R-18 checked on [milestone-checklist.md](milestone-checklist.md)
 - [ ] Each `megiddo/r-*` branch has one commit; gates recorded
-- [ ] [04-milestone-checklist.md](../../04-milestone-checklist.md) Phase 2 items checked
+- [ ] [04-milestone-checklist.md](../../04-milestone-checklist.md) Phase 2 + continuation items checked
 - [ ] Target IDs marked done in [03-implementation-plan.md](../../03-implementation-plan.md)
-- [ ] Phase 3 audit prep: `rg '\$DB->' orkui/` trending toward zero
+- [ ] Phase 3 audit: see [11-phase-3-closeout.md](../../11-phase-3-closeout.md) (after R-18)
 
 ## Related
 

@@ -1,6 +1,6 @@
 # Refactor Execution — Milestone Checklist
 
-Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this file. Master checklist: [04-milestone-checklist.md](../../04-milestone-checklist.md) Phase 2.
+Track **R-01 … R-18** Phase 2 sprints. Orchestrator and workers update this file. Master checklist: [04-milestone-checklist.md](../../04-milestone-checklist.md) Phase 2 + [10-phase-2-continuation.md](../../10-phase-2-continuation.md).
 
 **Skill:** [SKILL.md](SKILL.md) · **Prompts:** [agent-prompt.md](agent-prompt.md)
 
@@ -12,7 +12,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-14-lib-service-refactor` @ `b38db249` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-14-lib-service-refactor` (branch tip; code @ `76758e2c`, docs @ `395b6d06`) |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -34,7 +34,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 | R-11 | `megiddo/r-11-search-refactor` | `bdbc86d7` |
 | R-12 | `megiddo/r-12-attendance-refactor` | `6fcc6ce0` |
 | R-13 | `megiddo/r-13-infrastructure-refactor` | `758b8566` |
-| R-14 | `megiddo/r-14-lib-service-refactor` | `b38db249` |
+| R-14 | `megiddo/r-14-lib-service-refactor` | `76758e2c` (+ docs `395b6d06`) |
 
 ---
 
@@ -318,7 +318,83 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | Docs + plan | [x] |
 | Commit: `R-14: …` | [x] |
 
-**Notes:** Branch `megiddo/r-14-lib-service-refactor` stacked on R-13 @ `758b8566`. Added `AuthorizationGate`, `LiveService`, `WeatherService`, `EraPhoeniceService` + JSON registrations; `Authorization.HasAuthority` SOAP/JSON; thinned `Controller_Live`, `Controller_Weather`, `Controller_EraPhoenice`, `Controller_Tournament`, `Controller_CalendarItemAjax`, `class.Controller` menu gates off `Ork3::$Lib` on migrated paths. PHPUnit 215/215 pass (2 skipped). Infection pass A MSI 18%, pass B MSI 27% (floors 15/15). Fuzzy test+mirror 4/4 pass (re-recorded `weather`/`tournament` baselines). Playwright: auth smoke + `lib-service.spec.ts` 4/4 pass.
+**Notes:** Branch `megiddo/r-14-lib-service-refactor` @ `76758e2c` stacked on R-13 @ `758b8566`. Added `AuthorizationGate`, `LiveService`, `WeatherService`, `EraPhoeniceService` + JSON registrations; `Authorization.HasAuthority` SOAP/JSON; thinned `Controller_Live`, `Controller_Weather`, `Controller_EraPhoenice`, `Controller_Tournament`, `Controller_CalendarItemAjax`, `class.Controller` menu gates off `Ork3::$Lib` on migrated paths. PHPUnit 215/215 pass (2 skipped). Infection pass A MSI 18%, pass B MSI 27% (floors 15/15). Fuzzy test+mirror 4/4 pass (re-recorded `weather`/`tournament` baselines). Playwright: auth smoke + `lib-service.spec.ts` 4/4 pass. **Carryover:** ~120 HasAuthority + templates → R-15 ([10-phase-2-continuation.md](../../10-phase-2-continuation.md)).
+
+---
+
+## R-15: HasAuthority
+
+**Depends on:** R-14 · **Branch:** `megiddo/r-15-hasauthority-refactor` · **V:** [v-14-lib-service-validation.md](../../validations/v-14-lib-service-validation.md) (§1.3)
+
+| Gate | Status |
+|------|--------|
+| Stack base: `megiddo/r-14-lib-service-refactor` @ `76758e2c` | [ ] |
+| Replace remaining HasAuthority in controllers | [ ] |
+| Precompute template auth flags (no `Ork3::$Lib` in templates) | [ ] |
+| PHPUnit | [ ] |
+| Infection §2.4 (pass A) | [ ] |
+| Fuzzy: `admin-permissions,kingdom-auth-sandbox,park-auth-sandbox,player-profile` | [ ] |
+| Playwright: `auth-permissions.spec.ts` + auth smoke | [ ] |
+| Docs + plan | [ ] |
+| Commit: `R-15: …` | [ ] |
+
+**Notes:**
+
+---
+
+## R-16: GhettoCache
+
+**Branch:** `megiddo/r-16-ghettocache-refactor` · **V:** [v-14-lib-service-validation.md](../../validations/v-14-lib-service-validation.md) (§1.4)
+
+| Gate | Status |
+|------|--------|
+| Prior R-* hygiene | [ ] |
+| Move read-through cache + write bust into domain | [ ] |
+| PHPUnit | [ ] |
+| Infection | [ ] |
+| Fuzzy: `kingdom-profile,park-auth-sandbox,reports-ladder-grid` | [ ] |
+| Playwright: domain specs + auth smoke | [ ] |
+| Docs + plan | [ ] |
+| Commit: `R-16: …` | [ ] |
+
+**Notes:**
+
+---
+
+## R-17: Lib bypass
+
+**Branch:** `megiddo/r-17-lib-bypass-refactor` · **V:** [v-14-lib-service-validation.md](../../validations/v-14-lib-service-validation.md)
+
+| Gate | Status |
+|------|--------|
+| Prior R-* hygiene | [ ] |
+| Residual `Ork3::$Lib` domain helpers (T-EVT-08, T-KNG-11, T-PRK-05, T-PLR-08, T-RPT-02, T-UNT-02/03, …) | [ ] |
+| PHPUnit | [ ] |
+| Infection | [ ] |
+| Fuzzy: `event-index-rsvp,player-profile,reports-voting-eligible` | [ ] |
+| Playwright: domain specs + auth smoke | [ ] |
+| Docs + plan | [ ] |
+| Commit: `R-17: …` | [ ] |
+
+**Notes:**
+
+---
+
+## R-18: Residual `$DB`
+
+**Branch:** `megiddo/r-18-residual-db-refactor` · **V:** V-00 regression sweep
+
+| Gate | Status |
+|------|--------|
+| Prior R-* hygiene | [ ] |
+| Zero `$DB->` in `orkui/` | [ ] |
+| PHPUnit | [ ] |
+| Fuzzy: V-00 active pages | [ ] |
+| Playwright: smoke + touched domain specs | [ ] |
+| Docs + plan | [ ] |
+| Commit: `R-18: …` | [ ] |
+
+**Notes:**
 
 ---
 
@@ -329,6 +405,10 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | 1 | R-01 | R-02 |
 | 2 | R-02 | R-03 |
 | … | … | … |
-| 14 | R-14 | Phase 3 audit |
+| 14 | R-14 | R-15 |
+| 15 | R-15 | R-16 |
+| 16 | R-16 | R-17 |
+| 17 | R-17 | R-18 |
+| 18 | R-18 | Phase 3 audit |
 
-**Next unchecked:** Phase 3 audit
+**Next unchecked:** R-15

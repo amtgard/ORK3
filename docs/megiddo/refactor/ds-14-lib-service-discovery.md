@@ -318,10 +318,10 @@ public function has_authority($uid, $type, $id, $role) {
 
 R-14 is **large** if all ~128 HasAuthority sites move at once. Recommended:
 
-1. Ship Authorization + Live + Weather + EraPhoenice services (T-LIB-*).
-2. Migrate explicit T-LIB-03/04 + Controller base menus.
-3. Track remaining HasAuthority replacements in domain R-* sprints (table in §1.5) — each execution sprint replaces lib calls in its touched files only.
-4. Phase 3 audit: `rg 'Ork3::\$Lib' orkui/` → zero.
+1. Ship Authorization + Live + Weather + EraPhoenice services (T-LIB-*) — **done in R-14**.
+2. Migrate explicit T-LIB-03/04 + Controller base menus — **done in R-14**.
+3. Track remaining HasAuthority replacements in **R-15** (table in §1.5); ghettocache in **R-16**; domain lib bypass in **R-17**; residual `$DB` in **R-18** — see [10-phase-2-continuation.md](./10-phase-2-continuation.md).
+4. **Phase 3 audit** (after R-18): `rg 'Ork3::\$Lib' orkui/` → zero; `rg '\$DB->' orkui/` → zero.
 
 ### 3.5 Non-goals (R-14)
 

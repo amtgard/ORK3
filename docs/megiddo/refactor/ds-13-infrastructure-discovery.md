@@ -139,7 +139,7 @@ Infrastructure violations live in **shared frontend bootstrap** code that runs o
 |---------|---------|-------|
 | RSVP batch counts | DS-01 / R-01 | T-INF-06 defers to `GetRsvpCountsBatch` |
 | `HasAuthority` in `Controller::__construct` | DS-14 | Menu admin links — R-14 policy, not R-13 |
-| Template `$DB` | Phase 3 audit | `default.theme` whats_new read moves with T-WN-01 |
+| Template `$DB` | R-18 / Phase 3 audit | `default.theme` whats_new read moves with T-WN-01 (done R-13) |
 
 ---
 
@@ -249,7 +249,7 @@ Register JSON endpoints where AJAX or high-frequency reads benefit; SOAP optiona
 
 - Moving `HasAuthority` menu gates (DS-14 / R-14).
 - Refactoring `orkui/index.php` session timing / `Ork3::$Lib->session` (not `$DB` violations).
-- Template audit beyond whats_new (Phase 3).
+- Template audit beyond whats_new → **R-18** / Phase 3 audit ([10-phase-2-continuation.md](./10-phase-2-continuation.md)).
 
 **Post-rebase (RB-D4, 2026-07-09):** §1 line ranges verified against `orkui/` and `class.Controller.php` at base `e6417645` (`origin/master`). Minor drift in event redirect (69–76), session token skip list (40–68), RSVP widget batch (166–184), whats_new template read (673–677); no upstream gap closures; §3 revision unchanged.
 
