@@ -1000,6 +1000,33 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 ---
 
+### T-19: Residual Ork3::$Lib bypass tests
+
+**Branch:** `megiddo/t-19-residual-lib-tests`
+
+**Depends on:** DS-19
+
+**Design source:** [ds-19-residual-lib-discovery.md §2](./ds-19-residual-lib-discovery.md#2-test-design)
+
+**Targets:** T-LIB-06 through T-LIB-17; R-19a … R-19d hop surfaces
+
+| Step | Status |
+|------|--------|
+| Backend unit/integration tests | [x] |
+| Frontend functional tests | [x] |
+| Milestone-scoped Infection passes | [x] |
+
+**Tests:** `tests/Integration/PlayerServiceTest.php`, `HeraldryServiceTest.php`, `StateOfAmtgardTest.php`; extensions to `DangerAuditQueryTest.php`, `WeatherServiceTest.php`, `KingdomAjaxTest.php`, `SearchServiceTest.php`; reuses `HealthTest.php`, `LegacyRedirectTest.php`, `WhatsNewTest.php`, `PlayerAjaxTest.php`; `tests/e2e/residual-lib.spec.ts`
+
+**Infection (pre-refactor):** `infection.t19-residual-lib.json5` — passes A–D per [ds-19 §2.3](./ds-19-residual-lib-discovery.md#23-infection-scope-t-19-per-r-19-hop)
+
+#### T-19 sign-off gate
+
+- [x] Test sprint sign-off checklist (above) satisfied
+- [x] Branch `megiddo/t-19-residual-lib-tests` squashed to exactly one commit (`fc557480`)
+
+---
+
 ## Phase 1.6 — Validation Artifacts
 
 Canary URLs, dual-database fuzzy baselines, and **test mutation boundaries** for R-* execution. Plan: [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md) · Index: [validations/README.md](./validations/README.md) · **Agent prompt:** [09-v-phase-agent-prompt.md](./09-v-phase-agent-prompt.md) (batched G0–G4).

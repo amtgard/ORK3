@@ -5,13 +5,15 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 /**
- * Characterization tests for Controller_KingdomAjax actions (T-KNA-01, T-KNA-02, T-KNA-04, T-KNA-05, T-KNA-07).
+ * Characterization tests for Controller_KingdomAjax actions (T-KNA-01, T-KNA-02, T-KNA-04, T-KNA-05, T-KNA-07; T-LIB-08 kingdom lib reads).
  */
 final class KingdomAjaxTest extends TestCase
 {
     private KingdomProfileFixture $fixture;
 
     private KingdomProfile $profileDomain;
+
+    private Kingdom $kingdomDomain;
 
     protected function setUp(): void
     {
@@ -23,6 +25,7 @@ final class KingdomAjaxTest extends TestCase
 
         $this->fixture = KingdomProfileFixture::create();
         $this->profileDomain = new KingdomProfile();
+        $this->kingdomDomain = new Kingdom();
     }
 
     protected function tearDown(): void
@@ -115,5 +118,25 @@ final class KingdomAjaxTest extends TestCase
             && (Ork3::$Lib->authorization->HasAuthority($editor['mundane_id'], AUTH_ADMIN, 0, AUTH_ADMIN)
                 || Ork3::$Lib->authorization->HasAuthority($editor['mundane_id'], AUTH_KINGDOM, $context['kingdom_id'], AUTH_EDIT));
         $this->assertTrue($authorized);
+    }
+
+    public function testKingdomLibReadsForAjaxPaths(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+
+        $parks = $this->kingdomDomain->GetParks(['KingdomId' => $kid]);
+        $this->assertSame(0, $parks['Status']['Status']);
+        $this->assertNotEmpty($parks['Parks']);
+
+        $familyIds = $this->kingdomDomain->GetFamilyKingdomIds($kid);
+        $this->assertContains($kid, $familyIds);
+
+        $titles = $this->kingdomDomain->GetKingdomParkTitles(['KingdomId' => $kid]);
+        $this->assertSame(0, $titles['Status']['Status']);
+        $this->assertArrayHasKey('ParkTitles', $titles);
+
+        $kingdoms = $this->kingdomDomain->GetKingdoms([]);
+        $this->assertSame(0, $kingdoms['Status']['Status']);
+        $this->assertArrayHasKey($kid, $kingdoms['Kingdoms']);
     }
 }

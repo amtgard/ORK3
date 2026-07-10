@@ -5,7 +5,8 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 /**
- * Characterization tests for Controller_Admin::auditlog queries (T-ADM-03).
+ * Characterization tests for Controller_Admin::auditlog queries (T-ADM-03) and
+ * auth-add audit side effects on residual lib paths (T-LIB-08–10, T-LIB-12).
  */
 final class DangerAuditQueryTest extends TestCase
 {
@@ -87,5 +88,86 @@ final class DangerAuditQueryTest extends TestCase
         $this->assertSame(0, $withEntityId['total']);
 
         $this->auditDomain->audit('T08ADM.TestAudit', ['foo' => 'bar'], 'Player', $actor['mundane_id']);
+    }
+
+    public function testAuthAddAuditKingdomScope(): void
+    {
+        $this->assertAuthAddAuditRow(AUTH_KINGDOM, $this->fixture->firstKingdomId(), [
+            'kingdom_id' => $this->fixture->firstKingdomId(),
+            'park_id' => 0,
+            'event_id' => 0,
+        ]);
+    }
+
+    public function testAuthAddAuditParkScope(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $this->assertAuthAddAuditRow(AUTH_PARK, $parkId, [
+            'park_id' => $parkId,
+            'kingdom_id' => 0,
+            'event_id' => 0,
+        ]);
+    }
+
+    public function testAuthAddAuditEventScope(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $event = $this->fixture->createPublishedEvent($parkId, 'audit-event');
+        $this->assertAuthAddAuditRow(AUTH_EVENT, $event['event_id'], [
+            'park_id' => 0,
+            'kingdom_id' => 0,
+            'event_id' => $event['event_id'],
+        ]);
+    }
+
+    public function testAuthAddAuditGlobalAdminScope(): void
+    {
+        $this->assertAuthAddAuditRow(AUTH_ADMIN, 0, [
+            'park_id' => 0,
+            'kingdom_id' => 0,
+            'event_id' => 0,
+            'role' => AUTH_ADMIN,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $postState
+     */
+    private function assertAuthAddAuditRow(string $type, int $entityId, array $postState): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $grantor = $this->fixture->createPlayer($parkId, 'audit-grantor');
+        $grantee = $this->fixture->createPlayer($parkId, 'audit-grantee');
+        $authId = 900000 + random_int(1, 99999);
+        $method = 'Authorization::AddAuthorization';
+
+        $_SESSION['is_authorized_mundane_id'] = $grantor['mundane_id'];
+        $this->auditDomain->audit(
+            $method,
+            ['MundaneId' => $grantee['mundane_id'], 'Type' => $type, 'Id' => $entityId, 'Role' => AUTH_CREATE],
+            'Player',
+            $grantee['mundane_id'],
+            null,
+            array_merge([
+                'authorization_id' => $authId,
+                'mundane_id' => $grantee['mundane_id'],
+                'unit_id' => 0,
+                'role' => $postState['role'] ?? AUTH_CREATE,
+            ], $postState),
+        );
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $page = $this->auditDomain->ListAuditLog([
+            'Start' => date('Y-m-d', strtotime('-1 day')),
+            'End' => date('Y-m-d', strtotime('+1 day')),
+            'MethodCall' => $method,
+            'EntityType' => 'Player',
+            'EntityId' => $grantee['mundane_id'],
+        ]);
+
+        $this->assertGreaterThanOrEqual(1, $page['total']);
+        $row = $page['rows'][0];
+        $this->assertSame($method, $row['MethodCall']);
+        $this->assertSame($grantee['mundane_id'], (int) $row['EntityId']);
     }
 }

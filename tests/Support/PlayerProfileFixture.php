@@ -143,6 +143,13 @@ final class PlayerProfileFixture
         return $map;
     }
 
+    public function deleteMilestone(int $milestoneId): void
+    {
+        $this->pdo->exec(
+            'DELETE FROM ' . DB_PREFIX . 'player_milestones WHERE milestone_id = ' . (int) $milestoneId,
+        );
+    }
+
     public function cleanup(): void
     {
         foreach ($this->noteIds as $id) {

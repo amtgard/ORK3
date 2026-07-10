@@ -247,6 +247,8 @@ sh bin/run-infection.sh \
 
 Document consolidated config in `infection.t19-residual-lib.json5` during T-19.
 
+**T-19 config:** [infection.t19-residual-lib.json5](../../../infection.t19-residual-lib.json5) — shared `minMsi`/`minCoveredMsi` 15; run each pass with `--configuration=infection.t19-residual-lib.json5` plus the `--filter` / `--test-framework-options` pairs below.
+
 ### 2.4 Gate expectations (VALIDATE-20)
 
 After R-19d:

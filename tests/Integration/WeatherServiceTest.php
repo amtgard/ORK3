@@ -5,7 +5,7 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 /**
- * Characterization tests for Controller_Weather and attendance weather paths (T-LIB-02, DS-12 overlap).
+ * Characterization tests for Controller_Weather and attendance weather paths (T-LIB-02, DS-12 overlap; T-LIB-11 admin refresh).
  */
 final class WeatherServiceTest extends TestCase
 {
@@ -44,6 +44,33 @@ final class WeatherServiceTest extends TestCase
 
         $archive = $this->weather->archive_for_date($parkId, '2020-01-15');
         $this->assertIsArray($archive);
+    }
+
+    public function testApiStatsShape(): void
+    {
+        $stats = $this->weather->api_stats(3);
+
+        $this->assertArrayHasKey('days', $stats);
+        $this->assertCount(3, $stats['days']);
+        $this->assertArrayHasKey('cooldown_present', $stats);
+        $this->assertArrayHasKey('error_streak', $stats);
+        foreach ($stats['days'] as $day) {
+            $this->assertArrayHasKey('date', $day);
+            $this->assertArrayHasKey('attempt', $day);
+            $this->assertArrayHasKey('success', $day);
+        }
+    }
+
+    public function testAdminRefreshWithPriorShape(): void
+    {
+        $refresh = $this->weather->AdminRefreshWithPrior();
+
+        $this->assertArrayHasKey('count', $refresh);
+        $this->assertArrayHasKey('elapsed_ms', $refresh);
+        $this->assertArrayHasKey('previous_fetched_at', $refresh);
+        $this->assertArrayHasKey('previous_age_min', $refresh);
+        $this->assertGreaterThanOrEqual(0, $refresh['count']);
+        $this->assertGreaterThanOrEqual(0, $refresh['elapsed_ms']);
     }
 
     private function mirrorWeatherPlayDate(string $date): string

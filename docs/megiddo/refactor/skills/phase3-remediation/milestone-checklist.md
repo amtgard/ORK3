@@ -18,7 +18,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 4 | FIX-05 | `megiddo/p3-fix-05-doc-hygiene` | `69fd2ac1` | [x] |
 | 5 | BACKFILL | `megiddo/p3-backfill-tvds-r14-r18` | `7f9576eb` | [x] |
 | 6 | DS-19 | `megiddo/ds-19-residual-lib-discovery` | `39f47f22` | [x] |
-| 7 | T-19 | | | [ ] |
+| 7 | T-19 | `megiddo/t-19-residual-lib-tests` | `fc557480` | [x] |
 | 8 | V-19 | | | [ ] |
 | 9 | R-19a | | | [ ] |
 | 10 | R-19b | | | [ ] |
@@ -26,7 +26,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 12 | R-19d | | | [ ] |
 | 13 | VALIDATE-20 | | | [ ] |
 
-**Next actionable hop:** T-19
+**Next actionable hop:** V-19
 
 ---
 
@@ -110,10 +110,16 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 ## T-19: Residual lib tests
 
-- [ ] Backend tests for R-19a…d domain/API surfaces
-- [ ] Playwright coverage gaps closed per DS-19
-- [ ] Full PHPUnit pass
-- [ ] Checklist + commit on stacked branch
+- [x] Backend tests for R-19a…d domain/API surfaces
+- [x] Playwright coverage gaps closed per DS-19
+- [x] Full PHPUnit pass
+- [x] Checklist + commit on stacked branch
+
+**Branch:** `megiddo/t-19-residual-lib-tests`
+
+**Tests:** `PlayerServiceTest.php`, `HeraldryServiceTest.php`, `StateOfAmtgardTest.php`; extensions to `DangerAuditQueryTest`, `WeatherServiceTest`, `KingdomAjaxTest`, `SearchServiceTest`; `tests/e2e/residual-lib.spec.ts`
+
+**Infection:** `infection.t19-residual-lib.json5` — passes A–D per DS-19 §2.3 (run at R-19 hop sign-off)
 
 ---
 
