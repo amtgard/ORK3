@@ -12,7 +12,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-06-kingdom-refactor` @ `85a9667c` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-07-park-refactor` @ `5bc70bdf` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -26,8 +26,8 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 | R-03 | `megiddo/r-03-banner-refactor` | `910cb0dc` |
 | R-04 | `megiddo/r-04-eventajax-refactor` | `810eceb3` |
 | R-05 | `megiddo/r-05-event-refactor` | `20264fa9` |
-| R-06 | `megiddo/r-06-kingdom-refactor` | `85a9667c` |
-| … | | |
+| R-06 | `megiddo/r-06-kingdom-refactor` | `56b59878` |
+| R-07 | `megiddo/r-07-park-refactor` | `5bc70bdf` |
 
 ---
 
@@ -169,16 +169,16 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Prior R-* hygiene | [ ] |
-| Refactor park targets | [ ] |
-| PHPUnit | [ ] |
-| Infection §2.4 | [ ] |
-| Fuzzy: `park-auth-sandbox,event-park` | [ ] |
-| Playwright: `park-profile.spec.ts` | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-07: …` | [ ] |
+| Prior R-* hygiene | [x] |
+| Refactor park targets | [x] |
+| PHPUnit | [x] |
+| Infection §2.4 | [x] |
+| Fuzzy: `park-auth-sandbox,event-park` | [x] |
+| Playwright: `park-profile.spec.ts` | [x] |
+| Docs + plan | [x] |
+| Commit: `R-07: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-07-park-refactor` stacked on R-06 @ `56b59878`. New `ParkProfile` domain + `Model_ParkProfile`; thinned `Controller_Park::profile` (no `$DB`) and `Controller_ParkAjax` T-PRA-03 checkabbr. Batched detail coords (N+1 fix). PHPUnit 214/214 pass. Infection `infection.t07-park.json5` `--only-covered --filter=class.ParkProfile.php`: MSI 39%, covered MSI 39%. Fuzzy 4/4 pass (re-recorded test `park-auth-sandbox` baselines after height drift). Playwright: auth smoke + `park-profile.spec.ts` 2/2 pass.
 
 ---
 
@@ -324,4 +324,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | … | … | … |
 | 14 | R-14 | Phase 3 audit |
 
-**Next unchecked:** R-07
+**Next unchecked:** R-08

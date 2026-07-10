@@ -11,6 +11,8 @@ final class ParkAjaxTest extends TestCase
 {
     private ParkProfileFixture $fixture;
 
+    private ParkProfile $profileDomain;
+
     protected function setUp(): void
     {
         if (!ork3_test_db_available()) {
@@ -18,6 +20,7 @@ final class ParkAjaxTest extends TestCase
         }
 
         $this->fixture = ParkProfileFixture::create();
+        $this->profileDomain = new ParkProfile();
     }
 
     protected function tearDown(): void
@@ -33,27 +36,10 @@ final class ParkAjaxTest extends TestCase
         $kingdomId = $this->fixture->kingdomIdForPark($parkId);
         $abbr = $this->fixture->fetchParkAbbreviation($parkId);
 
-        $taken = $this->mirrorParkAbbreviationTaken($kingdomId, $abbr, 0);
+        $taken = $this->profileDomain->CheckParkAbbreviationTaken($kingdomId, $abbr, 0);
         $this->assertTrue($taken);
 
-        $available = $this->mirrorParkAbbreviationTaken($kingdomId, $abbr, $parkId);
+        $available = $this->profileDomain->CheckParkAbbreviationTaken($kingdomId, $abbr, $parkId);
         $this->assertFalse($available);
-    }
-
-    private function mirrorParkAbbreviationTaken(int $kingdomId, string $abbr, int $excludeParkId): bool
-    {
-        $abbr = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($abbr)));
-        if ($abbr === '') {
-            return false;
-        }
-
-        global $DB;
-        $excludeClause = $excludeParkId > 0 ? ' AND park_id != ' . $excludeParkId : '';
-        $DB->Clear();
-        $rs = $DB->DataSet(
-            'SELECT park_id FROM ' . DB_PREFIX . "park WHERE abbreviation = '{$abbr}' AND kingdom_id = {$kingdomId}{$excludeClause} LIMIT 1"
-        );
-
-        return (bool) ($rs && $rs->Next());
     }
 }

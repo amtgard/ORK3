@@ -1129,7 +1129,7 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** R-07 (Park refactor — R-06 complete on `megiddo/r-06-kingdom-refactor`). Phase 1.6 (V-00…V-14) complete.
+**Next actionable milestone:** R-08 (Admin refactor — R-07 complete on `megiddo/r-07-park-refactor`). Phase 1.6 (V-00…V-14) complete.
 
 ### R-01 complete (2026-07-09)
 
@@ -1160,3 +1160,15 @@ Per execution sprint checklist:
 - [x] Branch `megiddo/r-05-event-refactor` stacked on `megiddo/r-04-eventajax-refactor` — occurrence page DTO, fees/links, reconcile, dietary in `EventPlanning`; `Controller_Event` T-EVT-01–08 off `$DB`
 - [x] Targets closed: T-EVT-01 through T-EVT-08 (page-render paths; auth lib deferred DS-14)
 - [x] Gates: PHPUnit 214/214 pass; Infection `--only-covered` MSI 44%; fuzzy 6/6; Playwright auth smoke + `event-detail.spec.ts` 3/3 + `event-planning.spec.ts` 3/3 pass
+
+### R-06 complete (2026-07-09)
+
+- [x] Branch `megiddo/r-06-kingdom-refactor` stacked on `megiddo/r-05-event-refactor` — `KingdomProfile` domain + `Report.GetKingdomExtendedParkAverages`; thinned `Controller_Kingdom` and `Controller_KingdomAjax` migrated paths off `$DB`
+- [x] Targets closed: T-KNG-01 through T-KNG-10 (excl. deferred lib-service); T-KNA-01–07, T-KNA-09
+- [x] Gates: PHPUnit 214/214 pass; Infection `--only-covered` MSI 21%; fuzzy 4/4; Playwright auth smoke + `kingdom-profile.spec.ts` 2/2 pass
+
+### R-07 complete (2026-07-09)
+
+- [x] Branch `megiddo/r-07-park-refactor` stacked on `megiddo/r-06-kingdom-refactor` — `ParkProfile` domain + `Model_ParkProfile`; thinned `Controller_Park::profile` and `Controller_ParkAjax` T-PRA-03 off `$DB`
+- [x] Targets closed: T-PRK-01 through T-PRK-04, T-PRA-03 (T-PRK-05 auth/weather/circles deferred DS-14; T-PRA-01/02/04 out of scope)
+- [x] Gates: PHPUnit 214/214 pass; Infection `--only-covered` MSI 39% (`class.ParkProfile.php`); fuzzy 4/4; Playwright auth smoke + `park-profile.spec.ts` 2/2 pass
