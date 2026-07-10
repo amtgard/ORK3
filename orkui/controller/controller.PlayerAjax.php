@@ -543,25 +543,22 @@ class Controller_PlayerAjax extends Controller
             exit;
         }
         $this->load_model('Reports');
-        global $DB;
-        $DB->Clear();
-        $rs = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = $mundane_id LIMIT 1");
-        if (!$rs || !$rs->Next()) {
+        $report = new Report();
+        $lookup = $report->GetVotingEligibleForPlayer(['MundaneId' => $mundane_id]);
+        if (($lookup['Status']['Status'] ?? 1) != 0 && ($lookup['KingdomId'] ?? 0) <= 0) {
             echo json_encode(['status' => 1, 'error' => 'Player not found']);
             exit;
         }
-        $kingdom_id = (int)$rs->kingdom_id;
-        $DB->Clear();
-        if (!in_array($kingdom_id, $this->Reports->supported_voting_kingdom_ids())) {
+        $kingdom_id = (int)($lookup['KingdomId'] ?? 0);
+        if (!in_array($kingdom_id, $this->Reports->supported_voting_kingdom_ids(), true)) {
             echo json_encode(['status' => 0, 'eligible' => false]);
             exit;
         }
-        $vr     = $this->Reports->get_voting_eligible_for_player($mundane_id, $kingdom_id);
-        $player = $vr['Players'][0] ?? [];
+        $player = $lookup['Players'][0] ?? [];
         echo json_encode([
             'status'           => 0,
             'eligible'         => !empty($player['VotingEligible']),
-            'province_mode'    => !empty($vr['ProvinceMode']),
+            'province_mode'    => !empty($lookup['ProvinceMode']),
             'province_eligible' => !empty($player['ProvinceEligible']),
             'active_knight'    => !empty($player['ActiveKnight']),
             'active_member'    => $player['ActiveMember'] ?? null,

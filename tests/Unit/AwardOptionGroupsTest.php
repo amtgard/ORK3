@@ -27,7 +27,7 @@ final class AwardOptionGroupsTest extends TestCase
             6403, 6297, 7273, 7070, 6311, 6310, 7277, 6411, 6771,
             6577, 94, 7084, 6171, 6574, 7254,
         ];
-        $actual = $this->mirrorPseudoLadderIds();
+        $actual = Award::pseudoLadderKingdomAwardIds();
 
         $this->assertSame($expected, $actual);
         $this->assertCount(24, $actual);

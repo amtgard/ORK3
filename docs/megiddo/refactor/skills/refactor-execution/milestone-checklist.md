@@ -12,7 +12,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-09-player-refactor` @ `4a7b1f8c` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-10-reports-refactor` @ `ea46a630` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -30,6 +30,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 | R-07 | `megiddo/r-07-park-refactor` | `5bc70bdf` |
 | R-08 | `megiddo/r-08-admin-refactor` | `ebda9ebe` |
 | R-09 | `megiddo/r-09-player-refactor` | `4a7b1f8c` |
+| R-10 | `megiddo/r-10-reports-refactor` | `ea46a630` |
 
 ---
 
@@ -228,16 +229,16 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Prior R-* hygiene | [ ] |
-| Refactor reports targets | [ ] |
-| PHPUnit | [ ] |
-| Infection §2.4 | [ ] |
-| Fuzzy: `reports-voting-eligible,reports-ladder-grid,reports-attendance` | [ ] |
-| Playwright: `reports.spec.ts` | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-10: …` | [ ] |
+| Prior R-* hygiene | [x] |
+| Refactor reports targets | [x] |
+| PHPUnit | [x] |
+| Infection §2.4 | [x] |
+| Fuzzy: `reports-voting-eligible,reports-ladder-grid,reports-attendance` | [x] |
+| Playwright: `reports.spec.ts` | [x] |
+| Docs + plan | [x] |
+| Commit: `R-10: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-10-reports-refactor` @ `ea46a630` stacked on R-09 @ `4a7b1f8c`. Added `VotingRules` config, `Report::GetLadderAwardGrid`, `GetAttendanceDates`, `GetVotingRules`, `GetVotingEligibleForPlayer`, `GetKingdomOfficerDirectoryMerged`; `Award::GetAwardOptionGroups`. Thinned `Controller_Reports::ladder_grid`, `Model_Reports`, `Model_Award`, `Controller_PlayerAjax::voting_eligible` off `$DB`. PHPUnit 215/215 pass (2 skipped). Infection `infection.t10-reports.json5` `--only-covered`: MSI 47%, covered MSI 47%. Fuzzy test+mirror 6/6 pass (re-recorded mirror `reports-ladder-grid` baselines). Playwright: auth smoke + `reports.spec.ts` 4/4 pass.
 
 ---
 
@@ -326,4 +327,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | … | … | … |
 | 14 | R-14 | Phase 3 audit |
 
-**Next unchecked:** R-10
+**Next unchecked:** R-11

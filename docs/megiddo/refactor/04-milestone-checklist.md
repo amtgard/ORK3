@@ -1129,7 +1129,7 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** R-10 (Reports refactor — R-09 complete on `megiddo/r-09-player-refactor`). Phase 1.6 (V-00…V-14) complete.
+**Next actionable milestone:** R-11 (Search refactor — R-10 complete on `megiddo/r-10-reports-refactor`). Phase 1.6 (V-00…V-14) complete.
 
 ### R-01 complete (2026-07-09)
 
@@ -1184,3 +1184,9 @@ Per execution sprint checklist:
 - [x] Branch `megiddo/r-09-player-refactor` stacked on `megiddo/r-08-admin-refactor` — player profile reads, AJAX probes, and model cache bust in `Player` / `Authorization` domain; thinned `Controller_Player`, `Controller_PlayerAjax`, `Model_Player` migrated paths off `$DB`
 - [x] Targets closed: T-PLR-01 through T-PLR-07, T-PLA-01 through T-PLA-05, T-PLM-01 through T-PLM-04 (T-PLR-08 → DS-14; T-PLA-06 → R-03)
 - [x] Gates: PHPUnit 214/214 pass; Infection `infection.t09-player.json5` `--only-covered` MSI 46% (Player+Authorization); fuzzy player-profile/player-profile-sandbox 4/4; Playwright auth smoke + `player-profile.spec.ts` 2/2 pass
+
+### R-10 complete (2026-07-10)
+
+- [x] Branch `megiddo/r-10-reports-refactor` stacked on `megiddo/r-09-player-refactor` — voting rules config, ladder grid, attendance dates, officer directory merge, award option groups in `VotingRules` / `Report` / `Award` domain; thinned `Controller_Reports::ladder_grid`, `Model_Reports`, `Model_Award`, `Controller_PlayerAjax::voting_eligible` off `$DB`
+- [x] Targets closed: T-RPT-01, T-RPT-03 through T-RPT-09, T-AWD-01 (T-RPT-02 auth/cache edge → DS-14)
+- [x] Gates: PHPUnit 215/215 pass; Infection `infection.t10-reports.json5` `--only-covered` MSI 47%; fuzzy reports-voting-eligible/reports-ladder-grid/reports-attendance 6/6; Playwright auth smoke + `reports.spec.ts` 4/4 pass

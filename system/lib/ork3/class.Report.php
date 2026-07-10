@@ -3565,6 +3565,15 @@ class Report extends Ork3
         $kingdom_id     = (int)($request['KingdomId'] ?? 0);
         $park_id        = valid_id($request['ParkId'] ?? 0) ? (int)$request['ParkId'] : 0;
         $mundane_id     = valid_id($request['MundaneId'] ?? 0) ? (int)$request['MundaneId'] : 0;
+
+        // T-RPT-04: backend-owned voting rules when caller did not pass rule flags.
+        if ($kingdom_id > 0 && !isset($request['AttendanceMode'])) {
+            $storedRules = VotingRules::rulesForKingdom($kingdom_id);
+            if ($storedRules !== null) {
+                $request = array_merge($storedRules, $request);
+            }
+        }
+
         $att_req        = isset($request['AttendanceRequired']) ? (int)$request['AttendanceRequired'] : 6;
         $months_win     = isset($request['MonthsWindow']) ? (int)$request['MonthsWindow'] : 6;
         $min_mem_mo     = isset($request['MinMembershipMonths']) ? (int)$request['MinMembershipMonths'] : 6;
@@ -6141,6 +6150,370 @@ class Report extends Ork3
             'TrendStats' => $trendStats,
             'PrevWeekly' => $prevWeekly,
             'PrevMonthly' => $prevMonthly,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function GetVotingRules($request)
+    {
+        $kingdomId = valid_id($request['KingdomId'] ?? 0) ? (int) $request['KingdomId'] : 0;
+
+        return [
+            'Status' => Success(),
+            'Rules' => VotingRules::allRules(),
+            'SupportedKingdomIds' => VotingRules::supportedKingdomIds(),
+            'KingdomRules' => $kingdomId > 0 ? VotingRules::rulesForKingdom($kingdomId) : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function GetVotingEligibleForPlayer($request)
+    {
+        $mundaneId = valid_id($request['MundaneId'] ?? 0) ? (int) $request['MundaneId'] : 0;
+        $kingdomId = valid_id($request['KingdomId'] ?? 0) ? (int) $request['KingdomId'] : 0;
+
+        if ($mundaneId <= 0) {
+            return ['Status' => InvalidParameter(), 'Players' => [], 'KingdomId' => 0];
+        }
+
+        if ($kingdomId <= 0) {
+            $this->db->Clear();
+            $row = $this->db->DataSet(
+                'SELECT kingdom_id FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundaneId . ' LIMIT 1'
+            );
+            if (!$row || !$row->Next()) {
+                return ['Status' => InvalidParameter(), 'Players' => [], 'KingdomId' => 0];
+            }
+            $kingdomId = (int) $row->kingdom_id;
+        }
+
+        $result = $this->GetVotingEligible([
+            'KingdomId' => $kingdomId,
+            'MundaneId' => $mundaneId,
+        ]);
+        $result['KingdomId'] = $kingdomId;
+
+        return $result;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function GetAttendanceDates($request)
+    {
+        $type = $request['Type'] ?? 'Kingdom';
+        $id = (int) ($request['Id'] ?? 0);
+        if ($id <= 0) {
+            return ['Status' => InvalidParameter(), 'Dates' => []];
+        }
+
+        $col = ($type === 'Kingdom') ? 'kingdom_id' : 'park_id';
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT DISTINCT DATE(date) AS att_date FROM ' . DB_PREFIX . "attendance WHERE {$col} = {$id} ORDER BY att_date DESC"
+        );
+        $dates = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $dates[] = $rs->att_date;
+            }
+        }
+
+        return ['Status' => Success(), 'Dates' => $dates];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function GetKingdomOfficerDirectoryMerged($request)
+    {
+        $kingdomId = valid_id($request['KingdomId'] ?? 0) ? (int) $request['KingdomId'] : null;
+        $r = $this->KingdomOfficerDirectory($request);
+        if (($r['Status']['Status'] ?? 1) != 0) {
+            return [
+                'Status' => $r['Status'],
+                'Rows' => [],
+                'Mode' => 'kingdoms',
+                'Principalities' => [],
+            ];
+        }
+
+        $principalities = [];
+        if (valid_id($kingdomId) && Ork3::$Lib->kingdom->StatsIncludesPrincipalities($kingdomId)) {
+            $prList = Ork3::$Lib->kingdom->GetPrincipalities(['KingdomId' => $kingdomId]);
+            foreach (($prList['Principalities'] ?? []) as $pr) {
+                $prId = (int) $pr['KingdomId'];
+                $dir = $this->KingdomOfficerDirectory(['KingdomId' => $prId]);
+                if (($dir['Status']['Status'] ?? 1) == 0 && !empty($dir['Kingdoms'])) {
+                    $principalities[] = [
+                        'KingdomId' => $prId,
+                        'Name' => $pr['Name'],
+                        'Rows' => $dir['Kingdoms'],
+                    ];
+                }
+            }
+        }
+
+        return [
+            'Status' => Success(),
+            'Rows' => $r['Kingdoms'],
+            'Mode' => $r['Mode'],
+            'Principalities' => $principalities,
+        ];
+    }
+
+    /**
+     * Ladder awards grid report assembly (T-RPT-01).
+     *
+     * @return array{ScopeName: string, LadderAwards: array<int, array<string, mixed>>, GridRows: list<array<string, mixed>>}
+     */
+    public function GetLadderAwardGrid($request)
+    {
+        $kingdomId = valid_id($request['KingdomId'] ?? 0) ? (int) $request['KingdomId'] : 0;
+        $parkId = valid_id($request['ParkId'] ?? 0) ? (int) $request['ParkId'] : 0;
+        $type = $parkId > 0 ? 'Park' : 'Kingdom';
+        $id = $parkId > 0 ? $parkId : $kingdomId;
+
+        if ($parkId > 0 && $kingdomId <= 0) {
+            $this->db->Clear();
+            $pr = $this->db->DataSet(
+                'SELECT kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $parkId . ' LIMIT 1'
+            );
+            if ($pr && $pr->Next()) {
+                $kingdomId = (int) $pr->kingdom_id;
+            }
+        }
+
+        $scopeName = '';
+        if ($parkId > 0) {
+            $this->db->Clear();
+            $nr = $this->db->DataSet(
+                'SELECT p.name AS park_name, k.name AS kingdom_name
+                 FROM ' . DB_PREFIX . 'park p
+                 LEFT JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = p.kingdom_id
+                 WHERE p.park_id = ' . $parkId . ' LIMIT 1'
+            );
+            if ($nr && $nr->Next()) {
+                $scopeName = $nr->kingdom_name . ' — ' . $nr->park_name;
+            }
+        } elseif ($kingdomId > 0) {
+            $this->db->Clear();
+            $nr = $this->db->DataSet(
+                'SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdomId . ' LIMIT 1'
+            );
+            if ($nr && $nr->Next()) {
+                $scopeName = $nr->name;
+            }
+        }
+
+        if ($kingdomId > 0) {
+            $kSql = 'SELECT DISTINCT a.award_id, IFNULL(ka.name, a.name) AS award_name, a.title_class
+                     FROM ' . DB_PREFIX . 'kingdomaward ka
+                     JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+                     WHERE ka.kingdom_id = ' . $kingdomId . "
+                       AND a.is_ladder = 1 AND a.award_id != 31
+                     ORDER BY IFNULL(ka.name, a.name)";
+        } else {
+            $kSql = 'SELECT DISTINCT a.award_id, a.name AS award_name, a.title_class
+                     FROM ' . DB_PREFIX . "award a
+                     WHERE a.is_ladder = 1 AND a.award_id != 31
+                     ORDER BY a.name";
+        }
+
+        $knightGroupMap = self::ladderKnightGroupMap();
+
+        $this->db->Clear();
+        $awardResult = $this->db->DataSet($kSql);
+        $awardCols = [];
+        if ($awardResult) {
+            while ($awardResult->Next()) {
+                if (!$awardResult->award_id) {
+                    continue;
+                }
+                $name = $awardResult->award_name;
+                $awardCols[(int) $awardResult->award_id] = [
+                    'Name' => $name,
+                    'DisplayName' => preg_replace('/^Order of (?:the )?/i', '', $name),
+                    'KnightGroup' => $knightGroupMap[$name] ?? '',
+                ];
+            }
+        }
+
+        if ($awardCols === []) {
+            return ['ScopeName' => $scopeName, 'LadderAwards' => [], 'GridRows' => []];
+        }
+
+        $awardIds = implode(',', array_keys($awardCols));
+        $gridCacheKey = Ork3::$Lib->ghettocache->key(['type' => $type, 'id' => $id, 'awards' => $awardIds]);
+        $cachedGrid = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetLadderAwardGrid', $gridCacheKey, 1200);
+        if ($cachedGrid !== false) {
+            return [
+                'ScopeName' => $scopeName,
+                'LadderAwards' => $awardCols,
+                'GridRows' => $cachedGrid,
+            ];
+        }
+
+        $locationClause = $parkId > 0
+            ? 'AND m.park_id = ' . $parkId
+            : ($kingdomId > 0 ? 'AND m.kingdom_id = ' . $kingdomId : '');
+
+        $dataSql = "SELECT m.mundane_id, m.persona, p.park_id, p.name AS park_name, a.award_id,
+                           GREATEST(MAX(ma.rank), COUNT(ma.awards_id)) AS award_count
+                    FROM " . DB_PREFIX . 'mundane m
+                    LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
+                    JOIN ' . DB_PREFIX . 'awards ma ON ma.mundane_id = m.mundane_id
+                    JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+                    JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+                    WHERE m.active = 1 AND a.is_ladder = 1
+                      AND a.award_id IN (' . $awardIds . ")
+                      AND (ma.revoked = 0 OR ma.revoked IS NULL)
+                      {$locationClause}
+                    GROUP BY m.mundane_id, a.award_id
+                    ORDER BY m.persona";
+
+        $this->db->Clear();
+        $dataResult = $this->db->DataSet($dataSql);
+        $playerData = [];
+        if ($dataResult) {
+            while ($dataResult->Next()) {
+                $mid = (int) $dataResult->mundane_id;
+                $aid = (int) $dataResult->award_id;
+                if (!$mid || !$aid) {
+                    continue;
+                }
+                if (!isset($playerData[$mid])) {
+                    $playerData[$mid] = [
+                        'MundaneId' => $mid,
+                        'Persona' => $dataResult->persona,
+                        'ParkId' => (int) $dataResult->park_id,
+                        'ParkName' => $dataResult->park_name ?? '',
+                        'Awards' => [],
+                    ];
+                }
+                $val = (int) $dataResult->award_count;
+                $playerData[$mid]['Awards'][$aid] = ['Rank' => $val > 0 ? $val : null, 'IsMaster' => false];
+            }
+        }
+
+        if ($playerData === []) {
+            return ['ScopeName' => $scopeName, 'LadderAwards' => $awardCols, 'GridRows' => []];
+        }
+
+        $mundaneIds = implode(',', array_keys($playerData));
+        $ladderToMasterMap = Award::GetLadderMasterMap();
+        $masterAwardIds = [];
+        foreach (array_keys($awardCols) as $lid) {
+            if (isset($ladderToMasterMap[$lid])) {
+                foreach ($ladderToMasterMap[$lid]['MasterAwardIds'] as $midAward) {
+                    $masterAwardIds[$midAward] = $lid;
+                }
+            }
+        }
+
+        if ($masterAwardIds !== []) {
+            $masterIds = implode(',', array_keys($masterAwardIds));
+            $masterSql = "SELECT ma.mundane_id, ka.award_id AS master_award_id
+                         FROM " . DB_PREFIX . 'awards ma
+                         JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+                         WHERE ma.mundane_id IN (' . $mundaneIds . ")
+                           AND ka.award_id IN ({$masterIds})
+                           AND (ma.revoked = 0 OR ma.revoked IS NULL)
+                         GROUP BY ma.mundane_id, ka.award_id";
+
+            $this->db->Clear();
+            $masterResult = $this->db->DataSet($masterSql);
+            if ($masterResult) {
+                while ($masterResult->Next()) {
+                    $mid = (int) $masterResult->mundane_id;
+                    if (!$mid) {
+                        continue;
+                    }
+                    $masterAid = (int) $masterResult->master_award_id;
+                    $ladderAid = $masterAwardIds[$masterAid] ?? null;
+                    if ($ladderAid !== null && isset($playerData[$mid]['Awards'][$ladderAid])) {
+                        $playerData[$mid]['Awards'][$ladderAid]['IsMaster'] = true;
+                    }
+                }
+            }
+        }
+
+        $this->db->Clear();
+        $recentResult = $this->db->DataSet(
+            'SELECT DISTINCT mundane_id FROM ' . DB_PREFIX . "attendance
+             WHERE mundane_id IN ({$mundaneIds})
+               AND date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)"
+        );
+        $recentIds = [];
+        if ($recentResult) {
+            while ($recentResult->Next()) {
+                $rmid = (int) $recentResult->mundane_id;
+                if ($rmid) {
+                    $recentIds[$rmid] = true;
+                }
+            }
+        }
+        foreach ($playerData as $mid => &$pRow) {
+            $pRow['RecentSignIn'] = isset($recentIds[$mid]);
+            $pRow['KnightGroups'] = [];
+        }
+        unset($pRow);
+
+        $knightSql = "SELECT ma.mundane_id, COALESCE(alias.name, a.name) AS knight_name
+                      FROM " . DB_PREFIX . 'awards ma
+                      JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+                      JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+                      LEFT JOIN ' . DB_PREFIX . 'award alias ON alias.award_id = ma.alias_award_id
+                      WHERE ma.mundane_id IN (' . $mundaneIds . ")
+                        AND COALESCE(alias.peerage, a.peerage) = 'Knight'
+                        AND (ma.revoked = 0 OR ma.revoked IS NULL)
+                      GROUP BY ma.mundane_id, COALESCE(alias.award_id, a.award_id)";
+
+        $this->db->Clear();
+        $knightResult = $this->db->DataSet($knightSql);
+        if ($knightResult) {
+            $knightTypeMap = ['Battle' => 'Battle', 'Sword' => 'Sword', 'Crown' => 'Crown', 'Flame' => 'Flame', 'Serpent' => 'Serpent'];
+            while ($knightResult->Next()) {
+                $mid = (int) $knightResult->mundane_id;
+                if (!isset($playerData[$mid])) {
+                    continue;
+                }
+                $knightType = ucfirst(strtolower(preg_replace('/^knight(?:hood)? of (?:the )?/i', '', $knightResult->knight_name)));
+                if (isset($knightTypeMap[$knightType])) {
+                    $playerData[$mid]['KnightGroups'][$knightType] = true;
+                }
+            }
+        }
+
+        $gridRows = array_values($playerData);
+        Ork3::$Lib->ghettocache->cache(__CLASS__ . '.GetLadderAwardGrid', $gridCacheKey, $gridRows);
+
+        return [
+            'ScopeName' => $scopeName,
+            'LadderAwards' => $awardCols,
+            'GridRows' => $gridRows,
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function ladderKnightGroupMap(): array
+    {
+        return [
+            'Order of Battle' => 'Battle',
+            'Order of the Warrior' => 'Sword',
+            'Order of the Crown' => 'Crown',
+            'Order of the Lion' => 'Flame',
+            'Order of the Rose' => 'Flame',
+            'Order of the Smith' => 'Flame',
+            'Order of the Dragon' => 'Serpent',
+            'Order of the Garber' => 'Serpent',
+            'Order of the Owl' => 'Serpent',
         ];
     }
 

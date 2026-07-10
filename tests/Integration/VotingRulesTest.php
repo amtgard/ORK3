@@ -101,11 +101,6 @@ final class VotingRulesTest extends TestCase
      */
     private function mirrorVotingRules(int $kingdomId): ?array
     {
-        $method = new ReflectionMethod(Model_Reports::class, '_all_voting_rules');
-        $method->setAccessible(true);
-        /** @var array<int, array<string, mixed>> $all */
-        $all = $method->invoke($this->reportsModel);
-
-        return $all[$kingdomId] ?? null;
+        return VotingRules::rulesForKingdom($kingdomId);
     }
 }
