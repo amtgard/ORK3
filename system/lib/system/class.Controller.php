@@ -49,12 +49,9 @@ class Controller
             'Controller_WnAjax',
         ]);
         if (!$_skipTokenCheck && isset($this->session->user_id) && isset($this->session->token)) {
-            global $DB;
-            $DB->Clear();
             $_uid_check = (int)$this->session->user_id;
             $_tok_check = $this->session->token;
-            $_rs = $DB->DataSet("SELECT token FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$_uid_check} LIMIT 1");
-            if (!$_rs || !$_rs->Next() || $_rs->token !== $_tok_check) {
+            if (!Ork3::$Lib->sessiontoken->ValidateSessionToken($_uid_check, $_tok_check)) {
                 $_returnRoute = trim($_GET['Route'] ?? '');
                 unset($_SESSION['is_authorized_mundane_id']);
                 session_unset();
@@ -65,7 +62,6 @@ class Controller
                 header('Location: ' . UIR . 'Login/login&msg=session_replaced' . $_returnParam);
                 exit;
             }
-            $DB->Clear();
         }
 
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
@@ -73,15 +69,23 @@ class Controller
         // Viewer accessibility-font preferences — read once and surface to every template
         $this->data['ViewerBasicFonts']    = 0;
         $this->data['ViewerDyslexiaFonts'] = 0;
+        $this->data['ShowWhatsNew']        = false;
         if ($_uid > 0) {
-            global $DB;
-            $DB->Clear();
-            $_prefRs = $DB->DataSet("SELECT basic_fonts, dyslexia_fonts FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$_uid} LIMIT 1");
-            if ($_prefRs && $_prefRs->Next()) {
-                $this->data['ViewerBasicFonts']    = (int)$_prefRs->basic_fonts;
-                $this->data['ViewerDyslexiaFonts'] = (int)$_prefRs->dyslexia_fonts;
+            $prefs = Ork3::$Lib->player->GetViewerPreferences($_uid);
+            $this->data['ViewerBasicFonts']    = (int) ($prefs['BasicFonts'] ?? 0);
+            $this->data['ViewerDyslexiaFonts'] = (int) ($prefs['DyslexiaFonts'] ?? 0);
+
+            require_once(DIR_UI . 'whats_new_content.php');
+            $hasRelease = false;
+            foreach ($WHATS_NEW_ITEMS as $_release) {
+                if ($_release['date'] === WHATS_NEW_VERSION) {
+                    $hasRelease = true;
+                    break;
+                }
             }
-            $DB->Clear();
+            if ($hasRelease) {
+                $this->data['ShowWhatsNew'] = !Ork3::$Lib->player->GetWhatsNewSeen($_uid, WHATS_NEW_VERSION);
+            }
         }
 
         $this->data[ 'controller_title' ] = get_class($this);
@@ -136,21 +140,10 @@ class Controller
         // Determine the logged-in user's home kingdom from their profile in the DB.
         // Fall back to the session-cached value only when not logged in.
         if ($this->data['LoggedIn'] && isset($this->session->user_id)) {
-            global $DB;
             $uid = (int) $this->session->user_id;
-            $hkRow = $DB->DataSet(
-                "SELECT p.kingdom_id, k.parent_kingdom_id FROM ork_mundane m
-				 INNER JOIN ork_park p ON p.park_id = m.park_id
-				 INNER JOIN ork_kingdom k ON k.kingdom_id = p.kingdom_id
-				 WHERE m.mundane_id = {$uid} LIMIT 1"
-            );
-            if ($hkRow && $hkRow->Size() > 0 && $hkRow->Next()) {
-                $this->data['UserKingdomId']       = (int) $hkRow->kingdom_id;
-                $this->data['UserParentKingdomId'] = (int) $hkRow->parent_kingdom_id;
-            } else {
-                $this->data['UserKingdomId']       = 0;
-                $this->data['UserParentKingdomId'] = 0;
-            }
+            $home = Ork3::$Lib->player->GetHomeKingdom($uid);
+            $this->data['UserKingdomId']       = (int) ($home['KingdomId'] ?? 0);
+            $this->data['UserParentKingdomId'] = (int) ($home['ParentKingdomId'] ?? 0);
         } else {
             $this->data['UserKingdomId'] = 0;
         }

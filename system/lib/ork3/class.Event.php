@@ -592,6 +592,30 @@ class Event extends Ork3
         return $events;
     }
 
+    /**
+     * Slim event lookup for legacy Event/index redirect (T-INF-02).
+     *
+     * @return array{Name: string, KingdomId: int}
+     */
+    public function GetEventSummaryForRedirect(int $eventId): array
+    {
+        if (!valid_id($eventId)) {
+            return ['Name' => '', 'KingdomId' => 0];
+        }
+        $this->db->Clear();
+        $rs = $this->db->query(
+            'SELECT name, kingdom_id FROM ' . DB_PREFIX . 'event WHERE event_id = ' . (int) $eventId . ' LIMIT 1'
+        );
+        if ($rs && $rs->size() > 0 && $rs->next()) {
+            return [
+                'Name' => (string) $rs->name,
+                'KingdomId' => (int) $rs->kingdom_id,
+            ];
+        }
+
+        return ['Name' => '', 'KingdomId' => 0];
+    }
+
     public function GetEvent($request)
     {
         $this->event->clear();

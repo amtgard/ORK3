@@ -12,7 +12,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-12-attendance-refactor` @ `6fcc6ce0` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-13-infrastructure-refactor` @ `51dc8948` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -33,6 +33,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 | R-10 | `megiddo/r-10-reports-refactor` | `ea46a630` |
 | R-11 | `megiddo/r-11-search-refactor` | `bdbc86d7` |
 | R-12 | `megiddo/r-12-attendance-refactor` | `6fcc6ce0` |
+| R-13 | `megiddo/r-13-infrastructure-refactor` | `51dc8948` |
 
 ---
 
@@ -288,16 +289,16 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Prior R-* hygiene | [ ] |
-| Refactor infrastructure targets | [ ] |
-| PHPUnit | [ ] |
-| Infection §2.4 | [ ] |
-| Fuzzy: `home-authenticated` | [ ] |
-| Playwright: `infrastructure.spec.ts` | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-13: …` | [ ] |
+| Prior R-* hygiene | [x] |
+| Refactor infrastructure targets | [x] |
+| PHPUnit | [x] |
+| Infection §2.4 | [x] |
+| Fuzzy: `home-authenticated` | [x] |
+| Playwright: `infrastructure.spec.ts` | [x] |
+| Docs + plan | [x] |
+| Commit: `R-13: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-13-infrastructure-refactor` stacked on R-12 @ `c86ab163`. Added `Health::PingDb`, `SessionToken::ValidateSessionToken`, `Player::GetViewerPreferences`/`GetHomeKingdom`/`DismissWhatsNew`/`GetWhatsNewSeen`, `Event::GetEventSummaryForRedirect`; thinned `orkui/index.php`, `class.Controller`, `controller.WnAjax`, `default.theme` off `$DB` on migrated paths (T-INF-06 → R-01; menu HasAuthority → R-14; session token in `SessionToken` — `class.Authorization.php` uncommittable per hook). PHPUnit 215/215 pass (2 skipped). Infection `infection.t13-infrastructure.json5` `--only-covered`: MSI 33% (`class.Player.php` + `class.SessionToken.php`). Fuzzy test+mirror 2/2 pass (re-recorded `home-authenticated` baselines). Playwright: auth smoke + `infrastructure.spec.ts` 3/3 pass.
 
 ---
 
@@ -329,4 +330,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | … | … | … |
 | 14 | R-14 | Phase 3 audit |
 
-**Next unchecked:** R-13
+**Next unchecked:** R-14

@@ -11,6 +11,8 @@ final class SessionTokenTest extends TestCase
 {
     private InfrastructureFixture $fixture;
 
+    private SessionToken $sessionTokenDomain;
+
     protected function setUp(): void
     {
         if (!ork3_test_db_available()) {
@@ -18,6 +20,7 @@ final class SessionTokenTest extends TestCase
         }
 
         $this->fixture = InfrastructureFixture::create();
+        $this->sessionTokenDomain = new SessionToken();
     }
 
     protected function tearDown(): void
@@ -32,7 +35,9 @@ final class SessionTokenTest extends TestCase
         $parkId = $this->fixture->firstParkId();
         $player = $this->fixture->createPlayer($parkId, 'session-ok');
 
-        $this->assertTrue($this->mirrorValidateSessionToken($player['mundane_id'], $player['token']));
+        $this->assertTrue(
+            $this->sessionTokenDomain->ValidateSessionToken($player['mundane_id'], $player['token'])
+        );
     }
 
     public function testValidateSessionTokenRejectsStale(): void
@@ -43,21 +48,11 @@ final class SessionTokenTest extends TestCase
         $newToken = md5('rotated-' . bin2hex(random_bytes(8)));
         $this->fixture->rotateToken($player['mundane_id'], $newToken);
 
-        $this->assertFalse($this->mirrorValidateSessionToken($player['mundane_id'], $staleToken));
-        $this->assertTrue($this->mirrorValidateSessionToken($player['mundane_id'], $newToken));
-    }
-
-    private function mirrorValidateSessionToken(int $mundaneId, string $token): bool
-    {
-        global $DB;
-        $DB->Clear();
-        $rs = $DB->DataSet(
-            'SELECT token FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundaneId . ' LIMIT 1'
+        $this->assertFalse(
+            $this->sessionTokenDomain->ValidateSessionToken($player['mundane_id'], $staleToken)
         );
-        if (!$rs || !$rs->Next()) {
-            return false;
-        }
-
-        return (string) $rs->token === $token;
+        $this->assertTrue(
+            $this->sessionTokenDomain->ValidateSessionToken($player['mundane_id'], $newToken)
+        );
     }
 }

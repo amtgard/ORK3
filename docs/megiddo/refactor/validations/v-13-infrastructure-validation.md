@@ -94,7 +94,7 @@ sh bin/run-infection.sh \
   --configuration=infection.t13-infrastructure.json5 \
   --only-covered \
   --filter=class.Player.php \
-  --filter=class.Authorization.php \
+  --filter=class.SessionToken.php \
   --test-framework-options="--filter=HealthTest|SessionTokenTest|ViewerPreferencesTest|WhatsNewTest|LegacyRedirectTest"
 ```
 
@@ -102,8 +102,8 @@ sh bin/run-infection.sh \
 
 ## 3. R-13 sign-off checklist
 
-- [ ] §1 page ids pass `bin/fuzzy-validator validate --phase all` (test + mirror)
-- [ ] Test edits within §2.3
-- [ ] Full unit suite green
-- [ ] Infection per §2.4
-- [ ] No new `$DB` in `orkui/index.php`, `class.Controller.php`, or `controller.WnAjax.php` for migrated targets
+- [x] §1 page ids pass `bin/fuzzy-validator validate --phase all` (test + mirror)
+- [x] Test edits within §2.3
+- [x] Full unit suite green
+- [x] Infection per §2.4
+- [x] No new `$DB` in `orkui/index.php`, `class.Controller.php`, or `controller.WnAjax.php` for migrated targets

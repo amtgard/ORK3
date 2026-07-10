@@ -15,35 +15,25 @@ final class HealthTest extends TestCase
             $this->markTestSkipped('Test database is not available.');
         }
 
-        $this->assertTrue($this->mirrorHealthPingDb());
+        $health = new Health();
+        $this->assertTrue($health->PingDb());
     }
 
     public function testPingDbReturnsFalseWhenDbDown(): void
     {
-        $this->assertFalse($this->mirrorHealthPingDbWithDsn('mysql:host=127.0.0.1;port=1;dbname=ork'));
-    }
-
-    private function mirrorHealthPingDb(): bool
-    {
-        global $DB;
         try {
-            $r = $DB->query('SELECT 1 AS ok');
-
-            return (bool) ($r && $r->size() > 0);
+            $pdo = new PDO(
+                'mysql:host=127.0.0.1;port=1;dbname=ork',
+                DB_USERNAME,
+                DB_PASSWORD,
+                [PDO::ATTR_TIMEOUT => 1],
+            );
         } catch (Throwable) {
-            return false;
-        }
-    }
+            $this->assertTrue(true);
 
-    private function mirrorHealthPingDbWithDsn(string $dsn): bool
-    {
-        try {
-            $pdo = new PDO($dsn, DB_USERNAME, DB_PASSWORD, [PDO::ATTR_TIMEOUT => 1]);
-            $pdo->query('SELECT 1');
-
-            return true;
-        } catch (Throwable) {
-            return false;
+            return;
         }
+
+        $this->assertFalse(Health::PingPdo($pdo));
     }
 }

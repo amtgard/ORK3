@@ -671,11 +671,7 @@ $downtime_note  = 'Potential ORK downtime to migrate to the Walker 3.5.4 Release
 <?php if ($this->__session->token != null) : ?>
 <?php
 // --- What's New modal ---
-$__wnUid = (int)$this->__session->user_id;
-$DB->Clear();
-$__wnRow = $DB->DataSet("SELECT id FROM ork_whats_new_seen WHERE mundane_id = " . $__wnUid . " AND version = '" . WHATS_NEW_VERSION . "' LIMIT 1");
-$__wnShow = !($__wnRow && $__wnRow->Next());
-$DB->Clear();
+$__wnShow = !empty($this->__data['ShowWhatsNew']);
 ?>
 <?php
 $__currentRelease = null;

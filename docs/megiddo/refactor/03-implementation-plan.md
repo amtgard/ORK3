@@ -106,6 +106,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 **R-11 complete (2026-07-10):** T-SRC-01, T-SRC-02, T-ADM-10, T-KNA-06, T-PRA-01, T-EVA-06 (search portion) migrated to `SearchService::UniversalSearch`, `ScopedPlayerSearch`, `GetUnitActivityCounts`; thinned `SearchAjax`, `Search`, `AdminAjax`, `KingdomAjax`, `ParkAjax`, `EventAjax` playersearch paths off `$DB` (T-EVA-06 addauth → R-02).
 
+**R-13 complete (2026-07-10):** T-INF-01 through T-INF-05, T-WN-01 migrated to `Health`, `Event`, `SessionToken`, `Player` domain APIs; thinned `orkui/index.php`, `class.Controller`, `controller.WnAjax`, `default.theme` whats_new read off `$DB` (T-INF-06 → R-01 `GetRsvpCountsBatch`; menu `HasAuthority` → R-14).
+
 **R-03 complete (2026-07-09):** T-PLA-06, T-PRA-04, T-KNA-08, T-UNT-01, T-EVA-14 migrated to `class.Banner.php` / BannerService; five `*Ajax::banner` controllers are thin `Model_Banner` adapters; zero banner `$DB` in `orkui/`.
 
 **R-04 complete (2026-07-09):** T-EVA-01–T-EVA-13 migrated to `class.EventPlanning.php` / EventService + `Model_EventPlanning`; `CreateEvent` accepts optional draft status; `RemoveEventHeraldry` in Heraldry domain; EventAjax planning methods are thin adapters (auth addauth/playersearch and banner unchanged).

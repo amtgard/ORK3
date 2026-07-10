@@ -3955,4 +3955,94 @@ class Player extends Ork3
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
     }
 
+    /**
+     * Viewer accessibility-font preferences (T-INF-04).
+     *
+     * @return array{BasicFonts: int, DyslexiaFonts: int}
+     */
+    public function GetViewerPreferences(int $mundaneId): array
+    {
+        if (!valid_id($mundaneId)) {
+            return ['BasicFonts' => 0, 'DyslexiaFonts' => 0];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT basic_fonts, dyslexia_fonts FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = '
+            . (int) $mundaneId . ' LIMIT 1'
+        );
+        if ($rs && $rs->Next()) {
+            return [
+                'BasicFonts' => (int) $rs->basic_fonts,
+                'DyslexiaFonts' => (int) $rs->dyslexia_fonts,
+            ];
+        }
+
+        return ['BasicFonts' => 0, 'DyslexiaFonts' => 0];
+    }
+
+    /**
+     * Home kingdom context for the logged-in user (T-INF-05).
+     *
+     * @return array{KingdomId: int, ParentKingdomId: int}
+     */
+    public function GetHomeKingdom(int $mundaneId): array
+    {
+        if (!valid_id($mundaneId)) {
+            return ['KingdomId' => 0, 'ParentKingdomId' => 0];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT p.kingdom_id, k.parent_kingdom_id FROM ' . DB_PREFIX . 'mundane m
+             INNER JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
+             INNER JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = p.kingdom_id
+             WHERE m.mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
+        );
+        if ($rs && $rs->Size() > 0 && $rs->Next()) {
+            return [
+                'KingdomId' => (int) $rs->kingdom_id,
+                'ParentKingdomId' => (int) $rs->parent_kingdom_id,
+            ];
+        }
+
+        return ['KingdomId' => 0, 'ParentKingdomId' => 0];
+    }
+
+    /**
+     * Record that the user dismissed the What's New modal (T-WN-01).
+     */
+    public function DismissWhatsNew(int $mundaneId, string $version): array
+    {
+        if (!valid_id($mundaneId)) {
+            return InvalidParameter('MundaneId is required.');
+        }
+        $version = preg_replace('/[^a-zA-Z0-9_\-]/', '', $version);
+        if ($version === '') {
+            return InvalidParameter('Version is required.');
+        }
+        $this->db->Clear();
+        $this->db->Execute(
+            'INSERT IGNORE INTO ' . DB_PREFIX . "whats_new_seen (mundane_id, version) VALUES ("
+            . (int) $mundaneId . ", '" . mysql_real_escape_string($version) . "')"
+        );
+
+        return Success();
+    }
+
+    /**
+     * Whether the user has already seen a What's New version (T-WN-01).
+     */
+    public function GetWhatsNewSeen(int $mundaneId, string $version): bool
+    {
+        if (!valid_id($mundaneId) || $version === '') {
+            return false;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT 1 FROM ' . DB_PREFIX . "whats_new_seen WHERE mundane_id = " . (int) $mundaneId
+            . " AND version = '" . mysql_real_escape_string($version) . "' LIMIT 1"
+        );
+
+        return (bool) ($rs && $rs->Next());
+    }
+
 }
