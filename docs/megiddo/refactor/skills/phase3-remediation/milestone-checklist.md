@@ -14,7 +14,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 |-----|-----|--------|--------|--------|
 | 1 | FIX-02 | `megiddo/p3-fix-02-assets` | `6e7bb487` | [x] |
 | 2 | FIX-03 | `megiddo/p3-fix-03-playwright-heraldry` | `6766aaac` | [x] |
-| 3 | FIX-04 | | | [ ] |
+| 3 | FIX-04 | `megiddo/p3-fix-04-fuzzy-park-auth` | `b973c6a1` | [x] |
 | 4 | FIX-05 | | | [ ] |
 | 5 | BACKFILL | | | [ ] |
 | 6 | DS-19 | | | [ ] |
@@ -26,7 +26,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 12 | R-19d | | | [ ] |
 | 13 | VALIDATE-20 | | | [ ] |
 
-**Next actionable hop:** FIX-04
+**Next actionable hop:** FIX-05
 
 ---
 
@@ -60,10 +60,14 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 ## FIX-04: Fuzzy park-auth-sandbox
 
-- [ ] `park-auth-sandbox` investigated (layout regression vs intentional)
-- [ ] `bin/fuzzy-validator validate --pages park-auth-sandbox --phase all` exit 0
-- [ ] Baseline re-record only if change is intentional
-- [ ] Checklist + commit on stacked branch
+**Root cause:** Phase 3 audit ran with stale sandbox heraldry (pre–FIX-02); test-profile capture rendered **937px** (24px shorter — heraldry block absent). Git manifest was re-calibrated to 937 while setpoint baseline PNG remained **961px** (RB-F bundle). After FIX-02 asset alignment, page stably renders **961px** with heraldry — not a template/CSS regression.
+
+**Fix:** Re-record test+mirror manifests (`imageHeight` 937→961 test; mirror timestamps/commit pin) to match setpoint baseline and post–FIX-02 render. No production code changes.
+
+- [x] `park-auth-sandbox` investigated (manifest drift from broken heraldry capture, not layout regression)
+- [x] `bin/fuzzy-validator validate --pages park-auth-sandbox --phase all` exit 0 (test+mirror 2/2 PASS)
+- [x] Baseline re-record only if change is intentional (manifest sync; PNG unchanged at 961)
+- [x] Checklist + commit on stacked branch
 
 ---
 
