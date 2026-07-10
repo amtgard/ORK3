@@ -94,6 +94,7 @@ class Controller
         $this->data[ 'menu' ] = [ ];
         $this->data[ 'menu' ][ 'home' ] = [ 'url' => UIR, 'display' => 'Home <i class="fas fa-home"></i> ', 'no-crumb' => 'no-crumb' ];
         $this->load_model('Authorization');
+        $this->data['NavIsOrkAdmin'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if ($_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, null, null)) {
             $this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin', 'display' => 'Admin Panel', 'no-crumb' => 'no-crumb' ];
         }

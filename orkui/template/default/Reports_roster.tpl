@@ -86,34 +86,8 @@ if ($variant === 'suspended' && is_array($roster) && count($roster) > 1) {
 }
 
 /* ── Remove-suspension auth ────────────────────────────────── */
-$_canRemoveAny = false;
-$_canRemoveMap = [];
-if ($variant === 'suspended' && $this->__session->user_id) {
-	$_uid        = $this->__session->user_id;
-	$_isOrkAdmin = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
-if ($_isOrkAdmin) {
-		$_canRemoveAny = true;
-		// Mark every roster player as removable
-		if (is_array($roster)) {
-			foreach ($roster as $player) {
-				$_canRemoveMap[(int)$player['MundaneId']] = true;
-			}
-		}
-	} elseif (is_array($roster)) {
-		// Check if user has authority for the report's scope kingdom directly —
-		// covers cases where a player's KingdomId differs from the scoped kingdom
-		// (e.g. parent/child kingdom relationships or data inconsistencies).
-		$_scopeKingdomAuth = $_scopeType === 'kingdom' && valid_id($_scopeId)
-			&& Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$_scopeId, AUTH_EDIT);
-		foreach ($roster as $player) {
-			$mid = (int)$player['MundaneId'];
-			$can = $_scopeKingdomAuth
-				|| Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$player['KingdomId'], AUTH_EDIT);
-			$_canRemoveMap[$mid] = $can;
-			if ($can) $_canRemoveAny = true;
-		}
-	}
-}
+$_canRemoveAny = !empty($RosterCanRemoveAny);
+$_canRemoveMap = is_array($RosterCanRemoveMap ?? null) ? $RosterCanRemoveMap : [];
 ?>
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">

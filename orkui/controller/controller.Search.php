@@ -8,7 +8,7 @@ class Controller_Search extends Controller
         $this->data['no_index'] = true;
         header('X-Robots-Tag: noindex, nofollow');
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if ($_uid > 0 && valid_id($this->session->park_id) && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
+        if ($_uid > 0 && valid_id($this->session->park_id) && $this->Authorization->has_authority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
             $this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
         }
         // Expose the auth token so the search-results JS can pass it to the SOAP service

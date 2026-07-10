@@ -120,3 +120,9 @@ sh bin/run-infection.sh \
 - [x] No new `Ork3::$Lib` in Live / Weather / Tournament / EraPhoenice / CalendarItemAjax / Controller base menu paths for migrated targets
 
 **R-15 … R-18:** Remaining HasAuthority, ghettocache, domain lib bypass, and residual `$DB` — see [10-phase-2-continuation.md](../10-phase-2-continuation.md). Reuse §2.3–2.4 boundaries where scope overlaps; add per-sprint notes under §3 as each continuation milestone completes.
+
+### R-15 (2026-07-10)
+
+- [x] Controllers/AJAX: zero `Ork3::$Lib->authorization->HasAuthority` in `orkui/` — all gates use `Model_Authorization::has_authority` / `AuthorizationGate`
+- [x] Templates: precomputed auth flags in controllers; zero auth `Ork3::$Lib` in `orkui/template/`
+- [x] Infection pass A MSI 18%; fuzzy gate `admin-permissions,kingdom-auth-sandbox,park-auth-sandbox,player-profile` 8/8

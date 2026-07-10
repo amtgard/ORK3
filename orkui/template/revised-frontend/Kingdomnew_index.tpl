@@ -39,11 +39,7 @@
 			$bannerUrl = HTTP_KINGDOM_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
 		}
 	}
-	// Banner management gates on AUTH_EDIT (matches Park/Player and the AJAX endpoint).
-	// $CanManageKingdom is AUTH_CREATE, so we derive this independently.
-	$_knBannerUid = isset($this->__session->user_id) ? (int)$this->__session->user_id : 0;
-	$knCanManageBanner = $_knBannerUid > 0
-		&& Ork3::$Lib->authorization->HasAuthority($_knBannerUid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_EDIT);
+	$knCanManageBanner = !empty($knCanManageBanner);
 
 	// Extract Monarch & Regent for hero display
 	$monarch = null; $regent = null;

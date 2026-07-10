@@ -388,7 +388,7 @@ class Controller_PlayerAjax extends Controller
             // Own-profile customization: about, colors, name prefix/suffix, photo focus.
             // ORK admins may also edit any player's profile (e.g. to remove inappropriate content).
             $uid = (int)$this->session->user_id;
-            $_isOrkAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, null, null);
+            $_isOrkAdmin = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, null, null);
             if ($uid !== $player_id && !$_isOrkAdmin) {
                 echo json_encode(['status' => 5, 'error' => 'You can only customize your own profile.']);
                 exit;
@@ -585,7 +585,7 @@ class Controller_PlayerAjax extends Controller
             )));
             foreach ($uniqueParkIds as $pid) {
                 if (valid_id($pid)) {
-                    $parkEditAuth[(int)$pid] = (bool)Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$pid, AUTH_EDIT);
+                    $parkEditAuth[(int)$pid] = (bool)$this->Authorization->has_authority($uid, AUTH_PARK, (int)$pid, AUTH_EDIT);
                 }
             }
         }

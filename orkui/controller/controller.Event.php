@@ -26,7 +26,7 @@ class Controller_Event extends Controller
         }
         $this->data['menu']['event'] = array( 'url' => UIR.'Event/index/'.$id, 'display' => $this->data['EventDetails']['Name'] );
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if ($_uid > 0 && valid_id($id) && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_EVENT, (int)$id, AUTH_EDIT)) {
+        if ($_uid > 0 && valid_id($id) && $this->Authorization->has_authority($_uid, AUTH_EVENT, (int)$id, AUTH_EDIT)) {
             $this->data['menu']['admin'] = array( 'url' => UIR.'Admin/event/'.$id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
             $this->data['menulist']['admin'] = array(
                 array( 'url' => UIR.'Admin/event/'.$id, 'display' => 'Event' )
@@ -58,7 +58,7 @@ class Controller_Event extends Controller
         }
 
         $can_manage = $uid > 0 && valid_id($event_id)
-            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
+            && $this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
         $this->data['CanManageEvent'] = $can_manage;
 
         $rsvp_data = [];
@@ -106,7 +106,7 @@ class Controller_Event extends Controller
             'display' => $details['Name'],
         ];
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $can_manage = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
+        $can_manage = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
         if ($can_manage) {
             $this->data['menu']['admin'] = [
                 'url'      => UIR . 'Admin/event/' . $event_id,
@@ -174,7 +174,7 @@ class Controller_Event extends Controller
 
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $this->data['CanManageEvent'] = $uid > 0
-            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
+            && $this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE);
     }
 
     public function detail($p = null)
@@ -261,7 +261,7 @@ class Controller_Event extends Controller
         $this->data['DefaultKingdomId']   = $this->session->kingdom_id   ?? 0;
 
         if ($action === 'deletedetail' && $uid > 0) {
-            if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+            if ($this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
                 if (!$this->Event->detail_belongs_to_event($event_id, $detail_id)) {
                     header('Location: ' . UIR . 'Event/index/' . $event_id);
                     exit;
@@ -305,7 +305,7 @@ class Controller_Event extends Controller
         if (strlen($action) > 0 && $uid > 0) {
 
             if ($action === 'edit') {
-                if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage) {
+                if ($this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage) {
                     if (!$this->Event->detail_belongs_to_event($event_id, $detail_id)) {
                         header('Location: ' . UIR . 'Event/index/' . $event_id);
                         exit;
@@ -372,7 +372,7 @@ class Controller_Event extends Controller
                 }
 
             } elseif ($action === 'reconcile') {
-                if (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+                if ($this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
                     if (!$this->Event->detail_belongs_to_event($event_id, $detail_id)) {
                         header('Location: ' . UIR . 'Event/index/' . $event_id);
                         exit;
@@ -460,13 +460,13 @@ class Controller_Event extends Controller
         $this->data['AttendanceCount'] = count($this->data['AttendanceReport']['Attendance'] ?? []);
 
         $this->data['CanManageEvent'] = $uid > 0
-            && (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage);
+            && ($this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage);
         $this->data['CanManageAttendance'] = $uid > 0
-            && (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) || $uid_staff_can_attendance);
+            && ($this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE) || $uid_staff_can_attendance);
         $this->data['CanManageSchedule'] = $uid > 0
-            && (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage || $uid_staff_can_schedule);
+            && ($this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage || $uid_staff_can_schedule);
         $this->data['CanManageFeast'] = $uid > 0
-            && (Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage || $uid_staff_can_feast);
+            && ($this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_EDIT) || $uid_staff_can_manage || $uid_staff_can_feast);
 
         $occurrencePage = $this->Event->get_occurrence_page_data(
             $event_id,
@@ -581,7 +581,7 @@ class Controller_Event extends Controller
             $this->data['AtParkName'] = $this->Event->get_park_name($at_park_id);
         }
 
-        if (!$uid || !Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+        if (!$uid || !$this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
             header('Location: ' . UIR . 'Login');
             return;
         }

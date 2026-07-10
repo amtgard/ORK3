@@ -12,7 +12,7 @@ Track **R-01 … R-18** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-14-lib-service-refactor` (branch tip; code @ `76758e2c`, docs @ `395b6d06`) |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-15-hasauthority-refactor` @ `a5639704` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -34,7 +34,8 @@ Track **R-01 … R-18** Phase 2 sprints. Orchestrator and workers update this fi
 | R-11 | `megiddo/r-11-search-refactor` | `bdbc86d7` |
 | R-12 | `megiddo/r-12-attendance-refactor` | `6fcc6ce0` |
 | R-13 | `megiddo/r-13-infrastructure-refactor` | `758b8566` |
-| R-14 | `megiddo/r-14-lib-service-refactor` | `76758e2c` (+ docs `395b6d06`) |
+| R-14 | `megiddo/r-14-lib-service-refactor` | `a389b247` |
+| R-15 | `megiddo/r-15-hasauthority-refactor` | `a5639704` |
 
 ---
 
@@ -328,17 +329,17 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Stack base: `megiddo/r-14-lib-service-refactor` @ `76758e2c` | [ ] |
-| Replace remaining HasAuthority in controllers | [ ] |
-| Precompute template auth flags (no `Ork3::$Lib` in templates) | [ ] |
-| PHPUnit | [ ] |
-| Infection §2.4 (pass A) | [ ] |
-| Fuzzy: `admin-permissions,kingdom-auth-sandbox,park-auth-sandbox,player-profile` | [ ] |
-| Playwright: `auth-permissions.spec.ts` + auth smoke | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-15: …` | [ ] |
+| Stack base: `megiddo/r-14-lib-service-refactor` @ `a389b247` | [x] |
+| Replace remaining HasAuthority in controllers | [x] |
+| Precompute template auth flags (no `Ork3::$Lib` in templates) | [x] |
+| PHPUnit | [x] |
+| Infection §2.4 (pass A) | [x] |
+| Fuzzy: `admin-permissions,kingdom-auth-sandbox,park-auth-sandbox,player-profile` | [x] |
+| Playwright: `auth-permissions.spec.ts` + auth smoke | [x] |
+| Docs + plan | [x] |
+| Commit: `R-15: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-15-hasauthority-refactor` stacked on R-14 @ `a389b247`. Replaced ~120 `Ork3::$Lib->authorization->HasAuthority` controller call sites with `$this->Authorization->has_authority()` (`AuthorizationGate`); precomputed template flags (`Admin_*`, `Reports_*`, `Playernew_*`, `Kingdomnew_index`, `default.theme` nav). Zero `HasAuthority` / auth `Ork3::$Lib` in `orkui/`. PHPUnit 215/215 pass (2 skipped). Infection pass A MSI 18%. Fuzzy 8/8 pass (test+mirror). Playwright auth smoke + `auth-permissions.spec.ts` 3/3 pass (mirror `admin`/`password`). **Carryover:** ghettocache → R-16; domain lib bypass → R-17.
 
 ---
 
@@ -411,4 +412,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | 17 | R-17 | R-18 |
 | 18 | R-18 | Phase 3 audit |
 
-**Next unchecked:** R-15
+**Next unchecked:** R-16

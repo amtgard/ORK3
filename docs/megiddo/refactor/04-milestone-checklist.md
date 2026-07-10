@@ -1120,12 +1120,14 @@ Deferred cross-cutting work from R-01 … R-14. **Implementation** — not Phase
 
 | Sprint | Branch | Status |
 |--------|--------|--------|
-| R-15 HasAuthority | `megiddo/r-15-hasauthority-refactor` | [ ] |
+| R-15 HasAuthority | `megiddo/r-15-hasauthority-refactor` | [x] |
 | R-16 GhettoCache | `megiddo/r-16-ghettocache-refactor` | [ ] |
 | R-17 Lib bypass | `megiddo/r-17-lib-bypass-refactor` | [ ] |
 | R-18 Residual `$DB` | `megiddo/r-18-residual-db-refactor` | [ ] |
 
-**Stack tip after R-14:** `megiddo/r-14-lib-service-refactor` — branch tip `395b6d06` (code commit `76758e2c` + docs close-out; squash before R-15 if enforcing DS-6)
+**Stack tip after R-15:** `megiddo/r-15-hasauthority-refactor` @ `a5639704` (stacked on R-14 @ `a389b247`)
+
+**Next actionable milestone:** **R-16** (`megiddo/r-16-ghettocache-refactor` stacked on `megiddo/r-15-hasauthority-refactor` branch tip). Phase 1.6 (V-00…V-14) complete.
 
 ---
 
@@ -1161,7 +1163,7 @@ Optional: merge stack tip into integration line `megiddo/rebase-20260709`.
 | **2 cont.** | Refactor execution R-15 … R-18 — cross-cutting HasAuthority, cache, residual lib/`$DB` ([10-phase-2-continuation.md](./10-phase-2-continuation.md)) |
 | **3** | **Audit and close-out** — [11-phase-3-closeout.md](./11-phase-3-closeout.md): automated gates + [manual smoke matrix](./validations/r-milestone-smoke-matrix.html) |
 
-**Next actionable milestone:** **R-15** (`megiddo/r-15-hasauthority-refactor` stacked on `megiddo/r-14-lib-service-refactor` branch tip). Phase 1.6 (V-00…V-14) complete.
+**Next actionable milestone:** **R-16** (`megiddo/r-16-ghettocache-refactor` stacked on `megiddo/r-15-hasauthority-refactor` branch tip).
 
 ### R-01 complete (2026-07-09)
 
@@ -1246,3 +1248,9 @@ Optional: merge stack tip into integration line `megiddo/rebase-20260709`.
 - [x] Branch `megiddo/r-14-lib-service-refactor` stacked on `megiddo/r-13-infrastructure-refactor` — `AuthorizationGate`, `LiveService`, `WeatherService`, `EraPhoeniceService` JSON surfaces; `Authorization.HasAuthority` SOAP; thinned Live/Weather/EraPhoenice/Tournament/CalendarItemAjax controllers and Controller base menu gates off `Ork3::$Lib` on migrated paths
 - [x] Targets closed: T-LIB-01 through T-LIB-05; Controller base menu HasAuthority; **~120 remaining HasAuthority + templates** → **R-15**; ghettocache → **R-16**; domain lib bypass → **R-17**; residual `$DB` → **R-18**
 - [x] Gates: PHPUnit 215/215 pass (2 skipped); Infection pass A MSI 18%, pass B MSI 27%; fuzzy `weather`/`tournament` 4/4 (re-recorded baselines); Playwright auth smoke + `lib-service.spec.ts` 4/4 pass
+
+### R-15 complete (2026-07-10)
+
+- [x] Branch `megiddo/r-15-hasauthority-refactor` stacked on `megiddo/r-14-lib-service-refactor` @ `a389b247` — replaced remaining `Ork3::$Lib->authorization->HasAuthority` in controllers/AJAX with `$this->Authorization->has_authority()`; precomputed template auth flags (`Admin_*`, `Reports_*`, `Playernew_*`, `Kingdomnew_index`, `default.theme` nav)
+- [x] Targets: HasAuthority portion of T-EVT-08, T-KNG-11, T-PRK-05, T-PLR-08, T-RPT-02, T-ATT-04, T-UNT-03; **ghettocache** + residual lib bypass on those files → **R-16/R-17**
+- [x] Gates: PHPUnit 215/215 pass (2 skipped); Infection pass A MSI 18%; fuzzy `admin-permissions,kingdom-auth-sandbox,park-auth-sandbox,player-profile` 8/8; Playwright auth smoke + `auth-permissions.spec.ts` 3/3 pass

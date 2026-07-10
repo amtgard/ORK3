@@ -438,7 +438,7 @@ $downtime_note  = 'Potential ORK downtime to migrate to the Walker 3.5.4 Release
 				</button>
 				<div class='nav-dropdown-menu'>
 					<a href='<?=UIR?>Player/profile/<?=$__navUid?>'><i class='fas fa-user'></i> View Profile</a>
-<?php if (Ork3::$Lib->authorization->HasAuthority($__navUid, AUTH_ADMIN, 0, AUTH_ADMIN)): ?>
+<?php if ($NavIsOrkAdmin): ?>
 					<div class='nav-dropdown-divider'></div>
 					<a href='<?=UIR?>Admin'><i class='fas fa-shield-alt'></i> ORK Admin</a>
 <?php endif; ?>

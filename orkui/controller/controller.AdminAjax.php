@@ -17,7 +17,7 @@ class Controller_AdminAjax extends Controller
         }
 
         $uid = (int)$this->session->user_id;
-        if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
             exit;
         }

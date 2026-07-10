@@ -21,7 +21,7 @@ class Controller_Admin extends Controller
     public function index($duh = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             header('Location: ' . UIR);
             exit;
         }
@@ -773,7 +773,7 @@ class Controller_Admin extends Controller
 
         // Global ORK view — no type/id provided
         if (!$type || !$id) {
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
                 header('Location: ' . UIR . 'Admin');
                 exit;
             }
@@ -785,7 +785,7 @@ class Controller_Admin extends Controller
         }
         $authTypeMap = ['Kingdom' => AUTH_KINGDOM, 'Park' => AUTH_PARK, 'Event' => AUTH_EVENT];
         $authType = $authTypeMap[$type];
-        if (!Ork3::$Lib->authorization->HasAuthority($uid, $authType, $id, AUTH_CREATE)) {
+        if (!$this->Authorization->has_authority($uid, $authType, $id, AUTH_CREATE)) {
             $backUrl = $type === 'Event'
                 ? UIR . 'Event/detail/' . $id . ($detailId ? '/' . $detailId : '')
                 : UIR . ($type === 'Kingdom' ? 'Kingdom/profile/' : 'Park/profile/') . $id;
@@ -860,7 +860,7 @@ class Controller_Admin extends Controller
         $this->data['PermUrl']          = $url;
         $this->data['PermAuths']        = $auths;
         $this->data['PermParkAuths']    = $parkAuths;
-        $this->data['PermCanGrantAdmin']      = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $this->data['PermCanGrantAdmin']      = $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $this->data['PermEventCreator']       = $eventCreator;
         $this->data['PermInheritedParkAuths']    = $inheritedParkAuths;
         $this->data['PermInheritedKingdomAuths'] = $inheritedKingdomAuths;
@@ -1210,6 +1210,12 @@ class Controller_Admin extends Controller
         }
         $this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$id", 'display' => $this->data['Player']['Persona'] );
         $this->data[ 'page_title' ] = "Admin: " . $this->data['Player']['Persona'];
+        $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $_parkId = (int)($this->data['Player']['ParkId'] ?? 0);
+        $this->data['CanEditPlayerMedia'] = $_uid > 0 && (
+            $_uid === (int)$id
+            || $this->Authorization->has_authority($_uid, AUTH_PARK, $_parkId, AUTH_EDIT)
+        );
     }
 
     public function player_bak($mundane_id)
@@ -1748,6 +1754,9 @@ class Controller_Admin extends Controller
         $this->data['IsPrinz'] = $this->data['KingdomInfo']['IsPrincipality'];
         $r = $this->Kingdom->get_park_summary($id);
         $this->data['park_summary'] = $r;
+        $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $this->data['CanResetWaivers'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $this->data['CanEditKingdomReports'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$id, AUTH_EDIT);
     }
 
     public function park($id = null)
@@ -1766,6 +1775,8 @@ class Controller_Admin extends Controller
             $this->data[$key] = $detail;
         }
         $this->data[ 'page_title' ] = "Admin: " . $this->data['ParkInfo']['ParkName'];
+        $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $this->data['CanResetWaivers'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
     }
 
     public function new_player_attendance()
@@ -1798,7 +1809,7 @@ class Controller_Admin extends Controller
         $this->template = 'Admin_inactivekingdoms.tpl';
         $this->load_model('Admin');
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             header('Location: ' . UIR . 'Admin');
             exit;
         }
@@ -1813,7 +1824,7 @@ class Controller_Admin extends Controller
         $this->template = 'Admin_inactiveparks.tpl';
         $this->load_model('Admin');
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             header('Location: ' . UIR . 'Admin');
             exit;
         }
@@ -1862,7 +1873,7 @@ class Controller_Admin extends Controller
     public function auditlog()
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             header('Location: ' . UIR . 'Admin');
             exit;
         }
@@ -1958,6 +1969,9 @@ class Controller_Admin extends Controller
             $this->data['IsPrinz'] = $this->data['KingdomInfo']['IsPrincipality'];
             $r = $this->Kingdom->get_park_summary($id);
             $this->data['park_summary'] = $r;
+            $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+            $this->data['CanResetWaivers'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+            $this->data['CanEditKingdomReports'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$id, AUTH_EDIT);
             $this->template = 'Admin_kingdom.tpl';
         } elseif ($type == 'park') {
             $this->park_route($id);
@@ -1966,6 +1980,8 @@ class Controller_Admin extends Controller
                 $this->data[$key] = $detail;
             }
             $this->data['page_title'] = "Admin: " . $this->data['ParkInfo']['ParkName'];
+            $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+            $this->data['CanResetWaivers'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
             $this->template = 'Admin_park.tpl';
         }
     }
@@ -1974,7 +1990,7 @@ class Controller_Admin extends Controller
     {
         $this->template = 'Admin_serverhealth.tpl';
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if (!Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             header('Location: ' . UIR . 'Admin');
             exit;
         }
@@ -2001,7 +2017,7 @@ class Controller_Admin extends Controller
             exit;
         }
         $uid = (int)($this->session->user_id ?? 0);
-        if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+        if (!$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
             exit;
         }

@@ -110,6 +110,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 **R-14 complete (2026-07-10):** T-LIB-01 through T-LIB-05 + Controller base menu `HasAuthority` migrated to `LiveService`, `WeatherService`, `EraPhoeniceService`, `AuthorizationGate` / `Authorization.HasAuthority`; thinned `Controller_Live`, `Controller_Weather`, `Controller_EraPhoenice`, `Controller_Tournament`, `Controller_CalendarItemAjax`, `class.Controller` off `Ork3::$Lib` on migrated paths. **Carryover:** ~120 HasAuthority sites + templates → R-15; ghettocache → R-16; T-EVT-08, T-KNG-11, T-PRK-05, T-PLR-08, T-RPT-02, T-UNT-02/03 → R-15–R-17; residual `$DB` → R-18 ([10-phase-2-continuation.md](./10-phase-2-continuation.md)).
 
+**R-15 complete (2026-07-10):** HasAuthority call sites in `orkui/` controllers + templates migrated to `Model_Authorization::has_authority` / precomputed `$this->data` flags. **Carryover on same files:** ghettocache → R-16; `park`/`player`/`weather` lib bypass → R-17; residual `$DB` → R-18 ([10-phase-2-continuation.md](./10-phase-2-continuation.md)).
+
 **R-03 complete (2026-07-09):** T-PLA-06, T-PRA-04, T-KNA-08, T-UNT-01, T-EVA-14 migrated to `class.Banner.php` / BannerService; five `*Ajax::banner` controllers are thin `Model_Banner` adapters; zero banner `$DB` in `orkui/`.
 
 **R-04 complete (2026-07-09):** T-EVA-01–T-EVA-13 migrated to `class.EventPlanning.php` / EventService + `Model_EventPlanning`; `CreateEvent` accepts optional draft status; `RemoveEventHeraldry` in Heraldry domain; EventAjax planning methods are thin adapters (auth addauth/playersearch and banner unchanged).

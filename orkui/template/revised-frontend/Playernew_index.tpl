@@ -5,19 +5,7 @@
 	$passwordExpiring = $passwordExpired ? 'Expired' : date('Y-m-j', strtotime($Player['PasswordExpires']));
 	$recError = isset($_GET['rec_error']) ? htmlspecialchars(urldecode($_GET['rec_error'])) : '';
 
-	$can_delete_recommendation = false;
-	if($this->__session->user_id) {
-		if (isset($this->__session->park_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $this->__session->park_id, AUTH_CREATE)) {
-				$can_delete_recommendation = true;
-			}
-		}
-		if (!$can_delete_recommendation && isset($this->__session->kingdom_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $this->__session->kingdom_id, AUTH_CREATE)) {
-				$can_delete_recommendation = true;
-			}
-		}
-	}
+	$can_delete_recommendation = !empty($canDeleteRecommendation);
 
 	$isSuspended = ($Player['Suspended'] == 1);
 	$isActive = ($Player['Active'] == 1 && !$isSuspended);
@@ -79,23 +67,11 @@
 	$_pnBeltDisplay = $Player['BeltDisplay'] ?? 'white';
 	if (!in_array($_pnBeltDisplay, array('white','own','none'))) { $_pnBeltDisplay = 'white'; }
 
-	// Auth helpers
-	$isOwnProfile  = isset($this->__session->user_id) && (int)$this->__session->user_id === (int)$Player['MundaneId'];
-	$canEditAdmin  = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT);
-	// Banner edit scope: self OR park officer OR kingdom officer OR admin.
-	$pnCanManageBanner =
-		   $isOwnProfile
-		|| $canEditAdmin
-		|| (
-			   !empty($Player['KingdomId'])
-			&& isset($this->__session->user_id)
-			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, (int)$Player['KingdomId'], AUTH_EDIT)
-		   )
-		|| (
-			   isset($this->__session->user_id)
-			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)
-		   );
-	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_CREATE);
+	// Auth helpers (precomputed in Controller_Player::profile)
+	$isOwnProfile  = !empty($IsOwnProfile);
+	$canEditAdmin  = !empty($canEditAdmin);
+	$pnCanManageBanner = !empty($pnCanManageBanner);
+	$canManageAwards = !empty($canManageAwards);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;

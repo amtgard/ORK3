@@ -319,7 +319,7 @@ class Controller_ParkAjax extends Controller
 
         } elseif ($action === 'deletedrecommendations') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -329,7 +329,7 @@ class Controller_ParkAjax extends Controller
 
         } elseif ($action === 'restorerecommendation') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -349,7 +349,7 @@ class Controller_ParkAjax extends Controller
 
         } elseif ($action === 'addauth') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -395,7 +395,7 @@ class Controller_ParkAjax extends Controller
 
         } elseif ($action === 'removeauth') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -486,7 +486,7 @@ class Controller_ParkAjax extends Controller
 
         if ($action === 'create') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized to create parks in this kingdom.']);
                 exit;
             }
@@ -526,7 +526,7 @@ class Controller_ParkAjax extends Controller
             }
         } elseif ($action === 'editpark') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized to edit parks in this kingdom.']);
                 exit;
             }

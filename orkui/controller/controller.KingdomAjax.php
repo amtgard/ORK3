@@ -67,7 +67,7 @@ class Controller_KingdomAjax extends Controller
             }
 
         } elseif ($action === 'setstatus') {
-            if (!Ork3::$Lib->authorization->HasAuthority((int)$this->session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            if (!$this->Authorization->has_authority((int)$this->session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
                 echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
                 exit;
             }
@@ -484,7 +484,7 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'deletedrecommendations') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -494,7 +494,7 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'restorerecommendation') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -582,7 +582,7 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'setrecsvisibility') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -593,7 +593,7 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'addauth') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -639,7 +639,7 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'removeauth') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -674,7 +674,7 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'setparent') {
             $uid = (int)($this->session->user_id ?? 0);
-            if (!$uid || !Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            if (!$uid || !$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
                 echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
                 exit;
             }
@@ -727,7 +727,7 @@ class Controller_KingdomAjax extends Controller
         }
 
         $kn_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $kn_isAdmin = ($kn_uid > 0) ? Ork3::$Lib->authorization->HasAuthority($kn_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
+        $kn_isAdmin = ($kn_uid > 0) ? $this->Authorization->has_authority($kn_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
         $this->load_model('KingdomProfile');
         $events = $this->KingdomProfile->calendar_feed((int)$kingdom_id, $start, $end, $kn_uid, $kn_isAdmin);
 
@@ -830,9 +830,9 @@ class Controller_KingdomAjax extends Controller
         $existing_suspended_by_id = (int)($context['suspended_by_id'] ?? 0);
         $is_currently_suspended   = (bool)$context['suspended'];
 
-        $isAdmin = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $isAdmin = $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $isKingdomEditor = valid_id($player_kingdom_id)
-            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT);
+            && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT);
         if (!$isAdmin && !$isKingdomEditor) {
             echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
             exit;

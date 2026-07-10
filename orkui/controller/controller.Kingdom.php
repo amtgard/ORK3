@@ -26,7 +26,7 @@ class Controller_Kingdom extends Controller
         unset($this->session->park_id);
         unset($this->session->park_name);
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$id, AUTH_EDIT)) {
+        if ($_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$id, AUTH_EDIT)) {
             $this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
             $this->data['menulist']['admin'] = array(
                     array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Kingdom' )
@@ -69,7 +69,7 @@ class Controller_Kingdom extends Controller
         $kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
         $kid     = (int)$kingdom_id;
         $uid     = (int)($this->session->user_id ?? 0);
-        $isAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kid, AUTH_EDIT);
+        $isAdmin = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $kid, AUTH_EDIT);
         $this->load_model('KingdomProfile');
         $result = $this->KingdomProfile->extended_park_averages($kid, $isAdmin);
         header('Content-Type: application/json');
@@ -102,9 +102,9 @@ class Controller_Kingdom extends Controller
         $this->load_model('Reports');
 
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $isOrkAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $isOrkAdmin = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $canManageKingdom = $isOrkAdmin
-            || ($uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE));
+            || ($uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE));
 
         $knConfigs  = Common::get_configs($kingdom_id, CFG_KINGDOM);
         $recsPublic = isset($knConfigs['AwardRecsPublic'])
@@ -300,7 +300,7 @@ class Controller_Kingdom extends Controller
         $this->load_model('KingdomProfile');
         $kid = (int)$kingdom_id;
         $kn_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $kn_isAdmin = ($kn_uid > 0) ? Ork3::$Lib->authorization->HasAuthority($kn_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
+        $kn_isAdmin = ($kn_uid > 0) ? $this->Authorization->has_authority($kn_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
         $eventBundle = $this->KingdomProfile->profile_event_bundle($kid, $kn_uid, $kn_isAdmin);
         $this->data['event_summary']        = $eventBundle['event_summary'];
         $this->data['knEventMapLocations']  = $eventBundle['knEventMapLocations'];
@@ -314,13 +314,14 @@ class Controller_Kingdom extends Controller
         // Pin the logged-in user's home park to the first slot in the parks list
         $this->data['UserParkId'] = $uid > 0 ? $this->KingdomProfile->user_home_park_id($uid) : 0;
         $this->data['CanEditKingdom']   = $uid > 0
-            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_EDIT);
+            && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_EDIT);
+        $this->data['knCanManageBanner'] = $this->data['CanEditKingdom'];
         $this->data['CanManageKingdom'] = $uid > 0
-            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+            && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
         $this->data['CanAddPark'] = $uid > 0
-            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+            && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
         $this->data['IsOrkAdmin'] = $uid > 0
-            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+            && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
 
         // Park-level officers (within this kingdom) need the calendar-item edit
         // modal rendered too so they can edit park-level calendar items via the

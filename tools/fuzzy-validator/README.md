@@ -33,7 +33,7 @@ tools/fuzzy-validator/
   manifests/                   # pages.json5, profiles, fuzz JSON (committed)
   setpoint.json                # latest baseline bundle pointer (committed)
   setpoints/bootstrap/         # committed pilot zip for restore/CI
-  baselines/                   # gitignored — restore via setpoint
+  baselines/                   # gitignored — restore via setpoint; browse test captures: baselines/test/index.html
   calibrations/                # ephemeral captures (gitignored)
   reports/                     # HTML report bundles (gitignored)
   evidence/                    # committed integration proof (FU-12+)

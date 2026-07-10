@@ -74,7 +74,7 @@ class Controller_Reports extends Controller
     public function playerheraldry($kingdom_id = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && !valid_id($kingdom_id) && !valid_id($this->request->ParkId)) {
             header('Location: ' . UIR);
             exit;
@@ -104,7 +104,7 @@ class Controller_Reports extends Controller
     public function eventheraldry($kingdom_id = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && !valid_id($kingdom_id)) {
             header('Location: ' . UIR);
             exit;
@@ -122,7 +122,7 @@ class Controller_Reports extends Controller
     public function guilds($param = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!isset($this->request->KingdomId) && !isset($this->request->ParkId))) {
             header('Location: ' . UIR);
             exit;
@@ -156,7 +156,7 @@ class Controller_Reports extends Controller
         }
         $global = empty($type);
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $isOrkAdmin = $uid && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $isOrkAdmin = $uid && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if ($global && !$isOrkAdmin && (!isset($ladder) || $ladder < 7)) {
             $ladder = 7;
         }
@@ -204,9 +204,9 @@ class Controller_Reports extends Controller
         $_recsPublic = isset($_knConfigs['AwardRecsPublic'])
             ? (bool)(int)$_knConfigs['AwardRecsPublic']['Value']
             : true;
-        $_isOrkAdmin    = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin    = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $_isKingdomUser = $_uid > 0 && $_scopeKingdomId > 0
-            && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $_scopeKingdomId, AUTH_CREATE);
+            && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, $_scopeKingdomId, AUTH_CREATE);
         $_canAccess = $_isOrkAdmin || $_isKingdomUser || ($_recsPublic && $_uid > 0);
         if (!$_canAccess) {
             header('Location: ' . UIR);
@@ -218,6 +218,7 @@ class Controller_Reports extends Controller
         $this->template = 'Reports_playerawardrecommendations.tpl';
         $this->data['AwardRecommendations'] = $this->Reports->recommended_awards(array('KingdomId' => 'Kingdom' == $type ? $id : 0, 'ParkId' => 'Park' == $type ? $id : 0, 'IncludeKnights' => 1, 'IncludeMasters' => 1, 'IncludeLadder' => 1, 'LadderMinimum' => $ladder));
         $this->data['ScopeType'] = ($type === 'Park') ? 'park' : (($type === 'Kingdom') ? 'kingdom' : '');
+        $this->data['CanDeleteRecommendation'] = $this->award_rec_can_delete($_uid);
         $this->data[ 'page_title' ] = "Award Recommendations";
     }
 
@@ -334,7 +335,7 @@ class Controller_Reports extends Controller
     public function active($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -398,7 +399,7 @@ class Controller_Reports extends Controller
     public function masters($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -464,7 +465,7 @@ class Controller_Reports extends Controller
     public function roster($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -474,7 +475,7 @@ class Controller_Reports extends Controller
         $_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $_authType = $type === 'Kingdom' ? AUTH_KINGDOM : AUTH_PARK;
         $this->data['canViewMundane'] = $_uid > 0 && valid_id($this->request->id)
-            && Ork3::$Lib->authorization->HasAuthority($_uid, $_authType, (int)$this->request->id, AUTH_EDIT);
+            && $this->Authorization->has_authority($_uid, $_authType, (int)$this->request->id, AUTH_EDIT);
     }
 
     public function reeve($type = null)
@@ -554,7 +555,7 @@ class Controller_Reports extends Controller
     public function inactive($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -569,7 +570,7 @@ class Controller_Reports extends Controller
     public function waivered($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -582,7 +583,7 @@ class Controller_Reports extends Controller
     public function unwaivered($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -633,12 +634,19 @@ class Controller_Reports extends Controller
             $this->data['ScopeName'] = $this->Kingdom->get_kingdom_name($this->request->id);
         }
         $this->data['page_title'] = "Suspended Player Roster";
+        $auth = $this->roster_suspension_remove_auth(
+            $this->data['roster'],
+            $this->data['ScopeType'],
+            $this->data['ScopeId']
+        );
+        $this->data['RosterCanRemoveAny'] = $auth['canRemoveAny'];
+        $this->data['RosterCanRemoveMap'] = $auth['canRemoveMap'];
     }
 
     public function voting_eligible($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, ['Kingdom', 'Park']) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -993,7 +1001,7 @@ class Controller_Reports extends Controller
         $this->data['OfficerDirectoryKingdomId'] = $kingdom_id;
         $this->data['OfficerDirectoryPrincipalities'] = $result['Principalities'] ?? [];
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $this->data['IsOrkAdmin'] = $uid && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $this->data['IsOrkAdmin'] = $uid && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
     }
 
     public function event_attendance($params = null)
@@ -1144,7 +1152,7 @@ class Controller_Reports extends Controller
     public function player_status_reconciliation($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin && (!in_array($type, array('Kingdom', 'Park')) || !valid_id($this->request->id))) {
             header('Location: ' . UIR);
             exit;
@@ -1162,9 +1170,9 @@ class Controller_Reports extends Controller
         if ($_isOrkAdmin) {
             $can_edit = true;
         } elseif ($type === 'Park' && valid_id($this->request->id)) {
-            $can_edit = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, $this->request->id, AUTH_CREATE);
+            $can_edit = $this->Authorization->has_authority($_uid, AUTH_PARK, $this->request->id, AUTH_CREATE);
         } elseif ($type === 'Kingdom' && valid_id($this->request->id)) {
-            $can_edit = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $this->request->id, AUTH_EDIT);
+            $can_edit = $this->Authorization->has_authority($_uid, AUTH_KINGDOM, $this->request->id, AUTH_EDIT);
         }
         $this->data['can_edit'] = $can_edit;
 
@@ -1211,7 +1219,7 @@ class Controller_Reports extends Controller
     public function release_utilization($params = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_isOrkAdmin = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $_isOrkAdmin = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         if (!$_isOrkAdmin) {
             header('Location: ' . UIR);
             exit;
@@ -1221,6 +1229,55 @@ class Controller_Reports extends Controller
         $this->data['Report'] = $result;
         $this->data['page_title'] = 'Release Feature Utilization';
         $this->template = 'Reports_release_utilization.tpl';
+    }
+
+    private function award_rec_can_delete(int $uid): bool
+    {
+        if ($uid <= 0) {
+            return false;
+        }
+        if ($this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            return true;
+        }
+        if (isset($this->session->park_id) && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
+            return true;
+        }
+        if (isset($this->session->kingdom_id) && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, AUTH_EDIT)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function roster_suspension_remove_auth(array $roster, ?string $scopeType, $scopeId): array
+    {
+        $_canRemoveAny = false;
+        $_canRemoveMap = [];
+        $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        if ($_uid <= 0 || !is_array($roster)) {
+            return ['canRemoveAny' => $_canRemoveAny, 'canRemoveMap' => $_canRemoveMap];
+        }
+        if ($this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            $_canRemoveAny = true;
+            foreach ($roster as $player) {
+                $_canRemoveMap[(int)$player['MundaneId']] = true;
+            }
+
+            return ['canRemoveAny' => $_canRemoveAny, 'canRemoveMap' => $_canRemoveMap];
+        }
+        $_scopeKingdomAuth = $scopeType === 'kingdom' && valid_id($scopeId)
+            && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$scopeId, AUTH_EDIT);
+        foreach ($roster as $player) {
+            $mid = (int)$player['MundaneId'];
+            $can = $_scopeKingdomAuth
+                || $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$player['KingdomId'], AUTH_EDIT);
+            $_canRemoveMap[$mid] = $can;
+            if ($can) {
+                $_canRemoveAny = true;
+            }
+        }
+
+        return ['canRemoveAny' => $_canRemoveAny, 'canRemoveMap' => $_canRemoveMap];
     }
 
 }

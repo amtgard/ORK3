@@ -244,7 +244,7 @@ class Controller_EventAjax extends Controller
         }
 
         $uid = (int)$this->session->user_id;
-        if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+        if (!$this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
             echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
             exit;
         }
@@ -281,7 +281,7 @@ class Controller_EventAjax extends Controller
         $uid = (int)$this->session->user_id;
 
         if ($action === 'playersearch') {
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
                 echo json_encode([]);
                 exit;
             }
@@ -300,7 +300,7 @@ class Controller_EventAjax extends Controller
             echo json_encode($results);
 
         } elseif ($action === 'addauth') {
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -342,7 +342,7 @@ class Controller_EventAjax extends Controller
             echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
 
         } elseif ($action === 'removeauth') {
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }

@@ -1,6 +1,6 @@
 # Phase 2 Continuation — R-15 … R-18
 
-**Status:** Planned (stack tip `megiddo/r-14-lib-service-refactor` @ `76758e2c`)  
+**Status:** In progress (stack tip `megiddo/r-15-hasauthority-refactor` @ `a5639704`)  
 **Master checklist:** [04-milestone-checklist.md](./04-milestone-checklist.md)  
 **Prerequisite:** R-01 … R-14 complete (domain migrations + T-LIB-01–05 JSON surfaces)
 
@@ -17,6 +17,7 @@ Audit snapshot on stack tip `76758e2c` (2026-07-10):
 | Files with `$DB->` in `orkui/` | 9 |
 | Files with `Ork3::$Lib` in `orkui/` | 34 |
 | `Ork3::$Lib` call sites (approx.) | ~203 |
+| `HasAuthority` in `orkui/` (post-R-15) | **0** |
 
 ### Per-milestone deferrals
 
