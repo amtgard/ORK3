@@ -1129,7 +1129,7 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** R-11 (Search refactor — R-10 complete on `megiddo/r-10-reports-refactor`). Phase 1.6 (V-00…V-14) complete.
+**Next actionable milestone:** R-12 (Attendance refactor — R-11 complete on `megiddo/r-11-search-refactor`). Phase 1.6 (V-00…V-14) complete.
 
 ### R-01 complete (2026-07-09)
 
@@ -1190,3 +1190,9 @@ Per execution sprint checklist:
 - [x] Branch `megiddo/r-10-reports-refactor` stacked on `megiddo/r-09-player-refactor` — voting rules config, ladder grid, attendance dates, officer directory merge, award option groups in `VotingRules` / `Report` / `Award` domain; thinned `Controller_Reports::ladder_grid`, `Model_Reports`, `Model_Award`, `Controller_PlayerAjax::voting_eligible` off `$DB`
 - [x] Targets closed: T-RPT-01, T-RPT-03 through T-RPT-09, T-AWD-01 (T-RPT-02 auth/cache edge → DS-14)
 - [x] Gates: PHPUnit 215/215 pass; Infection `infection.t10-reports.json5` `--only-covered` MSI 47%; fuzzy reports-voting-eligible/reports-ladder-grid/reports-attendance 6/6; Playwright auth smoke + `reports.spec.ts` 4/4 pass
+
+### R-11 complete (2026-07-10)
+
+- [x] Branch `megiddo/r-11-search-refactor` stacked on `megiddo/r-10-reports-refactor` — universal/scoped player search and unit activity counts in `SearchService`; thinned `SearchAjax`, `Search`, `AdminAjax`, `KingdomAjax`, `ParkAjax`, `EventAjax` playersearch paths off `$DB`
+- [x] Targets closed: T-SRC-01, T-SRC-02, T-ADM-10, T-KNA-06, T-PRA-01, T-EVA-06 (search portion; addauth → R-02)
+- [x] Gates: PHPUnit 215/215 pass; Infection `infection.t11-search.json5` `--only-covered` MSI 40%; fuzzy admin-permissions/kingdom-auth-sandbox/park-auth-sandbox 6/6; Playwright auth smoke + `search.spec.ts` 3/3 pass

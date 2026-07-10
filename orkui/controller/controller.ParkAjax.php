@@ -186,84 +186,23 @@ class Controller_ParkAjax extends Controller
                 exit;
             }
 
-            global $DB;
-            $pid  = (int)$park_id;
-
-            // Parse optional "KD:PK search term" abbreviation prefix
-            $filterKid = 0;
-            $filterPid = 0;
-            $searchQ   = $q;
-            if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\*)?\s+(.+)$/i', $q, $m)) {
-                $kAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[1]);
-                $rs = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
-                if ($rs && $rs->Next()) {
-                    $filterKid = (int)$rs->kingdom_id;
-                }
-                if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
-                    $pAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[2]);
-                    $rs = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
-                    if ($rs && $rs->Next()) {
-                        $filterPid = (int)$rs->park_id;
-                    }
-                }
-                $searchQ = trim($m[3]);
-            }
-            $term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $searchQ);
-
-            if ($scope === 'own') {
-                $park_clause = "AND m.park_id = {$pid}";
-            } elseif ($scope === 'exclude') {
-                $park_clause = "AND m.park_id != {$pid}";
-            } else {
-                $park_clause = '';
+            $scopeKey = 'park_own';
+            if ($scope === 'exclude') {
+                $scopeKey = 'park_exclude';
+            } elseif ($scope === 'all') {
+                $scopeKey = 'park_all';
             }
 
-            $order_clause = $prioritize
-                ? "CASE WHEN m.park_id = {$pid} THEN 0 WHEN m.kingdom_id = (SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$pid} LIMIT 1) THEN 1 ELSE 2 END,"
-                : "";
-
-            // Abbreviation prefix overrides scope filter when specific kingdom/park matched
-            if ($filterPid > 0) {
-                $park_clause = "AND m.park_id = {$filterPid}";
-            } elseif ($filterKid > 0) {
-                $park_clause = "AND m.kingdom_id = {$filterKid}";
-            }
-
-            $sql = "
-				SELECT m.mundane_id, m.persona, m.park_id AS m_park_id, m.kingdom_id AS m_kingdom_id,
-				       k.name AS kingdom_name, p.name AS park_name,
-				       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
-				       m.suspended, m.active
-				FROM ork_mundane m
-				LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
-				LEFT JOIN ork_park p ON p.park_id = m.park_id
-				WHERE LENGTH(m.persona) > 0
-				  " . ($include_suspended ? "" : "AND m.suspended = 0") . "
-				  " . ($include_inactive ? "" : "AND m.active = 1")    . "
-				  {$park_clause}
-				  AND (m.persona LIKE '%{$term}%'
-				    OR m.given_name LIKE '%{$term}%'
-				    OR m.surname LIKE '%{$term}%'
-				    OR m.username LIKE '%{$term}%')
-				ORDER BY m.suspended ASC, m.active DESC, {$order_clause} m.persona
-				LIMIT 15";
-            $DB->Clear();
-            $rs      = $DB->DataSet($sql);
-            $results = [];
-            while ($rs->Next()) {
-                $results[] = [
-                    'MundaneId'   => (int)$rs->mundane_id,
-                    'Persona'     => $rs->persona,
-                    'KingdomId'   => (int)$rs->m_kingdom_id,
-                    'ParkId'      => (int)$rs->m_park_id,
-                    'KingdomName' => $rs->kingdom_name,
-                    'ParkName'    => $rs->park_name,
-                    'KAbbr'       => $rs->k_abbr,
-                    'PAbbr'       => $rs->p_abbr,
-                    'Suspended'   => (int)$rs->suspended,
-                    'Active'      => (int)$rs->active,
-                ];
-            }
+            $results = Ork3::$Lib->searchservice->ScopedPlayerSearch([
+                'Query'            => $q,
+                'Scope'            => $scopeKey,
+                'ParkId'           => (int)$park_id,
+                'IncludeInactive'  => $include_inactive,
+                'IncludeSuspended' => $include_suspended,
+                'Prioritize'       => $prioritize,
+                'Limit'            => 15,
+                'Format'           => 'kingdom',
+            ]);
 
             echo json_encode($results);
 

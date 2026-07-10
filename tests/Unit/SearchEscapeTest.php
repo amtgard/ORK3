@@ -14,7 +14,7 @@ final class SearchEscapeTest extends TestCase
      */
     public function testLikeEscape(string $input, string $expected): void
     {
-        $this->assertSame($expected, $this->mirrorLikeEscape($input));
+        $this->assertSame($expected, SearchService::EscapeLike($input));
     }
 
     /**
@@ -29,10 +29,5 @@ final class SearchEscapeTest extends TestCase
             ['back\\slash', 'back\\\\slash'],
             ["mix'_%\\", "mix''\\\\_\\\\%\\\\"],
         ];
-    }
-
-    private function mirrorLikeEscape(string $term): string
-    {
-        return str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $term);
     }
 }

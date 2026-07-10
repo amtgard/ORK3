@@ -762,88 +762,23 @@ class Controller_KingdomAjax extends Controller
             exit;
         }
 
-        global $DB;
-        $kid  = $kingdom_id;
-
-        // Parse optional "KD:PK search term" prefix to scope results by abbreviation.
-        // When matched, the prefix overrides the scope-based kingdom/park filter entirely.
-        $filterKid = 0;
-        $filterPid = 0;
-        $searchQ   = $q;
-        if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\\*)?\\s+(.+)$/i', $q, $m)) {
-            $kAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[1]);
-            $rs = $DB->DataSet("SELECT kingdom_id FROM ork_kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
-            if ($rs->Next()) {
-                $filterKid = (int)$rs->kingdom_id;
-            }
-            if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
-                $pAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[2]);
-                $rs = $DB->DataSet("SELECT park_id FROM ork_park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
-                if ($rs->Next()) {
-                    $filterPid = (int)$rs->park_id;
-                }
-            }
-            $searchQ = trim($m[3]);
-        }
-
-        $term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $searchQ);
-
-        if ($filterPid > 0) {
-            $kingdom_clause = '';
-            $park_clause    = "AND m.park_id = {$filterPid}";
-        } elseif ($filterKid > 0) {
-            $kingdom_clause = "AND m.kingdom_id = {$filterKid}";
-            $park_clause    = '';
-        } elseif ($scope === 'exclude') {
-            $kingdom_clause = "AND m.kingdom_id != {$kid}";
-            $park_clause    = valid_id($park_id) ? "AND m.park_id = {$park_id}" : '';
+        $scopeKey = 'kingdom_own';
+        if ($scope === 'exclude') {
+            $scopeKey = 'kingdom_exclude';
         } elseif ($scope === 'all') {
-            $kingdom_clause = '';
-            $park_clause    = '';
-        } else {
-            // Own-kingdom scope ALWAYS includes child principalities (family), not toggle-gated.
-            $familyIds      = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($kid)));
-            $kingdom_clause = "AND m.kingdom_id IN ({$familyIds})";
-            $park_clause    = valid_id($park_id) ? "AND m.park_id = {$park_id}" : '';
+            $scopeKey = 'kingdom_all';
         }
 
-        $sql = "
-			SELECT m.mundane_id, m.persona, p.park_id, k.kingdom_id,
-			       k.name AS kingdom_name, p.name AS park_name,
-			       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
-			       m.suspended, m.active
-			FROM ork_mundane m
-			LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
-			LEFT JOIN ork_park p ON p.park_id = m.park_id
-			WHERE LENGTH(m.persona) > 0
-			  " . ($include_suspended ? "" : "AND m.suspended = 0") . "
-			  " . ($include_inactive ? "" : "AND m.active = 1")    . "
-			  {$kingdom_clause}
-			  {$park_clause}
-			  AND (m.persona LIKE '%{$term}%'
-			    OR m.given_name LIKE '%{$term}%'
-			    OR m.surname LIKE '%{$term}%'
-			    OR m.username LIKE '%{$term}%')
-			ORDER BY m.suspended ASC, m.active DESC, CASE WHEN m.kingdom_id = {$kid} THEN 0 ELSE 1 END, m.persona
-			LIMIT 15";
-
-        $DB->Clear();
-        $rs      = $DB->DataSet($sql);
-        $results = [];
-        while ($rs->Next()) {
-            $results[] = [
-                'MundaneId'   => (int)$rs->mundane_id,
-                'Persona'     => $rs->persona,
-                'KingdomId'   => (int)$rs->kingdom_id,
-                'ParkId'      => (int)$rs->park_id,
-                'KingdomName' => $rs->kingdom_name,
-                'ParkName'    => $rs->park_name,
-                'KAbbr'       => $rs->k_abbr,
-                'PAbbr'       => $rs->p_abbr,
-                'Suspended'   => (int)$rs->suspended,
-                'Active'      => (int)$rs->active,
-            ];
-        }
+        $results = Ork3::$Lib->searchservice->ScopedPlayerSearch([
+            'Query'            => $q,
+            'Scope'            => $scopeKey,
+            'KingdomId'        => $kingdom_id,
+            'ScopeParkId'      => $park_id,
+            'IncludeInactive'  => $include_inactive,
+            'IncludeSuspended' => $include_suspended,
+            'Limit'            => 15,
+            'Format'           => 'kingdom',
+        ]);
 
         echo json_encode($results);
         exit;

@@ -12,7 +12,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-10-reports-refactor` @ `ea46a630` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-11-search-refactor` @ `bdbc86d7` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -31,6 +31,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 | R-08 | `megiddo/r-08-admin-refactor` | `ebda9ebe` |
 | R-09 | `megiddo/r-09-player-refactor` | `4a7b1f8c` |
 | R-10 | `megiddo/r-10-reports-refactor` | `ea46a630` |
+| R-11 | `megiddo/r-11-search-refactor` | `bdbc86d7` |
 
 ---
 
@@ -248,16 +249,16 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Prior R-* hygiene | [ ] |
-| Refactor search targets | [ ] |
-| PHPUnit | [ ] |
-| Infection §2.4 | [ ] |
-| Fuzzy: `admin-permissions,kingdom-auth-sandbox,park-auth-sandbox` | [ ] |
-| Playwright: `search.spec.ts` | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-11: …` | [ ] |
+| Prior R-* hygiene | [x] |
+| Refactor search targets | [x] |
+| PHPUnit | [x] |
+| Infection §2.4 | [x] |
+| Fuzzy: `admin-permissions,kingdom-auth-sandbox,park-auth-sandbox` | [x] |
+| Playwright: `search.spec.ts` | [x] |
+| Docs + plan | [x] |
+| Commit: `R-11: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-11-search-refactor` @ `bdbc86d7` stacked on R-10 @ `de3c2118`. Added `SearchService::UniversalSearch`, `ScopedPlayerSearch`, `GetUnitActivityCounts`, `EscapeLike`, punct-fold helpers; thinned `SearchAjax::universal`, `Search::unitactivity`, `AdminAjax`/`KingdomAjax`/`ParkAjax`/`EventAjax` playersearch off `$DB`. PHPUnit 215/215 pass (2 skipped). Infection `infection.t11-search.json5` `--only-covered`: MSI 40%, covered MSI 40%. Fuzzy test+mirror 6/6 pass. Playwright: auth smoke + `search.spec.ts` 3/3 pass.
 
 ---
 
@@ -327,4 +328,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | … | … | … |
 | 14 | R-14 | Phase 3 audit |
 
-**Next unchecked:** R-11
+**Next unchecked:** R-12
