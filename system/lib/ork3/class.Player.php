@@ -1391,6 +1391,29 @@ class Player extends Ork3
         $this->db->query($sql);
     }
 
+    /**
+     * Infer SuspendedById when not explicitly submitted (T-ADM-05).
+     */
+    public function InferSuspendedById(int $mundaneId, int $submittedById, int $sessionUserId): int
+    {
+        if ($submittedById > 0) {
+            return $submittedById;
+        }
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT suspended_by_id, suspended FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
+        );
+        $existingById = 0;
+        $isSuspended = false;
+        if ($rs && $rs->Next()) {
+            $existingById = (int) $rs->suspended_by_id;
+            $isSuspended = (bool) $rs->suspended;
+        }
+
+        return $isSuspended ? ($existingById ?: 0) : $sessionUserId;
+    }
+
     public function SetPlayerSuspension($request)
     {
         $this->mundane->clear();

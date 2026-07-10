@@ -12,7 +12,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-07-park-refactor` @ `5bc70bdf` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-08-admin-refactor` @ `0d003dd9` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -28,6 +28,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 | R-05 | `megiddo/r-05-event-refactor` | `20264fa9` |
 | R-06 | `megiddo/r-06-kingdom-refactor` | `56b59878` |
 | R-07 | `megiddo/r-07-park-refactor` | `5bc70bdf` |
+| R-08 | `megiddo/r-08-admin-refactor` | `0d003dd9` |
 
 ---
 
@@ -188,16 +189,16 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Prior R-* hygiene | [ ] |
-| Refactor admin targets | [ ] |
-| PHPUnit | [ ] |
-| Infection §2.4 | [ ] |
-| Fuzzy: `admin-dashboard,admin-permissions,admin-state-of-amtgard` | [ ] |
-| Playwright: `admin-dashboard.spec.ts` | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-08: …` | [ ] |
+| Prior R-* hygiene | [x] |
+| Refactor admin targets | [x] |
+| PHPUnit | [x] |
+| Infection §2.4 | [x] |
+| Fuzzy: `admin-dashboard,admin-permissions,admin-state-of-amtgard` | [x] |
+| Playwright: `admin-dashboard.spec.ts` | [x] |
+| Docs + plan | [x] |
+| Commit: `R-08: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-08-admin-refactor` stacked on R-07 @ `57baf282`. Domain APIs on `Report`, `Administration` (permissions), `Dangeraudit`, `Player`, `Weather`, `StateOfAmtgard`, `ParkProfile`; `Model_AdminDashboard` thins `Controller_Admin` T-ADM-01–09 and `AdminAjax::stateofamtgard` T-ADM-12. PHPUnit 214/214 pass. Infection `infection.t08-admin.json5` `--only-covered`: MSI 18%, covered MSI 18%. Fuzzy 6/6 pass (re-recorded test admin baselines after DOM drift). Playwright: auth smoke + `admin-dashboard.spec.ts` 3/3 pass.
 
 ---
 
@@ -324,4 +325,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | … | … | … |
 | 14 | R-14 | Phase 3 audit |
 
-**Next unchecked:** R-08
+**Next unchecked:** R-09

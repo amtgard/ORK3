@@ -1502,4 +1502,44 @@ class Weather extends Ork3
         }
         return @file_get_contents($url);
     }
+
+    /**
+     * @return array{total_active: int, fresh: int, aging: int, stale_row: int}
+     */
+    public function GetFreshnessBuckets(): array
+    {
+        $admin = new Administration();
+
+        return $admin->GetServerHealthWeatherSummary();
+    }
+
+    public function GetPreviousFetchedAt(): ?string
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet('SELECT MAX(fetched_at) AS prev FROM ' . DB_PREFIX . 'park_weather');
+        if ($rs && $rs->Size() > 0 && $rs->Next()) {
+            return $rs->prev ?: null;
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{count: int, elapsed_ms: int, previous_fetched_at: ?string, previous_age_min: ?int}
+     */
+    public function AdminRefreshWithPrior(): array
+    {
+        $prev = $this->GetPreviousFetchedAt();
+        $prevAgeMin = $prev ? (int) round((time() - strtotime($prev)) / 60) : null;
+        $start = microtime(true);
+        $count = $this->refresh_all_active_parks();
+        $elapsedMs = (int) round((microtime(true) - $start) * 1000);
+
+        return [
+            'count' => $count,
+            'elapsed_ms' => $elapsedMs,
+            'previous_fetched_at' => $prev,
+            'previous_age_min' => $prevAgeMin,
+        ];
+    }
 }

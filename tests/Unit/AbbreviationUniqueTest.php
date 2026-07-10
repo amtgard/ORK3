@@ -10,6 +10,8 @@ use PHPUnit\Framework\TestCase;
 final class AbbreviationUniqueTest extends TestCase
 {
     private AdminDashboardFixture $fixture;
+    private ParkProfile $parkProfile;
+    private KingdomProfile $kingdomProfile;
 
     protected function setUp(): void
     {
@@ -18,6 +20,8 @@ final class AbbreviationUniqueTest extends TestCase
         }
 
         $this->fixture = AdminDashboardFixture::create();
+        $this->parkProfile = new ParkProfile();
+        $this->kingdomProfile = new KingdomProfile();
     }
 
     protected function tearDown(): void
@@ -31,15 +35,11 @@ final class AbbreviationUniqueTest extends TestCase
     {
         $parkId = $this->fixture->firstParkId();
         $kingdomId = $this->fixture->firstKingdomId();
+        $abbr = $this->parkProfile->GetParkAbbreviation($parkId);
+        $this->assertNotNull($abbr);
 
-        global $DB;
-        $DB->Clear();
-        $rs = $DB->DataSet('SELECT abbreviation FROM ' . DB_PREFIX . "park WHERE park_id = {$parkId} LIMIT 1");
-        $this->assertTrue((bool) ($rs && $rs->Next()));
-        $abbr = strtoupper((string) $rs->abbreviation);
-
-        $takenOther = $this->mirrorParkAbbreviationTaken($kingdomId, $abbr, excludeParkId: 0);
-        $availableSelf = $this->mirrorParkAbbreviationTaken($kingdomId, $abbr, excludeParkId: $parkId);
+        $takenOther = $this->parkProfile->CheckParkAbbreviationTaken($kingdomId, $abbr, 0);
+        $availableSelf = $this->parkProfile->CheckParkAbbreviationTaken($kingdomId, $abbr, $parkId);
 
         $this->assertTrue($takenOther);
         $this->assertFalse($availableSelf);
@@ -54,44 +54,10 @@ final class AbbreviationUniqueTest extends TestCase
         $kingdomId = $this->fixture->firstKingdomId();
         $abbr = $this->fixture->kingdomAbbreviation($kingdomId);
 
-        $takenOther = $this->mirrorKingdomAbbreviationTaken($abbr, excludeKingdomId: 0);
-        $availableSelf = $this->mirrorKingdomAbbreviationTaken($abbr, excludeKingdomId: $kingdomId);
+        $takenOther = $this->kingdomProfile->CheckKingdomAbbreviationTaken($abbr, 0);
+        $availableSelf = $this->kingdomProfile->CheckKingdomAbbreviationTaken($abbr, $kingdomId);
 
         $this->assertTrue($takenOther);
         $this->assertFalse($availableSelf);
-    }
-
-    private function mirrorParkAbbreviationTaken(int $kingdomId, string $abbr, int $excludeParkId): bool
-    {
-        global $DB;
-        $abbrEsc = mysql_real_escape_string($abbr);
-        $DB->Clear();
-        $rs = $DB->DataSet(
-            'SELECT name FROM ' . DB_PREFIX . "park
-             WHERE kingdom_id = {$kingdomId}
-               AND abbreviation = '{$abbrEsc}'
-               AND park_id != {$excludeParkId}
-               AND active = 'Active'
-             LIMIT 1"
-        );
-
-        return (bool) ($rs && $rs->Next());
-    }
-
-    private function mirrorKingdomAbbreviationTaken(string $abbr, int $excludeKingdomId): bool
-    {
-        $abbr = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($abbr)));
-        if ($abbr === '') {
-            return false;
-        }
-
-        global $DB;
-        $excludeClause = $excludeKingdomId > 0 ? " AND kingdom_id != {$excludeKingdomId}" : '';
-        $DB->Clear();
-        $rs = $DB->DataSet(
-            'SELECT kingdom_id FROM ' . DB_PREFIX . "kingdom WHERE abbreviation = '{$abbr}'{$excludeClause} LIMIT 1"
-        );
-
-        return (bool) ($rs && $rs->Next());
     }
 }

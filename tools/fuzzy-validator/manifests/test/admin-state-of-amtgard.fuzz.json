@@ -3,7 +3,7 @@
   "pageId": "admin-state-of-amtgard",
   "imageWidth": 1280,
   "imageHeight": 1002,
-  "calibratedAt": "2026-07-09T17:27:08Z",
+  "calibratedAt": "2026-07-10T03:00:35Z",
   "calibrationRuns": 5,
   "params": {
     "colorThreshold": 20,
@@ -12,5 +12,5 @@
   },
   "fuzzZones": [],
   "manualZones": [],
-  "calibratedFromCommit": "1591950d"
+  "calibratedFromCommit": "57baf282"
 }

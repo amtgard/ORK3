@@ -37,8 +37,9 @@ final class AdminDashboardTrendStatsTest extends TestCase
             $this->markTestSkipped('Test database is not available.');
         }
 
-        $weekly = $this->mirrorPrevWeeklyKingdomCounts();
-        $monthly = $this->mirrorPrevMonthlyKingdomCounts();
+        $stats = $this->reportDomain->GetAdminDashboardStats();
+        $weekly = $stats['PrevWeekly'];
+        $monthly = $stats['PrevMonthly'];
 
         $this->assertIsArray($weekly);
         $this->assertIsArray($monthly);
@@ -55,14 +56,12 @@ final class AdminDashboardTrendStatsTest extends TestCase
             $this->assertGreaterThanOrEqual(0, $count);
         }
 
-        if (ork3_test_db_available()) {
-            $summary = $this->reportDomain->GetActiveKingdomsSummary([]);
-            $this->assertSame(0, $summary['Status']['Status']);
-            $this->assertIsArray($summary['ActiveKingdomsSummaryList']);
+        $summary = $this->reportDomain->GetActiveKingdomsSummary([]);
+        $this->assertSame(0, $summary['Status']['Status']);
+        $this->assertIsArray($summary['ActiveKingdomsSummaryList']);
 
-            $distinct = $this->reportDomain->GetDistinctActivePlayerCount(26);
-            $this->assertGreaterThanOrEqual(0, $distinct);
-        }
+        $distinct = $this->reportDomain->GetDistinctActivePlayerCount(26);
+        $this->assertGreaterThanOrEqual(0, $distinct);
     }
 
     /**
@@ -85,63 +84,5 @@ final class AdminDashboardTrendStatsTest extends TestCase
             'prev1yrStart' => date('Y-m-d', strtotime('-2 years')),
             'prev1yrEnd' => date('Y-m-d', strtotime('-1 year')),
         ];
-    }
-
-    /**
-     * @return array<int, int>
-     */
-    private function mirrorPrevWeeklyKingdomCounts(): array
-    {
-        global $DB;
-        $DB->Clear();
-        $prevWkRs = $DB->DataSet(
-            'SELECT COUNT(mw.mundane_id) AS att, mw.kingdom_id
-             FROM (
-                 SELECT mundane_id, date_year, date_week3, kingdom_id
-                 FROM ' . DB_PREFIX . 'attendance
-                 WHERE date >  DATE_SUB(CURDATE(), INTERVAL 52 WEEK)
-                   AND date <= DATE_SUB(CURDATE(), INTERVAL 26 WEEK)
-                   AND mundane_id > 0
-                 GROUP BY date_year, date_week3, mundane_id, kingdom_id
-             ) mw
-             GROUP BY mw.kingdom_id'
-        );
-        $prevWeekly = [];
-        if ($prevWkRs) {
-            while ($prevWkRs->Next()) {
-                $prevWeekly[(int) $prevWkRs->kingdom_id] = (int) $prevWkRs->att;
-            }
-        }
-
-        return $prevWeekly;
-    }
-
-    /**
-     * @return array<int, int>
-     */
-    private function mirrorPrevMonthlyKingdomCounts(): array
-    {
-        global $DB;
-        $DB->Clear();
-        $prevMoRs = $DB->DataSet(
-            'SELECT COUNT(mm.mundane_id) AS mo, mm.kingdom_id
-             FROM (
-                 SELECT mundane_id, date_year, date_month, kingdom_id
-                 FROM ' . DB_PREFIX . 'attendance
-                 WHERE date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
-                   AND date <  DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-                   AND mundane_id > 0
-                 GROUP BY date_year, date_month, mundane_id, kingdom_id
-             ) mm
-             GROUP BY mm.kingdom_id'
-        );
-        $prevMonthly = [];
-        if ($prevMoRs) {
-            while ($prevMoRs->Next()) {
-                $prevMonthly[(int) $prevMoRs->kingdom_id] = (int) $prevMoRs->mo;
-            }
-        }
-
-        return $prevMonthly;
     }
 }

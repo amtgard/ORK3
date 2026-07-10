@@ -6057,4 +6057,91 @@ class Report extends Ork3
         return $chart;
     }
 
+    /**
+     * Admin dashboard YoY trend stats and prior-period kingdom attendance keys (T-ADM-01).
+     *
+     * @return array{
+     *   TrendStats: array<string, int>,
+     *   PrevWeekly: array<int, int>,
+     *   PrevMonthly: array<int, int>
+     * }
+     */
+    public function GetAdminDashboardStats(): array
+    {
+        $thisYearStart = date('Y') . '-01-01';
+        $lastYearStart = (date('Y') - 1) . '-01-01';
+        $lastYearEnd = date('Y-m-d', strtotime('-1 year'));
+        $now1yr = date('Y-m-d');
+        $prev1yrStart = date('Y-m-d', strtotime('-2 years'));
+        $prev1yrEnd = date('Y-m-d', strtotime('-1 year'));
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            "SELECT
+              (SELECT COUNT(*) FROM " . DB_PREFIX . "awards WHERE entered_at >= '$thisYearStart' AND entered_at < '$now1yr') AS awards_cur,
+              (SELECT COUNT(*) FROM " . DB_PREFIX . "awards WHERE entered_at >= '$lastYearStart' AND entered_at < '$lastYearEnd') AS awards_prev,
+              (SELECT COUNT(*) FROM " . DB_PREFIX . "attendance WHERE date >= '$thisYearStart' AND date < '$now1yr' AND mundane_id > 0) AS att_cur,
+              (SELECT COUNT(*) FROM " . DB_PREFIX . "attendance WHERE date >= '$lastYearStart' AND date < '$lastYearEnd' AND mundane_id > 0) AS att_prev,
+              (SELECT COUNT(DISTINCT mundane_id) FROM " . DB_PREFIX . "attendance WHERE date >= '$prev1yrEnd' AND date < '$now1yr' AND mundane_id > 0) AS players_cur,
+              (SELECT COUNT(DISTINCT mundane_id) FROM " . DB_PREFIX . "attendance WHERE date >= '$prev1yrStart' AND date < '$prev1yrEnd' AND mundane_id > 0) AS players_prev,
+              (SELECT COUNT(*) FROM " . DB_PREFIX . "recommendations WHERE date_recommended >= '$thisYearStart' AND date_recommended < '$now1yr' AND deleted_at IS NULL) AS recs_cur,
+              (SELECT COUNT(*) FROM " . DB_PREFIX . "recommendations WHERE date_recommended >= '$lastYearStart' AND date_recommended < '$lastYearEnd' AND deleted_at IS NULL) AS recs_prev"
+        );
+        $trendStats = [
+            'awards_cur' => 0, 'awards_prev' => 0, 'att_cur' => 0, 'att_prev' => 0,
+            'players_cur' => 0, 'players_prev' => 0, 'recs_cur' => 0, 'recs_prev' => 0,
+        ];
+        if ($rs && $rs->Next()) {
+            foreach ($trendStats as $k => $_) {
+                $trendStats[$k] = (int) $rs->$k;
+            }
+        }
+
+        $this->db->Clear();
+        $prevWkRs = $this->db->DataSet(
+            'SELECT COUNT(mw.mundane_id) AS att, mw.kingdom_id
+             FROM (
+                 SELECT mundane_id, date_year, date_week3, kingdom_id
+                 FROM ' . DB_PREFIX . 'attendance
+                 WHERE date >  DATE_SUB(CURDATE(), INTERVAL 52 WEEK)
+                   AND date <= DATE_SUB(CURDATE(), INTERVAL 26 WEEK)
+                   AND mundane_id > 0
+                 GROUP BY date_year, date_week3, mundane_id, kingdom_id
+             ) mw
+             GROUP BY mw.kingdom_id'
+        );
+        $prevWeekly = [];
+        if ($prevWkRs) {
+            while ($prevWkRs->Next()) {
+                $prevWeekly[(int) $prevWkRs->kingdom_id] = (int) $prevWkRs->att;
+            }
+        }
+
+        $this->db->Clear();
+        $prevMoRs = $this->db->DataSet(
+            'SELECT COUNT(mm.mundane_id) AS mo, mm.kingdom_id
+             FROM (
+                 SELECT mundane_id, date_year, date_month, kingdom_id
+                 FROM ' . DB_PREFIX . 'attendance
+                 WHERE date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH)
+                   AND date <  DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+                   AND mundane_id > 0
+                 GROUP BY date_year, date_month, mundane_id, kingdom_id
+             ) mm
+             GROUP BY mm.kingdom_id'
+        );
+        $prevMonthly = [];
+        if ($prevMoRs) {
+            while ($prevMoRs->Next()) {
+                $prevMonthly[(int) $prevMoRs->kingdom_id] = (int) $prevMoRs->mo;
+            }
+        }
+
+        return [
+            'TrendStats' => $trendStats,
+            'PrevWeekly' => $prevWeekly,
+            'PrevMonthly' => $prevMonthly,
+        ];
+    }
+
 }

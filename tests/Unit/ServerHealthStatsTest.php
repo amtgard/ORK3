@@ -10,6 +10,8 @@ use PHPUnit\Framework\TestCase;
 final class ServerHealthStatsTest extends TestCase
 {
     private AdminDashboardFixture $fixture;
+    private Administration $adminDomain;
+    private Player $playerDomain;
 
     protected function setUp(): void
     {
@@ -18,6 +20,8 @@ final class ServerHealthStatsTest extends TestCase
         }
 
         $this->fixture = AdminDashboardFixture::create();
+        $this->adminDomain = new Administration();
+        $this->playerDomain = new Player();
     }
 
     protected function tearDown(): void
@@ -29,7 +33,7 @@ final class ServerHealthStatsTest extends TestCase
 
     public function testWeatherFreshnessBuckets(): void
     {
-        $stats = $this->mirrorWeatherFreshnessStats();
+        $stats = $this->adminDomain->GetServerHealthWeatherSummary();
 
         $this->assertArrayHasKey('total_active', $stats);
         $this->assertArrayHasKey('fresh', $stats);
@@ -47,80 +51,13 @@ final class ServerHealthStatsTest extends TestCase
         $suspended = $this->fixture->createPlayer($parkId, 'suspended', suspended: true, suspendedById: 42);
         $active = $this->fixture->createPlayer($parkId, 'active-new');
 
-        $editById = $this->mirrorInferSuspendedById($suspended['mundane_id'], submittedById: 0, sessionUserId: 99);
+        $editById = $this->playerDomain->InferSuspendedById($suspended['mundane_id'], 0, 99);
         $this->assertSame(42, $editById);
 
-        $newById = $this->mirrorInferSuspendedById($active['mundane_id'], submittedById: 0, sessionUserId: 99);
+        $newById = $this->playerDomain->InferSuspendedById($active['mundane_id'], 0, 99);
         $this->assertSame(99, $newById);
 
-        $explicit = $this->mirrorInferSuspendedById($active['mundane_id'], submittedById: 7, sessionUserId: 99);
+        $explicit = $this->playerDomain->InferSuspendedById($active['mundane_id'], 7, 99);
         $this->assertSame(7, $explicit);
-    }
-
-    /**
-     * @return array{total_active: int, fresh: int, aging: int, stale_row: int}
-     */
-    private function mirrorWeatherFreshnessStats(): array
-    {
-        $cutoffFresh = date('Y-m-d H:i:s', time() - 90 * 60);
-        $cutoffAging = date('Y-m-d H:i:s', time() - 4 * 3600);
-
-        global $DB;
-        $DB->Clear();
-        $p = DB_PREFIX;
-        $wsql = "SELECT
-            (SELECT COUNT(*) FROM {$p}park p WHERE p.active = 'Active'
-               AND EXISTS (SELECT 1 FROM {$p}attendance a
-                           WHERE a.park_id = p.park_id AND a.date >= DATE_SUB(CURDATE(), INTERVAL 60 DAY))
-            ) AS total_active,
-            (SELECT COUNT(*) FROM {$p}park_weather pw
-               JOIN {$p}park p ON p.park_id = pw.park_id
-               WHERE p.active = 'Active'
-                 AND pw.fetched_at >= '{$cutoffFresh}'
-            ) AS fresh,
-            (SELECT COUNT(*) FROM {$p}park_weather pw
-               JOIN {$p}park p ON p.park_id = pw.park_id
-               WHERE p.active = 'Active'
-                 AND pw.fetched_at >= '{$cutoffAging}'
-                 AND pw.fetched_at <  '{$cutoffFresh}'
-            ) AS aging,
-            (SELECT COUNT(*) FROM {$p}park_weather pw
-               JOIN {$p}park p ON p.park_id = pw.park_id
-               WHERE p.active = 'Active'
-                 AND pw.fetched_at <  '{$cutoffAging}'
-                 AND EXISTS (SELECT 1 FROM {$p}attendance a
-                             WHERE a.park_id = p.park_id AND a.date >= DATE_SUB(CURDATE(), INTERVAL 60 DAY))
-            ) AS stale_row";
-        $wr = $DB->DataSet($wsql);
-        $stats = ['total_active' => 0, 'fresh' => 0, 'aging' => 0, 'stale_row' => 0];
-        if ($wr && $wr->Size() > 0 && $wr->Next()) {
-            $stats['total_active'] = (int) $wr->total_active;
-            $stats['fresh'] = (int) $wr->fresh;
-            $stats['aging'] = (int) $wr->aging;
-            $stats['stale_row'] = (int) $wr->stale_row;
-        }
-
-        return $stats;
-    }
-
-    private function mirrorInferSuspendedById(int $mundaneId, int $submittedById, int $sessionUserId): int
-    {
-        if ($submittedById > 0) {
-            return $submittedById;
-        }
-
-        global $DB;
-        $DB->Clear();
-        $rs = $DB->DataSet(
-            'SELECT suspended_by_id, suspended FROM ' . DB_PREFIX . "mundane WHERE mundane_id = {$mundaneId} LIMIT 1"
-        );
-        $existingById = 0;
-        $isSuspended = false;
-        if ($rs && $rs->Next()) {
-            $existingById = (int) $rs->suspended_by_id;
-            $isSuspended = (bool) $rs->suspended;
-        }
-
-        return $isSuspended ? ($existingById ?: 0) : $sessionUserId;
     }
 }

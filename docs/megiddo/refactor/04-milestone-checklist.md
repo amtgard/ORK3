@@ -1129,7 +1129,7 @@ Per execution sprint checklist:
 | **2** | Refactor execution — move code; fuzzy + Infection + PHPUnit sign-off |
 | **3** | Audit and close-out |
 
-**Next actionable milestone:** R-08 (Admin refactor — R-07 complete on `megiddo/r-07-park-refactor`). Phase 1.6 (V-00…V-14) complete.
+**Next actionable milestone:** R-09 (Player refactor — R-08 complete on `megiddo/r-08-admin-refactor`). Phase 1.6 (V-00…V-14) complete.
 
 ### R-01 complete (2026-07-09)
 
@@ -1172,3 +1172,9 @@ Per execution sprint checklist:
 - [x] Branch `megiddo/r-07-park-refactor` stacked on `megiddo/r-06-kingdom-refactor` — `ParkProfile` domain + `Model_ParkProfile`; thinned `Controller_Park::profile` and `Controller_ParkAjax` T-PRA-03 off `$DB`
 - [x] Targets closed: T-PRK-01 through T-PRK-04, T-PRA-03 (T-PRK-05 auth/weather/circles deferred DS-14; T-PRA-01/02/04 out of scope)
 - [x] Gates: PHPUnit 214/214 pass; Infection `--only-covered` MSI 39% (`class.ParkProfile.php`); fuzzy 4/4; Playwright auth smoke + `park-profile.spec.ts` 2/2 pass
+
+### R-08 complete (2026-07-09)
+
+- [x] Branch `megiddo/r-08-admin-refactor` stacked on `megiddo/r-07-park-refactor` — admin read SQL and business rules in domain (`Report`, `Authorization`, `Dangeraudit`, `Administration`, `Player`, `Weather`, `StateOfAmtgard`, `ParkProfile`); `Model_AdminDashboard` thins `Controller_Admin` / `AdminAjax::stateofamtgard` migrated paths off `$DB`
+- [x] Targets closed: T-ADM-01 through T-ADM-09, T-ADM-12 (T-ADM-10 → R-11; T-ADM-11 → R-02)
+- [x] Gates: PHPUnit 214/214 pass; Infection `infection.t08-admin.json5` MSI 18%; fuzzy admin-dashboard/permissions/state-of-amtgard 6/6; Playwright auth smoke + `admin-dashboard.spec.ts` 3/3 pass

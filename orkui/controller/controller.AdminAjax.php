@@ -122,44 +122,15 @@ class Controller_AdminAjax extends Controller
         }
         // stateofamtgard endpoints are open to all logged-in users
 
-        // Strict YYYY-MM-DD validation: regex strips junk, then DateTime parses
-        // and round-trips to reject impossible dates (e.g. 2026-02-30, 99999-99-99).
-        $validate_date = function ($val, $fallback) {
-            $val = preg_replace('/[^0-9\-]/', '', $val ?? '');
-            if ($val === '') {
-                return $fallback;
-            }
-            $dt = DateTime::createFromFormat('Y-m-d', $val);
-            if ($dt === false || $dt->format('Y-m-d') !== $val) {
-                return false;
-            }
-            return $val;
-        };
-        $start = $validate_date($_GET['start'] ?? null, date('Y') . '-01-01');
-        $end   = $validate_date($_GET['end']   ?? null, date('Y') . '-12-31');
-        if ($start === false || $end === false) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Invalid date format. Expected YYYY-MM-DD.']);
+        $sor = Ork3::$Lib->stateofamtgard;
+        $validated = $sor->ValidateDateRange($_GET['start'] ?? null, $_GET['end'] ?? null);
+        if (!$validated['ok']) {
+            http_response_code($validated['httpCode'] ?? 400);
+            echo json_encode(['error' => $validated['error'] ?? 'Invalid date range.']);
             exit;
         }
-        if ($start > $end) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Start date must be on or before end date.']);
-            exit;
-        }
-
-        // Cap the reporting window at 12 months in production to protect the server
-        // from multi-year scans that can exhaust the DB. Local/dev (ENVIRONMENT=DEV)
-        // is unrestricted, matching the env gate used for the Server Health load test.
-        $limit_months = (getenv('ENVIRONMENT') === 'DEV') ? 0 : 12;
-        if ($limit_months > 0) {
-            $max_end = (new DateTime($start))->modify('+' . $limit_months . ' months')->format('Y-m-d');
-            if ($end > $max_end) {
-                http_response_code(400);
-                echo json_encode(['error' => 'The reporting window cannot exceed ' . $limit_months . ' months. Please narrow the date range.']);
-                exit;
-            }
-        }
+        $start = $validated['start'];
+        $end = $validated['end'];
 
         $raw_kingdoms = isset($_GET['kingdoms']) && is_array($_GET['kingdoms']) ? $_GET['kingdoms'] : [];
         // Reject 0/negative and absurd IDs (real kingdom_ids fit well under 100000).
@@ -168,35 +139,11 @@ class Controller_AdminAjax extends Controller
             fn ($id) => $id > 0 && $id < 100000
         ));
 
-        $sor = Ork3::$Lib->stateofamtgard;
-        switch (trim($section ?? '')) {
-            case 'kingdoms':
-                echo json_encode(['kingdoms' => $sor->getKingdomSignIns($start, $end, $kingdom_ids)]);
-                break;
-            case 'classes':
-                echo json_encode(['classes' => $sor->getClassSignIns($start, $end, $kingdom_ids)]);
-                break;
-            case 'parks':
-                echo json_encode(['parks' => $sor->getParksAnalysis($start, $end, $kingdom_ids)]);
-                break;
-            case 'players':
-                echo json_encode(['players' => $sor->getPlayerStats($start, $end, $kingdom_ids)]);
-                break;
-            case 'cohorts':
-                echo json_encode(['cohorts' => $sor->getPlayerCohorts($start, $end, $kingdom_ids)]);
-                break;
-            case 'longevity':
-                echo json_encode(['longevity' => $sor->getPlayerLongevity($start, $end, $kingdom_ids)]);
-                break;
-            case 'retention':
-                // Fixed mature-cohort analysis; ignores start/end by design, respects kingdom filter.
-                echo json_encode(['retention' => $sor->getNewPlayerRetention($kingdom_ids)]);
-                break;
-            case 'awards':
-                echo json_encode(['awards' => $sor->getAwardGrants($start, $end, $kingdom_ids)]);
-                break;
-            default:
-                echo json_encode(['error' => 'Unknown section.']);
+        $payload = $sor->DispatchChartSection(trim($section ?? ''), $start, $end, $kingdom_ids);
+        if ($payload === null) {
+            echo json_encode(['error' => 'Unknown section.']);
+        } else {
+            echo json_encode($payload);
         }
         exit;
     }

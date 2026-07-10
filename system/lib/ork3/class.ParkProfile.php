@@ -264,17 +264,39 @@ class ParkProfile extends Ork3
 
     public function CheckParkAbbreviationTaken(int $kingdomId, string $abbr, int $excludeParkId = 0): bool
     {
+        return $this->GetParkAbbreviationConflict($kingdomId, $abbr, $excludeParkId) !== null;
+    }
+
+    public function GetParkAbbreviation(int $parkId): ?string
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT abbreviation FROM ' . DB_PREFIX . 'park WHERE park_id = ' . (int) $parkId . ' LIMIT 1'
+        );
+        if (!$rs || !$rs->Next()) {
+            return null;
+        }
+
+        return strtoupper((string) $rs->abbreviation);
+    }
+
+    public function GetParkAbbreviationConflict(int $kingdomId, string $abbr, int $excludeParkId = 0): ?string
+    {
         $abbr = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($abbr)));
         if ($abbr === '') {
-            return false;
+            return null;
         }
         $excludeClause = $excludeParkId > 0 ? ' AND park_id != ' . (int) $excludeParkId : '';
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT park_id FROM ' . DB_PREFIX . "park WHERE abbreviation = '{$abbr}' AND kingdom_id = " . (int) $kingdomId . "{$excludeClause} LIMIT 1"
+            'SELECT name FROM ' . DB_PREFIX . "park
+             WHERE kingdom_id = " . (int) $kingdomId . "
+               AND abbreviation = '{$abbr}'
+               AND active = 'Active'{$excludeClause}
+             LIMIT 1"
         );
 
-        return (bool) ($rs && $rs->Next());
+        return ($rs && $rs->Next()) ? (string) $rs->name : null;
     }
 
     private function draftClause(int $mundaneId, bool $isAdmin): string
