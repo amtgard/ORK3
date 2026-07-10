@@ -104,7 +104,8 @@ final class ModelPlayerCacheTest extends TestCase
         $player = $this->fixture->createPlayer($parkId, 'note-domain');
         $this->fixture->insertNote($player['mundane_id'], 'Domain note check');
 
-        $notes = Ork3::$Lib->player->GetNotes(['MundaneId' => $player['mundane_id']]);
+        $playerDomain = new Player();
+        $notes = $playerDomain->GetNotes(['MundaneId' => $player['mundane_id']]);
         $this->assertIsArray($notes);
         $this->assertNotEmpty($notes);
         $this->assertArrayHasKey('Note', $notes[0]);
@@ -115,11 +116,13 @@ final class ModelPlayerCacheTest extends TestCase
         $parkId = $this->fixture->firstParkId();
         $player = $this->fixture->createPlayer($parkId, 'milestones');
 
-        $milestones = Ork3::$Lib->player->GetCustomMilestones($player['mundane_id']);
+        $playerDomain = new Player();
+
+        $milestones = $playerDomain->GetCustomMilestones($player['mundane_id']);
         $this->assertIsArray($milestones);
 
-        $latest = Ork3::$Lib->player->get_latest_attendance_date($player['mundane_id']);
-        $earliest = Ork3::$Lib->player->get_earliest_attendance_date($player['mundane_id']);
+        $latest = $playerDomain->get_latest_attendance_date($player['mundane_id']);
+        $earliest = $playerDomain->get_earliest_attendance_date($player['mundane_id']);
         $this->assertTrue($latest === null || is_string($latest));
         $this->assertTrue($earliest === null || is_string($earliest));
     }

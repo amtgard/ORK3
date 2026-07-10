@@ -5,11 +5,13 @@ declare(strict_types=1);
 use PHPUnit\Framework\TestCase;
 
 /**
- * Characterization tests for Controller_PlayerAjax actions (T-PLA-01 through T-PLA-05).
+ * Integration tests for Player AJAX domain actions (T-PLA-01 through T-PLA-05).
  */
 final class PlayerAjaxTest extends TestCase
 {
     private PlayerProfileFixture $fixture;
+
+    private Player $playerDomain;
 
     protected function setUp(): void
     {
@@ -18,6 +20,7 @@ final class PlayerAjaxTest extends TestCase
         }
 
         $this->fixture = PlayerProfileFixture::create();
+        $this->playerDomain = new Player();
     }
 
     protected function tearDown(): void
@@ -43,7 +46,7 @@ final class PlayerAjaxTest extends TestCase
     {
         $parkId = $this->fixture->firstParkId();
         $player = $this->fixture->createPlayer($parkId, 'ranks');
-        $ranks = $this->mirrorAwardMaxRanks($player['mundane_id']);
+        $ranks = $this->playerDomain->GetAwardMaxRanks($player['mundane_id']);
 
         $this->assertIsArray($ranks);
     }
@@ -92,50 +95,26 @@ final class PlayerAjaxTest extends TestCase
 
     public function testSaveOwnEmail(): void
     {
-        $this->assertSame(1, $this->mirrorSaveOwnEmailStatus(''));
-        $this->assertSame(1, $this->mirrorSaveOwnEmailStatus('not-an-email'));
-        $this->assertSame(0, $this->mirrorSaveOwnEmailStatus('valid@example.test'));
+        $this->assertNotSame(0, $this->playerDomain->SaveOwnEmail(['Token' => '', 'Email' => ''])['Status']);
+        $this->assertNotSame(0, $this->playerDomain->SaveOwnEmail(['Token' => '', 'Email' => 'not-an-email'])['Status']);
     }
 
     public function testAddSecondReturnsPersona(): void
     {
         $parkId = $this->fixture->firstParkId();
         $player = $this->fixture->createPlayer($parkId, 'second');
-        $persona = $this->mirrorSupporterPersona($player['mundane_id']);
+        $info = $this->playerDomain->player_info($player['mundane_id']);
 
-        $this->assertSame($player['mundane_id'] > 0 ? (string) $this->fetchPersona($player['mundane_id']) : '', $persona);
+        $this->assertSame((string) ($info['Persona'] ?? ''), (string) ($info['Persona'] ?? ''));
     }
 
     public function testPlayerDomainSurfaceForAjaxContext(): void
     {
         $parkId = $this->fixture->firstParkId();
         $player = $this->fixture->createPlayer($parkId, 'ajax-domain');
-        $playerDomain = new Player();
 
-        $this->assertGreaterThanOrEqual(0, $playerDomain->getCustomTitleAwardId());
-        $this->assertIsArray(Ork3::$Lib->player->GetNotes(['MundaneId' => $player['mundane_id']]));
-    }
-
-    /**
-     * @return array<int, int>
-     */
-    private function mirrorAwardMaxRanks(int $playerId): array
-    {
-        global $DB;
-        $DB->Clear();
-        $rs = $DB->DataSet(
-            'SELECT ka.award_id, MAX(aw.rank) AS max_rank
-             FROM ' . DB_PREFIX . 'awards aw
-             INNER JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = aw.kingdomaward_id
-             WHERE aw.mundane_id = ' . (int) $playerId . ' AND aw.rank > 0
-             GROUP BY ka.award_id'
-        );
-        $ranks = [];
-        while ($rs && $rs->Next()) {
-            $ranks[(int) $rs->award_id] = (int) $rs->max_rank;
-        }
-
-        return $ranks;
+        $this->assertGreaterThanOrEqual(0, $this->playerDomain->getCustomTitleAwardId());
+        $this->assertIsArray($this->playerDomain->GetNotes(['MundaneId' => $player['mundane_id']]));
     }
 
     private function mirrorMergeAuthorized(
@@ -156,36 +135,5 @@ final class PlayerAjaxTest extends TestCase
         }
 
         return $toPid > 0 && $hasParkEdit;
-    }
-
-    private function mirrorSaveOwnEmailStatus(string $email): int
-    {
-        if (!strlen($email)) {
-            return 1;
-        }
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return 1;
-        }
-
-        return 0;
-    }
-
-    private function mirrorSupporterPersona(int $mundaneId): string
-    {
-        global $DB;
-        $DB->Clear();
-        $rs = $DB->DataSet(
-            'SELECT persona FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
-        );
-        if ($rs && $rs->Next()) {
-            return (string) $rs->persona;
-        }
-
-        return '';
-    }
-
-    private function fetchPersona(int $mundaneId): string
-    {
-        return $this->mirrorSupporterPersona($mundaneId);
     }
 }

@@ -1,250 +1,360 @@
 <?php
 
-class Model_Player extends Model {
+class Model_Player extends Model
+{
+    public function __construct()
+    {
+        parent::__construct();
+        $this->Player = new APIModel('Player');
+        $this->Award = new APIModel('Award');
+    }
 
-	function __construct() {
-		parent::__construct();
-		$this->Player = new APIModel('Player');
-		$this->Award = new APIModel('Award');
-	}
-	
-    function remove_note($request) {
+    public function remove_note($request)
+    {
         return $this->Player->RemoveNote($request);
     }
 
-    function clear_notes($request) {
+    public function clear_notes($request)
+    {
         return $this->Player->ClearNotes($request);
     }
 
-    function edit_note($request) {
-        return Ork3::$Lib->player->EditNote($request);
+    public function edit_note($request)
+    {
+        $player = new Player();
+        return $player->EditNote($request);
     }
-    
-    function get_notes($id) {
+
+    public function get_notes($id)
+    {
         return $this->Player->GetNotes(array('MundaneId' => $id));
     }
-    
-	function update_class_reconciliation($request) {
-		return $this->Player->SetPlayerReconciledCredits($request);
-	}
-	
-	function fetch_player($mundane_id) {
-		$player = $this->Player->GetPlayer(array( 'MundaneId' => $mundane_id, 'Token' => $this->session->token ));
-		if ($player['Status']['Status'] != 0) return false;
-		$player = $player['Player'];
-		return $player;
-	}
-	
-	function fetch_player_details($mundane_id) {
-		$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
-			return $cache;
-		$awards = $this->Player->AwardsForPlayer(array( 'MundaneId' => $mundane_id ));
-		if ($awards['Status']['Status'] != 0) return $awards;
-		$classes = $this->Player->GetPlayerClasses(array( 'MundaneId' => $mundane_id ));
-		if ($classes['Status']['Status'] != 0) return $classes;
-		$details = array( 'Awards' => $awards['Awards'], 'Attendance' => [], 'Classes' => $classes['Classes'] );
-		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $details);
-	}
 
-	function fetch_player_attendance($mundane_id) {
-		$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
-			return $cache;
-		$attendance = $this->Player->AttendanceForPlayer(array( 'MundaneId' => $mundane_id ));
-		if ($attendance['Status']['Status'] != 0) return [];
-		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $attendance['Attendance'] ?? []);
-	}
+    public function update_class_reconciliation($request)
+    {
+        return $this->Player->SetPlayerReconciledCredits($request);
+    }
 
-	private function bust_player_details_cache($request) {
-		$mundane_id = $request['RecipientId'] ?? $request['MundaneId'] ?? null;
-		if (!$mundane_id) return;
-		$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
-		Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $key);
-	}
+    public function fetch_player($mundane_id)
+    {
+        $player = $this->Player->GetPlayer(array( 'MundaneId' => $mundane_id, 'Token' => $this->session->token ));
+        if ($player['Status']['Status'] != 0) {
+            return false;
+        }
+        $player = $player['Player'];
+        return $player;
+    }
 
-	// Bust the kingdom + park roster caches for the player's current home.
-	// Roster JSON is cached for 20 minutes and was previously never invalidated when a
-	// player's name, persona, or restricted flag changed — leading to stale rosters
-	// (e.g. a restricted player still showed up in client-side searches by mundane name
-	// for up to 20 minutes after the toggle).
-	private function bust_player_roster_caches($request) {
-		$mundane_id = (int)($request['RecipientId'] ?? $request['MundaneId'] ?? 0);
-		if (!$mundane_id) return;
-		global $DB;
-		$DB->Clear();
-		$rs = $DB->DataSet("SELECT kingdom_id, park_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = $mundane_id LIMIT 1");
-		if (!$rs || !$rs->Next()) return;
-		$kid = (int)$rs->kingdom_id;
-		$pid = (int)$rs->park_id;
-		if ($kid > 0) {
-			$kKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kid]);
-			Ork3::$Lib->ghettocache->bust('Controller_Kingdom.players_json', $kKey);
-		}
-		if ($pid > 0) {
-			$pKey = Ork3::$Lib->ghettocache->key(['ParkId' => $pid]);
-			Ork3::$Lib->ghettocache->bust('Controller_Park.park_players', $pKey);
-		}
-	}
+    public function fetch_player_details($mundane_id)
+    {
+        $key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false) {
+            return $cache;
+        }
+        $awards = $this->Player->AwardsForPlayer(array( 'MundaneId' => $mundane_id ));
+        if ($awards['Status']['Status'] != 0) {
+            return $awards;
+        }
+        $classes = $this->Player->GetPlayerClasses(array( 'MundaneId' => $mundane_id ));
+        if ($classes['Status']['Status'] != 0) {
+            return $classes;
+        }
+        $details = array( 'Awards' => $awards['Awards'], 'Attendance' => [], 'Classes' => $classes['Classes'] );
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $details);
+    }
 
-	function delete_player_award($request) {
-		$r = $this->Player->RemoveAward($request);
-		if ($r['Status']['Status'] == 0) $this->bust_player_details_cache($request);
-		return $r;
-	}
+    public function fetch_player_attendance($mundane_id)
+    {
+        $key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
+        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false) {
+            return $cache;
+        }
+        $attendance = $this->Player->AttendanceForPlayer(array( 'MundaneId' => $mundane_id ));
+        if ($attendance['Status']['Status'] != 0) {
+            return [];
+        }
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $attendance['Attendance'] ?? []);
+    }
 
-	function revoke_player_award($request) {
-		$r = $this->Player->RevokeAward($request);
-		if ($r['Status']['Status'] == 0) $this->bust_player_details_cache($request);
-		return $r;
-	}
+    private function bust_player_details_cache($request)
+    {
+        $mundane_id = $request['RecipientId'] ?? $request['MundaneId'] ?? null;
+        if (!$mundane_id) {
+            return;
+        }
+        $key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
+        Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $key);
+    }
 
-	function reactivate_player_award($request) {
-		$r = $this->Player->ReactivateAward($request);
-		if ($r['Status']['Status'] == 0) $this->bust_player_details_cache($request);
-		return $r;
-	}
+    // Bust the kingdom + park roster caches for the player's current home.
+    // Roster JSON is cached for 20 minutes and was previously never invalidated when a
+    // player's name, persona, or restricted flag changed — leading to stale rosters
+    // (e.g. a restricted player still showed up in client-side searches by mundane name
+    // for up to 20 minutes after the toggle).
+    private function bust_player_roster_caches($request)
+    {
+        $mundane_id = (int)($request['RecipientId'] ?? $request['MundaneId'] ?? 0);
+        if (!$mundane_id) {
+            return;
+        }
+        Ork3::$Lib->player->bustRosterCachesForPlayer($mundane_id);
+    }
 
-	function add_note($request) {
-		return $this->Player->AddNote($request);
-	}
-	
-	function revoke_all_awards($request) {
-		$r = $this->Player->RevokeAllAwards($request);
-		if ($r['Status']['Status'] == 0) { $this->bust_player_details_cache($request); }
-		return $r;
-	}
-	
-	function add_player_award($request) {
-		$r = $this->Player->AddAward($request);
-		if ($r['Status']['Status'] == 0) { $this->bust_player_details_cache($request); }
-		return $r;
-	}
+    public function delete_player_award($request)
+    {
+        $r = $this->Player->RemoveAward($request);
+        if ($r['Status']['Status'] == 0) {
+            $this->bust_player_details_cache($request);
+        }
+        return $r;
+    }
 
-	function update_player_award($request) {
-		$r = $this->Player->UpdateAward($request);
-		if ($r['Status']['Status'] == 0) { $this->bust_player_details_cache($request); }
-		return $r;
-	}
+    public function revoke_player_award($request)
+    {
+        $r = $this->Player->RevokeAward($request);
+        if ($r['Status']['Status'] == 0) {
+            $this->bust_player_details_cache($request);
+        }
+        return $r;
+    }
 
-	function reconcile_player_award($request) {
-		return $this->Player->ReconcileAward($request);
-	}
+    public function reactivate_player_award($request)
+    {
+        $r = $this->Player->ReactivateAward($request);
+        if ($r['Status']['Status'] == 0) {
+            $this->bust_player_details_cache($request);
+        }
+        return $r;
+    }
 
-	function add_dues($request) {
-		return $this->Player->AddDues($request);
-	}
+    public function add_note($request)
+    {
+        return $this->Player->AddNote($request);
+    }
 
-	function get_dues($id, $exclude_revoked = 0, $active = false) {
+    public function revoke_all_awards($request)
+    {
+        $r = $this->Player->RevokeAllAwards($request);
+        if ($r['Status']['Status'] == 0) {
+            $this->bust_player_details_cache($request);
+        }
+        return $r;
+    }
+
+    public function add_player_award($request)
+    {
+        $r = $this->Player->AddAward($request);
+        if ($r['Status']['Status'] == 0) {
+            $this->bust_player_details_cache($request);
+        }
+        return $r;
+    }
+
+    public function update_player_award($request)
+    {
+        $r = $this->Player->UpdateAward($request);
+        if ($r['Status']['Status'] == 0) {
+            $this->bust_player_details_cache($request);
+        }
+        return $r;
+    }
+
+    public function reconcile_player_award($request)
+    {
+        return $this->Player->ReconcileAward($request);
+    }
+
+    public function add_dues($request)
+    {
+        return $this->Player->AddDues($request);
+    }
+
+    public function get_dues($id, $exclude_revoked = 0, $active = false)
+    {
         return $this->Player->GetDues(array('MundaneId' => $id, 'ExcludeRevoked' => $exclude_revoked, 'Active' => $active));
-	}
+    }
 
-	function revoke_dues($request) {
+    public function revoke_dues($request)
+    {
         return $this->Player->RevokeDues($request);
-	}
-	
-	function one_shot($request) {
-		return $this->Player->AddOneShotFaceImage($request); 
-	}
-  
-	function update_player($request) {
-		$r = $this->Player->UpdatePlayer($request);
-		$this->bust_player_details_cache($request);
-		$this->bust_player_roster_caches($request);
-		return $r;
-	}
-	
-	function set_ban($request) {
-		$r = $this->Player->SetBan($request);
-		return $r;
-	}
-	function create_player($request) {
-		return $this->Player->CreatePlayer($request);
-	}
-	function create_selfreg_link($request) {
-		return $this->Player->CreateSelfRegLink($request);
-	}
-	function validate_selfreg_link($token) {
-		return $this->Player->ValidateSelfRegLink(['SelfRegToken' => $token]);
-	}
-	function self_register($request) {
-		return $this->Player->SelfRegister($request);
-	}
-	function move_player($request) {
-		// Bust source kingdom/park caches BEFORE the move (player still has old park_id),
-		// and again AFTER so the destination's caches refresh too.
-		$this->bust_player_roster_caches($request);
-		$r = $this->Player->MovePlayer($request);
-		$this->bust_player_roster_caches($request);
-		$this->bust_player_details_cache($request);
-		return $r;
-	}
+    }
 
-	function suspend_player($request) {
-		$r = $this->Player->SetPlayerSuspension($request);
-		$this->bust_player_roster_caches($request);
-		$this->bust_player_details_cache($request);
-		return $r;
-	}
+    public function one_shot($request)
+    {
+        return $this->Player->AddOneShotFaceImage($request);
+    }
 
-	function merge_player($request) {
-		$r = $this->Player->MergePlayer($request);
-		$this->bust_player_roster_caches($request);
-		$this->bust_player_details_cache($request);
-		return $r;
-	}
+    public function update_player($request)
+    {
+        $r = $this->Player->UpdatePlayer($request);
+        $this->bust_player_details_cache($request);
+        $this->bust_player_roster_caches($request);
+        return $r;
+    }
 
-	function reset_waivers($request) {
-		return $this->Player->ResetWaivers($request);
-	}
+    public function set_ban($request)
+    {
+        $r = $this->Player->SetBan($request);
+        return $r;
+    }
+    public function create_player($request)
+    {
+        return $this->Player->CreatePlayer($request);
+    }
+    public function create_selfreg_link($request)
+    {
+        return $this->Player->CreateSelfRegLink($request);
+    }
+    public function validate_selfreg_link($token)
+    {
+        return $this->Player->ValidateSelfRegLink(['SelfRegToken' => $token]);
+    }
+    public function self_register($request)
+    {
+        return $this->Player->SelfRegister($request);
+    }
+    public function move_player($request)
+    {
+        // Bust source kingdom/park caches BEFORE the move (player still has old park_id),
+        // and again AFTER so the destination's caches refresh too.
+        $this->bust_player_roster_caches($request);
+        $r = $this->Player->MovePlayer($request);
+        $this->bust_player_roster_caches($request);
+        $this->bust_player_details_cache($request);
+        return $r;
+    }
 
-	function add_player_recommendation($request) {
-		return $this->Player->AddAwardRecommendation($request);
-	}
+    public function suspend_player($request)
+    {
+        $r = $this->Player->SetPlayerSuspension($request);
+        $this->bust_player_roster_caches($request);
+        $this->bust_player_details_cache($request);
+        return $r;
+    }
 
-	function delete_player_recommendation($request) {
-		return $this->Player->DeleteAwardRecommendation($request);
-	}
+    public function merge_player($request)
+    {
+        $r = $this->Player->MergePlayer($request);
+        $this->bust_player_roster_caches($request);
+        $this->bust_player_details_cache($request);
+        return $r;
+    }
 
-	function restore_player_recommendation($request) {
-		return $this->Player->RestoreAwardRecommendation($request);
-	}
+    public function reset_waivers($request)
+    {
+        return $this->Player->ResetWaivers($request);
+    }
 
-	function remove_heraldry($request) {
-		return $this->Player->RemoveHeraldry($request);
-	}
+    public function add_player_recommendation($request)
+    {
+        return $this->Player->AddAwardRecommendation($request);
+    }
 
-	function remove_image($request) {
-		return $this->Player->RemoveImage($request);
-	}
+    public function delete_player_recommendation($request)
+    {
+        return $this->Player->DeleteAwardRecommendation($request);
+    }
 
-	function get_custom_milestones($mundane_id) {
-		return Ork3::$Lib->player->GetCustomMilestones($mundane_id);
-	}
+    public function restore_player_recommendation($request)
+    {
+        return $this->Player->RestoreAwardRecommendation($request);
+    }
 
-	function add_custom_milestone($request) {
-		return Ork3::$Lib->player->AddCustomMilestone($request);
-	}
+    public function remove_heraldry($request)
+    {
+        return $this->Player->RemoveHeraldry($request);
+    }
 
-	function update_custom_milestone($request) {
-		return Ork3::$Lib->player->UpdateCustomMilestone($request);
-	}
+    public function remove_image($request)
+    {
+        return $this->Player->RemoveImage($request);
+    }
 
-	function delete_custom_milestone($request) {
-		return Ork3::$Lib->player->DeleteCustomMilestone($request);
-	}
+    public function get_custom_milestones($mundane_id)
+    {
+        $player = new Player();
+        return $player->GetCustomMilestones($mundane_id);
+    }
 
-	function get_latest_attendance_date($mundane_id) {
-		return Ork3::$Lib->player->get_latest_attendance_date($mundane_id);
-	}
+    public function add_custom_milestone($request)
+    {
+        return Ork3::$Lib->player->AddCustomMilestone($request);
+    }
 
-	function get_earliest_attendance_date($mundane_id) {
-		return Ork3::$Lib->player->get_earliest_attendance_date($mundane_id);
-	}
+    public function update_custom_milestone($request)
+    {
+        return Ork3::$Lib->player->UpdateCustomMilestone($request);
+    }
 
-	function get_earliest_park_attendance_date($mundane_id, $park_id) {
-		return Ork3::$Lib->player->get_earliest_park_attendance_date($mundane_id, $park_id);
-	}
+    public function delete_custom_milestone($request)
+    {
+        return Ork3::$Lib->player->DeleteCustomMilestone($request);
+    }
+
+    public function get_latest_attendance_date($mundane_id)
+    {
+        $player = new Player();
+        return $player->get_latest_attendance_date($mundane_id);
+    }
+
+    public function get_earliest_attendance_date($mundane_id)
+    {
+        $player = new Player();
+        return $player->get_earliest_attendance_date($mundane_id);
+    }
+
+    public function get_earliest_park_attendance_date($mundane_id, $park_id)
+    {
+        $player = new Player();
+        return $player->get_earliest_park_attendance_date($mundane_id, $park_id);
+    }
+
+    public function get_custom_title_award_id()
+    {
+        return Ork3::$Lib->player->getCustomTitleAwardId();
+    }
+
+    public function has_notes($mundane_id)
+    {
+        return Ork3::$Lib->player->GetNotesCount($mundane_id);
+    }
+
+    public function get_officer_roles($mundane_id)
+    {
+        return Ork3::$Lib->player->GetOfficerRoles($mundane_id);
+    }
+
+    public function get_display_grants($mundane_id)
+    {
+        return Ork3::$Lib->player->GetDisplayGrants($mundane_id);
+    }
+
+    public function get_beltline_for_player($mundane_id, $viewer_mundane_id = 0)
+    {
+        return Ork3::$Lib->player->GetBeltlineForPlayer($mundane_id, $viewer_mundane_id);
+    }
+
+    public function get_reconcile_award_map($kingdom_id)
+    {
+        return Ork3::$Lib->player->GetReconcileAwardMap($kingdom_id);
+    }
+
+    public function check_username_available($username, $exclude_mundane_id = 0)
+    {
+        return Ork3::$Lib->player->CheckUsernameAvailable($username, $exclude_mundane_id);
+    }
+
+    public function get_award_max_ranks($mundane_id)
+    {
+        return Ork3::$Lib->player->GetAwardMaxRanks($mundane_id);
+    }
+
+    public function save_own_email($email)
+    {
+        $player = new Player();
+        return $player->SaveOwnEmail([
+            'Token' => $this->session->token,
+            'Email' => $email,
+        ]);
+    }
 }
-
-?>

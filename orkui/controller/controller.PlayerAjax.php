@@ -29,12 +29,8 @@ class Controller_PlayerAjax extends Controller
         if (strlen($candidate) < 4) {
             return ['status' => 0, 'available' => false, 'reason' => 'too-short', 'username' => $candidate];
         }
-        global $DB;
-        $DB->Clear();
-        $DB->username = $candidate;
-        $rs = $DB->DataSet('SELECT mundane_id FROM ' . DB_PREFIX . 'mundane WHERE username = :username LIMIT 1');
-        $taken = ($rs && $rs->Next());
-        return ['status' => 0, 'available' => !$taken, 'username' => $candidate];
+        $available = Ork3::$Lib->player->CheckUsernameAvailable($candidate);
+        return ['status' => 0, 'available' => $available, 'username' => $candidate];
     }
 
     public function park($p = null)
@@ -374,27 +370,15 @@ class Controller_PlayerAjax extends Controller
                 : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'awardranks') {
-            global $DB;
-            $DB->Clear();
-            $pid = (int)$player_id;
-            $rs  = $DB->DataSet("
-				SELECT ka.award_id, MAX(aw.rank) AS max_rank
-				FROM ork_awards aw
-				INNER JOIN ork_kingdomaward ka ON ka.kingdomaward_id = aw.kingdomaward_id
-				WHERE aw.mundane_id = {$pid} AND aw.rank > 0
-				GROUP BY ka.award_id");
-            $ranks = [];
-            while ($rs && $rs->Next()) {
-                $ranks[(int)$rs->award_id] = (int)$rs->max_rank;
-            }
+            $this->load_model('Player');
+            $ranks = $this->Player->get_award_max_ranks((int)$player_id);
             echo json_encode($ranks);
 
         } elseif ($action === 'info') {
-            global $DB;
-            $DB->Clear();
-            $rs = $DB->DataSet("SELECT mundane_id, persona FROM ork_mundane WHERE mundane_id = {$player_id} LIMIT 1");
-            if ($rs && $rs->Next()) {
-                echo json_encode(['status' => 0, 'MundaneId' => $player_id, 'Persona' => $rs->persona]);
+            $this->load_model('Player');
+            $player = $this->Player->fetch_player($player_id);
+            if ($player) {
+                echo json_encode(['status' => 0, 'MundaneId' => $player_id, 'Persona' => $player['Persona']]);
             } else {
                 echo json_encode(['status' => 1, 'error' => 'Player not found']);
             }
@@ -537,36 +521,6 @@ class Controller_PlayerAjax extends Controller
         }
         if ($from_id === $to_id) {
             echo json_encode(['status' => 1, 'error' => 'Cannot merge a player with themselves.']);
-            exit;
-        }
-        // Auth: mirror class.Player::MergePlayer's 3-tier check so park admins
-        // aren't rejected here before the server logic runs.
-        //   - cross-kingdom merge          => system-wide AUTH_ADMIN
-        //   - same-kingdom, different park => Kingdom EDIT (Kingdom-level officer)
-        //   - same park                    => Park EDIT (Park-level officer / admin)
-        global $DB;
-        $DB->Clear();
-        $rs = $DB->DataSet("SELECT mundane_id, park_id, kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id IN ({$from_id}, {$to_id})");
-        $rows = [];
-        while ($rs && $rs->Next()) {
-            $rows[(int)$rs->mundane_id] = ['park_id' => (int)$rs->park_id, 'kingdom_id' => (int)$rs->kingdom_id];
-        }
-        $authorized = false;
-        if (isset($rows[$from_id]) && isset($rows[$to_id])) {
-            $fKid = $rows[$from_id]['kingdom_id'];
-            $tKid = $rows[$to_id]['kingdom_id'];
-            $fPid = $rows[$from_id]['park_id'];
-            $tPid = $rows[$to_id]['park_id'];
-            if ($fKid !== $tKid) {
-                $authorized = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_EDIT);
-            } elseif ($fPid !== $tPid) {
-                $authorized = $tKid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $tKid, AUTH_EDIT);
-            } else {
-                $authorized = $tPid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $tPid, AUTH_EDIT);
-            }
-        }
-        if (!$authorized) {
-            echo json_encode(['status' => 5, 'error' => 'Not authorized to merge these players.']);
             exit;
         }
         $this->load_model('Player');
@@ -719,12 +673,9 @@ class Controller_PlayerAjax extends Controller
             echo json_encode(['status' => 1, 'error' => 'Please enter a valid email address.']);
             exit;
         }
-        $mundane_id = (int)$this->session->user_id;
-        global $DB;
-        $DB->Clear();
-        $DB->email = $email;
-        $DB->Execute("UPDATE ork_mundane SET email = :email WHERE mundane_id = $mundane_id");
-        echo json_encode(['status' => 0]);
+        $this->load_model('Player');
+        $r = $this->Player->save_own_email($email);
+        echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '']);
         exit;
     }
 
@@ -749,15 +700,7 @@ class Controller_PlayerAjax extends Controller
             'RecommendationsId' => $rec_id,
             'Notes' => $notes,
         ]);
-        $persona = '';
-        if ((int)($r['Status'] ?? 1) === 0) {
-            global $DB;
-            $DB->Clear();
-            $rs = $DB->DataSet("SELECT persona FROM " . DB_PREFIX . "mundane WHERE mundane_id = " . (int)$this->session->user_id . " LIMIT 1");
-            if ($rs && $rs->Next()) {
-                $persona = (string)$rs->persona;
-            }
-        }
+        $persona = (int)($r['Status'] ?? 1) === 0 ? (string)($r['SupporterPersona'] ?? '') : '';
         echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '', 'detail' => $r['Detail'] ?? '', 'supporter_persona' => $persona]);
         exit;
     }

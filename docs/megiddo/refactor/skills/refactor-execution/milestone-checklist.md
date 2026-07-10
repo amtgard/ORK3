@@ -12,7 +12,7 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 |-------|--------|
 | Integration line (R-01 base only) | `megiddo/rebase-20260709` @ `05bc1973` |
 | Branching | **stack-on-prior-R** (mandatory — lights out, no merge gates) |
-| Stack tip (orchestrator updates after each R-*) | `megiddo/r-08-admin-refactor` @ `0d003dd9` |
+| Stack tip (orchestrator updates after each R-*) | `megiddo/r-09-player-refactor` @ `4a7b1f8c` |
 | Prerequisite | [rebase-and-redocument](../rebase-and-redocument/milestone-checklist.md) RB-Z complete |
 | E2E credentials | [06-test-framework.md § preflight](../../06-test-framework.md#e2e-login-credentials-preflight) — mirror `admin`/`password`, sandbox `megiddo`/`test-db-player` |
 | Fuzzy setpoint | `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
@@ -28,7 +28,8 @@ Track **R-01 … R-14** Phase 2 sprints. Orchestrator and workers update this fi
 | R-05 | `megiddo/r-05-event-refactor` | `20264fa9` |
 | R-06 | `megiddo/r-06-kingdom-refactor` | `56b59878` |
 | R-07 | `megiddo/r-07-park-refactor` | `5bc70bdf` |
-| R-08 | `megiddo/r-08-admin-refactor` | `0d003dd9` |
+| R-08 | `megiddo/r-08-admin-refactor` | `ebda9ebe` |
+| R-09 | `megiddo/r-09-player-refactor` | `4a7b1f8c` |
 
 ---
 
@@ -208,16 +209,16 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 
 | Gate | Status |
 |------|--------|
-| Prior R-* hygiene | [ ] |
-| Refactor player targets | [ ] |
-| PHPUnit | [ ] |
-| Infection §2.4 | [ ] |
-| Fuzzy: `player-profile,player-profile-sandbox` | [ ] |
-| Playwright: `player-profile.spec.ts` | [ ] |
-| Docs + plan | [ ] |
-| Commit: `R-09: …` | [ ] |
+| Prior R-* hygiene | [x] |
+| Refactor player targets | [x] |
+| PHPUnit | [x] |
+| Infection §2.4 | [x] |
+| Fuzzy: `player-profile,player-profile-sandbox` | [x] |
+| Playwright: `player-profile.spec.ts` | [x] |
+| Docs + plan | [x] |
+| Commit: `R-09: …` | [x] |
 
-**Notes:**
+**Notes:** Branch `megiddo/r-09-player-refactor` @ `4a7b1f8c` stacked on R-08 @ `ebda9ebe`. Domain APIs on `Player` (profile reads, display grants, username, email, beltline, reconcile map, roster cache bust); thinned `Controller_Player` T-PLR-01–07, `Controller_PlayerAjax` T-PLA-01–05, `Model_Player` T-PLM-01–04. PHPUnit 214/214 pass. Infection `infection.t09-player.json5` `--only-covered`: MSI 46%, covered MSI 46%. Fuzzy 4/4 pass (re-recorded test player-profile baselines). Playwright: auth smoke + `player-profile.spec.ts` 2/2 pass.
 
 ---
 
@@ -325,4 +326,4 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | … | … | … |
 | 14 | R-14 | Phase 3 audit |
 
-**Next unchecked:** R-09
+**Next unchecked:** R-10

@@ -100,6 +100,8 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 **R-08 complete (2026-07-09):** T-ADM-01 through T-ADM-09, T-ADM-12 migrated to domain (`Report`, `Authorization`, `Dangeraudit`, `Administration`, `Player`, `ParkProfile`, `KingdomProfile`, `Weather`, `StateOfAmtgard`) via `Model_AdminDashboard`; T-ADM-10/11 out of scope (R-11/R-02).
 
+**R-09 complete (2026-07-09):** T-PLR-01 through T-PLR-07, T-PLA-01 through T-PLA-05, T-PLM-01 through T-PLM-04 migrated to `Player` / `Authorization` domain APIs; thinned `Controller_Player`, `Controller_PlayerAjax`, `Model_Player` migrated paths off `$DB` (T-PLR-08 unchanged — DS-14; T-PLA-06 → R-03).
+
 **R-03 complete (2026-07-09):** T-PLA-06, T-PRA-04, T-KNA-08, T-UNT-01, T-EVA-14 migrated to `class.Banner.php` / BannerService; five `*Ajax::banner` controllers are thin `Model_Banner` adapters; zero banner `$DB` in `orkui/`.
 
 **R-04 complete (2026-07-09):** T-EVA-01–T-EVA-13 migrated to `class.EventPlanning.php` / EventService + `Model_EventPlanning`; `CreateEvent` accepts optional draft status; `RemoveEventHeraldry` in Heraldry domain; EventAjax planning methods are thin adapters (auth addauth/playersearch and banner unchanged).
