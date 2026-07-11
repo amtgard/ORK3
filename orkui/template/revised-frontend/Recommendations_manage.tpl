@@ -78,6 +78,23 @@ html[data-theme="dark"] .rm-wrap {
 .rm-search::placeholder { color: var(--rm-muted); }
 .rm-fcheck { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--rm-fg); cursor: pointer; }
 .rm-fcheck input { margin: 0; }
+/* Export button — right-aligned in the filter bar. */
+.rm-fbtn {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 5px 10px;
+    border: 1px solid var(--rm-line);
+    border-radius: 4px;
+    background: var(--rm-bg);
+    color: var(--rm-fg);
+    white-space: nowrap;
+}
+.rm-fbtn:hover { border-color: var(--rm-accent); color: var(--rm-accent); }
+.rm-fbtn[disabled] { opacity: .6; cursor: default; }
 .rm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .rm-chip {
     cursor: pointer;
@@ -149,6 +166,9 @@ thead .rm-col-sel { text-align: center; }
 }
 a.rm-park { text-decoration: none; cursor: pointer; }
 a.rm-park:hover { color: var(--rm-accent); border-color: var(--rm-accent); }
+/* Park column (split out of the Recipient cell) */
+.rm-col-park { white-space: nowrap; }
+.rm-col-park .rm-park { margin-left: 0; }
 
 /* Award cell */
 .rm-rank {
@@ -158,6 +178,10 @@ a.rm-park:hover { color: var(--rm-accent); border-color: var(--rm-accent); }
     color: var(--rm-muted);
 }
 .rm-rank.rm-nonladder { font-style: italic; }
+
+/* Rank column (split out of the Award cell) */
+.rm-col-rank { white-space: nowrap; }
+.rm-col-rank .rm-rank { margin-left: 0; }
 .rm-badge {
     display: inline-block;
     margin-left: 6px;
@@ -177,7 +201,10 @@ html[data-theme="dark"] .rm-badge-passlocal { color: #6fb0e6; }
    so this button uses a child tooltip span shown on hover. Right-anchored so it
    never clips off the right edge. */
 .rm-act-passlocal { position: relative; }
-.rm-passlocal-tip {
+/* Shared rich-tooltip body — Pass-down (.rm-passlocal-tip) and Snooze
+   (.rm-snooze-tip) render byte-identical tooltips; only the :hover trigger
+   selectors differ. (The spans carry these class names from _rm_row.tpl.) */
+.rm-passlocal-tip, .rm-snooze-tip {
     display: none;
     position: absolute;
     right: 0;
@@ -197,8 +224,8 @@ html[data-theme="dark"] .rm-badge-passlocal { color: #6fb0e6; }
     pointer-events: none;
 }
 .rm-act-passlocal:hover .rm-passlocal-tip { display: block; }
-.rm-passlocal-tip strong { display: block; font-weight: 700; margin-bottom: 3px; }
-html[data-theme="dark"] .rm-passlocal-tip { background: #000; }
+.rm-passlocal-tip strong, .rm-snooze-tip strong { display: block; font-weight: 700; margin-bottom: 3px; }
+html[data-theme="dark"] .rm-passlocal-tip, html[data-theme="dark"] .rm-snooze-tip { background: #000; }
 
 /* Recommended cell */
 .rm-by { display: block; }
@@ -317,28 +344,9 @@ html[data-theme="dark"] [data-tip]:hover::after { background: #000; }
 /* Snooze button uses a rich tooltip (bold title + description) rather than the
    plain data-tip; mirrors .rm-passlocal-tip and right-anchors so it never clips. */
 .rm-act-snooze { position: relative; }
-.rm-snooze-tip {
-    display: none;
-    position: absolute;
-    right: 0;
-    bottom: calc(100% + 4px);
-    width: max-content;
-    max-width: 240px;
-    background: #222;
-    color: #fff;
-    font-size: 11px;
-    font-weight: 400;
-    line-height: 1.35;
-    text-align: left;
-    padding: 5px 8px;
-    border-radius: 4px;
-    white-space: normal;
-    z-index: 50;
-    pointer-events: none;
-}
+/* Body/strong/dark styles are shared with .rm-passlocal-tip above; only the
+   distinct :hover trigger lives here. */
 .rm-act-snooze:hover .rm-snooze-tip { display: block; }
-.rm-snooze-tip strong { display: block; font-weight: 700; margin-bottom: 3px; }
-html[data-theme="dark"] .rm-snooze-tip { background: #000; }
 
 /* Bulk action bar (Task 7) */
 .rm-bulkbar {
@@ -351,24 +359,26 @@ html[data-theme="dark"] .rm-snooze-tip { background: #000; }
     flex-wrap: wrap;
     padding: 8px 10px;
     margin-top: 6px;
-    background: var(--rm-bg2);
-    border: 1px solid var(--rm-line);
+    /* Brand header blue so the bar clearly stands out once rows are selected. */
+    background: #2c5f8b;
+    border: 1px solid #234d73;
     border-radius: 6px;
-    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.22);
 }
+html[data-theme="dark"] .rm-bulkbar { background: #23557f; border-color: #16344d; }
 .rm-bulkbar[hidden] { display: none; }
-#rm-bulklabel { font-size: 13px; font-weight: 600; color: var(--rm-fg); margin-right: 4px; }
+#rm-bulklabel { font-size: 13px; font-weight: 700; color: #fff; margin-right: 4px; }
 .rm-bulk {
     cursor: pointer;
     font-size: 13px;
     padding: 5px 10px;
-    border: 1px solid var(--rm-line);
+    border: 1px solid rgba(255, 255, 255, 0.55);
     border-radius: 4px;
-    background: var(--rm-bg);
-    color: var(--rm-fg);
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
 }
-.rm-bulk:hover { border-color: var(--rm-accent); background: var(--rm-bg2); }
-.rm-bulk-dismiss:hover { border-color: var(--rm-danger); color: var(--rm-danger); }
+.rm-bulk:hover { border-color: #fff; background: rgba(255, 255, 255, 0.24); }
+.rm-bulk-dismiss:hover { border-color: #ffd4d4; background: rgba(176, 48, 48, 0.55); color: #fff; }
 
 /* Toast (Task 8) */
 .rm-toast {
@@ -510,6 +520,40 @@ html[data-theme="dark"] .rm-modal {
 }
 .rm-btn-primary:hover { opacity: 0.92; }
 .rm-btn-primary:disabled { opacity: 0.55; cursor: default; }
+/* Grant Award modal fields */
+.rm-field { margin-bottom: 12px; }
+.rm-field > label { display: block; font-size: 12px; font-weight: 600; color: var(--rm-fg); margin-bottom: 4px; }
+.rm-field .rm-input, .rm-field textarea.rm-input { margin-bottom: 0; }
+.rm-field textarea.rm-input { resize: vertical; min-height: 56px; font-family: inherit; }
+.rm-field-hint { font-size: 11px; color: var(--rm-muted); margin-top: 4px; line-height: 1.4; }
+.rm-form-error { background: rgba(176, 48, 48, 0.12); border: 1px solid var(--rm-danger); color: var(--rm-danger); font-size: 13px; padding: 7px 10px; border-radius: 5px; margin-bottom: 12px; }
+.rm-form-error[hidden] { display: none; }
+.rm-radio-row { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 400; color: var(--rm-fg); margin: 4px 0; cursor: pointer; }
+.rm-radio-row input { margin: 0; }
+/* Given-By autocomplete dropdown */
+.rm-ac-wrap { position: relative; }
+.rm-ac-results { position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 20; background: var(--rm-bg); border: 1px solid var(--rm-line); border-radius: 5px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); max-height: 220px; overflow-y: auto; display: none; }
+.rm-ac-results.rm-ac-open { display: block; }
+.rm-ac-item { padding: 7px 10px; font-size: 13px; color: var(--rm-fg); cursor: pointer; }
+.rm-ac-item:hover, .rm-ac-item.rm-ac-active { background: var(--rm-bg2); }
+.rm-ac-none { padding: 7px 10px; font-size: 12px; color: var(--rm-muted); }
+/* Officer quick-pick chips (Given By) */
+.rm-officer-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.rm-officer-chip { font-size: 12px; padding: 4px 9px; border: 1px solid var(--rm-line); border-radius: 14px; background: var(--rm-bg2); color: var(--rm-fg); cursor: pointer; }
+.rm-officer-chip span { color: var(--rm-muted); }
+.rm-officer-chip:hover { border-color: var(--rm-accent); }
+.rm-officer-chip.rm-selected { background: var(--rm-accent); border-color: var(--rm-accent); color: #fff; }
+.rm-officer-chip.rm-selected span { color: rgba(255, 255, 255, 0.85); }
+/* Inline field hints */
+.rm-field-hint-inline { color: var(--rm-muted); font-weight: 400; font-size: 11px; }
+/* Rank pills (select the rank being granted; green = already held) */
+.rm-rank-pills { display: flex; flex-wrap: wrap; gap: 5px; }
+.rm-rank-pill { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; border: 1px solid var(--rm-line); border-radius: 6px; background: var(--rm-bg); color: var(--rm-fg); cursor: pointer; user-select: none; }
+.rm-rank-pill:hover { border-color: var(--rm-accent); }
+.rm-rank-pill.rm-rank-held { background: #2f855a; border-color: #2f855a; color: #fff; }
+.rm-rank-pill.rm-rank-forward { background: rgba(44, 95, 139, 0.14); border-color: var(--rm-accent); }
+.rm-rank-pill.rm-rank-selected { outline: 2px solid var(--rm-accent); outline-offset: 1px; }
+html[data-theme="dark"] .rm-rank-pill.rm-rank-held { background: #38a169; border-color: #38a169; }
 </style>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/reports.css?v=<?= filemtime(DIR_TEMPLATE . 'default/style/reports.css') ?>">
@@ -567,6 +611,7 @@ html[data-theme="dark"] .rm-modal {
     <?php } ?>
     <label class="rm-fcheck"><input type="checkbox" id="rm-filter-passlocal"> Passed to local</label>
     <div id="rm-chips" class="rm-chips"></div>
+    <button type="button" id="rm-export" class="rm-fbtn" data-tip="Download the full current filtered list as a CSV file"><i class="fas fa-download"></i> Export CSV</button>
   </div>
 
   <div class="rm-gridwrap">
@@ -575,7 +620,9 @@ html[data-theme="dark"] .rm-modal {
       <tr>
         <th class="rm-col-sel"><input type="checkbox" id="rm-selall"></th>
         <th class="rm-col-recip rm-sortable" data-sort="recip">Recipient</th>
+        <th class="rm-col-park">Park</th>
         <th class="rm-col-award rm-sortable" data-sort="award">Award</th>
+        <th class="rm-col-rank rm-sortable" data-sort="rank">Rank</th>
         <th class="rm-col-rec rm-sortable" data-sort="date">Recommended</th>
         <th class="rm-col-reason">Reason</th>
         <th class="rm-col-supp rm-sortable" data-sort="supp">Support</th>
@@ -629,16 +676,61 @@ html[data-theme="dark"] .rm-modal {
     </div>
   </div>
 
-  <!-- Grant Now when the rec is already on a court: let the officer decide what
-       happens to the planned court award (avoids a silent double-grant). -->
-  <div class="rm-modal-overlay" id="rm-grantcourt-overlay" hidden>
+  <!-- Grant Award modal: pre-filled from the rec. The ⚡ button always opens this —
+       we never insta-grant. When the rec is on a court plan, the officer also picks
+       what happens to the planned court award. -->
+  <div class="rm-modal-overlay" id="rm-grant-overlay" hidden>
     <div class="rm-modal">
-      <h2 class="rm-modal-title">Already on a court</h2>
-      <div class="rm-modal-sub" id="rm-grantcourt-sub"></div>
-      <div class="rm-modal-actions rm-modal-actions-stack">
-        <button type="button" class="rm-btn rm-btn-primary" id="rm-gc-remove">Grant &amp; Remove from Court</button>
-        <button type="button" class="rm-btn rm-btn-primary" id="rm-gc-leave">Grant &amp; Leave on Court</button>
-        <button type="button" class="rm-btn rm-btn-ghost" id="rm-gc-back">Go Back</button>
+      <h2 class="rm-modal-title">Grant Award</h2>
+      <div class="rm-modal-sub" id="rm-grant-sub"></div>
+      <div class="rm-form-error" id="rm-grant-error" hidden></div>
+      <div class="rm-field" id="rm-grant-rank-wrap" hidden>
+        <label>Rank <span class="rm-field-hint-inline">&mdash; green ranks are already held; grant a higher rank if earned</span></label>
+        <div class="rm-rank-pills" id="rm-grant-rank-pills"></div>
+        <input type="hidden" id="rm-grant-rank-val">
+      </div>
+      <div class="rm-field">
+        <label for="rm-grant-date">Date</label>
+        <input type="date" id="rm-grant-date" class="rm-input">
+      </div>
+      <div class="rm-field">
+        <label for="rm-grant-givenby">Given by</label>
+<?php if (!empty($PreloadOfficers)): ?>
+        <div class="rm-officer-chips" id="rm-grant-officer-chips">
+<?php foreach ($PreloadOfficers as $officer): ?>
+          <button type="button" class="rm-officer-chip" data-id="<?= (int)$officer['MundaneId'] ?>" data-name="<?= htmlspecialchars($officer['Persona'], ENT_QUOTES) ?>"><?= htmlspecialchars($officer['Persona']) ?> <span>(<?= htmlspecialchars($officer['Role']) ?>)</span></button>
+<?php endforeach; ?>
+        </div>
+<?php endif; ?>
+        <div class="rm-ac-wrap">
+          <input type="text" id="rm-grant-givenby" class="rm-input" autocomplete="off" placeholder="Search a player&hellip;">
+          <input type="hidden" id="rm-grant-givenby-id">
+          <div class="rm-ac-results" id="rm-grant-givenby-results"></div>
+        </div>
+        <div class="rm-field-hint">Defaults to you. For an association (e.g. a Knight taking a Squire), set the granter here.</div>
+      </div>
+      <div class="rm-field">
+        <label for="rm-grant-givenat">Given at <span class="rm-field-hint-inline">(optional)</span></label>
+        <div class="rm-ac-wrap">
+          <input type="text" id="rm-grant-givenat" class="rm-input" autocomplete="off" placeholder="Search park, kingdom, or event&hellip;">
+          <div class="rm-ac-results" id="rm-grant-givenat-results"></div>
+        </div>
+        <input type="hidden" id="rm-grant-park-id">
+        <input type="hidden" id="rm-grant-kingdom-id">
+        <input type="hidden" id="rm-grant-event-id" value="0">
+      </div>
+      <div class="rm-field">
+        <label for="rm-grant-note">Note</label>
+        <textarea id="rm-grant-note" class="rm-input" rows="3"></textarea>
+      </div>
+      <div class="rm-field" id="rm-grant-court-wrap" hidden>
+        <label id="rm-grant-court-label">This recommendation is on a court plan</label>
+        <label class="rm-radio-row"><input type="radio" name="rm-grant-court" value="remove" checked> Grant &amp; remove from court</label>
+        <label class="rm-radio-row"><input type="radio" name="rm-grant-court" value="leave"> Grant &amp; leave on court</label>
+      </div>
+      <div class="rm-modal-actions">
+        <button type="button" class="rm-btn rm-btn-ghost" id="rm-grant-cancel">Cancel</button>
+        <button type="button" class="rm-btn rm-btn-primary" id="rm-grant-submit">Grant Award</button>
       </div>
     </div>
   </div>
@@ -652,7 +744,11 @@ window.RmConfig = {
   parkId: <?= (int)$ParkId ?>,
   context: '<?= $Context === 'park' ? 'park' : 'kingdom' ?>',
   userId: <?= (int)$Uid ?>,
+  userName: <?= json_encode((string)($UserName ?? '')) ?>,
+  httpService: <?= json_encode((string)(defined('HTTP_SERVICE') ? HTTP_SERVICE : '')) ?>,
+  locationName: <?= json_encode((string)($LocationName ?? '')) ?>,
   rowsUrl:    '<?= UIR ?>Recommendations/rows/<?= $Context ?>/<?= $Context === 'park' ? (int)$ParkId : (int)$KingdomId ?>',
+  exportUrl:  '<?= UIR ?>Recommendations/export/<?= $Context ?>/<?= $Context === 'park' ? (int)$ParkId : (int)$KingdomId ?>',
   total:      <?= (int)($Total ?? 0) ?>,
   hasMore:    <?= !empty($HasMore) ? 'true' : 'false' ?>,
   nextOffset: <?= (int)($NextOffset ?? 0) ?>
@@ -675,7 +771,7 @@ function rmInsertDetail(tr, html, cls) {
     if (next && next.classList.contains('rm-detailrow')) { next.remove(); }
     var dr = document.createElement('tr');
     dr.className = 'rm-detailrow ' + cls;
-    dr.innerHTML = '<td></td><td colspan="7">' + html + '</td>';
+    dr.innerHTML = '<td></td><td colspan="9">' + html + '</td>';
     tr.parentNode.insertBefore(dr, tr.nextSibling);
 }
 
@@ -735,8 +831,10 @@ function rmFetch(reset) {
 	var tbody = document.getElementById('rm-tbody');
 	document.getElementById('rm-loading').style.display = '';
 	fetch(RmConfig.rowsUrl + (RmConfig.rowsUrl.indexOf('?') >= 0 ? '&' : '?') + q.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-		.then(function (r) { return r.json(); })
+		.then(function (r) { if (!r.ok) throw new Error('rows http ' + r.status); return r.json(); })
 		.then(function (d) {
+			// A 200 with an error field (or missing paging data) is not a valid page — surface it.
+			if (!d || d.error || typeof d.total === 'undefined') { throw new Error(d && d.error ? d.error : 'bad page'); }
 			if (reset) { tbody.innerHTML = ''; rmState.seen = {}; }
 			var tmp = document.createElement('tbody'); tmp.innerHTML = d.html;
 			Array.prototype.slice.call(tmp.children).forEach(function (tr) {
@@ -785,6 +883,22 @@ document.querySelectorAll('.rm-sortable').forEach(function (th) {
 		rmFetch(true);
 	});
 });
+// export current filtered set as CSV (server streams the FULL set, not just loaded batches)
+var rmExportBtn = document.getElementById('rm-export');
+if (rmExportBtn) rmExportBtn.addEventListener('click', function () {
+	rmReadFilters();
+	var q = new URLSearchParams({
+		search: rmState.search, elig: rmState.elig, court: rmState.court,
+		park: rmState.park, passlocal: rmState.passlocal ? '1' : '',
+		sort: rmState.sort, dir: rmState.dir
+	});
+	// brief disabled state — a large scope can take a moment to assemble server-side
+	var label = rmExportBtn.innerHTML;
+	rmExportBtn.disabled = true;
+	rmExportBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting…';
+	setTimeout(function () { rmExportBtn.disabled = false; rmExportBtn.innerHTML = label; }, 4000);
+	window.location = RmConfig.exportUrl + (RmConfig.exportUrl.indexOf('?') >= 0 ? '&' : '?') + q.toString();
+});
 // infinite scroll
 if ('IntersectionObserver' in window) {
 	var rmObs = new IntersectionObserver(function (entries) {
@@ -795,7 +909,9 @@ if ('IntersectionObserver' in window) {
 
 /* ---------- Task 7: selection + bulk bar ---------- */
 var rmLastIdx = null;
-function rmVisibleRows() { return RM.rows().filter(function (tr) { return tr.style.display !== 'none'; }); }
+// All rows currently loaded in the DOM. (Filtering is server-side now, so there is
+// no client-side hidden state to skip — every loaded row is a visible row.)
+function rmLoadedRows() { return RM.rows(); }
 function rmSelected() { return RM.rows().filter(function (tr) { return tr.querySelector('.rm-rowsel').checked; }); }
 function rmUpdateSelCount() {
     var n = rmSelected().length;
@@ -806,7 +922,7 @@ function rmUpdateSelCount() {
 }
 document.getElementById('rm-tbody').addEventListener('click', function (e) {
     var cb = e.target.closest('.rm-rowsel'); if (!cb) return;
-    var vis = rmVisibleRows();
+    var vis = rmLoadedRows();
     var idx = vis.indexOf(cb.closest('tr'));
     if (e.shiftKey && rmLastIdx !== null) {
         var lo = Math.min(idx, rmLastIdx), hi = Math.max(idx, rmLastIdx);
@@ -816,7 +932,7 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
     rmUpdateSelCount();
 });
 document.getElementById('rm-selall').addEventListener('change', function () {
-    rmVisibleRows().forEach(function (tr) { tr.querySelector('.rm-rowsel').checked = this.checked; }, this);
+    rmLoadedRows().forEach(function (tr) { tr.querySelector('.rm-rowsel').checked = this.checked; }, this);
     rmUpdateSelCount();
 });
 document.querySelector('.rm-bulk-clear').addEventListener('click', function () {
@@ -841,6 +957,31 @@ function rmRecAjaxBase(action) {
 }
 function rmPost(url, fd) {
     return fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); });
+}
+// These rec AJAX endpoints all echo {status:0} on success, {status:N,error} on failure.
+function rmJsonOk(j) { return !!j && j.status === 0; }
+function rmAllOk(results) { return Array.isArray(results) && results.every(rmJsonOk); }
+// Does the active eligibility filter hide a row given its snoozed state?
+// ('snoozed' shows only snoozed; 'all' shows both; every other bucket excludes snoozed.)
+function rmEligHides(elig, isSnoozed) {
+    if (elig === 'all') return false;
+    if (elig === 'snoozed') return !isSnoozed;
+    return !!isSnoozed;
+}
+// Add or remove the Award-cell "passed to local" badge (idempotent).
+function rmSetPasslocalBadge(tr, passed) {
+    var awardCell = tr.querySelector('.rm-col-award');
+    if (!awardCell) return;
+    var existing = awardCell.querySelector('.rm-badge-passlocal');
+    if (passed && !existing) {
+        var b = document.createElement('span');
+        b.className = 'rm-badge rm-badge-passlocal';
+        b.setAttribute('data-tip', 'Passed to the local park to award.');
+        b.innerHTML = '<i class="fas fa-arrow-down"></i> passed to local';
+        awardCell.appendChild(b);
+    } else if (!passed && existing) {
+        existing.remove();
+    }
 }
 
 // Remove a row (and any open detail row) then re-sync filters/counts.
@@ -870,12 +1011,16 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
         Promise.all(ids.map(function (id) {
             var fd = new FormData(); fd.append('RecommendationsId', id);
             return rmPost(rmRecAjaxBase(action), fd);
-        })).then(function () {
-            tr.setAttribute('data-snoozed', snoozed ? '0' : '1');
+        })).then(function (results) {
+            if (!rmAllOk(results)) { rmToast('Failed.', true); return; }
+            var nowSnoozed = !snoozed;
+            tr.setAttribute('data-snoozed', nowSnoozed ? '1' : '0');
             var sIco = sn.querySelector('.rm-snooze-ico') || sn;
-            sIco.textContent = snoozed ? '💤' : '🔔';
-            rmFetch(true);
-            rmToast(snoozed ? 'Unsnoozed.' : 'Snoozed.');
+            sIco.textContent = nowSnoozed ? '🔔' : '💤';
+            // Refetch only if the toggle moves the row out of the current bucket;
+            // otherwise leave it in place (cheap — no 500-row re-render).
+            if (rmEligHides(rmState.elig, nowSnoozed)) rmFetch(true);
+            rmToast(nowSnoozed ? 'Snoozed.' : 'Unsnoozed.');
         }).catch(function () { rmToast('Failed.', true); });
         return;
     }
@@ -888,8 +1033,10 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
             Promise.all(ids.map(function (id) {
                 var fd = new FormData(); fd.append('RecommendationsId', id);
                 return rmPost(rmRecAjaxBase('dismissrecommendation'), fd);
-            })).then(function () { rmRemoveRow(tr2); rmToast('Dismissed.'); })
-              .catch(function () { rmToast('Failed.', true); });
+            })).then(function (results) {
+                if (!rmAllOk(results)) { rmToast('Failed.', true); return; }
+                rmRemoveRow(tr2); rmToast('Dismissed.');
+            }).catch(function () { rmToast('Failed.', true); });
         } });
     }
 });
@@ -905,32 +1052,36 @@ document.getElementById('rm-tbody').addEventListener('click', function (e) {
     Promise.all(ids.map(function (id) {
         var fd = new FormData(); fd.append('RecommendationsId', id); fd.append('Passed', passed ? '0' : '1');
         return rmPost(rmRecAjaxBase('passtolocalrecommendation'), fd);
-    })).then(function () {
-        tr.setAttribute('data-passlocal', passed ? '0' : '1');
-        pl.classList.toggle('rm-act-active', !passed);
-        // toggle the Award-cell badge
-        var awardCell = tr.querySelector('.rm-col-award');
-        var existing = awardCell ? awardCell.querySelector('.rm-badge-passlocal') : null;
-        if (!passed && awardCell && !existing) {
-            var b = document.createElement('span');
-            b.className = 'rm-badge rm-badge-passlocal';
-            b.setAttribute('data-tip', 'Passed to the local park to award.');
-            b.innerHTML = '<i class="fas fa-arrow-down"></i> passed to local';
-            awardCell.appendChild(b);
-        } else if (passed && existing) { existing.remove(); }
-        rmFetch(true);
-        rmToast(passed ? 'Pass-to-local removed.' : 'Passed to local.');
+    })).then(function (results) {
+        if (!rmAllOk(results)) { rmToast('Update failed.', true); return; }
+        var nowPassed = !passed;
+        tr.setAttribute('data-passlocal', nowPassed ? '1' : '0');
+        pl.classList.toggle('rm-act-active', nowPassed);
+        rmSetPasslocalBadge(tr, nowPassed);
+        // Only refetch if the "Passed to local" filter is active and this row just
+        // dropped out of it; otherwise the in-place badge/state update is enough.
+        if (rmState.passlocal && !nowPassed) rmFetch(true);
+        rmToast(nowPassed ? 'Passed to local.' : 'Pass-to-local removed.');
     }).catch(function () { rmToast('Update failed.', true); });
 });
 
-// Bulk: run fn sequentially over rows, tally results, toast at end.
+// Bulk: run fn over rows with a bounded concurrency pool (up to 6 in flight),
+// tally results, toast + refetch once at the end. `fn(tr)` resolves true/false.
 function rmBulkSequential(rows, fn, doneMsg) {
-    var ok = 0, fail = 0, i = 0;
-    (function next() {
-        if (i >= rows.length) { rmToast(doneMsg(ok, fail), fail > 0); rmFetch(true); return; }
-        var tr = rows[i++];
-        fn(tr).then(function (good) { good ? ok++ : fail++; next(); });
-    })();
+    var ok = 0, fail = 0, i = 0, active = 0, POOL = 6;
+    function done() { rmToast(doneMsg(ok, fail), fail > 0); rmFetch(true); }
+    function pump() {
+        if (i >= rows.length && active === 0) { done(); return; }
+        while (active < POOL && i < rows.length) {
+            active++;
+            fn(rows[i++])
+                .then(function (good) { good ? ok++ : fail++; })
+                .catch(function () { fail++; })
+                .then(function () { active--; pump(); });
+        }
+    }
+    if (!rows.length) { done(); return; }
+    pump();
 }
 document.querySelector('.rm-bulk-snooze').addEventListener('click', function () {
     var rows = rmSelected().filter(function (tr) { return tr.getAttribute('data-snoozed') !== '1'; });
@@ -939,7 +1090,8 @@ document.querySelector('.rm-bulk-snooze').addEventListener('click', function () 
         return Promise.all(ids.map(function (id) {
             var fd = new FormData(); fd.append('RecommendationsId', id);
             return rmPost(rmRecAjaxBase('snoozerecommendation'), fd);
-        })).then(function () {
+        })).then(function (results) {
+            if (!rmAllOk(results)) return false;
             tr.setAttribute('data-snoozed', '1');
             var b = tr.querySelector('.rm-act-snooze');
             if (b) { b.textContent = '🔔'; b.setAttribute('data-tip', 'Unsnooze'); }
@@ -959,18 +1111,12 @@ document.querySelector('.rm-bulk-snooze').addEventListener('click', function () 
             return Promise.all(ids.map(function (id) {
                 var fd = new FormData(); fd.append('RecommendationsId', id); fd.append('Passed', '1');
                 return rmPost(rmRecAjaxBase('passtolocalrecommendation'), fd);
-            })).then(function () {
+            })).then(function (results) {
+                if (!rmAllOk(results)) return false;
                 tr.setAttribute('data-passlocal', '1');
                 var pl = tr.querySelector('.rm-act-passlocal');
                 if (pl) pl.classList.add('rm-act-active');
-                var awardCell = tr.querySelector('.rm-col-award');
-                if (awardCell && !awardCell.querySelector('.rm-badge-passlocal')) {
-                    var b = document.createElement('span');
-                    b.className = 'rm-badge rm-badge-passlocal';
-                    b.setAttribute('data-tip', 'Passed to the local park to award.');
-                    b.innerHTML = '<i class="fas fa-arrow-down"></i> passed to local';
-                    awardCell.appendChild(b);
-                }
+                rmSetPasslocalBadge(tr, true);
                 tr.querySelector('.rm-rowsel').checked = false;
                 return true;
             }).catch(function () { return false; });
@@ -986,116 +1132,280 @@ document.querySelector('.rm-bulk-dismiss').addEventListener('click', function ()
             return Promise.all(ids.map(function (id) {
                 var fd = new FormData(); fd.append('RecommendationsId', id);
                 return rmPost(rmRecAjaxBase('dismissrecommendation'), fd);
-            })).then(function () { rmRemoveRow(tr); return true; })
-              .catch(function () { return false; });
+            })).then(function (results) {
+                if (!rmAllOk(results)) return false;
+                rmRemoveRow(tr); return true;
+            }).catch(function () { return false; });
         }, function (ok, fail) { return 'Dismissed ' + ok + (fail ? ', ' + fail + ' failed' : '') + '.'; });
     } });
 });
 
-/* ---------- Task 9: Grant Now (instant) ---------- */
-// Today's date as YYYY-MM-DD (the format add_player_award expects for Date).
+/* ---------- Task 9: Grant Award (modal — never insta-grants) ---------- */
+// Today's date as YYYY-MM-DD (the format add_player_award expects).
 function rmTodayYMD() {
     var d = new Date();
     function p(n) { return (n < 10 ? '0' : '') + n; }
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
-// Core grant: write the award, optionally run a court-reconciliation step, then
-// soft-delete the rec and drop the row. `courtStep` (optional) returns a Promise
-// that settles the linked court award(s) before we dismiss the rec.
-function rmDoGrant(rec, tr, courtStep) {
+
+// Core grant: write the award via the JSON grantaward endpoint, optionally reconcile
+// the linked court award(s), then resolve the whole cluster + drop the row.
+// opts = { date, givenById, note, courtStep }. Resolves on full success; rejects with
+// an Error carrying `.granted` (did the award itself land?) so the caller can tell a
+// real grant failure from a post-grant cleanup failure.
+function rmDoGrant(rec, tr, opts) {
+    opts = opts || {};
+    var granted = false;
     var fd = new FormData();
     fd.append('KingdomAwardId', rec.KingdomAwardId);
-    fd.append('GivenById', RmConfig.userId);
-    fd.append('Date', rmTodayYMD());
-    fd.append('ParkId', RmConfig.parkId || '0');
-    fd.append('KingdomId', RmConfig.kingdomId || '0');
-    fd.append('EventId', '0');
-    fd.append('Note', rec.Reason || '');
-    if (rec.Rank) fd.append('Rank', rec.Rank);
-    // Admin/player/{id}/addaward renders the full Admin page (HTML, not JSON),
-    // so success is "the request reached the server with HTTP 200" (response.ok).
-    // Only on a confirmed-OK grant do we touch the court awards + dismiss the rec.
-    return fetch(RmConfig.uir + 'Admin/player/' + rec.MundaneId + '/addaward', {
-        method: 'POST', body: fd, credentials: 'same-origin'
-    }).then(function (r) {
-        if (!r.ok) throw new Error('grant http ' + r.status);
-        return courtStep ? courtStep() : null;
-    }).then(function () {
-        // Resolve the whole cluster (recipient/award/rank): soft-deletes every
-        // parallel rec + notifies each advocate, server-side.
-        var fd2 = new FormData();
-        fd2.append('MundaneId', rec.MundaneId);
-        fd2.append('KingdomAwardId', rec.KingdomAwardId);
-        fd2.append('Rank', rec.Rank || 0);
-        return rmPost(rmRecAjaxBase('resolverecommendationcluster'), fd2);
-    }).then(function () {
-        rmRemoveRow(tr);
-        rmToast('Granted.');
-    }).catch(function () {
-        rmToast('Grant failed.', true);
-    });
+    fd.append('GivenById', opts.givenById || RmConfig.userId);
+    fd.append('Date', opts.date || rmTodayYMD());
+    fd.append('ParkId', opts.parkId != null ? opts.parkId : (RmConfig.parkId || '0'));
+    fd.append('KingdomId', opts.kingdomId != null ? opts.kingdomId : (RmConfig.kingdomId || '0'));
+    fd.append('EventId', opts.eventId != null ? opts.eventId : '0');
+    fd.append('Note', opts.note != null ? opts.note : (rec.Reason || ''));
+    fd.append('Rank', opts.rank != null ? opts.rank : (rec.Rank || 0));
+    return rmPost(RmConfig.uir + 'PlayerAjax/player/' + rec.MundaneId + '/grantaward', fd)
+        .then(function (j) {
+            if (!rmJsonOk(j)) { var e = new Error(j && j.error ? j.error : 'Could not grant the award.'); e.granted = false; throw e; }
+            granted = true;
+            return opts.courtStep ? opts.courtStep() : null;
+        }).then(function (courtRes) {
+            if (courtRes && Array.isArray(courtRes) && !rmAllOk(courtRes)) { var e = new Error('court cleanup failed'); e.granted = true; throw e; }
+            var fd2 = new FormData();
+            fd2.append('MundaneId', rec.MundaneId);
+            fd2.append('KingdomAwardId', rec.KingdomAwardId);
+            fd2.append('Rank', rec.Rank || 0);
+            return rmPost(rmRecAjaxBase('resolverecommendationcluster'), fd2);
+        }).then(function (j) {
+            if (!rmJsonOk(j)) { var e = new Error('resolve cluster failed'); e.granted = true; throw e; }
+            rmRemoveRow(tr);
+            rmToast('Granted.');
+        }).catch(function (err) {
+            err.granted = (typeof err.granted === 'boolean') ? err.granted : granted;
+            throw err;
+        });
 }
+
+/* ----- Grant Award modal ----- */
+var rmGrantCtx = null; // { rec, tr, courts }
+function rmGid(id) { return document.getElementById(id); }
+function rmGrantErr(msg) {
+    var box = rmGid('rm-grant-error');
+    if (!msg) { box.hidden = true; box.textContent = ''; return; }
+    box.textContent = msg; box.hidden = false;
+}
+function rmOpenGrantModal(rec, tr, courts) {
+    rmGrantCtx = { rec: rec, tr: tr, courts: (courts && courts.length) ? courts : [] };
+    var rankTxt = rec.Rank ? (' — Rank ' + rec.Rank) : '';
+    rmGid('rm-grant-sub').textContent = 'Grant ' + (rec.AwardName || 'this award') + rankTxt + ' to “' + (rec.Persona || '') + '”.';
+    rmGrantErr('');
+    rmGid('rm-grant-date').value = rmTodayYMD();
+    rmGid('rm-grant-givenby').value = RmConfig.userName || '';
+    rmGid('rm-grant-givenby-id').value = RmConfig.userId || '';
+    rmGid('rm-grant-note').value = rec.Reason || '';
+    rmBuildRankPills(rec);
+    var chipsEl = rmGid('rm-grant-officer-chips');
+    if (chipsEl) chipsEl.querySelectorAll('.rm-officer-chip').forEach(function (c) { c.classList.remove('rm-selected'); });
+    rmGid('rm-grant-givenat').value = RmConfig.locationName || '';
+    rmGid('rm-grant-park-id').value = RmConfig.parkId || '0';
+    rmGid('rm-grant-kingdom-id').value = RmConfig.kingdomId || '0';
+    rmGid('rm-grant-event-id').value = '0';
+    var gaRes = rmGid('rm-grant-givenat-results'); if (gaRes) { gaRes.classList.remove('rm-ac-open'); gaRes.innerHTML = ''; }
+    var courtWrap = rmGid('rm-grant-court-wrap');
+    if (rmGrantCtx.courts.length) {
+        var names = rmGrantCtx.courts.map(function (c) { return c.Name + (c.CourtDate ? ' (' + c.CourtDate + ')' : ''); }).join(', ');
+        rmGid('rm-grant-court-label').textContent = 'Already on ' + (rmGrantCtx.courts.length === 1 ? 'court: ' : rmGrantCtx.courts.length + ' courts: ') + names;
+        var rm = document.querySelector('input[name="rm-grant-court"][value="remove"]'); if (rm) rm.checked = true;
+        courtWrap.hidden = false;
+    } else {
+        courtWrap.hidden = true;
+    }
+    var results = rmGid('rm-grant-givenby-results'); if (results) { results.classList.remove('rm-ac-open'); results.innerHTML = ''; }
+    rmGid('rm-grant-submit').disabled = false;
+    rmGid('rm-grant-overlay').hidden = false;
+    setTimeout(function () { rmGid('rm-grant-date').focus(); }, 30);
+}
+function rmCloseGrantModal() {
+    rmGid('rm-grant-overlay').hidden = true;
+    var results = rmGid('rm-grant-givenby-results'); if (results) results.classList.remove('rm-ac-open');
+    rmGrantCtx = null;
+}
+// The row's lightning-bolt always opens the modal (pre-filled). Never insta-grant.
 document.getElementById('rm-tbody').addEventListener('click', function (e) {
     var g = e.target.closest('.rm-act-grant'); if (!g) return;
     var tr = g.closest('tr');
     var rec = {}; try { rec = JSON.parse(tr.getAttribute('data-rec') || '{}'); } catch (x) {}
     var courts = []; try { courts = JSON.parse(tr.getAttribute('data-courts') || '[]'); } catch (x) {}
-    if (courts && courts.length) {
-        // Already on a court → let the officer decide what happens to that planned award.
-        rmOpenGrantCourtModal(rec, tr, courts);
-        return;
+    rmOpenGrantModal(rec, tr, courts);
+});
+rmGid('rm-grant-cancel').addEventListener('click', rmCloseGrantModal);
+rmGid('rm-grant-overlay').addEventListener('click', function (e) { if (e.target === this) rmCloseGrantModal(); });
+rmGid('rm-grant-submit').addEventListener('click', function () {
+    if (!rmGrantCtx) return;
+    var ctx = rmGrantCtx;
+    var date = rmGid('rm-grant-date').value;
+    var givenById = rmGid('rm-grant-givenby-id').value;
+    var note = rmGid('rm-grant-note').value;
+    if (!date) { rmGrantErr('Please choose a date.'); return; }
+    if (!givenById) { rmGrantErr('Please choose who granted this award (pick from the search).'); return; }
+    rmGrantErr('');
+    var submitBtn = rmGid('rm-grant-submit');
+    submitBtn.disabled = true;
+    var courtStep = null;
+    if (ctx.courts.length) {
+        var choice = (document.querySelector('input[name="rm-grant-court"]:checked') || {}).value;
+        courtStep = function () {
+            return Promise.all(ctx.courts.map(function (c) {
+                var fd = new FormData();
+                fd.append('CourtAwardId', c.CourtAwardId);
+                if (choice === 'leave') { fd.append('Status', 'given'); return rmPost(RmConfig.uir + 'CourtAjax/set_award_status', fd); }
+                return rmPost(RmConfig.uir + 'CourtAjax/remove_award', fd);
+            }));
+        };
     }
-    tnConfirm({ title: 'Grant now?', body: 'Grant “' + (rec.Persona || '') + '” the award immediately and remove it from pending.', confirmLabel: 'Grant Now', onConfirm: function () {
-        rmDoGrant(rec, tr, null);
-    } });
+    var rankVal = rmGid('rm-grant-rank-val').value;
+    rmDoGrant(ctx.rec, ctx.tr, {
+        date: date, givenById: givenById, note: note, courtStep: courtStep,
+        rank: (rankVal !== '' ? rankVal : (ctx.rec.Rank || 0)),
+        parkId: rmGid('rm-grant-park-id').value || '0',
+        kingdomId: rmGid('rm-grant-kingdom-id').value || '0',
+        eventId: rmGid('rm-grant-event-id').value || '0'
+    })
+        .then(function () { rmCloseGrantModal(); })
+        .catch(function (err) {
+            if (err && err.granted) {
+                // Award landed but cleanup failed — closing + refresh guidance avoids a retry double-grant.
+                rmCloseGrantModal();
+                rmToast('Granted, but the court/rec cleanup failed — refresh before retrying.', true);
+            } else {
+                submitBtn.disabled = false;
+                rmGrantErr((err && err.message) ? err.message : 'Grant failed.');
+            }
+        });
 });
-
-/* ---------- Task 9b: Grant Now when already on a court ---------- */
-var rmGrantCourtCtx = null;
-function rmOpenGrantCourtModal(rec, tr, courts) {
-    rmGrantCourtCtx = { rec: rec, tr: tr, courts: courts };
-    var names = courts.map(function (c) {
-        return c.Name + (c.CourtDate ? ' (' + c.CourtDate + ')' : '');
-    }).join(', ');
-    document.getElementById('rm-grantcourt-sub').textContent =
-        '“' + (rec.Persona || '') + '” is already on ' +
-        (courts.length === 1 ? 'court: ' : courts.length + ' courts: ') + names +
-        '. Grant the award now and…';
-    document.getElementById('rm-grantcourt-overlay').hidden = false;
-}
-function rmCloseGrantCourtModal() {
-    document.getElementById('rm-grantcourt-overlay').hidden = true;
-    rmGrantCourtCtx = null;
-}
-document.getElementById('rm-gc-back').addEventListener('click', rmCloseGrantCourtModal);
-document.getElementById('rm-grantcourt-overlay').addEventListener('click', function (e) {
-    if (e.target === this) rmCloseGrantCourtModal(); // click backdrop closes
-});
-// Grant & Remove from Court: delete the planned court award(s) entirely.
-document.getElementById('rm-gc-remove').addEventListener('click', function () {
-    if (!rmGrantCourtCtx) return;
-    var ctx = rmGrantCourtCtx; rmCloseGrantCourtModal();
-    rmDoGrant(ctx.rec, ctx.tr, function () {
-        return Promise.all(ctx.courts.map(function (c) {
-            var fd = new FormData(); fd.append('CourtAwardId', c.CourtAwardId);
-            return rmPost(RmConfig.uir + 'CourtAjax/remove_award', fd);
-        }));
+/* Rank pills — replicate the award modal's rank selector (green = already held). */
+function rmRankPaint(wrap, held, selected) {
+    held = parseInt(held, 10) || 0; selected = parseInt(selected, 10) || 0;
+    wrap.querySelectorAll('.rm-rank-pill').forEach(function (pill) {
+        var r = parseInt(pill.dataset.rank, 10);
+        pill.classList.remove('rm-rank-held', 'rm-rank-forward', 'rm-rank-selected');
+        if (r <= held) pill.classList.add('rm-rank-held');
+        else if (r <= selected) pill.classList.add('rm-rank-forward');
+        if (r === selected) pill.classList.add('rm-rank-selected');
     });
+}
+function rmBuildRankPills(rec) {
+    var wrap = rmGid('rm-grant-rank-pills'), row = rmGid('rm-grant-rank-wrap'), input = rmGid('rm-grant-rank-val');
+    wrap.innerHTML = ''; input.value = '';
+    var recRank = parseInt(rec.Rank, 10) || 0;
+    if (recRank <= 0) { row.hidden = true; return; } // non-ladder award → no rank selector
+    row.hidden = false;
+    var maxRank = /zodiac/i.test(rec.AwardName || '') ? 12 : 10;
+    var held = parseInt(rec.HeldRank, 10) || 0;
+    var selected = Math.min(Math.max(recRank, 1), maxRank);
+    wrap.dataset.held = held;
+    for (var r = 1; r <= maxRank; r++) {
+        var pill = document.createElement('div');
+        pill.className = 'rm-rank-pill'; pill.dataset.rank = r;
+        pill.innerHTML = '<span class="rm-rank-num">' + r + '</span>';
+        wrap.appendChild(pill);
+    }
+    rmRankPaint(wrap, held, selected);
+    input.value = selected;
+}
+rmGid('rm-grant-rank-pills').addEventListener('click', function (e) {
+    var pill = e.target.closest ? e.target.closest('.rm-rank-pill') : null;
+    if (!pill) return;
+    rmGid('rm-grant-rank-val').value = pill.dataset.rank;
+    rmRankPaint(this, this.dataset.held, pill.dataset.rank);
 });
-// Grant & Leave on Court: mark the court award(s) 'given' so the herald still sees
-// it on the court order but it can't be re-granted (grant_award guards 'given').
-document.getElementById('rm-gc-leave').addEventListener('click', function () {
-    if (!rmGrantCourtCtx) return;
-    var ctx = rmGrantCourtCtx; rmCloseGrantCourtModal();
-    rmDoGrant(ctx.rec, ctx.tr, function () {
-        return Promise.all(ctx.courts.map(function (c) {
-            var fd = new FormData();
-            fd.append('CourtAwardId', c.CourtAwardId);
-            fd.append('Status', 'given');
-            return rmPost(RmConfig.uir + 'CourtAjax/set_award_status', fd);
-        }));
+// Officer quick-pick chips → fill Given By.
+(function () {
+    var chipsEl = rmGid('rm-grant-officer-chips');
+    if (!chipsEl) return;
+    chipsEl.addEventListener('click', function (e) {
+        var chip = e.target.closest ? e.target.closest('.rm-officer-chip') : null;
+        if (!chip) return;
+        chipsEl.querySelectorAll('.rm-officer-chip').forEach(function (c) { c.classList.remove('rm-selected'); });
+        chip.classList.add('rm-selected');
+        rmGid('rm-grant-givenby').value = chip.getAttribute('data-name');
+        rmGid('rm-grant-givenby-id').value = chip.getAttribute('data-id');
+        var res = rmGid('rm-grant-givenby-results'); if (res) res.classList.remove('rm-ac-open');
     });
-});
+})();
+// Given At: location search (park / kingdom / event) → sets ParkId/KingdomId/EventId.
+(function () {
+    var input = rmGid('rm-grant-givenat'), results = rmGid('rm-grant-givenat-results');
+    if (!input || !results || !RmConfig.httpService) return;
+    var timer = null;
+    input.addEventListener('input', function () {
+        rmGid('rm-grant-park-id').value = '0'; rmGid('rm-grant-kingdom-id').value = '0'; rmGid('rm-grant-event-id').value = '0';
+        var term = input.value.trim(); clearTimeout(timer);
+        if (term.length < 2) { results.classList.remove('rm-ac-open'); results.innerHTML = ''; return; }
+        timer = setTimeout(function () {
+            var today = new Date().toISOString().slice(0, 10);
+            var url = RmConfig.httpService + 'Search/SearchService.php?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=8';
+            fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (data) {
+                if (!data || !data.length) { results.innerHTML = '<div class="rm-ac-none">No locations found</div>'; results.classList.add('rm-ac-open'); return; }
+                results.innerHTML = data.map(function (loc) {
+                    return '<div class="rm-ac-item" data-park="' + (parseInt(loc.ParkId) || 0) + '" data-kingdom="' + (parseInt(loc.KingdomId) || 0) + '" data-event="' + (parseInt(loc.EventId) || 0) + '" data-name="' + encodeURIComponent(loc.ShortName || loc.LocationName || '') + '">' + rmEsc(loc.LocationName || '') + '</div>';
+                }).join('');
+                results.classList.add('rm-ac-open');
+            }).catch(function () { results.classList.remove('rm-ac-open'); });
+        }, 220);
+    });
+    results.addEventListener('click', function (e) {
+        var item = e.target.closest ? e.target.closest('.rm-ac-item') : null;
+        if (!item) return;
+        input.value = decodeURIComponent(item.getAttribute('data-name'));
+        rmGid('rm-grant-park-id').value = item.getAttribute('data-park') || '0';
+        rmGid('rm-grant-kingdom-id').value = item.getAttribute('data-kingdom') || '0';
+        rmGid('rm-grant-event-id').value = item.getAttribute('data-event') || '0';
+        results.classList.remove('rm-ac-open');
+    });
+    document.addEventListener('click', function (e) { if (!input.contains(e.target) && !results.contains(e.target)) results.classList.remove('rm-ac-open'); });
+})();
+// Given-By player search: global giver scope (intentional), custom dropdown (not jQuery UI).
+(function () {
+    var input = rmGid('rm-grant-givenby');
+    var hidden = rmGid('rm-grant-givenby-id');
+    var results = rmGid('rm-grant-givenby-results');
+    if (!input || !results) return;
+    var timer = null;
+    input.addEventListener('input', function () {
+        hidden.value = ''; // typing invalidates the previous pick until one is reselected
+        var _chips = rmGid('rm-grant-officer-chips'); if (_chips) _chips.querySelectorAll('.rm-officer-chip').forEach(function (c) { c.classList.remove('rm-selected'); });
+        var term = input.value.trim();
+        clearTimeout(timer);
+        if (term.length < 2) { results.classList.remove('rm-ac-open'); results.innerHTML = ''; return; }
+        timer = setTimeout(function () {
+            var url = RmConfig.uir + 'KingdomAjax/playersearch/' + (RmConfig.kingdomId || 0) + '&scope=all&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
+            fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (data) {
+                if (!data || !data.length) { results.innerHTML = '<div class="rm-ac-none">No players found</div>'; results.classList.add('rm-ac-open'); return; }
+                results.innerHTML = data.map(function (pl) {
+                    return '<div class="rm-ac-item" tabindex="-1" data-id="' + pl.MundaneId + '" data-name="' + encodeURIComponent(pl.Persona || '') + '">' +
+                        rmEsc(pl.Persona || '') +
+                        ' <span style="color:var(--rm-muted);font-size:11px">(' + rmEsc(pl.KAbbr || '') + ':' + rmEsc(pl.PAbbr || '') + ')</span>' +
+                        (pl.Suspended ? ' <span style="color:var(--rm-danger);font-size:10px;font-weight:600">(Banned)</span>' : '') +
+                        '</div>';
+                }).join('');
+                results.classList.add('rm-ac-open');
+            }).catch(function () { results.classList.remove('rm-ac-open'); });
+        }, 220);
+    });
+    results.addEventListener('click', function (e) {
+        var item = e.target.closest ? e.target.closest('.rm-ac-item') : null;
+        if (!item) return;
+        input.value = decodeURIComponent(item.getAttribute('data-name'));
+        hidden.value = item.getAttribute('data-id');
+        results.classList.remove('rm-ac-open');
+    });
+    document.addEventListener('click', function (e) {
+        if (!input.contains(e.target) && !results.contains(e.target)) results.classList.remove('rm-ac-open');
+    });
+    if (typeof acKeyNav === 'function') acKeyNav(input, results, 'rm-ac-open', '.rm-ac-item');
+})();
 
 /* ---------- Task 10: Add to Court modal (single + bulk) ---------- */
 var rmCourtTargets = []; // array of rec payloads (each with ._tr) to add

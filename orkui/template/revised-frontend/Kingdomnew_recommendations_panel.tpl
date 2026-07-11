@@ -15,6 +15,9 @@
 				<button class="kn-btn kn-btn-secondary" onclick="knOpenRecModal()">
 					<i class="fas fa-star"></i> Recommend an Award
 				</button>
+				<?php if (($CanManageKingdom ?? false) || !empty($ViewerHasCircle)): ?>
+				<a class="kn-btn kn-btn-primary kn-manage-recs" href="<?= UIR ?>Recommendations/manage/kingdom/<?= (int)$kingdom_id ?>"><i class="fas fa-tasks"></i> Manage Recs</a>
+				<?php endif; ?>
 			</div>
 			<?php endif; ?>
 			<?php if (empty($AwardRecommendations)): ?>
@@ -22,7 +25,6 @@
 			<?php else: ?>
 			<?php if (($CanManageKingdom ?? false) || !empty($ViewerHasCircle)): ?>
 			<div class="kn-rec-filter-bar">
-				<a class="kn-btn kn-btn-primary kn-manage-recs" href="<?= UIR ?>Recommendations/manage/kingdom/<?= (int)$kingdom_id ?>"><i class="fas fa-tasks"></i> Manage Recommendations</a>
 				<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="open">Open Recs</button>
 				<button class="kn-rec-filter-btn" data-filter="below">Below Rec&rsquo;d</button>
 				<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
@@ -85,7 +87,7 @@
 							<?php if ((int)$rec['Rank'] > 0): ?><span class="ladder-rank" data-lvl="<?= min((int)$rec['Rank'], 10) ?>"><?= (int)$rec['Rank'] ?></span><?php else: ?>&mdash;<?php endif; ?>
 							<?php if (!empty($rec['AlreadyHas'])): ?>
 							<span class="pk-rec-has-tip"
-								title="<?= (int)$rec['Rank'] > 0 ? 'Player is currently at rank ' . (int)$rec['CurrentRank'] . ' as of ' . htmlspecialchars($rec['CurrentRankDate'] ?? '') : 'Player already has this award (granted ' . htmlspecialchars($rec['CurrentRankDate'] ?? 'unknown date') . ')' ?>">
+								data-tip="<?= (int)$rec['Rank'] > 0 ? 'Player is currently at rank ' . (int)$rec['CurrentRank'] . ' as of ' . htmlspecialchars($rec['CurrentRankDate'] ?? '') : 'Player already has this award (granted ' . htmlspecialchars($rec['CurrentRankDate'] ?? 'unknown date') . ')' ?>">
 								<i class="fas fa-info-circle"></i>
 							</span>
 							<?php endif; ?>

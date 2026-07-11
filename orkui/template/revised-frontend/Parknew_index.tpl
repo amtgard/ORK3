@@ -1599,6 +1599,9 @@
 					<button class="pk-btn pk-btn-secondary kn-rec-header-action" onclick="pkOpenRecModal()">
 						<i class="fas fa-star"></i> Recommend an Award
 					</button>
+					<?php if (!empty($CanAdminPark) || !empty($ViewerHasCircle)): ?>
+					<a class="pk-btn pk-btn-primary pk-manage-recs kn-rec-header-action" href="<?= UIR ?>Recommendations/manage/park/<?= (int)$park_id ?>"><i class="fas fa-tasks"></i> Manage Recs</a>
+					<?php endif; ?>
 				</div>
 				<?php endif; ?>
 				<?php if (empty($AwardRecommendations)): ?>
@@ -1606,7 +1609,6 @@
 				<?php else: ?>
 				<?php if (!empty($CanAdminPark) || !empty($ViewerHasCircle)): ?>
 				<div class="kn-rec-filter-bar">
-					<a class="pk-btn pk-btn-primary pk-manage-recs" href="<?= UIR ?>Recommendations/manage/park/<?= (int)$park_id ?>"><i class="fas fa-tasks"></i> Manage Recommendations</a>
 					<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="open">Open Recs</button>
 					<button class="kn-rec-filter-btn" data-filter="below">Below Rec&rsquo;d</button>
 					<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>

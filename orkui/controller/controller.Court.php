@@ -1,8 +1,9 @@
 <?php
 
-class Controller_Court extends Controller {
-
-    public function __construct($call = null, $id = null) {
+class Controller_Court extends Controller
+{
+    public function __construct($call = null, $id = null)
+    {
         parent::__construct($call, $id);
     }
 
@@ -11,7 +12,8 @@ class Controller_Court extends Controller {
     // Route: ?Route=Court/list/kingdom/{kingdom_id}
     //        ?Route=Court/list/park/{park_id}
     // -----------------------------------------------------------------------
-    public function list($context = null, $id = null) {
+    public function list($context = null, $id = null)
+    {
         $id = (int)preg_replace('/[^0-9]/', '', $id ?? '');
         $context = ($context === 'park') ? 'park' : 'kingdom';
 
@@ -23,10 +25,7 @@ class Controller_Court extends Controller {
 
         if ($context === 'park') {
             $park_id = $id;
-            global $DB;
-            $DB->Clear();
-            $pr = $DB->DataSet('SELECT kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id . ' LIMIT 1');
-            if ($pr && $pr->Next()) $kingdom_id = (int)$pr->kingdom_id;
+            $kingdom_id = (int)Ork3::$Lib->park->GetParkKingdomId($park_id);
         } else {
             $kingdom_id = $id;
         }
@@ -48,15 +47,16 @@ class Controller_Court extends Controller {
 
         // Location name
         $locationName = '';
-        global $DB;
         if ($park_id > 0) {
-            $DB->Clear();
-            $lr = $DB->DataSet('SELECT name FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id . ' LIMIT 1');
-            if ($lr && $lr->Next()) $locationName = $lr->name;
+            $pInfo = Ork3::$Lib->park->GetParkShortInfo(['ParkId' => $park_id]);
+            if (isset($pInfo['ParkInfo']['ParkName'])) {
+                $locationName = $pInfo['ParkInfo']['ParkName'];
+            }
         } else {
-            $DB->Clear();
-            $lr = $DB->DataSet('SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id . ' LIMIT 1');
-            if ($lr && $lr->Next()) $locationName = $lr->name;
+            $kInfo = Ork3::$Lib->kingdom->GetKingdomShortInfo(['KingdomId' => $kingdom_id]);
+            if (isset($kInfo['KingdomInfo']['KingdomName'])) {
+                $locationName = $kInfo['KingdomInfo']['KingdomName'];
+            }
         }
 
         $this->data['CourtList']      = $courtList;
@@ -73,7 +73,8 @@ class Controller_Court extends Controller {
     // Court detail — standalone planning page
     // Route: ?Route=Court/detail/{court_id}
     // -----------------------------------------------------------------------
-    public function detail($court_id = null) {
+    public function detail($court_id = null)
+    {
         $court_id = (int)preg_replace('/[^0-9]/', '', $court_id ?? '');
         $uid      = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
@@ -105,31 +106,24 @@ class Controller_Court extends Controller {
             'complete'  => null,
         ];
 
-        // Resolve heraldry: prefer park heraldry if park-scoped, else kingdom
+        // Resolve heraldry: prefer park heraldry if park-scoped, else kingdom.
+        // Use the Heraldry lib so the ?v=filemtime cache-buster is preserved.
         $heraldryUrl = '';
         $hasHeraldry = false;
         if ($court['ParkId'] > 0) {
-            global $DB;
-            $DB->Clear();
-            $hr = $DB->DataSet('SELECT has_heraldry FROM ' . DB_PREFIX . 'park WHERE park_id = ' . (int)$court['ParkId'] . ' LIMIT 1');
-            if ($hr && $hr->Next() && (int)$hr->has_heraldry) {
+            $pInfo = Ork3::$Lib->park->GetParkShortInfo(['ParkId' => (int)$court['ParkId']]);
+            if (!empty($pInfo['ParkInfo']['HasHeraldry'])) {
                 $hasHeraldry = true;
-                $name = sprintf('%05d', (int)$court['ParkId']);
-                $heraldryUrl = file_exists(DIR_PARK_HERALDRY . $name . '.png')
-                    ? HTTP_PARK_HERALDRY . $name . '.png'
-                    : HTTP_PARK_HERALDRY . $name . '.jpg';
+                $h = Ork3::$Lib->heraldry->GetHeraldryUrl(['Type' => 'Park', 'Id' => (int)$court['ParkId']]);
+                $heraldryUrl = $h['Url'] ?? '';
             }
         }
         if (!$hasHeraldry && $court['KingdomId'] > 0) {
-            global $DB;
-            $DB->Clear();
-            $hr = $DB->DataSet('SELECT has_heraldry FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . (int)$court['KingdomId'] . ' LIMIT 1');
-            if ($hr && $hr->Next() && (int)$hr->has_heraldry) {
+            $kInfo = Ork3::$Lib->kingdom->GetKingdomShortInfo(['KingdomId' => (int)$court['KingdomId']]);
+            if (!empty($kInfo['KingdomInfo']['HasHeraldry'])) {
                 $hasHeraldry = true;
-                $name = sprintf('%04d', (int)$court['KingdomId']);
-                $heraldryUrl = file_exists(DIR_KINGDOM_HERALDRY . $name . '.png')
-                    ? HTTP_KINGDOM_HERALDRY . $name . '.png'
-                    : HTTP_KINGDOM_HERALDRY . $name . '.jpg';
+                $h = Ork3::$Lib->heraldry->GetHeraldryUrl(['Type' => 'Kingdom', 'Id' => (int)$court['KingdomId']]);
+                $heraldryUrl = $h['Url'] ?? '';
             }
         }
 

@@ -1,8 +1,9 @@
 <?php
 
-class Controller_CourtAjax extends Controller {
-
-    public function __construct($call = null, $id = null) {
+class Controller_CourtAjax extends Controller
+{
+    public function __construct($call = null, $id = null)
+    {
         parent::__construct($call, $id);
     }
 
@@ -10,29 +11,36 @@ class Controller_CourtAjax extends Controller {
     // Helpers
     // -----------------------------------------------------------------------
 
-    private function jsonOut($data) {
+    private function jsonOut($data)
+    {
         header('Content-Type: application/json');
         echo json_encode($data);
         exit;
     }
 
-    private function requireLogin() {
+    private function requireLogin()
+    {
         if (!isset($this->session->user_id)) {
             $this->jsonOut(['status' => 5, 'error' => 'Not logged in']);
         }
         return (int)$this->session->user_id;
     }
 
-    private function requireCourtAuth($court_id) {
+    private function requireCourtAuth($court_id)
+    {
         $uid   = $this->requireLogin();
         $court = Ork3::$Lib->court->getCourtDetail($court_id);
-        if (!$court) $this->jsonOut(['status' => 1, 'error' => 'Court not found.']);
-        if (!Ork3::$Lib->court->canManage($uid, $court['KingdomId'], $court['ParkId']))
+        if (!$court) {
+            $this->jsonOut(['status' => 1, 'error' => 'Court not found.']);
+        }
+        if (!Ork3::$Lib->court->canManage($uid, $court['KingdomId'], $court['ParkId'])) {
             $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
+        }
         return [$uid, $court];
     }
 
-    private function esc($v) {
+    private function esc($v)
+    {
         return str_replace(["'", '\\'], ["''", '\\\\'], $v);
     }
 
@@ -40,38 +48,30 @@ class Controller_CourtAjax extends Controller {
     // create_court
     // POST: KingdomId, ParkId, Name, CourtDate, EventCalendarDetailId
     // -----------------------------------------------------------------------
-    public function create_court($p = null) {
+    public function create_court($p = null)
+    {
         $uid = $this->requireLogin();
 
         $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
         $park_id    = (int)($_POST['ParkId']    ?? 0);
 
-        if (!valid_id($kingdom_id))
+        if (!valid_id($kingdom_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid kingdom.']);
+        }
 
-        if (!Ork3::$Lib->court->canManage($uid, $kingdom_id, $park_id))
+        if (!Ork3::$Lib->court->canManage($uid, $kingdom_id, $park_id)) {
             $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
+        }
 
         $name       = trim($_POST['Name']       ?? '');
         $court_date = trim($_POST['CourtDate']  ?? '');
         $event_cd   = (int)($_POST['EventCalendarDetailId'] ?? 0);
 
-        if (!$name) $this->jsonOut(['status' => 1, 'error' => 'A name is required.']);
+        if (!$name) {
+            $this->jsonOut(['status' => 1, 'error' => 'A name is required.']);
+        }
 
-        $date_val   = $court_date ? "'" . $this->esc($court_date) . "'" : 'NULL';
-        $event_val  = $event_cd > 0 ? $event_cd : 'NULL';
-
-        global $DB;
-        $DB->Clear();
-        $DB->Execute(
-            'INSERT INTO ' . DB_PREFIX . 'court
-             (kingdom_id, park_id, name, court_date, event_calendardetail_id, created_by)
-             VALUES (' . $kingdom_id . ', ' . $park_id . ', \'' . $this->esc($name) . '\',
-                     ' . $date_val . ', ' . $event_val . ', ' . $uid . ')'
-        );
-        $DB->Clear();
-        $row = $DB->DataSet('SELECT LAST_INSERT_ID() AS court_id');
-        $court_id = ($row && $row->Next()) ? (int)$row->court_id : 0;
+        $court_id = Ork3::$Lib->court->createCourt($kingdom_id, $park_id, $name, $court_date, $event_cd, $uid);
 
         $this->jsonOut(['status' => 0, 'court_id' => $court_id, 'name' => $name]);
     }
@@ -80,21 +80,18 @@ class Controller_CourtAjax extends Controller {
     // update_court_status
     // POST: CourtId, Status
     // -----------------------------------------------------------------------
-    public function update_court_status($p = null) {
+    public function update_court_status($p = null)
+    {
         $court_id = (int)($_POST['CourtId'] ?? 0);
         [$uid, $court] = $this->requireCourtAuth($court_id);
 
         $status = trim($_POST['Status'] ?? '');
         $allowed = ['draft', 'published', 'complete'];
-        if (!in_array($status, $allowed))
+        if (!in_array($status, $allowed)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid status.']);
+        }
 
-        global $DB;
-        $DB->Clear();
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'court SET status = \'' . $status . '\'
-             WHERE court_id = ' . $court_id
-        );
+        Ork3::$Lib->court->updateCourtStatus($court_id, $status);
         $this->jsonOut(['status' => 0, 'new_status' => $status]);
     }
 
@@ -103,7 +100,8 @@ class Controller_CourtAjax extends Controller {
     // POST: CourtId, MundaneId, KingdomAwardId, Rank, RecommendationsId (opt),
     //       PassToLocal, Notes
     // -----------------------------------------------------------------------
-    public function add_award($p = null) {
+    public function add_award($p = null)
+    {
         $court_id = (int)($_POST['CourtId'] ?? 0);
         [$uid, $court] = $this->requireCourtAuth($court_id);
 
@@ -115,112 +113,53 @@ class Controller_CourtAjax extends Controller {
         $notes           = trim($_POST['Notes']               ?? '');
         $public_comment  = trim($_POST['PublicComment']       ?? '');
 
-        if (!valid_id($mundane_id))      $this->jsonOut(['status' => 1, 'error' => 'Recipient required.']);
-        if (!valid_id($kingdomaward_id)) $this->jsonOut(['status' => 1, 'error' => 'Award required.']);
-
-        // Next sort_order
-        global $DB;
-        $DB->Clear();
-        $sor = $DB->DataSet('SELECT MAX(sort_order) AS m FROM ' . DB_PREFIX . 'court_award
-                              WHERE court_id = ' . $court_id);
-        $sort = ($sor && $sor->Next()) ? (int)$sor->m + 10 : 10;
-
-        $rec_val   = $rec_id > 0 ? $rec_id : 'NULL';
-        $notes_val = "'" . $this->esc($notes) . "'";
-
-        $DB->Clear();
-        $DB->Execute(
-            'INSERT INTO ' . DB_PREFIX . 'court_award
-             (court_id, mundane_id, kingdomaward_id, rank, recommendations_id,
-              sort_order, pass_to_local, notes, public_comment)
-             VALUES (' . $court_id . ', ' . $mundane_id . ', ' . $kingdomaward_id . ', ' . $rank . ',
-                     ' . $rec_val . ', ' . $sort . ', ' . $pass_to_local . ', ' . $notes_val . ',
-                     \'' . $this->esc($public_comment) . '\')'
-        );
-        $DB->Clear();
-        $idr = $DB->DataSet('SELECT court_award_id FROM ' . DB_PREFIX . 'court_award
-                              WHERE court_id = ' . $court_id . '
-                              ORDER BY court_award_id DESC LIMIT 1');
-        $court_award_id = ($idr && $idr->Next()) ? (int)$idr->court_award_id : 0;
-
-        // Fetch persona + award_name for response
-        $DB->Clear();
-        $info = $DB->DataSet(
-            'SELECT m.persona, p.abbreviation AS park_abbrev, IFNULL(ka.name, a.name) AS award_name, a.is_ladder, IFNULL(a.is_title, 0) AS is_title
-             FROM ' . DB_PREFIX . 'mundane m
-             LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
-             JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ' . $kingdomaward_id . '
-             LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
-             WHERE m.mundane_id = ' . $mundane_id . '
-             LIMIT 1'
-        );
-        $persona     = '';
-        $park_abbrev = '';
-        $award_name  = '';
-        $is_ladder   = false;
-        $is_title    = false;
-        if ($info && $info->Next()) {
-            $persona     = $info->persona;
-            $park_abbrev = $info->park_abbrev ?? '';
-            $award_name  = $info->award_name;
-            $is_ladder   = (bool)(int)$info->is_ladder;
-            $is_title    = (bool)(int)$info->is_title;
+        if (!valid_id($mundane_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Recipient required.']);
+        }
+        if (!valid_id($kingdomaward_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Award required.']);
         }
 
-        $rec_reason = '';
-        if ($rec_id) {
-            $DB->Clear();
-            $rr = $DB->DataSet('SELECT reason FROM ' . DB_PREFIX . 'recommendations WHERE recommendations_id = ' . (int)$rec_id . ' LIMIT 1');
-            if ($rr && $rr->Next()) $rec_reason = $rr->reason ?? '';
+        // The lib enforces object-level auth: the kingdomaward must belong to this
+        // court's own kingdom (else an officer could attach another kingdom's id).
+        $award = Ork3::$Lib->court->addAward(
+            $court_id,
+            (int)$court['KingdomId'],
+            $mundane_id,
+            $kingdomaward_id,
+            $rank,
+            $rec_id,
+            $pass_to_local,
+            $notes,
+            $public_comment
+        );
+        if ($award === false) {
+            $this->jsonOut(['status' => 1, 'error' => 'That award does not belong to this kingdom.']);
         }
 
-        $this->jsonOut(['status' => 0, 'award' => [
-            'CourtAwardId'      => $court_award_id,
-            'MundaneId'         => $mundane_id,
-            'Persona'           => $persona,
-            'ParkAbbrev'        => $park_abbrev,
-            'KingdomAwardId'    => $kingdomaward_id,
-            'AwardName'         => $award_name,
-            'IsLadder'          => $is_ladder,
-            'IsTitle'           => $is_title,
-            'Rank'              => $rank,
-            'RecommendationsId' => $rec_id ?: null,
-            'SortOrder'         => $sort,
-            'PassToLocal'       => (bool)$pass_to_local,
-            'Notes'             => $notes,
-            'PublicComment'     => $public_comment,
-            'RecReason'         => $rec_reason,
-            'Status'            => 'planned',
-            'ScrollStatus'      => 0,
-            'RegaliaStatus'     => 0,
-            'Artisans'          => [],
-        ]]);
+        $this->jsonOut(['status' => 0, 'award' => $award]);
     }
 
     // -----------------------------------------------------------------------
     // remove_award
     // POST: CourtAwardId
     // -----------------------------------------------------------------------
-    public function remove_award($p = null) {
+    public function remove_award($p = null)
+    {
         $court_award_id = (int)($_POST['CourtAwardId'] ?? 0);
-        if (!valid_id($court_award_id)) $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
+        if (!valid_id($court_award_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
+        }
 
         // Look up court_id for auth
-        global $DB;
-        $DB->Clear();
-        $r = $DB->DataSet('SELECT court_id FROM ' . DB_PREFIX . 'court_award
-                            WHERE court_award_id = ' . $court_award_id . ' LIMIT 1');
-        if (!$r || !$r->Next()) $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
-        $court_id = (int)$r->court_id;
+        $court_id = Ork3::$Lib->court->getCourtAwardCourtId($court_award_id);
+        if (!$court_id) {
+            $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
+        }
 
         $this->requireCourtAuth($court_id);
 
-        $DB->Clear();
-        $DB->Execute('DELETE FROM ' . DB_PREFIX . 'court_award_artisan
-                       WHERE court_award_id = ' . $court_award_id);
-        $DB->Clear();
-        $DB->Execute('DELETE FROM ' . DB_PREFIX . 'court_award
-                       WHERE court_award_id = ' . $court_award_id);
+        Ork3::$Lib->court->removeAward($court_award_id);
 
         $this->jsonOut(['status' => 0]);
     }
@@ -239,16 +178,12 @@ class Controller_CourtAjax extends Controller {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
         }
 
-        global $DB;
-        $DB->Clear();
-        $r = $DB->DataSet('SELECT court_id, recommendations_id
-                            FROM ' . DB_PREFIX . 'court_award
-                            WHERE court_award_id = ' . $court_award_id . ' LIMIT 1');
-        if (!$r || !$r->Next()) {
+        $info = Ork3::$Lib->court->getCourtAwardForPass($court_award_id);
+        if (!$info) {
             $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
         }
-        $court_id = (int)$r->court_id;
-        $rec_id   = (int)$r->recommendations_id;
+        $court_id = $info['court_id'];
+        $rec_id   = $info['recommendations_id'];
 
         $this->requireCourtAuth($court_id);
 
@@ -266,10 +201,7 @@ class Controller_CourtAjax extends Controller {
             $this->jsonOut(['status' => 3, 'error' => 'Could not pass this award to local: ' . ($res['Error'] ?? 'Not authorized.')]);
         }
 
-        $DB->Clear();
-        $DB->Execute('DELETE FROM ' . DB_PREFIX . 'court_award_artisan WHERE court_award_id = ' . $court_award_id);
-        $DB->Clear();
-        $DB->Execute('DELETE FROM ' . DB_PREFIX . 'court_award WHERE court_award_id = ' . $court_award_id);
+        Ork3::$Lib->court->removeAward($court_award_id);
 
         $this->jsonOut(['status' => 0]);
     }
@@ -279,24 +211,26 @@ class Controller_CourtAjax extends Controller {
     // Recommendations Manager's Grant Now flow to mark an already-on-court award
     // 'given' when the officer chooses "Grant & Leave on Court", which prevents a
     // later double-grant at court (grant_award guards against re-granting 'given').
-    public function set_award_status($p = null) {
+    public function set_award_status($p = null)
+    {
         $court_award_id = (int)($_POST['CourtAwardId'] ?? 0);
         $status         = trim($_POST['Status'] ?? '');
         $allowed        = ['planned', 'announced', 'given', 'cancelled'];
-        if (!valid_id($court_award_id)) $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
-        if (!in_array($status, $allowed)) $this->jsonOut(['status' => 1, 'error' => 'Invalid status.']);
+        if (!valid_id($court_award_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
+        }
+        if (!in_array($status, $allowed)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid status.']);
+        }
 
-        global $DB;
-        $DB->Clear();
-        $r = $DB->DataSet('SELECT court_id FROM ' . DB_PREFIX . 'court_award
-                            WHERE court_award_id = ' . $court_award_id . ' LIMIT 1');
-        if (!$r || !$r->Next()) $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
+        $court_id = Ork3::$Lib->court->getCourtAwardCourtId($court_award_id);
+        if (!$court_id) {
+            $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
+        }
 
-        $this->requireCourtAuth((int)$r->court_id);
+        $this->requireCourtAuth($court_id);
 
-        $DB->Clear();
-        $DB->Execute('UPDATE ' . DB_PREFIX . 'court_award SET status = \'' . $status . '\'
-                       WHERE court_award_id = ' . $court_award_id);
+        Ork3::$Lib->court->setAwardStatus($court_award_id, $status);
 
         $this->jsonOut(['status' => 0, 'award_status' => $status]);
     }
@@ -305,17 +239,19 @@ class Controller_CourtAjax extends Controller {
     // update_award
     // POST: CourtAwardId, Notes, PassToLocal, Status
     // -----------------------------------------------------------------------
-    public function update_award($p = null) {
+    public function update_award($p = null)
+    {
         $court_award_id = (int)($_POST['CourtAwardId'] ?? 0);
-        if (!valid_id($court_award_id)) $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
+        if (!valid_id($court_award_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
+        }
 
-        global $DB;
-        $DB->Clear();
-        $r = $DB->DataSet('SELECT court_id FROM ' . DB_PREFIX . 'court_award
-                            WHERE court_award_id = ' . $court_award_id . ' LIMIT 1');
-        if (!$r || !$r->Next()) $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
+        $court_id = Ork3::$Lib->court->getCourtAwardCourtId($court_award_id);
+        if (!$court_id) {
+            $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
+        }
 
-        $this->requireCourtAuth((int)$r->court_id);
+        $this->requireCourtAuth($court_id);
 
         $notes            = trim($_POST['Notes']          ?? '');
         $public_comment   = trim($_POST['PublicComment']  ?? '');
@@ -324,19 +260,11 @@ class Controller_CourtAjax extends Controller {
         $scroll_maker_id  = (int)($_POST['ScrollMakerId']  ?? 0);
         $regalia_maker_id = (int)($_POST['RegaliaMakerId'] ?? 0);
         $allowed          = ['planned', 'announced', 'given', 'cancelled'];
-        if (!in_array($status, $allowed)) $status = 'planned';
+        if (!in_array($status, $allowed)) {
+            $status = 'planned';
+        }
 
-        $DB->Clear();
-        $DB->Execute(
-            'UPDATE ' . DB_PREFIX . 'court_award SET
-             notes = \'' . $this->esc($notes) . '\',
-             public_comment = \'' . $this->esc($public_comment) . '\',
-             pass_to_local = ' . $pass_to_local . ',
-             status = \'' . $status . '\',
-             scroll_maker_id  = ' . ($scroll_maker_id  > 0 ? $scroll_maker_id  : 'NULL') . ',
-             regalia_maker_id = ' . ($regalia_maker_id > 0 ? $regalia_maker_id : 'NULL') . '
-             WHERE court_award_id = ' . $court_award_id
-        );
+        Ork3::$Lib->court->updateAward($court_award_id, $notes, $public_comment, $pass_to_local, $status, $scroll_maker_id, $regalia_maker_id);
         $this->jsonOut(['status' => 0, 'notes' => $notes, 'public_comment' => $public_comment, 'pass_to_local' => $pass_to_local, 'award_status' => $status]);
     }
 
@@ -344,26 +272,17 @@ class Controller_CourtAjax extends Controller {
     // reorder_awards
     // POST: CourtId, Order (JSON array of court_award_ids in display order)
     // -----------------------------------------------------------------------
-    public function reorder_awards($p = null) {
+    public function reorder_awards($p = null)
+    {
         $court_id = (int)($_POST['CourtId'] ?? 0);
         $this->requireCourtAuth($court_id);
 
         $order = json_decode($_POST['Order'] ?? '[]', true);
-        if (!is_array($order)) $this->jsonOut(['status' => 1, 'error' => 'Invalid order.']);
-
-        global $DB;
-        $sort = 10;
-        foreach ($order as $caid) {
-            $caid = (int)$caid;
-            if ($caid <= 0) continue;
-            $DB->Clear();
-            $DB->Execute(
-                'UPDATE ' . DB_PREFIX . 'court_award
-                 SET sort_order = ' . $sort . '
-                 WHERE court_award_id = ' . $caid . ' AND court_id = ' . $court_id
-            );
-            $sort += 10;
+        if (!is_array($order)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid order.']);
         }
+
+        Ork3::$Lib->court->reorderAwards($court_id, $order);
         $this->jsonOut(['status' => 0]);
     }
 
@@ -371,71 +290,48 @@ class Controller_CourtAjax extends Controller {
     // add_artisan
     // POST: CourtAwardId, MundaneId, Contribution
     // -----------------------------------------------------------------------
-    public function add_artisan($p = null) {
+    public function add_artisan($p = null)
+    {
         $court_award_id = (int)($_POST['CourtAwardId'] ?? 0);
-        if (!valid_id($court_award_id)) $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
+        if (!valid_id($court_award_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
+        }
 
-        global $DB;
-        $DB->Clear();
-        $r = $DB->DataSet('SELECT court_id FROM ' . DB_PREFIX . 'court_award
-                            WHERE court_award_id = ' . $court_award_id . ' LIMIT 1');
-        if (!$r || !$r->Next()) $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
-        $this->requireCourtAuth((int)$r->court_id);
+        $court_id = Ork3::$Lib->court->getCourtAwardCourtId($court_award_id);
+        if (!$court_id) {
+            $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
+        }
+        $this->requireCourtAuth($court_id);
 
         $mundane_id   = (int)($_POST['MundaneId']    ?? 0);
         $contribution = trim($_POST['Contribution']  ?? '');
-        if (!valid_id($mundane_id)) $this->jsonOut(['status' => 1, 'error' => 'Artisan required.']);
-
-        $DB->Clear();
-        $DB->Execute(
-            'INSERT INTO ' . DB_PREFIX . 'court_award_artisan
-             (court_award_id, mundane_id, contribution)
-             VALUES (' . $court_award_id . ', ' . $mundane_id . ',
-                     \'' . $this->esc($contribution) . '\')'
-        );
-        $DB->Clear();
-        $idr = $DB->DataSet('SELECT caa.court_award_artisan_id, m.persona
-                              FROM ' . DB_PREFIX . 'court_award_artisan caa
-                              LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = caa.mundane_id
-                              WHERE caa.court_award_id = ' . $court_award_id . '
-                              ORDER BY caa.court_award_artisan_id DESC LIMIT 1');
-        $artisan_id = 0;
-        $persona    = '';
-        if ($idr && $idr->Next()) {
-            $artisan_id = (int)$idr->court_award_artisan_id;
-            $persona    = $idr->persona;
+        if (!valid_id($mundane_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Artisan required.']);
         }
 
-        $this->jsonOut(['status' => 0, 'artisan' => [
-            'CourtAwardArtisanId' => $artisan_id,
-            'MundaneId'           => $mundane_id,
-            'Persona'             => $persona,
-            'Contribution'        => $contribution,
-        ]]);
+        $artisan = Ork3::$Lib->court->addArtisan($court_award_id, $mundane_id, $contribution);
+
+        $this->jsonOut(['status' => 0, 'artisan' => $artisan]);
     }
 
     // -----------------------------------------------------------------------
     // remove_artisan
     // POST: CourtAwardArtisanId
     // -----------------------------------------------------------------------
-    public function remove_artisan($p = null) {
+    public function remove_artisan($p = null)
+    {
         $artisan_id = (int)($_POST['CourtAwardArtisanId'] ?? 0);
-        if (!valid_id($artisan_id)) $this->jsonOut(['status' => 1, 'error' => 'Invalid artisan.']);
+        if (!valid_id($artisan_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid artisan.']);
+        }
 
-        global $DB;
-        $DB->Clear();
-        $r = $DB->DataSet(
-            'SELECT caa.court_award_id, ca.court_id
-             FROM ' . DB_PREFIX . 'court_award_artisan caa
-             LEFT JOIN ' . DB_PREFIX . 'court_award ca ON ca.court_award_id = caa.court_award_id
-             WHERE caa.court_award_artisan_id = ' . $artisan_id . ' LIMIT 1'
-        );
-        if (!$r || !$r->Next()) $this->jsonOut(['status' => 1, 'error' => 'Artisan not found.']);
-        $this->requireCourtAuth((int)$r->court_id);
+        $court_id = Ork3::$Lib->court->getArtisanCourtId($artisan_id);
+        if ($court_id === null) {
+            $this->jsonOut(['status' => 1, 'error' => 'Artisan not found.']);
+        }
+        $this->requireCourtAuth((int)$court_id);
 
-        $DB->Clear();
-        $DB->Execute('DELETE FROM ' . DB_PREFIX . 'court_award_artisan
-                       WHERE court_award_artisan_id = ' . $artisan_id);
+        Ork3::$Lib->court->removeArtisan($artisan_id);
 
         $this->jsonOut(['status' => 0]);
     }
@@ -443,66 +339,60 @@ class Controller_CourtAjax extends Controller {
     // grant_award
     // POST: CourtAwardId
     // -----------------------------------------------------------------------
-    public function grant_award($p = null) {
+    public function grant_award($p = null)
+    {
         $court_award_id = (int)($_POST['CourtAwardId'] ?? 0);
-        if (!valid_id($court_award_id)) $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
-
-        global $DB;
-        $DB->Clear();
-        $ca = $DB->DataSet(
-            'SELECT ca.*, c.court_date, c.kingdom_id AS c_kingdom_id, c.park_id AS c_park_id,
-                    c.event_calendardetail_id, c.status AS court_status
-             FROM ' . DB_PREFIX . 'court_award ca
-             JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
-             WHERE ca.court_award_id = ' . $court_award_id . ' LIMIT 1'
-        );
-        if (!$ca || !$ca->Next()) $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
-
-        $uid = $this->requireLogin();
-        if (!Ork3::$Lib->court->canManage($uid, (int)$ca->c_kingdom_id, (int)$ca->c_park_id))
-            $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
-
-        if ($ca->court_status !== 'published')
-            $this->jsonOut(['status' => 1, 'error' => 'Court must be published to grant awards.']);
-        if (in_array($ca->status, ['given', 'cancelled']))
-            $this->jsonOut(['status' => 1, 'error' => 'Award already resolved.']);
-
-        // Resolve event_id from calendardetail
-        $event_id = 0;
-        if ((int)$ca->event_calendardetail_id > 0) {
-            $DB->Clear();
-            $ev = $DB->DataSet(
-                'SELECT event_id FROM ' . DB_PREFIX . 'event_calendardetail
-                 WHERE event_calendardetail_id = ' . (int)$ca->event_calendardetail_id . ' LIMIT 1'
-            );
-            if ($ev && $ev->Next()) $event_id = (int)$ev->event_id;
+        if (!valid_id($court_award_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
         }
 
-        $date = $ca->court_date ?: date('Y-m-d');
+        $ca = Ork3::$Lib->court->getCourtAwardForGrant($court_award_id);
+        if (!$ca) {
+            $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
+        }
+
+        $uid = $this->requireLogin();
+        if (!Ork3::$Lib->court->canManage($uid, $ca['KingdomId'], $ca['ParkId'])) {
+            $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
+        }
+
+        if ($ca['CourtStatus'] !== 'published') {
+            $this->jsonOut(['status' => 1, 'error' => 'Court must be published to grant awards.']);
+        }
+
+        // Atomic check-then-act: flip status to 'given' BEFORE granting so two
+        // rapid clicks can't double-grant. Only the caller that actually changed
+        // the row proceeds; anyone else gets "already resolved".
+        if (!Ork3::$Lib->court->claimAwardForGrant($court_award_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Award already resolved.']);
+        }
+
+        $event_id = Ork3::$Lib->court->getEventIdFromCalendarDetail($ca['EventCalendarDetailId']);
+        $date     = $ca['CourtDate'] ?: date('Y-m-d');
 
         $this->load_model('Player');
         $r = $this->Player->add_player_award([
             'Token'          => $this->session->token,
-            'RecipientId'    => (int)$ca->mundane_id,
-            'KingdomAwardId' => (int)$ca->kingdomaward_id,
+            'RecipientId'    => $ca['MundaneId'],
+            'KingdomAwardId' => $ca['KingdomAwardId'],
             'AwardId'        => 0,
-            'Rank'           => (int)$ca->rank,
+            'Rank'           => $ca['Rank'],
             'Date'           => $date,
             'GivenById'      => 0,
             'CustomName'     => '',
-            'Note'           => $ca->notes ?? '',
-            'ParkId'         => (int)$ca->c_park_id,
-            'KingdomId'      => (int)$ca->c_kingdom_id,
+            'Note'           => $ca['Notes'],
+            'ParkId'         => $ca['ParkId'],
+            'KingdomId'      => $ca['KingdomId'],
             'EventId'        => $event_id,
         ]);
 
-        if (($r['Status'] ?? 1) != 0)
+        if (($r['Status'] ?? 1) != 0) {
+            // Grant failed downstream — release the claim so it can be retried.
+            Ork3::$Lib->court->revertAwardStatus($court_award_id, $ca['Status']);
             $this->jsonOut(['status' => 1, 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+        }
 
-        $DB->Clear();
-        $DB->Execute(
-            "UPDATE " . DB_PREFIX . "court_award SET status = 'given' WHERE court_award_id = " . $court_award_id
-        );
+        // status is already 'given' from the atomic claim above.
 
         // Resolve the whole recommendation cluster for the granted award
         // (recipient + award + rank): soft-deletes every parallel rec and notifies
@@ -512,12 +402,13 @@ class Controller_CourtAjax extends Controller {
             $this->load_model('Player');
             $this->Player->resolve_player_recommendation_cluster([
                 'Token'          => $this->session->token,
-                'MundaneId'      => (int)$ca->mundane_id,
-                'KingdomAwardId' => (int)$ca->kingdomaward_id,
-                'Rank'           => (int)$ca->rank,
+                'MundaneId'      => $ca['MundaneId'],
+                'KingdomAwardId' => $ca['KingdomAwardId'],
+                'Rank'           => $ca['Rank'],
                 'RequestedBy'    => $uid,
             ]);
-        } catch (\Throwable $e) { /* recommendation cleanup is best-effort */ }
+        } catch (\Throwable $e) { /* recommendation cleanup is best-effort */
+        }
 
         $this->jsonOut(['status' => 0]);
     }
@@ -526,9 +417,12 @@ class Controller_CourtAjax extends Controller {
     // skip_award
     // POST: CourtAwardId
     // -----------------------------------------------------------------------
-    public function skip_award($p = null) {
+    public function skip_award($p = null)
+    {
         $court_award_id = (int)($_POST['CourtAwardId'] ?? 0);
-        if (!valid_id($court_award_id)) $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
+        if (!valid_id($court_award_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
+        }
 
         global $DB;
         $DB->Clear();
@@ -537,12 +431,15 @@ class Controller_CourtAjax extends Controller {
              JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
              WHERE ca.court_award_id = ' . $court_award_id . ' LIMIT 1'
         );
-        if (!$ca || !$ca->Next()) $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
+        if (!$ca || !$ca->Next()) {
+            $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
+        }
 
         [$uid, $court] = $this->requireCourtAuth((int)$ca->court_id);
 
-        if ($ca->court_status !== 'published')
+        if ($ca->court_status !== 'published') {
             $this->jsonOut(['status' => 1, 'error' => 'Court must be published to skip awards.']);
+        }
 
         $DB->Clear();
         $DB->Execute(
@@ -556,20 +453,25 @@ class Controller_CourtAjax extends Controller {
     // update_award_tracking_status
     // POST: CourtAwardId, Type
     // -----------------------------------------------------------------------
-    public function update_award_tracking_status($p = null) {
+    public function update_award_tracking_status($p = null)
+    {
         $court_award_id = (int)($_POST['CourtAwardId'] ?? 0);
-        if (!valid_id($court_award_id)) $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
+        if (!valid_id($court_award_id)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
+        }
 
         global $DB;
         $DB->Clear();
         $r = $DB->DataSet('SELECT court_id FROM ' . DB_PREFIX . 'court_award
                             WHERE court_award_id = ' . $court_award_id . ' LIMIT 1');
-        if (!$r || !$r->Next()) $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
+        if (!$r || !$r->Next()) {
+            $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
+        }
 
         $this->requireCourtAuth((int)$r->court_id);
 
         $type = $_POST['Type'] ?? '';
-        
+
         $result = Ork3::$Lib->court->updateAwardTrackingStatus($court_award_id, $type);
         $this->jsonOut($result);
     }

@@ -189,6 +189,16 @@ html[data-theme="dark"] .cp-flag-rec[data-tip]:hover::after { background: #000; 
 .cp-send-local-btn { position: relative; }
 .cp-send-local-btn[data-tip]:hover::after { content: attr(data-tip); position: absolute; top: 100%; left: 0; margin-top: 4px; width: max-content; max-width: 240px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 50; pointer-events: none; }
 html[data-theme="dark"] .cp-send-local-btn[data-tip]:hover::after { background: #000; }
+/* Generic data-tip tooltips (converted from native title=) — reuses the pattern above */
+.cp-page [data-tip], #cp-note-popup [data-tip], .cp-overlay [data-tip] { position: relative; }
+.cp-page [data-tip]:hover::after, #cp-note-popup [data-tip]:hover::after, .cp-overlay [data-tip]:hover::after { content: attr(data-tip); position: absolute; top: 100%; left: 0; margin-top: 4px; width: max-content; max-width: 240px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,0.25); z-index: 1001; pointer-events: none; }
+html[data-theme="dark"] .cp-page [data-tip]:hover::after, html[data-theme="dark"] #cp-note-popup [data-tip]:hover::after, html[data-theme="dark"] .cp-overlay [data-tip]:hover::after { background: #000; }
+/* Right-anchor tooltips in the tracking / flags columns so they don't overflow the row edge */
+.cp-tracking-icon[data-tip]:hover::after, .cp-hdr-scroll[data-tip]:hover::after, .cp-hdr-regalia[data-tip]:hover::after, .cp-flag-local[data-tip]:hover::after,
+.cp-rm-qualified[data-tip]:hover::after, .cp-rm-snooze-chip[data-tip]:hover::after, .cp-rm-onother[data-tip]:hover::after, .cp-rm-seconds[data-tip]:hover::after, .cp-rm-age-badge[data-tip]:hover::after { left: auto; right: 0; }
+/* Toast surface for network/AJAX failures */
+.cp-toast { position: fixed; top: 20px; right: 20px; z-index: 9999; background: #c53030; color: #fff; padding: 12px 16px; border-radius: 6px; font-size: 13px; line-height: 1.4; max-width: 320px; box-shadow: 0 4px 14px rgba(0,0,0,0.25); }
+html[data-theme="dark"] .cp-toast { background: #9b2c2c; }
 .cp-rm-row.dismissing { opacity: 0; transition: opacity .3s; }
 .cp-rm-add-count { font-size: 12px; color: #718096; align-self: center; margin-right: 4px; }
 .cp-rm-controls { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
@@ -900,7 +910,7 @@ $_total_awards = count($courtAwards ?? []);
             <span class="cp-sidebar-rail-label">Tools</span>
             <button class="cp-sidebar-collapse-btn" id="cp-sidebar-collapse-btn"
                     onclick="cpToggleSidebar()" type="button"
-                    title="Collapse sidebar" aria-label="Collapse sidebar">
+                    data-tip="Collapse sidebar" aria-label="Collapse sidebar">
                 <i class="fas fa-chevron-left cp-side-arrow-collapse"></i>
                 <i class="fas fa-chevron-right cp-side-arrow-expand"></i>
             </button>
@@ -994,11 +1004,11 @@ $_total_awards = count($courtAwards ?? []);
 
     <!-- Spreadsheet toolbar -->
     <div class="cp-list-toolbar">
-        <span class="cp-list-toolbar-label"><i class="fas fa-table-cells" style="margin-right:5px"></i>View</span>
+        <span class="cp-list-toolbar-label"><i class="fas fa-th-large" style="margin-right:5px"></i>View</span>
         <div class="cp-density-seg" id="cp-density-seg" role="group" aria-label="Row density">
-            <button type="button" data-density="cozy"        onclick="cpSetDensity('cozy')"        title="Cozy — extra spacing"><i class="fas fa-bars"></i> Cozy</button>
-            <button type="button" data-density="comfortable" onclick="cpSetDensity('comfortable')" title="Comfortable — balanced spacing"><i class="fas fa-grip-lines"></i> Comfortable</button>
-            <button type="button" data-density="compact"     onclick="cpSetDensity('compact')"     title="Compact — dense rows"><i class="fas fa-minus"></i> Compact</button>
+            <button type="button" data-density="cozy"        onclick="cpSetDensity('cozy')"        data-tip="Cozy — extra spacing"><i class="fas fa-bars"></i> Cozy</button>
+            <button type="button" data-density="comfortable" onclick="cpSetDensity('comfortable')" data-tip="Comfortable — balanced spacing"><i class="fas fa-grip-lines"></i> Comfortable</button>
+            <button type="button" data-density="compact"     onclick="cpSetDensity('compact')"     data-tip="Compact — dense rows"><i class="fas fa-minus"></i> Compact</button>
         </div>
         <span class="cp-list-toolbar-spacer"></span>
         <span class="cp-list-toolbar-label" id="cp-list-toolbar-count"><?= count($courtAwards) ?> award<?= count($courtAwards) !== 1 ? 's' : '' ?></span>
@@ -1013,8 +1023,8 @@ $_total_awards = count($courtAwards ?? []);
             <div class="cp-hdr-award">Award</div>
             <div class="cp-hdr-type">Type</div>
             <div class="cp-hdr-flags">Flags</div>
-            <div class="cp-hdr-scroll" title="Scroll"><i class="fas fa-print"></i></div>
-            <div class="cp-hdr-regalia" title="Regalia"><i class="fas fa-medal"></i></div>
+            <div class="cp-hdr-scroll" data-tip="Scroll"><i class="fas fa-print"></i></div>
+            <div class="cp-hdr-regalia" data-tip="Regalia"><i class="fas fa-medal"></i></div>
             <div class="cp-hdr-status">Status</div>
             <div class="cp-hdr-chev"></div>
         </div>
@@ -1047,15 +1057,15 @@ $_total_awards = count($courtAwards ?? []);
             <div class="cp-award-row-main cp-row-grid" onclick="cpToggleAward(<?= (int)$aw['CourtAwardId'] ?>)">
                 <div class="cp-cell cp-cell-order">
                     <div class="cp-reorder-btns">
-                        <button class="cp-reorder-btn" title="Move up" onclick="event.stopPropagation();cpMoveAward(<?= (int)$aw['CourtAwardId'] ?>,-1)">&#9650;</button>
-                        <button class="cp-reorder-btn" title="Move down" onclick="event.stopPropagation();cpMoveAward(<?= (int)$aw['CourtAwardId'] ?>,1)">&#9660;</button>
+                        <button class="cp-reorder-btn" data-tip="Move up" onclick="event.stopPropagation();cpMoveAward(<?= (int)$aw['CourtAwardId'] ?>,-1)">&#9650;</button>
+                        <button class="cp-reorder-btn" data-tip="Move down" onclick="event.stopPropagation();cpMoveAward(<?= (int)$aw['CourtAwardId'] ?>,1)">&#9660;</button>
                     </div>
                 </div>
                 <div class="cp-cell cp-cell-num"><?= $_rowIndex ?></div>
                 <div class="cp-cell cp-cell-recipient cp-award-name">
                     <span class="cp-recipient-name"><?= htmlspecialchars($aw['Persona']) ?></span>
                     <?php if (!empty($aw['ParkAbbrev'])): ?><span class="cp-award-park"><?= htmlspecialchars($aw['ParkAbbrev']) ?></span><?php endif; ?>
-                    <?php if (!empty($aw['Notes'])): ?><button class="cp-note-btn" data-note="<?= htmlspecialchars($aw['Notes']) ?>" onclick="event.stopPropagation();cpShowNote(this)" title="View note"><i class="fas fa-comment-alt"></i></button><?php endif; ?>
+                    <?php if (!empty($aw['Notes'])): ?><button class="cp-note-btn" data-note="<?= htmlspecialchars($aw['Notes']) ?>" onclick="event.stopPropagation();cpShowNote(this)" data-tip="View note"><i class="fas fa-comment-alt"></i></button><?php endif; ?>
                 </div>
                 <div class="cp-cell cp-cell-award">
                     <span class="cp-award-name-text"><?= htmlspecialchars($aw['AwardName']) ?></span>
@@ -1065,14 +1075,14 @@ $_total_awards = count($courtAwards ?? []);
                     <span class="<?= $typeClass ?>"><?= $typeLabel ?></span>
                 </div>
                 <div class="cp-cell cp-cell-flags cp-award-flags">
-                    <?php if ($aw['PassToLocal']): ?><span class="cp-flag-local" title="Pass to Local"><i class="fas fa-arrow-down"></i></span><?php endif; ?>
+                    <?php if ($aw['PassToLocal']): ?><span class="cp-flag-local" data-tip="Pass to Local"><i class="fas fa-arrow-down"></i></span><?php endif; ?>
                     <?php if ($aw['RecommendationsId']): ?><span class="cp-flag-rec" data-tip="Added from a recommendation."><i class="fas fa-star"></i></span><?php endif; ?>
                 </div>
                 <div class="cp-cell cp-cell-scroll">
-                    <span class="cp-tracking-icon" title="Needs Scroll" data-type="scroll" data-status="<?= $aw['ScrollStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'scroll', this)"><i class="fas fa-print"></i></span>
+                    <span class="cp-tracking-icon" data-tip="Needs Scroll" data-type="scroll" data-status="<?= $aw['ScrollStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'scroll', this)"><i class="fas fa-print"></i></span>
                 </div>
                 <div class="cp-cell cp-cell-regalia">
-                    <span class="cp-tracking-icon" title="Needs Regalia" data-type="regalia" data-status="<?= $aw['RegaliaStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'regalia', this)"><i class="fas fa-medal"></i></span>
+                    <span class="cp-tracking-icon" data-tip="Needs Regalia" data-type="regalia" data-status="<?= $aw['RegaliaStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'regalia', this)"><i class="fas fa-medal"></i></span>
                 </div>
                 <div class="cp-cell cp-cell-status">
                     <span class="cp-aw-badge" style="background:<?= $abg ?>;color:<?= $aclr ?>"><?= $albl ?></span>
@@ -1181,7 +1191,7 @@ $_total_awards = count($courtAwards ?? []);
                             <?php if ($art['Contribution']): ?>
                             <span style="color:#718096">— <?= htmlspecialchars($art['Contribution']) ?></span>
                             <?php endif; ?>
-                            <button class="cp-btn-danger-sm" title="Remove artisan"
+                            <button class="cp-btn-danger-sm" data-tip="Remove artisan"
                                     onclick="cpRemoveArtisan(<?= (int)$art['CourtAwardArtisanId'] ?>)">
                                 <i class="fas fa-times"></i>
                             </button>
@@ -1228,10 +1238,10 @@ $_total_awards = count($courtAwards ?? []);
             </div>
             <div class="cp-rm-controls">
                 <span class="cp-rm-sort-label">View:</span>
-                <button class="cp-rm-view-btn active" data-view="open"     onclick="cpRmView('open')"     title="Open recs ready to grant (hides already-qualified and snoozed)">Open</button>
-                <button class="cp-rm-view-btn"        data-view="all"      onclick="cpRmView('all')"      title="Every eligible rec for this kingdom/park">All</button>
-                <button class="cp-rm-view-btn"        data-view="snoozed"  onclick="cpRmView('snoozed')"  title="Recs the monarchy has set aside for this regnum">Snoozed</button>
-                <button class="cp-rm-view-btn"        data-view="already"  onclick="cpRmView('already')"  title="Player already has this award at or above the recommended rank">Already Has</button>
+                <button class="cp-rm-view-btn active" data-view="open"     onclick="cpRmView('open')"     data-tip="Open recs ready to grant (hides already-qualified and snoozed)">Open</button>
+                <button class="cp-rm-view-btn"        data-view="all"      onclick="cpRmView('all')"      data-tip="Every eligible rec for this kingdom/park">All</button>
+                <button class="cp-rm-view-btn"        data-view="snoozed"  onclick="cpRmView('snoozed')"  data-tip="Recs the monarchy has set aside for this regnum">Snoozed</button>
+                <button class="cp-rm-view-btn"        data-view="already"  onclick="cpRmView('already')"  data-tip="Player already has this award at or above the recommended rank">Already Has</button>
             </div>
             <div class="cp-rm-controls">
                 <span class="cp-rm-sort-label">Sort:</span>
@@ -1315,23 +1325,23 @@ $_total_awards = count($courtAwards ?? []);
                             <?php if ($rec['DateRecommended']): ?>
                             <span class="cp-rm-sep">&middot;</span>
                             <span class="cp-rm-date"><?= date('M j, Y', strtotime($rec['DateRecommended'])) ?></span>
-                            <span class="cp-rm-age-badge <?= $ageCls ?>" title="Age of this recommendation"><?= $ageLbl ?></span>
+                            <span class="cp-rm-age-badge <?= $ageCls ?>" data-tip="Age of this recommendation"><?= $ageLbl ?></span>
                             <?php endif; ?>
                             <?php if (!empty($rec['SecondsCount'])): ?>
                             <span class="cp-rm-sep">&middot;</span>
-                            <span class="cp-rm-seconds" title="<?= (int)$rec['SecondsCount'] ?> supporting <?= (int)$rec['SecondsCount'] === 1 ? 'second' : 'seconds' ?>"><i class="fas fa-thumbs-up"></i><?= (int)$rec['SecondsCount'] ?></span>
+                            <span class="cp-rm-seconds" data-tip="<?= (int)$rec['SecondsCount'] ?> supporting <?= (int)$rec['SecondsCount'] === 1 ? 'second' : 'seconds' ?>"><i class="fas fa-thumbs-up"></i><?= (int)$rec['SecondsCount'] ?></span>
                             <?php endif; ?>
                             <?php if ($isOnOther): ?>
                             <span class="cp-rm-sep">&middot;</span>
-                            <span class="cp-rm-onother" title="This recommendation is on another court plan"><i class="fas fa-scroll"></i> On another court</span>
+                            <span class="cp-rm-onother" data-tip="This recommendation is on another court plan"><i class="fas fa-scroll"></i> On another court</span>
                             <?php endif; ?>
                             <?php if ($alreadyHas): ?>
                             <span class="cp-rm-sep">&middot;</span>
-                            <span class="cp-rm-qualified" title="<?= htmlspecialchars($qualifiedTip) ?>"><i class="fas fa-check-circle"></i> <?= $coveredMaster ? 'Covered by Master' : 'Already has' ?></span>
+                            <span class="cp-rm-qualified" data-tip="<?= htmlspecialchars($qualifiedTip) ?>"><i class="fas fa-check-circle"></i> <?= $coveredMaster ? 'Covered by Master' : 'Already has' ?></span>
                             <?php endif; ?>
                             <?php if ($isSnoozed): ?>
                             <span class="cp-rm-sep">&middot;</span>
-                            <span class="cp-rm-snooze-chip" title="Snoozed for the current regnum"><i class="fas fa-bell-slash"></i> Snoozed</span>
+                            <span class="cp-rm-snooze-chip" data-tip="Snoozed for the current regnum"><i class="fas fa-bell-slash"></i> Snoozed</span>
                             <?php endif; ?>
                         </div>
                         <?php if ($reason): ?>
@@ -1450,7 +1460,7 @@ $_total_awards = count($courtAwards ?? []);
 <div id="cp-note-popup" style="position:fixed">
     <div id="cp-note-popup-header">
         <span id="cp-note-popup-title">Monarchy Note</span>
-        <button id="cp-note-popup-close" onclick="cpDismissNote()" title="Close">&times;</button>
+        <button id="cp-note-popup-close" onclick="cpDismissNote()" data-tip="Close">&times;</button>
     </div>
     <span id="cp-note-popup-text"></span>
 </div>
@@ -1472,33 +1482,78 @@ $_total_awards = count($courtAwards ?? []);
     }
     window.esc = esc;
     function gid(id) { return document.getElementById(id); }
+
+    // Transient error toast — the shared failure surface for AJAX/network problems.
+    function cpGlobalError(msg) {
+        var t = document.createElement('div');
+        t.className = 'cp-toast';
+        t.textContent = msg || 'Something went wrong. Please try again.';
+        document.body.appendChild(t);
+        setTimeout(function() { t.remove(); }, 5000);
+    }
+    window.cpGlobalError = cpGlobalError;
+
+    // Non-blocking message dialog (replaces native alert(), which freezes automation).
+    function cpAlert(msg, title) {
+        if (typeof tnConfirm === 'function') tnConfirm({ title: title || 'Court Planner', body: msg, confirmLabel: 'OK' });
+        else cpGlobalError(msg);
+    }
+    window.cpAlert = cpAlert;
+
+    // Confirmation dialog (replaces native confirm()). Mirrors the tnConfirm pattern
+    // already used by cpSendToLocal / cpDismissRec, with a native fallback if unloaded.
+    function cpConfirm(opts) {
+        if (typeof tnConfirm === 'function') tnConfirm(opts);
+        else if (confirm(opts.body || opts.title)) opts.onConfirm();
+    }
+
     function post(url, fd) {
         return fetch(uir + url, {
             method: 'POST', body: fd,
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        }).then(function(r) { return r.json(); });
+        }).then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        }).catch(function(err) {
+            // Surface fetch/JSON failures instead of silently no-op'ing, and resolve to a
+            // sentinel so callers' .then handlers still run (and Promise.all doesn't hang).
+            cpGlobalError('Could not reach the server. Please check your connection and try again.');
+            return { status: -1, error: 'Request failed. Please try again.', _postFailed: true };
+        });
     }
 
     // ---- Court status ----
     window.cpAdvanceStatus = function(newStatus) {
-        if (!confirm('Mark this court as "' + newStatus + '"?')) return;
-        var fd = new FormData();
-        fd.append('CourtId', courtId);
-        fd.append('Status',  newStatus);
-        post('CourtAjax/update_court_status', fd).then(function(d) {
-            if (d.status === 0) location.reload();
-            else alert(d.error || 'Could not update status.');
+        cpConfirm({
+            title: 'Update court status',
+            body: 'Mark this court as "' + newStatus + '"?',
+            confirmLabel: 'Confirm',
+            onConfirm: function() {
+                var fd = new FormData();
+                fd.append('CourtId', courtId);
+                fd.append('Status',  newStatus);
+                post('CourtAjax/update_court_status', fd).then(function(d) {
+                    if (d.status === 0) location.reload();
+                    else if (!d._postFailed) cpAlert(d.error || 'Could not update status.');
+                });
+            }
         });
     };
 
     window.cpReturnToPlanning = function(newStatus) {
-        if (!confirm('Return this court to "' + newStatus + '" status?')) return;
-        var fd = new FormData();
-        fd.append('CourtId', courtId);
-        fd.append('Status',  newStatus);
-        post('CourtAjax/update_court_status', fd).then(function(d) {
-            if (d.status === 0) location.reload();
-            else alert(d.error || 'Could not update status.');
+        cpConfirm({
+            title: 'Return to planning',
+            body: 'Return this court to "' + newStatus + '" status?',
+            confirmLabel: 'Confirm',
+            onConfirm: function() {
+                var fd = new FormData();
+                fd.append('CourtId', courtId);
+                fd.append('Status',  newStatus);
+                post('CourtAjax/update_court_status', fd).then(function(d) {
+                    if (d.status === 0) location.reload();
+                    else if (!d._postFailed) cpAlert(d.error || 'Could not update status.');
+                });
+            }
         });
     };
 
@@ -1547,8 +1602,9 @@ $_total_awards = count($courtAwards ?? []);
         var collapsed = body.classList.toggle('cp-sidebar-collapsed');
         var btn = gid('cp-sidebar-collapse-btn');
         if (btn) {
-            btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
-            btn.setAttribute('aria-label', btn.title);
+            var sbLabel = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+            btn.dataset.tip = sbLabel;
+            btn.setAttribute('aria-label', sbLabel);
         }
         try { localStorage.setItem(CP_SIDEBAR_KEY, collapsed ? '1' : '0'); } catch (e) {}
     };
@@ -1560,7 +1616,7 @@ $_total_awards = count($courtAwards ?? []);
             if (body) body.classList.add('cp-sidebar-collapsed');
             var btn = gid('cp-sidebar-collapse-btn');
             if (btn) {
-                btn.title = 'Expand sidebar';
+                btn.dataset.tip = 'Expand sidebar';
                 btn.setAttribute('aria-label', 'Expand sidebar');
             }
         }
@@ -1736,8 +1792,8 @@ $_total_awards = count($courtAwards ?? []);
                     else award.RegaliaStatus = d.newStatus;
                 }
                 cpRefreshStatusBar();
-            } else {
-                alert(d.error || 'Could not update tracking status.');
+            } else if (!d._postFailed) {
+                cpAlert(d.error || 'Could not update tracking status.');
             }
         });
     };
@@ -1790,7 +1846,12 @@ $_total_awards = count($courtAwards ?? []);
         var fd    = new FormData();
         fd.append('CourtId', courtId);
         fd.append('Order',   JSON.stringify(order));
-        post('CourtAjax/reorder_awards', fd);
+        post('CourtAjax/reorder_awards', fd).then(function(d) {
+            // Report server-side reorder failures; network failures already toast via post().
+            if (d && d.status !== 0 && !d._postFailed) {
+                cpAlert(d.error || 'Could not save the new order. Please refresh and try again.');
+            }
+        });
     }
 
     // ---- Save award (notes, pass_to_local, status) ----
@@ -1820,7 +1881,7 @@ $_total_awards = count($courtAwards ?? []);
                     if (ptl && !existing) {
                         var span = document.createElement('span');
                         span.className = 'cp-flag-local';
-                        span.title = 'Pass to Local';
+                        span.dataset.tip = 'Pass to Local';
                         span.innerHTML = '<i class="fas fa-arrow-down"></i>';
                         flagsEl.insertBefore(span, flagsEl.firstChild);
                     } else if (!ptl && existing) {
@@ -1835,7 +1896,7 @@ $_total_awards = count($courtAwards ?? []);
                         if (!existingNoteBtn) {
                             var nb = document.createElement('button');
                             nb.className = 'cp-note-btn';
-                            nb.title = 'View note';
+                            nb.dataset.tip = 'View note';
                             nb.innerHTML = '<i class="fas fa-comment-alt"></i>';
                             nb.dataset.note = notes;
                             nb.addEventListener('click', function(e) { e.stopPropagation(); cpShowNote(this); });
@@ -1850,8 +1911,8 @@ $_total_awards = count($courtAwards ?? []);
                 // Flash save confirmation
                 var btn = document.querySelector('#cp-aw-expand-' + caid + ' .cp-expand-actions .cp-btn-primary');
                 if (btn) { var orig = btn.innerHTML; btn.innerHTML = '<i class="fas fa-check"></i> Saved'; setTimeout(function() { btn.innerHTML = orig; }, 1500); }
-            } else {
-                alert(d.error || 'Could not save.');
+            } else if (!d._postFailed) {
+                cpAlert(d.error || 'Could not save.');
             }
         });
     };
@@ -1985,8 +2046,8 @@ $_total_awards = count($courtAwards ?? []);
                 var ga = courtAwards.find(function(a){ return String(a.CourtAwardId) === String(caid); });
                 if (ga) ga.Status = 'given';
                 cpRefreshProgress();
-            } else {
-                alert(d.error || 'Could not grant award.');
+            } else if (!d._postFailed) {
+                cpAlert(d.error || 'Could not grant award.');
             }
         });
     };
@@ -2007,15 +2068,24 @@ $_total_awards = count($courtAwards ?? []);
                 var sa = courtAwards.find(function(a){ return String(a.CourtAwardId) === String(caid); });
                 if (sa) sa.Status = 'cancelled';
                 cpRefreshProgress();
-            } else {
-                alert(d.error || 'Could not skip award.');
+            } else if (!d._postFailed) {
+                cpAlert(d.error || 'Could not skip award.');
             }
         });
     };
 
     // ---- Remove award ----
     window.cpRemoveAward = function(caid) {
-        if (!confirm('Remove this award from the court plan?')) return;
+        cpConfirm({
+            title: 'Remove award',
+            body: 'Remove this award from the court plan?',
+            confirmLabel: 'Remove',
+            danger: true,
+            onConfirm: function() { cpDoRemoveAward(caid); }
+        });
+    };
+
+    function cpDoRemoveAward(caid) {
         var fd = new FormData();
         fd.append('CourtAwardId', caid);
         post('CourtAjax/remove_award', fd).then(function(d) {
@@ -2034,11 +2104,11 @@ $_total_awards = count($courtAwards ?? []);
                 var cnt = gid('cp-award-count');
                 if (cnt) cnt.textContent = '(' + remaining + ')';
                 cpRenumberRows();
-            } else {
-                alert(d.error || 'Could not remove.');
+            } else if (!d._postFailed) {
+                cpAlert(d.error || 'Could not remove.');
             }
         });
-    };
+    }
 
     // ---- Rec modal ----
     var selectedRecs = [];
@@ -2156,7 +2226,10 @@ $_total_awards = count($courtAwards ?? []);
             var fd = new FormData();
             fd.append('RecommendationsId', recId);
             fetch(uir + 'KingdomAjax/kingdom/' + kidId + '/dismissrecommendation', { method: 'POST', body: fd })
-                .then(function(r) { return r.json(); })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
                 .then(function(d) {
                     if (d.status === 0) {
                         if (row) {
@@ -2164,8 +2237,11 @@ $_total_awards = count($courtAwards ?? []);
                             setTimeout(function() { row.remove(); cpRmFilter(); }, 320);
                         }
                     } else {
-                        alert(d.error || 'Failed to dismiss recommendation.');
+                        cpAlert(d.error || 'Failed to dismiss recommendation.');
                     }
+                })
+                .catch(function() {
+                    cpGlobalError('Could not dismiss the recommendation. Please try again.');
                 });
         }
         // Prefer the in-product confirm modal (project convention); fall back to native
@@ -2192,6 +2268,7 @@ $_total_awards = count($courtAwards ?? []);
             return;
         }
         gid('cp-rec-error').style.display = 'none';
+        // Keep each rec id paired with its result so we only mark successful adds as "In Plan".
         var promises = selectedRecs.map(function(rid) {
             var el = gid('cp-rec-' + rid);
             var fd = new FormData();
@@ -2202,33 +2279,33 @@ $_total_awards = count($courtAwards ?? []);
             fd.append('RecommendationsId', rid);
             fd.append('PassToLocal',       0);
             fd.append('Notes',             '');
-            return post('CourtAjax/add_award', fd);
+            return post('CourtAjax/add_award', fd).then(function(d) { return { rid: rid, d: d }; });
         });
         Promise.all(promises).then(function(results) {
-            var added = results.filter(function(d) { return d.status === 0; });
-            if (added.length > 0) {
-                added.forEach(function(d) { cpAppendAwardRow(d.award); });
-                cpCloseRecModal();
-                // Mark as already planned in modal
-                selectedRecs.forEach(function(rid) {
-                    var el = gid('cp-rec-' + rid);
-                    if (el) {
-                        el.classList.add('already');
-                        el.classList.remove('selected');
-                        el.setAttribute('onclick','');
-                        var checkEl = el.querySelector('.cp-rm-check');
-                        if (checkEl) checkEl.style.display = 'none';
-                        var rightEl = el.querySelector('.cp-rm-right');
-                        if (rightEl) rightEl.innerHTML = '<span class="cp-rm-in-plan"><i class="fas fa-check" style="margin-right:3px"></i>In Plan</span>';
-                    }
-                });
-                selectedRecs = [];
-                cpRmUpdateCount();
-            }
-            var failed = results.filter(function(d) { return d.status !== 0; });
+            var succeeded = results.filter(function(x) { return x.d.status === 0; });
+            var failed    = results.filter(function(x) { return x.d.status !== 0; });
+            // Append rows and mark ONLY the successful recs as already planned.
+            succeeded.forEach(function(x) {
+                cpAppendAwardRow(x.d.award);
+                var el = gid('cp-rec-' + x.rid);
+                if (el) {
+                    el.classList.add('already');
+                    el.classList.remove('selected');
+                    el.setAttribute('onclick','');
+                    var checkEl = el.querySelector('.cp-rm-check');
+                    if (checkEl) checkEl.style.display = 'none';
+                    var rightEl = el.querySelector('.cp-rm-right');
+                    if (rightEl) rightEl.innerHTML = '<span class="cp-rm-in-plan"><i class="fas fa-check" style="margin-right:3px"></i>In Plan</span>';
+                }
+            });
+            // Failed recs stay selectable so the user can retry them.
+            selectedRecs = failed.map(function(x) { return x.rid; });
+            cpRmUpdateCount();
             if (failed.length) {
-                gid('cp-rec-error').textContent = failed[0].error || 'Some awards could not be added.';
+                gid('cp-rec-error').textContent = failed[0].d.error || 'Some awards could not be added.';
                 gid('cp-rec-error').style.display = 'block';
+            } else {
+                cpCloseRecModal();
             }
         });
     };
@@ -2297,18 +2374,18 @@ $_total_awards = count($courtAwards ?? []);
     function cpAppendAwardRow(aw) {
         var empty = gid('cp-award-empty');
         if (empty) empty.remove();
-        var ptlBadge = aw.PassToLocal ? '<span class="cp-flag-local" title="Pass to Local"><i class="fas fa-arrow-down"></i></span>' : '';
+        var ptlBadge = aw.PassToLocal ? '<span class="cp-flag-local" data-tip="Pass to Local"><i class="fas fa-arrow-down"></i></span>' : '';
         var recBadge = aw.RecommendationsId ? '<span class="cp-flag-rec" data-tip="Added from a recommendation."><i class="fas fa-star"></i></span>' : '';
         var rankStr  = (aw.IsLadder && aw.Rank > 0) ? '<span class="ladder-rank cp-award-rank" data-lvl="' + Math.min(aw.Rank, 10) + '">Rank ' + aw.Rank + '</span>' : '';
-        var noteBtn  = aw.Notes ? '<button class="cp-note-btn" data-note="' + esc(aw.Notes) + '" onclick="event.stopPropagation();cpShowNote(this)" title="View note"><i class="fas fa-comment-alt"></i></button>' : '';
+        var noteBtn  = aw.Notes ? '<button class="cp-note-btn" data-note="' + esc(aw.Notes) + '" onclick="event.stopPropagation();cpShowNote(this)" data-tip="View note"><i class="fas fa-comment-alt"></i></button>' : '';
         var typeClass = aw.IsTitle ? 'cp-type-title' : (aw.IsLadder ? 'cp-type-ladder' : 'cp-type-award');
         var typeLabel = aw.IsTitle ? 'Title' : (aw.IsLadder ? 'Ladder' : 'Award');
         var typeRow   = aw.IsTitle ? 'title'  : (aw.IsLadder ? 'ladder' : 'award');
         var html = '<div class="cp-award-row cp-aw-type-' + typeRow + '" id="cp-aw-' + aw.CourtAwardId + '" data-court-award-id="' + aw.CourtAwardId + '" data-sort="' + aw.SortOrder + '">' +
             '<div class="cp-award-row-main cp-row-grid" onclick="cpToggleAward(' + aw.CourtAwardId + ')">' +
             '<div class="cp-cell cp-cell-order"><div class="cp-reorder-btns">' +
-            '<button class="cp-reorder-btn" onclick="event.stopPropagation();cpMoveAward(' + aw.CourtAwardId + ',-1)">&#9650;</button>' +
-            '<button class="cp-reorder-btn" onclick="event.stopPropagation();cpMoveAward(' + aw.CourtAwardId + ',1)">&#9660;</button>' +
+            '<button class="cp-reorder-btn" data-tip="Move up" onclick="event.stopPropagation();cpMoveAward(' + aw.CourtAwardId + ',-1)">&#9650;</button>' +
+            '<button class="cp-reorder-btn" data-tip="Move down" onclick="event.stopPropagation();cpMoveAward(' + aw.CourtAwardId + ',1)">&#9660;</button>' +
             '</div></div>' +
             '<div class="cp-cell cp-cell-num"></div>' +
             '<div class="cp-cell cp-cell-recipient cp-award-name">' +
@@ -2321,8 +2398,8 @@ $_total_awards = count($courtAwards ?? []);
             '</div>' +
             '<div class="cp-cell cp-cell-type"><span class="' + typeClass + '">' + typeLabel + '</span></div>' +
             '<div class="cp-cell cp-cell-flags cp-award-flags">' + ptlBadge + recBadge + '</div>' +
-            '<div class="cp-cell cp-cell-scroll"><span class="cp-tracking-icon" title="Needs Scroll" data-type="scroll" data-status="' + aw.ScrollStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'scroll\', this)"><i class="fas fa-print"></i></span></div>' +
-            '<div class="cp-cell cp-cell-regalia"><span class="cp-tracking-icon" title="Needs Regalia" data-type="regalia" data-status="' + aw.RegaliaStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'regalia\', this)"><i class="fas fa-medal"></i></span></div>' +
+            '<div class="cp-cell cp-cell-scroll"><span class="cp-tracking-icon" data-tip="Needs Scroll" data-type="scroll" data-status="' + aw.ScrollStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'scroll\', this)"><i class="fas fa-print"></i></span></div>' +
+            '<div class="cp-cell cp-cell-regalia"><span class="cp-tracking-icon" data-tip="Needs Regalia" data-type="regalia" data-status="' + aw.RegaliaStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'regalia\', this)"><i class="fas fa-medal"></i></span></div>' +
             '<div class="cp-cell cp-cell-status"><span class="cp-aw-badge" style="background:#edf2f7;color:#4a5568">Planned</span></div>' +
             '<div class="cp-cell cp-cell-chevron"><i class="fas fa-chevron-down"></i></div>' +
             '</div>' +
@@ -2392,12 +2469,21 @@ $_total_awards = count($courtAwards ?? []);
     };
 
     window.cpRemoveArtisan = function(artId) {
-        if (!confirm('Remove this artisan?')) return;
+        cpConfirm({
+            title: 'Remove artisan',
+            body: 'Remove this artisan?',
+            confirmLabel: 'Remove',
+            danger: true,
+            onConfirm: function() { cpDoRemoveArtisan(artId); }
+        });
+    };
+
+    function cpDoRemoveArtisan(artId) {
         var fd = new FormData();
         fd.append('CourtAwardArtisanId', artId);
         post('CourtAjax/remove_artisan', fd).then(function(d) {
             if (d.status === 0) { var el = gid('cp-art-' + artId); if (el) el.remove(); }
-            else alert(d.error || 'Could not remove.');
+            else if (!d._postFailed) cpAlert(d.error || 'Could not remove.');
         });
     };
 
