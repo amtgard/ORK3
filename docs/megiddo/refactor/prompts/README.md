@@ -1,0 +1,35 @@
+# Phase 3 close-out — agent prompt runbook
+
+Copy-paste prompts for the remaining automated work before human P3-4/P3-5. Open each `.prompt` file → Ctrl+A → Ctrl+C → paste into a **new** agent chat. File contents are agent-language only.
+
+**Prerequisite:** Stack tip `megiddo/r-19d-residual-lib-refactor` (R-19d complete; `Ork3::$Lib` → zero).
+
+**Doc layout:** [../README.md](../README.md) · completed DS notes in [../discovery/](../discovery/) · historical skills in [../archive/](../archive/)
+
+## Run order
+
+| Step | Prompt | Proceed when |
+|------|--------|--------------|
+| 1 | [01-fix-06-gate-blockers.prompt](./01-fix-06-gate-blockers.prompt) | ✅ Done @ `c330d69b` |
+| 2 | [01-fix-07-fuzzy-baselines.prompt](./01-fix-07-fuzzy-baselines.prompt) | ✅ Done @ `b4ddc98c` |
+| 3 | [02-validate-20-rerun.prompt](./02-validate-20-rerun.prompt) | 2nd run failed V20-C @ `49e76bda` |
+| 4 | [01-fix-08-heraldry-dom-volatile.prompt](./01-fix-08-heraldry-dom-volatile.prompt) | `validate --all` 42/42 after redeploy |
+| 5 | [02-validate-20-rerun.prompt](./02-validate-20-rerun.prompt) (3rd) | `phase3-audit-report.md` `status=ok` |
+| 6 | [03-idiom-enforcement-orchestrator.prompt](./03-idiom-enforcement-orchestrator.prompt) | `idioms-validate-report.md` `status=ok` |
+| 7 | Human — [validations/r-milestone-smoke-matrix.html](../validations/r-milestone-smoke-matrix.html) | P3-4 manual walk-through |
+| 8 | Human — retrospective bullets in `phase3-audit-report.md` | P3-5 complete |
+
+## After step 5 (VALIDATE-20 `status=ok`)
+
+- Optional merge: P3-6 → `megiddo/rebase-20260709`
+- Canonical plans: [11-phase-3-closeout.md](../11-phase-3-closeout.md), [12-idiom-enforcement.md](../12-idiom-enforcement.md)
+
+## Worker sources (orchestrator sub-agents)
+
+| Phase | Workers |
+|-------|---------|
+| FIX-06 | [skills/phase3-gate-fix/workers/FIX-06-gate-blockers.md](../skills/phase3-gate-fix/workers/FIX-06-gate-blockers.md) |
+| FIX-07 | [skills/phase3-gate-fix/workers/FIX-07-fuzzy-baselines.md](../skills/phase3-gate-fix/workers/FIX-07-fuzzy-baselines.md) |
+| FIX-08 | [skills/phase3-gate-fix/workers/FIX-08-heraldry-dom-volatile.md](../skills/phase3-gate-fix/workers/FIX-08-heraldry-dom-volatile.md) |
+| VALIDATE-20 | [skills/phase3-gate-fix/workers/VALIDATE-20.md](../skills/phase3-gate-fix/workers/VALIDATE-20.md) |
+| I-* | [skills/idiom-enforcement/workers/](../skills/idiom-enforcement/workers/) |

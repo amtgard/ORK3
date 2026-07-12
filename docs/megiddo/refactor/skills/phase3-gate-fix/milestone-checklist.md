@@ -13,7 +13,7 @@
 | 1 | FIX-06 | `megiddo/p3-fix-06-gate-blockers` | `c330d69b` | [x] |
 | 2 | FIX-07 | `megiddo/p3-fix-07-fuzzy-baselines` | `b4ddc98c` | [x] |
 | 3 | VALIDATE-20-rerun (2nd) | `megiddo/p3-validate-20-audit` | `49e76bda` | [ ] failed V20-C |
-| 4 | FIX-08 | `megiddo/p3-fix-08-heraldry-dom-volatile` | — | [ ] |
+| 4 | FIX-08 | `megiddo/p3-fix-08-heraldry-dom-volatile` | `e2f7c280` | [x] |
 | 5 | VALIDATE-20-rerun (3rd) | `megiddo/p3-validate-20-audit` | — | [ ] |
 
 **Next actionable hop:** [02-validate-20-rerun.prompt](../../prompts/02-validate-20-rerun.prompt) after FIX-08 commit
@@ -50,7 +50,7 @@
 - [x] `tree_diff.py` normalize heraldry URLs; unit tests pass
 - [x] Full `setpoint capture` post-deploy; bundle `20260712T233808Z-b4ddc98c-810b9accf0e0c8c8.zip`
 - [x] Repro: `validate --all` 42/42 exit 0 before and after `deploy-sandbox --yes`
-- [ ] Commit on `megiddo/p3-fix-08-heraldry-dom-volatile`
+- [x] Commit on `megiddo/p3-fix-08-heraldry-dom-volatile` @ `e2f7c280`
 
 ---
 
