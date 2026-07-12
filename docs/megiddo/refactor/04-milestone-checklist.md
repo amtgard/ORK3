@@ -1466,13 +1466,12 @@ Run only after **R-18**. No code migration.
 
 - [x] P3-1 HTML smoke matrix available ([r-milestone-smoke-matrix.html](./validations/r-milestone-smoke-matrix.html))
 - [ ] P3-4 Human manual walk-through — all 18 R-* smokes pass
-- [x] P3-2 Agent automated audit — [skills/phase3-closeout/orchestrator.prompt](./skills/phase3-closeout/orchestrator.prompt) ([phase3-audit-report.md](./phase3-audit-report.md) 2026-07-10 @ `1d8d8455`: **failed** — 42 `Ork3::$Lib`, fuzzy `park-auth-sandbox`, Playwright heraldry×3)
-- [x] All ~119 target IDs in [03-implementation-plan.md](./03-implementation-plan.md) marked done (R-* notes; residual lib bypass in code)
+- [x] P3-2 Agent automated audit — VALIDATE-20-rerun (2nd) ([phase3-audit-report.md](./phase3-audit-report.md) 2026-07-12 @ `b4ddc98c`: **failed** — fuzzy test `home-authenticated` dimension 1976→1838; sandbox auth DOM drift)
+- [x] All ~119 target IDs in [03-implementation-plan.md](./03-implementation-plan.md) marked done (R-* notes through R-19d)
 - [x] `rg '\$DB->' orkui/` → zero matches
 - [x] `rg 'Ork3::\$Lib' orkui/` → zero matches (R-19d @ `megiddo/r-19d-residual-lib-refactor` — 41 sites cleared R-19a…d)
-- [ ] Success criteria in [02-requirements.md](./02-requirements.md) satisfied
-- [x] PHPUnit full suite green (215 tests, 2 skipped — 2026-07-10)
-- [ ] Full fuzzy `--all` + Playwright green (fuzzy: gate-fix hops FIX-06…FIX-09; Playwright: mirror 50/50 + heraldry 3/3)
+- [x] PHPUnit full suite green (230 tests, 2 skipped — VALIDATE-20-rerun 2026-07-12)
+- [ ] Full fuzzy `--all` + Playwright green (gate-fix FIX-06…FIX-09; mirror 50/50 + heraldry 3/3 — pending VALIDATE-20 4th)
 - [ ] P3-5 Retrospective recorded (`phase3-audit-report.md` or checklist notes)
 
 Optional: merge stack tip into integration line `megiddo/rebase-20260709`.

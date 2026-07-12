@@ -1,27 +1,30 @@
 # Phase 3 Automated Audit Report
 
-**Timestamp:** 2026-07-10T16:40:05Z  
-**Branch:** `megiddo/r-18-residual-db-refactor`  
-**Commit:** `1d8d8455`  
-**Orchestrator:** [skills/phase3-closeout/orchestrator.prompt](./skills/phase3-closeout/orchestrator.prompt)
+**Timestamp:** 2026-07-12T22:49:09Z  
+**Branch:** `megiddo/p3-validate-20-audit`  
+**Commit:** `b4ddc98c` (stack base `megiddo/p3-fix-07-fuzzy-baselines`)  
+**Hop:** VALIDATE-20-rerun (2nd — after FIX-07)  
+**Worker:** [skills/phase3-gate-fix/workers/VALIDATE-20-rerun.md](./skills/phase3-gate-fix/workers/VALIDATE-20-rerun.md)
 
 ## Prerequisite
 
-- **R-18:** Complete on stack tip (`04-milestone-checklist.md` § Phase 2 continuation).
+- **FIX-07:** Complete — fuzzy baselines re-recorded; `setpoint publish` bundle `20260712T221041Z-c330d69b-af9ae3139c2ada41.zip`.
+- **FIX-06:** Complete — Playwright mirror 500s fixed; residual-lib surfaces green.
 
 ## Environment
 
 | Step | Result | Notes |
 |------|--------|-------|
 | `docker compose -f docker-compose.php8.yml up -d` | pass | `ork3-php8-db`, `ork3-php8-test-db`, `ork3-php8-app` running |
-| `bin/ork-db deploy-sandbox` | **fail** | Post-apply asset validation: 110 missing player heraldry files (`player/100021253`, `player/100050279`, …). Deploy aborted after `deploy-assets` (108 files). |
-| `bin/fuzzy-validator setpoint restore` | pass | Bundle `20260709T173049Z-1591950d-6b22e991bb478256.zip` (1349 files) |
+| `bin/ork-db deploy-sandbox --yes` | pass | Assets manifest ok (108 files; heraldry 82) |
+| `bin/fuzzy-validator setpoint restore` | pass | Bundle `20260712T221041Z-c330d69b-af9ae3139c2ada41.zip` (1330 files) |
+| `npx playwright install chromium` | pass | Required on this host — browsers missing on first V20-C attempt |
 
-**Credentials (documented):** Playwright and fuzzy mirror use `admin` / `password` (`ORK3_E2E_USERNAME` / `ORK3_E2E_PASSWORD`). Playwright run used **prod** profile per orchestrator (`bin/ork-db use prod`).
+**Credentials:** Playwright mirror `admin`/`password`; sandbox heraldry `megiddo`/`test-db-player` per `06-test-framework.md`.
 
 ---
 
-## P3-A — Static audit
+## V20-A — Static audit (frontend isolation)
 
 ### `$DB->` in `orkui/`
 
@@ -42,25 +45,8 @@ rg 'Ork3::\$Lib' orkui/
 
 | Metric | Value |
 |--------|-------|
-| Matches | **42** across **12 files** |
-| Result | **fail** |
-
-**Files (42 matches):**
-
-| File | Count | Domains / notes |
-|------|-------|-----------------|
-| `orkui/model/model.Player.php` | 12 | `player` thin wrappers (milestones, notes, beltline, etc.) |
-| `orkui/index.php` | 7 | `health`, `event`, `session` bootstrap / timing |
-| `orkui/controller/controller.KingdomAjax.php` | 6 | `searchservice`, `dangeraudit`, `kingdom` |
-| `orkui/controller/controller.EventAjax.php` | 5 | `searchservice`, `dangeraudit`, `heraldry` |
-| `orkui/controller/controller.AdminAjax.php` | 3 | `searchservice`, `dangeraudit`, `stateofamtgard` |
-| `orkui/controller/controller.Admin.php` | 2 | `weather` admin refresh/stats |
-| `orkui/controller/controller.ParkAjax.php` | 2 | `searchservice`, `dangeraudit` |
-| `orkui/controller/controller.SearchAjax.php` | 1 | `searchservice` |
-| `orkui/controller/controller.Search.php` | 1 | `searchservice` |
-| `orkui/controller/controller.PlayerAjax.php` | 1 | `player` username check |
-| `orkui/controller/controller.WnAjax.php` | 1 | `player` dismiss |
-| `orkui/model/model.AdminDashboard.php` | 1 | `stateofamtgard` bootstrap |
+| Matches | **0** |
+| Result | **pass** |
 
 ### Raw DML in `orkui/*.php`
 
@@ -73,11 +59,20 @@ rg -i 'INSERT INTO|UPDATE [a-z_]+ SET|DELETE FROM' orkui/ --glob '*.php'
 | Matches | **0** |
 | Result | **pass** |
 
-No documented exemptions in [02-requirements.md](./02-requirements.md) § Success Criteria. R-17/R-18 carryover notes referenced deferred lib sites (`searchservice`, `heraldry`, `index.php`) but did not close them.
+### Advisory patterns
+
+```bash
+rg -i 'new yapo|mysqli_|PDO::' orkui/ --glob '*.php'
+```
+
+| Metric | Value |
+|--------|-------|
+| Matches | **0** |
+| Result | advisory clean |
 
 ---
 
-## P3-B — PHPUnit
+## V20-B — PHPUnit
 
 ```bash
 sh bin/run-unit-tests.sh
@@ -86,14 +81,14 @@ sh bin/run-unit-tests.sh
 | Metric | Value |
 |--------|-------|
 | Exit code | **0** |
-| Tests | 215 (2 skipped) |
-| Assertions | 648 |
+| Tests | 230 (2 skipped) |
+| Assertions | 740 |
 | Drift check | PASS |
 | Result | **pass** |
 
 ---
 
-## P3-C — Fuzzy regression
+## V20-C — Fuzzy regression
 
 ```bash
 bin/fuzzy-validator setpoint restore
@@ -103,94 +98,79 @@ bin/fuzzy-validator validate --all --phase all
 | Metric | Value |
 |--------|-------|
 | Exit code | **2** |
-| Captures | 21/21 pass |
-| Gate failure | `park-auth-sandbox` — dimension mismatch: baseline **(961, 1280)** vs candidate **(937, 1280)** |
+| Primary failure | `[test] home-authenticated` — dimension mismatch: baseline **(1976, 1280)** vs candidate **(1838, 1280)** |
+| Secondary (run `20260712T223051Z`) | `[test] player-profile-sandbox` DOM 0.996; `kingdom-auth-sandbox` DOM 0.998; `park-auth-sandbox` DOM 0.998 — all &lt; 1.000 threshold |
+| Mirror profile | All 21 pages captured; gate aborted on test `home-authenticated` before full summary |
 | Result | **fail** |
+
+**Report:** `tools/fuzzy-validator/reports/run-20260712T223051Z/index.html` (partial DOM failures)
+
+**Note:** A prior local run (`20260712T222229Z`) reported 42/42 pass before this audit session's `deploy-sandbox`; reproducible failure after canonical preflight (`deploy-sandbox --yes` → `setpoint restore` → `validate`).
 
 ---
 
-## P3-D — Playwright
+## V20-D — Playwright
 
 ```bash
 export ORK3_E2E_BASE_URL=http://127.0.0.1:19080/orkui/
 bin/ork-db use prod
 export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
-npx playwright test tests/e2e/
+npx playwright test tests/e2e/ --grep-invert heraldry
+
+bin/ork-db use dev
+export ORK3_E2E_USERNAME=megiddo ORK3_E2E_PASSWORD=test-db-player
+npx playwright test tests/e2e/heraldry.spec.ts
 ```
 
-| Metric | Value |
-|--------|-------|
-| Exit code | **1** |
-| Passed | **43** / 46 |
-| Failed | **3** — all in `tests/e2e/heraldry.spec.ts` |
-| Result | **fail** |
-
-**Failures:**
-
-1. `kingdom profile shows test kingdom heraldry` — `.heraldry-img[src*="heraldry/kingdom/100001."]` not visible
-2. `park profile shows test park heraldry` — `.heraldry-img[src*="heraldry/park/1000001."]` not visible
-3. `kingdom roster serves heraldry avatars for flagged fake players` — no fake player with avatar URL in roster JSON
-
-Likely related to prod/mirror heraldry asset deployment (aligns with sandbox `deploy-sandbox` asset validation failure).
+| Suite | Result |
+|-------|--------|
+| Mirror (no heraldry) | **50/50 pass** |
+| Sandbox heraldry | **3/3 pass** |
+| Overall | **pass** |
 
 ---
 
-## P3-E — Plan completeness
+## V20-E — Plan completeness
 
-All **~119** tracked T-* IDs have R-* completion notes in [03-implementation-plan.md](./03-implementation-plan.md) (R-01…R-18) and [04-milestone-checklist.md](./04-milestone-checklist.md).
+All **~119** tracked T-* IDs have R-* completion notes in [03-implementation-plan.md](./03-implementation-plan.md) (R-01…R-19d) and [04-milestone-checklist.md](./04-milestone-checklist.md).
 
 | Gap type | Detail |
 |----------|--------|
-| Doc prose | ~~`03-implementation-plan.md` lacks inline **R-05, R-06, R-07, R-12** completion paragraphs~~ — closed by FIX-05 (2026-07-10). |
-| Code vs plan | **42** residual `Ork3::$Lib` call sites remain despite R-17/R-18 “domain lib bypass” sign-off; inventory rows (e.g. T-PLM-02/04, T-EVA-11, T-ADM-08/09, T-INF-01/02, T-SRC-*) still describe lib bypass in table text. |
+| Code vs plan | Static isolation gates now match plan claims (`$DB` zero, `Ork3::$Lib` zero) |
 
-**Result:** **pass** (all targets assigned to R-* milestones) with **code-state caveat** (lib bypass not fully eliminated).
+**Result:** **pass**
 
 ---
 
-## P3-F — Checklist sign-off (automated only)
+## V20-F — Checklist sign-off (automated only)
 
-Updated [04-milestone-checklist.md](./04-milestone-checklist.md) § Phase 3:
+Updated [04-milestone-checklist.md](./04-milestone-checklist.md) § Phase 3 and [skills/phase3-gate-fix/milestone-checklist.md](./skills/phase3-gate-fix/milestone-checklist.md) VALIDATE-20-rerun (2nd).
 
 - [x] P3-2 agent automated audit (this report)
 - [x] `rg '\$DB->' orkui/` → zero
-- [x] PHPUnit full suite green
-- [ ] `rg 'Ork3::\$Lib' orkui/` → zero (**42 matches**)
-- [ ] Full fuzzy `--all` + Playwright green
+- [x] `rg 'Ork3::\$Lib' orkui/` → zero
+- [x] PHPUnit full suite green (230/230)
+- [x] Playwright mirror + sandbox heraldry green (53/53)
+- [ ] Full fuzzy `--all` green — **blocked** on test `home-authenticated` dimension + sandbox auth DOM drift
 - [ ] Success criteria in `02-requirements.md` fully satisfied
 - [ ] P3-4 manual smoke matrix walk-through (human)
-- [ ] P3-5 retrospective (human; draft below)
+- [ ] P3-5 retrospective (human)
 
 ---
 
 ## Human follow-ups
 
-### P3-4 — Manual smoke matrix
+### Blocker — V20-C fuzzy gate
 
-Open [validations/r-milestone-smoke-matrix.html](./validations/r-milestone-smoke-matrix.html) in a browser. Walk **R-01 … R-18** in order; mark pass/fail per section. Pay extra attention to heraldry chrome and park-auth pages given fuzzy/Playwright failures.
+1. Investigate test `home-authenticated` height regression **1976 → 1838** after `deploy-sandbox` + `setpoint restore`.
+2. Reconcile sandbox auth page DOM drift (`player-profile-sandbox`, `kingdom-auth-sandbox`, `park-auth-sandbox`) — likely setpoint/anchor mismatch or layout change since FIX-07 record.
+3. If environmental only → new FIX hop (re-record affected pages + `setpoint publish`). If code regression → minimal template fix first.
 
-**Preflight before walk-through:**
+### If `status=ok` (not yet)
 
-```bash
-docker compose -f docker-compose.php8.yml up -d
-bin/ork-db deploy-sandbox   # fix asset manifest first if still aborting
-bin/fuzzy-validator setpoint restore
-export ORK3_E2E_BASE_URL=http://127.0.0.1:19080/orkui/
-bin/ork-db use prod
-export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
-```
-
-### P3-5 — Retrospective (draft for human edit)
-
-- **Residual lib bypass:** Phase 2 sign-off claimed R-17/R-18 closed domain lib migration, but static audit finds 42 `Ork3::$Lib` sites (search, heraldry, dangeraudit, player wrappers, index session). Decide: new R-19 scope vs documented exemptions in `02-requirements.md`.
-- **Asset pipeline:** `deploy-sandbox` aborts on 110 missing player heraldry files; Playwright `heraldry.spec.ts` and fuzzy `park-auth-sandbox` failures may share root cause. Run `bin/ork-db generate-assets && bin/ork-db deploy-assets` and reconcile manifest expectations.
-- **Fuzzy dimension drift:** `park-auth-sandbox` height 961→937 — re-record baseline or investigate layout regression from R-15+ template changes.
-- ~~**Doc hygiene:** Add R-05/06/07/12 completion paragraphs to `03-implementation-plan.md` for single-source traceability.~~ — done (FIX-05).
-- **Orchestrator:** Prod-profile Playwright requires explicit approval in constrained environments; document in `06-test-framework.md` if recurring.
-
-### P3-6 — Optional merge
-
-Merge stack tip `megiddo/r-18-residual-db-refactor` → `megiddo/rebase-20260709` after human sign-off.
+- **Idiom enforcement** — [03-idiom-enforcement-orchestrator.prompt](./prompts/03-idiom-enforcement-orchestrator.prompt) starting at **I-0**
+- **P3-4** — [validations/r-milestone-smoke-matrix.html](./validations/r-milestone-smoke-matrix.html)
+- **P3-5** — retrospective
 
 ---
 
@@ -198,14 +178,12 @@ Merge stack tip `megiddo/r-18-residual-db-refactor` → `megiddo/rebase-20260709
 
 | Gate | Result |
 |------|--------|
-| P3-A `$DB` | pass (0) |
-| P3-A `Ork3::$Lib` | **fail** (42 / 12 files) |
-| P3-A DML | pass (0) |
-| PHPUnit | pass |
-| Fuzzy | **fail** (`park-auth-sandbox` dimension) |
-| Playwright | **fail** (3 heraldry tests) |
-| Plan completeness | pass (with lib-bypass caveat) |
+| V20-A `$DB` | pass (0) |
+| V20-A `Ork3::$Lib` | pass (0) |
+| V20-A DML | pass (0) |
+| V20-B PHPUnit | pass (230/230) |
+| V20-C Fuzzy | **fail** (test `home-authenticated` dimension; sandbox auth DOM drift) |
+| V20-D Playwright | pass (50 + 3) |
+| V20-E Plan completeness | pass |
 
-**Overall status:** `failed` — R-18 prerequisite met; automated close-out blocked on residual lib bypass, asset/heraldry deployment, and visual regression gates.
-
-**Remediation orchestrator:** [skills/phase3-remediation/orchestrator.prompt](./skills/phase3-remediation/orchestrator.prompt) — serialized FIX-02…R-19d queue; **VALIDATE-20** final re-audit.
+**Overall status:** `failed` — FIX-06/07 remediated Playwright and most fuzzy drift; V20-C still blocked on test-profile `home-authenticated` dimension mismatch after canonical preflight.
