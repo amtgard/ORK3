@@ -101,3 +101,31 @@ def test_discover_fuzz_nodes_from_calibration_runs():
     fuzz_nodes = discover_fuzz_nodes(trees)
     assert fuzz_nodes
     assert fuzz_nodes[0]["mode"] in {"text", "subtree"}
+
+
+def test_compare_dom_trees_ignores_heraldry_cache_bust_query_params():
+    heraldry = "http://127.0.0.1:19080/assets/heraldry/player/000001.jpg"
+    baseline = _tree(
+        f'<html><body><img src="{heraldry}?v=111?222"></body></html>'
+    )
+    candidate = _tree(
+        f'<html><body><img src="{heraldry}?v=999?888"></body></html>'
+    )
+    manifest = {"fuzzNodes": [], "manualNodes": []}
+    result = compare_dom_trees(baseline, candidate, manifest)
+    assert result.passed is True
+
+
+def test_compare_dom_trees_ignores_heraldry_style_background_url_cache_bust():
+    heraldry = "http://127.0.0.1:19080/assets/heraldry/player/000001.jpg"
+    baseline = _tree(
+        "<html><body><div style=\"background-image: "
+        f"url('{heraldry}?v=111?222')\"></div></body></html>"
+    )
+    candidate = _tree(
+        "<html><body><div style=\"background-image: "
+        f"url('{heraldry}?v=999?888')\"></div></body></html>"
+    )
+    manifest = {"fuzzNodes": [], "manualNodes": []}
+    result = compare_dom_trees(baseline, candidate, manifest)
+    assert result.passed is True

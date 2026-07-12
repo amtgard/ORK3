@@ -3,8 +3,31 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any
+
+_HERALDRY_PATH = "/assets/heraldry/"
+_URL_IN_STYLE_RE = re.compile(r"url\((['\"]?)([^)'\"]+)\1\)")
+
+
+def normalize_dom_attr_value(name: str, value: Any) -> Any:
+    """Strip deploy-time cache-bust query params from heraldry asset URLs in DOM attrs."""
+    if not isinstance(value, str) or _HERALDRY_PATH not in value:
+        return value
+    if name == "src":
+        return re.sub(r"\?.*$", "", value)
+    if name == "style":
+
+        def _strip_url(match: re.Match[str]) -> str:
+            quote, url = match.group(1), match.group(2)
+            if _HERALDRY_PATH not in url:
+                return match.group(0)
+            stripped = re.sub(r"\?.*$", "", url)
+            return f"url({quote}{stripped}{quote})"
+
+        return _URL_IN_STYLE_RE.sub(_strip_url, value)
+    return value
 
 
 @dataclass(frozen=True)
@@ -239,7 +262,9 @@ def _compare_element_nodes(
     for name in sorted(set(base_attrs) | set(cand_attrs)):
         if name in ignored_attrs:
             continue
-        if base_attrs.get(name) != cand_attrs.get(name):
+        base_val = normalize_dom_attr_value(name, base_attrs.get(name))
+        cand_val = normalize_dom_attr_value(name, cand_attrs.get(name))
+        if base_val != cand_val:
             failures.append(
                 DomDiffFailure(
                     path=path,
