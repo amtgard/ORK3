@@ -79,9 +79,12 @@ class Court
 
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT c.court_id, c.name, c.court_date, c.status,
+            'SELECT c.court_id, c.name, c.court_date, c.status, c.mode,
                     c.event_calendardetail_id,
                     COUNT(ca.court_award_id) AS award_count,
+                    (SELECT COUNT(*) FROM ' . DB_PREFIX . 'court_award sca
+                        WHERE sca.court_id = c.court_id
+                          AND sca.status = \'staged\') AS staged_count,
                     e.name AS event_name
              FROM ' . DB_PREFIX . 'court c
              LEFT JOIN ' . DB_PREFIX . 'court_award ca
@@ -102,7 +105,9 @@ class Court
                     'Name'                  => $rs->name,
                     'CourtDate'             => $rs->court_date,
                     'Status'                => $rs->status,
+                    'Mode'                  => $rs->mode ?: 'run',
                     'AwardCount'            => (int)$rs->award_count,
+                    'StagedCount'           => (int)$rs->staged_count,
                     'EventName'             => $rs->event_name,
                     'EventCalendarDetailId' => (int)$rs->event_calendardetail_id,
                 ];
@@ -306,16 +311,31 @@ class Court
         return ($r && $r->Next()) ? (int)$r->court_id : 0;
     }
 
-    /** Delete a court_award (and its artisans). */
+    /**
+     * Delete a court_award (and its artisans). QW5 guard: NEVER hard-DELETE a
+     * committed ('given') row — that would destroy the audit trace of a grant
+     * already written to the permanent player record. Refuses (returns false) in
+     * that case so the caller can surface "already granted"; deletes and returns
+     * true otherwise.
+     */
     public function removeAward($court_award_id)
     {
         $court_award_id = (int)$court_award_id;
+
+        $this->db->Clear();
+        $chk = $this->db->DataSet('SELECT status FROM ' . DB_PREFIX . 'court_award
+                            WHERE court_award_id = ' . $court_award_id . ' LIMIT 1');
+        if ($chk && $chk->Next() && $chk->status === 'given') {
+            return false;
+        }
+
         $this->db->Clear();
         $this->db->Execute('DELETE FROM ' . DB_PREFIX . 'court_award_artisan
                        WHERE court_award_id = ' . $court_award_id);
         $this->db->Clear();
         $this->db->Execute('DELETE FROM ' . DB_PREFIX . 'court_award
                        WHERE court_award_id = ' . $court_award_id);
+        return true;
     }
 
     /** [court_id, recommendations_id] for a court_award, or null if absent. */
@@ -331,32 +351,85 @@ class Court
         return ['court_id' => (int)$r->court_id, 'recommendations_id' => (int)$r->recommendations_id];
     }
 
-    /** Set only the status of a court_award (caller validates the value). */
-    public function setAwardStatus($court_award_id, $status)
+    /**
+     * Set only the status of a court_award (caller validates the value).
+     * QW5 guard: refuses to move a committed ('given') row — a stale
+     * skip/set-status can never destroy a finalized row's lifecycle. S5
+     * optimistic lock: pass $expectedRowVersion to require the client's token
+     * still be current. Returns true iff exactly one row changed (row_version is
+     * always bumped on a match, so 0 rows == guard hit / stale / gone).
+     */
+    public function setAwardStatus($court_award_id, $status, $expectedRowVersion = null)
     {
+        $where = 'court_award_id = ' . (int)$court_award_id . ' AND status != \'given\'';
+        if ($expectedRowVersion !== null) {
+            $where .= ' AND row_version = ' . (int)$expectedRowVersion;
+        }
         $this->db->Clear();
-        $this->db->Execute('UPDATE ' . DB_PREFIX . 'court_award SET status = \'' . $this->esc($status) . '\'
-                       WHERE court_award_id = ' . (int)$court_award_id);
+        $rs = $this->db->DataSet(
+            'UPDATE ' . DB_PREFIX . 'court_award
+                SET status = \'' . $this->esc($status) . '\',
+                    row_version = row_version + 1
+              WHERE ' . $where
+        );
+        return $rs && $rs->Size() == 1;
     }
 
-    /** Update the editable fields of a court_award (caller validates status). */
-    public function updateAward($court_award_id, $notes, $public_comment, $pass_to_local, $status, $scroll_maker_id, $regalia_maker_id)
+    /**
+     * Guarded soft-cancel (QW5): mark a row 'cancelled' unless it is already
+     * 'given' (a committed grant's audit trace is never destroyed). This is the
+     * lib home for the skip flow whose raw guard used to live in the controller.
+     * Optional S5 optimistic lock via $expectedRowVersion. Returns true iff
+     * exactly one row changed (0 == already granted / stale / gone).
+     */
+    public function skipAward($court_award_id, $expectedRowVersion = null)
+    {
+        $where = 'court_award_id = ' . (int)$court_award_id . ' AND status != \'given\'';
+        if ($expectedRowVersion !== null) {
+            $where .= ' AND row_version = ' . (int)$expectedRowVersion;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'UPDATE ' . DB_PREFIX . 'court_award
+                SET status = \'cancelled\',
+                    row_version = row_version + 1
+              WHERE ' . $where
+        );
+        return $rs && $rs->Size() == 1;
+    }
+
+    /**
+     * Update the editable FIELDS of a court_award — never its status (QW4). The
+     * lifecycle moves solely through stage/unstage/skip/set-status/commit, so a
+     * stale field-save can no longer drag a row's status backward. S5 optimistic
+     * lock: pass $expectedRowVersion to require the client's token still be
+     * current. row_version is always bumped on a match, so a matched row always
+     * reports one affected row: returns true iff exactly one row changed (0 ==
+     * stale row_version / gone).
+     */
+    public function updateAward($court_award_id, $notes, $public_comment, $pass_to_local, $scroll_maker_id, $regalia_maker_id, $expectedRowVersion = null)
     {
         $court_award_id   = (int)$court_award_id;
         $pass_to_local    = $pass_to_local ? 1 : 0;
         $scroll_maker_id  = (int)$scroll_maker_id;
         $regalia_maker_id = (int)$regalia_maker_id;
+
+        $where = 'court_award_id = ' . $court_award_id;
+        if ($expectedRowVersion !== null) {
+            $where .= ' AND row_version = ' . (int)$expectedRowVersion;
+        }
         $this->db->Clear();
-        $this->db->Execute(
+        $rs = $this->db->DataSet(
             'UPDATE ' . DB_PREFIX . 'court_award SET
              notes = \'' . $this->esc($notes) . '\',
              public_comment = \'' . $this->esc($public_comment) . '\',
              pass_to_local = ' . $pass_to_local . ',
-             status = \'' . $this->esc($status) . '\',
              scroll_maker_id  = ' . ($scroll_maker_id  > 0 ? $scroll_maker_id : 'NULL') . ',
-             regalia_maker_id = ' . ($regalia_maker_id > 0 ? $regalia_maker_id : 'NULL') . '
-             WHERE court_award_id = ' . $court_award_id
+             regalia_maker_id = ' . ($regalia_maker_id > 0 ? $regalia_maker_id : 'NULL') . ',
+             row_version = row_version + 1
+             WHERE ' . $where
         );
+        return $rs && $rs->Size() == 1;
     }
 
     /**
@@ -385,7 +458,8 @@ class Court
         $this->db->Clear();
         $this->db->Execute(
             'UPDATE ' . DB_PREFIX . 'court_award
-                SET sort_order = CASE court_award_id' . $cases . ' END
+                SET sort_order = CASE court_award_id' . $cases . ' END,
+                    row_version = row_version + 1
               WHERE court_id = ' . $court_id . '
                 AND court_award_id IN (' . $idCsv . ')'
         );
@@ -493,30 +567,625 @@ class Court
         return ($ev && $ev->Next()) ? (int)$ev->event_id : 0;
     }
 
-    /**
-     * Atomic grant guard: flip status to 'given' only if not already resolved.
-     * Returns true iff this caller won the transition (exactly one row changed),
-     * so two rapid grant clicks can't both proceed to add_player_award.
-     */
-    public function claimAwardForGrant($court_award_id)
-    {
-        $this->db->Clear();
-        $rs = $this->db->DataSet(
-            'UPDATE ' . DB_PREFIX . 'court_award SET status = \'given\'
-              WHERE court_award_id = ' . (int)$court_award_id . '
-                AND status NOT IN (\'given\', \'cancelled\')'
-        );
-        return $rs && $rs->Size() == 1;
-    }
-
     /** Release a claimed grant when the downstream award insert fails. */
     public function revertAwardStatus($court_award_id, $status)
     {
         $this->db->Clear();
         $this->db->Execute(
-            'UPDATE ' . DB_PREFIX . 'court_award SET status = \'' . $this->esc($status) . '\'
+            'UPDATE ' . DB_PREFIX . 'court_award
+                SET status = \'' . $this->esc($status) . '\', row_version = row_version + 1
               WHERE court_award_id = ' . (int)$court_award_id . ' AND status = \'given\''
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Stage / finalize (spec 2026-07-11-court-planner-stage-finalize-design.md)
+    //
+    // Granting at court now *stages* a row (captures giver/reason/rank without
+    // touching the permanent player record). A separate finalize step commits
+    // every staged row via add_player_award and flips it to 'given'.
+    // -----------------------------------------------------------------------
+
+    /**
+     * Stage a grant in a single atomic UPDATE: capture giver/citation/rank and
+     * mark the row 'staged'. Guarded so a double-submit can't double-stage
+     * (won't touch rows already given/cancelled/staged). Returns true iff exactly
+     * one row changed.
+     */
+    public function stageAward($court_award_id, $given_by_mundane_id, $public_comment, $rank)
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'UPDATE ' . DB_PREFIX . 'court_award SET
+                 status = \'staged\',
+                 given_by_mundane_id = ' . (int)$given_by_mundane_id . ',
+                 public_comment = \'' . $this->esc($public_comment) . '\',
+                 rank = ' . (int)$rank . ',
+                 row_version = row_version + 1
+              WHERE court_award_id = ' . (int)$court_award_id . '
+                AND status NOT IN (\'given\', \'cancelled\', \'staged\')'
+        );
+        return $rs && $rs->Size() == 1;
+    }
+
+    /** Undo a stage: 'staged' -> 'planned'. No player-record trace to reverse. */
+    public function unstageAward($court_award_id)
+    {
+        $this->db->Clear();
+        $this->db->Execute(
+            'UPDATE ' . DB_PREFIX . 'court_award
+                SET status = \'planned\', row_version = row_version + 1
+              WHERE court_award_id = ' . (int)$court_award_id . ' AND status = \'staged\''
+        );
+    }
+
+    /**
+     * All staged rows on a court with every field finalize needs to call
+     * add_player_award, plus the owning court's context (park/kingdom/date/event).
+     */
+    public function getStagedAwards($court_id)
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT ca.court_award_id, ca.mundane_id, ca.kingdomaward_id, ca.rank,
+                    ca.given_by_mundane_id, ca.public_comment, ca.notes,
+                    ca.pass_to_local, ca.recommendations_id,
+                    rec.reason AS rec_reason,
+                    c.park_id, c.kingdom_id, c.court_date, c.event_calendardetail_id
+             FROM ' . DB_PREFIX . 'court_award ca
+             JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
+             LEFT JOIN ' . DB_PREFIX . 'recommendations rec ON rec.recommendations_id = ca.recommendations_id
+             WHERE ca.court_id = ' . (int)$court_id . '
+               AND ca.status = \'staged\'
+             ORDER BY ca.sort_order, ca.court_award_id'
+        );
+        $rows = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $rows[] = [
+                    'CourtAwardId'          => (int)$rs->court_award_id,
+                    'MundaneId'             => (int)$rs->mundane_id,
+                    'KingdomAwardId'        => (int)$rs->kingdomaward_id,
+                    'Rank'                  => (int)$rs->rank,
+                    'GivenByMundaneId'      => $rs->given_by_mundane_id ? (int)$rs->given_by_mundane_id : 0,
+                    'PublicComment'         => $rs->public_comment ?? '',
+                    'Notes'                 => $rs->notes ?? '',
+                    'RecReason'             => $rs->rec_reason ?? '',
+                    'PassToLocal'           => (bool)(int)$rs->pass_to_local,
+                    'RecommendationsId'     => $rs->recommendations_id ? (int)$rs->recommendations_id : 0,
+                    'ParkId'                => (int)$rs->park_id,
+                    'KingdomId'             => (int)$rs->kingdom_id,
+                    'CourtDate'             => $rs->court_date,
+                    'EventCalendarDetailId' => (int)$rs->event_calendardetail_id,
+                ];
+            }
+        }
+        return $rows;
+    }
+
+    /**
+     * Atomic finalize claim: flip 'staged' -> 'given' only if still 'staged'.
+     * Returns true iff this caller won the transition (exactly one row changed),
+     * so two concurrent finalizes can't both commit the same row (double-grant).
+     */
+    public function claimStagedForGrant($court_award_id)
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'UPDATE ' . DB_PREFIX . 'court_award
+                SET status = \'given\', row_version = row_version + 1
+              WHERE court_award_id = ' . (int)$court_award_id . '
+                AND status = \'staged\''
+        );
+        return $rs && $rs->Size() == 1;
+    }
+
+    /** Link the created player-record award id back onto a finalized court row. */
+    public function setAwardId($court_award_id, $award_id)
+    {
+        $this->db->Clear();
+        $this->db->Execute(
+            'UPDATE ' . DB_PREFIX . 'court_award
+                SET award_id = ' . (int)$award_id . ', row_version = row_version + 1
+              WHERE court_award_id = ' . (int)$court_award_id
+        );
+    }
+
+    /**
+     * All grant fields for ONE court_award (owning court context included), with
+     * NO status filter — commitStagedAward needs them AFTER it has claimed the
+     * row 'given'. Mirrors the per-row shape of getStagedAwards(). Null if absent.
+     */
+    public function getAwardForCommit($court_award_id)
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT ca.court_award_id, ca.mundane_id, ca.kingdomaward_id, ca.rank,
+                    ca.given_by_mundane_id, ca.public_comment, ca.notes,
+                    ca.pass_to_local, ca.recommendations_id,
+                    rec.reason AS rec_reason,
+                    c.park_id, c.kingdom_id, c.court_date, c.event_calendardetail_id
+             FROM ' . DB_PREFIX . 'court_award ca
+             JOIN ' . DB_PREFIX . 'court c ON c.court_id = ca.court_id
+             LEFT JOIN ' . DB_PREFIX . 'recommendations rec ON rec.recommendations_id = ca.recommendations_id
+             WHERE ca.court_award_id = ' . (int)$court_award_id . ' LIMIT 1'
+        );
+        if (!$rs || !$rs->Next()) {
+            return null;
+        }
+        return [
+            'CourtAwardId'          => (int)$rs->court_award_id,
+            'MundaneId'             => (int)$rs->mundane_id,
+            'KingdomAwardId'        => (int)$rs->kingdomaward_id,
+            'Rank'                  => (int)$rs->rank,
+            'GivenByMundaneId'      => $rs->given_by_mundane_id ? (int)$rs->given_by_mundane_id : 0,
+            'PublicComment'         => $rs->public_comment ?? '',
+            'Notes'                 => $rs->notes ?? '',
+            'RecReason'             => $rs->rec_reason ?? '',
+            'PassToLocal'           => (bool)(int)$rs->pass_to_local,
+            'RecommendationsId'     => $rs->recommendations_id ? (int)$rs->recommendations_id : 0,
+            'ParkId'                => (int)$rs->park_id,
+            'KingdomId'             => (int)$rs->kingdom_id,
+            'CourtDate'             => $rs->court_date,
+            'EventCalendarDetailId' => (int)$rs->event_calendardetail_id,
+        ];
+    }
+
+    /**
+     * S1 single idempotent commit path for ONE staged court line. This is the one
+     * place a court row is committed to the permanent player record.
+     *
+     * Flow (all here, so the controller loop just calls this per row):
+     *   1. Atomic claim 'staged' -> 'given' (claimStagedForGrant, Size()==1). The
+     *      COURT-LINE identity IS the idempotency key: a line commits at most
+     *      once. A double-click / concurrent finalize sees 0 rows and no-ops
+     *      (returns ['status' => 'noop']) — SAFE TO CALL TWICE.
+     *   2. Load the row's grant fields (row is no longer 'staged', so no filter).
+     *   3. Throw-safe player-record write: Ork3::$Lib->player->AddAward is wrapped
+     *      in try/catch (\Throwable). A thrown error OR a returned non-zero Status
+     *      reverts the claim ('given' -> 'staged') so the row stays re-runnable and
+     *      never ends 'given' with award_id IS NULL (QW3).
+     *   4. On success, link award_id from the RETURNED insert id (AddAward now
+     *      surfaces 'AwardId') — no date heuristic.
+     *
+     * $ctx must carry the acting user's 'Token' (AddAward records by_whom_id).
+     *
+     * Returns one of:
+     *   ['status' => 'ok',    'award_id' => int, 'row' => array]  committed now
+     *   ['status' => 'noop']                                       already resolved
+     *   ['status' => 'error', 'error' => string, 'court_award_id' => int]
+     */
+    public function commitStagedAward($court_award_id, $ctx)
+    {
+        $court_award_id = (int)$court_award_id;
+
+        // (1) Idempotency key: claim the line. Loser (already given/cancelled/not
+        // staged) no-ops.
+        if (!$this->claimStagedForGrant($court_award_id)) {
+            return ['status' => 'noop', 'court_award_id' => $court_award_id];
+        }
+
+        // (2) Load grant fields (row is 'given' now — fetch without status filter).
+        $row = $this->getAwardForCommit($court_award_id);
+        if (!$row) {
+            $this->revertAwardStatus($court_award_id, 'staged');
+            return [
+                'status'         => 'error',
+                'court_award_id' => $court_award_id,
+                'error'          => 'Award row vanished during commit.',
+            ];
+        }
+
+        // Giver backstop: never commit a row with no recorded giver.
+        if ($row['GivenByMundaneId'] <= 0) {
+            $this->revertAwardStatus($court_award_id, 'staged');
+            return [
+                'status'         => 'error',
+                'court_award_id' => $court_award_id,
+                'error'          => 'No giver recorded — re-grant this award and choose who conferred it.',
+            ];
+        }
+
+        $event_id = $this->getEventIdFromCalendarDetail($row['EventCalendarDetailId']);
+        $date     = $row['CourtDate'] ?: date('Y-m-d');
+        $note     = $row['PublicComment'] !== ''
+            ? $row['PublicComment']
+            : ($row['RecReason'] !== '' ? $row['RecReason'] : $row['Notes']);
+
+        // (3) Throw-safe player-record write. add_player_award returns the FLAT
+        // shape: Status (int, 0=success), Error, Detail (+ our new AwardId).
+        try {
+            $r = Ork3::$Lib->player->AddAward([
+                'Token'          => $ctx['Token'] ?? '',
+                'RecipientId'    => $row['MundaneId'],
+                'KingdomAwardId' => $row['KingdomAwardId'],
+                'AwardId'        => 0,
+                'Rank'           => $row['Rank'],
+                'Date'           => $date,
+                'GivenById'      => $row['GivenByMundaneId'],
+                'CustomName'     => '',
+                'Note'           => $note,
+                'ParkId'         => $row['ParkId'],
+                'KingdomId'      => $row['KingdomId'],
+                'EventId'        => $event_id,
+            ]);
+        } catch (\Throwable $e) {
+            // Revert the claim so finalize stays re-runnable; no orphaned 'given'.
+            $this->revertAwardStatus($court_award_id, 'staged');
+            return [
+                'status'         => 'error',
+                'court_award_id' => $court_award_id,
+                'error'          => 'Grant failed: ' . $e->getMessage(),
+            ];
+        }
+
+        if ((int)($r['Status'] ?? 1) !== 0) {
+            $this->revertAwardStatus($court_award_id, 'staged');
+            return [
+                'status'         => 'error',
+                'court_award_id' => $court_award_id,
+                'error'          => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''),
+            ];
+        }
+
+        // (4) Link the freshly-created ork_awards row via its RETURNED id.
+        $award_id = (int)($r['AwardId'] ?? 0);
+        $this->setAwardId($court_award_id, $award_id);
+
+        return [
+            'status'   => 'ok',
+            'award_id' => $award_id,
+            'row'      => $row,
+        ];
+    }
+
+    /**
+     * S1 server-side cross-path reconcile. When the Recs-Manager grantaward path
+     * writes an ork_awards row directly, call this so any court line still OPEN
+     * for that recommendation ('planned'/'announced'/'staged') is marked 'given'
+     * and linked to that awards row in the SAME request — a later finalize then
+     * sees it already committed and cannot re-grant. Client-side data-courts is no
+     * longer trusted for correctness.
+     *
+     * Guarded UPDATE (only open rows). Matches on the exact recommendations_id
+     * AND, as defense-in-depth, on the cluster key (mundane_id + kingdomaward_id
+     * + rank) when the caller supplies it — so a court line created under a
+     * sibling/older cluster-representative rec id, or an ad-hoc line for the same
+     * person+award+rank, is still reconciled and cannot be re-granted at finalize.
+     * This mirrors the cluster-wide resolve the finalize path already performs.
+     * Returns the number of court lines reconciled.
+     */
+    public function reconcileGrantForRecommendation($recommendations_id, $awards_id, $given_by_mundane_id, $rank = null, $mundane_id = 0, $kingdomaward_id = 0)
+    {
+        $recommendations_id = (int)$recommendations_id;
+        $mundane_id         = (int)$mundane_id;
+        $kingdomaward_id    = (int)$kingdomaward_id;
+        $rank               = ($rank === null) ? null : (int)$rank;
+
+        // Build the match: exact rec id OR the cluster key. At least one must be usable.
+        $matches = [];
+        if ($recommendations_id > 0) {
+            $matches[] = 'recommendations_id = ' . $recommendations_id;
+        }
+        if ($mundane_id > 0 && $kingdomaward_id > 0) {
+            $clusterMatch = 'mundane_id = ' . $mundane_id . ' AND kingdomaward_id = ' . $kingdomaward_id;
+            if ($rank !== null) {
+                $clusterMatch .= ' AND rank = ' . $rank;
+            }
+            $matches[] = '(' . $clusterMatch . ')';
+        }
+        if (!$matches) {
+            return 0;
+        }
+
+        $award_id = (int)$awards_id;
+        $giver    = (int)$given_by_mundane_id;
+
+        $sets = 'status = \'given\', row_version = row_version + 1';
+        if ($award_id > 0) {
+            $sets .= ', award_id = ' . $award_id;
+        }
+        if ($giver > 0) {
+            $sets .= ', given_by_mundane_id = ' . $giver;
+        }
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'UPDATE ' . DB_PREFIX . 'court_award SET ' . $sets . '
+              WHERE (' . implode(' OR ', $matches) . ')
+                AND status IN (\'planned\', \'announced\', \'staged\')'
+        );
+        return $rs ? (int)$rs->Size() : 0;
+    }
+
+    /** Mark a court complete + finalized (audit: who/when). */
+    public function setCourtFinalized($court_id, $uid)
+    {
+        $this->db->Clear();
+        $this->db->Execute(
+            'UPDATE ' . DB_PREFIX . 'court SET
+                 status = \'complete\',
+                 finalized_at = NOW(),
+                 finalized_by = ' . (int)$uid . '
+              WHERE court_id = ' . (int)$court_id
+        );
+    }
+
+    /** Set the run-vs-plan mode of a court. Rejects an invalid mode. */
+    public function setCourtMode($court_id, $mode)
+    {
+        if (!in_array($mode, ['run', 'plan'], true)) {
+            return false;
+        }
+        $this->db->Clear();
+        $this->db->Execute(
+            'UPDATE ' . DB_PREFIX . 'court SET mode = \'' . $this->esc($mode) . '\'
+              WHERE court_id = ' . (int)$court_id
+        );
+        return true;
+    }
+
+    /**
+     * Resolve one officer role to a giver descriptor, or null if the seat is
+     * vacant. Officer -> mundane persona, most-recent seat wins.
+     */
+    private function lookupOfficerGiver($kingdom_id, $park_id, $role, $role_label)
+    {
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT o.mundane_id, m.persona
+             FROM ' . DB_PREFIX . 'officer o
+             LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = o.mundane_id
+             WHERE o.kingdom_id = ' . (int)$kingdom_id . '
+               AND o.park_id = ' . (int)$park_id . '
+               AND o.role = \'' . $this->esc($role) . '\'
+             ORDER BY o.officer_id DESC
+             LIMIT 1'
+        );
+        if (!$r || !$r->Next() || (int)$r->mundane_id <= 0) {
+            return null;
+        }
+        return [
+            'mundane_id' => (int)$r->mundane_id,
+            'persona'    => $r->persona ?? '',
+            'role'       => $role_label,
+        ];
+    }
+
+    /**
+     * Grant-modal giver options: the court-level Monarch as the default plus
+     * ordered quick-pick pills (spec 6.1). Vacant seats are omitted.
+     *   Kingdom court: default = Kingdom Monarch; pill = Kingdom Regent.
+     *   Park court:    default = Park Monarch; pills = Park Regent,
+     *                  Kingdom Monarch, Kingdom Regent.
+     */
+    public function getCourtGiverOptions($court_id)
+    {
+        $this->db->Clear();
+        $cr = $this->db->DataSet(
+            'SELECT kingdom_id, park_id FROM ' . DB_PREFIX . 'court
+              WHERE court_id = ' . (int)$court_id . ' LIMIT 1'
+        );
+        if (!$cr || !$cr->Next()) {
+            return ['default' => null, 'pills' => []];
+        }
+        $kingdom_id = (int)$cr->kingdom_id;
+        $park_id    = (int)$cr->park_id;
+
+        $pills = [];
+        if ($park_id > 0) {
+            $default = $this->lookupOfficerGiver($kingdom_id, $park_id, 'Monarch', 'Park Monarch');
+            $candidates = [
+                [$kingdom_id, $park_id, 'Regent',  'Park Regent'],
+                [$kingdom_id, 0,        'Monarch', 'Kingdom Monarch'],
+                [$kingdom_id, 0,        'Regent',  'Kingdom Regent'],
+            ];
+        } else {
+            $default = $this->lookupOfficerGiver($kingdom_id, 0, 'Monarch', 'Kingdom Monarch');
+            $candidates = [
+                [$kingdom_id, 0, 'Regent', 'Kingdom Regent'],
+            ];
+        }
+        foreach ($candidates as $c) {
+            $cand = $this->lookupOfficerGiver($c[0], $c[1], $c[2], $c[3]);
+            if ($cand) {
+                $pills[] = $cand;
+            }
+        }
+        return ['default' => $default, 'pills' => $pills];
+    }
+
+    /**
+     * Rows from the most recent completed court at this level that are still
+     * awardable: not already 'given' and the recipient does not already hold that
+     * award/rank (already-has check mirrors Report's awards-table EXISTS). Feeds
+     * the "prepopulate skipped-from-last-court" banner (spec 6.5).
+     */
+    public function getUngrantedFromLastCourt($kingdom_id, $park_id)
+    {
+        $kingdom_id = (int)$kingdom_id;
+        $park_id    = (int)$park_id;
+
+        $this->db->Clear();
+        $cr = $this->db->DataSet(
+            'SELECT court_id FROM ' . DB_PREFIX . 'court
+              WHERE kingdom_id = ' . $kingdom_id . '
+                AND park_id = ' . $park_id . '
+                AND status = \'complete\'
+              ORDER BY court_date DESC, court_id DESC
+              LIMIT 1'
+        );
+        if (!$cr || !$cr->Next()) {
+            return [];
+        }
+        $last_court_id = (int)$cr->court_id;
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT ca.court_award_id, ca.mundane_id, ca.kingdomaward_id, ca.rank,
+                    ca.recommendations_id, ca.public_comment, ca.pass_to_local, ca.notes,
+                    m.persona, IFNULL(ka.name, a.name) AS award_name
+             FROM ' . DB_PREFIX . 'court_award ca
+             LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = ca.mundane_id
+             LEFT JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ca.kingdomaward_id
+             LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
+             WHERE ca.court_id = ' . $last_court_id . '
+               AND ca.status != \'given\'
+               AND NOT EXISTS (
+                   SELECT 1 FROM ' . DB_PREFIX . 'awards oa
+                    WHERE oa.mundane_id = ca.mundane_id
+                      AND oa.kingdomaward_id = ca.kingdomaward_id
+                      AND oa.rank >= ca.rank
+                      AND (oa.revoked = 0 OR oa.revoked IS NULL)
+               )
+             ORDER BY ca.sort_order, ca.court_award_id'
+        );
+        $rows = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $rows[] = [
+                    'CourtAwardId'      => (int)$rs->court_award_id,
+                    'MundaneId'         => (int)$rs->mundane_id,
+                    'Persona'           => $rs->persona ?? '',
+                    'KingdomAwardId'    => (int)$rs->kingdomaward_id,
+                    'AwardName'         => $rs->award_name ?? '',
+                    'Rank'              => (int)$rs->rank,
+                    'RecommendationsId' => $rs->recommendations_id ? (int)$rs->recommendations_id : 0,
+                    'PublicComment'     => $rs->public_comment ?? '',
+                    'PassToLocal'       => (bool)(int)$rs->pass_to_local,
+                    'Notes'             => $rs->notes ?? '',
+                ];
+            }
+        }
+        return $rows;
+    }
+
+    /**
+     * Cheap heartbeat state for the live multi-manager poll (spec 6.4).
+     * court_award has no updated_at column, so `version` is an md5 of the row set
+     * (court_award_id:status:sort_order:given_by:modified) plus court mode/status,
+     * which changes on any edit, reorder, giver change, add, or remove.
+     */
+    public function getCourtState($court_id)
+    {
+        $court_id = (int)$court_id;
+
+        $this->db->Clear();
+        $cr = $this->db->DataSet(
+            'SELECT mode, status FROM ' . DB_PREFIX . 'court
+              WHERE court_id = ' . $court_id . ' LIMIT 1'
+        );
+        $mode         = 'run';
+        $court_status = '';
+        if ($cr && $cr->Next()) {
+            $mode         = $cr->mode ?? 'run';
+            $court_status = $cr->status ?? '';
+        }
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT court_award_id, status, sort_order, given_by_mundane_id, row_version, modified
+             FROM ' . DB_PREFIX . 'court_award
+             WHERE court_id = ' . $court_id . '
+             ORDER BY court_award_id'
+        );
+        $awards     = [];
+        $stampParts = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $caid     = (int)$rs->court_award_id;
+                $givenBy  = $rs->given_by_mundane_id ? (int)$rs->given_by_mundane_id : 0;
+                $sortOrd  = (int)$rs->sort_order;
+                $rowVer   = (int)$rs->row_version;
+                $awards[] = [
+                    'court_award_id'      => $caid,
+                    'status'              => $rs->status,
+                    'sort_order'          => $sortOrd,
+                    'given_by_mundane_id' => $givenBy,
+                    'row_version'         => $rowVer,
+                ];
+                // row_version is the authoritative optimistic-lock token; fold it
+                // into the heartbeat stamp so any mutating write flips `version`.
+                $stampParts[] = $caid . ':' . $rs->status . ':' . $sortOrd . ':'
+                    . $givenBy . ':' . $rowVer . ':' . ($rs->modified ?? '');
+            }
+        }
+        $version = md5($court_status . '|' . $mode . '|' . implode(',', $stampParts));
+
+        return [
+            'version'      => $version,
+            'mode'         => $mode,
+            'court_status' => $court_status,
+            'awards'       => $awards,
+        ];
+    }
+
+    /** Count of staged-but-not-finalized rows (unfinalized-staged safeguard). */
+    public function countStagedAwards($court_id)
+    {
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'court_award
+              WHERE court_id = ' . (int)$court_id . ' AND status = \'staged\''
+        );
+        return ($r && $r->Next()) ? (int)$r->c : 0;
+    }
+
+    /**
+     * Plan-mode bulk stage: flip every 'planned' row on a court to 'staged',
+     * filling the default giver only where none was captured yet (leaves any
+     * existing public_comment/rank untouched). Returns the number staged.
+     */
+    public function bulkStagePlanned($court_id, $default_giver_mundane_id)
+    {
+        $court_id = (int)$court_id;
+        $giver    = (int)$default_giver_mundane_id;
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'UPDATE ' . DB_PREFIX . 'court_award SET
+                 status = \'staged\',
+                 given_by_mundane_id = CASE
+                     WHEN given_by_mundane_id IS NULL OR given_by_mundane_id = 0
+                     THEN ' . $giver . ' ELSE given_by_mundane_id END,
+                 row_version = row_version + 1
+              WHERE court_id = ' . $court_id . ' AND status = \'planned\''
+        );
+        return $rs ? (int)$rs->Size() : 0;
+    }
+
+    /**
+     * Skip-remaining helper for the complete-court flow (spec 6.6): mark every
+     * still-unresolved row ('planned'/'announced') on a court 'cancelled'. Leaves
+     * 'staged'/'given'/'cancelled' rows untouched. Returns the number cancelled.
+     */
+    public function cancelUnresolved($court_id)
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'UPDATE ' . DB_PREFIX . 'court_award
+                SET status = \'cancelled\', row_version = row_version + 1
+              WHERE court_id = ' . (int)$court_id . '
+                AND status IN (\'planned\', \'announced\')'
+        );
+        return $rs ? (int)$rs->Size() : 0;
+    }
+
+    /**
+     * Dedupe probe for the prepopulate-from-last-court flow (spec 6.5): does this
+     * court already carry a row for the same recipient/award/rank?
+     */
+    public function courtHasAward($court_id, $mundane_id, $kingdomaward_id, $rank)
+    {
+        $this->db->Clear();
+        $r = $this->db->DataSet(
+            'SELECT 1 FROM ' . DB_PREFIX . 'court_award
+              WHERE court_id = ' . (int)$court_id . '
+                AND mundane_id = ' . (int)$mundane_id . '
+                AND kingdomaward_id = ' . (int)$kingdomaward_id . '
+                AND rank = ' . (int)$rank . '
+              LIMIT 1'
+        );
+        return $r && $r->Next();
     }
 
     // -----------------------------------------------------------------------
@@ -530,7 +1199,7 @@ class Court
             'SELECT ca.court_award_id, ca.mundane_id, ca.kingdomaward_id, ca.rank,
                     ca.recommendations_id, ca.sort_order, ca.pass_to_local,
                     ca.notes, ca.public_comment, ca.status, ca.scroll_status, ca.regalia_status,
-                    ca.scroll_maker_id, ca.regalia_maker_id,
+                    ca.scroll_maker_id, ca.regalia_maker_id, ca.row_version,
                     sm.persona AS scroll_maker_persona, rm.persona AS regalia_maker_persona,
                     m.persona, p.abbreviation AS park_abbrev,
                     IFNULL(ka.name, a.name) AS award_name,
@@ -565,6 +1234,7 @@ class Court
                     'Rank'              => (int)$rs->rank,
                     'RecommendationsId' => $rs->recommendations_id ? (int)$rs->recommendations_id : null,
                     'SortOrder'         => (int)$rs->sort_order,
+                    'RowVersion'        => (int)$rs->row_version,
                     'PassToLocal'       => (bool)(int)$rs->pass_to_local,
                     'Notes'             => $rs->notes ?? '',
                     'PublicComment'     => $rs->public_comment ?? '',
@@ -765,7 +1435,7 @@ class Court
     {
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            'SELECT ka.kingdomaward_id, IFNULL(ka.name, a.name) AS award_name, a.is_ladder
+            'SELECT ka.kingdomaward_id, IFNULL(ka.name, a.name) AS award_name, a.is_ladder, a.is_title, a.peerage
              FROM ' . DB_PREFIX . 'kingdomaward ka
              LEFT JOIN ' . DB_PREFIX . 'award a ON a.award_id = ka.award_id
              WHERE ka.kingdom_id = ' . (int)$kingdom_id . '
@@ -778,6 +1448,7 @@ class Court
                     'KingdomAwardId' => (int)$rs->kingdomaward_id,
                     'AwardName'      => $rs->award_name,
                     'IsLadder'       => (bool)(int)$rs->is_ladder,
+                    'IsTitle'        => (bool)((int)$rs->is_title === 1 || !in_array((string)$rs->peerage, ['', 'None'], true)),
                 ];
             }
         }

@@ -1165,6 +1165,10 @@ function rmDoGrant(rec, tr, opts) {
     fd.append('EventId', opts.eventId != null ? opts.eventId : '0');
     fd.append('Note', opts.note != null ? opts.note : (rec.Reason || ''));
     fd.append('Rank', opts.rank != null ? opts.rank : (rec.Rank || 0));
+    // Thread the granted recommendation id so the server can reconcile the matching
+    // court line (mark it given) and a later court finalize can't double-grant it.
+    var recId = (opts.recommendationsId != null) ? opts.recommendationsId : rec.RepRecId;
+    if (recId) { fd.append('RecommendationsId', recId); }
     return rmPost(RmConfig.uir + 'PlayerAjax/player/' + rec.MundaneId + '/grantaward', fd)
         .then(function (j) {
             if (!rmJsonOk(j)) { var e = new Error(j && j.error ? j.error : 'Could not grant the award.'); e.granted = false; throw e; }

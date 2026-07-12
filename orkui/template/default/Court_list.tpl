@@ -53,6 +53,15 @@ $backUrl = $context === 'park'
 .cp-error-box { background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 14px 18px; border-radius: 6px; margin-bottom: 16px; }
 .cp-h1-icon { color: #4a5568; margin-right: 8px; }
 
+/* Mode + staged badges */
+.cp-badge-mode { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 12px; font-size: 11px; font-weight: 700; background: #ebf8ff; color: #2b6cb0; }
+.cp-badge-mode-plan { background: #faf089; color: #744210; }
+.cp-badge-staged { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 12px; font-size: 11px; font-weight: 700; background: #fefcbf; color: #975a16; box-shadow: inset 0 0 0 1px rgba(151,90,22,.25); }
+
+/* data-tip tooltip (no global handler on this standalone page) */
+.cp-page [data-tip], .cp-court-badges [data-tip] { position: relative; }
+.cp-page [data-tip]:hover::after { content: attr(data-tip); position: absolute; top: 100%; right: 0; margin-top: 4px; width: max-content; max-width: 240px; white-space: normal; background: #2d3748; color: #fff; padding: 6px 8px; border-radius: 4px; font-size: 11px; line-height: 1.35; font-weight: 500; text-align: left; box-shadow: 0 2px 6px rgba(0,0,0,.25); z-index: 50; pointer-events: none; }
+
 /* ----- Dark mode overrides ----- */
 html[data-theme="dark"] .cp-error-box { background: rgba(229,62,62,.12); border-color: rgba(229,62,62,.4); color: #fc8181; }
 html[data-theme="dark"] .cp-h1-icon { color: #a0aec0; }
@@ -85,6 +94,22 @@ html[data-theme="dark"] .cp-field select:focus { border-color: #4299e1; box-shad
 html[data-theme="dark"] .cp-btn-outline { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
 html[data-theme="dark"] .cp-btn-outline:hover { background: #2d3748; }
 html[data-theme="dark"] .cp-error { color: #fc8181; }
+html[data-theme="dark"] .cp-badge-mode { background: #1a2f45; color: #90cdf4; }
+html[data-theme="dark"] .cp-badge-mode-plan { background: #3d3512; color: #f6e05e; }
+html[data-theme="dark"] .cp-badge-staged { background: #3d3512; color: #f6e05e; box-shadow: inset 0 0 0 1px rgba(246,224,94,.3); }
+html[data-theme="dark"] .cp-page [data-tip]:hover::after { background: #000; }
+
+/* Mode selector (create-court modal) */
+.cp-mode-opts { display: flex; gap: 10px; }
+.cp-mode-opt { flex: 1; border: 1px solid #cbd5e0; border-radius: 6px; padding: 10px 12px; cursor: pointer; display: block; transition: border-color .12s, background .12s, box-shadow .12s; }
+.cp-mode-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.cp-mode-title { font-size: 13px; font-weight: 700; color: #2d3748; display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; }
+.cp-mode-desc { font-size: 11px; color: #718096; margin-top: 3px; line-height: 1.35; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.cp-mode-opt.cp-mode-sel { border-color: #2c5282; background: #ebf2fb; box-shadow: 0 0 0 1px #2c5282; }
+html[data-theme="dark"] .cp-mode-opt { border-color: #2d3748; }
+html[data-theme="dark"] .cp-mode-title { color: #e2e8f0; }
+html[data-theme="dark"] .cp-mode-desc { color: #a0aec0; }
+html[data-theme="dark"] .cp-mode-opt.cp-mode-sel { border-color: #4299e1; background: #1a2f45; box-shadow: 0 0 0 1px #4299e1; }
 
 /* Status badges (inline style!important: override common pastels) */
 html[data-theme="dark"] .cp-badge { box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
@@ -116,10 +141,12 @@ html[data-theme="dark"] .cp-badge { box-shadow: inset 0 0 0 1px rgba(255,255,255
     <?php else: ?>
         <?php foreach ($courtList as $court): ?>
         <?php
-            $st  = $court['Status'];
-            $lbl = $statusLabel[$st] ?? $st;
-            $clr = $statusColor[$st] ?? '#718096';
-            $bg  = $statusBg[$st]    ?? '#edf2f7';
+            $st     = $court['Status'];
+            $lbl    = $statusLabel[$st] ?? $st;
+            $clr    = $statusColor[$st] ?? '#718096';
+            $bg     = $statusBg[$st]    ?? '#edf2f7';
+            $mode   = $court['Mode'] ?? 'run';
+            $staged = (int)($court['StagedCount'] ?? 0);
         ?>
         <div class="cp-court-card">
             <div class="cp-court-date">
@@ -133,6 +160,14 @@ html[data-theme="dark"] .cp-badge { box-shadow: inset 0 0 0 1px rgba(255,255,255
             </div>
             <div class="cp-court-badges">
                 <span class="cp-badge" style="background:<?= $bg ?>;color:<?= $clr ?>"><?= $lbl ?></span>
+                <?php if ($mode === 'plan'): ?>
+                <span class="cp-badge-mode cp-badge-mode-plan" data-tip="Locked as a plan — prepared for someone to record later."><i class="fas fa-clipboard-list"></i> Plan</span>
+                <?php else: ?>
+                <span class="cp-badge-mode" data-tip="Run at court — awards granted live during the ceremony."><i class="fas fa-bullhorn"></i> Run</span>
+                <?php endif; ?>
+                <?php if ($staged > 0 && $st !== 'complete'): ?>
+                <span class="cp-badge-staged" data-tip="Grants captured but not yet finalized — open to finalize."><i class="fas fa-hourglass-half"></i> <?= $staged ?> staged</span>
+                <?php endif; ?>
                 <span class="cp-badge-count"><i class="fas fa-award" style="margin-right:3px"></i><?= (int)$court['AwardCount'] ?></span>
                 <a href="<?= UIR ?>Court/detail/<?= (int)$court['CourtId'] ?>" class="cp-btn-link">
                     Open <i class="fas fa-arrow-right"></i>
@@ -174,6 +209,21 @@ html[data-theme="dark"] .cp-badge { box-shadow: inset 0 0 0 1px rgba(255,255,255
                 <label>Date</label>
                 <input type="date" id="cp-new-date">
             </div>
+            <div class="cp-field">
+                <label>How will this court be handled?</label>
+                <div class="cp-mode-opts">
+                    <label class="cp-mode-opt cp-mode-sel" id="cp-mode-run-opt">
+                        <input type="radio" name="cp-mode" value="run" checked onchange="cpSyncMode()">
+                        <span class="cp-mode-title"><i class="fas fa-bullhorn"></i> Run at Court</span>
+                        <span class="cp-mode-desc">I'll grant awards live during the ceremony.</span>
+                    </label>
+                    <label class="cp-mode-opt" id="cp-mode-plan-opt">
+                        <input type="radio" name="cp-mode" value="plan" onchange="cpSyncMode()">
+                        <span class="cp-mode-title"><i class="fas fa-clipboard-list"></i> Lock as Plan</span>
+                        <span class="cp-mode-desc">I'm preparing the order of court for someone to record later.</span>
+                    </label>
+                </div>
+            </div>
             <div class="cp-error" id="cp-new-error"></div>
         </div>
         <div class="cp-modal-footer">
@@ -191,6 +241,15 @@ html[data-theme="dark"] .cp-badge { box-shadow: inset 0 0 0 1px rgba(255,255,255
     var kingdomId  = <?= (int)$kingdom_id ?>;
     var parkId     = <?= (int)$park_id ?>;
 
+    window.cpSyncMode = function() {
+        var runOpt  = document.getElementById('cp-mode-run-opt');
+        var planOpt = document.getElementById('cp-mode-plan-opt');
+        var planEl  = planOpt ? planOpt.querySelector('input') : null;
+        var isPlan  = planEl && planEl.checked;
+        if (runOpt)  runOpt.classList.toggle('cp-mode-sel', !isPlan);
+        if (planOpt) planOpt.classList.toggle('cp-mode-sel', !!isPlan);
+    };
+
     window.cpOnEventChange = function(sel, dateId) {
         var opt = sel.options[sel.selectedIndex];
         var start = opt ? opt.getAttribute('data-start') : '';
@@ -202,6 +261,9 @@ html[data-theme="dark"] .cp-badge { box-shadow: inset 0 0 0 1px rgba(255,255,255
         document.getElementById('cp-new-date').value  = '';
         var evEl = document.getElementById('cp-new-event');
         if (evEl) evEl.value = '0';
+        var runEl = document.querySelector('input[name="cp-mode"][value="run"]');
+        if (runEl) runEl.checked = true;
+        cpSyncMode();
         document.getElementById('cp-new-error').style.display = 'none';
         document.getElementById('cp-new-court-modal').style.display = 'flex';
         setTimeout(function() { document.getElementById('cp-new-name').focus(); }, 50);
@@ -221,12 +283,16 @@ html[data-theme="dark"] .cp-badge { box-shadow: inset 0 0 0 1px rgba(255,255,255
         if (!name) { errEl.textContent = 'Please enter a court name.'; errEl.style.display = 'block'; return; }
         errEl.style.display = 'none';
 
+        var modeEl = document.querySelector('input[name="cp-mode"]:checked');
+        var mode   = modeEl ? modeEl.value : 'run';
+
         var fd = new FormData();
         fd.append('KingdomId',               kingdomId);
         fd.append('ParkId',                  parkId);
         fd.append('Name',                    name);
         fd.append('CourtDate',               date);
         fd.append('EventCalendarDetailId',   eventId);
+        fd.append('Mode',                    mode);
 
         fetch(uir + 'CourtAjax/create_court', {
             method: 'POST', body: fd,

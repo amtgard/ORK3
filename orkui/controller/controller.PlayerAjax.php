@@ -216,6 +216,19 @@ class Controller_PlayerAjax extends Controller
                 echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => rtrim(($r['Error'] ?? 'Could not grant the award.') . ': ' . ($r['Detail'] ?? ''), ': ')]);
                 exit;
             }
+            // S1 cross-path reconcile: mark/link any court line still OPEN for this
+            // recommendation 'given' + award_id in the SAME request, so a later
+            // finalize sees it committed and cannot re-grant it. Tolerates a missing
+            // RecommendationsId (rec_id 0 => skip) — the Recs-Manager Grant modal
+            // starts POSTing it in Phase 3.
+            $new_award_id = (int)($r['AwardId'] ?? 0);
+            $rec_id       = (int)($_POST['RecommendationsId'] ?? 0);
+            if ($rec_id > 0) {
+                // Pass the cluster key too so a court line under a sibling/older
+                // representative rec id (or an ad-hoc line for the same
+                // person+award+rank) is still reconciled and can't re-grant.
+                Ork3::$Lib->court->reconcileGrantForRecommendation($rec_id, $new_award_id, $given_by_id, $rank, $player_id, $kingdomaward_id);
+            }
             echo json_encode(['status' => 0]);
             exit;
 

@@ -1382,6 +1382,25 @@
 			html[data-theme="dark"] .pk-cp-btn-link { border-color:#4a5568; color:#cbd5e0; }
 			html[data-theme="dark"] .pk-cp-btn-link:hover { background:#2d3748; color:#fff; }
 			html[data-theme="dark"] .pk-cp-empty { border-color:#2d3748; color:#a0aec0; }
+			/* Mode + staged badges */
+			.pk-cp-badge-mode { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; background:#ebf8ff; color:#2b6cb0; }
+			.pk-cp-badge-mode-plan { background:#faf089; color:#744210; }
+			.pk-cp-badge-staged { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; background:#fefcbf; color:#975a16; box-shadow:inset 0 0 0 1px rgba(151,90,22,.25); }
+			.pk-cp-badge-mode[data-tip]::after, .pk-cp-badge-staged[data-tip]::after { white-space:normal; width:max-content; max-width:240px; }
+			html[data-theme="dark"] .pk-cp-badge-mode { background:#1a2f45; color:#90cdf4; }
+			html[data-theme="dark"] .pk-cp-badge-mode-plan { background:#3d3512; color:#f6e05e; }
+			html[data-theme="dark"] .pk-cp-badge-staged { background:#3d3512; color:#f6e05e; box-shadow:inset 0 0 0 1px rgba(246,224,94,.3); }
+			/* Mode selector (create-court modal) */
+			.pk-cp-mode-opts { display:flex; gap:10px; }
+			.pk-cp-mode-opt { flex:1; border:1px solid #cbd5e0; border-radius:6px; padding:10px 12px; cursor:pointer; display:block; transition:border-color .12s,background .12s,box-shadow .12s; }
+			.pk-cp-mode-opt input { position:absolute; opacity:0; pointer-events:none; }
+			.pk-cp-mode-title { font-size:13px; font-weight:700; color:#2d3748; display:flex; align-items:center; gap:6px; }
+			.pk-cp-mode-desc { font-size:11px; color:#718096; margin-top:3px; line-height:1.35; font-weight:400; }
+			.pk-cp-mode-opt.pk-cp-mode-sel { border-color:#2c5282; background:#ebf2fb; box-shadow:0 0 0 1px #2c5282; }
+			html[data-theme="dark"] .pk-cp-mode-opt { border-color:#2d3748; }
+			html[data-theme="dark"] .pk-cp-mode-title { color:#e2e8f0; }
+			html[data-theme="dark"] .pk-cp-mode-desc { color:#a0aec0; }
+			html[data-theme="dark"] .pk-cp-mode-opt.pk-cp-mode-sel { border-color:#4299e1; background:#1a2f45; box-shadow:0 0 0 1px #4299e1; }
 			</style>
 			<div class="pk-cp-toolbar">
 				<span style="font-size:13px;color:#718096"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
@@ -1402,10 +1421,12 @@
 			<?php else: ?>
 			<?php foreach ($CourtList as $_court): ?>
 			<?php
-				$_st  = $_court['Status'];
-				$_lbl = $_cpStatusLabel[$_st] ?? $_st;
-				$_clr = $_cpStatusColor[$_st] ?? '#718096';
-				$_bg  = $_cpStatusBg[$_st]    ?? '#edf2f7';
+				$_st     = $_court['Status'];
+				$_lbl    = $_cpStatusLabel[$_st] ?? $_st;
+				$_clr    = $_cpStatusColor[$_st] ?? '#718096';
+				$_bg     = $_cpStatusBg[$_st]    ?? '#edf2f7';
+				$_mode   = $_court['Mode'] ?? 'run';
+				$_staged = (int)($_court['StagedCount'] ?? 0);
 			?>
 			<div class="pk-cp-court-card">
 				<div class="pk-cp-court-date">
@@ -1419,6 +1440,14 @@
 				</div>
 				<div class="pk-cp-court-badges">
 					<span class="pk-cp-badge" style="background:<?= $_bg ?>;color:<?= $_clr ?>"><?= $_lbl ?></span>
+					<?php if ($_mode === 'plan'): ?>
+					<span class="pk-cp-badge-mode pk-cp-badge-mode-plan" data-tip="Locked as a plan — prepared for someone to record later."><i class="fas fa-clipboard-list"></i> Plan</span>
+					<?php else: ?>
+					<span class="pk-cp-badge-mode" data-tip="Run at court — awards granted live during the ceremony."><i class="fas fa-bullhorn"></i> Run</span>
+					<?php endif; ?>
+					<?php if ($_staged > 0 && $_st !== 'complete'): ?>
+					<span class="pk-cp-badge-staged" data-tip="Grants captured but not yet finalized — open to finalize."><i class="fas fa-hourglass-half"></i> <?= $_staged ?> staged</span>
+					<?php endif; ?>
 					<span class="pk-cp-badge-count"><i class="fas fa-award" style="margin-right:3px"></i><?= (int)$_court['AwardCount'] ?></span>
 					<a href="<?= UIR ?>Court/detail/<?= (int)$_court['CourtId'] ?>" class="pk-cp-btn-link">
 						Open <i class="fas fa-arrow-right"></i>
@@ -1456,6 +1485,21 @@
 						<div class="pk-acct-field">
 							<label>Date</label>
 							<input type="date" id="pk-cp-new-date" >
+						</div>
+						<div class="pk-acct-field">
+							<label>How will this court be handled?</label>
+							<div class="pk-cp-mode-opts">
+								<label class="pk-cp-mode-opt pk-cp-mode-sel" id="pk-cp-mode-run-opt">
+									<input type="radio" name="pk-cp-mode" value="run" checked onchange="pkCpSyncMode()">
+									<span class="pk-cp-mode-title"><i class="fas fa-bullhorn"></i> Run at Court</span>
+									<span class="pk-cp-mode-desc">I'll grant awards live during the ceremony.</span>
+								</label>
+								<label class="pk-cp-mode-opt" id="pk-cp-mode-plan-opt">
+									<input type="radio" name="pk-cp-mode" value="plan" onchange="pkCpSyncMode()">
+									<span class="pk-cp-mode-title"><i class="fas fa-clipboard-list"></i> Lock as Plan</span>
+									<span class="pk-cp-mode-desc">I'm preparing the order of court for someone to record later.</span>
+								</label>
+							</div>
 						</div>
 						<div id="pk-cp-new-error" class="pk-form-error" style="display:none"></div>
 					</div>
@@ -1503,11 +1547,23 @@
 					if (start) document.getElementById(dateId).value = start;
 				};
 
+				window.pkCpSyncMode = function() {
+					var runOpt  = document.getElementById('pk-cp-mode-run-opt');
+					var planOpt = document.getElementById('pk-cp-mode-plan-opt');
+					var planEl  = planOpt ? planOpt.querySelector('input') : null;
+					var isPlan  = planEl && planEl.checked;
+					if (runOpt)  runOpt.classList.toggle('pk-cp-mode-sel', !isPlan);
+					if (planOpt) planOpt.classList.toggle('pk-cp-mode-sel', !!isPlan);
+				};
+
 				window.pkCpOpenNewCourt = function() {
 					document.getElementById('pk-cp-new-name').value = '';
 					document.getElementById('pk-cp-new-date').value = '';
 					var evEl = document.getElementById('pk-cp-new-event');
 					if (evEl) evEl.value = '0';
+					var runEl = document.querySelector('input[name="pk-cp-mode"][value="run"]');
+					if (runEl) runEl.checked = true;
+					pkCpSyncMode();
 					document.getElementById('pk-cp-new-error').style.display = 'none';
 					var modal = document.getElementById('pk-cp-new-court-modal');
 					modal.style.display = 'flex';
@@ -1526,12 +1582,15 @@
 					var errEl   = document.getElementById('pk-cp-new-error');
 					if (!name) { errEl.textContent = 'Please enter a court name.'; errEl.style.display = 'block'; return; }
 					errEl.style.display = 'none';
+					var modeEl = document.querySelector('input[name="pk-cp-mode"]:checked');
+					var mode   = modeEl ? modeEl.value : 'run';
 					var fd = new FormData();
 					fd.append('KingdomId', kingdomId);
 					fd.append('ParkId', parkId);
 					fd.append('Name', name);
 					fd.append('CourtDate', date);
 					fd.append('EventCalendarDetailId', eventId);
+					fd.append('Mode', mode);
 					fetch(uir + 'CourtAjax/create_court', {
 						method: 'POST', body: fd,
 						headers: { 'X-Requested-With': 'XMLHttpRequest' }

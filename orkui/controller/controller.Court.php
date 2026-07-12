@@ -97,7 +97,23 @@ class Controller_Court extends Controller
 
         $courtAwards  = Ork3::$Lib->court->getCourtAwards($court_id);
         $pendingRecs  = Ork3::$Lib->court->getPendingRecommendations($court['KingdomId'], $court['ParkId'], $uid, $court_id);
-        $awardOptions = Ork3::$Lib->court->getKingdomAwardOptions($court['KingdomId']);
+        // Grouped ad-hoc award/title picker options (mirrors the player Add Award
+        // modal grouping). Scoped to the COURT's kingdom, not the session's.
+        $this->load_model('Award');
+        $awardOptions = $this->Award->fetch_award_option_groups($court['KingdomId'], 'Awards');
+
+        // ---- Stage/finalize planner data (spec §6) ----
+        // Grant-modal giver roster (default monarch + quick-pick pills).
+        $giverOptions = Ork3::$Lib->court->getCourtGiverOptions($court_id);
+        // Cheap heartbeat state doubles as the source of the stored run/plan `mode`
+        // (getCourtDetail does not expose it) and the initial heartbeat version stamp.
+        $courtState   = Ork3::$Lib->court->getCourtState($court_id);
+        // Unfinalized-staged safeguard indicator (spec §5.3).
+        $stagedCount  = Ork3::$Lib->court->countStagedAwards($court_id);
+        // Prev-court "prepopulate skipped" banner source (spec §6.5) — empty if none.
+        $prevSkipped  = Ork3::$Lib->court->getUngrantedFromLastCourt($court['KingdomId'], $court['ParkId']);
+        // NOTE: rec_reason is already carried per-row by getCourtAwards() (`RecReason`),
+        // so the grant modal can fall back to it without a separate lookup.
 
         // Status labels and next-status transitions
         $statusFlow = [
@@ -136,6 +152,11 @@ class Controller_Court extends Controller
         $this->data['Uid']          = $uid;
         $this->data['HeraldryUrl']  = $heraldryUrl;
         $this->data['HasHeraldry']  = $hasHeraldry;
+        $this->data['GiverOptions'] = $giverOptions;
+        $this->data['CourtMode']    = $courtState['mode'] ?? 'run';
+        $this->data['StateVersion'] = $courtState['version'] ?? '';
+        $this->data['StagedCount']  = $stagedCount;
+        $this->data['PrevSkipped']  = $prevSkipped;
 
         $this->template = 'Court_detail.tpl';
     }

@@ -2251,9 +2251,32 @@ class Player extends Ork3
 
             $awards->save();
 
-            Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['RecipientId'], $this->get_award($awards));
+            // yapo::save() re-Finds by primary key after an INSERT, so awards_id
+            // now holds the real inserted row id (the awards table has no unique
+            // key that could make LAST_INSERT_ID stale here — each grant is a new
+            // row). Surface it so callers (Court finalize) can link the committed
+            // ork_awards row deterministically instead of guessing by date.
+            $new_award_id = (int)$awards->awards_id;
 
-            return Success('');
+            // Best-effort audit: the ork_awards row is ALREADY committed above. If
+            // auditing throws, it must NOT propagate — Court::commitStagedAward
+            // treats a thrown AddAward as failure and reverts the court line to
+            // 'staged', which on a re-run would double-commit the permanent record.
+            // Swallow post-insert failures so the write stays singular and linked.
+            try {
+                Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['RecipientId'], $this->get_award($awards));
+            } catch (\Throwable $e) {
+                // audit is non-authoritative; the grant already succeeded
+            }
+
+            // Return shape: the usual FLAT Success payload
+            //   ['Status' => 0, 'Error' => …, 'Detail' => '']
+            // (callers read $r['Status'] as an int, 0 = success) PLUS an extra
+            // 'AwardId' key carrying the inserted awards_id. Adding a key leaves
+            // every existing Status/Error/Detail reader untouched.
+            $success = Success('');
+            $success['AwardId'] = $new_award_id;
+            return $success;
         } else {
             return NoAuthorization();
         }
@@ -2876,113 +2899,137 @@ class Player extends Ork3
         }
     }
 
-	public function SnoozeAwardRecommendation($request) {
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
-			return NoAuthorization();
+    public function SnoozeAwardRecommendation($request)
+    {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
+            return NoAuthorization();
+        }
 
-		$rec_id = (int)($request['RecommendationsId'] ?? 0);
-		if (!$rec_id) return InvalidParameter();
+        $rec_id = (int)($request['RecommendationsId'] ?? 0);
+        if (!$rec_id) {
+            return InvalidParameter();
+        }
 
-		$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
-		$awardRec->clear();
-		$awardRec->recommendations_id = $rec_id;
-		if (!$awardRec->find()) return InvalidParameter('Recommendation not found.');
+        $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+        $awardRec->clear();
+        $awardRec->recommendations_id = $rec_id;
+        if (!$awardRec->find()) {
+            return InvalidParameter('Recommendation not found.');
+        }
 
-		// Auth: must be park admin for recipient's park
-		$recipientInfo = $this->player_info($awardRec->mundane_id);
-		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_EDIT))
-			return NoAuthorization();
+        // Auth: must be park admin for recipient's park
+        $recipientInfo = $this->player_info($awardRec->mundane_id);
+        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_EDIT)) {
+            return NoAuthorization();
+        }
 
-		// Resolve current monarch and regent for the recipient's park
-		$pid = (int)$recipientInfo['ParkId'];
-		$sql = "SELECT
+        // Resolve current monarch and regent for the recipient's park
+        $pid = (int)$recipientInfo['ParkId'];
+        $sql = "SELECT
 			COALESCE(MAX(CASE WHEN role='Monarch' THEN mundane_id END), 0) AS monarch_id,
 			COALESCE(MAX(CASE WHEN role='Regent'  THEN mundane_id END), 0) AS regent_id
 			FROM " . DB_PREFIX . "officer WHERE park_id = {$pid}";
-		$r = $this->db->query($sql);
-		$monarch_id = 0; $regent_id = 0;
-		if ($r && $r->size() > 0 && $r->next()) {
-			$monarch_id = (int)$r->monarch_id;
-			$regent_id  = (int)$r->regent_id;
-		}
+        $r = $this->db->query($sql);
+        $monarch_id = 0;
+        $regent_id = 0;
+        if ($r && $r->size() > 0 && $r->next()) {
+            $monarch_id = (int)$r->monarch_id;
+            $regent_id  = (int)$r->regent_id;
+        }
 
-		$awardRec->snoozed_by_id      = $mundane_id;
-		$awardRec->snoozed_monarch_id = $monarch_id;
-		$awardRec->snoozed_regent_id  = $regent_id;
-		$awardRec->save();
-		return Success('Recommendation snoozed.');
-	}
+        $awardRec->snoozed_by_id      = $mundane_id;
+        $awardRec->snoozed_monarch_id = $monarch_id;
+        $awardRec->snoozed_regent_id  = $regent_id;
+        $awardRec->save();
+        return Success('Recommendation snoozed.');
+    }
 
-	public function UnsnoozeAwardRecommendation($request) {
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
-			return NoAuthorization();
+    public function UnsnoozeAwardRecommendation($request)
+    {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
+            return NoAuthorization();
+        }
 
-		$rec_id = (int)($request['RecommendationsId'] ?? 0);
-		if (!$rec_id) return InvalidParameter();
+        $rec_id = (int)($request['RecommendationsId'] ?? 0);
+        if (!$rec_id) {
+            return InvalidParameter();
+        }
 
-		$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
-		$awardRec->clear();
-		$awardRec->recommendations_id = $rec_id;
-		if (!$awardRec->find()) return InvalidParameter('Recommendation not found.');
+        $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+        $awardRec->clear();
+        $awardRec->recommendations_id = $rec_id;
+        if (!$awardRec->find()) {
+            return InvalidParameter('Recommendation not found.');
+        }
 
-		$recipientInfo = $this->player_info($awardRec->mundane_id);
-		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_EDIT))
-			return NoAuthorization();
+        $recipientInfo = $this->player_info($awardRec->mundane_id);
+        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_EDIT)) {
+            return NoAuthorization();
+        }
 
-		// yapo's save() skips null-valued fields (isset() guard in YapoSave), so
-		// assigning null above never cleared these columns and unsnooze silently
-		// no-op'd. Clear them with a direct UPDATE instead.
-		$this->db->query(
-			"UPDATE " . DB_PREFIX . "recommendations
+        // yapo's save() skips null-valued fields (isset() guard in YapoSave), so
+        // assigning null above never cleared these columns and unsnooze silently
+        // no-op'd. Clear them with a direct UPDATE instead.
+        $this->db->query(
+            "UPDATE " . DB_PREFIX . "recommendations
 			 SET snoozed_by_id = NULL, snoozed_monarch_id = NULL, snoozed_regent_id = NULL
 			 WHERE recommendations_id = " . (int)$rec_id
-		);
-		return Success('Recommendation unsnoozed.');
-	}
+        );
+        return Success('Recommendation unsnoozed.');
+    }
 
-	// Pass-to-local toggle: a kingdom/principality officer delegates this recommendation to
-	// the recipient's home park to award (intent signal). Authority: AUTH_KINGDOM over the
-	// recipient's kingdom (the principality-auth traversal also lets a parent-kingdom officer
-	// through). Raw UPDATE (not yapo) so we can null the by/at columns on un-pass.
-	public function SetRecommendationPassedToLocal($request) {
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
-			return NoAuthorization();
+    // Pass-to-local toggle: a kingdom/principality officer delegates this recommendation to
+    // the recipient's home park to award (intent signal). Authority: AUTH_KINGDOM over the
+    // recipient's kingdom (the principality-auth traversal also lets a parent-kingdom officer
+    // through). Raw UPDATE (not yapo) so we can null the by/at columns on un-pass.
+    public function SetRecommendationPassedToLocal($request)
+    {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
+            return NoAuthorization();
+        }
 
-		$rec_id = (int)($request['RecommendationsId'] ?? 0);
-		if (!$rec_id) return InvalidParameter();
-		$passed = !empty($request['Passed']) ? 1 : 0;
+        $rec_id = (int)($request['RecommendationsId'] ?? 0);
+        if (!$rec_id) {
+            return InvalidParameter();
+        }
+        $passed = !empty($request['Passed']) ? 1 : 0;
 
-		$awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
-		$awardRec->clear();
-		$awardRec->recommendations_id = $rec_id;
-		if (!$awardRec->find()) return InvalidParameter('Recommendation not found.');
+        $awardRec = new yapo($this->db, DB_PREFIX . 'recommendations');
+        $awardRec->clear();
+        $awardRec->recommendations_id = $rec_id;
+        if (!$awardRec->find()) {
+            return InvalidParameter('Recommendation not found.');
+        }
 
-		$recipientInfo = $this->player_info($awardRec->mundane_id);
-		$kingdom_id = (int)($recipientInfo['KingdomId'] ?? 0);
-		if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE))
-			return NoAuthorization();
+        $recipientInfo = $this->player_info($awardRec->mundane_id);
+        $kingdom_id = (int)($recipientInfo['KingdomId'] ?? 0);
+        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            return NoAuthorization();
+        }
 
-		$this->db->Clear();
-		if ($passed) {
-			$this->db->query("UPDATE " . DB_PREFIX . "recommendations
+        $this->db->Clear();
+        if ($passed) {
+            $this->db->query("UPDATE " . DB_PREFIX . "recommendations
 				SET passed_to_local = 1, passed_to_local_by = " . (int)$mundane_id . ", passed_to_local_at = NOW()
 				WHERE recommendations_id = " . $rec_id);
-		} else {
-			$this->db->query("UPDATE " . DB_PREFIX . "recommendations
+        } else {
+            $this->db->query("UPDATE " . DB_PREFIX . "recommendations
 				SET passed_to_local = 0, passed_to_local_by = NULL, passed_to_local_at = NULL
 				WHERE recommendations_id = " . $rec_id);
-		}
+        }
 
-		$this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
-		if (isset(Ork3::$Lib->dangeraudit)) {
-			Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, ['passed_to_local' => $passed]);
-		}
-		return Success('Recommendation pass-to-local updated.');
-	}
+        $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
+        if (isset(Ork3::$Lib->dangeraudit)) {
+            Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, ['passed_to_local' => $passed]);
+        }
+        return Success('Recommendation pass-to-local updated.');
+    }
 
-	public function DeleteAwardRecommendation($request) {
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
-			return NoAuthorization();
+    public function DeleteAwardRecommendation($request)
+    {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
+            return NoAuthorization();
+        }
 
         if (valid_id($request['RequestedBy'])) {
             $can_delete_recommendation = false;
@@ -2990,88 +3037,100 @@ class Player extends Ork3
             $awardRec->clear();
             $awardRec->recommendations_id = $request['RecommendationsId'];
 
-			if (valid_id($request['RecommendationsId']) && $awardRec->find()) {
-				$recipientInfo = $this->player_info($awardRec->mundane_id);
-				if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
-					$can_delete_recommendation = true;
-				}
-				if ($can_delete_recommendation || $request['RequestedBy'] == $awardRec->recommended_by_id || $request['RequestedBy'] == $awardRec->mundane_id) {
-					$prior_rec = [
-						'recommendations_id' => (int)$awardRec->recommendations_id,
-						'mundane_id'         => (int)$awardRec->mundane_id,
-						'kingdomaward_id'    => (int)$awardRec->kingdomaward_id,
-						'award_id'           => (int)$awardRec->award_id,
-						'rank'               => (int)$awardRec->rank,
-						'recommended_by_id'  => (int)$awardRec->recommended_by_id,
-						'date_recommended'   => $awardRec->date_recommended,
-						'reason'             => $awardRec->reason,
-					];
-					$cascade_at = date('Y-m-d H:i:s');
-					// Granted-from-Manager: notify advocates BEFORE the rec/seconds soft-delete.
-					if (!empty($request['Granted'])) {
-						try {
-							Ork3::$Lib->notification->notifyRecommendationGranted(
-								(int)$awardRec->recommendations_id, (int)$request['RequestedBy']);
-						} catch (\Throwable $e) { /* best-effort */ }
-					}
-					$awardRec->deleted_by = $request['RequestedBy'];
-					$awardRec->deleted_at = $cascade_at;
-					$awardRec->save();
-					Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
-					// Cascade soft-delete to any active seconds on this recommendation.
-					$this->db->Clear();
-					$this->db->query("UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = '" . $cascade_at . "', deleted_by = " . (int)$request['RequestedBy'] . " WHERE recommendations_id = " . (int)$awardRec->recommendations_id . " AND deleted_at IS NULL");
-					$this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
-					return Success('Recommendation Removed!');
-				} else {
-					return InvalidParameter('Only the giver, recipient, or Admin may delete a recommendation.');
-				}
-			} else {
-				return InvalidParameter('There was a problem with the request.');
-			}
-		} else {
-				return NoAuthorization();
-		}
-	}
+            if (valid_id($request['RecommendationsId']) && $awardRec->find()) {
+                $recipientInfo = $this->player_info($awardRec->mundane_id);
+                if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
+                    $can_delete_recommendation = true;
+                }
+                if ($can_delete_recommendation || $request['RequestedBy'] == $awardRec->recommended_by_id || $request['RequestedBy'] == $awardRec->mundane_id) {
+                    $prior_rec = [
+                        'recommendations_id' => (int)$awardRec->recommendations_id,
+                        'mundane_id'         => (int)$awardRec->mundane_id,
+                        'kingdomaward_id'    => (int)$awardRec->kingdomaward_id,
+                        'award_id'           => (int)$awardRec->award_id,
+                        'rank'               => (int)$awardRec->rank,
+                        'recommended_by_id'  => (int)$awardRec->recommended_by_id,
+                        'date_recommended'   => $awardRec->date_recommended,
+                        'reason'             => $awardRec->reason,
+                    ];
+                    $cascade_at = date('Y-m-d H:i:s');
+                    // Granted-from-Manager: notify advocates BEFORE the rec/seconds soft-delete.
+                    if (!empty($request['Granted'])) {
+                        try {
+                            Ork3::$Lib->notification->notifyRecommendationGranted(
+                                (int)$awardRec->recommendations_id,
+                                (int)$request['RequestedBy']
+                            );
+                        } catch (\Throwable $e) { /* best-effort */
+                        }
+                    }
+                    $awardRec->deleted_by = $request['RequestedBy'];
+                    $awardRec->deleted_at = $cascade_at;
+                    $awardRec->save();
+                    Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', (int)$awardRec->mundane_id, $prior_rec);
+                    // Cascade soft-delete to any active seconds on this recommendation.
+                    $this->db->Clear();
+                    $this->db->query("UPDATE " . DB_PREFIX . "recommendation_seconds SET deleted_at = '" . $cascade_at . "', deleted_by = " . (int)$request['RequestedBy'] . " WHERE recommendations_id = " . (int)$awardRec->recommendations_id . " AND deleted_at IS NULL");
+                    $this->bust_player_award_recs_cache((int)$awardRec->mundane_id);
+                    return Success('Recommendation Removed!');
+                } else {
+                    return InvalidParameter('Only the giver, recipient, or Admin may delete a recommendation.');
+                }
+            } else {
+                return InvalidParameter('There was a problem with the request.');
+            }
+        } else {
+            return NoAuthorization();
+        }
+    }
 
-	// Resolve every live recommendation in a (recipient, kingdomaward, rank) cluster
-	// as "granted": each member runs through DeleteAwardRecommendation(Granted=1), which
-	// notifies that rec's advocates BEFORE soft-deleting it and cascading its seconds.
-	// Used by the Manager group-grant and CourtAjax::grant_award. No-ops on an empty cluster.
-	public function ResolveRecommendationCluster($request) {
-		$mundane_id = (int)($request['MundaneId'] ?? 0);
-		$ka_id      = (int)($request['KingdomAwardId'] ?? 0);
-		$rank       = (int)($request['Rank'] ?? 0);
-		if (!valid_id($mundane_id) || !valid_id($ka_id)) {
-			return ['Status' => 0, 'Resolved' => 0];
-		}
-		$this->db->Clear();
-		$rs = $this->db->DataSet(
-			'SELECT recommendations_id FROM ' . DB_PREFIX . 'recommendations
+    // Resolve every live recommendation in a (recipient, kingdomaward, rank) cluster
+    // as "granted": each member runs through DeleteAwardRecommendation(Granted=1), which
+    // notifies that rec's advocates BEFORE soft-deleting it and cascading its seconds.
+    // Used by the Manager group-grant and CourtAjax::grant_award. No-ops on an empty cluster.
+    public function ResolveRecommendationCluster($request)
+    {
+        $mundane_id = (int)($request['MundaneId'] ?? 0);
+        $ka_id      = (int)($request['KingdomAwardId'] ?? 0);
+        $rank       = (int)($request['Rank'] ?? 0);
+        if (!valid_id($mundane_id) || !valid_id($ka_id)) {
+            return ['Status' => 0, 'Resolved' => 0];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT recommendations_id FROM ' . DB_PREFIX . 'recommendations
 			  WHERE mundane_id = ' . $mundane_id . '
 			    AND kingdomaward_id = ' . $ka_id . '
 			    AND rank = ' . $rank . '
 			    AND deleted_at IS NULL'
-		);
-		$ids = [];
-		if ($rs) { while ($rs->Next()) { $ids[] = (int)$rs->recommendations_id; } }
+        );
+        $ids = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $ids[] = (int)$rs->recommendations_id;
+            }
+        }
 
-		$resolved = 0;
-		foreach ($ids as $rid) {
-			$r = $this->DeleteAwardRecommendation([
-				'Token'             => $request['Token'] ?? '',
-				'RecommendationsId' => $rid,
-				'RequestedBy'       => (int)($request['RequestedBy'] ?? 0),
-				'Granted'           => 1,
-			]);
-			if ((int)($r['Status'] ?? 1) === 0) { $resolved++; }
-		}
-		return ['Status' => 0, 'Resolved' => $resolved];
-	}
+        $resolved = 0;
+        foreach ($ids as $rid) {
+            $r = $this->DeleteAwardRecommendation([
+                'Token'             => $request['Token'] ?? '',
+                'RecommendationsId' => $rid,
+                'RequestedBy'       => (int)($request['RequestedBy'] ?? 0),
+                'Granted'           => 1,
+            ]);
+            if ((int)($r['Status'] ?? 1) === 0) {
+                $resolved++;
+            }
+        }
+        return ['Status' => 0, 'Resolved' => $resolved];
+    }
 
-	public function RestoreAwardRecommendation($request) {
-		if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0)
-			return NoAuthorization();
+    public function RestoreAwardRecommendation($request)
+    {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) == 0) {
+            return NoAuthorization();
+        }
 
         if (!valid_id($request['RecommendationsId'])) {
             return InvalidParameter('There was a problem with the request.');

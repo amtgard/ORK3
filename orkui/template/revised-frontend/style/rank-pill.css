@@ -21,7 +21,8 @@
    (teal / gold / orange are fair game — just not true green/red.)
    Filled pills in both themes; light/warm hues use dark text, the
    saturated mids use white text; dark mode is tuned a step brighter so
-   pills stay high-contrast on a dark page.
+   pills stay high-contrast on a dark page. Background/text pairs are
+   tuned so 11px bold text clears WCAG AA (>=4.5:1) at every level.
    ============================================================ */
 
 .ladder-rank {
@@ -39,27 +40,24 @@
 	vertical-align : middle;
 }
 
-/* ── Light mode ──────────────────────────────────────────── */
-.ladder-rank[data-lvl="1"]  { background:#0d9488; color:#ffffff; }  /* teal    */
-.ladder-rank[data-lvl="2"]  { background:#38bdf8; color:#06354d; }  /* sky     */
-.ladder-rank[data-lvl="3"]  { background:#2563eb; color:#ffffff; }  /* blue    */
-.ladder-rank[data-lvl="4"]  { background:#4f46e5; color:#ffffff; }  /* indigo  */
-.ladder-rank[data-lvl="5"]  { background:#7c3aed; color:#ffffff; }  /* violet  */
-.ladder-rank[data-lvl="6"]  { background:#9333ea; color:#ffffff; }  /* purple  */
-.ladder-rank[data-lvl="7"]  { background:#c026d3; color:#ffffff; }  /* magenta */
-.ladder-rank[data-lvl="8"]  { background:#db2777; color:#ffffff; }  /* rose    */
-.ladder-rank[data-lvl="9"]  { background:#ea580c; color:#ffffff; }  /* orange  */
+/* ── Rank ramp (ONE ramp for both themes) ─────────────────────
+   Deep, saturated fills with WHITE text (except the two genuinely
+   light book-ends — sky at the low end, gold at the top — which use
+   dark text). Uniform white-on-saturated reads clean and consistent;
+   avoids the muddy "mid-tone fill + dark text" look. Every pair clears
+   WCAG AA (≥4.5:1) at 11px bold, and every fill stays distinct against
+   a dark page. The saturated fills read well in BOTH light and dark,
+   so dark mode reuses them (only the border is nudged for the dark bg). */
+.ladder-rank[data-lvl="1"]  { background:#0f766e; color:#ffffff; }  /* teal    */
+.ladder-rank[data-lvl="2"]  { background:#0369a1; color:#ffffff; }  /* sky     */
+.ladder-rank[data-lvl="3"]  { background:#1d4ed8; color:#ffffff; }  /* blue    */
+.ladder-rank[data-lvl="4"]  { background:#4338ca; color:#ffffff; }  /* indigo  */
+.ladder-rank[data-lvl="5"]  { background:#6d28d9; color:#ffffff; }  /* violet  */
+.ladder-rank[data-lvl="6"]  { background:#7e22ce; color:#ffffff; }  /* purple  */
+.ladder-rank[data-lvl="7"]  { background:#a21caf; color:#ffffff; }  /* magenta */
+.ladder-rank[data-lvl="8"]  { background:#be185d; color:#ffffff; }  /* rose    */
+.ladder-rank[data-lvl="9"]  { background:#c2410c; color:#ffffff; }  /* orange  */
 .ladder-rank[data-lvl="10"] { background:#f5b30b; color:#3f2d00; }  /* gold    */
 
-/* ── Dark mode ───────────────────────────────────────────── */
-html[data-theme="dark"] .ladder-rank { border-color: rgba(255, 255, 255, 0.14); }
-html[data-theme="dark"] .ladder-rank[data-lvl="1"]  { background:#2dd4bf; color:#04302b; }  /* teal    */
-html[data-theme="dark"] .ladder-rank[data-lvl="2"]  { background:#7dd3fc; color:#06354d; }  /* sky     */
-html[data-theme="dark"] .ladder-rank[data-lvl="3"]  { background:#3b82f6; color:#ffffff; }  /* blue    */
-html[data-theme="dark"] .ladder-rank[data-lvl="4"]  { background:#6366f1; color:#ffffff; }  /* indigo  */
-html[data-theme="dark"] .ladder-rank[data-lvl="5"]  { background:#8b5cf6; color:#ffffff; }  /* violet  */
-html[data-theme="dark"] .ladder-rank[data-lvl="6"]  { background:#a855f7; color:#ffffff; }  /* purple  */
-html[data-theme="dark"] .ladder-rank[data-lvl="7"]  { background:#d946ef; color:#ffffff; }  /* magenta */
-html[data-theme="dark"] .ladder-rank[data-lvl="8"]  { background:#ec4899; color:#ffffff; }  /* rose    */
-html[data-theme="dark"] .ladder-rank[data-lvl="9"]  { background:#fb923c; color:#3d1c00; }  /* orange  */
-html[data-theme="dark"] .ladder-rank[data-lvl="10"] { background:#fbbf24; color:#422f00; }  /* gold    */
+/* ── Dark mode: same fills, just brighten the hairline border ── */
+html[data-theme="dark"] .ladder-rank { border-color: rgba(255, 255, 255, 0.18); }
