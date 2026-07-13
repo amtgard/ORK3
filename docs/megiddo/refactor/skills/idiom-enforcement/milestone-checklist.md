@@ -32,7 +32,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 15 | I-15 | `megiddo/i-15-idiom-r15` | `beb377ff` | [x] |
 | 16 | I-16 | `megiddo/i-16-idiom-r16` | `b1613c81` | [x] |
 | 17 | I-17 | `megiddo/i-17-idiom-r17` | `e9c4e9fc` | [x] |
-| 18 | I-18 | `megiddo/i-18-idiom-r18` | `5561f1e8` | [x] |
+| 18 | I-18 | `megiddo/i-18-idiom-r18` | `a881aaf5` | [x] |
 | 19 | I-19a | | | [ ] |
 | 20 | I-19b | | | [ ] |
 | 21 | I-19c | | | [ ] |
@@ -41,7 +41,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 **Next actionable hop:** I-19a
 
-**Stack tip:** `megiddo/i-18-idiom-r18` @ `5561f1e8`
+**Stack tip:** `megiddo/i-18-idiom-r18` @ `a881aaf5`
 
 ---
 
