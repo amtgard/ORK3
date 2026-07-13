@@ -1196,8 +1196,6 @@ class Controller_Reports extends Controller
             echo json_encode(['status' => 1, 'error' => 'Invalid parameters']);
             exit;
         }
-        $scope_type = $_POST['ScopeType'] ?? '';
-        $scope_id   = (int)($_POST['ScopeId'] ?? 0);
         $r = $this->Reports->set_player_active_status($this->session->token, $mundane_id, $active);
         if ($r['Status'] == 0) {
             echo json_encode(['status' => 0]);

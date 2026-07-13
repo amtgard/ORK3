@@ -21,8 +21,7 @@ class Model_Player extends Model
 
     public function edit_note($request)
     {
-        $player = new Player();
-        return $player->EditNote($request);
+        return $this->_player()->EditNote($request);
     }
 
     public function get_notes($id)
@@ -47,16 +46,12 @@ class Model_Player extends Model
 
     public function fetch_player_details($mundane_id)
     {
-        $player = new Player();
-
-        return $player->GetPlayerProfileDetails((int) $mundane_id);
+        return $this->_player()->GetPlayerProfileDetails((int) $mundane_id);
     }
 
     public function fetch_player_attendance($mundane_id)
     {
-        $player = new Player();
-
-        return $player->GetPlayerAttendanceList((int) $mundane_id);
+        return $this->_player()->GetPlayerAttendanceList((int) $mundane_id);
     }
 
     private function bust_player_details_cache($request)
@@ -65,8 +60,7 @@ class Model_Player extends Model
         if (!$mundane_id) {
             return;
         }
-        $player = new Player();
-        $player->bustPlayerProfileCaches((int) $mundane_id);
+        $this->_player()->bustPlayerProfileCaches((int) $mundane_id);
     }
 
     // Bust the kingdom + park roster caches for the player's current home.
@@ -80,8 +74,7 @@ class Model_Player extends Model
         if (!$mundane_id) {
             return;
         }
-        $player = new Player();
-        $player->bustRosterCachesForPlayer($mundane_id);
+        $this->_player()->bustRosterCachesForPlayer($mundane_id);
     }
 
     public function delete_player_award($request)
@@ -256,106 +249,87 @@ class Model_Player extends Model
 
     public function get_circle_award_ids($mundane_id)
     {
-        $player = new Player();
-
-        return $player->GetCircleAwardIds($mundane_id);
+        return $this->_player()->GetCircleAwardIds($mundane_id);
     }
 
     public function player_info($token_or_id)
     {
-        $player = new Player();
-
-        return $player->player_info($token_or_id);
+        return $this->_player()->player_info($token_or_id);
     }
 
     public function get_custom_milestones($mundane_id)
     {
-        $player = new Player();
-        return $player->GetCustomMilestones($mundane_id);
+        return $this->_player()->GetCustomMilestones($mundane_id);
     }
 
     public function add_custom_milestone($request)
     {
-        $player = new Player();
-        return $player->AddCustomMilestone($request);
+        return $this->_player()->AddCustomMilestone($request);
     }
 
     public function update_custom_milestone($request)
     {
-        $player = new Player();
-        return $player->UpdateCustomMilestone($request);
+        return $this->_player()->UpdateCustomMilestone($request);
     }
 
     public function delete_custom_milestone($request)
     {
-        $player = new Player();
-        return $player->DeleteCustomMilestone($request);
+        return $this->_player()->DeleteCustomMilestone($request);
     }
 
     public function get_latest_attendance_date($mundane_id)
     {
-        $player = new Player();
-        return $player->get_latest_attendance_date($mundane_id);
+        return $this->_player()->get_latest_attendance_date($mundane_id);
     }
 
     public function get_earliest_attendance_date($mundane_id)
     {
-        $player = new Player();
-        return $player->get_earliest_attendance_date($mundane_id);
+        return $this->_player()->get_earliest_attendance_date($mundane_id);
     }
 
     public function get_earliest_park_attendance_date($mundane_id, $park_id)
     {
-        $player = new Player();
-        return $player->get_earliest_park_attendance_date($mundane_id, $park_id);
+        return $this->_player()->get_earliest_park_attendance_date($mundane_id, $park_id);
     }
 
     public function get_custom_title_award_id()
     {
-        $player = new Player();
-        return $player->getCustomTitleAwardId();
+        return $this->_player()->getCustomTitleAwardId();
     }
 
     public function has_notes($mundane_id)
     {
-        $player = new Player();
-        return $player->GetNotesCount($mundane_id);
+        return $this->_player()->GetNotesCount($mundane_id);
     }
 
     public function get_officer_roles($mundane_id)
     {
-        $player = new Player();
-        return $player->GetOfficerRoles($mundane_id);
+        return $this->_player()->GetOfficerRoles($mundane_id);
     }
 
     public function get_display_grants($mundane_id)
     {
-        $player = new Player();
-        return $player->GetDisplayGrants($mundane_id);
+        return $this->_player()->GetDisplayGrants($mundane_id);
     }
 
     public function get_beltline_for_player($mundane_id, $viewer_mundane_id = 0)
     {
-        $player = new Player();
-        return $player->GetBeltlineForPlayer($mundane_id, $viewer_mundane_id);
+        return $this->_player()->GetBeltlineForPlayer($mundane_id, $viewer_mundane_id);
     }
 
     public function get_reconcile_award_map($kingdom_id)
     {
-        $player = new Player();
-        return $player->GetReconcileAwardMap($kingdom_id);
+        return $this->_player()->GetReconcileAwardMap($kingdom_id);
     }
 
     public function dismiss_whats_new($mundane_id, $version)
     {
-        $player = new Player();
-        return $player->DismissWhatsNew((int)$mundane_id, (string)$version);
+        return $this->_player()->DismissWhatsNew((int)$mundane_id, (string)$version);
     }
 
     public function check_username_available($username, $exclude_mundane_id = 0)
     {
-        $player = new Player();
-        return $player->CheckUsernameAvailable($username, $exclude_mundane_id);
+        return $this->_player()->CheckUsernameAvailable($username, $exclude_mundane_id);
     }
 
     public function username_check_payload($candidate)
@@ -378,50 +352,42 @@ class Model_Player extends Model
 
     public function add_second_to_recommendation($request)
     {
-        $player = new Player();
-        return $player->AddSecondToRecommendation($request);
+        return $this->_player()->AddSecondToRecommendation($request);
     }
 
     public function edit_second_notes($request)
     {
-        $player = new Player();
-        return $player->EditSecondNotes($request);
+        return $this->_player()->EditSecondNotes($request);
     }
 
     public function withdraw_second($request)
     {
-        $player = new Player();
-        return $player->WithdrawSecond($request);
+        return $this->_player()->WithdrawSecond($request);
     }
 
     public function edit_award_recommendation_reason($request)
     {
-        $player = new Player();
-        return $player->EditAwardRecommendationReason($request);
+        return $this->_player()->EditAwardRecommendationReason($request);
     }
 
     public function get_dietary_preferences($mundane_id)
     {
-        $player = new Player();
-        return $player->GetDietaryPreferences($mundane_id);
+        return $this->_player()->GetDietaryPreferences($mundane_id);
     }
 
     public function save_dietary_preferences($mundane_id, $data)
     {
-        $player = new Player();
-        return $player->SaveDietaryPreferences($mundane_id, $data);
+        return $this->_player()->SaveDietaryPreferences($mundane_id, $data);
     }
 
     public function get_award_max_ranks($mundane_id)
     {
-        $player = new Player();
-        return $player->GetAwardMaxRanks($mundane_id);
+        return $this->_player()->GetAwardMaxRanks($mundane_id);
     }
 
     public function save_own_email($email)
     {
-        $player = new Player();
-        return $player->SaveOwnEmail([
+        return $this->_player()->SaveOwnEmail([
             'Token' => $this->session->token,
             'Email' => $email,
         ]);
@@ -435,5 +401,10 @@ class Model_Player extends Model
     public function get_revoked_awards(int $mundaneId): array
     {
         return $this->Player->GetRevokedAwardsForPlayer($mundaneId);
+    }
+
+    private function _player(): Player
+    {
+        return new Player();
     }
 }
