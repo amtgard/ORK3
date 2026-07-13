@@ -346,6 +346,12 @@ class Model_Player extends Model
         return $player->GetReconcileAwardMap($kingdom_id);
     }
 
+    public function dismiss_whats_new($mundane_id, $version)
+    {
+        $player = new Player();
+        return $player->DismissWhatsNew((int)$mundane_id, (string)$version);
+    }
+
     public function check_username_available($username, $exclude_mundane_id = 0)
     {
         $player = new Player();

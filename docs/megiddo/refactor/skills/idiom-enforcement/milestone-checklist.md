@@ -27,7 +27,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 10 | I-10 | `megiddo/i-10-idiom-r10` | `50dd8536` | [x] |
 | 11 | I-11 | `megiddo/i-11-idiom-r11` | `22155811` | [x] |
 | 12 | I-12 | `megiddo/i-12-idiom-r12` | `c0d9b730` | [x] |
-| 13 | I-13 | | | [ ] |
+| 13 | I-13 | `megiddo/i-13-idiom-r13` | `b4dfd788` | [x] |
 | 14 | I-14 | | | [ ] |
 | 15 | I-15 | | | [ ] |
 | 16 | I-16 | | | [ ] |
@@ -39,9 +39,9 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 22 | I-19d | | | [ ] |
 | 23 | I-VALIDATE | | | [ ] |
 
-**Next actionable hop:** I-13
+**Next actionable hop:** I-14
 
-**Stack tip:** `megiddo/i-12-idiom-r12` @ `c0d9b730`
+**Stack tip:** `megiddo/i-13-idiom-r13` @ `b4dfd788`
 
 ---
 
@@ -179,7 +179,17 @@ Each hop: idiom-only edits on files listed in charter § hop scope (sourced from
 - [x] Hop fuzzy/Playwright gates per charter (if any)
 - [x] One commit; checklist updated
 
-### I-13 … I-18 (remaining)
+### I-13 (R-13 Infrastructure scope) — complete
+
+- [x] Controller `load_model` / `$this->Model` pattern aligned
+- [x] Model wrappers match domain-call idioms in charter
+- [x] JSON / error shapes unchanged (tests pass)
+- [x] `rg '$DB->' orkui/` + `rg 'Ork3::$Lib' orkui/` still zero
+- [x] PHPUnit exit 0
+- [x] Hop fuzzy/Playwright gates per charter (if any)
+- [x] One commit; checklist updated
+
+### I-14 … I-18 (remaining)
 
 - [ ] Controller `load_model` / `$this->Model` pattern aligned
 - [ ] Model wrappers match domain-call idioms in charter

@@ -15,7 +15,8 @@ class Controller_WnAjax extends Controller
             echo json_encode(['Status' => ['Status' => 1, 'Error' => 'Missing version']]);
             return;
         }
-        $result = Ork3::$Lib->player->DismissWhatsNew($uid, $version);
+        $this->load_model('Player');
+        $result = $this->Player->dismiss_whats_new($uid, $version);
         echo json_encode(['Status' => ['Status' => (int) ($result['Status'] ?? 1)]]);
     }
 }
