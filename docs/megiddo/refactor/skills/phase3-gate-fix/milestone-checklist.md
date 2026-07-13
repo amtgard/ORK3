@@ -14,9 +14,10 @@
 | 2 | FIX-07 | `megiddo/p3-fix-07-fuzzy-baselines` | `b4ddc98c` | [x] |
 | 3 | VALIDATE-20-rerun (2nd) | `megiddo/p3-validate-20-audit` | `49e76bda` | [ ] failed V20-C |
 | 4 | FIX-08 | `megiddo/p3-fix-08-heraldry-dom-volatile` | `e2f7c280` | [x] |
-| 5 | VALIDATE-20-rerun (3rd) | `megiddo/p3-validate-20-audit` | — | [ ] |
+| 5 | VALIDATE-20-rerun (3rd) | `megiddo/p3-validate-20-audit` | — | [ ] failed V20-C + V20-D |
+| 6 | FIX-09 | `megiddo/p3-fix-09-event-index-attendance` | `04bd2878` | [x] |
 
-**Next actionable hop:** [02-validate-20-rerun.prompt](../../prompts/02-validate-20-rerun.prompt) after FIX-08 commit
+**Next actionable hop:** [02-validate-20-rerun.prompt](../../prompts/02-validate-20-rerun.prompt) on rebased `megiddo/p3-validate-20-audit`
 
 ---
 
@@ -57,6 +58,20 @@
 ## VALIDATE-20-rerun (3rd)
 
 - [ ] Stack FIX-08 → rebase `megiddo/p3-validate-20-audit`
+- [ ] V20-C — **fail:** mirror `event-index` DOM 0.996 (event table rows 11–12 link text; V-00 only per v-05)
+- [ ] V20-D — **fail:** mirror `attendance.spec.ts` login `networkidle` timeout (49/50)
 - [ ] V20-A–F all pass; `phase3-audit-report.md` `status=ok`
 
 **Exit (ok):** [03-idiom-enforcement-orchestrator.prompt](../../prompts/03-idiom-enforcement-orchestrator.prompt)
+
+---
+
+## FIX-09: event-index skip + attendance login flake
+
+- [ ] Root cause: mirror `event-index` volatile event list href churn; attendance login `networkidle` on long-polling mirror
+- [ ] `event-index` `skip: true` in `pages.json5` (V-00 only; R-05 via `event-index-rsvp*`)
+- [ ] `attendance.spec.ts` login wait → `waitForURL(/Player\/profile/)` (avoid mirror `networkidle` flake)
+- [x] Repro: `validate --all` 41/41 exit 0 before and after `deploy-sandbox --yes`
+- [x] Playwright mirror 50/50 + sandbox heraldry 3/3
+- [x] Commit on `megiddo/p3-fix-09-event-index-attendance` @ `04bd2878`
+- [ ] Rebase `megiddo/p3-validate-20-audit` onto FIX-09 tip

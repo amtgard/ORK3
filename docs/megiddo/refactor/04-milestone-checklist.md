@@ -1472,7 +1472,7 @@ Run only after **R-18**. No code migration.
 - [x] `rg 'Ork3::\$Lib' orkui/` → zero matches (R-19d @ `megiddo/r-19d-residual-lib-refactor` — 41 sites cleared R-19a…d)
 - [ ] Success criteria in [02-requirements.md](./02-requirements.md) satisfied
 - [x] PHPUnit full suite green (215 tests, 2 skipped — 2026-07-10)
-- [ ] Full fuzzy `--all` + Playwright green (fuzzy: `park-auth-sandbox` dimension; Playwright: heraldry×3)
+- [ ] Full fuzzy `--all` + Playwright green (fuzzy: gate-fix hops FIX-06…FIX-09; Playwright: mirror 50/50 + heraldry 3/3)
 - [ ] P3-5 Retrospective recorded (`phase3-audit-report.md` or checklist notes)
 
 Optional: merge stack tip into integration line `megiddo/rebase-20260709`.
