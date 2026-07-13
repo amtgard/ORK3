@@ -15,21 +15,25 @@ class Controller_PlayerAjax extends Controller
             echo json_encode(['status' => 5, 'error' => 'Not logged in']);
             exit;
         }
+        $this->load_model('Player');
         $candidate = trim($_POST['UserName'] ?? '');
-        echo json_encode(self::username_check_payload($candidate));
+        echo json_encode(self::username_check_payload($candidate, $this->Player));
         exit;
     }
 
     // Shared helper — used by check_username() above AND by
     // Controller_SelfReg::check_username(). Same JSON contract so the JS
     // helper (initUsernameAvailabilityCheck in revised.js) works with both.
-    public static function username_check_payload($candidate)
+    public static function username_check_payload($candidate, $player = null)
     {
         $candidate = trim((string)$candidate);
         if (strlen($candidate) < 4) {
             return ['status' => 0, 'available' => false, 'reason' => 'too-short', 'username' => $candidate];
         }
-        $available = Ork3::$Lib->player->CheckUsernameAvailable($candidate);
+        if ($player === null) {
+            $player = new Model_Player();
+        }
+        $available = $player->check_username_available($candidate);
         return ['status' => 0, 'available' => $available, 'username' => $candidate];
     }
 
@@ -778,9 +782,9 @@ class Controller_PlayerAjax extends Controller
             exit;
         }
 
-        $params            = explode('/', $p ?? '');
+        $params  = explode('/', $p ?? '');
         $mundane_id_target = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
-        $action            = $params[1] ?? '';
+        $action  = $params[1] ?? '';
 
         if (!valid_id($mundane_id_target)) {
             echo json_encode(['status' => 1, 'error' => 'Invalid Player ID.']);
