@@ -16,8 +16,11 @@
 | 4 | FIX-08 | `megiddo/p3-fix-08-heraldry-dom-volatile` | `e2f7c280` | [x] |
 | 5 | VALIDATE-20-rerun (3rd) | `megiddo/p3-validate-20-audit` | rebased | [ ] failed V20-C + V20-D |
 | 6 | FIX-09 | `megiddo/p3-fix-09-event-index-attendance` | `73b36ee2` | [x] |
+| 7 | FIX-10 | `megiddo/p3-validate-20-audit` | `0e76d981` | [x] |
+| 8 | FIX-11 | `megiddo/p3-validate-20-audit` | `03055f88` | [x] |
+| 9 | VALIDATE-20-rerun (4th) | `megiddo/p3-validate-20-audit` | `03055f88` | [x] ok |
 
-**Next actionable hop:** [02-validate-20-rerun.prompt](../../prompts/02-validate-20-rerun.prompt) on rebased `megiddo/p3-validate-20-audit`
+**Next actionable hop:** [03-idiom-enforcement-orchestrator.prompt](../../prompts/03-idiom-enforcement-orchestrator.prompt) (I-0), then P3-4 / P3-5
 
 ---
 
@@ -86,3 +89,32 @@
 - [x] Playwright mirror 50/50 + sandbox heraldry 3/3
 - [x] Commit on `megiddo/p3-fix-09-event-index-attendance` @ `73b36ee2` (code `04bd2878`)
 - [x] Rebase `megiddo/p3-validate-20-audit` onto FIX-09 tip
+
+---
+
+## FIX-10: reports-ladder-grid baseline
+
+- [x] Re-record `reports-ladder-grid` fuzzy baseline for V20-C gate
+- [x] Commit on `megiddo/p3-validate-20-audit` @ `0e76d981`
+
+---
+
+## FIX-11: refuzz workflow + setpoint bundle
+
+- [x] Refuzz CLI workflow, `driftClass`, `stableHeightMs`
+- [x] Setpoint bundle `20260713T162337Z-bed5e87d-7d1c3c41e8ebe338.zip`
+- [x] Commit on `megiddo/p3-validate-20-audit` @ `03055f88`
+
+---
+
+## VALIDATE-20-rerun (4th)
+
+- [x] Stack FIX-06 → FIX-11 on `megiddo/p3-validate-20-audit` @ `03055f88` (audit @ 2026-07-13T16:59:01Z)
+- [x] V20-A static audit pass (`$DB`, `Ork3::$Lib`, DML all zero)
+- [x] V20-B PHPUnit pass (230/230, 2 skipped)
+- [x] V20-C fuzzy `--all` pass (40/40 — test 20/20 + mirror 20/20; `event-index` skipped)
+- [x] V20-D Playwright mirror + sandbox heraldry pass (50/50 + 3/3)
+- [x] V20-E plan completeness pass
+- [x] `phase3-audit-report.md` `status=ok` @ audit 2026-07-13T16:59:01Z
+
+**Exit (ok):** [03-idiom-enforcement-orchestrator.prompt](../../prompts/03-idiom-enforcement-orchestrator.prompt) → P3-4 manual smoke matrix + P3-5 retrospective
