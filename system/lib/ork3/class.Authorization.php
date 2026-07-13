@@ -12,6 +12,7 @@ define('AUTH_UNIT', 'Unit');
 class Authorization extends Ork3
 {
 	const MAX_SESSIONS_PER_USER = 3;
+	const TOKEN_LENGTH = 32; // md5 hex length — session tokens are md5(...) → 32 chars
 
 	public function __construct()
 	{
@@ -333,14 +334,16 @@ class Authorization extends Ork3
 						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else {
 						$_sessionToken = $this->CreateSession($this->mundane->mundane_id);
-						$this->mundane->token = $_sessionToken; // vestigial "last token" pointer
-						$this->mundane->token_expires = date('Y:m:d H:i:s', time() + LOGIN_TIMEOUT);
-						$this->mundane->save();
-						$response['Status'] = Success();
-						$response['Token'] = $this->mundane->token;
-						$response['UserId'] = $mundane_id;
-						$response['Timeout'] = $this->mundane->token_expires;
-						$response['PasswordExpires'] = $this->mundane->password_expires;
+						if ($_sessionToken === '') {
+							$response['Status'] = ProcessingError("Could not establish a session. Please try again.");
+						} else {
+							$this->persistVestigialToken($_sessionToken);
+							$response['Status'] = Success();
+							$response['Token'] = $this->mundane->token;
+							$response['UserId'] = $mundane_id;
+							$response['Timeout'] = $this->mundane->token_expires;
+							$response['PasswordExpires'] = $this->mundane->password_expires;
+						}
 					}
 				} else {
 					if (defined('UIR')) {
@@ -368,13 +371,15 @@ class Authorization extends Ork3
 					if ($_rotated === '') {
 						$_rotated = $this->CreateSession($this->mundane->mundane_id);
 					}
-					$this->mundane->token = $_rotated; // vestigial "last token" pointer
-					$this->mundane->token_expires = date('Y:m:d H:i:s', time() + LOGIN_TIMEOUT);
-					$this->mundane->save();
-					$response['Status'] = Success();
-					$response['Token'] = $this->mundane->token;
-					$response['UserId'] = $mundane_id;
-					$response['Timeout'] = $this->mundane->token_expires;
+					if ($_rotated === '') {
+						$response['Status'] = ProcessingError("Could not establish a session. Please try again.");
+					} else {
+						$this->persistVestigialToken($_rotated);
+						$response['Status'] = Success();
+						$response['Token'] = $this->mundane->token;
+						$response['UserId'] = $mundane_id;
+						$response['Timeout'] = $this->mundane->token_expires;
+					}
 				} else {
 					$response['Status'] = InvalidParameter(null, "Token has expired: " . strtotime($this->mundane->token_expires) . ' <= ' . time());
 					$response['Status']['Detail'] = $request['Token'];
@@ -424,9 +429,11 @@ class Authorization extends Ork3
 			return ['Status' => NoAuthorization('Your access to the ORK has been restricted.')];
 		}
 
-		$this->mundane->token = $this->CreateSession($this->mundane->mundane_id); // vestigial pointer + session row
-		$this->mundane->token_expires = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
-		$this->mundane->save();
+		$_idpToken = $this->CreateSession($this->mundane->mundane_id);
+		if ($_idpToken === '') {
+			return ['Status' => ProcessingError("Could not establish a session. Please try again.")];
+		}
+		$this->persistVestigialToken($_idpToken);
 		error_log("AuthorizeIdp: Updated mundane token.");
 
 		// Update tokens
@@ -484,9 +491,11 @@ class Authorization extends Ork3
 		$this->idp_auth->save();
 		error_log("AuthorizeIdp: IDP link created.");
 
-		$this->mundane->token = $this->CreateSession($this->mundane->mundane_id); // vestigial pointer + session row
-		$this->mundane->token_expires = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
-		$this->mundane->save();
+		$_idpToken = $this->CreateSession($this->mundane->mundane_id);
+		if ($_idpToken === '') {
+			return ['Status' => ProcessingError("Could not establish a session. Please try again.")];
+		}
+		$this->persistVestigialToken($_idpToken);
 		error_log("AuthorizeIdp: Mundane token updated.");
 
 		return [
@@ -857,10 +866,8 @@ class Authorization extends Ork3
 
 	public function IsAuthorized_h($token)
 	{
-		if (isset($_SESSION['is_authorized_mundane_id']))
-			return $_SESSION['is_authorized_mundane_id'];
 		logtrace("IsAuthorized_h($token)", null);
-		if (strlen($token) != 32)
+		if (strlen($token) != self::TOKEN_LENGTH)
 			return 0;
 		$mundane_id = $this->ValidateSessionByToken($token);
 		if ($mundane_id === 0) {
@@ -932,17 +939,32 @@ class Authorization extends Ork3
 	{
 		global $DB;
 		$mundane_id = (int)$mundane_id;
-		$token = md5(openssl_random_pseudo_bytes(16) . microtime());
 		$now = date('Y-m-d H:i:s');
 		$exp = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
 
-		$DB->Clear();
-		$DB->token = $token;
-		$DB->Execute("INSERT INTO " . DB_PREFIX . "session (mundane_id, token, created, last_seen, expires) "
-			. "VALUES (" . $mundane_id . ", :token, '" . $now . "', '" . $now . "', '" . $exp . "')");
-
-		$this->evictLruSessions($mundane_id);
-		return $token;
+		// Insert the session and VERIFY it landed. YapoMysql runs under
+		// ERRMODE_WARNING and swallows most INSERT errors, so an unverified
+		// insert could return a token no validation will ever match — a
+		// confusing self-evicting login loop. Read the row back; retry once
+		// with a fresh token on failure (also covers the astronomically rare
+		// UNIQUE(token) collision).
+		for ($attempt = 0; $attempt < 2; $attempt++) {
+			$token = md5(openssl_random_pseudo_bytes(16) . microtime());
+			$DB->Clear();
+			$DB->token = $token;
+			$DB->Execute("INSERT INTO " . DB_PREFIX . "session (mundane_id, token, created, last_seen, expires) "
+				. "VALUES (" . $mundane_id . ", :token, '" . $now . "', '" . $now . "', '" . $exp . "')");
+			$DB->Clear();
+			$DB->token = $token;
+			$rs = $DB->DataSet("SELECT session_id FROM " . DB_PREFIX . "session WHERE token = :token LIMIT 1");
+			if ($rs && $rs->Next()) {
+				$this->evictLruSessions($mundane_id);
+				return $token;
+			}
+		}
+		logtrace("CreateSession(): FAILED to persist ork_session after retry", array('mundane_id' => $mundane_id));
+		error_log("CreateSession(): FAILED to persist ork_session for mundane_id=" . $mundane_id);
+		return '';
 	}
 
 	private function evictLruSessions($mundane_id)
@@ -963,12 +985,15 @@ class Authorization extends Ork3
 			. "ORDER BY last_seen DESC, session_id DESC LIMIT " . $keep
 			. ") keep)"
 		);
+		logtrace("evictLruSessions(): enforced session cap", array('mundane_id' => $mundane_id, 'keep' => $keep));
 	}
 
+	// NOTE: not a pure read — on a session older than 60s this also slides
+	// last_seen/expires forward (see the throttled UPDATE below).
 	public function ValidateSessionByToken($token)
 	{
 		global $DB;
-		if (strlen($token) != 32) {
+		if (strlen($token) != self::TOKEN_LENGTH) {
 			return 0;
 		}
 		$DB->Clear();
@@ -997,7 +1022,7 @@ class Authorization extends Ork3
 	public function RotateSession($old_token)
 	{
 		global $DB;
-		if (strlen($old_token) != 32) {
+		if (strlen($old_token) != self::TOKEN_LENGTH) {
 			return '';
 		}
 		$DB->Clear();
@@ -1008,7 +1033,7 @@ class Authorization extends Ork3
 			return '';
 		}
 		$session_id = (int)$rs->session_id;
-		$new_token = md5($old_token . microtime());
+		$new_token = md5(openssl_random_pseudo_bytes(16) . microtime());
 		$now = date('Y-m-d H:i:s');
 		$exp = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
 		$DB->Clear();
@@ -1022,7 +1047,7 @@ class Authorization extends Ork3
 	{
 		global $DB;
 		$token = is_array($request) ? ($request['Token'] ?? '') : $request;
-		if (strlen($token) != 32) {
+		if (strlen($token) != self::TOKEN_LENGTH) {
 			return;
 		}
 		$DB->Clear();
@@ -1034,6 +1059,14 @@ class Authorization extends Ork3
 		$DB->Clear();
 		$DB->token = $token;
 		$DB->Execute("UPDATE " . DB_PREFIX . "mundane SET token = '' WHERE token = :token");
+	}
+
+	// Writes the vestigial ork_mundane.token pointer (ork_session is authoritative).
+	private function persistVestigialToken($token)
+	{
+		$this->mundane->token = $token;
+		$this->mundane->token_expires = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
+		$this->mundane->save();
 	}
 }
 
