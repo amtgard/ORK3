@@ -25,8 +25,11 @@ class Model_Authorization extends Model
 
     public function has_authority(int $uid, string $type, $id, ?string $role): bool
     {
-        $gate = new AuthorizationGate();
+        return $this->_authorization_gate()->check($uid, $type, $id, $role);
+    }
 
-        return $gate->check($uid, $type, $id, $role);
+    private function _authorization_gate(): AuthorizationGate
+    {
+        return new AuthorizationGate();
     }
 }

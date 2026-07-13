@@ -35,8 +35,11 @@ class Model_Weather extends Model
 
     public function for_park($park_id)
     {
-        $weather = new Weather();
+        return $this->_weather()->for_park($park_id);
+    }
 
-        return $weather->for_park($park_id);
+    private function _weather(): Weather
+    {
+        return new Weather();
     }
 }
