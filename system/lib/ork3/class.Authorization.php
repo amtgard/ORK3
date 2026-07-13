@@ -1028,6 +1028,12 @@ class Authorization extends Ork3
 		$DB->Clear();
 		$DB->token = $token;
 		$DB->Execute("DELETE FROM " . DB_PREFIX . "session WHERE token = :token");
+		// Also clear the vestigial ork_mundane.token pointer if it matches this
+		// token, so the legacy SOAP re-auth path (Authorize_h else-branch, which
+		// finds the user by ork_mundane.token) can't revive a logged-out session.
+		$DB->Clear();
+		$DB->token = $token;
+		$DB->Execute("UPDATE " . DB_PREFIX . "mundane SET token = '' WHERE token = :token");
 	}
 }
 
