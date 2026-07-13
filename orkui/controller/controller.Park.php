@@ -52,7 +52,8 @@ class Controller_Park extends Controller
         $this->data[ 'event_summary' ] = $this->Park->get_park_events($park_id);
         $this->data[ 'park_days' ] = $this->Park->get_park_parkdays($park_id);
         $this->data[ 'park_info' ] = $this->Park->get_park_details($park_id);
-        $this->data[ 'park_officers' ] = $this->Park->GetOfficers(['ParkId' => $park_id, 'Token' => $this->session->token]);
+        $_park_officers = $this->Park->get_officers($park_id, $this->session->token);
+        $this->data[ 'park_officers' ] = array('Officers' => is_array($_park_officers) ? $_park_officers : array());
         // [TOURNAMENTS HIDDEN] $this->data['park_tournaments'] = [];
     }
 
@@ -87,7 +88,8 @@ class Controller_Park extends Controller
         }
         $this->load_model('Weather');
         $this->data['park_weather']     = $this->Weather->for_park($park_id);
-        $this->data['park_officers']    = $this->Park->GetOfficers(['ParkId' => $park_id, 'Token' => $this->session->token]);
+        $_park_officers = $this->Park->get_officers($park_id, $this->session->token);
+        $this->data['park_officers']    = array('Officers' => is_array($_park_officers) ? $_park_officers : array());
         $this->data['park_tournaments'] = $this->Reports->get_tournaments(null, null, $park_id);
 
         // Gate the "Voting Eligible" Players-nav link by whether this park's kingdom

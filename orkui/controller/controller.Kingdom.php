@@ -44,7 +44,7 @@ class Controller_Kingdom extends Controller
         $this->data['principalities'] = $this->Kingdom->get_principalities($kingdom_id);
         $this->data['event_summary'] = $this->Kingdom->get_kingdom_events($kingdom_id);
         $this->data['kingdom_info'] = $this->Kingdom->get_kingdom_shortinfo($kingdom_id);
-        $this->data['kingdom_officers'] = $this->Kingdom->GetOfficers(['KingdomId' => $kingdom_id, 'Token' => $this->session->token]);
+        $this->data['kingdom_officers'] = $this->Kingdom->get_officers_bundle($kingdom_id, $this->session->token);
         $this->data['IsPrinz'] = $this->data['kingdom_info']['Info']['KingdomInfo']['IsPrincipality'];
         // [TOURNAMENTS HIDDEN] $this->data['kingdom_tournaments'] = [];
     }
@@ -157,10 +157,10 @@ class Controller_Kingdom extends Controller
     public function map($kingdom_id = null)
     {
         if (valid_id($kingdom_id)) {
-            $kingdom_details = $this->Kingdom->GetKingdomDetails(array('KingdomId' => $kingdom_id));
+            $kingdom_details = $this->Kingdom->get_kingdom_details($kingdom_id);
             $this->data[ 'page_title' ] = $kingdom_details['KingdomInfo']['KingdomName'] . " Map";
 
-            $all_parks = $this->Kingdom->GetParks(array('KingdomId' => $kingdom_id));
+            $all_parks = $this->Kingdom->get_parks($kingdom_id);
             $all_parks['Parks'] = array_filter(
                 $all_parks['Parks'],
                 function ($park) {
@@ -197,7 +197,7 @@ class Controller_Kingdom extends Controller
             header('Location: ' . UIR);
             exit;
         }
-        $this->data['kingdom_officers']    = $this->Kingdom->GetOfficers(['KingdomId' => $kingdom_id, 'Token' => $this->session->token]);
+        $this->data['kingdom_officers']    = $this->Kingdom->get_officers_bundle($kingdom_id, $this->session->token);
         $this->data['IsPrinz']             = $this->data['kingdom_info']['Info']['KingdomInfo']['IsPrincipality'];
 
         $parentKingdomId = (int)($this->data['kingdom_info']['Info']['KingdomInfo']['ParentKingdomId'] ?? 0);
@@ -216,7 +216,7 @@ class Controller_Kingdom extends Controller
         $this->data['PreloadOfficers']     = $preloadOfficers;
         // [TOURNAMENTS HIDDEN] $this->data['kingdom_tournaments'] = [];
 
-        $rawParks = $this->Kingdom->GetParks(['KingdomId' => $kingdom_id]);
+        $rawParks = $this->Kingdom->get_parks($kingdom_id);
         $this->data['map_parks'] = is_array($rawParks['Parks'])
             ? array_values(array_filter($rawParks['Parks'], function ($p) {
                 return $p['Active'] == 'Active';
@@ -253,7 +253,7 @@ class Controller_Kingdom extends Controller
                     ];
                 }
 
-                $prRawParks = $this->Kingdom->GetParks(['KingdomId' => $prId]);
+                $prRawParks = $this->Kingdom->get_parks($prId);
                 $prMapParks = is_array($prRawParks['Parks'] ?? null)
                     ? array_values(array_filter($prRawParks['Parks'], function ($p) {
                         return $p['Active'] == 'Active';
@@ -275,7 +275,7 @@ class Controller_Kingdom extends Controller
         $ownParkCount = is_array($this->data['park_summary']['KingdomParkAveragesSummary'] ?? null)
             ? count($this->data['park_summary']['KingdomParkAveragesSummary'])
             : 0;
-        if (!empty($this->data['HasChildPrincipalities']) && $this->Kingdom->StatsIncludesPrincipalities($kingdom_id)) {
+        if (!empty($this->data['HasChildPrincipalities']) && $this->Kingdom->stats_includes_principalities($kingdom_id)) {
             $prinzParkCount = 0;
             foreach ($this->data['principality_parks'] as $prGroup) {
                 $prinzParkCount += is_array($prGroup['parks'] ?? null) ? count($prGroup['parks']) : 0;
