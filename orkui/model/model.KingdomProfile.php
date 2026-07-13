@@ -101,6 +101,20 @@ class Model_KingdomProfile extends Model
         return $profile->GetPlayerSuspensionContext($mundaneId);
     }
 
+    public function park_kingdom_id(int $parkId): int
+    {
+        $profile = new KingdomProfile();
+
+        return $profile->GetParkKingdomId($parkId);
+    }
+
+    public function abbreviation_conflict(string $abbr, int $excludeKingdomId = 0): ?string
+    {
+        $profile = new KingdomProfile();
+
+        return $profile->GetKingdomAbbreviationConflict($abbr, $excludeKingdomId);
+    }
+
     public function user_home_park_id(int $mundaneId): int
     {
         $profile = new KingdomProfile();

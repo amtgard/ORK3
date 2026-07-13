@@ -368,9 +368,9 @@ class Controller_KingdomAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Select a destination park.']);
                 exit;
             }
-            $ctx = (new KingdomProfile())->GetPlayerSuspensionContext($mundane_id);
+            $ctx = $this->KingdomProfile->suspension_context($mundane_id);
             $player_kingdom_id = (int)($ctx['kingdom_id'] ?? 0);
-            $dest_kingdom_id = (new KingdomProfile())->GetParkKingdomId($dest_park_id);
+            $dest_kingdom_id = $this->KingdomProfile->park_kingdom_id($dest_park_id);
             if (!$this->KingdomProfile->authorize_move_player($uid, $player_kingdom_id, $dest_kingdom_id)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized to move this player.']);
                 exit;
@@ -666,7 +666,7 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
             $this->load_model('KingdomProfile');
-            $conflictName = (new KingdomProfile())->GetKingdomAbbreviationConflict($abbr, $excludeId);
+            $conflictName = $this->KingdomProfile->abbreviation_conflict($abbr, $excludeId);
             echo $conflictName !== null
                 ? json_encode(['status' => 0, 'taken' => true, 'name' => $conflictName])
                 : json_encode(['status' => 0, 'taken' => false]);
