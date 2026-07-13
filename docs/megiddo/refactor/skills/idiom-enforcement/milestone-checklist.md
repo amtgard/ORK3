@@ -33,15 +33,15 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 16 | I-16 | `megiddo/i-16-idiom-r16` | `b1613c81` | [x] |
 | 17 | I-17 | `megiddo/i-17-idiom-r17` | `e9c4e9fc` | [x] |
 | 18 | I-18 | `megiddo/i-18-idiom-r18` | `a881aaf5` | [x] |
-| 19 | I-19a | `megiddo/i-19a-idiom-residual-lib` | `bd5cda5b` | [x] |
-| 20 | I-19b | | | [ ] |
+| 19 | I-19a | `megiddo/i-19a-idiom-residual-lib` | `1b1201db` | [x] |
+| 20 | I-19b | `megiddo/i-19b-idiom-residual-lib` | `d708cc5f` | [x] |
 | 21 | I-19c | | | [ ] |
 | 22 | I-19d | | | [ ] |
 | 23 | I-VALIDATE | | | [ ] |
 
-**Next actionable hop:** I-19b
+**Next actionable hop:** I-19c
 
-**Stack tip:** `megiddo/i-19a-idiom-residual-lib` @ `bd5cda5b`
+**Stack tip:** `megiddo/i-19b-idiom-residual-lib` @ `d708cc5f`
 
 ---
 
@@ -274,6 +274,21 @@ Scope files (charter § I-19a, fixed 3-file group): `model/model.Player.php`, `i
 - [x] One commit; checklist updated
 
 **Idiom changes:** none required — R-19a scope (`model.Player`, `index.php`, `KingdomAjax`) was already charter-conformant at the I-18 stack tip. Controllers load models per branch with snake_case wrappers, `Model_Player` keeps its intentional `APIModel` vs private-domain-accessor split, `index.php` uses the established `Health`/`Event` bootstrap idiom, and the inline `Dangeraudit` audit matches all AJAX peers. Verified no-op idiom pass with all gates green.
+
+### I-19b (R-19b residual-lib scope) — complete
+
+Scope files (charter § I-19b, fixed 3-file group): `controller/controller.EventAjax.php`, `controller/controller.AdminAjax.php`, `controller/controller.Admin.php`.
+
+- [x] Controller `load_model` / `$this->Model` pattern aligned — all three files load models per action/branch and route through wrappers: `EventAjax` uses `$this->EventPlanning->…` (incl. heraldry via `set_event_heraldry` / `remove_heraldry`), `$this->Search->scoped_player_search`, `$this->Authorization->…`; `AdminAjax` uses `$this->Search->…`, `$this->Authorization->…`, `$this->AdminDashboard->state_of_amtgard_*`; `Admin` routes all reads through `$this->load_model('AdminDashboard')`. No `(new Model_*)` or `new Model_` sites (`rg` exit 1)
+- [x] Inline domain instantiation eliminated where charter requires — no `(new Heraldry())`, `(new Weather())`, or `(new StateOfAmtgard())` remain in scope (anti-patterns already resolved at R-19b): heraldry folded into `Model_EventPlanning`, weather stats + SoA bootstrap into `Model_AdminDashboard` (`rg '\(new (Heraldry|Weather|StateOfAmtgard)\(\)'` exit 1)
+- [x] Audit idiom preserved — inline `(new Dangeraudit())->audit(…)` after `add_auth` (EventAjax `auth/addauth`, AdminAjax `global/addauth`) and for EventStaff add/update/remove is the canonical cross-file idiom: every AJAX peer (`KingdomAjax`, `ParkAjax`, `Unit`) uses inline audit and `Model_Authorization` exposes **no** audit wrapper (grep: no `audit`/`Dangeraudit` in `model.Authorization.php`), so inline is canonical, not drift (charter §1.3 / §2)
+- [x] JSON / error shapes unchanged — no response-shape edits; lowercase `status` keys and `[]` arrays match each method's existing shape
+- [x] `rg '$DB->' orkui/` + `rg 'Ork3::$Lib' orkui/` still zero (both exit 1)
+- [x] PHPUnit exit 0 — 230 tests OK (2 skipped)
+- [x] Hop fuzzy/Playwright gates per charter §5 / v-19 §2.5 — fuzzy `event-index-rsvp,admin-dashboard,admin-permissions` 6/6 pass (test+mirror); Playwright `event-detail.spec.ts`, `event-planning.spec.ts`, `admin-dashboard.spec.ts`, `residual-lib.spec.ts` 16/16 pass
+- [x] One commit; checklist updated
+
+**Idiom changes:** none required — R-19b scope (`EventAjax`, `AdminAjax`, `Admin`) was already charter-conformant at the I-19a stack tip. Heraldry / weather / State-of-Amtgard reads were folded into model wrappers during R-19b, controllers load models per branch with snake_case wrappers, JSON shapes are untouched, and the inline `Dangeraudit` audit beside `add_auth` (and EventStaff) matches every AJAX peer with no `Model_Authorization` audit wrapper available. Verified no-op idiom pass with all gates green.
 
 ---
 
