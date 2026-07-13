@@ -7,7 +7,7 @@ class Model_Attendance extends Model
         parent::__construct();
         $this->Attendance = new APIModel('Attendance');
         $this->Report = new APIModel('Report');
-        $this->Search = new JSONMOdel('Search');
+        $this->Search = new JSONModel('Search');
         $this->Event = new APIModel('Event');
         $this->Player = new APIModel('Player');
         $this->Weather = new APIModel('Weather');
@@ -39,8 +39,7 @@ class Model_Attendance extends Model
 
     public function lookup_by_faces($request)
     {
-        $p = new APIModel("Player");
-        return $p->LookupByFaces($request);
+        return $this->Player->LookupByFaces($request);
     }
 
     public function delete_attendance($token, $attendance_id, $mundane_id = null)
