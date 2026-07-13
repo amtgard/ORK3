@@ -870,7 +870,7 @@ class Authorization extends Ork3
 		}
 		$this->mundane->clear();
 		$this->mundane->mundane_id = $mundane_id;
-		if ($this->mundane->find() && $this->mundane->penalty_box == 1) {
+		if (!$this->mundane->find() || $this->mundane->penalty_box == 1) {
 			return 0;
 		}
 		logtrace("IsAuthorized(): authorized", null);
