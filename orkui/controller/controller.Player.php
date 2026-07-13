@@ -520,7 +520,7 @@ class Controller_Player extends Controller
         // Feast preferences for the About-tab "Feast Preferences" card.
         // Always loaded — the template gates visibility on Show My Feast
         // Preferences + presence of meaningful data. Cheap single-row read.
-        $this->data['FeastPrefs'] = $this->Player->GetDietaryPreferences((int)$id);
+        $this->data['FeastPrefs'] = $this->Player->get_dietary_preferences((int)$id);
 
         // Player titles for the design modal's prefix/suffix dropdowns.
         $this->data['PlayerTitles'] = $beltline['Titles'];

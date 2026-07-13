@@ -352,6 +352,60 @@ class Model_Player extends Model
         return $player->CheckUsernameAvailable($username, $exclude_mundane_id);
     }
 
+    public function username_check_payload($candidate)
+    {
+        $candidate = trim((string)$candidate);
+        if (strlen($candidate) < 4) {
+            return ['status' => 0, 'available' => false, 'reason' => 'too-short', 'username' => $candidate];
+        }
+        $available = $this->check_username_available($candidate);
+        return ['status' => 0, 'available' => $available, 'username' => $candidate];
+    }
+
+    public static function username_check_payload_for($candidate, $player = null)
+    {
+        if ($player === null) {
+            $player = new Model_Player();
+        }
+        return $player->username_check_payload($candidate);
+    }
+
+    public function add_second_to_recommendation($request)
+    {
+        $player = new Player();
+        return $player->AddSecondToRecommendation($request);
+    }
+
+    public function edit_second_notes($request)
+    {
+        $player = new Player();
+        return $player->EditSecondNotes($request);
+    }
+
+    public function withdraw_second($request)
+    {
+        $player = new Player();
+        return $player->WithdrawSecond($request);
+    }
+
+    public function edit_award_recommendation_reason($request)
+    {
+        $player = new Player();
+        return $player->EditAwardRecommendationReason($request);
+    }
+
+    public function get_dietary_preferences($mundane_id)
+    {
+        $player = new Player();
+        return $player->GetDietaryPreferences($mundane_id);
+    }
+
+    public function save_dietary_preferences($mundane_id, $data)
+    {
+        $player = new Player();
+        return $player->SaveDietaryPreferences($mundane_id, $data);
+    }
+
     public function get_award_max_ranks($mundane_id)
     {
         $player = new Player();

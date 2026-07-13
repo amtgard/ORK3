@@ -26,15 +26,7 @@ class Controller_PlayerAjax extends Controller
     // helper (initUsernameAvailabilityCheck in revised.js) works with both.
     public static function username_check_payload($candidate, $player = null)
     {
-        $candidate = trim((string)$candidate);
-        if (strlen($candidate) < 4) {
-            return ['status' => 0, 'available' => false, 'reason' => 'too-short', 'username' => $candidate];
-        }
-        if ($player === null) {
-            $player = new Model_Player();
-        }
-        $available = $player->check_username_available($candidate);
-        return ['status' => 0, 'available' => $available, 'username' => $candidate];
+        return Model_Player::username_check_payload_for($candidate, $player);
     }
 
     public function park($p = null)
@@ -374,12 +366,10 @@ class Controller_PlayerAjax extends Controller
                 : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'awardranks') {
-            $this->load_model('Player');
             $ranks = $this->Player->get_award_max_ranks((int)$player_id);
             echo json_encode($ranks);
 
         } elseif ($action === 'info') {
-            $this->load_model('Player');
             $player = $this->Player->fetch_player($player_id);
             if ($player) {
                 echo json_encode(['status' => 0, 'MundaneId' => $player_id, 'Persona' => $player['Persona']]);
@@ -547,8 +537,7 @@ class Controller_PlayerAjax extends Controller
             exit;
         }
         $this->load_model('Reports');
-        $report = new Report();
-        $lookup = $report->GetVotingEligibleForPlayer(['MundaneId' => $mundane_id]);
+        $lookup = $this->Reports->get_voting_eligible_for_player($mundane_id, 0);
         if (($lookup['Status']['Status'] ?? 1) != 0 && ($lookup['KingdomId'] ?? 0) <= 0) {
             echo json_encode(['status' => 1, 'error' => 'Player not found']);
             exit;
@@ -696,7 +685,7 @@ class Controller_PlayerAjax extends Controller
         }
         $notes = isset($_POST['notes']) ? (string)$_POST['notes'] : '';
         $this->load_model('Player');
-        $r = $this->Player->AddSecondToRecommendation([
+        $r = $this->Player->add_second_to_recommendation([
             'Token' => $this->session->token,
             'RecommendationsId' => $rec_id,
             'Notes' => $notes,
@@ -720,7 +709,7 @@ class Controller_PlayerAjax extends Controller
         }
         $notes = isset($_POST['notes']) ? (string)$_POST['notes'] : '';
         $this->load_model('Player');
-        $r = $this->Player->EditSecondNotes([
+        $r = $this->Player->edit_second_notes([
             'Token' => $this->session->token,
             'RecommendationSecondsId' => $sid,
             'Notes' => $notes,
@@ -742,7 +731,7 @@ class Controller_PlayerAjax extends Controller
             exit;
         }
         $this->load_model('Player');
-        $r = $this->Player->WithdrawSecond([
+        $r = $this->Player->withdraw_second([
             'Token' => $this->session->token,
             'RecommendationSecondsId' => $sid,
         ]);
@@ -764,7 +753,7 @@ class Controller_PlayerAjax extends Controller
         }
         $reason = isset($_POST['reason']) ? (string)$_POST['reason'] : '';
         $this->load_model('Player');
-        $r = $this->Player->EditAwardRecommendationReason([
+        $r = $this->Player->edit_award_recommendation_reason([
             'Token' => $this->session->token,
             'RecommendationsId' => $rec_id,
             'Reason' => $reason,
@@ -815,7 +804,7 @@ class Controller_PlayerAjax extends Controller
             exit;
         }
         $this->load_model('Player');
-        $prefs = $this->Player->GetDietaryPreferences($mundane_id);
+        $prefs = $this->Player->get_dietary_preferences($mundane_id);
         echo json_encode(['status' => 0, 'prefs' => $prefs ?: []]);
         exit;
     }
@@ -864,7 +853,7 @@ class Controller_PlayerAjax extends Controller
             'AllergenNightshades' => max(0, min(2, (int)($_POST['AllergenNightshades'] ?? 0))),
         ];
         $this->load_model('Player');
-        $this->Player->SaveDietaryPreferences($mundane_id, $data);
+        $this->Player->save_dietary_preferences($mundane_id, $data);
         echo json_encode(['status' => 0]);
         exit;
     }
