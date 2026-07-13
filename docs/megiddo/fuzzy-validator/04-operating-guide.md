@@ -127,6 +127,30 @@ Run batched or overnight when calibrating the expanded registry; pilot pages (`h
 
 ---
 
+## 3b. `refuzz` — cross-session natural drift
+
+`record` discovers fuzz from **5 consecutive captures in one session**. Pages with `driftClass: natural` may pass calibration (0 fuzz nodes) yet fail `validate` hours or days later when datetime-relative lists change. That is **expected** on a stable mirror — not environmental flakiness.
+
+```bash
+bin/ork-db deploy-sandbox --yes
+bin/fuzzy-validator setpoint restore
+
+# Single page or all natural-drift pages (test + mirror)
+bin/fuzzy-validator refuzz --page home-authenticated --phase all
+bin/fuzzy-validator refuzz --natural --ensure-sandbox --phase all
+
+# Re-bundle after refuzz
+bin/fuzzy-validator setpoint capture --profiles test,mirror
+bin/fuzzy-validator setpoint publish --bundle tools/fuzzy-validator/setpoints/out/<newest>.zip
+cp tools/fuzzy-validator/setpoints/out/<newest>.zip tools/fuzzy-validator/setpoints/bootstrap/
+bin/fuzzy-validator setpoint restore
+bin/fuzzy-validator validate --all --phase all
+```
+
+`refuzz` captures one candidate, diffs against the restored baseline, **merges** new DOM fuzz nodes and pixel zones into manifests, and copies the candidate onto baselines.
+
+---
+
 ## 4. `validate` — refactor sign-off (R-*)
 
 ```bash
@@ -164,6 +188,7 @@ tools/fuzzy-validator/bin/gate.sh --pages home-anonymous,player-profile --phase 
 | Accidental static file touch | Revert CSS/JS change |
 | Template drift | Revert or re-`record` on integration branch |
 | New dynamic widget | Re-`record` DOM/pixel fuzz |
+| **Natural drift** (`driftClass: natural`, no code change) | `refuzz --page <id>` or `refuzz --natural`; then `setpoint capture` + `publish` |
 | Platform/font noise | Linux CI baselines only |
 
 ---

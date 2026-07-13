@@ -9,6 +9,8 @@ export interface PageEntry {
   repeat?: number;
   waitAfterMs?: number;
   readySelector?: string;
+  stableHeightMs?: number;
+  driftClass?: 'stable' | 'natural';
   skip?: boolean;
   notes?: string;
 }

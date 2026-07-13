@@ -129,3 +129,16 @@ def test_compare_dom_trees_ignores_heraldry_style_background_url_cache_bust():
     manifest = {"fuzzNodes": [], "manualNodes": []}
     result = compare_dom_trees(baseline, candidate, manifest)
     assert result.passed is True
+
+
+def test_discover_fuzz_nodes_from_pair_masks_structural_drift():
+    from lib.tree_diff import discover_fuzz_nodes_from_pair
+
+    baseline = _tree(
+        "<html><body><div id=\"w\"><a>Event A</a><a>Event B</a></div></body></html>"
+    )
+    candidate = _tree("<html><body><div id=\"w\"><a>Event C</a></div></body></html>")
+    fuzz_nodes = discover_fuzz_nodes_from_pair(baseline, candidate)
+    assert fuzz_nodes
+    result = compare_dom_trees(baseline, candidate, {"fuzzNodes": fuzz_nodes, "manualNodes": []})
+    assert result.passed is True

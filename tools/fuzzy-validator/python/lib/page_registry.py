@@ -13,6 +13,7 @@ DEFAULT_PAGES_PATH = TOOL_ROOT / "manifests" / "pages.json5"
 
 PAGE_ID_PATTERN = re.compile(r"^[a-z0-9-]+$")
 VALID_AUTH = frozenset({"none", "login"})
+VALID_DRIFT_CLASS = frozenset({"stable", "natural"})
 
 
 def load_pages_registry(path: Path | str | None = None) -> dict[str, Any]:
@@ -76,6 +77,12 @@ def validate_pages_registry(registry: dict[str, Any]) -> list[str]:
         if "waitAfterMs" in page and not isinstance(page["waitAfterMs"], int):
             errors.append(f'page "{page_id}" waitAfterMs must be an integer')
 
+        drift_class = page.get("driftClass")
+        if drift_class is not None and drift_class not in VALID_DRIFT_CLASS:
+            errors.append(
+                f'page "{page_id}" driftClass must be one of {sorted(VALID_DRIFT_CLASS)}'
+            )
+
     return errors
 
 
@@ -85,8 +92,17 @@ def assert_valid_pages_registry(registry: dict[str, Any]) -> None:
         raise ValueError("invalid pages registry:\n" + "\n".join(f"  - {err}" for err in errors))
 
 
+
 def active_page_ids(registry: dict[str, Any]) -> list[str]:
     return [page["id"] for page in registry["pages"] if not page.get("skip")]
+
+
+def page_ids_by_drift_class(registry: dict[str, Any], drift_class: str) -> list[str]:
+    return [
+        page["id"]
+        for page in registry["pages"]
+        if not page.get("skip") and page.get("driftClass") == drift_class
+    ]
 
 
 def estimated_calibrate_seconds(registry: dict[str, Any], *, seconds_per_page: int = 55) -> int:

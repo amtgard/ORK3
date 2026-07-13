@@ -3,6 +3,7 @@
     "viewport": { "width": 1280, "height": 720 },
     "repeat": 5,
     "waitAfterMs": 500,
+    "stableHeightMs": 0,
     "auth": "none"
   },
   "pages": [
@@ -20,13 +21,17 @@
       "url": "./index.php?Route=",
       "auth": "login",
       "readySelector": "#main, body",
-      "notes": "Class: Home — post-login home (infrastructure.spec.ts)"
+      "waitAfterMs": 1500,
+      "stableHeightMs": 800,
+      "driftClass": "natural",
+      "notes": "Class: Home — post-login home; RSVP/event widgets + nav (refuzz on setpoint refresh)"
     },
     {
       "id": "player-profile",
       "url": "./index.php?Route=Player/profile",
       "auth": "login",
       "waitAfterMs": 1000,
+      "driftClass": "stable",
       "notes": "Class: Player — logged-in player profile default route (rsvp.spec.ts)"
     },
     {
@@ -34,6 +39,7 @@
       "url": "./index.php?Route=Player/profile/1",
       "auth": "login",
       "waitAfterMs": 1000,
+      "driftClass": "natural",
       "notes": "Class: Player — sandbox player id 1 (player-profile.spec.ts)"
     },
     {
@@ -47,6 +53,7 @@
       "id": "kingdom-profile",
       "url": "./index.php?Route=Kingdom/profile/1",
       "auth": "login",
+      "driftClass": "stable",
       "notes": "Class: Kingdom — kingdom id 1 mirror; sandbox uses 100001+ (kingdom-profile.spec.ts)"
     },
     {
@@ -54,6 +61,7 @@
       "url": "./index.php?Route=Kingdom/profile/100001",
       "auth": "login",
       "waitAfterMs": 1000,
+      "driftClass": "natural",
       "notes": "V-02 auth — sandbox Empire of Ashkara permissions host; mirror id absent → home chrome"
     },
     {
@@ -61,12 +69,15 @@
       "url": "./index.php?Route=Park/profile/1000001",
       "auth": "login",
       "waitAfterMs": 1000,
+      "driftClass": "natural",
       "notes": "V-02 auth / V-03 banner — sandbox Silver Fen park host; mirror id absent → home chrome"
     },
     {
       "id": "event-list",
       "url": "./index.php?Route=Event",
       "auth": "login",
+      "waitAfterMs": 1000,
+      "driftClass": "natural",
       "notes": "Class: Event — event list landing (event-planning.spec.ts)"
     },
     {
@@ -95,6 +106,7 @@
       "url": "./index.php?Route=Event/index/80000",
       "auth": "login",
       "waitAfterMs": 1000,
+      "driftClass": "natural",
       "notes": "V-01 RSVP — Spring War index RSVP batch counts; sandbox event 80000; mirror id absent → home chrome"
     },
     {
@@ -102,6 +114,7 @@
       "url": "./index.php?Route=Event/index/80003",
       "auth": "login",
       "waitAfterMs": 1000,
+      "driftClass": "natural",
       "notes": "V-01 RSVP — Gathering of Kingdoms index variant; sandbox event 80003; mirror → home chrome"
     },
     {
@@ -123,36 +136,44 @@
       "id": "event-create",
       "url": "./index.php?Route=Event/create/1",
       "auth": "login",
+      "driftClass": "stable",
       "notes": "Class: Event — create form park id 1 (event-detail.spec.ts)"
     },
     {
       "id": "event-kingdom",
       "url": "./index.php?Route=Event/kingdom/1",
       "auth": "login",
+      "waitAfterMs": 1000,
+      "driftClass": "natural",
       "notes": "Class: Event — kingdom calendar kingdom id 1 (event-planning.spec.ts)"
     },
     {
       "id": "event-park",
       "url": "./index.php?Route=Event/park/1",
       "auth": "login",
+      "waitAfterMs": 1000,
+      "driftClass": "natural",
       "notes": "Class: Event — park calendar park id 1 (event-planning.spec.ts)"
     },
     {
       "id": "admin-dashboard",
       "url": "./index.php?Route=Admin",
       "auth": "login",
+      "driftClass": "stable",
       "notes": "Class: Admin — dashboard (admin-dashboard.spec.ts)"
     },
     {
       "id": "admin-state-of-amtgard",
       "url": "./index.php?Route=Admin/stateofamtgard",
       "auth": "login",
+      "driftClass": "stable",
       "notes": "Class: Admin — state of amtgard report (admin-dashboard.spec.ts)"
     },
     {
       "id": "admin-permissions",
       "url": "./index.php?Route=Admin/permissions",
       "auth": "login",
+      "driftClass": "stable",
       "notes": "Class: Admin — global permissions (auth-permissions.spec.ts)"
     },
     {
@@ -195,18 +216,23 @@
       "id": "reports-voting-eligible",
       "url": "./index.php?Route=Reports/voting_eligible&KingdomId=14",
       "auth": "login",
+      "driftClass": "natural",
       "notes": "Class: Reports — voting eligible kingdom id 14 mirror (reports.spec.ts)"
     },
     {
       "id": "reports-ladder-grid",
       "url": "./index.php?Route=Reports/ladder_grid&KingdomId=14",
       "auth": "login",
+      "waitAfterMs": 1000,
+      "stableHeightMs": 1000,
+      "driftClass": "natural",
       "notes": "Class: Reports — ladder grid kingdom id 14 mirror (reports.spec.ts)"
     },
     {
       "id": "reports-attendance",
       "url": "./index.php?Route=Reports/attendance&KingdomId=14",
       "auth": "login",
+      "driftClass": "natural",
       "notes": "Class: Reports — attendance report kingdom id 14 mirror (reports.spec.ts)"
     },
     {
@@ -220,12 +246,14 @@
       "id": "weather",
       "url": "./index.php?Route=Weather",
       "auth": "login",
+      "driftClass": "natural",
       "notes": "Class: Infrastructure — weather widget; may need stubs in test env (lib-service.spec.ts)"
     },
     {
       "id": "tournament",
       "url": "./index.php?Route=Tournament",
       "auth": "login",
+      "driftClass": "stable",
       "notes": "Class: Infrastructure — tournament page (lib-service.spec.ts)"
     },
     {

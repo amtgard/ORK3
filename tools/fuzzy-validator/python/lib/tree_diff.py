@@ -216,6 +216,37 @@ def discover_fuzz_nodes(trees: list[dict]) -> list[dict]:
     return collapse_ancestor_fuzz(fuzz_nodes)
 
 
+def discover_fuzz_nodes_from_pair(baseline: dict, candidate: dict) -> list[dict]:
+    """Discover fuzz nodes from baseline vs candidate (cross-session refuzz)."""
+    probe = compare_dom_trees(
+        baseline,
+        candidate,
+        {"fuzzNodes": [], "manualNodes": []},
+        dom_min_score=0.0,
+    )
+    if probe.passed:
+        return []
+
+    failure_paths = sorted({failure.path for failure in probe.failures})
+    trees = [baseline, candidate]
+    fuzz_nodes = [infer_fuzz_mode(trees, path) for path in failure_paths]
+    return collapse_ancestor_fuzz(fuzz_nodes)
+
+
+def merge_fuzz_nodes(existing: list[dict], new_nodes: list[dict]) -> list[dict]:
+    """Merge auto fuzz nodes; subtree rules subsume children and duplicate paths."""
+    by_path: dict[str, dict] = {}
+    for node in existing + new_nodes:
+        path = node["path"]
+        prior = by_path.get(path)
+        if prior is None:
+            by_path[path] = node
+            continue
+        if node.get("mode") == "subtree" or prior.get("mode") != "subtree":
+            by_path[path] = node
+    return collapse_ancestor_fuzz(list(by_path.values()))
+
+
 def effective_fuzz_nodes(manifest: dict) -> list[dict]:
     nodes = list(manifest.get("fuzzNodes", [])) + list(manifest.get("manualNodes", []))
     return collapse_ancestor_fuzz(nodes)

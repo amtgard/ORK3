@@ -25,12 +25,22 @@ Establish a **cross-cutting render setpoint** — major interface URLs sampled o
 | **Player** | `player-profile`, `player-profile-sandbox` |
 | **Kingdom** | `kingdom-profile` |
 | **Park** | `event-park` (profile route deferred — see skips) |
-| **Event** | `event-list`, `event-index`, `event-create`, `event-kingdom`, `event-park` |
+| **Event** | `event-list`, `event-create`, `event-kingdom`, `event-park`, `event-index-rsvp`, `event-index-rsvp-gok` |
 | **Admin** | `admin-dashboard`, `admin-state-of-amtgard`, `admin-permissions` |
 | **Reports** | `reports-voting-eligible`, `reports-ladder-grid`, `reports-attendance` |
 | **Infrastructure** | `weather`, `tournament` |
 
-**Deferred to domain V-* (registry row present, `skip: true`):** Search (`search`, `search-unitsearch` → V-11), Attendance (`attendance`, `sign-in-invalid` → V-12), `home-anonymous`, `park-profile`, `event-detail`, `reports-officer-directory`, `live-stats` — capture instability (deferred JS, mirror load, or live DOM).
+**Deferred to domain V-* (registry row present, `skip: true`):** Search (`search`, `search-unitsearch` → V-11), Attendance (`attendance`, `sign-in-invalid` → V-12), `home-anonymous`, `park-profile`, `event-detail`, `event-index`, `reports-officer-directory`, `live-stats` — deferred JS, mirror load, or datetime-relative lists.
+
+### Drift classification (`driftClass` in `pages.json5`)
+
+| Class | Meaning | When validate fails without code change |
+|-------|---------|----------------------------------------|
+| **`stable`** | Chrome/layout stable across sessions | Investigate regression; `record` if intentional |
+| **`natural`** | Datetime/list-driven content by design | `bin/fuzzy-validator refuzz --page <id>` or `refuzz --natural` → merge fuzz → re-baseline → `setpoint capture` |
+| **`skip`** | Not in `--all` gate | N/A |
+
+Five-run `record` calibration discovers **intra-session** volatility only. Cross-session natural drift requires **`refuzz`** (baseline vs candidate pair discovery).
 
 ### Sandbox entity pins (test profile)
 

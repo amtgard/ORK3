@@ -11,7 +11,12 @@ from pathlib import Path
 
 from gate_run import finalize_multi_profile_run, finalize_run, run_batch_gate
 from lib.manifest import load_defaults
-from lib.page_registry import active_page_ids, assert_valid_pages_registry, load_pages_registry
+from lib.page_registry import (
+    active_page_ids,
+    assert_valid_pages_registry,
+    load_pages_registry,
+    page_ids_by_drift_class,
+)
 from lib.tool_paths import (
     DEFAULT_TOOL_ROOT,
     defaults_path,
@@ -105,6 +110,21 @@ def _build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--pages", metavar="IDS", help="Comma-separated registry page ids")
     validate.add_argument("--all", action="store_true", help="All non-skipped registry pages")
     validate.add_argument("--phase", default="all", choices=["visual", "assets", "dom", "all"])
+
+    refuzz = subparsers.add_parser(
+        "refuzz",
+        parents=[shared],
+        help="Capture candidate vs baseline; merge cross-session fuzz; re-baseline",
+    )
+    refuzz.add_argument("--page", metavar="ID", help="Single registry page id")
+    refuzz.add_argument("--pages", metavar="IDS", help="Comma-separated registry page ids")
+    refuzz.add_argument("--all", action="store_true", help="All non-skipped registry pages")
+    refuzz.add_argument(
+        "--natural",
+        action="store_true",
+        help="All active pages with driftClass=natural",
+    )
+    refuzz.add_argument("--phase", default="all", choices=["visual", "dom", "all"])
 
     setpoint = subparsers.add_parser(
         "setpoint",
@@ -210,6 +230,14 @@ def _resolve_page_ids(args: argparse.Namespace, tool_root: Path) -> list[str]:
 
     print("fuzzy-validator: specify --page, --pages, or --all", file=sys.stderr)
     raise SystemExit(2)
+
+
+def _resolve_refuzz_page_ids(args: argparse.Namespace, tool_root: Path) -> list[str]:
+    if getattr(args, "natural", False):
+        registry = _load_registry(tool_root)
+        return page_ids_by_drift_class(registry, "natural")
+
+    return _resolve_page_ids(args, tool_root)
 
 
 def _activate_profile(
@@ -338,6 +366,97 @@ def _run_playwright_capture(
         check=False,
     )
     return int(result.returncode)
+
+
+def _run_refuzz_capture(
+    page_ids: list[str],
+    env: dict,
+    args: argparse.Namespace,
+    tool_root: Path,
+) -> int:
+    capture_env = env.copy()
+    capture_env["FUZZ_MODE"] = "candidate"
+    capture_env["FUZZ_PAGES"] = ",".join(page_ids)
+    capture_env["FUZZ_TOOL_ROOT"] = str(tool_root)
+    capture_env["FUZZ_PAGES_MANIFEST"] = str(pages_manifest_path(tool_root))
+    if args.base_url:
+        capture_env["ORK3_E2E_BASE_URL"] = args.base_url
+
+    for page_id in page_ids:
+        capture_env["FUZZ_PAGES"] = page_id
+        result = subprocess.run(
+            ["npx", "playwright", "test", "--project=fuzzy-capture"],
+            cwd=REPO_ROOT,
+            env=capture_env,
+            check=False,
+        )
+        if result.returncode != 0:
+            return int(result.returncode)
+    return 0
+
+
+def _run_refuzz(args: argparse.Namespace) -> int:
+    if args.phase not in {"visual", "dom", "all"}:
+        print(f"fuzzy-validator refuzz: unsupported phase '{args.phase}'", file=sys.stderr)
+        return 2
+
+    tool_root = resolve_tool_root(args.tool_root)
+    page_ids = _resolve_refuzz_page_ids(args, tool_root)
+    if not page_ids:
+        print("fuzzy-validator refuzz: no pages selected", file=sys.stderr)
+        return 2
+
+    if args.dry_run:
+        config = load_profiles_config(profiles_config_path(tool_root))
+        for profile_name in resolve_profile_names(
+            config=config,
+            profile=args.profile,
+            profiles=args.profiles,
+        ):
+            for page_id in page_ids:
+                print(f"{profile_name}:{page_id}")
+        return 0
+
+    config = load_profiles_config(profiles_config_path(tool_root))
+    profile_names = resolve_profile_names(
+        config=config,
+        profile=args.profile,
+        profiles=args.profiles,
+    )
+    base_env = os.environ.copy()
+    base_env["PYTHONPATH"] = f"{base_env.get('PYTHONPATH', '')}:{PYTHON_DIR}"
+    refuzz_script = PYTHON_DIR / "refuzz_page.py"
+
+    for profile_name in profile_names:
+        print(f"fuzzy-validator refuzz: profile={profile_name} pages={len(page_ids)}")
+        env = _activate_profile(profile_name, config, ensure_sandbox=args.ensure_sandbox, env=base_env)
+
+        for page_id in page_ids:
+            code = _run_refuzz_capture([page_id], env, args, tool_root)
+            if code != 0:
+                return code
+
+            refuzz = subprocess.run(
+                [
+                    sys.executable,
+                    str(refuzz_script),
+                    "--page-id",
+                    page_id,
+                    "--profile",
+                    profile_name,
+                    "--tool-root",
+                    str(tool_root),
+                    "--phase",
+                    args.phase,
+                ],
+                cwd=REPO_ROOT,
+                env=env,
+                check=False,
+            )
+            if refuzz.returncode != 0:
+                return int(refuzz.returncode)
+
+    return 0
 
 
 def _run_calibrate_assets(page_ids: list[str], env: dict, profile: str, tool_root: Path) -> int:
@@ -675,6 +794,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "validate":
         return _run_validate(args)
+
+    if args.command == "refuzz":
+        return _run_refuzz(args)
 
     if args.command == "setpoint":
         return _run_setpoint(args)

@@ -64,6 +64,8 @@ for (const pageEntry of capturePages) {
     }
 
     const waitAfterMs = pageEntry.waitAfterMs ?? registry.defaults.waitAfterMs ?? 500;
+    const stableHeightMs =
+      pageEntry.stableHeightMs ?? (registry.defaults as { stableHeightMs?: number }).stableHeightMs ?? 0;
     const singleCapture = process.env.FUZZ_MODE === 'candidate';
     const repeat = singleCapture ? 1 : repeatCount(pageEntry.repeat);
     const outDir = path.join(TOOL_ROOT, 'calibrations', pageEntry.id);
@@ -78,6 +80,7 @@ for (const pageEntry of capturePages) {
       await stabilizePage(page, {
         readySelector: pageEntry.readySelector,
         waitAfterMs,
+        stableHeightMs,
       });
 
       const fileName = singleCapture ? 'candidate.png' : `${runLabel}.png`;
