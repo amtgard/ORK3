@@ -474,7 +474,7 @@ class Controller_Reports extends Controller
         $this->data['page_title'] = "Player Roster";
         $_uid     = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $_authType = $type === 'Kingdom' ? AUTH_KINGDOM : AUTH_PARK;
-        $this->data['canViewMundane'] = $_uid > 0 && valid_id($this->request->id)
+        $this->data['CanViewMundane'] = $_uid > 0 && valid_id($this->request->id)
             && $this->Authorization->has_authority($_uid, $_authType, (int)$this->request->id, AUTH_EDIT);
     }
 

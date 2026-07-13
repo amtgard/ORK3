@@ -235,14 +235,7 @@ class Controller_Player extends Controller
         $this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1, 'Lightweight' => 1 ));
         $this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$id", 'display' => $this->data['Player']['Persona'] );
         $canEdit    = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
-        $this->data['canDeleteRecommendation'] = false;
-        if ($uid > 0) {
-            if (isset($this->session->park_id) && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
-                $this->data['canDeleteRecommendation'] = true;
-            } elseif (isset($this->session->kingdom_id) && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, AUTH_EDIT)) {
-                $this->data['canDeleteRecommendation'] = true;
-            }
-        }
+        $this->data['canDeleteRecommendation'] = $this->award_rec_can_delete($uid, AUTH_EDIT);
         if ($canEdit) {
             $this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
         }
@@ -406,14 +399,7 @@ class Controller_Player extends Controller
         $playerParkId = (int)($this->data['Player']['ParkId'] ?? 0);
         $playerKingdomId = (int)($this->data['Player']['KingdomId'] ?? 0);
         $this->data['canEditAdmin'] = $canEdit;
-        $this->data['canDeleteRecommendation'] = false;
-        if ($uid > 0) {
-            if (isset($this->session->park_id) && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$this->session->park_id, AUTH_CREATE)) {
-                $this->data['canDeleteRecommendation'] = true;
-            } elseif (isset($this->session->kingdom_id) && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, AUTH_CREATE)) {
-                $this->data['canDeleteRecommendation'] = true;
-            }
-        }
+        $this->data['canDeleteRecommendation'] = $this->award_rec_can_delete($uid, AUTH_CREATE);
         $this->data['pnCanManageBanner'] = ($uid === (int)$id)
             || $canEdit
             || ($playerKingdomId > 0 && $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $playerKingdomId, AUTH_EDIT))
@@ -792,6 +778,21 @@ class Controller_Player extends Controller
 
         // AwardId → KingdomAwardId map for current kingdom (pre-match historical award dropdowns)
         $this->data['AwardIdToKingdomAwardId'] = $this->Player->get_reconcile_award_map((int)$this->session->kingdom_id);
+    }
+
+    private function award_rec_can_delete(int $uid, string $role): bool
+    {
+        if ($uid <= 0) {
+            return false;
+        }
+        if (isset($this->session->park_id) && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$this->session->park_id, $role)) {
+            return true;
+        }
+        if (isset($this->session->kingdom_id) && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, $role)) {
+            return true;
+        }
+
+        return false;
     }
 
 }

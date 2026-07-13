@@ -254,7 +254,7 @@ $_canRemoveMap = is_array($RosterCanRemoveMap ?? null) ? $RosterCanRemoveMap : [
 <?php if ($_canRemoveAny) : ?>
 						<th class="rp-col-actions">Actions</th>
 <?php endif; ?>
-<?php if (!empty($canViewMundane)) : ?>
+<?php if (!empty($CanViewMundane)) : ?>
 						<th>Mundane</th>
 <?php endif; ?>
 <?php if (!$is_suspended) : ?>
@@ -310,7 +310,7 @@ $_canRemoveMap = is_array($RosterCanRemoveMap ?? null) ? $RosterCanRemoveMap : [
 					</a>
 				<?php endif; ?></td>
 <?php 		endif; ?>
-<?php if (!empty($canViewMundane)) : ?>
+<?php if (!empty($CanViewMundane)) : ?>
 					<td><?= $player['Displayable'] == 0 ? "<span class='restricted-player-display'>Restricted</span>" : htmlspecialchars($player['Surname'].', '.$player['GivenName']) ?></td>
 <?php endif; ?>
 <?php if (!$is_suspended) : ?>
@@ -412,7 +412,7 @@ $(function() {
 		<?php if (!isset($this->__session->park_id)) { echo 'idx++;'; } ?>
 		idx++; // Persona
 		<?php if ($_canRemoveAny) { echo 'idx++;'; } ?>
-		<?php if (!empty($canViewMundane)) { echo 'idx++;'; } ?>
+		<?php if (!empty($CanViewMundane)) { echo 'idx++;'; } ?>
 		idx++; // Last Sign-in
 		idx++; // Suspended At
 		idx++; // Suspended Until

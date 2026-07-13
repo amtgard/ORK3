@@ -1755,8 +1755,7 @@ class Controller_Admin extends Controller
         $r = $this->Kingdom->get_park_summary($id);
         $this->data['park_summary'] = $r;
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $this->data['CanResetWaivers'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
-        $this->data['CanEditKingdomReports'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$id, AUTH_EDIT);
+        $this->set_admin_kingdom_auth_flags($_uid, (int)$id);
     }
 
     public function park($id = null)
@@ -1776,7 +1775,7 @@ class Controller_Admin extends Controller
         }
         $this->data[ 'page_title' ] = "Admin: " . $this->data['ParkInfo']['ParkName'];
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $this->data['CanResetWaivers'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid);
     }
 
     public function new_player_attendance()
@@ -1972,8 +1971,7 @@ class Controller_Admin extends Controller
             $r = $this->Kingdom->get_park_summary($id);
             $this->data['park_summary'] = $r;
             $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-            $this->data['CanResetWaivers'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
-            $this->data['CanEditKingdomReports'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$id, AUTH_EDIT);
+            $this->set_admin_kingdom_auth_flags($_uid, (int)$id);
             $this->template = 'Admin_kingdom.tpl';
         } elseif ($type == 'park') {
             $this->park_route($id);
@@ -1983,7 +1981,7 @@ class Controller_Admin extends Controller
             }
             $this->data['page_title'] = "Admin: " . $this->data['ParkInfo']['ParkName'];
             $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-            $this->data['CanResetWaivers'] = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+            $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($_uid);
             $this->template = 'Admin_park.tpl';
         }
     }
@@ -2436,6 +2434,22 @@ class Controller_Admin extends Controller
         $this->data['RangeLimitMonths'] = $bootstrap['RangeLimitMonths'];
         $this->data['page_title'] = 'State of Amtgard Report';
         $this->template = '../revised-frontend/StateOfAmtgard_index.tpl';
+    }
+
+    private function admin_can_reset_waivers(int $uid): bool
+    {
+        return $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+    }
+
+    private function admin_can_edit_kingdom_reports(int $uid, int $kingdomId): bool
+    {
+        return $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdomId, AUTH_EDIT);
+    }
+
+    private function set_admin_kingdom_auth_flags(int $uid, int $kingdomId): void
+    {
+        $this->data['CanResetWaivers'] = $this->admin_can_reset_waivers($uid);
+        $this->data['CanEditKingdomReports'] = $this->admin_can_edit_kingdom_reports($uid, $kingdomId);
     }
 
 }
