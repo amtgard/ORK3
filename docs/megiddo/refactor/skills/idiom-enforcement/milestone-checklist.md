@@ -33,15 +33,15 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 16 | I-16 | `megiddo/i-16-idiom-r16` | `b1613c81` | [x] |
 | 17 | I-17 | `megiddo/i-17-idiom-r17` | `e9c4e9fc` | [x] |
 | 18 | I-18 | `megiddo/i-18-idiom-r18` | `a881aaf5` | [x] |
-| 19 | I-19a | | | [ ] |
+| 19 | I-19a | `megiddo/i-19a-idiom-residual-lib` | `bd5cda5b` | [x] |
 | 20 | I-19b | | | [ ] |
 | 21 | I-19c | | | [ ] |
 | 22 | I-19d | | | [ ] |
 | 23 | I-VALIDATE | | | [ ] |
 
-**Next actionable hop:** I-19a
+**Next actionable hop:** I-19b
 
-**Stack tip:** `megiddo/i-18-idiom-r18` @ `a881aaf5`
+**Stack tip:** `megiddo/i-19a-idiom-residual-lib` @ `bd5cda5b`
 
 ---
 
@@ -258,6 +258,22 @@ Scope files (charter § I-18): `controller.Admin.php`, `controller.AdminAjax.php
 - [ ] Static isolation unchanged; PHPUnit exit 0
 - [ ] R-19 hop fuzzy/Playwright gates per v-19
 - [ ] One commit each
+
+### I-19a (R-19a residual-lib scope) — complete
+
+Scope files (charter § I-19a, fixed 3-file group): `model/model.Player.php`, `index.php`, `controller/controller.KingdomAjax.php`.
+
+- [x] Controller `load_model` / `$this->Model` pattern aligned — `KingdomAjax` already loads models per branch and routes search/audit through wrappers (`$this->Search->scoped_player_search`, `$this->Player->…`, `$this->KingdomProfile->…`); no `(new Model_*)` or `new Model_` sites (`rg` exit 1)
+- [x] Model wrappers match domain-call idioms in charter — `Model_Player` uses the file-dominant split of constructor-wired `$this->Player` (`APIModel('Player')`) for service calls and the private `$this->_player()` domain accessor for direct reads; consistent per file (matches `model.Player.php` reference idiom)
+- [x] `index.php` bootstrap matches idiom — direct `(new Health())->PingDb()` and `(new Event())->GetEventSummaryForRedirect()` plus request-scoped `$Session`, per charter §1.6 and v-19 §2.3 (index.php is not a controller; `load_model` N/A)
+- [x] Audit idiom preserved — single `addauth` branch keeps inline `(new Dangeraudit())->audit(…)` after `add_auth`; this matches every AJAX peer (`ParkAjax`, `EventAjax`, `AdminAjax`, `Unit`) and `Model_Authorization` exposes no audit wrapper, so inline is canonical, not drift (charter §1.3 / §2)
+- [x] JSON / error shapes unchanged — no response-shape edits
+- [x] `rg '$DB->' orkui/` + `rg 'Ork3::$Lib' orkui/` still zero (both exit 1)
+- [x] PHPUnit exit 0 — 230 tests OK (2 skipped)
+- [x] Hop fuzzy/Playwright gates per charter §5 / v-19 §2.5 — fuzzy `player-profile,kingdom-auth-sandbox,home-authenticated` 6/6 pass (test+mirror); Playwright `player-profile.spec.ts`, `kingdom-profile.spec.ts`, `infrastructure.spec.ts`, `residual-lib.spec.ts` 14/14 pass
+- [x] One commit; checklist updated
+
+**Idiom changes:** none required — R-19a scope (`model.Player`, `index.php`, `KingdomAjax`) was already charter-conformant at the I-18 stack tip. Controllers load models per branch with snake_case wrappers, `Model_Player` keeps its intentional `APIModel` vs private-domain-accessor split, `index.php` uses the established `Health`/`Event` bootstrap idiom, and the inline `Dangeraudit` audit matches all AJAX peers. Verified no-op idiom pass with all gates green.
 
 ---
 
