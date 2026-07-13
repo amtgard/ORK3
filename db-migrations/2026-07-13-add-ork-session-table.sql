@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS `ork_session` (
   KEY `expires` (`expires`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-INSERT INTO `ork_session` (`mundane_id`, `token`, `created`, `last_seen`, `expires`)
+INSERT IGNORE INTO `ork_session` (`mundane_id`, `token`, `created`, `last_seen`, `expires`)
 SELECT `mundane_id`, `token`, NOW(), NOW(), `token_expires`
 FROM `ork_mundane`
 WHERE `token` <> '' AND CHAR_LENGTH(`token`) = 32 AND `token_expires` > NOW();
