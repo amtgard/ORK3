@@ -332,7 +332,8 @@ class Authorization extends Ork3
 					if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
 						$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 					} else {
-						$this->mundane->token = md5(openssl_random_pseudo_bytes(16) . microtime());
+						$_sessionToken = $this->CreateSession($this->mundane->mundane_id);
+						$this->mundane->token = $_sessionToken; // vestigial "last token" pointer
 						$this->mundane->token_expires = date('Y:m:d H:i:s', time() + LOGIN_TIMEOUT);
 						$this->mundane->save();
 						$response['Status'] = Success();
@@ -363,7 +364,11 @@ class Authorization extends Ork3
 				if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
 					$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
 				} else if (strtotime($this->mundane->token_expires) > time()) {
-					$this->mundane->token = md5($this->mundane->token . microtime());
+					$_rotated = $this->RotateSession($request['Token']);
+					if ($_rotated === '') {
+						$_rotated = $this->CreateSession($this->mundane->mundane_id);
+					}
+					$this->mundane->token = $_rotated; // vestigial "last token" pointer
 					$this->mundane->token_expires = date('Y:m:d H:i:s', time() + LOGIN_TIMEOUT);
 					$this->mundane->save();
 					$response['Status'] = Success();
@@ -857,18 +862,20 @@ class Authorization extends Ork3
 		logtrace("IsAuthorized_h($token)", null);
 		if (strlen($token) != 32)
 			return 0;
-		$this->mundane->clear();
-		$this->mundane->token = $token;
-		if ($this->mundane->find()) {
-			if ($this->mundane->penalty_box == 1)
-				return 0;
-			logtrace("IsAuthorized(): authorized", null);
-			$_SESSION['is_authorized_mundane_id'] = $this->mundane->mundane_id;
-			return $this->mundane->mundane_id;
+		$mundane_id = $this->ValidateSessionByToken($token);
+		if ($mundane_id === 0) {
+			if (isset($_SESSION['is_authorized_mundane_id']))
+				unset($_SESSION['is_authorized_mundane_id']);
+			return 0;
 		}
-		if (isset($_SESSION['is_authorized_mundane_id']))
-			unset($_SESSION['is_authorized_mundane_id']);
-		return 0;
+		$this->mundane->clear();
+		$this->mundane->mundane_id = $mundane_id;
+		if ($this->mundane->find() && $this->mundane->penalty_box == 1) {
+			return 0;
+		}
+		logtrace("IsAuthorized(): authorized", null);
+		$_SESSION['is_authorized_mundane_id'] = $mundane_id;
+		return $mundane_id;
 	}
 
 	public function IsAuthorized_app($token)
