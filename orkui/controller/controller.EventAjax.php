@@ -221,8 +221,7 @@ class Controller_EventAjax extends Controller
             exit;
         }
 
-        $this->load_model('Event');
-        $this->Event->remove_rsvp($detail_id, $mundane_id);
+        $this->EventPlanning->remove_rsvp($detail_id, $mundane_id);
         echo json_encode(['status' => 0]);
         exit;
     }
@@ -249,8 +248,8 @@ class Controller_EventAjax extends Controller
             exit;
         }
 
-        $this->load_model('Event');
-        $r = $this->Event->delete_event($this->session->token, $event_id);
+        $this->load_model('EventPlanning');
+        $r = $this->EventPlanning->delete_event($this->session->token, $event_id);
 
         if (isset($r['Status']) && $r['Status'] == 0) {
             echo json_encode(['status' => 0]);

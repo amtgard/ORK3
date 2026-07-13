@@ -93,33 +93,51 @@ class Model_EventPlanning extends Model
         ]);
     }
 
+    public function delete_event(string $token, int $eventId): array
+    {
+        return $this->Event->DeleteEvent([
+            'Token' => $token,
+            'EventId' => $eventId,
+        ]);
+    }
+
+    public function remove_rsvp(int $detailId, int $mundaneId): void
+    {
+        $this->Event->RemoveRsvp([
+            'EventCalendarDetailId' => $detailId,
+            'TargetMundaneId' => $mundaneId,
+            'AuthorizedByController' => true,
+        ]);
+    }
+
     public function get_attendance_display_row(int $attendanceId): ?array
     {
-        $planning = new EventPlanning();
-        return $planning->GetAttendanceDisplayRow($attendanceId);
+        return $this->_planning()->GetAttendanceDisplayRow($attendanceId);
     }
 
     public function can_add_attendance(int $mundaneId, int $eventId, int $detailId): bool
     {
-        $planning = new EventPlanning();
-        return $planning->CanAddAttendance($mundaneId, $eventId, $detailId);
+        return $this->_planning()->CanAddAttendance($mundaneId, $eventId, $detailId);
     }
 
     public function can_remove_rsvp(int $mundaneId, int $eventId, int $detailId): bool
     {
-        $planning = new EventPlanning();
-        return $planning->CanRemoveRsvp($mundaneId, $eventId, $detailId);
+        return $this->_planning()->CanRemoveRsvp($mundaneId, $eventId, $detailId);
     }
 
     public function can_manage_event_detail(int $mundaneId, int $eventId, int $detailId, string $capability): bool
     {
-        $planning = new EventPlanning();
-        return $planning->CanManageEventDetail($mundaneId, $eventId, $detailId, $capability);
+        return $this->_planning()->CanManageEventDetail($mundaneId, $eventId, $detailId, $capability);
     }
 
     public function set_event_heraldry(array $request): array
     {
         return $this->Heraldry->SetEventHeraldry($request);
+    }
+
+    private function _planning(): EventPlanning
+    {
+        return new EventPlanning();
     }
 
     public function emit_json(array $response, int $authDeniedStatus = 3): void
