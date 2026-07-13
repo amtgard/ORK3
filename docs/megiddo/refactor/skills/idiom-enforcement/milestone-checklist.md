@@ -37,11 +37,11 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 20 | I-19b | `megiddo/i-19b-idiom-residual-lib` | `d708cc5f` | [x] |
 | 21 | I-19c | `megiddo/i-19c-idiom-residual-lib` | `2954f2ea` | [x] |
 | 22 | I-19d | `megiddo/i-19d-idiom-residual-lib` | `23ca9f35` | [x] |
-| 23 | I-VALIDATE | | | [ ] |
+| 23 | I-VALIDATE | `megiddo/i-validate-idiom-audit` | `5e111edd` | [x] |
 
-**Next actionable hop:** I-VALIDATE
+**Next actionable hop:** none — queue complete. Human: P3-4 + P3-5 (optional P3-6 merge).
 
-**Stack tip:** `megiddo/i-19d-idiom-residual-lib` @ `23ca9f35`
+**Stack tip:** `megiddo/i-validate-idiom-audit` @ `5e111edd` (audit only; byte-identical to I-19d tip)
 
 ---
 
@@ -324,14 +324,18 @@ Scope files (charter § I-19d, fixed 3-file group): `controller/controller.Playe
 
 ---
 
-## I-VALIDATE: Idiom close-out
+## I-VALIDATE: Idiom close-out — complete (`status: ok`)
 
-- [ ] Charter lint commands all pass
-- [ ] `rg '$DB->' orkui/` + `rg 'Ork3::$Lib' orkui/` zero
-- [ ] PHPUnit full suite exit 0
-- [ ] Fuzzy `--all` exit 0
-- [ ] Playwright mirror + sandbox heraldry exit 0
-- [ ] `idioms-validate-report.md` with `status: ok|failed`
-- [ ] `04-milestone-checklist.md` § Phase 3.5 updated
+Audit-only hop on `megiddo/i-validate-idiom-audit` @ `5e111edd` (byte-identical to I-19d tip; zero code changes). Full report: [idioms-validate-report.md](../../idioms-validate-report.md).
+
+- [x] Charter lint commands all pass — §4.1 static isolation zero, §4.3 model sanity zero, §4.4 PHPUnit exit 0; §4.2 `(new Model_` / `new Model_` zero. Only §4.2 domain-construct match is the 7 documented `(new Dangeraudit())->audit(...)` canonical inline-audit sites (charter §1.3 / §2), not drift — no fix required
+- [x] `rg '$DB->' orkui/` + `rg 'Ork3::$Lib' orkui/` zero (both exit 1)
+- [x] PHPUnit full suite exit 0 — 230 tests OK, 2 skipped
+- [x] Fuzzy `--all` — 39/40 rows pass; sole failure `[test] park-auth-sandbox` is the **pre-existing** sandbox visual-baseline dimension mismatch (stored 1280×961 vs candidate 1280×1976; assets/dom/visual all 1.000; mirror passes). Branch is byte-identical to I-19d tip, so not introduced here; documented per orchestrator directive, does not flip status
+- [x] Playwright mirror + sandbox heraldry — mirror 50 tests green (1 transient login-redirect timeout in `attendance.spec.ts` passed on isolated re-run 4/4); sandbox heraldry 3/3
+- [x] `idioms-validate-report.md` with `status: ok`
+- [x] `04-milestone-checklist.md` § Phase 3.5 updated
 
 **Exit (ok):** Human P3-4 + P3-5. Optional P3-6 merge.
+
+**Recommended follow-up (non-blocking):** re-record the `test`-profile `park-auth-sandbox` visual baseline during a future intentional-UI/setpoint refresh to clear the standing sandbox dimension-mismatch flag.

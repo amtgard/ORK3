@@ -1487,15 +1487,15 @@ Runs after VALIDATE-20 `status=ok`. Style-only alignment — no semantic changes
 | Hop | Branch pattern | Worker | Status |
 |-----|----------------|--------|--------|
 | I-0 | `megiddo/i-0-idiom-charter` | [I-0.md](./skills/idiom-enforcement/workers/I-0.md) | [x] |
-| I-01 … I-18 | `megiddo/i-{nn}-idiom-r{nn}` | [I-01.md](./skills/idiom-enforcement/workers/_template-I-r-scope.md) (template) | [ ] |
-| I-19a … I-19d | `megiddo/i-19{a\|b\|c\|d}-idiom-residual-lib` | [I-19a.md](./skills/idiom-enforcement/workers/I-19a.md) … [I-19d.md](./skills/idiom-enforcement/workers/I-19d.md) | [ ] |
-| I-VALIDATE | `megiddo/i-validate-idiom-audit` | [I-VALIDATE.md](./skills/idiom-enforcement/workers/I-VALIDATE.md) | [ ] |
+| I-01 … I-18 | `megiddo/i-{nn}-idiom-r{nn}` | [I-01.md](./skills/idiom-enforcement/workers/_template-I-r-scope.md) (template) | [x] |
+| I-19a … I-19d | `megiddo/i-19{a\|b\|c\|d}-idiom-residual-lib` | [I-19a.md](./skills/idiom-enforcement/workers/I-19a.md) … [I-19d.md](./skills/idiom-enforcement/workers/I-19d.md) | [x] |
+| I-VALIDATE | `megiddo/i-validate-idiom-audit` | [I-VALIDATE.md](./skills/idiom-enforcement/workers/I-VALIDATE.md) | [x] |
 
 **Per-hop minimum gates:** `rg '\$DB->' orkui/` zero · `rg 'Ork3::\$Lib' orkui/` zero · `sh bin/run-unit-tests.sh` exit 0 · fuzzy/Playwright per [idioms-00-charter.md §5](./idioms-00-charter.md#5-gate-map--fuzzy--playwright-per-i-hop).
 
 **Exit (I-VALIDATE ok):** Human P3-4 manual smoke matrix + P3-5 retrospective. Optional P3-6 merge.
 
-**Next actionable hop:** I-0 (charter) — then I-01 per [milestone-checklist.md](./skills/idiom-enforcement/milestone-checklist.md).
+**I-VALIDATE complete (2026-07-13, `status: ok`)** — branch `megiddo/i-validate-idiom-audit` @ `5e111edd` (audit only; byte-identical to I-19d tip). Charter §4 lint all pass (only §4.2 match is 7 documented canonical `(new Dangeraudit())->audit` sites); PHPUnit 230 OK; fuzzy 39/40 (sole failure = pre-existing `[test] park-auth-sandbox` baseline dimension mismatch, mirror green, non-behavioral); Playwright mirror + sandbox heraldry green. Report: [idioms-validate-report.md](./idioms-validate-report.md). **Next actionable milestone:** human P3-4 + P3-5.
 
 ---
 
