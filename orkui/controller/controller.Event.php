@@ -337,7 +337,7 @@ class Controller_Event extends Controller
                     ]);
                     $_evType = trim($this->request->Eventnew_edit->EventType ?? '');
                     $this->Event->set_calendar_detail_event_type($event_id, $detail_id, $_evType);
-                    if ($r['Status'] == 0) {
+                    if ($this->Event->event_api_ok($r)) {
                         $this->request->clear('Eventnew_edit');
                         $_feesJson = trim($_POST['Fees'] ?? '');
                         $_feesIn = ($_feesJson !== '') ? json_decode($_feesJson, true) : [];
@@ -364,7 +364,7 @@ class Controller_Event extends Controller
                             header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
                             exit;
                         }
-                    } elseif ($r['Status'] != 5) {
+                    } elseif ($this->Event->event_api_status($r) != 5) {
                         $this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
                     }
                 }
@@ -606,7 +606,7 @@ class Controller_Event extends Controller
                 'MapUrlName'  => $this->request->Eventcreate->MapUrlName,
                 'EventType'   => $this->request->Eventcreate->EventType,
             ]);
-            if ($r['Status'] == 0) {
+            if ($this->Event->event_api_ok($r)) {
                 // Some SOAP implementations return new ID in Detail; fallback to newest detail
                 $new_id = (int)($r['Detail'] ?? 0);
                 if (!$new_id) {
@@ -644,7 +644,7 @@ class Controller_Event extends Controller
                 }
                 header('Location: ' . UIR . "Event/detail/{$event_id}/{$new_id}");
                 return;
-            } elseif ($r['Status'] != 5) {
+            } elseif ($this->Event->event_api_status($r) != 5) {
                 $this->data['Error'] = $r['Error'] . ':<p>' . $r['Detail'];
             }
         }

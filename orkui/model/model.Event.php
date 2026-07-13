@@ -103,6 +103,14 @@ class Model_Event extends Model
         return $this->_eventApiOk($r);
     }
 
+    public function event_api_status($r)
+    {
+        if (is_array($r['Status'] ?? null)) {
+            return (int)($r['Status']['Status'] ?? 1);
+        }
+        return (int)($r['Status'] ?? 1);
+    }
+
     public function set_rsvp_dated($detail_id, $mundane_id, $status)
     {
         return $this->Event->SetRsvp([
@@ -418,9 +426,9 @@ class Model_Event extends Model
         return $this->_eventApiOk($r) && !empty($r['Blocked']);
 }
 
-    public function get_event_templates_for_kingdom(int $kingdomId): array
+    public function get_event_templates_for_kingdom($kingdom_id)
     {
-        return $this->Event->GetEventTemplatesForKingdom($kingdomId);
+        return $this->Event->GetEventTemplatesForKingdom((int) $kingdom_id);
     }
 
 }
