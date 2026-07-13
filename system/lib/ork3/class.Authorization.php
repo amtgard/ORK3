@@ -424,7 +424,7 @@ class Authorization extends Ork3
 			return ['Status' => NoAuthorization('Your access to the ORK has been restricted.')];
 		}
 
-		$this->mundane->token = md5(openssl_random_pseudo_bytes(16) . microtime());
+		$this->mundane->token = $this->CreateSession($this->mundane->mundane_id); // vestigial pointer + session row
 		$this->mundane->token_expires = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
 		$this->mundane->save();
 		error_log("AuthorizeIdp: Updated mundane token.");
@@ -484,7 +484,7 @@ class Authorization extends Ork3
 		$this->idp_auth->save();
 		error_log("AuthorizeIdp: IDP link created.");
 
-		$this->mundane->token = md5(openssl_random_pseudo_bytes(16) . microtime());
+		$this->mundane->token = $this->CreateSession($this->mundane->mundane_id); // vestigial pointer + session row
 		$this->mundane->token_expires = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
 		$this->mundane->save();
 		error_log("AuthorizeIdp: Mundane token updated.");
