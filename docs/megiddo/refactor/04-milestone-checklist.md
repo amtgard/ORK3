@@ -1478,6 +1478,27 @@ Optional: merge stack tip into integration line `megiddo/rebase-20260709`.
 
 ---
 
+## Phase 3.5 — Idiom enforcement
+
+**Canonical plan:** [12-idiom-enforcement.md](./12-idiom-enforcement.md) · **Charter:** [idioms-00-charter.md](./idioms-00-charter.md) · **Agent skill:** [skills/idiom-enforcement/SKILL.md](./skills/idiom-enforcement/SKILL.md) · **Queue:** [skills/idiom-enforcement/milestone-checklist.md](./skills/idiom-enforcement/milestone-checklist.md)
+
+Runs after VALIDATE-20 `status=ok`. Style-only alignment — no semantic changes. Serialized I-0 → I-01 … I-18 → I-19a … I-19d → I-VALIDATE.
+
+| Hop | Branch pattern | Worker | Status |
+|-----|----------------|--------|--------|
+| I-0 | `megiddo/i-0-idiom-charter` | [I-0.md](./skills/idiom-enforcement/workers/I-0.md) | [x] |
+| I-01 … I-18 | `megiddo/i-{nn}-idiom-r{nn}` | [I-01.md](./skills/idiom-enforcement/workers/_template-I-r-scope.md) (template) | [ ] |
+| I-19a … I-19d | `megiddo/i-19{a\|b\|c\|d}-idiom-residual-lib` | [I-19a.md](./skills/idiom-enforcement/workers/I-19a.md) … [I-19d.md](./skills/idiom-enforcement/workers/I-19d.md) | [ ] |
+| I-VALIDATE | `megiddo/i-validate-idiom-audit` | [I-VALIDATE.md](./skills/idiom-enforcement/workers/I-VALIDATE.md) | [ ] |
+
+**Per-hop minimum gates:** `rg '\$DB->' orkui/` zero · `rg 'Ork3::\$Lib' orkui/` zero · `sh bin/run-unit-tests.sh` exit 0 · fuzzy/Playwright per [idioms-00-charter.md §5](./idioms-00-charter.md#5-gate-map--fuzzy--playwright-per-i-hop).
+
+**Exit (I-VALIDATE ok):** Human P3-4 manual smoke matrix + P3-5 retrospective. Optional P3-6 merge.
+
+**Next actionable hop:** I-0 (charter) — then I-01 per [milestone-checklist.md](./skills/idiom-enforcement/milestone-checklist.md).
+
+---
+
 ## Quick Reference
 
 | Phase | Focus |
@@ -1489,8 +1510,9 @@ Optional: merge stack tip into integration line `megiddo/rebase-20260709`.
 | **2** | Refactor execution R-01 … R-14 — domain migrations per DS-* |
 | **2 cont.** | Refactor execution R-15 … R-18 — cross-cutting HasAuthority, cache, residual lib/`$DB` ([10-phase-2-continuation.md](./10-phase-2-continuation.md)) |
 | **3** | **Audit and close-out** — [11-phase-3-closeout.md](./11-phase-3-closeout.md): automated gates + [manual smoke matrix](./validations/r-milestone-smoke-matrix.html) |
+| **3.5** | **Idiom enforcement** — [12-idiom-enforcement.md](./12-idiom-enforcement.md): style-only I-0 … I-VALIDATE |
 
-**Next actionable milestone:** **Phase 3 audit** ([11-phase-3-closeout.md](./11-phase-3-closeout.md)).
+**Next actionable milestone:** **Phase 3.5 idiom enforcement** — I-0 … I-VALIDATE ([idioms-00-charter.md](./idioms-00-charter.md)).
 
 ### R-01 complete (2026-07-09)
 

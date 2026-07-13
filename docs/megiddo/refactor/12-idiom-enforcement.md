@@ -1,6 +1,6 @@
 # Phase 3.5 — Idiom Enforcement
 
-**Status:** Not started  
+**Status:** In progress (I-0 charter published)  
 **Prerequisite:** VALIDATE-20 `status=ok` on stack tip (`megiddo/p3-validate-20-audit` or later)  
 **Before:** P3-4 manual smoke matrix, P3-5 retrospective  
 **Master checklist:** [04-milestone-checklist.md](./04-milestone-checklist.md) § Phase 3.5  

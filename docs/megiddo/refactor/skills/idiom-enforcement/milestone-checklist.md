@@ -4,7 +4,9 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 **Prerequisite:** VALIDATE-20 `status=ok` on `megiddo/p3-validate-20-audit` (or later)
 
-**Stack entry:** `megiddo/p3-validate-20-audit` @ checklist metadata
+**Stack entry:** `megiddo/p3-validate-20-audit` @ `bc74ad4d`
+
+**Charter:** [idioms-00-charter.md](../../idioms-00-charter.md)
 
 ---
 
@@ -12,7 +14,7 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 
 | Hop | ID | Branch | Commit | Status |
 |-----|-----|--------|--------|--------|
-| 0 | I-0 | | | [ ] |
+| 0 | I-0 | `megiddo/i-0-idiom-charter` | `0f52bd61` | [x] |
 | 1 | I-01 | | | [ ] |
 | 2 | I-02 | | | [ ] |
 | 3 | I-03 | | | [ ] |
@@ -37,17 +39,19 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 22 | I-19d | | | [ ] |
 | 23 | I-VALIDATE | | | [ ] |
 
-**Next actionable hop:** I-0
+**Next actionable hop:** I-01
+
+**Stack tip:** `megiddo/i-0-idiom-charter` @ `0f52bd61`
 
 ---
 
 ## I-0: Idiom charter
 
-- [ ] `idioms-00-charter.md` published — rules, reference files, lint commands
-- [ ] Per-hop file scope table (I-01 … I-19d) with primary reference file per scope
-- [ ] Anti-pattern catalog from R-19* and agent drift
-- [ ] Gate: `sh bin/run-unit-tests.sh` exit 0
-- [ ] Checklist + commit on stacked branch
+- [x] `idioms-00-charter.md` published — rules, reference files, lint commands
+- [x] Per-hop file scope table (I-01 … I-19d) with primary reference file per scope
+- [x] Anti-pattern catalog from R-19* and agent drift
+- [x] Gate: `sh bin/run-unit-tests.sh` exit 0
+- [x] Checklist + commit on stacked branch
 
 ---
 
