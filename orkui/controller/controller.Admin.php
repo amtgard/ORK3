@@ -2031,7 +2031,8 @@ class Controller_Admin extends Controller
                 exit;
             }
         }
-        $stats = (new Weather())->api_stats(3);
+        $this->load_model('AdminDashboard');
+        $stats = $this->AdminDashboard->api_stats(3);
         echo json_encode(['status' => 0, 'stats' => $stats, 'wx' => $stats]);
         exit;
     }
@@ -2357,7 +2358,8 @@ class Controller_Admin extends Controller
             echo json_encode($out);
 
         } elseif ($action === 'serverhealth_weather_refresh') {
-            $refresh = (new Weather())->AdminRefreshWithPrior();
+            $this->load_model('AdminDashboard');
+            $refresh = $this->AdminDashboard->admin_refresh_with_prior();
             echo json_encode([
                 'status'  => 0,
                 'weather' => $refresh,

@@ -97,8 +97,8 @@ class Controller_AdminAjax extends Controller
         }
         // stateofamtgard endpoints are open to all logged-in users
 
-        $sor = new StateOfAmtgard();
-        $validated = $sor->ValidateDateRange($_GET['start'] ?? null, $_GET['end'] ?? null);
+        $this->load_model('AdminDashboard');
+        $validated = $this->AdminDashboard->state_of_amtgard_validate_date_range($_GET['start'] ?? null, $_GET['end'] ?? null);
         if (!$validated['ok']) {
             http_response_code($validated['httpCode'] ?? 400);
             echo json_encode(['error' => $validated['error'] ?? 'Invalid date range.']);
@@ -114,7 +114,7 @@ class Controller_AdminAjax extends Controller
             fn ($id) => $id > 0 && $id < 100000
         ));
 
-        $payload = $sor->DispatchChartSection(trim($section ?? ''), $start, $end, $kingdom_ids);
+        $payload = $this->AdminDashboard->state_of_amtgard_chart_section(trim($section ?? ''), $start, $end, $kingdom_ids);
         if ($payload === null) {
             echo json_encode(['error' => 'Unknown section.']);
         } else {
