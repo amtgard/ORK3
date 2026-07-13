@@ -35,13 +35,13 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 18 | I-18 | `megiddo/i-18-idiom-r18` | `a881aaf5` | [x] |
 | 19 | I-19a | `megiddo/i-19a-idiom-residual-lib` | `1b1201db` | [x] |
 | 20 | I-19b | `megiddo/i-19b-idiom-residual-lib` | `d708cc5f` | [x] |
-| 21 | I-19c | | | [ ] |
+| 21 | I-19c | `megiddo/i-19c-idiom-residual-lib` | `2954f2ea` | [x] |
 | 22 | I-19d | | | [ ] |
 | 23 | I-VALIDATE | | | [ ] |
 
-**Next actionable hop:** I-19c
+**Next actionable hop:** I-19d
 
-**Stack tip:** `megiddo/i-19b-idiom-residual-lib` @ `d708cc5f`
+**Stack tip:** `megiddo/i-19c-idiom-residual-lib` @ `2954f2ea`
 
 ---
 
@@ -289,6 +289,22 @@ Scope files (charter § I-19b, fixed 3-file group): `controller/controller.Event
 - [x] One commit; checklist updated
 
 **Idiom changes:** none required — R-19b scope (`EventAjax`, `AdminAjax`, `Admin`) was already charter-conformant at the I-19a stack tip. Heraldry / weather / State-of-Amtgard reads were folded into model wrappers during R-19b, controllers load models per branch with snake_case wrappers, JSON shapes are untouched, and the inline `Dangeraudit` audit beside `add_auth` (and EventStaff) matches every AJAX peer with no `Model_Authorization` audit wrapper available. Verified no-op idiom pass with all gates green.
+
+### I-19c (R-19c residual-lib scope) — complete
+
+Scope files (charter § I-19c, fixed 3-file group): `controller/controller.ParkAjax.php`, `controller/controller.SearchAjax.php`, `controller/controller.Search.php`.
+
+- [x] `load_model('Search')` usage aligned with peers — all three files use the uniform AJAX idiom `$this->load_model('Search')` then `$this->Search->{scoped_player_search|universal_search|get_unit_activity_counts}(…)`, byte-identical in pattern to `EventAjax`, `AdminAjax`, and `KingdomAjax` search paths (`Model_Search` exposes snake_case wrappers over `SearchService`). No drift.
+- [x] Controller `load_model` / `$this->Model` pattern aligned — `ParkAjax` loads models per branch (`Park`, `Search`, `Player`, `Authorization`, `Reports`, `ParkProfile`, `Tournament`) and routes through snake_case wrappers; `SearchAjax` is a thin `load_model('Search')` adapter; `Search` (HTML) loads `Kingdom`/`Park`/`Unit`/`Search` per action with snake_case wrappers. No `(new Model_*)` or `new Model_` sites (`rg` exit 1).
+- [x] No inline domain construction in scope — the only `(new …)` in `ParkAjax` is `(new Dangeraudit())->audit(…)` after `add_auth`, the canonical cross-file idiom used by every AJAX peer (`KingdomAjax`, `EventAjax`, `AdminAjax`, `Unit`); `Model_Authorization` exposes no audit wrapper, so inline is canonical, not drift (charter §1.3 / §2). No `(new SearchService())` etc. in controllers.
+- [x] Heraldry PascalCase calls left intact (constrained, not in-scope drift) — `ParkAjax::setheraldry` uses `$this->Park->SetParkDetails(…)` and `removeheraldry` uses `$this->Park->RemoveParkHeraldry(…)`. `Model_Park` exposes only a PascalCase `RemoveParkHeraldry` wrapper (no snake_case alias) and no dedicated park-heraldry setter; rerouting `setheraldry` through the snake_case `set_park_details` wrapper would newly `logtrace` the base64 heraldry blob (a behavior change, unlike the clean peer wrappers `Model_EventPlanning::set_event_heraldry` / `remove_heraldry`). Proper alignment would require adding a `set_park_heraldry` wrapper to `model.Park.php`, which is out of the fixed I-19c 3-file group. Left as-is per "style only / no semantic change".
+- [x] JSON / error shapes unchanged — no response-shape edits; lowercase `status` keys and `[]` arrays match each method's existing shape.
+- [x] `rg '$DB->' orkui/` + `rg 'Ork3::$Lib' orkui/` still zero (both exit 1)
+- [x] PHPUnit exit 0 — 230 tests OK (2 skipped)
+- [x] Hop fuzzy/Playwright gates per charter §5 / v-19 §2.5 — Playwright `search.spec.ts` + `park-profile.spec.ts` 5/5 pass (mirror). Fuzzy `park-auth-sandbox`: **mirror PASS** (assets/dom/visual 1.000). **test (sandbox) profile FAIL** — pre-existing visual baseline **dimension mismatch** (baseline 961×1280 vs candidate 1976×1280), a sandbox-data/baseline drift independent of this hop (branch is byte-identical to the I-19b tip). Not re-recorded: v-19 §2.3 / §1.1 re-record only on **intentional UI change**, and this hop has none.
+- [x] One commit; checklist updated
+
+**Idiom changes:** none required — R-19c scope (`ParkAjax`, `SearchAjax`, `Search`) was already charter-conformant at the I-19b stack tip. `load_model('Search')` + snake_case Search wrappers match all AJAX peers exactly, controllers load models per branch, inline `Dangeraudit` matches every peer, and JSON shapes are untouched. The two PascalCase heraldry calls in `ParkAjax` are gated by the out-of-scope `Model_Park` wrapper surface (renaming/adding a wrapper is not in the fixed 3-file group, and rerouting would change blob-logging behavior). Verified no-op idiom pass; static + PHPUnit + Playwright + mirror-fuzzy green, with the sandbox-profile fuzzy visual dimension mismatch documented as pre-existing baseline drift.
 
 ---
 
