@@ -32,16 +32,16 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 15 | I-15 | `megiddo/i-15-idiom-r15` | `beb377ff` | [x] |
 | 16 | I-16 | `megiddo/i-16-idiom-r16` | `b1613c81` | [x] |
 | 17 | I-17 | `megiddo/i-17-idiom-r17` | `e9c4e9fc` | [x] |
-| 18 | I-18 | | | [ ] |
+| 18 | I-18 | `megiddo/i-18-idiom-r18` | `5561f1e8` | [x] |
 | 19 | I-19a | | | [ ] |
 | 20 | I-19b | | | [ ] |
 | 21 | I-19c | | | [ ] |
 | 22 | I-19d | | | [ ] |
 | 23 | I-VALIDATE | | | [ ] |
 
-**Next actionable hop:** I-18
+**Next actionable hop:** I-19a
 
-**Stack tip:** `megiddo/i-17-idiom-r17` @ `e9c4e9fc`
+**Stack tip:** `megiddo/i-18-idiom-r18` @ `5561f1e8`
 
 ---
 
@@ -229,15 +229,19 @@ Each hop: idiom-only edits on files listed in charter § hop scope (sourced from
 - [x] Hop fuzzy/Playwright gates per charter (if any)
 - [x] One commit; checklist updated
 
-### I-18 (remaining)
+### I-18 (R-18 residual-$DB scope) — complete
 
-- [ ] Controller `load_model` / `$this->Model` pattern aligned
-- [ ] Model wrappers match domain-call idioms in charter
-- [ ] JSON / error shapes unchanged (tests pass)
-- [ ] `rg '$DB->' orkui/` + `rg 'Ork3::$Lib' orkui/` still zero
-- [ ] PHPUnit exit 0
-- [ ] Hop fuzzy/Playwright gates per charter (if any)
-- [ ] One commit; checklist updated
+Scope files (charter § I-18): `controller.Admin.php`, `controller.AdminAjax.php`, `controller.EventAjax.php`, `controller.KingdomAjax.php`, `controller.ParkAjax.php`, `controller.Player.php`, `model.AdminDashboard.php`, `model.Event.php`, `model.ParkProfile.php`, `model.Player.php`, `template/default/Admin_auditlog.tpl`, `template/default/default.theme`, `template/revised-frontend/Eventnew_index.tpl`.
+
+- [x] Controller `load_model` / `$this->Model` pattern aligned — R-18 `$DB`→domain migrations (`get_persona`, `get_revoked_awards`, `park_abbr_check`, `get_event_templates_for_kingdom`, `park_belongs_to_kingdom`, `list_all_kingdom_names`, `audit_display_maps`) already use per-branch `load_model` + snake_case wrappers; no drift found
+- [x] Model wrappers match domain-call idioms in charter — `Model_AdminDashboard`/`Model_ParkProfile` use file-dominant private domain accessors (`$this->_dangeraudit()`, `$this->_profile()`); `Model_Event`/`Model_Player` use constructor-wired `$this->Event`/`$this->Player`; consistent per file
+- [x] JSON / error shapes unchanged (tests pass) — no response-shape edits
+- [x] `rg '$DB->' orkui/` + `rg 'Ork3::$Lib' orkui/` still zero (both exit 1); no `global $DB` in scope
+- [x] PHPUnit exit 0 — 230 tests OK
+- [x] Hop fuzzy/Playwright gates per charter — no code delta vs I-17 tip (scope already idiom-conformant); behavioral gates unaffected, mandatory static + PHPUnit gates green
+- [x] One commit; checklist updated
+
+**Idiom changes:** none required — R-18 scope was already charter-conformant at the I-17 stack tip (templates use precomputed maps + `nav_*`/`wx_*` view helpers; models expose snake_case wrappers over domain accessors; controllers load models per branch). Hop is a verified no-op idiom pass with gates green.
 
 ---
 
