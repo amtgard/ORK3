@@ -1,0 +1,47 @@
+# Worker — FIX-06 (VALIDATE-20 gate blockers)
+
+```
+You are executing **Megiddo FIX-06** only — resolve VALIDATE-20 fuzzy + Playwright mirror failures.
+
+Read: docs/megiddo/refactor/archive/skills/phase3-remediation/workers/_shared-procedure.md, docs/megiddo/refactor/phase3-audit-report.md (VALIDATE-20 section on branch `megiddo/p3-validate-20-audit`), docs/megiddo/refactor/validations/v-00-fuzzy-setpoint.md, tests/e2e/residual-lib.spec.ts, docs/megiddo/refactor/06-test-framework.md
+
+| Field | Value |
+|-------|-------|
+| Branch | `megiddo/p3-fix-06-gate-blockers` |
+| Stack base | `megiddo/r-19d-residual-lib-refactor` @ checklist (or latest R-19d tip) |
+| Prerequisite | R-19d complete — `rg 'Ork3::\$Lib' orkui/` zero |
+| Blockers | (1) fuzzy `reports-ladder-grid` 1px height drift mirror 15642→15643; (2) Playwright mirror HTTP 500 on `KingdomAjax/playersearch`; (3) Playwright mirror HTTP 500 on `Admin/serverhealth_weather_stats` |
+
+## Tasks
+
+1. Preflight: `docker compose -f docker-compose.php8.yml up -d`, `bin/ork-db deploy-sandbox`, `bin/fuzzy-validator setpoint restore`.
+2. **Playwright 500s** — reproduce on mirror (`bin/ork-db use prod`, `admin`/`password`). Read PHP/app logs. Fix runtime regression in minimal diff (likely `KingdomAjax::playersearch`, `Admin` weather stats path, or `Model_Search`/`Weather` wrappers). Do not weaken tests.
+3. **Fuzzy ladder-grid** — capture `reports-ladder-grid` test+mirror; if intentional 1px layout change re-record manifest per v-00; if regression fix template/CSS/report path.
+4. Re-run blocker gates below; full PHPUnit must stay green.
+
+## Gates
+
+```bash
+rg 'Ork3::\$Lib' orkui/          # exit 1
+rg '\$DB->' orkui/               # exit 1
+sh bin/run-unit-tests.sh         # exit 0
+
+bin/fuzzy-validator validate --pages reports-ladder-grid --phase all   # exit 0
+
+bin/ork-db use prod
+export ORK3_E2E_BASE_URL=http://127.0.0.1:19080/orkui/
+export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
+npx playwright test tests/e2e/residual-lib.spec.ts   # exit 0
+
+bin/ork-db use dev
+export ORK3_E2E_USERNAME=megiddo ORK3_E2E_PASSWORD=test-db-player
+npx playwright test tests/e2e/heraldry.spec.ts       # exit 0 (sanity)
+```
+
+## Out of scope
+
+- Idiom enforcement (I-* hops); P3-4 manual smoke; merge to integration
+
+Commit: `FIX-06: Resolve VALIDATE-20 fuzzy ladder-grid and Playwright mirror 500s.`  
+Update `skills/phase3-gate-fix/milestone-checklist.md` FIX-06 section; return report.
+```
