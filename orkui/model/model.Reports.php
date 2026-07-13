@@ -139,8 +139,7 @@ class Model_Reports extends Model
 
     public function get_attendance_dates($type, $id)
     {
-        $report = new Report();
-        $r = $report->GetAttendanceDates(['Type' => $type, 'Id' => (int) $id]);
+        $r = $this->_report_domain()->GetAttendanceDates(['Type' => $type, 'Id' => (int) $id]);
 
         return $r['Dates'] ?? [];
     }
@@ -312,9 +311,7 @@ class Model_Reports extends Model
 
     public function get_park_kingdom_id($park_id)
     {
-        $profile = new KingdomProfile();
-
-        return $profile->GetParkKingdomId((int) $park_id);
+        return $this->_kingdom_profile()->GetParkKingdomId((int) $park_id);
     }
 
     public function get_voting_eligible($type, $id)
@@ -322,12 +319,10 @@ class Model_Reports extends Model
         $kingdom_id = $type === 'Kingdom' ? (int) $id : 0;
         $park_id = $type === 'Park' ? (int) $id : 0;
         if ($type === 'Park' && $park_id && !$kingdom_id) {
-            $park = new APIModel('Park');
-            $kingdom_id = (int) $park->GetParkKingdomId($park_id);
+            $kingdom_id = (int) $this->_park()->GetParkKingdomId($park_id);
         }
-        $report = new Report();
 
-        return $report->GetVotingEligible([
+        return $this->_report_domain()->GetVotingEligible([
             'KingdomId' => $kingdom_id,
             'ParkId' => $park_id,
         ]);
@@ -335,9 +330,7 @@ class Model_Reports extends Model
 
     public function get_voting_eligible_for_player($mundane_id, $kingdom_id)
     {
-        $report = new Report();
-
-        return $report->GetVotingEligibleForPlayer([
+        return $this->_report_domain()->GetVotingEligibleForPlayer([
             'MundaneId' => (int) $mundane_id,
             'KingdomId' => (int) $kingdom_id,
         ]);
@@ -348,9 +341,7 @@ class Model_Reports extends Model
      */
     public function ladder_award_grid(string $type, int $kingdomId, int $parkId): array
     {
-        $report = new Report();
-
-        return $report->GetLadderAwardGrid([
+        return $this->_report_domain()->GetLadderAwardGrid([
             'KingdomId' => $kingdomId,
             'ParkId' => $parkId,
         ]);
@@ -368,8 +359,7 @@ class Model_Reports extends Model
 
     public function kingdom_officer_directory($kingdom_id = null)
     {
-        $report = new Report();
-        $r = $report->GetKingdomOfficerDirectoryMerged(['KingdomId' => $kingdom_id]);
+        $r = $this->_report_domain()->GetKingdomOfficerDirectoryMerged(['KingdomId' => $kingdom_id]);
         if (($r['Status']['Status'] ?? 1) != 0) {
             return ['Rows' => [], 'Mode' => 'kingdoms', 'Principalities' => []];
         }
@@ -446,5 +436,20 @@ class Model_Reports extends Model
             'MundaneId' => $mundane_id,
             'Active'    => $active,
         ));
+    }
+
+    private function _report_domain(): Report
+    {
+        return new Report();
+    }
+
+    private function _kingdom_profile(): KingdomProfile
+    {
+        return new KingdomProfile();
+    }
+
+    private function _park(): APIModel
+    {
+        return new APIModel('Park');
     }
 }
