@@ -11,6 +11,7 @@ define('AUTH_UNIT', 'Unit');
 
 class Authorization extends Ork3
 {
+	const MAX_SESSIONS_PER_USER = 3;
 
 	public function __construct()
 	{
@@ -913,6 +914,113 @@ class Authorization extends Ork3
 		}
 		logtrace("Authorization():", $response);
 		return $response;
+	}
+
+	/*
+	 * Multi-device session store (ork_session). Authoritative for session
+	 * validity; ork_mundane.token is retained only as a vestigial pointer.
+	 */
+
+	public function CreateSession($mundane_id)
+	{
+		global $DB;
+		$mundane_id = (int)$mundane_id;
+		$token = md5(openssl_random_pseudo_bytes(16) . microtime());
+		$now = date('Y-m-d H:i:s');
+		$exp = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
+
+		$DB->Clear();
+		$DB->token = $token;
+		$DB->Execute("INSERT INTO " . DB_PREFIX . "session (mundane_id, token, created, last_seen, expires) "
+			. "VALUES (" . $mundane_id . ", :token, '" . $now . "', '" . $now . "', '" . $exp . "')");
+
+		$this->evictLruSessions($mundane_id);
+		return $token;
+	}
+
+	private function evictLruSessions($mundane_id)
+	{
+		global $DB;
+		$mundane_id = (int)$mundane_id;
+		$keep = (int)self::MAX_SESSIONS_PER_USER;
+		// Delete this user's sessions that are NOT among the $keep most-recent
+		// by last_seen. Derived-table wrapper is required: MariaDB forbids a
+		// direct subselect on the table being deleted from.
+		$DB->Clear();
+		$DB->Execute(
+			"DELETE FROM " . DB_PREFIX . "session "
+			. "WHERE mundane_id = " . $mundane_id . " AND session_id NOT IN ("
+			. "SELECT session_id FROM ("
+			. "SELECT session_id FROM " . DB_PREFIX . "session "
+			. "WHERE mundane_id = " . $mundane_id . " "
+			. "ORDER BY last_seen DESC, session_id DESC LIMIT " . $keep
+			. ") keep)"
+		);
+	}
+
+	public function ValidateSessionByToken($token)
+	{
+		global $DB;
+		if (strlen($token) != 32) {
+			return 0;
+		}
+		$DB->Clear();
+		$DB->token = $token;
+		$rs = $DB->DataSet("SELECT session_id, mundane_id, last_seen FROM " . DB_PREFIX . "session "
+			. "WHERE token = :token AND expires > NOW() LIMIT 1");
+		if (!$rs || !$rs->Next()) {
+			return 0;
+		}
+		$session_id = (int)$rs->session_id;
+		$mundane_id = (int)$rs->mundane_id;
+		$last_seen  = strtotime($rs->last_seen);
+
+		// Slide expiry, throttled to at most once per 60s per session so a
+		// page that fires many API calls doesn't cause a write storm.
+		if ($last_seen < time() - 60) {
+			$now = date('Y-m-d H:i:s');
+			$exp = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
+			$DB->Clear();
+			$DB->Execute("UPDATE " . DB_PREFIX . "session SET last_seen = '" . $now . "', expires = '" . $exp . "' "
+				. "WHERE session_id = " . $session_id);
+		}
+		return $mundane_id;
+	}
+
+	public function RotateSession($old_token)
+	{
+		global $DB;
+		if (strlen($old_token) != 32) {
+			return '';
+		}
+		$DB->Clear();
+		$DB->token = $old_token;
+		$rs = $DB->DataSet("SELECT session_id FROM " . DB_PREFIX . "session "
+			. "WHERE token = :token AND expires > NOW() LIMIT 1");
+		if (!$rs || !$rs->Next()) {
+			return '';
+		}
+		$session_id = (int)$rs->session_id;
+		$new_token = md5($old_token . microtime());
+		$now = date('Y-m-d H:i:s');
+		$exp = date('Y-m-d H:i:s', time() + LOGIN_TIMEOUT);
+		$DB->Clear();
+		$DB->new_token = $new_token;
+		$DB->Execute("UPDATE " . DB_PREFIX . "session SET token = :new_token, last_seen = '" . $now . "', expires = '" . $exp . "' "
+			. "WHERE session_id = " . $session_id);
+		return $new_token;
+	}
+
+	public function DestroySession($request)
+	{
+		global $DB;
+		$token = is_array($request) ? ($request['Token'] ?? '') : $request;
+		if (strlen($token) != 32) {
+			return;
+		}
+		$DB->Clear();
+		$DB->token = $token;
+		$DB->Execute("DELETE FROM " . DB_PREFIX . "session WHERE token = :token");
 	}
 }
 
