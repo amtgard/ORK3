@@ -360,33 +360,36 @@ class Authorization extends Ork3
 				}
 			}
 		} else {
-			$this->mundane->clear();
-			$this->mundane->token = $request['Token'];
-			if ($this->mundane->find()) {
-				$mundane_id = $this->mundane->mundane_id;
-				if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
+			// Token-based re-auth (SOAP/mobile). Validate against ork_session so
+			// ANY of the user's live device tokens works — not just the most-recent
+			// one written to the single ork_mundane.token slot. ValidateSessionByToken
+			// also enforces expiry, so no separate token_expires gate is needed.
+			$mundane_id = $this->ValidateSessionByToken($request['Token']);
+			if ($mundane_id === 0) {
+				$response['Status'] = InvalidParameter(null, "Token could not be found or has expired.");
+				$response['Status']['Detail'] = $request['Token'];
+			} else {
+				$this->mundane->clear();
+				$this->mundane->mundane_id = $mundane_id;
+				if (!$this->mundane->find()) {
+					$response['Status'] = ProcessingError();
+				} else if ($this->mundane->penalty_box == 1 || $this->mundane->suspended == 1) {
 					$response['Status'] = NoAuthorization('Your access to the ORK has been restricted.');
-				} else if (strtotime($this->mundane->token_expires) > time()) {
+				} else {
 					$_rotated = $this->RotateSession($request['Token']);
 					if ($_rotated === '') {
-						$_rotated = $this->CreateSession($this->mundane->mundane_id);
+						$_rotated = $this->CreateSession($mundane_id);
 					}
 					if ($_rotated === '') {
 						$response['Status'] = ProcessingError("Could not establish a session. Please try again.");
 					} else {
 						$this->persistVestigialToken($_rotated);
 						$response['Status'] = Success();
-						$response['Token'] = $this->mundane->token;
+						$response['Token'] = $_rotated;
 						$response['UserId'] = $mundane_id;
 						$response['Timeout'] = $this->mundane->token_expires;
 					}
-				} else {
-					$response['Status'] = InvalidParameter(null, "Token has expired: " . strtotime($this->mundane->token_expires) . ' <= ' . time());
-					$response['Status']['Detail'] = $request['Token'];
 				}
-			} else {
-				$response['Status'] = InvalidParameter(null, "Token could not be found.");
-				$response['Status']['Detail'] = $request['Token'];
 			}
 		}
 		return $response;
