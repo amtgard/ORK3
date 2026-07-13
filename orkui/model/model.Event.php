@@ -98,6 +98,29 @@ class Model_Event extends Model
         return ($r['Status'] ?? 1) == 0;
     }
 
+    public function event_api_ok($r)
+    {
+        return $this->_eventApiOk($r);
+    }
+
+    public function set_rsvp_dated($detail_id, $mundane_id, $status)
+    {
+        return $this->Event->SetRsvp([
+            'EventCalendarDetailId' => (int)$detail_id,
+            'MundaneId' => (int)$mundane_id,
+            'Status' => $status,
+            'EndDateGate' => 'datetime',
+        ]);
+    }
+
+    public function withdraw_rsvp_self($detail_id, $mundane_id)
+    {
+        return $this->Event->WithdrawRsvp([
+            'EventCalendarDetailId' => (int)$detail_id,
+            'MundaneId' => (int)$mundane_id,
+        ]);
+    }
+
     public function get_rsvp($detail_id, $mundane_id)
     {
         $r = $this->Event->GetRsvpStatus([

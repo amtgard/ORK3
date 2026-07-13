@@ -216,7 +216,7 @@ class Controller_EventAjax extends Controller
 
         $uid = (int)$this->session->user_id;
         $this->load_model('EventPlanning');
-        if (!(new EventPlanning())->CanRemoveRsvp($uid, $event_id, $detail_id)) {
+        if (!$this->EventPlanning->can_remove_rsvp($uid, $event_id, $detail_id)) {
             echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
             exit;
         }
@@ -624,14 +624,13 @@ class Controller_EventAjax extends Controller
         }
 
         $hUid = (int)$this->session->user_id;
-        $planning = new EventPlanning();
-        if (!$planning->CanManageEventDetail($hUid, $event_id, 0, 'manage')) {
+        $this->load_model('EventPlanning');
+        if (!$this->EventPlanning->can_manage_event_detail($hUid, $event_id, 0, 'manage')) {
             echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
             exit;
         }
 
         if ($action === 'remove') {
-            $this->load_model('EventPlanning');
             $r = $this->EventPlanning->remove_heraldry($this->session->token, $event_id);
             if (($r['Status'] ?? 1) == 0) {
                 echo json_encode(['status' => 0]);
@@ -666,7 +665,7 @@ class Controller_EventAjax extends Controller
                 exit;
             }
             $mime = ($detectedType === IMAGETYPE_PNG) ? 'image/png' : 'image/jpeg';
-            $r = (new Heraldry())->SetEventHeraldry([
+            $r = $this->EventPlanning->set_event_heraldry([
                 'Token'            => $this->session->token,
                 'EventId'          => $event_id,
                 'Heraldry'         => base64_encode(file_get_contents($tmp)),

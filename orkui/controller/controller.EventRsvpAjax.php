@@ -2,14 +2,6 @@
 
 class Controller_EventRsvpAjax extends Controller
 {
-    private $eventApi;
-
-    public function __construct()
-    {
-        parent::__construct();
-        $this->eventApi = new APIModel('Event');
-    }
-
     private function requireLogin()
     {
         if (!isset($this->session->user_id)) {
@@ -31,13 +23,9 @@ class Controller_EventRsvpAjax extends Controller
         }
 
         $uid = (int)$this->session->user_id;
-        $r = $this->eventApi->SetRsvp([
-            'EventCalendarDetailId' => $detailId,
-            'MundaneId' => $uid,
-            'Status' => $status,
-            'EndDateGate' => 'datetime',
-        ]);
-        if (!$this->_eventApiOk($r)) {
+        $this->load_model('Event');
+        $r = $this->Event->set_rsvp_dated($detailId, $uid, $status);
+        if (!$this->Event->event_api_ok($r)) {
             $error = is_array($r['Status'] ?? null)
                 ? ($r['Status']['Detail'] ?? $r['Status']['Error'] ?? 'Error')
                 : ($r['Detail'] ?? $r['Error'] ?? 'Error');
@@ -69,11 +57,9 @@ class Controller_EventRsvpAjax extends Controller
         }
 
         $uid = (int)$this->session->user_id;
-        $r = $this->eventApi->WithdrawRsvp([
-            'EventCalendarDetailId' => $detailId,
-            'MundaneId' => $uid,
-        ]);
-        if (!$this->_eventApiOk($r)) {
+        $this->load_model('Event');
+        $r = $this->Event->withdraw_rsvp_self($detailId, $uid);
+        if (!$this->Event->event_api_ok($r)) {
             $error = is_array($r['Status'] ?? null)
                 ? ($r['Status']['Detail'] ?? $r['Status']['Error'] ?? 'Error')
                 : ($r['Detail'] ?? $r['Error'] ?? 'Error');

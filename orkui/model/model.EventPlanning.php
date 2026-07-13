@@ -105,6 +105,23 @@ class Model_EventPlanning extends Model
         return $planning->CanAddAttendance($mundaneId, $eventId, $detailId);
     }
 
+    public function can_remove_rsvp(int $mundaneId, int $eventId, int $detailId): bool
+    {
+        $planning = new EventPlanning();
+        return $planning->CanRemoveRsvp($mundaneId, $eventId, $detailId);
+    }
+
+    public function can_manage_event_detail(int $mundaneId, int $eventId, int $detailId, string $capability): bool
+    {
+        $planning = new EventPlanning();
+        return $planning->CanManageEventDetail($mundaneId, $eventId, $detailId, $capability);
+    }
+
+    public function set_event_heraldry(array $request): array
+    {
+        return $this->Heraldry->SetEventHeraldry($request);
+    }
+
     public function emit_json(array $response, int $authDeniedStatus = 3): void
     {
         $status = (int)($response['Status'] ?? $response['Status']['Status'] ?? 1);
