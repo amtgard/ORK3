@@ -116,7 +116,8 @@
       "id": "event-index",
       "url": "./index.php?Route=Event/index/1",
       "auth": "login",
-      "notes": "Class: Event — event index park id 1 (event-detail.spec.ts)"
+      "skip": true,
+      "notes": "V-00 only — skip visual capture; mirror event table row href churn (time-sensitive list). R-05 gate coverage via event-index-rsvp* + event-create (v-05-event-validation.md)"
     },
     {
       "id": "event-create",

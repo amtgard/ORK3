@@ -35,7 +35,7 @@ test.describe('authenticated attendance flows', () => {
     await page.fill('input[name="username"]', user!);
     await page.fill('input[name="password"]', pass!);
     await page.click('button[type="submit"], input[type="submit"]');
-    await page.waitForLoadState('networkidle');
+    await page.waitForURL(/Player\/profile/, { timeout: 30_000 });
   });
 
   test('park attendance ajax getday responds', async ({ page }) => {
