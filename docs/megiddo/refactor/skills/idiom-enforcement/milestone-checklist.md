@@ -36,12 +36,12 @@ Orchestrator and workers update this file. Master checklist: [04-milestone-check
 | 19 | I-19a | `megiddo/i-19a-idiom-residual-lib` | `1b1201db` | [x] |
 | 20 | I-19b | `megiddo/i-19b-idiom-residual-lib` | `d708cc5f` | [x] |
 | 21 | I-19c | `megiddo/i-19c-idiom-residual-lib` | `2954f2ea` | [x] |
-| 22 | I-19d | | | [ ] |
+| 22 | I-19d | `megiddo/i-19d-idiom-residual-lib` | `23ca9f35` | [x] |
 | 23 | I-VALIDATE | | | [ ] |
 
-**Next actionable hop:** I-19d
+**Next actionable hop:** I-VALIDATE
 
-**Stack tip:** `megiddo/i-19c-idiom-residual-lib` @ `2954f2ea`
+**Stack tip:** `megiddo/i-19d-idiom-residual-lib` @ `23ca9f35`
 
 ---
 
@@ -305,6 +305,22 @@ Scope files (charter § I-19c, fixed 3-file group): `controller/controller.ParkA
 - [x] One commit; checklist updated
 
 **Idiom changes:** none required — R-19c scope (`ParkAjax`, `SearchAjax`, `Search`) was already charter-conformant at the I-19b stack tip. `load_model('Search')` + snake_case Search wrappers match all AJAX peers exactly, controllers load models per branch, inline `Dangeraudit` matches every peer, and JSON shapes are untouched. The two PascalCase heraldry calls in `ParkAjax` are gated by the out-of-scope `Model_Park` wrapper surface (renaming/adding a wrapper is not in the fixed 3-file group, and rerouting would change blob-logging behavior). Verified no-op idiom pass; static + PHPUnit + Playwright + mirror-fuzzy green, with the sandbox-profile fuzzy visual dimension mismatch documented as pre-existing baseline drift.
+
+### I-19d (R-19d residual-lib scope) — complete
+
+Scope files (charter § I-19d, fixed 3-file group): `controller/controller.PlayerAjax.php`, `controller/controller.WnAjax.php`, `model/model.AdminDashboard.php`.
+
+- [x] Controller `load_model` / `$this->Model` pattern aligned — `PlayerAjax` loads `Player` per action/branch (`check_username`, `park/create`, `player/*`, `merge`, notes/dues/attendance/dietary) and routes through snake_case wrappers (`$this->Player->create_player`, `->revoke_player_award`, `->add_note`, `->dismiss`-style calls, etc.); `WnAjax::dismiss` uses `$this->load_model('Player')` → `$this->Player->dismiss_whats_new`. No `(new Model_*)` or `new Model_` sites (`rg` exit 1).
+- [x] `PlayerAjax` username anti-pattern absent — `check_username` uses `$this->load_model('Player')` then delegates to the shared static contract `Model_Player::username_check_payload_for(…)` (same JSON contract used by `Controller_SelfReg::check_username`); the charter §2 `(new Model_Player())` drift site is already resolved. `$this->Authorization` (used in `player/updateprofile` and `attendance`) is loaded by the base `Controller::__construct` (`load_model('Authorization')`), the established framework pattern — not per-branch drift.
+- [x] `WnAjax` uses model path, not inline domain — `dismiss_whats_new` goes through `Model_Player`; no inline `new Player()` in the controller. Its `['Status' => ['Status' => …]]` PascalCase response shape is this method's existing contract and is left unchanged (charter §1.4).
+- [x] `Model_AdminDashboard` SoA bootstrap matches peers — `state_of_amtgard_bootstrap()` / `state_of_amtgard_validate_date_range()` / `state_of_amtgard_chart_section()` return via the private `$this->_state_of_amtgard()` domain accessor, identical in shape to every other snake_case wrapper in the file (`_report()`, `_administration()`, `_dangeraudit()`, `_player()`, `_park_profile()`, `_kingdom_profile()`, `_weather()`). File-dominant private-domain-accessor idiom is consistent (matches I-18/I-19b `Model_AdminDashboard` idiom notes); no drift.
+- [x] JSON / error shapes unchanged — no response-shape edits; lowercase `status` keys in `PlayerAjax`, PascalCase `Status` envelope in `WnAjax`, each per its existing method shape.
+- [x] `rg '$DB->' orkui/` + `rg 'Ork3::$Lib' orkui/` still zero (both exit 1) — R-19d final: all 41 residual `$Lib` sites gone across `orkui/`.
+- [x] PHPUnit exit 0 — 230 tests OK (2 skipped).
+- [x] Hop fuzzy/Playwright gates — fuzzy `player-profile,admin-dashboard --phase all` **4/4 PASS** (test+mirror, assets/dom/visual 1.000); Playwright `tests/e2e/residual-lib.spec.ts` **7/7 pass** (health, kingdom scoped search, username availability, whats-new dismiss, universal search, SoA bootstrap, weather stats).
+- [x] One commit; checklist updated.
+
+**Idiom changes:** none required — R-19d scope (`PlayerAjax`, `WnAjax`, `model.AdminDashboard`) was already charter-conformant at the I-19c stack tip. `PlayerAjax`/`WnAjax` load `Player` per action and route through snake_case wrappers with the username check using the shared static payload contract (no `(new Model_Player())`), `$this->Authorization` comes from the base-controller load, and `Model_AdminDashboard` exposes uniform snake_case wrappers over private domain accessors (SoA bootstrap included). Verified no-op idiom pass with all gates green; R-19d closes the residual-`$Lib` migration (`orkui/` is `$Lib`- and `$DB`-free).
 
 ---
 
