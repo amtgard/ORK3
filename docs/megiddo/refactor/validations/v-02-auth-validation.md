@@ -65,7 +65,7 @@ bin/fuzzy-validator validate --pages admin-permissions,kingdom-profile,event-lis
 | `tests/Support/AuthorizationAddFixture.php` | Fixture | Seeded grantors/grantees |
 | `tests/e2e/auth-permissions.spec.ts` | e2e | Permissions route smoke |
 
-**Infection:** `infection.t02-auth-insert.json5` — MSI 42% on `class.Authorization.php`.
+**Infection:** `tools/infection/infection.t02-auth-insert.json5` — MSI 42% on `class.Authorization.php`.
 
 ### 2.2 Expected breakage when code migrates
 

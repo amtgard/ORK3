@@ -78,7 +78,7 @@ bin/fuzzy-validator validate --pages home-authenticated,player-profile,event-ind
 | `tests/Unit/EventRsvpValidationTest.php` | Unit | Status whitelist, date gate |
 | `tests/e2e/rsvp.spec.ts` | e2e | Home + player profile smoke |
 
-**Infection (pre-refactor):** `infection.t01-rsvp.json5` — MSI 52% / covered 63% on `model.Event.php` + `EventRsvp` filter.
+**Infection (pre-refactor):** `tools/infection/infection.t01-rsvp.json5` — MSI 52% / covered 63% on `model.Event.php` + `EventRsvp` filter.
 
 ### 2.2 Expected breakage when code migrates
 

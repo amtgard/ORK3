@@ -39,7 +39,7 @@ Establish a unified test framework and Infection mutation testing before any ref
 #### Mutation testing (Infection)
 
 - [x] Add `infection/infection` as a dev dependency
-- [x] Add `infection.json5` scoped to `system/lib/ork3/` and `orkservice/`
+- [x] Add `tools/infection/infection.json5` scoped to `system/lib/ork3/` and `orkservice/`
 - [x] Document coverage driver requirement (pcov, phpdbg, or Xdebug)
 - [x] Document full-suite unit test command **and** milestone-scoped Infection command
 - [x] Define initial `minMsi` / `minCoveredMsi` thresholds (start conservative; raise over time)
@@ -532,7 +532,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Integration/EventRsvpTest.php`, `EventRsvpAjaxTest.php`, `EventRsvpSearchTest.php`, `tests/Unit/EventRsvpValidationTest.php`, `tests/e2e/rsvp.spec.ts`
 
-**Infection (pre-refactor):** `infection.t01-rsvp.json5` — `--filter=model.Event.php --test-framework-options="--filter=EventRsvp"` (MSI 52%, covered MSI 63%)
+**Infection (pre-refactor):** `tools/infection/infection.t01-rsvp.json5` — `--filter=model.Event.php --test-framework-options="--filter=EventRsvp"` (MSI 52%, covered MSI 63%)
 
 #### T-01 sign-off gate
 
@@ -559,7 +559,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Integration/AuthorizationAddTest.php`, `tests/Support/AuthorizationAddFixture.php`, `tests/e2e/auth-permissions.spec.ts`
 
-**Infection (pre-refactor):** `infection.t02-auth-insert.json5` — `--only-covered --filter=class.Authorization.php --test-framework-options="--filter=AuthorizationAddTest"` (MSI 42%, covered MSI 42%)
+**Infection (pre-refactor):** `tools/infection/infection.t02-auth-insert.json5` — `--only-covered --filter=class.Authorization.php --test-framework-options="--filter=AuthorizationAddTest"` (MSI 42%, covered MSI 42%)
 
 #### T-02 sign-off gate
 
@@ -586,7 +586,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Integration/BannerTest.php`, `tests/Support/BannerFixture.php`, `tests/e2e/banner.spec.ts`
 
-**Infection (pre-refactor):** `infection.t03-banner.json5` — `--only-covered --filter=class.Park.php --test-framework-options="--filter=BannerTest"` (MSI 55%, covered MSI 55%)
+**Infection (pre-refactor):** `tools/infection/infection.t03-banner.json5` — `--only-covered --filter=class.Park.php --test-framework-options="--filter=BannerTest"` (MSI 55%, covered MSI 55%)
 
 #### T-03 sign-off gate
 
@@ -613,7 +613,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Integration/EventPlanningTest.php`, `tests/Integration/EventAttendanceAjaxTest.php`, `tests/Support/EventPlanningFixture.php`, `tests/e2e/event-planning.spec.ts`
 
-**Infection (pre-refactor):** `infection.t04-eventajax.json5` — `--only-covered --filter=class.Event.php --test-framework-options="--filter=EventPlanningTest"` (MSI 48%, covered MSI 48%)
+**Infection (pre-refactor):** `tools/infection/infection.t04-eventajax.json5` — `--only-covered --filter=class.Event.php --test-framework-options="--filter=EventPlanningTest"` (MSI 48%, covered MSI 48%)
 
 #### T-04 sign-off gate
 
@@ -640,7 +640,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Integration/EventOccurrenceTest.php`, `tests/Integration/EventRsvpBatchTest.php`, `tests/e2e/event-detail.spec.ts`
 
-**Infection (pre-refactor):** `infection.t05-event.json5` — `--only-covered --filter=class.Event.php --test-framework-options="--filter=EventOccurrenceTest|EventRsvpBatchTest"` (MSI 37%, covered MSI 37%)
+**Infection (pre-refactor):** `tools/infection/infection.t05-event.json5` — `--only-covered --filter=class.Event.php --test-framework-options="--filter=EventOccurrenceTest|EventRsvpBatchTest"` (MSI 37%, covered MSI 37%)
 
 #### T-05 sign-off gate
 
@@ -667,7 +667,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Integration/KingdomProfileTest.php`, `tests/Integration/KingdomAjaxTest.php`, `tests/e2e/kingdom-profile.spec.ts`
 
-**Infection (pre-refactor):** `infection.t06-kingdom.json5` — `--only-covered --filter=class.Kingdom.php --filter=class.Report.php --test-framework-options="--filter=KingdomProfileTest|KingdomAjaxTest"` (MSI 43%, covered MSI 43%)
+**Infection (pre-refactor):** `tools/infection/infection.t06-kingdom.json5` — `--only-covered --filter=class.Kingdom.php --filter=class.Report.php --test-framework-options="--filter=KingdomProfileTest|KingdomAjaxTest"` (MSI 43%, covered MSI 43%)
 
 #### T-06 sign-off gate
 
@@ -694,7 +694,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Integration/ParkProfileTest.php`, `tests/Integration/ParkAjaxTest.php`, `tests/e2e/park-profile.spec.ts`
 
-**Infection (pre-refactor):** `infection.t07-park.json5` — `--only-covered --filter=class.Park.php --test-framework-options="--filter=ParkProfileTest|ParkAjaxTest"` (MSI 24%, covered MSI 24%)
+**Infection (pre-refactor):** `tools/infection/infection.t07-park.json5` — `--only-covered --filter=class.Park.php --test-framework-options="--filter=ParkProfileTest|ParkAjaxTest"` (MSI 24%, covered MSI 24%)
 
 #### T-07 sign-off gate
 
@@ -721,7 +721,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Unit/AdminDashboardTrendStatsTest.php`, `tests/Integration/AdminPermissionsTest.php`, `tests/Integration/DangerAuditQueryTest.php`, `tests/Unit/ServerHealthStatsTest.php`, `tests/Unit/AbbreviationUniqueTest.php`, `tests/Unit/StateOfAmtgardValidationTest.php`, `tests/e2e/admin-dashboard.spec.ts`
 
-**Infection (pre-refactor):** scoped batches via `infection.t08-admin.json5` (≥15% MSI each): DangerAudit+Player 20%, Report 94%, StateOfAmtgard 98%, Park 24%. Weather freshness validated by SQL mirror in `ServerHealthStatsTest` (domain class excluded — pre-refactor gap).
+**Infection (pre-refactor):** scoped batches via `tools/infection/infection.t08-admin.json5` (≥15% MSI each): DangerAudit+Player 20%, Report 94%, StateOfAmtgard 98%, Park 24%. Weather freshness validated by SQL mirror in `ServerHealthStatsTest` (domain class excluded — pre-refactor gap).
 
 #### T-08 sign-off gate
 
@@ -748,7 +748,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Integration/PlayerProfileTest.php`, `tests/Integration/PlayerAjaxTest.php`, `tests/Unit/ModelPlayerCacheTest.php`, `tests/e2e/player-profile.spec.ts`
 
-**Infection (pre-refactor):** scoped batches via `infection.t09-player.json5` (≥15% MSI each): Player profile+cache 25%, Player AJAX 22%, Authorization 52%. Report filter deferred — no T-09 test coverage on Report domain paths.
+**Infection (pre-refactor):** scoped batches via `tools/infection/infection.t09-player.json5` (≥15% MSI each): Player profile+cache 25%, Player AJAX 22%, Authorization 52%. Report filter deferred — no T-09 test coverage on Report domain paths.
 
 #### T-09 sign-off gate
 
@@ -775,7 +775,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Integration/VotingRulesTest.php`, `tests/Integration/LadderGridTest.php`, `tests/Unit/AttendanceDatesTest.php`, `tests/Integration/OfficerDirectoryTest.php`, `tests/Unit/AwardOptionGroupsTest.php`, `tests/e2e/reports.spec.ts`
 
-**Infection (pre-refactor):** `infection.t10-reports.json5` — `--only-covered --filter=class.Report.php --filter=class.Award.php --test-framework-options="--filter=VotingRulesTest|LadderGridTest|AttendanceDatesTest|OfficerDirectoryTest|AwardOptionGroupsTest"` (MSI 48%, covered MSI 48%)
+**Infection (pre-refactor):** `tools/infection/infection.t10-reports.json5` — `--only-covered --filter=class.Report.php --filter=class.Award.php --test-framework-options="--filter=VotingRulesTest|LadderGridTest|AttendanceDatesTest|OfficerDirectoryTest|AwardOptionGroupsTest"` (MSI 48%, covered MSI 48%)
 
 #### T-10 sign-off gate
 
@@ -802,7 +802,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Integration/SearchServiceTest.php`, `tests/Unit/SearchEscapeTest.php`, `tests/e2e/search.spec.ts`
 
-**Infection (pre-refactor):** `infection.t11-search.json5` — `--only-covered --filter=class.SearchService.php --test-framework-options="--filter=SearchServiceTest|SearchEscapeTest"` (MSI 50%, covered MSI 50%)
+**Infection (pre-refactor):** `tools/infection/infection.t11-search.json5` — `--only-covered --filter=class.SearchService.php --test-framework-options="--filter=SearchServiceTest|SearchEscapeTest"` (MSI 50%, covered MSI 50%)
 
 #### T-11 sign-off gate
 
@@ -829,7 +829,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Unit/ClassLevelTest.php`, `tests/Integration/AttendanceSignInTest.php`, `tests/Integration/AttendanceWriteTest.php`, `tests/Support/AttendanceFixture.php`, `tests/e2e/attendance.spec.ts`
 
-**Infection (pre-refactor):** `infection.t12-attendance.json5` — `--only-covered --filter=class.Attendance.php --filter=class.Player.php --test-framework-options="--filter=ClassLevelTest|AttendanceSignInTest|AttendanceWriteTest"` (MSI 53%, covered MSI 53%)
+**Infection (pre-refactor):** `tools/infection/infection.t12-attendance.json5` — `--only-covered --filter=class.Attendance.php --filter=class.Player.php --test-framework-options="--filter=ClassLevelTest|AttendanceSignInTest|AttendanceWriteTest"` (MSI 53%, covered MSI 53%)
 
 #### T-12 sign-off gate
 
@@ -856,7 +856,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Unit/HealthTest.php`, `tests/Integration/SessionTokenTest.php`, `tests/Integration/ViewerPreferencesTest.php`, `tests/Integration/WhatsNewTest.php`, `tests/Integration/LegacyRedirectTest.php`, `tests/Support/InfrastructureFixture.php`, `tests/e2e/infrastructure.spec.ts`
 
-**Infection (pre-refactor):** `infection.t13-infrastructure.json5` — `--only-covered --filter=class.Player.php --test-framework-options="--filter=ViewerPreferencesTest|PlayerProfileTest|PlayerAjaxTest|ModelPlayerCacheTest"` (MSI 14%, covered MSI 13%; Authorization SQL mirrors — domain deferred to R-13/T-14)
+**Infection (pre-refactor):** `tools/infection/infection.t13-infrastructure.json5` — `--only-covered --filter=class.Player.php --test-framework-options="--filter=ViewerPreferencesTest|PlayerProfileTest|PlayerAjaxTest|ModelPlayerCacheTest"` (MSI 14%, covered MSI 13%; Authorization SQL mirrors — domain deferred to R-13/T-14)
 
 #### T-13 sign-off gate
 
@@ -883,7 +883,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Integration/AuthorizationLibTest.php`, `tests/Integration/LiveServiceTest.php`, `tests/Integration/WeatherServiceTest.php`, `tests/Unit/EraPhoeniceTest.php`, `tests/e2e/lib-service.spec.ts`
 
-**Infection (pre-refactor):** scoped batches via `infection.t14-lib-auth-era.json5` and `infection.t14-lib-live-weather.json5` (≥15% MSI each): Authorization+EraPhoenice 19%, Live+Weather 62%
+**Infection (pre-refactor):** scoped batches via `tools/infection/infection.t14-lib-auth-era.json5` and `tools/infection/infection.t14-lib-live-weather.json5` (≥15% MSI each): Authorization+EraPhoenice 19%, Live+Weather 62%
 
 #### T-14 sign-off gate
 
@@ -910,7 +910,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** Reuses `tests/Integration/AuthorizationLibTest.php`, `tests/e2e/auth-permissions.spec.ts`
 
-**Infection (R-15 sign-off):** `infection.t14-lib-auth-era.json5` pass A — MSI **18%**
+**Infection (R-15 sign-off):** `tools/infection/infection.t14-lib-auth-era.json5` pass A — MSI **18%**
 
 #### T-15 sign-off gate
 
@@ -1018,7 +1018,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 **Tests:** `tests/Integration/PlayerServiceTest.php`, `HeraldryServiceTest.php`, `StateOfAmtgardTest.php`; extensions to `DangerAuditQueryTest.php`, `WeatherServiceTest.php`, `KingdomAjaxTest.php`, `SearchServiceTest.php`; reuses `HealthTest.php`, `LegacyRedirectTest.php`, `WhatsNewTest.php`, `PlayerAjaxTest.php`; `tests/e2e/residual-lib.spec.ts`
 
-**Infection (pre-refactor):** `infection.t19-residual-lib.json5` — passes A–D per [ds-19 §2.3](./ds-19-residual-lib-discovery.md#23-infection-scope-t-19-per-r-19-hop)
+**Infection (pre-refactor):** `tools/infection/infection.t19-residual-lib.json5` — passes A–D per [ds-19 §2.3](./ds-19-residual-lib-discovery.md#23-infection-scope-t-19-per-r-19-hop)
 
 #### T-19 sign-off gate
 
@@ -1049,7 +1049,7 @@ Test sprints implement the test plans from Phase 1 discovery **before** refactor
 
 - [x] Validation doc published — [v-19-residual-lib-validation.md](./validations/v-19-residual-lib-validation.md)
 - [x] Per-hop fuzzy + Playwright + Infection boundaries for R-19a…d
-- [x] `infection.t19-residual-lib.json5` referenced (from T-19)
+- [x] `tools/infection/infection.t19-residual-lib.json5` referenced (from T-19)
 - [x] Full unit test suite passes (DS-4, DS-5)
 - [x] Branch `megiddo/v-19-residual-lib-validation` — one commit (`025cc2e3`)
 
@@ -1560,37 +1560,37 @@ Runs after VALIDATE-20 `status=ok`. Style-only alignment — no semantic changes
 
 - [x] Branch `megiddo/r-08-admin-refactor` stacked on `megiddo/r-07-park-refactor` — admin read SQL and business rules in domain (`Report`, `Authorization`, `Dangeraudit`, `Administration`, `Player`, `Weather`, `StateOfAmtgard`, `ParkProfile`); `Model_AdminDashboard` thins `Controller_Admin` / `AdminAjax::stateofamtgard` migrated paths off `$DB`
 - [x] Targets closed: T-ADM-01 through T-ADM-09, T-ADM-12 (T-ADM-10 → R-11; T-ADM-11 → R-02)
-- [x] Gates: PHPUnit 214/214 pass; Infection `infection.t08-admin.json5` MSI 18%; fuzzy admin-dashboard/permissions/state-of-amtgard 6/6; Playwright auth smoke + `admin-dashboard.spec.ts` 3/3 pass
+- [x] Gates: PHPUnit 214/214 pass; Infection `tools/infection/infection.t08-admin.json5` MSI 18%; fuzzy admin-dashboard/permissions/state-of-amtgard 6/6; Playwright auth smoke + `admin-dashboard.spec.ts` 3/3 pass
 
 ### R-09 complete (2026-07-09)
 
 - [x] Branch `megiddo/r-09-player-refactor` stacked on `megiddo/r-08-admin-refactor` — player profile reads, AJAX probes, and model cache bust in `Player` / `Authorization` domain; thinned `Controller_Player`, `Controller_PlayerAjax`, `Model_Player` migrated paths off `$DB`
 - [x] Targets closed: T-PLR-01 through T-PLR-07, T-PLA-01 through T-PLA-05, T-PLM-01 through T-PLM-04; **T-PLR-08** → R-15; T-PLA-06 → R-03
-- [x] Gates: PHPUnit 214/214 pass; Infection `infection.t09-player.json5` `--only-covered` MSI 46% (Player+Authorization); fuzzy player-profile/player-profile-sandbox 4/4; Playwright auth smoke + `player-profile.spec.ts` 2/2 pass
+- [x] Gates: PHPUnit 214/214 pass; Infection `tools/infection/infection.t09-player.json5` `--only-covered` MSI 46% (Player+Authorization); fuzzy player-profile/player-profile-sandbox 4/4; Playwright auth smoke + `player-profile.spec.ts` 2/2 pass
 
 ### R-10 complete (2026-07-10)
 
 - [x] Branch `megiddo/r-10-reports-refactor` stacked on `megiddo/r-09-player-refactor` — voting rules config, ladder grid, attendance dates, officer directory merge, award option groups in `VotingRules` / `Report` / `Award` domain; thinned `Controller_Reports::ladder_grid`, `Model_Reports`, `Model_Award`, `Controller_PlayerAjax::voting_eligible` off `$DB`
 - [x] Targets closed: T-RPT-01, T-RPT-03 through T-RPT-09, T-AWD-01; **T-RPT-02** → R-15/R-16/R-17
-- [x] Gates: PHPUnit 215/215 pass; Infection `infection.t10-reports.json5` `--only-covered` MSI 47%; fuzzy reports-voting-eligible/reports-ladder-grid/reports-attendance 6/6; Playwright auth smoke + `reports.spec.ts` 4/4 pass
+- [x] Gates: PHPUnit 215/215 pass; Infection `tools/infection/infection.t10-reports.json5` `--only-covered` MSI 47%; fuzzy reports-voting-eligible/reports-ladder-grid/reports-attendance 6/6; Playwright auth smoke + `reports.spec.ts` 4/4 pass
 
 ### R-11 complete (2026-07-10)
 
 - [x] Branch `megiddo/r-11-search-refactor` stacked on `megiddo/r-10-reports-refactor` — universal/scoped player search and unit activity counts in `SearchService`; thinned `SearchAjax`, `Search`, `AdminAjax`, `KingdomAjax`, `ParkAjax`, `EventAjax` playersearch paths off `$DB`
 - [x] Targets closed: T-SRC-01, T-SRC-02, T-ADM-10, T-KNA-06, T-PRA-01, T-EVA-06 (search portion; addauth → R-02)
-- [x] Gates: PHPUnit 215/215 pass; Infection `infection.t11-search.json5` `--only-covered` MSI 40%; fuzzy admin-permissions/kingdom-auth-sandbox/park-auth-sandbox 6/6; Playwright auth smoke + `search.spec.ts` 3/3 pass
+- [x] Gates: PHPUnit 215/215 pass; Infection `tools/infection/infection.t11-search.json5` `--only-covered` MSI 40%; fuzzy admin-permissions/kingdom-auth-sandbox/park-auth-sandbox 6/6; Playwright auth smoke + `search.spec.ts` 3/3 pass
 
 ### R-12 complete (2026-07-10)
 
 - [x] Branch `megiddo/r-12-attendance-refactor` stacked on `megiddo/r-11-search-refactor` — attendance reactivate/adjacent dates/link enrichment, class level helper, weather archive JSON, active-event model reads in domain; thinned `AttendanceAjax`, `SignIn`, `QR`, `Attendance` controllers and `Model_Attendance` off `$DB`/`Ork3::$Lib` on migrated paths
 - [x] Targets closed: T-ATT-01 through T-ATT-06, T-SIN-01 through T-SIN-04, T-QR-01
-- [x] Gates: PHPUnit 215/215 pass; Infection `infection.t12-attendance.json5` `--only-covered` MSI 51%; fuzzy park-auth-sandbox/event-park 4/4; Playwright auth smoke + `attendance.spec.ts` 4/4 pass
+- [x] Gates: PHPUnit 215/215 pass; Infection `tools/infection/infection.t12-attendance.json5` `--only-covered` MSI 51%; fuzzy park-auth-sandbox/event-park 4/4; Playwright auth smoke + `attendance.spec.ts` 4/4 pass
 
 ### R-13 complete (2026-07-10)
 
 - [x] Branch `megiddo/r-13-infrastructure-refactor` stacked on `megiddo/r-12-attendance-refactor` — health ping, session token, viewer prefs, home kingdom, What's New, legacy event redirect in `Health`/`SessionToken`/`Player`/`Event` domain; thinned `orkui/index.php`, `class.Controller`, `controller.WnAjax`, `default.theme` off `$DB` on migrated paths (T-INF-06 → R-01; menu `HasAuthority` → R-14)
 - [x] Targets closed: T-INF-01 through T-INF-05, T-WN-01
-- [x] Gates: PHPUnit 215/215 pass (2 skipped); Infection `infection.t13-infrastructure.json5` `--only-covered` MSI 33%; fuzzy `home-authenticated` 2/2 (re-recorded baselines); Playwright auth smoke + `infrastructure.spec.ts` 3/3 pass
+- [x] Gates: PHPUnit 215/215 pass (2 skipped); Infection `tools/infection/infection.t13-infrastructure.json5` `--only-covered` MSI 33%; fuzzy `home-authenticated` 2/2 (re-recorded baselines); Playwright auth smoke + `infrastructure.spec.ts` 3/3 pass
 
 ### R-14 complete (2026-07-10)
 

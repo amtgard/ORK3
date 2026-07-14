@@ -42,19 +42,19 @@ Workers get the full milestone prompt (no shared chat history). **Do not** paral
 
 | ID | Domain | DS | V | Infection config | Fuzzy gate (from V doc) |
 |----|--------|----|---|------------------|-------------------------|
-| **R-01** | RSVP | [ds-01](../../ds-01-rsvp-discovery.md) | [v-01](../../validations/v-01-rsvp-validation.md) | `infection.t01-rsvp.json5` | `home-authenticated,player-profile,event-index-rsvp,event-index-rsvp-gok` |
-| **R-02** | Auth INSERT | [ds-02](../../ds-02-auth-insert-discovery.md) | [v-02](../../validations/v-02-auth-validation.md) | `infection.t02-auth-insert.json5` | per v-02 §1 |
-| **R-03** | Banner | [ds-03](../../ds-03-banner-discovery.md) | [v-03](../../validations/v-03-banner-validation.md) | `infection.t03-banner.json5` | `kingdom-auth-sandbox,park-auth-sandbox,player-profile` |
-| **R-04** | EventAjax | [ds-04](../../ds-04-eventajax-discovery.md) | [v-04](../../validations/v-04-eventajax-validation.md) | `infection.t04-eventajax.json5` | per v-04 §1.3 |
-| **R-05** | Event | [ds-05](../../ds-05-event-discovery.md) | [v-05](../../validations/v-05-event-validation.md) | `infection.t05-event.json5` | `event-index-rsvp,event-index-rsvp-gok,event-create` |
-| **R-06** | Kingdom | [ds-06](../../ds-06-kingdom-discovery.md) | [v-06](../../validations/v-06-kingdom-validation.md) | `infection.t06-kingdom.json5` | `kingdom-profile,kingdom-auth-sandbox` |
-| **R-07** | Park | [ds-07](../../ds-07-park-discovery.md) | [v-07](../../validations/v-07-park-validation.md) | `infection.t07-park.json5` | `park-auth-sandbox,event-park` |
-| **R-08** | Admin | [ds-08](../../ds-08-admin-discovery.md) | [v-08](../../validations/v-08-admin-validation.md) | `infection.t08-admin.json5` | `admin-dashboard,admin-permissions,admin-state-of-amtgard` |
-| **R-09** | Player | [ds-09](../../ds-09-player-discovery.md) | [v-09](../../validations/v-09-player-validation.md) | `infection.t09-player.json5` | `player-profile,player-profile-sandbox` |
-| **R-10** | Reports | [ds-10](../../ds-10-reports-discovery.md) | [v-10](../../validations/v-10-reports-validation.md) | `infection.t10-reports.json5` | `reports-voting-eligible,reports-ladder-grid,reports-attendance` |
-| **R-11** | Search | [ds-11](../../ds-11-search-discovery.md) | [v-11](../../validations/v-11-search-validation.md) | `infection.t11-search.json5` | `admin-permissions,kingdom-auth-sandbox,park-auth-sandbox` |
-| **R-12** | Attendance | [ds-12](../../ds-12-attendance-discovery.md) | [v-12](../../validations/v-12-attendance-validation.md) | `infection.t12-attendance.json5` | `park-auth-sandbox,event-park` |
-| **R-13** | Infrastructure | [ds-13](../../ds-13-infrastructure-discovery.md) | [v-13](../../validations/v-13-infrastructure-validation.md) | `infection.t13-infrastructure.json5` | `home-authenticated` |
+| **R-01** | RSVP | [ds-01](../../ds-01-rsvp-discovery.md) | [v-01](../../validations/v-01-rsvp-validation.md) | `tools/infection/infection.t01-rsvp.json5` | `home-authenticated,player-profile,event-index-rsvp,event-index-rsvp-gok` |
+| **R-02** | Auth INSERT | [ds-02](../../ds-02-auth-insert-discovery.md) | [v-02](../../validations/v-02-auth-validation.md) | `tools/infection/infection.t02-auth-insert.json5` | per v-02 §1 |
+| **R-03** | Banner | [ds-03](../../ds-03-banner-discovery.md) | [v-03](../../validations/v-03-banner-validation.md) | `tools/infection/infection.t03-banner.json5` | `kingdom-auth-sandbox,park-auth-sandbox,player-profile` |
+| **R-04** | EventAjax | [ds-04](../../ds-04-eventajax-discovery.md) | [v-04](../../validations/v-04-eventajax-validation.md) | `tools/infection/infection.t04-eventajax.json5` | per v-04 §1.3 |
+| **R-05** | Event | [ds-05](../../ds-05-event-discovery.md) | [v-05](../../validations/v-05-event-validation.md) | `tools/infection/infection.t05-event.json5` | `event-index-rsvp,event-index-rsvp-gok,event-create` |
+| **R-06** | Kingdom | [ds-06](../../ds-06-kingdom-discovery.md) | [v-06](../../validations/v-06-kingdom-validation.md) | `tools/infection/infection.t06-kingdom.json5` | `kingdom-profile,kingdom-auth-sandbox` |
+| **R-07** | Park | [ds-07](../../ds-07-park-discovery.md) | [v-07](../../validations/v-07-park-validation.md) | `tools/infection/infection.t07-park.json5` | `park-auth-sandbox,event-park` |
+| **R-08** | Admin | [ds-08](../../ds-08-admin-discovery.md) | [v-08](../../validations/v-08-admin-validation.md) | `tools/infection/infection.t08-admin.json5` | `admin-dashboard,admin-permissions,admin-state-of-amtgard` |
+| **R-09** | Player | [ds-09](../../ds-09-player-discovery.md) | [v-09](../../validations/v-09-player-validation.md) | `tools/infection/infection.t09-player.json5` | `player-profile,player-profile-sandbox` |
+| **R-10** | Reports | [ds-10](../../ds-10-reports-discovery.md) | [v-10](../../validations/v-10-reports-validation.md) | `tools/infection/infection.t10-reports.json5` | `reports-voting-eligible,reports-ladder-grid,reports-attendance` |
+| **R-11** | Search | [ds-11](../../ds-11-search-discovery.md) | [v-11](../../validations/v-11-search-validation.md) | `tools/infection/infection.t11-search.json5` | `admin-permissions,kingdom-auth-sandbox,park-auth-sandbox` |
+| **R-12** | Attendance | [ds-12](../../ds-12-attendance-discovery.md) | [v-12](../../validations/v-12-attendance-validation.md) | `tools/infection/infection.t12-attendance.json5` | `park-auth-sandbox,event-park` |
+| **R-13** | Infrastructure | [ds-13](../../ds-13-infrastructure-discovery.md) | [v-13](../../validations/v-13-infrastructure-validation.md) | `tools/infection/infection.t13-infrastructure.json5` | `home-authenticated` |
 | **R-14** | Lib-service | [ds-14](../../ds-14-lib-service-discovery.md) | [v-14](../../validations/v-14-lib-service-validation.md) | `t14-lib-auth-era` + `t14-lib-live-weather` | `weather,tournament` |
 
 Gate commands and MSI floors: each **V-{nn}** doc §2.4 (Infection) and §1 / §3 (fuzzy + sign-off).

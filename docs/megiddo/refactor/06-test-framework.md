@@ -162,7 +162,7 @@ npx playwright test tests/e2e/heraldry.spec.ts
 | Unit tests | `tests/Unit/*Test.php` | Pure logic or static domain helpers |
 | Integration tests | `tests/Integration/*Test.php` | Requires DB; skips when unavailable |
 | PHPUnit config | `phpunit.xml.dist` | Full suite entry (copy to `phpunit.xml` locally if needed) |
-| Mutation config | `infection.json5` | Scoped to `system/lib/ork3/` and `orkservice/` |
+| Mutation config | `tools/infection/infection.json5` | Scoped to `system/lib/ork3/` and `orkservice/` |
 
 Test classes use `declare(strict_types=1);` and extend `PHPUnit\Framework\TestCase`.
 
@@ -253,7 +253,7 @@ sh bin/run-infection.sh \
 
 Document the `--filter` source path and PHPUnit filter used in each T-* and R-* milestone commit.
 
-### Thresholds (`infection.json5`)
+### Thresholds (`tools/infection/infection.json5`)
 
 | Setting | M0.1 value | Intent |
 |---------|------------|--------|

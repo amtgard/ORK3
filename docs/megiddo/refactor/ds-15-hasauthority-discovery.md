@@ -98,7 +98,7 @@ Reuse V-14 / T-14 pass A — Authorization domain unchanged; controller wiring m
 
 ```bash
 sh bin/run-infection.sh \
-  --configuration=infection.t14-lib-auth-era.json5 \
+  --configuration=tools/infection/infection.t14-lib-auth-era.json5 \
   --only-covered \
   --filter=class.Authorization.php \
   --filter=class.EraPhoenice.php \

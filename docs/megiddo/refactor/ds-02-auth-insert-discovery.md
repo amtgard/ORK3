@@ -184,7 +184,7 @@ sh bin/run-infection.sh \
   --test-framework-options="--filter=AuthorizationAddTest"
 ```
 
-Target ≥ `minMsi` / `minCoveredMsi` (15) from `infection.json5`.
+Target ≥ `minMsi` / `minCoveredMsi` (15) from `tools/infection/infection.json5`.
 
 ### 2.4 Frontend functional tests (implement in T-02)
 

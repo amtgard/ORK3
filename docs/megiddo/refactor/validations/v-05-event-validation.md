@@ -59,7 +59,7 @@ bin/fuzzy-validator validate --pages event-index-rsvp,event-index-rsvp-gok,event
 | `tests/Integration/EventRsvpBatchTest.php` | Integration | Batch RSVP counts / ownership (T-EVT-01/02) |
 | `tests/e2e/event-detail.spec.ts` | e2e | Index / create / detail smoke |
 
-**Infection:** `infection.t05-event.json5` — MSI 37% on `class.Event.php` + `EventOccurrenceTest|EventRsvpBatchTest`.
+**Infection:** `tools/infection/infection.t05-event.json5` — MSI 37% on `class.Event.php` + `EventOccurrenceTest|EventRsvpBatchTest`.
 
 ### 2.2 Expected breakage when code migrates
 

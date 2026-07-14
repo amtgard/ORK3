@@ -80,7 +80,7 @@ After domain batches, **RB-F** runs global fuzzy (or V-00 page set). **RB-Z** re
 sh bin/run-unit-tests.sh
 
 # Infection example (RSVP)
-sh bin/run-infection.sh --configuration=infection.t01-rsvp.json5
+sh bin/run-infection.sh --configuration=tools/infection/infection.t01-rsvp.json5
 
 # Fuzzy
 bin/ork-db deploy-sandbox

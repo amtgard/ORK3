@@ -2,6 +2,10 @@ node_modules/
 package-lock.json
 build/
 *config.php
+# Local docker / env overlays (do not commit secrets)
+.env
+.env.*
+!.env.example
 !assets/.gitkeep
 assets/heraldry/*
 !assets/heraldry/.gitkeep

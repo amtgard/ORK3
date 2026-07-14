@@ -256,19 +256,19 @@ report: short narrative
 
 | ID | {{SLUG}} suggestion | V doc | Primary infection |
 |----|---------------------|-------|-------------------|
-| R-01 | `rsvp-refactor` | v-01-rsvp-validation.md | infection.t01-rsvp.json5 |
-| R-02 | `auth-insert-refactor` | v-02-auth-validation.md | infection.t02-auth-insert.json5 |
-| R-03 | `banner-refactor` | v-03-banner-validation.md | infection.t03-banner.json5 |
-| R-04 | `eventajax-refactor` | v-04-eventajax-validation.md | infection.t04-eventajax.json5 |
-| R-05 | `event-refactor` | v-05-event-validation.md | infection.t05-event.json5 |
-| R-06 | `kingdom-refactor` | v-06-kingdom-validation.md | infection.t06-kingdom.json5 |
-| R-07 | `park-refactor` | v-07-park-validation.md | infection.t07-park.json5 |
-| R-08 | `admin-refactor` | v-08-admin-validation.md | infection.t08-admin.json5 |
-| R-09 | `player-refactor` | v-09-player-validation.md | infection.t09-player.json5 |
-| R-10 | `reports-refactor` | v-10-reports-validation.md | infection.t10-reports.json5 |
-| R-11 | `search-refactor` | v-11-search-validation.md | infection.t11-search.json5 |
-| R-12 | `attendance-refactor` | v-12-attendance-validation.md | infection.t12-attendance.json5 |
-| R-13 | `infrastructure-refactor` | v-13-infrastructure-validation.md | infection.t13-infrastructure.json5 |
+| R-01 | `rsvp-refactor` | v-01-rsvp-validation.md | tools/infection/infection.t01-rsvp.json5 |
+| R-02 | `auth-insert-refactor` | v-02-auth-validation.md | tools/infection/infection.t02-auth-insert.json5 |
+| R-03 | `banner-refactor` | v-03-banner-validation.md | tools/infection/infection.t03-banner.json5 |
+| R-04 | `eventajax-refactor` | v-04-eventajax-validation.md | tools/infection/infection.t04-eventajax.json5 |
+| R-05 | `event-refactor` | v-05-event-validation.md | tools/infection/infection.t05-event.json5 |
+| R-06 | `kingdom-refactor` | v-06-kingdom-validation.md | tools/infection/infection.t06-kingdom.json5 |
+| R-07 | `park-refactor` | v-07-park-validation.md | tools/infection/infection.t07-park.json5 |
+| R-08 | `admin-refactor` | v-08-admin-validation.md | tools/infection/infection.t08-admin.json5 |
+| R-09 | `player-refactor` | v-09-player-validation.md | tools/infection/infection.t09-player.json5 |
+| R-10 | `reports-refactor` | v-10-reports-validation.md | tools/infection/infection.t10-reports.json5 |
+| R-11 | `search-refactor` | v-11-search-validation.md | tools/infection/infection.t11-search.json5 |
+| R-12 | `attendance-refactor` | v-12-attendance-validation.md | tools/infection/infection.t12-attendance.json5 |
+| R-13 | `infrastructure-refactor` | v-13-infrastructure-validation.md | tools/infection/infection.t13-infrastructure.json5 |
 | R-14 | `lib-service-refactor` | v-14-lib-service-validation.md | t14-lib-auth-era + t14-lib-live-weather |
 
 Fuzzy page lists: each V doc **R-{nn} fuzzy gate** line (or §1.3 `validate --pages` command).

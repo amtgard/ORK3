@@ -79,7 +79,7 @@ V-19 is **doc-only** — no capture/validate at sign-off. Per-hop gates run at R
 | `tests/e2e/search.spec.ts` | e2e | R-19c universal search |
 | `tests/e2e/park-profile.spec.ts` | e2e | R-19c park |
 
-**Infection config:** [infection.t19-residual-lib.json5](../../../infection.t19-residual-lib.json5) — `minMsi` / `minCoveredMsi` **15%**; passes A–D per §2.4.
+**Infection config:** [tools/infection/infection.t19-residual-lib.json5](../../../infection.t19-residual-lib.json5) — `minMsi` / `minCoveredMsi` **15%**; passes A–D per §2.4.
 
 ### 2.2 Expected breakage when code migrates
 
@@ -111,13 +111,13 @@ V-19 is **doc-only** — no capture/validate at sign-off. Per-hop gates run at R
 
 ### 2.4 Infection scope + MSI floors (per R-19 hop)
 
-Shared configuration: `--configuration=infection.t19-residual-lib.json5` (`minMsi` **15%**, `minCoveredMsi` **15%**).
+Shared configuration: `--configuration=tools/infection/infection.t19-residual-lib.json5` (`minMsi` **15%**, `minCoveredMsi` **15%**).
 
 **Pass A — R-19a** (player + bootstrap + kingdom):
 
 ```bash
 sh bin/run-infection.sh \
-  --configuration=infection.t19-residual-lib.json5 \
+  --configuration=tools/infection/infection.t19-residual-lib.json5 \
   --only-covered \
   --filter=class.Player.php \
   --filter=class.Health.php \
@@ -130,7 +130,7 @@ sh bin/run-infection.sh \
 
 ```bash
 sh bin/run-infection.sh \
-  --configuration=infection.t19-residual-lib.json5 \
+  --configuration=tools/infection/infection.t19-residual-lib.json5 \
   --only-covered \
   --filter=class.Heraldry.php \
   --filter=class.Weather.php \
@@ -143,7 +143,7 @@ sh bin/run-infection.sh \
 
 ```bash
 sh bin/run-infection.sh \
-  --configuration=infection.t19-residual-lib.json5 \
+  --configuration=tools/infection/infection.t19-residual-lib.json5 \
   --only-covered \
   --filter=class.SearchService.php \
   --test-framework-options="--filter=SearchServiceTest"
@@ -153,7 +153,7 @@ sh bin/run-infection.sh \
 
 ```bash
 sh bin/run-infection.sh \
-  --configuration=infection.t19-residual-lib.json5 \
+  --configuration=tools/infection/infection.t19-residual-lib.json5 \
   --only-covered \
   --filter=class.Player.php \
   --filter=class.StateOfAmtgard.php \
@@ -240,7 +240,7 @@ Run §2.4 passes **A, B, C, D** — each MSI ≥ **15%**.
 
 - [x] Validation doc published (this file) — §2.3, §2.4, §2.5, §3
 - [x] Per-hop fuzzy + Playwright + Infection boundaries documented for R-19a…d
-- [x] `infection.t19-residual-lib.json5` referenced (T-19)
+- [x] `tools/infection/infection.t19-residual-lib.json5` referenced (T-19)
 - [x] `validations/r-milestone-smoke-matrix.html` — R-19a…d stubs
 - [x] `04-milestone-checklist.md` § V-19 updated
 - [x] Full unit suite green at V-19 sign-off

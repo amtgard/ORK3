@@ -64,8 +64,8 @@ bin/fuzzy-validator validate --pages weather,tournament --phase all
 | `tests/e2e/lib-service.spec.ts` | e2e | Live, Weather, Era, tournament smoke |
 
 **Infection:**  
-- Pass A: `infection.t14-lib-auth-era.json5` (MSI floor 15%)  
-- Pass B: `infection.t14-lib-live-weather.json5` (MSI floor 15%)
+- Pass A: `tools/infection/infection.t14-lib-auth-era.json5` (MSI floor 15%)  
+- Pass B: `tools/infection/infection.t14-lib-live-weather.json5` (MSI floor 15%)
 
 ### 2.2 Expected breakage when code migrates
 
@@ -94,7 +94,7 @@ bin/fuzzy-validator validate --pages weather,tournament --phase all
 ```bash
 # Pass A — Authorization + EraPhoenice
 sh bin/run-infection.sh \
-  --configuration=infection.t14-lib-auth-era.json5 \
+  --configuration=tools/infection/infection.t14-lib-auth-era.json5 \
   --only-covered \
   --filter=class.Authorization.php \
   --filter=class.EraPhoenice.php \
@@ -102,7 +102,7 @@ sh bin/run-infection.sh \
 
 # Pass B — Live + Weather
 sh bin/run-infection.sh \
-  --configuration=infection.t14-lib-live-weather.json5 \
+  --configuration=tools/infection/infection.t14-lib-live-weather.json5 \
   --only-covered \
   --filter=class.Live.php \
   --filter=class.Weather.php \

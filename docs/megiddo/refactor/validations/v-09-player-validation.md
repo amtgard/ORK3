@@ -58,7 +58,7 @@ bin/fuzzy-validator validate --pages player-profile,player-profile-sandbox --pha
 | `tests/Unit/ModelPlayerCacheTest.php` | Unit | Roster cache bust, EditNote path, milestones/dates |
 | `tests/e2e/player-profile.spec.ts` | e2e | Profile smoke |
 
-**Infection:** `infection.t09-player.json5` — batched MSI ≥15% (Player profile+cache, Player AJAX, Authorization).
+**Infection:** `tools/infection/infection.t09-player.json5` — batched MSI ≥15% (Player profile+cache, Player AJAX, Authorization).
 
 ### 2.2 Expected breakage when code migrates
 
@@ -84,7 +84,7 @@ bin/fuzzy-validator validate --pages player-profile,player-profile-sandbox --pha
 
 ```bash
 sh bin/run-infection.sh \
-  --configuration=infection.t09-player.json5 \
+  --configuration=tools/infection/infection.t09-player.json5 \
   --only-covered \
   --filter=class.Player.php \
   --filter=class.Authorization.php \

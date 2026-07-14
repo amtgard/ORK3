@@ -62,7 +62,7 @@ bin/fuzzy-validator validate --pages kingdom-profile,park-auth-sandbox,reports-l
 | `tests/e2e/reports.spec.ts` | e2e | Ladder grid smoke |
 | Auth smoke | e2e | Session preflight |
 
-**Infection:** V-14 §2.4 pass A + B — `infection.t14-lib-auth-era.json5`, `infection.t14-lib-live-weather.json5`.
+**Infection:** V-14 §2.4 pass A + B — `tools/infection/infection.t14-lib-auth-era.json5`, `tools/infection/infection.t14-lib-live-weather.json5`.
 
 ### 2.2 Expected breakage when code migrates
 
@@ -87,10 +87,10 @@ bin/fuzzy-validator validate --pages kingdom-profile,park-auth-sandbox,reports-l
 
 ```bash
 # Pass A
-sh bin/run-infection.sh --configuration=infection.t14-lib-auth-era.json5 ...
+sh bin/run-infection.sh --configuration=tools/infection/infection.t14-lib-auth-era.json5 ...
 
 # Pass B
-sh bin/run-infection.sh --configuration=infection.t14-lib-live-weather.json5 ...
+sh bin/run-infection.sh --configuration=tools/infection/infection.t14-lib-live-weather.json5 ...
 ```
 
 **R-16 sign-off result:** pass A MSI **18%**, pass B MSI **27%**.

@@ -1,5 +1,5 @@
 {
-    "$schema": "vendor/infection/infection/resources/schema.json",
+    "$schema": "../../vendor/infection/infection/resources/schema.json",
     "timeout": 120,
     "source": {
         "directories": [
@@ -7,8 +7,8 @@
         ]
     },
     "logs": {
-        "text": "build/infection-t07.log",
-        "summary": "build/infection-t07-summary.log"
+        "text": "build/infection-t11.log",
+        "summary": "build/infection-t11-summary.log"
     },
     "mutators": {
         "@default": true
@@ -20,5 +20,5 @@
     "phpUnit": {
         "configDir": "."
     },
-    "tmpDir": "build/infection-t07"
+    "tmpDir": "build/infection-t11"
 }

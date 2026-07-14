@@ -63,7 +63,7 @@ bin/fuzzy-validator validate --pages home-authenticated --phase all
 | `tests/Support/InfrastructureFixture.php` | Fixture | Sandbox infra rows |
 | `tests/e2e/infrastructure.spec.ts` | e2e | Health, session, home, What’s New smoke |
 
-**Infection:** `infection.t13-infrastructure.json5` — MSI floor 13% on `class.Player.php` (Authorization SQL mirrors deferred to R-13/T-14).
+**Infection:** `tools/infection/infection.t13-infrastructure.json5` — MSI floor 13% on `class.Player.php` (Authorization SQL mirrors deferred to R-13/T-14).
 
 ### 2.2 Expected breakage when code migrates
 
@@ -91,7 +91,7 @@ bin/fuzzy-validator validate --pages home-authenticated --phase all
 
 ```bash
 sh bin/run-infection.sh \
-  --configuration=infection.t13-infrastructure.json5 \
+  --configuration=tools/infection/infection.t13-infrastructure.json5 \
   --only-covered \
   --filter=class.Player.php \
   --filter=class.SessionToken.php \

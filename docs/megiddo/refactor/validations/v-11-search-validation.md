@@ -62,7 +62,7 @@ bin/fuzzy-validator validate --pages admin-permissions,kingdom-auth-sandbox,park
 | `tests/Unit/SearchEscapeTest.php` | Unit | LIKE escape |
 | `tests/e2e/search.spec.ts` | e2e | Nav search + scoped search smoke |
 
-**Infection:** `infection.t11-search.json5` — MSI 50% on `class.SearchService.php`.
+**Infection:** `tools/infection/infection.t11-search.json5` — MSI 50% on `class.SearchService.php`.
 
 ### 2.2 Expected breakage when code migrates
 
@@ -87,7 +87,7 @@ bin/fuzzy-validator validate --pages admin-permissions,kingdom-auth-sandbox,park
 
 ```bash
 sh bin/run-infection.sh \
-  --configuration=infection.t11-search.json5 \
+  --configuration=tools/infection/infection.t11-search.json5 \
   --only-covered \
   --filter=class.SearchService.php \
   --test-framework-options="--filter=SearchServiceTest|SearchEscapeTest"

@@ -74,7 +74,7 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | Docs + plan targets | [x] |
 | Commit: `R-01: …` | [x] |
 
-**Notes:** Branch `megiddo/r-01-rsvp-refactor` @ `bc626ce8`. Base `05bc1973` (`megiddo/rebase-20260709`). PHPUnit 204 tests, 0 failures (2 skipped). Infection `infection.t01-rsvp.json5`: MSI 17%, covered MSI 55% (floors 15/15). Fuzzy test+mirror 8/8 pass; re-recorded test baselines for `event-index-rsvp*` after sandbox redeploy (dom 0.94 pre-record). Playwright: infrastructure auth smoke + `rsvp.spec.ts` 2/2 pass.
+**Notes:** Branch `megiddo/r-01-rsvp-refactor` @ `bc626ce8`. Base `05bc1973` (`megiddo/rebase-20260709`). PHPUnit 204 tests, 0 failures (2 skipped). Infection `tools/infection/infection.t01-rsvp.json5`: MSI 17%, covered MSI 55% (floors 15/15). Fuzzy test+mirror 8/8 pass; re-recorded test baselines for `event-index-rsvp*` after sandbox redeploy (dom 0.94 pre-record). Playwright: infrastructure auth smoke + `rsvp.spec.ts` 2/2 pass.
 
 ---
 
@@ -94,7 +94,7 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | Docs + plan | [x] |
 | Commit: `R-02: …` | [x] |
 
-**Notes:** Branch `megiddo/r-02-auth-insert-refactor` @ `578f2f2f` stacked on R-01 @ `bc626ce8`. Replaced raw INSERT in AdminAjax/KingdomAjax/ParkAjax/EventAjax addauth with `Model_Authorization::add_auth`; added danger-audit on global admin grant. PHPUnit 204/204 pass. Infection `infection.t02-auth-insert.json5`: MSI 42%, covered MSI 42%. Fuzzy 10/10 pass; re-recorded test manifests for `kingdom-auth-sandbox,park-auth-sandbox` after sandbox redeploy. Playwright: auth smoke + `auth-permissions.spec.ts` 3/3 pass.
+**Notes:** Branch `megiddo/r-02-auth-insert-refactor` @ `578f2f2f` stacked on R-01 @ `bc626ce8`. Replaced raw INSERT in AdminAjax/KingdomAjax/ParkAjax/EventAjax addauth with `Model_Authorization::add_auth`; added danger-audit on global admin grant. PHPUnit 204/204 pass. Infection `tools/infection/infection.t02-auth-insert.json5`: MSI 42%, covered MSI 42%. Fuzzy 10/10 pass; re-recorded test manifests for `kingdom-auth-sandbox,park-auth-sandbox` after sandbox redeploy. Playwright: auth smoke + `auth-permissions.spec.ts` 3/3 pass.
 
 ---
 
@@ -113,7 +113,7 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | Docs + plan | [x] |
 | Commit: `R-03: …` | [x] |
 
-**Notes:** Branch `megiddo/r-03-banner-refactor` @ `4b0d8448` stacked on R-02 @ `516ac063`. Added `class.Banner.php`, BannerService, `Model_Banner`; thin adapters on five `*Ajax::banner`. PHPUnit 204/204 pass. Infection `infection.t03-banner.json5`: MSI 51%, covered MSI 74%. Fuzzy 6/6 pass; re-recorded test baselines for `kingdom-auth-sandbox,park-auth-sandbox` after sandbox redeploy. Playwright: auth smoke + `banner.spec.ts` 5/5 pass.
+**Notes:** Branch `megiddo/r-03-banner-refactor` @ `4b0d8448` stacked on R-02 @ `516ac063`. Added `class.Banner.php`, BannerService, `Model_Banner`; thin adapters on five `*Ajax::banner`. PHPUnit 204/204 pass. Infection `tools/infection/infection.t03-banner.json5`: MSI 51%, covered MSI 74%. Fuzzy 6/6 pass; re-recorded test baselines for `kingdom-auth-sandbox,park-auth-sandbox` after sandbox redeploy. Playwright: auth smoke + `banner.spec.ts` 5/5 pass.
 
 ---
 
@@ -151,7 +151,7 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | Docs + plan | [x] |
 | Commit: `R-05: …` | [x] |
 
-**Notes:** Branch `megiddo/r-05-event-refactor` @ `20264fa9` stacked on R-04 @ `810eceb3`. Extended `EventPlanning` with occurrence page DTO, fees/links, reconcile, dietary APIs; thinned `Controller_Event` T-EVT-01–08 (no `$DB` in migrated paths). PHPUnit 214/214 pass. Infection `infection.t05-event.json5` `--only-covered`: MSI 44%, covered MSI 44%. Fuzzy test+mirror 6/6 pass (re-recorded `event-index-rsvp*`). Playwright: auth smoke + `event-detail.spec.ts` 3/3 + `event-planning.spec.ts` 3/3 pass.
+**Notes:** Branch `megiddo/r-05-event-refactor` @ `20264fa9` stacked on R-04 @ `810eceb3`. Extended `EventPlanning` with occurrence page DTO, fees/links, reconcile, dietary APIs; thinned `Controller_Event` T-EVT-01–08 (no `$DB` in migrated paths). PHPUnit 214/214 pass. Infection `tools/infection/infection.t05-event.json5` `--only-covered`: MSI 44%, covered MSI 44%. Fuzzy test+mirror 6/6 pass (re-recorded `event-index-rsvp*`). Playwright: auth smoke + `event-detail.spec.ts` 3/3 + `event-planning.spec.ts` 3/3 pass.
 
 ---
 
@@ -170,7 +170,7 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | Docs + plan | [x] |
 | Commit: `R-06: …` | [x] |
 
-**Notes:** Branch `megiddo/r-06-kingdom-refactor` stacked on R-05 @ `15897315`. New `KingdomProfile` domain + `Report.GetKingdomExtendedParkAverages`; thinned `Controller_Kingdom` (no `$DB`) and `Controller_KingdomAjax` T-KNG/T-KNA migrated paths. PHPUnit 214/214 pass. Infection `infection.t06-kingdom.json5` `--only-covered`: MSI 21%, covered MSI 21%. Fuzzy 4/4 pass (re-recorded DOM + test `kingdom-auth-sandbox` assets; validate with `--pages kingdom-auth-sandbox,kingdom-profile` avoids capture-order flake). Playwright: auth smoke + `kingdom-profile.spec.ts` 2/2 (ICS via `page.request`).
+**Notes:** Branch `megiddo/r-06-kingdom-refactor` stacked on R-05 @ `15897315`. New `KingdomProfile` domain + `Report.GetKingdomExtendedParkAverages`; thinned `Controller_Kingdom` (no `$DB`) and `Controller_KingdomAjax` T-KNG/T-KNA migrated paths. PHPUnit 214/214 pass. Infection `tools/infection/infection.t06-kingdom.json5` `--only-covered`: MSI 21%, covered MSI 21%. Fuzzy 4/4 pass (re-recorded DOM + test `kingdom-auth-sandbox` assets; validate with `--pages kingdom-auth-sandbox,kingdom-profile` avoids capture-order flake). Playwright: auth smoke + `kingdom-profile.spec.ts` 2/2 (ICS via `page.request`).
 
 ---
 
@@ -189,7 +189,7 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | Docs + plan | [x] |
 | Commit: `R-07: …` | [x] |
 
-**Notes:** Branch `megiddo/r-07-park-refactor` stacked on R-06 @ `56b59878`. New `ParkProfile` domain + `Model_ParkProfile`; thinned `Controller_Park::profile` (no `$DB`) and `Controller_ParkAjax` T-PRA-03 checkabbr. Batched detail coords (N+1 fix). PHPUnit 214/214 pass. Infection `infection.t07-park.json5` `--only-covered --filter=class.ParkProfile.php`: MSI 39%, covered MSI 39%. Fuzzy 4/4 pass (re-recorded test `park-auth-sandbox` baselines after height drift). Playwright: auth smoke + `park-profile.spec.ts` 2/2 pass.
+**Notes:** Branch `megiddo/r-07-park-refactor` stacked on R-06 @ `56b59878`. New `ParkProfile` domain + `Model_ParkProfile`; thinned `Controller_Park::profile` (no `$DB`) and `Controller_ParkAjax` T-PRA-03 checkabbr. Batched detail coords (N+1 fix). PHPUnit 214/214 pass. Infection `tools/infection/infection.t07-park.json5` `--only-covered --filter=class.ParkProfile.php`: MSI 39%, covered MSI 39%. Fuzzy 4/4 pass (re-recorded test `park-auth-sandbox` baselines after height drift). Playwright: auth smoke + `park-profile.spec.ts` 2/2 pass.
 
 ---
 
@@ -208,7 +208,7 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | Docs + plan | [x] |
 | Commit: `R-08: …` | [x] |
 
-**Notes:** Branch `megiddo/r-08-admin-refactor` stacked on R-07 @ `57baf282`. Domain APIs on `Report`, `Administration` (permissions), `Dangeraudit`, `Player`, `Weather`, `StateOfAmtgard`, `ParkProfile`; `Model_AdminDashboard` thins `Controller_Admin` T-ADM-01–09 and `AdminAjax::stateofamtgard` T-ADM-12. PHPUnit 214/214 pass. Infection `infection.t08-admin.json5` `--only-covered`: MSI 18%, covered MSI 18%. Fuzzy 6/6 pass (re-recorded test admin baselines after DOM drift). Playwright: auth smoke + `admin-dashboard.spec.ts` 3/3 pass.
+**Notes:** Branch `megiddo/r-08-admin-refactor` stacked on R-07 @ `57baf282`. Domain APIs on `Report`, `Administration` (permissions), `Dangeraudit`, `Player`, `Weather`, `StateOfAmtgard`, `ParkProfile`; `Model_AdminDashboard` thins `Controller_Admin` T-ADM-01–09 and `AdminAjax::stateofamtgard` T-ADM-12. PHPUnit 214/214 pass. Infection `tools/infection/infection.t08-admin.json5` `--only-covered`: MSI 18%, covered MSI 18%. Fuzzy 6/6 pass (re-recorded test admin baselines after DOM drift). Playwright: auth smoke + `admin-dashboard.spec.ts` 3/3 pass.
 
 ---
 
@@ -227,7 +227,7 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | Docs + plan | [x] |
 | Commit: `R-09: …` | [x] |
 
-**Notes:** Branch `megiddo/r-09-player-refactor` @ `4a7b1f8c` stacked on R-08 @ `ebda9ebe`. Domain APIs on `Player` (profile reads, display grants, username, email, beltline, reconcile map, roster cache bust); thinned `Controller_Player` T-PLR-01–07, `Controller_PlayerAjax` T-PLA-01–05, `Model_Player` T-PLM-01–04. PHPUnit 214/214 pass. Infection `infection.t09-player.json5` `--only-covered`: MSI 46%, covered MSI 46%. Fuzzy 4/4 pass (re-recorded test player-profile baselines). Playwright: auth smoke + `player-profile.spec.ts` 2/2 pass.
+**Notes:** Branch `megiddo/r-09-player-refactor` @ `4a7b1f8c` stacked on R-08 @ `ebda9ebe`. Domain APIs on `Player` (profile reads, display grants, username, email, beltline, reconcile map, roster cache bust); thinned `Controller_Player` T-PLR-01–07, `Controller_PlayerAjax` T-PLA-01–05, `Model_Player` T-PLM-01–04. PHPUnit 214/214 pass. Infection `tools/infection/infection.t09-player.json5` `--only-covered`: MSI 46%, covered MSI 46%. Fuzzy 4/4 pass (re-recorded test player-profile baselines). Playwright: auth smoke + `player-profile.spec.ts` 2/2 pass.
 
 ---
 
@@ -246,7 +246,7 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | Docs + plan | [x] |
 | Commit: `R-10: …` | [x] |
 
-**Notes:** Branch `megiddo/r-10-reports-refactor` @ `ea46a630` stacked on R-09 @ `4a7b1f8c`. Added `VotingRules` config, `Report::GetLadderAwardGrid`, `GetAttendanceDates`, `GetVotingRules`, `GetVotingEligibleForPlayer`, `GetKingdomOfficerDirectoryMerged`; `Award::GetAwardOptionGroups`. Thinned `Controller_Reports::ladder_grid`, `Model_Reports`, `Model_Award`, `Controller_PlayerAjax::voting_eligible` off `$DB`. PHPUnit 215/215 pass (2 skipped). Infection `infection.t10-reports.json5` `--only-covered`: MSI 47%, covered MSI 47%. Fuzzy test+mirror 6/6 pass (re-recorded mirror `reports-ladder-grid` baselines). Playwright: auth smoke + `reports.spec.ts` 4/4 pass.
+**Notes:** Branch `megiddo/r-10-reports-refactor` @ `ea46a630` stacked on R-09 @ `4a7b1f8c`. Added `VotingRules` config, `Report::GetLadderAwardGrid`, `GetAttendanceDates`, `GetVotingRules`, `GetVotingEligibleForPlayer`, `GetKingdomOfficerDirectoryMerged`; `Award::GetAwardOptionGroups`. Thinned `Controller_Reports::ladder_grid`, `Model_Reports`, `Model_Award`, `Controller_PlayerAjax::voting_eligible` off `$DB`. PHPUnit 215/215 pass (2 skipped). Infection `tools/infection/infection.t10-reports.json5` `--only-covered`: MSI 47%, covered MSI 47%. Fuzzy test+mirror 6/6 pass (re-recorded mirror `reports-ladder-grid` baselines). Playwright: auth smoke + `reports.spec.ts` 4/4 pass.
 
 ---
 
@@ -265,7 +265,7 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | Docs + plan | [x] |
 | Commit: `R-11: …` | [x] |
 
-**Notes:** Branch `megiddo/r-11-search-refactor` @ `bdbc86d7` stacked on R-10 @ `de3c2118`. Added `SearchService::UniversalSearch`, `ScopedPlayerSearch`, `GetUnitActivityCounts`, `EscapeLike`, punct-fold helpers; thinned `SearchAjax::universal`, `Search::unitactivity`, `AdminAjax`/`KingdomAjax`/`ParkAjax`/`EventAjax` playersearch off `$DB`. PHPUnit 215/215 pass (2 skipped). Infection `infection.t11-search.json5` `--only-covered`: MSI 40%, covered MSI 40%. Fuzzy test+mirror 6/6 pass. Playwright: auth smoke + `search.spec.ts` 3/3 pass.
+**Notes:** Branch `megiddo/r-11-search-refactor` @ `bdbc86d7` stacked on R-10 @ `de3c2118`. Added `SearchService::UniversalSearch`, `ScopedPlayerSearch`, `GetUnitActivityCounts`, `EscapeLike`, punct-fold helpers; thinned `SearchAjax::universal`, `Search::unitactivity`, `AdminAjax`/`KingdomAjax`/`ParkAjax`/`EventAjax` playersearch off `$DB`. PHPUnit 215/215 pass (2 skipped). Infection `tools/infection/infection.t11-search.json5` `--only-covered`: MSI 40%, covered MSI 40%. Fuzzy test+mirror 6/6 pass. Playwright: auth smoke + `search.spec.ts` 3/3 pass.
 
 ---
 
@@ -284,7 +284,7 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | Docs + plan | [x] |
 | Commit: `R-12: …` | [x] |
 
-**Notes:** Branch `megiddo/r-12-attendance-refactor` @ `6fcc6ce0` stacked on R-11 @ `d9def14b`. Added `ClassLevel` helper, `Player::ComputeClassProgress`, `Attendance` reactivate/adjacent-dates/link enrichment/cache bust, `Weather` archive JSON wrappers; thinned AttendanceAjax/SignIn/QR/Attendance controllers and `Model_Attendance` off `$DB`/`Ork3::$Lib` on migrated paths. PHPUnit 215/215 pass (2 skipped). Infection `infection.t12-attendance.json5` `--only-covered`: MSI 51%, covered MSI 51%. Fuzzy test+mirror 4/4 pass (re-recorded `park-auth-sandbox` DOM/visual/assets + `event-park` DOM baselines). Playwright: auth smoke + `attendance.spec.ts` 4/4 pass.
+**Notes:** Branch `megiddo/r-12-attendance-refactor` @ `6fcc6ce0` stacked on R-11 @ `d9def14b`. Added `ClassLevel` helper, `Player::ComputeClassProgress`, `Attendance` reactivate/adjacent-dates/link enrichment/cache bust, `Weather` archive JSON wrappers; thinned AttendanceAjax/SignIn/QR/Attendance controllers and `Model_Attendance` off `$DB`/`Ork3::$Lib` on migrated paths. PHPUnit 215/215 pass (2 skipped). Infection `tools/infection/infection.t12-attendance.json5` `--only-covered`: MSI 51%, covered MSI 51%. Fuzzy test+mirror 4/4 pass (re-recorded `park-auth-sandbox` DOM/visual/assets + `event-park` DOM baselines). Playwright: auth smoke + `attendance.spec.ts` 4/4 pass.
 
 ---
 
@@ -303,7 +303,7 @@ Each milestone branch `megiddo/r-{nn}-{slug}` must satisfy before checking Done:
 | Docs + plan | [x] |
 | Commit: `R-13: …` | [x] |
 
-**Notes:** Branch `megiddo/r-13-infrastructure-refactor` stacked on R-12 @ `c86ab163`. Added `Health::PingDb`, `SessionToken::ValidateSessionToken`, `Player::GetViewerPreferences`/`GetHomeKingdom`/`DismissWhatsNew`/`GetWhatsNewSeen`, `Event::GetEventSummaryForRedirect`; thinned `orkui/index.php`, `class.Controller`, `controller.WnAjax`, `default.theme` off `$DB` on migrated paths (T-INF-06 → R-01; menu HasAuthority → R-14; session token in `SessionToken` — `class.Authorization.php` uncommittable per hook). PHPUnit 215/215 pass (2 skipped). Infection `infection.t13-infrastructure.json5` `--only-covered`: MSI 33% (`class.Player.php` + `class.SessionToken.php`). Fuzzy test+mirror 2/2 pass (re-recorded `home-authenticated` baselines). Playwright: auth smoke + `infrastructure.spec.ts` 3/3 pass.
+**Notes:** Branch `megiddo/r-13-infrastructure-refactor` stacked on R-12 @ `c86ab163`. Added `Health::PingDb`, `SessionToken::ValidateSessionToken`, `Player::GetViewerPreferences`/`GetHomeKingdom`/`DismissWhatsNew`/`GetWhatsNewSeen`, `Event::GetEventSummaryForRedirect`; thinned `orkui/index.php`, `class.Controller`, `controller.WnAjax`, `default.theme` off `$DB` on migrated paths (T-INF-06 → R-01; menu HasAuthority → R-14; session token in `SessionToken` — `class.Authorization.php` uncommittable per hook). PHPUnit 215/215 pass (2 skipped). Infection `tools/infection/infection.t13-infrastructure.json5` `--only-covered`: MSI 33% (`class.Player.php` + `class.SessionToken.php`). Fuzzy test+mirror 2/2 pass (re-recorded `home-authenticated` baselines). Playwright: auth smoke + `infrastructure.spec.ts` 3/3 pass.
 
 ---
 

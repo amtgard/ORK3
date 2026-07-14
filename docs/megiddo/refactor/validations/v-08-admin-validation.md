@@ -61,7 +61,7 @@ bin/fuzzy-validator validate --pages admin-dashboard,admin-permissions,admin-sta
 | `tests/Unit/StateOfAmtgardValidationTest.php` | Unit | Date/kingdom validation |
 | `tests/e2e/admin-dashboard.spec.ts` | e2e | Dashboard + SoA smoke |
 
-**Infection:** `infection.t08-admin.json5` — batched MSI ≥15% (DangerAudit+Player, Report, StateOfAmtgard, Park).
+**Infection:** `tools/infection/infection.t08-admin.json5` — batched MSI ≥15% (DangerAudit+Player, Report, StateOfAmtgard, Park).
 
 ### 2.2 Expected breakage when code migrates
 
@@ -87,7 +87,7 @@ bin/fuzzy-validator validate --pages admin-dashboard,admin-permissions,admin-sta
 
 ```bash
 sh bin/run-infection.sh \
-  --configuration=infection.t08-admin.json5 \
+  --configuration=tools/infection/infection.t08-admin.json5 \
   --only-covered \
   --filter=class.Report.php \
   --filter=class.DangerAudit.php \

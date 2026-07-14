@@ -1,21 +1,19 @@
 {
-    "$schema": "vendor/infection/infection/resources/schema.json",
+    "$schema": "../../vendor/infection/infection/resources/schema.json",
     "timeout": 120,
     "source": {
         "directories": [
             "system/lib/ork3",
-            "orkservice"
+            "orkservice/Event"
         ],
         "excludes": [
-            "AuthorizationService.testrig.php",
-            "AuthorizationService.testrig.sql",
-            "*.test.php",
-            "*.testrig.php"
+            "class.Player.php",
+            "class.Report.php"
         ]
     },
     "logs": {
-        "text": "build/infection.log",
-        "summary": "build/infection-summary.log"
+        "text": "build/infection-t01.log",
+        "summary": "build/infection-t01-summary.log"
     },
     "mutators": {
         "@default": true
@@ -27,5 +25,5 @@
     "phpUnit": {
         "configDir": "."
     },
-    "tmpDir": "build/infection"
+    "tmpDir": "build/infection-t01"
 }

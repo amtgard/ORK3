@@ -62,7 +62,7 @@ bin/fuzzy-validator validate --pages reports-voting-eligible,reports-ladder-grid
 | `tests/Unit/AwardOptionGroupsTest.php` | Unit | Pseudo-ladder IDs, peerage buckets |
 | `tests/e2e/reports.spec.ts` | e2e | Voting / ladder / attendance smoke |
 
-**Infection:** `infection.t10-reports.json5` — MSI 48% on `class.Report.php` + `class.Award.php`.
+**Infection:** `tools/infection/infection.t10-reports.json5` — MSI 48% on `class.Report.php` + `class.Award.php`.
 
 ### 2.2 Expected breakage when code migrates
 
@@ -89,7 +89,7 @@ bin/fuzzy-validator validate --pages reports-voting-eligible,reports-ladder-grid
 
 ```bash
 sh bin/run-infection.sh \
-  --configuration=infection.t10-reports.json5 \
+  --configuration=tools/infection/infection.t10-reports.json5 \
   --only-covered \
   --filter=class.Report.php \
   --filter=class.Award.php \

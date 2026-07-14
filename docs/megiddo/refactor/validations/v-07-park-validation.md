@@ -58,7 +58,7 @@ bin/fuzzy-validator validate --pages park-auth-sandbox,event-park --phase all
 | `tests/Integration/ParkAjaxTest.php` | Integration | Park abbr uniqueness |
 | `tests/e2e/park-profile.spec.ts` | e2e | Profile smoke |
 
-**Infection:** `infection.t07-park.json5` — MSI 24% on `class.Park.php`.
+**Infection:** `tools/infection/infection.t07-park.json5` — MSI 24% on `class.Park.php`.
 
 ### 2.2 Expected breakage when code migrates
 

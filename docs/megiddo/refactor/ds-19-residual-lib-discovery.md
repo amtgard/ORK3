@@ -245,9 +245,9 @@ sh bin/run-infection.sh \
   --test-framework-options="--filter=PlayerServiceTest|StateOfAmtgard"
 ```
 
-Document consolidated config in `infection.t19-residual-lib.json5` during T-19.
+Document consolidated config in `tools/infection/infection.t19-residual-lib.json5` during T-19.
 
-**T-19 config:** [infection.t19-residual-lib.json5](../../../infection.t19-residual-lib.json5) — shared `minMsi`/`minCoveredMsi` 15; run each pass with `--configuration=infection.t19-residual-lib.json5` plus the `--filter` / `--test-framework-options` pairs below.
+**T-19 config:** [tools/infection/infection.t19-residual-lib.json5](../../../infection.t19-residual-lib.json5) — shared `minMsi`/`minCoveredMsi` 15; run each pass with `--configuration=tools/infection/infection.t19-residual-lib.json5` plus the `--filter` / `--test-framework-options` pairs below.
 
 ### 2.4 Gate expectations (VALIDATE-20)
 

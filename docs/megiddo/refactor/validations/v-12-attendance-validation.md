@@ -64,7 +64,7 @@ bin/fuzzy-validator validate --pages park-auth-sandbox,event-park --phase all
 | `tests/Support/AttendanceFixture.php` | Fixture | Sandbox attendance rows |
 | `tests/e2e/attendance.spec.ts` | e2e | Attendance / SignIn / QR smoke |
 
-**Infection:** `infection.t12-attendance.json5` — MSI 53% on `class.Attendance.php` + `class.Player.php`.
+**Infection:** `tools/infection/infection.t12-attendance.json5` — MSI 53% on `class.Attendance.php` + `class.Player.php`.
 
 ### 2.2 Expected breakage when code migrates
 
@@ -90,7 +90,7 @@ bin/fuzzy-validator validate --pages park-auth-sandbox,event-park --phase all
 
 ```bash
 sh bin/run-infection.sh \
-  --configuration=infection.t12-attendance.json5 \
+  --configuration=tools/infection/infection.t12-attendance.json5 \
   --only-covered \
   --filter=class.Attendance.php \
   --filter=class.Player.php \

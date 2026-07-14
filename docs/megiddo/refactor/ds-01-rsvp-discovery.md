@@ -158,7 +158,7 @@ Extend integration tests to call SOAP/JSON wrappers once registered:
 | `--filter=class.Event.php` (or `class.EventRsvp.php` if split) | `--test-framework-options="--filter=EventRsvpTest"` |
 | Include `EventService.function.php` once handlers exist | Same |
 
-Document exact filters in T-01 commit. Target ≥ current `minMsi` / `minCoveredMsi` (15) from `infection.json5`.
+Document exact filters in T-01 commit. Target ≥ current `minMsi` / `minCoveredMsi` (15) from `tools/infection/infection.json5`.
 
 ### 2.4 Frontend functional tests (implement in T-01)
 

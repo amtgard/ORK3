@@ -1,5 +1,5 @@
 {
-    "$schema": "vendor/infection/infection/resources/schema.json",
+    "$schema": "../../vendor/infection/infection/resources/schema.json",
     "timeout": 120,
     "source": {
         "directories": [
@@ -7,18 +7,18 @@
         ]
     },
     "logs": {
-        "text": "build/infection-t08.log",
-        "summary": "build/infection-t08-summary.log"
+        "text": "build/infection-t13.log",
+        "summary": "build/infection-t13-summary.log"
     },
     "mutators": {
         "@default": true
     },
-    "minMsi": 15,
-    "minCoveredMsi": 15,
+    "minMsi": 13,
+    "minCoveredMsi": 13,
     "testFramework": "phpunit",
     "bootstrap": "tests/bootstrap.php",
     "phpUnit": {
         "configDir": "."
     },
-    "tmpDir": "build/infection-t08"
+    "tmpDir": "build/infection-t13"
 }

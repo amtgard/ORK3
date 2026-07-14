@@ -61,7 +61,7 @@ bin/fuzzy-validator validate --pages admin-permissions,kingdom-auth-sandbox,park
 | `tests/e2e/auth-permissions.spec.ts` | e2e | Admin/kingdom/park permission matrix smoke |
 | Auth smoke (orchestrator) | e2e | Session + home login |
 
-**Infection:** `infection.t14-lib-auth-era.json5` — pass A, MSI floor 15%.
+**Infection:** `tools/infection/infection.t14-lib-auth-era.json5` — pass A, MSI floor 15%.
 
 ### 2.2 Expected breakage when code migrates
 
@@ -85,7 +85,7 @@ bin/fuzzy-validator validate --pages admin-permissions,kingdom-auth-sandbox,park
 
 ```bash
 sh bin/run-infection.sh \
-  --configuration=infection.t14-lib-auth-era.json5 \
+  --configuration=tools/infection/infection.t14-lib-auth-era.json5 \
   --only-covered \
   --filter=class.Authorization.php \
   --filter=class.EraPhoenice.php \

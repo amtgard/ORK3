@@ -57,7 +57,7 @@ bin/fuzzy-validator validate --pages kingdom-profile,kingdom-auth-sandbox --phas
 | `tests/Integration/KingdomAjaxTest.php` | Integration | Move player, AwardRecsPublic, abbr, calendar, suspend |
 | `tests/e2e/kingdom-profile.spec.ts` | e2e | Profile + ICS smoke |
 
-**Infection:** `infection.t06-kingdom.json5` — MSI 43% on `class.Kingdom.php` + `class.Report.php`.
+**Infection:** `tools/infection/infection.t06-kingdom.json5` — MSI 43% on `class.Kingdom.php` + `class.Report.php`.
 
 ### 2.2 Expected breakage when code migrates
 

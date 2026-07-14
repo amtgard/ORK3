@@ -1,7 +1,7 @@
 // T-19 residual lib bypass — milestone-scoped Infection config (DS-19 §2.3).
 // Run each R-19 hop pass with matching --filter and --test-framework-options; see ds-19-residual-lib-discovery.md.
 {
-    "$schema": "vendor/infection/infection/resources/schema.json",
+    "$schema": "../../vendor/infection/infection/resources/schema.json",
     "timeout": 120,
     "source": {
         "directories": [

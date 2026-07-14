@@ -56,7 +56,7 @@ bin/fuzzy-validator validate --pages event-index-rsvp,event-index-rsvp-gok,event
 | `tests/Support/EventPlanningFixture.php` | Fixture | Seeded events/staff/schedule |
 | `tests/e2e/event-planning.spec.ts` | e2e | Kingdom/park calendar hosts |
 
-**Infection:** `infection.t04-eventajax.json5` — MSI 48% on `class.Event.php` + `EventPlanningTest`.
+**Infection:** `tools/infection/infection.t04-eventajax.json5` — MSI 48% on `class.Event.php` + `EventPlanningTest`.
 
 ### 2.2 Expected breakage when code migrates
 

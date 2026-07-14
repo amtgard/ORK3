@@ -60,7 +60,7 @@ At R-03 also gate `kingdom-profile,event-list,event-park` after `setpoint restor
 | `tests/Support/BannerFixture.php` | Fixture | Temp dirs + seeded entities |
 | `tests/e2e/banner.spec.ts` | e2e | Park/kingdom/player/event hosts |
 
-**Infection:** `infection.t03-banner.json5` — MSI 55% (pre-refactor on `class.Park.php`; post-R → `class.Banner.php`).
+**Infection:** `tools/infection/infection.t03-banner.json5` — MSI 55% (pre-refactor on `class.Park.php`; post-R → `class.Banner.php`).
 
 ### 2.2 Expected breakage when code migrates
 
