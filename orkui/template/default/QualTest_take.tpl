@@ -789,6 +789,12 @@ html[data-theme="dark"] .qt-loading { color: var(--ork-text-muted, #a0aec0); }
 .qt-confirm-overlay.qt-open { display:flex; }
 .qt-confirm-modal { background:#fff; border-radius:8px; padding:22px 24px; min-width:300px; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
 .qt-confirm-title { margin:0 0 10px; font-size:1rem; font-weight:700; color:#2d3748; }
+/* orkui.css paints every h1..h6 as a grey "chip" (background + border + white text-shadow),
+   which on a modal title reads as a pale box — a glaring white box in dark mode. Strip it.
+   The dark-context selector is specific enough to beat that global heading rule. */
+.qt-confirm-title, html[data-theme="dark"] .qt-confirm-title {
+	background:none; border:none; box-shadow:none; text-shadow:none; padding:0; border-radius:0;
+}
 .qt-confirm-body { font-size:0.9rem; color:#4a5568; line-height:1.5; margin-bottom:18px; }
 .qt-confirm-footer { display:flex; gap:10px; justify-content:flex-end; }
 .qt-confirm-btn { padding:7px 16px; border-radius:5px; font-size:0.85rem; font-weight:600; cursor:pointer; border:none; }

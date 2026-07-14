@@ -62,8 +62,10 @@
 /* Publish stays disabled until the draft can actually pass publishSet()'s guards. */
 .qt-ver-btn:disabled { opacity:.5; cursor:not-allowed; }
 /* Rename a version in place. Subtle until hovered — it is metadata, not a primary action. */
-.qt-ver-rename { background:none; border:none; cursor:pointer; color:#a0aec0; font-size:0.72rem; padding:2px 4px; }
-.qt-ver-rename:hover { color:#2b6cb0; }
+.qt-ver-rename, .qt-ver-editlabel { background:none; border:none; cursor:pointer; color:#a0aec0; font-size:0.72rem; padding:2px 4px; }
+.qt-ver-rename:hover, .qt-ver-editlabel:hover { color:#2b6cb0; }
+/* The live version's rules/corpora label, edited in place like the name. */
+.qt-ver-label { font-size:0.8rem; color:#718096; }
 /* Previous versions — retired sets, readable but not editable. Collapsed: the list only grows. */
 .qt-ver-past-wrap { margin-top:10px; padding-top:10px; border-top:1px dashed #e2e8f0; }
 .qt-ver-pasthdr { display:flex; align-items:center; gap:6px; font-size:0.72rem; font-weight:700;
@@ -117,6 +119,31 @@ html[data-theme="dark"] .qt-notlive-warning { background:#3b2f14; border-color:#
 .qt-mem-btn { padding:3px 9px; font-size:0.72rem; font-weight:600; border-radius:5px; border:1px solid #cbd5e0; background:#fff; cursor:pointer; white-space:nowrap; }
 .qt-mem-btn:hover { background:#edf2f7; }
 .qt-mem-btn.qt-mem-in { background:#e9d8fd; border-color:#d6bcfa; color:#44337a; }
+/* ── Dark theme: the status colours ──────────────────────────────────────────
+   The light-mode chips are pale tints (#e9d8fd lavender, #c6f6d5 mint) meant to sit on
+   white. Rendered unchanged on a dark page they are the BRIGHTEST thing on screen — the
+   draft purple in particular glared. Invert the pairing instead: deep background, light
+   text, so a chip still reads as purple-means-draft without shouting. */
+html[data-theme="dark"] .qt-ver-draft,
+html[data-theme="dark"] .qt-mem-draft,
+html[data-theme="dark"] .qt-preview-setchip-draft { background:#3c366b; color:#d6bcfa; }
+html[data-theme="dark"] .qt-ver-live,
+html[data-theme="dark"] .qt-mem-live,
+html[data-theme="dark"] .qt-preview-setchip-live  { background:#22543d; color:#9ae6b4; }
+html[data-theme="dark"] .qt-mem-unused { background:#374151; color:#a0aec0; }
+html[data-theme="dark"] .qt-mem-lib    { background:#2a4365; color:#bee3f8; }
+html[data-theme="dark"] .qt-preview-btn-draft { background:#3c366b; color:#d6bcfa; }
+html[data-theme="dark"] .qt-preview-btn-draft:hover { background:#4c4285; }
+html[data-theme="dark"] .qt-mem-btn { background:#374151; border-color:#4a5568; color:#e2e8f0; }
+html[data-theme="dark"] .qt-mem-btn:hover { background:#4a5568; }
+html[data-theme="dark"] .qt-mem-btn.qt-mem-in { background:#3c366b; border-color:#553c9a; color:#d6bcfa; }
+html[data-theme="dark"] .qt-ver-label { color:#a0aec0; }
+html[data-theme="dark"] .qt-ver-off { background:#374151; color:#cbd5e0; }
+html[data-theme="dark"] .qt-lib-ver-none { background:#374151; color:#718096; }
+/* The "multi" / "select all that apply" badge — was inline-styled, now a class so dark works. */
+.qt-multi-badge { background:#e6fffa; color:#234e52; font-size:0.7rem; padding:1px 6px; border-radius:3px; font-weight:600; margin-left:6px; }
+html[data-theme="dark"] .qt-multi-badge { background:#234e52; color:#9decdb; }
+
 html[data-theme="dark"] .qt-versions { background:#2d3748; border-color:#4a5568; }
 html[data-theme="dark"] .qt-ver-note { background:#322659; border-color:#553c9a; color:#e9d8fd; }
 html[data-theme="dark"] .qt-ver-btn { background:#374151; border-color:#4a5568; color:#e2e8f0; }
@@ -158,6 +185,18 @@ html[data-theme="dark"] .qt-lib-ver-diff { background:#3b2f14; color:#fde68a; }
 .qt-report-modal { background:#fff; border-radius:8px; padding:24px 26px; min-width:320px; max-width:440px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
 .qt-report-modal h4 { margin:0 0 14px; font-size:1rem; color:#2d3748; }
 .qt-report-modal h4 i { color:#e53e3e; margin-right:6px; }
+/* orkui.css styles EVERY h1..h6 as a grey "chip" — background, border, white text-shadow —
+   meant for report section headers. On a modal TITLE that reads as a pale box around the
+   text, and in dark mode it was a glaring white box (the global dark override for headings
+   is less specific than this, so the light chip won). Strip the chrome from modal titles in
+   both themes; the dark-context selectors are specific enough to beat the global heading rule. */
+.qt-preview-modal h4, .qt-bulk-import-modal h4, .qt-report-modal h4, .qt-confirm-title,
+html[data-theme="dark"] .qt-preview-modal h4,
+html[data-theme="dark"] .qt-bulk-import-modal h4,
+html[data-theme="dark"] .qt-report-modal h4,
+html[data-theme="dark"] .qt-confirm-title {
+	background:none; border:none; box-shadow:none; text-shadow:none; padding:0; border-radius:0;
+}
 .qt-report-reason-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f0f4f8; font-size:0.88rem; color:#4a5568; }
 .qt-report-reason-row:last-of-type { border-bottom:none; }
 .qt-report-count { font-weight:700; color:#e53e3e; min-width:24px; text-align:right; }
@@ -447,7 +486,15 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			<?php if ($_live): ?>
 				<strong class="qt-ver-name" data-set="<?= (int)$_live['SetId'] ?>"><?= htmlspecialchars($_live['Name']) ?></strong>
 				<button type="button" class="qt-ver-rename" data-set="<?= (int)$_live['SetId'] ?>" title="Rename this version"><i class="fas fa-pen"></i></button>
-				<?php if (($_live['RulesVersion'] ?? '') !== ''): ?><span class="qt-ver-meta"><?= htmlspecialchars($_live['RulesVersion']) ?></span><?php endif; ?>
+				<?php // The rules/corpora label is editable on the LIVE version too, not just on a draft.
+				      // Publishing REQUIRES it, so a typo used to be unfixable — the only remedy was
+				      // publishing a whole new version to correct a string. Safe to change in place:
+				      // past attempts keep the label they were STAMPED with, so history stays truthful;
+				      // only the test footer and future attempts move. ?>
+				<span class="qt-ver-label<?= ($_live['RulesVersion'] ?? '') === '' ? ' qt-ver-nolabel' : '' ?>"
+				      data-set="<?= (int)$_live['SetId'] ?>"><?= ($_live['RulesVersion'] ?? '') !== '' ? htmlspecialchars($_live['RulesVersion']) : 'no version label' ?></span>
+				<button type="button" class="qt-ver-editlabel" data-set="<?= (int)$_live['SetId'] ?>"
+				        title="Edit the rules/corpora version. Players see it as a footer on every test card. Past attempts keep the version they were sat under."><i class="fas fa-pen"></i></button>
 				<span class="qt-ver-meta"><?= $_liveCount ?> question<?= $_liveCount !== 1 ? 's' : '' ?></span>
 				<?php if (!$_ready): ?>
 					<span class="qt-ver-short"><i class="fas fa-exclamation-triangle"></i>
@@ -663,7 +710,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 						<td>
 							<?= htmlspecialchars($q['QuestionText']) ?>
 							<?php if (($q['AnswerMode'] ?? 'single') === 'multi'): ?>
-							<span style="background:#e6fffa;color:#234e52;font-size:0.7rem;padding:1px 6px;border-radius:3px;font-weight:600;margin-left:6px;">multi</span>
+							<span class="qt-multi-badge">multi</span>
 							<?php endif; ?>
 							<?php // Which version(s) is this question part of? "Unused" = written but in
 							      // no version — still fine, still reusable, just not being asked. ?>
@@ -1355,7 +1402,7 @@ $(function() {
 			html += '<div class="qt-bulk-import-success">' + parsedQuestions.length + ' question(s) ready to import</div>';
 			parsedQuestions.forEach(function(q, qi) {
 				var badge = q.AnswerMode === 'multi'
-					? ' <span style="background:#e6fffa;color:#234e52;font-size:0.7rem;padding:1px 6px;border-radius:3px;font-weight:600;margin-left:6px;">select all that apply</span>'
+					? ' <span class="qt-multi-badge">select all that apply</span>'
 					: '';
 				html += '<div class="qt-bulk-import-preview-q"><div class="qt-bulk-import-preview-q-text">' + (qi+1) + '. ' + escH(q.QuestionText) + badge + '</div>';
 				q.Answers.forEach(function(a) {
@@ -1805,53 +1852,76 @@ var QT_TARGET_SET = <?= (int)($TargetSetId ?? 0) ?>;
 	}
 	qtSyncPublishBtn();
 
-	// ── Rename a version ─────────────────────────────────────────────────────
-	// A version's name outlives the reign that made it: it is stamped onto every attempt and
-	// shown in players' test history for good. So it must be nameable, and nameable BEFORE it
-	// goes live. Swap the label for an input in place; Enter or blur saves, Escape reverts.
-	document.querySelectorAll('.qt-ver-rename').forEach(function(btn) {
-		btn.addEventListener('click', function() {
-			var label = document.querySelector('.qt-ver-name[data-set="' + btn.dataset.set + '"]');
-			if (!label || label.dataset.editing === '1') return;
-			var original = label.textContent;
-			label.dataset.editing = '1';
+	// ── Edit a version's name, or its rules/corpora label, in place ──────────
+	// Both outlive the reign that made them: they are stamped onto every attempt and shown in
+	// players' test history for good. Swap the text for an input; Enter or blur saves, Escape
+	// reverts. Nothing here can rewrite history — an attempt keeps whatever it was STAMPED
+	// with, so editing a live version moves only the test footer and future attempts.
+	//
+	// One editor, two fields: `field` is the POST key ('Name' or 'RulesVersion'). The endpoint
+	// falls back to the CURRENT value for whichever field is not sent, so sending one alone
+	// cannot blank the other.
+	function qtWireInlineEdit(btnSelector, labelSelector, field, opts) {
+		opts = opts || {};
+		document.querySelectorAll(btnSelector).forEach(function(btn) {
+			btn.addEventListener('click', function() {
+				var label = document.querySelector(labelSelector + '[data-set="' + btn.dataset.set + '"]');
+				if (!label || label.dataset.editing === '1') return;
+				// A placeholder ("no version label") is prompt text, not a value to edit.
+				var isPlaceholder = label.classList.contains('qt-ver-nolabel');
+				var original = isPlaceholder ? '' : label.textContent.trim();
+				label.dataset.editing = '1';
 
-			var inp = document.createElement('input');
-			inp.type      = 'text';
-			inp.className = 'qt-ver-input';
-			inp.value     = original;
-			inp.style.minWidth = '180px';
-			label.style.display = 'none';
-			btn.style.display   = 'none';
-			label.parentNode.insertBefore(inp, label.nextSibling);
-			inp.focus();
-			inp.select();
+				var inp = document.createElement('input');
+				inp.type        = 'text';
+				inp.className   = 'qt-ver-input';
+				inp.value       = original;
+				inp.placeholder = opts.placeholder || '';
+				inp.style.minWidth = '180px';
+				label.style.display = 'none';
+				btn.style.display   = 'none';
+				label.parentNode.insertBefore(inp, label.nextSibling);
+				inp.focus();
+				inp.select();
 
-			var done = false;
-			function finish(save) {
-				if (done) return;          // blur fires again when we remove the input
-				done = true;
-				var name = inp.value.trim();
-				inp.remove();
-				label.style.display = '';
-				btn.style.display   = '';
-				delete label.dataset.editing;
-				if (!save || name === '' || name === original) return;
-				label.textContent = name;   // optimistic; the post below is the source of truth
-				post('updateset', { SetId: btn.dataset.set, Name: name }, function(j) {
-					if (!j || j.status !== 0) {
-						label.textContent = original;    // put it back — the save did not happen
-						qtAlert((j && j.error) || 'Could not rename this version.');
-					}
+				var done = false;
+				function finish(save) {
+					if (done) return;          // blur fires again when we remove the input
+					done = true;
+					var val = inp.value.trim();
+					inp.remove();
+					label.style.display = '';
+					btn.style.display   = '';
+					delete label.dataset.editing;
+					if (!save || val === original) return;
+					if (val === '' && !opts.allowEmpty) return;   // a name cannot be blanked
+
+					var body = { SetId: btn.dataset.set };
+					body[field] = val;
+					label.textContent = val;                       // optimistic
+					label.classList.remove('qt-ver-nolabel');
+					post('updateset', body, function(j) {
+						if (!j || j.status !== 0) {
+							label.textContent = isPlaceholder ? (opts.placeholder || '') : original;
+							if (isPlaceholder) label.classList.add('qt-ver-nolabel');
+							qtAlert((j && j.error) || 'Could not save that change.');
+						}
+					});
+				}
+				inp.addEventListener('keydown', function(e) {
+					if (e.key === 'Enter')  { e.preventDefault(); finish(true); }
+					if (e.key === 'Escape') { e.preventDefault(); finish(false); }
 				});
-			}
-			inp.addEventListener('keydown', function(e) {
-				if (e.key === 'Enter')  { e.preventDefault(); finish(true); }
-				if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+				inp.addEventListener('blur', function() { finish(true); });
 			});
-			inp.addEventListener('blur', function() { finish(true); });
 		});
-	});
+	}
+
+	qtWireInlineEdit('.qt-ver-rename',    '.qt-ver-name',  'Name');
+	// The live version's rules/corpora label. Publishing REQUIRES one, so before this a typo in
+	// it could only be corrected by publishing an entirely new version.
+	qtWireInlineEdit('.qt-ver-editlabel', '.qt-ver-label', 'RulesVersion',
+		{ placeholder: 'no version label' });
 
 	// ── Previous versions: read one back, read-only ──────────────────────────
 	// Defined LOCALLY on purpose. An earlier bug in this file had a render function reach for
