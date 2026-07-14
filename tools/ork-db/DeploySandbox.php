@@ -6,6 +6,12 @@ namespace OrkDb;
 
 final class DeploySandbox
 {
+    /** @var (callable(array{target?: string}): array{lines: list<string>, exit_code: int})|null */
+    private $seedRunner;
+
+    /**
+     * @param (callable(array{target?: string}): array{lines: list<string>, exit_code: int})|null $seedRunner
+     */
     public function __construct(
         private readonly DeploymentTier $tier,
         private readonly Wiring $wiring,
@@ -19,7 +25,9 @@ final class DeploySandbox
         private readonly DeployAssets $deployAssets,
         private readonly string $toolRoot,
         private readonly ?\DateTimeImmutable $clock = null,
+        ?callable $seedRunner = null,
     ) {
+        $this->seedRunner = $seedRunner;
     }
 
     /**
@@ -137,6 +145,22 @@ final class DeploySandbox
             $lines[] = 'Deploy:       ABORT — deploy-assets failed';
 
             return ['lines' => $lines, 'exit_code' => 2];
+        }
+
+        // Enforce known sandbox logins after SQL/assets settle (deploy-sandbox refresh
+        // re-applies extracted production credential hashes, which break fuzzy/e2e).
+        $seedRunner = $this->seedRunner ?? function (array $opts): array {
+            return (new SeedTestCredentials($this->wiring))->run($opts);
+        };
+        $seedResult = $seedRunner(['target' => SeedTestCredentials::TARGET_SANDBOX]);
+        foreach ($seedResult['lines'] as $line) {
+            $lines[] = $line;
+        }
+        if ($seedResult['exit_code'] !== 0) {
+            $lines[] = 'Remediation:  bin/seed-test-credentials --target sandbox';
+            $lines[] = 'Deploy:       ABORT — seed-test-credentials failed';
+
+            return ['lines' => $lines, 'exit_code' => $seedResult['exit_code']];
         }
 
         $post = $this->validate->run(Validate::MODE_POST_APPLY, true);

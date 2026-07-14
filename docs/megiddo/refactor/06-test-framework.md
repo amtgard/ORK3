@@ -51,6 +51,17 @@ After a **mirror import/refresh** or first sandbox setup, ensure the accounts ab
 | **`admin` / `password`** | Set `admin` password to `password` in local mirror (UI password change or direct update to `ork_credential` / `ork_mundane` password fields). Required for mirror fuzzy + admin Playwright specs. | Same overwrite on sandbox if admin specs run against dev DB. |
 | **`megiddo` / `test-db-player`** | Optional on mirror (not the default Playwright user). | Fake players get `test-db-player` from `bin/ork-db apply`. Real extracted `megiddo` may still have mirror credentials — set to `test-db-player` if login fails after `deploy-sandbox`. |
 
+**Preferred (automated):** enforce both accounts with the credential seeder — also runs at the end of every `deploy-sandbox`:
+
+```bash
+bin/seed-test-credentials                    # sandbox + mirror
+bin/seed-test-credentials --target sandbox   # ork_test only
+bin/seed-test-credentials --target mirror    # ork only
+# aliases: bin/ork-db seed-test-credentials [--target …]
+```
+
+This writes `ork_credential` rows using the same `CryptStrip512` hash as `Authorization::KeyExists` (`UPPER(username)+password`). It is the bootstrap that makes `admin`/`password` and `megiddo`/`test-db-player` work after a sandbox refresh (which otherwise re-applies extracted production hashes).
+
 Verify manually once per DB refresh:
 
 ```bash

@@ -22,6 +22,7 @@ require_once __DIR__ . '/Bootstrap.php';
 require_once __DIR__ . '/DriftCheck.php';
 require_once __DIR__ . '/SchemaDiff.php';
 require_once __DIR__ . '/DeploySandbox.php';
+require_once __DIR__ . '/SeedTestCredentials.php';
 require_once __DIR__ . '/GenerateAssets.php';
 require_once __DIR__ . '/DeployAssets.php';
 
@@ -36,6 +37,7 @@ use OrkDb\GenerateAssets;
 use OrkDb\Init;
 use OrkDb\Render;
 use OrkDb\SchemaDiff;
+use OrkDb\SeedTestCredentials;
 use OrkDb\TierRefusalException;
 use OrkDb\UseProfile;
 use OrkDb\Validate;
@@ -58,6 +60,7 @@ $driftCheck = new DriftCheck($wiring, $toolRoot, $repoRoot);
 $schemaDiff = new SchemaDiff($wiring, $repoRoot);
 $generateAssets = new GenerateAssets($toolRoot, $render);
 $deployAssets = new DeployAssets($toolRoot, $repoRoot);
+$seedCredentials = new SeedTestCredentials($wiring);
 $deploySandbox = new DeploySandbox(
     $tier,
     $wiring,
@@ -86,6 +89,7 @@ try {
         'apply' => runApply($tier, $apply, $options),
         'bootstrap' => runBootstrap($tier, $bootstrap, $options),
         'deploy-sandbox' => runDeploySandbox($tier, $deploySandbox, $options),
+        'seed-test-credentials' => runSeedTestCredentials($tier, $seedCredentials, $options),
         'generate-assets' => runGenerateAssets($tier, $generateAssets, $options),
         'deploy-assets' => runDeployAssets($tier, $deployAssets, $options),
         'drift-check' => runDriftCheck($tier, $driftCheck, $options),
@@ -121,7 +125,8 @@ try {
  *   force_extract: bool,
  *   force_refresh: bool,
  *   skip_use_dev: bool,
- *   strict: bool
+ *   strict: bool,
+ *   target: string|null
  * }
  */
 function parseOptions(array $argv): array
@@ -141,12 +146,17 @@ function parseOptions(array $argv): array
     $forceRefresh = false;
     $skipUseDev = false;
     $strict = false;
+    $target = null;
     $positional = [];
 
     for ($i = 2, $count = count($argv); $i < $count; $i++) {
         $arg = $argv[$i];
         if ($arg === '--mode' && isset($argv[$i + 1])) {
             $mode = $argv[++$i];
+            continue;
+        }
+        if ($arg === '--target' && isset($argv[$i + 1])) {
+            $target = $argv[++$i];
             continue;
         }
         if ($arg === '--table' && isset($argv[$i + 1])) {
@@ -249,6 +259,7 @@ function parseOptions(array $argv): array
         'force_refresh' => $forceRefresh,
         'skip_use_dev' => $skipUseDev,
         'strict' => $strict,
+        'target' => $target,
     ];
 }
 
@@ -269,6 +280,7 @@ Usage:
   bin/ork-db init
   bin/ork-db bootstrap [--yes] [--skip-extract] [--force-extract]
   bin/ork-db deploy-sandbox [--yes] [--force-refresh] [--skip-use-dev]
+  bin/ork-db seed-test-credentials [--target sandbox|mirror|both]
   bin/ork-db generate-assets [--seed N]
   bin/ork-db deploy-assets
   bin/ork-db drift-check [--strict]
@@ -437,6 +449,22 @@ function runDeploySandbox(DeploymentTier $tier, DeploySandbox $deploySandbox, ar
         'yes' => $options['yes'],
         'force_refresh' => $options['force_refresh'],
         'skip_use_dev' => $options['skip_use_dev'],
+    ]);
+
+    foreach ($result['lines'] as $line) {
+        fwrite(STDOUT, $line . PHP_EOL);
+    }
+
+    exit($result['exit_code']);
+}
+
+/** @param array{target: string|null} $options */
+function runSeedTestCredentials(DeploymentTier $tier, SeedTestCredentials $seed, array $options): never
+{
+    $tier->refuseDataCommands('seed-test-credentials');
+
+    $result = $seed->run([
+        'target' => $options['target'] ?? SeedTestCredentials::TARGET_BOTH,
     ]);
 
     foreach ($result['lines'] as $line) {

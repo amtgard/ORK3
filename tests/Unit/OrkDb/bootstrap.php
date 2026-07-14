@@ -25,6 +25,7 @@ require_once ORK3_ROOT . '/tools/ork-db/Bootstrap.php';
 require_once ORK3_ROOT . '/tools/ork-db/DriftCheck.php';
 require_once ORK3_ROOT . '/tools/ork-db/SchemaDiff.php';
 require_once ORK3_ROOT . '/tools/ork-db/DeploySandbox.php';
+require_once ORK3_ROOT . '/tools/ork-db/SeedTestCredentials.php';
 require_once ORK3_ROOT . '/tools/ork-db/GenerateAssets.php';
 require_once ORK3_ROOT . '/tools/ork-db/DeployAssets.php';
 

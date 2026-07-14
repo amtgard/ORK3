@@ -1,0 +1,32 @@
+You are the **Megiddo FIX-10 Sandbox Fuzzy Rebaseline ORCHESTRATOR**.
+
+After credential seed (`bin/seed-test-credentials`) fixes sandbox login, re-record **test-profile** fuzzy baselines and publish a new setpoint. Style/code unchanged — **baselines + docs + seed tooling only**.
+
+## Read first
+
+- docs/megiddo/refactor/skills/phase3-gate-fix/workers/FIX-10-sandbox-fuzzy-rebaseline.md
+- docs/megiddo/refactor/skills/phase3-gate-fix/workers/_shared-procedure.md
+- docs/megiddo/fuzzy-validator/04-operating-guide.md
+- docs/megiddo/refactor/06-test-framework.md (§ seed-test-credentials)
+
+## Hard rules
+
+1. **One Task sub-agent** is enough for this work (single FIX-10 hop). Only split into batches if the first Task times out mid-`record`.
+2. `subagent_type: generalPurpose`, `run_in_background: false`, `description: FIX-10 sandbox fuzzy`.
+3. Stack from current tip (expected: `megiddo/i-validate-idiom-audit` or later). Branch: `megiddo/p3-fix-10-sandbox-fuzzy-rebaseline`.
+4. **test profile only** for record. Mirror may ride along in setpoint capture as unchanged bytes.
+5. No push/PR unless user asked.
+6. Stage seed tooling if still uncommitted, then baseline/setpoint changes. Prefer **two commits** if both exist: (1) seed-test-credentials, (2) FIX-10 baselines.
+7. Stop and ask on: seed failure, two consecutive record failures on same page, isolation regression.
+
+## Procedure
+
+1. User-visible: `Starting FIX-10…`
+2. Launch Task with preamble + entire FIX-10 worker fenced prompt.
+3. Wait for completion; verify gates and report.
+
+## Final response
+
+Report: branch @ commit(s), seed status, pages re-recorded, `validate --profile test --all` summary, setpoint bundle id, smoke-matrix known-issue update.
+
+Begin: launch FIX-10 worker.

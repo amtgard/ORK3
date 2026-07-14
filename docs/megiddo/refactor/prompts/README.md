@@ -18,6 +18,7 @@ Copy-paste prompts for the remaining automated work before human P3-4/P3-5. Open
 | 6 | [01-fix-09-event-index-attendance.prompt](./01-fix-09-event-index-attendance.prompt) | `validate --all` 41/41; Playwright 50/50 mirror |
 | 7 | [02-validate-20-rerun.prompt](./02-validate-20-rerun.prompt) (4th) | `phase3-audit-report.md` `status=ok` |
 | 8 | [03-idiom-enforcement-orchestrator.prompt](./03-idiom-enforcement-orchestrator.prompt) | `idioms-validate-report.md` `status=ok` |
+| 8b | [04-sandbox-fuzzy-rebaseline-orchestrator.prompt](./04-sandbox-fuzzy-rebaseline-orchestrator.prompt) | After seed-test-credentials: re-record **test**-profile fuzzy baselines + setpoint (`FIX-10`) |
 | 9 | Human — [validations/r-milestone-smoke-matrix.html](../validations/r-milestone-smoke-matrix.html) | P3-4 manual walk-through |
 | 10 | Human — retrospective bullets in `phase3-audit-report.md` | P3-5 complete |
 
@@ -34,5 +35,6 @@ Copy-paste prompts for the remaining automated work before human P3-4/P3-5. Open
 | FIX-07 | [skills/phase3-gate-fix/workers/FIX-07-fuzzy-baselines.md](../skills/phase3-gate-fix/workers/FIX-07-fuzzy-baselines.md) |
 | FIX-08 | [skills/phase3-gate-fix/workers/FIX-08-heraldry-dom-volatile.md](../skills/phase3-gate-fix/workers/FIX-08-heraldry-dom-volatile.md) |
 | FIX-09 | [skills/phase3-gate-fix/workers/FIX-09-event-index-attendance.md](../skills/phase3-gate-fix/workers/FIX-09-event-index-attendance.md) |
+| FIX-10 | [skills/phase3-gate-fix/workers/FIX-10-sandbox-fuzzy-rebaseline.md](../skills/phase3-gate-fix/workers/FIX-10-sandbox-fuzzy-rebaseline.md) |
 | VALIDATE-20 | [skills/phase3-gate-fix/workers/VALIDATE-20.md](../skills/phase3-gate-fix/workers/VALIDATE-20.md) |
 | I-* | [skills/idiom-enforcement/workers/](../skills/idiom-enforcement/workers/) |

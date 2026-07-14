@@ -197,6 +197,7 @@ final class DeploySandboxTest extends TestCase
             $deployAssets,
             $toolRoot,
             new \DateTimeImmutable('2026-07-07', new \DateTimeZone(LastRender::TIMEZONE)),
+            $this->seedStub(),
         );
 
         $result = $deploy->run(['yes' => true, 'skip_use_dev' => true]);
@@ -310,6 +311,7 @@ final class DeploySandboxTest extends TestCase
             $deployAssets,
             $toolRoot,
             new \DateTimeImmutable('2026-07-07', new \DateTimeZone(LastRender::TIMEZONE)),
+            $this->seedStub(),
         );
 
         $result = $deploy->run(['yes' => true, 'skip_use_dev' => true]);
@@ -363,6 +365,7 @@ final class DeploySandboxTest extends TestCase
             $deployAssets,
             $toolRoot,
             new \DateTimeImmutable('2026-07-07', new \DateTimeZone(LastRender::TIMEZONE)),
+            $this->seedStub(),
         );
 
         $result = $deploy->run(['yes' => true, 'force_refresh' => true, 'skip_use_dev' => true]);
@@ -372,6 +375,15 @@ final class DeploySandboxTest extends TestCase
         $output = implode("\n", $result['lines']);
         $this->assertSame(0, $result['exit_code'], $output);
         $this->assertStringContainsString('daily refresh (render anchor stale)', $output);
+    }
+
+    /** @return callable(array{target?: string}): array{lines: list<string>, exit_code: int} */
+    private function seedStub(): callable
+    {
+        return static fn (): array => [
+            'lines' => ['Seed credentials: OK sandbox (unit-test stub)'],
+            'exit_code' => 0,
+        ];
     }
 
     private function makeDeploySandbox(
@@ -413,6 +425,7 @@ final class DeploySandboxTest extends TestCase
             $deployAssets,
             $toolRoot,
             $clock,
+            $this->seedStub(),
         );
 
         return $deploy;

@@ -22,6 +22,12 @@
     .baseline figcaption { font-size: 0.8rem; color: #666; margin-top: 0.35rem; }
     .pass { margin-top: 0.75rem; font-weight: 600; }
     .preflight { background: #fff8e6; border: 1px solid #e6c200; padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.9rem; }
+    .known-issue { background: #fdecea; border: 1px solid #d98c86; border-left: 4px solid #c0392b; padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.9rem; margin: 1rem 0 2rem; }
+    .known-issue h2 { color: #c0392b; margin: 0 0 0.5rem; font-size: 1.05rem; border: none; }
+    .known-issue table { border-collapse: collapse; width: 100%; margin: 0.5rem 0; font-size: 0.88rem; }
+    .known-issue th, .known-issue td { border: 1px solid #d98c86; padding: 0.35rem 0.55rem; text-align: left; vertical-align: top; }
+    .known-issue th { background: #f9d9d5; width: 8rem; }
+    .issue-note { background: #fdecea; border-left: 4px solid #c0392b; padding: 0.5rem 0.8rem; margin: 0.75rem 0; font-size: 0.9rem; }
     code { background: #eee; padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.88em; }
   </style>
 </head>
@@ -35,7 +41,21 @@
   <code>docker compose -f docker-compose.php8.yml up -d</code><br>
   <code>export ORK3_E2E_BASE_URL=http://127.0.0.1:19080/orkui/</code><br>
   <code>bin/ork-db use prod</code> · <code>export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password</code><br>
-  Baseline images: <a href="../../../tools/fuzzy-validator/baselines/test/index.html">baselines/test/index.html</a> (run <code>bin/fuzzy-validator setpoint restore</code> if missing).
+  <code>bin/seed-test-credentials</code> — enforce <code>admin</code>/<code>password</code> (mirror) and <code>megiddo</code>/<code>test-db-player</code> + <code>admin</code>/<code>password</code> (sandbox). Also runs inside <code>bin/ork-db deploy-sandbox</code>.<br>
+  Baseline images: <a href="../../../../tools/fuzzy-validator/baselines/test/index.html">baselines/test/index.html</a> (run <code>bin/fuzzy-validator setpoint restore</code> if missing).
+</div>
+
+<div class="known-issue" id="known-issue-park-auth-sandbox">
+  <h2>Known issue — <code>park-auth-sandbox</code> fuzzy visual baseline (expected FAIL, not a regression)</h2>
+  <p>The automated fuzzy-validator <strong>test / sandbox</strong> profile reports a <strong>visual FAIL</strong> for the <code>park-auth-sandbox</code> page (<code>Park/profile/1000001</code>). This affects milestones <a href="#r-03">R-03</a> and <a href="#r-19c">R-19c</a>, which use that canary.</p>
+  <table>
+    <tr><th>Symptom</th><td>Stored baseline dimensions <code>1280&times;961</code> vs current render <code>1280&times;1976</code> — a viewport/height <em>dimension mismatch</em>, not a content diff.</td></tr>
+    <tr><th>Evidence</th><td>assets / DOM / visual similarity all score <code>1.000</code>; the <code>[mirror] park-auth-sandbox</code> profile passes cleanly; all Playwright behavioral checks (<code>banner.spec.ts</code>, <code>search.spec.ts</code>, <code>park-profile.spec.ts</code>) pass.</td></tr>
+    <tr><th>Status</th><td>Pre-existing, non-behavioral drift — observed before the Phase 3.5 idiom queue and confirmed byte-identical across I-19c and I-VALIDATE. <strong>Not introduced by any refactor / idiom hop.</strong></td></tr>
+    <tr><th>Human action</th><td>When walking R-03 and R-19c, verify the page renders correctly (park profile + banner chrome intact, no PHP/SQL fatal). Treat the fuzzy <em>test-profile</em> visual FAIL for this page as expected; do <strong>not</strong> mark the milestone Fail on that basis alone.</td></tr>
+    <tr><th>Follow-up</th><td>Re-record the <code>test</code>-profile <code>park-auth-sandbox</code> visual baseline during a future intentional-UI change / setpoint refresh to clear the standing dimension-mismatch flag.</td></tr>
+  </table>
+  <p>References: <a href="../idioms-validate-report.md">idioms-validate-report.md</a> (V20-C note) · <a href="v-19-residual-lib-validation.md">v-19 §2.3</a>.</p>
 </div>
 
 <nav>
@@ -76,7 +96,7 @@
     <dt>Playwright</dt><dd><code>tests/e2e/rsvp.spec.ts</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/event-index-rsvp.png" alt="Baseline event-index-rsvp" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/event-index-rsvp.png" alt="Baseline event-index-rsvp" width="640">
     <figcaption>Fuzzy baseline (test profile) — reference render before/after RSVP refactor</figcaption>
   </figure>
   <ol class="steps">
@@ -99,7 +119,7 @@
     <dt>Playwright</dt><dd><code>tests/e2e/auth-permissions.spec.ts</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/admin-permissions.png" alt="Baseline admin-permissions" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/admin-permissions.png" alt="Baseline admin-permissions" width="640">
     <figcaption>Fuzzy baseline — global permissions host (addauth paths use service layer)</figcaption>
   </figure>
   <ol class="steps">
@@ -122,7 +142,7 @@
     <dt>Playwright</dt><dd><code>tests/e2e/banner.spec.ts</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/park-auth-sandbox.png" alt="Baseline park-auth-sandbox" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/park-auth-sandbox.png" alt="Baseline park-auth-sandbox" width="640">
     <figcaption>Fuzzy baseline — Silver Fen park profile (hero banner host)</figcaption>
   </figure>
   <ol class="steps">
@@ -132,6 +152,7 @@
     <li>Confirm park profile body loads (park name or profile sections visible).</li>
   </ol>
   <div class="verify"><strong>Verify:</strong> Park profile renders; banner area present or empty state (no PHP fatal). Do not edit banner in this smoke.</div>
+  <div class="issue-note"><strong>Known issue:</strong> the <code>park-auth-sandbox</code> fuzzy <em>test-profile</em> visual FAILs on a baseline dimension mismatch (see <a href="#known-issue-park-auth-sandbox">known issue</a> at top). Judge this smoke on live render only.</div>
   <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
 </section>
 
@@ -145,7 +166,7 @@
     <dt>Playwright</dt><dd><code>tests/e2e/event-planning.spec.ts</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/event-list.png" alt="Baseline event-list" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/event-list.png" alt="Baseline event-list" width="640">
     <figcaption>Fuzzy baseline — event list landing (planning AJAX hosts)</figcaption>
   </figure>
   <ol class="steps">
@@ -168,7 +189,7 @@
     <dt>Playwright</dt><dd><code>tests/e2e/event-detail.spec.ts</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/event-create.png" alt="Baseline event-create" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/event-create.png" alt="Baseline event-create" width="640">
     <figcaption>Fuzzy baseline — event create form</figcaption>
   </figure>
   <ol class="steps">
@@ -190,7 +211,7 @@
     <dt>Playwright</dt><dd><code>tests/e2e/kingdom-profile.spec.ts</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/kingdom-profile.png" alt="Baseline kingdom-profile" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/kingdom-profile.png" alt="Baseline kingdom-profile" width="640">
     <figcaption>Fuzzy baseline — kingdom profile aggregates</figcaption>
   </figure>
   <ol class="steps">
@@ -212,7 +233,7 @@
     <dt>Playwright</dt><dd><code>tests/e2e/park-profile.spec.ts</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/event-park.png" alt="Baseline event-park" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/event-park.png" alt="Baseline event-park" width="640">
     <figcaption>Fuzzy baseline — park calendar (park profile reads framed here)</figcaption>
   </figure>
   <ol class="steps">
@@ -235,7 +256,7 @@
     <dt>Playwright</dt><dd><code>tests/e2e/admin-dashboard.spec.ts</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/admin-dashboard.png" alt="Baseline admin-dashboard" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/admin-dashboard.png" alt="Baseline admin-dashboard" width="640">
     <figcaption>Fuzzy baseline — admin dashboard YoY stats</figcaption>
   </figure>
   <ol class="steps">
@@ -258,7 +279,7 @@
     <dt>Playwright</dt><dd><code>tests/e2e/player-profile.spec.ts</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/player-profile.png" alt="Baseline player-profile" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/player-profile.png" alt="Baseline player-profile" width="640">
     <figcaption>Fuzzy baseline — logged-in player profile</figcaption>
   </figure>
   <ol class="steps">
@@ -280,7 +301,7 @@
     <dt>Playwright</dt><dd><code>tests/e2e/reports.spec.ts</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/reports-voting-eligible.png" alt="Baseline reports-voting-eligible" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/reports-voting-eligible.png" alt="Baseline reports-voting-eligible" width="640">
     <figcaption>Fuzzy baseline — voting eligible report</figcaption>
   </figure>
   <ol class="steps">
@@ -302,7 +323,7 @@
     <dt>Playwright</dt><dd><code>tests/e2e/search.spec.ts</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/admin-permissions.png" alt="Baseline admin-permissions for search" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/admin-permissions.png" alt="Baseline admin-permissions for search" width="640">
     <figcaption>Fuzzy baseline — admin host embeds playersearch UI (search page capture skipped per V-11)</figcaption>
   </figure>
   <ol class="steps">
@@ -325,7 +346,7 @@
     <dt>Playwright</dt><dd><code>tests/e2e/attendance.spec.ts</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/event-park.png" alt="Baseline event-park attendance frame" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/event-park.png" alt="Baseline event-park attendance frame" width="640">
     <figcaption>Fuzzy baseline — park calendar frames attendance workflows</figcaption>
   </figure>
   <ol class="steps">
@@ -347,7 +368,7 @@
     <dt>Playwright</dt><dd><code>tests/e2e/infrastructure.spec.ts</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/home-authenticated.png" alt="Baseline home-authenticated" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/home-authenticated.png" alt="Baseline home-authenticated" width="640">
     <figcaption>Fuzzy baseline — post-login home (session, prefs, menu)</figcaption>
   </figure>
   <ol class="steps">
@@ -370,7 +391,7 @@
     <dt>Playwright</dt><dd><code>tests/e2e/lib-service.spec.ts</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/weather.png" alt="Baseline weather" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/weather.png" alt="Baseline weather" width="640">
     <figcaption>Fuzzy baseline — weather dashboard (Live/Tournament also in gate)</figcaption>
   </figure>
   <ol class="steps">
@@ -392,7 +413,7 @@
     <dt>Route</dt><dd><code>./index.php?Route=Kingdom/profile/100001</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/kingdom-auth-sandbox.png" alt="Baseline kingdom-auth-sandbox" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/kingdom-auth-sandbox.png" alt="Baseline kingdom-auth-sandbox" width="640">
     <figcaption>Fuzzy baseline — sandbox kingdom permissions chrome</figcaption>
   </figure>
   <ol class="steps">
@@ -414,7 +435,7 @@
     <dt>Route</dt><dd><code>./index.php?Route=Reports/ladder_grid&amp;KingdomId=14</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/reports-ladder-grid.png" alt="Baseline reports-ladder-grid" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/reports-ladder-grid.png" alt="Baseline reports-ladder-grid" width="640">
     <figcaption>Fuzzy baseline — ladder grid (cache read-through)</figcaption>
   </figure>
   <ol class="steps">
@@ -435,7 +456,7 @@
     <dt>Route</dt><dd><code>./index.php?Route=Event/index/80000</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/event-index-rsvp.png" alt="Baseline event-index-rsvp lib bypass" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/event-index-rsvp.png" alt="Baseline event-index-rsvp lib bypass" width="640">
     <figcaption>Fuzzy baseline — event index (residual lib calls removed)</figcaption>
   </figure>
   <ol class="steps">
@@ -456,7 +477,7 @@
     <dt>Route</dt><dd><code>./index.php?Route=</code></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/home-authenticated.png" alt="Baseline home final regression" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/home-authenticated.png" alt="Baseline home final regression" width="640">
     <figcaption>Fuzzy baseline — final home smoke after zero-$DB audit</figcaption>
   </figure>
   <ol class="steps">
@@ -479,7 +500,7 @@
     <dt>Validation</dt><dd><a href="v-19-residual-lib-validation.md">v-19 §2.5 R-19a</a></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/player-profile.png" alt="Baseline player-profile R-19a" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/player-profile.png" alt="Baseline player-profile R-19a" width="640">
     <figcaption>Fuzzy baseline — player profile (milestone CRUD + read helpers off $Lib)</figcaption>
   </figure>
   <ol class="steps">
@@ -503,7 +524,7 @@
     <dt>Validation</dt><dd><a href="v-19-residual-lib-validation.md">v-19 §2.5 R-19b</a></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/admin-dashboard.png" alt="Baseline admin-dashboard R-19b" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/admin-dashboard.png" alt="Baseline admin-dashboard R-19b" width="640">
     <figcaption>Fuzzy baseline — admin dashboard (weather + SoA paths off $Lib)</figcaption>
   </figure>
   <ol class="steps">
@@ -527,7 +548,7 @@
     <dt>Validation</dt><dd><a href="v-19-residual-lib-validation.md">v-19 §2.5 R-19c</a></dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/park-auth-sandbox.png" alt="Baseline park-auth-sandbox R-19c" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/park-auth-sandbox.png" alt="Baseline park-auth-sandbox R-19c" width="640">
     <figcaption>Fuzzy baseline — park auth (scoped search + audit off $Lib)</figcaption>
   </figure>
   <ol class="steps">
@@ -536,6 +557,7 @@
     <li>Park admin → grant role via AJAX — audit log entry present.</li>
   </ol>
   <div class="verify"><strong>Verify:</strong> Prior R-19a/b files still clean; R-19c three files $Lib-free; fuzzy 2/2 pass.</div>
+  <div class="issue-note"><strong>Known issue:</strong> the <code>park-auth-sandbox</code> fuzzy <em>test-profile</em> visual FAILs on a baseline dimension mismatch (see <a href="#known-issue-park-auth-sandbox">known issue</a> at top). The <code>[mirror]</code> profile and Playwright checks pass; judge this smoke on live render only.</div>
   <p class="pass">☐ Pass &nbsp; ☐ Fail &nbsp; Notes: _______________</p>
 </section>
 
@@ -550,7 +572,7 @@
     <dt>Static</dt><dd><code>rg 'Ork3::\$Lib' orkui/</code> → <strong>zero</strong> (all 12 files)</dd>
   </dl>
   <figure class="baseline">
-    <img src="../../../tools/fuzzy-validator/baselines/test/admin-state-of-amtgard.png" alt="Baseline admin-state-of-amtgard R-19d" width="640">
+    <img src="../../../../tools/fuzzy-validator/baselines/test/admin-state-of-amtgard.png" alt="Baseline admin-state-of-amtgard R-19d" width="640">
     <figcaption>Fuzzy baseline — State of Amtgard admin (SoA bootstrap off $Lib)</figcaption>
   </figure>
   <ol class="steps">
