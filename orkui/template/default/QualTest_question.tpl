@@ -42,6 +42,16 @@
                      text-decoration: underline; padding: 0; margin-top: 4px; }
 .qt-field-hint { font-size: 0.75rem; color: var(--rp-text-muted); margin-top: 4px; }
 .qt-form-actions { display: flex; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--rp-border); }
+/* Editing a question that is in the LIVE set changes the running test immediately. */
+.qt-live-edit-warning { display:flex; align-items:flex-start; gap:10px; margin:0 0 18px; padding:12px 14px;
+	background:#fffbeb; border:1px solid #fcd34d; border-left:4px solid #f59e0b; border-radius:6px;
+	font-size:0.85rem; color:#78350f; line-height:1.55; }
+.qt-live-edit-warning i { color:#f59e0b; margin-top:2px; flex-shrink:0; }
+.qt-draft-target-note { display:flex; align-items:flex-start; gap:10px; margin:0 0 18px; padding:10px 14px;
+	background:#faf5ff; border:1px solid #e9d8fd; border-radius:6px; font-size:0.85rem; color:#553c9a; line-height:1.5; }
+.qt-draft-target-note i { margin-top:2px; flex-shrink:0; }
+html[data-theme="dark"] .qt-live-edit-warning { background:#3b2f14; border-color:#a16207; color:#fde68a; }
+html[data-theme="dark"] .qt-draft-target-note { background:#322659; border-color:#553c9a; color:#e9d8fd; }
 .qt-submit-btn { padding: 8px 22px; background: #2b6cb0; color: #fff; border: none; border-radius: 4px;
                  font-size: 0.9rem; font-weight: 600; cursor: pointer; }
 .qt-submit-btn:hover { background: #2c5282; }
@@ -164,9 +174,32 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 
 				<div class="qt-error-banner" id="qt-error-banner"></div>
 
+				<?php // THE load-bearing safety affordance. A question can be a member of both the
+				      // live set and the draft, so an in-place edit changes BOTH — which is exactly
+				      // right for correcting a bogus question, but dangerous if the admin believes
+				      // they're safely working on the next version. ?>
+				<?php if ($isEdit && !empty($EditingLiveQuestion)): ?>
+				<div class="qt-live-edit-warning">
+					<i class="fas fa-exclamation-triangle"></i>
+					<span>
+						<strong>This question is live.</strong> Editing it changes the <em>current</em> test immediately
+						&mdash; players will see the new wording on their very next attempt (and in any draft it belongs to).
+						That's what you want for a <strong>correction</strong> (a badly-worded or wrong question).
+						If instead you're reworking it for a <strong>future version</strong>, add a new question to the draft
+						and remove this one from the draft &mdash; that keeps the current test asking the old wording until you publish.
+					</span>
+				</div>
+				<?php elseif (!$isEdit && !empty($TargetIsDraft)): ?>
+				<div class="qt-draft-target-note">
+					<i class="fas fa-pen"></i>
+					<span>This question will be added to the draft version <strong><?= htmlspecialchars($TargetSetName) ?></strong>. It will not appear in the live test until you publish.</span>
+				</div>
+				<?php endif; ?>
+
 				<form id="qt-question-form">
 					<input type="hidden" name="KingdomId"  value="<?= $KingdomId ?>">
 					<input type="hidden" name="TestType"   value="<?= $TestType ?>">
+					<input type="hidden" name="SetId"      value="<?= (int)($TargetSetId ?? 0) ?>">
 					<input type="hidden" name="QuestionId" value="<?= $isEdit ? $q['QualQuestionId'] : 0 ?>">
 
 					<div class="qt-field">

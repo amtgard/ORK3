@@ -2874,7 +2874,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 			<button class="kn-modal-close-btn" id="kn-confirm-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="kn-modal-body">
-			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:var(--ork-text,#2d3748);line-height:1.6"></p>
+			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:var(--ork-text,#2d3748);line-height:1.6;white-space:pre-line"></p>
 		</div>
 		<div class="kn-modal-footer" style="justify-content:flex-end;gap:10px">
 			<button class="kn-btn-ghost" id="kn-confirm-cancel-btn">Cancel</button>

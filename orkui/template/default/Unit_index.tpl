@@ -489,13 +489,13 @@ html[data-theme="dark"] .un-btn-danger { color: #fc8181 !important; border-color
 
 <?php if ($_is_retired): ?>
 		<div class="pn-card un-retired-card">
-			<h4 style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fas fa-box-archive"></i> Retired</span></h4>
+			<h4 style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fas fa-archive"></i> Retired</span></h4>
 			<p class="un-card-text">This <?=htmlspecialchars($_type_l)?> has been retired and is hidden from listings and search.</p>
 <?php if ($_can_officer): ?>
 			<form method="post" action="<?=htmlspecialchars($_base_url)?>">
 				<input type="hidden" name="Action" value="restore_unit">
 				<button type="submit" class="pn-btn pn-btn-primary" style="width:100%;">
-					<i class="fas fa-rotate-left"></i> Reactivate This <?=htmlspecialchars($_type)?>
+					<i class="fas fa-undo"></i> Reactivate This <?=htmlspecialchars($_type)?>
 				</button>
 			</form>
 <?php else: ?>
@@ -583,7 +583,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 <?php if ($_show_claim): ?>
 		<div class="pn-card un-claim-card">
 <?php if ($_can_claim): ?>
-			<h4 style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fas fa-hand-sparkles"></i> Claim This <?=htmlspecialchars($_type)?></span></h4>
+			<h4 style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fas fa-hand-paper"></i> Claim This <?=htmlspecialchars($_type)?></span></h4>
 			<p class="un-card-text">This <?=htmlspecialchars($_type_l)?> has no manager. As a leader of <?=htmlspecialchars($_name)?>, you can take over managing it.</p>
 			<form method="post" action="<?=htmlspecialchars($_base_url)?>">
 				<input type="hidden" name="Action" value="claim_unit">
@@ -612,10 +612,10 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 <!-- ── Retire Card ──────────────────────────────────────── -->
 <?php if ($_show_retire): ?>
 		<div class="pn-card un-retire-card">
-			<h4 style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fas fa-box-archive"></i> Retire <?=htmlspecialchars($_type)?></span></h4>
+			<h4 style="display:flex;align-items:center;justify-content:space-between;"><span><i class="fas fa-archive"></i> Retire <?=htmlspecialchars($_type)?></span></h4>
 			<p class="un-card-text">If <?=htmlspecialchars($_name)?> is no longer active or has disbanded, you can retire it here.</p>
 			<button type="button" class="pn-btn pn-btn-ghost" style="width:100%;color:#c05621;border-color:#c05621;" onclick="unOpenModal('un-modal-retire')">
-				<i class="fas fa-box-archive"></i> Retire This Unit
+				<i class="fas fa-archive"></i> Retire This Unit
 			</button>
 		</div>
 <?php endif; ?>
@@ -1024,7 +1024,7 @@ if ($_can_edit && (count($_auths) > 0 || true)):
 <div class="pn-overlay" id="un-modal-retire">
 	<div class="pn-modal-box" style="max-width:460px">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-box-archive" style="margin-right:8px;color:#c05621"></i>Retire <?=htmlspecialchars($_name)?></h3>
+			<h3 class="pn-modal-title"><i class="fas fa-archive" style="margin-right:8px;color:#c05621"></i>Retire <?=htmlspecialchars($_name)?></h3>
 			<button class="pn-modal-close-btn" onclick="unCloseModal('un-modal-retire')">&times;</button>
 		</div>
 <?php if ($_can_transfer): ?>
@@ -1050,7 +1050,7 @@ foreach ($_transfer_targets as $_tt):
 					<div class="un-field-hint">The selected member becomes a manager and you step down as owner. The <?=htmlspecialchars($_type_l)?> stays active.</div>
 				</div>
 				<button type="submit" class="pn-btn pn-btn-primary" style="width:100%;">
-					<i class="fas fa-people-arrows"></i> Transfer Ownership
+					<i class="fas fa-exchange-alt"></i> Transfer Ownership
 				</button>
 			</form>
 			<div class="un-mg-or-divider">or retire the <?=htmlspecialchars($_type_l)?></div>
@@ -1060,7 +1060,7 @@ foreach ($_transfer_targets as $_tt):
 			<form method="post" action="<?=htmlspecialchars($_base_url)?>">
 				<input type="hidden" name="Action" value="retire_unit">
 				<button type="submit" class="pn-btn pn-btn-ghost" style="width:100%;color:#c05621;border-color:#c05621;">
-					<i class="fas fa-box-archive"></i> Retire This <?=htmlspecialchars($_type)?>
+					<i class="fas fa-archive"></i> Retire This <?=htmlspecialchars($_type)?>
 				</button>
 			</form>
 		</div>
@@ -1074,7 +1074,7 @@ foreach ($_transfer_targets as $_tt):
 				<div class="pn-modal-footer" style="padding:0;border:0;">
 					<button type="button" class="pn-btn pn-btn-secondary" onclick="unCloseModal('un-modal-retire')">Cancel</button>
 					<button type="submit" class="pn-btn pn-btn-primary" style="background:#c05621;border-color:#c05621;">
-						<i class="fas fa-box-archive"></i> Retire This <?=htmlspecialchars($_type)?>
+						<i class="fas fa-archive"></i> Retire This <?=htmlspecialchars($_type)?>
 					</button>
 				</div>
 			</form>

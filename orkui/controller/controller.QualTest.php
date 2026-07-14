@@ -38,6 +38,12 @@ class Controller_QualTest extends Controller
         $this->data['CorporaCount']  = Ork3::$Lib->qualtest->countActiveQuestions($kingdom_id, 'corpora');
         $this->data['Managers']      = Ork3::$Lib->qualtest->getManagers($kingdom_id);
         $this->data['Uid']           = $uid;
+
+        // The rules/corpora version belongs to the published VERSION, not to these settings —
+        // settings shows it read-only. Two editable copies of one fact drift, and the config
+        // copy used to be the one that won on a player's permanent attempt record.
+        $this->data['ReeveLiveSet']   = Ork3::$Lib->qualtest->getPublishedSet($kingdom_id, 'reeve');
+        $this->data['CorporaLiveSet'] = Ork3::$Lib->qualtest->getPublishedSet($kingdom_id, 'corpora');
     }
 
     // -----------------------------------------------------------------------
@@ -66,12 +72,32 @@ class Controller_QualTest extends Controller
         $questions = Ork3::$Lib->qualtest->getAllQuestions($kingdom_id, $test_type);
         $config    = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);
 
-        $this->data['KingdomId']   = $kingdom_id;
-        $this->data['KingdomName'] = $kingdom_name;
-        $this->data['TestType']    = $test_type;
-        $this->data['Questions']   = $questions;
-        $this->data['Config']      = $config;
-        $this->data['Uid']         = $uid;
+        // Question-set versioning. The live test draws only from the PUBLISHED set, so a
+        // draft can be built without touching it. New questions (add / bulk import /
+        // library) land in whichever set the admin is working in — the draft when one
+        // exists, otherwise the live set.
+        $published = Ork3::$Lib->qualtest->getPublishedSet($kingdom_id, $test_type);
+        $draft     = Ork3::$Lib->qualtest->getDraftSet($kingdom_id, $test_type);
+        $target    = $draft ? (int)$draft['SetId'] : ($published ? (int)$published['SetId'] : 0);
+
+        $this->data['KingdomId']    = $kingdom_id;
+        $this->data['KingdomName']  = $kingdom_name;
+        $this->data['TestType']     = $test_type;
+        $this->data['Questions']    = $questions;
+        $this->data['Config']       = $config;
+        $this->data['Uid']          = $uid;
+        $this->data['Sets']         = Ork3::$Lib->qualtest->getSets($kingdom_id, $test_type);
+        $this->data['PublishedSet'] = $published;
+        $this->data['DraftSet']     = $draft;
+        $this->data['TargetSetId']  = $target;
+
+        // A published set is NOT actually takeable unless the kingdom has switched the
+        // test on (QualTest*Enabled — kingdom config, gated by kingdom authority). A GMR
+        // can manage every part of the test but CANNOT flip that switch, so "Published"
+        // would otherwise be a lie: the UI has to say the test is still off.
+        $_key   = ($test_type === 'corpora') ? 'QualTestCorporaEnabled' : 'QualTestReeveEnabled';
+        $_knCfg = Common::get_configs($kingdom_id, CFG_KINGDOM);
+        $this->data['TestEnabled'] = isset($_knCfg[$_key]) ? (bool)(int)$_knCfg[$_key]['Value'] : false;
     }
 
     // -----------------------------------------------------------------------
@@ -120,7 +146,29 @@ class Controller_QualTest extends Controller
             $this->data['TestType']  = $test_type;
         }
 
-        $this->data['KingdomName'] = Ork3::$Lib->qualtest->getKingdomName((int)$this->data['KingdomId']);
+        // Set context. A NEW question joins the set being worked on (the draft when one
+        // exists). EDITING never changes membership — but if the question is in the LIVE
+        // set the edit changes the running test immediately, so the form warns about it.
+        $_kid  = (int)$this->data['KingdomId'];
+        $_type = $this->data['TestType'];
+        $_pub  = Ork3::$Lib->qualtest->getPublishedSet($_kid, $_type);
+        $_drf  = Ork3::$Lib->qualtest->getDraftSet($_kid, $_type);
+        $this->data['TargetSetId'] = $_drf ? (int)$_drf['SetId'] : ($_pub ? (int)$_pub['SetId'] : 0);
+        $this->data['TargetSetName'] = $_drf ? $_drf['Name'] : ($_pub ? $_pub['Name'] : '');
+        $this->data['TargetIsDraft'] = (bool)$_drf;
+
+        $this->data['EditingLiveQuestion'] = false;
+        if (($action ?? '') === 'edit' && $_pub && !empty($this->data['Question'])) {
+            $bank = Ork3::$Lib->qualtest->getAllQuestions($_kid, $_type);
+            foreach ($bank as $bq) {
+                if ((int)$bq['QualQuestionId'] === (int)$this->data['Question']['QualQuestionId']) {
+                    $this->data['EditingLiveQuestion'] = !empty($bq['InLive']);
+                    break;
+                }
+            }
+        }
+
+        $this->data['KingdomName'] = Ork3::$Lib->qualtest->getKingdomName($_kid);
         $this->data['Action'] = $action ?? 'create';
         $this->data['Uid']    = $uid;
     }
@@ -178,6 +226,14 @@ class Controller_QualTest extends Controller
 
         $test_label = ($test_type === 'corpora') ? 'Corpora Test' : "Reeve's Test";
 
+        // The "Based on ..." footer must name the version the player is ACTUALLY sitting, which
+        // is the published set — not the kingdom-config copy, which publishSet() only mirrors
+        // and which is stale for any kingdom that never saved its settings.
+        $_liveSet = Ork3::$Lib->qualtest->getPublishedSet($kingdom_id, $test_type);
+        if ($_liveSet && trim((string)$_liveSet['RulesVersion']) !== '') {
+            $config['RulesVersion'] = $_liveSet['RulesVersion'];
+        }
+
         $this->template = 'QualTest_take.tpl';
 
         $this->data['KingdomId']      = $kingdom_id;
@@ -189,6 +245,9 @@ class Controller_QualTest extends Controller
         $this->data['RetakeBlocked']  = $retake_blocked;
         $this->data['RetakeCount']    = $retake_count;
         $this->data['Uid']            = $uid;
+        // Durable attempt history for this player+test (pass and fail), newest
+        // first — powers the "Your Test History" review list on the take page.
+        $this->data['PlayerAttempts'] = Ork3::$Lib->qualtest->getPlayerAttempts($uid, $kingdom_id, $test_type);
     }
 
 }

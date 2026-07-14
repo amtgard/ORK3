@@ -602,6 +602,66 @@
 }
 .qt-back-link:hover { background: #ebf4ff; transform: translateY(-1px); }
 
+/* ── Answer review (post-test + history drill-in) ───────────── */
+.qt-review-toggle {
+	display: inline-flex; align-items: center; gap: 8px;
+	margin-top: 8px; padding: 9px 20px;
+	background: transparent; color: #4a5568;
+	border: 2px solid #cbd5e0; border-radius: 8px;
+	font-size: 0.9rem; font-weight: 600; cursor: pointer;
+	transition: background 0.15s;
+}
+.qt-review-toggle:hover { background: #f7fafc; }
+.qt-review-wrap { margin-top: 18px; text-align: left; }
+.qt-review-q {
+	border: 1px solid #e2e8f0; border-radius: 10px;
+	padding: 14px 16px; margin-bottom: 12px; background: #fff;
+}
+.qt-review-q-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.qt-review-q-badge { flex: 0 0 auto; font-size: 1.05rem; line-height: 1.3; }
+.qt-review-q-correct .qt-review-q-badge { color: #276749; }
+.qt-review-q-wrong   .qt-review-q-badge { color: #9b2c2c; }
+.qt-review-q-text { font-weight: 600; color: #2d3748; }
+.qt-review-opt {
+	display: flex; align-items: center; gap: 9px;
+	padding: 7px 10px; border-radius: 7px; font-size: 0.9rem;
+	color: #4a5568; margin: 3px 0;
+}
+.qt-review-opt-correct   { background: #f0fff4; color: #276749; }
+.qt-review-opt-wrongpick { background: #fff5f5; color: #9b2c2c; }
+.qt-review-opt-icon { flex: 0 0 1.1em; text-align: center; }
+.qt-review-opt-tag { margin-left: auto; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; opacity: .8; }
+
+/* ── Test history list (status view) ────────────────────────── */
+.qt-history-section { padding: 16px 22px 4px; }
+.qt-history-title { font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #718096; margin-bottom: 10px; }
+.qt-history-item {
+	display: flex; align-items: center; gap: 12px; width: 100%;
+	padding: 11px 14px; margin-bottom: 8px;
+	background: #fff; border: 1px solid #e2e8f0; border-radius: 9px;
+	cursor: pointer; text-align: left; font: inherit;
+	transition: border-color 0.15s, box-shadow 0.15s;
+}
+.qt-history-item:hover { border-color: #a0aec0; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.qt-history-outcome { flex: 0 0 auto; font-size: 1.1rem; }
+.qt-history-pass .qt-history-outcome { color: #276749; }
+.qt-history-fail .qt-history-outcome { color: #9b2c2c; }
+.qt-history-meta { display: flex; flex-direction: column; gap: 1px; }
+.qt-history-score { font-weight: 700; color: #2d3748; font-size: 0.95rem; }
+.qt-history-date { font-size: 0.8rem; color: #718096; }
+.qt-history-chevron { margin-left: auto; color: #a0aec0; }
+.qt-history-detail { padding: 4px 14px 2px; }
+
+html[data-theme="dark"] .qt-review-q,
+html[data-theme="dark"] .qt-history-item { background: #2d3748; border-color: #4a5568; }
+html[data-theme="dark"] .qt-review-q-text,
+html[data-theme="dark"] .qt-history-score { color: #e2e8f0; }
+html[data-theme="dark"] .qt-review-opt { color: #cbd5e0; }
+html[data-theme="dark"] .qt-review-opt-correct   { background: #22543d; color: #9ae6b4; }
+html[data-theme="dark"] .qt-review-opt-wrongpick { background: #63171b; color: #feb2b2; }
+html[data-theme="dark"] .qt-review-toggle { color: #cbd5e0; border-color: #4a5568; }
+html[data-theme="dark"] .qt-review-toggle:hover { background: #374151; }
+
 /* ── Mobile ─────────────────────────────────────────────────── */
 @media (max-width: 600px) {
 	.qt-overview-header { padding: 20px 18px 16px; gap: 12px; }
@@ -920,6 +980,30 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 					</div>
 
 				</div><!-- /.qt-overview -->
+
+				<?php if (!empty($PlayerAttempts)): ?>
+				<!-- Durable history: every past attempt (pass or fail), reviewable. -->
+				<div class="qt-history-section">
+					<div class="qt-history-title"><i class="fas fa-history"></i> Your Test History</div>
+					<?php foreach ($PlayerAttempts as $att): ?>
+						<?php $att_passed = !empty($att['Passed']); ?>
+						<button type="button"
+							class="qt-history-item <?= $att_passed ? 'qt-history-pass' : 'qt-history-fail' ?>"
+							data-attempt-id="<?= (int)$att['QualAttemptId'] ?>"
+							aria-expanded="false">
+							<span class="qt-history-outcome">
+								<i class="fas <?= $att_passed ? 'fa-check-circle' : 'fa-times-circle' ?>"></i>
+							</span>
+							<span class="qt-history-meta">
+								<span class="qt-history-score"><?= $att_passed ? 'Passed' : 'Did not pass' ?> &middot; <?= (int)$att['ScorePercent'] ?>%</span>
+								<span class="qt-history-date"><?= date('M j, Y \a\t g:i A', strtotime($att['TakenAt'])) ?><?= !empty($att['RulesVersion']) ? ' &middot; ' . htmlspecialchars($att['RulesVersion']) : '' ?></span>
+							</span>
+							<span class="qt-history-chevron"><i class="fas fa-chevron-down"></i></span>
+						</button>
+						<div class="qt-history-detail" id="qt-history-detail-<?= (int)$att['QualAttemptId'] ?>" style="display:none;"></div>
+					<?php endforeach; ?>
+				</div>
+				<?php endif; ?>
 			</div><!-- /#qt-status-view -->
 
 			<!-- ── B. Question View (shown during quiz) ────────────── -->
@@ -999,6 +1083,10 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 							<i class="fas fa-redo"></i> Retake Test
 						</button>
 					</div>
+					<button class="qt-review-toggle" id="qt-review-toggle" style="display:none;">
+						<i class="fas fa-tasks"></i> <span id="qt-review-toggle-text">Review Your Answers</span>
+					</button>
+					<div class="qt-review-wrap" id="qt-review-wrap" style="display:none;"></div>
 				</div>
 			</div><!-- /#qt-result-view -->
 
@@ -1614,6 +1702,9 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 		setTimeout(function() {
 			animateScore(j.score_percent, 1000);
 		}, 300);
+
+		// Offer the durable "Review Your Answers" drill-in for this fresh attempt.
+		setupPostTestReview(j.attempt_id);
 	}
 
 	// Retake button
@@ -1622,5 +1713,104 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			startQuiz();
 		});
 	}
+
+	// ── Answer review (shared by post-test + history) ───────────────────
+	function esc(s) {
+		return String(s == null ? '' : s)
+			.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+	}
+
+	// Build the review HTML from an attempt-detail object (see QualTest::getAttemptDetail).
+	function renderReview(attempt) {
+		if (!attempt || !attempt.Questions || !attempt.Questions.length) {
+			return '<div style="color:#718096;font-size:0.9rem;">No answer detail was recorded for this attempt.</div>';
+		}
+		var html = '';
+		attempt.Questions.forEach(function(q, i) {
+			var qClass = q.Correct ? 'qt-review-q-correct' : 'qt-review-q-wrong';
+			var badge  = q.Correct ? '<i class="fas fa-check-circle"></i>' : '<i class="fas fa-times-circle"></i>';
+			var archived = (q.Archived ? ' <span style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#92400e;background:#fef3c7;padding:1px 6px;border-radius:4px;margin-left:4px;white-space:nowrap;">Archived</span>' : '') + (q.NotInLiveSet ? ' <span style="font-size:0.64rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:#64748b;background:#f1f5f9;border:1px solid #e2e8f0;padding:0 6px;border-radius:4px;margin-left:4px;white-space:nowrap;">Not in current test</span>' : '');
+			html += '<div class="qt-review-q ' + qClass + '">';
+			html += '<div class="qt-review-q-head"><span class="qt-review-q-badge">' + badge + '</span>'
+				+ '<span class="qt-review-q-text">' + (i + 1) + '. ' + esc(q.QuestionText) + archived + '</span></div>';
+			(q.Options || []).forEach(function(o) {
+				var cls = '', icon = '<i class="far fa-circle qt-review-opt-icon"></i>', tag = '';
+				if (o.WasSelected && o.IsCorrect) {
+					cls = 'qt-review-opt-correct';
+					icon = '<i class="fas fa-check-circle qt-review-opt-icon"></i>';
+					tag = '<span class="qt-review-opt-tag">Your pick</span>';
+				} else if (o.WasSelected && !o.IsCorrect) {
+					cls = 'qt-review-opt-wrongpick';
+					icon = '<i class="fas fa-times-circle qt-review-opt-icon"></i>';
+					tag = '<span class="qt-review-opt-tag">Your pick</span>';
+				} else if (!o.WasSelected && o.IsCorrect) {
+					cls = 'qt-review-opt-correct';
+					icon = '<i class="fas fa-check qt-review-opt-icon"></i>';
+					tag = '<span class="qt-review-opt-tag">Correct</span>';
+				}
+				html += '<div class="qt-review-opt ' + cls + '">' + icon
+					+ '<span>' + esc(o.AnswerText) + '</span>' + tag + '</div>';
+			});
+			html += '</div>';
+		});
+		return html;
+	}
+
+	// Fetch one attempt's detail; cb(attemptObjOrNull).
+	function fetchAttempt(attemptId, cb) {
+		var fd = new FormData();
+		fd.append('AttemptId', attemptId);
+		fetch(BASE_URL + 'QualTestAjax/attemptdetail', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(j) { cb(j && j.status === 0 ? j.attempt : null); })
+			.catch(function() { cb(null); });
+	}
+
+	function setupPostTestReview(attemptId) {
+		var toggle = document.getElementById('qt-review-toggle');
+		var wrap   = document.getElementById('qt-review-wrap');
+		if (!toggle || !wrap) return;
+		if (!attemptId) { toggle.style.display = 'none'; wrap.style.display = 'none'; return; }
+		var loaded = false, open = false;
+		var label = document.getElementById('qt-review-toggle-text');
+		toggle.style.display = 'inline-flex';
+		wrap.style.display = 'none';
+		wrap.innerHTML = '';
+		toggle.onclick = function() {
+			open = !open;
+			wrap.style.display = open ? 'block' : 'none';
+			if (label) label.textContent = open ? 'Hide Your Answers' : 'Review Your Answers';
+			if (open && !loaded) {
+				wrap.innerHTML = '<div style="color:#718096;font-size:0.9rem;">Loading…</div>';
+				fetchAttempt(attemptId, function(att) {
+					loaded = true;
+					wrap.innerHTML = renderReview(att);
+				});
+			}
+		};
+	}
+
+	// History list on the status view: expand each row to its review inline.
+	Array.prototype.forEach.call(document.querySelectorAll('.qt-history-item'), function(btn) {
+		var id     = btn.getAttribute('data-attempt-id');
+		var detail = document.getElementById('qt-history-detail-' + id);
+		if (!detail) return;
+		var loaded = false;
+		btn.addEventListener('click', function() {
+			var open = detail.style.display !== 'none';
+			detail.style.display = open ? 'none' : 'block';
+			btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+			var chev = btn.querySelector('.qt-history-chevron i');
+			if (chev) chev.className = open ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+			if (!open && !loaded) {
+				detail.innerHTML = '<div style="color:#718096;font-size:0.9rem;padding:6px 0;">Loading…</div>';
+				fetchAttempt(id, function(att) {
+					loaded = true;
+					detail.innerHTML = renderReview(att);
+				});
+			}
+		});
+	});
 })();
 </script>

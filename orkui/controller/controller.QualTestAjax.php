@@ -26,6 +26,44 @@ class Controller_QualTestAjax extends Controller
         return (int)$this->session->user_id;
     }
 
+    // -----------------------------------------------------------------------
+    // help — render a docs/*.md guide to HTML for the in-app help modal.
+    // POST: Doc (whitelisted key)
+    //
+    // The Markdown file stays the single source of truth: it is the same document a developer
+    // reads in the repo, so the in-app help cannot quietly drift from it. Rendered server-side
+    // with the Parsedown already vendored in system/lib.
+    // -----------------------------------------------------------------------
+    public function help($p = null)
+    {
+        $this->requireLogin();
+
+        // WHITELIST, not a path. Never interpolate user input into a filename — a 'Doc' of
+        // "../../config.dev.php" would otherwise read out the database password.
+        $docs = [
+            'qualtests' => 'qualification-tests-guide.md',
+        ];
+        $key = (string)($_POST['Doc'] ?? '');
+        if (!isset($docs[$key])) {
+            $this->jsonOut(['status' => 1, 'error' => 'Unknown help topic.']);
+        }
+
+        $path = DIR_BASENAME . 'docs/' . $docs[$key];
+        if (!is_readable($path)) {
+            $this->jsonOut(['status' => 1, 'error' => 'Help document is missing.']);
+        }
+
+        require_once DIR_SYSTEM . 'lib/Parsedown.php';
+        $pd = new Parsedown();
+        $pd->setSafeMode(true);       // the file is ours, but never render raw HTML from a file
+        $pd->setBreaksEnabled(false); // the guide hard-wraps at 100 cols; honour paragraphs, not newlines
+
+        $this->jsonOut([
+            'status' => 0,
+            'html'   => $pd->text(file_get_contents($path)),
+        ]);
+    }
+
     private function requireAdmin($kingdom_id)
     {
         $uid = $this->requireLogin();
@@ -65,12 +103,19 @@ class Controller_QualTestAjax extends Controller
         $max_retakes     = max(0, (int)($_POST['MaxRetakes']     ?? 0));
         $share_questions = empty($_POST['ShareQuestions']) ? 0 : 1;
         $instructions    = $_POST['Instructions'] ?? null;
-        $rules_version   = trim($_POST['RulesVersion'] ?? '');
         $show_correct    = empty($_POST['ShowCorrectOnIncorrect']) ? 0 : 1;
 
-        if ($test_type === 'reeve' && $rules_version === '') {
-            $this->jsonOut(['status' => 1, 'error' => 'Rules of Play version is required for the Reeve\'s Test.']);
-        }
+        // The version label is a property of the VERSION, not of these settings — it is required
+        // before a version can be published, and publishSet() writes it down here afterwards.
+        // Settings no longer offers a field for it, so this must fall back to the STORED value:
+        // saveConfig() writes the column unconditionally, and defaulting to '' would wipe the
+        // label off the live test every time someone saved an unrelated setting.
+        // (The old "required for the Reeve's Test" check moved to publishSet(), where it now
+        // applies to both tests — you cannot publish any version without a label.)
+        $existing        = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);
+        $rules_version   = array_key_exists('RulesVersion', $_POST)
+                             ? trim($_POST['RulesVersion'])
+                             : (string)($existing['RulesVersion'] ?? '');
 
         Ork3::$Lib->qualtest->saveConfig($kingdom_id, $test_type, $question_count, $pass_percent, $valid_days, $valid_until, $max_retakes, $share_questions, $instructions, $rules_version, $show_correct);
 
@@ -146,7 +191,10 @@ class Controller_QualTestAjax extends Controller
             ];
         }
 
+        // New questions join the set the admin is working in (draft or live). Editing an
+        // existing question never changes membership.
         $saved_id = Ork3::$Lib->qualtest->saveQuestion($question_id, [
+            'SetId'        => (int)($_POST['SetId'] ?? 0),
             'KingdomId'    => $kingdom_id,
             'TestType'     => $test_type,
             'QuestionText' => $question_text,
@@ -298,8 +346,28 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Your kingdom is not opted in to the Global Question Library.']);
         }
 
-        $questions = Ork3::$Lib->qualtest->getLibraryQuestions($kingdom_id);
-        $this->jsonOut(['status' => 0, 'questions' => $questions]);
+        // Pass the stats through: an empty list means "nobody has shared anything" OR "you have
+        // already imported everything shared", and the UI must not report the first when it is
+        // the second. Only the model knows which, because it does the dedup.
+        $stats = null;
+        $questions = Ork3::$Lib->qualtest->getLibraryQuestions($kingdom_id, $stats);
+
+        // The version the browsing Kingdom is BUILDING (the draft, or the live set if there is no
+        // draft). Every Kingdom plays the same rulebook, but they rewrite their tests at different
+        // speeds — so the useful comparison is not "is this question valid" but "is this Kingdom's
+        // test as current as mine". Sending it lets the UI flag questions written against a
+        // different edition, without the model having to guess what "current" means.
+        $_draft   = Ork3::$Lib->qualtest->getDraftSet($kingdom_id, 'reeve');
+        $_pub     = Ork3::$Lib->qualtest->getPublishedSet($kingdom_id, 'reeve');
+        $_working = $_draft ?: $_pub;
+        $my_version = $_working ? trim((string)$_working['RulesVersion']) : '';
+
+        $this->jsonOut([
+            'status'     => 0,
+            'questions'  => $questions,
+            'stats'      => $stats,
+            'my_version' => $my_version,
+        ]);
     }
 
     // -----------------------------------------------------------------------
@@ -330,7 +398,9 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Source kingdom is not sharing questions.']);
         }
 
-        $new_id = Ork3::$Lib->qualtest->copyQuestionToKingdom($question_id, $kingdom_id, $uid);
+        $new_id = Ork3::$Lib->qualtest->copyQuestionToKingdom(
+            $question_id, $kingdom_id, $uid, (int)($_POST['SetId'] ?? 0)
+        );
         if (!$new_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Failed to copy question.']);
         }
@@ -388,15 +458,15 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid persona ID.']);
         }
 
-        // Verify the mundane exists
-        $name = Ork3::$Lib->qualtest->getMundaneName($mundane_id);
-        if ($name === null) {
+        // Verify the mundane exists; fetch persona + park for the response row.
+        $info = Ork3::$Lib->qualtest->getMundaneDisplay($mundane_id);
+        if ($info === null) {
             $this->jsonOut(['status' => 1, 'error' => 'Persona not found.']);
         }
 
         Ork3::$Lib->qualtest->addManager($kingdom_id, $mundane_id);
 
-        $this->jsonOut(['status' => 0, 'mundane_id' => $mundane_id, 'name' => $name]);
+        $this->jsonOut(['status' => 0, 'mundane_id' => $mundane_id, 'name' => $info['Name'], 'park' => $info['Park']]);
     }
 
     // -----------------------------------------------------------------------
@@ -576,6 +646,20 @@ class Controller_QualTestAjax extends Controller
         $passed  = $result['score_percent'] >= $config['PassPercent'];
         $expires = null;
 
+        // Durable, reviewable-for-all-time record of THIS attempt (pass or fail),
+        // with a full snapshot of the questions/options as seen. Distinct from the
+        // pass-only recordResult() upsert below.
+        $attempt_id = Ork3::$Lib->qualtest->recordAttempt(
+            $uid,
+            $kingdom_id,
+            $test_type,
+            $result['score_percent'],
+            (int)$config['PassPercent'],
+            $passed,
+            $submitted,
+            $config['RulesVersion'] ?? ''
+        );
+
         if ($passed) {
             $expires = Ork3::$Lib->qualtest->recordResult(
                 $uid,
@@ -583,7 +667,8 @@ class Controller_QualTestAjax extends Controller
                 $test_type,
                 $result['score_percent'],
                 $config['ValidDays'],
-                $config['ValidUntil'] ?? null
+                $config['ValidUntil'] ?? null,
+                $config['RulesVersion'] ?? ''
             );
             Ork3::$Lib->qualtest->syncMundaneQual($uid, $test_type, $expires);
         }
@@ -596,6 +681,7 @@ class Controller_QualTestAjax extends Controller
             'total'         => $result['total'],
             'pass_percent'  => $config['PassPercent'],
             'expires_at'    => $expires,
+            'attempt_id'    => $attempt_id,
         ]);
     }
     // -----------------------------------------------------------------------
@@ -676,10 +762,45 @@ class Controller_QualTestAjax extends Controller
 
         $test_type = $_POST['TestType'] ?? 'reeve';
         $config    = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);
-        $questions = Ork3::$Lib->qualtest->getQuestionsForPreview($kingdom_id, $test_type, $config['QuestionCount']);
+
+        // Preview the set the GMR is WORKING IN — the draft when one is open, otherwise the live
+        // set. It used to always draw from the published set, so while you were building the next
+        // version Preview showed you the test it was about to replace, and on a first version it
+        // failed outright ("not enough questions") even with a full draft sitting there. Everything
+        // else on the questions page targets the draft; Preview now agrees with it.
+        // The UI offers one button per version that exists (Preview Draft / Preview Live Test), so
+        // it says WHICH set it wants. Fall back to the working set when it doesn't.
+        $working = null;
+        $want    = (int)($_POST['SetId'] ?? 0);
+        if ($want > 0) {
+            $s = Ork3::$Lib->qualtest->getSetById($want);
+            // Must be THIS kingdom's set, for THIS test. Otherwise a hand-crafted SetId would
+            // preview another kingdom's bank — answers and all.
+            if ($s === null || (int)$s['KingdomId'] !== $kingdom_id || $s['TestType'] !== $test_type) {
+                $this->jsonOut(['status' => 1, 'error' => 'That version does not belong to this test.']);
+            }
+            $working = $s;
+        } else {
+            $draft   = Ork3::$Lib->qualtest->getDraftSet($kingdom_id, $test_type);
+            $pub     = Ork3::$Lib->qualtest->getPublishedSet($kingdom_id, $test_type);
+            $working = $draft ?: $pub;
+        }
+
+        if ($working === null) {
+            $this->jsonOut(['status' => 1, 'error' => 'There are no questions to preview yet. Add some first.']);
+        }
+
+        $need      = (int)$config['QuestionCount'];
+        $questions = Ork3::$Lib->qualtest->getQuestionsForPreview(
+            $kingdom_id, $test_type, $need, (int)$working['SetId']
+        );
 
         if ($questions === null) {
-            $this->jsonOut(['status' => 1, 'error' => 'Not enough active questions available for this test.']);
+            // Say which version is short and by how much, rather than a bare "not enough".
+            $have = (int)$working['MemberCount'];
+            $this->jsonOut(['status' => 1, 'error' =>
+                '"' . $working['Name'] . '" has ' . $have . ' active question' . ($have === 1 ? '' : 's')
+                . ' but the test draws ' . $need . '. Add ' . max(0, $need - $have) . ' more to preview it.']);
         }
 
         $this->jsonOut([
@@ -687,6 +808,10 @@ class Controller_QualTestAjax extends Controller
             'questions'      => $questions,
             'pass_percent'   => $config['PassPercent'],
             'question_count' => count($questions),
+            // Which version this preview came from — the modal must never leave that ambiguous.
+            'set_name'       => $working['Name'],
+            'set_status'     => $working['Status'],   // 'draft' | 'published'
+            'rules_version'  => (string)($working['RulesVersion'] ?? ''),
         ]);
     }
 
@@ -711,13 +836,221 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Maximum 200 questions per batch.']);
         }
 
-        $result = Ork3::$Lib->qualtest->saveQuestionBatch($kingdom_id, $test_type, $questions, $uid);
+        $result = Ork3::$Lib->qualtest->saveQuestionBatch(
+            $kingdom_id, $test_type, $questions, $uid, (int)($_POST['SetId'] ?? 0)
+        );
 
         $this->jsonOut([
             'status'   => 0,
             'imported' => $result['imported'],
             'errors'   => $result['errors'],
         ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Question Sets (versioning)
+    //
+    // A draft set lets an admin build the next version of the test WITHOUT touching the
+    // running one: the live test draws only from the published set. See
+    // docs/superpowers/plans/2026-07-13-qual-test-question-sets.md
+    // -----------------------------------------------------------------------
+
+    /** Load a set and authorize the caller against ITS kingdom. Exits on failure. */
+    private function requireSet($set_id)
+    {
+        $set = Ork3::$Lib->qualtest->getSetById((int)$set_id);
+        if ($set === null) {
+            $this->jsonOut(['status' => 1, 'error' => 'Version not found.']);
+        }
+        $this->requireAdmin((int)$set['KingdomId']);
+        return $set;
+    }
+
+    // POST: KingdomId, TestType, Name, RulesVersion
+    public function createdraft($p = null)
+    {
+        $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
+        $uid        = $this->requireAdmin($kingdom_id);
+        $test_type  = ($_POST['TestType'] ?? 'reeve') === 'corpora' ? 'corpora' : 'reeve';
+
+        // An empty name is fine — the model numbers it ("Version 3"). Naming it is the GMR's
+        // to do afterwards, and they can rename it any time before it goes live.
+        $name = trim($_POST['Name'] ?? '');
+        // A draft is the SUCCESSOR to the current version — it has no meaning without one.
+        // Allowed through, createDraft() would find nothing to clone and leave the kingdom with
+        // a draft and no published set: every new question would land in the draft and the live
+        // test would stay empty until publish. The button is hidden in this state; this stops a
+        // stale page from posting anyway.
+        $published = Ork3::$Lib->qualtest->getPublishedSet($kingdom_id, $test_type);
+        if ($published === null) {
+            $this->jsonOut(['status' => 1, 'error' => 'There is no current version yet. Add your first question — the current version is created automatically — then start the next one.']);
+        }
+        // Clones the live set's membership, so carried-over questions are NOT duplicated.
+        $id = Ork3::$Lib->qualtest->createDraft(
+            $kingdom_id, $test_type, $name, trim($_POST['RulesVersion'] ?? ''), $uid
+        );
+        if ($id <= 0) {
+            $this->jsonOut(['status' => 1, 'error' => 'A draft version already exists for this test.']);
+        }
+        $this->jsonOut(['status' => 0, 'set_id' => $id]);
+    }
+
+    // POST: SetId, Name, RulesVersion
+    public function updateset($p = null)
+    {
+        $set = $this->requireSet($_POST['SetId'] ?? 0);
+        if ($set['Status'] === 'retired') {
+            $this->jsonOut(['status' => 1, 'error' => 'Previous versions cannot be edited.']);
+        }
+        // Both fields fall back to the CURRENT value, never to ''. updateSet() writes both
+        // columns unconditionally, so defaulting RulesVersion to '' would have let a
+        // name-only save silently blank the version label — the one field publishing requires.
+        $name = array_key_exists('Name', $_POST)         ? trim($_POST['Name'])         : $set['Name'];
+        $ver  = array_key_exists('RulesVersion', $_POST) ? trim($_POST['RulesVersion']) : (string)$set['RulesVersion'];
+        if ($name === '') {
+            $this->jsonOut(['status' => 1, 'error' => 'A version needs a name.']);
+        }
+        Ork3::$Lib->qualtest->updateSet((int)$set['SetId'], $name, $ver);
+        $this->jsonOut(['status' => 0, 'name' => $name]);
+    }
+
+    // POST: SetId  — hard-refuses if the draft can't make a valid test.
+    public function publishset($p = null)
+    {
+        $set = $this->requireSet($_POST['SetId'] ?? 0);
+        $res = Ork3::$Lib->qualtest->publishSet((int)$set['SetId']);
+        if (!$res['ok']) {
+            $this->jsonOut(['status' => 1, 'error' => $res['error']]);
+        }
+        $this->jsonOut(['status' => 0]);
+    }
+
+    // POST: SetId — throws away the draft. Questions survive (they may be in other sets).
+    public function discarddraft($p = null)
+    {
+        $set = $this->requireSet($_POST['SetId'] ?? 0);
+        if ($set['Status'] !== 'draft') {
+            $this->jsonOut(['status' => 1, 'error' => 'Only a draft can be discarded.']);
+        }
+        Ork3::$Lib->qualtest->discardDraft((int)$set['SetId']);
+        $this->jsonOut(['status' => 0]);
+    }
+
+    // POST: SetId, QuestionId, In (1 = add, 0 = remove)
+    // Removing does NOT archive the question: it stays live in the published set.
+    // Read one version back, including a retired one — this is how a manager inspects what a
+    // previous version of the test actually contained. Read-only by construction: it returns
+    // data and touches nothing. requireSet() enforces canManage() on the set's own kingdom, so
+    // this cannot be used to read another kingdom's bank.
+    public function setquestions($p = null)
+    {
+        $set = $this->requireSet($_POST['SetId'] ?? 0);
+        $this->jsonOut([
+            'status'    => 0,
+            'set'       => [
+                'SetId'        => (int)$set['SetId'],
+                'Name'         => $set['Name'],
+                'RulesVersion' => $set['RulesVersion'],
+                'Status'       => $set['Status'],
+                'PublishedAt'  => $set['PublishedAt'],
+            ],
+            'questions' => Ork3::$Lib->qualtest->getSetQuestions((int)$set['SetId']),
+        ]);
+    }
+
+    public function setmembership($p = null)
+    {
+        $set = $this->requireSet($_POST['SetId'] ?? 0);
+        if ($set['Status'] === 'retired') {
+            $this->jsonOut(['status' => 1, 'error' => 'Previous versions cannot be edited.']);
+        }
+        $qid = (int)($_POST['QuestionId'] ?? 0);
+        $q   = Ork3::$Lib->qualtest->getQuestion($qid);
+        if (!$q || (int)$q['KingdomId'] !== (int)$set['KingdomId']) {
+            $this->jsonOut(['status' => 1, 'error' => 'Question not found.']);
+        }
+        if (!empty($_POST['In'])) {
+            Ork3::$Lib->qualtest->addQuestionToSet((int)$set['SetId'], $qid);
+        } else {
+            Ork3::$Lib->qualtest->removeQuestionFromSet((int)$set['SetId'], $qid);
+        }
+        $this->jsonOut(['status' => 0, 'in' => !empty($_POST['In'])]);
+    }
+
+    // -----------------------------------------------------------------------
+    // attempts
+    // POST: PlayerId (optional; defaults to self), KingdomId (optional), TestType (optional)
+    // Lists a player's attempt history. Viewing someone ELSE's history requires
+    // being a manager of the kingdom it is scoped to.
+    // -----------------------------------------------------------------------
+    public function attempts($p = null)
+    {
+        $uid       = $this->requireLogin();
+        $player_id = (int)($_POST['PlayerId'] ?? 0);
+        if ($player_id <= 0) {
+            $player_id = $uid;
+        }
+        $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
+        $test_type  = isset($_POST['TestType']) ? ($_POST['TestType'] === 'corpora' ? 'corpora' : 'reeve') : null;
+
+        // Viewing another player's history is a manager action and MUST be scoped
+        // to a kingdom the caller manages (no cross-kingdom fishing).
+        if ($player_id !== $uid) {
+            if ($kingdom_id <= 0 || !Ork3::$Lib->qualtest->canManage($uid, $kingdom_id)) {
+                $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
+            }
+        }
+
+        $this->jsonOut([
+            'status'   => 0,
+            'attempts' => Ork3::$Lib->qualtest->getPlayerAttempts($player_id, $kingdom_id, $test_type),
+        ]);
+    }
+
+    // -----------------------------------------------------------------------
+    // attemptdetail
+    // POST: AttemptId
+    // Returns the full snapshot for one attempt (the "Review Your Answers" data).
+    // Authorized for the attempt's owner OR a manager of its kingdom.
+    // -----------------------------------------------------------------------
+    public function attemptdetail($p = null)
+    {
+        $uid        = $this->requireLogin();
+        $attempt_id = (int)($_POST['AttemptId'] ?? 0);
+        if ($attempt_id <= 0) {
+            $this->jsonOut(['status' => 1, 'error' => 'Invalid attempt.']);
+        }
+
+        $detail = Ork3::$Lib->qualtest->getAttemptDetail($attempt_id);
+        if ($detail === null) {
+            $this->jsonOut(['status' => 1, 'error' => 'Attempt not found.']);
+        }
+
+        $isManager = Ork3::$Lib->qualtest->canManage($uid, (int)$detail['KingdomId']);
+        if ((int)$detail['PlayerId'] !== $uid && !$isManager) {
+            $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
+        }
+
+        // Respect the "Display correct answer on incorrect" setting for a player's
+        // OWN review: when it's OFF, don't reveal correct answers on questions they
+        // got wrong (otherwise a player could harvest the key by failing and then
+        // reviewing). Managers always see the full detail.
+        if (!$isManager) {
+            $cfg = Ork3::$Lib->qualtest->getConfig((int)$detail['KingdomId'], $detail['TestType']);
+            if (empty($cfg['ShowCorrectOnIncorrect'])) {
+                foreach ($detail['Questions'] as &$q) {
+                    if (empty($q['Correct'])) {
+                        foreach ($q['Options'] as &$o) {
+                            $o['IsCorrect'] = false; // hide the key; keep WasSelected + per-question Correct
+                        }
+                        unset($o);
+                    }
+                }
+                unset($q);
+            }
+        }
+
+        $this->jsonOut(['status' => 0, 'attempt' => $detail]);
     }
 
 }

@@ -14,6 +14,21 @@
 
 <style>
 /* ── Card shell ────────────────────────────────────────── */
+/* Unsaved-config warning (test is running on invisible defaults) */
+.qt-unsaved-warning {
+	display:flex; align-items:flex-start; gap:10px;
+	margin:0 0 14px; padding:11px 14px;
+	background:#fffbeb; border:1px solid #fcd34d; border-left:4px solid #f59e0b;
+	border-radius:6px; font-size:0.85rem; color:#78350f; line-height:1.5;
+}
+.qt-unsaved-warning i { color:#f59e0b; margin-top:2px; flex-shrink:0; }
+/* A value shown but NOT owned here — it belongs to the published version. Deliberately not an
+   input: it must not look editable, because editing it here is exactly the bug we removed. */
+.qt-derived-value { padding:8px 0; font-size:0.95rem; font-weight:600; color:#2d3748; }
+.qt-derived-empty { font-weight:400; font-style:italic; color:#a0aec0; }
+html[data-theme="dark"] .qt-derived-value { color:#e2e8f0; }
+html[data-theme="dark"] .qt-derived-empty { color:#718096; }
+html[data-theme="dark"] .qt-unsaved-warning { background:#3b2f14; border-color:#a16207; color:#fde68a; }
 .qt-config-card { background: #fff; border: 1px solid var(--rp-border); border-radius: 8px; padding: 20px 22px; margin-bottom: 20px; display: flex; flex-direction: column; }
 .qt-config-card h3 { margin: 0 0 6px; font-size: 1.05rem; color: #2d3748; }
 .qt-config-card h3 i { margin-right: 6px; color: #2b6cb0; }
@@ -252,6 +267,20 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			<div class="qt-config-card">
 				<h3><i class="fas fa-scroll"></i> <?= $label ?></h3>
 
+				<?php // getConfig() falls back to DEFAULTS when no row was ever saved, so
+				      // the fields below can look deliberate when nothing was chosen. ?>
+				<?php if (empty($cfg['Configured'])): ?>
+				<div class="qt-unsaved-warning">
+					<i class="fas fa-exclamation-triangle"></i>
+					<span>
+						<strong>Never saved.</strong> The values below are <em>defaults</em>, not settings anyone chose &mdash;
+						nothing is stored for this test. It still runs on them<?php if ($type === 'reeve'): ?>, and the kingdom
+						is <strong>not</strong> opted in to the Global Question Library<?php endif; ?>.
+						Press <strong>Save</strong> below to make these settings explicit.
+					</span>
+				</div>
+				<?php endif; ?>
+
 				<div class="qt-stat-row">
 					<div class="qt-mini-stat"><strong><?= $count ?></strong> active question<?= $count !== 1 ? 's' : '' ?></div>
 				</div>
@@ -326,18 +355,36 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 						</div>
 					</div>
 
+					<?php
+					  // The version label is READ-ONLY here. It belongs to the published version:
+					  // publishing requires it, and the attempt record stamps it. An editable copy
+					  // on this page was a second source of truth for one fact — and the copy that
+					  // WON on the player's permanent record, so retyping it here silently rewrote
+					  // what future attempts claimed to have been sat under. Show it, don't own it.
+					  $_liveSet = ($type === 'reeve') ? ($ReeveLiveSet ?? null) : ($CorporaLiveSet ?? null);
+					  $_liveVer = $_liveSet ? trim((string)$_liveSet['RulesVersion']) : '';
+					?>
 					<?php if ($type === 'reeve'): ?>
 					<!-- Section: Reeve only -->
 					<div class="qt-section">
 						<div class="qt-section-header">Reeve Only</div>
 						<div class="qt-form-row qt-stack">
-							<label>Rules of Play version <span class="qt-required">*</span></label>
+							<label>Rules of Play version</label>
 							<div class="qt-field-grow">
-								<input type="text" name="RulesVersion" required maxlength="100"
-									value="<?= htmlspecialchars($cfg['RulesVersion'] ?? '') ?>"
-									placeholder="e.g. 9.0"
-									class="qt-text-input">
-								<div class="qt-help-text">Shown as a footer on every test card: "Based on Amtgard Rules of Play Version <em>{value}</em>".</div>
+								<?php if ($_liveVer !== ''): ?>
+									<div class="qt-derived-value"><?= htmlspecialchars($_liveVer) ?></div>
+									<div class="qt-help-text">
+										From the live version &ldquo;<?= htmlspecialchars($_liveSet['Name']) ?>&rdquo;.
+										Shown as a footer on every test card: &ldquo;Based on Amtgard Rules of Play Version <em>{value}</em>&rdquo;.
+										Set it on the version itself &mdash; it is required before you can publish.
+									</div>
+								<?php else: ?>
+									<div class="qt-derived-value qt-derived-empty">Not set yet</div>
+									<div class="qt-help-text">
+										The version label lives on each version of the test, and is required before you can publish one.
+										Set it in <strong>Questions &rarr; Versions</strong>; it then appears as a footer on every test card.
+									</div>
+								<?php endif; ?>
 							</div>
 						</div>
 						<div class="qt-switch-row">
@@ -358,11 +405,20 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 						<div class="qt-form-row qt-stack">
 							<label>Based on</label>
 							<div class="qt-field-grow">
-								<input type="text" name="RulesVersion" maxlength="100"
-									value="<?= htmlspecialchars($cfg['RulesVersion'] ?? '') ?>"
-									placeholder="e.g. Corpora 5.1 2026"
-									class="qt-text-input">
-								<div class="qt-help-text">Shown as a footer on every test card: "Based on <em>{value}</em>". Enter the document name(s) and version, e.g. "Corpora 5.1 2026".</div>
+								<?php if ($_liveVer !== ''): ?>
+									<div class="qt-derived-value"><?= htmlspecialchars($_liveVer) ?></div>
+									<div class="qt-help-text">
+										From the live version &ldquo;<?= htmlspecialchars($_liveSet['Name']) ?>&rdquo;.
+										Shown as a footer on every test card: &ldquo;Based on <em>{value}</em>&rdquo;.
+										Set it on the version itself &mdash; it is required before you can publish.
+									</div>
+								<?php else: ?>
+									<div class="qt-derived-value qt-derived-empty">Not set yet</div>
+									<div class="qt-help-text">
+										The version label lives on each version of the test, and is required before you can publish one.
+										Set it in <strong>Questions &rarr; Versions</strong>; it then appears as a footer on every test card.
+									</div>
+								<?php endif; ?>
 							</div>
 						</div>
 					</div>
@@ -405,7 +461,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				<li class="qt-manager-row" data-id="<?= (int)$mgr['MundaneId'] ?>" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0f0f0;">
 					<span style="flex:1;font-size:0.88rem;">
 						<a href="<?= UIR ?>Player/index/<?= (int)$mgr['MundaneId'] ?>" target="_blank"><?= htmlspecialchars($mgr['Name']) ?></a>
-						<span style="color:var(--rp-text-muted);font-size:0.78rem;">&nbsp;#<?= (int)$mgr['MundaneId'] ?></span>
+						<span style="color:var(--rp-text-muted);font-size:0.78rem;">&nbsp;<?= !empty($mgr['Park']) ? htmlspecialchars($mgr['Park']) : '&mdash;' ?></span>
 					</span>
 					<button class="qt-rm-manager-btn" data-id="<?= (int)$mgr['MundaneId'] ?>" data-tip="Remove" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:1rem;padding:0 4px;">
 						<i class="fas fa-times-circle"></i>
@@ -516,6 +572,15 @@ function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); 
 					if (j.status === 0) {
 						var msg = form.querySelector('.qt-saved-msg');
 						if (msg) { msg.style.display = 'inline'; setTimeout(function() { msg.style.display = 'none'; }, 2500); }
+						// The "Never saved / these are defaults" banner is rendered from the
+						// server's Configured flag. Saving is exactly what makes that flag true,
+						// so a banner still shouting "nothing is stored" after a successful save
+						// is now simply wrong — and it only went away on refresh. Drop it here.
+						// Scoped to THIS test's card: the two tests are configured separately, so
+						// saving the Reeve's test must not clear the Corpora banner.
+						var card = form.closest('.qt-config-card');
+						var warn = card && card.querySelector('.qt-unsaved-warning');
+						if (warn) warn.remove();
 					} else {
 						qtAlert(j.error || 'Error saving settings.');
 					}
@@ -558,7 +623,7 @@ function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); 
 	var searchInput = document.getElementById('qt-manager-search');
 	var idInput     = document.getElementById('qt-manager-id-input');
 	var acDrop      = document.getElementById('qt-manager-ac-results');
-	var _acTimer;
+	var _acTimer, _acItems = [], _acIndex = -1;
 
 	function escHtml(s) {
 		return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -571,17 +636,32 @@ function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); 
 	}
 
 	// Autocomplete
+	function acClose() { acDrop.style.display = 'none'; _acItems = []; _acIndex = -1; }
+	function acHighlight(idx) {
+		_acIndex = idx;
+		_acItems.forEach(function(el, i) { el.style.background = (i === idx) ? '#ebf4ff' : ''; });
+		if (idx >= 0 && _acItems[idx] && _acItems[idx].scrollIntoView) {
+			_acItems[idx].scrollIntoView({ block: 'nearest' });
+		}
+	}
+	function acSelect(item) {
+		if (!item) return;
+		searchInput.value = item.dataset.name;
+		idInput.value     = item.dataset.id;
+		acClose();
+	}
+
 	searchInput.addEventListener('input', function() {
 		idInput.value = '';
 		var q = searchInput.value.trim();
-		if (q.length < 2) { acDrop.style.display = 'none'; return; }
+		if (q.length < 2) { acClose(); return; }
 		clearTimeout(_acTimer);
 		_acTimer = setTimeout(function() {
 			fetch(searchBase + '&q=' + encodeURIComponent(q) + '&kid=' + kingdomId)
 				.then(function(r) { return r.json(); })
 				.then(function(data) {
 					var items = data.players || [];
-					if (!items.length) { acDrop.style.display = 'none'; return; }
+					if (!items.length) { acClose(); return; }
 					acDrop.innerHTML = items.map(function(pl) {
 						return '<div class="qt-ac-item" data-id="' + pl.id + '" data-name="' + escHtml(pl.name) + '"'
 							+ ' style="padding:6px 10px;cursor:pointer;font-size:0.88rem;border-bottom:1px solid #f0f4f8;">'
@@ -590,24 +670,41 @@ function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); 
 							+ '</div>';
 					}).join('');
 					acDrop.style.display = 'block';
-					acDrop.querySelectorAll('.qt-ac-item').forEach(function(item) {
-						item.addEventListener('mousedown', function(e) {
-							e.preventDefault();
-							searchInput.value = item.dataset.name;
-							idInput.value     = item.dataset.id;
-							acDrop.style.display = 'none';
-						});
+					_acItems = Array.prototype.slice.call(acDrop.querySelectorAll('.qt-ac-item'));
+					_acIndex = -1;
+					_acItems.forEach(function(item, i) {
+						item.addEventListener('mousedown', function(e) { e.preventDefault(); acSelect(item); });
+						item.addEventListener('mouseenter', function() { acHighlight(i); });
 					});
 				}).catch(function(){});
 		}, 220);
 	});
 
+	// Keyboard: ↓/↑ move through matches, Enter chooses, Esc closes.
+	searchInput.addEventListener('keydown', function(e) {
+		var open = acDrop.style.display !== 'none' && _acItems.length;
+		if (e.key === 'ArrowDown') {
+			if (!open) return;
+			e.preventDefault();
+			acHighlight((_acIndex + 1) % _acItems.length);
+		} else if (e.key === 'ArrowUp') {
+			if (!open) return;
+			e.preventDefault();
+			acHighlight((_acIndex - 1 + _acItems.length) % _acItems.length);
+		} else if (e.key === 'Enter') {
+			if (open && _acIndex >= 0) { e.preventDefault(); acSelect(_acItems[_acIndex]); }
+			else if (open && _acItems.length === 1) { e.preventDefault(); acSelect(_acItems[0]); }
+		} else if (e.key === 'Escape') {
+			acClose();
+		}
+	});
+
 	document.addEventListener('click', function(e) {
-		if (!e.target.closest('.qt-manager-search-wrap')) acDrop.style.display = 'none';
+		if (!e.target.closest('.qt-manager-search-wrap')) acClose();
 	});
 
 	// Add button
-	function buildManagerRow(id, name) {
+	function buildManagerRow(id, name, park) {
 		var li = document.createElement('li');
 		li.className = 'qt-manager-row';
 		li.dataset.id = id;
@@ -615,7 +712,7 @@ function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); 
 		li.innerHTML =
 			'<span style="flex:1;font-size:0.88rem;">' +
 				'<a href="<?= UIR ?>Player/index/' + id + '" target="_blank">' + escHtml(name) + '</a>' +
-				'<span style="color:var(--rp-text-muted);font-size:0.78rem;">&nbsp;#' + id + '</span>' +
+				'<span style="color:var(--rp-text-muted);font-size:0.78rem;">&nbsp;' + (park ? escHtml(park) : '—') + '</span>' +
 			'</span>' +
 			'<button class="qt-rm-manager-btn" data-id="' + id + '" data-tip="Remove" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:1rem;padding:0 4px;">' +
 				'<i class="fas fa-times-circle"></i>' +
@@ -641,7 +738,7 @@ function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); 
 				if (noMsg) noMsg.remove();
 				var existing = document.querySelector('#qt-manager-list [data-id="' + j.mundane_id + '"]');
 				if (!existing) {
-					document.getElementById('qt-manager-list').appendChild(buildManagerRow(j.mundane_id, j.name));
+					document.getElementById('qt-manager-list').appendChild(buildManagerRow(j.mundane_id, j.name, j.park));
 					attachRemoveHandlers();
 				}
 			});
@@ -652,23 +749,34 @@ function qtAlert(msg) { qtConfirm({ title: 'Error', body: msg, okOnly: true }); 
 			btn.onclick = null;
 			btn.addEventListener('click', function() {
 				var mid = parseInt(btn.dataset.id, 10);
-				var fd = new FormData();
-				fd.append('KingdomId', kingdomId);
-				fd.append('MundaneId', mid);
-				fetch(ajaxBase + 'removemanager', { method: 'POST', body: fd })
-					.then(function(r) { return r.json(); })
-					.then(function(j) {
-						if (j.status !== 0) { showManagerError(j.error || 'Error removing manager.'); return; }
-						var row = document.querySelector('#qt-manager-list [data-id="' + mid + '"]');
-						if (row) row.remove();
-						if (!document.querySelector('#qt-manager-list .qt-manager-row')) {
-							var li = document.createElement('li');
-							li.id = 'qt-no-managers';
-							li.style.cssText = 'font-size:0.85rem;color:var(--rp-text-muted);';
-							li.textContent = 'No managers added yet.';
-							document.getElementById('qt-manager-list').appendChild(li);
-						}
-					});
+				var row0    = btn.closest('.qt-manager-row');
+				var link    = row0 ? row0.querySelector('a') : null;
+				var persona = (link && link.textContent.trim()) ? link.textContent.trim() : 'this player';
+				qtConfirm({
+					title: 'Remove Test Manager',
+					body: 'Remove ' + persona + ' as a test manager? They will lose the ability to view and manage these tests.',
+					confirmLabel: 'Remove',
+					danger: true,
+					onConfirm: function() {
+						var fd = new FormData();
+						fd.append('KingdomId', kingdomId);
+						fd.append('MundaneId', mid);
+						fetch(ajaxBase + 'removemanager', { method: 'POST', body: fd })
+							.then(function(r) { return r.json(); })
+							.then(function(j) {
+								if (j.status !== 0) { showManagerError(j.error || 'Error removing manager.'); return; }
+								var row = document.querySelector('#qt-manager-list [data-id="' + mid + '"]');
+								if (row) row.remove();
+								if (!document.querySelector('#qt-manager-list .qt-manager-row')) {
+									var li = document.createElement('li');
+									li.id = 'qt-no-managers';
+									li.style.cssText = 'font-size:0.85rem;color:var(--rp-text-muted);';
+									li.textContent = 'No managers added yet.';
+									document.getElementById('qt-manager-list').appendChild(li);
+								}
+							});
+					}
+				});
 			});
 		});
 	}

@@ -4926,7 +4926,7 @@ $(document).ready(function() {
         if (!overlay) return;
         if (_knPending.size > 0) {
             var names = Array.from(_knPending).map(function(id) { return _knPanelNames[id] || id; });
-            knConfirm('You have unsaved changes in: ' + names.join(', ') + '. Close anyway?', function() {
+            knConfirm('You have unsaved changes in: ' + names.join(', ') + '.\nClose anyway?', function() {
                 _knPending.clear();
                 knCloseAdminModal();
             }, 'Unsaved Changes');
@@ -5145,8 +5145,19 @@ $(document).ready(function() {
                     var btnNo = document.createElement('button');
                     btnNo.type = 'button'; btnNo.textContent = 'No';
                     btnNo.className = 'kn-toggle-btn kn-toggle-btn-no' + (inp.value === '0' ? ' kn-toggle-active' : '');
-                    btnYes.addEventListener('click', function() { inp.value = '1'; btnYes.classList.add('kn-toggle-active'); btnNo.classList.remove('kn-toggle-active'); });
-                    btnNo.addEventListener('click', function() { inp.value = '0'; btnNo.classList.add('kn-toggle-active'); btnYes.classList.remove('kn-toggle-active'); });
+                    // The value lives on a hidden input, and assigning `.value` in JS fires
+                    // no event — so the panel's dirty-tracker (knWirePendingPanel, which
+                    // listens for bubbling input/change) never saw these toggles and the
+                    // page could be closed on unsaved changes. Emit a real event.
+                    var setToggle = function(on) {
+                        if (inp.value === (on ? '1' : '0')) return;   // no-op re-click isn't a change
+                        inp.value = on ? '1' : '0';
+                        btnYes.classList.toggle('kn-toggle-active', on);
+                        btnNo.classList.toggle('kn-toggle-active', !on);
+                        inp.dispatchEvent(new Event('change', { bubbles: true }));
+                    };
+                    btnYes.addEventListener('click', function() { setToggle(true); });
+                    btnNo.addEventListener('click', function() { setToggle(false); });
                     wrap.appendChild(btnYes);
                     wrap.appendChild(btnNo);
                     inputs.appendChild(wrap);
@@ -5209,7 +5220,7 @@ $(document).ready(function() {
             } else {
                 saveRecs(function(ok, err) {
                     btn.disabled = false;
-                    if (ok) feedback('kn-admin-config-feedback', 'Configuration saved!', true);
+                    if (ok) { knClearPending('kn-admin-body-config'); feedback('kn-admin-config-feedback', 'Configuration saved!', true); }
                     else feedback('kn-admin-config-feedback', err, false);
                 });
             }
@@ -6122,6 +6133,13 @@ $(document).ready(function() {
         wireToggle('kn-admin-hdr-signinlink', 'kn-admin-body-signinlink', 'kn-admin-chev-signinlink');
         wireToggle('kn-admin-hdr-ops',        'kn-admin-body-ops',        'kn-admin-chev-ops');
 
+        // Arm the unsaved-changes tracking. These listeners sit on the panel itself and
+        // catch edits by bubbling, so they survive the buildConfig/buildTitles/... rebuilds
+        // that replace the panel's children. Only panels listed in _knPanelNames are wired;
+        // Sign-in Link and Operations are excluded on purpose (their inputs are searches and
+        // one-shot actions, not pending edits, and would raise false "unsaved" prompts).
+        Object.keys(_knPanelNames).forEach(knWirePendingPanel);
+
         wireDetails();
         wirePrinz();
         wireStatus();
@@ -6161,6 +6179,61 @@ $(document).ready(function() {
 // ── Shared: Styled confirmation modal (used by Kingdom + Park admin dialogs) ──
 (function() {
     var _confirmCallback = null;
+
+    // ── In-app help ("?" beside a section heading) ────────────────────────────
+    // The body is a docs/*.md guide rendered to HTML by the server, so the help a GMR reads in
+    // the app is literally the same document that lives in the repo. Fetched on demand and
+    // cached per topic — the guide is long and does not change between clicks.
+    var _knHelpCache = {};
+    function knHelpClose() {
+        var o = document.getElementById('kn-help-overlay');
+        if (o) o.classList.remove('kn-open');
+        document.body.style.overflow = '';
+    }
+    function knHelpOpen(doc, title) {
+        var overlay = document.getElementById('kn-help-overlay');
+        var bodyEl  = document.getElementById('kn-help-body');
+        if (!overlay || !bodyEl) return;
+        var titleEl = document.getElementById('kn-help-title');
+        if (titleEl) titleEl.innerHTML = '<i class="fas fa-question-circle" style="margin-right:8px;color:#2b6cb0"></i>' + (title || 'Help');
+        overlay.classList.add('kn-open');
+        document.body.style.overflow = 'hidden';
+        bodyEl.scrollTop = 0;
+
+        if (_knHelpCache[doc]) { bodyEl.innerHTML = _knHelpCache[doc]; return; }
+        bodyEl.innerHTML = '<div style="text-align:center;padding:32px;color:#718096"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>';
+        // KnConfig.uir is the UI root; BASE_URL is Kingdom-scoped (KingdomAjax/kingdom/<id>/)
+        // and would not reach this controller.
+        $.post(KnConfig.uir + 'QualTestAjax/help', { Doc: doc }, function(r) {
+            if (r && r.status === 0) {
+                _knHelpCache[doc] = r.html;
+                bodyEl.innerHTML  = r.html;
+                bodyEl.scrollTop  = 0;
+            } else {
+                bodyEl.innerHTML = '<div style="padding:24px;color:#c53030">'
+                    + ((r && r.error) ? r.error : 'Could not load help.') + '</div>';
+            }
+        }, 'json').fail(function() {
+            bodyEl.innerHTML = '<div style="padding:24px;color:#c53030">Could not load help.</div>';
+        });
+    }
+    $(document).ready(function() {
+        document.querySelectorAll('.kn-help-btn').forEach(function(b) {
+            b.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                knHelpOpen(b.dataset.doc, b.getAttribute('title'));
+            });
+        });
+        var hc = document.getElementById('kn-help-close-btn');
+        if (hc) hc.addEventListener('click', knHelpClose);
+        var ho = document.getElementById('kn-help-overlay');
+        if (ho) ho.addEventListener('click', function(e) { if (e.target === ho) knHelpClose(); });
+        document.addEventListener('keydown', function(e) {
+            var o = document.getElementById('kn-help-overlay');
+            if (e.key === 'Escape' && o && o.classList.contains('kn-open')) knHelpClose();
+        });
+    });
 
     window.knConfirm = function(message, onConfirm, title) {
         var overlay = document.getElementById('kn-confirm-overlay');

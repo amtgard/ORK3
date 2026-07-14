@@ -48,6 +48,88 @@
 [data-tip]:hover::after { opacity: 1; }
 /* Right-anchor tips in the Actions column so they don't clip off-screen */
 .qt-actions-cell [data-tip]::after { left: auto; right: 0; transform: none; }
+/* ── Versions (question sets) ───────────────────────────── */
+.qt-versions { margin:10px 0 0; padding:12px 14px; background:#f7fafc; border:1px solid #e2e8f0; border-radius:8px; }
+.qt-ver-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.qt-ver-row + .qt-ver-row { margin-top:10px; padding-top:10px; border-top:1px dashed #e2e8f0; }
+.qt-ver-chip { display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:999px; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+.qt-ver-live  { background:#c6f6d5; color:#22543d; }
+.qt-ver-off   { background:#e2e8f0; color:#4a5568; }
+.qt-ver-warn  { background:#fef3c7; color:#78350f; }
+.qt-ver-draft { background:#e9d8fd; color:#44337a; }
+/* Published, but holding fewer questions than the test draws — so it cannot be taken at all. */
+.qt-ver-short { display:inline-flex; align-items:center; gap:5px; font-size:0.8rem; font-weight:600; color:#b45309; }
+/* Publish stays disabled until the draft can actually pass publishSet()'s guards. */
+.qt-ver-btn:disabled { opacity:.5; cursor:not-allowed; }
+/* Rename a version in place. Subtle until hovered — it is metadata, not a primary action. */
+.qt-ver-rename { background:none; border:none; cursor:pointer; color:#a0aec0; font-size:0.72rem; padding:2px 4px; }
+.qt-ver-rename:hover { color:#2b6cb0; }
+/* Previous versions — retired sets, readable but not editable. Collapsed: the list only grows. */
+.qt-ver-past-wrap { margin-top:10px; padding-top:10px; border-top:1px dashed #e2e8f0; }
+.qt-ver-pasthdr { display:flex; align-items:center; gap:6px; font-size:0.72rem; font-weight:700;
+	text-transform:uppercase; letter-spacing:.04em; color:#718096; cursor:pointer; list-style:none; user-select:none; }
+.qt-ver-pasthdr::-webkit-details-marker { display:none; }   /* we draw our own caret */
+.qt-ver-pasthdr:hover { color:#2b6cb0; }
+.qt-ver-caret { transition:transform .15s ease; font-size:0.65rem; }
+.qt-ver-past-wrap[open] .qt-ver-caret { transform:rotate(90deg); }
+/* Cap the height once there are many versions — scroll rather than shove the page down. */
+.qt-ver-pastlist { display:flex; flex-direction:column; gap:6px; margin-top:10px; max-height:220px; overflow-y:auto; }
+.qt-ver-past { display:flex; align-items:center; gap:10px; padding:6px 10px; background:#fff; text-align:left;
+	border:1px solid #e2e8f0; border-radius:6px; cursor:pointer; font-size:0.82rem; color:#2d3748; }
+.qt-ver-past:hover { border-color:#90cdf4; background:#ebf8ff; }
+.qt-ver-past .qt-ver-view { margin-left:auto; }   /* View pinned right, so the rows line up */
+.qt-ver-view { display:inline-flex; align-items:center; gap:4px; font-size:0.75rem; font-weight:600; color:#2b6cb0; }
+.qt-ver-nolabel { font-style:italic; }
+/* A retired version's question, shown read-only in the modal. */
+.qt-vq { padding:10px 12px; border:1px solid #e2e8f0; border-radius:6px; margin-bottom:8px; background:#fff; }
+.qt-vq-text { font-weight:600; color:#2d3748; margin-bottom:6px; }
+.qt-vq-ans { font-size:0.85rem; color:#4a5568; padding:2px 0 2px 18px; position:relative; }
+.qt-vq-ans.qt-vq-correct { color:#22543d; font-weight:600; }
+.qt-vq-ans.qt-vq-correct::before { content:"\f00c"; font-family:"Font Awesome 5 Free"; font-weight:900;
+	position:absolute; left:0; color:#38a169; }
+.qt-vq-archived { display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px; font-size:0.68rem;
+	font-weight:700; text-transform:uppercase; background:#fed7d7; color:#742a2a; }
+html[data-theme="dark"] .qt-ver-warn  { background:#3b2f14; color:#fde68a; }
+html[data-theme="dark"] .qt-ver-short { color:#fbbf24; }
+/* The kingdom hasn't switched the test on — a published version still reaches nobody. */
+.qt-notlive-warning { display:flex; align-items:flex-start; gap:10px; margin:0 0 12px; padding:11px 14px;
+	background:#fffbeb; border:1px solid #fcd34d; border-left:4px solid #f59e0b; border-radius:6px;
+	font-size:0.85rem; color:#78350f; line-height:1.55; }
+.qt-notlive-warning i { color:#f59e0b; margin-top:3px; flex-shrink:0; }
+html[data-theme="dark"] .qt-notlive-warning { background:#3b2f14; border-color:#a16207; color:#fde68a; }
+.qt-ver-meta  { font-size:0.8rem; color:#718096; }
+.qt-ver-input { padding:5px 9px; border:1px solid #cbd5e0; border-radius:5px; font-size:0.82rem; min-width:230px; }
+.qt-ver-btn { margin-left:auto; padding:5px 13px; border:1px solid #cbd5e0; background:#fff; border-radius:6px; font-size:0.82rem; font-weight:600; color:#2d3748; cursor:pointer; }
+.qt-ver-btn:hover { background:#edf2f7; }
+.qt-ver-publish { background:#2b6cb0; border-color:#2b6cb0; color:#fff; margin-left:auto; }
+.qt-ver-publish:hover { background:#2c5282; }
+.qt-ver-discard { margin-left:0; color:#9b2c2c; border-color:#feb2b2; }
+.qt-ver-discard:hover { background:#fff5f5; }
+.qt-ver-note { margin-top:10px; font-size:0.8rem; color:#553c9a; background:#faf5ff; border:1px solid #e9d8fd; border-radius:6px; padding:8px 11px; line-height:1.5; }
+/* membership chips on question rows */
+.qt-mem { display:inline-flex; align-items:center; gap:4px; font-size:0.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; padding:1px 6px; border-radius:4px; margin-left:5px; white-space:nowrap; }
+.qt-mem-live   { background:#c6f6d5; color:#22543d; }
+.qt-mem-draft  { background:#e9d8fd; color:#44337a; }
+.qt-mem-unused { background:#edf2f7; color:#718096; }
+.qt-mem-btn { padding:3px 9px; font-size:0.72rem; font-weight:600; border-radius:5px; border:1px solid #cbd5e0; background:#fff; cursor:pointer; white-space:nowrap; }
+.qt-mem-btn:hover { background:#edf2f7; }
+.qt-mem-btn.qt-mem-in { background:#e9d8fd; border-color:#d6bcfa; color:#44337a; }
+html[data-theme="dark"] .qt-versions { background:#2d3748; border-color:#4a5568; }
+html[data-theme="dark"] .qt-ver-note { background:#322659; border-color:#553c9a; color:#e9d8fd; }
+html[data-theme="dark"] .qt-ver-btn { background:#374151; border-color:#4a5568; color:#e2e8f0; }
+html[data-theme="dark"] .qt-ver-input { background:#374151; border-color:#4a5568; color:#e2e8f0; }
+
+/* Unsaved-config warning (test is running on invisible defaults) */
+.qt-unsaved-warning {
+	display:flex; align-items:flex-start; gap:10px;
+	margin:10px 0 0; padding:11px 14px;
+	background:#fffbeb; border:1px solid #fcd34d; border-left:4px solid #f59e0b;
+	border-radius:6px; font-size:0.85rem; color:#78350f; line-height:1.5;
+}
+.qt-unsaved-warning i { color:#f59e0b; margin-top:2px; flex-shrink:0; }
+.qt-unsaved-warning a { color:#92400e; font-weight:700; text-decoration:underline; }
+html[data-theme="dark"] .qt-unsaved-warning { background:#3b2f14; border-color:#a16207; color:#fde68a; }
+html[data-theme="dark"] .qt-unsaved-warning a { color:#fde68a; }
 .qt-lib-question { border:1px solid #e2e8f0; border-radius:6px; padding:12px 14px; margin-bottom:10px; }
 .qt-lib-question-hdr { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
 .qt-lib-question-text { font-size:0.88rem; font-weight:600; color:#2d3748; flex:1; }
@@ -59,6 +141,14 @@
 .qt-lib-add-btn:hover { background:#2c5282; }
 .qt-lib-add-btn:disabled { background:#a0aec0; cursor:default; }
 .qt-lib-flag { display:inline-flex; align-items:center; gap:3px; margin-left:8px; font-size:0.72rem; font-weight:700; color:#e53e3e; vertical-align:middle; }
+/* Which rules edition the sharing kingdom's live test is built on. Neutral when it matches the
+   version you are building; amber when it does not — that is the signal worth acting on. */
+.qt-lib-ver { display:inline-block; margin-left:8px; padding:1px 7px; border-radius:999px; font-size:0.7rem;
+	font-weight:600; background:#edf2f7; color:#4a5568; vertical-align:middle; }
+.qt-lib-ver-diff { background:#fef3c7; color:#78350f; }
+.qt-lib-ver-none { background:#edf2f7; color:#a0aec0; font-style:italic; font-weight:400; }
+html[data-theme="dark"] .qt-lib-ver { background:#2d3748; color:#cbd5e0; }
+html[data-theme="dark"] .qt-lib-ver-diff { background:#3b2f14; color:#fde68a; }
 #qt-library-search:focus { border-color:#2b6cb0; box-shadow:0 0 0 3px rgba(43,108,176,0.15); }
 .qt-report-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9000; align-items:center; justify-content:center; }
 .qt-report-overlay.qt-open { display:flex; }
@@ -82,10 +172,14 @@
 .qt-bulk-bar-restore:hover { background:#9ae6b4; }
 .qt-bulk-bar-deselect { color:#a0aec0; text-decoration:underline; cursor:pointer; background:none; border:none; font-size:0.82rem; }
 /* Bulk import modal */
-.qt-bulk-import-modal { background:#fff; border-radius:8px; padding:24px 26px; min-width:340px; max-width:680px; width:95%; max-height:90vh; box-shadow:0 4px 24px rgba(0,0,0,0.18); display:flex; flex-direction:column; }
+.qt-bulk-import-modal { background:#fff; border-radius:8px; padding:24px 26px; min-width:340px; max-width:680px; width:95%; max-height:90vh; box-sizing:border-box; box-shadow:0 4px 24px rgba(0,0,0,0.18); display:flex; flex-direction:column; }
 .qt-bulk-import-modal h4 { margin:0 0 14px; font-size:1rem; color:#2d3748; }
-.qt-bulk-import-instructions { background:#f7fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 14px; font-size:0.78rem; color:#4a5568; font-family:monospace; white-space:pre-line; margin-bottom:12px; line-height:1.6; }
-.qt-bulk-import-preview { overflow-y:auto; flex:1; margin:12px 0; }
+/* The header (above) and the button row (below) are flex-shrink:0 and stay
+   pinned; only this middle region scrolls, so the buttons are never pushed off
+   screen no matter how short the window. min-height:0 lets it actually shrink. */
+.qt-bulk-import-body { flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; }
+.qt-bulk-import-instructions { background:#f7fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 14px; font-size:0.78rem; color:#4a5568; font-family:monospace; white-space:pre-line; margin-bottom:12px; line-height:1.6; flex-shrink:0; }
+.qt-bulk-import-preview { flex:0 0 auto; margin:12px 0; }
 .qt-bulk-import-preview-q { border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px; margin-bottom:8px; }
 .qt-bulk-import-preview-q-text { font-weight:600; font-size:0.88rem; color:#2d3748; margin-bottom:6px; }
 .qt-bulk-import-preview-a { font-size:0.8rem; color:#4a5568; line-height:1.5; padding-left:12px; }
@@ -97,6 +191,16 @@
 .qt-preview-overlay.qt-open { display:flex; }
 .qt-preview-modal { background:#fff; border-radius:8px; padding:24px 26px; max-width:720px; width:95%; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
 .qt-preview-info { background:#ebf8ff; border:1px solid #bee3f8; border-radius:6px; padding:8px 14px; font-size:0.85rem; color:#2b6cb0; font-weight:600; margin-bottom:14px; flex-shrink:0; }
+/* Which version the preview drew from. A GMR mid-draft must never mistake the running test for
+   the one they are building, or vice versa. */
+.qt-preview-setchip { display:inline-block; margin-right:8px; padding:1px 9px; border-radius:999px; font-size:0.7rem;
+	font-weight:700; text-transform:uppercase; letter-spacing:.04em; vertical-align:middle; }
+.qt-preview-setchip-draft { background:#e9d8fd; color:#44337a; }
+.qt-preview-setchip-live  { background:#c6f6d5; color:#22543d; }
+.qt-preview-setmeta { font-weight:400; color:#4a5568; margin-left:6px; }
+.qt-preview-setnote { margin-top:6px; font-weight:400; font-size:0.8rem; color:#553c9a; }
+html[data-theme="dark"] .qt-preview-setmeta { color:#a0aec0; }
+html[data-theme="dark"] .qt-preview-setnote { color:#d6bcfa; }
 .qt-preview-body { overflow-y:auto; flex:1; }
 .qt-preview-q { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:14px 16px; margin-bottom:12px; }
 .qt-preview-q-text { font-weight:700; font-size:0.92rem; color:#2d3748; margin-bottom:10px; }
@@ -105,6 +209,10 @@
 .qt-preview-btn { padding:6px 14px; border-radius:5px; font-size:0.85rem; font-weight:600; cursor:pointer; border:none; }
 .qt-preview-btn-secondary { background:#e2e8f0; color:#2d3748; }
 .qt-preview-btn-secondary:hover { background:#cbd5e0; }
+/* Preview Draft is tinted like the Draft chip, so the two buttons are never confused at a glance. */
+.qt-preview-btn-draft { background:#e9d8fd; color:#44337a; }
+.qt-preview-btn-draft:hover { background:#d6bcfa; }
+.qt-preview-btn-sub { display:block; font-weight:400; font-size:0.72rem; opacity:.75; margin-top:1px; margin-left:18px; }
 .qt-preview-btn-draw { background:#2b6cb0; color:#fff; }
 .qt-preview-btn-draw:hover { background:#2c5282; }
 
@@ -265,6 +373,184 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 		</span>
 	</div>
 
+	<?php // The values above come from getConfig(), which falls back to DEFAULTS when
+	      // no qual_config row was ever saved. Without this warning the settings look
+	      // deliberate when nothing was actually chosen (and sharing stays opted out). ?>
+	<?php if (empty($Config['Configured'])): ?>
+	<div class="qt-unsaved-warning">
+		<i class="fas fa-exclamation-triangle"></i>
+		<span>
+			<strong>This test has no saved configuration.</strong>
+			The numbers above are <em>defaults</em>, not settings anyone chose &mdash; nothing is stored for this
+			kingdom's <?= htmlspecialchars($typeLabel) ?>. The test still runs on them, but they can change
+			under you<?php if ($TestType === 'reeve'): ?>, and the kingdom is <strong>not</strong> opted in to the
+			Global Question Library<?php endif; ?>.
+			<a href="<?= UIR ?>QualTest/manage/<?= (int)$KingdomId ?>">Open test settings and Save</a> to make them explicit.
+		</span>
+	</div>
+	<?php endif; ?>
+
+	<?php
+		// ── Versions ────────────────────────────────────────────────────────────
+		// The live test draws ONLY from the published set, so a draft can be built
+		// freely without touching the running test. New questions land in the draft
+		// while one exists; otherwise they go straight live.
+		$_live  = $PublishedSet ?? null;
+		$_draft = $DraftSet ?? null;
+		$_target = (int)($TargetSetId ?? 0);
+	?>
+	<div class="qt-versions">
+		<?php // Publishing a version does NOT make the test takeable — the kingdom must also
+		      // have the test switched on. That toggle lives in Kingdom Configuration and needs
+		      // kingdom authority, which a GMR does NOT have. Say so plainly, or "Published"
+		      // reads as "players can take it" when nobody can. ?>
+		<?php if (empty($TestEnabled)): ?>
+		<div class="qt-notlive-warning">
+			<i class="fas fa-power-off"></i>
+			<span>
+				<strong>The <?= htmlspecialchars($typeLabel) ?> is switched off for this kingdom.</strong>
+				Nothing below is available to players &mdash; not even a published version &mdash; until it is turned on.
+				The switch is on the <strong>Kingdom page</strong>, under the <strong>Admin</strong> button (the cog at the top)
+				&rarr; <strong>Configuration</strong>. Only the monarchy (Monarch, Regent, or Prime Minister) can open that panel
+				&mdash; as GMR or a Test Manager you won't see the Admin button at all, so you'll need to ask them to turn it on.
+				You can still write, version and publish questions here; they simply won't be asked of anyone yet.
+			</span>
+		</div>
+		<?php endif; ?>
+		<?php
+		  // "Live" must mean exactly one thing: a player can be asked these questions RIGHT NOW.
+		  // Three things have to hold, and the chip reports all three honestly.
+		  //   1. a published version exists,
+		  //   2. it holds at least QuestionCount active questions — the draw is a LIMIT n that
+		  //      returns NULL when it cannot fill the test, and the start endpoint then refuses
+		  //      outright ("Not enough active questions"), so a short version is not merely a
+		  //      shorter test: it is NO test,
+		  //   3. the kingdom has switched the test on (Kingdom Configuration; monarchy only).
+		  // MemberCount counts ACTIVE members, so it is precisely what the draw can reach.
+		  $_liveCount = (int)($_live['MemberCount'] ?? 0);
+		  $_need      = (int)($Config['QuestionCount'] ?? 0);
+		  $_ready     = ($_live && $_need > 0 && $_liveCount >= $_need);
+		  $_isLive    = ($_ready && !empty($TestEnabled));
+		?>
+		<div class="qt-ver-row">
+			<?php if ($_isLive): ?>
+				<span class="qt-ver-chip qt-ver-live"><i class="fas fa-check-circle"></i> Live</span>
+			<?php elseif ($_ready): ?>
+				<span class="qt-ver-chip qt-ver-warn"><i class="fas fa-power-off"></i> Published (test off)</span>
+			<?php else: ?>
+				<span class="qt-ver-chip qt-ver-off"><i class="fas fa-minus-circle"></i> Not live</span>
+			<?php endif; ?>
+
+			<?php if ($_live): ?>
+				<strong class="qt-ver-name" data-set="<?= (int)$_live['SetId'] ?>"><?= htmlspecialchars($_live['Name']) ?></strong>
+				<button type="button" class="qt-ver-rename" data-set="<?= (int)$_live['SetId'] ?>" title="Rename this version"><i class="fas fa-pen"></i></button>
+				<?php if (($_live['RulesVersion'] ?? '') !== ''): ?><span class="qt-ver-meta"><?= htmlspecialchars($_live['RulesVersion']) ?></span><?php endif; ?>
+				<span class="qt-ver-meta"><?= $_liveCount ?> question<?= $_liveCount !== 1 ? 's' : '' ?></span>
+				<?php if (!$_ready): ?>
+					<span class="qt-ver-short"><i class="fas fa-exclamation-triangle"></i>
+						the test draws <?= $_need ?> &mdash; nobody can take it until this version has <?= $_need ?></span>
+				<?php endif; ?>
+			<?php elseif ($_draft): ?>
+				<span class="qt-ver-meta">Nothing is live yet. Publish the draft below when it is ready.</span>
+			<?php else: ?>
+				<span class="qt-ver-meta">Nothing is live yet &mdash; add your first question to start building a version.</span>
+			<?php endif; ?>
+
+			<?php // Nothing to succeed until a version is actually live, so offering "next version"
+			      // would build v2 of a v1 that never shipped. Hidden until there is one. ?>
+			<?php if (!$_draft && $_live): ?>
+				<button type="button" class="qt-ver-btn" id="qt-newdraft-btn"><i class="fas fa-code-branch"></i> Start next version</button>
+			<?php endif; ?>
+		</div>
+
+		<?php if ($_draft): ?>
+		<?php
+		  // The FIRST version is a draft like any other, so this row serves two situations:
+		  // building v1 (nothing live behind it) and building the successor to a running test.
+		  // The reassurance "the live test is unaffected" is meaningless in the first case.
+		  $_draftCount = (int)($_draft['MemberCount'] ?? 0);
+		  $_draftVer   = trim((string)($_draft['RulesVersion'] ?? ''));
+		  $_firstVer   = ($_live === null);
+		  // publishSet() rejects a draft with no version label or too few questions. Rather than
+		  // let the GMR click Publish and collect an error, disable it and say what is missing.
+		  $_pubBlock   = [];
+		  if ($_draftVer === '')                        { $_pubBlock[] = 'a rules/corpora version'; }
+		  if ($_need > 0 && $_draftCount < $_need)      { $_pubBlock[] = ($_need - $_draftCount) . ' more question' . (($_need - $_draftCount) === 1 ? '' : 's'); }
+		?>
+		<div class="qt-ver-row qt-ver-draftrow">
+			<span class="qt-ver-chip qt-ver-draft"><i class="fas fa-pen"></i> Draft</span>
+			<strong class="qt-ver-name" data-set="<?= (int)$_draft['SetId'] ?>"><?= htmlspecialchars($_draft['Name']) ?></strong>
+			<button type="button" class="qt-ver-rename" data-set="<?= (int)$_draft['SetId'] ?>" title="Rename this version"><i class="fas fa-pen"></i></button>
+			<input type="text" id="qt-draft-version" class="qt-ver-input" placeholder="Rules / Corpora version (required)"
+			       value="<?= htmlspecialchars($_draft['RulesVersion']) ?>" data-set="<?= (int)$_draft['SetId'] ?>">
+			<span class="qt-ver-meta"><?= $_draftCount ?> question<?= $_draftCount !== 1 ? 's' : '' ?><?= $_need > 0 ? ' of ' . $_need : '' ?></span>
+			<button type="button" class="qt-ver-btn qt-ver-publish" id="qt-publish-btn"
+			        data-set="<?= (int)$_draft['SetId'] ?>"
+			        data-need="<?= $_need ?>" data-have="<?= $_draftCount ?>"
+			        <?= $_pubBlock ? 'disabled' : '' ?>
+			        title="<?= $_pubBlock ? htmlspecialchars('Needs ' . implode(' and ', $_pubBlock) . ' before publishing.') : 'Make this the live test' ?>">
+				<i class="fas fa-upload"></i> Publish
+			</button>
+			<button type="button" class="qt-ver-btn qt-ver-discard" id="qt-discard-btn" data-set="<?= (int)$_draft['SetId'] ?>"><i class="fas fa-trash"></i> Discard</button>
+		</div>
+		<div class="qt-ver-note">
+			<i class="fas fa-info-circle"></i>
+			<?php if ($_firstVer): ?>
+				You are building the <strong>first version</strong> of this test. <strong>Nothing is live until you publish it</strong> &mdash;
+				players cannot take the test yet, even if the kingdom has switched it on. Add questions at your own pace,
+				set the rules/corpora version, then publish when you are ready.
+			<?php else: ?>
+				You are building the next version. <strong>The live test is unaffected until you publish.</strong>
+				New questions (add, bulk import, library) go into the draft. Removing a question from the draft
+				does <em>not</em> archive it &mdash; it stays live in the current version.
+			<?php endif; ?>
+		</div>
+		<?php endif; ?>
+
+		<?php
+		  // Retired versions. Publishing never deletes anything — publishSet() only flips the
+		  // outgoing version to 'retired', membership intact — so every version this kingdom has
+		  // ever run can still be read back in full. Without this list that history was reachable
+		  // only from the database.
+		  $_retired = [];
+		  foreach (($Sets ?? []) as $_s) {
+			  if (($_s['Status'] ?? '') === 'retired') { $_retired[] = $_s; }
+		  }
+		?>
+		<?php if ($_retired): ?>
+		<?php // Collapsed by default, and it has to be: this list only ever grows — two versions a
+		      // reign, forever. Laid out inline it would eventually push the questions off the page.
+		      // Old versions are reference material, not something you need on every visit.
+		      // <details> gives the disclosure behaviour natively, so there is no JS to get wrong. ?>
+		<details class="qt-ver-past-wrap">
+			<summary class="qt-ver-pasthdr">
+				<i class="fas fa-chevron-right qt-ver-caret"></i>
+				<i class="fas fa-history"></i>
+				Previous versions <span class="qt-ver-meta">(<?= count($_retired) ?>)</span>
+			</summary>
+			<div class="qt-ver-pastlist">
+				<?php foreach ($_retired as $_s): ?>
+				<button type="button" class="qt-ver-past qt-verview-btn" data-set="<?= (int)$_s['SetId'] ?>">
+					<strong><?= htmlspecialchars($_s['Name']) ?></strong>
+					<?php if (($_s['RulesVersion'] ?? '') !== ''): ?>
+						<span class="qt-ver-meta"><?= htmlspecialchars($_s['RulesVersion']) ?></span>
+					<?php else: ?>
+						<span class="qt-ver-meta qt-ver-nolabel" data-tip="Published before a version label was required">no version label</span>
+					<?php endif; ?>
+					<?php // TotalCount, not MemberCount: a version CONTAINED what it contained. Counting
+					      // only still-active questions would shrink history each time one is archived. ?>
+					<span class="qt-ver-meta"><?= (int)$_s['TotalCount'] ?> question<?= ((int)$_s['TotalCount']) !== 1 ? 's' : '' ?></span>
+					<?php if (!empty($_s['PublishedAt'])): ?>
+						<span class="qt-ver-meta">ran from <?= date('M j, Y', strtotime($_s['PublishedAt'])) ?></span>
+					<?php endif; ?>
+					<span class="qt-ver-view"><i class="fas fa-eye"></i> View</span>
+				</button>
+				<?php endforeach; ?>
+			</div>
+		</details>
+		<?php endif; ?>
+	</div>
+
 	<div class="rp-body">
 
 		<!-- Sidebar -->
@@ -295,11 +581,30 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 							<i class="fas fa-edit"></i> Edit settings
 						</a>
 					</div>
-					<div style="margin-top:8px;">
-						<button id="qt-preview-btn" class="qt-preview-btn qt-preview-btn-secondary" style="font-size:12px;width:100%;text-align:left;">
-							<i class="fas fa-eye"></i> Preview Test
+					<?php // One button per version that exists, rather than one button that silently picks
+					      // for you. Two when a draft is open, one when only the live test exists, none
+					      // when there is nothing to preview — you always know what you are about to see
+					      // BEFORE you click, not from a chip afterwards. ?>
+					<?php if ($_live || $_draft): ?>
+					<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+						<?php if ($_draft): ?>
+						<button class="qt-preview-btn qt-preview-btn-draft qt-preview-open"
+						        data-set="<?= (int)$_draft['SetId'] ?>"
+						        style="font-size:12px;width:100%;text-align:left;">
+							<i class="fas fa-eye"></i> Preview Draft
+							<span class="qt-preview-btn-sub"><?= htmlspecialchars($_draft['Name']) ?></span>
 						</button>
+						<?php endif; ?>
+						<?php if ($_live): ?>
+						<button class="qt-preview-btn qt-preview-btn-secondary qt-preview-open"
+						        data-set="<?= (int)$_live['SetId'] ?>"
+						        style="font-size:12px;width:100%;text-align:left;">
+							<i class="fas fa-eye"></i> Preview Live Test
+							<span class="qt-preview-btn-sub"><?= htmlspecialchars($_live['Name']) ?></span>
+						</button>
+						<?php endif; ?>
 					</div>
+					<?php endif; ?>
 				</div>
 			</div>
 		</div><!-- /.rp-sidebar -->
@@ -333,6 +638,18 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 							<?= htmlspecialchars($q['QuestionText']) ?>
 							<?php if (($q['AnswerMode'] ?? 'single') === 'multi'): ?>
 							<span style="background:#e6fffa;color:#234e52;font-size:0.7rem;padding:1px 6px;border-radius:3px;font-weight:600;margin-left:6px;">multi</span>
+							<?php endif; ?>
+							<?php // Which version(s) is this question part of? "Unused" = written but in
+							      // no version — still fine, still reusable, just not being asked. ?>
+							<?php if (!empty($q['InLive'])): ?><span class="qt-mem qt-mem-live" data-tip="In the live test">Live</span><?php endif; ?>
+							<?php if (!empty($q['InDraft'])): ?><span class="qt-mem qt-mem-draft" data-tip="In the draft version">Draft</span><?php endif; ?>
+							<?php if (!empty($q['Unused'])): ?><span class="qt-mem qt-mem-unused" data-tip="Not in any version — not being asked">Unused</span><?php endif; ?>
+							<?php if ($_draft): ?>
+							<button type="button" class="qt-mem-btn qt-draft-toggle <?= !empty($q['InDraft']) ? 'qt-mem-in' : '' ?>"
+							        data-id="<?= (int)$q['QualQuestionId'] ?>" data-set="<?= (int)$_draft['SetId'] ?>"
+							        data-in="<?= !empty($q['InDraft']) ? '1' : '0' ?>">
+								<?= !empty($q['InDraft']) ? '&minus; Remove from draft' : '+ Add to draft' ?>
+							</button>
 							<?php endif; ?>
 						</td>
 						<td>
@@ -489,6 +806,23 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	<button class="qt-bulk-bar-deselect" id="qt-bulk-deselect">Deselect All</button>
 </div>
 
+<!-- Version contents modal (read-only; used for previous versions) -->
+<div class="qt-preview-overlay" id="qt-verview-overlay">
+	<div class="qt-preview-modal">
+		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0;">
+			<h4 style="margin:0;"><i class="fas fa-history" style="color:#2b6cb0;margin-right:6px;"></i> <span id="qt-verview-title">Version</span></h4>
+			<button id="qt-verview-close" aria-label="Close" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#718096;line-height:1;">&times;</button>
+		</div>
+		<div class="qt-preview-info" id="qt-verview-info"></div>
+		<div class="qt-preview-body" id="qt-verview-body">
+			<div style="text-align:center;padding:32px;color:#718096;"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>
+		</div>
+		<div style="display:flex;gap:8px;margin-top:14px;flex-shrink:0;">
+			<button class="qt-preview-btn qt-preview-btn-secondary" id="qt-verview-close-footer">Close</button>
+		</div>
+	</div>
+</div>
+
 <!-- Test Preview modal -->
 <div class="qt-preview-overlay" id="qt-preview-overlay">
 	<div class="qt-preview-modal">
@@ -514,6 +848,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			<h4 style="margin:0;"><i class="fas fa-file-import" style="color:#2b6cb0;margin-right:6px;"></i> Bulk Import Questions</h4>
 			<button id="qt-bulkimport-close" aria-label="Close" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#718096;line-height:1;">&times;</button>
 		</div>
+		<div class="qt-bulk-import-body">
 		<div class="qt-bulk-import-instructions">Paste questions separated by a blank line.
 First line = question text.
 Subsequent lines = answers (prefix with * for correct).
@@ -528,8 +863,9 @@ C) Red
 Who wrote Hamlet?
 *A) Shakespeare
 B) Dickens</div>
-		<textarea id="qt-bulkimport-text" aria-label="Paste questions here" rows="8" placeholder="Paste your questions here..." style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e0;border-radius:4px;font-size:0.88rem;font-family:inherit;resize:vertical;flex-shrink:0;"></textarea>
+		<textarea id="qt-bulkimport-text" aria-label="Paste questions here" rows="6" placeholder="Paste your questions here..." style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e0;border-radius:4px;font-size:0.88rem;font-family:inherit;resize:vertical;flex:0 0 auto;min-height:96px;"></textarea>
 		<div class="qt-bulk-import-preview" id="qt-bulkimport-preview"></div>
+		</div><!-- /.qt-bulk-import-body -->
 		<div style="display:flex;gap:8px;margin-top:10px;flex-shrink:0;">
 			<button class="qt-preview-btn qt-preview-btn-secondary" id="qt-bulkimport-parse"><i class="fas fa-search"></i> Parse &amp; Preview</button>
 			<button class="qt-preview-btn qt-preview-btn-draw" id="qt-bulkimport-submit" disabled><i class="fas fa-file-import"></i> Import Questions</button>
@@ -541,7 +877,9 @@ B) Dickens</div>
 <!-- Global Question Library modal -->
 <?php if ($TestType === 'reeve' && !empty($Config['ShareQuestions'])): ?>
 <div class="qt-report-overlay" id="qt-library-overlay">
-	<div class="qt-report-modal" style="max-width:720px;width:95%;max-height:85vh;display:flex;flex-direction:column;">
+	<?php // Fixed height (not max-height) so the modal does NOT resize as the filter
+	      // narrows results — the list area stays constant and just scrolls. ?>
+	<div class="qt-report-modal" style="max-width:720px;width:95%;height:80vh;max-height:80vh;box-sizing:border-box;display:flex;flex-direction:column;">
 		<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-shrink:0;">
 			<h4 style="margin:0;"><i class="fas fa-globe" style="color:#2b6cb0;margin-right:6px;"></i> Global Question Library</h4>
 			<button id="qt-library-close" aria-label="Close" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#718096;line-height:1;">&times;</button>
@@ -552,7 +890,10 @@ B) Dickens</div>
 		</div>
 		<div id="qt-library-loading" style="text-align:center;padding:32px;color:#718096;"><i class="fas fa-spinner fa-spin"></i> Loading library&hellip;</div>
 		<div id="qt-library-empty" style="display:none;text-align:center;padding:32px;color:#718096;">No questions available from other kingdoms yet.</div>
-		<div id="qt-library-body" style="display:none;overflow-y:auto;flex:1;">
+		<?php // The modal now has a fixed height, so the list fills the remaining space
+		      // and scrolls. min-height:0 lets it shrink below its content (without it,
+		      // a flex item won't shrink past its content and would push the modal). ?>
+		<div id="qt-library-body" style="display:none;overflow-y:auto;flex:1 1 auto;min-height:0;">
 			<div id="qt-library-list"></div>
 		</div>
 	</div>
@@ -819,9 +1160,10 @@ $(function() {
 
 // ----- Test Preview -----
 (function() {
-	var previewBtn    = document.getElementById('qt-preview-btn');
-	if (!previewBtn) return;
+	// Guard on the OVERLAY, not on a button: there is no longer a single preview button — there
+	// are zero, one or two (Draft / Live), depending on which versions exist.
 	var overlay       = document.getElementById('qt-preview-overlay');
+	if (!overlay) return;
 	var infoEl        = document.getElementById('qt-preview-info');
 	var bodyEl        = document.getElementById('qt-preview-body');
 	var drawBtn       = document.getElementById('qt-preview-draw');
@@ -831,17 +1173,36 @@ $(function() {
 	function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 	var letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
+	// Which version the open preview is showing. "Draw Again" must re-draw from the SAME one,
+	// not silently hop to the other.
+	var previewSet = 0;
+
 	function fetchPreview() {
 		bodyEl.innerHTML = '<div style="text-align:center;padding:32px;color:#718096;"><i class="fas fa-spinner fa-spin"></i> Loading preview&hellip;</div>';
 		drawBtn.style.display = 'none';
 		var fd = new FormData();
 		fd.append('KingdomId', '<?= (int)$KingdomId ?>');
 		fd.append('TestType',  '<?= $TestType ?>');
+		if (previewSet) fd.append('SetId', previewSet);
 		fetch('<?= UIR ?>QualTestAjax/previewtest', { method: 'POST', body: fd })
 			.then(function(r) { return r.json(); })
 			.then(function(data) {
 				if (data.status !== 0) { bodyEl.innerHTML = '<div style="color:#e53e3e;padding:16px;">' + escH(data.error || 'Error') + '</div>'; return; }
-				infoEl.textContent = data.question_count + ' questions drawn \u2014 requires ' + data.pass_percent + '% to pass';
+
+				// WHICH version this is a preview of. Never leave it ambiguous: while a draft is
+				// open this shows the draft (what you are about to publish), not the running test.
+				var isDraft = (data.set_status === 'draft');
+				var chip = '<span class="qt-preview-setchip ' + (isDraft ? 'qt-preview-setchip-draft' : 'qt-preview-setchip-live') + '">'
+					+ (isDraft ? 'Draft' : 'Live') + '</span>';
+				var ver = (data.rules_version || '').trim();
+				infoEl.innerHTML = chip
+					+ '<strong>' + escH(data.set_name || '') + '</strong>'
+					+ (ver ? ' <span class="qt-preview-setmeta">' + escH(ver) + '</span>' : '')
+					+ ' <span class="qt-preview-setmeta">' + data.question_count
+					+ ' questions drawn \u2014 requires ' + data.pass_percent + '% to pass</span>'
+					+ (isDraft
+						? '<div class="qt-preview-setnote">This is the version you are building. Players are still being asked the current live test until you publish.</div>'
+						: '');
 				var html = '';
 				data.questions.forEach(function(q, qi) {
 					html += '<div class="qt-preview-q"><div class="qt-preview-q-text">' + (qi+1) + '. ' + escH(q.QuestionText) + '</div>';
@@ -858,12 +1219,21 @@ $(function() {
 			});
 	}
 
-	previewBtn.addEventListener('click', function() { overlay.classList.add('qt-open'); fetchPreview(); });
-	drawBtn.addEventListener('click', fetchPreview);
+	document.querySelectorAll('.qt-preview-open').forEach(function(b) {
+		b.addEventListener('click', function() {
+			previewSet = parseInt(b.dataset.set || '0', 10);
+			overlay.classList.add('qt-open');
+			fetchPreview();
+		});
+	});
+	drawBtn.addEventListener('click', fetchPreview);   // re-draws from previewSet
 	function closePreview() { overlay.classList.remove('qt-open'); }
 	closeBtn.addEventListener('click', closePreview);
 	closeFooter.addEventListener('click', closePreview);
 	overlay.addEventListener('click', function(e) { if (e.target === overlay) closePreview(); });
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape' && overlay.classList.contains('qt-open')) closePreview();
+	});
 })();
 
 // ----- Bulk Import -----
@@ -950,6 +1320,7 @@ $(function() {
 		fd.append('KingdomId', '<?= (int)$KingdomId ?>');
 		fd.append('TestType',  '<?= $TestType ?>');
 		fd.append('Questions', JSON.stringify(parsedQuestions));
+		fd.append('SetId', QT_TARGET_SET);   // imported questions join the draft, not the live test
 		fetch('<?= UIR ?>QualTestAjax/bulkimport', { method: 'POST', body: fd })
 			.then(function(r) { return r.json(); })
 			.then(function(j) {
@@ -993,6 +1364,9 @@ $(function() {
 	closeBtn.addEventListener('click', closeModal);
 	cancelBtn.addEventListener('click', closeModal);
 	overlay.addEventListener('click', function(e) { if (e.target === overlay) closeModal(); });
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape' && overlay.classList.contains('qt-open')) closeModal();
+	});
 })();
 
 // ----- Global Question Library -----
@@ -1011,6 +1385,15 @@ $(function() {
 	var loaded     = false;
 	var allQuestions = [];
 	var addedCount = 0;
+	// The rules/corpora version of the set THIS kingdom is building — the yardstick every
+	// library row is measured against.
+	var myVersion  = '';
+
+	// escH is defined inside the preview + bulk-import IIFEs, which are separate
+	// scopes — it was NOT visible here, so renderList() threw "escH is not defined"
+	// and (being inside a .then()) failed silently: the search box appeared but the
+	// list never rendered. Define it locally.
+	function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 	function renderList(questions) {
 		if (!questions.length) { listEl.innerHTML = '<div style="text-align:center;padding:16px;color:#718096;">No matches.</div>'; return; }
@@ -1024,10 +1407,28 @@ $(function() {
 			var flag = (q.ReportCount >= 2)
 				? '<span class="qt-lib-flag" data-tip="' + q.ReportCount + ' player reports"><i class="fas fa-flag"></i> ' + q.ReportCount + '</span>'
 				: '';
+
+			// Which edition of the rules this Kingdom's LIVE test is built on. Everyone plays the
+			// same rulebook, but Kingdoms rewrite their tests at different speeds — so a question
+			// can be current for THEM and still predate the ruleset you are writing against. Mark
+			// it when it differs from the version you are building; that is the whole point of
+			// showing this. Free text, so an exact match is all we can honestly claim.
+			var ver = (q.RulesVersion || '').trim();
+			var verChip;
+			if (!ver) {
+				verChip = '<span class="qt-lib-ver qt-lib-ver-none" data-tip="This kingdom published before a version label was required">no version</span>';
+			} else if (myVersion && ver !== myVersion) {
+				verChip = '<span class="qt-lib-ver qt-lib-ver-diff" data-tip="Their test is built on ' + escH(ver)
+					+ '; you are building ' + escH(myVersion) + '">' + escH(ver) + '</span>';
+			} else {
+				verChip = '<span class="qt-lib-ver">' + escH(ver) + '</span>';
+			}
+
 			return '<div class="qt-lib-question" data-qid="' + q.QualQuestionId + '">'
 				+ '<div class="qt-lib-question-hdr">'
 					+ '<div><div class="qt-lib-question-text">' + escH(q.QuestionText) + '</div>'
-					+ '<div class="qt-lib-kingdom"><i class="fas fa-chess-rook" style="margin-right:3px;"></i>' + escH(q.KingdomName) + flag + '</div></div>'
+					+ '<div class="qt-lib-kingdom"><i class="fas fa-chess-rook" style="margin-right:3px;"></i>' + escH(q.KingdomName)
+					+ verChip + flag + '</div></div>'
 					+ '<button class="qt-lib-add-btn" data-qid="' + q.QualQuestionId + '"><i class="fas fa-plus"></i> Add</button>'
 				+ '</div>'
 				+ '<div class="qt-lib-answers">' + answers + '</div>'
@@ -1040,6 +1441,7 @@ $(function() {
 				var fd = new FormData();
 				fd.append('KingdomId',  '<?= (int)$KingdomId ?>');
 				fd.append('QuestionId', btn.dataset.qid);
+				fd.append('SetId', QT_TARGET_SET);
 				fetch('<?= UIR ?>QualTestAjax/copyfromlibrary', { method: 'POST', body: fd })
 					.then(function(r) { return r.json(); })
 					.then(function(j) {
@@ -1064,9 +1466,39 @@ $(function() {
 				loadingEl.style.display = 'none';
 				if (j.status !== 0) { emptyEl.textContent = j.error || 'Error loading library.'; emptyEl.style.display = 'block'; return; }
 				allQuestions = j.questions || [];
-				if (!allQuestions.length) { emptyEl.style.display = 'block'; return; }
+				if (!allQuestions.length) {
+					// An empty library has two quite different meanings, and saying "none shared
+					// yet" when a kingdom has in fact imported every shared question reads as if
+					// the feature is broken. The server tells us which case this is.
+					var st = j.stats || {};
+					if (st.Shared > 0 && st.AlreadyHave >= st.Shared) {
+						emptyEl.innerHTML = '<div style="font-weight:600;color:#22543d;">'
+							+ '<i class="fas fa-check-circle"></i> You already have every shared question.</div>'
+							+ '<div style="margin-top:6px;">All ' + st.Shared + ' question'
+							+ (st.Shared === 1 ? '' : 's') + ' other kingdoms are sharing '
+							+ (st.Shared === 1 ? 'is' : 'are') + ' already in your bank. '
+							+ 'Check back when another kingdom publishes new ones.</div>';
+					} else {
+						emptyEl.textContent = 'No questions available from other kingdoms yet. '
+							+ 'Questions appear here once another kingdom opts in to sharing and publishes them.';
+					}
+					emptyEl.style.display = 'block';
+					return;
+				}
 				searchWrapEl.style.display = 'block';
 				bodyEl.style.display = 'block';
+				// Questions already in your bank are filtered out (matched on text). Without a word
+				// of explanation the list looks arbitrarily short next to what a kingdom advertises.
+				var st2 = j.stats || {};
+				if (st2.AlreadyHave > 0 && listEl.parentNode) {
+					var note = document.createElement('div');
+					note.style.cssText = 'font-size:0.8rem;color:#718096;padding:0 0 8px;';
+					note.innerHTML = '<i class="fas fa-info-circle"></i> ' + st2.AlreadyHave
+						+ ' shared question' + (st2.AlreadyHave === 1 ? '' : 's')
+						+ ' already in your bank ' + (st2.AlreadyHave === 1 ? 'is' : 'are') + ' hidden.';
+					listEl.parentNode.insertBefore(note, listEl);
+				}
+				myVersion = (j.my_version || '').trim();
 				renderList(allQuestions);
 				searchEl.focus();
 			});
@@ -1074,9 +1506,12 @@ $(function() {
 
 	searchEl.addEventListener('input', function() {
 		var q = searchEl.value.trim().toLowerCase();
+		// Version is searchable too: "show me everything built on 8.7" is the obvious question
+		// once the label is on screen.
 		var filtered = !q ? allQuestions : allQuestions.filter(function(item) {
 			return item.QuestionText.toLowerCase().indexOf(q) !== -1
-				|| item.KingdomName.toLowerCase().indexOf(q) !== -1;
+				|| item.KingdomName.toLowerCase().indexOf(q) !== -1
+				|| (item.RulesVersion || '').toLowerCase().indexOf(q) !== -1;
 		});
 		renderList(filtered);
 	});
@@ -1087,6 +1522,11 @@ $(function() {
 	}
 	closeBtn.addEventListener('click', closeLibrary);
 	overlay.addEventListener('click', function(e) { if (e.target === overlay) closeLibrary(); });
+	// Escape closes it too — every other modal on this page does, and the search box swallows
+	// the key otherwise, so there was no way out but the mouse.
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape' && overlay.classList.contains('qt-open')) closeLibrary();
+	});
 })();
 
 // ----- Report flag popup -----
@@ -1138,6 +1578,9 @@ $(function() {
 
 	closeBtn.addEventListener('click', function() { overlay.classList.remove('qt-open'); });
 	overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.classList.remove('qt-open'); });
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape' && overlay.classList.contains('qt-open')) overlay.classList.remove('qt-open');
+	});
 
 	clearBtn.addEventListener('click', function() {
 		qtConfirm({
@@ -1183,6 +1626,267 @@ $(function() {
 						});
 				}
 			});
+	});
+})();
+
+// ── Question-set versioning ────────────────────────────────────────────────
+// New questions (add / bulk import / library) go into whichever set the admin is
+// working in: the draft when one exists, otherwise the live set.
+var QT_TARGET_SET = <?= (int)($TargetSetId ?? 0) ?>;
+
+(function() {
+	var KID  = '<?= (int)$KingdomId ?>';
+	var TYPE = '<?= htmlspecialchars($TestType, ENT_QUOTES) ?>';
+	var BASE = '<?= UIR ?>QualTestAjax/';
+
+	function post(endpoint, params, cb) {
+		var fd = new FormData();
+		Object.keys(params).forEach(function(k) { fd.append(k, params[k]); });
+		fetch(BASE + endpoint, { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(cb)
+			.catch(function() { cb({ status: 1, error: 'Network error.' }); });
+	}
+
+	// Start the next version: clones the live set's membership, so carried-over
+	// questions are NOT duplicated.
+	var newBtn = document.getElementById('qt-newdraft-btn');
+	if (newBtn) newBtn.addEventListener('click', function() {
+		qtConfirm({
+			title: 'Start the next version',
+			body: 'This copies the current live questions into a new draft. The live test keeps running unchanged until you publish.',
+			confirmLabel: 'Create draft',
+			danger: false,
+			onConfirm: function() {
+				// No name: the model numbers it ("Version 3"). It used to hardcode "Next version",
+				// which stopped being true the moment it was published — leaving the LIVE test
+				// called "Next version" forever. Rename it with the pencil once it exists.
+				post('createdraft', { KingdomId: KID, TestType: TYPE, Name: '', RulesVersion: '' }, function(j) {
+					if (j.status !== 0) { qtAlert(j.error || 'Could not create the draft.'); return; }
+					window.location.reload();
+				});
+			}
+		});
+	});
+
+	// Version label on the draft (required before publishing).
+	var verInput = document.getElementById('qt-draft-version');
+
+	// publishSet() refuses a draft with no version label or too few questions. The button is
+	// rendered disabled in that state; keep it in step as the GMR types, so the version they
+	// just entered enables Publish immediately instead of after a reload. The question count
+	// only changes on reload, so it is read from the server-rendered data-* attributes.
+	function qtSyncPublishBtn() {
+		var b = document.getElementById('qt-publish-btn');
+		if (!b) return;
+		var need    = parseInt(b.dataset.need || '0', 10);
+		var have    = parseInt(b.dataset.have || '0', 10);
+		var missing = [];
+		if (!verInput || verInput.value.trim() === '') { missing.push('a rules/corpora version'); }
+		if (need > 0 && have < need) { missing.push((need - have) + ' more question' + ((need - have) === 1 ? '' : 's')); }
+		b.disabled = missing.length > 0;
+		b.title    = missing.length ? 'Needs ' + missing.join(' and ') + ' before publishing.' : 'Make this the live test';
+	}
+
+	if (verInput) {
+		var _t;
+		verInput.addEventListener('input', function() {
+			qtSyncPublishBtn();          // reflect the requirement the moment it is met
+			clearTimeout(_t);
+			_t = setTimeout(function() {
+				post('updateset', { SetId: verInput.dataset.set, RulesVersion: verInput.value }, function() {});
+			}, 500);
+		});
+	}
+	qtSyncPublishBtn();
+
+	// ── Rename a version ─────────────────────────────────────────────────────
+	// A version's name outlives the reign that made it: it is stamped onto every attempt and
+	// shown in players' test history for good. So it must be nameable, and nameable BEFORE it
+	// goes live. Swap the label for an input in place; Enter or blur saves, Escape reverts.
+	document.querySelectorAll('.qt-ver-rename').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			var label = document.querySelector('.qt-ver-name[data-set="' + btn.dataset.set + '"]');
+			if (!label || label.dataset.editing === '1') return;
+			var original = label.textContent;
+			label.dataset.editing = '1';
+
+			var inp = document.createElement('input');
+			inp.type      = 'text';
+			inp.className = 'qt-ver-input';
+			inp.value     = original;
+			inp.style.minWidth = '180px';
+			label.style.display = 'none';
+			btn.style.display   = 'none';
+			label.parentNode.insertBefore(inp, label.nextSibling);
+			inp.focus();
+			inp.select();
+
+			var done = false;
+			function finish(save) {
+				if (done) return;          // blur fires again when we remove the input
+				done = true;
+				var name = inp.value.trim();
+				inp.remove();
+				label.style.display = '';
+				btn.style.display   = '';
+				delete label.dataset.editing;
+				if (!save || name === '' || name === original) return;
+				label.textContent = name;   // optimistic; the post below is the source of truth
+				post('updateset', { SetId: btn.dataset.set, Name: name }, function(j) {
+					if (!j || j.status !== 0) {
+						label.textContent = original;    // put it back — the save did not happen
+						qtAlert((j && j.error) || 'Could not rename this version.');
+					}
+				});
+			}
+			inp.addEventListener('keydown', function(e) {
+				if (e.key === 'Enter')  { e.preventDefault(); finish(true); }
+				if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+			});
+			inp.addEventListener('blur', function() { finish(true); });
+		});
+	});
+
+	// ── Previous versions: read one back, read-only ──────────────────────────
+	// Defined LOCALLY on purpose. An earlier bug in this file had a render function reach for
+	// an escH() that lived in a different IIFE; it threw inside a .then() with no .catch() and
+	// the list just silently came up empty. Keep the helper in the scope that uses it.
+	function qtVerEsc(s) {
+		return String(s === null || s === undefined ? '' : s)
+			.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+	}
+
+	var verviewOverlay = document.getElementById('qt-verview-overlay');
+	function qtVerviewClose() { if (verviewOverlay) verviewOverlay.classList.remove('qt-open'); }
+
+	function qtVerviewOpen(setId) {
+		if (!verviewOverlay) return;
+		var titleEl = document.getElementById('qt-verview-title');
+		var infoEl  = document.getElementById('qt-verview-info');
+		var bodyEl  = document.getElementById('qt-verview-body');
+		titleEl.textContent = 'Version';
+		infoEl.textContent  = '';
+		bodyEl.innerHTML    = '<div style="text-align:center;padding:32px;color:#718096;"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>';
+		verviewOverlay.classList.add('qt-open');
+
+		post('setquestions', { SetId: setId }, function(j) {
+			if (!j || j.status !== 0) {
+				bodyEl.innerHTML = '<div style="padding:24px;color:#c53030;">' +
+					qtVerEsc((j && j.error) || 'Could not load this version.') + '</div>';
+				return;
+			}
+			var s  = j.set || {};
+			var qs = j.questions || [];
+			titleEl.textContent = s.Name || 'Version';
+
+			var bits = [];
+			if (s.RulesVersion) { bits.push(qtVerEsc(s.RulesVersion)); }
+			else { bits.push('<em>no version label</em>'); }
+			bits.push(qs.length + ' question' + (qs.length === 1 ? '' : 's'));
+			// Questions are shared by reference between versions, so what is shown is the text as
+			// it reads TODAY. Only a player's attempt keeps the wording they actually saw. Say so
+			// rather than let this list be mistaken for a snapshot.
+			infoEl.innerHTML = bits.join(' &middot; ') +
+				'<div style="margin-top:6px;font-size:0.8rem;color:#718096;">' +
+				'This version is retired and cannot be edited. Questions are shown as they read now &mdash; ' +
+				'if one was edited since, the change shows here. What a player was actually asked is kept ' +
+				'on their attempt.</div>';
+
+			if (!qs.length) {
+				bodyEl.innerHTML = '<div style="padding:24px;color:#718096;">This version has no questions.</div>';
+				return;
+			}
+			var html = '';
+			qs.forEach(function(q, i) {
+				html += '<div class="qt-vq">';
+				html += '<div class="qt-vq-text">' + (i + 1) + '. ' + qtVerEsc(q.QuestionText);
+				if (q.Archived) { html += '<span class="qt-vq-archived">Archived</span>'; }
+				html += '</div>';
+				(q.Answers || []).forEach(function(a) {
+					html += '<div class="qt-vq-ans' + (a.IsCorrect ? ' qt-vq-correct' : '') + '">' +
+						qtVerEsc(a.AnswerText) + '</div>';
+				});
+				html += '</div>';
+			});
+			bodyEl.innerHTML = html;
+		});
+	}
+
+	document.querySelectorAll('.qt-verview-btn').forEach(function(b) {
+		b.addEventListener('click', function() { qtVerviewOpen(b.dataset.set); });
+	});
+	var vvClose  = document.getElementById('qt-verview-close');
+	var vvCloseF = document.getElementById('qt-verview-close-footer');
+	if (vvClose)  vvClose.addEventListener('click', qtVerviewClose);
+	if (vvCloseF) vvCloseF.addEventListener('click', qtVerviewClose);
+	if (verviewOverlay) {
+		verviewOverlay.addEventListener('click', function(e) {
+			if (e.target === verviewOverlay) qtVerviewClose();   // click the backdrop
+		});
+	}
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape' && verviewOverlay && verviewOverlay.classList.contains('qt-open')) {
+			qtVerviewClose();
+		}
+	});
+
+	// Publishing makes this the current version — but the kingdom must ALSO have the
+	// test switched on for anyone to actually sit it. Don't let a GMR publish believing
+	// players can now take it when the monarchy hasn't turned the test on.
+	var QT_TEST_ENABLED = <?= !empty($TestEnabled) ? 'true' : 'false' ?>;
+	// Publishing the FIRST version has no predecessor to retire, so don't promise one.
+	var QT_FIRST_VERSION = <?= empty($PublishedSet) ? 'true' : 'false' ?>;
+
+	var pubBtn = document.getElementById('qt-publish-btn');
+	if (pubBtn) pubBtn.addEventListener('click', function() {
+		qtConfirm({
+			title: 'Publish this version',
+			body: !QT_TEST_ENABLED
+				? 'This becomes the current version — but the test is still switched OFF for this kingdom, so nobody can take it yet. The monarchy must turn it on from the Kingdom page: Admin (the cog at the top) → Configuration.'
+				: QT_FIRST_VERSION
+					? 'This makes the test live. Players can start taking it right away.'
+					: 'This immediately becomes the live test. The current version is kept as a previous version. Players start being asked these questions right away.',
+			confirmLabel: 'Publish',
+			danger: false,
+			onConfirm: function() {
+				post('publishset', { SetId: pubBtn.dataset.set }, function(j) {
+					if (j.status !== 0) { qtAlert(j.error || 'Could not publish.'); return; }
+					window.location.reload();
+				});
+			}
+		});
+	});
+
+	var disBtn = document.getElementById('qt-discard-btn');
+	if (disBtn) disBtn.addEventListener('click', function() {
+		qtConfirm({
+			title: 'Discard this draft',
+			body: 'The draft version is thrown away. The questions themselves are kept — any that were only in this draft simply become unused.',
+			confirmLabel: 'Discard draft',
+			danger: true,
+			onConfirm: function() {
+				post('discarddraft', { SetId: disBtn.dataset.set }, function(j) {
+					if (j.status !== 0) { qtAlert(j.error || 'Could not discard.'); return; }
+					window.location.reload();
+				});
+			}
+		});
+	});
+
+	// Add/remove a question from the draft. Removing does NOT archive it — it stays
+	// live in the published version until the draft is published.
+	document.querySelectorAll('.qt-draft-toggle').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			var want = btn.dataset.in === '1' ? 0 : 1;
+			btn.disabled = true;
+			post('setmembership', { SetId: btn.dataset.set, QuestionId: btn.dataset.id, In: want }, function(j) {
+				btn.disabled = false;
+				if (j.status !== 0) { qtAlert(j.error || 'Could not update the draft.'); return; }
+				window.location.reload();
+			});
+		});
 	});
 })();
 </script>

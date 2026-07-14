@@ -3311,7 +3311,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 		<div class="pn-design-tabs-wrap">
 			<button type="button" class="pn-design-tabs-chev pn-design-tabs-chev-left" id="pn-design-tabs-chev-left" aria-label="Scroll tabs left" tabindex="-1"><i class="fas fa-chevron-left"></i></button>
 			<div class="pn-design-tabs" id="pn-design-tabs">
-				<button class="pn-design-tab pn-active" data-panel="welcome"><i class="fas fa-hand-sparkles"></i> Welcome</button>
+				<button class="pn-design-tab pn-active" data-panel="welcome"><i class="fas fa-smile-beam"></i> Welcome</button>
 				<button class="pn-design-tab" data-panel="about"><i class="fas fa-scroll"></i> About</button>
 				<button class="pn-design-tab" data-panel="colors"><i class="fas fa-palette"></i> Colors</button>
 				<button class="pn-design-tab" data-panel="name"><i class="fas fa-signature"></i> Name</button>
@@ -5600,6 +5600,44 @@ pnRenderSparkline();
 .pn-qt-retake-warning { margin-top: 6px; padding: 7px 10px; background: #fff5f5; border: 1px solid #feb2b2; border-radius: 5px; font-size: 0.8rem; color: #9b2c2c; line-height: 1.4; }
 .pn-qt-retake-warning i { margin-right: 5px; }
 .pn-qt-reset-retakes-btn { margin-top: 4px; }
+/* Past-attempts history (player + manager view) */
+.pn-qt-history { font-size: 0.8rem; }
+/* Full-width review panel below the cards (uses the whole modal width). */
+.pn-qt-history-panel { margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fafbfc; overflow: hidden; font-size: 0.85rem; }
+.pn-qt-history-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #fff; border-bottom: 1px solid #edf2f7; }
+.pn-qt-history-panel-title { font-weight: 700; font-size: 0.92rem; color: #2d3748; }
+.pn-qt-history-panel-close { background: none; border: 0; font-size: 1.4rem; line-height: 1; color: #718096; cursor: pointer; padding: 0 4px; }
+.pn-qt-history-panel-close:hover { color: #2d3748; }
+#pn-qt-history-panel-body { padding: 12px 14px; max-height: 46vh; overflow-y: auto; }
+html[data-theme="dark"] .pn-qt-history-panel { background: #252d3a; border-color: #4a5568; }
+html[data-theme="dark"] .pn-qt-history-panel-head { background: #2d3748; border-color: #4a5568; }
+html[data-theme="dark"] .pn-qt-history-panel-title { color: #e2e8f0; }
+.pn-qt-hist-empty { color: #718096; padding: 4px 2px; }
+.pn-qt-hist-row { border: 1px solid #e2e8f0; border-radius: 7px; overflow: hidden; margin-bottom: 6px; }
+.pn-qt-hist-row.pass { border-left: 3px solid #48bb78; }
+.pn-qt-hist-row.fail { border-left: 3px solid #f56565; }
+.pn-qt-hist-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 11px; background: #fff; border: 0; cursor: pointer; font: inherit; text-align: left; }
+.pn-qt-hist-toggle:hover { background: #f7fafc; }
+.pn-qt-hist-badge { font-weight: 700; font-size: 0.8rem; }
+.pn-qt-hist-row.pass .pn-qt-hist-badge { color: #276749; }
+.pn-qt-hist-row.fail .pn-qt-hist-badge { color: #9b2c2c; }
+.pn-qt-hist-score { font-weight: 600; color: #2d3748; }
+.pn-qt-hist-when { margin-left: auto; font-size: 0.76rem; color: #718096; }
+.pn-qt-hist-detail { padding: 8px 11px 10px; background: #fafbfc; border-top: 1px solid #edf2f7; }
+.pn-qt-rev-q { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; background: #fff; }
+.pn-qt-rev-q.ok  .pn-qt-rev-qh { color: #276749; }
+.pn-qt-rev-q.bad .pn-qt-rev-qh { color: #9b2c2c; }
+.pn-qt-rev-qh { font-weight: 600; margin-bottom: 5px; }
+.pn-qt-rev-opt { padding: 3px 7px; border-radius: 4px; color: #4a5568; margin: 2px 0; font-size: 0.78rem; }
+.pn-qt-rev-opt.correct { background: #f0fff4; color: #276749; }
+.pn-qt-rev-opt.wrong   { background: #fff5f5; color: #9b2c2c; }
+.pn-qt-rev-opt em { font-style: normal; font-size: 0.7rem; text-transform: uppercase; letter-spacing: .03em; opacity: .75; }
+html[data-theme="dark"] .pn-qt-hist-toggle, html[data-theme="dark"] .pn-qt-rev-q { background: #2d3748; }
+html[data-theme="dark"] .pn-qt-hist-row, html[data-theme="dark"] .pn-qt-rev-q { border-color: #4a5568; }
+html[data-theme="dark"] .pn-qt-hist-detail { background: #252d3a; }
+html[data-theme="dark"] .pn-qt-hist-score { color: #e2e8f0; }
+html[data-theme="dark"] .pn-qt-rev-opt.correct { background: #22543d; color: #9ae6b4; }
+html[data-theme="dark"] .pn-qt-rev-opt.wrong   { background: #63171b; color: #feb2b2; }
 /* Chooser modal */
 #pn-qt-chooser-overlay .pn-modal-box { width: 720px; max-width: calc(100vw - 40px); }
 .pn-qt-chooser-prompt { font-size: 0.92rem; color: #4a5568; margin-bottom: 14px; }
@@ -5781,30 +5819,45 @@ html[data-theme="dark"] #pn-quiz-report-reason {
 	$_qualResults   = is_array($QualResults ?? null) ? $QualResults : [];
 	$_qualKingdomId = $QualKingdomId ?? 0;
 	$_qualCanManage = $QualCanManage ?? false;
+	// Most kingdoms enable only ONE test, and asking "which would you like?" above a lone
+	// card reads as a choice the player doesn't actually have. The modal still earns its
+	// place (it carries the status, past attempts and retakes), so soften the wording
+	// rather than skip it.
+	$_qualOnlyOne   = (count($_qualTypes) === 1);
 ?>
 <div class="pn-overlay" id="pn-qt-chooser-overlay">
 	<div class="pn-modal-box">
 		<div class="pn-modal-header">
-			<h3 class="pn-modal-title"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>Which test would you like to take?</h3>
+			<h3 class="pn-modal-title"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i><?= $_qualOnlyOne ? 'Qualification Test' : 'Which test would you like to take?' ?></h3>
 			<button class="pn-modal-close-btn" id="pn-qt-chooser-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="pn-modal-body">
 			<?php if (empty($_qualTypes)): ?>
 			<div class="pn-qt-chooser-empty">No tests are currently enabled for your kingdom.</div>
 			<?php else: ?>
-			<div class="pn-qt-chooser-prompt">Pick a test to begin. Your current status, score, and remaining retakes are listed below.</div>
+			<div class="pn-qt-chooser-prompt"><?= $_qualOnlyOne
+				? 'Your current status, score, and remaining retakes are shown below.'
+				: 'Pick a test to begin. Your current status, score, and remaining retakes are listed below.' ?></div>
 			<div class="pn-qt-cards">
 				<?php foreach ($_qualTypes as $_qtType => $_qtLabel): ?>
 				<?php
 					$_qr           = $_qualResults[$_qtType] ?? null;
-					$_qtPassed     = $_qr && empty($_qr['Expired']);
-					$_qtExpired    = $_qr && !empty($_qr['Expired']);
+					// A record with QualResultId == 0 is a retake/attempt-only entry:
+					// the player has TAKEN the test but never PASSED (ork_qual_result
+					// is written only on a pass). Only a genuine passing result can be
+					// "Passed" or "Expired"; otherwise they simply haven't passed yet.
+					$_qtHasPass    = $_qr && !empty($_qr['QualResultId']);
+					$_qtPassed     = $_qtHasPass && empty($_qr['Expired']);
+					$_qtExpired    = $_qtHasPass && !empty($_qr['Expired']);
+					$_qtAttempted  = $_qr && !$_qtHasPass; // taken, never passed
 					$_qtConfig     = ($QualConfigs ?? [])[$_qtType] ?? ['MaxRetakes' => 0];
 					$_qtMaxRetakes = (int)$_qtConfig['MaxRetakes'];
 					$_qtRetakes    = (int)(($_qualResults[$_qtType]['RetakeCount'] ?? 0));
 					$_qtBlocked    = $_qtMaxRetakes > 0 && $_qtRetakes >= $_qtMaxRetakes;
-					$_qtScore      = $_qr ? (int)$_qr['ScorePercent'] : null;
-					$_qtExpires    = $_qr && !empty($_qr['ExpiresAt']) ? date('M j, Y', strtotime($_qr['ExpiresAt'])) : '';
+					// Score/expiry only mean something for a real passing result;
+					// the synthesized attempt-only entry carries a fake 0%.
+					$_qtScore      = $_qtHasPass ? (int)$_qr['ScorePercent'] : null;
+					$_qtExpires    = $_qtHasPass && !empty($_qr['ExpiresAt']) ? date('M j, Y', strtotime($_qr['ExpiresAt'])) : '';
 				?>
 				<div class="pn-qt-card" data-type="<?= $_qtType ?>">
 					<div class="pn-qt-card-title"><i class="fas fa-scroll"></i> <?= $_qtLabel ?></div>
@@ -5814,8 +5867,10 @@ html[data-theme="dark"] #pn-quiz-report-reason {
 					<?php elseif ($_qtExpired): ?>
 						<div class="pn-qt-status pn-qt-status-expired"><i class="fas fa-clock"></i> Expired<?= $_qtExpires ? ' ' . $_qtExpires : '' ?></div>
 						<?php if ($_qtScore !== null): ?>
-						<div class="pn-qt-detail">Last score: <?= $_qtScore ?>%</div>
+						<div class="pn-qt-detail">Last passing score: <?= $_qtScore ?>%</div>
 						<?php endif; ?>
+					<?php elseif ($_qtAttempted): ?>
+						<div class="pn-qt-status pn-qt-status-none"><i class="fas fa-minus-circle"></i> Not passed yet</div>
 					<?php else: ?>
 						<div class="pn-qt-status pn-qt-status-none"><i class="fas fa-minus-circle"></i> Not yet taken</div>
 					<?php endif; ?>
@@ -5838,7 +5893,10 @@ html[data-theme="dark"] #pn-quiz-report-reason {
 						<i class="fas fa-play-circle"></i> <?= $_qtPassed ? 'Retake Test' : 'Take Test' ?>
 					</button>
 					<?php endif; ?>
-					<?php if ($_qualCanManage): ?>
+					<?php // Officer-only, and only when a retake LIMIT exists. With no limit the count never
+				      // blocks anyone, so resetting it changes nothing a player can feel — offering it
+				      // there just invites "did that actually do something?". ?>
+					<?php if ($_qualCanManage && $_qtMaxRetakes > 0): ?>
 					<button class="pn-btn pn-btn-sm pn-btn-ghost pn-qt-reset-retakes-btn"
 					        data-type="<?= $_qtType ?>"
 					        data-kingdom="<?= $_qualKingdomId ?>"
@@ -5847,8 +5905,26 @@ html[data-theme="dark"] #pn-quiz-report-reason {
 						<i class="fas fa-undo-alt"></i> Reset Retakes
 					</button>
 					<?php endif; ?>
+					<?php if ($isOwnProfile || $_qualCanManage): ?>
+					<button type="button" class="pn-btn pn-btn-sm pn-btn-ghost pn-qt-history-btn"
+					        data-type="<?= $_qtType ?>"
+					        data-kingdom="<?= $_qualKingdomId ?>"
+					        data-player="<?= (int)($QualPlayerId ?? 0) ?>"
+					        data-label="<?= htmlspecialchars($_qtLabel) ?>"
+					        style="margin-top:4px;font-size:0.78rem;" aria-expanded="false">
+						<i class="fas fa-history"></i> View past attempts
+					</button>
+					<?php endif; ?>
 				</div>
 				<?php endforeach; ?>
+			</div>
+			<!-- Full-width review panel: "View past attempts" renders here, using the whole modal. -->
+			<div class="pn-qt-history-panel" id="pn-qt-history-panel" style="display:none;">
+				<div class="pn-qt-history-panel-head">
+					<span class="pn-qt-history-panel-title" id="pn-qt-history-panel-title"></span>
+					<button type="button" class="pn-qt-history-panel-close" id="pn-qt-history-panel-close" aria-label="Close">&times;</button>
+				</div>
+				<div id="pn-qt-history-panel-body"></div>
 			</div>
 			<?php endif; ?>
 		</div>
@@ -5857,7 +5933,17 @@ html[data-theme="dark"] #pn-quiz-report-reason {
 <script>
 function pnOpenTestChooser() {
 	var ov = document.getElementById('pn-qt-chooser-overlay');
-	if (ov) ov.classList.add('pn-open');
+	if (!ov) return;
+	// Open cleanly: collapse and clear the shared "past attempts" panel so stale
+	// state from a previous open doesn't linger, and so reopening re-fetches
+	// (picking up attempts taken since the modal was last opened).
+	if (typeof window._pnResetQualHistory === 'function') {
+		window._pnResetQualHistory();
+	}
+	ov.querySelectorAll('.pn-qt-history-btn').forEach(function(btn) {
+		btn.setAttribute('aria-expanded', 'false');
+	});
+	ov.classList.add('pn-open');
 }
 (function() {
 	var ov = document.getElementById('pn-qt-chooser-overlay');
@@ -5865,6 +5951,18 @@ function pnOpenTestChooser() {
 	var closeBtn = document.getElementById('pn-qt-chooser-close-btn');
 	if (closeBtn) closeBtn.addEventListener('click', function() { ov.classList.remove('pn-open'); });
 	ov.addEventListener('click', function(e) { if (e.target === ov) ov.classList.remove('pn-open'); });
+	// Escape closes the chooser — but if the full-width history panel is open, close
+	// that first (one layer at a time).
+	document.addEventListener('keydown', function(e) {
+		if ((e.key !== 'Escape' && e.keyCode !== 27) || !ov.classList.contains('pn-open')) return;
+		var panel = document.getElementById('pn-qt-history-panel');
+		if (panel && panel.style.display !== 'none') {
+			if (typeof window._pnResetQualHistory === 'function') window._pnResetQualHistory();
+			else panel.style.display = 'none';
+			return;
+		}
+		ov.classList.remove('pn-open');
+	});
 	// When a take button is clicked inside the chooser, close the chooser so the quiz modal isn't behind it.
 	ov.querySelectorAll('.pn-qt-take-btn').forEach(function(btn) {
 		btn.addEventListener('click', function() { ov.classList.remove('pn-open'); });
@@ -5903,6 +6001,11 @@ function pnOpenTestChooser() {
 				<div class="pn-quiz-progress-segments" id="pn-quiz-progress-segments"></div>
 				<div class="pn-quiz-q-text" id="pn-quiz-q-text"></div>
 				<ul class="pn-quiz-answers" id="pn-quiz-answers"></ul>
+				<!-- Multi-correct affordances: hidden for single-answer questions. -->
+				<div class="pn-quiz-multi-hint" id="pn-quiz-multi-hint" style="display:none;font-size:0.82rem;color:#4a5568;margin:6px 0 10px;"><i class="fas fa-check-square" style="margin-right:5px;color:#2b6cb0;"></i>Select all that apply, then submit.</div>
+				<div id="pn-quiz-multi-submit-row" style="display:none;margin:0 0 12px;">
+					<button class="pn-btn pn-btn-primary" id="pn-quiz-multi-submit-btn" disabled><i class="fas fa-check"></i> Submit Answer</button>
+				</div>
 				<div class="pn-quiz-feedback" id="pn-quiz-feedback"></div>
 				<div id="pn-quiz-report-area" style="display:none;margin-top:10px;">
 					<button class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-quiz-report-btn" style="font-size:0.8rem;"><i class="fas fa-flag" style="color:#e53e3e;margin-right:5px;"></i>Report Question</button>
@@ -5963,6 +6066,9 @@ function pnOpenTestChooser() {
 	var progressSegs   = document.getElementById('pn-quiz-progress-segments');
 	var qText          = document.getElementById('pn-quiz-q-text');
 	var answersList    = document.getElementById('pn-quiz-answers');
+	var multiHintEl    = document.getElementById('pn-quiz-multi-hint');
+	var multiSubmitRow = document.getElementById('pn-quiz-multi-submit-row');
+	var multiSubmitBtn = document.getElementById('pn-quiz-multi-submit-btn');
 	var feedbackEl     = document.getElementById('pn-quiz-feedback');
 	var nextBtn        = document.getElementById('pn-quiz-next');
 	var submitBtn      = document.getElementById('pn-quiz-submit');
@@ -5992,6 +6098,11 @@ function pnOpenTestChooser() {
 	var correctCount   = 0;
 	var currentIdx     = 0;
 	var passPercent    = 70;
+	// Set of checked answer ids for the multi-select question in view (null for single).
+	var multiSelected  = null;
+	// True while the player is mid-test (questions in view, not yet finished) — used
+	// to confirm before an accidental close throws away in-progress answers.
+	var quizInProgress = false;
 	var currentType    = '';
 	var currentKingdom = 0;
 	var currentLabel   = '';
@@ -6006,6 +6117,7 @@ function pnOpenTestChooser() {
 		correctCount   = 0;
 		currentIdx     = 0;
 		isChecking     = false;
+		quizInProgress = false;
 
 		modalTitle.innerHTML = '<i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>' + label;
 		overlay.classList.add('pn-open');
@@ -6072,6 +6184,7 @@ function pnOpenTestChooser() {
 		var q     = questions[idx];
 		var total = questions.length;
 		currentIdx = idx;
+		quizInProgress = true; // answering questions — guard against accidental close
 
 		progressTxt.textContent = 'Question ' + (idx + 1) + ' of ' + total;
 		progressScore.textContent = correctCount + ' correct so far';
@@ -6087,6 +6200,12 @@ function pnOpenTestChooser() {
 		reportReason.value = '';
 		reportThanks.style.display = 'none';
 
+		var isMulti = (q.AnswerMode === 'multi');
+		multiHintEl.style.display    = isMulti ? '' : 'none';
+		multiSubmitRow.style.display = isMulti ? '' : 'none';
+		multiSubmitBtn.disabled      = true;
+		multiSelected = isMulti ? Object.create(null) : null;
+
 		answersList.innerHTML = '';
 		q.Answers.forEach(function(a) {
 			var li    = document.createElement('li');
@@ -6095,7 +6214,7 @@ function pnOpenTestChooser() {
 			label.className = 'pn-quiz-answer-label';
 			label.dataset.answerId = a.QualAnswerId;
 			label.setAttribute('tabindex', '0');
-			label.setAttribute('role', 'radio');
+			label.setAttribute('role', isMulti ? 'checkbox' : 'radio');
 			label.setAttribute('aria-checked', 'false');
 
 			var radio = document.createElement('span');
@@ -6109,10 +6228,32 @@ function pnOpenTestChooser() {
 			text.textContent = a.AnswerText;
 			label.appendChild(text);
 
-			label.addEventListener('click', function() { checkAnswer(q, a.QualAnswerId); });
-			label.addEventListener('keydown', function(e) {
-				if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); checkAnswer(q, a.QualAnswerId); }
-			});
+			if (isMulti) {
+				// Multi: clicking toggles selection; scoring waits for Submit Answer.
+				var toggle = function() {
+					if (isChecking) return;
+					if (multiSelected[a.QualAnswerId]) {
+						delete multiSelected[a.QualAnswerId];
+						label.classList.remove('pn-quiz-selected');
+						label.setAttribute('aria-checked', 'false');
+					} else {
+						multiSelected[a.QualAnswerId] = true;
+						label.classList.add('pn-quiz-selected');
+						label.setAttribute('aria-checked', 'true');
+					}
+					multiSubmitBtn.disabled = (Object.keys(multiSelected).length === 0);
+				};
+				label.addEventListener('click', toggle);
+				label.addEventListener('keydown', function(e) {
+					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+				});
+			} else {
+				// Single: clicking grades immediately.
+				label.addEventListener('click', function() { checkAnswer(q, a.QualAnswerId); });
+				label.addEventListener('keydown', function(e) {
+					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); checkAnswer(q, a.QualAnswerId); }
+				});
+			}
 			li.appendChild(label);
 			answersList.appendChild(li);
 		});
@@ -6120,19 +6261,28 @@ function pnOpenTestChooser() {
 		questionView.style.display = 'block';
 	}
 
-	function checkAnswer(q, selectedId) {
+	// `selected` is a number for single-select, or an array of ids for multi.
+	function checkAnswer(q, selected) {
 		if (isChecking) return;
+		var isMulti = Array.isArray(selected);
+		if (isMulti && selected.length === 0) return;
 		isChecking = true;
 
 		var allLabels = answersList.querySelectorAll('.pn-quiz-answer-label');
-		allLabels.forEach(function(l) {
-			l.classList.remove('pn-quiz-selected');
-			l.setAttribute('aria-checked', 'false');
-		});
-		var selLabel = answersList.querySelector('[data-answer-id="' + selectedId + '"]');
-		if (selLabel) {
-			selLabel.classList.add('pn-quiz-selected');
-			selLabel.setAttribute('aria-checked', 'true');
+		if (isMulti) {
+			allLabels.forEach(function(l) {
+				var picked = selected.indexOf(parseInt(l.dataset.answerId, 10)) !== -1;
+				l.classList.toggle('pn-quiz-selected', picked);
+				l.setAttribute('aria-checked', picked ? 'true' : 'false');
+			});
+			multiSubmitBtn.disabled = true;
+		} else {
+			allLabels.forEach(function(l) {
+				l.classList.remove('pn-quiz-selected');
+				l.setAttribute('aria-checked', 'false');
+			});
+			var sel0 = answersList.querySelector('[data-answer-id="' + selected + '"]');
+			if (sel0) { sel0.classList.add('pn-quiz-selected'); sel0.setAttribute('aria-checked', 'true'); }
 		}
 		allLabels.forEach(function(l) { l.classList.add('pn-quiz-disabled'); });
 
@@ -6140,7 +6290,12 @@ function pnOpenTestChooser() {
 		fd.append('KingdomId',  currentKingdom);
 		fd.append('TestType',   currentType);
 		fd.append('QuestionId', q.QualQuestionId);
-		fd.append('AnswerId',   selectedId);
+		if (isMulti) {
+			selected.forEach(function(id) { fd.append('AnswerIds[]', id); });
+		} else {
+			fd.append('AnswerId', selected);
+			fd.append('AnswerIds[]', selected); // dual-post for forward compat
+		}
 		fetch(PnConfig.uir + 'QualTestAjax/checkanswer', { method: 'POST', body: fd })
 			.then(function(r) { return r.json(); })
 			.then(function(j) {
@@ -6150,19 +6305,38 @@ function pnOpenTestChooser() {
 					isChecking = false;
 					return;
 				}
-				answers[q.QualQuestionId] = selectedId;
+				answers[q.QualQuestionId] = selected;
 
-				selLabel = answersList.querySelector('[data-answer-id="' + selectedId + '"]');
-				var okLabel = answersList.querySelector('[data-answer-id="' + j.correct_answer_id + '"]');
+				// Server returns the full correct set (correct_answer_ids); the
+				// scalar correct_answer_id stays for single back-compat.
+				var correctIds = Array.isArray(j.correct_answer_ids)
+					? j.correct_answer_ids.map(function(x) { return parseInt(x, 10); })
+					: (j.correct_answer_id ? [parseInt(j.correct_answer_id, 10)] : []);
+				var pickedIds = isMulti ? selected : [selected];
 
 				if (j.is_correct) {
 					correctCount++;
-					if (selLabel) { selLabel.classList.remove('pn-quiz-selected'); selLabel.classList.add('pn-quiz-correct'); }
+					pickedIds.forEach(function(id) {
+						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
+						if (l) { l.classList.remove('pn-quiz-selected'); l.classList.add('pn-quiz-correct'); }
+					});
 					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-correct';
 					feedbackEl.innerHTML = '<i class="fas fa-check-circle" style="margin-right:6px;"></i> Correct!';
 				} else {
-					if (selLabel) { selLabel.classList.remove('pn-quiz-selected'); selLabel.classList.add('pn-quiz-wrong'); }
-					if (okLabel) { okLabel.classList.remove('pn-quiz-disabled'); okLabel.classList.add('pn-quiz-correct'); }
+					pickedIds.forEach(function(id) {
+						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
+						if (!l) return;
+						l.classList.remove('pn-quiz-selected');
+						// A picked id that's also correct = partially right; show green.
+						if (correctIds.indexOf(id) !== -1) l.classList.add('pn-quiz-correct');
+						else                               l.classList.add('pn-quiz-wrong');
+					});
+					// Reveal correct answers the player missed.
+					correctIds.forEach(function(id) {
+						if (pickedIds.indexOf(id) !== -1) return;
+						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
+						if (l) { l.classList.remove('pn-quiz-disabled'); l.classList.add('pn-quiz-correct'); }
+					});
 					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-wrong';
 					feedbackEl.innerHTML = '<i class="fas fa-times-circle" style="margin-right:6px;"></i> Sorry, that\'s not correct.';
 					reportArea.style.display = 'block';
@@ -6173,6 +6347,10 @@ function pnOpenTestChooser() {
 				requestAnimationFrame(function() { feedbackEl.classList.add('pn-quiz-feedback-show'); });
 				progressScore.textContent = correctCount + ' correct so far';
 				updateProgressSegments();
+
+				// Answer locked in — retire the multi affordances.
+				multiSubmitRow.style.display = 'none';
+				multiHintEl.style.display    = 'none';
 
 				if (currentIdx < questions.length - 1) {
 					nextBtn.style.display = 'inline-block';
@@ -6185,6 +6363,16 @@ function pnOpenTestChooser() {
 				showError('Network error. Please try again.');
 				isChecking = false;
 			});
+	}
+
+	// Multi-correct: "Submit Answer" grades the whole selected set at once.
+	if (multiSubmitBtn) {
+		multiSubmitBtn.addEventListener('click', function() {
+			if (!multiSelected) return;
+			var ids = Object.keys(multiSelected).map(function(x) { return parseInt(x, 10); });
+			if (ids.length === 0) return;
+			checkAnswer(questions[currentIdx], ids);
+		});
 	}
 
 	function showLoading(show) { loading.style.display = show ? 'block' : 'none'; }
@@ -6271,6 +6459,7 @@ function pnOpenTestChooser() {
 	}
 
 	function showResult(j) {
+		quizInProgress = false; // test finished — closing is safe now
 		if (j.passed) {
 			fireConfetti();
 			resultIcon.innerHTML    = '<i class="fas fa-check-circle pn-quiz-result-pass" style="font-size:inherit;"></i>';
@@ -6324,13 +6513,36 @@ function pnOpenTestChooser() {
 		}
 	}
 
-	closeBtn.addEventListener('click', function() { overlay.classList.remove('pn-open'); });
+	// Guarded close: if a test is mid-progress, confirm (via the in-app dialog,
+	// matching Submit Test etc.) before discarding answers.
+	function requestCloseQuiz() {
+		if (!quizInProgress) {
+			overlay.classList.remove('pn-open');
+			return;
+		}
+		pnConfirm({
+			title: 'Leave the test?',
+			message: 'Your progress on this attempt will be lost and it won\'t be recorded.',
+			confirmText: 'Leave Test',
+			danger: true
+		}, function() {
+			quizInProgress = false;
+			overlay.classList.remove('pn-open');
+		});
+	}
+	closeBtn.addEventListener('click', requestCloseQuiz);
+	// The result-view "Close" is a finished test — no guard needed.
 	doneBtn.addEventListener('click',  function() { overlay.classList.remove('pn-open'); });
 	retakeBtn.addEventListener('click', function() {
 		resultView.style.display = 'none';
 		openModal(currentType, currentKingdom, currentLabel);
 	});
-	overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.classList.remove('pn-open'); });
+	overlay.addEventListener('click', function(e) { if (e.target === overlay) requestCloseQuiz(); });
+	// Escape closes the quiz too — via the same guard, so a mid-test Escape prompts
+	// before discarding progress.
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('pn-open')) requestCloseQuiz();
+	});
 
 	document.querySelectorAll('.pn-qt-reset-retakes-btn').forEach(function(btn) {
 		btn.addEventListener('click', function() {
@@ -6360,6 +6572,107 @@ function pnOpenTestChooser() {
 			openModal(btn.dataset.type, btn.dataset.kingdom, btn.dataset.label);
 		});
 	});
+
+	// Past-attempts history: lazy-load the player's attempt list + per-attempt
+	// answer review. Reuses the shared attempts/attemptdetail endpoints, which
+	// authorize owner-or-manager; the button only renders for those viewers.
+	(function() {
+		function esc(s) {
+			return String(s == null ? '' : s)
+				.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+				.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+		}
+		function renderReview(attempt) {
+			if (!attempt || !attempt.Questions || !attempt.Questions.length) {
+				return '<div class="pn-qt-hist-empty">No answer detail was recorded for this attempt.</div>';
+			}
+			var html = '';
+			attempt.Questions.forEach(function(q, i) {
+				var archived = (q.Archived ? ' <span style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#92400e;background:#fef3c7;padding:1px 6px;border-radius:4px;margin-left:4px;white-space:nowrap;">Archived</span>' : '') + (q.NotInLiveSet ? ' <span style="font-size:0.64rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:#64748b;background:#f1f5f9;border:1px solid #e2e8f0;padding:0 6px;border-radius:4px;margin-left:4px;white-space:nowrap;">Not in current test</span>' : '');
+				html += '<div class="pn-qt-rev-q ' + (q.Correct ? 'ok' : 'bad') + '">';
+				html += '<div class="pn-qt-rev-qh">' + (q.Correct ? '✓' : '✗') + ' ' + (i + 1) + '. ' + esc(q.QuestionText) + archived + '</div>';
+				(q.Options || []).forEach(function(o) {
+					var cls = o.IsCorrect ? 'correct' : (o.WasSelected ? 'wrong' : '');
+					var tag = o.WasSelected ? ' <em>(your pick)</em>' : (o.IsCorrect ? ' <em>(correct)</em>' : '');
+					html += '<div class="pn-qt-rev-opt ' + cls + '">' + esc(o.AnswerText) + tag + '</div>';
+				});
+				html += '</div>';
+			});
+			return html;
+		}
+		function post(endpoint, params, cb) {
+			var fd = new FormData();
+			Object.keys(params).forEach(function(k) { fd.append(k, params[k]); });
+			fetch(PnConfig.uir + endpoint, { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); }).then(cb).catch(function() { cb(null); });
+		}
+		// Shared full-width panel below the cards — one at a time, uses the whole modal.
+		var panel      = document.getElementById('pn-qt-history-panel');
+		var panelBody  = document.getElementById('pn-qt-history-panel-body');
+		var panelTitle = document.getElementById('pn-qt-history-panel-title');
+		var panelClose = document.getElementById('pn-qt-history-panel-close');
+		var activeBtn  = null;
+
+		function closePanel() {
+			if (panel) panel.style.display = 'none';
+			if (activeBtn) activeBtn.setAttribute('aria-expanded', 'false');
+			activeBtn = null;
+		}
+		// Exposed so pnOpenTestChooser can reset the panel each time the modal opens.
+		window._pnResetQualHistory = function() { if (panelBody) panelBody.innerHTML = ''; closePanel(); };
+		if (panelClose) panelClose.addEventListener('click', closePanel);
+
+		// Per-attempt review expansion (delegated within the shared panel body).
+		if (panelBody) panelBody.addEventListener('click', function(e) {
+			var t = e.target && e.target.closest ? e.target.closest('.pn-qt-hist-toggle') : null;
+			if (!t) return;
+			var detail = t.nextElementSibling;
+			if (detail.style.display !== 'none') { detail.style.display = 'none'; return; }
+			detail.style.display = 'block';
+			if (detail.dataset.loaded) return;
+			detail.innerHTML = '<div class="pn-qt-hist-empty">Loading…</div>';
+			post('QualTestAjax/attemptdetail', { AttemptId: t.dataset.attemptId }, function(j) {
+				detail.dataset.loaded = '1';
+				detail.innerHTML = renderReview(j && j.status === 0 ? j.attempt : null);
+			});
+		});
+
+		document.querySelectorAll('.pn-qt-history-btn').forEach(function(btn) {
+			btn.addEventListener('click', function() {
+				if (!panel) return;
+				// Same button already open → toggle closed.
+				if (activeBtn === btn && panel.style.display !== 'none') { closePanel(); return; }
+				if (activeBtn) activeBtn.setAttribute('aria-expanded', 'false');
+				activeBtn = btn;
+				btn.setAttribute('aria-expanded', 'true');
+				panelTitle.textContent = (btn.dataset.label || 'Test') + ' — Past attempts';
+				panel.style.display = 'block';
+				panelBody.innerHTML = '<div class="pn-qt-hist-empty">Loading…</div>';
+				if (panel.scrollIntoView) panel.scrollIntoView({ block: 'nearest' });
+				post('QualTestAjax/attempts', {
+					PlayerId: btn.dataset.player, KingdomId: btn.dataset.kingdom, TestType: btn.dataset.type
+				}, function(j) {
+					if (activeBtn !== btn) return; // switched away before this load returned
+					if (!j || j.status !== 0) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">Could not load history.</div>'; return; }
+					if (!j.attempts.length) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">No attempts recorded yet.</div>'; return; }
+					panelBody.innerHTML = '';
+					j.attempts.forEach(function(a) {
+						var when = a.TakenAt ? new Date(a.TakenAt.replace(' ', 'T')).toLocaleString() : '';
+						var row = document.createElement('div');
+						row.className = 'pn-qt-hist-row ' + (a.Passed ? 'pass' : 'fail');
+						row.innerHTML =
+							'<button type="button" class="pn-qt-hist-toggle" data-attempt-id="' + a.QualAttemptId + '">' +
+								'<span class="pn-qt-hist-badge">' + (a.Passed ? '✓ Passed' : '✗ Not passed') + '</span>' +
+								'<span class="pn-qt-hist-score">' + a.ScorePercent + '%</span>' +
+								'<span class="pn-qt-hist-when">' + esc(when) + (a.RulesVersion ? ' · ' + esc(a.RulesVersion) : '') + '</span>' +
+							'</button>' +
+							'<div class="pn-qt-hist-detail" style="display:none;"></div>';
+						panelBody.appendChild(row);
+					});
+				});
+			});
+		});
+	})();
 })();
 </script>
 <?php endif; ?>
