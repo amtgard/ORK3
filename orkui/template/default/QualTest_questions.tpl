@@ -111,6 +111,9 @@ html[data-theme="dark"] .qt-notlive-warning { background:#3b2f14; border-color:#
 .qt-mem-live   { background:#c6f6d5; color:#22543d; }
 .qt-mem-draft  { background:#e9d8fd; color:#44337a; }
 .qt-mem-unused { background:#edf2f7; color:#718096; }
+/* Imported from another kingdom via the Global Question Library. Deliberately NOT uppercased —
+   it carries a kingdom's name, and shouting it looks wrong. */
+.qt-mem-lib    { background:#bee3f8; color:#2a4365; text-transform:none; letter-spacing:0; font-weight:600; }
 .qt-mem-btn { padding:3px 9px; font-size:0.72rem; font-weight:600; border-radius:5px; border:1px solid #cbd5e0; background:#fff; cursor:pointer; white-space:nowrap; }
 .qt-mem-btn:hover { background:#edf2f7; }
 .qt-mem-btn.qt-mem-in { background:#e9d8fd; border-color:#d6bcfa; color:#44337a; }
@@ -603,6 +606,29 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 							<span class="qt-preview-btn-sub"><?= htmlspecialchars($_live['Name']) ?></span>
 						</button>
 						<?php endif; ?>
+
+						<?php // Downloads in the SAME format Bulk Import reads, so a bank round-trips:
+						      // export it, edit it in any text editor, paste it back. Version-scoped for
+						      // the same reason Preview is — "export the test" means nothing while a
+						      // draft and a live version both exist. ?>
+						<?php // Purple = draft, everywhere: the Draft chip, Preview Draft, and this. The two
+					      // draft actions were different colours, which made the tint look decorative
+					      // rather than meaningful. ?>
+					<?php $_exp = $_draft ?: $_live; ?>
+						<a class="qt-preview-btn <?= $_draft ? 'qt-preview-btn-draft' : 'qt-preview-btn-secondary' ?>"
+						   href="<?= UIR ?>QualTest/export/<?= (int)$_exp['SetId'] ?>"
+						   style="font-size:12px;width:100%;text-align:left;text-decoration:none;display:block;box-sizing:border-box;">
+							<i class="fas fa-download"></i> Export <?= $_draft ? 'Draft' : 'Live Test' ?>
+							<span class="qt-preview-btn-sub"><?= htmlspecialchars($_exp['Name']) ?></span>
+						</a>
+						<?php if ($_draft && $_live): ?>
+						<a class="qt-preview-btn qt-preview-btn-secondary"
+						   href="<?= UIR ?>QualTest/export/<?= (int)$_live['SetId'] ?>"
+						   style="font-size:12px;width:100%;text-align:left;text-decoration:none;display:block;box-sizing:border-box;">
+							<i class="fas fa-download"></i> Export Live Test
+							<span class="qt-preview-btn-sub"><?= htmlspecialchars($_live['Name']) ?></span>
+						</a>
+						<?php endif; ?>
 					</div>
 					<?php endif; ?>
 				</div>
@@ -644,6 +670,16 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 							<?php if (!empty($q['InLive'])): ?><span class="qt-mem qt-mem-live" data-tip="In the live test">Live</span><?php endif; ?>
 							<?php if (!empty($q['InDraft'])): ?><span class="qt-mem qt-mem-draft" data-tip="In the draft version">Draft</span><?php endif; ?>
 							<?php if (!empty($q['Unused'])): ?><span class="qt-mem qt-mem-unused" data-tip="Not in any version — not being asked">Unused</span><?php endif; ?>
+						<?php // Imported from the Global Question Library. Tells a GMR at a glance which
+						      // questions their kingdom wrote and which it inherited — and it survives
+						      // rewording, because the origin is a stored id, not a text match. The
+						      // source kingdom's name may be missing (kingdom removed), so fall back. ?>
+						<?php if (!empty($q['SourceQuestionId'])): ?>
+							<span class="qt-mem qt-mem-lib" data-tip="Imported from the Global Question Library<?= $q['SourceKingdom'] !== '' ? ' — originally from ' . htmlspecialchars($q['SourceKingdom']) : '' ?>. Your copy is independent: edits here do not affect them.">
+								<i class="fas fa-globe"></i>
+								<?= $q['SourceKingdom'] !== '' ? htmlspecialchars($q['SourceKingdom']) : 'Library' ?>
+							</span>
+						<?php endif; ?>
 							<?php if ($_draft): ?>
 							<button type="button" class="qt-mem-btn qt-draft-toggle <?= !empty($q['InDraft']) ? 'qt-mem-in' : '' ?>"
 							        data-id="<?= (int)$q['QualQuestionId'] ?>" data-set="<?= (int)$_draft['SetId'] ?>"
@@ -818,6 +854,10 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			<div style="text-align:center;padding:32px;color:#718096;"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>
 		</div>
 		<div style="display:flex;gap:8px;margin-top:14px;flex-shrink:0;">
+			<?php // Retired versions are exportable too — this is the one place an old bank can be
+			      // pulled back out as text, e.g. to revive a question set a previous GMR wrote. ?>
+			<a class="qt-preview-btn qt-preview-btn-secondary" id="qt-verview-export"
+			   href="#" style="text-decoration:none;"><i class="fas fa-download"></i> Export as text</a>
 			<button class="qt-preview-btn qt-preview-btn-secondary" id="qt-verview-close-footer">Close</button>
 		</div>
 	</div>
@@ -869,6 +909,11 @@ B) Dickens</div>
 		<div style="display:flex;gap:8px;margin-top:10px;flex-shrink:0;">
 			<button class="qt-preview-btn qt-preview-btn-secondary" id="qt-bulkimport-parse"><i class="fas fa-search"></i> Parse &amp; Preview</button>
 			<button class="qt-preview-btn qt-preview-btn-draw" id="qt-bulkimport-submit" disabled><i class="fas fa-file-import"></i> Import Questions</button>
+			<?php // Shown only AFTER a successful import, in place of the import button. Clears the
+			      // box so a second batch can be pasted — importing the same text twice would just
+			      // create duplicates, which is what the old dead "Done" button left you one click
+			      // away from doing. ?>
+			<button class="qt-preview-btn qt-preview-btn-secondary" id="qt-bulkimport-more" style="display:none;"><i class="fas fa-plus"></i> Import Another Batch</button>
 			<button class="qt-preview-btn qt-preview-btn-secondary" id="qt-bulkimport-cancel">Close</button>
 		</div>
 	</div>
@@ -1245,6 +1290,7 @@ $(function() {
 	var cancelBtn = document.getElementById('qt-bulkimport-cancel');
 	var parseBtn  = document.getElementById('qt-bulkimport-parse');
 	var submitBtn = document.getElementById('qt-bulkimport-submit');
+	var moreBtn   = document.getElementById('qt-bulkimport-more');
 	var textarea  = document.getElementById('qt-bulkimport-text');
 	var previewEl = document.getElementById('qt-bulkimport-preview');
 	var parsedQuestions = [];
@@ -1256,19 +1302,34 @@ $(function() {
 	// silently blank.
 	function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+	// Strip the numbering a pasted quiz brings with it — "1.", "12)", "Q3.", "A)".
+	// Real banks are written in a document first, so most GMRs paste something already
+	// numbered; without this the numbering became part of the question text ("1. What
+	// colour...") and had to be hand-edited out of every single question afterwards.
+	//
+	// A bare letter followed by a PERIOD is deliberately NOT treated as numbering: that
+	// would eat the start of a sentence like "E. coli is a bacterium?". A letter only
+	// counts as an enumerator when it uses ")", which nothing else does. Digits are safe
+	// with either, because the trailing space rules out decimals ("3.14" is untouched).
+	function stripEnumerator(s) {
+		return s.replace(/^(?:Q?\d+)[.)]\s+/i, '').replace(/^[A-Za-z]\)\s*/, '');
+	}
+
 	function parseQuestions(raw) {
 		var blocks = raw.split(/\n\s*\n/).map(function(b) { return b.trim(); }).filter(Boolean);
 		var questions = [], errors = [];
 		blocks.forEach(function(block, bi) {
 			var lines = block.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
 			if (lines.length < 2) { errors.push('Block ' + (bi+1) + ': needs question + at least 2 answers.'); return; }
-			var qText = lines[0].replace(/^\*/, ''); // strip leading * from question text
+			var qText = stripEnumerator(lines[0].replace(/^\*/, '')); // leading * then any numbering
 			var answers = [], correctCount = 0;
 			for (var i = 1; i < lines.length; i++) {
 				var line = lines[i];
 				var isCorrect = line.charAt(0) === '*';
 				if (isCorrect) { line = line.substring(1).trim(); correctCount++; }
-				line = line.replace(/^[A-Za-z]\)\s*/, '');
+				// Same rule as the question line. This previously stripped "A)" but not "1)",
+				// so a numbered answer list imported as "1) Blue", "2) Green".
+				line = stripEnumerator(line);
 				if (line) answers.push({ AnswerText: line, IsCorrect: isCorrect ? 1 : 0 });
 			}
 			if (answers.length < 2) { errors.push('Block ' + (bi+1) + ': at least 2 answers required.'); return; }
@@ -1337,9 +1398,43 @@ $(function() {
 					}
 				}
 				previewEl.innerHTML = html;
-				submitBtn.innerHTML = '<i class="fas fa-check"></i> Done';
-				if (importedCount > 0) cancelBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Close &amp; Reload';
+
+				if (j.status === 0) {
+					// Closed mid-flight (Escape / backdrop / X while the request was still running):
+					// closeModal() saw importedCount === 0 and skipped its reload, so the page behind
+					// is now stale — it still says "0 active questions" while the import succeeded.
+					// Reload from here instead.
+					if (j.imported > 0 && !overlay.classList.contains('qt-open')) {
+						window.location.reload();
+						return;
+					}
+					// The batch is CONSUMED. Clearing it is the point: the textarea still holds the
+					// questions you just imported, so re-parsing and importing again would duplicate
+					// every one of them. The import button used to be relabelled "Done" and left
+					// disabled here — a dead control that did nothing, one click away from that trap.
+					parsedQuestions = [];
+					submitBtn.style.display = 'none';
+					moreBtn.style.display   = '';
+					// Keep Parse & Preview ONLY if something failed, so a partial batch can be
+					// corrected in place and retried. On a clean import there is nothing to re-parse.
+					parseBtn.style.display  = (j.errors && j.errors.length) ? '' : 'none';
+					// Closing now reloads the page, so make that the obvious next step.
+					cancelBtn.className = 'qt-preview-btn qt-preview-btn-draw';
+					cancelBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Close &amp; Reload';
+				} else {
+					submitBtn.disabled  = false;   // failed outright — let them try again
+					submitBtn.innerHTML = '<i class="fas fa-file-import"></i> Import Questions';
+				}
 			});
+	});
+
+	// Paste a second batch: clear the box and put the buttons back to their starting state.
+	moreBtn.addEventListener('click', function() {
+		resetModal();
+		submitBtn.style.display = '';
+		parseBtn.style.display  = '';
+		moreBtn.style.display   = 'none';
+		textarea.focus();
 	});
 
 	function resetModal() {
@@ -1353,6 +1448,12 @@ $(function() {
 	openBtn.addEventListener('click', function() {
 		resetModal();
 		importedCount = 0;
+		// Full reset: the modal is reused, so a previous import's finished-state buttons would
+		// otherwise still be showing the next time it is opened.
+		submitBtn.style.display = '';
+		parseBtn.style.display  = '';
+		moreBtn.style.display   = 'none';
+		cancelBtn.className = 'qt-preview-btn qt-preview-btn-secondary';
 		cancelBtn.innerHTML = 'Close';
 		overlay.classList.add('qt-open');
 	});
@@ -1449,6 +1550,10 @@ $(function() {
 						btn.innerHTML = '<i class="fas fa-check"></i> Added';
 						btn.style.background = '#276749';
 						addedCount++;
+						// Closed mid-flight: closeLibrary() saw addedCount === 0 and skipped its
+						// reload, so the bank behind is stale and the question looks like it never
+						// arrived. Same guard as the bulk-import path.
+						if (!overlay.classList.contains('qt-open')) { window.location.reload(); }
 					});
 			});
 		});
@@ -1766,6 +1871,9 @@ var QT_TARGET_SET = <?= (int)($TargetSetId ?? 0) ?>;
 		var titleEl = document.getElementById('qt-verview-title');
 		var infoEl  = document.getElementById('qt-verview-info');
 		var bodyEl  = document.getElementById('qt-verview-body');
+		// Point the export link at the version being viewed.
+		var expEl   = document.getElementById('qt-verview-export');
+		if (expEl) expEl.href = '<?= UIR ?>QualTest/export/' + encodeURIComponent(setId);
 		titleEl.textContent = 'Version';
 		infoEl.textContent  = '';
 		bodyEl.innerHTML    = '<div style="text-align:center;padding:32px;color:#718096;"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>';

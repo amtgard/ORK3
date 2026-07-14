@@ -338,7 +338,14 @@ class QualTest
 
         $this->db->Clear();
         $rs = $this->db->DataSet(
+            // Where an imported question came from. source_question_id is recorded on every
+            // library copy; resolve it to the ORIGINATING kingdom's name so the bank can say
+            // "From the Nine Blades" rather than leaving a GMR unable to tell which questions
+            // they wrote and which they inherited. LEFT JOINs: a question written locally has
+            // no source, and the source kingdom is looked up through the source question.
             'SELECT q.qual_question_id, q.question_text, q.answer_mode, q.status, q.created_at,
+                    q.source_question_id,
+                    sk.name AS source_kingdom_name,
                     EXISTS(SELECT 1 FROM ' . DB_PREFIX . 'qual_set_question xl
                             WHERE xl.qual_question_id = q.qual_question_id
                               AND xl.qual_question_set_id = ' . $pid . ') AS in_live,
@@ -358,6 +365,8 @@ class QualTest
              FROM ' . DB_PREFIX . 'qual_question q
              LEFT JOIN ' . DB_PREFIX . 'qual_answer a  ON a.qual_question_id = q.qual_question_id
              LEFT JOIN ' . DB_PREFIX . 'qual_question_stat s ON s.qual_question_id = q.qual_question_id
+             LEFT JOIN ' . DB_PREFIX . 'qual_question sq ON sq.qual_question_id = q.source_question_id
+             LEFT JOIN ' . DB_PREFIX . 'kingdom sk       ON sk.kingdom_id = sq.kingdom_id
              WHERE q.kingdom_id = ' . (int)$kingdom_id . '
                AND q.test_type = \'' . $test_type . '\'
              GROUP BY q.qual_question_id
@@ -378,6 +387,11 @@ class QualTest
                     'TimesAnswered'  => (int)$rs->times_answered,
                     'TimesCorrect'   => (int)$rs->times_correct,
                     'ReportCount'    => (int)$rs->report_count,
+                    // Imported from the Global Question Library. SourceKingdom may be '' even when
+                    // SourceQuestionId is set — the originating kingdom could have been removed —
+                    // so the badge must not assume a name is there.
+                    'SourceQuestionId' => (int)($rs->source_question_id ?? 0),
+                    'SourceKingdom'    => (string)($rs->source_kingdom_name ?? ''),
                     'InLive'         => (int)$rs->in_live  === 1,
                     'InDraft'        => (int)$rs->in_draft === 1,
                     'Unused'         => (int)$rs->set_count === 0,
@@ -592,6 +606,34 @@ class QualTest
     // -----------------------------------------------------------------------
     // Questions (player — randomized, no correct flags)
     // -----------------------------------------------------------------------
+
+    /**
+     * Can a player actually SIT this test right now, questions-wise?
+     *
+     * True only when a published version exists AND holds at least QuestionCount active
+     * questions. The draw is a LIMIT n that returns NULL when it cannot fill the test, and
+     * the start endpoint then refuses outright — so a short version is not a shorter test,
+     * it is NO test.
+     *
+     * This is the check the player-facing UI was missing. It offered "Take Test" off the
+     * kingdom's on/off switch alone, so the moment a monarch flipped the switch every player
+     * was invited to sit a test that did not exist yet — and got "Not enough active questions
+     * available" the instant they tried. The switch says the kingdom PARTICIPATES; this says
+     * there is something to take.
+     *
+     * Callers must still AND this with the kingdom's QualTest*Enabled config: the switch and
+     * the bank are independent, and both have to be true.
+     */
+    public function hasTakeableVersion($kingdom_id, $test_type)
+    {
+        $published = $this->getPublishedSet($kingdom_id, $test_type);
+        if ($published === null) {
+            return false;
+        }
+        $cfg  = $this->getConfig($kingdom_id, $test_type);
+        $need = (int)$cfg['QuestionCount'];
+        return $need > 0 && (int)$published['MemberCount'] >= $need;
+    }
 
     /**
      * Get $limit random active questions with shuffled answers (no is_correct flag).

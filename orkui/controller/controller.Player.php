@@ -956,6 +956,15 @@ class Controller_Player extends Controller
         $this->data['QualKingdomId']          = $playerKingdomId;
         $this->data['QualPlayerId']           = (int)$id;
 
+        // The kingdom switch says the kingdom PARTICIPATES; it does not say a test exists yet.
+        // Offering "Take Test" off the switch alone meant a player could accept and immediately
+        // be told "Not enough active questions available" — inviting them to do something that
+        // cannot be done. A test is takeable only if it is ALSO published with enough questions.
+        $this->data['QualTakeable'] = [
+            'reeve'   => $qualReeveEnabled   && Ork3::$Lib->qualtest->hasTakeableVersion($playerKingdomId, 'reeve'),
+            'corpora' => $qualCorporaEnabled && Ork3::$Lib->qualtest->hasTakeableVersion($playerKingdomId, 'corpora'),
+        ];
+
         if ($qualReeveEnabled || $qualCorporaEnabled) {
             $this->data['QualResults']   = Ork3::$Lib->qualtest->getPlayerResults((int)$id, $playerKingdomId);
             $this->data['QualCanManage'] = $canEdit || Ork3::$Lib->qualtest->canManage($uid, $playerKingdomId);

@@ -204,6 +204,12 @@ class Controller_QualTest extends Controller
             $this->data['Error'] = 'This test is not currently enabled.';
             return;
         }
+        // Switched on is not the same as ready. Without this, a player reaching this page (or
+        // an old link) is shown the whole test-taking UI for a test that cannot start.
+        if (!Ork3::$Lib->qualtest->hasTakeableVersion($kingdom_id, $test_type)) {
+            $this->data['Error'] = 'This test is not ready yet — your kingdom is still putting the questions together. Check back soon.';
+            return;
+        }
 
         $kingdom_name = Ork3::$Lib->qualtest->getKingdomName($kingdom_id);
 
@@ -248,6 +254,60 @@ class Controller_QualTest extends Controller
         // Durable attempt history for this player+test (pass and fail), newest
         // first — powers the "Your Test History" review list on the take page.
         $this->data['PlayerAttempts'] = Ork3::$Lib->qualtest->getPlayerAttempts($uid, $kingdom_id, $test_type);
+    }
+
+    // -----------------------------------------------------------------------
+    // export — download one version's questions as text
+    // Route: ?Route=QualTest/export/{set_id}
+    //
+    // Emits the SAME format Bulk Import reads, so a bank round-trips: export it, edit it
+    // in any text editor, paste it back. That one property is what makes this useful as a
+    // backup, a way to review a test in a shared document, a way to seed a new kingdom, and
+    // a way to hand questions to a kingdom that is not opted in to the library. A CSV would
+    // have needed answer_1..answer_n columns and a correctness convention nobody remembers.
+    // -----------------------------------------------------------------------
+    public function export($action = null)
+    {
+        $parts  = explode('/', $action ?? '');
+        $set_id = (int)preg_replace('/[^0-9]/', '', $parts[0] ?? '');
+        $uid    = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+
+        $set = Ork3::$Lib->qualtest->getSetById($set_id);
+        if ($set === null) {
+            $this->data['Error'] = 'Version not found.';
+            return;
+        }
+        // Same gate as the rest of test management, checked against the SET's own kingdom —
+        // never a kingdom id from the request, or this would export any kingdom's bank
+        // (answers included) to anyone who could guess a set id.
+        if (!Ork3::$Lib->qualtest->canManage($uid, (int)$set['KingdomId'])) {
+            $this->data['Error'] = 'You do not have permission to export this test.';
+            return;
+        }
+
+        $lines = [];
+        foreach (Ork3::$Lib->qualtest->getSetQuestions($set_id) as $q) {
+            // Archived questions are skipped: they are not part of the test any more, and
+            // re-importing this file should not quietly resurrect them as active.
+            if (!empty($q['Archived'])) {
+                continue;
+            }
+            $lines[] = $q['QuestionText'];
+            foreach ($q['Answers'] as $a) {
+                $lines[] = (!empty($a['IsCorrect']) ? '*' : '') . $a['AnswerText'];
+            }
+            $lines[] = '';   // blank line = block separator, which is what the parser splits on
+        }
+
+        $kingdom = Ork3::$Lib->qualtest->getKingdomName((int)$set['KingdomId']);
+        $name    = preg_replace('/[^a-z0-9]+/i', '-', $kingdom . '-' . $set['TestType'] . '-' . $set['Name']);
+        $name    = trim(strtolower($name), '-');
+
+        header('Content-Type: text/plain; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $name . '.txt"');
+        header('Cache-Control: no-cache, must-revalidate');
+        echo implode("\n", $lines);
+        exit();
     }
 
 }

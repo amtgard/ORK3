@@ -1356,10 +1356,22 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 					<?php endif; ?>
 				</span>
 			</div>
-			<?php if ($isOwnProfile && (!empty($QualTestReeveEnabled) || !empty($QualTestCorporaEnabled))): ?>
+			<?php
+			  // Offer this ONLY when there is something to do. The button used to appear whenever
+			  // the kingdom had a test switched on, so a player could press it, pick a test, and be
+			  // told "Not enough active questions available" — invited to do the impossible.
+			  // A player with past attempts still gets in, because the same modal is where they
+			  // review them.
+			  $_qtTakeable = !empty($QualTakeable['reeve']) || !empty($QualTakeable['corpora']);
+			  $_qtHasHistory = false;
+			  foreach ((array)($QualResults ?? []) as $_qr) {
+				  if (!empty($_qr)) { $_qtHasHistory = true; break; }
+			  }
+			?>
+			<?php if ($isOwnProfile && ($_qtTakeable || $_qtHasHistory)): ?>
 			<div style="margin-top:10px;display:flex;justify-content:flex-end;">
 				<button type="button" class="pn-btn pn-btn-sm pn-btn-primary" onclick="pnOpenTestChooser();return false;">
-					<i class="fas fa-play-circle"></i> Take Tests
+					<i class="fas fa-play-circle"></i> <?= $_qtTakeable ? 'Take Tests' : 'Test History' ?>
 				</button>
 			</div>
 			<?php endif; ?>
@@ -5881,7 +5893,17 @@ html[data-theme="dark"] #pn-quiz-report-reason {
 							Retakes used: <strong><?= $_qtRetakes ?></strong> <span style="color:#a0aec0">(no limit)</span>
 						<?php endif; ?>
 					</div>
-					<?php if ($_qtBlocked): ?>
+					<?php
+					  // Switched on, but nothing published (or too few questions to fill a test).
+					  // Starting it would fail with "Not enough active questions available", so do
+					  // not offer it — say why, and let them see their history.
+					  $_qtTakeableNow = !empty($QualTakeable[$_qtType]);
+					?>
+					<?php if (!$_qtTakeableNow): ?>
+					<div class="pn-qt-retake-warning" style="background:#edf2f7;border-color:#cbd5e0;color:#4a5568;">
+						<i class="fas fa-hourglass-half"></i> This test isn't ready yet &mdash; your kingdom is still putting the questions together. Check back soon.
+					</div>
+					<?php elseif ($_qtBlocked): ?>
 					<div class="pn-qt-retake-warning">
 						<i class="fas fa-ban"></i> You may not retake this test again. Please reach out to your local monarchy for further instructions.
 					</div>
