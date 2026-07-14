@@ -108,7 +108,7 @@ Player-submitted feedback on a question (during or after taking it).
 surface to managers in the management UI for triage.
 
 ### Kingdom config flags (`ork_configuration`)
-Migration `2026-03-29-add-qual-test-enabled-configs.sql` seeds two
+Migration `2026-07-14-qualification-tests.sql` seeds two
 new keys per active kingdom, both defaulting to `"0"` (disabled):
 
 - `QualTestReeveEnabled`
