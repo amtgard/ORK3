@@ -311,6 +311,10 @@ html[data-theme="dark"] .qt-lib-answer.qt-lib-correct { color: #9ae6b4; }
 html[data-theme="dark"] .qt-lib-flag { color: #fc8181; }
 html[data-theme="dark"] .qt-lib-add-btn:disabled { background: #4a5568; color: #a0aec0; }
 html[data-theme="dark"] #qt-library-search:focus { border-color: #63b3ed; box-shadow: 0 0 0 3px rgba(99,179,237,0.2); }
+/* "N shared questions already in your bank are hidden" note — color moved off the
+   inline style so dark mode can lift it off the too-dim #718096. */
+.qt-lib-note { color: #718096; }
+html[data-theme="dark"] .qt-lib-note { color: #a0aec0; }
 /* Report-question modal */
 html[data-theme="dark"] .qt-report-modal {
 	background: var(--ork-card-bg, #2d3748);
@@ -1644,7 +1648,8 @@ $(function() {
 				var st2 = j.stats || {};
 				if (st2.AlreadyHave > 0 && listEl.parentNode) {
 					var note = document.createElement('div');
-					note.style.cssText = 'font-size:0.8rem;color:#718096;padding:0 0 8px;';
+					note.className = 'qt-lib-note';
+					note.style.cssText = 'font-size:0.8rem;padding:0 0 8px;';
 					note.innerHTML = '<i class="fas fa-info-circle"></i> ' + st2.AlreadyHave
 						+ ' shared question' + (st2.AlreadyHave === 1 ? '' : 's')
 						+ ' already in your bank ' + (st2.AlreadyHave === 1 ? 'is' : 'are') + ' hidden.';

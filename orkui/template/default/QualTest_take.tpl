@@ -657,8 +657,15 @@ html[data-theme="dark"] .qt-history-item { background: #2d3748; border-color: #4
 html[data-theme="dark"] .qt-review-q-text,
 html[data-theme="dark"] .qt-history-score { color: #e2e8f0; }
 html[data-theme="dark"] .qt-review-opt { color: #cbd5e0; }
-html[data-theme="dark"] .qt-review-opt-correct   { background: #22543d; color: #9ae6b4; }
-html[data-theme="dark"] .qt-review-opt-wrongpick { background: #63171b; color: #feb2b2; }
+/* Dark: clearly-filled pills with near-white text, matching the reeve/corpora
+   results report — state reads from the fill + left accent, text stays high
+   contrast (a faint tint or pale-on-saturated both read poorly here). */
+html[data-theme="dark"] .qt-review-opt-correct   { background: #24503c; color: #eafff4; border-left: 3px solid #48bb78; }
+html[data-theme="dark"] .qt-review-opt-wrongpick { background: #532a2e; color: #ffe9e9; border-left: 3px solid #f56565; }
+html[data-theme="dark"] .qt-review-opt-tag { opacity: 1; color: #cbd5e0; }
+/* The ✓/✗ question badge keeps the light-mode dark green/red otherwise. */
+html[data-theme="dark"] .qt-review-q-correct .qt-review-q-badge { color: #68d391; }
+html[data-theme="dark"] .qt-review-q-wrong   .qt-review-q-badge { color: #fc8181; }
 html[data-theme="dark"] .qt-review-toggle { color: #cbd5e0; border-color: #4a5568; }
 html[data-theme="dark"] .qt-review-toggle:hover { background: #374151; }
 
@@ -726,6 +733,11 @@ html[data-theme="dark"] .qt-q-text {
 html[data-theme="dark"] .qt-progress-text  { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .qt-progress-score { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .qt-progress-seg   { background: #4a5568; }
+/* Done/current need brighter fills on the dark modal — the light-mode green/blue
+   and the faint current-glow both wash out against #2d3748, so you can't tell
+   which question you're on. */
+html[data-theme="dark"] .qt-progress-seg-done    { background: #48bb78; }
+html[data-theme="dark"] .qt-progress-seg-current { background: #63b3ed; box-shadow: 0 0 0 2px rgba(99,179,237,0.5); }
 html[data-theme="dark"] .qt-answer-label {
 	background: var(--ork-bg-tertiary, #374151);
 	border-color: var(--ork-border, #4a5568);

@@ -5648,8 +5648,22 @@ html[data-theme="dark"] .pn-qt-hist-toggle, html[data-theme="dark"] .pn-qt-rev-q
 html[data-theme="dark"] .pn-qt-hist-row, html[data-theme="dark"] .pn-qt-rev-q { border-color: #4a5568; }
 html[data-theme="dark"] .pn-qt-hist-detail { background: #252d3a; }
 html[data-theme="dark"] .pn-qt-hist-score { color: #e2e8f0; }
-html[data-theme="dark"] .pn-qt-rev-opt.correct { background: #22543d; color: #9ae6b4; }
-html[data-theme="dark"] .pn-qt-rev-opt.wrong   { background: #63171b; color: #feb2b2; }
+/* Attempt-row meta: dim #718096 timestamp and light-mode pass/fail badges are
+   too faint on the navy row — lift to readable brights. */
+html[data-theme="dark"] .pn-qt-hist-when { color: #a0aec0; }
+html[data-theme="dark"] .pn-qt-hist-row.pass .pn-qt-hist-badge { color: #68d391; }
+html[data-theme="dark"] .pn-qt-hist-row.fail .pn-qt-hist-badge { color: #fc8181; }
+/* Dark: clearly-filled pills with near-white text + left accent, matching the
+   reeve/corpora results report — high contrast for both answer and label. */
+html[data-theme="dark"] .pn-qt-rev-opt.correct { background: #24503c; color: #eafff4; border-left: 3px solid #48bb78; }
+html[data-theme="dark"] .pn-qt-rev-opt.wrong   { background: #532a2e; color: #ffe9e9; border-left: 3px solid #f56565; }
+html[data-theme="dark"] .pn-qt-rev-opt em { opacity: 1; color: #cbd5e0; }
+/* Un-picked options (neither correct nor the player's pick): the base #4a5568 is
+   near-invisible on the navy card — lift to a readable muted grey. */
+html[data-theme="dark"] .pn-qt-rev-opt { color: #a0aec0; }
+/* Question headers: the light-mode green/red are too dark on the navy card. */
+html[data-theme="dark"] .pn-qt-rev-q.ok  .pn-qt-rev-qh { color: #68d391; }
+html[data-theme="dark"] .pn-qt-rev-q.bad .pn-qt-rev-qh { color: #fc8181; }
 /* Chooser modal */
 #pn-qt-chooser-overlay .pn-modal-box { width: 720px; max-width: calc(100vw - 40px); }
 .pn-qt-chooser-prompt { font-size: 0.92rem; color: #4a5568; margin-bottom: 14px; }
@@ -5757,6 +5771,15 @@ html[data-theme="dark"] .pn-qt-chooser-empty  { color: var(--ork-text-muted, #a0
 html[data-theme="dark"] .pn-quiz-progress         { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .pn-quiz-progress-score   { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .pn-quiz-progress-seg     { background: #4a5568; }
+/* Done/current need brighter fills on the dark modal — the light-mode green/blue
+   and the faint current-glow wash out against #2d3748, so you can't tell which
+   question you're on. */
+html[data-theme="dark"] .pn-quiz-progress-seg-done    { background: #48bb78; }
+html[data-theme="dark"] .pn-quiz-progress-seg-current { background: #63b3ed; box-shadow: 0 0 0 2px rgba(99,179,237,0.5); }
+/* "Select all that apply" hint — color moved off the inline style so dark mode
+   can lift it off the too-dark #4a5568 it used to hard-code. */
+.pn-quiz-multi-hint { color: #4a5568; }
+html[data-theme="dark"] .pn-quiz-multi-hint { color: #cbd5e0; }
 html[data-theme="dark"] .pn-quiz-q-text {
 	color: var(--ork-text, #e2e8f0);
 	border-bottom-color: var(--ork-border, #4a5568);
@@ -6024,7 +6047,7 @@ function pnOpenTestChooser() {
 				<div class="pn-quiz-q-text" id="pn-quiz-q-text"></div>
 				<ul class="pn-quiz-answers" id="pn-quiz-answers"></ul>
 				<!-- Multi-correct affordances: hidden for single-answer questions. -->
-				<div class="pn-quiz-multi-hint" id="pn-quiz-multi-hint" style="display:none;font-size:0.82rem;color:#4a5568;margin:6px 0 10px;"><i class="fas fa-check-square" style="margin-right:5px;color:#2b6cb0;"></i>Select all that apply, then submit.</div>
+				<div class="pn-quiz-multi-hint" id="pn-quiz-multi-hint" style="display:none;font-size:0.82rem;margin:6px 0 10px;"><i class="fas fa-check-square" style="margin-right:5px;color:#2b6cb0;"></i>Select all that apply, then submit.</div>
 				<div id="pn-quiz-multi-submit-row" style="display:none;margin:0 0 12px;">
 					<button class="pn-btn pn-btn-primary" id="pn-quiz-multi-submit-btn" disabled><i class="fas fa-check"></i> Submit Answer</button>
 				</div>

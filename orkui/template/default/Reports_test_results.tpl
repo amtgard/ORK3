@@ -105,8 +105,25 @@ html[data-theme="dark"] .rp-attempt-toggle,
 html[data-theme="dark"] .rp-rev-q { background: #2d3748; }
 html[data-theme="dark"] .rp-attempt-detail { background: #252d3a; }
 html[data-theme="dark"] .rp-att-score { color: #e2e8f0; }
-html[data-theme="dark"] .rp-rev-opt.correct { background: #22543d; color: #9ae6b4; }
-html[data-theme="dark"] .rp-rev-opt.wrong   { background: #63171b; color: #feb2b2; }
+/* Attempt-row meta on the navy row: the #718096 timestamp and the light-mode
+   green/red pass-fail badges are too dim — lift to readable brights. */
+html[data-theme="dark"] .rp-att-when { color: #a0aec0; }
+html[data-theme="dark"] .rp-history-row.pass .rp-att-badge { color: #68d391; }
+html[data-theme="dark"] .rp-history-row.fail .rp-att-badge { color: #fc8181; }
+/* Dark: clearly-filled pills with near-white text — state stays obvious via the
+   fill + left accent, and the answer/label text keeps high contrast. (A faint
+   tint or a pale-on-saturated combo both read poorly here.) */
+html[data-theme="dark"] .rp-rev-opt.correct { background: #24503c; color: #eafff4; border-left: 3px solid #48bb78; }
+html[data-theme="dark"] .rp-rev-opt.wrong   { background: #532a2e; color: #ffe9e9; border-left: 3px solid #f56565; }
+/* The global .75 opacity on the (their pick)/(correct) labels washes them out on
+   the fills; make them full-opacity and a light neutral so they stay legible. */
+html[data-theme="dark"] .rp-rev-opt em { opacity: 1; color: #cbd5e0; }
+/* Un-picked options (neither correct nor their pick): the base #4a5568 is
+   near-invisible on the navy card — lift to a readable muted grey. */
+html[data-theme="dark"] .rp-rev-opt { color: #a0aec0; }
+/* Question headers: the light-mode green/red are too dark on the navy card. */
+html[data-theme="dark"] .rp-rev-q.ok  .rp-rev-qh { color: #68d391; }
+html[data-theme="dark"] .rp-rev-q.bad .rp-rev-qh { color: #fc8181; }
 /* Pass/Fail filter pills */
 .rp-filter-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .rp-filter-label { font-size: 0.82rem; font-weight: 600; color: #718096; }
