@@ -2,7 +2,7 @@
 
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
-define('WHATS_NEW_VERSION', '2026-07-18');
+define('WHATS_NEW_VERSION', '2026-07-15');
 
 // Application version — shown in the site footer. Change this if you change the above date.
 define('ORK_VERSION', '3.5.4 Walker');
@@ -10,7 +10,7 @@ define('ORK_VERSION', '3.5.4 Walker');
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
 $WHATS_NEW_ITEMS = [
-    ['version' => '3.5.4 Walker', 'date' => '2026-07-18', 'items' => [
+    ['version' => '3.5.4 Walker', 'date' => '2026-07-15', 'items' => [
         ['icon' => 'fas fa-graduation-cap', 'title' => 'Qualification Tests Arrive', 'body' => 'Kingdoms can now run the Reeve\'s Test and the Corpora Test right inside the ORK. Build your own multiple-choice question banks, set the pass score and how long a pass stays valid, and let players test on their own time with instant auto-grading. A passing score writes straight back into the player\'s official qualifications, so every existing report keeps working — the record-keeping just does itself. Each test type is opt-in per kingdom, so nothing appears until your kingdom turns it on.'],
         ['icon' => 'fas fa-list-ol', 'title' => 'Build and Run Your Own Question Bank', 'body' => 'Test managers get a full dashboard: dial in question count, pass percent, validity window, and retake limits; add questions one at a time or paste a whole batch at once; and pull ready-made questions from a shared library that other kingdoms have opted to publish. You can appoint a subject-matter expert as a test manager without handing over broader officer powers, triage questions players flag as unclear, and reset retakes for a single player or everyone at once.'],
         ['icon' => 'fas fa-user-graduate', 'title' => 'Take the Test on Your Own Time', 'body' => 'From the Qualifications card on your profile, see whether you\'re currently certified, when it expires, and how many retakes you have left — then take the test whenever you\'re ready. Questions come one at a time with the kingdom\'s instructions up top, you can flag anything that looks off without leaving the test, and a passing score sets off a little confetti. Questions can be single-answer or "select all that apply."'],
