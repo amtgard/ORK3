@@ -843,8 +843,14 @@ class QualTest
             return !empty($want) && $given === $want;
         }
         $given_id = is_array($given_raw) ? (int)($given_raw[0] ?? 0) : (int)$given_raw;
-        $want_id  = (int)($correct_ids[0] ?? 0);
-        return $given_id > 0 && $given_id === $want_id;
+        // A well-formed single question has exactly one correct id, so this is
+        // normally a plain equality check. But if malformed data carries more
+        // than one is_correct row (a directly-inserted or legacy question the
+        // model's validation never saw), honor ANY of them rather than blessing
+        // only the first and marking a genuinely-correct pick wrong. No behavior
+        // change when there is a single correct id.
+        $want = array_map('intval', $correct_ids);
+        return $given_id > 0 && in_array($given_id, $want, true);
     }
 
     /**
