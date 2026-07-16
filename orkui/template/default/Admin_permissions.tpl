@@ -194,7 +194,7 @@ html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-colo
 					<?php if ($type === 'Kingdom'): ?>
 					<li>Edit kingdom name, heraldry &amp; settings</li>
 					<li>Set and vacate officer roles (Monarch, Regent, etc.)</li>
-					<li>Add, edit, and claim parks within the kingdom</li>
+					<li>Add and edit parks within the kingdom</li>
 					<li>Manage kingdom-level awards and park titles</li>
 					<li>Track kingdom-wide attendance</li>
 					<li>Grant and revoke permissions for others</li>

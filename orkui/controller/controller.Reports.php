@@ -516,6 +516,41 @@ class Controller_Reports extends Controller
         $this->data['page_title']        = "Corpora Qualified";
     }
 
+    public function reeve_test_results($type = null)
+    {
+        $this->_test_results($type, 'reeve', "Reeve's Test", 'fa-gavel', "Reeve's Test Results");
+    }
+
+    public function corpora_test_results($type = null)
+    {
+        $this->_test_results($type, 'corpora', 'Corpora Test', 'fa-book', 'Corpora Test Results');
+    }
+
+    private function _test_results($type, $test_type, $test_label, $test_icon, $page_title)
+    {
+        $this->template = 'Reports_test_results.tpl';
+        $kingdom_id = ($type == 'Kingdom' && valid_id($this->request->id)) ? (int)$this->request->id : null;
+        if (!$kingdom_id) {
+            $this->data['Error'] = 'Invalid kingdom.';
+            return;
+        }
+        $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        if (!$uid || !Ork3::$Lib->qualtest->canManage($uid, $kingdom_id)) {
+            $this->data['Error'] = 'You do not have permission to view this report.';
+            $this->data['page_title'] = 'Access Denied';
+            return;
+        }
+        $this->data['results']      = Ork3::$Lib->qualtest->getTestResults($kingdom_id, $test_type);
+        $this->data['stats']        = Ork3::$Lib->qualtest->getTestReportStats($kingdom_id, $test_type);
+        $this->data['ScopeType']    = 'kingdom';
+        $this->data['ScopeId']      = $kingdom_id;
+        $this->data['TestType']     = $test_type;
+        $this->data['test_label']   = $test_label;
+        $this->data['test_icon']    = $test_icon;
+        $this->data['KingdomName']  = Ork3::$Lib->qualtest->getKingdomName($kingdom_id);
+        $this->data['page_title']   = $page_title;
+    }
+
     public function inactive($type = null)
     {
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;

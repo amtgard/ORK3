@@ -1003,8 +1003,8 @@
 								<div class="plr-gear-wrap">
 									<button class="plr-gear-btn" id="pk-plr-gear-btn" aria-label="Player actions" aria-expanded="false" onclick="var m=this.nextElementSibling;var o=m.classList.toggle('open');this.setAttribute('aria-expanded',o)"><i class="fas fa-cog"></i></button>
 									<div class="plr-gear-menu" id="pk-plr-gear-menu">
-										<button class="plr-gear-item" onclick="pkOpenMovePlayerModal();document.getElementById('pk-plr-gear-menu').classList.remove('open')"><i class="fas fa-people-arrows"></i> Move Player</button>
-										<?php if (!empty($CanMergePlayers)): ?><button class="plr-gear-item" onclick="pkOpenMergePlayerModal();document.getElementById('pk-plr-gear-menu').classList.remove('open')"><i class="fas fa-compress-alt"></i> Merge Players</button><?php endif; ?>
+										<button class="plr-gear-item" onclick="pkOpenMovePlayerModal();document.getElementById('pk-plr-gear-menu').classList.remove('open')"><i class="fas fa-exchange-alt"></i> Move Player</button>
+										<?php if (!empty($CanMergePlayers)): ?><button class="plr-gear-item" onclick="pkOpenMergePlayerModal();document.getElementById('pk-plr-gear-menu').classList.remove('open')"><i class="fas fa-compress-arrows-alt"></i> Merge Players</button><?php endif; ?>
 									</div>
 								</div>
 							</div>
@@ -1822,7 +1822,9 @@ var PkBannerConfig = {
 			<!-- Entered today (always visible, shared by both tabs) -->
 			<div class="pk-att-entered-section">
 				<div class="pk-att-section-label">
-					<i class="fas fa-list-check" style="margin-right:6px;color:#a0aec0"></i>Attendance
+					<?php // fa-tasks, not fa-list-check: the ORK loads Font Awesome 5, where the FA6
+					      // name renders as nothing at all — no icon, no error, no broken glyph. ?>
+					<i class="fas fa-tasks" style="margin-right:6px;color:#a0aec0"></i>Attendance
 					<span class="pk-att-entered-count" id="pk-att-entered-count"></span>
 				</div>
 				<div id="pk-att-entered-empty" class="pk-att-qa-empty">No entries yet for this date.</div>
@@ -2850,7 +2852,7 @@ html[data-theme="dark"] #pk-addday-startdate { color-scheme:dark; }
 <div id="pk-moveplayer-overlay">
 	<div class="pk-modal-box" style="width:480px;max-width:calc(100vw - 40px)">
 		<div class="pk-modal-header">
-			<h3 class="pk-modal-title"><i class="fas fa-people-arrows" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
+			<h3 class="pk-modal-title"><i class="fas fa-exchange-alt" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
 			<button class="pk-modal-close-btn" id="pk-moveplayer-close-btn">&times;</button>
 		</div>
 		<div class="pk-modal-body">
@@ -2894,7 +2896,7 @@ html[data-theme="dark"] #pk-addday-startdate { color-scheme:dark; }
 <div id="pk-mergeplayer-overlay">
 	<div class="pk-modal-box" style="width:540px;max-width:calc(100vw - 40px)">
 		<div class="pk-modal-header">
-			<h3 class="pk-modal-title"><i class="fas fa-compress-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
+			<h3 class="pk-modal-title"><i class="fas fa-compress-arrows-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
 			<button class="pk-modal-close-btn" id="pk-mergeplayer-close-btn">&times;</button>
 		</div>
 		<div class="pk-modal-body">
@@ -2936,7 +2938,7 @@ html[data-theme="dark"] #pk-addday-startdate { color-scheme:dark; }
 		</div>
 		<div class="pk-modal-footer">
 			<button class="pk-btn-ghost" id="pk-mergeplayer-cancel">Cancel</button>
-			<button class="pk-btn" id="pk-mergeplayer-submit" disabled style="background:#c53030;color:#fff;border-color:#c53030"><i class="fas fa-compress-alt"></i> Merge Players</button>
+			<button class="pk-btn" id="pk-mergeplayer-submit" disabled style="background:#c53030;color:#fff;border-color:#c53030"><i class="fas fa-compress-arrows-alt"></i> Merge Players</button>
 		</div>
 	</div>
 </div>
@@ -2949,7 +2951,7 @@ html[data-theme="dark"] #pk-addday-startdate { color-scheme:dark; }
 			<button class="kn-modal-close-btn" id="kn-confirm-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="kn-modal-body">
-			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:var(--ork-text,#2d3748);line-height:1.6"></p>
+			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:var(--ork-text,#2d3748);line-height:1.6;white-space:pre-line"></p>
 		</div>
 		<div class="kn-modal-footer" style="justify-content:flex-end;gap:10px">
 			<button class="kn-btn-ghost" id="kn-confirm-cancel-btn">Cancel</button>

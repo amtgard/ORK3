@@ -224,7 +224,7 @@ html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background:
 
 		<!-- Retired (Inactive) Units — separate section -->
 		<div id="su-retired-section" style="display:none;margin-top:28px;">
-			<div class="su-retired-header"><i class="fas fa-box-archive"></i> Retired (Inactive) Units <span class="su-retired-count" id="su-retired-count"></span></div>
+			<div class="su-retired-header"><i class="fas fa-archive"></i> Retired (Inactive) Units <span class="su-retired-count" id="su-retired-count"></span></div>
 			<p class="su-retired-note">These companies &amp; households have been retired and are hidden from the main results. A member of monarchy can reactivate one from its profile.</p>
 			<table id="su-retired-table">
 				<thead><tr><th></th><th>Name</th><th>Total</th><th class="su-col-leaders">Leaders</th><th class="su-col-web" style="text-align:center">Web</th></tr></thead>

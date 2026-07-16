@@ -940,6 +940,43 @@ class Controller_Player extends Controller
         if (!empty($this->data['BeltlineAssociates'])) {
             $this->data['BeltlineAssociates'] = $__dedupeByKey($this->data['BeltlineAssociates'], 'RecipientId');
         }
+
+        // Qualification test results — use the viewed player's home kingdom, not the session context
+        $playerKingdomId    = (int)($this->data['Player']['KingdomId'] ?? $this->session->kingdom_id);
+        $playerKnConfigs    = Common::get_configs($playerKingdomId, CFG_KINGDOM);
+        $qualReeveEnabled   = isset($playerKnConfigs['QualTestReeveEnabled'])
+            ? (bool)(int)$playerKnConfigs['QualTestReeveEnabled']['Value']
+            : false;
+        $qualCorporaEnabled = isset($playerKnConfigs['QualTestCorporaEnabled'])
+            ? (bool)(int)$playerKnConfigs['QualTestCorporaEnabled']['Value']
+            : false;
+
+        $this->data['QualTestReeveEnabled']   = $qualReeveEnabled;
+        $this->data['QualTestCorporaEnabled'] = $qualCorporaEnabled;
+        $this->data['QualKingdomId']          = $playerKingdomId;
+        $this->data['QualPlayerId']           = (int)$id;
+
+        // The kingdom switch says the kingdom PARTICIPATES; it does not say a test exists yet.
+        // Offering "Take Test" off the switch alone meant a player could accept and immediately
+        // be told "Not enough active questions available" — inviting them to do something that
+        // cannot be done. A test is takeable only if it is ALSO published with enough questions.
+        $this->data['QualTakeable'] = [
+            'reeve'   => $qualReeveEnabled   && Ork3::$Lib->qualtest->hasTakeableVersion($playerKingdomId, 'reeve'),
+            'corpora' => $qualCorporaEnabled && Ork3::$Lib->qualtest->hasTakeableVersion($playerKingdomId, 'corpora'),
+        ];
+
+        if ($qualReeveEnabled || $qualCorporaEnabled) {
+            $this->data['QualResults']   = Ork3::$Lib->qualtest->getPlayerResults((int)$id, $playerKingdomId);
+            $this->data['QualCanManage'] = $canEdit || Ork3::$Lib->qualtest->canManage($uid, $playerKingdomId);
+            $this->data['QualConfigs']   = [
+                'reeve'   => $qualReeveEnabled ? Ork3::$Lib->qualtest->getConfig($playerKingdomId, 'reeve') : null,
+                'corpora' => $qualCorporaEnabled ? Ork3::$Lib->qualtest->getConfig($playerKingdomId, 'corpora') : null,
+            ];
+        } else {
+            $this->data['QualResults']   = [];
+            $this->data['QualCanManage'] = false;
+            $this->data['QualConfigs']   = ['reeve' => null, 'corpora' => null];
+        }
     }
 
 

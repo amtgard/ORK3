@@ -464,10 +464,13 @@ class Model_Reports extends Model
             ],
             24 => [ // Winter's Edge — 6 distinct weeks/6mo; citizenship requires 3mo membership
                     // Physical vs. online can't be determined; event sign-ins shown informally.
+                    // Citizenship is kingdom-scoped, so gauge membership age by first attendance in
+                    // the kingdom rather than park_member_since, which resets on an intra-kingdom park switch.
                 'AttendanceRequired'  => 6,
                 'MonthsWindow'        => 6,
                 'MinMembershipMonths' => 3,
                 'AttendanceMode'      => 'weeks',
+                'MembershipMode'      => 'first_attendance',
                 'ProvinceMode'        => false,
                 'ShowEventCount'      => true,
             ],

@@ -232,7 +232,7 @@ html[data-theme="dark"] .si-invalid a { color: var(--ork-link, #63b3ed) !importa
 <?php if ($error && !$link): ?>
 	<!-- Link invalid / expired -->
 	<div class="si-invalid">
-		<i class="fas fa-link-slash"></i>
+		<i class="fas fa-unlink"></i>
 		<h3 style="margin:0 0 8px;color:#2d3748;background:transparent;border:none;padding:0;border-radius:0;text-shadow:none">Sign-in Link Unavailable</h3>
 		<p><?= htmlspecialchars($error) ?></p>
 		<a href="<?= UIR ?>" style="display:inline-block;margin-top:16px;color:#3182ce;font-size:13px">

@@ -352,7 +352,7 @@
 					<span class="kn-tab-count" id="kn-tab-count-recs"<?= $_recsN > 0 ? '' : ' style="display:none"' ?>><?= $_recsN > 0 ? '(' . $_recsN . ')' : '' ?></span>
 				</li>
 				<?php endif; ?>
-				<?php if ($CanManageKingdom ?? false): ?>
+				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
 				<li data-kntab="admin">
 					<i class="fas fa-cog"></i><span class="kn-tab-label"> Admin Tasks</span>
 				</li>
@@ -883,6 +883,9 @@
 							<li><a href="<?= UIR ?>Reports/parkheraldry/<?= $kingdom_id ?>"><?= $entityLabel ?> Heraldry, Parks</a></li>
 							<li><a href="<?= UIR ?>Reports/playerheraldry/<?= $kingdom_id ?>"><?= $entityLabel ?> Heraldry, Players</a></li>
 							<li><a href="<?= UIR ?>Reports/park_distance_matrix&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-th"></i> Park Distance Matrix</a></li>
+							<?php // Test Results now live under Admin Tasks -> Tests, with the rest of the test
+							      // workspace (configure, questions, results). They are officer-only, so they were
+							      // the only gated entries in this otherwise-public group. ?>
 						</ul>
 					</div>
 					<?php endif; ?>
@@ -903,9 +906,10 @@
 			</div>
 
 		<!-- Admin Tab -->
-		<?php if ($CanManageKingdom ?? false): ?>
+		<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
 		<div class="kn-tab-panel" id="kn-tab-admin" style="display:none">
 			<div class="kn-report-cols">
+				<?php if ($CanManageKingdom ?? false): ?>
 				<div class="kn-report-group">
 					<h5><i class="fas fa-users-cog"></i> Players</h5>
 					<ul>
@@ -922,6 +926,35 @@
 						<li><a href="#" onclick="knOpenClaimParkModal();return false;">Claim Park</a></li>
 					</ul>
 				</div>
+				<?php endif; ?>
+				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
+				<div class="kn-report-group">
+					<h5>
+						<i class="fas fa-clipboard-check"></i> Tests
+						<button type="button" class="kn-help-btn" data-doc="qualtests"
+						        title="How the Reeve's and Corpora tests work" aria-label="Help: qualification tests">
+							<i class="fas fa-question-circle"></i>
+						</button>
+					</h5>
+					<ul>
+						<li><a href="<?= UIR ?>QualTest/manage/<?= $kingdom_id ?>">Configure Tests</a></li>
+						<li><a href="<?= UIR ?>QualTest/questions/<?= $kingdom_id ?>/reeve">Reeve's Test Questions</a></li>
+						<li><a href="<?= UIR ?>QualTest/questions/<?= $kingdom_id ?>/corpora">Corpora Test Questions</a></li>
+						<?php // Results belong with the rest of the test workspace: whoever configures a
+						      // test and writes its questions is the same person who reads who passed it,
+						      // and they were a tab away in Reports. Same audience as this whole group
+						      // (the enclosing check is CanManageKingdom || CanManageTests), so only the
+						      // per-test "is it switched on" condition is needed here. Still listed under
+						      // Reports too, for anyone who goes looking for a report where reports live. ?>
+						<?php if (!empty($QualTestReeveEnabled)): ?>
+						<li><a href="<?= UIR ?>Reports/reeve_test_results/Kingdom&id=<?= $kingdom_id ?>">Reeve's Test Results</a></li>
+						<?php endif; ?>
+						<?php if (!empty($QualTestCorporaEnabled)): ?>
+						<li><a href="<?= UIR ?>Reports/corpora_test_results/Kingdom&id=<?= $kingdom_id ?>">Corpora Test Results</a></li>
+						<?php endif; ?>
+					</ul>
+				</div>
+				<?php endif; ?>
 			</div>
 		</div>
 		<?php endif; ?>
@@ -959,8 +992,8 @@
 						<div class="plr-gear-wrap">
 							<button class="plr-gear-btn" id="kn-plr-gear-btn" aria-label="Player actions" aria-expanded="false" onclick="var m=this.nextElementSibling;var o=m.classList.toggle('open');this.setAttribute('aria-expanded',o)"><i class="fas fa-cog"></i></button>
 							<div class="plr-gear-menu" id="kn-plr-gear-menu">
-								<button class="plr-gear-item" onclick="knOpenMovePlayerModal();document.getElementById('kn-plr-gear-menu').classList.remove('open')"><i class="fas fa-people-arrows"></i> Move Player</button>
-								<button class="plr-gear-item" onclick="knOpenMergePlayerModal();document.getElementById('kn-plr-gear-menu').classList.remove('open')"><i class="fas fa-compress-alt"></i> Merge Players</button>
+								<button class="plr-gear-item" onclick="knOpenMovePlayerModal();document.getElementById('kn-plr-gear-menu').classList.remove('open')"><i class="fas fa-exchange-alt"></i> Move Player</button>
+								<button class="plr-gear-item" onclick="knOpenMergePlayerModal();document.getElementById('kn-plr-gear-menu').classList.remove('open')"><i class="fas fa-compress-arrows-alt"></i> Merge Players</button>
 							</div>
 						</div>
 					</div>
@@ -2051,6 +2084,20 @@ var KnBannerConfig = {
 </div>
 
 <!-- Confirmation Modal (shared) -->
+<!-- In-app help. Body is rendered server-side from docs/*.md (Parsedown), so the guide in the
+     repo and the guide in the app are the same document and cannot drift apart. -->
+<div id="kn-help-overlay">
+	<div class="kn-modal-box kn-help-box">
+		<div class="kn-modal-header">
+			<h3 class="kn-modal-title" id="kn-help-title"><i class="fas fa-question-circle" style="margin-right:8px;color:#2b6cb0"></i>Help</h3>
+			<button class="kn-modal-close-btn" id="kn-help-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="kn-modal-body kn-help-body" id="kn-help-body">
+			<div style="text-align:center;padding:32px;color:#718096"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>
+		</div>
+	</div>
+</div>
+
 <div id="kn-confirm-overlay">
 	<div class="kn-modal-box kn-confirm-box">
 		<div class="kn-modal-header">
@@ -2058,7 +2105,7 @@ var KnBannerConfig = {
 			<button class="kn-modal-close-btn" id="kn-confirm-close-btn" aria-label="Close">&times;</button>
 		</div>
 		<div class="kn-modal-body">
-			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:var(--ork-text,#2d3748);line-height:1.6"></p>
+			<p id="kn-confirm-message" style="margin:0;font-size:14px;color:var(--ork-text,#2d3748);line-height:1.6;white-space:pre-line"></p>
 		</div>
 		<div class="kn-modal-footer" style="justify-content:flex-end;gap:10px">
 			<button class="kn-btn-ghost" id="kn-confirm-cancel-btn">Cancel</button>
@@ -2212,6 +2259,16 @@ tr:hover .kn-copy-link { opacity: 1; }
 </style>
 <!-- Move Player Modal -->
 <style>
+.kn-qt-cards { display: flex; flex-wrap: wrap; gap: 16px; padding: 4px 0; }
+.kn-qt-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 20px; min-width: 220px; flex: 1; }
+.kn-qt-card-title { font-weight: 700; font-size: 1rem; color: #2d3748; margin-bottom: 10px; }
+.kn-qt-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 12px; font-size: 0.82rem; color: #4a5568; }
+.kn-qt-stat strong { color: #2b6cb0; }
+.kn-qt-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.kn-qt-card-disabled { opacity: 0.55; border-style: dashed; }
+.kn-qt-badge-disabled { display: inline-block; font-size: 0.7rem; font-weight: 600; color: #a0aec0; background: #edf2f7; border-radius: 4px; padding: 1px 7px; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.03em; }
+.kn-btn-sm { padding: 5px 12px; font-size: 0.8rem; }
+.kn-tab-toolbar { margin-bottom: 14px; }
 .kn-mp-toggle { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
 .kn-mp-toggle-btn {
 	flex:1 1 auto; min-width:130px; padding:7px 10px; border:1px solid #cbd5e0; border-radius:var(--ork-radius-md); font-size:var(--ork-font-size-sm); font-weight:var(--ork-font-weight-semibold);
@@ -2377,7 +2434,7 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 <div id="kn-moveplayer-overlay">
 	<div class="kn-modal-box" style="width:520px;max-width:calc(100vw - 40px)">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-people-arrows" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
+			<h3 class="kn-modal-title"><i class="fas fa-exchange-alt" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
 			<button class="kn-modal-close-btn" id="kn-moveplayer-close-btn">&times;</button>
 		</div>
 		<div class="kn-modal-body">
@@ -2424,7 +2481,7 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 <div id="kn-mergeplayer-overlay">
 	<div class="kn-modal-box" style="width:540px;max-width:calc(100vw - 40px)">
 		<div class="kn-modal-header">
-			<h3 class="kn-modal-title"><i class="fas fa-compress-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
+			<h3 class="kn-modal-title"><i class="fas fa-compress-arrows-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
 			<button class="kn-modal-close-btn" id="kn-mergeplayer-close-btn">&times;</button>
 		</div>
 		<div class="kn-modal-body">
@@ -2462,7 +2519,7 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 		</div>
 		<div class="kn-modal-footer">
 			<button class="kn-btn-ghost" id="kn-mergeplayer-cancel">Cancel</button>
-			<button class="kn-btn kn-btn-danger" id="kn-mergeplayer-submit" disabled><i class="fas fa-compress-alt"></i> Merge Players</button>
+			<button class="kn-btn kn-btn-danger" id="kn-mergeplayer-submit" disabled><i class="fas fa-compress-arrows-alt"></i> Merge Players</button>
 		</div>
 	</div>
 </div>
