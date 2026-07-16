@@ -1186,13 +1186,40 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			<div id="ev-sched-filters" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
 			<div id="ev-schedule-container">
 			<?php
+			// A multi-day item is expanded into one segment per calendar day it touches,
+			// clipped to that day, so both views show it on every day it covers.
 			$scheduleByDay = [];
+			$dayTsByKey    = [];
 			foreach ($scheduleList as $item) {
-				$dayKey = date('Ymd', strtotime($item['StartTime']));
-				$scheduleByDay[$dayKey][] = $item;
+				$s = strtotime($item['StartTime']);
+				$e = strtotime($item['EndTime']);
+				if ($e < $s) $e = $s;
+				$lastDayTs = strtotime(date('Y-m-d 00:00:00', $e));
+				// '+1 day' rather than +86400 so DST transitions stay on day boundaries.
+				for ($cursor = strtotime(date('Y-m-d 00:00:00', $s)); $cursor <= $lastDayTs; $cursor = strtotime('+1 day', $cursor)) {
+					$nextDay  = strtotime('+1 day', $cursor);
+					$segStart = max($s, $cursor);
+					$segEnd   = min($e, $nextDay);
+					// An item ending exactly at midnight must not leave an empty segment on
+					// the next day, but a zero-length item still belongs on its start day.
+					if ($segEnd <= $segStart && $cursor > $s) continue;
+					$seg = $item;
+					$seg['_SegStart']   = $segStart;
+					$seg['_SegEnd']     = $segEnd;
+					$seg['_IsFirstDay'] = ($segStart === $s);
+					$seg['_IsLastDay']  = ($segEnd === $e);
+					$dayKey = date('Ymd', $cursor);
+					$scheduleByDay[$dayKey][] = $seg;
+					$dayTsByKey[$dayKey]      = $cursor;
+				}
+			}
+			ksort($scheduleByDay);
+			foreach ($scheduleByDay as $dayKey => $dayItems) {
+				usort($dayItems, function ($a, $b) { return ($a['_SegStart'] <=> $b['_SegStart']) ?: ($a['_SegEnd'] <=> $b['_SegEnd']); });
+				$scheduleByDay[$dayKey] = $dayItems;
 			}
 			foreach ($scheduleByDay as $dayKey => $dayItems):
-				$dayTs = strtotime($dayItems[0]['StartTime']);
+				$dayTs = $dayTsByKey[$dayKey];
 			?>
 			<div class="ev-sched-day-section" data-date="<?= date('Y-m-d', $dayTs) ?>">
 				<div class="ev-sched-day-header"><?= date('l, F j, Y', $dayTs) ?></div>
@@ -1224,14 +1251,23 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							$evCatCfg     = $evSchedCategories[$evCat] ?? $evSchedCategories['Other'];
 							$evSecCat     = $item['SecondaryCategory'] ?? '';
 							$evSecCatCfg  = $evSecCat ? ($evSchedCategories[$evSecCat] ?? $evSchedCategories['Other']) : null;
+							// Which slice of a multi-day item this row is. The mobile card joins the
+							// start/end cells into one line and only wants a dash between two real
+							// times — on a spanning slice the end cell is a bare arrow, not a time.
+							$evSeg = ($item['_IsFirstDay'] && $item['_IsLastDay']) ? 'single'
+								: ($item['_IsFirstDay'] ? 'first' : ($item['_IsLastDay'] ? 'last' : 'mid'));
 						?>
-						<tr id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" data-secondary-category="<?= htmlspecialchars($evSecCat, ENT_QUOTES) ?>" data-leads="<?= htmlspecialchars(json_encode($item['Leads'] ?? []), ENT_QUOTES) ?>" data-menu="<?= htmlspecialchars($item['Menu'] ?? '', ENT_QUOTES) ?>" data-cost="<?= htmlspecialchars((string)($item['Cost'] ?? ''), ENT_QUOTES) ?>" data-dietary="<?= htmlspecialchars($item['Dietary'] ?? '', ENT_QUOTES) ?>" data-allergens="<?= htmlspecialchars($item['Allergens'] ?? '', ENT_QUOTES) ?>" style="background:<?= $evCatCfg['bg'] ?>">
-							<td style="white-space:nowrap"><?= date('g:ia', strtotime($item['StartTime'])) ?></td>
+						<tr <?php if ($item['_IsFirstDay']): ?>id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" <?php endif; ?>data-seg="<?= $evSeg ?>" data-schedule-id="<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" data-secondary-category="<?= htmlspecialchars($evSecCat, ENT_QUOTES) ?>" data-leads="<?= htmlspecialchars(json_encode($item['Leads'] ?? []), ENT_QUOTES) ?>" data-menu="<?= htmlspecialchars($item['Menu'] ?? '', ENT_QUOTES) ?>" data-cost="<?= htmlspecialchars((string)($item['Cost'] ?? ''), ENT_QUOTES) ?>" data-dietary="<?= htmlspecialchars($item['Dietary'] ?? '', ENT_QUOTES) ?>" data-allergens="<?= htmlspecialchars($item['Allergens'] ?? '', ENT_QUOTES) ?>" style="background:<?= $evCatCfg['bg'] ?>">
+							<td style="white-space:nowrap"><?= $item['_IsFirstDay'] ? date('g:ia', $item['_SegStart']) : '(cont.)' ?></td>
 							<td style="white-space:nowrap"><?php
-								$evEndTs = strtotime($item['EndTime']);
-								echo date('g:ia', $evEndTs);
-								if (date('Ymd', $evEndTs) !== date('Ymd', strtotime($item['StartTime']))) {
-									echo ' (' . date('D', $evEndTs) . ')';
+								if (!$item['_IsLastDay']) {
+									echo '&rarr;';
+								} else {
+									$evEndTs = strtotime($item['EndTime']);
+									echo date('g:ia', $evEndTs);
+									if (date('Ymd', $evEndTs) !== date('Ymd', strtotime($item['StartTime']))) {
+										echo ' (' . date('D', $evEndTs) . ')';
+									}
 								}
 							?></td>
 							<td style="white-space:nowrap"><i class="fas fa-fw <?= $evCatCfg['icon'] ?>" style="color:<?= $evCatCfg['color'] ?>" data-tip="<?= htmlspecialchars($evCat) ?>"></i><?php if ($evSecCatCfg): ?><i class="fas fa-fw <?= $evSecCatCfg['icon'] ?>" style="color:<?= $evSecCatCfg['color'] ?>;margin-right:4px" data-tip="<?= htmlspecialchars($evSecCat) ?>"></i><?php else: ?><span style="display:inline-block;width:1.25em;margin-right:4px"></span><?php endif; ?><?= htmlspecialchars($item['Title']) ?><?php if (($evCat === 'Feast and Food' || $evSecCat === 'Feast and Food') && !empty($item['Menu'])): ?> <i class="fas fa-scroll" style="color:#e65100;font-size:10px;margin-left:4px;vertical-align:middle" data-tip="Has menu"></i><?php endif; ?></td>
@@ -1262,16 +1298,15 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			<?php
 			// Build per-day grid data using same $scheduleByDay bucketing.
 			foreach ($scheduleByDay as $dayKey => $dayItems):
-				$dayTs = strtotime($dayItems[0]['StartTime']);
+				$dayTs = $dayTsByKey[$dayKey];
 
 				// Collect min/max and per-category buckets
 				$catBuckets = [];
 				$minStart = PHP_INT_MAX;
 				$maxEnd   = 0;
 				foreach ($dayItems as $it) {
-					$s = strtotime($it['StartTime']);
-					$e = strtotime($it['EndTime']);
-					if ($e < $s) $e = $s;
+					$s = $it['_SegStart'];
+					$e = $it['_SegEnd'];
 					if ($s < $minStart) $minStart = $s;
 					if ($e > $maxEnd)   $maxEnd   = $e;
 					$cat = $it['Category'] ?? 'Other';
@@ -1280,9 +1315,20 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 				}
 				if ($minStart === PHP_INT_MAX) continue;
 
-				// Snap to half-hour grid, pad ±30min
-				$gridStart = (int) floor($minStart / 1800) * 1800 - 1800;
-				$gridEnd   = (int) ceil ($maxEnd   / 1800) * 1800 + 1800;
+				// Snap to whole hours, padding out by 30-60min, clamped to this calendar day
+				// so a spanned segment can never stretch the grid past midnight. $gridStart
+				// MUST land on an hour: the columns draw their hour lines with a CSS gradient
+				// repeating every 56px from the top of the column, while the time gutter
+				// labels sit at slot*28px from $gridStart. A $gridStart on a half hour puts
+				// every line 28px (30min) out from the label beside it.
+				// Snapping via date() rather than arithmetic on the timestamp: dividing by
+				// 3600 would land on a UTC hour, which is a half past the hour in a zone
+				// offset by :30.
+				$gridStart = max($dayTs, strtotime(date('Y-m-d H:00:00', $minStart - 1800)));
+				$padEnd    = $maxEnd + 1800;
+				$gridEnd   = strtotime(date('Y-m-d H:00:00', $padEnd));
+				if ($gridEnd < $padEnd) $gridEnd = strtotime('+1 hour', $gridEnd);
+				$gridEnd   = min(strtotime('+1 day', $dayTs), $gridEnd);
 				$totalSlots = max(1, (int)(($gridEnd - $gridStart) / 1800));
 
 				// Only categories with items (preserve palette order)
@@ -1388,6 +1434,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 										$hasMenu   = ($cName === 'Feast and Food' || $secCat === 'Feast and Food') && !empty($it['Menu']);
 										$compact   = ($hPx < 42);
 										$blockLabel = $it['Title'] . ' at ' . date('g:ia', $entry['start']);
+										if (!$it['_IsLastDay']) $blockLabel .= ' (continues)';
 									?>
 									<div class="ev-grid-block<?= $compact ? ' ev-grid-block-compact' : '' ?>"
 										data-schedule-id="<?= $sid ?>"
@@ -1399,7 +1446,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 											<?= htmlspecialchars($it['Title']) ?>
 											<?php if ($hasMenu): ?><i class="fas fa-scroll" style="color:#e65100;font-size:9px;margin-left:3px" data-tip="Has menu"></i><?php endif; ?>
 										</div>
-										<div class="ev-grid-block-time"><?= date('g:ia', $entry['start']) ?> – <?= date('g:ia', $entry['end']) ?></div>
+										<div class="ev-grid-block-time"><?php if (!$it['_IsFirstDay']): ?>&rarr; <?php endif; ?><?= date('g:ia', $entry['start']) ?> – <?= date('g:ia', $entry['end']) ?><?php if (!$it['_IsLastDay']): ?> &rarr;<?php endif; ?></div>
 										<?php if (!empty($it['Location'])): ?>
 										<div class="ev-grid-block-loc"><i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($it['Location']) ?></div>
 										<?php endif; ?>
@@ -3711,10 +3758,28 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 			allowInput:      false,
 			onReady: function(sel, str, fp) { if (fp.calendarContainer) fp.calendarContainer.classList.add('ev-sched-fp'); }
 		};
-		if (EvConfig.eventStart) _schedFpOpts.minDate = EvConfig.eventStart;
-		if (EvConfig.eventEnd)   _schedFpOpts.maxDate = EvConfig.eventEnd;
+		// Bound schedule items to the event's DAYS, not its clock times. Passing the
+		// event's full start/end datetime here made Flatpickr treat the time-of-day as a
+		// floor/ceiling (minDateHasTime/maxDateHasTime), which clamped the hour spinner on
+		// the event's own first and last days: stepping the hour computed an out-of-range
+		// time, got snapped straight back, and the carat read as a dead button. Day-only
+		// bounds keep items inside the event's dates while leaving the clock free.
+		function _evDayPad2(n) { return (n < 10 ? '0' : '') + n; }
+		function _evDayPlus(ymd, days) {
+			var d = new Date(ymd + 'T00:00');
+			d.setDate(d.getDate() + days);
+			return d.getFullYear() + '-' + _evDayPad2(d.getMonth() + 1) + '-' + _evDayPad2(d.getDate());
+		}
+		var _evStartDay = EvConfig.eventStart ? String(EvConfig.eventStart).slice(0, 10) : '';
+		var _evEndDay   = EvConfig.eventEnd   ? String(EvConfig.eventEnd).slice(0, 10)   : '';
+		if (_evStartDay) _schedFpOpts.minDate = _evStartDay;
+		if (_evEndDay)   _schedFpOpts.maxDate = _evEndDay + 'T23:59';
 
-		var _schedFpEnd = flatpickr('#ev-sched-end', _schedFpOpts);
+		// An item may legitimately run past midnight — the list view labels cross-midnight
+		// end times with a weekday — so the end picker gets one extra day of headroom.
+		var _schedFpEnd = flatpickr('#ev-sched-end', Object.assign({}, _schedFpOpts, {
+			maxDate: _evEndDay ? _evDayPlus(_evEndDay, 1) + 'T23:59' : undefined
+		}));
 		var _schedFpStart = flatpickr('#ev-sched-start', Object.assign({}, _schedFpOpts, {
 			onChange: function(selectedDates, dateStr, fp) {
 				if (!selectedDates[0] || !_schedFpEnd) return;
@@ -3880,6 +3945,11 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 .ev-grid-col { position:relative; border-left:1px solid #edf2f7; }
 .ev-grid-block {
 	position:absolute;
+	/* border-box: top/height are computed server-side as exact minutes-to-pixels, so the
+	   borders and padding must sit inside that box. As content-box they were added to it,
+	   making every block 11px taller and 19px wider than its own time span — the bottom
+	   edge overshot its end time and the block spilled past the column. */
+	box-sizing:border-box;
 	border:1px solid rgba(0,0,0,0.06); border-left:4px solid #999;
 	border-radius:4px; padding:5px 7px 4px; overflow:hidden;
 	box-shadow:0 1px 2px rgba(0,0,0,0.08);
@@ -3945,7 +4015,7 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	.ev-grid-view-toolbar       { justify-content:flex-start; flex-wrap:wrap; }
 	.ev-grid-view-toggle        { display:none !important; }
 	.ev-grid-view-toolbar .ev-submit-btn { padding:9px 16px; min-height:40px; }
-	.ev-sched-pill { padding:9px 13px; min-height:40px; }
+	.ev-sched-pill { padding:8px 12px; min-height:36px; }
 }
 
 /* ── Mobile: stacked-card layout for the forced schedule LIST view ── */
@@ -3958,6 +4028,7 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	.ev-sched-table thead { display:none; }
 	.ev-sched-table colgroup { display:none; }
 	.ev-sched-table tr {
+		display:flex; flex-wrap:wrap; align-items:center;
 		padding:10px 12px; margin-bottom:12px; border-radius:8px;
 		border:1px solid var(--ork-border, #e2e8f0);
 		border-left:4px solid rgba(0,0,0,0.18);
@@ -3966,7 +4037,47 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	.ev-sched-table td {
 		display:flex; justify-content:space-between; gap:10px;
 		padding:3px 0; white-space:normal !important; text-align:left;
-		border:none;
+		flex:0 0 100%;
+		/* !important to outrank html[data-theme="dark"] .ev-table td in revised.css,
+		   which re-adds a bottom border. The card draws its own border, so the cells
+		   must not: on the headline the cells sit side by side, and each one's border
+		   painted a separate stub under the time, the title and the action buttons. */
+		border:none !important;
+	}
+	/* A cell the row had no value for carries no text at all, so :empty drops the
+	   whole line — label included — without disturbing the desktop table, which
+	   needs every cell to keep its column. nth-of-type still counts hidden cells,
+	   so the labels below stay attached to the right fields. */
+	.ev-sched-table td:empty { display:none !important; }
+
+	/* Card headline: "12:00pm – 6:00pm        Gate Opens  [edit] [delete]" */
+	.ev-sched-table td:nth-of-type(1),
+	.ev-sched-table td:nth-of-type(2) {
+		flex:0 0 auto; padding:0; gap:5px; white-space:nowrap !important;
+		font-weight:600; color:var(--ork-text-secondary, #4a5568);
+	}
+	.ev-sched-table td:nth-of-type(1) { order:1; }
+	.ev-sched-table td:nth-of-type(2) { order:2; margin-left:5px; }
+	.ev-sched-table td:nth-of-type(3) {
+		order:3; flex:1 1 auto; justify-content:flex-end; gap:5px;
+		padding:0 0 0 10px; font-weight:700; text-align:right;
+	}
+	/* The title cell pads itself with an empty span when an item has no secondary
+	   category, to hold the desktop column. As a flex item it becomes a visible gap. */
+	.ev-sched-table td:nth-of-type(3) span:empty { display:none !important; }
+	.ev-sched-table td:nth-of-type(4) { order:5; }
+	.ev-sched-table td:nth-of-type(5) { order:6; }
+	.ev-sched-table td:nth-of-type(6) { order:7; }
+	/* The merged headline speaks for itself — labels only on the rows below it. */
+	.ev-sched-table td:nth-of-type(1)::before,
+	.ev-sched-table td:nth-of-type(2)::before,
+	.ev-sched-table td:nth-of-type(3)::before { content:none !important; }
+	/* Dash only between two real clock times: a spanning slice renders its end as a
+	   bare arrow ("12:00pm →") or its start as "(cont.)". */
+	.ev-sched-table tr[data-seg="single"] td:nth-of-type(1)::after,
+	.ev-sched-table tr[data-seg="last"]   td:nth-of-type(1)::after {
+		content:"–"; font-weight:400;
+		color:var(--ork-text-muted, #718096);
 	}
 	.ev-sched-table td::before {
 		flex-shrink:0; font-size:10px; font-weight:700;
@@ -3979,13 +4090,15 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	.ev-sched-table td:nth-of-type(4)::before { content:"Location"; }
 	.ev-sched-table td:nth-of-type(5)::before { content:"Lead(s)"; }
 	.ev-sched-table td:nth-of-type(6)::before { content:"Description"; }
+	/* Editors get the actions on the headline row rather than a row of their own. */
 	.ev-sched-table td.ev-del-cell {
-		width:auto; justify-content:flex-end; gap:6px; padding-top:8px;
+		order:4; flex:0 0 auto; width:auto;
+		justify-content:flex-end; gap:2px; padding:0 0 0 4px;
 	}
 	.ev-sched-table td.ev-del-cell::before { content:none; }
 	.ev-sched-table td.ev-del-cell .ev-edit-link,
 	.ev-sched-table td.ev-del-cell .ev-del-link {
-		min-width:40px; min-height:40px; display:inline-flex;
+		min-width:36px; min-height:36px; display:inline-flex;
 		align-items:center; justify-content:center;
 	}
 	html[data-theme="dark"] .ev-sched-table tr {

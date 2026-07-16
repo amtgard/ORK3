@@ -9364,6 +9364,7 @@ $(document).ready(function() {
                         }
                     } else {
                         var newRow = '<tr id="ev-schedule-row-' + s.EventScheduleId + '"' +
+                            ' data-schedule-id="' + s.EventScheduleId + '"' +
                             ' data-title="' + s.Title.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
                             ' data-start="' + (s.StartTime || '').replace(' ','T').substring(0,16) + '"' +
                             ' data-end="'   + (s.EndTime || '').replace(' ','T').substring(0,16) + '"' +
@@ -9544,17 +9545,22 @@ $(document).ready(function() {
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.status === 0) {
-                    var row = gid('ev-schedule-row-' + scheduleId);
-                    // Capture the day-section BEFORE removing the row — closest() on a
+                    // A multi-day item renders one row per day it spans, so remove them all.
+                    var rows = document.querySelectorAll('tr[data-schedule-id="' + scheduleId + '"]');
+                    // Capture the day-sections BEFORE removing the rows — closest() on a
                     // detached node returns null, so empty sections never got cleaned up.
-                    var daySection = row ? row.closest('.ev-sched-day-section') : null;
-                    if (row) row.remove();
-                    if (daySection) {
+                    var daySections = [];
+                    rows.forEach(function(row) {
+                        var sec = row.closest('.ev-sched-day-section');
+                        if (sec && daySections.indexOf(sec) === -1) daySections.push(sec);
+                        row.remove();
+                    });
+                    daySections.forEach(function(daySection) {
                         var tbody = daySection.querySelector('tbody');
                         if (tbody && tbody.querySelectorAll('tr').length === 0) {
                             daySection.remove();
                         }
-                    }
+                    });
                     var container = gid('ev-schedule-container');
                     if (container && container.querySelectorAll('.ev-sched-day-section').length === 0) {
                         var empty = gid('ev-schedule-empty');
