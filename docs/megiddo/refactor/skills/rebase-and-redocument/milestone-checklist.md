@@ -89,15 +89,41 @@ Tooling check: docker OK (Compose v5.0.2); `bin/ork-db`, `bin/fuzzy-validator`, 
 
 | Step | Status |
 |------|--------|
-| `git rebase origin/master` (or agreed base) | [ ] |
-| Overlap conflicts merged per playbook (Megiddo layering + upstream behavior) | [ ] |
-| Upstream-new files taken; listed for RB-N | [ ] |
-| Migrations kept (both sides) | [ ] |
-| Rebase completed; tip based on new base | [ ] |
-| Conflict notes recorded (file → where logic landed) | [ ] |
-| Commit: `RB-1: Rebase Megiddo onto master (spirit merge)` | [ ] |
+| `git rebase origin/master` (or agreed base) | [x] |
+| Overlap conflicts merged per playbook (Megiddo layering + upstream behavior) | [x] |
+| Upstream-new files taken; listed for RB-N | [x] |
+| Migrations kept (both sides) | [x] |
+| Rebase completed; tip based on new base | [x] |
+| Conflict notes recorded (file → where logic landed) | [x] |
+| Commit: `RB-1: Rebase Megiddo onto master (spirit merge)` | [x] |
 
 **Exit:** Clean rebase. PHPUnit need not be green yet.
+
+**RB-1 notes (2026-07-17):**
+
+Rebase onto `origin/master` @ `7631d0ba` completed. `origin/master` is an ancestor of HEAD. Post-rebase Megiddo tip before this docs commit: `81633e54` (rewritten RB-0). This RB-1 commit is the branch tip.
+
+Operational friction (not product conflicts): untracked fuzzy baseline PNGs blocked early pick (removed per playbook — restore in RB-F); Google Drive `index.lock` / assume-unchanged races on docs — cleared and continued.
+
+#### Conflict notes (file → where logic landed)
+
+| Conflict / touch | Resolution |
+|------------------|------------|
+| `orkui/model/model.Reports.php` (R-10) | Kept Megiddo thin model (`Report` / `VotingRules` wrappers). Did **not** take upstream fat `$DB` / inline voting-rules table. |
+| Winter's Edge `MembershipMode=first_attendance` (upstream `a29c9127`, was in fat model) | Ported into `system/lib/ork3/class.VotingRules.php` kingdom `24` rules. |
+| `system/lib/ork3/class.Kingdom.php` (R-16) | Kept Megiddo structure (ghettocache bust / principality helpers). Bad hunk had re-inserted upstream method bodies into `EditAward` — discarded. |
+| QualTest kingdom defaults (`QualTestReeveEnabled` / `QualTestCorporaEnabled`) | Ported into `Kingdom::CreateKingdom` config seed list. |
+| Auto-merged overlap controllers (`Player`, `Kingdom`, `Reports`) | Upstream QualTest UI hooks landed via `Ork3::$Lib->qualtest` — **no `$DB`**. Deferred spirit migration to **RB-N** (do not thin further in RB-1). |
+| Upstream-new QualTest controllers/templates/lib + `Reports_test_results.tpl` + `db-migrations/2026-07-14-qualification-tests.sql` | Taken as-is; listed for RB-N. |
+| `db-migrations/**` | Both sides kept (incl. qualification-tests). |
+
+#### Upstream-new retained for RB-N
+
+- `orkui/controller/controller.QualTest.php`, `controller.QualTestAjax.php`
+- `orkui/template/default/QualTest_*.tpl`, `Reports_test_results.tpl`
+- `system/lib/ork3/class.QualTest.php`
+- `db-migrations/2026-07-14-qualification-tests.sql`
+- Overlap follow-ups: `Ork3::$Lib->qualtest` call sites in `controller.Player.php`, `controller.Kingdom.php`, `controller.Reports.php` (`_*_test_results`)
 
 ---
 
@@ -223,7 +249,7 @@ Shared sign-off:
 | 6 | RB-F |
 | 7 | RB-Z |
 
-**Next unchecked:** RB-1
+**Next unchecked:** RB-2
 
 ---
 
