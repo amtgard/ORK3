@@ -242,18 +242,31 @@ Recovery verification found that Infection 0.29.14 applies only the last of repe
 
 | Step | Status |
 |------|--------|
-| Inventory upstream-new / heavily rewritten `orkui/` areas | [ ] |
-| Static scan: `$DB`, raw SQL, `Ork3::$Lib`, auth INSERTs | [ ] |
-| Migrate violations into `system/lib/ork3/` + thin frontend | [ ] |
-| Add/extend characterization tests for moved behavior | [ ] |
-| `rg '\$DB->' orkui/` clean | [ ] |
-| `rg 'Ork3::\$Lib' orkui/` clean | [ ] |
-| `sh bin/run-unit-tests.sh` exit 0 | [ ] |
-| Commit: `RB-N: Migrate new upstream frontend logic behind services` | [ ] |
+| Inventory upstream-new / heavily rewritten `orkui/` areas | [x] |
+| Static scan: `$DB`, raw SQL, `Ork3::$Lib`, auth INSERTs | [x] |
+| Migrate violations into `system/lib/ork3/` + thin frontend | [x] |
+| Add/extend characterization tests for moved behavior | [x] |
+| `rg '\$DB->' orkui/` clean | [x] |
+| `rg 'Ork3::\$Lib' orkui/` clean | [x] |
+| `sh bin/run-unit-tests.sh` exit 0 | [x] |
+| Commit: `RB-N: Migrate new upstream frontend logic behind services` | [x] |
 
 **Exit:** Success-criteria static gates clean on `orkui/`, or explicit user waivers listed on this checklist.
 
-**RB-N preview (from RB-0):** QualTest controllers on `origin/master` already use heavy `Ork3::$Lib->qualtest` — expect spirit migration (thin frontend → service/`Model_*`) as primary RB-N work. Split to RB-N2 if scope explodes.
+**RB-N notes (2026-07-17):**
+
+Inventory: primary violations were upstream-new `controller.QualTest.php` / `controller.QualTestAjax.php` (heavy `Ork3::$Lib->qualtest` + one `Ork3::$Lib->player->player_info`). Templates (`QualTest_*.tpl`, `Reports_test_results.tpl`) had no `$DB` / `Ork3::$Lib`. Domain already lived in `system/lib/ork3/class.QualTest.php` (taken in RB-1). Overlap controllers were already thinned via `Model_QualTest` in RB-H.
+
+Migrations:
+- Expanded `orkui/model/model.QualTest.php` with snake_case wrappers for all QualTest controller call sites (manage/questions/take/export + full AJAX surface).
+- Thinned both QualTest controllers to `load_model('QualTest')` → `$this->QualTest->…`; `resetplayerretakes` uses `load_model('Player')` for kingdom IDOR check.
+- Left `Common::get_configs` kingdom enable flags in controllers (same pattern as Kingdom/Player/Reports peers).
+- Characterization: `tests/Unit/QualTestScoreTest.php` (scoreTest single/multi + `Model_QualTest::score_test` delegation).
+- Infection: added `tools/infection/infection.t-qualtest.json5` (floors 15%). **Gap:** full `class.QualTest.php` MSI not gated this hop — class is large; only scoring characterization exists. Do not lower floors; broaden coverage before enforcing the gate.
+
+Static gates: `rg '$DB->' orkui/` and `rg 'Ork3::$Lib' orkui/` clean (controllers/models/templates/index). No auth INSERTs / yapo-in-frontend in QualTest paths. PHPUnit: **250 tests / 834 assertions, exit 0**.
+
+**RB-N preview (from RB-0):** QualTest controllers on `origin/master` already use heavy `Ork3::$Lib->qualtest` — expect spirit migration (thin frontend → service/`Model_*`) as primary RB-N work. Split to RB-N2 if scope explodes. → **Done in this hop; no RB-N2 needed.**
 
 ---
 
@@ -313,7 +326,7 @@ Validate the rebased tip against the **RB-G gold setpoint** (captured from unreb
 | 7 | RB-F (validate vs gold) |
 | 8 | RB-Z |
 
-**Next unchecked:** RB-N (RB-G folded into RB-F this run — see RB-G note). RB-H fully clear (Reports Infection 60% Report-alone).
+**Next unchecked:** RB-F (RB-G folded into RB-F this run — see RB-G note). RB-N clear (QualTest thinned via `Model_QualTest`; static gates clean).
 
 ---
 
