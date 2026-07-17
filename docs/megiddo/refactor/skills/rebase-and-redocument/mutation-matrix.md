@@ -1,91 +1,84 @@
-# Mutation matrix — what rebase can break
+# Mutation matrix — what a post-refactor rebase can break
 
-Use during **RB-0** (inventory) and **RB-D\*** / **RB-F** (repair). Status: **ok** · **stale** · **broken**.
+Use during **RB-0** (inventory) and **RB-H** / **RB-N** / **RB-F** (repair). Status: **ok** · **stale** · **broken** · **new-violation**.
 
 Which milestone owns the repair:
 
 | Artifact | Primary RB-* |
 |----------|----------------|
-| Rebase / conflicts | RB-1 |
+| Rebase / spirit-preserving conflicts | RB-1 |
 | Global PHPUnit / sandbox | RB-2 |
-| ds-* §1/§3, plan lines, v-* paths, domain tests, Infection | RB-D1…D4 (or RB-D-{nn}) |
+| Overlap hotspot tests, Infection, thin-layer verify | RB-H |
+| New upstream frontend `$DB` / `Ork3::$Lib` / domain logic | RB-N |
 | Fuzzy baselines / setpoint | RB-F |
-| Checklist “Last rebase” + links | RB-Z |
+| Checklist “Last rebase” + handoff to P3-4 | RB-Z |
 
 ## Artifact × failure mode
 
 | Artifact | Typical upstream change | Symptom | Repair |
 |----------|-------------------------|---------|--------|
-| **ds-* §1 line tables** | Edits in `orkui/` controllers/models | Wrong line ranges / missing methods | Re-read file; update lines + behavior notes; add post-rebase note |
-| **03-implementation-plan.md** | Same | Target ID lines wrong | Sync lines with ds-* / current code |
-| **ds-* §3 proposed revision** | Upstream already added service/API | Design assumes gap that closed | Amend §3; keep target IDs unless feature gone |
-| **validations/v-* §1** | Route/query/template change | Wrong canary URL or skip reason | Fix `pages.json5` + validation doc |
-| **validations/v-* §2** | Test file rename/move | Broken test paths | Update paths; keep mutation boundaries intent |
-| **PHPUnit unit/integration** | Signature, schema, sandbox seed | Failures / errors | Fix tests/fixtures; full suite green |
+| **Overlap controllers/models** | Feature edits in files Megiddo thinned | Conflict / reintroduced `$DB` / lib bypass | Spirit merge (playbook); finish in RB-H if tests lag |
+| **New `orkui/` modules** | Entire new feature (e.g. QualTest) | `$DB` / business logic in frontend | **RB-N** migrate to lib/service; thin frontend |
+| **Templates / revised JS** | Large UX diffs on shared pages | Fuzzy fail; auth chrome drift | Merge UX; keep Megiddo flags; RB-F recapture |
+| **db-migrations** | New tables/columns | deploy-sandbox / tests fail | Keep migrations; refresh sandbox; fix fixtures |
+| **PHPUnit** | Signature, schema, seed | Failures / errors | Fix tests/fixtures; full suite green |
 | **Playwright e2e** | DOM/copy/auth flow | Spec failures / skips | Fix selectors/flows; E2E preflight first |
-| **infection.t*.json5** | File move / new excludes needed | Low MSI or path miss | Update `source.directories`; re-run gate |
+| **tools/infection/*.json5** | File move / new classes | Low MSI or path miss | Update `source.directories`; re-run gate |
 | **Fuzzy baselines** | CSS/JS/DOM/layout or seed data | `validate` fail | Re-`record` / `setpoint capture` + publish |
-| **setpoint.json** | New capture | Stale `latestBundle` | `setpoint publish`; update v-00 / domain capture notes |
-| **ork-db templates/fingerprints** | Schema migrations on master | deploy-sandbox / tests fail | Classify new migrations; refresh sandbox |
+| **Static success gates** | Upstream frontend SQL/lib | `rg` matches in `orkui/` | Must be cleared in RB-N (or waived) |
+| **Active docs** | Path / status drift | Stale README / remaining checklist | RB-Z updates Last rebase + remaining work |
 
-## Domain sweep order (RB-D\* batches)
+## RB-0 overlap inventory (required)
 
-| Batch | Domains | Prefer before |
-|-------|---------|---------------|
-| RB-D1 | 01–04 RSVP, auth, banner, EventAjax | R-01 start |
-| RB-D2 | 05–08 event, kingdom, park, admin | |
-| RB-D3 | 09–12 player, reports, search, attendance | |
-| RB-D4 | 13–14 infrastructure, lib-service | |
+Produce a short table on the checklist:
 
-After domain batches, **RB-F** runs global fuzzy (or V-00 page set). **RB-Z** re-checks full PHPUnit.
+| Path | Megiddo changed? | Upstream changed? | Class |
+|------|------------------|-------------------|-------|
+| … | yes/no | yes/no | overlap / megiddo-only / upstream-new |
 
-## Discovery doc checklist (per ds-*)
+**overlap** → RB-1 careful merge + RB-H follow-up  
+**upstream-new** → take upstream in RB-1 + RB-N spirit scan  
+**megiddo-only** → usually clean replay
 
-- [ ] §1 class/method/line tables match current sources  
-- [ ] Target IDs still exist (not deleted upstream)  
-- [ ] Schema / migration cites still valid  
-- [ ] §2 test paths exist under `tests/`  
-- [ ] §2.3 Infection paths/filters still valid  
-- [ ] §3 revision still accurate (gap vs already-fixed)  
-- [ ] Footer links to `validations/v-{nn}-*.md` work  
+## RB-H hotspot checklist
 
-## Implementation plan checklist
+For each overlap path from RB-0:
 
-- [ ] Every in-scope target ID line range updated or marked removed  
-- [ ] Descriptions still match behavior (not just lines)  
+- [ ] Controller/model still has no `$DB->` / `Ork3::$Lib`
+- [ ] Upstream behavior present (manual diff vs `origin/master` file)
+- [ ] Domain unit/integration tests green (or gap noted)
+- [ ] Relevant `tools/infection/infection.t*.json5` gate green (or gap noted)
 
-## Test checklist
+## RB-N new-code spirit checklist
 
-- [ ] `sh bin/run-unit-tests.sh` exit 0  
-- [ ] In-scope `tests/e2e/*.spec.ts` pass (or documented skip with preflight reason)  
-- [ ] No deleted characterization coverage without sign-off report entry  
+For each upstream-new (and heavily rewritten) `orkui/` area:
 
-## Infection checklist
+- [ ] Inventory `$DB`, raw SQL, yapo-in-frontend, `Ork3::$Lib`, authorization INSERTs
+- [ ] Domain rules not left only in controllers/templates
+- [ ] Logic moved to `system/lib/ork3/` (+ `orkservice` as needed)
+- [ ] Frontend thinned to service/`Model_*` calls (idiomatic siblings)
+- [ ] Characterization tests added or extended for moved behavior
+- [ ] Repo-wide: `rg '\$DB->' orkui/` and `rg 'Ork3::\$Lib' orkui/` clean
 
-- [ ] Config files resolve source paths  
-- [ ] Milestone Infection meets documented MSI floor  
-- [ ] Archive/checklist Infection one-liners updated if filters changed  
+Prefer migrating clear violations in RB-N over documenting permanent debt. If a module is too large for one hop, stop with `status=blocked` and propose `RB-N2` splits — do not silently leave gates red.
 
-## Fuzzy checklist
-
-- [ ] `pages.json5` ids in validation docs still registered  
-- [ ] `validate --all --phase all` (or agreed page set) pass **test** + **mirror**  
-- [ ] `setpoint.json` `latestBundle` matches published zip if capture ran  
-- [ ] v-00 / v-{nn} capture notes dated post-rebase  
-
-## Quick commands
+## Test / Infection / fuzzy quick commands
 
 ```bash
 # PHPUnit
 sh bin/run-unit-tests.sh
 
-# Infection example (RSVP)
+# Infection example (configs under tools/)
 sh bin/run-infection.sh --configuration=tools/infection/infection.t01-rsvp.json5
+
+# Static spirit gates
+rg '\$DB->' orkui/ || true
+rg 'Ork3::\$Lib' orkui/ || true
 
 # Fuzzy
 bin/ork-db deploy-sandbox
 bin/fuzzy-validator validate --all --phase all
 
-# Line-range hunt (example)
-rg -n "INSERT INTO.*ork_authorization|function addauth" orkui/
+# Overlap / new-file hunt after fetch
+git diff --name-only $(git merge-base HEAD origin/master)..origin/master -- orkui/ system/ db-migrations/
 ```

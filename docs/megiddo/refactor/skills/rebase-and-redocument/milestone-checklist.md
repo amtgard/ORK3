@@ -1,10 +1,10 @@
-# Rebase & Redocument — Milestone Checklist
+# Rebase & Redocument — Milestone Checklist (Post-Refactor)
 
-Track **RB-*** progress here. **Preferred:** one [orchestrator](agent-prompt.md) chat launches serialized sub-agents per milestone. Manual: one worker prompt per chat.
+Track **RB-*** progress for the **current** post-refactor rebase. **Preferred:** paste [orchestrator.prompt](orchestrator.prompt) into one chat; it launches serialized sub-agents per milestone.
 
-**Skill:** [SKILL.md](SKILL.md) · **Agent prompts:** [agent-prompt.md](agent-prompt.md) (orchestrator + workers) · **Matrix:** [mutation-matrix.md](mutation-matrix.md) · **Conflicts:** [conflict-playbook.md](conflict-playbook.md)
+**Skill:** [SKILL.md](SKILL.md) · **Copy-paste:** [orchestrator.prompt](orchestrator.prompt) · **Workers:** [agent-prompt.md](agent-prompt.md) · **Matrix:** [mutation-matrix.md](mutation-matrix.md) · **Conflicts:** [conflict-playbook.md](conflict-playbook.md)
 
-**Steering:** [05-development-steering.md](../../05-development-steering.md) (DS-1–DS-8 as applicable)
+**Steering:** [05-development-steering.md](../../05-development-steering.md) · **Remaining close-out:** [04-milestone-checklist.md](../../04-milestone-checklist.md)
 
 ---
 
@@ -12,38 +12,76 @@ Track **RB-*** progress here. **Preferred:** one [orchestrator](agent-prompt.md)
 
 | Field | Value |
 |-------|-------|
-| Date started | 2026-07-09 |
-| Megiddo tip (pre-rebase) | branch `megiddo/v-14-lib-service-validation` @ `ad878395` |
-| Base | `origin/master` @ `e6417645` |
-| Working branch | `megiddo/rebase-20260709` |
-| **Sizing grade** | **S** |
-| Sizing rationale | 0 commits on `origin/master` since merge-base (`e6417645` = current master tip); no upstream `orkui/`, `db-migrations/`, template, or test churn; Megiddo is 75 commits ahead on same base — rebase expected clean |
-| Session plan | **S:** one sub-agent per RB-* (serialized); queue runs faster; no RB-D per-domain splits |
+| Date started | 2026-07-17 |
+| Megiddo tip (pre-rebase) | `megiddo/p3-fix-10-sandbox-fuzzy-rebaseline` @ `e1d993976f646c9d75ea13c96e99b26aa10939b4` |
+| Base | `origin/master` @ `7631d0baad65b573d4d53f115c84d20af09b046e` |
+| Working branch | `megiddo/rebase-20260717` |
+| **Sizing grade** | **L** |
+| Sizing rationale | 26 commits on `HEAD..origin/master`; merge-base `e6417645`. Upstream brings full **Qualification Tests** module (new `orkui` controllers/templates + `class.QualTest.php` + consolidated migration). Overlap includes **Player / Kingdom / Reports** controllers + revised-frontend templates + `class.Kingdom.php` — matches L heuristics (large new module + messy Player/Kingdom/Reports/template merges). |
+| Session plan | **L:** RB-1 alone (spirit merges); RB-2 alone; RB-H split by domain (Kingdom / Player / Reports / templates); RB-N alone (QualTest spirit scan — controllers already call `Ork3::$Lib->qualtest`); RB-F alone; RB-Z close. Do not collapse into one mega-session. |
+| Overlap inventory | See table under RB-0 notes below |
+| WIP parked | `stash@{0}`: `WIP: park docs archive ahead of megiddo/rebase-20260717 (RB-0)` (docs archive + related; skill files restored onto this branch for the post-refactor checklist) |
 
 ---
 
 ## Phase A — Integrate
 
-### RB-0: Preflight and size
+### RB-0: Preflight, reset, and size
 
-**Branch:** create or use `megiddo/rebase-{YYYYMMDD}` (do **not** rebase yet)  
+**Branch:** create `megiddo/rebase-{YYYYMMDD}` from current Megiddo tip (do **not** rebase yet)  
 **Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-0`
 
 | Step | Status |
 |------|--------|
+| Reset this checklist for a new run (prior notes → Prior runs) | [x] |
 | `git fetch`; record tip + `origin/master` SHAs | [x] |
 | Working tree clean (or WIP parked) | [x] |
-| Summarize `HEAD..origin/master` (commits + hot paths: `orkui/`, migrations, templates) | [x] |
-| Assign sizing grade S/M/L + session plan in metadata table | [x] |
-| Confirm docker / `bin/ork-db` / `bin/fuzzy-validator` available | [x] |
-| Checklist metadata filled; next milestone named | [x] |
-| Commit (optional docs-only): `RB-0: Size Megiddo rebase onto master` | [x] |
+| Summarize `HEAD..origin/master` (commits + hot paths) | [x] |
+| Overlap inventory: Megiddo∩upstream paths vs upstream-new | [x] |
+| Assign sizing grade S/M/L + session plan | [x] |
+| Confirm docker / `bin/ork-db` / `bin/fuzzy-validator` / `tools/infection/` | [x] |
+| Next milestone named | [x] |
+| Commit (optional): `RB-0: Size post-refactor Megiddo rebase` | [x] |
 
-**Exit:** Grade + plan recorded; ready for RB-1.
+**Exit:** Grade + overlap inventory recorded; ready for RB-1.
+
+**RB-0 notes (2026-07-17):**
+
+Upstream delta (`HEAD..origin/master`): **26 commits**, tip `7631d0ba` (Walker 3.5.4 / Qual Tests / maintenance banner). Meaningful file churn since merge-base `e6417645`: **35 files** (`orkui/` 27, `db-migrations/` 2, `system/lib/` 2, plus docs/README). Tree-wide `git diff --name-only HEAD..origin/master` is large (~1383) because Megiddo tip has diverged; use merge-base for inventory.
+
+Hot paths (merge-base → `origin/master`): QualTest controllers/templates; Kingdom/Player/Reports touch-ups; revised-frontend templates/JS/CSS; `db-migrations/2026-07-14-qualification-tests.sql`; `system/lib/ork3/class.QualTest.php` + `class.Kingdom.php`.
+
+#### Overlap inventory (Megiddo ∩ upstream since merge-base)
+
+| Path | Megiddo changed? | Upstream changed? | Class |
+|------|------------------|-------------------|-------|
+| `orkui/controller/controller.Kingdom.php` | yes | yes | **overlap** |
+| `orkui/controller/controller.Player.php` | yes | yes | **overlap** |
+| `orkui/controller/controller.Reports.php` | yes | yes | **overlap** |
+| `orkui/model/model.Reports.php` | yes | yes | **overlap** |
+| `orkui/template/default/default.theme` | yes | yes | **overlap** |
+| `orkui/template/revised-frontend/Eventnew_index.tpl` | yes | yes | **overlap** |
+| `orkui/template/revised-frontend/Kingdomnew_index.tpl` | yes | yes | **overlap** |
+| `orkui/template/revised-frontend/Parknew_index.tpl` | yes | yes | **overlap** |
+| `orkui/template/revised-frontend/Playernew_index.tpl` | yes | yes | **overlap** |
+| `system/lib/ork3/class.Kingdom.php` | yes | yes | **overlap** |
+
+#### Upstream-new `orkui/` / lib (take in RB-1 → spirit scan in RB-N)
+
+| Path | Class |
+|------|-------|
+| `orkui/controller/controller.QualTest.php` | **upstream-new** |
+| `orkui/controller/controller.QualTestAjax.php` | **upstream-new** |
+| `orkui/template/default/QualTest_*.tpl` (manage/question/questions/take) | **upstream-new** |
+| `orkui/template/default/Reports_test_results.tpl` | **upstream-new** |
+| `system/lib/ork3/class.QualTest.php` | **upstream-new** |
+| `db-migrations/2026-07-14-qualification-tests.sql` | **upstream-new** |
+
+Tooling check: docker OK (Compose v5.0.2); `bin/ork-db`, `bin/fuzzy-validator`, `tools/infection/` present.
 
 ---
 
-### RB-1: Rebase onto base
+### RB-1: Rebase with spirit-preserving merges
 
 **Depends on:** RB-0  
 **Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-1`  
@@ -51,13 +89,15 @@ Track **RB-*** progress here. **Preferred:** one [orchestrator](agent-prompt.md)
 
 | Step | Status |
 |------|--------|
-| `git rebase origin/master` (or agreed base) | [x] |
-| Conflicts resolved per playbook | [x] |
-| Rebase completed; tip is ancestor-based on base | [x] |
-| Smoke: `composer install` / obvious syntax breakage noted for RB-2 | [x] |
-| Commit: `RB-1: Rebase Megiddo line onto master` | [x] |
+| `git rebase origin/master` (or agreed base) | [ ] |
+| Overlap conflicts merged per playbook (Megiddo layering + upstream behavior) | [ ] |
+| Upstream-new files taken; listed for RB-N | [ ] |
+| Migrations kept (both sides) | [ ] |
+| Rebase completed; tip based on new base | [ ] |
+| Conflict notes recorded (file → where logic landed) | [ ] |
+| Commit: `RB-1: Rebase Megiddo onto master (spirit merge)` | [ ] |
 
-**Exit:** Clean rebase (or user-approved alternate strategy). No requirement that PHPUnit is green yet.
+**Exit:** Clean rebase. PHPUnit need not be green yet.
 
 ---
 
@@ -70,100 +110,64 @@ Track **RB-*** progress here. **Preferred:** one [orchestrator](agent-prompt.md)
 
 | Step | Status |
 |------|--------|
-| `docker compose -f docker-compose.php8.yml up -d` | [x] |
-| `bin/ork-db deploy-sandbox` (fix schema/migration drift if needed) | [x] |
-| E2E preflight when touching auth-gated specs | [x] |
-| `sh bin/run-unit-tests.sh` exit 0 | [x] |
-| Critical e2e smoke (or document deferrals to RB-D\*) | [x] |
-| Commit: `RB-2: Repair tests after Megiddo rebase` | [x] |
+| `docker compose -f docker-compose.php8.yml up -d` | [ ] |
+| `bin/ork-db deploy-sandbox` (fix schema/migration drift) | [ ] |
+| E2E preflight when touching auth-gated specs | [ ] |
+| `sh bin/run-unit-tests.sh` exit 0 | [ ] |
+| Critical e2e smoke (or documented deferrals to RB-H/RB-N) | [ ] |
+| Commit: `RB-2: Repair tests after post-refactor rebase` | [ ] |
 
-**RB-2 notes (2026-07-09):** Sandbox schema drift vs mirror — added google-maps lat/lng override, InnoDB engine parity in `baseline-gaps.sql`, test-park coords in Render; removed stale `attendance_myisam` fixture refs. PHPUnit: 204 tests, 627 assertions, 2 skipped, exit 0. E2E: health-route smoke pass; auth-gated Playwright deferred to RB-D\* (credentials preflight per `06-test-framework.md`).
-
-**Exit:** Full PHPUnit green. Domain-specific assertion tweaks may continue in RB-D\* if isolated and listed under “deferred”.
+**Exit:** Full PHPUnit green. Domain/hotspot tweaks may continue in RB-H/RB-N if listed.
 
 ---
 
-## Phase C — Domain redocument
+## Phase C — Hotspots and new-code spirit
 
-Each **RB-D\*** batch repairs, for every domain in the batch:
+### RB-H: Overlap hotspots
 
-1. `ds-{nn}-*-discovery.md` §1 lines/behavior + §3 if assumptions broke (+ post-rebase note)
-2. Matching rows in `03-implementation-plan.md`
-3. `validations/v-{nn}-*.md` §1 page ids / §2 test paths
-4. Domain unit/integration/e2e failures still open after RB-2
-5. `infection.t{nn}*.json5` paths + milestone Infection gate
+**Depends on:** RB-2  
+**Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-H`
 
-**Sizing L:** split a batch into `RB-D-{nn}` single-domain milestones (copy the batch checklist row into its own section).
+For each **overlap** path from RB-0 inventory:
 
-### Shared sign-off (every RB-D\* / RB-D-{nn})
+| Hotspot / domain | Thin layer OK | Upstream behavior | Tests | Infection | Done |
+|------------------|---------------|-------------------|-------|-----------|------|
+| Kingdom (`controller.Kingdom.php`, `class.Kingdom.php`, `Kingdomnew_index.tpl`) | [ ] | [ ] | [ ] | [ ] | [ ] |
+| Player (`controller.Player.php`, `Playernew_index.tpl`) | [ ] | [ ] | [ ] | [ ] | [ ] |
+| Reports (`controller.Reports.php`, `model.Reports.php`) | [ ] | [ ] | [ ] | [ ] | [ ] |
+| Templates (`default.theme`, Event/Park revised-frontend) | [ ] | [ ] | [ ] | [ ] | [ ] |
 
-- [x] Discovery + implementation-plan lines updated for domains in scope
-- [x] Validation docs paths/ids still valid
-- [x] Domain tests green (or gap noted)
-- [x] Infection gate pass for domains in scope (or gap noted + user aware)
-- [x] Checklist checked; one commit `RB-D1: …` (or `RB-D-01: …`)
+Shared sign-off:
 
----
+- [ ] No `$DB->` / `Ork3::$Lib` reintroduced on overlap paths
+- [ ] Hotspot tests green (or gaps listed)
+- [ ] Relevant `tools/infection/` gates green (or gaps listed)
+- [ ] Commit: `RB-H: Repair overlap hotspots after rebase`
 
-### RB-D1: Domains 01–04
-
-**Depends on:** RB-2 · **Domains:** RSVP, auth INSERT, banner, EventAjax  
-**Prompt:** `{{BATCH}}=RB-D1` or `{{MILESTONE}}=RB-D1`
-
-| Domain | ds-* | plan lines | v-* | tests | Infection | Done |
-|--------|------|------------|-----|-------|-----------|------|
-| 01 RSVP | [x] | [x] | [x] | [x] | [x] | [x] |
-| 02 Auth | [x] | [x] | [x] | [x] | [x] | [x] |
-| 03 Banner | [x] | [x] | [x] | [x] | [x] | [x] |
-| 04 EventAjax | [x] | [x] | [x] | [x] | [x] | [x] |
-
-**RB-D1 notes (2026-07-09):** Base `e6417645`; §1 verified against current `orkui/`. Domains 03–04 had minor line drift (banner end lines; EventAjax staff/schedule/heraldry blocks). §3 gaps unchanged. PHPUnit domain filter: 67 tests, 1 skipped, exit 0. Infection: t01 MSI 55%/covered 59%; t02 MSI 42%; t03 MSI 58%; t04 MSI 48% (all ≥15 floor). Auth-gated Playwright still deferred (RB-2 carry-forward).
+**Exit:** Overlap surfaces trustworthy; remaining new-module work is RB-N.
 
 ---
 
-### RB-D2: Domains 05–08
+### RB-N: New upstream code — spirit of the refactor
 
-**Depends on:** RB-2 (RB-D1 recommended first) · **Domains:** event, kingdom, park, admin  
-**Prompt:** `{{BATCH}}=RB-D2`
+**Depends on:** RB-2 (RB-H recommended first)  
+**Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-N`  
+**Matrix:** [mutation-matrix.md](mutation-matrix.md) § RB-N
 
-| Domain | ds-* | plan lines | v-* | tests | Infection | Done |
-|--------|------|------------|-----|-------|-----------|------|
-| 05 Event | [x] | [x] | [x] | [x] | [x] | [x] |
-| 06 Kingdom | [x] | [x] | [x] | [x] | [x] | [x] |
-| 07 Park | [x] | [x] | [x] | [x] | [x] | [x] |
-| 08 Admin | [x] | [x] | [x] | [x] | [x] | [x] |
+| Step | Status |
+|------|--------|
+| Inventory upstream-new / heavily rewritten `orkui/` areas | [ ] |
+| Static scan: `$DB`, raw SQL, `Ork3::$Lib`, auth INSERTs | [ ] |
+| Migrate violations into `system/lib/ork3/` + thin frontend | [ ] |
+| Add/extend characterization tests for moved behavior | [ ] |
+| `rg '\$DB->' orkui/` clean | [ ] |
+| `rg 'Ork3::\$Lib' orkui/` clean | [ ] |
+| `sh bin/run-unit-tests.sh` exit 0 | [ ] |
+| Commit: `RB-N: Migrate new upstream frontend logic behind services` | [ ] |
 
-**RB-D2 notes (2026-07-09):** Base `e6417645`; §1 verified against current `orkui/`. Domains 05–08 had minor line drift (event RSVP/template/reconcile; kingdom player-count/ICS; park draft clause; admin suspend/abbr). §3 gaps unchanged. PHPUnit domain filter: 48 tests, exit 0. Infection: t05 MSI 26%; t06 MSI 43%; t07 MSI 24%; t08 batched — Report 88%, StateOfAmtgard 89%, Park 24%, DangerAudit 15% (Player/Weather domain excluded per pre-refactor gap).
+**Exit:** Success-criteria static gates clean on `orkui/`, or explicit user waivers listed on this checklist.
 
----
-
-### RB-D3: Domains 09–12
-
-**Depends on:** RB-2 · **Domains:** player, reports, search, attendance  
-**Prompt:** `{{BATCH}}=RB-D3`
-
-| Domain | ds-* | plan lines | v-* | tests | Infection | Done |
-|--------|------|------------|-----|-------|-----------|------|
-| 09 Player | [x] | [x] | [x] | [x] | [x] | [x] |
-| 10 Reports | [x] | [x] | [x] | [x] | [x] | [x] |
-| 11 Search | [x] | [x] | [x] | [x] | [x] | [x] |
-| 12 Attendance | [x] | [x] | [x] | [x] | [x] | [x] |
-
-**RB-D3 notes (2026-07-09):** Base `e6417645`; §1 verified against current `orkui/`. Domains 09–12 had minor line drift (player profile/beltline/reconcile; reports ladder_grid/voting; search unitactivity/park playersearch; attendance SignIn levels/QR). §3 gaps unchanged. Fixed `LadderGridTest` `$DB->Clear()` pollution from prior attendance tests. PHPUnit domain filter: 56 tests, 1 skipped, exit 0. Infection: t09 batched — profile+cache 25%, AJAX 22%, Authorization 52%; t10 MSI 49%; t11 MSI 50%; t12 MSI 53% (all ≥15 floor).
-
----
-
-### RB-D4: Domains 13–14
-
-**Depends on:** RB-2 · **Domains:** infrastructure, lib-service  
-**Prompt:** `{{BATCH}}=RB-D4`
-
-| Domain | ds-* | plan lines | v-* | tests | Infection | Done |
-|--------|------|------------|-----|-------|-----------|------|
-| 13 Infrastructure | [x] | [x] | [x] | [x] | [x] | [x] |
-| 14 Lib-service | [x] | [x] | [x] | [x] | [x] | [x] |
-
-**RB-D4 notes (2026-07-09):** Base `e6417645`; §1 verified against current `orkui/` and `class.Controller.php`. Domains 13–14 had minor line drift (infra redirect/session/RSVP/widget/template; lib-service Controller menu HasAuthority 92/98/105; plan T-INF-05/06 method→`index`, T-LIB-05 lines). §3 gaps unchanged. PHPUnit domain filter: 21 tests, exit 0. Infection: t13 MSI 13% (Player+profile batch); t14 pass A MSI 18%; t14 pass B MSI 28% (all ≥15 floor).
+**RB-N preview (from RB-0):** QualTest controllers on `origin/master` already use heavy `Ork3::$Lib->qualtest` — expect spirit migration (thin frontend → service/`Model_*`) as primary RB-N work. Split to RB-N2 if scope explodes.
 
 ---
 
@@ -171,19 +175,17 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 
 ### RB-F: Fuzzy baselines and setpoint
 
-**Depends on:** RB-2; prefer all RB-D\* done if pages.json5 / canaries changed  
-**Prompt:** `{{MILESTONE}}=RB-F`
+**Depends on:** RB-2; prefer RB-H + RB-N done if UI/schema changed  
+**Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-F`
 
 | Step | Status |
 |------|--------|
-| E2E preflight for capture profiles | [x] |
-| `bin/fuzzy-validator validate --all --phase all` (or restore setpoint first) | [x] |
-| Re-record / `setpoint capture` + `publish` if upstream render drift | [x] |
-| Update `validations/v-00-*.md` + affected `v-{nn}` capture notes / `latestBundle` | [x] |
-| Validate pass **test** + **mirror** | [x] |
-| Commit: `RB-F: Recapture fuzzy baselines after rebase` | [x] |
-
-**RB-F notes (2026-07-09):** Base `e6417645` @ commit `1591950d`. Sandbox `--force-refresh` caused test-profile dimension drift (`park-auth-sandbox` 937→961px; `player-profile-sandbox`, `kingdom-auth-sandbox`, RSVP hosts). Full `setpoint capture` → `20260709T173049Z-1591950d-6b22e991bb478256.zip`; bootstrap copy committed. Validate **42/42 pass** (21 pages × test+mirror), exit 0. E2E preflight: health + auth (`admin`/`password`).
+| E2E preflight for capture profiles | [ ] |
+| `bin/fuzzy-validator validate --all --phase all` (or restore setpoint first) | [ ] |
+| Re-record / `setpoint capture` + `publish` if legitimate drift | [ ] |
+| Update active validation notes / `latestBundle` as needed | [ ] |
+| Validate pass **test** + **mirror** | [ ] |
+| Commit: `RB-F: Recapture fuzzy baselines after rebase` | [ ] |
 
 ---
 
@@ -191,22 +193,21 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 
 ### RB-Z: Sign-off
 
-**Depends on:** RB-1, RB-2, all planned RB-D\*, RB-F  
-**Prompt:** `{{MILESTONE}}=RB-Z`
+**Depends on:** RB-1, RB-2, RB-H, RB-N, RB-F  
+**Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-Z`
 
 | Step | Status |
 |------|--------|
-| Re-run `sh bin/run-unit-tests.sh` | [x] |
-| Spot-check Infection gaps closed or listed | [x] |
-| Fuzzy still green (no accidental doc-only breakage) | [x] |
-| Write **Last rebase** note on [04-milestone-checklist.md](../../04-milestone-checklist.md) / [README.md](../../README.md) | [x] |
-| Fix broken links under `docs/megiddo/refactor/` | [x] |
-| Final report table to user | [x] |
-| Commit: `RB-Z: Close Megiddo rebase and redocument` | [x] |
+| Re-run `sh bin/run-unit-tests.sh` | [ ] |
+| Confirm static spirit gates still clean | [ ] |
+| Spot-check Infection gaps closed or listed | [ ] |
+| Fuzzy still green | [ ] |
+| Write **Last rebase** on [04-milestone-checklist.md](../../04-milestone-checklist.md) + [README.md](../../README.md) | [ ] |
+| Fix broken links under active `docs/megiddo/refactor/` | [ ] |
+| Final report table to user | [ ] |
+| Commit: `RB-Z: Close post-refactor Megiddo rebase` | [ ] |
 
-**RB-Z notes (2026-07-09):** Base `e6417645` @ branch `megiddo/rebase-20260709`. PHPUnit: 204 tests, 627 assertions, 2 skipped, exit 0. Fuzzy validate **42/42 pass** (21 pages × test+mirror); setpoint `20260709T173049Z-1591950d-6b22e991bb478256.zip`. Infection gaps carried forward (documented): auth-gated Playwright deferred; t08 Player/Weather excluded; t13 MSI 13% (domain floor); search/attendance/banner page hosts remain `skip: true` per V-00. Archive README links fixed; template placeholder de-linked.
-
-**Exit:** Skill complete → next is **R-01**.
+**Exit:** Skill complete → next is **P3-4** (manual smoke matrix), then P3-5 / optional P3-6.
 
 ---
 
@@ -217,8 +218,25 @@ Each **RB-D\*** batch repairs, for every domain in the batch:
 | 1 | RB-0 |
 | 2 | RB-1 |
 | 3 | RB-2 |
-| 4 | RB-D1 → RB-D2 → RB-D3 → RB-D4 |
-| 5 | RB-F |
-| 6 | RB-Z |
+| 4 | RB-H |
+| 5 | RB-N |
+| 6 | RB-F |
+| 7 | RB-Z |
 
-**Next unchecked:** *(none — rebase skill complete)* → **R-01**
+**Next unchecked:** RB-1
+
+---
+
+## Prior runs
+
+### 2026-07-09 — pre-execution / tooling-era rebase (complete)
+
+| Field | Value |
+|-------|-------|
+| Megiddo tip (pre-rebase) | `megiddo/v-14-lib-service-validation` @ `ad878395` |
+| Base | `origin/master` @ `e6417645` |
+| Working branch | `megiddo/rebase-20260709` |
+| Sizing grade | S |
+| Outcome | RB-0…RB-Z complete; fuzzy setpoint `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
+
+That run used the pre-R-* playbook (take upstream for `orkui/` when Megiddo had not yet migrated production code). **Do not reuse those conflict rules** for post-refactor rebases.
