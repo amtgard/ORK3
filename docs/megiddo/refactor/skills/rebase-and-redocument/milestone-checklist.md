@@ -205,14 +205,14 @@ For each **overlap** path from RB-0 inventory:
 |------------------|---------------|-------------------|-------|-----------|------|
 | Kingdom (`controller.Kingdom.php`, `class.Kingdom.php`, `Kingdomnew_index.tpl`) | [x] | [x] | [x] | [x] | [x] |
 | Player (`controller.Player.php`, `Playernew_index.tpl`) | [x] | [x] | [x] | [x] | [x] |
-| Reports (`controller.Reports.php`, `model.Reports.php`) | [x] | [x] | [x] | [ ] | [ ] |
+| Reports (`controller.Reports.php`, `model.Reports.php`) | [x] | [x] | [x] | [x] | [x] |
 | Templates (`default.theme`, Event/Park revised-frontend) | [x] | [x] | [x] | [x] | [x] |
 
 Shared sign-off:
 
 - [x] No `$DB->` / `Ork3::$Lib` reintroduced on overlap paths
 - [x] Hotspot tests green (or gaps listed)
-- [ ] Relevant `tools/infection/` gates green (or gaps listed)
+- [x] Relevant `tools/infection/` gates green (or gaps listed)
 - [x] Commit: `RB-H: Repair overlap hotspots after rebase`
 
 **Exit:** Overlap surfaces trustworthy; remaining new-module work is RB-N.
@@ -225,12 +225,12 @@ Overlap QualTest hooks in `controller.Kingdom.php` / `controller.Player.php` / `
 |---------|------------|-------------------|-------|-----------|
 | Kingdom | fixed via `Model_QualTest`; no `$DB`/`Ork3::$Lib` on overlap controller/tpl | QualTest admin tab / toggles / config seed present; `class.Kingdom` keeps Megiddo structure | `KingdomProfileTest` + fixture attendance for park averages | `t06` `class.Kingdom.php` MSI **30%** / covered **30%** (floor 15%) |
 | Player | fixed via `Model_QualTest`; precomputed auth flags retained | Qual takeable/results/config UI present in `Playernew_index.tpl` | Player profile/ajax/cache filters green | `t09` `class.Player.php` MSI **27%** / covered **27%** (floor 15%) |
-| Reports | fixed via `Model_QualTest`; thin `model.Reports` retained | Winter's Edge `MembershipMode=first_attendance` in `VotingRules`; test-results endpoints present | VotingRules/Ladder/Attendance/Officer/Award filters green | **BLOCKED:** `t10` `class.Report.php` MSI **12.15%** / covered **12.15%** (floor 15%, exit 1); Award-only scope is 36% |
+| Reports | fixed via `Model_QualTest`; thin `model.Reports` retained | Winter's Edge `MembershipMode=first_attendance` in `VotingRules`; test-results endpoints present | VotingRules/Ladder/Attendance/Officer/Award + **ReportDomainCoverageTest** | `t10` `class.Report.php` alone MSI **60%** / covered **60%** (floor 15%, exit 0); Award-alone spot-check **31%** |
 | Templates | no `$DB`/`Ork3::$Lib` on overlap templates (`nav_*` / `wx_*` / precomputed flags) | Walker 3.5.4 banner copy; QualTest UI hooks; Event confirm `white-space:pre-line`; Park weather helpers | N/A domain suite (thinning only) | `t05` `class.Event.php` MSI **39%**; `t07` `class.ParkProfile.php` MSI **42%** (floors 15%) |
 
 Also fixed Infection `phpUnit.configDir` for `t05`/`t06`/`t07`/`t09`/`t10` to `../..` after the configs moved under `tools/infection/`. Attendance fixture inserts no longer depend on a seed attendance template row.
 
-Recovery verification found that Infection 0.29.14 applies only the last of repeated `--filter` options, so the earlier combined t10 pass mutated `class.Award.php` and masked the Report score. Running `class.Report.php` alone with the documented report tests produced 461 mutants and **12.15% MSI**; adding all existing relevant Kingdom/Player/Search/AdminDashboard Report consumers produced 905 mutants and remained at **12%**. The floor was not lowered. Closing this gap requires new Report mutation coverage beyond the existing hotspot test scope, so RB-H remains blocked and RB-N must not start.
+Recovery verification found that Infection 0.29.14 applies only the last of repeated `--filter` options, so historical dual-filter t10 runs (`class.Report.php` then `class.Award.php`) mutated Award only and masked Report. Report-alone with the original hotspot filters was **12.15% MSI** (floor 15%). **Fix (same day):** added `ReportDomainCoverageTest` + fixture helpers that exercise real sandbox kingdoms with explicit voting-rule payloads (seed has no kingdoms 14/17/…), ladder park-scope + awarded player, officer park pivot, attendance-dates domain contract, and park-average cache bust. Re-ran **Report alone** (`--filter=class.Report.php` only — never dual-filter): **752 mutants, 456 killed, MSI 60% / covered 60%, exit 0**. Award-alone spot-check remains above floor (31%). Floors were not lowered. Soft 30% stretch not chased further (already cleared at 60%). RB-H fully clear → next is **RB-N**.
 
 ---
 
@@ -313,7 +313,7 @@ Validate the rebased tip against the **RB-G gold setpoint** (captured from unreb
 | 7 | RB-F (validate vs gold) |
 | 8 | RB-Z |
 
-**Next unchecked:** RB-N (RB-G folded into RB-F this run — see RB-G note). RB-H committed after overlap QualTest thinning + Infection gates.
+**Next unchecked:** RB-N (RB-G folded into RB-F this run — see RB-G note). RB-H fully clear (Reports Infection 60% Report-alone).
 
 ---
 
