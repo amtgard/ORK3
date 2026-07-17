@@ -136,14 +136,35 @@ Operational friction (not product conflicts): untracked fuzzy baseline PNGs bloc
 
 | Step | Status |
 |------|--------|
-| `docker compose -f docker-compose.php8.yml up -d` | [ ] |
-| `bin/ork-db deploy-sandbox` (fix schema/migration drift) | [ ] |
-| E2E preflight when touching auth-gated specs | [ ] |
-| `sh bin/run-unit-tests.sh` exit 0 | [ ] |
-| Critical e2e smoke (or documented deferrals to RB-H/RB-N) | [ ] |
-| Commit: `RB-2: Repair tests after post-refactor rebase` | [ ] |
+| `docker compose -f docker-compose.php8.yml up -d` | [x] |
+| `bin/ork-db deploy-sandbox` (fix schema/migration drift) | [x] |
+| E2E preflight when touching auth-gated specs | [x] |
+| `sh bin/run-unit-tests.sh` exit 0 | [x] |
+| Critical e2e smoke (or documented deferrals to RB-H/RB-N) | [x] |
+| Commit: `RB-2: Repair tests after post-refactor rebase` | [x] |
 
 **Exit:** Full PHPUnit green. Domain/hotspot tweaks may continue in RB-H/RB-N if listed.
+
+**RB-2 notes (2026-07-17):**
+
+Docker stack up; sandbox deploy completed after interactive confirm (daily refresh apply). Drift-check initially failed on unclassified migrations — classified:
+
+| Migration | Class | Render | Notes |
+|-----------|-------|--------|-------|
+| `2026-07-14-qualification-tests.sql` | `S+RC` | `full` | QualTest schema + idempotent kingdom config defaults |
+| `dev-set-test-logins.php` | `ES` | `skip` | Local-dev credential helper, not schema |
+
+Re-render + apply after classification. PHPUnit: **230 tests, 740 assertions, exit 0** (2 skipped, 3 PHPUnit deprecations). No characterization coverage deleted.
+
+E2E preflight: seeded credentials; repaired corrupted `node_modules/playwright` via `npm install` + `npx playwright install chromium`. Auth smoke + full mirror suite (`tests/e2e/ --grep-invert heraldry`): **50 passed**. Sandbox heraldry: **3 passed**.
+
+#### Deferred (no suite failures; ownership for follow-up)
+
+| Item | Owner | Why |
+|------|-------|-----|
+| `Ork3::$Lib->qualtest` call sites in `controller.Player.php`, `controller.Kingdom.php`, `controller.Reports.php` | **RB-N** | Upstream QualTest hooks retained in RB-1; spirit migration out of scope for RB-2 |
+| Kingdom / Player / Reports / template overlap Infection + thin-layer recheck | **RB-H** | Global suite green; hotspot gates are RB-H |
+| QualTest controllers/templates/lib migration behind thin frontend | **RB-N** | Upstream-new module; no PHPUnit failures deferred |
 
 ---
 
@@ -249,7 +270,7 @@ Shared sign-off:
 | 6 | RB-F |
 | 7 | RB-Z |
 
-**Next unchecked:** RB-2
+**Next unchecked:** RB-H
 
 ---
 

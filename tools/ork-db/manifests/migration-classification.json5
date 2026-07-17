@@ -80,6 +80,8 @@
     "2026-06-03-northern-lights-custom-award-dedup.sql": { "class": "ES", "render": "skip" },
     "2026-06-06-trim-persona-whitespace.sql": { "class": "PB", "render": "skip" },
     "2026-07-01-mundane-design-show-feast-prefs.sql": { "class": "S", "render": "full" },
-    "2026-07-07-add-prod-canary.sql": { "class": "PC", "render": "skip", "notes": "Dev mirror only" }
+    "2026-07-07-add-prod-canary.sql": { "class": "PC", "render": "skip", "notes": "Dev mirror only" },
+    "2026-07-14-qualification-tests.sql": { "class": "S+RC", "render": "full", "notes": "Qualification test schema plus idempotent per-kingdom config defaults" },
+    "dev-set-test-logins.php": { "class": "ES", "render": "skip", "notes": "Local-dev credential helper; not a schema migration" }
   }
 }
