@@ -30,6 +30,12 @@ final class KingdomProfileFixture
     /** @var list<int> */
     private array $configIds = [];
 
+    /** @var list<int> */
+    private array $attendanceIds = [];
+
+    /** @var list<int> */
+    private array $attendanceKingdomIds = [];
+
     public function __construct(
         private readonly PDO $pdo,
     ) {
@@ -92,6 +98,43 @@ final class KingdomProfileFixture
             'park_id' => $parkId,
             'kingdom_id' => $kingdomId,
         ];
+    }
+
+    public function createRecentAttendance(int $mundaneId, int $parkId, int $kingdomId): int
+    {
+        $classId = (int) $this->pdo->query(
+            'SELECT class_id FROM ' . DB_PREFIX . 'class ORDER BY class_id ASC LIMIT 1'
+        )->fetchColumn();
+        if ($classId <= 0) {
+            throw new RuntimeException('No class row in seed data.');
+        }
+
+        $date = date('Y-m-d', strtotime('-7 days'));
+        $timestamp = strtotime($date);
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'attendance
+             (park_id, kingdom_id, mundane_id, persona, class_id, date, credits, note, flavor, by_whom_id,
+              entered_at, entry_method, event_id, event_calendardetail_id, date_year, date_month, date_week3, date_week6)
+             VALUES (?, ?, ?, ?, ?, ?, 1, \'\', \'\', ?, NOW(), \'manual\', 0, 0, ?, ?, ?, 0)'
+        );
+        $stmt->execute([
+            $parkId,
+            $kingdomId,
+            $mundaneId,
+            self::MARKER . ' attendance',
+            $classId,
+            $date . ' 12:00:00',
+            $mundaneId,
+            (int) date('Y', $timestamp),
+            (int) date('n', $timestamp),
+            (int) date('W', $timestamp),
+        ]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->attendanceIds[] = $id;
+        $this->attendanceKingdomIds[] = $kingdomId;
+        (new Report())->bustKingdomParkAverageCaches($kingdomId);
+
+        return $id;
     }
 
     /**
@@ -196,6 +239,14 @@ final class KingdomProfileFixture
 
     public function cleanup(): void
     {
+        foreach ($this->attendanceIds as $id) {
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'attendance WHERE attendance_id = ' . (int) $id);
+        }
+
+        foreach (array_unique($this->attendanceKingdomIds) as $kingdomId) {
+            (new Report())->bustKingdomParkAverageCaches((int) $kingdomId);
+        }
+
         foreach ($this->detailIds as $id) {
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_rsvp WHERE event_calendardetail_id = ' . (int) $id);
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . (int) $id);

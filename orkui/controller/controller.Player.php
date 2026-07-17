@@ -280,6 +280,7 @@ class Controller_Player extends Controller
     public function profile($id = null)
     {
         $this->template = '../revised-frontend/Playernew_index.tpl';
+        $this->load_model('QualTest');
 
         $params    = explode('/', $id ?? '');
         $id        = (int) $params[0];
@@ -709,16 +710,16 @@ class Controller_Player extends Controller
         // be told "Not enough active questions available" — inviting them to do something that
         // cannot be done. A test is takeable only if it is ALSO published with enough questions.
         $this->data['QualTakeable'] = [
-            'reeve'   => $qualReeveEnabled   && Ork3::$Lib->qualtest->hasTakeableVersion($playerKingdomId, 'reeve'),
-            'corpora' => $qualCorporaEnabled && Ork3::$Lib->qualtest->hasTakeableVersion($playerKingdomId, 'corpora'),
+            'reeve'   => $qualReeveEnabled   && $this->QualTest->has_takeable_version($playerKingdomId, 'reeve'),
+            'corpora' => $qualCorporaEnabled && $this->QualTest->has_takeable_version($playerKingdomId, 'corpora'),
         ];
 
         if ($qualReeveEnabled || $qualCorporaEnabled) {
-            $this->data['QualResults']   = Ork3::$Lib->qualtest->getPlayerResults((int)$id, $playerKingdomId);
-            $this->data['QualCanManage'] = $canEdit || Ork3::$Lib->qualtest->canManage($uid, $playerKingdomId);
+            $this->data['QualResults']   = $this->QualTest->player_results((int)$id, $playerKingdomId);
+            $this->data['QualCanManage'] = $canEdit || $this->QualTest->can_manage($uid, $playerKingdomId);
             $this->data['QualConfigs']   = [
-                'reeve'   => $qualReeveEnabled ? Ork3::$Lib->qualtest->getConfig($playerKingdomId, 'reeve') : null,
-                'corpora' => $qualCorporaEnabled ? Ork3::$Lib->qualtest->getConfig($playerKingdomId, 'corpora') : null,
+                'reeve'   => $qualReeveEnabled ? $this->QualTest->config($playerKingdomId, 'reeve') : null,
+                'corpora' => $qualCorporaEnabled ? $this->QualTest->config($playerKingdomId, 'corpora') : null,
             ];
         } else {
             $this->data['QualResults']   = [];

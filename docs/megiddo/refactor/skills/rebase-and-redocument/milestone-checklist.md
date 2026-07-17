@@ -81,9 +81,33 @@ Tooling check: docker OK (Compose v5.0.2); `bin/ork-db`, `bin/fuzzy-validator`, 
 
 ---
 
-### RB-1: Rebase with spirit-preserving merges
+### RB-G: Gold UI setpoint (from unrebased mainline)
 
 **Depends on:** RB-0  
+**Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-G`
+
+Capture the fuzzy setpoint from **`origin/master` @ base SHA** — the UI gold master — **before** rebasing. RB-F later only validates against this bundle.
+
+| Step | Status |
+|------|--------|
+| Commit/park rebase-branch work; checkout base SHA in a clean tree | [ ] |
+| `bin/ork-db deploy-sandbox`; E2E preflight (test + mirror) | [ ] |
+| `bin/fuzzy-validator setpoint capture --profiles test,mirror` | [ ] |
+| `bin/fuzzy-validator setpoint publish` (bundle → Drive/bootstrap) | [ ] |
+| Return to `megiddo/rebase-*`; record gold bundle id below | [ ] |
+| Commit: `RB-G: Capture gold UI setpoint from mainline @ <baseSHA>` | [ ] |
+
+**Exit:** Gold setpoint published from base SHA; bundle id recorded; ready for RB-1.
+
+**Gold bundle id:** _(fill in RB-G)_
+
+> **This run (resume):** RB-1 already landed before RB-G existed. Fold RB-G into RB-F — commit the rebase work, `git checkout 7631d0ba` in a clean tree, capture + publish gold there, return, then validate the tip. The setpoint must come from `7631d0ba`, never from the rebased tip.
+
+---
+
+### RB-1: Rebase with spirit-preserving merges
+
+**Depends on:** RB-0 (and RB-G, or RB-G folded into RB-F for resumes)  
 **Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-1`  
 **Conflicts:** [conflict-playbook.md](conflict-playbook.md)
 
@@ -179,19 +203,34 @@ For each **overlap** path from RB-0 inventory:
 
 | Hotspot / domain | Thin layer OK | Upstream behavior | Tests | Infection | Done |
 |------------------|---------------|-------------------|-------|-----------|------|
-| Kingdom (`controller.Kingdom.php`, `class.Kingdom.php`, `Kingdomnew_index.tpl`) | [ ] | [ ] | [ ] | [ ] | [ ] |
-| Player (`controller.Player.php`, `Playernew_index.tpl`) | [ ] | [ ] | [ ] | [ ] | [ ] |
-| Reports (`controller.Reports.php`, `model.Reports.php`) | [ ] | [ ] | [ ] | [ ] | [ ] |
-| Templates (`default.theme`, Event/Park revised-frontend) | [ ] | [ ] | [ ] | [ ] | [ ] |
+| Kingdom (`controller.Kingdom.php`, `class.Kingdom.php`, `Kingdomnew_index.tpl`) | [x] | [x] | [x] | [x] | [x] |
+| Player (`controller.Player.php`, `Playernew_index.tpl`) | [x] | [x] | [x] | [x] | [x] |
+| Reports (`controller.Reports.php`, `model.Reports.php`) | [x] | [x] | [x] | [ ] | [ ] |
+| Templates (`default.theme`, Event/Park revised-frontend) | [x] | [x] | [x] | [x] | [x] |
 
 Shared sign-off:
 
-- [ ] No `$DB->` / `Ork3::$Lib` reintroduced on overlap paths
-- [ ] Hotspot tests green (or gaps listed)
+- [x] No `$DB->` / `Ork3::$Lib` reintroduced on overlap paths
+- [x] Hotspot tests green (or gaps listed)
 - [ ] Relevant `tools/infection/` gates green (or gaps listed)
-- [ ] Commit: `RB-H: Repair overlap hotspots after rebase`
+- [x] Commit: `RB-H: Repair overlap hotspots after rebase`
 
 **Exit:** Overlap surfaces trustworthy; remaining new-module work is RB-N.
+
+**RB-H notes (2026-07-17):**
+
+Overlap QualTest hooks in `controller.Kingdom.php` / `controller.Player.php` / `controller.Reports.php` were thinned through new `orkui/model/model.QualTest.php` (`load_model('QualTest')` → snake_case wrappers → `QualTest` domain). Shared sign-off is clean for **overlap paths only**. Upstream-new QualTest controllers still use `Ork3::$Lib->qualtest` — ownership stays **RB-N**.
+
+| Hotspot | Thin layer | Upstream behavior | Tests | Infection |
+|---------|------------|-------------------|-------|-----------|
+| Kingdom | fixed via `Model_QualTest`; no `$DB`/`Ork3::$Lib` on overlap controller/tpl | QualTest admin tab / toggles / config seed present; `class.Kingdom` keeps Megiddo structure | `KingdomProfileTest` + fixture attendance for park averages | `t06` `class.Kingdom.php` MSI **30%** / covered **30%** (floor 15%) |
+| Player | fixed via `Model_QualTest`; precomputed auth flags retained | Qual takeable/results/config UI present in `Playernew_index.tpl` | Player profile/ajax/cache filters green | `t09` `class.Player.php` MSI **27%** / covered **27%** (floor 15%) |
+| Reports | fixed via `Model_QualTest`; thin `model.Reports` retained | Winter's Edge `MembershipMode=first_attendance` in `VotingRules`; test-results endpoints present | VotingRules/Ladder/Attendance/Officer/Award filters green | **BLOCKED:** `t10` `class.Report.php` MSI **12.15%** / covered **12.15%** (floor 15%, exit 1); Award-only scope is 36% |
+| Templates | no `$DB`/`Ork3::$Lib` on overlap templates (`nav_*` / `wx_*` / precomputed flags) | Walker 3.5.4 banner copy; QualTest UI hooks; Event confirm `white-space:pre-line`; Park weather helpers | N/A domain suite (thinning only) | `t05` `class.Event.php` MSI **39%**; `t07` `class.ParkProfile.php` MSI **42%** (floors 15%) |
+
+Also fixed Infection `phpUnit.configDir` for `t05`/`t06`/`t07`/`t09`/`t10` to `../..` after the configs moved under `tools/infection/`. Attendance fixture inserts no longer depend on a seed attendance template row.
+
+Recovery verification found that Infection 0.29.14 applies only the last of repeated `--filter` options, so the earlier combined t10 pass mutated `class.Award.php` and masked the Report score. Running `class.Report.php` alone with the documented report tests produced 461 mutants and **12.15% MSI**; adding all existing relevant Kingdom/Player/Search/AdminDashboard Report consumers produced 905 mutants and remained at **12%**. The floor was not lowered. Closing this gap requires new Report mutation coverage beyond the existing hotspot test scope, so RB-H remains blocked and RB-N must not start.
 
 ---
 
@@ -220,19 +259,22 @@ Shared sign-off:
 
 ## Phase D — Fuzzy
 
-### RB-F: Fuzzy baselines and setpoint
+### RB-F: Validate rebased tip against the gold setpoint
 
 **Depends on:** RB-2; prefer RB-H + RB-N done if UI/schema changed  
 **Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-F`
 
+Validate the rebased tip against the **RB-G gold setpoint** (captured from unrebased mainline). Do **not** recapture from the Megiddo tip to go green — drift means we changed product UI.
+
 | Step | Status |
 |------|--------|
-| E2E preflight for capture profiles | [ ] |
-| `bin/fuzzy-validator validate --all --phase all` (or restore setpoint first) | [ ] |
-| Re-record / `setpoint capture` + `publish` if legitimate drift | [ ] |
-| Update active validation notes / `latestBundle` as needed | [ ] |
+| Gold setpoint present (RB-G bundle) — else capture from base SHA first (this run) | [ ] |
+| `bin/fuzzy-validator setpoint restore` (gold bundle) | [ ] |
+| E2E preflight for validate profiles (test + mirror) | [ ] |
+| `bin/fuzzy-validator validate --all --phase all` against gold | [ ] |
+| Any drift triaged: refactor-caused → fix code (`status=blocked`); legitimate upstream UI change → recapture **from `master`** only | [ ] |
 | Validate pass **test** + **mirror** | [ ] |
-| Commit: `RB-F: Recapture fuzzy baselines after rebase` | [ ] |
+| Commit: `RB-F: Validate rebased tip against gold UI setpoint` | [ ] |
 
 ---
 
@@ -240,7 +282,7 @@ Shared sign-off:
 
 ### RB-Z: Sign-off
 
-**Depends on:** RB-1, RB-2, RB-H, RB-N, RB-F  
+**Depends on:** RB-G, RB-1, RB-2, RB-H, RB-N, RB-F  
 **Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-Z`
 
 | Step | Status |
@@ -263,14 +305,15 @@ Shared sign-off:
 | Order | ID |
 |-------|-----|
 | 1 | RB-0 |
-| 2 | RB-1 |
-| 3 | RB-2 |
-| 4 | RB-H |
-| 5 | RB-N |
-| 6 | RB-F |
-| 7 | RB-Z |
+| 2 | RB-G |
+| 3 | RB-1 |
+| 4 | RB-2 |
+| 5 | RB-H |
+| 6 | RB-N |
+| 7 | RB-F (validate vs gold) |
+| 8 | RB-Z |
 
-**Next unchecked:** RB-H
+**Next unchecked:** RB-N (RB-G folded into RB-F this run — see RB-G note). RB-H committed after overlap QualTest thinning + Infection gates.
 
 ---
 

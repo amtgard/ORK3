@@ -159,6 +159,12 @@ final class KingdomProfileTest extends TestCase
     public function testReportAveragesShapeAndValues(): void
     {
         $kid = $this->fixture->firstKingdomId();
+        $player = $this->fixture->createPlayer('averages', $kid);
+        $this->fixture->createRecentAttendance(
+            $player['mundane_id'],
+            $player['park_id'],
+            $kid,
+        );
         $weekly = $this->reportDomain->GetKingdomParkAverages([
             'KingdomId' => $kid,
             'AverageMonths' => 6,

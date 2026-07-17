@@ -165,21 +165,29 @@ final class SearchFixture
 
     public function insertUnitAttendance(int $mundaneId, int $parkId, int $kingdomId): int
     {
-        $templateId = (int) $this->pdo->query(
-            'SELECT attendance_id FROM ' . DB_PREFIX . 'attendance ORDER BY attendance_id ASC LIMIT 1'
+        $classId = (int) $this->pdo->query(
+            'SELECT class_id FROM ' . DB_PREFIX . 'class ORDER BY class_id ASC LIMIT 1'
         )->fetchColumn();
         $date = date('Y-m-d', strtotime('-30 days'));
+        $timestamp = strtotime($date);
         $stmt = $this->pdo->prepare(
             'INSERT INTO ' . DB_PREFIX . 'attendance
-             (mundane_id, class_id, date, date_year, date_month, date_week3, date_week6,
-              park_id, kingdom_id, event_id, event_calendardetail_id, credits, persona,
-              flavor, note, by_whom_id, entry_method, entered_at)
-             SELECT ?, class_id, ?, YEAR(?), MONTH(?), date_week3, date_week6,
-                    ?, ?, event_id, event_calendardetail_id, credits, persona,
-                    flavor, note, by_whom_id, entry_method, NOW()
-             FROM ' . DB_PREFIX . 'attendance WHERE attendance_id = ?'
+             (park_id, kingdom_id, mundane_id, persona, class_id, date, credits, note, flavor, by_whom_id,
+              entered_at, entry_method, event_id, event_calendardetail_id, date_year, date_month, date_week3, date_week6)
+             VALUES (?, ?, ?, ?, ?, ?, 1, \'\', \'\', ?, NOW(), \'manual\', 0, 0, ?, ?, ?, 0)'
         );
-        $stmt->execute([$mundaneId, $date, $date, $date, $parkId, $kingdomId, $templateId]);
+        $stmt->execute([
+            $parkId,
+            $kingdomId,
+            $mundaneId,
+            self::MARKER . ' attendance',
+            $classId,
+            $date . ' 12:00:00',
+            $mundaneId,
+            (int) date('Y', $timestamp),
+            (int) date('n', $timestamp),
+            (int) date('W', $timestamp),
+        ]);
         $id = (int) $this->pdo->lastInsertId();
         $this->attendanceIds[] = $id;
 

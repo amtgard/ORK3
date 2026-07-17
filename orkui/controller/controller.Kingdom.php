@@ -299,6 +299,7 @@ class Controller_Kingdom extends Controller
         }
 
         $this->load_model('KingdomProfile');
+        $this->load_model('QualTest');
         $kid = (int)$kingdom_id;
         $kn_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $kn_isAdmin = ($kn_uid > 0) ? $this->Authorization->has_authority($kn_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
@@ -335,7 +336,7 @@ class Controller_Kingdom extends Controller
         }
 
         // Qualification Tests module: gate the Tests management UI.
-        $this->data['CanManageTests'] = $uid > 0 && Ork3::$Lib->qualtest->canManage($uid, (int)$kingdom_id);
+        $this->data['CanManageTests'] = $uid > 0 && $this->QualTest->can_manage($uid, (int)$kingdom_id);
 
         // Kingdom-level configs are read in two places below (QualTest toggles
         // and AwardRecsPublic). Fetch once here — before the qual-tests branch
