@@ -1,9 +1,16 @@
 {
   "schemaVersion": 1,
   "pageId": "weather",
-  "calibratedAt": "2026-07-10T08:33:19Z",
-  "calibrationRuns": 5,
+  "calibratedAt": "2026-07-18T03:04:30Z",
+  "calibrationRuns": 3,
   "fuzzNodes": [],
-  "manualNodes": [],
-  "calibratedFromCommit": "758b8566"
+  "manualNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/p[0]/text[0]",
+      "mode": "text",
+      "source": "manual",
+      "note": "Forecast freshness copy flips across sessions (last hour vs last few hours); stable within short calibration windows"
+    }
+  ],
+  "calibratedFromCommit": "7631d0ba"
 }
