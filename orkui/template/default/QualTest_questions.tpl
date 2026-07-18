@@ -952,6 +952,8 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 		<div class="qt-bulk-import-instructions">Paste questions separated by a blank line.
 First line = question text.
 Subsequent lines = answers (prefix with * for correct).
+Two or more * answers = "select all that apply".
+For a select-all question with only ONE correct answer, put [multi] on its own line above the question.
 Letter prefixes like A) B) are optional and stripped.
 
 Example:
@@ -960,9 +962,11 @@ A) Green
 *B) Blue
 C) Red
 
-Who wrote Hamlet?
-*A) Shakespeare
-B) Dickens</div>
+[multi]
+Which of these is a primary color?
+*A) Blue
+B) Green
+C) Orange</div>
 		<textarea id="qt-bulkimport-text" aria-label="Paste questions here" rows="6" placeholder="Paste your questions here..." style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e0;border-radius:4px;font-size:0.88rem;font-family:inherit;resize:vertical;flex:0 0 auto;min-height:96px;"></textarea>
 		<div class="qt-bulk-import-preview" id="qt-bulkimport-preview"></div>
 		</div><!-- /.qt-bulk-import-body -->
@@ -1381,6 +1385,15 @@ $(function() {
 		var questions = [], errors = [];
 		blocks.forEach(function(block, bi) {
 			var lines = block.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+			// Optional leading mode directive ([multi] / [single]). This is what lets a
+			// multi-select question with a SINGLE correct answer round-trip: the star
+			// count alone would read one star as single. Absent, mode is still inferred
+			// from the number of starred answers below.
+			var forcedMode = null;
+			if (lines.length && /^\[(multi|single)\]$/i.test(lines[0])) {
+				forcedMode = /multi/i.test(lines[0]) ? 'multi' : 'single';
+				lines = lines.slice(1);
+			}
 			if (lines.length < 2) { errors.push('Block ' + (bi+1) + ': needs question + at least 2 answers.'); return; }
 			var qText = stripEnumerator(lines[0].replace(/^\*/, '')); // leading * then any numbering
 			var answers = [], correctCount = 0;
@@ -1395,9 +1408,10 @@ $(function() {
 			}
 			if (answers.length < 2) { errors.push('Block ' + (bi+1) + ': at least 2 answers required.'); return; }
 			if (correctCount < 1)   { errors.push('Block ' + (bi+1) + ': at least 1 correct answer required.'); return; }
-			// Multi-correct is auto-detected: 2+ starred answers → "select all
-			// that apply." Admins can still flip the toggle in the editor.
-			var mode = correctCount > 1 ? 'multi' : 'single';
+			// An explicit [multi]/[single] directive wins; otherwise multi-correct is
+			// auto-detected (2+ starred answers → "select all that apply"). Admins can
+			// still flip the toggle in the editor.
+			var mode = forcedMode || (correctCount > 1 ? 'multi' : 'single');
 			questions.push({ QuestionText: qText, AnswerMode: mode, Answers: answers });
 		});
 		return { questions: questions, errors: errors };

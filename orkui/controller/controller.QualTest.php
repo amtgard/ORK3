@@ -292,6 +292,13 @@ class Controller_QualTest extends Controller
             if (!empty($q['Archived'])) {
                 continue;
             }
+            // Emit an explicit mode directive for multi-select questions so they
+            // round-trip on re-import. Without it, a multi question with a single
+            // correct answer would re-import as single (the importer infers multi
+            // from 2+ stars). Single is the natural default and needs no directive.
+            if (($q['AnswerMode'] ?? 'single') === 'multi') {
+                $lines[] = '[multi]';
+            }
             $lines[] = $q['QuestionText'];
             foreach ($q['Answers'] as $a) {
                 $lines[] = (!empty($a['IsCorrect']) ? '*' : '') . $a['AnswerText'];
