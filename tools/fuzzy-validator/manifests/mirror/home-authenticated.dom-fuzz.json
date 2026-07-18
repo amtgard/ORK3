@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "home-authenticated",
-  "calibratedAt": "2026-07-10T06:31:47Z",
+  "calibratedAt": "2026-07-18T23:06:26Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "c86ab163"
+  "calibratedFromCommit": "671c108b"
 }

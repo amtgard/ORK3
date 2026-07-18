@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "admin-permissions",
-  "calibratedAt": "2026-07-10T03:00:58Z",
+  "calibratedAt": "2026-07-18T23:06:30Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "57baf282"
+  "calibratedFromCommit": "671c108b"
 }

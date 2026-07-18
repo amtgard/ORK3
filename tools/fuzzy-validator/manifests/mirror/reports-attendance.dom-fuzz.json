@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "reports-attendance",
-  "calibratedAt": "2026-07-10T05:20:59Z",
+  "calibratedAt": "2026-07-18T23:06:34Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "c96ec75e"
+  "calibratedFromCommit": "671c108b"
 }

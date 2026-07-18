@@ -78,9 +78,27 @@ Track **RB-*** progress for the current post-refactor rebase.
 ### RB-G: Gold UI setpoint (from unrebased mainline)
 | Step | Status |
 |------|--------|
-| Checkout base SHA in a clean tree; deploy sandbox and run E2E preflight | [ ] |
+| Checkout base SHA in a clean tree; deploy sandbox and run E2E preflight | [x] |
 | Capture and publish test + mirror setpoint | [ ] |
-| Return to `megiddo/rebase-*`; record bundle id and commit | [ ] |
+| Return to `megiddo/rebase-*`; record bundle id and commit | [x] |
+
+**RB-G notes (2026-07-18):**
+
+- Gold product source: detached `671c108b612b03616437bb88c7126f7c56ceb703`
+  (`origin/master`). This base predates the validator tooling, so the current
+  harness served that detached worktree through Docker while performing the
+  sandbox deploy, authenticated test/mirror preflight, and capture.
+- Both authenticated E2E profile checks passed. The captured setpoint contains
+  20 registry pages for `test,mirror`.
+- Gold bundle:
+  `20260718T230634Z-671c108b-b16eae2472f1daa9.zip` (copied unchanged to
+  `tools/fuzzy-validator/setpoints/bootstrap/` and committed there;
+  `setpoint.json` points here).
+- `bin/fuzzy-validator setpoint publish` completed locally, but the external
+  Google Drive upload remains a manual maintainer step because no
+  configured Drive upload client or synced `ORK3 Fuzzy Setpoints` destination
+  is available on this machine. The publish step remains open until the bundle
+  is uploaded unchanged before RB-F.
 
 ### RB-1: Rebase with spirit-preserving merges
 | Step | Status |

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "event-park",
-  "calibratedAt": "2026-07-10T05:51:52Z",
+  "calibratedAt": "2026-07-18T23:06:29Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "d9def14b"
+  "calibratedFromCommit": "671c108b"
 }
