@@ -6091,6 +6091,7 @@ function pnOpenTestChooser() {
 	var reportBtn      = document.getElementById('pn-quiz-report-btn');
 	var reportForm     = document.getElementById('pn-quiz-report-form');
 	var reportReason   = document.getElementById('pn-quiz-report-reason');
+	var reportCorrectOpt = reportReason ? reportReason.querySelector('option[value="correct"]') : null;
 	var reportSubmit   = document.getElementById('pn-quiz-report-submit');
 	var reportCancel   = document.getElementById('pn-quiz-report-cancel');
 	var reportThanks   = document.getElementById('pn-quiz-report-thanks');
@@ -6113,6 +6114,9 @@ function pnOpenTestChooser() {
 	var passPercent    = 70;
 	// Set of checked answer ids for the multi-select question in view (null for single).
 	var multiSelected  = null;
+	// Pending answer id for a SINGLE-select question — chosen on click but not
+	// submitted until "Submit Answer", so a fat-fingered pick can be changed.
+	var singleSelected = null;
 	// True while the player is mid-test (questions in view, not yet finished) — used
 	// to confirm before an accidental close throws away in-progress answers.
 	var quizInProgress = false;
@@ -6211,13 +6215,17 @@ function pnOpenTestChooser() {
 		reportArea.style.display = 'none';
 		reportForm.style.display = 'none';
 		reportReason.value = '';
+		if (reportCorrectOpt) reportCorrectOpt.hidden = false;
 		reportThanks.style.display = 'none';
 
 		var isMulti = (q.AnswerMode === 'multi');
 		multiHintEl.style.display    = isMulti ? '' : 'none';
-		multiSubmitRow.style.display = isMulti ? '' : 'none';
+		// Both single and multi now confirm with the Submit button, so a mis-click
+		// can be corrected before it counts.
+		multiSubmitRow.style.display = '';
 		multiSubmitBtn.disabled      = true;
-		multiSelected = isMulti ? Object.create(null) : null;
+		multiSelected  = isMulti ? Object.create(null) : null;
+		singleSelected = null;
 
 		answersList.innerHTML = '';
 		q.Answers.forEach(function(a) {
@@ -6261,10 +6269,23 @@ function pnOpenTestChooser() {
 					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
 				});
 			} else {
-				// Single: clicking grades immediately.
-				label.addEventListener('click', function() { checkAnswer(q, a.QualAnswerId); });
+				// Single: clicking selects; scoring waits for Submit Answer so a
+				// mis-tap can be changed.
+				var selectSingle = function() {
+					if (isChecking) return;
+					// Radio behaviour: clear any prior pick, then select this one.
+					answersList.querySelectorAll('.pn-quiz-answer-label').forEach(function(l) {
+						l.classList.remove('pn-quiz-selected');
+						l.setAttribute('aria-checked', 'false');
+					});
+					label.classList.add('pn-quiz-selected');
+					label.setAttribute('aria-checked', 'true');
+					singleSelected = a.QualAnswerId;
+					multiSubmitBtn.disabled = false;
+				};
+				label.addEventListener('click', selectSingle);
 				label.addEventListener('keydown', function(e) {
-					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); checkAnswer(q, a.QualAnswerId); }
+					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSingle(); }
 				});
 			}
 			li.appendChild(label);
@@ -6352,9 +6373,15 @@ function pnOpenTestChooser() {
 					});
 					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-wrong';
 					feedbackEl.innerHTML = '<i class="fas fa-times-circle" style="margin-right:6px;"></i> Sorry, that\'s not correct.';
-					reportArea.style.display = 'block';
-					reportBtn.dataset.questionId = q.QualQuestionId;
 				}
+
+				// Any question can be reported — a right answer doesn't mean the
+				// question is sound (it may be poorly worded or outdated). The
+				// "My answer was correct" reason only applies to a miss, so hide
+				// it when they got it right.
+				reportArea.style.display = 'block';
+				reportBtn.dataset.questionId = q.QualQuestionId;
+				if (reportCorrectOpt) reportCorrectOpt.hidden = !!j.is_correct;
 
 				isChecking = false;
 				requestAnimationFrame(function() { feedbackEl.classList.add('pn-quiz-feedback-show'); });
@@ -6378,13 +6405,20 @@ function pnOpenTestChooser() {
 			});
 	}
 
-	// Multi-correct: "Submit Answer" grades the whole selected set at once.
+	// "Submit Answer" grades the current question — the whole selected set for
+	// multi, or the single pending pick.
 	if (multiSubmitBtn) {
 		multiSubmitBtn.addEventListener('click', function() {
-			if (!multiSelected) return;
-			var ids = Object.keys(multiSelected).map(function(x) { return parseInt(x, 10); });
-			if (ids.length === 0) return;
-			checkAnswer(questions[currentIdx], ids);
+			if (multiSubmitBtn.disabled) return;
+			var q = questions[currentIdx];
+			if (q.AnswerMode === 'multi') {
+				var ids = Object.keys(multiSelected || {}).map(function(x) { return parseInt(x, 10); });
+				if (ids.length === 0) return;
+				checkAnswer(q, ids);
+			} else {
+				if (singleSelected == null) return;
+				checkAnswer(q, singleSelected);
+			}
 		});
 	}
 
