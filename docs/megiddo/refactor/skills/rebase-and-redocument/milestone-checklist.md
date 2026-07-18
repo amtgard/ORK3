@@ -1,10 +1,8 @@
 # Rebase & Redocument — Milestone Checklist (Post-Refactor)
 
-Track **RB-*** progress for the **current** post-refactor rebase. **Preferred:** paste [orchestrator.prompt](orchestrator.prompt) into one chat; it launches serialized sub-agents per milestone.
+Track **RB-*** progress for the current post-refactor rebase.
 
-**Skill:** [SKILL.md](SKILL.md) · **Copy-paste:** [orchestrator.prompt](orchestrator.prompt) · **Workers:** [agent-prompt.md](agent-prompt.md) · **Matrix:** [mutation-matrix.md](mutation-matrix.md) · **Conflicts:** [conflict-playbook.md](conflict-playbook.md)
-
-**Steering:** [05-development-steering.md](../../05-development-steering.md) · **Remaining close-out:** [04-milestone-checklist.md](../../04-milestone-checklist.md)
+**Skill:** [SKILL.md](SKILL.md) · [orchestrator.prompt](orchestrator.prompt) · [agent-prompt.md](agent-prompt.md) · [mutation-matrix.md](mutation-matrix.md) · [conflict-playbook.md](conflict-playbook.md)
 
 ---
 
@@ -12,15 +10,15 @@ Track **RB-*** progress for the **current** post-refactor rebase. **Preferred:**
 
 | Field | Value |
 |-------|-------|
-| Date started | 2026-07-17 |
-| Megiddo tip (pre-rebase) | `megiddo/p3-fix-10-sandbox-fuzzy-rebaseline` @ `e1d993976f646c9d75ea13c96e99b26aa10939b4` |
-| Base | `origin/master` @ `7631d0baad65b573d4d53f115c84d20af09b046e` |
-| Working branch | `megiddo/rebase-20260717` |
+| Date started | 2026-07-18 |
+| Megiddo tip (pre-rebase) | `megiddo/rebase-20260718` @ `1979ae722f4869ccd0bea9a5d90205c2653f8222` |
+| Base | `origin/master` @ `671c108b612b03616437bb88c7126f7c56ceb703` |
+| Working branch | `megiddo/rebase-20260718` |
 | **Sizing grade** | **L** |
-| Sizing rationale | 26 commits on `HEAD..origin/master`; merge-base `e6417645`. Upstream brings full **Qualification Tests** module (new `orkui` controllers/templates + `class.QualTest.php` + consolidated migration). Overlap includes **Player / Kingdom / Reports** controllers + revised-frontend templates + `class.Kingdom.php` — matches L heuristics (large new module + messy Player/Kingdom/Reports/template merges). |
-| Session plan | **L:** RB-1 alone (spirit merges); RB-2 alone; RB-H split by domain (Kingdom / Player / Reports / templates); RB-N alone (QualTest spirit scan — controllers already call `Ork3::$Lib->qualtest`); RB-F alone; RB-Z close. Do not collapse into one mega-session. |
-| Overlap inventory | See table under RB-0 notes below |
-| WIP parked | `stash@{0}`: `WIP: park docs archive ahead of megiddo/rebase-20260717 (RB-0)` (docs archive + related; skill files restored onto this branch for the post-refactor checklist) |
+| Sizing rationale | 35 upstream commits and 1,384 changed paths (73 under `orkui/`) span QualTest follow-ups, event schedule/embed, DataTables/revised frontend, reports UI, and broad tooling/test churn. Twelve merge-base overlaps include QualTest, Event, shared templates, and Player/Report domain surfaces; upstream also has new EventEmbed, QualTest templates, schedule embed, DataTables, and Whats New files. This meets the L large-module/template-overlap heuristic. |
+| Session plan | **L:** RB-G alone; RB-1 alone; RB-2 alone; split RB-H by domain if needed (QualTest/Event, templates, Player/Report); RB-N alone; RB-F alone; RB-Z close. Do not collapse into one mega-session. |
+| Overlap inventory | Recorded in RB-0 notes below. |
+| WIP parked | None — tree was clean before RB-0 documentation update. |
 
 ---
 
@@ -28,8 +26,7 @@ Track **RB-*** progress for the **current** post-refactor rebase. **Preferred:**
 
 ### RB-0: Preflight, reset, and size
 
-**Branch:** create `megiddo/rebase-{YYYYMMDD}` from current Megiddo tip (do **not** rebase yet)  
-**Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-0`
+**Branch:** preserve `megiddo/rebase-20260718` at the current Megiddo tip; do **not** rebase yet.
 
 | Step | Status |
 |------|--------|
@@ -43,294 +40,101 @@ Track **RB-*** progress for the **current** post-refactor rebase. **Preferred:**
 | Next milestone named | [x] |
 | Commit (optional): `RB-0: Size post-refactor Megiddo rebase` | [x] |
 
-**Exit:** Grade + overlap inventory recorded; ready for RB-1.
+**RB-0 notes (2026-07-18):**
 
-**RB-0 notes (2026-07-17):**
-
-Upstream delta (`HEAD..origin/master`): **26 commits**, tip `7631d0ba` (Walker 3.5.4 / Qual Tests / maintenance banner). Meaningful file churn since merge-base `e6417645`: **35 files** (`orkui/` 27, `db-migrations/` 2, `system/lib/` 2, plus docs/README). Tree-wide `git diff --name-only HEAD..origin/master` is large (~1383) because Megiddo tip has diverged; use merge-base for inventory.
-
-Hot paths (merge-base → `origin/master`): QualTest controllers/templates; Kingdom/Player/Reports touch-ups; revised-frontend templates/JS/CSS; `db-migrations/2026-07-14-qualification-tests.sql`; `system/lib/ork3/class.QualTest.php` + `class.Kingdom.php`.
+- Fetch complete. Tip: `megiddo/rebase-20260718` @ `1979ae722f4869ccd0bea9a5d90205c2653f8222`; base: `origin/master` @ `671c108b612b03616437bb88c7126f7c56ceb703`; merge-base: `7631d0baad65b573d4d53f115c84d20af09b046e`.
+- `HEAD..origin/master`: **35 commits**, **1,384 files**. Hot paths: `orkui/` 73, `system/` 30, `db-migrations/` 1 (`2026-07-07-add-prod-canary.sql`), `tools/` 943, and `tests/` 111.
+- Existing working branch already pointed to the required tip; no rebase was run. Docker **29.2.0**; `bin/ork-db`, `bin/fuzzy-validator`, and `tools/infection/` exist.
 
 #### Overlap inventory (Megiddo ∩ upstream since merge-base)
 
-| Path | Megiddo changed? | Upstream changed? | Class |
-|------|------------------|-------------------|-------|
-| `orkui/controller/controller.Kingdom.php` | yes | yes | **overlap** |
-| `orkui/controller/controller.Player.php` | yes | yes | **overlap** |
-| `orkui/controller/controller.Reports.php` | yes | yes | **overlap** |
-| `orkui/model/model.Reports.php` | yes | yes | **overlap** |
-| `orkui/template/default/default.theme` | yes | yes | **overlap** |
-| `orkui/template/revised-frontend/Eventnew_index.tpl` | yes | yes | **overlap** |
-| `orkui/template/revised-frontend/Kingdomnew_index.tpl` | yes | yes | **overlap** |
-| `orkui/template/revised-frontend/Parknew_index.tpl` | yes | yes | **overlap** |
-| `orkui/template/revised-frontend/Playernew_index.tpl` | yes | yes | **overlap** |
-| `system/lib/ork3/class.Kingdom.php` | yes | yes | **overlap** |
+| Path | Class |
+|------|-------|
+| `orkui/controller/controller.EraPhoenice.php` | overlap |
+| `orkui/controller/controller.QualTest.php` | overlap |
+| `orkui/controller/controller.QualTestAjax.php` | overlap |
+| `orkui/model/model.Event.php` | overlap |
+| `orkui/template/default/Reports_playerawardrecommendations.tpl` | overlap |
+| `orkui/template/revised-frontend/{Event,Kingdom,Park,Player}new_index.tpl` | overlap |
+| `system/lib/ork3/class.{Player,Report}.php` | overlap |
+| `system/lib/system/class.Controller.php` | overlap |
 
-#### Upstream-new `orkui/` / lib (take in RB-1 → spirit scan in RB-N)
+#### Upstream-new `orkui/` modules/files (RB-1 take → RB-N scan)
 
 | Path | Class |
 |------|-------|
-| `orkui/controller/controller.QualTest.php` | **upstream-new** |
-| `orkui/controller/controller.QualTestAjax.php` | **upstream-new** |
-| `orkui/template/default/QualTest_*.tpl` (manage/question/questions/take) | **upstream-new** |
-| `orkui/template/default/Reports_test_results.tpl` | **upstream-new** |
-| `system/lib/ork3/class.QualTest.php` | **upstream-new** |
-| `db-migrations/2026-07-14-qualification-tests.sql` | **upstream-new** |
+| `controller/controller.EventEmbed.php` | upstream-new |
+| `template/default/QualTest_{question,questions,take}.tpl` | upstream-new |
+| `template/default/Reports_release_utilization.tpl` | upstream-new |
+| `template/embed/{demo.html,ork-schedule.js}` | upstream-new |
+| `template/revised-frontend/Kingdomnew_recommendations_panel.tpl` | upstream-new |
+| `template/revised-frontend/{script/revised.js,style/ork-datatables.css,style/revised.css}` | upstream-new |
+| `whats_new_content.php` | upstream-new |
 
-Tooling check: docker OK (Compose v5.0.2); `bin/ork-db`, `bin/fuzzy-validator`, `tools/infection/` present.
+**Next:** **RB-G** — capture the gold UI setpoint from unrebased `origin/master` @ `671c108b612b03616437bb88c7126f7c56ceb703`.
 
 ---
 
 ### RB-G: Gold UI setpoint (from unrebased mainline)
-
-**Depends on:** RB-0  
-**Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-G`
-
-Capture the fuzzy setpoint from **`origin/master` @ base SHA** — the UI gold master — **before** rebasing. RB-F later only validates against this bundle.
-
 | Step | Status |
 |------|--------|
-| Commit/park rebase-branch work; checkout base SHA in a clean tree | [ ] |
-| `bin/ork-db deploy-sandbox`; E2E preflight (test + mirror) | [ ] |
-| `bin/fuzzy-validator setpoint capture --profiles test,mirror` | [ ] |
-| `bin/fuzzy-validator setpoint publish` (bundle → Drive/bootstrap) | [ ] |
-| Return to `megiddo/rebase-*`; record gold bundle id below | [ ] |
-| Commit: `RB-G: Capture gold UI setpoint from mainline @ <baseSHA>` | [ ] |
-
-**Exit:** Gold setpoint published from base SHA; bundle id recorded; ready for RB-1.
-
-**Gold bundle id:** _(fill in RB-G)_
-
-> **This run (resume):** RB-1 already landed before RB-G existed. Fold RB-G into RB-F — commit the rebase work, `git checkout 7631d0ba` in a clean tree, capture + publish gold there, return, then validate the tip. The setpoint must come from `7631d0ba`, never from the rebased tip.
-
----
+| Checkout base SHA in a clean tree; deploy sandbox and run E2E preflight | [ ] |
+| Capture and publish test + mirror setpoint | [ ] |
+| Return to `megiddo/rebase-*`; record bundle id and commit | [ ] |
 
 ### RB-1: Rebase with spirit-preserving merges
-
-**Depends on:** RB-0 (and RB-G, or RB-G folded into RB-F for resumes)  
-**Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-1`  
-**Conflicts:** [conflict-playbook.md](conflict-playbook.md)
-
 | Step | Status |
 |------|--------|
-| `git rebase origin/master` (or agreed base) | [x] |
-| Overlap conflicts merged per playbook (Megiddo layering + upstream behavior) | [x] |
-| Upstream-new files taken; listed for RB-N | [x] |
-| Migrations kept (both sides) | [x] |
-| Rebase completed; tip based on new base | [x] |
-| Conflict notes recorded (file → where logic landed) | [x] |
-| Commit: `RB-1: Rebase Megiddo onto master (spirit merge)` | [x] |
-
-**Exit:** Clean rebase. PHPUnit need not be green yet.
-
-**RB-1 notes (2026-07-17):**
-
-Rebase onto `origin/master` @ `7631d0ba` completed. `origin/master` is an ancestor of HEAD. Post-rebase Megiddo tip before this docs commit: `81633e54` (rewritten RB-0). This RB-1 commit is the branch tip.
-
-Operational friction (not product conflicts): untracked fuzzy baseline PNGs blocked early pick (removed per playbook — restore in RB-F); Google Drive `index.lock` / assume-unchanged races on docs — cleared and continued.
-
-#### Conflict notes (file → where logic landed)
-
-| Conflict / touch | Resolution |
-|------------------|------------|
-| `orkui/model/model.Reports.php` (R-10) | Kept Megiddo thin model (`Report` / `VotingRules` wrappers). Did **not** take upstream fat `$DB` / inline voting-rules table. |
-| Winter's Edge `MembershipMode=first_attendance` (upstream `a29c9127`, was in fat model) | Ported into `system/lib/ork3/class.VotingRules.php` kingdom `24` rules. |
-| `system/lib/ork3/class.Kingdom.php` (R-16) | Kept Megiddo structure (ghettocache bust / principality helpers). Bad hunk had re-inserted upstream method bodies into `EditAward` — discarded. |
-| QualTest kingdom defaults (`QualTestReeveEnabled` / `QualTestCorporaEnabled`) | Ported into `Kingdom::CreateKingdom` config seed list. |
-| Auto-merged overlap controllers (`Player`, `Kingdom`, `Reports`) | Upstream QualTest UI hooks landed via `Ork3::$Lib->qualtest` — **no `$DB`**. Deferred spirit migration to **RB-N** (do not thin further in RB-1). |
-| Upstream-new QualTest controllers/templates/lib + `Reports_test_results.tpl` + `db-migrations/2026-07-14-qualification-tests.sql` | Taken as-is; listed for RB-N. |
-| `db-migrations/**` | Both sides kept (incl. qualification-tests). |
-
-#### Upstream-new retained for RB-N
-
-- `orkui/controller/controller.QualTest.php`, `controller.QualTestAjax.php`
-- `orkui/template/default/QualTest_*.tpl`, `Reports_test_results.tpl`
-- `system/lib/ork3/class.QualTest.php`
-- `db-migrations/2026-07-14-qualification-tests.sql`
-- Overlap follow-ups: `Ork3::$Lib->qualtest` call sites in `controller.Player.php`, `controller.Kingdom.php`, `controller.Reports.php` (`_*_test_results`)
-
----
+| Rebase onto base; preserve Megiddo layering and upstream behavior | [ ] |
+| Take upstream-new files, keep migrations, record conflicts, and commit | [ ] |
 
 ## Phase B — Global tests
-
 ### RB-2: Full suite green
-
-**Depends on:** RB-1  
-**Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-2`
-
 | Step | Status |
 |------|--------|
-| `docker compose -f docker-compose.php8.yml up -d` | [x] |
-| `bin/ork-db deploy-sandbox` (fix schema/migration drift) | [x] |
-| E2E preflight when touching auth-gated specs | [x] |
-| `sh bin/run-unit-tests.sh` exit 0 | [x] |
-| Critical e2e smoke (or documented deferrals to RB-H/RB-N) | [x] |
-| Commit: `RB-2: Repair tests after post-refactor rebase` | [x] |
-
-**Exit:** Full PHPUnit green. Domain/hotspot tweaks may continue in RB-H/RB-N if listed.
-
-**RB-2 notes (2026-07-17):**
-
-Docker stack up; sandbox deploy completed after interactive confirm (daily refresh apply). Drift-check initially failed on unclassified migrations — classified:
-
-| Migration | Class | Render | Notes |
-|-----------|-------|--------|-------|
-| `2026-07-14-qualification-tests.sql` | `S+RC` | `full` | QualTest schema + idempotent kingdom config defaults |
-| `dev-set-test-logins.php` | `ES` | `skip` | Local-dev credential helper, not schema |
-
-Re-render + apply after classification. PHPUnit: **230 tests, 740 assertions, exit 0** (2 skipped, 3 PHPUnit deprecations). No characterization coverage deleted.
-
-E2E preflight: seeded credentials; repaired corrupted `node_modules/playwright` via `npm install` + `npx playwright install chromium`. Auth smoke + full mirror suite (`tests/e2e/ --grep-invert heraldry`): **50 passed**. Sandbox heraldry: **3 passed**.
-
-#### Deferred (no suite failures; ownership for follow-up)
-
-| Item | Owner | Why |
-|------|-------|-----|
-| `Ork3::$Lib->qualtest` call sites in `controller.Player.php`, `controller.Kingdom.php`, `controller.Reports.php` | **RB-N** | Upstream QualTest hooks retained in RB-1; spirit migration out of scope for RB-2 |
-| Kingdom / Player / Reports / template overlap Infection + thin-layer recheck | **RB-H** | Global suite green; hotspot gates are RB-H |
-| QualTest controllers/templates/lib migration behind thin frontend | **RB-N** | Upstream-new module; no PHPUnit failures deferred |
-
----
+| Deploy sandbox, E2E preflight, full PHPUnit, critical smoke, and commit | [ ] |
 
 ## Phase C — Hotspots and new-code spirit
-
 ### RB-H: Overlap hotspots
-
-**Depends on:** RB-2  
-**Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-H`
-
-For each **overlap** path from RB-0 inventory:
-
-| Hotspot / domain | Thin layer OK | Upstream behavior | Tests | Infection | Done |
-|------------------|---------------|-------------------|-------|-----------|------|
-| Kingdom (`controller.Kingdom.php`, `class.Kingdom.php`, `Kingdomnew_index.tpl`) | [x] | [x] | [x] | [x] | [x] |
-| Player (`controller.Player.php`, `Playernew_index.tpl`) | [x] | [x] | [x] | [x] | [x] |
-| Reports (`controller.Reports.php`, `model.Reports.php`) | [x] | [x] | [x] | [x] | [x] |
-| Templates (`default.theme`, Event/Park revised-frontend) | [x] | [x] | [x] | [x] | [x] |
-
-Shared sign-off:
-
-- [x] No `$DB->` / `Ork3::$Lib` reintroduced on overlap paths
-- [x] Hotspot tests green (or gaps listed)
-- [x] Relevant `tools/infection/` gates green (or gaps listed)
-- [x] Commit: `RB-H: Repair overlap hotspots after rebase`
-
-**Exit:** Overlap surfaces trustworthy; remaining new-module work is RB-N.
-
-**RB-H notes (2026-07-17):**
-
-Overlap QualTest hooks in `controller.Kingdom.php` / `controller.Player.php` / `controller.Reports.php` were thinned through new `orkui/model/model.QualTest.php` (`load_model('QualTest')` → snake_case wrappers → `QualTest` domain). Shared sign-off is clean for **overlap paths only**. Upstream-new QualTest controllers still use `Ork3::$Lib->qualtest` — ownership stays **RB-N**.
-
-| Hotspot | Thin layer | Upstream behavior | Tests | Infection |
-|---------|------------|-------------------|-------|-----------|
-| Kingdom | fixed via `Model_QualTest`; no `$DB`/`Ork3::$Lib` on overlap controller/tpl | QualTest admin tab / toggles / config seed present; `class.Kingdom` keeps Megiddo structure | `KingdomProfileTest` + fixture attendance for park averages | `t06` `class.Kingdom.php` MSI **30%** / covered **30%** (floor 15%) |
-| Player | fixed via `Model_QualTest`; precomputed auth flags retained | Qual takeable/results/config UI present in `Playernew_index.tpl` | Player profile/ajax/cache filters green | `t09` `class.Player.php` MSI **27%** / covered **27%** (floor 15%) |
-| Reports | fixed via `Model_QualTest`; thin `model.Reports` retained | Winter's Edge `MembershipMode=first_attendance` in `VotingRules`; test-results endpoints present | VotingRules/Ladder/Attendance/Officer/Award + **ReportDomainCoverageTest** | `t10` `class.Report.php` alone MSI **60%** / covered **60%** (floor 15%, exit 0); Award-alone spot-check **31%** |
-| Templates | no `$DB`/`Ork3::$Lib` on overlap templates (`nav_*` / `wx_*` / precomputed flags) | Walker 3.5.4 banner copy; QualTest UI hooks; Event confirm `white-space:pre-line`; Park weather helpers | N/A domain suite (thinning only) | `t05` `class.Event.php` MSI **39%**; `t07` `class.ParkProfile.php` MSI **42%** (floors 15%) |
-
-Also fixed Infection `phpUnit.configDir` for `t05`/`t06`/`t07`/`t09`/`t10` to `../..` after the configs moved under `tools/infection/`. Attendance fixture inserts no longer depend on a seed attendance template row.
-
-Recovery verification found that Infection 0.29.14 applies only the last of repeated `--filter` options, so historical dual-filter t10 runs (`class.Report.php` then `class.Award.php`) mutated Award only and masked Report. Report-alone with the original hotspot filters was **12.15% MSI** (floor 15%). **Fix (same day):** added `ReportDomainCoverageTest` + fixture helpers that exercise real sandbox kingdoms with explicit voting-rule payloads (seed has no kingdoms 14/17/…), ladder park-scope + awarded player, officer park pivot, attendance-dates domain contract, and park-average cache bust. Re-ran **Report alone** (`--filter=class.Report.php` only — never dual-filter): **752 mutants, 456 killed, MSI 60% / covered 60%, exit 0**. Award-alone spot-check remains above floor (31%). Floors were not lowered. Soft 30% stretch not chased further (already cleared at 60%). RB-H fully clear → next is **RB-N**.
-
----
+| Step | Status |
+|------|--------|
+| Verify thin layers, upstream behavior, tests, and Infection for every overlap | [ ] |
+| Confirm no `$DB->` / `Ork3::$Lib` on overlap paths; commit | [ ] |
 
 ### RB-N: New upstream code — spirit of the refactor
-
-**Depends on:** RB-2 (RB-H recommended first)  
-**Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-N`  
-**Matrix:** [mutation-matrix.md](mutation-matrix.md) § RB-N
-
 | Step | Status |
 |------|--------|
-| Inventory upstream-new / heavily rewritten `orkui/` areas | [x] |
-| Static scan: `$DB`, raw SQL, `Ork3::$Lib`, auth INSERTs | [x] |
-| Migrate violations into `system/lib/ork3/` + thin frontend | [x] |
-| Add/extend characterization tests for moved behavior | [x] |
-| `rg '\$DB->' orkui/` clean | [x] |
-| `rg 'Ork3::\$Lib' orkui/` clean | [x] |
-| `sh bin/run-unit-tests.sh` exit 0 | [x] |
-| Commit: `RB-N: Migrate new upstream frontend logic behind services` | [x] |
-
-**Exit:** Success-criteria static gates clean on `orkui/`, or explicit user waivers listed on this checklist.
-
-**RB-N notes (2026-07-17):**
-
-Inventory: primary violations were upstream-new `controller.QualTest.php` / `controller.QualTestAjax.php` (heavy `Ork3::$Lib->qualtest` + one `Ork3::$Lib->player->player_info`). Templates (`QualTest_*.tpl`, `Reports_test_results.tpl`) had no `$DB` / `Ork3::$Lib`. Domain already lived in `system/lib/ork3/class.QualTest.php` (taken in RB-1). Overlap controllers were already thinned via `Model_QualTest` in RB-H.
-
-Migrations:
-- Expanded `orkui/model/model.QualTest.php` with snake_case wrappers for all QualTest controller call sites (manage/questions/take/export + full AJAX surface).
-- Thinned both QualTest controllers to `load_model('QualTest')` → `$this->QualTest->…`; `resetplayerretakes` uses `load_model('Player')` for kingdom IDOR check.
-- Left `Common::get_configs` kingdom enable flags in controllers (same pattern as Kingdom/Player/Reports peers).
-- Characterization: `tests/Unit/QualTestScoreTest.php` (scoreTest single/multi + `Model_QualTest::score_test` delegation).
-- Infection: added `tools/infection/infection.t-qualtest.json5` (floors 15%). **Gap:** full `class.QualTest.php` MSI not gated this hop — class is large; only scoring characterization exists. Do not lower floors; broaden coverage before enforcing the gate.
-
-Static gates: `rg '$DB->' orkui/` and `rg 'Ork3::$Lib' orkui/` clean (controllers/models/templates/index). No auth INSERTs / yapo-in-frontend in QualTest paths. PHPUnit: **250 tests / 834 assertions, exit 0**.
-
-**RB-N preview (from RB-0):** QualTest controllers on `origin/master` already use heavy `Ork3::$Lib->qualtest` — expect spirit migration (thin frontend → service/`Model_*`) as primary RB-N work. Split to RB-N2 if scope explodes. → **Done in this hop; no RB-N2 needed.**
-
----
+| Inventory and scan upstream-new `orkui/` code | [ ] |
+| Move violations behind `system/lib/ork3/` / `Model_*`; add characterization tests | [ ] |
+| Confirm static gates and PHPUnit; commit | [ ] |
 
 ## Phase D — Fuzzy
-
-### RB-F: Validate rebased tip against the gold setpoint
-
-**Depends on:** RB-2; prefer RB-H + RB-N done if UI/schema changed  
-**Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-F`
-
-Validate the rebased tip against the **RB-G gold setpoint** (captured from unrebased mainline). Do **not** recapture from the Megiddo tip to go green — drift means we changed product UI.
-
+### RB-F: Validate rebased tip against gold
 | Step | Status |
 |------|--------|
-| Gold setpoint present (RB-G bundle) — else capture from base SHA first (this run) | [ ] |
-| `bin/fuzzy-validator setpoint restore` (gold bundle) | [ ] |
-| E2E preflight for validate profiles (test + mirror) | [ ] |
-| `bin/fuzzy-validator validate --all --phase all` against gold | [ ] |
-| Any drift triaged: refactor-caused → fix code (`status=blocked`); legitimate upstream UI change → recapture **from `master`** only | [ ] |
-| Validate pass **test** + **mirror** | [ ] |
-| Commit: `RB-F: Validate rebased tip against gold UI setpoint` | [ ] |
-
----
+| Restore RB-G gold bundle; preflight and validate test + mirror; commit | [ ] |
 
 ## Phase E — Close
-
 ### RB-Z: Sign-off
-
-**Depends on:** RB-G, RB-1, RB-2, RB-H, RB-N, RB-F  
-**Prompt:** [agent-prompt.md](agent-prompt.md) → `RB-Z`
-
 | Step | Status |
 |------|--------|
-| Re-run `sh bin/run-unit-tests.sh` | [ ] |
-| Confirm static spirit gates still clean | [ ] |
-| Spot-check Infection gaps closed or listed | [ ] |
-| Fuzzy still green | [ ] |
-| Write **Last rebase** on [04-milestone-checklist.md](../../04-milestone-checklist.md) + [README.md](../../README.md) | [ ] |
-| Fix broken links under active `docs/megiddo/refactor/` | [ ] |
-| Final report table to user | [ ] |
-| Commit: `RB-Z: Close post-refactor Megiddo rebase` | [ ] |
-
-**Exit:** Skill complete → next is **P3-4** (manual smoke matrix), then P3-5 / optional P3-6.
-
----
-
-## Quick reference
-
-| Order | ID |
-|-------|-----|
-| 1 | RB-0 |
-| 2 | RB-G |
-| 3 | RB-1 |
-| 4 | RB-2 |
-| 5 | RB-H |
-| 6 | RB-N |
-| 7 | RB-F (validate vs gold) |
-| 8 | RB-Z |
-
-**Next unchecked:** RB-F (RB-G folded into RB-F this run — see RB-G note). RB-N clear (QualTest thinned via `Model_QualTest`; static gates clean).
+| Re-run PHPUnit/static/coverage/fuzzy checks; update Last rebase docs; commit | [ ] |
 
 ---
 
 ## Prior runs
+
+### 2026-07-17/18 — post-refactor rebase (complete)
+
+| Field | Value |
+|-------|-------|
+| Megiddo tip (pre-rebase) | `megiddo/p3-fix-10-sandbox-fuzzy-rebaseline` @ `e1d993976f646c9d75ea13c96e99b26aa10939b4` |
+| Base | `origin/master` @ `7631d0baad65b573d4d53f115c84d20af09b046e` |
+| Working branch | `megiddo/rebase-20260717` |
+| Sizing grade | **L** |
+| Outcome | RB-0…RB-Z complete; handed off to P3-4. |
+
+Notes preserved: RB-0 found 26 upstream commits and QualTest / Player / Kingdom / Reports / template overlap. RB-G published `20260718T030809Z-7631d0ba-fd37ea34a9523a28.zip` from unrebased mainline. RB-1 retained thin layering and migrations; RB-H thinned QualTest through `Model_QualTest`; RB-N cleared `orkui/` `$DB` and `Ork3::$Lib` gates with characterization coverage. RB-F passed test + mirror 40/40 against gold; RB-Z passed 250 tests / 859 assertions and listed the QualTest full-class Infection gap.
 
 ### 2026-07-09 — pre-execution / tooling-era rebase (complete)
 
@@ -342,4 +146,4 @@ Validate the rebased tip against the **RB-G gold setpoint** (captured from unreb
 | Sizing grade | S |
 | Outcome | RB-0…RB-Z complete; fuzzy setpoint `20260709T173049Z-1591950d-6b22e991bb478256.zip` |
 
-That run used the pre-R-* playbook (take upstream for `orkui/` when Megiddo had not yet migrated production code). **Do not reuse those conflict rules** for post-refactor rebases.
+This run used the pre-R-* playbook. **Do not reuse those conflict rules** for post-refactor rebases.
