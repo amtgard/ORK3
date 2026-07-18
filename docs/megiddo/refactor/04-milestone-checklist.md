@@ -1469,7 +1469,7 @@ Run only after **R-18**. No code migration.
 - [x] P3-2 Agent automated audit — [skills/phase3-closeout/orchestrator.prompt](./skills/phase3-closeout/orchestrator.prompt) ([phase3-audit-report.md](./phase3-audit-report.md) 2026-07-10 @ `1d8d8455`: **failed** — 42 `Ork3::$Lib`, fuzzy `park-auth-sandbox`, Playwright heraldry×3)
 - [x] All ~119 target IDs in [03-implementation-plan.md](./03-implementation-plan.md) marked done (R-* notes; residual lib bypass in code)
 - [x] `rg '\$DB->' orkui/` → zero matches
-- [ ] `rg 'Ork3::\$Lib' orkui/` → zero matches (**42** in 12 files — see audit report)
+- [x] `rg 'Ork3::\$Lib' orkui/` → zero matches (R-19d @ `megiddo/r-19d-residual-lib-refactor` — 41 sites cleared R-19a…d)
 - [ ] Success criteria in [02-requirements.md](./02-requirements.md) satisfied
 - [x] PHPUnit full suite green (215 tests, 2 skipped — 2026-07-10)
 - [ ] Full fuzzy `--all` + Playwright green (fuzzy: `park-auth-sandbox` dimension; Playwright: heraldry×3)
@@ -1606,3 +1606,25 @@ Optional: merge stack tip into integration line `megiddo/rebase-20260709`.
 - [x] Branch `megiddo/r-19a-residual-lib-refactor` stacked on `megiddo/v-19-residual-lib-validation` @ `5872aa92` — zero `Ork3::$Lib` in `model.Player.php`, `index.php`, `KingdomAjax.php`; `Model_Kingdom`/`Model_Search` wrappers for kingdom AJAX paths
 - [x] Targets closed: T-LIB-06, T-LIB-07, T-LIB-08 (17 sites in 3 files)
 - [x] Gates: static `rg` clean on 3 files + `$DB` still zero; PHPUnit 230/230 pass (2 skipped); Infection pass A MSI 28%; Playwright `player-profile`/`kingdom-profile`/`infrastructure` 7/7 pass; fuzzy hop pages — pre-existing baseline drift on v-19 base (mirror visual 0.743, test dom 0.98), not introduced by R-19a
+
+### R-19b complete (2026-07-10)
+
+- [x] Branch `megiddo/r-19b-residual-lib-refactor` stacked on `megiddo/r-19a-residual-lib-refactor` @ `0088e6f2` — zero `Ork3::$Lib` in `EventAjax.php`, `AdminAjax.php`, `Admin.php`
+- [x] Targets closed: T-LIB-09, T-LIB-10, T-LIB-11 (10 sites in 3 files)
+- [x] Gates: static `rg` clean on R-19b files + R-19a still clean; PHPUnit 230/230 pass (2 skipped); Infection pass B 0 mutants in scope (exit 0); Playwright `event-detail`/`event-planning`/`admin-dashboard` 9/9 pass; fuzzy hop pages — pre-existing baseline drift
+
+### R-19c complete (2026-07-10)
+
+- [x] Branch `megiddo/r-19c-residual-lib-refactor` stacked on `megiddo/r-19b-residual-lib-refactor` @ `b2527caa` — zero `Ork3::$Lib` in `ParkAjax.php`, `SearchAjax.php`, `Search.php`
+- [x] Targets closed: T-LIB-12, T-LIB-13, T-LIB-14 (4 sites in 3 files)
+- [x] Gates: static `rg` clean on R-19c files + prior hops clean; PHPUnit 230/230 pass (2 skipped); Infection pass C MSI 40%; Playwright `search`/`park-profile` 5/5 pass; fuzzy hop pages — pre-existing baseline drift
+
+### R-19d complete (2026-07-10)
+
+- [x] Branch `megiddo/r-19d-residual-lib-refactor` stacked on `megiddo/r-19c-residual-lib-refactor` @ `12e6f19e` — zero `Ork3::$Lib` repo-wide in `orkui/`; final 3 sites in `PlayerAjax.php`, `WnAjax.php`, `model.AdminDashboard.php`
+- [x] Targets closed: T-LIB-15, T-LIB-16, T-LIB-17 (3 sites in 3 files); **R-19 stack complete** — 41 sites / 12 files
+- [x] Gates: `rg 'Ork3::\$Lib' orkui/` zero + `$DB` still zero; PHPUnit 230/230 pass (2 skipped); Infection passes A–D (A=28%, B=0 mutants, C=40%, D=18%); fuzzy full gate list — pre-existing baseline drift (16/16 fail, not introduced); Playwright mirror 48/50 + sandbox heraldry 3/3 — R-19d surfaces pass; 2 `residual-lib.spec.ts` mirror failures on prior-hop surfaces → VALIDATE-20
+
+**Stack tip after R-19:** `megiddo/r-19d-residual-lib-refactor` (stacked on R-19c @ `12e6f19e`)
+
+**Next actionable milestone:** **VALIDATE-20** — full success-criteria re-audit

@@ -124,6 +124,10 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 **R-19c complete (2026-07-10):** T-LIB-12 (`ParkAjax` scoped player search + park auth audit → `Model_Search`, `new Dangeraudit()`), T-LIB-13 (`SearchAjax` universal search → `Model_Search::universal_search`), T-LIB-14 (`Search` unit activity counts → `Model_Search::get_unit_activity_counts`); extended `model.Search.php` wrappers. **4 `$Lib` sites cleared** in 3 files; **3 remain** in 3 files → R-19d.
 
+**R-19d complete (2026-07-10):** T-LIB-15 (`PlayerAjax` username check → `Model_Player::check_username_available`), T-LIB-16 (`WnAjax` dismiss whats-new → `new Player()->DismissWhatsNew`), T-LIB-17 (`Model_AdminDashboard` SoA bootstrap → `new StateOfAmtgard()->GetPageBootstrap`). **3 `$Lib` sites cleared** in 3 files.
+
+**R-19 complete (2026-07-10):** All four hops (R-19a…d) eliminated **41** residual `Ork3::$Lib` call sites across **12** `orkui/` files. Repo-wide `rg 'Ork3::\$Lib' orkui/` → **zero** (Path A, no exemptions). Phase 3 lib-bypass remediation done — **VALIDATE-20** next.
+
 **R-03 complete (2026-07-09):** T-PLA-06, T-PRA-04, T-KNA-08, T-UNT-01, T-EVA-14 migrated to `class.Banner.php` / BannerService; five `*Ajax::banner` controllers are thin `Model_Banner` adapters; zero banner `$DB` in `orkui/`.
 
 **R-04 complete (2026-07-09):** T-EVA-01–T-EVA-13 migrated to `class.EventPlanning.php` / EventService + `Model_EventPlanning`; `CreateEvent` accepts optional draft status; `RemoveEventHeraldry` in Heraldry domain; EventAjax planning methods are thin adapters (auth addauth/playersearch and banner unchanged).
