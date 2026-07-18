@@ -1810,6 +1810,37 @@ class QualTest
     }
 
     /**
+     * Who reported a question, most recent first — so a test writer can see the
+     * individual reporters (and reach out) rather than just the per-reason totals.
+     * player_id is already captured on every report; this just surfaces it with the
+     * reporter's persona. Returns [ ['ReportId','PlayerId','Persona','Reason','CreatedAt'], ... ].
+     */
+    public function getReportDetails($question_id)
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT r.qual_report_id, r.player_id, r.reason, r.created_at, m.persona
+             FROM ' . DB_PREFIX . 'qual_report r
+             LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = r.player_id
+             WHERE r.qual_question_id = ' . (int)$question_id . '
+             ORDER BY r.created_at DESC, r.qual_report_id DESC'
+        );
+        $out = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $out[] = [
+                    'ReportId'  => (int)$rs->qual_report_id,
+                    'PlayerId'  => (int)$rs->player_id,
+                    'Persona'   => $rs->persona,
+                    'Reason'    => $rs->reason,
+                    'CreatedAt' => $rs->created_at,
+                ];
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Delete all reports for a question (call after archiving or editing to clear the flag).
      */
     public function clearReports($question_id)

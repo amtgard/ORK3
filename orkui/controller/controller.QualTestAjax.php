@@ -309,8 +309,9 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid question.']);
         }
 
-        $counts = Ork3::$Lib->qualtest->getReportCounts($question_id);
-        $this->jsonOut(['status' => 0, 'counts' => $counts]);
+        $counts    = Ork3::$Lib->qualtest->getReportCounts($question_id);
+        $reporters = Ork3::$Lib->qualtest->getReportDetails($question_id);
+        $this->jsonOut(['status' => 0, 'counts' => $counts, 'reporters' => $reporters]);
     }
 
     // -----------------------------------------------------------------------
