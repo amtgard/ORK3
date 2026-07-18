@@ -8008,6 +8008,10 @@ html[data-theme="dark"] .kn-admin-config-sublabel { color: var(--ork-text-muted)
 html[data-theme="dark"] .kn-toggle-wrap { border-color: var(--ork-input-border); }
 html[data-theme="dark"] .kn-toggle-btn { background: var(--ork-input-bg); color: var(--ork-text-secondary); }
 html[data-theme="dark"] .kn-toggle-btn:first-child { border-right-color: var(--ork-input-border); }
+/* The base dark .kn-toggle-btn rule above out-specifies the plain .kn-toggle-active
+   colours, so the active Yes/No state has to be restored explicitly for dark mode. */
+html[data-theme="dark"] .kn-toggle-btn-yes.kn-toggle-active { background:#2f855a; color:#fff; }
+html[data-theme="dark"] .kn-toggle-btn-no.kn-toggle-active { background:#c53030; color:#fff; }
 /* Add Award / Add Kingdom-Specific Award forms */
 /* Operations section */
 html[data-theme="dark"] .kn-admin-ops-info strong { color: var(--ork-text); }
