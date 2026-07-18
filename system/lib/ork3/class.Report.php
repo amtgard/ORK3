@@ -4967,6 +4967,62 @@ class Report extends Ork3
                 );
             }
         }
+        // Same random sampling for the other profile types that can carry a banner,
+        // so the report shows a live example of each — not just players.
+        $this->db->Clear();
+        $bannerParkRows = array();
+        $bpR = $this->db->query(
+            "SELECT park_id, name FROM `{$p}park`
+			  WHERE has_banner = 1 AND name IS NOT NULL AND name <> ''
+			  ORDER BY RAND() LIMIT 3"
+        );
+        if ($bpR !== false) {
+            while ($bpR->next()) {
+                $bannerParkRows[] = array('label' => $bpR->name, 'route' => 'Park/index/' . (int)$bpR->park_id);
+            }
+        }
+        $this->db->Clear();
+        $bannerKingdomRows = array();
+        $bkR = $this->db->query(
+            "SELECT kingdom_id, name FROM `{$p}kingdom`
+			  WHERE has_banner = 1 AND name IS NOT NULL AND name <> ''
+			  ORDER BY RAND() LIMIT 3"
+        );
+        if ($bkR !== false) {
+            while ($bkR->next()) {
+                $bannerKingdomRows[] = array('label' => $bkR->name, 'route' => 'Kingdom/index/' . (int)$bkR->kingdom_id);
+            }
+        }
+        $this->db->Clear();
+        $bannerUnitRows = array();
+        $buR = $this->db->query(
+            "SELECT unit_id, name FROM `{$p}unit`
+			  WHERE has_banner = 1 AND name IS NOT NULL AND name <> ''
+			  ORDER BY RAND() LIMIT 3"
+        );
+        if ($buR !== false) {
+            while ($buR->next()) {
+                $bannerUnitRows[] = array('label' => $buR->name, 'route' => 'Unit/index/' . (int)$buR->unit_id);
+            }
+        }
+        // Events link through a calendar occurrence — Event/detail needs both the event
+        // id and one of its calendardetail ids — so the INNER JOIN drops any banner
+        // event that has no occurrence to point at.
+        $this->db->Clear();
+        $bannerEventRows = array();
+        $beR = $this->db->query(
+            "SELECT e.event_id, e.name, MIN(cd.event_calendardetail_id) AS cdid
+			   FROM `{$p}event` e
+			   JOIN `{$p}event_calendardetail` cd ON cd.event_id = e.event_id
+			  WHERE e.has_banner = 1 AND e.name IS NOT NULL AND e.name <> ''
+			  GROUP BY e.event_id, e.name
+			  ORDER BY RAND() LIMIT 3"
+        );
+        if ($beR !== false) {
+            while ($beR->next()) {
+                $bannerEventRows[] = array('label' => $beR->name, 'route' => 'Event/detail/' . (int)$beR->event_id . '/' . (int)$beR->cdid);
+            }
+        }
         $bannerChart = array(
             'id'         => 'rfu-banners',
             'type'       => 'bar',
@@ -4988,6 +5044,10 @@ class Report extends Ork3
             'charts' => array($bannerChart),
             'links' => array(
                 $this->_rfuLinkTile('Example Players with a Hero Banner', $bannerRows),
+                $this->_rfuLinkTile('Example Parks with a Hero Banner', $bannerParkRows),
+                $this->_rfuLinkTile('Example Kingdoms with a Hero Banner', $bannerKingdomRows),
+                $this->_rfuLinkTile('Example Units with a Hero Banner', $bannerUnitRows),
+                $this->_rfuLinkTile('Example Events with a Hero Banner', $bannerEventRows),
             ),
         );
 
