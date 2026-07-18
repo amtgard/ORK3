@@ -1181,6 +1181,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	var reportBtn       = document.getElementById('qt-report-btn');
 	var reportForm      = document.getElementById('qt-report-form');
 	var reportReason    = document.getElementById('qt-report-reason');
+	var reportCorrectOpt = reportReason ? reportReason.querySelector('option[value="correct"]') : null;
 	var reportSubmit    = document.getElementById('qt-report-submit');
 	var reportCancel    = document.getElementById('qt-report-cancel');
 	var reportThanks    = document.getElementById('qt-report-thanks');
@@ -1355,6 +1356,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			reportForm.style.display = 'none';
 			reportThanks.style.display = 'none';
 			reportReason.value = '';
+			if (reportCorrectOpt) reportCorrectOpt.hidden = false;
 
 			var isMulti = (q.AnswerMode === 'multi');
 			multiHintEl.style.display    = isMulti ? '' : 'none';
@@ -1520,9 +1522,15 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 					});
 					feedbackEl.className = 'qt-feedback qt-fb-wrong';
 					feedbackEl.innerHTML = '<i class="fas fa-times-circle" style="margin-right:6px;"></i> Sorry, that\'s not correct.';
-					reportArea.style.display = 'block';
-					reportBtn.dataset.questionId = q.QualQuestionId;
 				}
+
+				// Any question can be reported — a right answer doesn't mean the
+				// question is sound (it may be poorly worded or outdated). The
+				// "My answer was correct" reason only applies to a miss, so hide
+				// it when they got it right.
+				reportArea.style.display = 'block';
+				reportBtn.dataset.questionId = q.QualQuestionId;
+				if (reportCorrectOpt) reportCorrectOpt.hidden = !!j.is_correct;
 
 				isChecking = false;
 
