@@ -42,6 +42,7 @@ class Controller
 			'Controller_SearchAjax',
 			'Controller_AttendanceAjax',
 			'Controller_EventAjax',
+			'Controller_EventEmbed',
 			'Controller_KingdomAjax',
 			'Controller_ParkAjax',
 			'Controller_PlayerAjax',

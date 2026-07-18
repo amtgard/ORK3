@@ -111,6 +111,7 @@
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/ork-datatables.css?v=<?= filemtime(__DIR__ . '/style/ork-datatables.css') ?>">
 
 <!-- =============================================
      ZONE 1: Hero Header
@@ -430,7 +431,7 @@
 
 					<!-- List view -->
 					<div id="kn-parks-list-view" style="display:none">
-						<table class="kn-table kn-sortable" id="kn-parks-table">
+						<table class="kn-table kn-parks-dt" id="kn-parks-table">
 							<thead>
 								<tr>
 									<th data-sorttype="text">Park</th>
@@ -439,7 +440,7 @@
 									<th data-sorttype="numeric" class="kn-col-numeric" title="Average distinct players per month over the past 12 months">Avg/Mo</th>
 									<th data-sorttype="numeric" class="kn-col-numeric" title="Distinct players who signed in at this park in the past 12 months">Total Players</th>
 									<th data-sorttype="numeric" class="kn-col-numeric" title="Distinct players whose home park is here who signed in at this park in the past 12 months">Total Members</th>
-									<?php if ($CanManageKingdom ?? false): ?><th data-sorttype="none" style="width:32px"></th><?php endif; ?>
+									<?php if ($CanManageKingdom ?? false): ?><th data-sorttype="none" class="no-export" style="width:32px"></th><?php endif; ?>
 								</tr>
 							</thead>
 							<tbody>
@@ -538,7 +539,7 @@
 									<span class="kn-prinz-name"><?= htmlspecialchars($prinz['Name']) ?></span>
 									<i class="fas fa-external-link-alt kn-prinz-extlink"></i>
 								</a>
-								<table class="kn-table kn-sortable">
+								<table class="kn-table kn-parks-dt" data-csvname="<?= htmlspecialchars($prinz['Name']) ?> Parks">
 									<thead>
 										<tr>
 											<th data-sorttype="text">Park</th>
@@ -2789,7 +2790,7 @@ html[data-theme="dark"] #kn-cfe-results .kn-ac-empty { color: var(--ork-text-mut
 					listHtml.push(
 						'<details class="kn-year-section"' + openAttr + ' data-year="' + yk + '">'
 						+ summary
-						+ '<table class="kn-table kn-year-table"><thead><tr>'
+						+ '<table class="kn-table kn-year-table kn-sortable"><thead><tr>'
 						+ '<th data-sorttype="text">Persona</th>'
 						+ '<th data-sorttype="text">Park</th>'
 						+ '<th data-sorttype="numeric">6mo Sign-ins</th>'
@@ -3225,6 +3226,9 @@ window.knInitRecsTab = function() {
 			{ targets: [-1], orderable: false, searchable: false },
 			<?php endif; ?>
 		],
+		dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>",
+		lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+		language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' },
 		pageLength: 25,
 		scrollX: true
 	});

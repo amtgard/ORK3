@@ -242,15 +242,32 @@
 	transform:translateX(-50%) translateY(calc(-100% - 8px));
 }
 .ev-rsvp-th-tooltip:hover .ev-rsvp-th-tip { display:block; }
-/* Heraldry edit overlay */
-.ev-heraldry-edit-wrap { position: relative; display: inline-block; cursor: pointer; }
-.ev-heraldry-edit-overlay {
-	position: absolute; inset: 0; background: rgba(0,0,0,0); border-radius: 6px;
-	display: flex; align-items: center; justify-content: center; transition: background .2s;
+/* Heraldry edit button — corner target, mirrors player .pn-img-edit-btn.
+   The logo image itself is a .heraldry-img lightbox trigger; this small
+   button is the only edit affordance (frame no longer clicks-to-edit). */
+.ev-heraldry-frame { position: relative; }
+.ev-heraldry-edit-btn {
+	position: absolute;
+	bottom: 6px;
+	right: 6px;
+	width: 26px;
+	height: 26px;
+	background: rgba(0,0,0,0.62);
+	border-radius: 50%;
+	border: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+	transition: opacity 0.18s, background 0.15s;
+	cursor: pointer;
+	z-index: 2;
+	padding: 0;
+	line-height: 1;
 }
-.ev-heraldry-edit-wrap:hover .ev-heraldry-edit-overlay { background: rgba(0,0,0,0.45); }
-.ev-heraldry-edit-icon { color: #fff; font-size: 22px; opacity: 0; transition: opacity .2s; }
-.ev-heraldry-edit-wrap:hover .ev-heraldry-edit-icon { opacity: 1; }
+.ev-heraldry-frame:hover .ev-heraldry-edit-btn { opacity: 1; }
+.ev-heraldry-edit-btn:hover { background: rgba(44,82,130,0.9); }
+.ev-heraldry-edit-btn i { color: #fff; font-size: 12px; pointer-events: none; }
 /* Image upload modal */
 .ev-img-overlay {
 	display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55);
@@ -742,14 +759,14 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 	<div class="ev-hero-content">
 
 		<?php if ($_showLogo): ?>
-		<div class="ev-heraldry-frame<?= $canManage ? ' ev-heraldry-edit-wrap' : '' ?>"<?= $canManage ? ' onclick="evOpenImgModal()" data-tip="Change logo"' : '' ?>>
-			<img id="ev-heraldry-img"
+		<div class="ev-heraldry-frame">
+			<img id="ev-heraldry-img"<?= $hasHeraldry ? ' class="heraldry-img"' : '' ?>
 				src="<?= htmlspecialchars($heraldryUrl) ?>"
 				onerror="this.src='<?= HTTP_EVENT_HERALDRY ?>00000.jpg'"
 				alt="<?= $eventName ?> logo"
 				crossorigin="anonymous">
 			<?php if ($canManage): ?>
-			<div class="ev-heraldry-edit-overlay"><i class="fas fa-camera ev-heraldry-edit-icon"></i></div>
+			<button type="button" class="ev-heraldry-edit-btn" onclick="evOpenImgModal()" aria-label="Change logo"><i class="fas fa-camera"></i></button>
 			<?php endif; ?>
 		</div>
 		<?php endif; ?>
@@ -1160,6 +1177,9 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					<button type="button" class="ev-grid-view-btn" data-ev-view="list" aria-pressed="true"><i class="fas fa-list-ul"></i> List</button>
 					<button type="button" class="ev-grid-view-btn" data-ev-view="grid" aria-pressed="false"><i class="fas fa-th"></i> Grid</button>
 				</div>
+				<button type="button" class="ev-sched-copy-btn" onclick="evCopyScheduleLink(this)" title="Copy a link that opens the schedule in this exact view">
+					<i class="fas fa-link"></i> Copy link
+				</button>
 				<?php if ($canManageSchedule): ?>
 				<button type="button" class="ev-submit-btn" onclick="evOpenScheduleModal()">
 					<i class="fas fa-plus"></i> Add Schedule Item
@@ -1169,13 +1189,40 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			<div id="ev-sched-filters" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
 			<div id="ev-schedule-container">
 			<?php
+			// A multi-day item is expanded into one segment per calendar day it touches,
+			// clipped to that day, so both views show it on every day it covers.
 			$scheduleByDay = [];
+			$dayTsByKey    = [];
 			foreach ($scheduleList as $item) {
-				$dayKey = date('Ymd', strtotime($item['StartTime']));
-				$scheduleByDay[$dayKey][] = $item;
+				$s = strtotime($item['StartTime']);
+				$e = strtotime($item['EndTime']);
+				if ($e < $s) $e = $s;
+				$lastDayTs = strtotime(date('Y-m-d 00:00:00', $e));
+				// '+1 day' rather than +86400 so DST transitions stay on day boundaries.
+				for ($cursor = strtotime(date('Y-m-d 00:00:00', $s)); $cursor <= $lastDayTs; $cursor = strtotime('+1 day', $cursor)) {
+					$nextDay  = strtotime('+1 day', $cursor);
+					$segStart = max($s, $cursor);
+					$segEnd   = min($e, $nextDay);
+					// An item ending exactly at midnight must not leave an empty segment on
+					// the next day, but a zero-length item still belongs on its start day.
+					if ($segEnd <= $segStart && $cursor > $s) continue;
+					$seg = $item;
+					$seg['_SegStart']   = $segStart;
+					$seg['_SegEnd']     = $segEnd;
+					$seg['_IsFirstDay'] = ($segStart === $s);
+					$seg['_IsLastDay']  = ($segEnd === $e);
+					$dayKey = date('Ymd', $cursor);
+					$scheduleByDay[$dayKey][] = $seg;
+					$dayTsByKey[$dayKey]      = $cursor;
+				}
+			}
+			ksort($scheduleByDay);
+			foreach ($scheduleByDay as $dayKey => $dayItems) {
+				usort($dayItems, function ($a, $b) { return ($a['_SegStart'] <=> $b['_SegStart']) ?: ($a['_SegEnd'] <=> $b['_SegEnd']); });
+				$scheduleByDay[$dayKey] = $dayItems;
 			}
 			foreach ($scheduleByDay as $dayKey => $dayItems):
-				$dayTs = strtotime($dayItems[0]['StartTime']);
+				$dayTs = $dayTsByKey[$dayKey];
 			?>
 			<div class="ev-sched-day-section" data-date="<?= date('Y-m-d', $dayTs) ?>">
 				<div class="ev-sched-day-header"><?= date('l, F j, Y', $dayTs) ?></div>
@@ -1207,10 +1254,25 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							$evCatCfg     = $evSchedCategories[$evCat] ?? $evSchedCategories['Other'];
 							$evSecCat     = $item['SecondaryCategory'] ?? '';
 							$evSecCatCfg  = $evSecCat ? ($evSchedCategories[$evSecCat] ?? $evSchedCategories['Other']) : null;
+							// Which slice of a multi-day item this row is. The mobile card joins the
+							// start/end cells into one line and only wants a dash between two real
+							// times — on a spanning slice the end cell is a bare arrow, not a time.
+							$evSeg = ($item['_IsFirstDay'] && $item['_IsLastDay']) ? 'single'
+								: ($item['_IsFirstDay'] ? 'first' : ($item['_IsLastDay'] ? 'last' : 'mid'));
 						?>
-						<tr id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" data-secondary-category="<?= htmlspecialchars($evSecCat, ENT_QUOTES) ?>" data-leads="<?= htmlspecialchars(json_encode($item['Leads'] ?? []), ENT_QUOTES) ?>" data-menu="<?= htmlspecialchars($item['Menu'] ?? '', ENT_QUOTES) ?>" data-cost="<?= htmlspecialchars((string)($item['Cost'] ?? ''), ENT_QUOTES) ?>" data-dietary="<?= htmlspecialchars($item['Dietary'] ?? '', ENT_QUOTES) ?>" data-allergens="<?= htmlspecialchars($item['Allergens'] ?? '', ENT_QUOTES) ?>" style="background:<?= $evCatCfg['bg'] ?>">
-							<td style="white-space:nowrap"><?= date('g:ia', strtotime($item['StartTime'])) ?></td>
-							<td style="white-space:nowrap"><?= date('g:ia', strtotime($item['EndTime'])) ?></td>
+						<tr <?php if ($item['_IsFirstDay']): ?>id="ev-schedule-row-<?= (int)$item['EventScheduleId'] ?>" <?php endif; ?>data-seg="<?= $evSeg ?>" data-schedule-id="<?= (int)$item['EventScheduleId'] ?>" data-title="<?= htmlspecialchars($item['Title'], ENT_QUOTES) ?>" data-start="<?= date('Y-m-d\TH:i', strtotime($item['StartTime'])) ?>" data-end="<?= date('Y-m-d\TH:i', strtotime($item['EndTime'])) ?>" data-location="<?= htmlspecialchars($item['Location'], ENT_QUOTES) ?>" data-description="<?= htmlspecialchars($item['Description'], ENT_QUOTES) ?>" data-category="<?= htmlspecialchars($evCat, ENT_QUOTES) ?>" data-secondary-category="<?= htmlspecialchars($evSecCat, ENT_QUOTES) ?>" data-leads="<?= htmlspecialchars(json_encode($item['Leads'] ?? []), ENT_QUOTES) ?>" data-menu="<?= htmlspecialchars($item['Menu'] ?? '', ENT_QUOTES) ?>" data-cost="<?= htmlspecialchars((string)($item['Cost'] ?? ''), ENT_QUOTES) ?>" data-dietary="<?= htmlspecialchars($item['Dietary'] ?? '', ENT_QUOTES) ?>" data-allergens="<?= htmlspecialchars($item['Allergens'] ?? '', ENT_QUOTES) ?>" style="background:<?= $evCatCfg['bg'] ?>">
+							<td style="white-space:nowrap"><?= $item['_IsFirstDay'] ? date('g:ia', $item['_SegStart']) : '(cont.)' ?></td>
+							<td style="white-space:nowrap"><?php
+								if (!$item['_IsLastDay']) {
+									echo '&rarr;';
+								} else {
+									$evEndTs = strtotime($item['EndTime']);
+									echo date('g:ia', $evEndTs);
+									if (date('Ymd', $evEndTs) !== date('Ymd', strtotime($item['StartTime']))) {
+										echo ' (' . date('D', $evEndTs) . ')';
+									}
+								}
+							?></td>
 							<td style="white-space:nowrap"><i class="fas fa-fw <?= $evCatCfg['icon'] ?>" style="color:<?= $evCatCfg['color'] ?>" data-tip="<?= htmlspecialchars($evCat) ?>"></i><?php if ($evSecCatCfg): ?><i class="fas fa-fw <?= $evSecCatCfg['icon'] ?>" style="color:<?= $evSecCatCfg['color'] ?>;margin-right:4px" data-tip="<?= htmlspecialchars($evSecCat) ?>"></i><?php else: ?><span style="display:inline-block;width:1.25em;margin-right:4px"></span><?php endif; ?><?= htmlspecialchars($item['Title']) ?><?php if (($evCat === 'Feast and Food' || $evSecCat === 'Feast and Food') && !empty($item['Menu'])): ?> <i class="fas fa-scroll" style="color:#e65100;font-size:10px;margin-left:4px;vertical-align:middle" data-tip="Has menu"></i><?php endif; ?></td>
 							<td><?= htmlspecialchars($item['Location']) ?></td>
 							<td><?php foreach ($item['Leads'] ?? [] as $li => $lead) { if ($li > 0) echo ', '; echo '<a href="' . UIR . 'Playernew/index/' . (int)$lead['MundaneId'] . '">' . htmlspecialchars($lead['Persona']) . '</a>'; } ?></td>
@@ -1239,16 +1301,15 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 			<?php
 			// Build per-day grid data using same $scheduleByDay bucketing.
 			foreach ($scheduleByDay as $dayKey => $dayItems):
-				$dayTs = strtotime($dayItems[0]['StartTime']);
+				$dayTs = $dayTsByKey[$dayKey];
 
 				// Collect min/max and per-category buckets
 				$catBuckets = [];
 				$minStart = PHP_INT_MAX;
 				$maxEnd   = 0;
 				foreach ($dayItems as $it) {
-					$s = strtotime($it['StartTime']);
-					$e = strtotime($it['EndTime']);
-					if ($e < $s) $e = $s;
+					$s = $it['_SegStart'];
+					$e = $it['_SegEnd'];
 					if ($s < $minStart) $minStart = $s;
 					if ($e > $maxEnd)   $maxEnd   = $e;
 					$cat = $it['Category'] ?? 'Other';
@@ -1257,9 +1318,20 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 				}
 				if ($minStart === PHP_INT_MAX) continue;
 
-				// Snap to half-hour grid, pad ±30min
-				$gridStart = (int) floor($minStart / 1800) * 1800 - 1800;
-				$gridEnd   = (int) ceil ($maxEnd   / 1800) * 1800 + 1800;
+				// Snap to whole hours, padding out by 30-60min, clamped to this calendar day
+				// so a spanned segment can never stretch the grid past midnight. $gridStart
+				// MUST land on an hour: the columns draw their hour lines with a CSS gradient
+				// repeating every 56px from the top of the column, while the time gutter
+				// labels sit at slot*28px from $gridStart. A $gridStart on a half hour puts
+				// every line 28px (30min) out from the label beside it.
+				// Snapping via date() rather than arithmetic on the timestamp: dividing by
+				// 3600 would land on a UTC hour, which is a half past the hour in a zone
+				// offset by :30.
+				$gridStart = max($dayTs, strtotime(date('Y-m-d H:00:00', $minStart - 1800)));
+				$padEnd    = $maxEnd + 1800;
+				$gridEnd   = strtotime(date('Y-m-d H:00:00', $padEnd));
+				if ($gridEnd < $padEnd) $gridEnd = strtotime('+1 hour', $gridEnd);
+				$gridEnd   = min(strtotime('+1 day', $dayTs), $gridEnd);
 				$totalSlots = max(1, (int)(($gridEnd - $gridStart) / 1800));
 
 				// Only categories with items (preserve palette order)
@@ -1365,6 +1437,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 										$hasMenu   = ($cName === 'Feast and Food' || $secCat === 'Feast and Food') && !empty($it['Menu']);
 										$compact   = ($hPx < 42);
 										$blockLabel = $it['Title'] . ' at ' . date('g:ia', $entry['start']);
+										if (!$it['_IsLastDay']) $blockLabel .= ' (continues)';
 									?>
 									<div class="ev-grid-block<?= $compact ? ' ev-grid-block-compact' : '' ?>"
 										data-schedule-id="<?= $sid ?>"
@@ -1376,7 +1449,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 											<?= htmlspecialchars($it['Title']) ?>
 											<?php if ($hasMenu): ?><i class="fas fa-scroll" style="color:#e65100;font-size:9px;margin-left:3px" data-tip="Has menu"></i><?php endif; ?>
 										</div>
-										<div class="ev-grid-block-time"><?= date('g:ia', $entry['start']) ?> – <?= date('g:ia', $entry['end']) ?></div>
+										<div class="ev-grid-block-time"><?php if (!$it['_IsFirstDay']): ?>&rarr; <?php endif; ?><?= date('g:ia', $entry['start']) ?> – <?= date('g:ia', $entry['end']) ?><?php if (!$it['_IsLastDay']): ?> &rarr;<?php endif; ?></div>
 										<?php if (!empty($it['Location'])): ?>
 										<div class="ev-grid-block-loc"><i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($it['Location']) ?></div>
 										<?php endif; ?>
@@ -2304,6 +2377,13 @@ function evShareFallback(url, btn) {
 	setTimeout(function() { btn.innerHTML = orig; btn.disabled = false; }, 1400);
 }
 
+// Copy a link that reopens the schedule in its current view/day. We stamp the hash first
+// (in case the user hasn't toggled anything yet) so the copied URL is always accurate.
+function evCopyScheduleLink(btn) {
+	if (typeof window.evWriteHash === 'function') window.evWriteHash('ev-tab-schedule');
+	evShareUrl(btn);
+}
+
 function evPositionDelTooltip(wrap) {
 	var btn = wrap.querySelector('button');
 	var tip = wrap.querySelector('.ev-del-detail-tooltip');
@@ -2886,11 +2966,26 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 <script>
 (function() {
-    var hash = location.hash.replace('#', '');
-    if (hash) {
-        var li = document.querySelector('[data-tab="' + hash + '"]');
-        if (li && typeof evShowTab === 'function') evShowTab(li, hash);
+    // Deep-link hash format: #<tabId>[?key=val&key=val]
+    //   #ev-tab-schedule                        -> Schedule tab, default (list) view
+    //   #ev-tab-schedule?view=grid              -> Schedule tab, grid view
+    //   #ev-tab-schedule?view=grid&day=20260718 -> grid view, that day pre-selected
+    // Only the tab is opened here; the schedule script (further down) reads
+    // window.evHashParams to apply view/day once its DOM + helpers exist.
+    var raw = location.hash.replace('#', '');
+    if (!raw) return;
+    var qIdx = raw.indexOf('?');
+    var tabId = qIdx === -1 ? raw : raw.slice(0, qIdx);
+    window.evHashParams = {};
+    if (qIdx !== -1) {
+        raw.slice(qIdx + 1).split('&').forEach(function(pair) {
+            if (!pair) return;
+            var kv = pair.split('=');
+            window.evHashParams[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1] || '');
+        });
     }
+    var li = document.querySelector('[data-tab="' + tabId + '"]');
+    if (li && typeof evShowTab === 'function') evShowTab(li, tabId);
 })();
 (function() {
 	var _evAttDt = null;
@@ -2911,6 +3006,15 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 		});
 		window._evAttDt = _evAttDt;
 	}
+	// Keep the address bar in sync with the visible tab so a copied URL reopens here.
+	// The schedule tab contributes its own view/day suffix via evScheduleHashSuffix.
+	window.evWriteHash = function(tabId) {
+		var suffix = (tabId === 'ev-tab-schedule' && typeof window.evScheduleHashSuffix === 'function')
+			? window.evScheduleHashSuffix() : '';
+		var h = '#' + tabId + suffix;
+		try { history.replaceState(null, '', h); }
+		catch (e) { location.hash = h; }
+	};
 	var _origEvShowTab = window.evShowTab;
 	window.evShowTab = function(li, tabId) {
 		if (typeof _origEvShowTab === 'function') _origEvShowTab(li, tabId);
@@ -2920,6 +3024,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 		if (tabId === 'ev-tab-rsvp') {
 			evPulseRsvpCredits();
 		}
+		window.evWriteHash(tabId);
 	};
 	// Init now if the attendance tab is already visible on page load
 	$(function() {
@@ -3688,10 +3793,28 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 			allowInput:      false,
 			onReady: function(sel, str, fp) { if (fp.calendarContainer) fp.calendarContainer.classList.add('ev-sched-fp'); }
 		};
-		if (EvConfig.eventStart) _schedFpOpts.minDate = EvConfig.eventStart;
-		if (EvConfig.eventEnd)   _schedFpOpts.maxDate = EvConfig.eventEnd;
+		// Bound schedule items to the event's DAYS, not its clock times. Passing the
+		// event's full start/end datetime here made Flatpickr treat the time-of-day as a
+		// floor/ceiling (minDateHasTime/maxDateHasTime), which clamped the hour spinner on
+		// the event's own first and last days: stepping the hour computed an out-of-range
+		// time, got snapped straight back, and the carat read as a dead button. Day-only
+		// bounds keep items inside the event's dates while leaving the clock free.
+		function _evDayPad2(n) { return (n < 10 ? '0' : '') + n; }
+		function _evDayPlus(ymd, days) {
+			var d = new Date(ymd + 'T00:00');
+			d.setDate(d.getDate() + days);
+			return d.getFullYear() + '-' + _evDayPad2(d.getMonth() + 1) + '-' + _evDayPad2(d.getDate());
+		}
+		var _evStartDay = EvConfig.eventStart ? String(EvConfig.eventStart).slice(0, 10) : '';
+		var _evEndDay   = EvConfig.eventEnd   ? String(EvConfig.eventEnd).slice(0, 10)   : '';
+		if (_evStartDay) _schedFpOpts.minDate = _evStartDay;
+		if (_evEndDay)   _schedFpOpts.maxDate = _evEndDay + 'T23:59';
 
-		var _schedFpEnd = flatpickr('#ev-sched-end', _schedFpOpts);
+		// An item may legitimately run past midnight — the list view labels cross-midnight
+		// end times with a weekday — so the end picker gets one extra day of headroom.
+		var _schedFpEnd = flatpickr('#ev-sched-end', Object.assign({}, _schedFpOpts, {
+			maxDate: _evEndDay ? _evDayPlus(_evEndDay, 1) + 'T23:59' : undefined
+		}));
 		var _schedFpStart = flatpickr('#ev-sched-start', Object.assign({}, _schedFpOpts, {
 			onChange: function(selectedDates, dateStr, fp) {
 				if (!selectedDates[0] || !_schedFpEnd) return;
@@ -3768,6 +3891,21 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 	background: #2d3748; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.15);
 }
 .ev-grid-view-btn i { font-size: 11px; }
+
+/* "Copy link" button — deep-links the current schedule view (stays visible on mobile) */
+.ev-sched-copy-btn {
+	background: #fff; border: 1px solid #e2e8f0; color: #718096;
+	padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+	border-radius: 999px; display: inline-flex; align-items: center; gap: 6px;
+	box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: background .15s, color .15s;
+}
+.ev-sched-copy-btn:hover { color: #2d3748; background: #f7fafc; }
+.ev-sched-copy-btn i { font-size: 11px; }
+html[data-theme="dark"] .ev-sched-copy-btn {
+	background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-muted);
+	box-shadow: 0 1px 2px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .ev-sched-copy-btn:hover { color: var(--ork-text); background: var(--ork-bg); }
 
 /* Dark mode toggle */
 html[data-theme="dark"] .ev-grid-view-toggle {
@@ -3857,6 +3995,11 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 .ev-grid-col { position:relative; border-left:1px solid #edf2f7; }
 .ev-grid-block {
 	position:absolute;
+	/* border-box: top/height are computed server-side as exact minutes-to-pixels, so the
+	   borders and padding must sit inside that box. As content-box they were added to it,
+	   making every block 11px taller and 19px wider than its own time span — the bottom
+	   edge overshot its end time and the block spilled past the column. */
+	box-sizing:border-box;
 	border:1px solid rgba(0,0,0,0.06); border-left:4px solid #999;
 	border-radius:4px; padding:5px 7px 4px; overflow:hidden;
 	box-shadow:0 1px 2px rgba(0,0,0,0.08);
@@ -3922,7 +4065,7 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	.ev-grid-view-toolbar       { justify-content:flex-start; flex-wrap:wrap; }
 	.ev-grid-view-toggle        { display:none !important; }
 	.ev-grid-view-toolbar .ev-submit-btn { padding:9px 16px; min-height:40px; }
-	.ev-sched-pill { padding:9px 13px; min-height:40px; }
+	.ev-sched-pill { padding:8px 12px; min-height:36px; }
 }
 
 /* ── Mobile: stacked-card layout for the forced schedule LIST view ── */
@@ -3935,6 +4078,7 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	.ev-sched-table thead { display:none; }
 	.ev-sched-table colgroup { display:none; }
 	.ev-sched-table tr {
+		display:flex; flex-wrap:wrap; align-items:center;
 		padding:10px 12px; margin-bottom:12px; border-radius:8px;
 		border:1px solid var(--ork-border, #e2e8f0);
 		border-left:4px solid rgba(0,0,0,0.18);
@@ -3943,7 +4087,47 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	.ev-sched-table td {
 		display:flex; justify-content:space-between; gap:10px;
 		padding:3px 0; white-space:normal !important; text-align:left;
-		border:none;
+		flex:0 0 100%;
+		/* !important to outrank html[data-theme="dark"] .ev-table td in revised.css,
+		   which re-adds a bottom border. The card draws its own border, so the cells
+		   must not: on the headline the cells sit side by side, and each one's border
+		   painted a separate stub under the time, the title and the action buttons. */
+		border:none !important;
+	}
+	/* A cell the row had no value for carries no text at all, so :empty drops the
+	   whole line — label included — without disturbing the desktop table, which
+	   needs every cell to keep its column. nth-of-type still counts hidden cells,
+	   so the labels below stay attached to the right fields. */
+	.ev-sched-table td:empty { display:none !important; }
+
+	/* Card headline: "12:00pm – 6:00pm        Gate Opens  [edit] [delete]" */
+	.ev-sched-table td:nth-of-type(1),
+	.ev-sched-table td:nth-of-type(2) {
+		flex:0 0 auto; padding:0; gap:5px; white-space:nowrap !important;
+		font-weight:600; color:var(--ork-text-secondary, #4a5568);
+	}
+	.ev-sched-table td:nth-of-type(1) { order:1; }
+	.ev-sched-table td:nth-of-type(2) { order:2; margin-left:5px; }
+	.ev-sched-table td:nth-of-type(3) {
+		order:3; flex:1 1 auto; justify-content:flex-end; gap:5px;
+		padding:0 0 0 10px; font-weight:700; text-align:right;
+	}
+	/* The title cell pads itself with an empty span when an item has no secondary
+	   category, to hold the desktop column. As a flex item it becomes a visible gap. */
+	.ev-sched-table td:nth-of-type(3) span:empty { display:none !important; }
+	.ev-sched-table td:nth-of-type(4) { order:5; }
+	.ev-sched-table td:nth-of-type(5) { order:6; }
+	.ev-sched-table td:nth-of-type(6) { order:7; }
+	/* The merged headline speaks for itself — labels only on the rows below it. */
+	.ev-sched-table td:nth-of-type(1)::before,
+	.ev-sched-table td:nth-of-type(2)::before,
+	.ev-sched-table td:nth-of-type(3)::before { content:none !important; }
+	/* Dash only between two real clock times: a spanning slice renders its end as a
+	   bare arrow ("12:00pm →") or its start as "(cont.)". */
+	.ev-sched-table tr[data-seg="single"] td:nth-of-type(1)::after,
+	.ev-sched-table tr[data-seg="last"]   td:nth-of-type(1)::after {
+		content:"–"; font-weight:400;
+		color:var(--ork-text-muted, #718096);
 	}
 	.ev-sched-table td::before {
 		flex-shrink:0; font-size:10px; font-weight:700;
@@ -3956,13 +4140,15 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	.ev-sched-table td:nth-of-type(4)::before { content:"Location"; }
 	.ev-sched-table td:nth-of-type(5)::before { content:"Lead(s)"; }
 	.ev-sched-table td:nth-of-type(6)::before { content:"Description"; }
+	/* Editors get the actions on the headline row rather than a row of their own. */
 	.ev-sched-table td.ev-del-cell {
-		width:auto; justify-content:flex-end; gap:6px; padding-top:8px;
+		order:4; flex:0 0 auto; width:auto;
+		justify-content:flex-end; gap:2px; padding:0 0 0 4px;
 	}
 	.ev-sched-table td.ev-del-cell::before { content:none; }
 	.ev-sched-table td.ev-del-cell .ev-edit-link,
 	.ev-sched-table td.ev-del-cell .ev-del-link {
-		min-width:40px; min-height:40px; display:inline-flex;
+		min-width:36px; min-height:36px; display:inline-flex;
 		align-items:center; justify-content:center;
 	}
 	html[data-theme="dark"] .ev-sched-table tr {
@@ -3996,11 +4182,19 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	var btns = document.querySelectorAll('.ev-grid-view-btn');
 	var isMobile = function() { return window.matchMedia('(max-width: 700px)').matches; };
 
+	// desiredView = what the user/URL asked for; the resolved view can differ (mobile
+	// forces list because the grid isn't rendered below the breakpoint). We persist and
+	// deep-link the desired value but reflect the resolved one in the UI and shared hash.
+	var desiredView  = 'list';
+	var currentView  = 'list';
+	var currentDayKey = '';
+
 	function applyMode(mode, opts) {
 		opts = opts || {};
-		if (isMobile()) mode = 'list';
-		if (mode !== 'grid') mode = 'list';
-		if (mode === 'grid') {
+		if (mode === 'grid' || mode === 'list') desiredView = mode;
+		var resolved = isMobile() ? 'list' : desiredView;
+		if (resolved !== 'grid') resolved = 'list';
+		if (resolved === 'grid') {
 			listEl.style.display = 'none';
 			gridEl.style.display = '';
 			updateNowLines();
@@ -4009,27 +4203,51 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 			gridEl.style.display = 'none';
 		}
 		btns.forEach(function(b) {
-			var active = b.getAttribute('data-ev-view') === mode;
+			var active = b.getAttribute('data-ev-view') === resolved;
 			b.classList.toggle('ev-grid-view-active', active);
 			b.setAttribute('aria-pressed', active ? 'true' : 'false');
 		});
+		currentView = resolved;
 		if (opts.persist === true) {
-			try { localStorage.setItem(STORAGE_KEY, mode); } catch(e) {}
+			try { localStorage.setItem(STORAGE_KEY, desiredView); } catch(e) {}
+		}
+	}
+
+	// Reflect the on-screen schedule state in the URL hash so a copied link reopens this
+	// exact view. List is the implicit default, so only grid (and, for a multi-day event,
+	// the selected day) is encoded.
+	function scheduleTabActive() {
+		var panel = document.getElementById('ev-tab-schedule');
+		return !!(panel && panel.classList.contains('ev-tab-visible'));
+	}
+	window.evScheduleHashSuffix = function() {
+		if (currentView !== 'grid') return '';
+		var s = '?view=grid';
+		if (gridDays.length > 1 && currentDayKey) s += '&day=' + currentDayKey;
+		return s;
+	};
+	function writeScheduleHash() {
+		if (scheduleTabActive() && typeof window.evWriteHash === 'function') {
+			window.evWriteHash('ev-tab-schedule');
 		}
 	}
 
 	btns.forEach(function(b) {
-		b.addEventListener('click', function() { applyMode(b.getAttribute('data-ev-view'), {persist:true}); });
+		b.addEventListener('click', function() {
+			applyMode(b.getAttribute('data-ev-view'), {persist:true});
+			writeScheduleHash();
+		});
 	});
 
 	// ---- Day pills (multi-day grids) ----
 	// The grid renders one .ev-grid-day per calendar day, stacked vertically. For a
 	// multi-day event that's an unwieldy scroll, so when there's more than one day we
 	// show a single day at a time and let the user switch via pills along the top.
-	var gridDays = Array.prototype.slice.call(gridEl.querySelectorAll('.ev-grid-day'));
+	var gridDays = [];
 	var gridTodayKey = (window.EvConfig && EvConfig.evGridTodayKey) || '';
 	var pillBar = null;
 	function selectGridDay(dayKey) {
+		currentDayKey = dayKey;
 		gridDays.forEach(function(day) {
 			day.style.display = (day.getAttribute('data-day-key') === dayKey) ? '' : 'none';
 		});
@@ -4042,42 +4260,61 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 		}
 		updateNowLines();
 	}
-	if (gridDays.length > 1) {
-		var defaultDayKey = gridDays[0].getAttribute('data-day-key');
-		pillBar = document.createElement('div');
-		pillBar.className = 'ev-grid-day-pills';
-		gridDays.forEach(function(day) {
-			var dk = day.getAttribute('data-day-key');
-			var dateStr = day.getAttribute('data-date');
-			if (dk === gridTodayKey) defaultDayKey = dk; // prefer today if it's in range
-			var d = new Date(dateStr + 'T00:00:00');
-			var label = isNaN(d.getTime()) ? dateStr
-				: d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-			var pill = document.createElement('button');
-			pill.type = 'button';
-			pill.className = 'ev-grid-day-pill';
-			pill.setAttribute('data-day-key', dk);
-			pill.setAttribute('aria-pressed', 'false');
-			pill.textContent = label;
-			if (dk === gridTodayKey) {
-				var dot = document.createElement('span');
-				dot.className = 'ev-grid-day-pill-today';
-				dot.setAttribute('data-tip', 'Today');
-				pill.appendChild(dot);
-			}
-			pill.addEventListener('click', function() { selectGridDay(dk); });
-			pillBar.appendChild(pill);
-		});
-		gridEl.insertBefore(pillBar, gridEl.firstChild);
-		selectGridDay(defaultDayKey);
+	// (Re)build the day pills from the CURRENT grid DOM. Runs on load and again after
+	// the grid is re-fetched following a schedule add/edit/delete, so gridDays/pillBar
+	// never hold stale nodes from a previous render.
+	function setupGridDays() {
+		var oldPills = gridEl.querySelector('.ev-grid-day-pills');
+		if (oldPills && oldPills.parentNode) oldPills.parentNode.removeChild(oldPills);
+		pillBar = null;
+		gridDays = Array.prototype.slice.call(gridEl.querySelectorAll('.ev-grid-day'));
+		if (gridDays.length > 1) {
+			var defaultDayKey = gridDays[0].getAttribute('data-day-key');
+			pillBar = document.createElement('div');
+			pillBar.className = 'ev-grid-day-pills';
+			gridDays.forEach(function(day) {
+				var dk = day.getAttribute('data-day-key');
+				var dateStr = day.getAttribute('data-date');
+				if (dk === gridTodayKey) defaultDayKey = dk; // prefer today if it's in range
+				var d = new Date(dateStr + 'T00:00:00');
+				var label = isNaN(d.getTime()) ? dateStr
+					: d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+				var pill = document.createElement('button');
+				pill.type = 'button';
+				pill.className = 'ev-grid-day-pill';
+				pill.setAttribute('data-day-key', dk);
+				pill.setAttribute('aria-pressed', 'false');
+				pill.textContent = label;
+				if (dk === gridTodayKey) {
+					var dot = document.createElement('span');
+					dot.className = 'ev-grid-day-pill-today';
+					dot.setAttribute('data-tip', 'Today');
+					pill.appendChild(dot);
+				}
+				pill.addEventListener('click', function() { selectGridDay(dk); writeScheduleHash(); });
+				pillBar.appendChild(pill);
+			});
+			gridEl.insertBefore(pillBar, gridEl.firstChild);
+			selectGridDay(defaultDayKey);
+		} else if (gridDays.length === 1) {
+			gridDays[0].style.display = '';
+		}
 	}
+	setupGridDays();
 
 	var initial = 'list';
 	try { initial = localStorage.getItem(STORAGE_KEY) || 'list'; } catch(e) {}
+	// A view/day in the URL hash wins over the stored preference, so a shared deep link
+	// opens as intended regardless of what the recipient last viewed.
+	var hp = window.evHashParams || {};
+	if (hp.view === 'grid' || hp.view === 'list') initial = hp.view;
 	applyMode(initial, {persist:false});
+	if (hp.day && gridDays.some(function(d){ return d.getAttribute('data-day-key') === hp.day; })) {
+		selectGridDay(hp.day);
+	}
 	window.addEventListener('resize', function() {
-		// Re-evaluate when crossing mobile breakpoint
-		applyMode(localStorage.getItem(STORAGE_KEY) || 'list', {persist:false});
+		// Re-evaluate when crossing the mobile breakpoint; keep the user's desired view.
+		applyMode(desiredView, {persist:false});
 	});
 
 	// "Now" indicator
@@ -4193,6 +4430,43 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 		pop.style.left = left + 'px';
 		pop.style.top  = top  + 'px';
 		openPopover = pop;
+	};
+
+	// --- Grid ⇄ server resync -------------------------------------------------
+	// The grid is server-rendered; schedule add/edit/delete (handled in revised.js)
+	// only update the list DOM, so the grid used to go stale until a full reload.
+	// Re-fetch the page, swap in the freshly-rendered grid, and rebuild the day
+	// pills — keeping the server as the single source of truth for the layout math.
+	window.evReinitScheduleGrid = function() {
+		setupGridDays();
+		updateNowLines();
+		startNowTimer(); // self-guards; covers an empty→populated schedule
+	};
+	window.evRefreshScheduleGrid = function() {
+		fetch(window.location.href, {
+			headers: { 'X-Requested-With': 'XMLHttpRequest' },
+			credentials: 'same-origin'
+		})
+		.then(function(r) { return r.text(); })
+		.then(function(html) {
+			var doc = new DOMParser().parseFromString(html, 'text/html');
+			var fresh = doc.getElementById('ev-schedule-grid-container');
+			if (!fresh) return;
+			// Preserve the day the user is currently viewing, if it survives the swap.
+			var prevDayKey = null;
+			gridEl.querySelectorAll('.ev-grid-day').forEach(function(d) {
+				if (prevDayKey === null && d.style.display !== 'none') prevDayKey = d.getAttribute('data-day-key');
+			});
+			// Swap inner content only, so gridEl (and the view-toggle + now-timer
+			// wiring that closes over it) stays valid.
+			gridEl.innerHTML = fresh.innerHTML;
+			window.evReinitScheduleGrid();
+			if (prevDayKey) {
+				var still = gridEl.querySelector('.ev-grid-day[data-day-key="' + prevDayKey + '"]');
+				if (still) selectGridDay(prevDayKey);
+			}
+		})
+		.catch(function() { /* leave the grid as-is; the list is already correct */ });
 	};
 })();
 </script>

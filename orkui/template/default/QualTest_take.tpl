@@ -1176,11 +1176,15 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	// Set of currently-checked answer ids for the multi-select question in view.
 	// Rebuilt at the start of each renderQuestion().
 	var multiSelected   = null;
+	// Pending answer id for a SINGLE-select question — chosen on click but not
+	// submitted until "Submit Answer", so a fat-fingered pick can be changed.
+	var singleSelected  = null;
 	var feedbackEl      = document.getElementById('qt-feedback');
 	var reportArea      = document.getElementById('qt-report-area');
 	var reportBtn       = document.getElementById('qt-report-btn');
 	var reportForm      = document.getElementById('qt-report-form');
 	var reportReason    = document.getElementById('qt-report-reason');
+	var reportCorrectOpt = reportReason ? reportReason.querySelector('option[value="correct"]') : null;
 	var reportSubmit    = document.getElementById('qt-report-submit');
 	var reportCancel    = document.getElementById('qt-report-cancel');
 	var reportThanks    = document.getElementById('qt-report-thanks');
@@ -1355,12 +1359,16 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			reportForm.style.display = 'none';
 			reportThanks.style.display = 'none';
 			reportReason.value = '';
+			if (reportCorrectOpt) reportCorrectOpt.hidden = false;
 
 			var isMulti = (q.AnswerMode === 'multi');
 			multiHintEl.style.display    = isMulti ? '' : 'none';
-			multiSubmitRow.style.display = isMulti ? '' : 'none';
+			// Both single and multi now confirm with the Submit button, so a
+			// mis-click can be corrected before it counts.
+			multiSubmitRow.style.display = '';
 			multiSubmitBtn.disabled      = true;
-			multiSelected = isMulti ? Object.create(null) : null;
+			multiSelected  = isMulti ? Object.create(null) : null;
+			singleSelected = null;
 
 			answersEl.innerHTML = '';
 			q.Answers.forEach(function(a) {
@@ -1407,9 +1415,21 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 						if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
 					});
 				} else {
-					label.addEventListener('click', function() { checkAnswer(q, a.QualAnswerId); });
+					var selectSingle = function() {
+						if (isChecking) return;
+						// Radio behaviour: clear any prior pick, then select this one.
+						answersEl.querySelectorAll('.qt-answer-label').forEach(function(l) {
+							l.classList.remove('qt-ans-selected');
+							l.setAttribute('aria-checked', 'false');
+						});
+						label.classList.add('qt-ans-selected');
+						label.setAttribute('aria-checked', 'true');
+						singleSelected = a.QualAnswerId;
+						multiSubmitBtn.disabled = false;
+					};
+					label.addEventListener('click', selectSingle);
 					label.addEventListener('keydown', function(e) {
-						if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); checkAnswer(q, a.QualAnswerId); }
+						if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSingle(); }
 					});
 				}
 				li.appendChild(label);
@@ -1520,9 +1540,15 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 					});
 					feedbackEl.className = 'qt-feedback qt-fb-wrong';
 					feedbackEl.innerHTML = '<i class="fas fa-times-circle" style="margin-right:6px;"></i> Sorry, that\'s not correct.';
-					reportArea.style.display = 'block';
-					reportBtn.dataset.questionId = q.QualQuestionId;
 				}
+
+				// Any question can be reported — a right answer doesn't mean the
+				// question is sound (it may be poorly worded or outdated). The
+				// "My answer was correct" reason only applies to a miss, so hide
+				// it when they got it right.
+				reportArea.style.display = 'block';
+				reportBtn.dataset.questionId = q.QualQuestionId;
+				if (reportCorrectOpt) reportCorrectOpt.hidden = !!j.is_correct;
 
 				isChecking = false;
 
@@ -1597,9 +1623,14 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	multiSubmitBtn.addEventListener('click', function() {
 		if (multiSubmitBtn.disabled) return;
 		var q = questions[currentIdx];
-		var picks = Object.keys(multiSelected || {}).map(function(k) { return parseInt(k, 10); });
-		if (!picks.length) return;
-		checkAnswer(q, picks);
+		if (q.AnswerMode === 'multi') {
+			var picks = Object.keys(multiSelected || {}).map(function(k) { return parseInt(k, 10); });
+			if (!picks.length) return;
+			checkAnswer(q, picks);
+		} else {
+			if (singleSelected == null) return;
+			checkAnswer(q, singleSelected);
+		}
 	});
 
 	nextBtn.addEventListener('click', function() {

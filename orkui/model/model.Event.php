@@ -226,6 +226,74 @@ class Model_Event extends Model {
 		return $r;
 	}
 
+	/**
+	 * Schedule items for a single event occurrence (event_calendardetail_id),
+	 * ordered by start time, each with its leads attached. Shared by the event
+	 * page and the public embed endpoint so both draw from one query.
+	 */
+	function get_schedule($detail_id) {
+		global $DB;
+		$detail_id = (int)$detail_id;
+		if ($detail_id <= 0) return array();
+
+		$DB->Clear();
+		$scheduleRows = $DB->DataSet(
+			'SELECT event_schedule_id AS EventScheduleId, title AS Title,
+			        start_time AS StartTime, end_time AS EndTime,
+			        location AS Location, description AS Description, category AS Category,
+			        secondary_category AS SecondaryCategory,
+			        menu AS Menu, cost AS Cost, dietary AS Dietary, allergens AS Allergens
+			FROM ' . DB_PREFIX . 'event_schedule
+			WHERE event_calendardetail_id = ' . $detail_id . '
+			ORDER BY start_time'
+		);
+		$scheduleList = array();
+		if ($scheduleRows) {
+			while ($scheduleRows->Next()) {
+				$scheduleList[] = array(
+					'EventScheduleId'   => (int)$scheduleRows->EventScheduleId,
+					'Title'             => $scheduleRows->Title,
+					'StartTime'         => $scheduleRows->StartTime,
+					'EndTime'           => $scheduleRows->EndTime,
+					'Location'          => $scheduleRows->Location,
+					'Description'       => $scheduleRows->Description,
+					'Category'          => $scheduleRows->Category,
+					'SecondaryCategory' => $scheduleRows->SecondaryCategory ?? '',
+					'Menu'              => $scheduleRows->Menu,
+					'Cost'              => $scheduleRows->Cost !== null ? (float)$scheduleRows->Cost : null,
+					'Dietary'           => $scheduleRows->Dietary,
+					'Allergens'         => $scheduleRows->Allergens,
+				);
+			}
+		}
+		// Batch-load leads for all schedule items
+		if (!empty($scheduleList)) {
+			$slIds = implode(',', array_map('intval', array_column($scheduleList, 'EventScheduleId')));
+			$DB->Clear();
+			$leadRows = $DB->DataSet(
+				'SELECT sl.event_schedule_id AS EventScheduleId, m.mundane_id AS MundaneId, m.persona AS Persona
+				FROM ' . DB_PREFIX . 'event_schedule_lead sl
+				JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = sl.mundane_id
+				WHERE sl.event_schedule_id IN (' . $slIds . ')
+				ORDER BY m.persona'
+			);
+			$leadsMap = array();
+			if ($leadRows) {
+				while ($leadRows->Next()) {
+					$leadsMap[(int)$leadRows->EventScheduleId][] = array(
+						'MundaneId' => (int)$leadRows->MundaneId,
+						'Persona'   => $leadRows->Persona,
+					);
+				}
+			}
+			foreach ($scheduleList as &$schItem) {
+				$schItem['Leads'] = $leadsMap[(int)$schItem['EventScheduleId']] ?? array();
+			}
+			unset($schItem);
+		}
+		return $scheduleList;
+	}
+
 }
 
 ?>

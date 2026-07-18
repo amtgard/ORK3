@@ -161,8 +161,8 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 			<div class="rp-filter-card">
 				<div class="rp-filter-card-header"><i class="fas fa-lightbulb"></i> Tips</div>
 				<div class="rp-filter-card-body" style="font-size:12px;line-height:1.55;color:var(--rp-text-body);">
-					<p style="margin:0 0 8px;">Select the radio button next to the correct answer.</p>
-					<p style="margin:0 0 8px;">A question must have at least 2 answers with exactly one marked correct.</p>
+					<p style="margin:0 0 8px;"><strong>Single-answer:</strong> pick the one correct answer. <strong>Multiple-correct:</strong> check every answer that should count as correct (one or more).</p>
+					<p style="margin:0 0 8px;">A question needs at least 2 answer choices and at least one marked correct.</p>
 					<p style="margin:0;">Click &times; to remove an answer choice.</p>
 				</div>
 			</div>
@@ -379,7 +379,9 @@ html[data-theme="dark"] .qt-field span[style*="color:#e53e3e"] { color: #fc8181 
 
 		if (!questionText) { showErr('Question text is required.'); return; }
 		if (checkedNodes.length === 0) { showErr('Please mark at least one correct answer.'); return; }
-		if (mode === 'multi' && checkedNodes.length < 2) { showErr('Multiple-correct questions need at least 2 correct answers. Switch back to Single, or check another answer.'); return; }
+		// Multi-select is allowed to have a single correct answer on purpose: the
+		// player sees checkboxes (not a radio group), so they must have the judgment
+		// to pick only the one right option and leave the plausible extras unchecked.
 		if (texts.length < 2) { showErr('At least 2 answer choices are required.'); return; }
 
 		var fd = new FormData(form);

@@ -2803,13 +2803,18 @@ class Player extends Ork3
             }
         }
 
-        // Custom awards (is_ladder = 0 AND is_title = 0) allow unlimited duplicates
-        // and unlimited recommendations — skip both dedup checks entirely.
+        // Custom awards (is_ladder = 0 AND is_title = 0) and the "Custom Title"
+        // sentinel allow unlimited duplicates and unlimited recommendations —
+        // their real name is free-text entered at grant time and is never stored
+        // on the recommendation row, so the dedup check (which keys on the shared
+        // kingdomaward_id) would wrongly block genuinely different customs.
         $isCustomAward = false;
+        $isCustomTitle = false;
         $this->db->clear();
-        $awardMeta = $this->db->query("SELECT is_ladder, is_title FROM " . DB_PREFIX . "award WHERE award_id = " . (int)$request['AwardId'] . " LIMIT 1");
+        $awardMeta = $this->db->query("SELECT name, is_ladder, is_title FROM " . DB_PREFIX . "award WHERE award_id = " . (int)$request['AwardId'] . " LIMIT 1");
         if ($awardMeta && $awardMeta->next()) {
             $isCustomAward = ((int)$awardMeta->is_ladder === 0 && (int)$awardMeta->is_title === 0);
+            $isCustomTitle = ((int)$awardMeta->is_title === 1 && $awardMeta->name === 'Custom Title');
         }
 
         // Check for existing award rank (ladder awards only — custom awards and
@@ -2830,8 +2835,9 @@ class Player extends Ork3
             }
         }
 
-        // Check for duplicate recommendations from the same user (skipped for custom awards).
-        if (!$isCustomAward) {
+        // Check for duplicate recommendations from the same user
+        // (skipped for custom awards and custom titles — see note above).
+        if (!$isCustomAward && !$isCustomTitle) {
             $dupeRec = new yapo($this->db, DB_PREFIX . 'recommendations');
             $dupeRec->clear();
             $dupeRec->kingdomaward_id = $request['KingdomAwardId'];

@@ -253,6 +253,7 @@
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/ork-datatables.css?v=<?= filemtime(__DIR__ . '/style/ork-datatables.css') ?>">
 
 <!-- =============================================
      ZONE 1: Hero Header
@@ -1424,11 +1425,6 @@
 					<div class="pk-deleted-recs-body" id="pk-deleted-recs-body" style="display:none">
 						<div class="pk-deleted-recs-loading" id="pk-deleted-recs-loading">Loading&hellip;</div>
 						<div class="pk-deleted-recs-empty" id="pk-deleted-recs-empty" style="display:none">No deleted recommendations.</div>
-						<div class="pk-deleted-recs-search-wrap" style="display:none">
-							<i class="fas fa-search"></i>
-							<input type="text" class="pk-deleted-recs-search" placeholder="Search player, award, notes, or actor&hellip;" autocomplete="off">
-						</div>
-						<div class="pk-deleted-recs-no-match" style="display:none">No deleted recommendations match your search.</div>
 						<div class="pk-deleted-recs-table-wrap" id="pk-deleted-recs-table-wrap" style="display:none">
 							<table class="pk-deleted-recs-table">
 								<thead>
@@ -1441,7 +1437,7 @@
 										<th>Recommended By</th>
 										<th>Deleted At</th>
 										<th>Deleted By</th>
-										<th></th>
+										<th class="no-export"></th>
 									</tr>
 								</thead>
 								<tbody id="pk-deleted-recs-tbody"></tbody>
@@ -3301,7 +3297,10 @@ $(function() {
 				<?php endif; ?>
 			],
 			pageLength: 25,
-			scrollX: true
+			scrollX: true,
+			dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>",
+			lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+			language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' }
 		});
 	}
 });

@@ -200,6 +200,12 @@ html[data-theme="dark"] .qt-confirm-title {
 .qt-report-reason-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f0f4f8; font-size:0.88rem; color:#4a5568; }
 .qt-report-reason-row:last-of-type { border-bottom:none; }
 .qt-report-count { font-weight:700; color:#e53e3e; min-width:24px; text-align:right; }
+.qt-report-reporters-hdr { margin:14px 0 6px; font-size:0.74rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#a0aec0; }
+.qt-report-reporter-row { display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:5px 0; border-bottom:1px solid #f0f4f8; font-size:0.86rem; }
+.qt-report-reporter-row:last-child { border-bottom:none; }
+.qt-report-reporter-name a { color:#2b6cb0; text-decoration:none; font-weight:600; }
+.qt-report-reporter-name a:hover { text-decoration:underline; }
+.qt-report-reporter-meta { color:#718096; font-size:0.8rem; white-space:nowrap; }
 .qt-report-footer { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
 /* Bulk checkbox + bar */
 .qt-bulk-cb { accent-color:#2b6cb0; width:15px; height:15px; cursor:pointer; }
@@ -326,6 +332,9 @@ html[data-theme="dark"] .qt-report-reason-row {
 	color: var(--ork-text-secondary, #cbd5e0);
 }
 html[data-theme="dark"] .qt-report-count { color: #fc8181; }
+html[data-theme="dark"] .qt-report-reporter-row { border-bottom-color: var(--ork-border, #4a5568); }
+html[data-theme="dark"] .qt-report-reporter-name a { color: #63b3ed; }
+html[data-theme="dark"] .qt-report-reporter-meta { color: var(--ork-text-muted, #a0aec0); }
 /* Bulk bar (already dark-friendly bg) — preserve high-contrast inner buttons */
 html[data-theme="dark"] .qt-bulk-bar-archive { background: #742a2a; color: #feb2b2; }
 html[data-theme="dark"] .qt-bulk-bar-archive:hover { background: #9b2c2c; }
@@ -943,6 +952,8 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 		<div class="qt-bulk-import-instructions">Paste questions separated by a blank line.
 First line = question text.
 Subsequent lines = answers (prefix with * for correct).
+Two or more * answers = "select all that apply".
+For a select-all question with only ONE correct answer, put [multi] on its own line above the question.
 Letter prefixes like A) B) are optional and stripped.
 
 Example:
@@ -951,9 +962,11 @@ A) Green
 *B) Blue
 C) Red
 
-Who wrote Hamlet?
-*A) Shakespeare
-B) Dickens</div>
+[multi]
+Which of these is a primary color?
+*A) Blue
+B) Green
+C) Orange</div>
 		<textarea id="qt-bulkimport-text" aria-label="Paste questions here" rows="6" placeholder="Paste your questions here..." style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e0;border-radius:4px;font-size:0.88rem;font-family:inherit;resize:vertical;flex:0 0 auto;min-height:96px;"></textarea>
 		<div class="qt-bulk-import-preview" id="qt-bulkimport-preview"></div>
 		</div><!-- /.qt-bulk-import-body -->
@@ -1006,6 +1019,7 @@ B) Dickens</div>
 			<div class="qt-report-reason-row"><span>My answer was correct</span><span class="qt-report-count" id="qr-correct">0</span></div>
 			<div class="qt-report-reason-row"><span>Not updated for recent changes</span><span class="qt-report-count" id="qr-outdated">0</span></div>
 			<div class="qt-report-reason-row"><span>Other</span><span class="qt-report-count" id="qr-other">0</span></div>
+			<div id="qt-report-reporters"></div>
 		</div>
 		<div class="qt-report-footer">
 			<button class="qt-action-btn" id="qt-report-close" style="background:#e2e8f0;color:#2d3748;">Close</button>
@@ -1371,6 +1385,15 @@ $(function() {
 		var questions = [], errors = [];
 		blocks.forEach(function(block, bi) {
 			var lines = block.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+			// Optional leading mode directive ([multi] / [single]). This is what lets a
+			// multi-select question with a SINGLE correct answer round-trip: the star
+			// count alone would read one star as single. Absent, mode is still inferred
+			// from the number of starred answers below.
+			var forcedMode = null;
+			if (lines.length && /^\[(multi|single)\]$/i.test(lines[0])) {
+				forcedMode = /multi/i.test(lines[0]) ? 'multi' : 'single';
+				lines = lines.slice(1);
+			}
 			if (lines.length < 2) { errors.push('Block ' + (bi+1) + ': needs question + at least 2 answers.'); return; }
 			var qText = stripEnumerator(lines[0].replace(/^\*/, '')); // leading * then any numbering
 			var answers = [], correctCount = 0;
@@ -1385,9 +1408,10 @@ $(function() {
 			}
 			if (answers.length < 2) { errors.push('Block ' + (bi+1) + ': at least 2 answers required.'); return; }
 			if (correctCount < 1)   { errors.push('Block ' + (bi+1) + ': at least 1 correct answer required.'); return; }
-			// Multi-correct is auto-detected: 2+ starred answers → "select all
-			// that apply." Admins can still flip the toggle in the editor.
-			var mode = correctCount > 1 ? 'multi' : 'single';
+			// An explicit [multi]/[single] directive wins; otherwise multi-correct is
+			// auto-detected (2+ starred answers → "select all that apply"). Admins can
+			// still flip the toggle in the editor.
+			var mode = forcedMode || (correctCount > 1 ? 'multi' : 'single');
 			questions.push({ QuestionText: qText, AnswerMode: mode, Answers: answers });
 		});
 		return { questions: questions, errors: errors };
@@ -1698,6 +1722,34 @@ $(function() {
 	var currentQid = 0;
 	var currentKid = 0;
 
+	function repEsc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+	// Show WHO reported (persona linked to their profile so the writer can reach
+	// out), with each report's reason and date. Reporter identity is only exposed
+	// here in the admin-only reports modal.
+	function renderReporters(reporters) {
+		var el = document.getElementById('qt-report-reporters');
+		if (!el) return;
+		if (!reporters.length) { el.innerHTML = ''; return; }
+		var reasonLabels = { wording:'Worded poorly', correct:'Answer was correct', outdated:'Outdated', other:'Other' };
+		var rows = reporters.map(function(rp) {
+			var name = rp.Persona ? repEsc(rp.Persona) : 'Unknown player';
+			var nameHtml = rp.PlayerId
+				? '<a href="<?= UIR ?>Player/profile/' + rp.PlayerId + '" target="_blank" rel="noopener">' + name + '</a>'
+				: name;
+			var when = '';
+			if (rp.CreatedAt) {
+				var d = new Date(String(rp.CreatedAt).replace(' ', 'T'));
+				when = isNaN(d.getTime()) ? repEsc(rp.CreatedAt)
+					: d.toLocaleDateString([], { year:'numeric', month:'short', day:'numeric' });
+			}
+			var meta = repEsc(reasonLabels[rp.Reason] || rp.Reason) + (when ? ' · ' + when : '');
+			return '<div class="qt-report-reporter-row"><span class="qt-report-reporter-name">' + nameHtml
+				+ '</span><span class="qt-report-reporter-meta">' + meta + '</span></div>';
+		}).join('');
+		el.innerHTML = '<div class="qt-report-reporters-hdr">Who reported (' + reporters.length + ')</div>' + rows;
+	}
+
 	function openReportPopup(qid, kid) {
 		currentQid = qid;
 		currentKid = kid;
@@ -1723,6 +1775,7 @@ $(function() {
 				document.getElementById('qr-correct').textContent  = j.counts.correct;
 				document.getElementById('qr-outdated').textContent = j.counts.outdated;
 				document.getElementById('qr-other').textContent    = j.counts.other;
+				renderReporters(j.reporters || []);
 				bodyEl.style.display = 'block';
 			});
 	}

@@ -583,22 +583,6 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
 /* ===========================
    Player Profile (PnConfig)
    =========================== */
-// ---- Pagination Helpers ----
-function pnPageRange(current, total) {
-    var pages = [];
-    if (total <= 7) {
-        for (var p = 1; p <= total; p++) pages.push(p);
-    } else {
-        pages.push(1);
-        if (current > 3) pages.push(-1);
-        var s = Math.max(2, current - 1);
-        var e = Math.min(total - 1, current + 1);
-        for (var p = s; p <= e; p++) pages.push(p);
-        if (current < total - 2) pages.push(-1);
-        pages.push(total);
-    }
-    return pages;
-}
 
 /* ===========================
    Generic confirm dialog
@@ -657,102 +641,45 @@ function pnPageRange(current, total) {
     };
 })();
 
-function pnSetPageSize(tableId, size) {
-    var $table = $('#' + tableId);
-    if (!$table.length) return;
-    $table.data('pagesize', size === 'all' ? 99999 : parseInt(size));
-    pnPaginate($table, 1);
-}
 
-function pnAwardSearch(q) {
-    q = q.trim().toLowerCase();
-    var table = document.getElementById('pn-awards-table');
-    var noResults = document.getElementById('pn-award-search-empty');
-    if (!table) return;
-    var rows = table.querySelectorAll('tbody tr');
-    if (!q) {
-        rows.forEach(function(r) { r.style.display = ''; });
-        if (noResults) noResults.style.display = 'none';
-        if (typeof pnPaginate === 'function') pnPaginate($('#pn-awards-table'), 1);
-        return;
-    }
-    var matchCount = 0;
-    rows.forEach(function(r) {
-        var match = r.textContent.toLowerCase().indexOf(q) !== -1;
-        r.style.display = match ? '' : 'none';
-        if (match) matchCount++;
-    });
-    var pg = table.nextElementSibling;
-    while (pg && !pg.classList.contains('pn-pagination')) { pg = pg.nextElementSibling; }
-    if (pg) pg.style.display = 'none';
-    if (noResults) noResults.style.display = matchCount === 0 ? '' : 'none';
-}
+// ---- Unified DataTables initializer for player-profile data tables ----
+// Gives every profile grid the same feature set: click-sort, "Show N" length
+// menu, pagination, a search box, and CSV export. Header cells:
+//   - data-sorttype="date" -> that column sorts as a date
+//   - class="pn-nosort"     -> action-button column (no sort/search/export)
+// opts: { order: [[col,'desc']], filename: 'Awards', pageLength: 25 }
+function pnInitDataTable(selector, opts) {
+    opts = opts || {};
+    if (!$.fn || !$.fn.DataTable) return null;
+    var $table = $(selector);
+    if (!$table.length) return null;
+    if ($.fn.DataTable.isDataTable($table)) { $table.DataTable().destroy(); }
 
-function pnPaginate($table, page) {
-    var pageSize = parseInt($table.data('pagesize')) || 10;
-    var $rows = $table.find('tbody tr');
-    var total = $rows.length;
-    if (total === 0) return;
-    var totalPages = Math.max(1, Math.ceil(total / pageSize));
-    page = Math.max(1, Math.min(page, totalPages));
-    $table.data('pn-page', page);
-    $rows.each(function(i) {
-        $(this).toggle(i >= (page - 1) * pageSize && i < page * pageSize);
+    var colDefs = [];
+    var hasAction = false;
+    $table.find('thead th').each(function(i) {
+        var $th = $(this);
+        if ($th.hasClass('pn-nosort')) { hasAction = true; colDefs.push({ targets: i, orderable: false, searchable: false }); }
+        if ($th.data('sorttype') === 'date') colDefs.push({ targets: i, type: 'date' });
     });
-    var $pg = $table.next('.pn-pagination');
-    if ($pg.length === 0) $pg = $('<div class="pn-pagination"></div>').insertAfter($table);
-    if (total <= pageSize) { $pg.empty().hide(); return; }
-    $pg.show();
-    var start = (page - 1) * pageSize + 1;
-    var end = Math.min(page * pageSize, total);
-    var html = '<span class="pn-pagination-info">Showing ' + start + '\u2013' + end + ' of ' + total + '</span>';
-    html += '<div class="pn-pagination-controls">';
-    html += '<button class="pn-page-btn pn-page-prev"' + (page === 1 ? ' disabled' : '') + '>&#8249;</button>';
-    var range = pnPageRange(page, totalPages);
-    for (var ri = 0; ri < range.length; ri++) {
-        if (range[ri] === -1) {
-            html += '<span class="pn-page-ellipsis">&hellip;</span>';
-        } else {
-            html += '<button class="pn-page-btn pn-page-num' + (range[ri] === page ? ' pn-page-active' : '') + '" data-page="' + range[ri] + '">' + range[ri] + '</button>';
-        }
-    }
-    html += '<button class="pn-page-btn pn-page-next"' + (page === totalPages ? ' disabled' : '') + '>&#8250;</button>';
-    html += '</div>';
-    $pg.html(html);
-}
 
-function pnSortDesc($table, colIndex, sortType, secondaryColIndex, secondarySortType) {
-    if (!$table.length) return;
-    $table.find('thead th').removeClass('sort-asc sort-desc');
-    $table.find('thead th').eq(colIndex).addClass('sort-desc');
-    var $tbody = $table.find('tbody');
-    var rows = $tbody.find('tr').get();
-    rows.sort(function(a, b) {
-        var aVal = $(a).find('td').eq(colIndex).text().trim();
-        var bVal = $(b).find('td').eq(colIndex).text().trim();
-        var cmp = 0;
-        if (sortType === 'numeric') {
-            cmp = (parseFloat(aVal) || 0) - (parseFloat(bVal) || 0);
-        } else if (sortType === 'date') {
-            cmp = (new Date(aVal).getTime() || 0) - (new Date(bVal).getTime() || 0);
-        } else {
-            cmp = aVal.localeCompare(bVal);
-        }
-        if (cmp === 0 && secondaryColIndex != null) {
-            var aVal2 = $(a).find('td').eq(secondaryColIndex).text().trim();
-            var bVal2 = $(b).find('td').eq(secondaryColIndex).text().trim();
-            var st = secondarySortType || 'text';
-            if (st === 'numeric') {
-                cmp = (parseFloat(aVal2) || 0) - (parseFloat(bVal2) || 0);
-            } else if (st === 'date') {
-                cmp = (new Date(aVal2).getTime() || 0) - (new Date(bVal2).getTime() || 0);
-            } else {
-                cmp = aVal2.localeCompare(bVal2);
-            }
-        }
-        return -cmp;
+    return $table.DataTable({
+        dom: "<'pn-dt-toolbar'lfB>rtip",
+        buttons: [{
+            extend: 'csv',
+            className: 'pn-dt-csv-btn',
+            text: '<i class="fas fa-download"></i> CSV',
+            filename: opts.filename || 'Export',
+            exportOptions: { columns: hasAction ? ':not(.pn-nosort)' : ':visible' }
+        }],
+        columnDefs: colDefs,
+        order: opts.order || [],
+        pageLength: opts.pageLength || 25,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+        scrollX: true,
+        autoWidth: false,
+        language: { search: '', searchPlaceholder: 'Search…' }
     });
-    $.each(rows, function(i, row) { $tbody.append(row); });
 }
 
 function pnActivateTab(tab) {
@@ -761,6 +688,12 @@ function pnActivateTab(tab) {
     $pnTab.addClass('pn-tab-active');
     $('.pn-tab-panel').hide();
     $('#pn-tab-' + tab).show();
+    // DataTables can't measure column widths while a tab is hidden; re-adjust on show.
+    if ($.fn && $.fn.DataTable) {
+        $('#pn-tab-' + tab).find('table.dataTable').each(function() {
+            $(this).DataTable().columns.adjust();
+        });
+    }
     var pnLabel = $pnTab.find('.pn-tab-label').text().trim();
     if (pnLabel) $('#pn-active-tab-label').text(pnLabel);
 }
@@ -788,9 +721,9 @@ $(document).ready(function() {
     $('.pn-ladder-item[data-ladname]').on('click', function() {
         var name = $(this).data('ladname');
         pnActivateTab('awards');
-        var $input = $('#pn-award-search');
-        $input.val(name);
-        pnAwardSearch(name);
+        if ($.fn.DataTable && $.fn.DataTable.isDataTable('#pn-awards-table')) {
+            $('#pn-awards-table').DataTable().search(name).draw();
+        }
     });
 
     // ---- Class Level Calculation ----
@@ -826,41 +759,7 @@ $(document).ready(function() {
         }
     });
 
-    // ---- Sortable Tables ----
-    $('.pn-sortable').each(function() {
-        var table = $(this);
-        table.find('thead th').on('click', function() {
-            var columnIndex = $(this).index();
-            var sortType = $(this).data('sorttype') || 'text';
-            var isAscending = !$(this).hasClass('sort-asc');
-
-            table.find('thead th').removeClass('sort-asc sort-desc');
-            $(this).addClass(isAscending ? 'sort-asc' : 'sort-desc');
-
-            var tbody = table.find('tbody');
-            var rows = tbody.find('tr').get();
-
-            rows.sort(function(a, b) {
-                var aText = $(a).find('td').eq(columnIndex).text().trim();
-                var bText = $(b).find('td').eq(columnIndex).text().trim();
-                var cmp = 0;
-
-                if (sortType === 'numeric') {
-                    cmp = (parseFloat(aText) || 0) - (parseFloat(bText) || 0);
-                } else if (sortType === 'date') {
-                    cmp = (new Date(aText).getTime() || 0) - (new Date(bText).getTime() || 0);
-                } else {
-                    cmp = aText.localeCompare(bText);
-                }
-                return isAscending ? cmp : -cmp;
-            });
-
-            $.each(rows, function(i, row) {
-                tbody.append(row);
-            });
-            pnPaginate(table, 1);
-        });
-    });
+    // Profile data tables use DataTables for sorting/paging/search/CSV — see pnInitDataTable().
 
 
     // ---- Custom Recommendation Modal ----
@@ -1181,21 +1080,6 @@ if (PnConfig.recError) {
         $cell.find('.pn-delete-confirm').removeClass('pn-active');
     });
 
-    // ---- Pagination: page button handlers ----
-    $(document).on('click', '.pn-page-num', function() {
-        var $table = $(this).closest('.pn-pagination').prev('.pn-table');
-        if ($table.length) pnPaginate($table, parseInt($(this).data('page')));
-    });
-    $(document).on('click', '.pn-page-prev', function() {
-        if ($(this).prop('disabled')) return;
-        var $table = $(this).closest('.pn-pagination').prev('.pn-table');
-        if ($table.length) pnPaginate($table, ($table.data('pn-page') || 1) - 1);
-    });
-    $(document).on('click', '.pn-page-next', function() {
-        if ($(this).prop('disabled')) return;
-        var $table = $(this).closest('.pn-pagination').prev('.pn-table');
-        if ($table.length) pnPaginate($table, ($table.data('pn-page') || 1) + 1);
-    });
 
 
     // ---- Image Upload Modal ----
@@ -2393,28 +2277,12 @@ if (PnConfig.recError) {
         });
     })();
 
-    pnSortDesc($('#pn-classes-table'), 2, 'numeric');
-    // Classes table: click-to-sort without pagination
-    $('#pn-classes-table thead th').on('click', function() {
-        var $th    = $(this);
-        var $table = $('#pn-classes-table');
-        var col    = $th.index();
-        var stype  = $th.data('sorttype') || 'text';
-        var isAsc  = !$th.hasClass('sort-asc');
-        $table.find('thead th').removeClass('sort-asc sort-desc');
-        $th.addClass(isAsc ? 'sort-asc' : 'sort-desc');
-        var $tbody = $table.find('tbody');
-        var rows   = $tbody.find('tr').get();
-        rows.sort(function(a, b) {
-            var av = $(a).find('td').eq(col).text().trim();
-            var bv = $(b).find('td').eq(col).text().trim();
-            var cmp = stype === 'numeric'
-                ? (parseFloat(av) || 0) - (parseFloat(bv) || 0)
-                : av.localeCompare(bv);
-            return isAsc ? cmp : -cmp;
-        });
-        $.each(rows, function(i, row) { $tbody.append(row); });
-    });
+    // Initialize server-rendered profile tables as DataTables (AJAX tabs init after their fetch).
+    pnInitDataTable('#pn-awards-table',         { order: [[2, 'desc'], [1, 'desc']], filename: 'Awards' });
+    pnInitDataTable('#pn-titles-table',         { order: [[2, 'desc'], [1, 'desc']], filename: 'Titles' });
+    pnInitDataTable('#pn-classes-table',        { order: [[2, 'desc']],              filename: 'Class Levels' });
+    pnInitDataTable('#pn-revoked-awards-table', { order: [[3, 'desc']],              filename: 'Revoked Awards' });
+    pnInitDataTable('#pn-revoked-titles-table', { order: [[3, 'desc']],              filename: 'Revoked Titles' });
 
 });
 
@@ -2731,6 +2599,9 @@ function knActivateTab(tab) {
     if (tab === 'recommendations') {
         knLazyLoadRecs();
     }
+    if (tab === 'parks') {
+        window.orkAdjustDataTables($('#kn-tab-parks'));
+    }
 }
 
 // Lazily fetch the Recommendations tab's inner HTML the first time the tab is
@@ -3028,6 +2899,7 @@ $(document).ready(function() {
             $('#kn-prinz-tables').show();
             $('#kn-view-list').addClass('kn-view-active');
             $('#kn-view-tiles').removeClass('kn-view-active');
+            window.orkAdjustDataTables($('#kn-tab-parks'));
         } else {
             $('#kn-parks-list-view').hide();
             $('#kn-parks-tiles').show();
@@ -3069,29 +2941,32 @@ $(document).ready(function() {
         knSetEventsView('list');
     }
 
-    // ---- Sortable tables ----
-    $('.kn-sortable').each(function() {
-        var $table = $(this);
-        $table.find('thead th').on('click', function() {
-            var colIndex = $(this).index();
-            var sortType = $(this).data('sorttype') || 'text';
-            var isAsc = !$(this).hasClass('sort-asc');
-            $table.find('thead th').removeClass('sort-asc sort-desc');
-            $(this).addClass(isAsc ? 'sort-asc' : 'sort-desc');
-            var $tbody = $table.find('tbody');
-            var rows = $tbody.find('tr').get();
-            rows.sort(function(a, b) {
-                var aVal = $(a).find('td').eq(colIndex).text().trim();
-                var bVal = $(b).find('td').eq(colIndex).text().trim();
-                var cmp = 0;
-                if (sortType === 'numeric')   cmp = (parseFloat(aVal) || 0) - (parseFloat(bVal) || 0);
-                else if (sortType === 'date') cmp = (new Date(aVal).getTime() || 0) - (new Date(bVal).getTime() || 0);
-                else                          cmp = aVal.localeCompare(bVal);
-                return isAsc ? cmp : -cmp;
-            });
-            $.each(rows, function(i, row) { $tbody.append(row); });
-            knPaginate($table, 1);
+    // ---- Sortable tables (delegated so JS-injected tables like the Players
+    //      list are covered too) ----
+    $(document).on('click', '.kn-sortable thead th', function() {
+        var $th = $(this);
+        var $table = $th.closest('table');
+        var colIndex = $th.index();
+        var sortType = $th.data('sorttype') || 'text';
+        var isAsc = !$th.hasClass('sort-asc');
+        $table.find('thead th').removeClass('sort-asc sort-desc');
+        $th.addClass(isAsc ? 'sort-asc' : 'sort-desc');
+        var $tbody = $table.find('tbody');
+        var rows = $tbody.find('tr').get();
+        rows.sort(function(a, b) {
+            var aVal = $(a).find('td').eq(colIndex).text().trim();
+            var bVal = $(b).find('td').eq(colIndex).text().trim();
+            var cmp = 0;
+            if (sortType === 'numeric')   cmp = (parseFloat(aVal) || 0) - (parseFloat(bVal) || 0);
+            else if (sortType === 'date') cmp = (new Date(aVal).getTime() || 0) - (new Date(bVal).getTime() || 0);
+            else                          cmp = aVal.localeCompare(bVal);
+            return isAsc ? cmp : -cmp;
         });
+        $.each(rows, function(i, row) { $tbody.append(row); });
+        // The year-grouped Players list shows every member per year section
+        // (no pagination) — sorting only reorders it. Other kn-sortable tables
+        // (e.g. Events) keep their pager.
+        if (!$table.hasClass('kn-year-table')) knPaginate($table, 1);
     });
 
     // ---- Pagination event delegation ----
@@ -3159,8 +3034,23 @@ $(document).ready(function() {
 
     // ---- Default sort + initial pagination ----
 
-    knSortAsc($('#kn-parks-table'), 0, 'text');
-    knPaginate($('#kn-parks-table'), 1);
+    // Parks + principality tables → standard DataTables toolbar.
+    // Capture the whole set in ONE pass, before any init runs. DataTables'
+    // scrollX clone tables copy the source table's kn-parks-dt class, so a
+    // second selector pass after the first table initialises would match
+    // those clones and try to re-initialise them ("Cannot reinitialise
+    // table" alert). Selecting up-front — while nothing is a DataTable yet —
+    // means the collection holds only the real tables.
+    $('.kn-parks-dt').each(function() {
+        var lastCol = this.tHead ? this.tHead.rows[0].cells.length - 1 : 0;
+        var hasGear = $(this).find('thead th.no-export').length > 0;
+        var isMain  = this.id === 'kn-parks-table';
+        window.orkInitDataTable($(this), {
+            order: [[0, 'asc']],
+            csvName: isMain ? 'Kingdom Parks' : ($(this).data('csvname') || 'Parks'),
+            columnDefs: hasGear ? [{ targets: lastCol, orderable: false, searchable: false }] : []
+        });
+    });
 
     knSortAsc($('#kn-events-table'), 0, 'date');
     knPaginate($('#kn-events-table'), 1);
@@ -9474,6 +9364,7 @@ $(document).ready(function() {
                         }
                     } else {
                         var newRow = '<tr id="ev-schedule-row-' + s.EventScheduleId + '"' +
+                            ' data-schedule-id="' + s.EventScheduleId + '"' +
                             ' data-title="' + s.Title.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
                             ' data-start="' + (s.StartTime || '').replace(' ','T').substring(0,16) + '"' +
                             ' data-end="'   + (s.EndTime || '').replace(' ','T').substring(0,16) + '"' +
@@ -9535,6 +9426,8 @@ $(document).ready(function() {
                         });
                         evBuildScheduleFilters();
                     }
+                    // Keep the server-rendered grid in sync with this list mutation.
+                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
                 } else {
                     errEl.textContent = data.error || 'An error occurred.';
                     errEl.style.display = 'block';
@@ -9654,17 +9547,22 @@ $(document).ready(function() {
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.status === 0) {
-                    var row = gid('ev-schedule-row-' + scheduleId);
-                    // Capture the day-section BEFORE removing the row — closest() on a
+                    // A multi-day item renders one row per day it spans, so remove them all.
+                    var rows = document.querySelectorAll('tr[data-schedule-id="' + scheduleId + '"]');
+                    // Capture the day-sections BEFORE removing the rows — closest() on a
                     // detached node returns null, so empty sections never got cleaned up.
-                    var daySection = row ? row.closest('.ev-sched-day-section') : null;
-                    if (row) row.remove();
-                    if (daySection) {
+                    var daySections = [];
+                    rows.forEach(function(row) {
+                        var sec = row.closest('.ev-sched-day-section');
+                        if (sec && daySections.indexOf(sec) === -1) daySections.push(sec);
+                        row.remove();
+                    });
+                    daySections.forEach(function(daySection) {
                         var tbody = daySection.querySelector('tbody');
                         if (tbody && tbody.querySelectorAll('tr').length === 0) {
                             daySection.remove();
                         }
-                    }
+                    });
                     var container = gid('ev-schedule-container');
                     if (container && container.querySelectorAll('.ev-sched-day-section').length === 0) {
                         var empty = gid('ev-schedule-empty');
@@ -9681,6 +9579,8 @@ $(document).ready(function() {
                         }
                     });
                     evBuildScheduleFilters();
+                    // Keep the server-rendered grid in sync with this removal.
+                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
                 } else {
                     alert(data.error || 'Could not remove schedule item.');
                 }
@@ -13504,59 +13404,9 @@ function setupPronounPicker(cfg) {
             .then(function(data) {
                 if (data.status === 0) {
                     pnCloseAddNoteModal();
-                    var dateDisp  = date + (dateComp ? ' - ' + dateComp : '');
-                    var safeTitle = $('<div>').text(title.trim()).html();
-                    var safeDesc  = $('<div>').text(desc).html();
-                    var safeDate  = $('<div>').text(dateDisp).html();
-                    if (isEdit) {
-                        // Update the existing row in place
-                        var row = document.querySelector('tr[data-notes-id="' + editNoteId + '"]');
-                        if (row) {
-                            var cells = row.cells;
-                            if (cells[0]) cells[0].innerHTML = safeTitle;
-                            if (cells[1]) cells[1].innerHTML = safeDesc;
-                            if (cells[2]) cells[2].innerHTML = safeDate;
-                            var eb = row.querySelector('.pn-note-edit-btn');
-                            if (eb) {
-                                eb.setAttribute('data-note', title.trim());
-                                eb.setAttribute('data-desc', desc);
-                                eb.setAttribute('data-date', date);
-                                eb.setAttribute('data-date-complete', dateComp);
-                            }
-                        }
-                    } else {
-                        // Prepend new row to the table
-                        var tbody = document.querySelector('#pn-history-table tbody');
-                        if (tbody) {
-                            var tr = document.createElement('tr');
-                            var newId = data.notesId || 0;
-                            tr.setAttribute('data-notes-id', newId);
-                            tr.innerHTML = '<td>' + safeTitle + '</td>'
-                                + '<td>' + safeDesc + '</td>'
-                                + '<td class="pn-col-nowrap">' + safeDate + '</td>'
-                                + '<td>'
-                                + '<button class="pn-note-edit-btn"'
-                                + ' data-notes-id="' + newId + '"'
-                                + ' data-note="' + $('<div>').text(title.trim()).html().replace(/"/g, '&quot;') + '"'
-                                + ' data-desc="' + $('<div>').text(desc).html().replace(/"/g, '&quot;') + '"'
-                                + ' data-date="' + $('<div>').text(date).html() + '"'
-                                + ' data-date-complete="' + $('<div>').text(dateComp).html() + '"'
-                                + ' title="Edit note"><i class="fas fa-pencil-alt"></i></button>'
-                                + ' <button class="pn-note-del-btn" data-notes-id="' + newId + '" title="Delete note"><i class="fas fa-times"></i></button>'
-                                + '</td>';
-                            tbody.insertBefore(tr, tbody.firstChild);
-                            var tabCount = document.querySelector('[data-tab="history"] .pn-tab-count');
-                            if (tabCount) {
-                                var n = parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0;
-                                tabCount.textContent = '(' + (n + 1) + ')';
-                            }
-                            var table = document.getElementById('pn-history-table');
-                            if (table) table.style.display = '';
-                            var emptyState = document.getElementById('pn-history-empty');
-                            if (emptyState) emptyState.style.display = 'none';
-                            pnSyncNotesInfobox();
-                        }
-                    }
+                    // Re-fetch the tab so the DataTable (sort/search/paging/CSV/count) stays in sync
+                    // with the server. Hand-patching the DOM would desync DataTables' row cache.
+                    if (typeof window.pnReloadNotes === 'function') window.pnReloadNotes(); else location.reload();
                 } else {
                     if (fb) { fb.textContent = data.error || 'Error saving note.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
                     btn.disabled = false;
@@ -13595,15 +13445,9 @@ function setupPronounPicker(cfg) {
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (data.status === 0) {
-                        row.fadeOut(300, function() {
-                            row.remove();
-                            var tabCount = document.querySelector('[data-tab="history"] .pn-tab-count');
-                            if (tabCount) {
-                                var n = parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0;
-                                tabCount.textContent = '(' + Math.max(0, n - 1) + ')';
-                            }
-                            pnSyncNotesInfobox();
-                        });
+                        // Re-fetch the tab so the DataTable stays in sync — a raw row.remove()
+                        // leaves DataTables' cache holding the row, so it can reappear on next draw.
+                        if (typeof window.pnReloadNotes === 'function') window.pnReloadNotes(); else location.reload();
                     } else {
                         self.disabled = false;
                         pnConfirm({ title: 'Delete Failed', message: data.error || 'Error deleting note.', confirmText: 'OK', danger: false }, function() {});
@@ -15881,6 +15725,70 @@ function recsCellText(td) {
     $c.find('button, .pk-rec-notes-ellipsis').remove();
     return $c.text().replace(/\s+/g, ' ').trim();
 }
+// ---- Shared DataTables helpers (ORK standard toolbar + CSV) ----
+// CSV: data columns only (skip <th class="no-export">), current filtered+sorted view, ALL rows.
+window.orkExportDataTableCsv = function(dt, filename) {
+    var keep = [], headers = [];
+    dt.columns().every(function(i) {
+        var $h = $(this.header());
+        if ($h.hasClass('no-export')) return;
+        keep.push(i);
+        headers.push($h.text().trim());
+    });
+    var rows = [headers];
+    dt.rows({ search: 'applied', order: 'applied' }).every(function() {
+        var $tds = $(this.node()).find('td');
+        rows.push(keep.map(function(ci) { return $tds.eq(ci).text().trim().replace(/\s+/g, ' '); }));
+    });
+    var csv = rows.map(function(r) {
+        return r.map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\r\n');
+    var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+};
+
+// Init a table as a DataTable with the ORK standard toolbar + an Export CSV button.
+// opts: { order, columnDefs, csvName, dt (extra config merged last) }
+window.orkInitDataTable = function($table, opts) {
+    opts = opts || {};
+    if (!$table || !$table.length) return null;
+    // Never operate on a DataTables scrollX clone table — the clones copy the
+    // source table's classes, so a class-based selector can hand us one. Real
+    // (un-initialised) tables are not yet inside a .dataTables_scroll wrapper.
+    if ($table.closest('.dataTables_scroll').length) return null;
+    if ($.fn.dataTable.isDataTable($table)) { $table.DataTable().destroy(); }
+    var dt = $table.DataTable($.extend(true, {
+        dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>",
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+        pagingType: 'simple_numbers',
+        autoWidth: false,
+        scrollX: true,
+        order: (opts.order || []),
+        columnDefs: (opts.columnDefs || []),
+        language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' }
+    }, opts.dt || {}));
+    var $top = $(dt.table().container()).find('.ork-dt-top');
+    var $btn = $('<button type="button" class="ork-dt-csv"><i class="fas fa-file-csv"></i> Export CSV</button>');
+    $btn.on('click', function() { window.orkExportDataTableCsv(dt, (opts.csvName || 'export') + '.csv'); });
+    $top.append($btn);
+    return dt;
+};
+
+// Re-measure columns for any DataTables inside a just-revealed container
+// (fixes zero-width columns when a table was initialised while its tab was hidden).
+window.orkAdjustDataTables = function($scope) {
+    $($scope || document).find('table').each(function() {
+        if ($.fn.dataTable.isDataTable(this)) {
+            try { $(this).DataTable().columns.adjust(); } catch (e) {}
+        }
+    });
+};
+
 window.recsExportCsv = function(dt, filename) {
     var EXPORT_COLS = 6; // skip actions column
     var headers = [];
@@ -16178,21 +16086,14 @@ window.initUsernameAvailabilityCheck = function(opts) {
             var delBy = r.DeletedById
                 ? '<a href="' + uirBase() + 'Player/profile/' + parseInt(r.DeletedById, 10) + '">' + escHtml(r.DeletedByName || '') + '</a>'
                 : '&mdash;';
-            var searchKey = [
-                r.Persona || '',
-                r.AwardName || '',
-                r.Reason || '',
-                r.RecommendedByName || '',
-                r.DeletedByName || ''
-            ].join(' ').toLowerCase();
-            html += '<tr data-rec-id="' + rid + '" data-search="' + escHtml(searchKey) + '">'
+            html += '<tr data-rec-id="' + rid + '">'
                 + '<td><a href="' + uirBase() + 'Player/profile/' + parseInt(r.MundaneId, 10) + '">' + escHtml(r.Persona || '') + '</a></td>'
                 + '<td>' + escHtml(r.AwardName || '') + '</td>'
-                + '<td>' + rank + '</td>'
+                + '<td data-order="' + (parseInt(r.Rank, 10) || 0) + '">' + rank + '</td>'
                 + '<td>' + notes + '</td>'
-                + '<td>' + escHtml(r.DateRecommended || '') + '</td>'
+                + '<td data-order="' + (Date.parse(r.DateRecommended) || 0) + '">' + escHtml(r.DateRecommended || '') + '</td>'
                 + '<td>' + recBy + '</td>'
-                + '<td>' + escHtml(fmtDt(r.DeletedAt)) + '</td>'
+                + '<td data-order="' + (Date.parse(r.DeletedAt) || 0) + '">' + escHtml(fmtDt(r.DeletedAt)) + '</td>'
                 + '<td>' + delBy + '</td>'
                 + '<td style="text-align:right;white-space:nowrap"><button type="button" class="pk-deleted-restore-btn" data-rec-id="' + rid + '"><i class="fas fa-undo"></i> Restore</button></td>'
                 + '</tr>';
@@ -16230,8 +16131,13 @@ window.initUsernameAvailabilityCheck = function(opts) {
                 }
                 renderRows(tbody, recs);
                 if (wrap) wrap.style.display = '';
-                var searchWrap = panel.querySelector('.pk-deleted-recs-search-wrap');
-                if (searchWrap) searchWrap.style.display = recs.length > 5 ? '' : 'none';
+                var $delTable = $(panel).find('.pk-deleted-recs-table');
+                panel.__dt = window.orkInitDataTable($delTable, {
+                    order: [[6, 'desc']],   // Deleted At, newest first
+                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Deleted Recommendations',
+                    columnDefs: [{ targets: 8, orderable: false, searchable: false }]
+                });
+                window.orkAdjustDataTables($(panel));
                 panel.dataset.loaded = '1';
                 if (onRendered) onRendered();
             })
@@ -16264,25 +16170,6 @@ window.initUsernameAvailabilityCheck = function(opts) {
                 loadDeleted(panel, listUrl);
             }
         });
-
-        var searchInput = panel.querySelector('.pk-deleted-recs-search');
-        if (searchInput) {
-            searchInput.addEventListener('input', function () {
-                var q = this.value.trim().toLowerCase();
-                var tbody = panel.querySelector('tbody');
-                if (!tbody) return;
-                var rows = tbody.querySelectorAll('tr');
-                var visible = 0;
-                for (var i = 0; i < rows.length; i++) {
-                    var key = rows[i].getAttribute('data-search') || '';
-                    var match = !q || key.indexOf(q) !== -1;
-                    rows[i].style.display = match ? '' : 'none';
-                    if (match) visible++;
-                }
-                var noMatch = panel.querySelector('.pk-deleted-recs-no-match');
-                if (noMatch) noMatch.style.display = (q && visible === 0) ? '' : 'none';
-            });
-        }
 
         panel.addEventListener('click', function (e) {
             var btn = e.target.closest ? e.target.closest('.pk-deleted-restore-btn') : null;
@@ -16317,25 +16204,27 @@ window.initUsernameAvailabilityCheck = function(opts) {
                         return;
                     }
                     var row = btn.closest('tr');
-                    if (row) {
-                        row.classList.add('pk-deleted-restored');
-                        setTimeout(function () {
-                            row.parentNode && row.parentNode.removeChild(row);
-                            var countEl = panel.querySelector('.pk-deleted-recs-count');
-                            var tbody   = panel.querySelector('tbody');
-                            var remaining = tbody ? tbody.querySelectorAll('tr').length : 0;
-                            if (countEl) {
-                                countEl.textContent = remaining;
-                                countEl.style.display = remaining > 0 ? '' : 'none';
-                            }
-                            if (remaining === 0) {
-                                var wrap = panel.querySelector('.pk-deleted-recs-table-wrap');
-                                var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
-                                if (wrap)    wrap.style.display = 'none';
-                                if (emptyEl) emptyEl.style.display = '';
-                            }
-                        }, 500);
-                    }
+                    if (row) row.classList.add('pk-deleted-restored');
+                    var recIdDone = btn.getAttribute('data-rec-id');
+                    setTimeout(function () {
+                        if (panel.__dt) {
+                            panel.__dt.rows(function (i, data, node) {
+                                return node.getAttribute('data-rec-id') === recIdDone;
+                            }).remove().draw(false);
+                        }
+                        var remaining = panel.__dt ? panel.__dt.rows().count() : 0;
+                        var countEl = panel.querySelector('.pk-deleted-recs-count');
+                        if (countEl) {
+                            countEl.textContent = remaining;
+                            countEl.style.display = remaining > 0 ? '' : 'none';
+                        }
+                        if (remaining === 0) {
+                            var wrap = panel.querySelector('.pk-deleted-recs-table-wrap');
+                            var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
+                            if (wrap)    wrap.style.display = 'none';
+                            if (emptyEl) emptyEl.style.display = '';
+                        }
+                    }, 500);
                 })
                 .catch(function () {
                     alert('Network error.');
