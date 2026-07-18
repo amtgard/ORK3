@@ -6,11 +6,18 @@
  * Expects $AwardRecommendations, $IsLoggedIn, $CanManageKingdom, $kingdom_name,
  * $kingdom_id to be in scope.
  */ ?>
+			<style>
+			.rm-inline-passlocal { display:inline-block; margin-left:6px; font-size:11px; color:#2c5f8b; border:1px solid rgba(44,95,139,.4); border-radius:3px; padding:0 5px; }
+			html[data-theme="dark"] .rm-inline-passlocal { color:#6fb0e6; }
+			</style>
 			<?php if ($IsLoggedIn): ?>
 			<div class="pk-tab-toolbar">
 				<button class="kn-btn kn-btn-secondary" onclick="knOpenRecModal()">
 					<i class="fas fa-star"></i> Recommend an Award
 				</button>
+				<?php if (($CanManageKingdom ?? false) || !empty($ViewerHasCircle)): ?>
+				<a class="kn-btn kn-btn-primary kn-manage-recs" href="<?= UIR ?>Recommendations/manage/kingdom/<?= (int)$kingdom_id ?>"><i class="fas fa-tasks"></i> Manage Recs</a>
+				<?php endif; ?>
 			</div>
 			<?php endif; ?>
 			<?php if (empty($AwardRecommendations)): ?>
@@ -19,9 +26,9 @@
 			<?php if (($CanManageKingdom ?? false) || !empty($ViewerHasCircle)): ?>
 			<div class="kn-rec-filter-bar">
 				<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="open">Open Recs</button>
-				<button class="kn-rec-filter-btn" data-filter="below">Below Rec'd</button>
+				<button class="kn-rec-filter-btn" data-filter="below">Below Rec&rsquo;d</button>
 				<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
-				<button class="kn-rec-filter-btn" data-filter="already">At or Above Rec'd</button>
+				<button class="kn-rec-filter-btn" data-filter="already">At or Above Rec&rsquo;d</button>
 				<button class="kn-rec-filter-btn" data-filter="all">All</button>
 				<?php if (!empty($ViewerHasCircle)): ?>
 				<button class="kn-rec-filter-btn" data-filter="mycircles"><i class="fas fa-users"></i> My Circles</button>
@@ -75,12 +82,12 @@
 						data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
 						<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
 						<td><?php if (!empty($rec['ParkId'])): ?><a href="<?= UIR ?>Park/profile/<?= (int)$rec['ParkId'] ?>"><?= htmlspecialchars($rec['ParkName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
-						<td><?= htmlspecialchars($rec['AwardName']) ?></td>
+						<td><?= htmlspecialchars($rec['AwardName']) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="rm-inline-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?></td>
 						<td style="white-space:nowrap">
-							<?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?>
+							<?php if ((int)$rec['Rank'] > 0): ?><span class="ladder-rank" data-lvl="<?= min((int)$rec['Rank'], 10) ?>"><?= (int)$rec['Rank'] ?></span><?php else: ?>&mdash;<?php endif; ?>
 							<?php if (!empty($rec['AlreadyHas'])): ?>
 							<span class="pk-rec-has-tip"
-								title="<?= (int)$rec['Rank'] > 0 ? 'Player is currently at rank ' . (int)$rec['CurrentRank'] . ' as of ' . htmlspecialchars($rec['CurrentRankDate'] ?? '') : 'Player already has this award (granted ' . htmlspecialchars($rec['CurrentRankDate'] ?? 'unknown date') . ')' ?>">
+								data-tip="<?= (int)$rec['Rank'] > 0 ? 'Player is currently at rank ' . (int)$rec['CurrentRank'] . ' as of ' . htmlspecialchars($rec['CurrentRankDate'] ?? '') : 'Player already has this award (granted ' . htmlspecialchars($rec['CurrentRankDate'] ?? 'unknown date') . ')' ?>">
 								<i class="fas fa-info-circle"></i>
 							</span>
 							<?php endif; ?>
@@ -106,16 +113,6 @@
 							<?php endif; ?>
 							<?php if (!empty($rec['ViewerCanSecond'])): ?>
 							<button class="rs-action-btn" data-rec="<?= (int)$rec['RecommendationsId'] ?>" data-award="<?= htmlspecialchars($rec['AwardName'] ?? '', ENT_QUOTES) ?>" data-recipient="<?= htmlspecialchars($rec['Persona'] ?? '', ENT_QUOTES) ?>" data-rstip="Second this recommendation and add your feedback."><i class="fas fa-plus"></i></button>
-							<?php endif; ?>
-							<?php if ($CanManageKingdom ?? false): ?>
-							<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
-								data-rec="<?= htmlspecialchars(json_encode(['RecommendationsId'=>(int)$rec['RecommendationsId'],'MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''])) ?>">
-								<i class="fas fa-medal"></i> Grant
-							</button>
-							<button class="pk-rec-dismiss-btn"
-								data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
-								<i class="fas fa-times"></i> Delete
-							</button>
 							<?php endif; ?>
 						</td>
 						<?php endif; ?>

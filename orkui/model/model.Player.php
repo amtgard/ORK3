@@ -206,8 +206,24 @@ class Model_Player extends Model {
 		return $this->Player->DeleteAwardRecommendation($request);
 	}
 
+	function resolve_player_recommendation_cluster($request) {
+		return $this->Player->ResolveRecommendationCluster($request);
+	}
+
 	function restore_player_recommendation($request) {
 		return $this->Player->RestoreAwardRecommendation($request);
+	}
+
+	function snooze_recommendation($request) {
+		return $this->Player->SnoozeAwardRecommendation($request);
+	}
+
+	function unsnooze_recommendation($request) {
+		return $this->Player->UnsnoozeAwardRecommendation($request);
+	}
+
+	function set_recommendation_passed_to_local($request) {
+		return $this->Player->SetRecommendationPassedToLocal($request);
 	}
 
 	function remove_heraldry($request) {

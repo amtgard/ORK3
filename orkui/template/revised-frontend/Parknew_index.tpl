@@ -252,6 +252,7 @@
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/rank-pill.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/rank-pill.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/ork-datatables.css?v=<?= filemtime(__DIR__ . '/style/ork-datatables.css') ?>">
 
@@ -614,7 +615,7 @@
 					<?php endif; ?>
 				</li>
 				<?php endif; ?>
-				<?php if (!empty($CanAdminPark)): ?>
+				<?php if (!empty($CanManagePark) || !empty($CanManageCourt)): ?>
 				<li data-pktab="admin">
 					<i class="fas fa-cog"></i><span class="pk-tab-label"> Admin Tasks</span>
 				</li>
@@ -1269,7 +1270,8 @@
 							<li><a href="<?= UIR ?>Reports/player_awards&Ladder=0&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Player Awards</a></li>
 							<li><a href="<?= UIR ?>Reports/class_masters&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Class Masters</a></li>
 							<li><a href="<?= UIR ?>Reports/ladder_grid&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Ladder Award Grid</a></li>
-											<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Custom Awards</a></li>
+							<li><a href="<?= UIR ?>Reports/custom_awards&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>">Custom Awards</a></li>
+							<li><a href="<?= UIR ?>Reports/courts&KingdomId=<?= $kingdom_id ?>&ParkId=<?= $park_id ?>"><i class="fas fa-gavel"></i> Court Report</a></li>
 						</ul>
 					</div>
 					<?php endif; ?>
@@ -1277,9 +1279,10 @@
 				</div>
 			</div>
 
-			<!-- Admin Tab -->
-			<?php if (!empty($CanAdminPark)): ?>
+			<!-- Admin Tab (now also hosts Court Planner as a collapsible subsection) -->
+			<?php if (!empty($CanAdminPark) || !empty($CanManageCourt)): ?>
 			<div class="pk-tab-panel" id="pk-tab-admin" style="display:none">
+				<?php if (!empty($CanAdminPark)): ?>
 				<div class="kn-report-cols">
 					<div class="kn-report-group">
 						<h5><i class="fas fa-users-cog"></i> Players</h5>
@@ -1297,17 +1300,367 @@
 						</ul>
 					</div>
 				</div>
+				<?php endif; ?>
+
+				<!-- Court Planner subsection (relocated from former top-level tab) -->
+				<?php if (!empty($CanManageCourt)): ?>
+				<?php $_cpOpen = !empty($CourtList); ?>
+				<div class="pk-cp-section<?= $_cpOpen ? ' pk-cp-open' : '' ?>" id="pk-cp-section">
+					<button type="button" class="pk-cp-header" onclick="pkCpToggleSection()" aria-expanded="<?= $_cpOpen ? 'true' : 'false' ?>">
+						<span class="pk-cp-header-title"><i class="fas fa-gavel"></i> Court Planner<?php if (!empty($CourtList)): ?> <span class="pk-cp-header-count">(<?= count($CourtList) ?>)</span><?php endif; ?></span>
+						<i class="fas fa-chevron-down pk-cp-chevron"></i>
+					</button>
+					<div class="pk-cp-body" id="pk-cp-body"<?= $_cpOpen ? '' : ' style="display:none"' ?>>
+			<style>
+			.pk-cp-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+			.pk-cp-court-card { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:14px 18px; margin-bottom:10px; display:flex; align-items:center; gap:14px; transition:box-shadow .15s; }
+			.pk-cp-court-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.1); }
+			.pk-cp-court-date { font-size:13px; color:#718096; white-space:nowrap; min-width:88px; }
+			.pk-cp-court-info { flex:1; }
+			.pk-cp-court-name { font-weight:700; font-size:15px; color:#2d3748; }
+			.pk-cp-court-meta { font-size:12px; color:#718096; margin-top:2px; }
+			.pk-cp-court-badges { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+			.pk-cp-badge { display:inline-block; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; }
+			.pk-cp-badge-count { background:#edf2f7; color:#4a5568; padding:3px 9px; border-radius:12px; font-size:11px; }
+			.pk-cp-btn-link { background:none; border:1px solid #cbd5e0; color:#4a5568; padding:5px 12px; border-radius:5px; font-size:12px; cursor:pointer; text-decoration:none; display:inline-block; }
+			.pk-cp-btn-link:hover { background:#f7fafc; color:#2d3748; }
+			.pk-cp-empty { text-align:center; padding:48px 24px; color:#718096; font-size:15px; border:1px dashed #e2e8f0; border-radius:8px; }
+			.kn-rec-age-badge { font-size:11px; padding:1px 6px; border-radius:10px; font-weight:600; margin-left:4px; }
+			.kn-rec-age-green  { background:#c6f6d5; color:#22543d; }
+			.kn-rec-age-yellow { background:#fefcbf; color:#744210; }
+			.kn-rec-age-orange { background:#fed7aa; color:#7b341e; }
+			.kn-rec-age-red    { background:#fed7d7; color:#742a2a; }
+			.pk-rec-passlocal { display:inline-block; margin-left:6px; font-size:11px; color:#2c5f8b; border:1px solid rgba(44,95,139,.4); border-radius:3px; padding:0 5px; white-space:nowrap; }
+			html[data-theme="dark"] .pk-rec-passlocal { color:#6fb0e6; border-color:rgba(111,176,230,.4); }
+			.pk-rec-passlocal[data-tip] { position:relative; }
+			.pk-rec-passlocal[data-tip]:hover::after { content:attr(data-tip); position:absolute; left:0; top:calc(100% + 4px); white-space:normal; width:220px; background:#1a202c; color:#fff; font-size:11px; padding:6px 8px; border-radius:4px; z-index:50; }
+			/* Delegated-by-the-Kingdom pinned section (officer-only, to-schedule list) */
+			.pk-delegated { border:1px solid rgba(44,95,139,.4); background:rgba(44,95,139,.07); border-radius:8px; padding:12px 16px; margin-bottom:16px; }
+			.pk-delegated-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+			.pk-delegated-title { margin:0; font-size:14px; font-weight:700; color:#2c5f8b !important; display:flex; align-items:center; gap:8px; }
+			.pk-delegated-title i { color:#2c5f8b; }
+			.pk-delegated-count { font-weight:600; color:#718096; }
+			.pk-delegated-help { font-size:12px; color:#718096; margin:6px 0 10px; }
+			.pk-delegated-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+			.pk-delegated-item { font-size:13px; color:#2d3748; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+			.pk-delegated-item a { font-weight:600; }
+			.pk-delegated-sep { color:#cbd5e0; }
+			.pk-delegated-award { color:#4a5568; }
+			.pk-delegated-rank { color:#4a5568; }
+			.pk-delegated-approved { margin-left:auto; color:#718096; font-size:12px; }
+			html[data-theme="dark"] .pk-delegated { border-color:rgba(111,176,230,.4); background:rgba(111,176,230,.08); }
+			html[data-theme="dark"] .pk-delegated-title { color:#6fb0e6 !important; }
+			html[data-theme="dark"] .pk-delegated-title i { color:#6fb0e6; }
+			html[data-theme="dark"] .pk-delegated-count { color:#a0aec0; }
+			html[data-theme="dark"] .pk-delegated-help { color:#a0aec0; }
+			html[data-theme="dark"] .pk-delegated-item { color:#e2e8f0; }
+			html[data-theme="dark"] .pk-delegated-award { color:#cbd5e0; }
+			html[data-theme="dark"] .pk-delegated-rank { color:#cbd5e0; }
+			html[data-theme="dark"] .pk-delegated-approved { color:#a0aec0; }
+			html[data-theme="dark"] .pk-delegated-sep { color:#4a5568; }
+			.pk-delegated-toggle { display:flex; align-items:center; gap:10px; background:none; border:none; cursor:pointer; padding:0; text-align:left; flex:1; min-width:0; }
+			.pk-delegated-chevron { color:#a0aec0; flex-shrink:0; }
+			.pk-delegated-body { padding-top:2px; }
+			/* Collapsible subsection chrome (relocated court) */
+			.pk-cp-section { border-top:1px solid #e2e8f0; margin-top:24px; padding-top:4px; }
+			.pk-cp-header { display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; cursor:pointer; padding:10px 4px; font-size:15px; font-weight:700; color:#2d3748; text-align:left; }
+			.pk-cp-header:hover { color:#1a202c; }
+			.pk-cp-header-title i.fa-gavel { margin-right:8px; color:#4a5568; }
+			.pk-cp-header-count { font-weight:600; color:#718096; font-size:13px; }
+			.pk-cp-chevron { transition:transform .15s; color:#a0aec0; }
+			.pk-cp-section.pk-cp-open .pk-cp-chevron { transform:rotate(180deg); }
+			.pk-cp-body { padding-top:8px; }
+			html[data-theme="dark"] .pk-cp-section { border-top-color:#2d3748; }
+			html[data-theme="dark"] .pk-cp-header { color:#e2e8f0; }
+			html[data-theme="dark"] .pk-cp-header:hover { color:#fff; }
+			html[data-theme="dark"] .pk-cp-header-title i.fa-gavel { color:#a0aec0; }
+			html[data-theme="dark"] .pk-cp-court-card { background:#1a202c; border-color:#2d3748; }
+			html[data-theme="dark"] .pk-cp-court-name { color:#e2e8f0; }
+			html[data-theme="dark"] .pk-cp-court-date { color:#a0aec0; }
+			html[data-theme="dark"] .pk-cp-court-meta { color:#a0aec0; }
+			html[data-theme="dark"] .pk-cp-badge-count { background:#2d3748; color:#cbd5e0; }
+			html[data-theme="dark"] .pk-cp-btn-link { border-color:#4a5568; color:#cbd5e0; }
+			html[data-theme="dark"] .pk-cp-btn-link:hover { background:#2d3748; color:#fff; }
+			html[data-theme="dark"] .pk-cp-empty { border-color:#2d3748; color:#a0aec0; }
+			/* Mode + staged badges */
+			.pk-cp-badge-mode { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; background:#ebf8ff; color:#2b6cb0; }
+			.pk-cp-badge-mode-plan { background:#faf089; color:#744210; }
+			.pk-cp-badge-staged { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; background:#fefcbf; color:#975a16; box-shadow:inset 0 0 0 1px rgba(151,90,22,.25); }
+			.pk-cp-badge-mode[data-tip]::after, .pk-cp-badge-staged[data-tip]::after { white-space:normal; width:max-content; max-width:240px; }
+			html[data-theme="dark"] .pk-cp-badge-mode { background:#1a2f45; color:#90cdf4; }
+			html[data-theme="dark"] .pk-cp-badge-mode-plan { background:#3d3512; color:#f6e05e; }
+			html[data-theme="dark"] .pk-cp-badge-staged { background:#3d3512; color:#f6e05e; box-shadow:inset 0 0 0 1px rgba(246,224,94,.3); }
+			/* Mode selector (create-court modal) */
+			.pk-cp-mode-opts { display:flex; gap:10px; }
+			.pk-cp-mode-opt { flex:1; border:1px solid #cbd5e0; border-radius:6px; padding:10px 12px; cursor:pointer; display:block; transition:border-color .12s,background .12s,box-shadow .12s; }
+			.pk-cp-mode-opt input { position:absolute; opacity:0; pointer-events:none; }
+			.pk-cp-mode-title { font-size:13px; font-weight:700; color:#2d3748; display:flex; align-items:center; gap:6px; }
+			.pk-cp-mode-desc { font-size:11px; color:#718096; margin-top:3px; line-height:1.35; font-weight:400; }
+			.pk-cp-mode-opt.pk-cp-mode-sel { border-color:#2c5282; background:#ebf2fb; box-shadow:0 0 0 1px #2c5282; }
+			html[data-theme="dark"] .pk-cp-mode-opt { border-color:#2d3748; }
+			html[data-theme="dark"] .pk-cp-mode-title { color:#e2e8f0; }
+			html[data-theme="dark"] .pk-cp-mode-desc { color:#a0aec0; }
+			html[data-theme="dark"] .pk-cp-mode-opt.pk-cp-mode-sel { border-color:#4299e1; background:#1a2f45; box-shadow:0 0 0 1px #4299e1; }
+			</style>
+			<div class="pk-cp-toolbar">
+				<span style="font-size:13px;color:#718096"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
+				<button class="pk-btn pk-btn-primary" onclick="pkCpOpenNewCourt()">
+					<i class="fas fa-plus"></i> Plan a Court
+				</button>
+			</div>
+			<?php
+				$_cpStatusLabel = ['draft' => 'Draft', 'published' => 'Published', 'complete' => 'Complete'];
+				$_cpStatusColor = ['draft' => '#718096', 'published' => '#2b6cb0', 'complete' => '#276749'];
+				$_cpStatusBg    = ['draft' => '#edf2f7', 'published' => '#ebf8ff', 'complete' => '#f0fff4'];
+			?>
+			<?php if (empty($CourtList)): ?>
+			<div class="pk-cp-empty">
+				<i class="fas fa-gavel" style="font-size:32px;margin-bottom:12px;display:block;opacity:.3"></i>
+				No courts planned yet. Click <strong>Plan a Court</strong> to get started.
+			</div>
+			<?php else: ?>
+			<?php foreach ($CourtList as $_court): ?>
+			<?php
+				$_st     = $_court['Status'];
+				$_lbl    = $_cpStatusLabel[$_st] ?? $_st;
+				$_clr    = $_cpStatusColor[$_st] ?? '#718096';
+				$_bg     = $_cpStatusBg[$_st]    ?? '#edf2f7';
+				$_mode   = $_court['Mode'] ?? 'run';
+				$_staged = (int)($_court['StagedCount'] ?? 0);
+			?>
+			<div class="pk-cp-court-card">
+				<div class="pk-cp-court-date">
+					<?= $_court['CourtDate'] ? date('M j, Y', strtotime($_court['CourtDate'])) : '<em style="color:#a0aec0">No date</em>' ?>
+				</div>
+				<div class="pk-cp-court-info">
+					<div class="pk-cp-court-name"><?= htmlspecialchars($_court['Name']) ?></div>
+					<?php if ($_court['EventName']): ?>
+					<div class="pk-cp-court-meta"><i class="fas fa-calendar-alt" style="margin-right:3px"></i><?= htmlspecialchars($_court['EventName']) ?></div>
+					<?php endif; ?>
+				</div>
+				<div class="pk-cp-court-badges">
+					<span class="pk-cp-badge" style="background:<?= $_bg ?>;color:<?= $_clr ?>"><?= $_lbl ?></span>
+					<?php if ($_mode === 'plan'): ?>
+					<span class="pk-cp-badge-mode pk-cp-badge-mode-plan" data-tip="Locked as a plan — prepared for someone to record later."><i class="fas fa-clipboard-list"></i> Plan</span>
+					<?php else: ?>
+					<span class="pk-cp-badge-mode" data-tip="Run at court — awards granted live during the ceremony."><i class="fas fa-bullhorn"></i> Run</span>
+					<?php endif; ?>
+					<?php if ($_staged > 0 && $_st !== 'complete'): ?>
+					<span class="pk-cp-badge-staged" data-tip="Grants captured but not yet finalized — open to finalize."><i class="fas fa-hourglass-half"></i> <?= $_staged ?> staged</span>
+					<?php endif; ?>
+					<span class="pk-cp-badge-count"><i class="fas fa-award" style="margin-right:3px"></i><?= (int)$_court['AwardCount'] ?></span>
+					<a href="<?= UIR ?>Court/detail/<?= (int)$_court['CourtId'] ?>" class="pk-cp-btn-link">
+						Open <i class="fas fa-arrow-right"></i>
+					</a>
+				</div>
+			</div>
+			<?php endforeach; ?>
+			<?php endif; ?>
+
+			<!-- New Court Modal (park-scoped) -->
+			<div class="pk-overlay" id="pk-cp-new-court-modal" style="display:none">
+				<div class="pk-modal-box" style="max-width:480px">
+					<div class="pk-modal-header">
+						<h3 class="pk-modal-title"><i class="fas fa-gavel" style="margin-right:8px;color:#4a5568"></i>Plan a New Court</h3>
+						<button class="pk-modal-close-btn" onclick="pkCpCloseNewCourt()" aria-label="Close">&times;</button>
+					</div>
+					<div class="pk-modal-body">
+						<div class="pk-acct-field">
+							<label>Court Name <span style="color:#e53e3e">*</span></label>
+							<input type="text" id="pk-cp-new-name" placeholder="Summer Coronation Court&#x2026;" autocomplete="off">
+						</div>
+						<?php if (!empty($CourtUpcomingEvents)): ?>
+						<div class="pk-acct-field">
+							<label>Link to Event (optional)</label>
+							<select id="pk-cp-new-event" onchange="pkCpOnEventChange(this,'pk-cp-new-date')">
+								<option value="0" data-start="">— None —</option>
+								<?php foreach ($CourtUpcomingEvents as $_ev): ?>
+								<option value="<?= (int)$_ev['EventCalendarDetailId'] ?>" data-start="<?= $_ev['EventStart'] ? date('Y-m-d', strtotime($_ev['EventStart'])) : '' ?>">
+									<?= htmlspecialchars($_ev['Name']) ?><?= $_ev['EventStart'] ? ' (' . date('M j', strtotime($_ev['EventStart'])) . ')' : '' ?>
+								</option>
+								<?php endforeach; ?>
+							</select>
+						</div>
+						<?php endif; ?>
+						<div class="pk-acct-field">
+							<label>Date</label>
+							<input type="date" id="pk-cp-new-date" >
+						</div>
+						<div class="pk-acct-field">
+							<label>How will this court be handled?</label>
+							<div class="pk-cp-mode-opts">
+								<label class="pk-cp-mode-opt pk-cp-mode-sel" id="pk-cp-mode-run-opt">
+									<input type="radio" name="pk-cp-mode" value="run" checked onchange="pkCpSyncMode()">
+									<span class="pk-cp-mode-title"><i class="fas fa-bullhorn"></i> Run at Court</span>
+									<span class="pk-cp-mode-desc">I'll grant awards live during the ceremony.</span>
+								</label>
+								<label class="pk-cp-mode-opt" id="pk-cp-mode-plan-opt">
+									<input type="radio" name="pk-cp-mode" value="plan" onchange="pkCpSyncMode()">
+									<span class="pk-cp-mode-title"><i class="fas fa-clipboard-list"></i> Lock as Plan</span>
+									<span class="pk-cp-mode-desc">I'm preparing the order of court for someone to record later.</span>
+								</label>
+							</div>
+						</div>
+						<div id="pk-cp-new-error" class="pk-form-error" style="display:none"></div>
+					</div>
+					<div class="pk-modal-footer">
+						<button class="pk-btn-ghost" onclick="pkCpCloseNewCourt()">Cancel</button>
+						<button class="pk-btn pk-btn-primary" onclick="pkCpSubmitNewCourt()">
+							<i class="fas fa-plus"></i> Create Court
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<script>
+			(function() {
+				if (!<?= !empty($CanManageCourt) ? 'true' : 'false' ?>) return;
+				var uir       = '<?= UIR ?>';
+				var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;
+				var parkId    = <?= (int)($park_id ?? 0) ?>;
+
+				window.pkCpToggleSection = function() {
+					var sec = document.getElementById('pk-cp-section');
+					var body = document.getElementById('pk-cp-body');
+					if (!sec || !body) return;
+					var open = sec.classList.toggle('pk-cp-open');
+					body.style.display = open ? '' : 'none';
+					var hdr = sec.querySelector('.pk-cp-header');
+					if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
+				};
+
+				window.pkDelegatedToggle = function() {
+					var sec = document.getElementById('pk-delegated');
+					var body = document.getElementById('pk-delegated-body');
+					if (!sec || !body) return;
+					var open = sec.classList.toggle('pk-delegated-open');
+					body.style.display = open ? '' : 'none';
+					var hdr = sec.querySelector('.pk-delegated-toggle');
+					if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
+					var ico = sec.querySelector('.pk-delegated-chevron');
+					if (ico) { ico.classList.toggle('fa-chevron-up', open); ico.classList.toggle('fa-chevron-down', !open); }
+				};
+
+				window.pkCpOnEventChange = function(sel, dateId) {
+					var opt = sel.options[sel.selectedIndex];
+					var start = opt ? opt.getAttribute('data-start') : '';
+					if (start) document.getElementById(dateId).value = start;
+				};
+
+				window.pkCpSyncMode = function() {
+					var runOpt  = document.getElementById('pk-cp-mode-run-opt');
+					var planOpt = document.getElementById('pk-cp-mode-plan-opt');
+					var planEl  = planOpt ? planOpt.querySelector('input') : null;
+					var isPlan  = planEl && planEl.checked;
+					if (runOpt)  runOpt.classList.toggle('pk-cp-mode-sel', !isPlan);
+					if (planOpt) planOpt.classList.toggle('pk-cp-mode-sel', !!isPlan);
+				};
+
+				window.pkCpOpenNewCourt = function() {
+					document.getElementById('pk-cp-new-name').value = '';
+					document.getElementById('pk-cp-new-date').value = '';
+					var evEl = document.getElementById('pk-cp-new-event');
+					if (evEl) evEl.value = '0';
+					var runEl = document.querySelector('input[name="pk-cp-mode"][value="run"]');
+					if (runEl) runEl.checked = true;
+					pkCpSyncMode();
+					document.getElementById('pk-cp-new-error').style.display = 'none';
+					var modal = document.getElementById('pk-cp-new-court-modal');
+					modal.style.display = 'flex';
+					setTimeout(function() { document.getElementById('pk-cp-new-name').focus(); }, 50);
+				};
+
+				window.pkCpCloseNewCourt = function() {
+					document.getElementById('pk-cp-new-court-modal').style.display = 'none';
+				};
+
+				window.pkCpSubmitNewCourt = function() {
+					var name    = document.getElementById('pk-cp-new-name').value.trim();
+					var date    = document.getElementById('pk-cp-new-date').value;
+					var evEl    = document.getElementById('pk-cp-new-event');
+					var eventId = evEl ? evEl.value : '0';
+					var errEl   = document.getElementById('pk-cp-new-error');
+					if (!name) { errEl.textContent = 'Please enter a court name.'; errEl.style.display = 'block'; return; }
+					errEl.style.display = 'none';
+					var modeEl = document.querySelector('input[name="pk-cp-mode"]:checked');
+					var mode   = modeEl ? modeEl.value : 'run';
+					var fd = new FormData();
+					fd.append('KingdomId', kingdomId);
+					fd.append('ParkId', parkId);
+					fd.append('Name', name);
+					fd.append('CourtDate', date);
+					fd.append('EventCalendarDetailId', eventId);
+					fd.append('Mode', mode);
+					fetch(uir + 'CourtAjax/create_court', {
+						method: 'POST', body: fd,
+						headers: { 'X-Requested-With': 'XMLHttpRequest' }
+					})
+					.then(function(r) { return r.json(); })
+					.then(function(data) {
+						if (data.status === 0 && data.court_id) {
+							window.location.href = uir + 'Court/detail/' + data.court_id;
+						} else {
+							errEl.textContent = data.error || 'An error occurred.';
+							errEl.style.display = 'block';
+						}
+					})
+					.catch(function(e) { errEl.textContent = 'Request failed: ' + e.message; errEl.style.display = 'block'; });
+				};
+
+				var modal = document.getElementById('pk-cp-new-court-modal');
+				modal.addEventListener('click', function(e) { if (e.target === this) pkCpCloseNewCourt(); });
+				document.addEventListener('keydown', function(e) { if (e.key === 'Escape') pkCpCloseNewCourt(); });
+			})();
+			</script>
+
+					</div>
+				</div>
+				<?php endif; ?>
 			</div>
 			<?php endif; ?>
 
 			<!-- Recommendations Tab -->
 			<?php if (!empty($ShowRecsTab)): ?>
 			<div class="pk-tab-panel" id="pk-tab-recommendations" style="display:none">
+				<?php if (!empty($CanAdminPark)):
+					$pkDelegated = array_values(array_filter($AwardRecommendations ?? [], function ($r) {
+						return !empty($r['PassedToLocal']) && empty($r['IsOnCourt']);
+					}));
+				?>
+				<?php if (!empty($pkDelegated)): ?>
+				<div class="pk-delegated pk-delegated-open" id="pk-delegated">
+					<div class="pk-delegated-head">
+						<button type="button" class="pk-delegated-toggle" onclick="pkDelegatedToggle()" aria-expanded="true">
+							<span class="pk-delegated-title"><i class="fas fa-arrow-down"></i> Delegated by the Kingdom &mdash; to schedule <span class="pk-delegated-count">(<?= count($pkDelegated) ?>)</span></span>
+							<i class="fas fa-chevron-up pk-delegated-chevron"></i>
+						</button>
+						<a class="pk-btn pk-btn-secondary pk-delegated-manage" href="<?= UIR ?>Recommendations/manage/park/<?= (int)$park_id ?>?passlocal=1">Manage <i class="fas fa-arrow-right"></i></a>
+					</div>
+					<div class="pk-delegated-body" id="pk-delegated-body">
+					<div class="pk-delegated-help">The kingdom granted your park authority to give these. Schedule them into a court.</div>
+					<ul class="pk-delegated-list">
+						<?php foreach ($pkDelegated as $dr): ?>
+						<li class="pk-delegated-item">
+							<a href="<?= UIR ?>Player/profile/<?= (int)$dr['MundaneId'] ?>"><?= htmlspecialchars($dr['Persona']) ?></a>
+							<span class="pk-delegated-sep">&middot;</span>
+							<span class="pk-delegated-award"><?= htmlspecialchars(preg_replace('/^Order of(?:\s+the)?\s+/i', '', $dr['AwardName'])) ?></span>
+							<?php if ((int)$dr['Rank'] > 0): ?><span class="pk-delegated-rank">Rank <?= (int)$dr['Rank'] ?></span><?php endif; ?>
+							<?php if (!empty($dr['PassedToLocalAt'])): ?><span class="pk-delegated-approved">Approved on: <?= htmlspecialchars(date('F j, Y', strtotime($dr['PassedToLocalAt']))) ?></span><?php endif; ?>
+						</li>
+						<?php endforeach; ?>
+					</ul>
+				</div>
+				</div>
+				<?php endif; ?>
+				<?php endif; ?>
 				<?php if ($IsLoggedIn): ?>
 				<div class="pk-tab-toolbar">
-					<button class="pk-btn pk-btn-secondary" onclick="pkOpenRecModal()">
+					<button class="pk-btn pk-btn-secondary kn-rec-header-action" onclick="pkOpenRecModal()">
 						<i class="fas fa-star"></i> Recommend an Award
 					</button>
+					<?php if (!empty($CanAdminPark) || !empty($ViewerHasCircle)): ?>
+					<a class="pk-btn pk-btn-primary pk-manage-recs kn-rec-header-action" href="<?= UIR ?>Recommendations/manage/park/<?= (int)$park_id ?>"><i class="fas fa-tasks"></i> Manage Recs</a>
+					<?php endif; ?>
 				</div>
 				<?php endif; ?>
 				<?php if (empty($AwardRecommendations)): ?>
@@ -1316,13 +1669,14 @@
 				<?php if (!empty($CanAdminPark) || !empty($ViewerHasCircle)): ?>
 				<div class="kn-rec-filter-bar">
 					<button class="kn-rec-filter-btn kn-rec-filter-active" data-filter="open">Open Recs</button>
-					<button class="kn-rec-filter-btn" data-filter="below">Below Rec'd</button>
+					<button class="kn-rec-filter-btn" data-filter="below">Below Rec&rsquo;d</button>
 					<button class="kn-rec-filter-btn" data-filter="nonladder">Non-Ladder</button>
-					<button class="kn-rec-filter-btn" data-filter="already">At or Above Rec'd</button>
+					<button class="kn-rec-filter-btn" data-filter="already">At or Above Rec&rsquo;d</button>
 					<button class="kn-rec-filter-btn" data-filter="all">All</button>
 					<?php if (!empty($ViewerHasCircle)): ?>
 					<button class="kn-rec-filter-btn" data-filter="mycircles"><i class="fas fa-users"></i> My Circles</button>
 					<?php endif; ?>
+					<button class="kn-rec-filter-btn" data-filter="snoozed">Snoozed</button>
 					<span class="kn-rec-filter-info">
 						<button class="kn-rec-filter-info-btn" type="button" aria-label="Filter help"><i class="fas fa-question-circle"></i></button>
 						<div class="kn-rec-filter-popover">
@@ -1368,12 +1722,39 @@
 						<?php foreach ($AwardRecommendations as $rec): ?>
 						<tr class="pk-rec-row"
 							data-rec-id="<?= (int)$rec['RecommendationsId'] ?>" data-award-id="<?= (int)$rec['AwardId'] ?>"
+							data-snoozed="<?= !empty($rec['IsSnoozed']) ? '1' : '0' ?>"
+							data-passlocal="<?= !empty($rec['PassedToLocal']) ? '1' : '0' ?>"
 							data-filter="<?= !empty($rec['AlreadyHas']) ? 'already' : ((int)$rec['Rank'] > 0 ? 'below' : 'nonladder') ?>">
 							<td><a href="<?= UIR ?>Player/profile/<?= (int)$rec['MundaneId'] ?>"><?= htmlspecialchars($rec['Persona']) ?></a></td>
-							<td><?= htmlspecialchars($rec['AwardName']) ?></td>
-							<td><?= (int)$rec['Rank'] > 0 ? (int)$rec['Rank'] : '&mdash;' ?></td>
-							<td><?php if (!empty($rec['RecommendedById'])): ?><a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a><?php else: ?>&mdash;<?php endif; ?></td>
-							<td><?= htmlspecialchars($rec['DateRecommended']) ?></td>
+							<td><?= htmlspecialchars(preg_replace('/^Order of(?:\\s+the)?\\s+/i', '', $rec['AwardName'])) ?><?php if (!empty($rec['PassedToLocal'])): ?> <span class="pk-rec-passlocal" data-tip="The kingdom delegated this to the local park to award."><i class="fas fa-arrow-down"></i> passed to local</span><?php endif; ?></td>
+							<td style="white-space:nowrap">
+								<?php if ((int)$rec['Rank'] > 0): ?><span class="ladder-rank" data-lvl="<?= min((int)$rec['Rank'], 10) ?>"><?= (int)$rec['Rank'] ?></span><?php else: ?>&mdash;<?php endif; ?>
+								<?php if (!empty($rec['AlreadyHas'])): ?>
+								<span class="pk-rec-has-tip"
+									title="<?= (int)$rec['Rank'] > 0 ? 'Player is currently at rank ' . (int)$rec['CurrentRank'] . ' as of ' . htmlspecialchars($rec['CurrentRankDate'] ?? '') : 'Player already has this award (granted ' . htmlspecialchars($rec['CurrentRankDate'] ?? 'unknown date') . ')' ?>">
+									<i class="fas fa-info-circle"></i>
+								</span>
+								<?php endif; ?>
+							</td>
+							<td>
+									<?php if (!empty($rec['IsAnonymous']) && !($CallerIsOrkAdmin ?? false)): ?>
+										<span style="color:#718096;font-style:italic">Anonymous</span>
+									<?php elseif (!empty($rec['IsAnonymous']) && ($CallerIsOrkAdmin ?? false)): ?>
+										<a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars((string)$rec['RecommendedByName']) ?></a>
+										<span style="color:#a0aec0;font-size:11px">(anon)</span>
+									<?php elseif (!empty($rec['RecommendedById'])): ?>
+										<a href="<?= UIR ?>Player/profile/<?= (int)$rec['RecommendedById'] ?>"><?= htmlspecialchars($rec['RecommendedByName']) ?></a>
+									<?php else: ?>&mdash;<?php endif; ?>
+								</td>
+							<td><?= htmlspecialchars($rec['DateRecommended']) ?>
+<?php
+$_d = (int)($rec['AgeDays'] ?? 0);
+if ($_d < 1)        { $_al = 'today'; $_ac = 'kn-rec-age-green'; }
+elseif ($_d < 30)   { $_al = $_d.'d'; $_ac = 'kn-rec-age-green'; }
+elseif ($_d < 90)   { $_mo = round($_d/30); $_al = $_mo.'mo'; $_ac = 'kn-rec-age-yellow'; }
+elseif ($_d < 180)  { $_mo = round($_d/30); $_al = $_mo.'mo'; $_ac = 'kn-rec-age-orange'; }
+else                { $_y  = round($_d/365); $_al = $_y.'y+'; $_ac = 'kn-rec-age-red'; }
+?><span class="kn-rec-age-badge <?= $_ac ?>"><?= $_al ?></span></td>
 							<td class="pk-rec-notes">
 <?php if (!empty($rec['Reason'])): ?>
 							<span class="pk-rec-notes-short"><?= htmlspecialchars(mb_substr($rec['Reason'], 0, 50)) ?><?php if (mb_strlen($rec['Reason']) > 50): ?><span class="pk-rec-notes-ellipsis">&hellip; <button class="pk-rec-expand-btn" type="button">[&hellip;]</button></span><span class="pk-rec-notes-full" style="display:none"><?= htmlspecialchars(mb_substr($rec['Reason'], 50)) ?> <button class="pk-rec-expand-btn pk-rec-collapse-btn" type="button">[&laquo;]</button></span><?php endif; ?></span>
@@ -1396,16 +1777,6 @@
 								<?php endif; ?>
 								<?php if (!empty($rec['ViewerCanSecond'])): ?>
 								<button class="rs-action-btn" data-rec="<?= (int)$rec['RecommendationsId'] ?>" data-award="<?= htmlspecialchars($rec['AwardName'] ?? '', ENT_QUOTES) ?>" data-recipient="<?= htmlspecialchars($rec['Persona'] ?? '', ENT_QUOTES) ?>" data-rstip="Second this recommendation and add your feedback."><i class="fas fa-plus"></i></button>
-								<?php endif; ?>
-								<?php if (!empty($CanAdminPark)): ?>
-								<button class="pk-btn pk-btn-primary pk-rec-grant-btn"
-									data-rec="<?= htmlspecialchars(json_encode(['RecommendationsId'=>(int)$rec['RecommendationsId'],'MundaneId'=>(int)$rec['MundaneId'],'Persona'=>$rec['Persona'],'KingdomAwardId'=>(int)$rec['KingdomAwardId'],'Rank'=>(int)$rec['Rank'],'Reason'=>$rec['Reason']??''], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES) ?>">
-									<i class="fas fa-medal"></i> Grant
-								</button>
-								<button class="pk-rec-dismiss-btn"
-									data-rec-id="<?= (int)$rec['RecommendationsId'] ?>">
-									<i class="fas fa-times"></i> Delete
-								</button>
 								<?php endif; ?>
 							</td>
 							<?php endif; ?>
@@ -1893,6 +2264,13 @@ var PkBannerConfig = {
 				<label for="pk-rec-reason">Reason <span style="color:#e53e3e">*</span></label>
 				<input type="text" id="pk-rec-reason" maxlength="400" placeholder="Why should this player receive this award?" />
 				<span class="pk-char-count" id="pk-rec-char-count">400 characters remaining</span>
+			</div>
+			<div class="pk-acct-field" style="margin-top:12px">
+				<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+					<input type="checkbox" id="pk-rec-anon" value="1" style="width:16px;height:16px;cursor:pointer">
+					<span>Submit Anonymously</span>
+				</label>
+				<div style="font-size:11px;color:#718096;margin-top:3px;padding-left:24px">Your name will not be visible to others on this recommendation</div>
 			</div>
 		</div>
 		<div class="pk-modal-footer">
@@ -3260,8 +3638,8 @@ html[data-theme="dark"] #pk-addday-startdate { color-scheme:dark; }
 <?php endif; ?>
 
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
-
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+
 <script>
 function pkCopyEventLink(el) {
 	var url = el.getAttribute('data-url');
@@ -3303,10 +3681,10 @@ $(function() {
 			language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' }
 		});
 	}
-});
-window.pkRecPrint = function() { if (window.pkRecDT) window.recsExportPrint(window.pkRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($park_name)) ?>'); };
+	window.pkRecPrint = function() { if (window.pkRecDT) window.recsExportPrint(window.pkRecDT, 'Award Recommendations \u2014 <?= htmlspecialchars(addslashes($park_name)) ?>'); };
 window.pkRecCsv   = function() { if (window.pkRecDT) window.recsExportCsv(window.pkRecDT, 'recs-<?= preg_replace('/[^a-z0-9]+/i', '-', $park_name) ?>.csv'); };
-initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
+	initEmailSpellCheck('pk-addplayer-email', 'pk-addplayer-email-suggestion');
+});
 window.pkUsernameCheck = initUsernameAvailabilityCheck({
 	inputId:     'pk-addplayer-username',
 	statusId:    'pk-addplayer-username-status',

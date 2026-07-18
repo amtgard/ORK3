@@ -126,6 +126,13 @@ html[data-theme="dark"] .kn-btn-primary:hover:not(:disabled),
 html[data-theme="dark"] .pk-btn-primary:hover:not(:disabled) {
   background: #3182ce;
 }
+/* "Manage Recommendations" is an <a> styled as a button; beat the global
+   dark-mode link color (html[data-theme="dark"] #theme_container a -> cyan)
+   so its text stays white. */
+html[data-theme="dark"] .pk-manage-recs,
+html[data-theme="dark"] .kn-manage-recs,
+html[data-theme="dark"] .pk-manage-recs:hover,
+html[data-theme="dark"] .kn-manage-recs:hover { color: #fff !important; }
 html[data-theme="dark"] .pn-btn-secondary,
 html[data-theme="dark"] .kn-btn-secondary,
 html[data-theme="dark"] .pk-btn-secondary {
@@ -2779,9 +2786,10 @@ html[data-theme="dark"] .kn-ac-item.kn-ac-suspended:hover, html[data-theme="dark
 .kn-btn-ghost:hover { background:#f7fafc; border-color:#e2e8f0; }
 .kn-badge-ladder { display:inline-flex; align-items:center; gap:4px; padding:1px 8px; border-radius:12px; font-size:11px; font-weight:700; background:var(--ork-badge-gold-bg); color:var(--ork-badge-gold-text); }
 /* Reuse modal structure for kn- award modal */
-#kn-award-overlay, #kn-rec-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
-#kn-award-overlay.kn-open, #kn-rec-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
+#kn-award-overlay, #kn-rec-overlay, #kn-addcourt-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
+#kn-award-overlay.kn-open, #kn-rec-overlay.kn-open, #kn-addcourt-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
 #kn-award-overlay .kn-modal-box, #kn-rec-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; width:90vw; max-width:520px; }
+#kn-addcourt-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); padding:24px; width:90vw; max-width:540px; }
 #kn-award-overlay .kn-modal-header, #kn-rec-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; background:var(--ork-bg-secondary); }
 /* Reset global h1-h6 box styles for all kn modal titles (fights orkui.css gray box) */
 .kn-modal-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
@@ -2791,6 +2799,18 @@ html[data-theme="dark"] .kn-ac-item.kn-ac-suspended:hover, html[data-theme="dark
 #kn-award-overlay .kn-modal-body, #kn-rec-overlay .kn-modal-body { padding:20px; overflow-y:auto; flex:1; }
 #kn-rec-overlay .kn-modal-body { overflow: visible; }
 #kn-award-overlay .kn-modal-footer, #kn-rec-overlay .kn-modal-footer { padding:14px 20px; border-top:1px solid var(--ork-border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; background:var(--ork-bg-secondary); }
+#kn-cp-new-court-modal { position:fixed; inset:0; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; z-index:var(--z-modal, 1100); }
+#kn-cp-new-court-modal .kn-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; width:90vw; max-width:480px; }
+#kn-cp-new-court-modal .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; }
+#kn-cp-new-court-modal .kn-modal-title { font-size:16px; font-weight:700; color:var(--ork-text, #1a202c); margin:0; background:transparent; border:none; padding:0; border-radius:0; text-shadow:none; }
+#kn-cp-new-court-modal .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted, #a0aec0); cursor:pointer; line-height:1; padding:0 4px; }
+#kn-cp-new-court-modal .kn-modal-close-btn:hover { color:var(--ork-text, #4a5568); }
+#kn-cp-new-court-modal .kn-modal-body { padding:20px; overflow-y:auto; flex:1; }
+#kn-cp-new-court-modal .kn-modal-footer { padding:14px 20px; border-top:1px solid var(--ork-border, #e2e8f0); display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-shrink:0; background:var(--ork-bg-secondary); }
+#kn-cp-new-court-modal .kn-acct-field { margin-bottom:14px; }
+#kn-cp-new-court-modal .kn-acct-field label { display:block; font-size:12px; font-weight:600; color:var(--ork-text-secondary, #4a5568); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.04em; }
+#kn-cp-new-court-modal .kn-acct-field input, #kn-cp-new-court-modal .kn-acct-field select { width:100%; padding:8px 10px; border:1.5px solid var(--ork-input-border, #e2e8f0); border-radius:6px; font-size:13px; color:var(--ork-text, #2d3748); background:var(--ork-input-bg, #fff); box-sizing:border-box; }
+#kn-cp-new-court-modal .kn-acct-field input:focus, #kn-cp-new-court-modal .kn-acct-field select:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 3px rgba(66,153,225,0.15); }
 #kn-award-overlay .kn-acct-field, #kn-rec-overlay .pk-acct-field { position:relative; margin-bottom:14px; }
 #kn-award-overlay .kn-acct-field label, #kn-rec-overlay .pk-acct-field label { display:block; font-size:12px; font-weight:600; color:var(--ork-text-secondary); margin-bottom:4px; }
 #kn-award-overlay .kn-acct-field input[type=text],
@@ -4053,9 +4073,9 @@ html[data-theme="dark"] .pk-ac-item.pk-ac-suspended:hover, html[data-theme="dark
 .pk-btn-ghost:hover { background:#f7fafc; border-color:#e2e8f0; }
 .pk-badge-ladder { display:inline-flex; align-items:center; gap:4px; padding:1px 8px; border-radius:12px; font-size:11px; font-weight:700; background:var(--ork-badge-gold-bg); color:var(--ork-badge-gold-text); }
 /* Reuse pn- overlay/modal styles for pk- award modal */
-#pk-award-overlay, #pk-rec-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
-#pk-award-overlay.pk-open, #pk-rec-overlay.pk-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-award-overlay .pk-modal-box, #pk-rec-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; width:90vw; max-width:520px; }
+#pk-award-overlay, #pk-rec-overlay, #pk-addcourt-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
+#pk-award-overlay.pk-open, #pk-rec-overlay.pk-open, #pk-addcourt-overlay.pk-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
+#pk-award-overlay .pk-modal-box, #pk-rec-overlay .pk-modal-box, #pk-addcourt-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; width:90vw; max-width:520px; }
 #pk-award-overlay .pk-modal-header, #pk-rec-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; }
 /* Reset global h1-h6 box styles for all pk modal titles */
 .pk-modal-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
@@ -4065,6 +4085,18 @@ html[data-theme="dark"] .pk-ac-item.pk-ac-suspended:hover, html[data-theme="dark
 #pk-award-overlay .pk-modal-body, #pk-rec-overlay .pk-modal-body { padding:20px; overflow-y:auto; flex:1; }
 #pk-rec-overlay .pk-modal-body { overflow: visible; }
 #pk-award-overlay .pk-modal-footer, #pk-rec-overlay .pk-modal-footer { padding:14px 20px; border-top:1px solid var(--ork-border, #e2e8f0); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+#pk-cp-new-court-modal { position:fixed; inset:0; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; z-index:var(--z-modal, 1100); }
+#pk-cp-new-court-modal .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; width:90vw; max-width:480px; }
+#pk-cp-new-court-modal .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; }
+#pk-cp-new-court-modal .pk-modal-title { font-size:16px; font-weight:700; color:var(--ork-text, #1a202c); margin:0; background:transparent; border:none; padding:0; border-radius:0; text-shadow:none; }
+#pk-cp-new-court-modal .pk-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-lighter, #a0aec0); cursor:pointer; line-height:1; padding:0 4px; }
+#pk-cp-new-court-modal .pk-modal-close-btn:hover { color:var(--ork-text, #4a5568); }
+#pk-cp-new-court-modal .pk-modal-body { padding:20px; overflow-y:auto; flex:1; }
+#pk-cp-new-court-modal .pk-modal-footer { padding:14px 20px; border-top:1px solid var(--ork-border, #e2e8f0); display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-shrink:0; }
+#pk-cp-new-court-modal .pk-acct-field { margin-bottom:14px; }
+#pk-cp-new-court-modal .pk-acct-field label { display:block; font-size:12px; font-weight:600; color:var(--ork-text-secondary, #4a5568); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.04em; }
+#pk-cp-new-court-modal .pk-acct-field input, #pk-cp-new-court-modal .pk-acct-field select { width:100%; padding:8px 10px; border:1.5px solid var(--ork-input-border, #e2e8f0); border-radius:6px; font-size:13px; color:var(--ork-text, #2d3748); background:var(--ork-input-bg, #fff); box-sizing:border-box; }
+#pk-cp-new-court-modal .pk-acct-field input:focus, #pk-cp-new-court-modal .pk-acct-field select:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 3px rgba(66,153,225,0.15); }
 #pk-award-overlay .pk-acct-field, #pk-rec-overlay .pk-acct-field { position: relative; margin-bottom:14px; }
 #pk-award-overlay .pk-acct-field label, #pk-rec-overlay .pk-acct-field label { display:block; font-size:12px; font-weight:600; color:var(--ork-text-secondary, #4a5568); margin-bottom:4px; }
 #pk-award-overlay .pk-acct-field input[type=text],
@@ -6576,7 +6608,9 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 
 /* ---- Shared: award recommendations table (pk, kn) ---- */
 .pk-recs-empty { padding: 32px 0; text-align: center; color: #a0aec0; font-size: 14px; }
-.pk-recs-table-wrap { overflow-x: auto; }
+.pk-recs-table-wrap { overflow-x: auto; width: 100%; }
+.pk-recs-table-wrap .dataTables_wrapper { width: 100%; }
+table.dataTable.pk-recs-table { width: 100% !important; }
 .pk-recs-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .pk-recs-table thead th {
     text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 700;
@@ -6590,7 +6624,7 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 .pk-recs-table td a { color: #2b6cb0; text-decoration: none; }
 .pk-recs-table td a:hover { text-decoration: underline; }
 .pk-rec-notes { max-width: 220px; white-space: normal; color: #718096; }
-.pk-rec-actions { white-space: nowrap; }
+.pk-rec-actions { white-space: nowrap; text-align: right; }
 .pk-rec-actions button { margin-right: 6px; }
 .pk-rec-actions button:last-child { margin-right: 0; }
 .pk-rec-dismiss-btn {
@@ -6600,6 +6634,35 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 .pk-rec-dismiss-btn:hover { background: #fff5f5; border-color: #fc8181; color: #c53030; }
 .pk-rec-dismiss-btn.pk-rec-dismiss-confirm { background: #fff5f5; border-color: #fc8181; color: #c53030; font-weight: 600; }
 .pk-rec-row.pk-rec-dismissed { opacity: 0.4; pointer-events: none; }
+.pk-rec-snooze-btn {
+    font-size: 12px; padding: 4px 10px; border-radius: 4px;
+    background: none; border: 1px solid #e2e8f0; color: #718096; cursor: pointer;
+}
+.pk-rec-snooze-btn:hover { background: #fffbeb; border-color: #f6e05e; color: #975a16; }
+.pk-rec-snooze-btn[data-snoozed="1"] { background: #fefcbf; border-color: #ecc94b; color: #744210; }
+.pk-rec-snooze-btn[data-snoozed="1"]:hover { background: #fffbeb; border-color: #d69e2e; color: #744210; }
+.pk-rec-row[data-snoozed="1"] { opacity: 0.55; }
+.kn-rec-header-row { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+.kn-rec-header-left { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.kn-rec-header-action { flex-shrink:0; }
+.kn-bulk-actions-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+.kn-bulk-btn {
+    font-size:12px; padding:4px 12px; border-radius:20px;
+    border:1.5px solid #e2e8f0; background:#fff; color:#4a5568;
+    font-weight:600; cursor:pointer; transition:background .15s,color .15s,border-color .15s;
+}
+.kn-bulk-btn:disabled { opacity:.45; cursor:not-allowed; }
+.kn-bulk-btn:not(:disabled):hover { border-color:#90cdf4; color:#2b6cb0; }
+.kn-bulk-btn.kn-bulk-confirm { background:#fef3c7; border-color:#d97706; color:#92400e; }
+.kn-rec-filter-bar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; } /* legacy — kept for park page */
+.pk-rec-addcourt-btn {
+    font-size:12px; padding:4px 10px; border-radius:4px;
+    background:none; border:1px solid #e2e8f0; color:#718096; cursor:pointer;
+}
+.pk-rec-addcourt-btn:hover { background:#ebf8ff; border-color:#90cdf4; color:#2b6cb0; }
+.pk-rec-addcourt-btn.pk-rec-oncourt { background:#ebf8ff; border-color:#63b3ed; color:#2b6cb0; font-weight:600; }
+.pk-rec-addcourt-btn.pk-rec-oncourt:hover { background:#bee3f8; border-color:#3182ce; color:#1a365d; }
+
 .kn-rec-filter-bar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
 .kn-rec-export-btns { display:flex; gap:6px; margin-left:auto; }
 .kn-rec-export-btn { padding:4px 10px; border-radius:6px; border:1.5px solid #e2e8f0; background:#fff; color:#4a5568; font-size:12px; font-weight:600; cursor:pointer; transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap; }
@@ -9339,29 +9402,33 @@ html[data-theme="dark"] .dataTables_empty {
   background: var(--ork-card-bg) !important;
 }
 
-/* ── Park recs DataTable dark mode ───────────────────────────────────── */
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable thead th,
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable thead td {
+/* ── Park/Kingdom recs table dark mode ───────────────────────────────────
+   Scoped to .pk-recs-table (always present), NOT table.dataTable: these recs
+   tables are NOT DataTables (no DataTable() init), so a table.dataTable scope
+   never matched and dark mode fell back to the light thead/hover/td styles. */
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table thead th,
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table thead td {
   background: var(--ork-bg-secondary) !important;
   color: var(--ork-text-muted) !important;
   border-color: var(--ork-border) !important;
 }
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr {
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody tr {
   background: var(--ork-card-bg) !important;
 }
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr:hover td,
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr.odd:hover td,
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr.even:hover td {
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody tr:hover,
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody tr:hover td,
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody tr.odd:hover td,
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody tr.even:hover td {
   background: var(--ork-bg-tertiary) !important;
 }
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody td {
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody td {
   color: var(--ork-text-secondary) !important;
   border-color: var(--ork-border) !important;
 }
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr.odd td {
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody tr.odd td {
   background: var(--ork-card-bg) !important;
 }
-html[data-theme="dark"] .pk-recs-table-wrap table.dataTable tbody tr.even td {
+html[data-theme="dark"] .pk-recs-table-wrap table.pk-recs-table tbody tr.even td {
   background: var(--ork-bg-secondary) !important;
 }
 html[data-theme="dark"] .pk-recs-table-wrap .dataTables_wrapper .dataTables_length,

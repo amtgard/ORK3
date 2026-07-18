@@ -1,0 +1,63 @@
+/* ============================================================
+   ORK3 — Ladder Award Rank Pill  (.ladder-rank)
+
+   ONE shared component for ladder-award rank indicators across
+   every surface that shows recommendations / planned awards:
+   Recommendations Manager, Park & Kingdom recs tabs, Court planning.
+
+   Usage:
+     <span class="ladder-rank" data-lvl="5">Rank 5</span>   (label form)
+     <span class="ladder-rank" data-lvl="5">5</span>        (number form)
+
+   data-lvl is the ladder rank CLAMPED to 1..10 (min(rank,10)).
+   Non-ladder / rank 0 awards do NOT get a pill (render plain).
+
+   Colour ramp — a DISTINCT cool->warm temperature sweep so adjacent
+   ranks are easy to tell apart:
+     1 teal · 2 sky · 3 blue · 4 indigo · 5 violet ·
+     6 purple · 7 magenta · 8 rose · 9 orange · 10 gold
+   Deliberately NO deep green and NO deep red, so rank reads as a
+   magnitude and never as a "green = approved / red = rejected" verdict.
+   (teal / gold / orange are fair game — just not true green/red.)
+   Filled pills in both themes; light/warm hues use dark text, the
+   saturated mids use white text; dark mode is tuned a step brighter so
+   pills stay high-contrast on a dark page. Background/text pairs are
+   tuned so 11px bold text clears WCAG AA (>=4.5:1) at every level.
+   ============================================================ */
+
+.ladder-rank {
+	display        : inline-flex;
+	align-items    : center;
+	justify-content: center;
+	padding        : 1px 8px;
+	border-radius  : 10px;
+	font-size      : 11px;
+	font-weight    : 700;
+	line-height    : 1.6;
+	letter-spacing : .2px;
+	white-space    : nowrap;
+	border         : 1px solid rgba(0, 0, 0, 0.10);
+	vertical-align : middle;
+}
+
+/* ── Rank ramp (ONE ramp for both themes) ─────────────────────
+   Deep, saturated fills with WHITE text (except the two genuinely
+   light book-ends — sky at the low end, gold at the top — which use
+   dark text). Uniform white-on-saturated reads clean and consistent;
+   avoids the muddy "mid-tone fill + dark text" look. Every pair clears
+   WCAG AA (≥4.5:1) at 11px bold, and every fill stays distinct against
+   a dark page. The saturated fills read well in BOTH light and dark,
+   so dark mode reuses them (only the border is nudged for the dark bg). */
+.ladder-rank[data-lvl="1"]  { background:#0f766e; color:#ffffff; }  /* teal    */
+.ladder-rank[data-lvl="2"]  { background:#0369a1; color:#ffffff; }  /* sky     */
+.ladder-rank[data-lvl="3"]  { background:#1d4ed8; color:#ffffff; }  /* blue    */
+.ladder-rank[data-lvl="4"]  { background:#4338ca; color:#ffffff; }  /* indigo  */
+.ladder-rank[data-lvl="5"]  { background:#6d28d9; color:#ffffff; }  /* violet  */
+.ladder-rank[data-lvl="6"]  { background:#7e22ce; color:#ffffff; }  /* purple  */
+.ladder-rank[data-lvl="7"]  { background:#a21caf; color:#ffffff; }  /* magenta */
+.ladder-rank[data-lvl="8"]  { background:#be185d; color:#ffffff; }  /* rose    */
+.ladder-rank[data-lvl="9"]  { background:#c2410c; color:#ffffff; }  /* orange  */
+.ladder-rank[data-lvl="10"] { background:#f5b30b; color:#3f2d00; }  /* gold    */
+
+/* ── Dark mode: same fills, just brighten the hairline border ── */
+html[data-theme="dark"] .ladder-rank { border-color: rgba(255, 255, 255, 0.18); }

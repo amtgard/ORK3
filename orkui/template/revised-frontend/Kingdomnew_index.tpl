@@ -110,6 +110,7 @@
 ?>
 
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/rank-pill.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/rank-pill.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/ork-datatables.css?v=<?= filemtime(__DIR__ . '/style/ork-datatables.css') ?>">
 
@@ -353,7 +354,7 @@
 					<span class="kn-tab-count" id="kn-tab-count-recs"<?= $_recsN > 0 ? '' : ' style="display:none"' ?>><?= $_recsN > 0 ? '(' . $_recsN . ')' : '' ?></span>
 				</li>
 				<?php endif; ?>
-				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
+				<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests) || ($CanManageCourt ?? false)): ?>
 				<li data-kntab="admin">
 					<i class="fas fa-cog"></i><span class="kn-tab-label"> Admin Tasks</span>
 				</li>
@@ -844,6 +845,7 @@
 							<li><a href="<?= UIR ?>Reports/player_award_recommendations&KingdomId=<?= $kingdom_id ?>">Recommendations</a></li>
 							<?php endif; ?>
 							<li><a href="<?= UIR ?>Reports/knights_and_masters&KingdomId=<?= $kingdom_id ?>">Knights &amp; Masters</a></li>
+							<li><a href="<?= UIR ?>Reports/courts&KingdomId=<?= $kingdom_id ?>"><i class="fas fa-gavel"></i> Court Report</a></li>
 							<?php if ($IsLoggedIn): ?>
 							<li><a href="<?= UIR ?>Reports/knights_list&KingdomId=<?= $kingdom_id ?>">Knights</a></li>
 							<li><a href="<?= UIR ?>Reports/masters_list&KingdomId=<?= $kingdom_id ?>">Masters</a></li>
@@ -906,9 +908,10 @@
 				</div>
 			</div>
 
-		<!-- Admin Tab -->
-		<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests)): ?>
+		<!-- Admin Tab (now also hosts Court Planner as a collapsible subsection) -->
+		<?php if (($CanManageKingdom ?? false) || !empty($CanManageTests) || ($CanManageCourt ?? false)): ?>
 		<div class="kn-tab-panel" id="kn-tab-admin" style="display:none">
+			<?php if ($CanManageKingdom ?? false): ?>
 			<div class="kn-report-cols">
 				<?php if ($CanManageKingdom ?? false): ?>
 				<div class="kn-report-group">
@@ -957,6 +960,277 @@
 				</div>
 				<?php endif; ?>
 			</div>
+			<?php endif; ?>
+
+			<!-- Court Planner subsection (relocated from former top-level tab) -->
+			<?php if ($CanManageCourt ?? false): ?>
+			<?php $_cpOpen = !empty($CourtList); ?>
+			<div class="kn-cp-section<?= $_cpOpen ? ' kn-cp-open' : '' ?>" id="kn-cp-section">
+				<button type="button" class="kn-cp-header" onclick="knCpToggleSection()" aria-expanded="<?= $_cpOpen ? 'true' : 'false' ?>">
+					<span class="kn-cp-header-title"><i class="fas fa-gavel"></i> Court Planner<?php if (!empty($CourtList)): ?> <span class="kn-cp-header-count">(<?= count($CourtList) ?>)</span><?php endif; ?></span>
+					<i class="fas fa-chevron-down kn-cp-chevron"></i>
+				</button>
+				<div class="kn-cp-body" id="kn-cp-body"<?= $_cpOpen ? '' : ' style="display:none"' ?>>
+			<style>
+			.kn-cp-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+			.kn-cp-court-card { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:14px 18px; margin-bottom:10px; display:flex; align-items:center; gap:14px; transition:box-shadow .15s; }
+			.kn-cp-court-card:hover { box-shadow:0 2px 8px rgba(0,0,0,.1); }
+			.kn-cp-court-date { font-size:13px; color:#718096; white-space:nowrap; min-width:88px; }
+			.kn-cp-court-info { flex:1; }
+			.kn-cp-court-name { font-weight:700; font-size:15px; color:#2d3748; }
+			.kn-cp-court-meta { font-size:12px; color:#718096; margin-top:2px; }
+			.kn-cp-court-badges { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+			.kn-cp-badge { display:inline-block; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; }
+			.kn-cp-badge-count { background:#edf2f7; color:#4a5568; padding:3px 9px; border-radius:12px; font-size:11px; }
+			.kn-cp-btn-link { background:none; border:1px solid #cbd5e0; color:#4a5568; padding:5px 12px; border-radius:5px; font-size:12px; cursor:pointer; text-decoration:none; display:inline-block; }
+			.kn-cp-btn-link:hover { background:#f7fafc; color:#2d3748; }
+			.kn-cp-empty { text-align:center; padding:48px 24px; color:#718096; font-size:15px; border:1px dashed #e2e8f0; border-radius:8px; }
+			.kn-rec-age-badge { font-size:11px; padding:1px 6px; border-radius:10px; font-weight:600; margin-left:4px; }
+			.kn-rec-age-green  { background:#c6f6d5; color:#22543d; }
+			.kn-rec-age-yellow { background:#fefcbf; color:#744210; }
+			.kn-rec-age-orange { background:#fed7aa; color:#7b341e; }
+			.kn-rec-age-red    { background:#fed7d7; color:#742a2a; }
+			/* Collapsible subsection chrome (relocated court) */
+			.kn-cp-section { border-top:1px solid #e2e8f0; margin-top:24px; padding-top:4px; }
+			.kn-cp-header { display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; cursor:pointer; padding:10px 4px; font-size:15px; font-weight:700; color:#2d3748; text-align:left; }
+			.kn-cp-header:hover { color:#1a202c; }
+			.kn-cp-header-title i.fa-gavel { margin-right:8px; color:#4a5568; }
+			.kn-cp-header-count { font-weight:600; color:#718096; font-size:13px; }
+			.kn-cp-chevron { transition:transform .15s; color:#a0aec0; }
+			.kn-cp-section.kn-cp-open .kn-cp-chevron { transform:rotate(180deg); }
+			.kn-cp-body { padding-top:8px; }
+			html[data-theme="dark"] .kn-cp-section { border-top-color:#2d3748; }
+			html[data-theme="dark"] .kn-cp-header { color:#e2e8f0; }
+			html[data-theme="dark"] .kn-cp-header:hover { color:#fff; }
+			html[data-theme="dark"] .kn-cp-header-title i.fa-gavel { color:#a0aec0; }
+			html[data-theme="dark"] .kn-cp-court-card { background:#1a202c; border-color:#2d3748; }
+			html[data-theme="dark"] .kn-cp-court-name { color:#e2e8f0; }
+			html[data-theme="dark"] .kn-cp-court-meta { color:#a0aec0; }
+			html[data-theme="dark"] .kn-cp-court-date { color:#a0aec0; }
+			html[data-theme="dark"] .kn-cp-badge-count { background:#2d3748; color:#cbd5e0; }
+			html[data-theme="dark"] .kn-cp-btn-link { border-color:#4a5568; color:#cbd5e0; }
+			html[data-theme="dark"] .kn-cp-btn-link:hover { background:#2d3748; color:#fff; }
+			html[data-theme="dark"] .kn-cp-empty { border-color:#2d3748; color:#a0aec0; }
+			/* Mode + staged badges */
+			.kn-cp-badge-mode { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; background:#ebf8ff; color:#2b6cb0; }
+			.kn-cp-badge-mode-plan { background:#faf089; color:#744210; }
+			.kn-cp-badge-staged { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; background:#fefcbf; color:#975a16; box-shadow:inset 0 0 0 1px rgba(151,90,22,.25); }
+			.kn-cp-badge-mode[data-tip]::after, .kn-cp-badge-staged[data-tip]::after { white-space:normal; width:max-content; max-width:240px; }
+			html[data-theme="dark"] .kn-cp-badge-mode { background:#1a2f45; color:#90cdf4; }
+			html[data-theme="dark"] .kn-cp-badge-mode-plan { background:#3d3512; color:#f6e05e; }
+			html[data-theme="dark"] .kn-cp-badge-staged { background:#3d3512; color:#f6e05e; box-shadow:inset 0 0 0 1px rgba(246,224,94,.3); }
+			/* Mode selector (create-court modal) */
+			.kn-cp-mode-opts { display:flex; gap:10px; }
+			.kn-cp-mode-opt { flex:1; border:1px solid #cbd5e0; border-radius:6px; padding:10px 12px; cursor:pointer; display:block; transition:border-color .12s,background .12s,box-shadow .12s; }
+			.kn-cp-mode-opt input { position:absolute; opacity:0; pointer-events:none; }
+			.kn-cp-mode-title { font-size:13px; font-weight:700; color:#2d3748; display:flex; align-items:center; gap:6px; }
+			.kn-cp-mode-desc { font-size:11px; color:#718096; margin-top:3px; line-height:1.35; font-weight:400; }
+			.kn-cp-mode-opt.kn-cp-mode-sel { border-color:#2c5282; background:#ebf2fb; box-shadow:0 0 0 1px #2c5282; }
+			html[data-theme="dark"] .kn-cp-mode-opt { border-color:#2d3748; }
+			html[data-theme="dark"] .kn-cp-mode-title { color:#e2e8f0; }
+			html[data-theme="dark"] .kn-cp-mode-desc { color:#a0aec0; }
+			html[data-theme="dark"] .kn-cp-mode-opt.kn-cp-mode-sel { border-color:#4299e1; background:#1a2f45; box-shadow:0 0 0 1px #4299e1; }
+			</style>
+			<div class="kn-cp-toolbar">
+				<span style="font-size:13px;color:#718096"><?= count($CourtList ?? []) ?> court<?= count($CourtList ?? []) !== 1 ? 's' : '' ?> planned</span>
+				<button class="kn-btn kn-btn-primary" onclick="knCpOpenNewCourt()">
+					<i class="fas fa-plus"></i> Plan a Court
+				</button>
+			</div>
+			<?php
+				$_cpStatusLabel = ['draft' => 'Draft', 'published' => 'Published', 'complete' => 'Complete'];
+				$_cpStatusColor = ['draft' => '#718096', 'published' => '#2b6cb0', 'complete' => '#276749'];
+				$_cpStatusBg    = ['draft' => '#edf2f7', 'published' => '#ebf8ff', 'complete' => '#f0fff4'];
+			?>
+			<?php if (empty($CourtList)): ?>
+			<div class="kn-cp-empty">
+				<i class="fas fa-gavel" style="font-size:32px;margin-bottom:12px;display:block;opacity:.3"></i>
+				No courts planned yet. Click <strong>Plan a Court</strong> to get started.
+			</div>
+			<?php else: ?>
+			<?php foreach ($CourtList as $_court): ?>
+			<?php
+				$_st     = $_court['Status'];
+				$_lbl    = $_cpStatusLabel[$_st] ?? $_st;
+				$_clr    = $_cpStatusColor[$_st] ?? '#718096';
+				$_bg     = $_cpStatusBg[$_st]    ?? '#edf2f7';
+				$_mode   = $_court['Mode'] ?? 'run';
+				$_staged = (int)($_court['StagedCount'] ?? 0);
+			?>
+			<div class="kn-cp-court-card">
+				<div class="kn-cp-court-date">
+					<?= $_court['CourtDate'] ? date('M j, Y', strtotime($_court['CourtDate'])) : '<em style="color:#a0aec0">No date</em>' ?>
+				</div>
+				<div class="kn-cp-court-info">
+					<div class="kn-cp-court-name"><?= htmlspecialchars($_court['Name']) ?></div>
+					<?php if ($_court['EventName']): ?>
+					<div class="kn-cp-court-meta"><i class="fas fa-calendar-alt" style="margin-right:3px"></i><?= htmlspecialchars($_court['EventName']) ?></div>
+					<?php endif; ?>
+				</div>
+				<div class="kn-cp-court-badges">
+					<span class="kn-cp-badge" style="background:<?= $_bg ?>;color:<?= $_clr ?>"><?= $_lbl ?></span>
+					<?php if ($_mode === 'plan'): ?>
+					<span class="kn-cp-badge-mode kn-cp-badge-mode-plan" data-tip="Locked as a plan — prepared for someone to record later."><i class="fas fa-clipboard-list"></i> Plan</span>
+					<?php else: ?>
+					<span class="kn-cp-badge-mode" data-tip="Run at court — awards granted live during the ceremony."><i class="fas fa-bullhorn"></i> Run</span>
+					<?php endif; ?>
+					<?php if ($_staged > 0 && $_st !== 'complete'): ?>
+					<span class="kn-cp-badge-staged" data-tip="Grants captured but not yet finalized — open to finalize."><i class="fas fa-hourglass-half"></i> <?= $_staged ?> staged</span>
+					<?php endif; ?>
+					<span class="kn-cp-badge-count"><i class="fas fa-award" style="margin-right:3px"></i><?= (int)$_court['AwardCount'] ?></span>
+					<a href="<?= UIR ?>Court/detail/<?= (int)$_court['CourtId'] ?>" class="kn-cp-btn-link">
+						Open <i class="fas fa-arrow-right"></i>
+					</a>
+				</div>
+			</div>
+			<?php endforeach; ?>
+			<?php endif; ?>
+
+			<!-- New Court Modal (kingdom-scoped) -->
+			<div class="kn-overlay" id="kn-cp-new-court-modal" style="display:none">
+				<div class="kn-modal-box" style="max-width:480px">
+					<div class="kn-modal-header">
+						<h3 class="kn-modal-title"><i class="fas fa-gavel" style="margin-right:8px;color:#4a5568"></i>Plan a New Court</h3>
+						<button class="kn-modal-close-btn" onclick="knCpCloseNewCourt()">&times;</button>
+					</div>
+					<div class="kn-modal-body">
+						<div class="kn-acct-field">
+							<label >Court Name <span style="color:#e53e3e">*</span></label>
+							<input type="text" id="kn-cp-new-name" placeholder="Summer Coronation Court&#x2026;" autocomplete="off">
+						</div>
+						<?php if (!empty($CourtUpcomingEvents)): ?>
+						<div class="kn-acct-field">
+							<label >Link to Event (optional)</label>
+							<select id="kn-cp-new-event" onchange="knCpOnEventChange(this,'kn-cp-new-date')">
+								<option value="0" data-start="">— None —</option>
+								<?php foreach ($CourtUpcomingEvents as $_ev): ?>
+								<option value="<?= (int)$_ev['EventCalendarDetailId'] ?>" data-start="<?= $_ev['EventStart'] ? date('Y-m-d', strtotime($_ev['EventStart'])) : '' ?>">
+									<?= htmlspecialchars($_ev['Name']) ?><?= $_ev['EventStart'] ? ' (' . date('M j', strtotime($_ev['EventStart'])) . ')' : '' ?>
+								</option>
+								<?php endforeach; ?>
+							</select>
+						</div>
+						<?php endif; ?>
+						<div class="kn-acct-field">
+							<label >Date</label>
+							<input type="date" id="kn-cp-new-date" >
+						</div>
+						<div class="kn-acct-field">
+							<label>How will this court be handled?</label>
+							<div class="kn-cp-mode-opts">
+								<label class="kn-cp-mode-opt kn-cp-mode-sel" id="kn-cp-mode-run-opt">
+									<input type="radio" name="kn-cp-mode" value="run" checked onchange="knCpSyncMode()">
+									<span class="kn-cp-mode-title"><i class="fas fa-bullhorn"></i> Run at Court</span>
+									<span class="kn-cp-mode-desc">I'll grant awards live during the ceremony.</span>
+								</label>
+								<label class="kn-cp-mode-opt" id="kn-cp-mode-plan-opt">
+									<input type="radio" name="kn-cp-mode" value="plan" onchange="knCpSyncMode()">
+									<span class="kn-cp-mode-title"><i class="fas fa-clipboard-list"></i> Lock as Plan</span>
+									<span class="kn-cp-mode-desc">I'm preparing the order of court for someone to record later.</span>
+								</label>
+							</div>
+						</div>
+						<div id="kn-cp-new-error" style="color:#c53030;font-size:13px;margin-top:8px;display:none"></div>
+					</div>
+					<div class="kn-modal-footer">
+						<button class="kn-btn kn-btn-secondary" onclick="knCpCloseNewCourt()">Cancel</button>
+						<button class="kn-btn kn-btn-primary" onclick="knCpSubmitNewCourt()">
+							<i class="fas fa-plus"></i> Create Court
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<script>
+			(function() {
+				if (!<?= !empty($CanManageCourt) ? 'true' : 'false' ?>) return;
+				var uir       = '<?= UIR ?>';
+				var kingdomId = <?= (int)($kingdom_id ?? 0) ?>;
+
+				window.knCpToggleSection = function() {
+					var sec = document.getElementById('kn-cp-section');
+					var body = document.getElementById('kn-cp-body');
+					if (!sec || !body) return;
+					var open = sec.classList.toggle('kn-cp-open');
+					body.style.display = open ? '' : 'none';
+					var hdr = sec.querySelector('.kn-cp-header');
+					if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
+				};
+
+				window.knCpOnEventChange = function(sel, dateId) {
+					var opt = sel.options[sel.selectedIndex];
+					var start = opt ? opt.getAttribute('data-start') : '';
+					if (start) document.getElementById(dateId).value = start;
+				};
+
+				window.knCpSyncMode = function() {
+					var runOpt  = document.getElementById('kn-cp-mode-run-opt');
+					var planOpt = document.getElementById('kn-cp-mode-plan-opt');
+					var planEl  = planOpt ? planOpt.querySelector('input') : null;
+					var isPlan  = planEl && planEl.checked;
+					if (runOpt)  runOpt.classList.toggle('kn-cp-mode-sel', !isPlan);
+					if (planOpt) planOpt.classList.toggle('kn-cp-mode-sel', !!isPlan);
+				};
+
+				window.knCpOpenNewCourt = function() {
+					document.getElementById('kn-cp-new-name').value = '';
+					document.getElementById('kn-cp-new-date').value = '';
+					var evEl = document.getElementById('kn-cp-new-event');
+					if (evEl) evEl.value = '0';
+					var runEl = document.querySelector('input[name="kn-cp-mode"][value="run"]');
+					if (runEl) runEl.checked = true;
+					knCpSyncMode();
+					document.getElementById('kn-cp-new-error').style.display = 'none';
+					var modal = document.getElementById('kn-cp-new-court-modal');
+					modal.style.display = 'flex';
+					setTimeout(function() { document.getElementById('kn-cp-new-name').focus(); }, 50);
+				};
+
+				window.knCpCloseNewCourt = function() {
+					document.getElementById('kn-cp-new-court-modal').style.display = 'none';
+				};
+
+				window.knCpSubmitNewCourt = function() {
+					var name    = document.getElementById('kn-cp-new-name').value.trim();
+					var date    = document.getElementById('kn-cp-new-date').value;
+					var evEl    = document.getElementById('kn-cp-new-event');
+					var eventId = evEl ? evEl.value : '0';
+					var errEl   = document.getElementById('kn-cp-new-error');
+					if (!name) { errEl.textContent = 'Please enter a court name.'; errEl.style.display = 'block'; return; }
+					errEl.style.display = 'none';
+					var modeEl = document.querySelector('input[name="kn-cp-mode"]:checked');
+					var mode   = modeEl ? modeEl.value : 'run';
+					var fd = new FormData();
+					fd.append('KingdomId', kingdomId);
+					fd.append('ParkId', 0);
+					fd.append('Name', name);
+					fd.append('CourtDate', date);
+					fd.append('EventCalendarDetailId', eventId);
+					fd.append('Mode', mode);
+					fetch(uir + 'CourtAjax/create_court', {
+						method: 'POST', body: fd,
+						headers: { 'X-Requested-With': 'XMLHttpRequest' }
+					})
+					.then(function(r) { return r.json(); })
+					.then(function(data) {
+						if (data.status === 0 && data.court_id) {
+							window.location.href = uir + 'Court/detail/' + data.court_id;
+						} else {
+							errEl.textContent = data.error || 'An error occurred.';
+							errEl.style.display = 'block';
+						}
+					})
+					.catch(function(e) { errEl.textContent = 'Request failed: ' + e.message; errEl.style.display = 'block'; });
+				};
+
+				var modal = document.getElementById('kn-cp-new-court-modal');
+				modal.addEventListener('click', function(e) { if (e.target === this) knCpCloseNewCourt(); });
+				document.addEventListener('keydown', function(e) { if (e.key === 'Escape') knCpCloseNewCourt(); });
+			})();
+			</script>
+				</div>
+			</div>
+			<?php endif; ?>
 		</div>
 		<?php endif; ?>
 
@@ -972,6 +1246,7 @@
 			</div>
 		</div>
 		<?php endif; ?>
+
 
 		<!-- Players Tab -->
 		<div class="kn-tab-panel" id="kn-tab-players" style="display:none">
@@ -1186,7 +1461,7 @@ var KnBannerConfig = {
 		</div>
 		<div class="kn-modal-footer">
 			<button class="kn-btn-ghost" id="kn-award-cancel">Close</button>
-			<div style="display:flex;gap:8px">
+			<div style="display:flex;gap:8px" id="kn-award-footer-normal">
 				<button class="kn-btn kn-btn-secondary" id="kn-award-save-same" disabled>
 					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>Same Player
 				</button>
@@ -1194,6 +1469,9 @@ var KnBannerConfig = {
 					<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player
 				</button>
 			</div>
+			<button class="kn-btn kn-btn-primary" id="kn-award-save-next" disabled style="display:none">
+				<i class="fas fa-arrow-right"></i> Add and Next
+			</button>
 		</div>
 	</div>
 </div>
@@ -1233,6 +1511,13 @@ var KnBannerConfig = {
 				<label for="kn-rec-reason">Reason <span style="color:#e53e3e">*</span></label>
 				<input type="text" id="kn-rec-reason" maxlength="400" placeholder="Why should this player receive this award?" />
 				<span class="pk-char-count" id="kn-rec-char-count">400 characters remaining</span>
+			</div>
+			<div class="pk-acct-field" style="margin-top:12px">
+				<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+					<input type="checkbox" id="kn-rec-anon" value="1" style="width:16px;height:16px;cursor:pointer">
+					<span>Submit Anonymously</span>
+				</label>
+				<div style="font-size:11px;color:#718096;margin-top:3px;padding-left:24px">Your name will not be visible to others on this recommendation</div>
 			</div>
 		</div>
 		<div class="kn-modal-footer">

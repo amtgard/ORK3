@@ -97,6 +97,7 @@
 		   );
 	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_CREATE);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
+	$callerIsOrkAdmin = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_EDIT);
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
 
@@ -233,6 +234,19 @@
 		}
 	}
 ?>
+
+<?php if (!function_exists('pnaRelTime')) {
+    function pnaRelTime($ts) {
+        $t = strtotime((string)$ts);
+        if (!$t) return '';
+        $d = time() - $t;
+        if ($d < 60)     return 'just now';
+        if ($d < 3600)   return floor($d / 60) . 'm ago';
+        if ($d < 86400)  return floor($d / 3600) . 'h ago';
+        if ($d < 604800) return floor($d / 86400) . 'd ago';
+        return date('M j', $t);
+    }
+} ?>
 
 <?php
 	$_pnHeroBg = $isSuspended ? '#9b2c2c' : '#2c5282';
@@ -1058,6 +1072,30 @@ html[data-theme="dark"] .dp-anon-row{border-bottom-color:var(--ork-border)}
 #dp-prefs-body.dp-locked{opacity:.35;pointer-events:none;user-select:none}
 html[data-theme="dark"] .dp-no-restrict-row{background:rgba(255,255,255,.04);border-color:var(--ork-border)}
 html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.08)}
+.pna-notif-card { padding: 0; overflow: hidden; }
+.pna-notif-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #e2e8f0; }
+.pna-notif-title { font-weight: 700; font-size: 14px; color: #2d3748; }
+.pna-notif-title i { color: #b7791f; margin-right: 5px; }
+.pna-notif-count { display: inline-block; min-width: 18px; height: 18px; line-height: 18px; text-align: center; background: #c53030; color: #fff; border-radius: 9px; font-size: 11px; font-weight: 700; padding: 0 5px; margin-left: 4px; }
+.pna-notif-clearall { background: none; border: none; color: #718096; font-size: 12px; cursor: pointer; padding: 2px 4px; }
+.pna-notif-clearall:hover { color: #2b6cb0; text-decoration: underline; }
+.pna-notif-list { list-style: none; margin: 0; padding: 0; }
+.pna-notif-item { display: flex; align-items: center; gap: 9px; padding: 10px 14px; border-bottom: 1px solid #edf2f7; font-size: 13px; }
+.pna-notif-item:last-child { border-bottom: none; }
+.pna-notif-unread { background: #ebf8ff; box-shadow: inset 3px 0 0 #2b6cb0; }
+.pna-notif-icon { color: #b7791f; flex-shrink: 0; }
+.pna-notif-msg { flex: 1; color: #2d3748; text-decoration: none; }
+a.pna-notif-msg:hover { text-decoration: underline; }
+.pna-notif-time { color: #a0aec0; font-size: 11px; white-space: nowrap; }
+.pna-notif-x { background: none; border: none; color: #a0aec0; font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.pna-notif-x:hover { color: #c53030; }
+/* dark mode */
+html[data-theme="dark"] .pna-notif-head { border-color: #2d3748; }
+html[data-theme="dark"] .pna-notif-title { color: #e2e8f0; }
+html[data-theme="dark"] .pna-notif-item { border-color: #1f2733; }
+html[data-theme="dark"] .pna-notif-unread { background: #1a2740; box-shadow: inset 3px 0 0 #2b6cb0; }
+html[data-theme="dark"] .pna-notif-msg { color: #e2e8f0; }
+html[data-theme="dark"] .pna-notif-clearall { color: #718096; }
 </style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -1643,6 +1681,33 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 
 					<!-- Feed -->
 					<div class="pna-feed">
+
+<?php $pnaNotifs = $Notifications ?? []; if (($isOwnProfile ?? false) && count($pnaNotifs)) {
+    $pnaUnread = 0; foreach ($pnaNotifs as $n) { if (empty($n['read_at'])) $pnaUnread++; }
+?>
+<div class="pna-card pna-notif-card" id="pna-notif-card">
+    <div class="pna-notif-head">
+        <span class="pna-notif-title"><i class="fas fa-bell"></i> Notifications<?php if ($pnaUnread) { ?> <span class="pna-notif-count"><?= (int)$pnaUnread ?></span><?php } ?></span>
+        <button type="button" class="pna-notif-clearall" onclick="pnaDismissAllNotifs()">Clear all</button>
+    </div>
+    <ul class="pna-notif-list" id="pna-notif-list">
+        <?php foreach ($pnaNotifs as $n) {
+            $nid    = (int)$n['notification_id'];
+            $unread = empty($n['read_at']);
+            $msg    = htmlspecialchars($n['message']);
+            $lnk    = (string)($n['link'] ?? '');
+            $rel    = htmlspecialchars(pnaRelTime($n['created_at']));
+        ?>
+        <li class="pna-notif-item<?= $unread ? ' pna-notif-unread' : '' ?>" data-nid="<?= $nid ?>">
+            <i class="fas fa-award pna-notif-icon"></i>
+            <?php if ($lnk) { ?><a class="pna-notif-msg" href="<?= htmlspecialchars($lnk) ?>"><?= $msg ?></a><?php } else { ?><span class="pna-notif-msg"><?= $msg ?></span><?php } ?>
+            <span class="pna-notif-time"><?= $rel ?></span>
+            <button type="button" class="pna-notif-x" data-tip="Dismiss" onclick="pnaDismissNotif(<?= $nid ?>)">&times;</button>
+        </li>
+        <?php } ?>
+    </ul>
+</div>
+<?php } ?>
 
 						<!-- 26-week sparkline -->
 						<div class="pna-card">
@@ -3890,6 +3955,13 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 					<input type="text" name="Reason" id="pn-rec-reason" maxlength="400" placeholder="Why should this player receive this award?" />
 					<span class="pn-char-count" id="pn-rec-char-count">400 characters remaining</span>
 				</div>
+				<div style="margin-top:12px">
+					<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal">
+						<input type="checkbox" name="Anonymous" id="pn-rec-anon" value="1" style="width:16px;height:16px;cursor:pointer">
+						<span>Submit Anonymously</span>
+					</label>
+					<div style="font-size:11px;color:#718096;margin-top:3px;padding-left:24px">Your name will not be visible to others on this recommendation</div>
+				</div>
 			</form>
 		</div>
 		<div class="pn-modal-footer">
@@ -5558,6 +5630,42 @@ pnRenderSparkline();
 	});
 })();
 <?php endif; ?>
+function pnaNotifMaybeHide() {
+    var list = document.getElementById('pna-notif-list');
+    if (list && !list.children.length) {
+        var c = document.getElementById('pna-notif-card');
+        if (c) c.remove();
+    }
+}
+function pnaDismissNotif(nid) {
+    var fd = new FormData(); fd.append('NotificationId', nid);
+    fetch('<?= UIR ?>PlayerAjax/dismiss_notification', { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+            if (j && j.status === 0) {
+                var li = document.querySelector('.pna-notif-item[data-nid="' + nid + '"]');
+                if (li) li.remove();
+                pnaNotifMaybeHide();
+            }
+        });
+}
+function pnaDoDismissAllNotifs() {
+    fetch('<?= UIR ?>PlayerAjax/dismiss_all_notifications', { method: 'POST', credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+            if (j && j.status === 0) {
+                var c = document.getElementById('pna-notif-card');
+                if (c) c.remove();
+            }
+        });
+}
+function pnaDismissAllNotifs() {
+    if (typeof tnConfirm === 'function') {
+        tnConfirm({ title: 'Clear all notifications?', body: 'This cannot be undone.', confirmLabel: 'Clear all', danger: true, onConfirm: pnaDoDismissAllNotifs });
+    } else {
+        pnaDoDismissAllNotifs();
+    }
+}
 </script>
 
 <!-- =============================================

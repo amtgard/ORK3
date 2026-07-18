@@ -175,6 +175,63 @@ class Controller_PlayerAjax extends Controller
                 ? json_encode(['status' => 0])
                 : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
+        } elseif ($action === 'grantaward') {
+            // JSON grant path for the Recommendations Manager's Grant Award modal.
+            // Thin wrapper over add_player_award so the modal can surface real
+            // validation/auth errors instead of the HTML Admin/addaward page.
+            $kingdomaward_id = (int)($_POST['KingdomAwardId'] ?? 0);
+            $given_by_id     = (int)($_POST['GivenById']      ?? 0);
+            $rank            = (int)($_POST['Rank']           ?? 0);
+            $date            = trim($_POST['Date'] ?? '');
+            $note            = trim($_POST['Note'] ?? '');
+            if (!valid_id($kingdomaward_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid award.']);
+                exit;
+            }
+            if (!valid_id($given_by_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Choose who granted this award.']);
+                exit;
+            }
+            if ($date === '') {
+                echo json_encode(['status' => 1, 'error' => 'A date is required.']);
+                exit;
+            }
+            $r = $this->Player->add_player_award([
+                'Token'          => $this->session->token,
+                'RecipientId'    => $player_id,
+                'KingdomAwardId' => $kingdomaward_id,
+                'CustomName'     => '',
+                'AliasAwardId'   => 0,
+                'Rank'           => $rank,
+                'Date'           => $date,
+                'GivenById'      => $given_by_id,
+                'Note'           => $note,
+                'ParkId'         => (int)($_POST['ParkId']    ?? 0),
+                'KingdomId'      => (int)($_POST['KingdomId'] ?? 0),
+                'EventId'        => (int)($_POST['EventId']   ?? 0),
+            ]);
+            // add_player_award returns the flat SOAP status shape ($r['Status'] int,
+            // 0 = success), mirroring CourtAjax::grant_award.
+            if (($r['Status'] ?? 1) != 0) {
+                echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => rtrim(($r['Error'] ?? 'Could not grant the award.') . ': ' . ($r['Detail'] ?? ''), ': ')]);
+                exit;
+            }
+            // S1 cross-path reconcile: mark/link any court line still OPEN for this
+            // recommendation 'given' + award_id in the SAME request, so a later
+            // finalize sees it committed and cannot re-grant it. Tolerates a missing
+            // RecommendationsId (rec_id 0 => skip) — the Recs-Manager Grant modal
+            // starts POSTing it in Phase 3.
+            $new_award_id = (int)($r['AwardId'] ?? 0);
+            $rec_id       = (int)($_POST['RecommendationsId'] ?? 0);
+            if ($rec_id > 0) {
+                // Pass the cluster key too so a court line under a sibling/older
+                // representative rec id (or an ad-hoc line for the same
+                // person+award+rank) is still reconciled and can't re-grant.
+                Ork3::$Lib->court->reconcileGrantForRecommendation($rec_id, $new_award_id, $given_by_id, $rank, $player_id, $kingdomaward_id);
+            }
+            echo json_encode(['status' => 0]);
+            exit;
+
         } elseif ($action === 'addnote') {
             $note     = trim($_POST['Note']         ?? '');
             $desc     = trim($_POST['Description']  ?? '');
@@ -759,6 +816,35 @@ class Controller_PlayerAjax extends Controller
             }
         }
         echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '', 'detail' => $r['Detail'] ?? '', 'supporter_persona' => $persona]);
+        exit;
+    }
+
+    public function dismiss_notification($p = null)
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        $nid = (int)($_POST['NotificationId'] ?? $p ?? 0);
+        if (!valid_id($nid)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid notification']);
+            exit;
+        }
+        Ork3::$Lib->notification->Dismiss($nid, (int)$this->session->user_id);
+        echo json_encode(['status' => 0]);
+        exit;
+    }
+
+    public function dismiss_all_notifications($p = null)
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        Ork3::$Lib->notification->DismissAll((int)$this->session->user_id);
+        echo json_encode(['status' => 0]);
         exit;
     }
 

@@ -305,6 +305,14 @@ class Controller_Player extends Controller
 
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
+        // My Amtgard dashboard notifications (own profile only). Load the snapshot for
+        // this render (unread highlight intact), then mark read so the next visit is clean.
+        $this->data['Notifications'] = [];
+        if ($uid > 0 && $uid === (int)$id) {
+            $this->data['Notifications'] = Ork3::$Lib->notification->GetForUser($uid, 20);
+            Ork3::$Lib->notification->MarkAllRead($uid);
+        }
+
         if ($uid > 0 && $uid === (int)$id && isset($this->request->cancel_rsvp_detail_id)) {
             $this->Event->toggle_rsvp((int)$this->request->cancel_rsvp_detail_id, $uid);
             header('Location: ' . UIR . 'Player/profile/' . $id);
@@ -329,6 +337,7 @@ class Controller_Player extends Controller
                             'KingdomAwardId' => $this->request->Player_profile->KingdomAwardId,
                             'Rank'           => $this->request->Player_profile->Rank,
                             'Reason'         => $this->request->Player_profile->Reason,
+                            'Anonymous'      => !empty($this->request->Player_profile->Anonymous) ? 1 : 0,
                         ]);
                         $this->request->clear('Player_profile');
                         if ($r['Status'] == 0) {
