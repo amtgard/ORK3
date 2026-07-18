@@ -98,10 +98,10 @@ class Controller_EraPhoenice extends Controller
     {
         http_response_code($status);
         header('Content-Type: application/json');
-        // Public read-only endpoint — allow cross-origin so the data can
-        // be fetched directly from third-party kingdom websites and from
-        // mORK without an auth proxy.
-        header('Access-Control-Allow-Origin: *');
+        // Public read-only endpoint, fetched cross-origin from third-party kingdom
+        // sites and mORK. CORS is supplied by nginx site-wide (see nginx.ork3.config
+        // `add_header Access-Control-Allow-Origin *`) — do NOT set it here too, or the
+        // duplicate header makes browsers reject the response even though curl accepts it.
         header('Cache-Control: public, max-age=300');
         echo json_encode($payload);
         exit;
