@@ -102,7 +102,7 @@ Catalog from R-19* execution and agent refactors. Fix only when the **file's dom
 
 ## §3 Hop scope table
 
-**Source:** incremental `git diff` of `megiddo/r-{nn}-*` vs prior R hop (integration base `megiddo/rebase-20260709`). I-19a … I-19d use fixed 3-file groups from [ds-19-residual-lib-discovery.md §3.2](./ds-19-residual-lib-discovery.md).
+**Source:** incremental `git diff` of `megiddo/r-{nn}-*` vs prior R hop (integration base `megiddo/rebase-20260709`). I-19a … I-19d use fixed 3-file groups from [archived DS-19 discovery §3.2](./archive/discovery/ds-19-residual-lib-discovery.md#32-execution-split-mandatory).
 
 ### I-01 … I-18
 
@@ -182,7 +182,7 @@ sh bin/run-unit-tests.sh             # expect: exit 0
 
 ### 4.5 I-VALIDATE full regression
 
-Re-run all §4.1–4.4 plus VALIDATE-20 gates (see [skills/phase3-gate-fix/workers/VALIDATE-20.md](./skills/phase3-gate-fix/workers/VALIDATE-20.md)): fuzzy `--all`, Playwright mirror + sandbox heraldry.
+The completed I-VALIDATE run used all §4.1–4.4 checks plus VALIDATE-20 gates (see [archived worker](./archive/skills/phase3-gate-fix/workers/VALIDATE-20.md)): fuzzy `--all`, Playwright mirror + sandbox heraldry.
 
 ---
 
@@ -226,7 +226,7 @@ Re-run all §4.1–4.4 plus VALIDATE-20 gates (see [skills/phase3-gate-fix/worke
 
 | Doc | Purpose |
 |-----|---------|
-| [skills/idiom-enforcement/SKILL.md](./skills/idiom-enforcement/SKILL.md) | Agent skill + orchestrator |
-| [skills/idiom-enforcement/milestone-checklist.md](./skills/idiom-enforcement/milestone-checklist.md) | Hop queue |
+| [archive/skills/idiom-enforcement/SKILL.md](./archive/skills/idiom-enforcement/SKILL.md) | Completed agent skill + orchestrator |
+| [archive/skills/idiom-enforcement/milestone-checklist.md](./archive/skills/idiom-enforcement/milestone-checklist.md) | Completed hop queue |
 | [04-milestone-checklist.md](./04-milestone-checklist.md) § Phase 3.5 | Master checklist |
 | [01-code-decomposition.md](./01-code-decomposition.md) | Layer responsibilities |

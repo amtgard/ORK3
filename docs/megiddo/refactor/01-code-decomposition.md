@@ -221,4 +221,4 @@ Most frequently accessed from `orkui`:
 - [03-implementation-plan.md](./03-implementation-plan.md) — per-target inventory with class/method/lines
 - [04-milestone-checklist.md](./04-milestone-checklist.md) — milestones and discovery sprints
 - [05-development-steering.md](./05-development-steering.md) — branch, test, mutation, and commit rules
-- [07-agent-milestone-prompt.md](./07-agent-milestone-prompt.md) — agent prompt template for milestone work
+- [archive/07-agent-milestone-prompt.md](./archive/07-agent-milestone-prompt.md) — completed agent prompt template for milestone work

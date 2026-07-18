@@ -2,6 +2,8 @@
 
 This document lists every refactor target in `orkui/` with **class**, **method**, and **line range**. Targets are grouped by domain. Each target has an ID (`T-xxx`) for tracking in discovery sprints and the milestone checklist.
 
+**Status:** Complete historical target map; all targets were migrated through R-19d.
+
 **Excluded from this document:** how to refactor, and whether code is duplicate or unique (discovery sprint output).
 
 ---
@@ -108,9 +110,9 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 **R-13 complete (2026-07-10):** T-INF-01 through T-INF-05, T-WN-01 migrated to `Health`, `Event`, `SessionToken`, `Player` domain APIs; thinned `orkui/index.php`, `class.Controller`, `controller.WnAjax`, `default.theme` whats_new read off `$DB` (T-INF-06 → R-01 `GetRsvpCountsBatch`; menu `HasAuthority` → R-14).
 
-**R-14 complete (2026-07-10):** T-LIB-01 through T-LIB-05 + Controller base menu `HasAuthority` migrated to `LiveService`, `WeatherService`, `EraPhoeniceService`, `AuthorizationGate` / `Authorization.HasAuthority`; thinned `Controller_Live`, `Controller_Weather`, `Controller_EraPhoenice`, `Controller_Tournament`, `Controller_CalendarItemAjax`, `class.Controller` off `Ork3::$Lib` on migrated paths. **Carryover:** ~120 HasAuthority sites + templates → R-15; ghettocache → R-16; T-EVT-08, T-KNG-11, T-PRK-05, T-PLR-08, T-RPT-02, T-UNT-02/03 → R-15–R-17; residual `$DB` → R-18 ([10-phase-2-continuation.md](./10-phase-2-continuation.md)).
+**R-14 complete (2026-07-10):** T-LIB-01 through T-LIB-05 + Controller base menu `HasAuthority` migrated to `LiveService`, `WeatherService`, `EraPhoeniceService`, `AuthorizationGate` / `Authorization.HasAuthority`; thinned `Controller_Live`, `Controller_Weather`, `Controller_EraPhoenice`, `Controller_Tournament`, `Controller_CalendarItemAjax`, `class.Controller` off `Ork3::$Lib` on migrated paths. **Carryover (completed):** ~120 HasAuthority sites + templates → R-15; ghettocache → R-16; T-EVT-08, T-KNG-11, T-PRK-05, T-PLR-08, T-RPT-02, T-UNT-02/03 → R-15–R-17; residual `$DB` → R-18 ([archived continuation plan](./archive/10-phase-2-continuation.md)).
 
-**R-15 complete (2026-07-10):** HasAuthority call sites in `orkui/` controllers + templates migrated to `Model_Authorization::has_authority` / precomputed `$this->data` flags. **Carryover on same files:** ghettocache → R-16; `park`/`player`/`weather` lib bypass → R-17; residual `$DB` → R-18 ([10-phase-2-continuation.md](./10-phase-2-continuation.md)).
+**R-15 complete (2026-07-10):** HasAuthority call sites in `orkui/` controllers + templates migrated to `Model_Authorization::has_authority` / precomputed `$this->data` flags. **Carryover on same files (completed):** ghettocache → R-16; `park`/`player`/`weather` lib bypass → R-17; residual `$DB` → R-18 ([archived continuation plan](./archive/10-phase-2-continuation.md)).
 
 **R-16 complete (2026-07-10):** Ghettocache read-through + write bust migrated into domain services; zero `Ork3::$Lib->ghettocache` in `orkui/`. **Carryover on same files:** residual `park`/`player`/`weather` lib bypass → R-17; residual `$DB` → R-18.
 
@@ -132,7 +134,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 
 **R-04 complete (2026-07-09):** T-EVA-01–T-EVA-13 migrated to `class.EventPlanning.php` / EventService + `Model_EventPlanning`; `CreateEvent` accepts optional draft status; `RemoveEventHeraldry` in Heraldry domain; EventAjax planning methods are thin adapters (auth addauth/playersearch and banner unchanged).
 
-**R-05 complete (2026-07-09):** T-EVT-01 through T-EVT-07 (page-render paths) migrated to `EventPlanning` domain — occurrence page DTO, fees/links, reconcile, dietary; thinned `Controller_Event` off `$DB` (**T-EVT-08** → R-15/R-16/R-17 auth/ghettocache/weather templates; [10-phase-2-continuation.md](./10-phase-2-continuation.md)).
+**R-05 complete (2026-07-09):** T-EVT-01 through T-EVT-07 (page-render paths) migrated to `EventPlanning` domain — occurrence page DTO, fees/links, reconcile, dietary; thinned `Controller_Event` off `$DB` (**T-EVT-08** → R-15/R-16/R-17 auth/ghettocache/weather templates; [archived continuation plan](./archive/10-phase-2-continuation.md)).
 
 ---
 
@@ -165,7 +167,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-KNA-07 | `Controller_KingdomAjax` | `suspendplayer` | 1183 | Read suspension state from `ork_mundane` |
 | T-KNA-08 | `Controller_KingdomAjax` | `banner` | 1225–1376 | Kingdom banner CRUD on `ork_kingdom` |
 
-**R-06 complete (2026-07-09):** T-KNG-01 through T-KNG-10, T-KNA-01–07, T-KNA-09 migrated to `KingdomProfile` domain + `Report.GetKingdomExtendedParkAverages`; thinned `Controller_Kingdom` and `Controller_KingdomAjax` migrated paths off `$DB` (**T-KNG-11** → R-15/R-16/R-17; [10-phase-2-continuation.md](./10-phase-2-continuation.md)).
+**R-06 complete (2026-07-09):** T-KNG-01 through T-KNG-10, T-KNA-01–07, T-KNA-09 migrated to `KingdomProfile` domain + `Report.GetKingdomExtendedParkAverages`; thinned `Controller_Kingdom` and `Controller_KingdomAjax` migrated paths off `$DB` (**T-KNG-11** → R-15/R-16/R-17; [archived continuation plan](./archive/10-phase-2-continuation.md)).
 
 ---
 
@@ -188,7 +190,7 @@ This document lists every refactor target in `orkui/` with **class**, **method**
 | T-PRA-03 | `Controller_ParkAjax` | `kingdom` → checkabbr | 602–645 | Park abbreviation uniqueness within kingdom |
 | T-PRA-04 | `Controller_ParkAjax` | `banner` | 657–817 | Park banner CRUD on `ork_park` |
 
-**R-07 complete (2026-07-09):** T-PRK-01 through T-PRK-04, T-PRA-03 migrated to `ParkProfile` domain + `Model_ParkProfile`; thinned `Controller_Park::profile` and `Controller_ParkAjax` off `$DB` (**T-PRK-05** → R-15/R-17; T-PRA-01/02/04 → R-02/R-11/R-03; [10-phase-2-continuation.md](./10-phase-2-continuation.md)).
+**R-07 complete (2026-07-09):** T-PRK-01 through T-PRK-04, T-PRA-03 migrated to `ParkProfile` domain + `Model_ParkProfile`; thinned `Controller_Park::profile` and `Controller_ParkAjax` off `$DB` (**T-PRK-05** → R-15/R-17; T-PRA-01/02/04 → R-02/R-11/R-03; [archived continuation plan](./archive/10-phase-2-continuation.md)).
 
 ---
 
@@ -303,7 +305,7 @@ These controllers use models/services for data but still call domain libs direct
 
 ### Residual lib bypass (Phase 3 — DS-19 / R-19a…d)
 
-41 sites in 12 files remain after R-18 (Phase 3 audit). Tracked for R-19 execution hops; see [ds-19-residual-lib-discovery.md](./ds-19-residual-lib-discovery.md).
+The 41 sites in 12 files found after R-18 were completed in R-19a … R-19d; see [archived DS-19 discovery](./archive/discovery/ds-19-residual-lib-discovery.md).
 
 | ID | Class / File | Method / Area | Lines | Lib / Call | Hop |
 |----|--------------|---------------|-------|------------|-----|

@@ -1,35 +1,13 @@
-# Megiddo Refactor — Validation Artifacts (Phase 1.6)
+# Megiddo Refactor — Remaining Validation Material
 
-Per-domain **canary URLs** and **test mutation boundaries** for R-* execution sprints. Produced in Phase 1.6 (**V-*** milestones); consumed at R-* sign-off with `bin/fuzzy-validator` and Infection.
-
-**Plan:** [08-phase-16-validation-artifacts.md](../08-phase-16-validation-artifacts.md) · **Checklist:** [04-milestone-checklist.md § Phase 1.6](../04-milestone-checklist.md#phase-16--validation-artifacts) · **Agent prompt:** [09-v-phase-agent-prompt.md](../09-v-phase-agent-prompt.md)
+The per-domain V-* validation artifacts supported completed R-* migrations and are preserved in [archive/validations/](../archive/validations/). They are historical reference, not an active execution queue.
 
 ---
 
-## Documents
+## Active validation
 
-| ID | File | Domain | R-* |
-|----|------|--------|-----|
-| **V-00** | [v-00-fuzzy-setpoint.md](./v-00-fuzzy-setpoint.md) | Global major-interface setpoint | All |
-| V-01 | [v-01-rsvp-validation.md](./v-01-rsvp-validation.md) | RSVP / events | R-01 |
-| V-02 | [v-02-auth-validation.md](./v-02-auth-validation.md) | Authorization INSERT | R-02 |
-| V-03 | [v-03-banner-validation.md](./v-03-banner-validation.md) | Banners | R-03 |
-| V-04 | [v-04-eventajax-validation.md](./v-04-eventajax-validation.md) | EventAjax | R-04 |
-| V-05 | [v-05-event-validation.md](./v-05-event-validation.md) | Event controller | R-05 |
-| V-06 | [v-06-kingdom-validation.md](./v-06-kingdom-validation.md) | Kingdom | R-06 |
-| V-07 | [v-07-park-validation.md](./v-07-park-validation.md) | Park | R-07 |
-| V-08 | [v-08-admin-validation.md](./v-08-admin-validation.md) | Admin | R-08 |
-| V-09 | [v-09-player-validation.md](./v-09-player-validation.md) | Player | R-09 |
-| V-10 | [v-10-reports-validation.md](./v-10-reports-validation.md) | Reports / awards | R-10 |
-| V-11 | [v-11-search-validation.md](./v-11-search-validation.md) | Search | R-11 |
-| V-12 | [v-12-attendance-validation.md](./v-12-attendance-validation.md) | Attendance / sign-in | R-12 |
-| V-13 | [v-13-infrastructure-validation.md](./v-13-infrastructure-validation.md) | Infrastructure | R-13 |
-| V-14 | [v-14-lib-service-validation.md](./v-14-lib-service-validation.md) | Ork3::$Lib / lib-service | R-14 |
-| V-19 | [v-19-residual-lib-validation.md](./v-19-residual-lib-validation.md) | Residual Ork3::$Lib bypass (41 sites) | R-19a … R-19d |
-
-**Template:** [_template-validation.md](./_template-validation.md)
-
-**Phase 3 manual smokes:** [r-milestone-smoke-matrix.html](./r-milestone-smoke-matrix.html) — one smoke per R-* (P3-1 / P3-4 in [11-phase-3-closeout.md](../11-phase-3-closeout.md))
+- **P3-4 manual smoke:** [r-milestone-smoke-matrix.html](./r-milestone-smoke-matrix.html) — one human smoke per R-* milestone.
+- **Close-out context:** [11-phase-3-closeout.md](../11-phase-3-closeout.md).
 
 ---
 
@@ -44,7 +22,7 @@ Per-domain **canary URLs** and **test mutation boundaries** for R-* execution sp
 
 ---
 
-## Sign-off commands (R-*)
+## Historical sign-off commands
 
 ```bash
 bin/ork-db deploy-sandbox
@@ -52,4 +30,4 @@ bin/fuzzy-validator validate --pages <ids-from-v-NN.md> --phase all
 # Default: test (strict) + mirror (lenient) — see fuzzy-validator 11-dual-database-profiles.md
 ```
 
-Requires [E2E login preflight](../06-test-framework.md#e2e-login-credentials-preflight). Dual-profile `validate` is implemented (FU-11); baselines via `record` or `setpoint restore` (FU-16).
+Requires [E2E login preflight](../06-test-framework.md#e2e-login-credentials-preflight). These commands remain useful when preparing the local environment for the manual smoke.

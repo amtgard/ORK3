@@ -1,10 +1,9 @@
 # Phase 3.5 — Idiom Enforcement
 
-**Status:** In progress (I-0 charter published)  
-**Prerequisite:** VALIDATE-20 `status=ok` on stack tip (`megiddo/p3-validate-20-audit` or later)  
-**Before:** P3-4 manual smoke matrix, P3-5 retrospective  
-**Master checklist:** [04-milestone-checklist.md](./04-milestone-checklist.md) § Phase 3.5  
-**Agent skill:** [skills/idiom-enforcement/SKILL.md](./skills/idiom-enforcement/SKILL.md)
+**Status:** Complete — I-0 … I-VALIDATE finished with `status: ok`.
+**Prerequisite satisfied:** VALIDATE-20 `status=ok` on the completed stack.
+**Next work:** P3-4 manual smoke matrix, P3-5 retrospective, and optional P3-6 merge, after rebase onto current `origin/master`.
+**Historical hop checklists and worker skill:** [archive/skills/idiom-enforcement/](./archive/skills/idiom-enforcement/)
 
 Megiddo refactors moved logic out of `orkui/` without rewriting the frontend in a modern style. **Refactored code must smell like the surrounding 2008–2012 ORK3 code** — same layering habits, naming, JSON shapes, whitespace, and call patterns. Idiom enforcement is a **style-only** pass: no new features, no semantic changes, no gate regressions.
 
@@ -36,11 +35,11 @@ Idiom hops **do not** relax success criteria from [02-requirements.md](./02-requ
 | **I-19a … I-19d** | R-19a … R-19d | Align residual lib migration files (3 files per hop) |
 | **I-VALIDATE** | — | Charter compliance audit + full test gates |
 
-**Orchestrator:** [skills/idiom-enforcement/orchestrator.prompt](./skills/idiom-enforcement/orchestrator.prompt)
+The completed orchestration materials are archived with the hop records.
 
 ---
 
-## Deliverables
+## Completed deliverables
 
 | ID | Owner | Artifact |
 |----|-------|----------|
@@ -53,7 +52,7 @@ Idiom hops **do not** relax success criteria from [02-requirements.md](./02-requ
 
 ---
 
-## Per-hop gates (I-01 … I-19d)
+## Per-hop gates (historical)
 
 Every idiom hop runs **at minimum**:
 
@@ -63,7 +62,7 @@ rg 'Ork3::\$Lib' orkui/              # exit 1
 sh bin/run-unit-tests.sh             # exit 0
 ```
 
-Hop-specific fuzzy/Playwright gates reuse the **R-* / R-19* gate lists** from [validations/v-*](./validations/) and remediation workers — run when the idiom diff touches rendered surfaces or AJAX contracts referenced by those gates.
+Hop-specific fuzzy/Playwright gates reused the archived R-* / R-19 validation records when an idiom diff touched rendered surfaces or AJAX contracts.
 
 **I-VALIDATE** runs full VALIDATE-20 gate set plus charter lint (see I-VALIDATE worker).
 
@@ -82,11 +81,11 @@ Clean pre-refactor idioms to cite in the charter:
 
 ---
 
-## Phase 3 close-out order (revised)
+## Phase 3 close-out order
 
 ```
-VALIDATE-20 (ok)
-  → I-0 → I-01 … I-18 → I-19a … I-19d → I-VALIDATE (ok)
+VALIDATE-20 (ok) → I-0 → I-01 … I-18 → I-19a … I-19d → I-VALIDATE (ok)
+  → rebase onto current origin/master
   → P3-4 manual smoke matrix
   → P3-5 retrospective
   → P3-6 optional merge

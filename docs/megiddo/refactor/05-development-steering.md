@@ -1,6 +1,6 @@
 # Megiddo Refactor — Development Steering
 
-Mandatory rules for all Megiddo refactor work (Phase 0 through Phase 2 continuation). **Phase 3** is audit-only after R-18 — see [10-phase-2-continuation.md](./10-phase-2-continuation.md). Every milestone sign-off must satisfy this checklist in addition to milestone-specific exit criteria.
+Mandatory rules used throughout the Megiddo refactor. Implementation, automated audit, and idiom enforcement are complete; the rules remain the reference for the pending rebase and any final close-out changes. See [11-phase-3-closeout.md](./11-phase-3-closeout.md) for remaining work.
 
 ---
 

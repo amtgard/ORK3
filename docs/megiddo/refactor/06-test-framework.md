@@ -319,7 +319,7 @@ Required at **R-* sign-off** after matching **V-*** milestone. Complements Playw
 | **Command** | `bin/fuzzy-validator validate --pages <ids> --phase all` |
 | **Output** | Exit code + HTML report under `tools/fuzzy-validator/reports/run-{id}/` |
 
-Record baselines in **V-00** (global setpoint) and **V-{nn}** (domain canaries): `bin/fuzzy-validator record --pages …`. See [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md) and [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md).
+Record baselines in **V-00** (global setpoint) and **V-{nn}** (domain canaries): `bin/fuzzy-validator record --pages …`. See the archived [08-phase-16-validation-artifacts.md](./archive/08-phase-16-validation-artifacts.md) and [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md).
 
 ---
 
@@ -354,6 +354,6 @@ Optional: add `sh bin/run-unit-tests.sh` to personal pre-push hook (not enforced
 | [04-milestone-checklist.md](./04-milestone-checklist.md) | M0.1 checklist |
 | [05-development-steering.md](./05-development-steering.md) | DS-4–DS-7 gates |
 | [../test-database-tool/README.md](../test-database-tool/README.md) | Sandbox DB (`bin/ork-db`) |
-| [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md) | Phase 1.6 V-* validation artifacts |
+| [archive/08-phase-16-validation-artifacts.md](./archive/08-phase-16-validation-artifacts.md) | Completed Phase 1.6 V-* validation artifacts |
 | [validations/README.md](./validations/README.md) | Canary URLs + test mutation boundaries |
 | [../fuzzy-validator/README.md](../fuzzy-validator/README.md) | Render gate (`bin/fuzzy-validator`) |

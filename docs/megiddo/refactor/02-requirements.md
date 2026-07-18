@@ -61,7 +61,7 @@ Each refactor target must have:
 - **Mutation tests** (Infection) scoped to the milestone, passing before sign-off per [05-development-steering.md](./05-development-steering.md) DS-7.
 - **Render stability gate:** `bin/fuzzy-validator validate` against **`test`** (strict) and **`mirror`** (lenient) database profiles — see [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md). Tooling complete through FU-16; artifacts from Phase 1.6 (V-*).
 
-**Phase 1.6 (V-*):** Before each R-* sprint, validation artifacts document canary URLs and dual-profile fuzzy baselines plus test mutation boundaries — [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md).
+**Phase 1.6 (V-*):** Before each R-* sprint, validation artifacts documented canary URLs and dual-profile fuzzy baselines plus test mutation boundaries — [archive/08-phase-16-validation-artifacts.md](./archive/08-phase-16-validation-artifacts.md).
 
 Authenticated Playwright and fuzzy-validator flows require **configured E2E login credentials** (sandbox `megiddo` / `test-db-player`; mirror `admin` / `password` on local docker) — not the local-only `class.Authorization.php` bypass. See [06-test-framework.md § E2E login credentials (preflight)](./06-test-framework.md#e2e-login-credentials-preflight).
 
@@ -185,11 +185,11 @@ The refactor is complete when **R-18** and **Phase 3 audit** pass:
 | [01-code-decomposition.md](./01-code-decomposition.md) | Architecture map |
 | [03-implementation-plan.md](./03-implementation-plan.md) | Target inventory |
 | [04-milestone-checklist.md](./04-milestone-checklist.md) | Milestones and sprint tracking |
-| [10-phase-2-continuation.md](./10-phase-2-continuation.md) | R-15 … R-18 + short Phase 3 pointer |
+| [archive/10-phase-2-continuation.md](./archive/10-phase-2-continuation.md) | Completed R-15 … R-18 continuation plan |
 | [11-phase-3-closeout.md](./11-phase-3-closeout.md) | **Phase 3** — full audit plan, HTML matrix, prompts |
 | [05-development-steering.md](./05-development-steering.md) | Branch, test, mutation, and commit rules |
-| [07-agent-milestone-prompt.md](./07-agent-milestone-prompt.md) | Copy-paste agent prompt per milestone |
-| [08-phase-16-validation-artifacts.md](./08-phase-16-validation-artifacts.md) | Phase 1.6 — V-* canaries + test mutation boundaries |
+| [archive/07-agent-milestone-prompt.md](./archive/07-agent-milestone-prompt.md) | Completed copy-paste agent prompt per milestone |
+| [archive/08-phase-16-validation-artifacts.md](./archive/08-phase-16-validation-artifacts.md) | Completed Phase 1.6 V-* canaries + test mutation boundaries |
 | [validations/README.md](./validations/README.md) | Per-domain validation artifact index |
 | [../fuzzy-validator/README.md](../fuzzy-validator/README.md) | Render stability gate (`bin/fuzzy-validator`) |
 | [../test-database-tool/README.md](../test-database-tool/README.md) | Stable sandbox DB for tests and fuzzy **`test`** profile |
