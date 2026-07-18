@@ -1177,6 +1177,9 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					<button type="button" class="ev-grid-view-btn" data-ev-view="list" aria-pressed="true"><i class="fas fa-list-ul"></i> List</button>
 					<button type="button" class="ev-grid-view-btn" data-ev-view="grid" aria-pressed="false"><i class="fas fa-th"></i> Grid</button>
 				</div>
+				<button type="button" class="ev-sched-copy-btn" onclick="evCopyScheduleLink(this)" title="Copy a link that opens the schedule in this exact view">
+					<i class="fas fa-link"></i> Copy link
+				</button>
 				<?php if ($canManageSchedule): ?>
 				<button type="button" class="ev-submit-btn" onclick="evOpenScheduleModal()">
 					<i class="fas fa-plus"></i> Add Schedule Item
@@ -2374,6 +2377,13 @@ function evShareFallback(url, btn) {
 	setTimeout(function() { btn.innerHTML = orig; btn.disabled = false; }, 1400);
 }
 
+// Copy a link that reopens the schedule in its current view/day. We stamp the hash first
+// (in case the user hasn't toggled anything yet) so the copied URL is always accurate.
+function evCopyScheduleLink(btn) {
+	if (typeof window.evWriteHash === 'function') window.evWriteHash('ev-tab-schedule');
+	evShareUrl(btn);
+}
+
 function evPositionDelTooltip(wrap) {
 	var btn = wrap.querySelector('button');
 	var tip = wrap.querySelector('.ev-del-detail-tooltip');
@@ -2956,11 +2966,26 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
 <script>
 (function() {
-    var hash = location.hash.replace('#', '');
-    if (hash) {
-        var li = document.querySelector('[data-tab="' + hash + '"]');
-        if (li && typeof evShowTab === 'function') evShowTab(li, hash);
+    // Deep-link hash format: #<tabId>[?key=val&key=val]
+    //   #ev-tab-schedule                        -> Schedule tab, default (list) view
+    //   #ev-tab-schedule?view=grid              -> Schedule tab, grid view
+    //   #ev-tab-schedule?view=grid&day=20260718 -> grid view, that day pre-selected
+    // Only the tab is opened here; the schedule script (further down) reads
+    // window.evHashParams to apply view/day once its DOM + helpers exist.
+    var raw = location.hash.replace('#', '');
+    if (!raw) return;
+    var qIdx = raw.indexOf('?');
+    var tabId = qIdx === -1 ? raw : raw.slice(0, qIdx);
+    window.evHashParams = {};
+    if (qIdx !== -1) {
+        raw.slice(qIdx + 1).split('&').forEach(function(pair) {
+            if (!pair) return;
+            var kv = pair.split('=');
+            window.evHashParams[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1] || '');
+        });
     }
+    var li = document.querySelector('[data-tab="' + tabId + '"]');
+    if (li && typeof evShowTab === 'function') evShowTab(li, tabId);
 })();
 (function() {
 	var _evAttDt = null;
@@ -2981,6 +3006,15 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 		});
 		window._evAttDt = _evAttDt;
 	}
+	// Keep the address bar in sync with the visible tab so a copied URL reopens here.
+	// The schedule tab contributes its own view/day suffix via evScheduleHashSuffix.
+	window.evWriteHash = function(tabId) {
+		var suffix = (tabId === 'ev-tab-schedule' && typeof window.evScheduleHashSuffix === 'function')
+			? window.evScheduleHashSuffix() : '';
+		var h = '#' + tabId + suffix;
+		try { history.replaceState(null, '', h); }
+		catch (e) { location.hash = h; }
+	};
 	var _origEvShowTab = window.evShowTab;
 	window.evShowTab = function(li, tabId) {
 		if (typeof _origEvShowTab === 'function') _origEvShowTab(li, tabId);
@@ -2990,6 +3024,7 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
 		if (tabId === 'ev-tab-rsvp') {
 			evPulseRsvpCredits();
 		}
+		window.evWriteHash(tabId);
 	};
 	// Init now if the attendance tab is already visible on page load
 	$(function() {
@@ -3857,6 +3892,21 @@ var _fpEnd = flatpickr('#ev-fp-end', Object.assign({}, _fpOpts, {
 }
 .ev-grid-view-btn i { font-size: 11px; }
 
+/* "Copy link" button — deep-links the current schedule view (stays visible on mobile) */
+.ev-sched-copy-btn {
+	background: #fff; border: 1px solid #e2e8f0; color: #718096;
+	padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+	border-radius: 999px; display: inline-flex; align-items: center; gap: 6px;
+	box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: background .15s, color .15s;
+}
+.ev-sched-copy-btn:hover { color: #2d3748; background: #f7fafc; }
+.ev-sched-copy-btn i { font-size: 11px; }
+html[data-theme="dark"] .ev-sched-copy-btn {
+	background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-muted);
+	box-shadow: 0 1px 2px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .ev-sched-copy-btn:hover { color: var(--ork-text); background: var(--ork-bg); }
+
 /* Dark mode toggle */
 html[data-theme="dark"] .ev-grid-view-toggle {
 	background: var(--ork-bg-secondary);
@@ -4132,11 +4182,19 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	var btns = document.querySelectorAll('.ev-grid-view-btn');
 	var isMobile = function() { return window.matchMedia('(max-width: 700px)').matches; };
 
+	// desiredView = what the user/URL asked for; the resolved view can differ (mobile
+	// forces list because the grid isn't rendered below the breakpoint). We persist and
+	// deep-link the desired value but reflect the resolved one in the UI and shared hash.
+	var desiredView  = 'list';
+	var currentView  = 'list';
+	var currentDayKey = '';
+
 	function applyMode(mode, opts) {
 		opts = opts || {};
-		if (isMobile()) mode = 'list';
-		if (mode !== 'grid') mode = 'list';
-		if (mode === 'grid') {
+		if (mode === 'grid' || mode === 'list') desiredView = mode;
+		var resolved = isMobile() ? 'list' : desiredView;
+		if (resolved !== 'grid') resolved = 'list';
+		if (resolved === 'grid') {
 			listEl.style.display = 'none';
 			gridEl.style.display = '';
 			updateNowLines();
@@ -4145,17 +4203,40 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 			gridEl.style.display = 'none';
 		}
 		btns.forEach(function(b) {
-			var active = b.getAttribute('data-ev-view') === mode;
+			var active = b.getAttribute('data-ev-view') === resolved;
 			b.classList.toggle('ev-grid-view-active', active);
 			b.setAttribute('aria-pressed', active ? 'true' : 'false');
 		});
+		currentView = resolved;
 		if (opts.persist === true) {
-			try { localStorage.setItem(STORAGE_KEY, mode); } catch(e) {}
+			try { localStorage.setItem(STORAGE_KEY, desiredView); } catch(e) {}
+		}
+	}
+
+	// Reflect the on-screen schedule state in the URL hash so a copied link reopens this
+	// exact view. List is the implicit default, so only grid (and, for a multi-day event,
+	// the selected day) is encoded.
+	function scheduleTabActive() {
+		var panel = document.getElementById('ev-tab-schedule');
+		return !!(panel && panel.classList.contains('ev-tab-visible'));
+	}
+	window.evScheduleHashSuffix = function() {
+		if (currentView !== 'grid') return '';
+		var s = '?view=grid';
+		if (gridDays.length > 1 && currentDayKey) s += '&day=' + currentDayKey;
+		return s;
+	};
+	function writeScheduleHash() {
+		if (scheduleTabActive() && typeof window.evWriteHash === 'function') {
+			window.evWriteHash('ev-tab-schedule');
 		}
 	}
 
 	btns.forEach(function(b) {
-		b.addEventListener('click', function() { applyMode(b.getAttribute('data-ev-view'), {persist:true}); });
+		b.addEventListener('click', function() {
+			applyMode(b.getAttribute('data-ev-view'), {persist:true});
+			writeScheduleHash();
+		});
 	});
 
 	// ---- Day pills (multi-day grids) ----
@@ -4166,6 +4247,7 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	var gridTodayKey = (window.EvConfig && EvConfig.evGridTodayKey) || '';
 	var pillBar = null;
 	function selectGridDay(dayKey) {
+		currentDayKey = dayKey;
 		gridDays.forEach(function(day) {
 			day.style.display = (day.getAttribute('data-day-key') === dayKey) ? '' : 'none';
 		});
@@ -4209,7 +4291,7 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 					dot.setAttribute('data-tip', 'Today');
 					pill.appendChild(dot);
 				}
-				pill.addEventListener('click', function() { selectGridDay(dk); });
+				pill.addEventListener('click', function() { selectGridDay(dk); writeScheduleHash(); });
 				pillBar.appendChild(pill);
 			});
 			gridEl.insertBefore(pillBar, gridEl.firstChild);
@@ -4222,10 +4304,17 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 
 	var initial = 'list';
 	try { initial = localStorage.getItem(STORAGE_KEY) || 'list'; } catch(e) {}
+	// A view/day in the URL hash wins over the stored preference, so a shared deep link
+	// opens as intended regardless of what the recipient last viewed.
+	var hp = window.evHashParams || {};
+	if (hp.view === 'grid' || hp.view === 'list') initial = hp.view;
 	applyMode(initial, {persist:false});
+	if (hp.day && gridDays.some(function(d){ return d.getAttribute('data-day-key') === hp.day; })) {
+		selectGridDay(hp.day);
+	}
 	window.addEventListener('resize', function() {
-		// Re-evaluate when crossing mobile breakpoint
-		applyMode(localStorage.getItem(STORAGE_KEY) || 'list', {persist:false});
+		// Re-evaluate when crossing the mobile breakpoint; keep the user's desired view.
+		applyMode(desiredView, {persist:false});
 	});
 
 	// "Now" indicator
