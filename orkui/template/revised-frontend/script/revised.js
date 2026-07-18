@@ -9426,6 +9426,8 @@ $(document).ready(function() {
                         });
                         evBuildScheduleFilters();
                     }
+                    // Keep the server-rendered grid in sync with this list mutation.
+                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
                 } else {
                     errEl.textContent = data.error || 'An error occurred.';
                     errEl.style.display = 'block';
@@ -9577,6 +9579,8 @@ $(document).ready(function() {
                         }
                     });
                     evBuildScheduleFilters();
+                    // Keep the server-rendered grid in sync with this removal.
+                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
                 } else {
                     alert(data.error || 'Could not remove schedule item.');
                 }

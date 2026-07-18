@@ -4162,7 +4162,7 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 	// The grid renders one .ev-grid-day per calendar day, stacked vertically. For a
 	// multi-day event that's an unwieldy scroll, so when there's more than one day we
 	// show a single day at a time and let the user switch via pills along the top.
-	var gridDays = Array.prototype.slice.call(gridEl.querySelectorAll('.ev-grid-day'));
+	var gridDays = [];
 	var gridTodayKey = (window.EvConfig && EvConfig.evGridTodayKey) || '';
 	var pillBar = null;
 	function selectGridDay(dayKey) {
@@ -4178,35 +4178,47 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 		}
 		updateNowLines();
 	}
-	if (gridDays.length > 1) {
-		var defaultDayKey = gridDays[0].getAttribute('data-day-key');
-		pillBar = document.createElement('div');
-		pillBar.className = 'ev-grid-day-pills';
-		gridDays.forEach(function(day) {
-			var dk = day.getAttribute('data-day-key');
-			var dateStr = day.getAttribute('data-date');
-			if (dk === gridTodayKey) defaultDayKey = dk; // prefer today if it's in range
-			var d = new Date(dateStr + 'T00:00:00');
-			var label = isNaN(d.getTime()) ? dateStr
-				: d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-			var pill = document.createElement('button');
-			pill.type = 'button';
-			pill.className = 'ev-grid-day-pill';
-			pill.setAttribute('data-day-key', dk);
-			pill.setAttribute('aria-pressed', 'false');
-			pill.textContent = label;
-			if (dk === gridTodayKey) {
-				var dot = document.createElement('span');
-				dot.className = 'ev-grid-day-pill-today';
-				dot.setAttribute('data-tip', 'Today');
-				pill.appendChild(dot);
-			}
-			pill.addEventListener('click', function() { selectGridDay(dk); });
-			pillBar.appendChild(pill);
-		});
-		gridEl.insertBefore(pillBar, gridEl.firstChild);
-		selectGridDay(defaultDayKey);
+	// (Re)build the day pills from the CURRENT grid DOM. Runs on load and again after
+	// the grid is re-fetched following a schedule add/edit/delete, so gridDays/pillBar
+	// never hold stale nodes from a previous render.
+	function setupGridDays() {
+		var oldPills = gridEl.querySelector('.ev-grid-day-pills');
+		if (oldPills && oldPills.parentNode) oldPills.parentNode.removeChild(oldPills);
+		pillBar = null;
+		gridDays = Array.prototype.slice.call(gridEl.querySelectorAll('.ev-grid-day'));
+		if (gridDays.length > 1) {
+			var defaultDayKey = gridDays[0].getAttribute('data-day-key');
+			pillBar = document.createElement('div');
+			pillBar.className = 'ev-grid-day-pills';
+			gridDays.forEach(function(day) {
+				var dk = day.getAttribute('data-day-key');
+				var dateStr = day.getAttribute('data-date');
+				if (dk === gridTodayKey) defaultDayKey = dk; // prefer today if it's in range
+				var d = new Date(dateStr + 'T00:00:00');
+				var label = isNaN(d.getTime()) ? dateStr
+					: d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+				var pill = document.createElement('button');
+				pill.type = 'button';
+				pill.className = 'ev-grid-day-pill';
+				pill.setAttribute('data-day-key', dk);
+				pill.setAttribute('aria-pressed', 'false');
+				pill.textContent = label;
+				if (dk === gridTodayKey) {
+					var dot = document.createElement('span');
+					dot.className = 'ev-grid-day-pill-today';
+					dot.setAttribute('data-tip', 'Today');
+					pill.appendChild(dot);
+				}
+				pill.addEventListener('click', function() { selectGridDay(dk); });
+				pillBar.appendChild(pill);
+			});
+			gridEl.insertBefore(pillBar, gridEl.firstChild);
+			selectGridDay(defaultDayKey);
+		} else if (gridDays.length === 1) {
+			gridDays[0].style.display = '';
+		}
 	}
+	setupGridDays();
 
 	var initial = 'list';
 	try { initial = localStorage.getItem(STORAGE_KEY) || 'list'; } catch(e) {}
@@ -4329,6 +4341,43 @@ html[data-theme="dark"] .ev-grid-day-pill.ev-grid-day-pill-active {
 		pop.style.left = left + 'px';
 		pop.style.top  = top  + 'px';
 		openPopover = pop;
+	};
+
+	// --- Grid ⇄ server resync -------------------------------------------------
+	// The grid is server-rendered; schedule add/edit/delete (handled in revised.js)
+	// only update the list DOM, so the grid used to go stale until a full reload.
+	// Re-fetch the page, swap in the freshly-rendered grid, and rebuild the day
+	// pills — keeping the server as the single source of truth for the layout math.
+	window.evReinitScheduleGrid = function() {
+		setupGridDays();
+		updateNowLines();
+		startNowTimer(); // self-guards; covers an empty→populated schedule
+	};
+	window.evRefreshScheduleGrid = function() {
+		fetch(window.location.href, {
+			headers: { 'X-Requested-With': 'XMLHttpRequest' },
+			credentials: 'same-origin'
+		})
+		.then(function(r) { return r.text(); })
+		.then(function(html) {
+			var doc = new DOMParser().parseFromString(html, 'text/html');
+			var fresh = doc.getElementById('ev-schedule-grid-container');
+			if (!fresh) return;
+			// Preserve the day the user is currently viewing, if it survives the swap.
+			var prevDayKey = null;
+			gridEl.querySelectorAll('.ev-grid-day').forEach(function(d) {
+				if (prevDayKey === null && d.style.display !== 'none') prevDayKey = d.getAttribute('data-day-key');
+			});
+			// Swap inner content only, so gridEl (and the view-toggle + now-timer
+			// wiring that closes over it) stays valid.
+			gridEl.innerHTML = fresh.innerHTML;
+			window.evReinitScheduleGrid();
+			if (prevDayKey) {
+				var still = gridEl.querySelector('.ev-grid-day[data-day-key="' + prevDayKey + '"]');
+				if (still) selectGridDay(prevDayKey);
+			}
+		})
+		.catch(function() { /* leave the grid as-is; the list is already correct */ });
 	};
 })();
 </script>
