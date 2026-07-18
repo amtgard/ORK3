@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS `ork_day_convert` (
   `day` int(11) NOT NULL,
   `dayname` varchar(15) NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `ork_day_convert` (`day`, `dayname`) VALUES
 (0, 'Monday'),
