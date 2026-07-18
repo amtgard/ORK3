@@ -45,7 +45,7 @@ test.describe('authenticated residual-lib flows', () => {
   });
 
   test('kingdom scoped player search ajax responds', async ({ page }) => {
-    const response = await page.goto('./index.php?Route=KingdomAjax/playersearch?q=test&kingdom_id=1');
+    const response = await page.goto('./index.php?Route=KingdomAjax/playersearch/1&q=test');
     expect(response?.status()).toBeLessThan(500);
   });
 

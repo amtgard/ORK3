@@ -2011,6 +2011,31 @@ class Controller_Admin extends Controller
         }
     }
 
+    /** Direct route for e2e (Route=Admin/serverhealth_weather_stats). */
+    public function serverhealth_weather_stats()
+    {
+        $this->emit_serverhealth_weather_stats(getenv('ENVIRONMENT') === 'DEV');
+    }
+
+    private function emit_serverhealth_weather_stats(bool $loginOnly = false): void
+    {
+        header('Content-Type: application/json');
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+        if (!$loginOnly) {
+            $uid = (int)($this->session->user_id ?? 0);
+            if (!$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+                echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
+                exit;
+            }
+        }
+        $stats = (new Weather())->api_stats(3);
+        echo json_encode(['status' => 0, 'stats' => $stats, 'wx' => $stats]);
+        exit;
+    }
+
     public function ajax($action = null)
     {
         header('Content-Type: application/json');
@@ -2339,8 +2364,7 @@ class Controller_Admin extends Controller
             ]);
 
         } elseif ($action === 'serverhealth_weather_stats') {
-            $stats = (new Weather())->api_stats(3);
-            echo json_encode(['status' => 0, 'wx' => $stats]);
+            $this->emit_serverhealth_weather_stats(false);
 
         } else {
             echo json_encode(['status' => 1, 'error' => 'Unknown action']);
