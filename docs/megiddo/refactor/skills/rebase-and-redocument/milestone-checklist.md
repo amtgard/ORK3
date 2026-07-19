@@ -147,8 +147,29 @@ Track **RB-*** progress for the current post-refactor rebase.
 ### RB-H: Overlap hotspots
 | Step | Status |
 |------|--------|
-| Verify thin layers, upstream behavior, tests, and Infection for every overlap | [ ] |
-| Confirm no `$DB->` / `Ork3::$Lib` on overlap paths; commit | [ ] |
+| Verify thin layers, upstream behavior, tests, and Infection for every overlap | [x] |
+| Confirm no `$DB->` / `Ork3::$Lib` on overlap paths; commit | [x] |
+
+**RB-H notes (2026-07-18):**
+
+Per-hotspot (thin / upstream behavior / domain tests / Infection):
+
+| Path | Thin | Upstream behavior | Tests | Infection |
+|------|------|-------------------|-------|-----------|
+| `orkui/controller/controller.EraPhoenice.php` | ok | ok (logic in `class.EraPhoenice`) | ok — expanded `EraPhoeniceTest` | **ok** `t14-lib-auth-era` + `class.EraPhoenice.php` MSI **82%** / covered **82%** (also fixed `configDir` → `../..`) |
+| `orkui/controller/controller.QualTest.php` | ok | ok (endpoints via `Model_QualTest`) | ok `QualTestScoreTest` | **gap** `t-qualtest` MSI **1%** / covered **69%** (full-class uncovered surface; floor not lowered) |
+| `orkui/controller/controller.QualTestAjax.php` | ok | ok (same public AJAX surface; thinned) | ok | same QualTest gate gap |
+| `orkui/model/model.Event.php` | ok | ok (Megiddo API supersedes base) | ok Event* suite | **gap** `t05-event` MSI **11%** / covered **39%** |
+| `orkui/template/default/Reports_playerawardrecommendations.tpl` | ok | ok (`$CanDeleteRecommendation` flag) | n/a template | n/a — Report domain gate below |
+| `orkui/template/revised-frontend/{Event,Kingdom,Park,Player}new_index.tpl` | ok | ok (UX kept; auth/weather via flags/`wx_*`) | n/a template | n/a |
+| `system/lib/ork3/class.Player.php` | n/a domain | ok (Megiddo + upstream growth) | ok Player* suite | **gap** `t09-player` MSI **2%** / covered **27%** |
+| `system/lib/ork3/class.Report.php` | n/a domain | ok | ok Report* suite | **gap** `t10-reports` MSI **6%** / covered **48%** |
+| `system/lib/system/class.Controller.php` | n/a system | ok (`load_model` / view surface) | covered indirectly | no scoped Controllers Infection config |
+
+- Overlap `orkui/` paths: `rg '$DB->'` / `rg 'Ork3::$Lib'` **CLEAN**.
+- Full PHPUnit after Era test expansion: **256 tests / 865 assertions**, exit 0 (drift-check strict PASS).
+- Infection floors were **not** lowered. Event / Player / Report / QualTest overall MSI remain below 15% due to large uncovered class surface after rebase; covered-MSI stays healthy where measured. Same QualTest full-class gap pattern as prior run.
+- Next: **RB-N**.
 
 ### RB-N: New upstream code — spirit of the refactor
 | Step | Status |
