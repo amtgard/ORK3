@@ -492,160 +492,25 @@ class Controller_Player extends Controller
         $this->data['PlayerTitles'] = $beltline['Titles'];
 
         // ===== Milestones Timeline Data =====
-        $__milestones = [];
         $__awards = is_array($this->data['Details']['Awards']) ? $this->data['Details']['Awards'] : [];
-        $__classes = is_array($this->data['Details']['Classes']) ? $this->data['Details']['Classes'] : [];
-
-        // 1. First Sign-In — use PlayerSinceDate (already computed via MIN(date)
-        // query at controller line ~358); no full-attendance scan needed.
-        $__earliestDate = $this->data['Player']['PlayerSinceDate'] ?? null;
-        if ($__earliestDate && $__earliestDate !== '0000-00-00' && $__earliestDate !== '1970-01-01') {
-            $__milestones[] = ['type' => 'first_signin', 'date' => $__earliestDate, 'icon' => 'fa-door-open', 'description' => 'First sign-in at Amtgard'];
-        }
-
-        // 2. Reached Level 6 in Class — computed client-side once attendance loads
-        // (see PlayerAjax/attendance handler in Playernew_index.tpl). Server-side
-        // generation removed so we don't have to fetch full attendance during
-        // page render.
-
-        // 3-6: Awards-based milestones
-        $__knightIds  = [17, 18, 19, 20, 245];
-        $__knightNames = [17 => 'Flame', 18 => 'Crown', 19 => 'Serpent', 20 => 'Sword', 245 => 'Battle'];
-        $__masterIds  = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 240, 244]; // mirrors $pnOrderToMaster values in Playernew_index.tpl
-        foreach ($__awards as $__aw) {
-            $__aid = (int)($__aw['AwardId'] ?? 0);
-            $__awDate = $__aw['Date'] ?? '';
-            // Prefer the player-specific custom_name when present (Custom Title /
-            // Custom Award rows). Otherwise fall back to the kingdomaward name,
-            // then the underlying award name.
-            $__awName = !empty($__aw['CustomAwardName']) ? $__aw['CustomAwardName'] : (!empty($__aw['KingdomAwardName']) ? $__aw['KingdomAwardName'] : ($__aw['Name'] ?? ''));
-            $__officerRole = $__aw['OfficerRole'] ?? 'none';
-            $__isTitle = (int)($__aw['IsTitle'] ?? 0);
-            $__aliasPeerage = $__aw['AliasPeerage'] ?? '';
-
-            if (empty($__awDate) || $__awDate === '0000-00-00') {
-                continue;
-            }
-
-            // Knight
-            if (in_array($__aid, $__knightIds)) {
-                $__knLabel = isset($__knightNames[$__aid]) ? 'Knight of the ' . $__knightNames[$__aid] : 'Knighted';
-                $__milestones[] = ['type' => 'knight', 'date' => $__awDate, 'icon' => 'fa-shield-alt', 'description' => 'Earned ' . $__knLabel];
-            }
-
-            // Master title — only when the player actually holds the formal Master award,
-            // not merely because they reached rank 10 of the corresponding Order.
-            if (in_array($__aid, $__masterIds)) {
-                $__milestones[] = ['type' => 'master', 'date' => $__awDate, 'icon' => 'fa-star', 'description' => 'Earned ' . $__awName];
-            }
-
-            // Paragon (class-specific paragon awards)
-            $__paragonIds = [37,38,39,40,41,241,42,43,44,45,46,47,242,49,50,51];
-            if (in_array($__aid, $__paragonIds)) {
-                $__milestones[] = ['type' => 'paragon', 'date' => $__awDate, 'icon' => 'fa-gem', 'description' => 'Earned ' . $__awName];
-            }
-
-            // Title (IsTitle=1 and OfficerRole is none, exclude paragons/knights already handled above).
-            // For Custom Titles aliased to a beltline peerage (Page/Squire/etc.),
-            // suppress this — the 'became_associate' milestone already covers it.
-            if ($__isTitle === 1 && in_array($__officerRole, ['none', null]) && !in_array($__aid, $__paragonIds) && !in_array($__aid, $__knightIds)
-                && !in_array($__aliasPeerage, ['Page', 'Lords-Page', 'Squire', 'Man-At-Arms'])) {
-                $__milestones[] = ['type' => 'title', 'date' => $__awDate, 'icon' => 'fa-crown', 'description' => 'Earned the title ' . $__awName];
-            }
-
-            // Served as Officer (OfficerRole is not none)
-            if (!in_array($__officerRole, ['none', null, ''])) {
-                $__milestones[] = ['type' => 'officer', 'date' => $__awDate, 'icon' => 'fa-landmark', 'description' => 'Served as ' . $__awName];
-            }
-        }
-
-        // 7. Became Associate (peerage awards given TO this player - from BeltlinePeers data)
-        $__blPeerLabels = ['Squire' => 'Squire', 'Man-At-Arms' => 'Person-at-Arms', 'Lords-Page' => "Lord's Page", 'Page' => 'Page'];
-        if (!empty($this->data['BeltlinePeers'])) {
-            foreach ($this->data['BeltlinePeers'] as $__bp) {
-                $__peerDate = $__bp['Date'] ?? '';
-                if (empty($__peerDate) || $__peerDate === '0000-00-00') {
-                    continue;
-                }
-                $__peerLabel = $__blPeerLabels[$__bp['Peerage']] ?? $__bp['Peerage'];
-                $__milestones[] = ['type' => 'became_associate', 'date' => $__peerDate, 'icon' => 'fa-handshake', 'description' => 'Became ' . $__peerLabel . ' to ' . $__bp['Persona']];
-            }
-        }
-
-        // 8. Took Associate (peerage awards given BY this player - from BeltlineAssociates data)
-        if (!empty($this->data['BeltlineAssociates'])) {
-            foreach ($this->data['BeltlineAssociates'] as $__ba) {
-                $__assocDate = $__ba['Date'] ?? '';
-                if (empty($__assocDate) || $__assocDate === '0000-00-00') {
-                    continue;
-                }
-                $__assocLabel = $__blPeerLabels[$__ba['Peerage']] ?? $__ba['Peerage'];
-                $__milestones[] = ['type' => 'took_associate', 'date' => $__assocDate, 'icon' => 'fa-hand-holding-heart', 'description' => 'Took ' . $__ba['Persona'] . ' as ' . $__assocLabel];
-            }
-        }
-
-        // 9. Custom milestones from DB
         $__customMs = $this->Player->get_custom_milestones((int)$id);
-        if (is_array($__customMs)) {
-            foreach ($__customMs as $__cm) {
-                $__milestones[] = [
-                    'type' => 'custom',
-                    'date' => $__cm['MilestoneDate'],
-                    'icon' => $__cm['Icon'],
-                    'description' => $__cm['Description'],
-                    'milestoneId' => (int)$__cm['MilestoneId'],
-                ];
-            }
-        }
-
-        // Cross-type dedup:
-        // 1. Remove 'title' milestones for peerage terms (already covered by 'became_associate')
-        // 2. Remove 'title' milestones for "Master X" that duplicate an existing 'master' milestone
-        $__masterMsNames = [];
-        foreach ($__milestones as $__m) {
-            if ($__m['type'] === 'master') {
-                $__masterMsNames[] = strtolower(preg_replace('/^Earned (?:Master )?/', '', $__m['description']));
-            }
-        }
-        $__peerageTerms = ['squire', 'man-at-arms', 'person-at-arms', "lord's page", 'page'];
-        $__milestones = array_values(array_filter($__milestones, function ($m) use ($__masterMsNames, $__peerageTerms) {
-            if ($m['type'] !== 'title') {
-                return true;
-            }
-            $__tn = strtolower(preg_replace('/^Earned the title /', '', $m['description']));
-            if (in_array($__tn, $__peerageTerms)) {
-                return false;
-            }
-            if (substr($__tn, 0, 7) === 'master ') {
-                $__kw = substr($__tn, 7);
-                foreach ($__masterMsNames as $__mn) {
-                    if (strpos($__mn, $__kw) !== false) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        }));
-
-        // Deduplicate milestones with same description + date
-        $__seen = [];
-        $__milestones = array_filter($__milestones, function ($m) use (&$__seen) {
-            $key = $m['date'] . '|' . $m['description'];
-            if (isset($__seen[$key])) {
-                return false;
-            }
-            $__seen[$key] = true;
-            return true;
-        });
-
-        // Sort chronologically ascending
-        usort($__milestones, function ($a, $b) {
-            return strtotime($a['date']) - strtotime($b['date']);
-        });
-
-        $this->data['Milestones'] = $__milestones;
+        $this->data['Milestones'] = $this->Player->get_player_milestones([
+            'MundaneId' => (int)$id,
+            'PlayerSinceDate' => $this->data['Player']['PlayerSinceDate'] ?? null,
+            'Awards' => $__awards,
+            'BeltlinePeers' => $this->data['BeltlinePeers'] ?? [],
+            'BeltlineAssociates' => $this->data['BeltlineAssociates'] ?? [],
+            'IncludeCustom' => true,
+        ]);
         $this->data['CustomMilestones'] = is_array($__customMs) ? $__customMs : [];
         $this->data['MilestoneConfig'] = $this->data['Player']['MilestoneConfig'] ?? '';
+        $this->data['LadderProgress'] = $this->Player->get_ladder_progress([
+            'MundaneId' => (int)$id,
+            'Awards' => $__awards,
+        ]);
+        $this->data['ClassParagonMap'] = $this->Player->get_class_paragon_map();
+        $this->data['LadderMasterMap'] = $this->Player->get_ladder_master_map();
+        $this->data['KnightAwardMap'] = $this->Player->get_knight_award_map();
 
         // Collapse the Peers/Associates *display* lists to one row per
         // counterparty, keeping the highest-precedence peerage (the SQL

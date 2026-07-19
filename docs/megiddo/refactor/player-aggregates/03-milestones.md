@@ -58,20 +58,25 @@ Executable checklist for implementers / orchestrator. IDs reuse **P3-R0…P3-R4*
 
 **Goal:** AwardId catalogues and timeline/ladder algorithms leave controller/templates.
 
+**Open-question decisions (this milestone):**
+- **Belt assets:** Domain returns AwardIds + short names (`GetKnightAwardMap`); belt **IMAGE URLs** remain in the template (host/path presentation).
+- **Milestone icons:** Font Awesome class strings stay in the domain DTO (`icon` field) — template renders as-is (matches pre-R2 controller behavior).
+- **Master catalogue:** `GetMasterAwardIds` flattens `GetLadderMasterMap` and **includes Warlord (12)** — former controller list omitted 12; unified on the ladder map as sole source.
+
 ### Work
 
-- [ ] Add `Award::GetClassParagonMap` (+ knight/master/paragon helpers as needed); ensure `GetLadderMasterMap` is the only order→master source
-- [ ] Implement `Player::GetPlayerMilestones` + model wrapper; port controller block ~515–669 including dedup/sort
-- [ ] Implement `Player::GetLadderProgress` + model wrapper; port template ladder tile algorithm
-- [ ] Thin `Controller_Player::profile`: assign `Milestones`, `LadderProgress`, maps
-- [ ] Thin `Playernew_index.tpl`: remove `$pnOrderToMaster`, `$pnOrderNames`, `$pnClassToParagon`; iterate DTOs; knight belt detection may consume shared knight map
-- [ ] PHPUnit: map equality vs former literals; milestone fixture cases; ladder Approx/Master edge cases
+- [x] Add `Award::GetClassParagonMap` (+ knight/master/paragon helpers as needed); ensure `GetLadderMasterMap` is the only order→master source
+- [x] Implement `Player::GetPlayerMilestones` + model wrapper; port controller block ~515–669 including dedup/sort
+- [x] Implement `Player::GetLadderProgress` + model wrapper; port template ladder tile algorithm
+- [x] Thin `Controller_Player::profile`: assign `Milestones`, `LadderProgress`, maps
+- [x] Thin `Playernew_index.tpl`: remove `$pnOrderToMaster`, `$pnOrderNames`, `$pnClassToParagon`; iterate DTOs; knight belt detection may consume shared knight map
+- [x] PHPUnit: map equality vs former literals; milestone fixture cases; ladder Approx/Master edge cases
 
 ### Acceptance
 
-- [ ] `rg 'pnOrderToMaster|pnClassToParagon|__knightIds|__paragonIds'` clean under `orkui/` (except comments pointing to domain if any)
-- [ ] Template does not define order→master or class→paragon maps
-- [ ] Full PHPUnit green; static gates clean
+- [x] `rg 'pnOrderToMaster|pnClassToParagon|__knightIds|__paragonIds'` clean under `orkui/` (except comments pointing to domain if any)
+- [x] Template does not define order→master or class→paragon maps
+- [x] Full PHPUnit green; static gates clean
 - [ ] Visual/DOM behavior preserved for Awards / Class Levels / Milestones tabs (manual or fuzzy later)
 
 **Note:** Belt image URL assembly may remain in template if AwardIds come from domain.
@@ -132,6 +137,6 @@ Do not parallelize R1–R4 on overlapping `Controller_Player` / template files. 
 ## Open questions (resolve during R1–R3, document in commit)
 
 1. **Credit semantics:** **Resolved (P3-R1):** `fetch_player_details` / `GetPlayerProfileDetails` Classes come from `GetPlayerClasses` — same as `ComputeClassProgress`. Chose **Option A** (`GetHighestClassLevel`). Option B helper `HighestClassLevelFromClasses` kept for characterization.
-2. **Belt assets:** Domain returns AwardIds only vs include relative image keys.
-3. **Milestone icons:** Keep Font Awesome class strings in domain DTO (current) vs map type→icon in template.
+2. **Belt assets:** **Resolved (P3-R2):** Domain returns AwardIds + short names only; belt image URLs remain in the template.
+3. **Milestone icons:** **Resolved (P3-R2):** Keep Font Awesome class strings in the domain DTO (`icon`); template does not remap type→icon.
 4. **orkservice:** Defer forever vs register in R4 for one client — product call, not a gate.

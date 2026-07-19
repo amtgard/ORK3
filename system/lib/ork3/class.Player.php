@@ -1082,6 +1082,368 @@ class Player extends Ork3
         return $highest;
     }
 
+    /**
+     * Profile milestone timeline (P3-R2). Prefer preloaded Awards / beltline to avoid N+1.
+     * Icons stay Font Awesome class strings in the DTO (template renders as-is).
+     *
+     * @param array{
+     *   MundaneId?: int,
+     *   PlayerSinceDate?: ?string,
+     *   Awards?: ?list,
+     *   BeltlinePeers?: ?list,
+     *   BeltlineAssociates?: ?list,
+     *   IncludeCustom?: bool
+     * } $request
+     * @return array{Status: int, Error?: string, Detail: list<array<string, mixed>>}
+     */
+    public function GetPlayerMilestones(array $request)
+    {
+        $mundaneId = (int)($request['MundaneId'] ?? 0);
+        $awards = $request['Awards'] ?? null;
+        if (!is_array($awards)) {
+            if (!valid_id($mundaneId)) {
+                return InvalidParameter();
+            }
+            $awardsResponse = $this->AwardsForPlayer(['MundaneId' => $mundaneId]);
+            $awards = is_array($awardsResponse['Awards'] ?? null) ? $awardsResponse['Awards'] : [];
+        }
+
+        $playerSince = $request['PlayerSinceDate'] ?? null;
+        if (($playerSince === null || $playerSince === '') && valid_id($mundaneId)) {
+            $playerSince = $this->get_earliest_attendance_date($mundaneId);
+        }
+
+        $peers = is_array($request['BeltlinePeers'] ?? null) ? $request['BeltlinePeers'] : [];
+        $associates = is_array($request['BeltlineAssociates'] ?? null) ? $request['BeltlineAssociates'] : [];
+        $includeCustom = array_key_exists('IncludeCustom', $request)
+            ? (bool)$request['IncludeCustom']
+            : true;
+
+        $milestones = [];
+
+        if ($playerSince && $playerSince !== '0000-00-00' && $playerSince !== '1970-01-01') {
+            $milestones[] = [
+                'type' => 'first_signin',
+                'date' => $playerSince,
+                'icon' => 'fa-door-open',
+                'description' => 'First sign-in at Amtgard',
+            ];
+        }
+
+        $knightMap = Award::GetKnightAwardMap();
+        $knightIds = array_map('intval', array_keys($knightMap));
+        $masterIds = Award::GetMasterAwardIds();
+        $paragonIds = Award::GetParagonAwardIds();
+
+        foreach ($awards as $aw) {
+            if (!is_array($aw)) {
+                continue;
+            }
+            $aid = (int)($aw['AwardId'] ?? 0);
+            $awDate = $aw['Date'] ?? '';
+            $awName = !empty($aw['CustomAwardName'])
+                ? $aw['CustomAwardName']
+                : (!empty($aw['KingdomAwardName']) ? $aw['KingdomAwardName'] : ($aw['Name'] ?? ''));
+            $officerRole = $aw['OfficerRole'] ?? 'none';
+            $isTitle = (int)($aw['IsTitle'] ?? 0);
+            $aliasPeerage = $aw['AliasPeerage'] ?? '';
+
+            if (empty($awDate) || $awDate === '0000-00-00') {
+                continue;
+            }
+
+            if (in_array($aid, $knightIds, true)) {
+                $knLabel = isset($knightMap[$aid]) ? 'Knight of the ' . $knightMap[$aid] : 'Knighted';
+                $milestones[] = [
+                    'type' => 'knight',
+                    'date' => $awDate,
+                    'icon' => 'fa-shield-alt',
+                    'description' => 'Earned ' . $knLabel,
+                ];
+            }
+
+            if (in_array($aid, $masterIds, true)) {
+                $milestones[] = [
+                    'type' => 'master',
+                    'date' => $awDate,
+                    'icon' => 'fa-star',
+                    'description' => 'Earned ' . $awName,
+                ];
+            }
+
+            if (in_array($aid, $paragonIds, true)) {
+                $milestones[] = [
+                    'type' => 'paragon',
+                    'date' => $awDate,
+                    'icon' => 'fa-gem',
+                    'description' => 'Earned ' . $awName,
+                ];
+            }
+
+            if ($isTitle === 1 && in_array($officerRole, ['none', null], true)
+                && !in_array($aid, $paragonIds, true)
+                && !in_array($aid, $knightIds, true)
+                && !in_array($aliasPeerage, ['Page', 'Lords-Page', 'Squire', 'Man-At-Arms'], true)
+            ) {
+                $milestones[] = [
+                    'type' => 'title',
+                    'date' => $awDate,
+                    'icon' => 'fa-crown',
+                    'description' => 'Earned the title ' . $awName,
+                ];
+            }
+
+            if (!in_array($officerRole, ['none', null, ''], true)) {
+                $milestones[] = [
+                    'type' => 'officer',
+                    'date' => $awDate,
+                    'icon' => 'fa-landmark',
+                    'description' => 'Served as ' . $awName,
+                ];
+            }
+        }
+
+        $peerLabels = [
+            'Squire' => 'Squire',
+            'Man-At-Arms' => 'Person-at-Arms',
+            'Lords-Page' => "Lord's Page",
+            'Page' => 'Page',
+        ];
+        foreach ($peers as $bp) {
+            if (!is_array($bp)) {
+                continue;
+            }
+            $peerDate = $bp['Date'] ?? '';
+            if (empty($peerDate) || $peerDate === '0000-00-00') {
+                continue;
+            }
+            $peerLabel = $peerLabels[$bp['Peerage'] ?? ''] ?? ($bp['Peerage'] ?? '');
+            $milestones[] = [
+                'type' => 'became_associate',
+                'date' => $peerDate,
+                'icon' => 'fa-handshake',
+                'description' => 'Became ' . $peerLabel . ' to ' . ($bp['Persona'] ?? ''),
+            ];
+        }
+        foreach ($associates as $ba) {
+            if (!is_array($ba)) {
+                continue;
+            }
+            $assocDate = $ba['Date'] ?? '';
+            if (empty($assocDate) || $assocDate === '0000-00-00') {
+                continue;
+            }
+            $assocLabel = $peerLabels[$ba['Peerage'] ?? ''] ?? ($ba['Peerage'] ?? '');
+            $milestones[] = [
+                'type' => 'took_associate',
+                'date' => $assocDate,
+                'icon' => 'fa-hand-holding-heart',
+                'description' => 'Took ' . ($ba['Persona'] ?? '') . ' as ' . $assocLabel,
+            ];
+        }
+
+        if ($includeCustom && valid_id($mundaneId)) {
+            $customMs = $this->GetCustomMilestones($mundaneId);
+            if (is_array($customMs)) {
+                foreach ($customMs as $cm) {
+                    $milestones[] = [
+                        'type' => 'custom',
+                        'date' => $cm['MilestoneDate'],
+                        'icon' => $cm['Icon'],
+                        'description' => $cm['Description'],
+                        'milestoneId' => (int)$cm['MilestoneId'],
+                    ];
+                }
+            }
+        }
+
+        $masterMsNames = [];
+        foreach ($milestones as $m) {
+            if (($m['type'] ?? '') === 'master') {
+                $masterMsNames[] = strtolower(preg_replace('/^Earned (?:Master )?/', '', $m['description']));
+            }
+        }
+        $peerageTerms = ['squire', 'man-at-arms', 'person-at-arms', "lord's page", 'page'];
+        $milestones = array_values(array_filter($milestones, function ($m) use ($masterMsNames, $peerageTerms) {
+            if (($m['type'] ?? '') !== 'title') {
+                return true;
+            }
+            $tn = strtolower(preg_replace('/^Earned the title /', '', $m['description']));
+            if (in_array($tn, $peerageTerms, true)) {
+                return false;
+            }
+            if (substr($tn, 0, 7) === 'master ') {
+                $kw = substr($tn, 7);
+                foreach ($masterMsNames as $mn) {
+                    if (strpos($mn, $kw) !== false) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }));
+
+        $seen = [];
+        $milestones = array_values(array_filter($milestones, function ($m) use (&$seen) {
+            $key = ($m['date'] ?? '') . '|' . ($m['description'] ?? '');
+            if (isset($seen[$key])) {
+                return false;
+            }
+            $seen[$key] = true;
+            return true;
+        }));
+
+        usort($milestones, function ($a, $b) {
+            return strtotime($a['date'] ?? '') - strtotime($b['date'] ?? '');
+        });
+
+        return Success($milestones);
+    }
+
+    /**
+     * Ladder progress tiles for the Awards tab (P3-R2). Uses Award::GetLadderMasterMap only.
+     * Skips Walker of the Middle (31). Approx when effective count > Rank and no Master.
+     *
+     * @param array{MundaneId?: int, Awards?: ?list} $request
+     * @return array{Status: int, Error?: string, Detail: list<array<string, mixed>>}
+     */
+    public function GetLadderProgress(array $request)
+    {
+        $mundaneId = (int)($request['MundaneId'] ?? 0);
+        $awards = $request['Awards'] ?? null;
+        if (!is_array($awards)) {
+            if (!valid_id($mundaneId)) {
+                return InvalidParameter();
+            }
+            $awardsResponse = $this->AwardsForPlayer(['MundaneId' => $mundaneId]);
+            $awards = is_array($awardsResponse['Awards'] ?? null) ? $awardsResponse['Awards'] : [];
+        }
+
+        $ladderMap = Award::GetLadderMasterMap();
+        $heldAwardIds = [];
+        foreach ($awards as $a) {
+            if (!is_array($a)) {
+                continue;
+            }
+            $aid = (int)($a['AwardId'] ?? 0);
+            if ($aid > 0) {
+                $heldAwardIds[$aid] = true;
+            }
+        }
+
+        $progress = [];
+        foreach ($awards as $a) {
+            if (!is_array($a)) {
+                continue;
+            }
+            if ((int)($a['IsLadder'] ?? 0) !== 1) {
+                continue;
+            }
+            $aid = (int)($a['AwardId'] ?? 0);
+            $rank = (int)($a['Rank'] ?? 0);
+            if ($aid <= 0 || $aid === 31) {
+                continue; // 31 = Walker of the Middle
+            }
+
+            $custom = (string)($a['CustomAwardName'] ?? '');
+            $kingdomName = (string)($a['KingdomAwardName'] ?? '');
+            $name = (string)($a['Name'] ?? '');
+            if (function_exists('trimlen')) {
+                $displayName = trimlen($custom) > 0 ? $custom
+                    : (trimlen($kingdomName) > 0 ? $kingdomName : $name);
+            } else {
+                $displayName = $custom !== '' ? $custom : ($kingdomName !== '' ? $kingdomName : $name);
+            }
+            $shortName = preg_replace('/^Order of (the )?/i', '', $displayName);
+
+            $hasMaster = false;
+            if (isset($ladderMap[$aid])) {
+                foreach ((array)$ladderMap[$aid]['MasterAwardIds'] as $masterId) {
+                    if (isset($heldAwardIds[(int)$masterId])) {
+                        $hasMaster = true;
+                        break;
+                    }
+                }
+            }
+
+            $rankKey = $rank;
+            if (!isset($progress[$aid])) {
+                $progress[$aid] = [
+                    'Name' => $displayName,
+                    'Short' => $shortName,
+                    'Rank' => $rank,
+                    'RankSet' => $rank > 0 ? [$rankKey => true] : [],
+                    'UnrankedCount' => $rank === 0 ? 1 : 0,
+                    'HasMaster' => $hasMaster,
+                ];
+            } else {
+                if ($rank > $progress[$aid]['Rank']) {
+                    $progress[$aid]['Rank'] = $rank;
+                }
+                if ($rank > 0) {
+                    $progress[$aid]['RankSet'][$rankKey] = true;
+                } else {
+                    $progress[$aid]['UnrankedCount']++;
+                }
+            }
+        }
+
+        foreach ($progress as $lpAid => &$lp) {
+            $maxRank = (int)($ladderMap[$lpAid]['MaxRank'] ?? (($lpAid === 30) ? 12 : 10));
+            $effectiveCount = count($lp['RankSet']) + $lp['UnrankedCount'];
+            $lp['Approx'] = ($effectiveCount > $lp['Rank']) && empty($lp['HasMaster']);
+            $lp['Rank'] = min($maxRank, max($lp['Rank'], $effectiveCount));
+            $lp['MaxRank'] = $maxRank;
+            unset($lp['RankSet'], $lp['UnrankedCount']);
+        }
+        unset($lp);
+
+        foreach ($ladderMap as $orderId => $info) {
+            if (isset($progress[$orderId])) {
+                continue;
+            }
+            $hasMaster = false;
+            foreach ((array)$info['MasterAwardIds'] as $masterId) {
+                if (isset($heldAwardIds[(int)$masterId])) {
+                    $hasMaster = true;
+                    break;
+                }
+            }
+            if (!$hasMaster) {
+                continue;
+            }
+            $maxRank = (int)($info['MaxRank'] ?? 10);
+            $name = (string)($info['LadderName'] ?? 'Unknown Order');
+            $short = preg_replace('/^Order of (the )?/i', '', $name);
+            $progress[$orderId] = [
+                'Name' => $name,
+                'Short' => $short,
+                'Rank' => $maxRank,
+                'MaxRank' => $maxRank,
+                'HasMaster' => true,
+                'Approx' => false,
+            ];
+        }
+
+        $tiles = [];
+        foreach ($progress as $aid => $lp) {
+            $tiles[] = [
+                'AwardId' => (int)$aid,
+                'Name' => $lp['Name'],
+                'Short' => $lp['Short'],
+                'Rank' => (int)$lp['Rank'],
+                'MaxRank' => (int)($lp['MaxRank'] ?? (($aid === 30) ? 12 : 10)),
+                'HasMaster' => !empty($lp['HasMaster']),
+                'Approx' => !empty($lp['Approx']),
+            ];
+        }
+        usort($tiles, function ($a, $b) {
+            return strcmp($a['Name'], $b['Name']);
+        });
+
+        return Success($tiles);
+    }
+
     public function GetPlayerClasses($request)
     {
         // Cold-cache the dedupe-by-date subquery costs ~185ms for the busiest player

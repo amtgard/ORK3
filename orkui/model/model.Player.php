@@ -327,6 +327,49 @@ class Model_Player extends Model
         return $this->_player()->GetHighestClassLevel($mundane_id);
     }
 
+    public function get_class_paragon_map(): array
+    {
+        return Award::GetClassParagonMap();
+    }
+
+    public function get_ladder_master_map(): array
+    {
+        return Award::GetLadderMasterMap();
+    }
+
+    public function get_knight_award_map(): array
+    {
+        return Award::GetKnightAwardMap();
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     * @return list<array<string, mixed>>
+     */
+    public function get_player_milestones(array $request): array
+    {
+        $response = $this->_player()->GetPlayerMilestones($request);
+        if (($response['Status'] ?? 1) != 0) {
+            return [];
+        }
+
+        return is_array($response['Detail'] ?? null) ? $response['Detail'] : [];
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     * @return list<array<string, mixed>>
+     */
+    public function get_ladder_progress(array $request): array
+    {
+        $response = $this->_player()->GetLadderProgress($request);
+        if (($response['Status'] ?? 1) != 0) {
+            return [];
+        }
+
+        return is_array($response['Detail'] ?? null) ? $response['Detail'] : [];
+    }
+
     public function dismiss_whats_new($mundane_id, $version)
     {
         return $this->_player()->DismissWhatsNew((int)$mundane_id, (string)$version);

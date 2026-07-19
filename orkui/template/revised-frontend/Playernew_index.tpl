@@ -28,7 +28,9 @@
 	}
 
 
-	$knightAwardIds = array(17, 18, 19, 20, 245);
+	// Knight AwardIds from domain (Award::GetKnightAwardMap via controller).
+	// Belt IMAGE URLs stay presentation-local (host/path); AwardIds come from domain.
+	$knightAwardIds = array_map('intval', array_keys(is_array($KnightAwardMap ?? null) ? $KnightAwardMap : []));
 	$_beltImgHost = '//' . $_SERVER['HTTP_HOST'] . '/assets/images/';
 	$beltImageMap = array(
 		17  => $_beltImgHost . 'belt-flame.png',
@@ -129,11 +131,10 @@
 		if (!empty($_att['ClassId'])) { $_lastClassId = (int)$_att['ClassId']; break; }
 	}
 
-	// Class → Paragon award map (used by My Amtgard + Class Levels tabs)
-	$pnClassToParagon = [
-		1=>37, 2=>38, 3=>39, 4=>40, 5=>41, 6=>241, 7=>42, 8=>43,
-		9=>44, 10=>45, 11=>46, 12=>47, 14=>242, 15=>49, 16=>50, 17=>51,
-	];
+	// Class → Paragon award map from domain (controller-assigned ClassParagonMap)
+	if (!isset($ClassParagonMap) || !is_array($ClassParagonMap)) {
+		$ClassParagonMap = [];
+	}
 	$pnHeldAwardIds = [];
 	if (is_array($Details['Awards'])) {
 		foreach ($Details['Awards'] as $_pa) {
@@ -2129,114 +2130,16 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 						}
 					}
 
-					// Build ladder progress: AwardId -> {Name, Short, MaxRank, HasMaster}
-					// Static map: Order award_id => Master award_id(s)
-					$pnOrderToMaster = [
-						21  => [1],       // Order of the Rose      → Master Rose
-						22  => [2],       // Order of the Smith      → Master Smith
-						23  => [3],       // Order of the Lion       → Master Lion
-						24  => [4],       // Order of the Owl        → Master Owl
-						25  => [5],       // Order of the Dragon     → Master Dragon
-						26  => [6],       // Order of the Garber     → Master Garber
-						27  => [12],      // Order of the Warrior    → Warlord
-						28  => [7],       // Order of the Jovius     → Master Jovius
-						29  => [9],       // Order of the Mask       → Master Mask
-						30  => [8],       // Order of the Zodiac     → Master Zodiac
-						32  => [10],      // Order of the Hydra      → Master Hydra
-						33  => [11],      // Order of the Griffin    → Master Griffin
-						239 => [240],     // Order of the Crown      → Master Crown
-						243 => [244],     // Order of Battle         → Battlemaster
-					];
-					$pnOrderNames = [
-						21  => ['Order of the Rose',    'Rose'],
-						22  => ['Order of the Smith',   'Smith'],
-						23  => ['Order of the Lion',    'Lion'],
-						24  => ['Order of the Owl',     'Owl'],
-						25  => ['Order of the Dragon',  'Dragon'],
-						26  => ['Order of the Garber',  'Garber'],
-						27  => ['Order of the Warrior', 'Warrior'],
-						28  => ['Order of the Jovius',  'Jovius'],
-						29  => ['Order of the Mask',    'Mask'],
-						30  => ['Order of the Zodiac',  'Zodiac'],
-						32  => ['Order of the Hydra',   'Hydra'],
-						33  => ['Order of the Griffin', 'Griffin'],
-						239 => ['Order of the Crown',   'Crown'],
-						243 => ['Order of Battle',      'Battle'],
-					];
-					// Index all award_ids the player holds (including titles)
-					$pnHeldAwardIds = [];
-					foreach ($awardsList as $a) {
-						$aid = (int)$a['AwardId'];
-						if ($aid > 0) $pnHeldAwardIds[$aid] = true;
+					// Ladder progress tiles from domain (Player::GetLadderProgress via controller)
+					if (!isset($LadderProgress) || !is_array($LadderProgress)) {
+						$LadderProgress = [];
 					}
-					$pnLadderProgress = [];
-					foreach ($awardsList as $a) {
-						if ((int)$a['IsLadder'] !== 1) continue;
-						$aid  = (int)$a['AwardId'];
-						$rank = (int)$a['Rank'];
-						if ($aid <= 0 || $aid === 31) continue; // 31 = Walker of the Middle
-						$displayName = trimlen($a['CustomAwardName']) > 0 ? $a['CustomAwardName']
-							: (trimlen($a['KingdomAwardName']) > 0 ? $a['KingdomAwardName'] : $a['Name']);
-						// Strip "Order of the " / "Order of " prefix to save space
-						$shortName = preg_replace('/^Order of (the )?/i', '', $displayName);
-						// Check if player holds the corresponding Master title
-						$hasMaster = false;
-						if (isset($pnOrderToMaster[$aid])) {
-							foreach ($pnOrderToMaster[$aid] as $masterId) {
-								if (isset($pnHeldAwardIds[$masterId])) { $hasMaster = true; break; }
-							}
-						}
-						// Dedup key is rank only — two awards at the same rank from different
-						// parks or dates are still the same rank, not two separate levels.
-						$rankKey = $rank;
-						if (!isset($pnLadderProgress[$aid])) {
-							$pnLadderProgress[$aid] = ['Name' => $displayName, 'Short' => $shortName, 'Rank' => $rank,
-								'RankSet' => $rank > 0 ? [$rankKey => true] : [], 'UnrankedCount' => $rank === 0 ? 1 : 0, 'HasMaster' => $hasMaster];
-						} else {
-							if ($rank > $pnLadderProgress[$aid]['Rank']) {
-								$pnLadderProgress[$aid]['Rank'] = $rank;
-							}
-							if ($rank > 0) {
-								$pnLadderProgress[$aid]['RankSet'][$rankKey] = true;
-							} else {
-								$pnLadderProgress[$aid]['UnrankedCount']++;
-							}
-						}
-					}
-					// Use max(highest_rank, effective_count) to account for unreconciled historical awards.
-					// Effective count = distinct ranked entries + unranked entries (deduplicates duplicate ranks).
-					// Cap at maxRank per award (10 for most, 12 for Zodiac)
-					// Mark as approximate when effective count exceeds highest actual rank
-					foreach ($pnLadderProgress as $_lpAid => &$lp) {
-						$_lpMax = ($_lpAid === 30) ? 12 : 10;
-						$_effectiveCount = count($lp['RankSet']) + $lp['UnrankedCount'];
-						// Suppress the "approximate" marker when the player already holds the
-						// corresponding Master title — the M badge is the authoritative signal,
-						// no need to second-guess the breakdown that got them there.
-						$lp['Approx'] = ($_effectiveCount > $lp['Rank']) && empty($lp['HasMaster']);
-						$lp['Rank'] = min($_lpMax, max($lp['Rank'], $_effectiveCount));
-					}
-					unset($lp);
-					// Add a complete tile for any masterhood held with no corresponding ladder progress
-					foreach ($pnOrderToMaster as $orderId => $masterIds) {
-						if (isset($pnLadderProgress[$orderId])) continue;
-						$hasMaster = false;
-						foreach ($masterIds as $masterId) {
-							if (isset($pnHeldAwardIds[$masterId])) { $hasMaster = true; break; }
-						}
-						if (!$hasMaster) continue;
-						$maxRank = ($orderId === 30) ? 12 : 10;
-						$name  = $pnOrderNames[$orderId][0] ?? 'Unknown Order';
-						$short = $pnOrderNames[$orderId][1] ?? $name;
-						$pnLadderProgress[$orderId] = ['Name' => $name, 'Short' => $short, 'Rank' => $maxRank, 'Count' => 0, 'HasMaster' => true, 'Approx' => false];
-					}
-					uasort($pnLadderProgress, function($a, $b) { return strcmp($a['Name'], $b['Name']); });
 				?>
-				<?php if (!empty($pnLadderProgress)): ?>
+				<?php if (!empty($LadderProgress)): ?>
 					<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:16px;">
 						<div class="pn-ladder-grid" style="flex:1;min-width:0;margin-bottom:0">
-							<?php foreach ($pnLadderProgress as $aid => $lp): ?>
-								<?php $maxRank = ($aid === 30) ? 12 : 10; ?>
+							<?php foreach ($LadderProgress as $lp): ?>
+								<?php $maxRank = (int)($lp['MaxRank'] ?? 10); ?>
 								<?php $pct = min(100, round($lp['Rank'] / $maxRank * 100)); ?>
 								<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
 									<div class="pn-ladder-header">
@@ -2568,8 +2471,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 			<div class="pn-tab-panel" id="pn-tab-classes" style="display:none">
 				<?php
 					$classList = is_array($Details['Classes']) ? $Details['Classes'] : array();
-					// class_id → Paragon award_id
-					// $pnClassToParagon and $pnHeldAwardIds are pre-computed in the template preamble
+					// ClassParagonMap and $pnHeldAwardIds come from controller / preamble
 				?>
 				<?php if ($canManageAwards): ?>
 				<div class="pn-tab-toolbar">
@@ -2589,7 +2491,7 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 							<?php foreach ($classList as $detail): ?>
 								<?php
 									$totalCredits = $detail['Credits'] + (isset($Player_index) ? $Player_index['Class_' . $detail['ClassId']] : $detail['Reconciled']);
-									$paragonAwardId = $pnClassToParagon[$detail['ClassId']] ?? null;
+									$paragonAwardId = $ClassParagonMap[$detail['ClassId']] ?? null;
 									$hasParagon = $paragonAwardId && isset($pnHeldAwardIds[$paragonAwardId]);
 								?>
 								<tr>
@@ -3912,7 +3814,7 @@ if (is_array($Details['Awards'])) {
 }
 $playerHeldAwardIds        = array_keys($playerHeldAwardIds);
 $playerHeldKingdomAwardIds = array_keys($playerHeldKingdomAwardIds);
-$ladderMasterMap           = Award::GetLadderMasterMap();
+$ladderMasterMap           = is_array($LadderMasterMap ?? null) ? $LadderMasterMap : [];
 ?>
 
 <!-- =============================================
@@ -3976,7 +3878,7 @@ var PnConfig = {
 	isOwnProfile:     <?= !empty($isOwnProfile) ? 'true' : 'false' ?>,
 	canEditDesign:    <?= (!empty($isOwnProfile) || !empty($ViewerIsOrkAdmin)) ? 'true' : 'false' ?>,
 	kingdomUrl:       <?= json_encode(UIR . 'Kingdom/profile/' . (int)($KingdomId ?? 0)) ?>,
-	classToParagon:   <?= json_encode($pnClassToParagon) ?>,
+	classToParagon:   <?= json_encode($ClassParagonMap) ?>,
 	heldAwardIds:     <?= json_encode(array_keys($pnHeldAwardIds)) ?>,
 	canDeleteRec:   <?= !empty($can_delete_recommendation) ? 'true' : 'false' ?>,
 	showRecsTab:    <?= !empty($ShowRecsTab) ? 'true' : 'false' ?>,
