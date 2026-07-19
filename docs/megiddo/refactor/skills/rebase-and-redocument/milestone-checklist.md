@@ -127,7 +127,21 @@ Track **RB-*** progress for the current post-refactor rebase.
 ### RB-2: Full suite green
 | Step | Status |
 |------|--------|
-| Deploy sandbox, E2E preflight, full PHPUnit, critical smoke, and commit | [ ] |
+| Deploy sandbox, E2E preflight, full PHPUnit, critical smoke, and commit | [x] |
+
+**RB-2 notes (2026-07-18):**
+
+- `docker compose -f docker-compose.php8.yml up -d` — app + mirror + sandbox running.
+- `bin/ork-db deploy-sandbox` — PASS (no migration/schema drift); credentials seeded.
+- `sh bin/run-unit-tests.sh` — **OK**: 250 tests, 859 assertions, 2 skipped, exit 0.
+  Drift-check strict PASS. No fixture or coverage repairs required post-rebase.
+- E2E preflight (06-test-framework):
+  - Mirror (`admin`/`password`): health + auth home login PASS; full mirror suite
+    `npx playwright test tests/e2e/ --grep-invert heraldry` → 44 passed, 6 skipped, exit 0.
+  - Sandbox (`megiddo`/`test-db-player`): auth home login PASS.
+- Deferred to RB-H / RB-N: none from this milestone (suite already green; hotspot and
+  upstream-new spirit work remain RB-H / RB-N scope).
+- Next: **RB-H**.
 
 ## Phase C — Hotspots and new-code spirit
 ### RB-H: Overlap hotspots
