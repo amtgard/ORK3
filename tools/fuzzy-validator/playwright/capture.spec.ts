@@ -59,7 +59,7 @@ for (const pageEntry of capturePages) {
     await blockVolatileThirdPartyAssets(page);
     await page.clock.install({ time: FIXED_CLOCK_TIME });
     // Pin server-rendered "today" (EP footer) to match gold / defaults.clockDate.
-    const clockDate = process.env.ORK3_CLOCK_DATE || '2026-07-18';
+    const clockDate = process.env.ORK3_CLOCK_DATE || '2026-07-19';
     if (/^\d{4}-\d{2}-\d{2}$/.test(clockDate)) {
       await page.setExtraHTTPHeaders({ 'X-ORK3-Clock-Date': clockDate });
     }

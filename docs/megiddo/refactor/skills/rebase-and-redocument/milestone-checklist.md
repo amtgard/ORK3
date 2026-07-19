@@ -82,8 +82,11 @@ Track **RB-*** progress for the current post-refactor rebase.
 | Capture and publish test + mirror setpoint | [x] |
 | Return to `megiddo/rebase-*`; record bundle id and commit | [x] |
 
-**RB-G notes (2026-07-18/19) — recapture after corrupt gold:**
+**RB-G notes (2026-07-19) — mirror-data refresh:**
 
+- Reason: prior gold `20260719T042339Z-671c108b-f95bafa0edb03f53.zip` was
+  stale vs current prod/mirror DB (+ CDN). Recaptured from unrebased master
+  with current mirror data; did **not** tip-rebaseline.
 - Gold product source: unrebased `671c108b612b03616437bb88c7126f7c56ceb703`
   via worktree `/tmp/ork3-gold-671c108b` + tip harness overlay (Docker mount
   override). Base `config.dev.php` hardcodes mirror DB; tip `config.dev.php`
@@ -91,23 +94,24 @@ Track **RB-*** progress for the current post-refactor rebase.
 - E2E preflight PASS: mirror `admin`/`password`; sandbox `megiddo`/`test-db-player`.
 - Capture: sequential `record --profile test|mirror --all --phase all` with
   explicit `docker restart ork3-php8-app` after each `ork-db use` so PHP-FPM
-  reloads the DB profile (compose restart from the worktree project is a no-op
-  when the tip project owns the container).
+  reloads the DB profile.
 - Integrity gate PASS:
   - 20 registry pages × test+mirror; bundle gitSha `671c108b`
   - test home: Ashkara/Litavia present; Blackspire/Wetlands absent
   - mirror home: Blackspire/Wetlands/Desert Winds present; Ashkara/Litavia absent
-  - PNG uniqueness: test 13/20 unique (largest dup group 6); mirror 10/20
-    unique (largest dup group 9) — matches known-good prior gold shape; rejects
-    prior corrupt zip (~3/20 unique, largest group ≥10, test home had mirror
-    kingdoms).
+  - PNG uniqueness: test 12/20 unique (largest dup group 5); mirror 11/20
+    unique (largest dup group 9).
+- Weather `manualNodes` (forecast freshness copy from `10dcbd79`) re-applied
+  after record wiped them.
 - Gold bundle (local publish):
-  `20260719T042339Z-671c108b-f95bafa0edb03f53.zip` in
+  `20260719T124448Z-671c108b-149b83ec1220a285.zip` in
   `tools/fuzzy-validator/setpoints/bootstrap/` + `setpoints/out/`;
-  `setpoint.json` `latestBundle` updated. Supersedes corrupt
-  `20260718T230634Z-671c108b-b16eae2472f1daa9.zip`.
+  `setpoint.json` `latestBundle` updated. Supersedes
+  `20260719T042339Z-671c108b-f95bafa0edb03f53.zip`.
 - Google Drive upload: optional/manual maintainer step (non-blocking).
 - Tip restored to `megiddo/rebase-20260718`; Docker remounted tip product.
+- Harness: `defaults.clockDate` / capture fallback set to `2026-07-19` so tip
+  DEV clock pin matches gold (master lacks `X-ORK3-Clock-Date` support).
 - Next: **RB-F**.
 
 ### RB-1: Rebase with spirit-preserving merges
@@ -224,32 +228,27 @@ Next: **RB-F**.
 |------|--------|
 | Restore RB-G gold bundle; preflight and validate test + mirror; commit | [ ] |
 
-**RB-F notes (2026-07-19) — BLOCKED (validate-against-gold; no tip rebaseline):**
+**RB-F notes (2026-07-19) — after gold mirror-data refresh (no tip rebaseline):**
 
-- Restored gold `20260719T042339Z-671c108b-f95bafa0edb03f53.zip` (`latestBundle`).
-  Corrupt prior zip not used. `bin/ork-db deploy-sandbox` PASS.
-- Product fix (tip regression vs master gold): R-13 What's New path was broken —
-  `View` never assigned `$this->__data`, and theme `require_once` of
-  `whats_new_content.php` left `$WHATS_NEW_ITEMS` unset after Controller already
-  loaded it. Fixed by wiring `View::$__data`, passing `WhatsNewRelease` through
-  Controller data, and reading that in `default.theme`. Modal now matches test
-  gold (all pages modal=true); mirror keeps admin `whats_new_seen` (gold
-  modal=false).
-- Harness stabilizations (not tip rebaseline): implement `assetStripQuery` for
-  `?v=<filemtime>` only; DOM `href`/`src` `?v=` normalize; 1px screenshot height
-  align; DOM pass/fail is score-based (mirror 0.99 floor); DEV clock pin
-  `X-ORK3-Clock-Date` / `defaults.clockDate=2026-07-18` for EP footer + weather.
-- Latest dual-profile validate (after fixes): **test ~16–17/20 PASS**; remaining
-  test fails are **award dropdown HTML** on
-  `player-profile-sandbox` / `kingdom-auth-sandbox` / `park-auth-sandbox`
-  (Megiddo `class.Award` option grouping vs master gold — intentional UI
-  difference). **Mirror** fails mostly on live attendance text (`N.N/wk`) with
-  empty fuzz (dom ~0.96 < 0.99) — data drift since gold capture, not product
-  regression. Did **not** tip-rebaseline per orchestrator override.
-- Blockers for green RB-F: (1) waiver to tip-rebaseline / refuzz award-option
-  pages and mirror attendance fuzz, or (2) recapture gold from tip after
-  intentional Megiddo UI, or (3) same-day mirror validate with attendance fuzz
-  in gold. Next: resolve blockers then retry RB-F; else hold RB-Z.
+- Restored gold `20260719T124448Z-671c108b-149b83ec1220a285.zip` (`latestBundle`).
+  `bin/ork-db deploy-sandbox` PASS. Run id:
+  `rb-f-after-gold-refresh-20260719` → exit **1**.
+- Report: http://127.0.0.1:8765/run-rb-f-after-gold-refresh-20260719/index.html
+- Dual-profile validate (clock pin `2026-07-19` matching gold civil day):
+  **test 17/20 PASS**, **mirror 18/20 PASS**.
+- Remaining fails (intentional Megiddo award UI / CDN, not mirror attendance drift):
+  - test `player-profile-sandbox` / `kingdom-auth-sandbox` / `park-auth-sandbox`:
+    assets < 1.0 (+ minor DOM) — Megiddo award `<optgroup>` grouping vs master gold
+    and Google Fonts CDN CSS hash drift.
+  - mirror `player-profile-sandbox`: assets < 1.0 — Google Fonts CDN CSS hash drift
+    (award DOM within mirror 0.99 floor).
+  - mirror `kingdom-profile`: assets+dom — Megiddo award optgroup/option membership
+    and kingdom stats text vs master gold.
+- Weather forecast-freshness `manualNodes` restored (from `10dcbd79`).
+- Prior product fix retained: R-13 What's New wiring. Did **not** tip-rebaseline.
+- Blockers for green RB-F: waiver to tip-rebaseline / refuzz award-option pages
+  (and optionally CDN font assets), or accept remaining intentional Megiddo UI
+  drift. Mirror live-attendance drift cleared by gold refresh.
 
 ## Phase E — Close
 ### RB-Z: Sign-off
