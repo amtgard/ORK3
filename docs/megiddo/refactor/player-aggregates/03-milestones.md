@@ -77,7 +77,7 @@ Executable checklist for implementers / orchestrator. IDs reuse **P3-R0…P3-R4*
 - [x] `rg 'pnOrderToMaster|pnClassToParagon|__knightIds|__paragonIds'` clean under `orkui/` (except comments pointing to domain if any)
 - [x] Template does not define order→master or class→paragon maps
 - [x] Full PHPUnit green; static gates clean
-- [ ] Visual/DOM behavior preserved for Awards / Class Levels / Milestones tabs (manual or fuzzy later)
+- [x] Visual/DOM behavior preserved for Awards / Class Levels / Milestones tabs (manual or fuzzy later) — confirmed via P3-R4 fuzzy `player-profile` test+mirror
 
 **Note:** Belt image URL assembly may remain in template if AwardIds come from domain.
 
@@ -108,21 +108,30 @@ Executable checklist for implementers / orchestrator. IDs reuse **P3-R0…P3-R4*
 
 **Goal:** End-to-end thin UI; prove with fuzzy; optionally expose JSON.
 
+**Status:** Complete (UI gate). orkservice stretch skipped (not a UI blocker).
+
 ### Work
 
-- [ ] Confirm all P3-R1–R3 call sites wired; grep inventory §7 clean
-- [ ] Fuzzy validate `player-profile` (and `player-profile-sandbox` if in active setpoint) on **test** and **mirror**
-- [ ] Re-record baselines only if intentional drift approved; otherwise fix regressions
-- [ ] Update [04-milestone-checklist.md](../04-milestone-checklist.md) / close-out notes: check off P3-R*
-- [ ] **Optional stretch:** register thin `PlayerService` methods for milestones / ladder / reconcile DTOs ([02-api-contract.md](./02-api-contract.md) §D) — does not block UI sign-off
+- [x] Confirm all P3-R1–R3 call sites wired; grep inventory §7 clean
+- [x] Fuzzy validate `player-profile` on **test** and **mirror** (`player-profile-sandbox` not required for this gate)
+- [x] Re-record baselines only if intentional drift approved; otherwise fix regressions — **no re-record** (scores 1.00)
+- [x] Update [04-milestone-checklist.md](../04-milestone-checklist.md) / close-out notes: check off P3-R*
+- [ ] **Optional stretch (skipped):** register thin `PlayerService` methods for milestones / ladder / reconcile DTOs ([02-api-contract.md](./02-api-contract.md) §D) — does not block UI sign-off
+
+### Wire leftovers fixed in R4
+
+- Removed dead `_ma_level` / `_ma_progress` threshold helpers from `Playernew_index.tpl`
+- Exposed `ClassLevel::THRESHOLDS` via `Model_Player::get_class_level_thresholds` → controller `ClassLevelThresholds` → `PnConfig.classLevelThresholds`
+- Classes-table / My Amtgard / level-6 milestone JS consume PnConfig only (no hard-coded `>= 53` / `[5,12,21,34,53]` in revised-frontend)
+- Legacy `orkui/template/default/Player_index.tpl` + `Admin_player.tpl` still have threshold JS but are **not** on the active Player profile route (`Playernew_index.tpl`)
 
 ### Acceptance
 
-- [ ] Controllers/templates contain no ladder rule literals (thresholds, AwardId catalogues, smart-rank)
-- [ ] Full PHPUnit green
-- [ ] Static `orkui/` Lib/$DB clean
-- [ ] Fuzzy player-profile test+mirror pass
-- [ ] Checklist boxes for P3-R0…R4 marked done; human P3-4/5/6 untouched
+- [x] Controllers / revised Player templates contain no ladder rule literals (thresholds, AwardId catalogues, smart-rank)
+- [x] Full PHPUnit green (292 tests)
+- [x] Static `orkui/` Lib/$DB clean
+- [x] Fuzzy `player-profile` test+mirror PASS — assets=1.00 dom=1.00 visual=1.000 (run `p3-r4-player-profile`)
+- [x] Checklist boxes for P3-R0…R4 marked done; human P3-4/5/6 untouched
 
 ---
 

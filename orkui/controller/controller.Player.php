@@ -509,6 +509,7 @@ class Controller_Player extends Controller
             'Awards' => $__awards,
         ]);
         $this->data['ClassParagonMap'] = $this->Player->get_class_paragon_map();
+        $this->data['ClassLevelThresholds'] = $this->Player->get_class_level_thresholds();
         $this->data['LadderMasterMap'] = $this->Player->get_ladder_master_map();
         $this->data['KnightAwardMap'] = $this->Player->get_knight_award_map();
 

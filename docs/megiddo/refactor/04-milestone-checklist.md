@@ -19,7 +19,7 @@ The complete historical milestone checklist is preserved in [archive/04-mileston
 - [x] **P3-R1:** Class level / progress via domain (`ClassLevel` / Player); thin controller.
 - [x] **P3-R2:** Milestones + award maps API; remove maps from Player templates.
 - [x] **P3-R3:** Reconcile suggestions API; template display-only.
-- [ ] **P3-R4:** Wire controller/templates; fuzzy player-profile canaries; optional orkservice exposure.
+- [x] **P3-R4:** Wire controller/templates; fuzzy player-profile canaries (test+mirror PASS). Optional orkservice exposure skipped.
 
 **Non-blocking (done):** bootstrap `class.Controller` Lib→model hop; `Authorization->audit` for Dangeraudit; `index.php` via `Model_Health` / `Model_Event`.
 

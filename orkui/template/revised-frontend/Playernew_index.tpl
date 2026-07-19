@@ -113,6 +113,9 @@
 	if (!isset($ClassParagonMap) || !is_array($ClassParagonMap)) {
 		$ClassParagonMap = [];
 	}
+	if (!isset($ClassLevelThresholds) || !is_array($ClassLevelThresholds)) {
+		$ClassLevelThresholds = [];
+	}
 	$pnHeldAwardIds = [];
 	if (is_array($Details['Awards'])) {
 		foreach ($Details['Awards'] as $_pa) {
@@ -170,22 +173,7 @@
 			$_daysLeft = max(1, ceil($passwordSoonSecs / 86400));
 			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-key','msg'=>"Your password expires in {$_daysLeft} day" . ($_daysLeft===1?'':'s') . ".",'actionLabel'=>'Update your password.','actionOnclick'=>'pnOpenAccountModal();return false;'];
 		}
-		// Level helpers
-		function _ma_level($credits) {
-			if ($credits >= 53) return 6;
-			if ($credits >= 34) return 5;
-			if ($credits >= 21) return 4;
-			if ($credits >= 12) return 3;
-			if ($credits >= 5)  return 2;
-			return 1;
-		}
-		function _ma_progress($credits) {
-			$t = [0,5,12,21,34,53];
-			if ($credits >= 53) return 100;
-			for ($i = count($t)-1; $i >= 0; $i--)
-				if ($credits >= $t[$i]) return round(($credits-$t[$i])/($t[$i+1]-$t[$i])*100);
-			return 0;
-		}
+		// Class level thresholds live in ClassLevel::THRESHOLDS (controller → ClassLevelThresholds / PnConfig).
 	}
 ?>
 
@@ -3857,6 +3845,7 @@ var PnConfig = {
 	canEditDesign:    <?= (!empty($isOwnProfile) || !empty($ViewerIsOrkAdmin)) ? 'true' : 'false' ?>,
 	kingdomUrl:       <?= json_encode(UIR . 'Kingdom/profile/' . (int)($KingdomId ?? 0)) ?>,
 	classToParagon:   <?= json_encode($ClassParagonMap) ?>,
+	classLevelThresholds: <?= json_encode(array_values($ClassLevelThresholds ?? [])) ?>,
 	heldAwardIds:     <?= json_encode(array_keys($pnHeldAwardIds)) ?>,
 	canDeleteRec:   <?= !empty($can_delete_recommendation) ? 'true' : 'false' ?>,
 	showRecsTab:    <?= !empty($ShowRecsTab) ? 'true' : 'false' ?>,
@@ -7006,6 +6995,8 @@ $(function() {
 				});
 
 				var newMilestones = [];
+				var levelThresholds = PnConfig.classLevelThresholds || [];
+				var maxClassCredits = levelThresholds.length ? levelThresholds[levelThresholds.length - 1] : null;
 				Object.keys(classData).forEach(function(cid) {
 					var cd = classData[cid];
 					if (!cd.history.length) return;
@@ -7013,7 +7004,7 @@ $(function() {
 					var cum = cd.reconciled;
 					for (var i = 0; i < cd.history.length; i++) {
 						cum += cd.history[i].credits;
-						if (cum >= 53) {
+						if (maxClassCredits !== null && cum >= maxClassCredits) {
 							newMilestones.push({ date: cd.history[i].date, name: cd.name });
 							break;
 						}
@@ -7201,13 +7192,18 @@ $(function() {
 				});
 				if (!maClasses.length) { cpBody.innerHTML = ''; return; }
 				var maHtml = '<div class="pna-card"><div class="pna-card-title"><i class="fas fa-shield-alt"></i> Class Progress <a class="pna-card-more" href="#" onclick="pnActivateTab(\'classes\');return false;">All &rarr;</a></div><div style="font-size:11px;color:#a0aec0;margin-bottom:6px;">Your recent classes&hellip;</div>';
-				var thresholds = [0,5,12,21,34,53];
+				var levelThresholds = PnConfig.classLevelThresholds || [];
+				var thresholds = [0].concat(levelThresholds);
+				var maxCredits = levelThresholds.length ? levelThresholds[levelThresholds.length - 1] : null;
 				maClasses.forEach(function(mc) {
 					var total = parseInt(mc.Credits||0) + parseInt(mc.Reconciled||0);
-					var lvl = total>=53?6:total>=34?5:total>=21?4:total>=12?3:total>=5?2:1;
-					var pct = total>=53?100:Math.round((total/thresholds[lvl])*100);
-					var isMax = total >= 53;
-					var next = thresholds[lvl] || 53;
+					var lvl = 1;
+					for (var ti = levelThresholds.length - 1; ti >= 0; ti--) {
+						if (total >= levelThresholds[ti]) { lvl = ti + 2; break; }
+					}
+					var isMax = maxCredits !== null && total >= maxCredits;
+					var pct = isMax ? 100 : Math.round((total / (thresholds[lvl] || 1)) * 100);
+					var next = thresholds[lvl] || maxCredits;
 					var parId = classToParagon[parseInt(mc.ClassId)] || 0;
 					var hasPar = parId > 0 && !!heldAwardIds[parId];
 					maHtml += '<div class="pna-class-row">'

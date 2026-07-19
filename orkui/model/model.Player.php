@@ -374,6 +374,24 @@ class Model_Player extends Model
         return $this->_player()->GetHighestClassLevel($mundane_id);
     }
 
+    /**
+     * ClassLevel::THRESHOLDS for client UX (PnConfig) — single source, no UI copy.
+     *
+     * @return list<float|int>
+     */
+    public function get_class_level_thresholds(): array
+    {
+        return ClassLevel::THRESHOLDS;
+    }
+
+    /**
+     * @return array{Level: int, ToNext: ?float}
+     */
+    public function compute_class_level(float $credits): array
+    {
+        return ClassLevel::computeClassLevel($credits);
+    }
+
     public function get_class_paragon_map(): array
     {
         return Award::GetClassParagonMap();
