@@ -168,6 +168,36 @@ final class AttendanceSignInTest extends TestCase
         $this->assertSame(3.0, $domainCredits);
     }
 
+    public function testGetHighestClassLevelMatchesProgressAndClasses(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $kingdomId = $this->fixture->kingdomIdForPark($parkId);
+        $player = $this->fixture->createPlayer($parkId, 'high-lvl');
+        $classId = $this->fixture->firstClassId();
+
+        // 12 credits attendance + 0 reconciled → level 3 for that class
+        $this->fixture->insertParkAttendance($parkId, $kingdomId, $player['mundane_id'], '2096-01-05', $classId, 5.0);
+        $this->fixture->insertParkAttendance($parkId, $kingdomId, $player['mundane_id'], '2096-01-12', $classId, 5.0);
+        $this->fixture->insertParkAttendance($parkId, $kingdomId, $player['mundane_id'], '2096-01-19', $classId, 2.0);
+
+        $playerDomain = new Player();
+        $progress = $playerDomain->ComputeClassProgress(['MundaneId' => $player['mundane_id']]);
+        $this->assertSame(0, $progress['Status']);
+
+        $maxFromProgress = 0;
+        foreach ($progress['Detail'] ?? [] as $row) {
+            $maxFromProgress = max($maxFromProgress, (int) ($row['Level'] ?? 0));
+        }
+
+        $classes = $playerDomain->GetPlayerClasses(['MundaneId' => $player['mundane_id']]);
+        $fromClasses = Player::HighestClassLevelFromClasses($classes['Classes'] ?? []);
+        $fromApi = $playerDomain->GetHighestClassLevel($player['mundane_id']);
+
+        $this->assertSame(3, $maxFromProgress);
+        $this->assertSame($maxFromProgress, $fromClasses);
+        $this->assertSame($maxFromProgress, $fromApi);
+    }
+
     public function testValidateLinkTokenForQr(): void
     {
         $parkId = $this->fixture->firstParkId();

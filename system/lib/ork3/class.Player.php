@@ -1037,6 +1037,51 @@ class Player extends Ork3
         return Success($progress);
     }
 
+    /**
+     * Profile chrome highest class level via ComputeClassProgress (P3-R1 Option A).
+     * Details['Classes'] from GetPlayerProfileDetails use the same GetPlayerClasses source.
+     */
+    public function GetHighestClassLevel(int $mundaneId): int
+    {
+        $progress = $this->ComputeClassProgress(['MundaneId' => $mundaneId]);
+        if (($progress['Status'] ?? 1) != 0) {
+            return 0;
+        }
+
+        $highest = 0;
+        foreach ($progress['Detail'] ?? [] as $row) {
+            $lvl = (int)($row['Level'] ?? 0);
+            if ($lvl > $highest) {
+                $highest = $lvl;
+            }
+        }
+
+        return $highest;
+    }
+
+    /**
+     * Pure max level over class rows (Credits + Reconciled) via ClassLevel::computeClassLevel.
+     * Characterization / Option B byte-identical path over already-fetched Details['Classes'].
+     *
+     * @param array<int|string, array<string, mixed>> $classes
+     */
+    public static function HighestClassLevelFromClasses(array $classes): int
+    {
+        $highest = 0;
+        foreach ($classes as $c) {
+            if (!is_array($c)) {
+                continue;
+            }
+            $credits = (float)($c['Credits'] ?? 0) + (float)($c['Reconciled'] ?? 0);
+            $lvl = ClassLevel::computeClassLevel($credits)['Level'];
+            if ($lvl > $highest) {
+                $highest = $lvl;
+            }
+        }
+
+        return $highest;
+    }
+
     public function GetPlayerClasses($request)
     {
         // Cold-cache the dedupe-by-date subquery costs ~185ms for the busiest player

@@ -322,6 +322,11 @@ class Model_Player extends Model
         return $this->_player()->GetReconcileAwardMap($kingdom_id);
     }
 
+    public function get_highest_class_level(int $mundane_id): int
+    {
+        return $this->_player()->GetHighestClassLevel($mundane_id);
+    }
+
     public function dismiss_whats_new($mundane_id, $version)
     {
         return $this->_player()->DismissWhatsNew((int)$mundane_id, (string)$version);

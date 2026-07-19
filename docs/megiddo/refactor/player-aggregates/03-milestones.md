@@ -34,19 +34,21 @@ Executable checklist for implementers / orchestrator. IDs reuse **P3-R0…P3-R4*
 
 **Goal:** Remove threshold block from `Controller_Player::profile`; use `ClassLevel` / `Player` (mirror SignIn).
 
+**Choice (credit semantics):** **Option A** — `Player::GetHighestClassLevel` via `ComputeClassProgress`. Evidence: `GetPlayerProfileDetails` already loads `Classes` from `GetPlayerClasses`, the same source `ComputeClassProgress` uses (Credits + Reconciled). `HighestClassLevelFromClasses` remains as a pure characterization helper (Option B path) and matches Option A on those rows.
+
 ### Work
 
-- [ ] Choose Option A or B from [02-api-contract.md](./02-api-contract.md) §B1 after comparing `Details['Classes']` credits vs `ComputeClassProgress`
-- [ ] Implement domain + `Model_Player` wrapper
-- [ ] Wire controller: assign `Stats['HighestClassLevel']` from model; delete inline `>= 53`… chain
-- [ ] PHPUnit characterization (extend `ClassLevelTest` and/or Player/integration)
+- [x] Choose Option A or B from [02-api-contract.md](./02-api-contract.md) §B1 after comparing `Details['Classes']` credits vs `ComputeClassProgress`
+- [x] Implement domain + `Model_Player` wrapper
+- [x] Wire controller: assign `Stats['HighestClassLevel']` from model; delete inline `>= 53`… chain
+- [x] PHPUnit characterization (extend `ClassLevelTest` and/or Player/integration)
 
 ### Acceptance
 
-- [ ] No class-level threshold literals in `orkui/controller/controller.Player.php`
-- [ ] Full PHPUnit green
-- [ ] Static `orkui/` Lib/$DB clean
-- [ ] Behavior: HighestClassLevel matches pre-change for fixture players (test assertion)
+- [x] No class-level threshold literals in `orkui/controller/controller.Player.php`
+- [x] Full PHPUnit green
+- [x] Static `orkui/` Lib/$DB clean
+- [x] Behavior: HighestClassLevel matches pre-change for fixture players (test assertion)
 
 **Fuzzy:** Not required if chrome number is unchanged; optional spot-check.
 
@@ -129,7 +131,7 @@ Do not parallelize R1–R4 on overlapping `Controller_Player` / template files. 
 
 ## Open questions (resolve during R1–R3, document in commit)
 
-1. **Credit semantics:** Does `fetch_player_details` Classes credits match `GetPlayerClasses`? Chooses B1 Option A vs B.
+1. **Credit semantics:** **Resolved (P3-R1):** `fetch_player_details` / `GetPlayerProfileDetails` Classes come from `GetPlayerClasses` — same as `ComputeClassProgress`. Chose **Option A** (`GetHighestClassLevel`). Option B helper `HighestClassLevelFromClasses` kept for characterization.
 2. **Belt assets:** Domain returns AwardIds only vs include relative image keys.
 3. **Milestone icons:** Keep Font Awesome class strings in domain DTO (current) vs map type→icon in template.
 4. **orkservice:** Defer forever vs register in R4 for one client — product call, not a gate.

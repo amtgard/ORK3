@@ -16,7 +16,7 @@ The complete historical milestone checklist is preserved in [archive/04-mileston
 **Plan home:** [player-aggregates/](./player-aggregates/) (inventory, contract, milestones, orchestrator). Summary also in [11-phase-3-closeout.md](./11-phase-3-closeout.md) § P3-R.
 
 - [x] **P3-R0:** Inventory + API contract ([player-aggregates/](./player-aggregates/)).
-- [ ] **P3-R1:** Class level / progress via domain (`ClassLevel` / Player); thin controller.
+- [x] **P3-R1:** Class level / progress via domain (`ClassLevel` / Player); thin controller.
 - [ ] **P3-R2:** Milestones + award maps API; remove maps from Player templates.
 - [ ] **P3-R3:** Reconcile suggestions API; template display-only.
 - [ ] **P3-R4:** Wire controller/templates; fuzzy player-profile canaries; optional orkservice exposure.

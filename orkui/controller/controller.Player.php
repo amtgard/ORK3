@@ -434,7 +434,7 @@ class Controller_Player extends Controller
             'TotalAttendance'   => 0,
             'TotalAwards'       => 0,
             'TotalTitles'       => 0,
-            'HighestClassLevel' => 0,
+            'HighestClassLevel' => $this->Player->get_highest_class_level($id),
             'LastPlayedClass'   => '',
         ];
         if (is_array($this->data['Details']['Awards'])) {
@@ -443,27 +443,6 @@ class Controller_Player extends Controller
                     $this->data['Stats']['TotalAwards']++;
                 } else {
                     $this->data['Stats']['TotalTitles']++;
-                }
-            }
-        }
-        if (is_array($this->data['Details']['Classes'])) {
-            foreach ($this->data['Details']['Classes'] as $c) {
-                $credits = $c['Credits'] + $c['Reconciled'];
-                if ($credits >= 53) {
-                    $lvl = 6;
-                } elseif ($credits >= 34) {
-                    $lvl = 5;
-                } elseif ($credits >= 21) {
-                    $lvl = 4;
-                } elseif ($credits >= 12) {
-                    $lvl = 3;
-                } elseif ($credits >= 5) {
-                    $lvl = 2;
-                } else {
-                    $lvl = 1;
-                }
-                if ($lvl > $this->data['Stats']['HighestClassLevel']) {
-                    $this->data['Stats']['HighestClassLevel'] = $lvl;
                 }
             }
         }
