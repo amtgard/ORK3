@@ -174,9 +174,39 @@ Per-hotspot (thin / upstream behavior / domain tests / Infection):
 ### RB-N: New upstream code — spirit of the refactor
 | Step | Status |
 |------|--------|
-| Inventory and scan upstream-new `orkui/` code | [ ] |
-| Move violations behind `system/lib/ork3/` / `Model_*`; add characterization tests | [ ] |
-| Confirm static gates and PHPUnit; commit | [ ] |
+| Inventory and scan upstream-new `orkui/` code | [x] |
+| Move violations behind `system/lib/ork3/` / `Model_*`; add characterization tests | [x] |
+| Confirm static gates and PHPUnit; commit | [x] |
+
+**RB-N notes (2026-07-18):**
+
+Upstream-new inventory + scan:
+
+| Path | Violations | Action |
+|------|------------|--------|
+| `controller/controller.EventEmbed.php` | `$DB` published-event + occurrence SQL (pre-existing on base) | Migrated to `class.EventEmbed` + `Model_Event` |
+| `template/default/QualTest_{question,questions,take}.tpl` | none (presentation / precomputed flags) | no change |
+| `template/default/Reports_release_utilization.tpl` | none | no change |
+| `template/embed/{demo.html,ork-schedule.js}` | none (JS client) | no change |
+| `template/revised-frontend/Kingdomnew_recommendations_panel.tpl` | none (auth flags) | no change |
+| `template/revised-frontend/{script,style}/*` | none | no change |
+| `whats_new_content.php` | none | no change |
+
+Migrations:
+
+- New domain `system/lib/ork3/class.EventEmbed.php` (`GetPublishedScheduleEmbed`) — published-only gate, strict detail ownership (no fall-through), 7-day default occurrence, schedule via `EventPlanning::GetSchedule`.
+- Exposed as `Event.GetPublishedScheduleEmbed` (`orkservice/Event/*`).
+- `Model_Event::get_published_schedule_embed`; `Controller_EventEmbed` thinned to model + presentational day grouping.
+- Characterization: `tests/Unit/EventEmbedTest.php` (6 cases).
+- Infection: `tools/infection/infection.t-event-embed.json5` — MSI **70%** / covered **74%** (floors 15%, not lowered).
+
+Static gates: `rg '$DB->' orkui/` and `rg 'Ork3::$Lib' orkui/` **CLEAN**; no raw SQL under `orkui/`.
+
+PHPUnit: **262 tests / 882 assertions**, exit 0 (drift-check strict PASS).
+
+Remaining waivers / gaps (unchanged from RB-H): QualTest / Event / Player / Report full-class Infection MSI below 15% floors — not lowered.
+
+Next: **RB-F**.
 
 ## Phase D — Fuzzy
 ### RB-F: Validate rebased tip against gold

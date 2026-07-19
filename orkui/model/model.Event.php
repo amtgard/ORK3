@@ -305,6 +305,42 @@ class Model_Event extends Model
         return $this->_eventApiOk($r) ? ($r['ScheduleList'] ?? []) : [];
     }
 
+    /**
+     * Public schedule embed: published event + occurrence + schedule list (RB-N).
+     * On failure returns ['ok' => false, 'error' => string, 'http' => int].
+     */
+    public function get_published_schedule_embed($event_id, $detail_id = 0)
+    {
+        $r = $this->Event->GetPublishedScheduleEmbed([
+            'EventId' => (int) $event_id,
+            'EventCalendarDetailId' => (int) $detail_id,
+        ]);
+        if ($this->_eventApiOk($r)) {
+            return [
+                'ok' => true,
+                'event_id' => (int) ($r['EventId'] ?? 0),
+                'detail_id' => (int) ($r['EventCalendarDetailId'] ?? 0),
+                'name' => (string) ($r['Name'] ?? ''),
+                'park_name' => (string) ($r['ParkName'] ?? ''),
+                'event_start' => (string) ($r['EventStart'] ?? ''),
+                'event_end' => (string) ($r['EventEnd'] ?? ''),
+                'schedule' => $r['ScheduleList'] ?? [],
+            ];
+        }
+
+        $detail = is_array($r['Status'] ?? null)
+            ? (string) ($r['Status']['Detail'] ?? '')
+            : (string) ($r['Detail'] ?? '');
+        if ($detail === 'Invalid event id') {
+            return ['ok' => false, 'error' => $detail, 'http' => 400];
+        }
+        if ($detail === '') {
+            $detail = 'Event not found';
+        }
+
+        return ['ok' => false, 'error' => $detail, 'http' => 404];
+    }
+
     public function detail_belongs_to_event($event_id, $detail_id)
     {
         $r = $this->Event->AssertDetailBelongsToEvent([
@@ -424,7 +460,7 @@ class Model_Event extends Model
             'StaffCaps' => is_array($staff_caps) ? $staff_caps : [],
         ]);
         return $this->_eventApiOk($r) && !empty($r['Blocked']);
-}
+    }
 
     public function get_event_templates_for_kingdom($kingdom_id)
     {

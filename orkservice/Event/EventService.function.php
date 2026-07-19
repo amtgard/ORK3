@@ -150,6 +150,12 @@ function GetSchedule($request)
     return $EP->GetSchedule($request);
 }
 
+function GetPublishedScheduleEmbed($request)
+{
+    $EE = new EventEmbed();
+    return $EE->GetPublishedScheduleEmbed($request);
+}
+
 function SetCalendarDetailFeesAndLinks($request)
 {
     $EP = new EventPlanning();

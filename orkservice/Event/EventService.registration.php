@@ -246,6 +246,13 @@ $server->register(
 );
 
 $server->register(
+    'Event.GetPublishedScheduleEmbed',
+    array('OccurrenceScopeRequest' => 'tns:OccurrenceScopeRequest'),
+    array('return' => 'tns:StatusType'),
+    $namespace
+);
+
+$server->register(
     'Event.SetCalendarDetailFeesAndLinks',
     array('CalendarDetailFeesLinksRequest' => 'tns:CalendarDetailFeesLinksRequest'),
     array('return' => 'tns:StatusType'),
