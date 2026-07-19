@@ -13,9 +13,9 @@ The complete historical milestone checklist is preserved in [archive/04-mileston
 
 ## Player first-class API residual (P3-R)
 
-See plan detail in [11-phase-3-closeout.md](./11-phase-3-closeout.md) § P3-R.
+**Plan home:** [player-aggregates/](./player-aggregates/) (inventory, contract, milestones, orchestrator). Summary also in [11-phase-3-closeout.md](./11-phase-3-closeout.md) § P3-R.
 
-- [ ] **P3-R0:** Inventory + API contract (milestones, class progress, award maps, reconcile suggestions).
+- [x] **P3-R0:** Inventory + API contract ([player-aggregates/](./player-aggregates/)).
 - [ ] **P3-R1:** Class level / progress via domain (`ClassLevel` / Player); thin controller.
 - [ ] **P3-R2:** Milestones + award maps API; remove maps from Player templates.
 - [ ] **P3-R3:** Reconcile suggestions API; template display-only.
@@ -23,4 +23,4 @@ See plan detail in [11-phase-3-closeout.md](./11-phase-3-closeout.md) § P3-R.
 
 **Non-blocking (done):** bootstrap `class.Controller` Lib→model hop; `Authorization->audit` for Dangeraudit; `index.php` via `Model_Health` / `Model_Event`.
 
-See [11-phase-3-closeout.md](./11-phase-3-closeout.md) for context and [README.md](./README.md) for active navigation.
+See [11-phase-3-closeout.md](./11-phase-3-closeout.md) for Phase 3 human close-out and [README.md](./README.md) for active navigation.

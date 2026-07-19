@@ -1,6 +1,6 @@
 # Phase 3 — Audit and Close-out
 
-**Status:** Automated work complete; human close-out remains open. A post-gate residual (Player first-class APIs) is tracked below.
+**Status:** Automated work complete; human close-out remains open. A post-gate residual (Player first-class APIs) is planned under [player-aggregates/](./player-aggregates/) and summarized below.
 **Completed:** P3-2/P3-3 automated audit and gate fixes, I-0 … I-VALIDATE idiom enforcement, and RB-0 … RB-Z are complete, with `$DB` and `Ork3::$Lib` at zero in `orkui/`.
 **Current tip:** `megiddo/fuzzy-validator-v2` (stacked on post-rebase Megiddo tip). See [PR #492](https://github.com/amtgard/ORK3/pull/492).
 
@@ -54,19 +54,21 @@ Sign-in already uses migrated class-progress enrichment via the Attendance model
 
 ---
 
-## P3-R — Player first-class API residual (plan)
+## P3-R — Player first-class API residual
 
 **Goal:** Player profile chrome consumes domain/model DTOs only; award ladders, class levels, milestones, and reconcile suggestions are callable without opening `orkui/`.
 
+**Canonical plan package:** [player-aggregates/](./player-aggregates/) (nickname: play-aggregates) — inventory, API contract, executable milestones, orchestrator prompts. Implementation starts at **P3-R1**.
+
 | ID | Deliverable | Notes |
 |----|-------------|-------|
-| **P3-R0** | Inventory + contract | List current controller/template rule sites; draft API shapes (milestones, class progress summary, order/class→award maps, reconcile suggestions). Confirm what `ClassLevel` / `Player` already expose vs net-new. |
+| **P3-R0** | Inventory + contract | **Done** in [player-aggregates/](./player-aggregates/). |
 | **P3-R1** | Class level / progress API | Replace controller threshold block with domain/`ClassLevel` (mirror SignIn enrichment). PHPUnit characterization. |
 | **P3-R2** | Milestones + award maps API | Move AwardId lists and peerage dedup into domain; thin controller; remove maps from `Playernew_index.tpl`. |
 | **P3-R3** | Reconcile suggestions API | Move smart-rank logic out of `Playernew_reconcile.tpl` into model/domain; template display-only. |
 | **P3-R4** | Wire + gate | Point `Controller_Player` + templates at the new APIs; fuzzy canaries for player-profile (test + mirror); optional thin orkservice exposure if external clients need the same DTOs. |
 
-**Out of scope for P3-R:** reopening R-* for unrelated controllers. Bootstrap Lib / Dangeraudit / index Health·Event hop is **done** (see above).
+**Out of scope for P3-R:** reopening R-* for unrelated controllers. Bootstrap Lib / Dangeraudit / index Health·Event hop is **done** (see above). Human P3-4 / P3-5 / P3-6 remain separate.
 
 ---
 
@@ -86,5 +88,6 @@ Use [06-test-framework.md](./06-test-framework.md) for local test and login prer
 - Post-refactor rebase RB-0 … RB-Z (and later stacked tip including fuzzy-validator v2) validated on the Megiddo line.
 - 2026-07-19 frontend residual hunt: `orkui/` gates clean; Player aggregate APIs tracked as **P3-R\***.
 - 2026-07-19 bootstrap/API-coupling hop: `class.Controller`, auth audit call sites, and `index.php` Health/Event now go through models (no `Ork3::$Lib` / no controller `new Dangeraudit()`).
+- 2026-07-19 P3-R0 plan package: [player-aggregates/](./player-aggregates/) (inventory, contract, milestones, orchestrator).
 
 Track human close-out checkboxes in [04-milestone-checklist.md](./04-milestone-checklist.md).
