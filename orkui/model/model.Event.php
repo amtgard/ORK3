@@ -467,4 +467,15 @@ class Model_Event extends Model
         return $this->Event->GetEventTemplatesForKingdom((int) $kingdom_id);
     }
 
+    /** @return array{KingdomId: int, Name: string} */
+    public function get_event_summary_for_redirect(int $event_id): array
+    {
+        return $this->_event_domain()->GetEventSummaryForRedirect($event_id);
+    }
+
+    private function _event_domain(): Event
+    {
+        return new Event();
+    }
+
 }

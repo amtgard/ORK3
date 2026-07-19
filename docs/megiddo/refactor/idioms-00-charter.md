@@ -59,7 +59,7 @@ Read these before editing any hop scope. Match **the file being edited** first; 
 
 - Auth checks: `$this->Authorization->has_authority($uid, AUTH_*, $id, $role)` after `load_model('Authorization')`.
 - Auth mutations: `$this->Authorization->add_auth([…])` / `del_auth([…])`.
-- **Dangeraudit:** when `addauth` paths in a file already call `(new Dangeraudit())->audit(…)` after `add_auth`, keep that shape; when file peers route audit through `Model_Authorization`, match peers. Do not change audit payload fields or timing.
+- **Dangeraudit:** `$this->Authorization->audit(…)` after mutations (model wraps `Dangeraudit`). Do **not** `(new Dangeraudit())` in controllers. Do not change audit payload fields or timing.
 
 ### 1.4 JSON shapes and HTTP semantics
 
@@ -76,7 +76,7 @@ Read these before editing any hop scope. Match **the file being edited** first; 
 ### 1.6 Templates and `index.php`
 
 - Template hops (I-15, I-17, I-18): idiom = precomputed auth flags and helper calls consistent with sibling templates; no markup semantic changes.
-- `index.php`: bootstrap calls match R-13/R-14 established patterns (`Health::PingDb`, request-scoped session).
+- `index.php`: bootstrap via models (`Model_Health::ping_db`, `Model_Event::get_event_summary_for_redirect`), not bare `new Health()` / `new Event()`.
 
 ---
 
@@ -89,14 +89,23 @@ Catalog from R-19* execution and agent refactors. Fix only when the **file's dom
 | `(new Model_Player())` in AJAX | `PlayerAjax` username check | `$this->load_model('Player');` → `$this->Player->…` |
 | `(new EventPlanning())` in controller | `EventAjax::remove_rsvp` | `$this->load_model('EventPlanning');` → `$this->EventPlanning->…` |
 | `(new KingdomProfile())` after `load_model` | `KingdomAjax` suspension / abbr | `$this->KingdomProfile->…` (model already loaded) |
-| `(new Dangeraudit())->audit` beside `add_auth` | `KingdomAjax`, `EventAjax`, `AdminAjax`, `ParkAjax` | Keep if all `addauth` branches in file use inline audit; else add `Model_Authorization` wrapper if peers do |
+| `(new Dangeraudit())->audit` in controller | any `*Ajax` / `Unit` | `$this->Authorization->audit(…)` |
+| `Ork3::$Lib->…` in `class.Controller` or `orkui/` | bootstrap prefs / session | `$this->load_model(…)` → snake_case wrapper |
 | `(new Heraldry())->SetEventHeraldry` in controller | `EventAjax` | `$this->load_model('EventPlanning')` or heraldry wrapper on model used elsewhere in file |
 | `(new Weather())` in `Controller_Admin` | weather stats / refresh | `$this->load_model('Weather')` or `Model_AdminDashboard` wrapper |
 | `new SearchService()` only in new model while siblings use `JSONModel` | `Model_Search` (R-11) | Match `model.Event.php` / domain wrapper style in same domain |
 | Mixed `[]` and `array()` within one method | various AJAX | Match **method's** nearest siblings, not PSR-12 |
 | Reformatting entire file for tabs/spaces | any | **Forbidden** — touch only idiom lines |
 
-**Static isolation (non-negotiable):** `rg '\$DB->' orkui/` and `rg 'Ork3::\$Lib' orkui/` must remain zero after every hop.
+**Static isolation (non-negotiable):**
+
+```bash
+rg '\$DB->' orkui/                                    # expect: no matches
+rg 'Ork3::\$Lib' orkui/                              # expect: no matches
+rg 'Ork3::\$Lib' system/lib/system/class.Controller.php   # expect: no matches
+rg '\(new Dangeraudit\(\)\)' orkui/controller/       # expect: no matches
+```
+
 
 ---
 
@@ -145,8 +154,10 @@ Run from repo root. **Exit 0** = pass for PHPUnit; **exit 1 (no matches)** = pas
 ### 4.1 Static isolation (every I-* hop)
 
 ```bash
-rg '\$DB->' orkui/                    # expect: no matches
-rg 'Ork3::\$Lib' orkui/              # expect: no matches
+rg '\$DB->' orkui/                                          # expect: no matches
+rg 'Ork3::\$Lib' orkui/                                    # expect: no matches
+rg 'Ork3::\$Lib' system/lib/system/class.Controller.php     # expect: no matches
+rg '\(new Dangeraudit\(\)\)' orkui/controller/             # expect: no matches
 ```
 
 ### 4.2 Controller idiom drift
@@ -156,7 +167,7 @@ rg 'Ork3::\$Lib' orkui/              # expect: no matches
 rg '\(new Model_' orkui/controller/
 
 # Inline domain construction in controllers (prefer load_model + model wrapper)
-rg '\(new (Player|EventPlanning|KingdomProfile|Heraldry|Weather|Dangeraudit|Report|SearchService)\(\)' orkui/controller/
+rg '\(new (Player|EventPlanning|KingdomProfile|Heraldry|Weather|Report|SearchService)\(\)' orkui/controller/
 
 # Model_* instantiated without load_model in AJAX controllers
 rg 'new Model_' orkui/controller/

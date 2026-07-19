@@ -322,9 +322,139 @@ class Model_Player extends Model
         return $this->_player()->GetReconcileAwardMap($kingdom_id);
     }
 
+    /**
+     * Pure historical partition + smart-rank (no kingdom map / no DB).
+     *
+     * @param list<array<string, mixed>> $awards
+     * @return array{
+     *   HistoricalAwards: list<array<string, mixed>>,
+     *   RankSuggestions: array<int, int>,
+     *   RealRanksByAwardId: array<int, list<int>>,
+     *   Summary: array{AwardTypeCount: int, TotalCount: int},
+     *   HasHistoricalLadder: bool
+     * }
+     */
+    public function get_reconcile_suggestions(array $awards): array
+    {
+        return $this->_player()->GetReconcileSuggestions($awards);
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     * @return array{
+     *   HistoricalAwards: list<array<string, mixed>>,
+     *   RankSuggestions: array<int, int>,
+     *   RealRanksByAwardId: array<int, list<int>>,
+     *   AwardIdToKingdomAwardId: array<int, int>,
+     *   Summary: array{AwardTypeCount: int, TotalCount: int},
+     *   HasHistoricalLadder: bool
+     * }
+     */
+    public function get_reconcile_page_data(array $request): array
+    {
+        $empty = [
+            'HistoricalAwards' => [],
+            'RankSuggestions' => [],
+            'RealRanksByAwardId' => [],
+            'AwardIdToKingdomAwardId' => [],
+            'Summary' => ['AwardTypeCount' => 0, 'TotalCount' => 0],
+            'HasHistoricalLadder' => false,
+        ];
+        $response = $this->_player()->GetReconcilePageData($request);
+        if (($response['Status'] ?? 1) != 0) {
+            return $empty;
+        }
+        $detail = $response['Detail'] ?? null;
+
+        return is_array($detail) ? array_merge($empty, $detail) : $empty;
+    }
+
+    public function get_highest_class_level(int $mundane_id): int
+    {
+        return $this->_player()->GetHighestClassLevel($mundane_id);
+    }
+
+    /**
+     * ClassLevel::THRESHOLDS for client UX (PnConfig) — single source, no UI copy.
+     *
+     * @return list<float|int>
+     */
+    public function get_class_level_thresholds(): array
+    {
+        return ClassLevel::THRESHOLDS;
+    }
+
+    /**
+     * @return array{Level: int, ToNext: ?float}
+     */
+    public function compute_class_level(float $credits): array
+    {
+        return ClassLevel::computeClassLevel($credits);
+    }
+
+    public function get_class_paragon_map(): array
+    {
+        return Award::GetClassParagonMap();
+    }
+
+    public function get_ladder_master_map(): array
+    {
+        return Award::GetLadderMasterMap();
+    }
+
+    public function get_knight_award_map(): array
+    {
+        return Award::GetKnightAwardMap();
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     * @return list<array<string, mixed>>
+     */
+    public function get_player_milestones(array $request): array
+    {
+        $response = $this->_player()->GetPlayerMilestones($request);
+        if (($response['Status'] ?? 1) != 0) {
+            return [];
+        }
+
+        return is_array($response['Detail'] ?? null) ? $response['Detail'] : [];
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     * @return list<array<string, mixed>>
+     */
+    public function get_ladder_progress(array $request): array
+    {
+        $response = $this->_player()->GetLadderProgress($request);
+        if (($response['Status'] ?? 1) != 0) {
+            return [];
+        }
+
+        return is_array($response['Detail'] ?? null) ? $response['Detail'] : [];
+    }
+
     public function dismiss_whats_new($mundane_id, $version)
     {
         return $this->_player()->DismissWhatsNew((int)$mundane_id, (string)$version);
+    }
+
+    /** @return array{BasicFonts: int, DyslexiaFonts: int} */
+    public function get_viewer_preferences(int $mundane_id): array
+    {
+        return $this->_player()->GetViewerPreferences($mundane_id);
+    }
+
+    public function get_whats_new_seen(int $mundane_id, string $version): bool
+    {
+        return $this->_player()->GetWhatsNewSeen($mundane_id, $version);
+    }
+
+    /** @return array{KingdomId: int, ParentKingdomId: int} */
+    public function get_home_kingdom(int $mundane_id): array
+    {
+        return $this->_player()->GetHomeKingdom($mundane_id);
     }
 
     public function check_username_available($username, $exclude_mundane_id = 0)

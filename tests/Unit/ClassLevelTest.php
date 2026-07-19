@@ -47,4 +47,9 @@ final class ClassLevelTest extends TestCase
         $this->assertNull(ClassLevel::computeClassLevel(53.0)['ToNext']);
         $this->assertNull(ClassLevel::computeClassLevel(100.0)['ToNext']);
     }
+
+    public function testThresholdsConstantIsCanonicalLadder(): void
+    {
+        $this->assertSame([5, 12, 21, 34, 53], ClassLevel::THRESHOLDS);
+    }
 }

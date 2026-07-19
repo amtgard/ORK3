@@ -6,7 +6,8 @@ define('UIR', HTTP_UI_REMOTE . 'index.php?Route=');
 ini_set("error_reporting", E_ALL & ~E_DEPRECATED & ~E_NOTICE & ~E_WARNING);
 
 if (isset($_REQUEST['Route']) && $_REQUEST['Route'] === 'Health') {
-    $ok = (new Health())->PingDb();
+    require_once DIR_MODEL . 'model.Health.php';
+    $ok = (new Model_Health())->ping_db();
     http_response_code($ok ? 200 : 503);
     if ($_SERVER['REQUEST_METHOD'] !== 'HEAD') {
         header('Content-Type: text/plain');
@@ -62,7 +63,8 @@ foreach ($_legacyRedirects as $_old => $_new) {
 // Redirect Event/index/{id} to the kingdom event attendance report with the event name as filter
 if (preg_match('#^Event/index/(\d+)#i', $_REQUEST['Route'], $_m)) {
     $_event_id = (int)$_m[1];
-    $_summary = (new Event())->GetEventSummaryForRedirect($_event_id);
+    require_once DIR_MODEL . 'model.Event.php';
+    $_summary = (new Model_Event())->get_event_summary_for_redirect($_event_id);
     if ($_summary['KingdomId'] > 0 && $_summary['Name'] !== '') {
         header('Location: ' . UIR . 'Reports/event_attendance/Kingdom/' . $_summary['KingdomId'] . '&filter=' . rawurlencode($_summary['Name']), true, 302);
         exit;

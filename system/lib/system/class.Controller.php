@@ -51,7 +51,8 @@ class Controller
         if (!$_skipTokenCheck && isset($this->session->user_id) && isset($this->session->token)) {
             $_uid_check = (int)$this->session->user_id;
             $_tok_check = $this->session->token;
-            if (!Ork3::$Lib->sessiontoken->ValidateSessionToken($_uid_check, $_tok_check)) {
+            $this->load_model('SessionToken');
+            if (!$this->SessionToken->validate_session_token($_uid_check, $_tok_check)) {
                 $_returnRoute = trim($_GET['Route'] ?? '');
                 unset($_SESSION['is_authorized_mundane_id']);
                 session_unset();
@@ -72,7 +73,8 @@ class Controller
         $this->data['ShowWhatsNew']        = false;
         $this->data['WhatsNewRelease']     = null;
         if ($_uid > 0) {
-            $prefs = Ork3::$Lib->player->GetViewerPreferences($_uid);
+            $this->load_model('Player');
+            $prefs = $this->Player->get_viewer_preferences($_uid);
             $this->data['ViewerBasicFonts']    = (int) ($prefs['BasicFonts'] ?? 0);
             $this->data['ViewerDyslexiaFonts'] = (int) ($prefs['DyslexiaFonts'] ?? 0);
 
@@ -84,7 +86,7 @@ class Controller
                 }
             }
             if ($this->data['WhatsNewRelease'] !== null) {
-                $this->data['ShowWhatsNew'] = !Ork3::$Lib->player->GetWhatsNewSeen($_uid, WHATS_NEW_VERSION);
+                $this->data['ShowWhatsNew'] = !$this->Player->get_whats_new_seen($_uid, WHATS_NEW_VERSION);
             }
         }
 
@@ -114,8 +116,7 @@ class Controller
         }
         // HasAuthority uses the auth ORM which shares the global DB connection.
         // Clear after all auth checks so subclass methods start with a clean DB state.
-        global $DB;
-        $DB->Clear();
+        $this->Authorization->clear_db_after_auth_checks();
     }
 
     public function load_model($name)
@@ -143,7 +144,8 @@ class Controller
         // Fall back to the session-cached value only when not logged in.
         if ($this->data['LoggedIn'] && isset($this->session->user_id)) {
             $uid = (int) $this->session->user_id;
-            $home = Ork3::$Lib->player->GetHomeKingdom($uid);
+            $this->load_model('Player');
+            $home = $this->Player->get_home_kingdom($uid);
             $this->data['UserKingdomId']       = (int) ($home['KingdomId'] ?? 0);
             $this->data['UserParentKingdomId'] = (int) ($home['ParentKingdomId'] ?? 0);
         } else {
