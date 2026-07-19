@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 2,
+  "id": "example-intentional-header",
+  "workstream": "docs/example",
+  "createdAt": "2026-07-19T12:00:00Z",
+  "basedOnSetpoint": "pin-after-restore",
+  "entries": [
+    {
+      "id": "example-header-title",
+      "class": "intentional",
+      "layer": "dom",
+      "profiles": ["test", "mirror"],
+      "pages": ["home-authenticated"],
+      "dom": { "pathPrefix": "/html/body/div/h1", "match": "subtree" },
+      "rationale": "Example intentional header mutation (replace with real REQ)",
+      "requirementRef": "docs/megiddo/fuzzy-validator/version-2/01-requirements.md#R2",
+      "source": "putative"
+    }
+  ]
+}

@@ -8,7 +8,7 @@ It answers a question that unit tests and click-path e2e usually miss:
 
 The tool loads pages in a real browser (Playwright), takes stabilized captures, and compares each **candidate** run against a previously recorded **baseline** across three layers: static assets (CSS/JS), the DOM tree, and full-page **screenshots**. Comparisons that would otherwise drown in noise use *learned fuzz*: small allowlists of regions and nodes that were observed to change even when the code did not. Everything outside those allowances is gated hard.
 
-When a validate run finishes you get an exit code (for CI) and an HTML report. Annotated screenshots in that report use **green** for allowed fuzz and **red** for unexpected drift (gate fail):
+When a validate run finishes you get an exit code (for CI) and an HTML report. Annotated screenshots in that report use **green** for allowed fuzz / overlay surface and **red** for unexpected drift (gate fail):
 
 <table>
 <tr>
@@ -23,7 +23,7 @@ When a validate run finishes you get an exit code (for CI) and an HTML report. A
 </tr>
 </table>
 
-It is packaged here as `bin/fuzzy-validator`, but the design is site-agnostic: a page registry, capture + stabilize, discovery of volatility, baselines, and validate / refuzz / setpoint workflows. ORK3-specific wiring (docker, dual DBs, npm scripts) is at the end under [Using it in this repository](#using-it-in-this-repository-ork3).
+It is packaged here as `bin/fuzzy-validator`, but the design is site-agnostic: a page registry, capture + stabilize, discovery of volatility, baselines, drift overlays, and validate / refuzz / setpoint / overlay workflows. ORK3-specific wiring (docker, dual DBs, npm scripts) is at the end under [Using it in this repository](#using-it-in-this-repository-ork3).
 
 ---
 
@@ -64,7 +64,15 @@ The hard counterpart is the **asset** layer: CSS and JS bodies must be byte-iden
 
 **Baselines** are the last accepted captures (screenshot, DOM, assets).  
 **Fuzz manifests** are the committed allowlists that make those compares workable.  
-Together they are the contract: validate fails if the candidate differs outside the fuzz; intentional UI change means re-**record**; natural data noise without a layout change means **refuzz**.
+Together they are the **setpoint contract**: validate fails if the candidate differs outside the fuzz.
+
+Two more tools sit *on top of* that contract without rewriting it:
+
+| Need | Command / artifact |
+|------|--------------------|
+| Natural data noise; layout unchanged | **`refuzz`** — widen learned fuzz, then promote a new setpoint when ready |
+| Planned UI change during a feature (keep gold master locked) | **Drift overlay** — classify expected **natural** / **intentional** drift at validate time |
+| Accepted new UI as the next gold master | **`record`** + [setpoint capture](#setpoint-capture) / [publish](#setpoint-publish) |
 
 Stabilization before capture (fixed clock, reduced animation, font/network readiness, optional auth) shrinks *artificial* flakiness so discovery mostly sees genuine page volatility.
 
@@ -74,7 +82,7 @@ Stabilization before capture (fixed clock, reduced animation, font/network readi
 
 ### Pages
 
-A **page** is one URL under gate — home, profile, admin screen, and so on. Pages are declared in `manifests/pages.json5` with an `id`, path/URL, auth needs, wait hints, and optional `skip` / drift class. Without registry entries, day-to-day commands have nothing to run against. Targeting a page from the CLI is shown with `record` / `validate` / `refuzz` below.
+A **page** is one URL under gate — home, profile, admin screen, and so on. Pages are declared in `manifests/pages.json5` with an `id`, path/URL, auth needs, wait hints, and optional `skip` / drift class. Without registry entries, day-to-day commands have nothing to run against. Targeting a page from the CLI is shown with `record` / `validate` / `refuzz` / `overlay` below.
 
 ### Profiles
 
@@ -94,6 +102,28 @@ A run can exercise one comparison layer or all of them. That selection is the **
 | `all` | Assets → DOM → screenshots |
 
 `validate` defaults to `all`. `record` defaults to `visual`. When cutting full baselines, pass `--phase all` on `record` (examples below).
+
+### Drift overlays
+
+A **drift overlay** is a versioned JSON5 file of *extra* allowances applied at **`validate` time**. It does **not** rewrite baselines or the setpoint zip. Entries are classified:
+
+| Class | Meaning |
+|-------|---------|
+| **natural** | Volatility expected without a product change (same idea as learned fuzz; overlay can refine it) |
+| **intentional** | Drift expected because of planned development mutation (tie to a requirement ref) |
+
+Layout under the tool root:
+
+```text
+overlays/
+  natural/         reviewed shared natural refinements (optional)
+  intentional/     promoted workstream overlays (git-tracked)
+  putative/        drafts from planning; loaded only with --putative
+```
+
+At gate time the tool merges calibrated fuzz ∪ overlay entries, then labels each remaining diff **expected** (by class) or **unexpected**. Unexpected diffs still fail the gate. Optional `annotations.json` may assess unexpected drifts for humans — it is **display-only** and never changes exit codes.
+
+Schema-check overlays with [`overlay validate`](#overlay-validate--summarize); apply them on [`validate`](#validate) via `--overlay` / `--overlay-dir`. Format: [Drift overlay](#drift-overlay-schemaversion-2).
 
 ---
 
@@ -135,15 +165,16 @@ While changing templates, CSS, or JS, run `validate` on the pages you touched ([
 fuzzy-validator validate --pages home-authenticated,player-profile --phase all
 ```
 
-**Review the run.** Open the newest `reports/run-*/index.html` ([Reading reports](#reading-reports)). The terminal prints `FUZZ_GATE …` and an exit code (`0` pass, `1` fail, `2` harness error). On the annotated screenshots in that report, **green** overlays are allowed fuzz and **red** overlays (or a hard asset diff in the assets view) are failures.
+**Review the run.** Open the newest `reports/run-*/index.html` ([Reading reports](#reading-reports)). The terminal prints `FUZZ_GATE …` and an exit code (`0` pass, `1` fail, `2` harness error). On the annotated screenshots in that report, **green** is allowed fuzz / overlay surface and **red** (or a hard asset diff in the assets view) is unexpected failure.
 
 | Outcome | Action |
 |---------|--------|
 | Red / asset fail you caused | Fix the bug; re-run `validate` |
-| Intentional new UI | [`record`](#record) on a known-good commit of that UI, then [setpoint capture](#setpoint-capture) / [publish](#setpoint-publish) |
+| Planned UI still in flight (gold master locked) | Use a drift [overlay](#drift-overlays) and re-validate. Full process: [§4](#4-requirements-driven-development-expected-drift-via-overlays--agent-skills) |
+| Intentional UI accepted as the next gold master | [`record`](#record) on a known-good commit of that UI, then [setpoint capture](#setpoint-capture) / [publish](#setpoint-publish) |
 | Data noise only; layout unchanged | [`refuzz`](#refuzz), then [setpoint capture](#setpoint-capture) / [publish](#setpoint-publish) |
 
-Most sessions never run `record` or `setpoint`. Creating a checkpoint: **capture → store zip → publish → commit pointer**. Consuming one: **restore → validate**.
+Most sessions never run `record` or `setpoint`. Creating a checkpoint: **capture → store zip → publish → commit pointer**. Consuming one: **restore → validate**. Feature work that expects UI drift: **restore → validate with overlay** (keep setpoint locked until you promote).
 
 ### 3. Setpoint validation from prior capture
 
@@ -156,6 +187,20 @@ fuzzy-validator validate --pages home-authenticated,player-profile --phase all
 
 Details: [setpoint restore](#setpoint-restore), [validate](#validate), [Reading reports](#reading-reports). Missing baselines → exit `2` and a restore hint.
 
+### 4. Requirements-driven development (expected drift via overlays + agent skills)
+
+Use this when a feature plan will **deliberately change the UI**, but you want the current gold-master setpoint to stay locked until that new look is accepted. You declare the planned changes as an **overlay** (expected drift), build the feature, then compare work against the locked setpoint. Planned differences show up as expected; anything else still fails.
+
+The loop is agent-assisted: for the draft and evaluation steps, copy the linked `orchestrator.prompt` into a **new** agent chat and follow what it asks for.
+
+1. Make sure you have a current gold-master setpoint for the pages you will touch (capture and publish one first if needed — see [§1](#1-first-time-for-a-new-site-or-page-no-baselines-yet)). Restore it on your machine before the later steps (`setpoint restore`).
+2. From the requirements, draft an overlay of intentional UI drift  (or have [this agent skill do it for you](../../docs/megiddo/fuzzy-validator/skills/putative-drift-overlay/orchestrator.prompt)) so later checks know which changes were planned. Copy [this prompt](../../docs/megiddo/fuzzy-validator/skills/putative-drift-overlay/orchestrator.prompt) into a new agent chat; point it at your requirements/plan docs and name the workstream. Review the draft, reject anything speculative, then promote the reviewed overlay into the workstream’s intentional overlays (the agent will say where).
+3. Implement the feature on your branch. Leave the gold-master setpoint alone — do not re-record or publish a new one just to silence differences you already planned for.
+4. Compare current work to the locked setpoint with that overlay applied, on both sandbox and prod-mirror profiles. The recommended approache is to use  [this agent skill prompt](../../docs/megiddo/fuzzy-validator/skills/run-setpoint-drift/orchestrator.prompt) in a new agent chat and tell it which overlay to use. If it stops because the prod mirror looks stale, refresh the mirror (or give an explicit override) before continuing. Open the HTML report when it finishes.
+5. Correct real product bugs, or accept and fold missing planned drift into the overlay when the requirements were incomplete. Optional agent notes on failures are commentary only — they do not clear a fail. Repeat from step 4 (and update the overlay via step 2 if the plan changed) until unexpected errors are winnowed down. When the new UI is accepted as the next contract, record and publish a new setpoint ([§1](#1-first-time-for-a-new-site-or-page-no-baselines-yet) / [setpoint capture](#setpoint-capture)).
+
+Day-to-day checks without a feature plan stay [§2](#2-day-to-day-development). Clone-and-restore only stays [§3](#3-setpoint-validation-from-prior-capture).
+
 ---
 
 ## Reading reports
@@ -164,10 +209,20 @@ Every `record`, `validate`, and `refuzz` writes a directory under `reports/run-<
 
 1. Open `reports/run-<id>/index.html` in a browser (newest `run-*` after a local run).
 2. Drill into a page → screenshot / DOM / assets views.
-3. On annotated screenshots: **green** = allowed fuzz; **red** = unexpected drift (fail).
+3. On annotated screenshots: **green** = allowed fuzz / overlay surface; **red** = unexpected drift (fail).
 4. Pair with the terminal `FUZZ_GATE` line and process exit code.
 
-Evidence of the same overlay language appears in the preamble images above.
+When you pass drift overlays on `validate`, also check:
+
+| Artifact | Role |
+|----------|------|
+| **Unexpected** section (HTML) | Failures — primary gate signal |
+| **Expected intentional / natural** | Informational; covered by overlay or calibrated fuzz |
+| **`drifts.json`** | Machine-readable inventory (`expected` / `unexpected` + class) |
+| **`pages/<id>/reproduce.md`** | Mechanical steps to reproduce (no LLM); links baseline / candidate / diff |
+| **Assessment** column | Optional `annotations.json` — display-only; never hides Unexpected |
+
+Evidence of the same green/red screenshot language appears in the preamble images above.
 
 ---
 
@@ -232,15 +287,19 @@ fuzzy-validator record --urls /tmp/pages.txt --phase all
 
 ### `validate`
 
-**Why.** Day-to-day gate: after a code change, decide pass/fail against the known-good contract without rewriting baselines.
+**Why.** Day-to-day gate: after a code change, decide pass/fail against the known-good contract without rewriting baselines. Optional drift overlays classify planned or refined allowances without mutating the setpoint.
 
-**What.** Captures each target once, compares to `baselines/` under the fuzz allowlists (and hard asset equality), scores against profile thresholds, writes `reports/run-*/`, prints `FUZZ_GATE`, exits `0`/`1`/`2`. Default `--phase` is `all`.
+**What.** Captures each target once, compares to `baselines/` under the fuzz allowlists ∪ any loaded overlays (and hard asset equality), scores against profile thresholds, writes `reports/run-*/` (including `drifts.json` and mechanical `reproduce.md` when overlays / classification apply), prints `FUZZ_GATE`, exits `0`/`1`/`2`. Default `--phase` is `all`.
 
 **Basic usage**
 
 ```bash
 # Full gate for one page; then open reports/run-*/index.html.
 fuzzy-validator validate --page player-profile
+
+# Same gate with a workstream overlay (setpoint stays locked).
+fuzzy-validator validate --page player-profile \
+  --overlay overlays/intentional/my-feature.json5
 ```
 
 **Parameters**
@@ -263,6 +322,28 @@ fuzzy-validator validate --profile test --page player-profile
 
 # --profiles: explicit list.
 fuzzy-validator validate --profiles mirror --page player-profile
+
+# --overlay: comma-separated overlay file paths (schemaVersion 2).
+fuzzy-validator validate --page home-authenticated \
+  --overlay overlays/intentional/my-feature.json5
+
+# --overlay-dir: load every *.json5 / *.json in a directory.
+fuzzy-validator validate --all --overlay-dir overlays/intentional
+
+# --putative: also load overlays/putative/ (off by default; drafts only).
+fuzzy-validator validate --all --overlay-dir overlays/intentional --putative
+
+# --require-fresh-mirror: exit 2 if ork-db extract manifest is older than 7 days.
+fuzzy-validator validate --all --require-fresh-mirror
+
+# --mirror-stale-ok: override stale-mirror check; reason is recorded in drifts.json.
+fuzzy-validator validate --all --require-fresh-mirror --mirror-stale-ok "import scheduled Monday"
+
+# --annotations: display-only assessment file (never changes exit code).
+fuzzy-validator validate --page player-profile --annotations /tmp/annotations.json
+
+# --annotations-out: write an empty annotations shell for an agent evaluator.
+fuzzy-validator validate --page player-profile --annotations-out reports/run-local/annotations.json
 
 # --base-url: site root for this run.
 fuzzy-validator validate --page player-profile --base-url http://localhost:19080/orkui/
@@ -294,9 +375,33 @@ fuzzy-validator validate --tool-root tools/fuzzy-validator/evidence --page home-
 
 | Exit | Meaning |
 |------|---------|
-| `0` | Pass |
-| `1` | Regression |
-| `2` | Harness error (missing baselines, bad registry, unreachable site, …) |
+| `0` | Pass (no unexpected drift below thresholds) |
+| `1` | Regression — at least one **unexpected** failure |
+| `2` | Harness error (missing baselines, bad registry/overlay, stale mirror with `--require-fresh-mirror`, unreachable site, …) |
+
+### `overlay validate` / `summarize`
+
+**Why.** Check overlay files before a long validate run, and inventory what a workstream claims as expected drift.
+
+**What.** Loads one or more overlay paths, merges them, checks schema + conflicts (`validate`), or prints entry counts by class/page (`summarize`). Does **not** capture pages.
+
+**Basic usage**
+
+```bash
+fuzzy-validator overlay validate overlays/putative/example-workstream.json5
+fuzzy-validator overlay summarize overlays/intentional/my-feature.json5
+```
+
+**Parameters**
+
+```bash
+# One or more overlay paths (positional).
+fuzzy-validator overlay validate overlays/natural/shared.json5 overlays/intentional/ws.json5
+
+fuzzy-validator overlay summarize overlays/intentional/ws.json5
+```
+
+Promote a reviewed putative draft into `overlays/intentional/` before relying on it in CI (do not pass `--putative` in lights-out gates unless you mean to).
 
 ### `refuzz`
 
@@ -453,14 +558,18 @@ Heavy binary baselines usually do **not** live as loose files in git. Git keeps 
 ```
 tools/fuzzy-validator/
   manifests/          page registry, profiles, defaults, fuzz allowlists
+  overlays/           drift overlays (natural / intentional / putative) — additive; never rewrite setpoints
   setpoint.json       which baseline bundle is “current”
   setpoints/          bootstrap (committed) + out/cache (local)
   baselines/          restored or recorded “known good” captures
   calibrations/       scratch captures used while learning or staging candidates
-  reports/            HTML gate results for humans
+  reports/            HTML gate results for humans (+ drifts.json, reproduce.md)
   evidence/           committed end-to-end proof fixtures (tool development)
   playwright/         browser capture + stabilization
-  python/             discovery, gates, scoring, CLI, unit tests
+  python/             discovery, gates, scoring, CLI package, unit tests
+                      fuzzy_validator/ — thin cli.py + record/validate/refuzz/setpoint_cli/overlay_cli
+                      + runtime (profile activate, subprocess seam), capture, pages, parser
+
 ```
 
 | Path | Why it exists |
@@ -470,14 +579,15 @@ tools/fuzzy-validator/
 | **`manifests/defaults.json5`** | Global knobs (calibration run count, color tolerances, default score floors). |
 | **`manifests/<profile>/*.fuzz.json`** | Screenshot allowlists (rectangles). Committed so PRs can review forgiven noise. |
 | **`manifests/<profile>/*.dom-fuzz.json`** | DOM allowlists (paths + `subtree` / `text` / `attributes`). Same review role. |
+| **`overlays/{natural,intentional,putative}/`** | Classified drift overlays applied at validate time; setpoint stays locked. See [Drift overlay](#drift-overlay-schemaversion-2). |
 | **`setpoint.json`** | Pointer + metadata for the latest baseline **bundle** — see [format descriptions](#format-descriptions). |
 | **`setpoints/bootstrap/*.zip`** | Offline restore after clone / in CI without fetching external storage. |
 | **`setpoints/out/`**, **`setpoints/cache/`** | Local staging for newly captured zips and downloads (gitignored). |
 | **`baselines/<profile>/`** | Known-good screenshot PNG, DOM JSON, asset manifest, raw CSS/JS used by `validate`. |
 | **`calibrations/`** | Transient N-run / candidate files so Playwright and Python can hand off via the filesystem; safe to delete. |
-| **`reports/run-<id>/`** | Human narrative: `index.html`, layer views, annotated screenshots (green fuzz vs red failures). |
+| **`reports/run-<id>/`** | Human narrative: `index.html`, layer views, annotated screenshots, `drifts.json`, per-page `reproduce.md`. |
 | **`evidence/`** | Self-contained proof tree for developing the tool itself — not your product baselines. |
-| **`playwright/`**, **`python/`** | Capture runtime vs compare/discover/report logic. |
+| **`playwright/`**, **`python/`** | Capture runtime vs compare/discover/report logic. CLI lives under `python/fuzzy_validator/` (thin `cli.py` + command modules). |
 
 ---
 
@@ -565,6 +675,45 @@ Named environments for the same page registry. Each profile has its own baseline
 | `profiles.<name>.auth.passwordEnv` | Env var name that overrides the default password |
 | `profiles.<name>.auth.usernameEnv` | Optional env var name that overrides `username` |
 
+### Drift overlay (`schemaVersion: 2`)
+
+Additive allowances for `validate --overlay` / `--overlay-dir`. Does not modify baselines or `setpoint.json`.
+
+```json5
+{
+  schemaVersion: 2,
+  id: "example-intentional-header",
+  workstream: "docs/example",
+  createdAt: "2026-07-19T12:00:00Z",
+  basedOnSetpoint: "pin-after-restore",
+  entries: [
+    {
+      id: "example-header-title",
+      class: "intentional",          // natural | intentional
+      layer: "dom",                  // visual | dom | assets
+      profiles: ["test", "mirror"],
+      pages: ["home-authenticated"],
+      dom: { pathPrefix: "/html/body/div/h1", match: "subtree" },
+      // visual: { x, y, width, height }  — screenshot boxes
+      // assets: { ids: ["css-000"] }     — explicit only; assets stay hard by default
+      rationale: "Header title changes per requirement",
+      requirementRef: "docs/.../requirements.md#REQ-12",  // required for intentional
+      source: "putative"             // calibrated | manual | putative | promoted
+    }
+  ]
+}
+```
+
+| Field | Role |
+|-------|------|
+| `basedOnSetpoint` | Which gold-master bundle this overlay was authored against |
+| `entries[].class` | `natural` or `intentional` — used in report classification |
+| `entries[].layer` | Which gate layer the allowance applies to |
+| `entries[].requirementRef` | Required for `intentional` — ties drift to a written requirement |
+| `entries[].source` | Provenance; promote `putative` → `intentional/` after human review |
+
+Conflicts (same region, contradictory classes) fail closed (`overlay validate` / `validate` exit `2`).
+
 ---
 
 ## How it works (pipeline)
@@ -581,16 +730,19 @@ record  → intersect differences across N runs
           → require assets identical across runs
           → write baselines + manifests
 validate → gate assets → gate DOM → gate screenshots
-          → score vs thresholds → HTML report
+          → apply drift overlays (optional)
+          → classify expected natural | intentional | unexpected
+          → score vs thresholds → HTML report + drifts.json + reproduce.md
 refuzz  → treat baseline↔candidate drift as new natural fuzz
           → merge into manifests; refresh baselines
+overlay → schema + conflict check / summarize (no capture)
 setpoint → capture zip / publish pointer / restore into baselines/
 ```
 
 1. **Stabilize** — neutralize capture flakiness so N runs on the same commit mostly agree except for real page volatility.  
 2. **Discover (record)** — pairwise-diff N screenshots and DOM trees; keep regions/nodes that change across comparisons as fuzz; abort if CSS/JS diverge across those runs.  
-3. **Gate (validate)** — one candidate; assets exact; DOM/screenshots may differ only inside learned fuzz; scores must meet profile thresholds.  
-4. **Report** — green = forgiven fuzz; red = unexpected diff.
+3. **Gate (validate)** — one candidate; assets exact (unless an explicit asset overlay entry); DOM/screenshots may differ inside learned fuzz ∪ overlays; scores must meet profile thresholds; unexpected diffs fail.  
+4. **Report** — green = forgiven fuzz / overlay surface; red = unexpected diff; expected classes listed separately; annotations optional and non-masking.
 
 ---
 
@@ -638,18 +790,22 @@ Default `validate` / `record` run both profiles unless you pass `--profile` / `-
 
 - Run `setpoint restore` after clone; otherwise `validate` exits `2`.  
 - Prefer `bin/fuzzy-validator` over legacy `calibrate.sh` / `gate.sh`.  
-- Screenshot compare can differ macOS vs Linux; treat **CI Linux** as canonical for sign-off.  
+- Screenshot compare can differ macOS vs Linux; prefer a **Linux** docker/host gate for sign-off when they disagree.  
 - Do not lower `assetsMinScore` to hide a refactor; fix the drift or intentionally re-record.  
-- `validate --all` is slow (many pages × two profiles).
+- Do not use overlays (or annotations) to soft-pass unexpected regressions; overlays are for *declared* expected drift only.  
+- `validate --all` is slow (many pages × two profiles).  
+- For dual-profile sign-off with a freshness check: `validate … --require-fresh-mirror` (override only with `--mirror-stale-ok "reason"`). Refresh the local prod mirror / re-`bin/ork-db extract` when prompted.
 
-### Tests / CI (ORK3)
+Agent orchestration skills (run setpoint drift; draft putative overlays from requirements): [`docs/megiddo/fuzzy-validator/skills/`](../../docs/megiddo/fuzzy-validator/skills/).
+
+### Tests (ORK3)
 
 ```bash
 pip install -r tools/fuzzy-validator/python/requirements-dev.txt
 pytest tools/fuzzy-validator/python/tests/ \
   --cov=tools/fuzzy-validator/python/lib \
   --cov=tools/fuzzy-validator/python \
-  --cov-fail-under=90
+  --cov-fail-under=95
 ```
 
-Workflow: [`.github/workflows/fuzzy-validator.yml`](../../.github/workflows/fuzzy-validator.yml). Deeper notes: [`docs/megiddo/fuzzy-validator/`](../../docs/megiddo/fuzzy-validator/). Prefer this README and `bin/fuzzy-validator … --help` day to day.
+Deeper notes: [`docs/megiddo/fuzzy-validator/`](../../docs/megiddo/fuzzy-validator/). Prefer this README and `bin/fuzzy-validator … --help` day to day.

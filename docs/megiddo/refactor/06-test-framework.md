@@ -99,7 +99,7 @@ export ORK3_E2E_USERNAME=megiddo ORK3_E2E_PASSWORD=test-db-player
 
 Optional explicit override (same values): `export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password ORK3_E2E_TEST_PASSWORD=test-db-player`
 
-See [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md).
+See [11-dual-database-profiles.md](../fuzzy-validator/reference/11-dual-database-profiles.md).
 
 ### 4. Verify login works (sign-off gate)
 
@@ -319,7 +319,7 @@ Required at **R-* sign-off** after matching **V-*** milestone. Complements Playw
 | **Command** | `bin/fuzzy-validator validate --pages <ids> --phase all` |
 | **Output** | Exit code + HTML report under `tools/fuzzy-validator/reports/run-{id}/` |
 
-Record baselines in **V-00** (global setpoint) and **V-{nn}** (domain canaries): `bin/fuzzy-validator record --pages …`. See the archived [08-phase-16-validation-artifacts.md](./archive/08-phase-16-validation-artifacts.md) and [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md).
+Record baselines in **V-00** (global setpoint) and **V-{nn}** (domain canaries): `bin/fuzzy-validator record --pages …`. See the archived [08-phase-16-validation-artifacts.md](./archive/08-phase-16-validation-artifacts.md) and [11-dual-database-profiles.md](../fuzzy-validator/reference/11-dual-database-profiles.md).
 
 ---
 

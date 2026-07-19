@@ -85,6 +85,57 @@ def test_assert_profile_baselines_missing_dir(tmp_path: Path):
         assert_profile_baselines_exist(tmp_path, "mirror", ["home-anonymous"])
 
 
+def test_assert_profile_baselines_missing_files(tmp_path: Path):
+    baselines = tmp_path / "baselines" / "test"
+    baselines.mkdir(parents=True)
+    with pytest.raises(ProfileError, match="missing baselines for"):
+        assert_profile_baselines_exist(tmp_path, "test", ["home-anonymous", "other"])
+
+
+def test_load_profiles_config_missing(tmp_path: Path):
+    with pytest.raises(ProfileError, match="missing profiles config"):
+        load_profiles_config(tmp_path / "nope.json5")
+
+
+def test_get_profile_unknown(tmp_path: Path):
+    from lib.profiles import get_profile
+
+    config_path = tmp_path / "profiles.json5"
+    _write_profiles(config_path)
+    config = load_profiles_config(config_path)
+    with pytest.raises(ProfileError, match="unknown profile"):
+        get_profile(config, "nope")
+
+
+def test_default_profile_names_without_default_key(tmp_path: Path):
+    from lib.profiles import default_profile_names
+
+    assert default_profile_names({"profiles": {"a": {}, "b": {}}}) == ["a", "b"]
+
+
+def test_profile_auth_env_from_environ(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("ORK3_E2E_USERNAME", "env-user")
+    monkeypatch.setenv("ORK3_E2E_PASSWORD", "env-pass")
+    profile = {
+        "auth": {
+            "usernameEnv": "ORK3_E2E_USERNAME",
+            "passwordEnv": "ORK3_E2E_PASSWORD",
+            "passwordDefault": "fallback",
+        }
+    }
+    env = profile_auth_env(profile)
+    assert env["ORK3_E2E_USERNAME"] == "env-user"
+    assert env["ORK3_E2E_PASSWORD"] == "env-pass"
+
+
+def test_ork_db_use_command():
+    from lib.profiles import ork_db_use_command
+
+    assert ork_db_use_command({"orkDbUse": "dev"}) == ["bin/ork-db", "use", "dev"]
+    with pytest.raises(ProfileError, match="orkDbUse"):
+        ork_db_use_command({})
+
+
 def test_profile_auth_env_defaults():
     profile = {"auth": {"username": "megiddo", "passwordDefault": "secret"}}
     env = profile_auth_env(profile)

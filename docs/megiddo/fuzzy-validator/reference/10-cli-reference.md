@@ -246,8 +246,8 @@ Legacy npm aliases (optional, FU-0+):
 
 ## Related docs
 
-- [USER-GUIDE.md](./USER-GUIDE.md) — operator workflows
-- [DEVELOPER-GUIDE.md](./DEVELOPER-GUIDE.md) — tests and extending the tool
+- [USER-GUIDE.md](../USER-GUIDE.md) — operator workflows
+- [DEVELOPER-GUIDE.md](../DEVELOPER-GUIDE.md) — tests and extending the tool
 - [04-operating-guide.md](./04-operating-guide.md) — review workflow
 - [06-gate-output-and-report.md](./06-gate-output-and-report.md) — pass/fail + HTML report
 - [11-dual-database-profiles.md](./11-dual-database-profiles.md) — test vs mirror tiers

@@ -93,7 +93,7 @@ On **production servers**, `extract` / `render` / `apply` refuse to run. See [10
 | `docs/megiddo/refactor/06-test-framework.md` | PHPUnit defaults → `19307` / `ork_test`; `deploy-sandbox` before sign-off |
 | `tests/Integration/*` | Stable fake kingdoms/parks instead of dev seed lottery |
 | `tests/Support/*Fixture.php` | May simplify as canonical sandbox data exists |
-| `bin/fuzzy-validator` | **`test`** profile uses same sandbox via `ork-db use dev` ([fuzzy-validator](../fuzzy-validator/11-dual-database-profiles.md)) |
+| `bin/fuzzy-validator` | **`test`** profile uses same sandbox via `ork-db use dev` ([fuzzy-validator](../fuzzy-validator/reference/11-dual-database-profiles.md)) |
 | `db-migrations/` | Schema applied to both DBs; content migrations filtered per [06-migration-classification.md](./06-migration-classification.md) |
 
 ---

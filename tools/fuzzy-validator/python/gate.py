@@ -52,6 +52,7 @@ def run_pixel_gate(
     min_area_px: int = 1,
     pad_px: int = 0,
     morphology_kernel_px: int = 1,
+    extra_fuzz_zones: list[dict] | None = None,
 ) -> GateResult:
     baseline = load_rgb_array(baseline_path)
     candidate = load_rgb_array(candidate_path)
@@ -81,7 +82,8 @@ def run_pixel_gate(
         )
 
     full_diff = pairwise_diff_mask(baseline, candidate, color_threshold)
-    fuzz_rects = rects_from_manifest_zones(effective_fuzz_zones(manifest))
+    zones = effective_fuzz_zones(manifest) + list(extra_fuzz_zones or [])
+    fuzz_rects = rects_from_manifest_zones(zones)
     fuzz_coverage = rect_mask(full_diff.shape, fuzz_rects)
     outside_mask = full_diff & ~fuzz_coverage
 

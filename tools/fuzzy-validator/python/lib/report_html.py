@@ -11,6 +11,7 @@ from typing import Any
 
 from jinja2 import Environment, BaseLoader
 
+from lib.annotations import annotations_by_drift_id
 from lib.scoring import Thresholds, page_passes, score_near_threshold
 
 REPORT_CSS = """
@@ -176,13 +177,59 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
 {% if profiles %}
 <p>Profiles: {{ profiles | join(', ') }}</p>
 {% endif %}
-<nav><a href="summary.json">summary.json</a></nav>
+<nav><a href="summary.json">summary.json</a>
+{% if has_drifts %} · <a href="drifts.json">drifts.json</a>{% endif %}
+</nav>
 <h2>Thresholds</h2>
 <ul>
   <li>assets ≥ {{ thresholds.assetsMinScore }}</li>
   <li>dom ≥ {{ thresholds.domMinScore }}</li>
   <li>visual ≥ {{ thresholds.visualMinScore }}</li>
 </ul>
+{% if unexpected_drifts %}
+<h2>Unexpected drifts</h2>
+<table>
+  <tr><th>Drift id</th><th>Page</th><th>Profile</th><th>Layer</th><th>Location</th><th>Assessment</th></tr>
+  {% for drift in unexpected_drifts %}
+  <tr>
+    <td><code>{{ drift.driftId }}</code></td>
+    <td>{{ drift.pageId }}</td>
+    <td>{{ drift.profile }}</td>
+    <td>{{ drift.layer }}</td>
+    <td><code>{{ drift.location_text }}</code></td>
+    <td>{% if drift.assessment %}<em>{{ drift.assessment }}</em>{% if drift.notes %}: {{ drift.notes }}{% endif %}{% else %}—{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% if expected_intentional %}
+<h2>Expected intentional</h2>
+<table>
+  <tr><th>Drift id</th><th>Page</th><th>Layer</th><th>Rationale</th></tr>
+  {% for drift in expected_intentional %}
+  <tr>
+    <td><code>{{ drift.driftId }}</code></td>
+    <td>{{ drift.pageId }}</td>
+    <td>{{ drift.layer }}</td>
+    <td>{{ drift.rationale or '—' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% if expected_natural %}
+<h2>Expected natural</h2>
+<table>
+  <tr><th>Drift id</th><th>Page</th><th>Layer</th><th>Rationale</th></tr>
+  {% for drift in expected_natural %}
+  <tr>
+    <td><code>{{ drift.driftId }}</code></td>
+    <td>{{ drift.pageId }}</td>
+    <td>{{ drift.layer }}</td>
+    <td>{{ drift.rationale or '—' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
 {% for section in profile_sections %}
 <div class="profile-section">
   <h2>Profile: {{ section.profile }} ({{ section.label }})</h2>
@@ -402,6 +449,38 @@ def _verdict_strip(page_id: str, layers: list[dict], thresholds: Thresholds, pas
     return " · ".join(parts) if parts else "FAIL"
 
 
+def _drift_rows(
+    drifts: list[dict[str, Any]] | None,
+    annotations: dict[str, Any] | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    if not drifts:
+        return [], [], []
+    by_id = annotations_by_drift_id(annotations)
+    unexpected: list[dict[str, Any]] = []
+    intentional: list[dict[str, Any]] = []
+    natural: list[dict[str, Any]] = []
+    for drift in drifts:
+        row = dict(drift)
+        location = drift.get("location") or {}
+        row["location_text"] = html.escape(json.dumps(location, sort_keys=True))
+        note = by_id.get(str(drift.get("driftId", "")))
+        if note:
+            row["assessment"] = note.get("assessment")
+            row["notes"] = note.get("notes")
+        else:
+            row["assessment"] = None
+            row["notes"] = None
+        status = drift.get("status")
+        class_ = drift.get("class")
+        if status == "unexpected":
+            unexpected.append(row)
+        elif status == "expected" and class_ == "intentional":
+            intentional.append(row)
+        elif status == "expected" and class_ == "natural":
+            natural.append(row)
+    return unexpected, intentional, natural
+
+
 def write_report_bundle(
     *,
     run_dir: Path,
@@ -414,9 +493,14 @@ def write_report_bundle(
     profile_label: str | None = None,
     profiles: list[str] | None = None,
     profile_sections: list[dict[str, Any]] | None = None,
+    drifts: list[dict[str, Any]] | None = None,
+    annotations: dict[str, Any] | None = None,
 ) -> Path:
     run_dir.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    unexpected_drifts, expected_intentional, expected_natural = _drift_rows(
+        drifts, annotations
+    )
 
     page_summaries: list[dict[str, Any]] = []
     for page in page_results:
@@ -550,6 +634,10 @@ def write_report_bundle(
         profile_sections=profile_sections or [],
         pass_count=pass_count,
         fail_count=fail_count,
+        has_drifts=bool(drifts),
+        unexpected_drifts=unexpected_drifts,
+        expected_intentional=expected_intentional,
+        expected_natural=expected_natural,
     )
     index_path = run_dir / "index.html"
     index_path.write_text(index_html, encoding="utf-8")

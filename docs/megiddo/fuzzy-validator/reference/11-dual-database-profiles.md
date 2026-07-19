@@ -1,7 +1,7 @@
 # Fuzzy Validator — Dual Database Profiles
 
-**Status:** Plan (not implemented)  
-**Depends on:** [ork-db test database tool](../test-database-tool/README.md) (TD-6+), FU-1+ capture harness
+**Status:** Implemented (FU-11)  
+**Depends on:** [ork-db test database tool](../../test-database-tool/README.md) (TD-6+), FU-1+ capture harness
 
 Every `record` and `validate` run targets one or both **database profiles**. The ORK3 app reads data through a single MariaDB connection; the profile selects which database the **local docker app** uses via `bin/ork-db use dev|prod`.
 
@@ -33,7 +33,7 @@ Before each profile pass, the validator:
 2. Restarts or waits for `ork3-php8-app` to pick up the profile (same as manual dev workflow)
 3. Optionally runs `bin/ork-db validate --mode post-apply` on **test** profile only when `--ensure-sandbox` is set
 
-See [test-database-tool 10-cli-reference.md](../test-database-tool/10-cli-reference.md).
+See [test-database-tool 10-cli-reference.md](../../test-database-tool/10-cli-reference.md).
 
 ---
 
@@ -199,7 +199,7 @@ Sandbox baselines should remain stable across refactors; re-`record --profile te
 
 PHPUnit uses `ENVIRONMENT=TEST` → `config.test.php` → **`ork_test` @ `19307`** directly (host), independent of `bin/ork-db use`. Fuzzy-validator **`test`** profile aligns with the same sandbox data the integration suite expects after `deploy-sandbox`.
 
-See [refactor 06-test-framework.md](../refactor/06-test-framework.md).
+See [refactor 06-test-framework.md](../../refactor/06-test-framework.md).
 
 ---
 
@@ -213,4 +213,4 @@ See [refactor 06-test-framework.md](../refactor/06-test-framework.md).
 
 - [10-cli-reference.md](./10-cli-reference.md) — full CLI flags
 - [03-manifest-schema.md](./03-manifest-schema.md) — `profiles.json5` schema
-- [../test-database-tool/README.md](../test-database-tool/README.md) — sandbox tool
+- [../../test-database-tool/README.md](../../test-database-tool/README.md) — sandbox tool

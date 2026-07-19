@@ -1,6 +1,6 @@
 # Fuzzy Validator — Architecture
 
-**Status:** Implemented — see [12-design-and-implementation.md](./12-design-and-implementation.md) for as-built design; this doc retains algorithm and stabilization detail.  
+**Status:** Implemented — see [12-design-and-implementation.md](../12-design-and-implementation.md) for as-built design; this doc retains algorithm and stabilization detail.  
 **Stack:** Playwright (TypeScript) + Python (Pillow, NumPy, OpenCV)  
 **License / cost:** OSS only, no SaaS
 
@@ -62,7 +62,7 @@ flowchart LR
 
 ### Phase 2 — asset + DOM gate
 
-See [05-phase2-asset-dom-gate.md](./05-phase2-asset-dom-gate.md) for full detail. Summary:
+See [05-phase2-asset-dom-gate.md](../archive/05-phase2-asset-dom-gate.md) for full detail. Summary:
 
 ```mermaid
 flowchart LR
@@ -128,7 +128,7 @@ Central list in `tools/fuzzy-validator/manifests/pages.json5` (see [03-manifest-
 
 Capture spec iterates registry; no hand-written test per page.
 
-**Phase 2 extension:** same loop also writes DOM HTML and records CSS/JS asset bodies (see [05-phase2-asset-dom-gate.md](./05-phase2-asset-dom-gate.md)).
+**Phase 2 extension:** same loop also writes DOM HTML and records CSS/JS asset bodies (see [05-phase2-asset-dom-gate.md](../archive/05-phase2-asset-dom-gate.md)).
 
 ### 4.3 Render stabilization (JavaScript)
 
@@ -294,7 +294,7 @@ Sub-pixel anti-aliasing may shift slightly between captures. Prefer lowering **`
 
 ## 7. Phase 2 — CSS, JavaScript, DOM (summary)
 
-Full specification: [05-phase2-asset-dom-gate.md](./05-phase2-asset-dom-gate.md).
+Full specification: [05-phase2-asset-dom-gate.md](../archive/05-phase2-asset-dom-gate.md).
 
 | Layer | Calibration | Gate |
 |-------|-------------|------|

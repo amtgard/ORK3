@@ -3,7 +3,7 @@
 ```
 You are executing **Megiddo FIX-10** only — re-record **test/sandbox** fuzzy baselines after credential seed fix (no production refactors).
 
-Read: docs/megiddo/refactor/skills/phase3-gate-fix/workers/_shared-procedure.md, docs/megiddo/fuzzy-validator/04-operating-guide.md § record / setpoint / refuzz, docs/megiddo/refactor/06-test-framework.md § E2E login credentials, docs/megiddo/refactor/validations/v-00-fuzzy-setpoint.md
+Read: docs/megiddo/refactor/skills/phase3-gate-fix/workers/_shared-procedure.md, docs/megiddo/fuzzy-validator/reference/04-operating-guide.md § record / setpoint / refuzz, docs/megiddo/refactor/06-test-framework.md § E2E login credentials, docs/megiddo/refactor/validations/v-00-fuzzy-setpoint.md
 
 | Field | Value |
 |-------|-------|

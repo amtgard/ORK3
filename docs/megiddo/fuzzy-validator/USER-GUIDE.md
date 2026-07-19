@@ -2,7 +2,7 @@
 
 **Audience:** Megiddo R-* developers, maintainers running record/validate/sign-off  
 **Entry point:** `bin/fuzzy-validator` from repo root  
-**Deep reference:** [10-cli-reference.md](./10-cli-reference.md) · [04-operating-guide.md](./04-operating-guide.md)
+**Deep reference:** [10-cli-reference.md](./reference/10-cli-reference.md) · [04-operating-guide.md](./reference/04-operating-guide.md)
 
 ---
 
@@ -87,7 +87,7 @@ For full-registry promotion after merge to `main`, use **setpoint capture** (§4
 3. Review overlays and fuzz manifests.
 4. Promote via setpoint workflow (§4) or commit manifests if baselines already in zip.
 
-See [03-manifest-schema.md](./03-manifest-schema.md) for field definitions.
+See [03-manifest-schema.md](./reference/03-manifest-schema.md) for field definitions.
 
 ---
 
@@ -104,8 +104,30 @@ See [03-manifest-schema.md](./03-manifest-schema.md) for field definitions.
 Stdout includes a line like:
 
 ```text
-FUZZ_GATE run=20260707T120000Z pass=3 fail=0 exit=0
+FUZZ_GATE run=20260707T120000Z pass=3 fail=0 unexpected=0 expectedNatural=0 expectedIntentional=0 exit=0
 ```
+
+### Drift overlays (v2)
+
+Overlays classify **expected** (natural / intentional) vs **unexpected** drift without rewriting the setpoint.
+
+```bash
+# Schema-check an overlay
+bin/fuzzy-validator overlay validate tools/fuzzy-validator/overlays/putative/example-workstream.json5
+
+# Validate with overlays (setpoint stays locked)
+bin/fuzzy-validator validate --pages home-anonymous --overlay path/to/overlay.json5
+
+# Also load overlays/putative/ (off by default)
+bin/fuzzy-validator validate --all --overlay-dir tools/fuzzy-validator/overlays/intentional --putative
+
+# Fail if prod mirror extracted_at is older than 7 days
+bin/fuzzy-validator validate --all --require-fresh-mirror
+```
+
+Reports include `drifts.json`, expected/unexpected HTML sections, and per-page mechanical `reproduce.md`. Optional `annotations.json` is display-only and never changes exit codes.
+
+Skills: [skills/README.md](./skills/README.md). Plan: [version-2/](./version-2/).
 
 ### HTML report
 
@@ -113,13 +135,16 @@ Open `tools/fuzzy-validator/reports/run-{id}/index.html`:
 
 | UI element | Meaning |
 |------------|---------|
-| **Green boxes** on screenshot | Fuzz allowance (ignored diff) |
+| **Unexpected drifts** | Failures (red) — primary gate signal |
+| **Expected intentional / natural** | Informational (covered by overlay or calibrated fuzz reporting) |
+| **Assessment** column | Agent annotations only — never hides Unexpected |
+| **Green boxes** on screenshot | Fuzz / overlay allowance (ignored diff) |
 | **Red boxes** | Regression that caused failure |
 | **Assets section** | Unified diff for changed CSS/JS |
 | **DOM section** | Paths/snippets outside fuzz nodes |
 | **Scores** | Stability in `[0.0, 1.0]` per layer |
 
-Full report spec: [06-gate-output-and-report.md](./06-gate-output-and-report.md).
+Full report spec: [06-gate-output-and-report.md](./reference/06-gate-output-and-report.md).
 
 ### On failure
 
@@ -150,7 +175,7 @@ bin/fuzzy-validator validate --profile test --page player-profile
 bin/fuzzy-validator validate --ensure-sandbox --profile test --all
 ```
 
-Details: [11-dual-database-profiles.md](./11-dual-database-profiles.md).
+Details: [11-dual-database-profiles.md](./reference/11-dual-database-profiles.md).
 
 ---
 
@@ -183,7 +208,7 @@ bin/fuzzy-validator setpoint restore
 bin/fuzzy-validator setpoint restore --bundle ~/Downloads/20260708T….zip
 ```
 
-When to capture: [04-operating-guide.md §5](./04-operating-guide.md).
+When to capture: [04-operating-guide.md §5](./reference/04-operating-guide.md).
 
 ---
 
@@ -193,6 +218,9 @@ When to capture: [04-operating-guide.md §5](./04-operating-guide.md).
 |------|---------|
 | Validate one page | `bin/fuzzy-validator validate --page player-profile` |
 | Validate all registry pages | `bin/fuzzy-validator validate --all --phase all` |
+| Validate with overlay | `bin/fuzzy-validator validate --page X --overlay overlays/intentional/ws.json5` |
+| Overlay schema check | `bin/fuzzy-validator overlay validate path.json5` |
+| Require fresh mirror | `bin/fuzzy-validator validate --all --require-fresh-mirror` |
 | Record one page | `bin/fuzzy-validator record --page player-profile --phase all` |
 | Pixel-only gate | `bin/fuzzy-validator validate --page X --phase visual` |
 | URL list file | `bin/fuzzy-validator validate --urls urls.txt` |
@@ -200,7 +228,7 @@ When to capture: [04-operating-guide.md §5](./04-operating-guide.md).
 | Restore baselines | `bin/fuzzy-validator setpoint restore` |
 | npm alias | `npm run fuzz:validate -- --page home-anonymous` |
 
-Full flag list: [10-cli-reference.md](./10-cli-reference.md).
+Full flag list: [10-cli-reference.md](./reference/10-cli-reference.md).
 
 ---
 
@@ -228,15 +256,11 @@ Reviewer checklist: [evidence/README.md](../../../tools/fuzzy-validator/evidence
 
 ---
 
-## CI usage
+## Local checks
 
-**Required on PR:** Python unit tests (≥ 90% coverage) — no docker.
+Before merging fuzzy-validator or related UI changes, run unit tests with the coverage floor (≥ 95%) from the [DEVELOPER-GUIDE](./DEVELOPER-GUIDE.md). For a visual gate, restore the setpoint and validate locally; open `tools/fuzzy-validator/reports/run-*/index.html` on failure.
 
-**Optional:** Linux pixel gate on pilot pages — workflow restores setpoint then validates. Set repo secrets `ORK3_E2E_USERNAME` / `ORK3_E2E_PASSWORD` for auth pages.
-
-Download failed gate artifacts from GitHub Actions → **Artifacts** → `fuzzy-validator-reports-{runId}`.
-
-Details: [04-operating-guide.md §10](./04-operating-guide.md).
+Details: [04-operating-guide.md §10](./reference/04-operating-guide.md).
 
 ---
 
@@ -248,9 +272,9 @@ Details: [04-operating-guide.md §10](./04-operating-guide.md).
 | Record aborts (assets unstable) | Fix flaky scripts; stub network |
 | Empty fuzz manifest | Page fully deterministic — OK |
 | Dimension mismatch | Content height changed — update baseline |
-| macOS local fail, CI pass | Use CI as canonical; local gate optional |
+| macOS local fail, Linux pass | Prefer a Linux docker/host gate as the sign-off surface when screenshots disagree |
 
-More: [04-operating-guide.md §7](./04-operating-guide.md).
+More: [04-operating-guide.md §7](./reference/04-operating-guide.md).
 
 ---
 
@@ -260,4 +284,4 @@ More: [04-operating-guide.md §7](./04-operating-guide.md).
 |-----|----------|
 | [12-design-and-implementation.md](./12-design-and-implementation.md) | Understanding design decisions |
 | [DEVELOPER-GUIDE.md](./DEVELOPER-GUIDE.md) | Writing tests or changing the tool |
-| [03-manifest-schema.md](./03-manifest-schema.md) | Editing fuzz JSON or page registry |
+| [03-manifest-schema.md](./reference/03-manifest-schema.md) | Editing fuzz JSON or page registry |

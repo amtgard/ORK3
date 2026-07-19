@@ -59,7 +59,7 @@ Each refactor target must have:
 - **Backend unit tests** covering the moved logic (or existing logic if consolidating duplicates).
 - **Frontend functional tests** verifying the user-facing behavior is unchanged.
 - **Mutation tests** (Infection) scoped to the milestone, passing before sign-off per [05-development-steering.md](./05-development-steering.md) DS-7.
-- **Render stability gate:** `bin/fuzzy-validator validate` against **`test`** (strict) and **`mirror`** (lenient) database profiles — see [11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md). Tooling complete through FU-16; artifacts from Phase 1.6 (V-*).
+- **Render stability gate:** `bin/fuzzy-validator validate` against **`test`** (strict) and **`mirror`** (lenient) database profiles — see [11-dual-database-profiles.md](../fuzzy-validator/reference/11-dual-database-profiles.md). Tooling complete through FU-16; artifacts from Phase 1.6 (V-*).
 
 **Phase 1.6 (V-*):** Before each R-* sprint, validation artifacts documented canary URLs and dual-profile fuzzy baselines plus test mutation boundaries — [archive/08-phase-16-validation-artifacts.md](./archive/08-phase-16-validation-artifacts.md).
 

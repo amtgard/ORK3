@@ -79,7 +79,7 @@ bin/fuzzy-validator record --all --phase all --profile mirror
 
 Review overlays under `tools/fuzzy-validator/reports/`; commit manifests + publish setpoint (FU-16) or commit baselines per profile.
 
-**Tooling status:** FU-4 (page registry), FU-11 (dual profiles), FU-12–15 (sandbox evidence suite), and FU-16 (setpoint zip) are complete — see [fuzzy-validator checklist](../fuzzy-validator/08-milestone-checklist.md).
+**Tooling status:** FU-4 (page registry), FU-11 (dual profiles), FU-12–15 (sandbox evidence suite), and FU-16 (setpoint zip) are complete — see [fuzzy-validator checklist](../fuzzy-validator/archive/08-milestone-checklist.md).
 
 ---
 
@@ -140,5 +140,5 @@ M0.1 → M0.2 → DS-01…14 → T-01…14 → V-00 → V-01…14 (parallel) →
 | [04-milestone-checklist.md](./04-milestone-checklist.md) | V-* checkboxes |
 | [07-agent-milestone-prompt.md](./07-agent-milestone-prompt.md) | Agent process for V-* and R-* |
 | [06-test-framework.md](./06-test-framework.md) | PHPUnit, Infection, E2E preflight, fuzzy gate |
-| [../fuzzy-validator/11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md) | test vs mirror thresholds |
+| [../fuzzy-validator/11-dual-database-profiles.md](../fuzzy-validator/reference/11-dual-database-profiles.md) | test vs mirror thresholds |
 | [../test-database-tool/README.md](../test-database-tool/README.md) | Sandbox deploy |

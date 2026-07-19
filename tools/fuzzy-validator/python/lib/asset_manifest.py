@@ -152,6 +152,36 @@ def compare_asset_manifests(
     )
 
 
+def apply_asset_allowances(
+    result: AssetCompareResult,
+    allowed_ids: set[str],
+    *,
+    baseline_count: int,
+) -> AssetCompareResult:
+    """Drop overlay-allowed asset ids from mismatches; recompute score (assets stay hard by default)."""
+    if not allowed_ids:
+        return result
+
+    def kept(ids: list[str]) -> list[str]:
+        return [asset_id for asset_id in ids if asset_id not in allowed_ids]
+
+    missing_ids = kept(result.missing_ids)
+    extra_ids = kept(result.extra_ids)
+    changed_ids = kept(result.changed_ids)
+    mismatches = len(missing_ids) + len(extra_ids) + len(changed_ids)
+    if baseline_count <= 0:
+        assets_score = 1.0 if mismatches == 0 else 0.0
+    else:
+        assets_score = max(0.0, 1.0 - (mismatches / baseline_count))
+    return AssetCompareResult(
+        passed=not missing_ids and not extra_ids and not changed_ids,
+        missing_ids=missing_ids,
+        extra_ids=extra_ids,
+        changed_ids=changed_ids,
+        assets_score=assets_score,
+    )
+
+
 def calibration_asset_manifests(calibration_dir: Path) -> list[Path]:
     return sorted(calibration_dir.glob("run-*.assets.json"))
 

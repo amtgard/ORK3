@@ -30,6 +30,21 @@ class argparse_namespace:
         self.__dict__.update(values)
 
 
+def _prepare_validate_tool_root(
+    tmp_path: Path,
+    *,
+    page_id: str = "home-anonymous",
+    profiles: tuple[str, ...] = ("test", "mirror"),
+) -> Path:
+    """Minimal tool root with profile baselines so validate can run isolated."""
+    tool_root = tmp_path / "tool"
+    for profile in profiles:
+        baseline = tool_root / "baselines" / profile / f"{page_id}.png"
+        baseline.parent.mkdir(parents=True, exist_ok=True)
+        baseline.write_bytes(b"\x89PNG\r\n\x1a\n")
+    return tool_root
+
+
 def test_help_exits_zero():
     with pytest.raises(SystemExit) as exc:
         main(["--help"])
@@ -48,16 +63,27 @@ def test_validate_help_exits_zero():
     assert exc.value.code == 0
 
 
-def test_validate_runs_gate_script():
-    with patch("fuzzy_validator.cli.subprocess.run") as run_mock:
+def test_validate_runs_gate_script(tmp_path: Path):
+    tool_root = _prepare_validate_tool_root(tmp_path)
+    with patch("fuzzy_validator.runtime.run_subprocess") as run_mock:
         run_mock.return_value.returncode = 0
-        with patch("fuzzy_validator.cli._activate_profile") as activate:
+        with patch("fuzzy_validator.runtime.activate_profile") as activate:
             activate.side_effect = lambda profile_name, config, *, ensure_sandbox, env: env
-            with patch("fuzzy_validator.cli.run_batch_gate") as gate_mock:
+            with patch("fuzzy_validator.validate.run_batch_gate") as gate_mock:
                 gate_mock.return_value = ([], 0)
-                with patch("fuzzy_validator.cli.finalize_multi_profile_run"):
+                with patch("fuzzy_validator.validate.finalize_multi_profile_run"):
                     assert (
-                        main(["validate", "--page", "home-anonymous", "--phase", "visual"])
+                        main(
+                            [
+                                "validate",
+                                "--page",
+                                "home-anonymous",
+                                "--phase",
+                                "visual",
+                                "--tool-root",
+                                str(tool_root),
+                            ]
+                        )
                         == 0
                     )
                     assert run_mock.call_count >= 1

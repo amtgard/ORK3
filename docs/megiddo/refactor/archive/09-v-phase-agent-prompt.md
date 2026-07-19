@@ -35,9 +35,9 @@ You do **not** refactor `orkui/`, re-run DS-* surveys, or implement new T-* char
 | Template | `docs/megiddo/refactor/validations/_template-validation.md` |
 | V-00 spec | `docs/megiddo/refactor/validations/v-00-fuzzy-setpoint.md` |
 | E2E login preflight | `docs/megiddo/refactor/06-test-framework.md` § E2E login credentials |
-| Fuzzy CLI | `docs/megiddo/fuzzy-validator/10-cli-reference.md` |
-| Dual profiles | `docs/megiddo/fuzzy-validator/11-dual-database-profiles.md` |
-| Setpoints (FU-16) | `docs/megiddo/fuzzy-validator/04-operating-guide.md` § Setpoint |
+| Fuzzy CLI | `docs/megiddo/fuzzy-validator/reference/10-cli-reference.md` |
+| Dual profiles | `docs/megiddo/fuzzy-validator/reference/11-dual-database-profiles.md` |
+| Setpoints (FU-16) | `docs/megiddo/fuzzy-validator/reference/04-operating-guide.md` § Setpoint |
 | User guide | `docs/megiddo/fuzzy-validator/USER-GUIDE.md` |
 
 **Inputs (read-only):** matching `docs/megiddo/refactor/ds-{nn}-*-discovery.md` (§1 scope, §2 test list) and T-* test paths cited in checklist — do not rewrite those tests.

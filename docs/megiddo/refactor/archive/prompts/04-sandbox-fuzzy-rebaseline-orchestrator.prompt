@@ -6,7 +6,7 @@ After credential seed (`bin/seed-test-credentials`) fixes sandbox login, re-reco
 
 - docs/megiddo/refactor/skills/phase3-gate-fix/workers/FIX-10-sandbox-fuzzy-rebaseline.md
 - docs/megiddo/refactor/skills/phase3-gate-fix/workers/_shared-procedure.md
-- docs/megiddo/fuzzy-validator/04-operating-guide.md
+- docs/megiddo/fuzzy-validator/reference/04-operating-guide.md
 - docs/megiddo/refactor/06-test-framework.md (§ seed-test-credentials)
 
 ## Hard rules

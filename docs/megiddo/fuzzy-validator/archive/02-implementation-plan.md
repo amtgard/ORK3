@@ -1,7 +1,7 @@
 # Fuzzy Validator — Implementation Plan
 
-**Status:** Plan (not implemented)  
-**Estimated effort:** Phase 1 — 2–3 sessions (3 pilot pages); Phase 2 — 2–3 additional sessions
+**Status:** Historical — implemented as FU-0 … FU-16 (see [08-milestone-checklist.md](./08-milestone-checklist.md)). Kept for milestone exit-criteria archaeology.  
+**Estimated effort (original):** Phase 1 — 2–3 sessions (3 pilot pages); Phase 2 — 2–3 additional sessions
 
 **Agent execution:** [07-agent-milestone-prompt.md](./07-agent-milestone-prompt.md) · **Progress:** [08-milestone-checklist.md](./08-milestone-checklist.md) · **Tool tests:** [09-test-framework.md](./09-test-framework.md) (≥ 90% Python coverage from FU-2)
 
@@ -90,7 +90,7 @@ tools/fuzzy-validator/calibrations/
 tools/fuzzy-validator/reports/
 ```
 
-**Repo entry point:** `bin/fuzzy-validator` → exec `tools/fuzzy-validator/bin/fuzzy-validator`. CLI spec: [10-cli-reference.md](./10-cli-reference.md).
+**Repo entry point:** `bin/fuzzy-validator` → exec `tools/fuzzy-validator/bin/fuzzy-validator`. CLI spec: [10-cli-reference.md](../reference/10-cli-reference.md).
 
 ---
 
@@ -290,7 +290,7 @@ See [05-phase2-asset-dom-gate.md](./05-phase2-asset-dom-gate.md) §4.
    - Single Playwright capture produces PNG + DOM + assets
    - Run gates in order: assets → dom → pixels (fail fast on cheapest first)
 3. Extend `bin/calibrate.sh --phase all` to run pixel + DOM fuzz + asset stability check
-4. Update [04-operating-guide.md](./04-operating-guide.md)
+4. Update [04-operating-guide.md](../reference/04-operating-guide.md)
 
 ### Acceptance
 
@@ -324,7 +324,7 @@ See [05-phase2-asset-dom-gate.md](./05-phase2-asset-dom-gate.md) §4.
 - `--visual-min-score 0.98` passes a run with ≤2% comparable pixel drift; `1.0` fails same run
 - Asset byte change → score 0.0, diff visible in report
 
-See [06-gate-output-and-report.md](./06-gate-output-and-report.md).
+See [06-gate-output-and-report.md](../reference/06-gate-output-and-report.md).
 
 ---
 
@@ -332,7 +332,7 @@ See [06-gate-output-and-report.md](./06-gate-output-and-report.md).
 
 ### Tasks
 
-1. Add `manifests/profiles.json5` (from [profiles.json5.example](./manifests/profiles.json5.example))
+1. Add `manifests/profiles.json5` (from [profiles.json5.example](../reference/examples/profiles.json5.example))
 2. Restructure `baselines/{profile}/` and `manifests/{profile}/`
 3. Before each profile pass: `bin/ork-db use dev|prod`; wait for app container
 4. `--profiles test,mirror` default on `record` and `validate`; `--profile` for single
@@ -347,7 +347,7 @@ See [06-gate-output-and-report.md](./06-gate-output-and-report.md).
 - `test` fails at visual 0.99; `mirror` passes at 0.983 with default 0.98 floor
 - Missing `baselines/mirror/` fails with clear error when mirror in profile list
 
-See [11-dual-database-profiles.md](./11-dual-database-profiles.md).
+See [11-dual-database-profiles.md](../reference/11-dual-database-profiles.md).
 
 ---
 

@@ -5,21 +5,38 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from gate import run_pixel_gate
 from gate_assets import run_asset_gate
 from gate_dom import run_dom_gate
+from lib.annotations import load_annotations
 from lib.diff_regions import load_rgb_array, rects_from_manifest_zones
+from lib.drift_classify import (
+    DriftRecord,
+    classify_asset_failures,
+    classify_dom_failures,
+    classify_visual_boxes,
+    count_by_status,
+    write_drifts_json,
+)
+from lib.drift_overlay import (
+    MergedOverlays,
+    asset_ids_from_overlay,
+    dom_nodes_from_overlay,
+    visual_zones_from_overlay,
+)
 from lib.manifest import effective_fuzz_zones, load_defaults, load_fuzz_manifest
 from lib.overlay import draw_gate_annotation
+from lib.page_registry import load_pages_registry
 from lib.report_html import copy_page_artifacts, render_summary_table, write_report_bundle, write_summary_json
+from lib.reproduce import write_reproduce_md
 from lib.scoring import Thresholds, build_page_summary, build_run_summary
-from lib.tool_paths import DEFAULT_TOOL_ROOT, defaults_path, resolve_tool_root
+from lib.tool_paths import DEFAULT_TOOL_ROOT, defaults_path, pages_manifest_path, resolve_tool_root
 
 TOOL_ROOT = DEFAULT_TOOL_ROOT
 
@@ -38,6 +55,7 @@ class PageGateResult:
     page_id: str
     passed: bool
     layers: list[LayerResult] = field(default_factory=list)
+    drifts: list[DriftRecord] = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return {
@@ -53,6 +71,7 @@ class PageGateResult:
                 }
                 for layer in self.layers
             ],
+            "drifts": [drift.as_dict() for drift in self.drifts],
         }
 
 
@@ -78,10 +97,12 @@ def run_page_gate(
     thresholds: Thresholds | None = None,
     visual_diff_out: Path | None = None,
     run_dir: Path | None = None,
+    overlays: MergedOverlays | None = None,
 ) -> PageGateResult:
     cal_dir = tool_root / "calibrations" / page_id
     baselines = _baseline_root(tool_root, profile)
     manifests = _manifest_root(tool_root, profile)
+    profile_name = profile or "test"
 
     active_thresholds = thresholds or Thresholds.from_defaults(defaults)
     assets_min = active_thresholds.assets_min
@@ -95,11 +116,48 @@ def run_page_gate(
     strip_query = bool(defaults.get("assetStripQuery", False))
 
     layers: list[LayerResult] = []
+    page_drifts: list[DriftRecord] = []
     asset_diff_dir = (run_dir / "diffs" / page_id) if run_dir else (
         tool_root / "reports" / f"{page_id}-asset-diffs"
     )
 
+    visual_entries = (
+        overlays.for_page(page_id=page_id, profile=profile_name, layer="visual")
+        if overlays
+        else []
+    )
+    dom_entries = (
+        overlays.for_page(page_id=page_id, profile=profile_name, layer="dom")
+        if overlays
+        else []
+    )
+    asset_entries = (
+        overlays.for_page(page_id=page_id, profile=profile_name, layer="assets")
+        if overlays
+        else []
+    )
+
     if phase in {"assets", "all"}:
+        raw_asset = run_asset_gate(
+            baseline_path=baselines / f"{page_id}.assets.json",
+            candidate_path=cal_dir / "candidate.assets.json",
+            assets_min_score=0.0,
+            calibration_dir=None,
+            diff_dir=None,
+            tool_root=tool_root,
+            strip_query=strip_query,
+        )
+        page_drifts.extend(
+            classify_asset_failures(
+                page_id=page_id,
+                profile=profile_name,
+                changed_ids=raw_asset.changed_ids,
+                missing_ids=raw_asset.missing_ids,
+                extra_ids=raw_asset.extra_ids,
+                overlay_entries=asset_entries,
+            )
+        )
+        allowed = asset_ids_from_overlay(asset_entries)
         asset_result = run_asset_gate(
             baseline_path=baselines / f"{page_id}.assets.json",
             candidate_path=cal_dir / "candidate.assets.json",
@@ -108,6 +166,7 @@ def run_page_gate(
             diff_dir=asset_diff_dir,
             tool_root=tool_root,
             strip_query=strip_query,
+            allowed_asset_ids=allowed or None,
         )
         layers.append(
             LayerResult(
@@ -120,18 +179,35 @@ def run_page_gate(
         )
 
     if phase in {"dom", "all"}:
+        calibrated_dom = run_dom_gate(
+            baseline_path=baselines / f"{page_id}.dom.json",
+            candidate_path=cal_dir / "candidate.dom.html",
+            manifest_path=manifests / f"{page_id}.dom-fuzz.json",
+            dom_min_score=0.0,
+            compare_script_bodies=compare_script_bodies,
+        )
+        page_drifts.extend(
+            classify_dom_failures(
+                page_id=page_id,
+                profile=profile_name,
+                failures=calibrated_dom.get("failures", []),
+                overlay_entries=dom_entries,
+            )
+        )
+        extra_nodes = dom_nodes_from_overlay(dom_entries)
         dom_payload = run_dom_gate(
             baseline_path=baselines / f"{page_id}.dom.json",
             candidate_path=cal_dir / "candidate.dom.html",
             manifest_path=manifests / f"{page_id}.dom-fuzz.json",
             dom_min_score=dom_min,
             compare_script_bodies=compare_script_bodies,
+            extra_fuzz_nodes=extra_nodes or None,
         )
         if run_dir is not None:
             dom_diff_path = run_dir / "data" / f"{page_id}-dom-diff.json"
             dom_diff_path.parent.mkdir(parents=True, exist_ok=True)
             with dom_diff_path.open("w", encoding="utf-8") as handle:
-                json.dump({"failures": dom_payload["failures"]}, handle, indent=2)
+                json.dump({"failures": calibrated_dom["failures"]}, handle, indent=2)
                 handle.write("\n")
         layers.append(
             LayerResult(
@@ -145,6 +221,26 @@ def run_page_gate(
 
     if phase in {"visual", "all"}:
         manifest = load_fuzz_manifest(manifests / f"{page_id}.fuzz.json")
+        calibrated = run_pixel_gate(
+            baseline_path=baselines / f"{page_id}.png",
+            candidate_path=cal_dir / "candidate.png",
+            manifest=manifest,
+            color_threshold=color_threshold,
+            max_outside_diff=max_outside,
+            visual_min_score=0.0,
+            min_area_px=int(defaults.get("minAreaPx", 64)),
+            pad_px=int(defaults.get("padPx", 4)),
+            morphology_kernel_px=int(defaults.get("morphologyKernelPx", 5)),
+        )
+        page_drifts.extend(
+            classify_visual_boxes(
+                page_id=page_id,
+                profile=profile_name,
+                failure_boxes=calibrated.failure_boxes,
+                overlay_entries=visual_entries,
+            )
+        )
+        extra_zones = visual_zones_from_overlay(visual_entries)
         pixel_result = run_pixel_gate(
             baseline_path=baselines / f"{page_id}.png",
             candidate_path=cal_dir / "candidate.png",
@@ -155,10 +251,13 @@ def run_page_gate(
             min_area_px=int(defaults.get("minAreaPx", 64)),
             pad_px=int(defaults.get("padPx", 4)),
             morphology_kernel_px=int(defaults.get("morphologyKernelPx", 5)),
+            extra_fuzz_zones=extra_zones or None,
         )
         if visual_diff_out is not None:
             candidate = load_rgb_array(cal_dir / "candidate.png")
-            fuzz_rects = rects_from_manifest_zones(effective_fuzz_zones(manifest))
+            fuzz_rects = rects_from_manifest_zones(
+                effective_fuzz_zones(manifest) + extra_zones
+            )
             draw_gate_annotation(
                 candidate,
                 fuzz_rects,
@@ -176,7 +275,9 @@ def run_page_gate(
         )
 
     passed = all(layer.passed for layer in layers) if layers else True
-    return PageGateResult(page_id=page_id, passed=passed, layers=layers)
+    return PageGateResult(
+        page_id=page_id, passed=passed, layers=layers, drifts=page_drifts
+    )
 
 
 def run_batch_gate(
@@ -188,9 +289,23 @@ def run_batch_gate(
     run_dir: Path,
     profile: str | None = None,
     thresholds: Thresholds | None = None,
+    overlays: MergedOverlays | None = None,
+    overlay_cli_args: str = "",
+    setpoint_bundle: str | None = None,
 ) -> tuple[list[PageGateResult], int]:
     active_thresholds = thresholds or Thresholds.from_defaults(defaults)
     page_results: list[PageGateResult] = []
+    registry: dict[str, Any] | None = None
+    try:
+        registry = load_pages_registry(pages_manifest_path(tool_root))
+    except (OSError, ValueError):
+        registry = None
+    pages_by_id = {
+        page["id"]: page
+        for page in (registry or {}).get("pages", [])
+        if isinstance(page, dict) and "id" in page
+    }
+    reg_defaults = (registry or {}).get("defaults", {}) if registry else {}
 
     for page_id in page_ids:
         visual_diff_out = run_dir / "data" / f"{page_id}-annotated.png"
@@ -204,6 +319,7 @@ def run_batch_gate(
                 thresholds=active_thresholds,
                 visual_diff_out=visual_diff_out,
                 run_dir=run_dir,
+                overlays=overlays,
             )
         except (ValueError, FileNotFoundError) as exc:
             print(f"gate_run: [{page_id}] {exc}", file=sys.stderr)
@@ -215,10 +331,26 @@ def run_batch_gate(
             tool_root=tool_root,
             profile=profile,
         )
+        write_reproduce_md(
+            run_dir,
+            page_id=page_id,
+            profile=profile or "test",
+            page=pages_by_id.get(page_id),
+            defaults=reg_defaults if isinstance(reg_defaults, dict) else {},
+            setpoint_bundle=setpoint_bundle,
+            overlay_args=overlay_cli_args,
+        )
         page_results.append(page_result)
 
     exit_code = 0 if all(result.passed for result in page_results) else 1
     return page_results, exit_code
+
+
+def collect_drifts(page_results: list[PageGateResult]) -> list[DriftRecord]:
+    drifts: list[DriftRecord] = []
+    for result in page_results:
+        drifts.extend(result.drifts)
+    return drifts
 
 
 def write_run_summary(
@@ -252,6 +384,9 @@ def write_run_summary(
     )
     summary["generatedAt"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     summary["pagesDetailed"] = [result.as_dict() for result in page_results]
+    drifts = collect_drifts(page_results)
+    if drifts:
+        summary["driftCounts"] = count_by_status(drifts)
     return write_summary_json(run_dir, summary)
 
 
@@ -262,14 +397,28 @@ def print_stdout_summary(
     exit_code: int,
     thresholds: Thresholds,
     profile: str | None = None,
+    drifts: list[DriftRecord] | None = None,
 ) -> None:
     run_id = run_dir.name.removeprefix("run-")
     pass_count = sum(1 for result in page_results if result.passed)
     fail_count = len(page_results) - pass_count
     overall = "PASS" if exit_code == 0 else "FAIL"
+    active_drifts = drifts if drifts is not None else collect_drifts(page_results)
+    counts = count_by_status(active_drifts)
 
     print(f"Fuzzy UI Gate — {overall}")
     prefix = f"[{profile}] " if profile else ""
+    unexpected = [d for d in active_drifts if d.status == "unexpected"]
+    expected = [d for d in active_drifts if d.status == "expected"]
+    if unexpected:
+        print("Unexpected drifts:")
+        for drift in unexpected:
+            print(f"  ! {drift.drift_id} {drift.layer} {drift.location}")
+    if expected:
+        print("Expected drifts:")
+        for drift in expected:
+            print(f"  · {drift.drift_id} [{drift.class_}] {drift.layer}")
+
     for result in page_results:
         scores = {layer.layer: layer.score for layer in result.layers}
         assets = scores.get("assets", 1.0)
@@ -292,7 +441,11 @@ def print_stdout_summary(
     profile_suffix = f" profiles={','.join([profile])}" if profile else ""
     print(
         f"FUZZ_GATE run={run_id}{profile_suffix} pages={len(page_results)} "
-        f"pass={pass_count} fail={fail_count} exit={exit_code}"
+        f"pass={pass_count} fail={fail_count} "
+        f"unexpected={counts['unexpected']} "
+        f"expectedNatural={counts['expectedNatural']} "
+        f"expectedIntentional={counts['expectedIntentional']} "
+        f"exit={exit_code}"
     )
     print(f"Report: {run_dir / 'index.html'}")
 
@@ -308,6 +461,11 @@ def finalize_run(
     profile_label: str | None = None,
     profiles: list[str] | None = None,
     profile_sections: list[dict] | None = None,
+    overlays: MergedOverlays | None = None,
+    setpoint: str | None = None,
+    annotations_path: Path | None = None,
+    mirror_age_days: float | None = None,
+    mirror_override_reason: str | None = None,
 ) -> Path:
     write_run_summary(
         run_dir=run_dir,
@@ -318,6 +476,20 @@ def finalize_run(
         profile=profile,
         profiles=profiles,
     )
+    drifts = collect_drifts(page_results)
+    write_drifts_json(
+        run_dir,
+        run_id=run_dir.name.removeprefix("run-"),
+        setpoint=setpoint,
+        overlays=overlays,
+        drifts=drifts,
+        mirror_age_days=mirror_age_days,
+        mirror_override_reason=mirror_override_reason,
+    )
+    annotations = load_annotations(annotations_path) if annotations_path else None
+    if annotations is None:
+        annotations = load_annotations(run_dir / "annotations.json")
+
     index_path = write_report_bundle(
         run_dir=run_dir,
         run_id=run_dir.name.removeprefix("run-"),
@@ -329,6 +501,8 @@ def finalize_run(
         profile_label=profile_label,
         profiles=profiles,
         profile_sections=profile_sections,
+        drifts=[drift.as_dict() for drift in drifts],
+        annotations=annotations,
     )
     print_stdout_summary(
         run_dir=run_dir,
@@ -336,6 +510,7 @@ def finalize_run(
         exit_code=exit_code,
         thresholds=thresholds,
         profile=profile,
+        drifts=drifts,
     )
     return index_path
 
@@ -347,13 +522,20 @@ def finalize_multi_profile_run(
     profile_runs: list[dict],
     exit_code: int,
     profiles: list[str],
+    overlays: MergedOverlays | None = None,
+    setpoint: str | None = None,
+    annotations_path: Path | None = None,
+    mirror_age_days: float | None = None,
+    mirror_override_reason: str | None = None,
 ) -> Path:
     profile_sections: list[dict] = []
+    all_drifts: list[DriftRecord] = []
     for entry in profile_runs:
         profile_name = entry["profile"]
         profile_label = entry.get("label", profile_name)
         page_results = entry["page_results"]
         thresholds: Thresholds = entry["thresholds"]
+        all_drifts.extend(collect_drifts(page_results))
         page_summaries = [
             build_page_summary(
                 page_id=result.page_id,
@@ -381,6 +563,7 @@ def finalize_multi_profile_run(
             run_pass=all(result.passed for result in page_results),
             profile=profile_name,
             profile_label=profile_label,
+            drifts=[drift.as_dict() for drift in collect_drifts(page_results)],
         )
         for page_file in (run_dir / "pages").glob("*.html"):
             if page_file.parent == run_dir / "pages":
@@ -394,6 +577,20 @@ def finalize_multi_profile_run(
         thresholds=Thresholds(),
         profiles=profiles,
     )
+    write_drifts_json(
+        run_dir,
+        run_id=run_dir.name.removeprefix("run-"),
+        setpoint=setpoint,
+        overlays=overlays,
+        drifts=all_drifts,
+        mirror_age_days=mirror_age_days,
+        mirror_override_reason=mirror_override_reason,
+    )
+    annotations = load_annotations(annotations_path) if annotations_path else None
+    if annotations is None:
+        annotations = load_annotations(run_dir / "annotations.json")
+
+    counts = count_by_status(all_drifts)
     index_path = write_report_bundle(
         run_dir=run_dir,
         run_id=run_dir.name.removeprefix("run-"),
@@ -403,12 +600,24 @@ def finalize_multi_profile_run(
         run_pass=exit_code == 0,
         profiles=profiles,
         profile_sections=profile_sections,
+        drifts=[drift.as_dict() for drift in all_drifts],
+        annotations=annotations,
     )
 
     print(f"Fuzzy UI Gate — {'PASS' if exit_code == 0 else 'FAIL'}")
+    unexpected = [d for d in all_drifts if d.status == "unexpected"]
+    expected = [d for d in all_drifts if d.status == "expected"]
+    if unexpected:
+        print("Unexpected drifts:")
+        for drift in unexpected:
+            print(f"  ! {drift.drift_id}")
+    if expected:
+        print("Expected drifts:")
+        for drift in expected:
+            print(f"  · {drift.drift_id} [{drift.class_}]")
+
     for entry in profile_runs:
         profile_name = entry["profile"]
-        thresholds = entry["thresholds"]
         for result in entry["page_results"]:
             scores = {layer.layer: layer.score for layer in result.layers}
             assets = scores.get("assets", 1.0)
@@ -426,7 +635,11 @@ def finalize_multi_profile_run(
     fail_pages = page_count * len(profiles) - pass_pages if exit_code != 0 else 0
     print(
         f"FUZZ_GATE run={run_id} profiles={','.join(profiles)} "
-        f"pages={page_count} pass={pass_pages} fail={fail_pages} exit={exit_code}"
+        f"pages={page_count} pass={pass_pages} fail={fail_pages} "
+        f"unexpected={counts['unexpected']} "
+        f"expectedNatural={counts['expectedNatural']} "
+        f"expectedIntentional={counts['expectedIntentional']} "
+        f"exit={exit_code}"
     )
     print(f"Report: {run_dir / 'index.html'}")
     return index_path

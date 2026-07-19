@@ -168,7 +168,7 @@ def test_setpoint_publish_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             profiles=["test"],
         )
 
-    monkeypatch.setattr("fuzzy_validator.cli.DEFAULT_TOOL_ROOT", tool_root)
+    monkeypatch.setattr("lib.tool_paths.DEFAULT_TOOL_ROOT", tool_root)
     assert main(["setpoint", "publish", "--bundle", str(bundle)]) == 0
     data = load_setpoint(tool_root)
     assert data["latestBundle"] == bundle.name
@@ -179,3 +179,192 @@ def test_sha256_file_roundtrip(tmp_path: Path):
     path.write_bytes(b"hello setpoint")
     digest = sha256_file(path)
     assert len(digest) == 64
+
+
+def test_resolve_bundle_path_explicit(tmp_path: Path):
+    from lib.setpoint import resolve_bundle_path
+
+    bundle = tmp_path / "bundle.zip"
+    bundle.write_bytes(b"zip")
+    assert resolve_bundle_path(tmp_path, bundle=str(bundle)) == bundle.resolve()
+
+
+def test_resolve_bundle_path_missing_latest(tmp_path: Path):
+    from lib.setpoint import resolve_bundle_path
+
+    (tmp_path / "setpoint.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(SetpointError, match="no latestBundle"):
+        resolve_bundle_path(tmp_path, use_latest=True)
+
+
+def test_resolve_bundle_path_bootstrap(tmp_path: Path):
+    from lib.setpoint import resolve_bundle_path
+
+    name = "20260707T120000Z-abc12345-deadbeef01234567.zip"
+    bootstrap = tmp_path / "setpoints" / "bootstrap"
+    bootstrap.mkdir(parents=True)
+    (bootstrap / name).write_bytes(b"zip")
+    (tmp_path / "setpoint.json").write_text(
+        json.dumps({"latestBundle": name}),
+        encoding="utf-8",
+    )
+    assert resolve_bundle_path(tmp_path, use_latest=True) == bootstrap / name
+
+
+def test_resolve_bundle_path_out_dir(tmp_path: Path):
+    from lib.setpoint import resolve_bundle_path
+
+    name = "bundle.zip"
+    out_dir = tmp_path / "setpoints" / "out"
+    out_dir.mkdir(parents=True)
+    (out_dir / name).write_bytes(b"zip")
+    (tmp_path / "setpoint.json").write_text(
+        json.dumps({"latestBundle": name}),
+        encoding="utf-8",
+    )
+    assert resolve_bundle_path(tmp_path, use_latest=True) == out_dir / name
+
+
+def test_resolve_bundle_path_use_latest_missing(tmp_path: Path):
+    from lib.setpoint import resolve_bundle_path
+
+    (tmp_path / "setpoint.json").write_text(
+        json.dumps({"latestBundle": "missing.zip", "driveFolder": "Drive"}),
+        encoding="utf-8",
+    )
+    with pytest.raises(SetpointError, match="not found locally"):
+        resolve_bundle_path(tmp_path, use_latest=True)
+
+
+def test_resolve_bundle_path_requires_bundle_when_not_use_latest(tmp_path: Path):
+    from lib.setpoint import resolve_bundle_path
+
+    (tmp_path / "setpoint.json").write_text(
+        json.dumps({"latestBundle": "missing.zip"}),
+        encoding="utf-8",
+    )
+    with pytest.raises(SetpointError, match="specify --bundle"):
+        resolve_bundle_path(tmp_path, use_latest=False)
+
+
+def test_resolve_bundle_path_downloads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from lib.setpoint import resolve_bundle_path
+
+    name = "remote.zip"
+    (tmp_path / "setpoint.json").write_text(
+        json.dumps({"latestBundle": name}),
+        encoding="utf-8",
+    )
+
+    def fake_download(base_url: str, filename: str, dest: Path) -> Path:
+        dest.write_bytes(b"downloaded")
+        return dest
+
+    monkeypatch.setattr("lib.setpoint.download_bundle", fake_download)
+    path = resolve_bundle_path(tmp_path, base_url="https://example.test/folder")
+    assert path.is_file()
+    assert path.read_bytes() == b"downloaded"
+
+
+def test_download_bundle_url_error(tmp_path: Path):
+    import urllib.error
+
+    from lib.setpoint import download_bundle
+
+    dest = tmp_path / "out.zip"
+    with patch(
+        "lib.setpoint.urllib.request.urlopen",
+        side_effect=urllib.error.URLError("offline"),
+    ):
+        with pytest.raises(SetpointError, match="failed to download"):
+            download_bundle("https://example.test", "x.zip", dest)
+
+
+def test_download_bundle_success(tmp_path: Path):
+    from lib.setpoint import download_bundle
+
+    class _Resp:
+        def read(self):
+            return b"zip-bytes"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    dest = tmp_path / "out.zip"
+    with patch("lib.setpoint.urllib.request.urlopen", return_value=_Resp()):
+        assert download_bundle("https://example.test/dir/", "b.zip", dest) == dest
+    assert dest.read_bytes() == b"zip-bytes"
+
+
+def test_missing_baselines_hint_without_bootstrap(tmp_path: Path):
+    (tmp_path / "setpoint.json").write_text(
+        json.dumps({"latestBundle": "x.zip", "driveFolder": "Folder"}),
+        encoding="utf-8",
+    )
+    hint = missing_baselines_hint(tmp_path)
+    assert "x.zip" in hint
+    assert "Folder" in hint
+
+
+def test_missing_baselines_hint_no_pointer(tmp_path: Path):
+    (tmp_path / "setpoint.json").write_text("{}", encoding="utf-8")
+    assert "path/to/setpoint.zip" in missing_baselines_hint(tmp_path)
+
+
+def test_short_git_sha_failure(tmp_path: Path):
+    from lib.setpoint import short_git_sha
+
+    with patch("lib.setpoint.subprocess.run") as run_mock:
+        run_mock.return_value.returncode = 1
+        run_mock.return_value.stdout = ""
+        with pytest.raises(SetpointError, match="unable to read git"):
+            short_git_sha(tmp_path)
+
+
+def test_short_git_sha_success(tmp_path: Path):
+    from lib.setpoint import short_git_sha
+
+    with patch("lib.setpoint.subprocess.run") as run_mock:
+        run_mock.return_value.returncode = 0
+        run_mock.return_value.stdout = "abc1234\n"
+        assert short_git_sha(tmp_path) == "abc1234"
+
+
+def test_count_pages_skips_missing_profile(tmp_path: Path):
+    from lib.setpoint import count_pages_in_baselines
+
+    _write_baseline(tmp_path, "test", "home-anonymous")
+    assert count_pages_in_baselines(tmp_path, ["test", "missing"]) == 1
+
+
+def test_read_bundle_manifest_requires_manifest(tmp_path: Path):
+    from lib.setpoint import read_bundle_manifest
+
+    bundle = tmp_path / "empty.zip"
+    with zipfile.ZipFile(bundle, "w") as archive:
+        archive.writestr("readme.txt", "nope")
+    with pytest.raises(SetpointError, match="missing manifest"):
+        read_bundle_manifest(bundle)
+
+
+def test_publish_bundle_missing_file(tmp_path: Path):
+    with pytest.raises(SetpointError, match="bundle not found"):
+        publish_bundle(tmp_path, tmp_path / "missing.zip")
+
+
+def test_restore_bundle_missing_file(tmp_path: Path):
+    with pytest.raises(SetpointError, match="bundle not found"):
+        restore_bundle(tmp_path, tmp_path / "missing.zip", verify_pointer=False)
+
+
+def test_verify_bundle_skips_when_no_entry(tmp_path: Path):
+    bundle = tmp_path / "orphan.zip"
+    bundle.write_bytes(b"zip")
+    (tmp_path / "setpoint.json").write_text(
+        json.dumps({"setpoints": {}}),
+        encoding="utf-8",
+    )
+    verify_bundle_content_sha(tmp_path, bundle)

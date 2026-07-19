@@ -349,8 +349,8 @@ PR diffs show `latestBundle` filename change — the audit trail for *which blob
 - [x] `.gitignore` — stop tracking heavy `baselines/**`; keep `setpoint.json` + `manifests/` in git
 - [x] Migrate existing pilot baselines into first published zip; remove PNGs from git on cutover branch
 - [x] Document public Drive folder setup (world-readable, maintainer write)
-- [x] [04-operating-guide.md](./04-operating-guide.md) § Setpoint promotion (replaces §5 multi-file git add for baselines)
-- [x] [10-cli-reference.md](./10-cli-reference.md) `setpoint` subcommand docs
+- [x] [04-operating-guide.md](../reference/04-operating-guide.md) § Setpoint promotion (replaces §5 multi-file git add for baselines)
+- [x] [10-cli-reference.md](../reference/10-cli-reference.md) `setpoint` subcommand docs
 - [x] `validate` fails with actionable message when baselines missing → `setpoint restore --bundle …`
 - [x] **Deferred:** `--base-url` download, Drive folder auto-scan for committed filename
 - [x] Single squashed commit

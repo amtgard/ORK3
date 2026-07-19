@@ -34,7 +34,7 @@ tools/fuzzy-validator/evidence/scripts/run-evidence-suite.sh
 
 Use `--tool-root tools/fuzzy-validator/evidence` on all `record` / `validate` commands so baselines and manifests stay under `evidence/`.
 
-Optional CI: `.github/workflows/fuzzy-validator-evidence.yml` (`workflow_dispatch` or weekly cron). Does **not** block pytest CI.
+Re-run the evidence suite locally when changing proof pipelines; it does not replace unit tests.
 
 ## Reviewer checklist (FU-15 sign-off)
 
@@ -54,4 +54,4 @@ Also confirm:
 
 See [mutations.md](./mutations.md) for in-zone / out-of-zone recipes.
 
-Cross-ref: [09-test-framework.md](../../docs/megiddo/fuzzy-validator/09-test-framework.md) § Evidence suite.
+Cross-ref: [09-test-framework.md](../../docs/megiddo/fuzzy-validator/archive/09-test-framework.md) § Evidence suite.

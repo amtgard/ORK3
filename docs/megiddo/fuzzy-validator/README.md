@@ -2,8 +2,9 @@
 
 Automated refactor-stability harness for Megiddo R-*: **hard CSS/JS byte checks**, **fuzzy DOM tree comparison**, and **fuzzy pixel screenshots** — with calibration-learned allowlists, dual DB profiles, setpoint bundles, and JaCoCo-style HTML reports.
 
-**Run:** `bin/fuzzy-validator record|validate|setpoint …`  
-**Code:** `tools/fuzzy-validator/`
+**Run:** `bin/fuzzy-validator record|validate|refuzz|setpoint …`  
+**Code:** `tools/fuzzy-validator/`  
+**Status:** v1 shipped (FU-0 … FU-16). Next product work: [version-2/](./version-2/).
 
 ---
 
@@ -14,6 +15,7 @@ Automated refactor-stability harness for Megiddo R-*: **hard CSS/JS byte checks*
 | **Use** the tool (validate, record, setpoints, read reports) | **[USER-GUIDE.md](./USER-GUIDE.md)** |
 | **Develop** the tool (tests, extend gates, debug) | **[DEVELOPER-GUIDE.md](./DEVELOPER-GUIDE.md)** |
 | Understand **design decisions and implementation** | **[12-design-and-implementation.md](./12-design-and-implementation.md)** |
+| Look up CLI flags, schemas, or gate/report contracts | **[reference/](./reference/)** |
 
 ---
 
@@ -30,43 +32,24 @@ open tools/fuzzy-validator/reports/run-*/index.html
 
 ---
 
-## Documentation map
+## Folder layout
 
-### Primary (maintained for operators and developers)
+| Path | Audience | Contents |
+|------|----------|----------|
+| *(this folder)* | Humans | README, USER-GUIDE, DEVELOPER-GUIDE, design overview |
+| [reference/](./reference/) | Humans + agents | Live as-built specs (CLI, schemas, ops, reports, profiles) |
+| [skills/](./skills/) | Agents | Orchestration skills (reserved; empty until version-2) |
+| [version-2/](./version-2/) | Planners / agents | Home for the next feature plan (classified drift overlays) |
+| [archive/](./archive/) | Historical | Completed FU-* plans, prompts, checklists |
 
-| Doc | Audience | Purpose |
-|-----|----------|---------|
-| [USER-GUIDE.md](./USER-GUIDE.md) | R-* devs, maintainers | Workflows, profiles, setpoints, reading reports |
-| [DEVELOPER-GUIDE.md](./DEVELOPER-GUIDE.md) | Tool contributors | Unit/integration tests, extending code, CI |
-| [12-design-and-implementation.md](./12-design-and-implementation.md) | Architects, agents | Design decisions, module map, data flow |
-| [10-cli-reference.md](./10-cli-reference.md) | All | Complete CLI flag reference |
-| [04-operating-guide.md](./04-operating-guide.md) | Maintainers | Detailed operating procedures ( overlaps USER-GUIDE ) |
+### Reorganization note (2026-07-19)
 
-### Reference
-
-| Doc | Purpose |
-|-----|---------|
-| [01-architecture.md](./01-architecture.md) | Original architecture spec (algorithms, stabilization) |
-| [03-manifest-schema.md](./03-manifest-schema.md) | Page registry, fuzz JSON schemas |
-| [05-phase2-asset-dom-gate.md](./05-phase2-asset-dom-gate.md) | Asset + DOM gate detail |
-| [06-gate-output-and-report.md](./06-gate-output-and-report.md) | Pass/fail scoring + HTML report |
-| [11-dual-database-profiles.md](./11-dual-database-profiles.md) | Test vs mirror profiles |
-| [09-test-framework.md](./09-test-framework.md) | Test plan index → see DEVELOPER-GUIDE |
-
-### Project history (agents / milestones)
-
-| Doc | Purpose |
-|-----|---------|
-| [02-implementation-plan.md](./02-implementation-plan.md) | FU-* milestone plan |
-| [07-agent-milestone-prompt.md](./07-agent-milestone-prompt.md) | Agent prompt template |
-| [08-milestone-checklist.md](./08-milestone-checklist.md) | FU-0 … FU-16 completion |
-
-### Committed integration proof
-
-| Location | Purpose |
-|----------|---------|
-| [tools/fuzzy-validator/evidence/README.md](../../../tools/fuzzy-validator/evidence/README.md) | Evidence suite reviewer checklist |
-| `evidence/reports/*-proof/index.html` | Pixel, DOM, asset, unified pass/fail HTML |
+| Action | Items | Why |
+|--------|-------|-----|
+| **Kept at top level** | README, USER-GUIDE, DEVELOPER-GUIDE, 12-design | Human-readable entry points |
+| **Moved to `reference/`** | 01, 03, 04, 06, 10, 11 + profiles example | Still needed for day-to-day ops and agent work |
+| **Moved to `archive/`** | 02, 05, 07, 08, 09 | FU-* complete or superseded (09 → DEVELOPER-GUIDE) |
+| **Added** | `skills/`, `version-2/` | Clean home for upcoming orchestration skills and the v2 plan |
 
 ---
 
@@ -109,4 +92,13 @@ open tools/fuzzy-validator/reports/run-*/index.html
 1. **Pass / fail** — exit code + stdout `FUZZ_GATE …` line  
 2. **HTML report** — `tools/fuzzy-validator/reports/run-{id}/index.html`
 
-See [06-gate-output-and-report.md](./06-gate-output-and-report.md).
+See [reference/06-gate-output-and-report.md](./reference/06-gate-output-and-report.md).
+
+---
+
+## Committed integration proof
+
+| Location | Purpose |
+|----------|---------|
+| [tools/fuzzy-validator/evidence/README.md](../../../tools/fuzzy-validator/evidence/README.md) | Evidence suite reviewer checklist |
+| `evidence/reports/*-proof/index.html` | Pixel, DOM, asset, unified pass/fail HTML |

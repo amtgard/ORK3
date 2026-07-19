@@ -2,7 +2,7 @@
 
 Day-to-day commands for maintainers and Megiddo R-* agents. Assumes **FU-10** for full gate + report; FU-3 for pixel-only.
 
-> **New:** [USER-GUIDE.md](./USER-GUIDE.md) consolidates operator workflows. This guide retains detailed procedures and troubleshooting.
+> **New:** [USER-GUIDE.md](../USER-GUIDE.md) consolidates operator workflows. This guide retains detailed procedures and troubleshooting.
 
 ---
 
@@ -308,29 +308,17 @@ Primary interface: **`bin/fuzzy-validator`** from repo root. Full flags: [10-cli
 
 ---
 
-## 10. CI (GitHub Actions)
+## 10. Local quality gates
 
-Workflow: [`.github/workflows/fuzzy-validator.yml`](../../../.github/workflows/fuzzy-validator.yml)
+This project does not run fuzzy-validator via GitHub Actions. Maintainers enforce the same checks locally.
 
-| Job | When | Purpose |
-|-----|------|---------|
-| `pyunit` | PRs touching `orkui/`, `class.Controller.php`, or `tools/fuzzy-validator/` | pytest ≥ 90% coverage (required) |
-| `gate-pilot` | Same PRs + `workflow_dispatch` | Linux pixel gate on pilot baselines (optional; `continue-on-error`) |
+| Check | Command / action |
+|-------|------------------|
+| Unit tests + coverage (≥ 95%) | `pytest tools/fuzzy-validator/python/tests/ --cov-fail-under=95` (from `python/` with project cov config — see [DEVELOPER-GUIDE](../DEVELOPER-GUIDE.md)) |
+| Pilot / full visual gate | `bin/fuzzy-validator setpoint restore` then `bin/fuzzy-validator validate …`; open `reports/run-*/index.html` |
+| Evidence suite | `tools/fuzzy-validator/evidence/scripts/run-evidence-suite.sh` |
 
-### Optional gate secrets
-
-Set repository secrets for full pilot gate (all three baselines):
-
-| Secret | Purpose |
-|--------|---------|
-| `ORK3_E2E_USERNAME` | Mirror/test login for auth-gated pilot pages |
-| `ORK3_E2E_PASSWORD` | Matching password |
-
-Without secrets, CI validates `home-anonymous` only.
-
-### Report artifacts
-
-Every `gate-pilot` run uploads `tools/fuzzy-validator/reports/` and candidate PNGs as artifact **`fuzzy-validator-reports-{runId}`** (14-day retention). Download from the Actions run → **Artifacts** after a failed optional gate. Full HTML dashboard arrives in FU-10; FU-3/FU-5 artifacts include per-page diff PNGs (`{pageId}-gate-diff.png`) and calibration overlays.
+Do not commit `reports/run-*` to git.
 
 ---
 

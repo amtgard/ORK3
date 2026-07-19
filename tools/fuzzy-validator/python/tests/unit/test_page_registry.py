@@ -78,3 +78,80 @@ def test_assert_valid_raises_with_details():
 def test_estimated_calibrate_seconds_scales_with_active_pages():
     registry = _minimal_registry()
     assert estimated_calibrate_seconds(registry) == 110
+
+
+def test_validate_rejects_missing_defaults_object():
+    errors = validate_pages_registry({"pages": []})
+    assert any("defaults must be an object" in err for err in errors)
+
+
+def test_validate_rejects_non_dict_viewport():
+    registry = {
+        "defaults": {"viewport": "wide", "repeat": 1, "auth": "none"},
+        "pages": [{"id": "ok", "url": "./index.php", "auth": "none"}],
+    }
+    errors = validate_pages_registry(registry)
+    assert any("defaults.viewport must be an object" in err for err in errors)
+
+
+def test_validate_rejects_bad_viewport_and_repeat():
+    registry = {
+        "defaults": {"viewport": {"width": 1280}, "auth": "none"},
+        "pages": [{"id": "ok", "url": "./index.php", "auth": "none"}],
+    }
+    errors = validate_pages_registry(registry)
+    assert any("viewport" in err for err in errors)
+    assert any("repeat" in err for err in errors)
+
+
+def test_validate_rejects_non_array_pages():
+    errors = validate_pages_registry({"defaults": {"viewport": {"width": 1, "height": 1}, "repeat": 1}, "pages": {}})
+    assert any("pages must be an array" in err for err in errors)
+
+
+def test_validate_rejects_non_object_page_and_bad_id():
+    registry = _minimal_registry(
+        pages=[
+            "not-an-object",
+            {"id": "Bad_ID", "url": "./x", "auth": "none"},
+            {"url": "./x", "auth": "none"},
+        ]
+    )
+    errors = validate_pages_registry(registry)
+    assert any("must be an object" in err for err in errors)
+    assert any("must match" in err for err in errors)
+    assert any("missing id" in err for err in errors)
+
+
+def test_validate_rejects_bad_page_viewport_repeat_wait_and_drift():
+    registry = _minimal_registry(
+        pages=[
+            {
+                "id": "bad-meta",
+                "url": "./index.php",
+                "auth": "none",
+                "viewport": {"width": 100},
+                "repeat": "five",
+                "waitAfterMs": "soon",
+                "driftClass": "volatile",
+            }
+        ]
+    )
+    errors = validate_pages_registry(registry)
+    assert any("viewport must include" in err for err in errors)
+    assert any("repeat must be an integer" in err for err in errors)
+    assert any("waitAfterMs must be an integer" in err for err in errors)
+    assert any("driftClass must be one of" in err for err in errors)
+
+
+def test_page_ids_by_drift_class():
+    from lib.page_registry import page_ids_by_drift_class
+
+    registry = _minimal_registry(
+        pages=[
+            {"id": "stable-page", "url": "./a", "auth": "none", "driftClass": "stable"},
+            {"id": "natural-page", "url": "./b", "auth": "none", "driftClass": "natural"},
+            {"id": "skipped", "url": "./c", "auth": "none", "driftClass": "natural", "skip": True},
+        ]
+    )
+    assert page_ids_by_drift_class(registry, "natural") == ["natural-page"]

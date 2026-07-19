@@ -4,7 +4,7 @@
 **Audience:** Maintainers, architects, agents extending the tool  
 **Companion docs:** [USER-GUIDE.md](./USER-GUIDE.md) · [DEVELOPER-GUIDE.md](./DEVELOPER-GUIDE.md)
 
-This document captures **why** the tool is shaped the way it is and **how** it is built today. Historical planning detail remains in [01-architecture.md](./01-architecture.md) and [02-implementation-plan.md](./02-implementation-plan.md).
+This document captures **why** the tool is shaped the way it is and **how** it is built today. Historical planning detail remains in [01-architecture.md](./reference/01-architecture.md) and [02-implementation-plan.md](./archive/02-implementation-plan.md).
 
 ---
 
@@ -54,7 +54,7 @@ Refactor assumption: CSS and JS should not change. If asset bytes differ across 
 | **test** | `ork_test` sandbox @ 19307 | visual/dom/assets ≥ 1.0 | Deterministic dataset; strict refactor gate |
 | **mirror** | Local `ork` @ 19306 | visual ≥ 0.98, dom ≥ 0.99 | Realistic prod-like data; catches mirror-only drift |
 
-`record` and `validate` default to `--profiles test,mirror`, switching app DB via `bin/ork-db use` between passes. See [11-dual-database-profiles.md](./11-dual-database-profiles.md).
+`record` and `validate` default to `--profiles test,mirror`, switching app DB via `bin/ork-db use` between passes. See [11-dual-database-profiles.md](./reference/11-dual-database-profiles.md).
 
 ### 2.5 Setpoint bundles (FU-16) — git vs off-git storage
 
@@ -231,7 +231,7 @@ Project name in root `playwright.config.ts`: **`fuzzy-capture`**.
 
 ## 7. Algorithms (summary)
 
-Detailed specs: [01-architecture.md](./01-architecture.md) §5–7, [05-phase2-asset-dom-gate.md](./05-phase2-asset-dom-gate.md).
+Detailed specs: [01-architecture.md](./reference/01-architecture.md) §5–7, [05-phase2-asset-dom-gate.md](./archive/05-phase2-asset-dom-gate.md).
 
 ### 7.1 Pixel fuzz discovery
 
@@ -271,7 +271,7 @@ Every `validate` run produces:
 | JSON summary | `reports/run-{id}/summary.json` |
 | HTML dashboard | `reports/run-{id}/index.html` |
 
-Multi-profile runs add per-profile sections. Full spec: [06-gate-output-and-report.md](./06-gate-output-and-report.md).
+Multi-profile runs add per-profile sections. Full spec: [06-gate-output-and-report.md](./reference/06-gate-output-and-report.md).
 
 ---
 
@@ -291,13 +291,15 @@ Committed HTML entry points:
 
 ---
 
-## 10. CI integration
+## 10. Quality gates (local)
 
-| Workflow | Job | Required |
-|----------|-----|----------|
-| [`.github/workflows/fuzzy-validator.yml`](../../../.github/workflows/fuzzy-validator.yml) | `pyunit` — pytest ≥ 90% | Yes on PR |
-| Same | `gate-pilot` — restore setpoint + pixel validate on pilot pages | Optional (`continue-on-error`) |
-| [`.github/workflows/fuzzy-validator-evidence.yml`](../../../.github/workflows/fuzzy-validator-evidence.yml) | Evidence suite re-run | Manual / weekly cron |
+This project does not use GitHub Actions for the fuzzy validator. Expected local checks:
+
+| Check | Required for tool changes |
+|-------|---------------------------|
+| `pytest` with `--cov-fail-under=95` on production Python sources | Yes |
+| Optional pilot `validate` after `setpoint restore` | When touching capture / visual gate |
+| Evidence suite under `evidence/` | When changing proof/report pipelines |
 
 ---
 
@@ -328,8 +330,8 @@ Committed HTML entry points:
 
 | Topic | Doc |
 |-------|-----|
-| Manifest JSON schemas | [03-manifest-schema.md](./03-manifest-schema.md) |
-| CLI flags | [10-cli-reference.md](./10-cli-reference.md) |
+| Manifest JSON schemas | [03-manifest-schema.md](./reference/03-manifest-schema.md) |
+| CLI flags | [10-cli-reference.md](./reference/10-cli-reference.md) |
 | Day-to-day workflows | [USER-GUIDE.md](./USER-GUIDE.md) |
 | Tests and extending code | [DEVELOPER-GUIDE.md](./DEVELOPER-GUIDE.md) |
-| Milestone history | [08-milestone-checklist.md](./08-milestone-checklist.md) |
+| Milestone history | [08-milestone-checklist.md](./archive/08-milestone-checklist.md) |

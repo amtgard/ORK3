@@ -32,6 +32,7 @@ def run_dom_gate(
     manifest_path: Path,
     dom_min_score: float,
     compare_script_bodies: bool,
+    extra_fuzz_nodes: list[dict] | None = None,
 ) -> dict:
     baseline = load_canonical_tree(baseline_path)
     candidate = load_candidate_tree(
@@ -39,6 +40,12 @@ def run_dom_gate(
         compare_script_bodies=compare_script_bodies,
     )
     manifest = load_dom_fuzz_manifest(manifest_path)
+    if extra_fuzz_nodes:
+        merged = dict(manifest)
+        merged["manualNodes"] = list(manifest.get("manualNodes", [])) + list(
+            extra_fuzz_nodes
+        )
+        manifest = merged
     result = compare_dom_trees(
         baseline,
         candidate,

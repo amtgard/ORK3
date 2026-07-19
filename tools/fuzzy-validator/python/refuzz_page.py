@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -18,9 +18,11 @@ from lib.diff_regions import (
     pairwise_diff_mask,
 )
 from lib.manifest import load_defaults, load_json5, save_json
+from lib.profiles import profile_baselines_dir, profile_manifests_dir
+from lib.tool_paths import DEFAULT_TOOL_ROOT, defaults_path, resolve_tool_root
 from lib.tree_diff import discover_fuzz_nodes_from_pair, merge_fuzz_nodes
 
-TOOL_ROOT = Path(__file__).resolve().parents[1]
+TOOL_ROOT = DEFAULT_TOOL_ROOT
 
 
 def _git_head(repo_root: Path) -> str | None:
@@ -83,10 +85,10 @@ def refuzz_page(
     defaults: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Merge pair-discovered fuzz into manifests and re-baseline from candidate."""
-    defaults = defaults or load_defaults(tool_root / "manifests" / "defaults.json5")
+    defaults = defaults or load_defaults(defaults_path(tool_root))
     cal_dir = tool_root / "calibrations" / page_id
-    baseline_dir = tool_root / "baselines" / profile
-    manifest_dir = tool_root / "manifests" / profile
+    baseline_dir = profile_baselines_dir(tool_root, profile)
+    manifest_dir = profile_manifests_dir(tool_root, profile)
 
     baseline_png = baseline_dir / f"{page_id}.png"
     candidate_png = cal_dir / "candidate.png"
@@ -134,8 +136,6 @@ def refuzz_page(
         dom_manifest["fuzzNodes"] = merged_auto
         dom_manifest["manualNodes"] = manual_nodes
         dom_manifest["calibrationRuns"] = dom_manifest.get("calibrationRuns", 0)
-        from datetime import datetime, timezone
-
         dom_manifest["refuzzedAt"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         dom_manifest["refuzzedFromCommit"] = _git_head(repo_root)
         save_json(dom_manifest_path, dom_manifest)
@@ -155,8 +155,6 @@ def refuzz_page(
                 "manualZones": [],
                 "params": {},
             }
-
-        from datetime import datetime, timezone
 
         refuzzed_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         try:
@@ -208,7 +206,7 @@ def build_parser():
     parser = argparse.ArgumentParser(description="Refuzz a page from baseline vs candidate pair")
     parser.add_argument("--page-id", required=True)
     parser.add_argument("--profile", required=True)
-    parser.add_argument("--tool-root", type=Path, default=TOOL_ROOT)
+    parser.add_argument("--tool-root", type=Path, default=None)
     parser.add_argument("--phase", default="all", choices=["visual", "dom", "all"])
     return parser
 
@@ -216,12 +214,13 @@ def build_parser():
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    repo_root = args.tool_root.parent.parent
+    tool_root = resolve_tool_root(args.tool_root)
+    repo_root = DEFAULT_TOOL_ROOT.parent.parent
     try:
         summary = refuzz_page(
             page_id=args.page_id,
             profile=args.profile,
-            tool_root=args.tool_root,
+            tool_root=tool_root,
             repo_root=repo_root,
             phase=args.phase,
         )

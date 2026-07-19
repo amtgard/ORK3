@@ -2,7 +2,7 @@
 
 Tests validate the **tool itself** (not ORK3 pages under test). Target: **≥ 90% line coverage** on `tools/fuzzy-validator/python/` at each milestone sign-off from FU-2 onward.
 
-**Primary developer reference:** [DEVELOPER-GUIDE.md](./DEVELOPER-GUIDE.md) (setup, unit tests, integration tiers, CI, extending the tool).
+**Primary developer reference:** [DEVELOPER-GUIDE.md](../DEVELOPER-GUIDE.md) (setup, unit tests, integration tiers, CI, extending the tool).
 
 ---
 
@@ -146,4 +146,4 @@ Integration proof lives under `tools/fuzzy-validator/evidence/` — committed ba
 
 Pytest CI does **not** run the evidence suite (docker required). Optional nightly/manual workflow in FU-15.
 
-See [evidence/README.md](../../../tools/fuzzy-validator/evidence/README.md) and [08-milestone-checklist.md](./08-milestone-checklist.md) Phase 3.
+See [evidence/README.md](../../../../tools/fuzzy-validator/evidence/README.md) and [08-milestone-checklist.md](./08-milestone-checklist.md) Phase 3.

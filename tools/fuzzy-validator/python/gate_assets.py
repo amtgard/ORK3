@@ -11,6 +11,7 @@ from pathlib import Path
 
 from lib.asset_manifest import (
     AssetCompareResult,
+    apply_asset_allowances,
     asset_content_key,
     compare_asset_manifests,
     load_asset_manifest,
@@ -76,11 +77,19 @@ def run_asset_gate(
     diff_dir: Path | None = None,
     tool_root: Path | None = None,
     strip_query: bool = False,
+    allowed_asset_ids: set[str] | None = None,
 ) -> AssetCompareResult:
     root = tool_root or TOOL_ROOT
     baseline = load_asset_manifest(baseline_path)
     candidate = load_asset_manifest(candidate_path)
     result = compare_asset_manifests(baseline, candidate, strip_query=strip_query)
+
+    if allowed_asset_ids:
+        result = apply_asset_allowances(
+            result,
+            allowed_asset_ids,
+            baseline_count=len(parse_assets(baseline)),
+        )
 
     if diff_dir is not None and calibration_dir is not None and result.changed_ids:
         write_asset_diffs(

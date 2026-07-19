@@ -1,6 +1,6 @@
 # Phase 2 — Asset Stability (CSS/JS) + Fuzzy DOM Tree Gate
 
-**Status:** Plan (not implemented)  
+**Status:** Historical plan — implemented (FU-6 … FU-10). Prefer [../12-design-and-implementation.md](../12-design-and-implementation.md) and [../reference/01-architecture.md](../reference/01-architecture.md) for as-built behavior.  
 **Depends on:** Phase 1 (FU-3+) — shared Playwright capture harness and page registry  
 **Purpose:** Refactor regression — assets and markup should change **minimally or not at all**
 
@@ -238,7 +238,7 @@ Phase flags:
 | `--phase dom` | DOM tree gate |
 | `--phase all` | All three + report (default after FU-10) |
 
-Megiddo R-* sign-off should use `--phase all`. Outputs: exit code + `reports/run-{id}/index.html`. See [06-gate-output-and-report.md](./06-gate-output-and-report.md).
+Megiddo R-* sign-off should use `--phase all`. Outputs: exit code + `reports/run-{id}/index.html`. See [06-gate-output-and-report.md](../reference/06-gate-output-and-report.md).
 
 ---
 

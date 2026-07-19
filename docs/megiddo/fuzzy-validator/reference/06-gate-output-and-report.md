@@ -1,6 +1,6 @@
 # Gate Output — Pass/Fail + HTML Report
 
-**Status:** Plan (not implemented)  
+**Status:** Implemented (FU-9 / FU-10)  
 **Audience:** CI lights-out runs and human post-mortem after a failed gate
 
 Every gate invocation produces **exactly two deliverables**:
@@ -280,25 +280,15 @@ jinja2>=3.1
 
 ---
 
-## 5. CI artifact policy
+## 5. Report retention
 
-Workflow: [`.github/workflows/fuzzy-validator.yml`](../../../.github/workflows/fuzzy-validator.yml) (FU-5).
-
-On every `gate-pilot` job run (pass or fail):
-
-1. Upload `tools/fuzzy-validator/reports/` and `calibrations/*/candidate.png` as artifact **`fuzzy-validator-reports-{runId}`** (retention 14 days).
-2. On **fail**, download artifact from GitHub Actions → **Artifacts**; open diff PNGs locally (`{pageId}-gate-diff.png`).
-3. On **pass**, optional upload retained for audit trail on R-* branches.
-
-After **FU-10**, artifact path becomes `reports/run-{runId}/index.html` (full HTML dashboard). Until then, per-page diff PNGs and calibration overlays are the review surface.
-
-Do not commit `reports/run-*` to git.
+Gate reports live under `tools/fuzzy-validator/reports/run-*/` (gitignored). On failure, open `index.html` and the per-page diff PNGs locally. Do not commit `reports/run-*` to git.
 
 ---
 
 ## 6. Review workflow
 
-1. CI fails → download artifact → open `index.html`
+1. Local validate fails → open `reports/run-*/index.html`
 2. Red boxes on screenshot → locate unintended layout drift
 3. Asset diff section → accidental `revised.css` edit
 4. DOM section → template output change outside fuzz
@@ -310,4 +300,4 @@ Do not commit `reports/run-*` to git.
 
 - Threshold fields in [03-manifest-schema.md](./03-manifest-schema.md)
 - Gate commands in [04-operating-guide.md](./04-operating-guide.md)
-- Layer algorithms in [01-architecture.md](./01-architecture.md) and [05-phase2-asset-dom-gate.md](./05-phase2-asset-dom-gate.md)
+- Layer algorithms in [01-architecture.md](./01-architecture.md) and [05-phase2-asset-dom-gate.md](../archive/05-phase2-asset-dom-gate.md)

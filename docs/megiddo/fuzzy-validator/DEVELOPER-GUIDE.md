@@ -36,13 +36,20 @@ bin/fuzzy-validator setpoint restore
 tools/fuzzy-validator/
   bin/fuzzy-validator           # bash dispatcher — add new top-level commands here
   python/
-    fuzzy_validator/cli.py      # record | validate | setpoint orchestration
+    fuzzy_validator/cli.py      # record | validate | overlay | setpoint orchestration
+    fuzzy_validator/overlay_cli.py
     discover_*.py, gate*.py     # CLI scripts invoked by cli.py or gate.sh
     lib/                        # unit-testable library code (prefer adding logic here)
+      drift_overlay.py          # v2 overlay schema / merge / conflicts
+      drift_classify.py         # expected vs unexpected inventory
+      mirror_freshness.py       # 7-day mirror probe
+      reproduce.py              # mechanical reproduce.md
+      annotations.py            # display-only agent notes
     tests/
       conftest.py               # shared fixtures
       unit/                     # fast synthetic tests
       integration/              # multi-module wiring on fixtures
+  overlays/                     # v2 drift overlays (natural / intentional / putative)
   playwright/
     capture.spec.ts             # capture loop
     lib/                        # stabilization, auth, DOM/asset capture
@@ -50,7 +57,7 @@ tools/fuzzy-validator/
   evidence/                     # integration proof + run-evidence-suite.sh
 ```
 
-**Convention:** Put reusable logic in `python/lib/`. Keep top-level `gate*.py` / `discover_*.py` as thin CLIs. Wire new user commands through `fuzzy_validator/cli.py` and `bin/fuzzy-validator`.
+**Convention:** Put reusable logic in `python/lib/`. Keep top-level `gate*.py` / `discover_*.py` as thin CLIs. Wire new user commands through `fuzzy_validator/cli.py` and `bin/fuzzy-validator`. Overlays never mutate setpoint zip contents.
 
 ---
 
@@ -65,7 +72,7 @@ pytest tools/fuzzy-validator/python/tests/ \
   --cov=tools/fuzzy-validator/python/lib \
   --cov=tools/fuzzy-validator/python \
   --cov-report=term-missing \
-  --cov-fail-under=90
+  --cov-fail-under=95
 ```
 
 Or from the python directory:
@@ -76,10 +83,10 @@ pytest tests/ \
   --cov=lib \
   --cov=. \
   --cov-report=term-missing \
-  --cov-fail-under=90
+  --cov-fail-under=95
 ```
 
-**Requirement:** ≥ **90% line coverage** on `tools/fuzzy-validator/python/` (excluding `tests/`). Enforced on every PR via `.github/workflows/fuzzy-validator.yml`.
+**Requirement:** ≥ **95% line coverage** on production sources under `tools/fuzzy-validator/python/` (excluding `tests/`). Run the pytest command above before merging tool changes.
 
 ### During development
 
@@ -183,7 +190,7 @@ tools/fuzzy-validator/evidence/scripts/run-evidence-suite.sh
 echo $?   # expect 0
 ```
 
-**Not run in required CI.** Optional workflow: `.github/workflows/fuzzy-validator-evidence.yml` (`workflow_dispatch` or weekly cron).
+**Not required for every Python-only change.** Re-run locally when touching capture/report proof paths; see [evidence/README.md](../../../tools/fuzzy-validator/evidence/README.md).
 
 After changing gate/report/discover logic, re-run the evidence suite and commit updated reports if behavior intentionally changed.
 
@@ -203,18 +210,15 @@ Optional tests for pure TS helpers under `playwright/` (if present). Not part of
 
 ---
 
-## 5. CI workflows
+## 5. Local quality gates
 
-| Workflow | Trigger | What runs |
-|----------|---------|-----------|
-| `fuzzy-validator.yml` | PR touching `orkui/`, `tools/fuzzy-validator/`, etc. | **Required:** pytest ≥ 90%. **Optional:** setpoint restore + pilot pixel gate |
-| `fuzzy-validator-evidence.yml` | Manual / weekly | Evidence suite against docker |
-
-Local pre-push checklist:
+This repo does not use GitHub Actions for the fuzzy validator. Before merging tool changes, run:
 
 ```bash
-pytest tools/fuzzy-validator/python/tests/ --cov-fail-under=90
+pytest tools/fuzzy-validator/python/tests/ --cov-fail-under=95
 ```
+
+Optional full evidence suite (docker): see [evidence/README.md](../../../tools/fuzzy-validator/evidence/README.md).
 
 ---
 
@@ -222,7 +226,7 @@ pytest tools/fuzzy-validator/python/tests/ --cov-fail-under=90
 
 ### Add a new page to the registry
 
-1. Edit `manifests/pages.json5` — follow [03-manifest-schema.md](./03-manifest-schema.md).
+1. Edit `manifests/pages.json5` — follow [03-manifest-schema.md](./reference/03-manifest-schema.md).
 2. Add/extend `test_page_registry.py` if validation rules change.
 3. Record on stable commit; publish setpoint (maintainer).
 
@@ -233,14 +237,14 @@ pytest tools/fuzzy-validator/python/tests/ --cov-fail-under=90
 3. Add scoring in `lib/scoring.py` if new score dimension.
 4. Extend `lib/report_html.py` for HTML section.
 5. Unit tests for pass/fail fixtures; update `integration/test_gate_run_fixtures.py`.
-6. Update [06-gate-output-and-report.md](./06-gate-output-and-report.md) and CLI help.
+6. Update [06-gate-output-and-report.md](./reference/06-gate-output-and-report.md) and CLI help.
 
 ### Add a CLI command
 
 1. Subparser in `fuzzy_validator/cli.py`.
 2. Dispatch case in `tools/fuzzy-validator/bin/fuzzy-validator`.
 3. Tests in `tests/unit/test_cli*.py`.
-4. Document in [10-cli-reference.md](./10-cli-reference.md) and [USER-GUIDE.md](./USER-GUIDE.md).
+4. Document in [10-cli-reference.md](./reference/10-cli-reference.md) and [USER-GUIDE.md](./USER-GUIDE.md).
 
 ### Use alternate tool root (evidence pattern)
 
@@ -283,7 +287,7 @@ Ephemeral debug dirs (gitignored):
 
 ```bash
 # Unit tests (required)
-pytest tools/fuzzy-validator/python/tests/ --cov-fail-under=90
+pytest tools/fuzzy-validator/python/tests/ --cov-fail-under=95
 
 # Integration fixtures
 pytest tools/fuzzy-validator/python/tests/integration/ -v
@@ -305,7 +309,7 @@ bin/fuzzy-validator setpoint restore --help
 
 | Doc | Content |
 |-----|---------|
-| [09-test-framework.md](./09-test-framework.md) | Original test plan (superseded in detail by this guide) |
+| [09-test-framework.md](./archive/09-test-framework.md) | Original test plan (superseded in detail by this guide) |
 | [12-design-and-implementation.md](./12-design-and-implementation.md) | Architecture and module map |
 | [evidence/README.md](../../../tools/fuzzy-validator/evidence/README.md) | Evidence reviewer checklist |
-| [08-milestone-checklist.md](./08-milestone-checklist.md) | FU-* completion history |
+| [08-milestone-checklist.md](./archive/08-milestone-checklist.md) | FU-* completion history |

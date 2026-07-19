@@ -1433,7 +1433,7 @@ Per execution sprint checklist (R-01 … R-14 complete; template applies to R-15
 - [ ] **Full** unit test suite passes (no partial run at sign-off)
 - [ ] Milestone-scoped Infection run passes configured thresholds on refactored code
 - [ ] Frontend functional tests pass (when applicable to milestone)
-- [ ] `bin/ork-db deploy-sandbox` then `bin/fuzzy-validator validate --pages <ids-from-v-NN.md> --phase all` passes **test** (strict) and **mirror** (lenient) — requires V-00 + V-{nn} baselines ([11-dual-database-profiles.md](../fuzzy-validator/11-dual-database-profiles.md))
+- [ ] `bin/ork-db deploy-sandbox` then `bin/fuzzy-validator validate --pages <ids-from-v-NN.md> --phase all` passes **test** (strict) and **mirror** (lenient) — requires V-00 + V-{nn} baselines ([11-dual-database-profiles.md](../fuzzy-validator/reference/11-dual-database-profiles.md))
 - [ ] Target IDs marked done in [03-implementation-plan.md](./03-implementation-plan.md)
 - [ ] No new `$DB` or unauthorized `Ork3::$Lib` usage introduced in touched files
 - [ ] All `docs/megiddo/refactor/` updates committed on the milestone branch (Documentation sign-off above)
