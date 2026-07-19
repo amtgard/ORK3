@@ -214,6 +214,33 @@ Next: **RB-F**.
 |------|--------|
 | Restore RB-G gold bundle; preflight and validate test + mirror; commit | [ ] |
 
+**RB-F notes (2026-07-18) — BLOCKED:**
+
+- Tip: `megiddo/rebase-20260718` @ `22d98808a04984ea49e9b7c2e1d00158df7d218b`.
+- Gold bundle (unchanged): `20260718T230634Z-671c108b-b16eae2472f1daa9.zip`
+  (`latestBundle` already pointed here; restored 1006 files from bootstrap).
+- Preflight: `bin/ork-db deploy-sandbox --yes` PASS; mirror + sandbox authenticated
+  home login PASS (`admin`/`password`, `megiddo`/`test-db-player`).
+- `bin/fuzzy-validator validate --all --phase all`:
+  - **test:** exit 2 — `home-authenticated` dimension mismatch baseline
+    `(1838, 1280)` vs candidate `(1140, 1280)`.
+  - **mirror (alone):** exit 2 — `reports-ladder-grid` dimension mismatch
+    `(15532, 1280)` vs `(15533, 1280)`.
+- Tip sandbox candidate for home correctly shows sandbox chapters
+  (Empire of Ashkara / Grand Duchy of Litavia). Gold **test** home baseline
+  contains real mirror kingdoms (Blackspire, etc.), so test gold is not a
+  faithful sandbox setpoint.
+- Gold ZIP integrity defect (not tip product drift): many unrelated page PNGs
+  share identical SHA-256 inside the bundle — e.g. test profile one hash covers
+  `home-authenticated`, `player-profile`, `admin-dashboard`, `event-list`,
+  `tournament`, and 6 more; mirror has similar cross-page duplicates. Only
+  3/20 test PNGs are unique.
+- No tip-derived rebaseline performed (orchestrator override). Prefer fixing
+  product regressions; here the gold capture itself is unusable.
+- **Blocker:** re-run **RB-G** on unrebased `671c108b` to produce a non-corrupt
+  gold (unique per-page baselines; test profile on sandbox), then re-run RB-F.
+  Do not replace gold with Megiddo-tip captures.
+
 ## Phase E — Close
 ### RB-Z: Sign-off
 | Step | Status |
