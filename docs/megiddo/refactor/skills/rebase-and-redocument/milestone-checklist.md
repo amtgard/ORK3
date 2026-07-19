@@ -103,8 +103,25 @@ Track **RB-*** progress for the current post-refactor rebase.
 ### RB-1: Rebase with spirit-preserving merges
 | Step | Status |
 |------|--------|
-| Rebase onto base; preserve Megiddo layering and upstream behavior | [ ] |
-| Take upstream-new files, keep migrations, record conflicts, and commit | [ ] |
+| Rebase onto base; preserve Megiddo layering and upstream behavior | [x] |
+| Take upstream-new files, keep migrations, record conflicts, and commit | [x] |
+
+**RB-1 sign-off (2026-07-18):**
+
+- Rebase is clean: `671c108b612b03616437bb88c7126f7c56ceb703` is an
+  ancestor of `HEAD` (`b927109575c6fcb7af9c9ad1cabca91fc3e7378d`) on
+  `megiddo/rebase-20260718`.
+- Conflict resolution retained the code, tooling, and documentation replays;
+  baseline-only replays were dropped. Upstream-new files and migrations were
+  retained for later RB-N/RB-H review.
+- Existing sign-off commit
+  `75a3d4f84a42c1b19c6be6687bdf4cf9e850913b`
+  (`RB-1: Rebase Megiddo onto master (spirit merge)`) is an ancestor and is
+  the single RB-1 sign-off; no duplicate commit was created.
+- `git diff 671c108b..75a3d4f8 -- orkui/` adds no `$DB` or
+  `Ork3::$Lib` references. `controller.EventEmbed.php` retains its pre-existing
+  base `$DB` use and remains RB-N scope; no rebase-introduced reference was
+  found.
 
 ## Phase B — Global tests
 ### RB-2: Full suite green
