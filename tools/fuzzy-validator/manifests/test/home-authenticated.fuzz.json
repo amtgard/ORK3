@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "pageId": "home-authenticated",
   "imageWidth": 1280,
-  "imageHeight": 1002,
-  "calibratedAt": "2026-07-10T06:31:38Z",
+  "imageHeight": 1140,
+  "calibratedAt": "2026-07-19T04:20:14Z",
   "calibrationRuns": 5,
   "params": {
     "colorThreshold": 20,
@@ -12,5 +12,5 @@
   },
   "fuzzZones": [],
   "manualZones": [],
-  "calibratedFromCommit": "c86ab163"
+  "calibratedFromCommit": "671c108b"
 }

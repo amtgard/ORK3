@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "admin-state-of-amtgard",
-  "calibratedAt": "2026-07-10T03:00:36Z",
+  "calibratedAt": "2026-07-19T04:20:24Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "57baf282"
+  "calibratedFromCommit": "671c108b"
 }

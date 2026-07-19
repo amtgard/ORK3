@@ -79,26 +79,36 @@ Track **RB-*** progress for the current post-refactor rebase.
 | Step | Status |
 |------|--------|
 | Checkout base SHA in a clean tree; deploy sandbox and run E2E preflight | [x] |
-| Capture and publish test + mirror setpoint | [ ] |
+| Capture and publish test + mirror setpoint | [x] |
 | Return to `megiddo/rebase-*`; record bundle id and commit | [x] |
 
-**RB-G notes (2026-07-18):**
+**RB-G notes (2026-07-18/19) — recapture after corrupt gold:**
 
-- Gold product source: detached `671c108b612b03616437bb88c7126f7c56ceb703`
-  (`origin/master`). This base predates the validator tooling, so the current
-  harness served that detached worktree through Docker while performing the
-  sandbox deploy, authenticated test/mirror preflight, and capture.
-- Both authenticated E2E profile checks passed. The captured setpoint contains
-  20 registry pages for `test,mirror`.
-- Gold bundle:
-  `20260718T230634Z-671c108b-b16eae2472f1daa9.zip` (copied unchanged to
-  `tools/fuzzy-validator/setpoints/bootstrap/` and committed there;
-  `setpoint.json` points here).
-- `bin/fuzzy-validator setpoint publish` completed locally, but the external
-  Google Drive upload remains a manual maintainer step because no
-  configured Drive upload client or synced `ORK3 Fuzzy Setpoints` destination
-  is available on this machine. The publish step remains open until the bundle
-  is uploaded unchanged before RB-F.
+- Gold product source: unrebased `671c108b612b03616437bb88c7126f7c56ceb703`
+  via worktree `/tmp/ork3-gold-671c108b` + tip harness overlay (Docker mount
+  override). Base `config.dev.php` hardcodes mirror DB; tip `config.dev.php`
+  (ORK3_DB_PROFILE switching) was overlaid so test/mirror profiles work.
+- E2E preflight PASS: mirror `admin`/`password`; sandbox `megiddo`/`test-db-player`.
+- Capture: sequential `record --profile test|mirror --all --phase all` with
+  explicit `docker restart ork3-php8-app` after each `ork-db use` so PHP-FPM
+  reloads the DB profile (compose restart from the worktree project is a no-op
+  when the tip project owns the container).
+- Integrity gate PASS:
+  - 20 registry pages × test+mirror; bundle gitSha `671c108b`
+  - test home: Ashkara/Litavia present; Blackspire/Wetlands absent
+  - mirror home: Blackspire/Wetlands/Desert Winds present; Ashkara/Litavia absent
+  - PNG uniqueness: test 13/20 unique (largest dup group 6); mirror 10/20
+    unique (largest dup group 9) — matches known-good prior gold shape; rejects
+    prior corrupt zip (~3/20 unique, largest group ≥10, test home had mirror
+    kingdoms).
+- Gold bundle (local publish):
+  `20260719T042339Z-671c108b-f95bafa0edb03f53.zip` in
+  `tools/fuzzy-validator/setpoints/bootstrap/` + `setpoints/out/`;
+  `setpoint.json` `latestBundle` updated. Supersedes corrupt
+  `20260718T230634Z-671c108b-b16eae2472f1daa9.zip`.
+- Google Drive upload: optional/manual maintainer step (non-blocking).
+- Tip restored to `megiddo/rebase-20260718`; Docker remounted tip product.
+- Next: **RB-F**.
 
 ### RB-1: Rebase with spirit-preserving merges
 | Step | Status |
@@ -214,32 +224,14 @@ Next: **RB-F**.
 |------|--------|
 | Restore RB-G gold bundle; preflight and validate test + mirror; commit | [ ] |
 
-**RB-F notes (2026-07-18) — BLOCKED:**
+**RB-F notes (2026-07-18) — was BLOCKED; ready to retry after RB-G recapture:**
 
-- Tip: `megiddo/rebase-20260718` @ `22d98808a04984ea49e9b7c2e1d00158df7d218b`.
-- Gold bundle (unchanged): `20260718T230634Z-671c108b-b16eae2472f1daa9.zip`
-  (`latestBundle` already pointed here; restored 1006 files from bootstrap).
-- Preflight: `bin/ork-db deploy-sandbox --yes` PASS; mirror + sandbox authenticated
-  home login PASS (`admin`/`password`, `megiddo`/`test-db-player`).
-- `bin/fuzzy-validator validate --all --phase all`:
-  - **test:** exit 2 — `home-authenticated` dimension mismatch baseline
-    `(1838, 1280)` vs candidate `(1140, 1280)`.
-  - **mirror (alone):** exit 2 — `reports-ladder-grid` dimension mismatch
-    `(15532, 1280)` vs `(15533, 1280)`.
-- Tip sandbox candidate for home correctly shows sandbox chapters
-  (Empire of Ashkara / Grand Duchy of Litavia). Gold **test** home baseline
-  contains real mirror kingdoms (Blackspire, etc.), so test gold is not a
-  faithful sandbox setpoint.
-- Gold ZIP integrity defect (not tip product drift): many unrelated page PNGs
-  share identical SHA-256 inside the bundle — e.g. test profile one hash covers
-  `home-authenticated`, `player-profile`, `admin-dashboard`, `event-list`,
-  `tournament`, and 6 more; mirror has similar cross-page duplicates. Only
-  3/20 test PNGs are unique.
-- No tip-derived rebaseline performed (orchestrator override). Prefer fixing
-  product regressions; here the gold capture itself is unusable.
-- **Blocker:** re-run **RB-G** on unrebased `671c108b` to produce a non-corrupt
-  gold (unique per-page baselines; test profile on sandbox), then re-run RB-F.
-  Do not replace gold with Megiddo-tip captures.
+- Prior attempt blocked on corrupt gold
+  `20260718T230634Z-671c108b-b16eae2472f1daa9.zip` (test home had mirror
+  kingdoms; catastrophic cross-page PNG duplicates).
+- RB-G recapture published
+  `20260719T042339Z-671c108b-f95bafa0edb03f53.zip` — restore that bundle and
+  re-run validate on tip. Do not rebaseline from Megiddo tip.
 
 ## Phase E — Close
 ### RB-Z: Sign-off

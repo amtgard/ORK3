@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "pageId": "player-profile-sandbox",
-  "calibratedAt": "2026-07-10T03:11:14Z",
+  "calibratedAt": "2026-07-19T04:20:22Z",
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "ebda9ebe"
+  "calibratedFromCommit": "671c108b"
 }
