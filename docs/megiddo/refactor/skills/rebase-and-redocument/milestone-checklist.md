@@ -224,14 +224,32 @@ Next: **RB-F**.
 |------|--------|
 | Restore RB-G gold bundle; preflight and validate test + mirror; commit | [ ] |
 
-**RB-F notes (2026-07-18) — was BLOCKED; ready to retry after RB-G recapture:**
+**RB-F notes (2026-07-19) — BLOCKED (validate-against-gold; no tip rebaseline):**
 
-- Prior attempt blocked on corrupt gold
-  `20260718T230634Z-671c108b-b16eae2472f1daa9.zip` (test home had mirror
-  kingdoms; catastrophic cross-page PNG duplicates).
-- RB-G recapture published
-  `20260719T042339Z-671c108b-f95bafa0edb03f53.zip` — restore that bundle and
-  re-run validate on tip. Do not rebaseline from Megiddo tip.
+- Restored gold `20260719T042339Z-671c108b-f95bafa0edb03f53.zip` (`latestBundle`).
+  Corrupt prior zip not used. `bin/ork-db deploy-sandbox` PASS.
+- Product fix (tip regression vs master gold): R-13 What's New path was broken —
+  `View` never assigned `$this->__data`, and theme `require_once` of
+  `whats_new_content.php` left `$WHATS_NEW_ITEMS` unset after Controller already
+  loaded it. Fixed by wiring `View::$__data`, passing `WhatsNewRelease` through
+  Controller data, and reading that in `default.theme`. Modal now matches test
+  gold (all pages modal=true); mirror keeps admin `whats_new_seen` (gold
+  modal=false).
+- Harness stabilizations (not tip rebaseline): implement `assetStripQuery` for
+  `?v=<filemtime>` only; DOM `href`/`src` `?v=` normalize; 1px screenshot height
+  align; DOM pass/fail is score-based (mirror 0.99 floor); DEV clock pin
+  `X-ORK3-Clock-Date` / `defaults.clockDate=2026-07-18` for EP footer + weather.
+- Latest dual-profile validate (after fixes): **test ~16–17/20 PASS**; remaining
+  test fails are **award dropdown HTML** on
+  `player-profile-sandbox` / `kingdom-auth-sandbox` / `park-auth-sandbox`
+  (Megiddo `class.Award` option grouping vs master gold — intentional UI
+  difference). **Mirror** fails mostly on live attendance text (`N.N/wk`) with
+  empty fuzz (dom ~0.96 < 0.99) — data drift since gold capture, not product
+  regression. Did **not** tip-rebaseline per orchestrator override.
+- Blockers for green RB-F: (1) waiver to tip-rebaseline / refuzz award-option
+  pages and mirror attendance fuzz, or (2) recapture gold from tip after
+  intentional Megiddo UI, or (3) same-day mirror validate with attendance fuzz
+  in gold. Next: resolve blockers then retry RB-F; else hold RB-Z.
 
 ## Phase E — Close
 ### RB-Z: Sign-off

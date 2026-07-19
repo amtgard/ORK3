@@ -68,6 +68,45 @@ def test_run_dom_gate_fails_on_tag_rename(tmp_path: Path):
     assert payload["passed"] is False
 
 
+def test_run_dom_gate_mirror_floor_allows_small_text_drift(tmp_path: Path):
+    # Large tree so a single text drift stays above the 0.99 mirror floor.
+    items = "".join(f"<li>Item {i}</li>" for i in range(200))
+    baseline_html = f"<html><body><ul>{items}</ul><p>Stable</p></body></html>"
+    candidate_html = f"<html><body><ul>{items}</ul><p>Drifted</p></body></html>"
+    from lib.canonical_dom import html_to_canonical_tree, save_canonical_tree
+    from lib.manifest import build_dom_fuzz_manifest, save_json
+
+    page_id = "fixture-page"
+    baseline_path = tmp_path / "baselines" / f"{page_id}.dom.json"
+    save_canonical_tree(baseline_path, html_to_canonical_tree(baseline_html))
+    manifest_path = tmp_path / "manifests" / f"{page_id}.dom-fuzz.json"
+    save_json(
+        manifest_path,
+        build_dom_fuzz_manifest(page_id=page_id, fuzz_nodes=[], calibration_runs=3),
+    )
+    candidate_path = tmp_path / "calibrations" / page_id / "candidate.dom.html"
+    candidate_path.parent.mkdir(parents=True, exist_ok=True)
+    candidate_path.write_text(candidate_html, encoding="utf-8")
+
+    strict = run_dom_gate(
+        baseline_path=baseline_path,
+        candidate_path=candidate_path,
+        manifest_path=manifest_path,
+        dom_min_score=1.0,
+        compare_script_bodies=False,
+    )
+    assert strict["passed"] is False
+    lenient = run_dom_gate(
+        baseline_path=baseline_path,
+        candidate_path=candidate_path,
+        manifest_path=manifest_path,
+        dom_min_score=0.99,
+        compare_script_bodies=False,
+    )
+    assert lenient["domScore"] >= 0.99
+    assert lenient["passed"] is True
+
+
 def test_gate_dom_cli_writes_json_outputs(tmp_path: Path):
     paths = _write_dom_fixtures(tmp_path)
     json_out = tmp_path / "result.json"

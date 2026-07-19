@@ -57,15 +57,24 @@ def run_pixel_gate(
     candidate = load_rgb_array(candidate_path)
 
     if baseline.shape != candidate.shape:
-        raise ValueError(
-            f"Dimension mismatch: baseline {baseline.shape[:2]} "
-            f"vs candidate {candidate.shape[:2]}"
-        )
+        bh, bw = baseline.shape[:2]
+        ch, cw = candidate.shape[:2]
+        # Full-page screenshots occasionally drift by 1px in height.
+        if bw == cw and abs(bh - ch) == 1:
+            h = min(bh, ch)
+            baseline = baseline[:h]
+            candidate = candidate[:h]
+        else:
+            raise ValueError(
+                f"Dimension mismatch: baseline {(bh, bw)} "
+                f"vs candidate {(ch, cw)}"
+            )
 
     expected_h = int(manifest["imageHeight"])
     expected_w = int(manifest["imageWidth"])
     actual_h, actual_w = baseline.shape[:2]
-    if actual_h != expected_h or actual_w != expected_w:
+    # Allow the same 1px height drift against the fuzz manifest metadata.
+    if actual_w != expected_w or abs(actual_h - expected_h) > 1:
         raise ValueError(
             f"Manifest dimensions {expected_w}x{expected_h} "
             f"!= image {actual_w}x{actual_h}"

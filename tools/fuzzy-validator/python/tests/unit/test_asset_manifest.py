@@ -55,6 +55,29 @@ def test_compare_asset_manifests_passes_on_identical_manifests():
     assert result.assets_score == 1.0
 
 
+def test_compare_asset_manifests_strips_cache_bust_query_when_enabled():
+    css = "body{color:red}"
+    baseline = _sample_manifest("fixture-page", css)
+    candidate = _sample_manifest("fixture-page", css)
+    baseline["assets"][0]["url"] = "http://localhost/orkui/revised.css?v=111"
+    candidate["assets"][0]["url"] = "http://localhost/orkui/revised.css?v=999"
+    result = compare_asset_manifests(baseline, candidate, strip_query=True)
+    assert result.passed
+    assert result.assets_score == 1.0
+    assert compare_asset_manifests(baseline, candidate, strip_query=False).passed is False
+
+
+def test_compare_asset_manifests_preserves_non_cachebust_query_strings():
+    css = "body{}"
+    baseline = _sample_manifest("fixture-page", css)
+    candidate = _sample_manifest("fixture-page", css)
+    baseline["assets"][0]["url"] = "https://fonts.googleapis.com/css2?family=Open+Sans"
+    candidate["assets"][0]["url"] = "https://fonts.googleapis.com/css2?family=MedievalSharp"
+    # Different families must remain distinct even with strip_query enabled.
+    result = compare_asset_manifests(baseline, candidate, strip_query=True)
+    assert result.passed is False
+
+
 def test_compare_asset_manifests_detects_changed_sha256():
     baseline = _sample_manifest("fixture-page", "body{color:red}")
     candidate = _sample_manifest("fixture-page", "body{color:blue}")

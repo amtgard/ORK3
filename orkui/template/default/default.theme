@@ -654,13 +654,11 @@ $downtime_note  = 'Potential ORK downtime to migrate to the Walker 3.5.4 Release
 <?php if ($this->__session->token != null) : ?>
 <?php
 // --- What's New modal ---
+// ShowWhatsNew + WhatsNewRelease are set on Controller::$data and exposed via View::$__data.
+// Do not re-read $WHATS_NEW_ITEMS here: Controller already require_once'd whats_new_content.php
+// in a different scope, so require_once in this theme would leave $WHATS_NEW_ITEMS unset.
 $__wnShow = !empty($this->__data['ShowWhatsNew']);
-?>
-<?php
-$__currentRelease = null;
-foreach ($WHATS_NEW_ITEMS as $__release) {
-    if ($__release['date'] === WHATS_NEW_VERSION) { $__currentRelease = $__release; break; }
-}
+$__currentRelease = $this->__data['WhatsNewRelease'] ?? null;
 ?>
 <?php if ($__wnShow && $__currentRelease): ?>
 <div class="wn-overlay wn-open" id="wn-overlay">
@@ -861,7 +859,7 @@ endif;
 <?php
     // Pre-render today's E.P. summary so opening the popover doesn't need
     // a network round-trip. Same shape as /EraPhoenice/today JSON.
-    $_epToday    = new DateTimeImmutable('today');
+    $_epToday    = EraPhoenice::today();
     $_epLastHol  = EraPhoenice::lastHoliday($_epToday);
     $_epNextHol  = EraPhoenice::nextHoliday($_epToday);
 ?>

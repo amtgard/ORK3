@@ -31,20 +31,21 @@ class Controller_Weather extends Controller
         }
         $this->template = '../revised-frontend/Weather_index.tpl';
         $this->data['page_title'] = 'Weather Forecast';
-        $today = date('Y-m-d');
+        $today = EraPhoenice::todayDateString();
         $this->data['SelectedDate']    = $today;
         $this->data['Rundown']         = $this->Weather->daily_summary($today);
         $this->data['PlayToday']       = $this->Weather->play_for_date($today);
         $this->data['UpcomingEvents']  = $this->Weather->upcoming_events_with_forecast(7);
         $this->data['FreshnessPhrase'] = $this->Weather->freshness_phrase();
-        // 7-day strip of pills (today + next 6 days)
+        // 7-day strip of pills (today + next 6 days), anchored to clock-pinned today.
         $strip = array();
+        $todayTs = strtotime($today . ' 12:00:00');
         for ($i = 0; $i < 7; $i++) {
-            $d = date('Y-m-d', strtotime("+$i days"));
+            $d = date('Y-m-d', strtotime("+$i days", $todayTs));
             $strip[] = array(
                 'date'      => $d,
-                'day_label' => $i === 0 ? 'Today' : date('D', strtotime($d)),
-                'date_label' => date('M j', strtotime($d)),
+                'day_label' => $i === 0 ? 'Today' : date('D', strtotime($d . ' 12:00:00')),
+                'date_label' => date('M j', strtotime($d . ' 12:00:00')),
                 'is_today'  => $i === 0,
             );
         }

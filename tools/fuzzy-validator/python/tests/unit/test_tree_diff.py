@@ -116,6 +116,20 @@ def test_compare_dom_trees_ignores_heraldry_cache_bust_query_params():
     assert result.passed is True
 
 
+def test_compare_dom_trees_ignores_stylesheet_cache_bust_query_params():
+    css = "http://127.0.0.1:19080/orkui/template/default/style/tokens.css"
+    baseline = _tree(
+        f'<html><head><link rel="stylesheet" href="{css}?v=111"></head><body></body></html>'
+    )
+    candidate = _tree(
+        f'<html><head><link rel="stylesheet" href="{css}?v=999"></head><body></body></html>'
+    )
+    result = compare_dom_trees(
+        baseline, candidate, {"fuzzNodes": [], "manualNodes": []}
+    )
+    assert result.passed is True
+
+
 def test_compare_dom_trees_ignores_heraldry_style_background_url_cache_bust():
     heraldry = "http://127.0.0.1:19080/assets/heraldry/player/000001.jpg"
     baseline = _tree(

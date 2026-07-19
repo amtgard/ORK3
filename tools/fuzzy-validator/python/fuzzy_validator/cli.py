@@ -344,6 +344,16 @@ def _run_pixel_discover(page_ids: list[str], env: dict, profile: str, tool_root:
     return 0
 
 
+def _apply_clock_date(capture_env: dict, tool_root: Path) -> None:
+    """Pin server-rendered 'today' for fuzzy capture (EP footer stability)."""
+    if capture_env.get("ORK3_CLOCK_DATE"):
+        return
+    defaults = load_defaults(defaults_path(tool_root))
+    clock_date = defaults.get("clockDate")
+    if isinstance(clock_date, str) and clock_date:
+        capture_env["ORK3_CLOCK_DATE"] = clock_date
+
+
 def _run_playwright_capture(
     page_ids: list[str],
     env: dict,
@@ -354,6 +364,7 @@ def _run_playwright_capture(
     capture_env["FUZZ_PAGES"] = ",".join(page_ids)
     capture_env["FUZZ_TOOL_ROOT"] = str(tool_root)
     capture_env["FUZZ_PAGES_MANIFEST"] = str(pages_manifest_path(tool_root))
+    _apply_clock_date(capture_env, tool_root)
     if args.repeat is not None:
         capture_env["FUZZ_REPEAT"] = str(args.repeat)
     if args.base_url:
@@ -379,6 +390,7 @@ def _run_refuzz_capture(
     capture_env["FUZZ_PAGES"] = ",".join(page_ids)
     capture_env["FUZZ_TOOL_ROOT"] = str(tool_root)
     capture_env["FUZZ_PAGES_MANIFEST"] = str(pages_manifest_path(tool_root))
+    _apply_clock_date(capture_env, tool_root)
     if args.base_url:
         capture_env["ORK3_E2E_BASE_URL"] = args.base_url
 
@@ -604,6 +616,7 @@ def _run_validate(args: argparse.Namespace) -> int:
             capture_env["FUZZ_MODE"] = "candidate"
             capture_env["FUZZ_TOOL_ROOT"] = str(tool_root)
             capture_env["FUZZ_PAGES_MANIFEST"] = str(pages_manifest_path(tool_root))
+            _apply_clock_date(capture_env, tool_root)
             for page_id in page_ids:
                 capture_env["FUZZ_PAGES"] = page_id
                 capture = subprocess.run(

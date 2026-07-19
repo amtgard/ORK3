@@ -30,9 +30,16 @@ def write_asset_diffs(
     calibration_dir: Path,
     diff_dir: Path,
     tool_root: Path,
+    strip_query: bool = False,
 ) -> None:
-    baseline_by_key = {asset_content_key(entry): entry for entry in parse_assets(baseline)}
-    candidate_by_key = {asset_content_key(entry): entry for entry in parse_assets(candidate)}
+    baseline_by_key = {
+        asset_content_key(entry, strip_query=strip_query): entry
+        for entry in parse_assets(baseline)
+    }
+    candidate_by_key = {
+        asset_content_key(entry, strip_query=strip_query): entry
+        for entry in parse_assets(candidate)
+    }
     diff_dir.mkdir(parents=True, exist_ok=True)
 
     for asset_key in result.changed_ids:
@@ -68,11 +75,12 @@ def run_asset_gate(
     calibration_dir: Path | None = None,
     diff_dir: Path | None = None,
     tool_root: Path | None = None,
+    strip_query: bool = False,
 ) -> AssetCompareResult:
     root = tool_root or TOOL_ROOT
     baseline = load_asset_manifest(baseline_path)
     candidate = load_asset_manifest(candidate_path)
-    result = compare_asset_manifests(baseline, candidate)
+    result = compare_asset_manifests(baseline, candidate, strip_query=strip_query)
 
     if diff_dir is not None and calibration_dir is not None and result.changed_ids:
         write_asset_diffs(
@@ -82,6 +90,7 @@ def run_asset_gate(
             calibration_dir=calibration_dir,
             diff_dir=diff_dir,
             tool_root=root,
+            strip_query=strip_query,
         )
 
     if result.assets_score < assets_min_score:
@@ -124,6 +133,7 @@ def main(argv: list[str] | None = None) -> int:
     assets_min_score = args.assets_min_score
     if assets_min_score is None:
         assets_min_score = float(defaults.get("assetsMinScore", 1.0))
+    strip_query = bool(defaults.get("assetStripQuery", False))
 
     calibration_dir = args.calibration_dir
     if calibration_dir is None:
@@ -136,6 +146,7 @@ def main(argv: list[str] | None = None) -> int:
             assets_min_score=assets_min_score,
             calibration_dir=calibration_dir,
             diff_dir=args.diff_dir,
+            strip_query=strip_query,
         )
     except (ValueError, FileNotFoundError) as exc:
         print(f"gate_assets: {exc}", file=sys.stderr)

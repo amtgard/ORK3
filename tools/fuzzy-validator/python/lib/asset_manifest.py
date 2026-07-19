@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+# ORK templates append ?v=<filemtime> to local CSS/JS. Do not strip other
+# query strings (e.g. Google Fonts ?family=...), which distinguish assets.
+_CACHE_BUST_QUERY_RE = re.compile(r"\?v=\d+$")
 
 
 @dataclass(frozen=True)
@@ -86,18 +91,34 @@ def asset_fingerprints(manifest: dict[str, Any]) -> dict[str, str]:
     return {entry.id: entry.sha256 for entry in parse_assets(manifest)}
 
 
-def asset_content_key(entry: AssetEntry) -> str:
+def strip_asset_url_query(url: str | None) -> str | None:
+    """Drop deploy-time ?v=<filemtime> cache-bust suffixes from asset URLs."""
+    if not url:
+        return url
+    return _CACHE_BUST_QUERY_RE.sub("", url)
+
+
+def asset_content_key(entry: AssetEntry, *, strip_query: bool = False) -> str:
     if entry.url:
-        return f"{entry.kind}:{entry.url}"
+        url = strip_asset_url_query(entry.url) if strip_query else entry.url
+        return f"{entry.kind}:{url}"
     return f"inline:{entry.kind}:{entry.sha256}"
 
 
 def compare_asset_manifests(
     baseline: dict[str, Any],
     candidate: dict[str, Any],
+    *,
+    strip_query: bool = False,
 ) -> AssetCompareResult:
-    baseline_by_key = {asset_content_key(entry): entry for entry in parse_assets(baseline)}
-    candidate_by_key = {asset_content_key(entry): entry for entry in parse_assets(candidate)}
+    baseline_by_key = {
+        asset_content_key(entry, strip_query=strip_query): entry
+        for entry in parse_assets(baseline)
+    }
+    candidate_by_key = {
+        asset_content_key(entry, strip_query=strip_query): entry
+        for entry in parse_assets(candidate)
+    }
 
     baseline_keys = set(baseline_by_key)
     candidate_keys = set(candidate_by_key)

@@ -105,11 +105,39 @@ class EraPhoenice
     }
 
     /**
+     * Civil "today" for rendering (Y-m-d).
+     *
+     * In DEV, honors fuzzy-validator pin via X-ORK3-Clock-Date / ORK3_CLOCK_DATE
+     * so EP footer and weather "today" stay stable across capture/validate days.
+     */
+    public static function todayDateString(?DateTimeZone $tz = null): string
+    {
+        if (defined('APP_STAGE') && APP_STAGE === 'DEV') {
+            $hdr = $_SERVER['HTTP_X_ORK3_CLOCK_DATE'] ?? '';
+            $env = getenv('ORK3_CLOCK_DATE') ?: '';
+            $raw = is_string($hdr) && $hdr !== '' ? $hdr : $env;
+            if (is_string($raw) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
+                return $raw;
+            }
+        }
+
+        return (new DateTimeImmutable('today', $tz))->format('Y-m-d');
+    }
+
+    /**
+     * Today's civil date as DateTimeImmutable (00:00), honoring DEV clock pin.
+     */
+    public static function today(?DateTimeZone $tz = null): DateTimeImmutable
+    {
+        return new DateTimeImmutable(self::todayDateString($tz), $tz);
+    }
+
+    /**
      * Today's E.P. date in the given timezone (or server-default if null).
      */
     public static function formatToday(?DateTimeZone $tz = null): string
     {
-        return self::format(new DateTimeImmutable('now', $tz));
+        return self::format(self::today($tz));
     }
 
     /**

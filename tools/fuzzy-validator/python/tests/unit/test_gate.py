@@ -215,3 +215,30 @@ def test_run_pixel_gate_dimension_mismatch(tmp_path: Path):
             max_outside_diff=500,
             visual_min_score=1.0,
         )
+
+
+def test_run_pixel_gate_allows_one_pixel_height_drift(tmp_path: Path):
+    # make_uniform_image(width, height) — candidate one pixel taller.
+    baseline = make_uniform_image(20, 20, (10, 10, 10))
+    candidate = make_uniform_image(20, 21, (10, 10, 10))
+    baseline_path = tmp_path / "baseline-1px.png"
+    candidate_path = tmp_path / "candidate-1px.png"
+    from tests.conftest import _write_rgb
+
+    _write_rgb(baseline_path, baseline)
+    _write_rgb(candidate_path, candidate)
+    manifest = {
+        "imageWidth": 20,
+        "imageHeight": 20,
+        "fuzzZones": [],
+        "manualZones": [],
+    }
+    result = run_pixel_gate(
+        baseline_path=baseline_path,
+        candidate_path=candidate_path,
+        manifest=manifest,
+        color_threshold=10,
+        max_outside_diff=500,
+        visual_min_score=1.0,
+    )
+    assert result.passed is True

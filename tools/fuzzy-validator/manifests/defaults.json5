@@ -9,6 +9,7 @@
   "assetsMinScore": 1.0,
   "domMinScore": 1.0,
   "visualMinScore": 1.0,
-  "assetStripQuery": false,
+  "assetStripQuery": true,
+  "clockDate": "2026-07-18",
   "domCompareScriptBodies": false
 }

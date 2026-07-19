@@ -3,7 +3,7 @@
 	$events     = $UpcomingEvents ?? array();
 	$dateStrip  = $DateStrip ?? array();
 	$playToday  = $PlayToday ?? array();
-	$selected   = $SelectedDate ?? date('Y-m-d');
+	$selected   = $SelectedDate ?? EraPhoenice::todayDateString();
 
 	// ─── Rundown sentence builder ──────────────────────────────────
 	// Pre-written slot templates; no LLM.
@@ -522,7 +522,7 @@ html[data-theme="dark"] .wx-feels { color: #a0aec0; }
 			<?php foreach ($events as $ev):
 				$ts = strtotime($ev['event_start']);
 				$dayDate = substr($ev['event_start'], 0, 10);
-				$today = date('Y-m-d');
+				$today = EraPhoenice::todayDateString();
 				$isToday = ($dayDate === $today);
 			?>
 			<div class="wx-event"
@@ -603,7 +603,7 @@ html[data-theme="dark"] .wx-feels { color: #a0aec0; }
 	// Server-computed today in the server's local timezone — use this wherever
 	// JS code needs to know "is this date today?". JS's new Date().toISOString()
 	// returns UTC and will be off by one for users west of UTC late at night.
-	var WX_TODAY = '<?= htmlspecialchars(date('Y-m-d')) ?>';
+	var WX_TODAY = '<?= htmlspecialchars(EraPhoenice::todayDateString()) ?>';
 	var wxIcon = function(c) {
 		c = +c;
 		if (c === 0)                  return '☀️';

@@ -70,20 +70,20 @@ class Controller
         $this->data['ViewerBasicFonts']    = 0;
         $this->data['ViewerDyslexiaFonts'] = 0;
         $this->data['ShowWhatsNew']        = false;
+        $this->data['WhatsNewRelease']     = null;
         if ($_uid > 0) {
             $prefs = Ork3::$Lib->player->GetViewerPreferences($_uid);
             $this->data['ViewerBasicFonts']    = (int) ($prefs['BasicFonts'] ?? 0);
             $this->data['ViewerDyslexiaFonts'] = (int) ($prefs['DyslexiaFonts'] ?? 0);
 
             require_once(DIR_UI . 'whats_new_content.php');
-            $hasRelease = false;
             foreach ($WHATS_NEW_ITEMS as $_release) {
                 if ($_release['date'] === WHATS_NEW_VERSION) {
-                    $hasRelease = true;
+                    $this->data['WhatsNewRelease'] = $_release;
                     break;
                 }
             }
-            if ($hasRelease) {
+            if ($this->data['WhatsNewRelease'] !== null) {
                 $this->data['ShowWhatsNew'] = !Ork3::$Lib->player->GetWhatsNewSeen($_uid, WHATS_NEW_VERSION);
             }
         }

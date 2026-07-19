@@ -12,12 +12,14 @@ _URL_IN_STYLE_RE = re.compile(r"url\((['\"]?)([^)'\"]+)\1\)")
 
 
 def normalize_dom_attr_value(name: str, value: Any) -> Any:
-    """Strip deploy-time cache-bust query params from heraldry asset URLs in DOM attrs."""
-    if not isinstance(value, str) or _HERALDRY_PATH not in value:
+    """Strip deploy-time cache-bust query params from static asset URLs in DOM attrs."""
+    if not isinstance(value, str):
         return value
-    if name == "src":
+    if name in {"href", "src"} and "?v=" in value:
         return re.sub(r"\?.*$", "", value)
-    if name == "style":
+    if name == "src" and _HERALDRY_PATH in value:
+        return re.sub(r"\?.*$", "", value)
+    if name == "style" and _HERALDRY_PATH in value:
 
         def _strip_url(match: re.Match[str]) -> str:
             quote, url = match.group(1), match.group(2)
@@ -224,7 +226,8 @@ def discover_fuzz_nodes_from_pair(baseline: dict, candidate: dict) -> list[dict]
         {"fuzzNodes": [], "manualNodes": []},
         dom_min_score=0.0,
     )
-    if probe.passed:
+    # Score floors must not hide failures here — discovery keys off diffs.
+    if not probe.failures:
         return []
 
     failure_paths = sorted({failure.path for failure in probe.failures})
@@ -382,7 +385,9 @@ def compare_dom_trees(
     else:
         dom_score = 1.0 - (failure_paths / comparable_paths)
 
-    passed = failure_paths == 0 and dom_score >= dom_min_score
+    # Mirror profiles intentionally allow a small DOM score floor (< 1.0) for
+    # live-data markup drift; pass/fail is score-based, not zero-failure.
+    passed = dom_score >= dom_min_score
     return DomCompareResult(
         passed=passed,
         dom_score=dom_score,

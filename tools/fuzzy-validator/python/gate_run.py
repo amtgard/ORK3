@@ -92,6 +92,7 @@ def run_page_gate(
         defaults.get("gateColorThreshold", defaults.get("colorThreshold", 20))
     )
     compare_script_bodies = bool(defaults.get("domCompareScriptBodies", False))
+    strip_query = bool(defaults.get("assetStripQuery", False))
 
     layers: list[LayerResult] = []
     asset_diff_dir = (run_dir / "diffs" / page_id) if run_dir else (
@@ -106,6 +107,7 @@ def run_page_gate(
             calibration_dir=cal_dir,
             diff_dir=asset_diff_dir,
             tool_root=tool_root,
+            strip_query=strip_query,
         )
         layers.append(
             LayerResult(
