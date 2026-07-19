@@ -89,16 +89,18 @@ Executable checklist for implementers / orchestrator. IDs reuse **P3-R0…P3-R4*
 
 ### Work
 
-- [ ] Implement `Player::GetReconcilePageData` (or split pure suggestion helper) + model wrapper
-- [ ] Characterization tests locking smart-rank outcomes for mixed historical/real rank sets
-- [ ] Wire `Controller_Player::reconcile`; template display-only
-- [ ] Optional: profile `HasHistorical` / `HasHistoricalTip` from same helper (remove duplicate filter in index tpl)
+- [x] Implement `Player::GetReconcilePageData` (or split pure suggestion helper) + model wrapper
+- [x] Characterization tests locking smart-rank outcomes for mixed historical/real rank sets
+- [x] Wire `Controller_Player::reconcile`; template display-only
+- [x] Optional: profile `HasHistorical` / `HasHistoricalTip` from same helper (remove duplicate filter in index tpl)
 
 ### Acceptance
 
-- [ ] No smart-rank / historical partition algorithm in `Playernew_reconcile.tpl`
-- [ ] `GetReconcileAwardMap` still used (via page DTO or existing assign)
-- [ ] Full PHPUnit green; static gates clean
+- [x] No smart-rank / historical partition algorithm in `Playernew_reconcile.tpl`
+- [x] `GetReconcileAwardMap` still used (via page DTO or existing assign)
+- [x] Full PHPUnit green; static gates clean
+
+**Notes:** Pure `GetReconcileSuggestions` + page DTO `GetReconcilePageData` (includes award map). Profile flags use suggestions helper only (no map DB hit).
 
 ---
 

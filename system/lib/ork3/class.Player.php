@@ -243,6 +243,148 @@ class Player extends Ork3
         return $awardIdMap;
     }
 
+    /**
+     * Pure historical partition + smart-rank suggestions over an awards list.
+     * Prefer existing Rank if unused by real+suggested; else smallest free
+     * positive integer per AwardId group. Matches former Playernew_reconcile.tpl.
+     *
+     * @param list<array<string, mixed>> $awards
+     * @return array{
+     *   HistoricalAwards: list<array<string, mixed>>,
+     *   RankSuggestions: array<int, int>,
+     *   RealRanksByAwardId: array<int, list<int>>,
+     *   Summary: array{AwardTypeCount: int, TotalCount: int},
+     *   HasHistoricalLadder: bool
+     * }
+     */
+    public function GetReconcileSuggestions(array $awards): array
+    {
+        $historicalAwards = [];
+        $realRanksByAwardId = [];
+
+        foreach ($awards as $a) {
+            if (!is_array($a)) {
+                continue;
+            }
+            $isAward = in_array($a['OfficerRole'] ?? null, ['none', null]) && ($a['IsTitle'] ?? 0) != 1;
+            if (!$isAward) {
+                continue;
+            }
+
+            $isHistorical = (int)($a['GivenById'] ?? 0) === 0 && (int)($a['EnteredById'] ?? 0) === 0;
+
+            if ($isHistorical) {
+                $historicalAwards[] = $a;
+            } else {
+                $aid = (int)($a['AwardId'] ?? 0);
+                $rank = (int)($a['Rank'] ?? 0);
+                if ($aid > 0) {
+                    if (!isset($realRanksByAwardId[$aid])) {
+                        $realRanksByAwardId[$aid] = [];
+                    }
+                    if ($rank > 0) {
+                        $realRanksByAwardId[$aid][] = $rank;
+                    }
+                }
+            }
+        }
+
+        // Keep only ladder awards — non-ladder (Custom Award etc.) are not reconcilable
+        $historicalAwards = array_values(array_filter($historicalAwards, function ($a) {
+            return (int)($a['IsLadder'] ?? 0) === 1;
+        }));
+
+        // Sort: AwardId ASC, date ASC (missing last)
+        usort($historicalAwards, function ($a, $b) {
+            if ((int)$a['AwardId'] !== (int)$b['AwardId']) {
+                return (int)$a['AwardId'] - (int)$b['AwardId'];
+            }
+            $da = ($ts = strtotime($a['Date'] ?? '')) > 0 ? $ts : PHP_INT_MAX;
+            $db = ($ts = strtotime($b['Date'] ?? '')) > 0 ? $ts : PHP_INT_MAX;
+
+            return $da - $db;
+        });
+
+        $rankSuggestions = [];
+        $groupState = [];
+        foreach ($historicalAwards as $a) {
+            $aid = (int)$a['AwardId'];
+            $awardsId = (int)$a['AwardsId'];
+            $isLadder = (int)($a['IsLadder'] ?? 0);
+            if (!$isLadder) {
+                $rankSuggestions[$awardsId] = 0;
+                continue;
+            }
+            if (!isset($groupState[$aid])) {
+                $real = [];
+                foreach ($realRanksByAwardId[$aid] ?? [] as $r) {
+                    if ($r > 0) {
+                        $real[$r] = true;
+                    }
+                }
+                $groupState[$aid] = ['realRanks' => $real, 'usedRanks' => []];
+            }
+            $existing = (int)($a['Rank'] ?? 0);
+            if ($existing > 0
+                && !isset($groupState[$aid]['realRanks'][$existing])
+                && !isset($groupState[$aid]['usedRanks'][$existing])
+            ) {
+                $rankSuggestions[$awardsId] = $existing;
+                $groupState[$aid]['usedRanks'][$existing] = true;
+            } else {
+                $c = 1;
+                while (isset($groupState[$aid]['realRanks'][$c]) || isset($groupState[$aid]['usedRanks'][$c])) {
+                    $c++;
+                }
+                $rankSuggestions[$awardsId] = $c;
+                $groupState[$aid]['usedRanks'][$c] = true;
+            }
+        }
+
+        $awardTypeCount = count(array_unique(array_column($historicalAwards, 'AwardId')));
+        $totalCount = count($historicalAwards);
+
+        return [
+            'HistoricalAwards' => $historicalAwards,
+            'RankSuggestions' => $rankSuggestions,
+            'RealRanksByAwardId' => $realRanksByAwardId,
+            'Summary' => [
+                'AwardTypeCount' => $awardTypeCount,
+                'TotalCount' => $totalCount,
+            ],
+            'HasHistoricalLadder' => $totalCount > 0,
+        ];
+    }
+
+    /**
+     * Reconcile page DTO: suggestions + kingdom award map.
+     *
+     * @param array{
+     *   MundaneId?: int,
+     *   KingdomId?: int,
+     *   Awards?: ?list
+     * } $request
+     * @return array{Status: int, Error?: string, Detail: array<string, mixed>}
+     */
+    public function GetReconcilePageData(array $request)
+    {
+        $mundaneId = (int)($request['MundaneId'] ?? 0);
+        $kingdomId = (int)($request['KingdomId'] ?? 0);
+        $awards = $request['Awards'] ?? null;
+        if (!is_array($awards)) {
+            if (!valid_id($mundaneId)) {
+                return InvalidParameter();
+            }
+            $awardsResponse = $this->AwardsForPlayer(['MundaneId' => $mundaneId]);
+            $awards = is_array($awardsResponse['Awards'] ?? null) ? $awardsResponse['Awards'] : [];
+        }
+
+        $suggestions = $this->GetReconcileSuggestions($awards);
+        $suggestions['AwardIdToKingdomAwardId'] = $this->GetReconcileAwardMap($kingdomId);
+
+        return Success($suggestions);
+    }
+
     public function CheckUsernameAvailable($username, $excludeMundaneId = 0)
     {
         $username = trim((string) $username);

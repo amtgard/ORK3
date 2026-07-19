@@ -512,6 +512,11 @@ class Controller_Player extends Controller
         $this->data['LadderMasterMap'] = $this->Player->get_ladder_master_map();
         $this->data['KnightAwardMap'] = $this->Player->get_knight_award_map();
 
+        $__reconcileHints = $this->Player->get_reconcile_suggestions($__awards);
+        $this->data['HasHistoricalLadder'] = !empty($__reconcileHints['HasHistoricalLadder']);
+        $this->data['HasHistorical'] = !empty($this->data['canManageAwards']) && $this->data['HasHistoricalLadder'];
+        $this->data['HasHistoricalTip'] = $this->data['HasHistoricalLadder'];
+
         // Collapse the Peers/Associates *display* lists to one row per
         // counterparty, keeping the highest-precedence peerage (the SQL
         // already orders Squire→Page so the first row wins). Run this AFTER
@@ -621,8 +626,19 @@ class Controller_Player extends Controller
         }
         $this->data['PreloadOfficers'] = $preloadOfficers;
 
-        // AwardId → KingdomAwardId map for current kingdom (pre-match historical award dropdowns)
-        $this->data['AwardIdToKingdomAwardId'] = $this->Player->get_reconcile_award_map((int)$this->session->kingdom_id);
+        $awards = is_array($this->data['Details']['Awards'] ?? null) ? $this->data['Details']['Awards'] : [];
+        $reconcilePage = $this->Player->get_reconcile_page_data([
+            'MundaneId' => $id,
+            'KingdomId' => (int)$this->session->kingdom_id,
+            'Awards' => $awards,
+        ]);
+        $this->data['HistoricalAwards'] = $reconcilePage['HistoricalAwards'];
+        $this->data['RankSuggestions'] = $reconcilePage['RankSuggestions'];
+        $this->data['RealRanksByAwardId'] = $reconcilePage['RealRanksByAwardId'];
+        $this->data['AwardIdToKingdomAwardId'] = $reconcilePage['AwardIdToKingdomAwardId'];
+        $this->data['AwardTypeCount'] = (int)($reconcilePage['Summary']['AwardTypeCount'] ?? 0);
+        $this->data['TotalCount'] = (int)($reconcilePage['Summary']['TotalCount'] ?? 0);
+        $this->data['HasHistoricalLadder'] = !empty($reconcilePage['HasHistoricalLadder']);
     }
 
     private function award_rec_can_delete(int $uid, string $role): bool

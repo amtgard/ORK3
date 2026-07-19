@@ -89,31 +89,9 @@
 	$showLastName  = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowMundaneLast']  ?? 0));
 	$showEmail     = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowEmail']        ?? 0));
 
-	// Check if player has any reconcilable historical awards (ladder only — matches reconcile page filter)
-	$hasHistorical = false;
-	if ($canManageAwards && is_array($Details['Awards'])) {
-		foreach ($Details['Awards'] as $_ha) {
-			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1 && (int)($_ha['IsLadder'] ?? 0) === 1) {
-				if ((int)$_ha['GivenById'] === 0 && (int)($_ha['EnteredById'] ?? 0) === 0) {
-					$hasHistorical = true;
-					break;
-				}
-			}
-		}
-	}
-
-	// Same check, visible to anyone viewing the profile
-	$hasHistoricalTip = false;
-	if (is_array($Details['Awards'])) {
-		foreach ($Details['Awards'] as $_ha) {
-			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1 && (int)($_ha['IsLadder'] ?? 0) === 1) {
-				if ((int)$_ha['GivenById'] === 0 && (int)($_ha['EnteredById'] ?? 0) === 0) {
-					$hasHistoricalTip = true;
-					break;
-				}
-			}
-		}
-	}
+	// Historical ladder flags from domain (Controller_Player::profile via get_reconcile_suggestions)
+	$hasHistorical = !empty($HasHistorical);
+	$hasHistoricalTip = !empty($HasHistoricalTip);
 
 	// Kingdom dues period config
 	$_kconfig = Common::get_configs((int)($KingdomId ?? 0));

@@ -322,6 +322,53 @@ class Model_Player extends Model
         return $this->_player()->GetReconcileAwardMap($kingdom_id);
     }
 
+    /**
+     * Pure historical partition + smart-rank (no kingdom map / no DB).
+     *
+     * @param list<array<string, mixed>> $awards
+     * @return array{
+     *   HistoricalAwards: list<array<string, mixed>>,
+     *   RankSuggestions: array<int, int>,
+     *   RealRanksByAwardId: array<int, list<int>>,
+     *   Summary: array{AwardTypeCount: int, TotalCount: int},
+     *   HasHistoricalLadder: bool
+     * }
+     */
+    public function get_reconcile_suggestions(array $awards): array
+    {
+        return $this->_player()->GetReconcileSuggestions($awards);
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     * @return array{
+     *   HistoricalAwards: list<array<string, mixed>>,
+     *   RankSuggestions: array<int, int>,
+     *   RealRanksByAwardId: array<int, list<int>>,
+     *   AwardIdToKingdomAwardId: array<int, int>,
+     *   Summary: array{AwardTypeCount: int, TotalCount: int},
+     *   HasHistoricalLadder: bool
+     * }
+     */
+    public function get_reconcile_page_data(array $request): array
+    {
+        $empty = [
+            'HistoricalAwards' => [],
+            'RankSuggestions' => [],
+            'RealRanksByAwardId' => [],
+            'AwardIdToKingdomAwardId' => [],
+            'Summary' => ['AwardTypeCount' => 0, 'TotalCount' => 0],
+            'HasHistoricalLadder' => false,
+        ];
+        $response = $this->_player()->GetReconcilePageData($request);
+        if (($response['Status'] ?? 1) != 0) {
+            return $empty;
+        }
+        $detail = $response['Detail'] ?? null;
+
+        return is_array($detail) ? array_merge($empty, $detail) : $empty;
+    }
+
     public function get_highest_class_level(int $mundane_id): int
     {
         return $this->_player()->GetHighestClassLevel($mundane_id);
