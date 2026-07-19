@@ -30,4 +30,14 @@ class AuthorizationGate extends Ork3
             'Authorized' => $this->check($mundaneId, $type, $id, $role),
         ];
     }
+
+    /**
+     * HasAuthority / auth ORM share the global DB connection. Clear after nav
+     * auth checks so subclass controller actions start with a clean DB state.
+     */
+    public function clearSharedDb(): void
+    {
+        global $DB;
+        $DB->Clear();
+    }
 }

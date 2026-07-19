@@ -327,6 +327,23 @@ class Model_Player extends Model
         return $this->_player()->DismissWhatsNew((int)$mundane_id, (string)$version);
     }
 
+    /** @return array{BasicFonts: int, DyslexiaFonts: int} */
+    public function get_viewer_preferences(int $mundane_id): array
+    {
+        return $this->_player()->GetViewerPreferences($mundane_id);
+    }
+
+    public function get_whats_new_seen(int $mundane_id, string $version): bool
+    {
+        return $this->_player()->GetWhatsNewSeen($mundane_id, $version);
+    }
+
+    /** @return array{KingdomId: int, ParentKingdomId: int} */
+    public function get_home_kingdom(int $mundane_id): array
+    {
+        return $this->_player()->GetHomeKingdom($mundane_id);
+    }
+
     public function check_username_available($username, $exclude_mundane_id = 0)
     {
         return $this->_player()->CheckUsernameAvailable($username, $exclude_mundane_id);

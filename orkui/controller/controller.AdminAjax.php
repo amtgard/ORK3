@@ -60,7 +60,7 @@ class Controller_AdminAjax extends Controller
             $authId = (int)($r['Detail'] ?? 0);
             $this->load_model('Player');
             $persona = $this->Player->get_persona($mid);
-            (new Dangeraudit())->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_ADMIN, 'Id' => 0, 'Role' => AUTH_ADMIN], 'Player', $mid, null, [
+            $this->Authorization->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_ADMIN, 'Id' => 0, 'Role' => AUTH_ADMIN], 'Player', $mid, null, [
                 'authorization_id' => $authId,
                 'mundane_id'       => $mid,
                 'park_id'          => 0,
