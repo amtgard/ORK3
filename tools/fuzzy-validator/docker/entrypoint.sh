@@ -18,7 +18,8 @@ ensure_node_modules() {
     return 1
   fi
   echo "fuzzy-validator-runner: installing node_modules (npm ci) into runner volume…" >&2
-  npm ci
+  # --ignore-scripts: avoid postinstall rewriting bind-mounted orkui assets on the host.
+  npm ci --ignore-scripts
 }
 
 # ork-db wiring uses 127.0.0.1:19306/19307 (host-published ports). Inside the
