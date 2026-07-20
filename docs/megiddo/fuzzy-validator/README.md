@@ -4,7 +4,7 @@ Automated refactor-stability harness for Megiddo R-*: **hard CSS/JS byte checks*
 
 **Run:** `bin/fuzzy-validator record|validate|refuzz|setpoint …`  
 **Code:** `tools/fuzzy-validator/`  
-**Status:** v1 shipped (FU-0 … FU-16). Next product work: [version-2/](./version-2/).
+**Status:** v1 shipped (FU-0 … FU-16). v2 overlays shipped: [version-2/](./version-2/). Next product work (plan): [version-2.1/](./version-2.1/) — containerized Ubuntu 26.04 + pinned Chromium runner for stable setpoints.
 
 ---
 
@@ -38,8 +38,9 @@ open tools/fuzzy-validator/reports/run-*/index.html
 |------|----------|----------|
 | *(this folder)* | Humans | README, USER-GUIDE, DEVELOPER-GUIDE, design overview |
 | [reference/](./reference/) | Humans + agents | Live as-built specs (CLI, schemas, ops, reports, profiles) |
-| [skills/](./skills/) | Agents | Orchestration skills (reserved; empty until version-2) |
-| [version-2/](./version-2/) | Planners / agents | Home for the next feature plan (classified drift overlays) |
+| [skills/](./skills/) | Agents | Orchestration skills (run-setpoint-drift, putative-drift-overlay) |
+| [version-2/](./version-2/) | Planners / agents | Classified drift overlays (implemented) |
+| [version-2.1/](./version-2.1/) | Planners / agents | Containerized runner plan (Ubuntu 26.04 + pinned Chromium) — **status: plan** |
 | [archive/](./archive/) | Historical | Completed FU-* plans, prompts, checklists |
 
 ### Reorganization note (2026-07-19)

@@ -790,7 +790,7 @@ Default `validate` / `record` run both profiles unless you pass `--profile` / `-
 
 - Run `setpoint restore` after clone; otherwise `validate` exits `2`.  
 - Prefer `bin/fuzzy-validator` over legacy `calibrate.sh` / `gate.sh`.  
-- Screenshot compare can differ macOS vs Linux; prefer a **Linux** docker/host gate for sign-off when they disagree.  
+- Screenshot compare can differ macOS vs Linux; prefer a **Linux** docker/host gate for sign-off when they disagree. **Planned default:** containerized runner (Ubuntu 26.04 + pinned Chromium) so capture/validate are stable across host OS — see [`docs/megiddo/fuzzy-validator/version-2.1/`](../../docs/megiddo/fuzzy-validator/version-2.1/) (**status: plan**).  
 - Do not lower `assetsMinScore` to hide a refactor; fix the drift or intentionally re-record.  
 - Do not use overlays (or annotations) to soft-pass unexpected regressions; overlays are for *declared* expected drift only.  
 - `validate --all` is slow (many pages × two profiles).  
