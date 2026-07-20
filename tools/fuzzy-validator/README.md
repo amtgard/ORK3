@@ -752,20 +752,34 @@ ORK3 uses this tool to gate front-end refactors against local docker. Two profil
 
 ### Quick start (ORK3)
 
+**Default:** containerized runner (Ubuntu 26.04 + Playwright-pinned Chromium). Host Playwright/Python installs are optional.
+
 ```bash
-npm ci
-npx playwright install chromium
-pip install -r tools/fuzzy-validator/python/requirements.txt
-
 docker compose -f docker-compose.php8.yml up -d
-bin/ork-db deploy-sandbox --yes
+bin/ork-db deploy-sandbox
 
-export ORK3_E2E_BASE_URL=http://localhost:19080/orkui/
+# Humans / host browsers still use localhost; the runner defaults to
+# http://ork3-php8-app/orkui/ on the php8 docker network.
 export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password
 # test profile defaults: megiddo / test-db-player
 
 bin/fuzzy-validator setpoint restore
 bin/fuzzy-validator validate --pages home-authenticated,player-profile --phase all
+```
+
+First invocation builds/starts `ork3-fuzzy-validator-runner` if needed and **leaves it running** (`restart: "no"` — no reboot persistence).
+
+```bash
+# Stop / rebuild the runner when the Playwright pin or Dockerfile changes:
+docker compose -f tools/fuzzy-validator/docker-compose.runner.yml stop
+FUZZY_VALIDATOR_REBUILD=1 bin/fuzzy-validator validate --help   # or: compose up -d --build
+
+# Non-default compose project network:
+export FUZZY_VALIDATOR_DOCKER_NETWORK=myproject_ork3-php8-net
+
+# Native escape hatch (debug only — captures may differ from sign-off):
+FUZZY_VALIDATOR_NATIVE=1 bin/fuzzy-validator validate --page home-authenticated
+# or: bin/fuzzy-validator --host validate …
 ```
 
 Open `tools/fuzzy-validator/reports/run-*/index.html`.
@@ -790,11 +804,13 @@ Default `validate` / `record` run both profiles unless you pass `--profile` / `-
 
 - Run `setpoint restore` after clone; otherwise `validate` exits `2`.  
 - Prefer `bin/fuzzy-validator` over legacy `calibrate.sh` / `gate.sh`.  
-- Screenshot compare can differ macOS vs Linux; prefer a **Linux** docker/host gate for sign-off when they disagree.  
+- **Sign-off path is the containerized runner** ([version-2.1](../../docs/megiddo/fuzzy-validator/version-2.1/)). After switching to 2.1, **re-record and publish the gold setpoint once** from the runner — macOS-native baselines often fail visual under Linux Chromium with no product change.  
+- Cloud-synced worktrees (e.g. Google Drive bind mounts) can be slow/flaky for the runner volume; prefer a local disk clone for heavy loops.  
 - Do not lower `assetsMinScore` to hide a refactor; fix the drift or intentionally re-record.  
 - Do not use overlays (or annotations) to soft-pass unexpected regressions; overlays are for *declared* expected drift only.  
 - `validate --all` is slow (many pages × two profiles).  
 - For dual-profile sign-off with a freshness check: `validate … --require-fresh-mirror` (override only with `--mirror-stale-ok "reason"`). Refresh the local prod mirror / re-`bin/ork-db extract` when prompted.
+- Native mode (`--host` / `FUZZY_VALIDATOR_NATIVE=1`) is for tool debugging only — not gold-master capture.
 
 Agent orchestration skills (run setpoint drift; draft putative overlays from requirements): [`docs/megiddo/fuzzy-validator/skills/`](../../docs/megiddo/fuzzy-validator/skills/).
 

@@ -1,0 +1,23 @@
+# Keep build context small when building from repo root.
+.git
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+tools/fuzzy-validator/baselines
+tools/fuzzy-validator/reports
+tools/fuzzy-validator/calibrations
+tools/fuzzy-validator/setpoints
+tools/fuzzy-validator/overlays
+tools/fuzzy-validator/evidence
+tools/ork-db/extracted
+*.png
+*.jpg
+*.jpeg
+*.zip
+orkui
+assets
+vendor
+docs
+tests
+.phpunit*
