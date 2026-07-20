@@ -1,0 +1,41 @@
+# Fuzzy Validator 2.1 — long-lived capture/validate runner (not part of php8 stack).
+#
+# Network: joins the external php8 user network. Default name matches compose
+# project "ork3"; override with FUZZY_VALIDATOR_DOCKER_NETWORK or let the CLI
+# wrapper auto-detect from `ork3-php8-app`.
+#
+# Lifecycle: restart "no" — auto-started by CLI; left running; does not survive reboot.
+
+services:
+  fuzzy-validator-runner:
+    build:
+      context: ../..
+      dockerfile: tools/fuzzy-validator/docker/Dockerfile
+    image: ork3-fuzzy-validator-runner:local
+    container_name: ork3-fuzzy-validator-runner
+    restart: "no"
+    working_dir: /ork3
+    volumes:
+      - ../..:/ork3
+      - fv-node-modules:/ork3/node_modules
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      ORK3_E2E_BASE_URL: ${ORK3_E2E_BASE_URL:-http://ork3-php8-app/orkui/}
+      FUZZY_VALIDATOR_IN_CONTAINER: "1"
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      # Host docker.sock paths in compose files refer to the host engine.
+      DOCKER_HOST: unix:///var/run/docker.sock
+    networks:
+      - ork3-php8-net
+    stdin_open: true
+    tty: true
+    command: ["sleep", "infinity"]
+
+volumes:
+  fv-node-modules:
+    name: ork3-fv-node-modules
+
+networks:
+  ork3-php8-net:
+    external: true
+    name: ${FUZZY_VALIDATOR_DOCKER_NETWORK:-ork3_ork3-php8-net}

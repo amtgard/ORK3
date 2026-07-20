@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# Fuzzy Validator — CLI dispatcher
+# Fuzzy Validator — CLI dispatcher (default: containerized runner).
+#
+# Default path: ensure ork3-fuzzy-validator-runner is up, then docker exec.
+# Escape hatch: FUZZY_VALIDATOR_NATIVE=1 or --host → bare-metal Python/Playwright.
 set -euo pipefail
 
 TOOL_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PYTHON_DIR="$TOOL_ROOT/python"
+REPO_ROOT="$(cd "$TOOL_ROOT/../.." && pwd)"
+COMPOSE_FILE="$TOOL_ROOT/docker-compose.runner.yml"
+RUNNER_NAME="ork3-fuzzy-validator-runner"
+NATIVE_BIN="$TOOL_ROOT/bin/fuzzy-validator-native"
 
 usage() {
   cat <<'EOF'
@@ -22,31 +28,149 @@ Commands:
 
 Global options:
   -h, --help    Show help
+  --host        Run on the host (native Playwright); not the sign-off path
+
+Environment:
+  FUZZY_VALIDATOR_NATIVE=1           Same as --host
+  FUZZY_VALIDATOR_DOCKER_NETWORK=…   Override php8 external network name
+  FUZZY_VALIDATOR_REBUILD=1          Force runner image rebuild on ensure
+  ORK3_E2E_*                         Passed through to the runner
+
+Default execution is inside the Ubuntu 26.04 runner container (pinned Chromium).
+See tools/fuzzy-validator/README.md and docs/megiddo/fuzzy-validator/version-2.1/.
 
 Run from repo root:
   bin/fuzzy-validator record --help
   bin/fuzzy-validator validate --help
-
-Documentation:
-  docs/megiddo/fuzzy-validator/10-cli-reference.md
 EOF
 }
 
-cmd="${1:-}"
-shift || true
+# Already inside the runner → never nest docker exec.
+if [[ "${FUZZY_VALIDATOR_IN_CONTAINER:-}" == "1" ]]; then
+  exec "$NATIVE_BIN" "$@"
+fi
 
-case "$cmd" in
-  record|validate|refuzz|setpoint|overlay)
-    export PYTHONPATH="${PYTHONPATH:-}:$PYTHON_DIR"
-    exec python3 -m fuzzy_validator.cli "$cmd" "$@"
-    ;;
-  -h|--help|help|'')
-    usage
-    exit 0
-    ;;
-  *)
-    echo "fuzzy-validator: unknown command '$cmd'" >&2
-    usage
-    exit 2
-    ;;
-esac
+want_native=0
+if [[ "${FUZZY_VALIDATOR_NATIVE:-}" == "1" ]]; then
+  want_native=1
+fi
+
+forward_args=()
+for arg in "$@"; do
+  if [[ "$arg" == "--host" ]]; then
+    want_native=1
+    continue
+  fi
+  forward_args+=("$arg")
+done
+
+if [[ "$want_native" -eq 1 ]]; then
+  echo "fuzzy-validator: native mode — captures may differ from containerized default" >&2
+  exec "$NATIVE_BIN" "${forward_args[@]}"
+fi
+
+# Top-level help without docker: avoid forcing a build for bare --help.
+cmd="${forward_args[0]:-}"
+if [[ -z "$cmd" || "$cmd" == "-h" || "$cmd" == "--help" || "$cmd" == "help" ]]; then
+  usage
+  exit 0
+fi
+
+detect_php8_network() {
+  if [[ -n "${FUZZY_VALIDATOR_DOCKER_NETWORK:-}" ]]; then
+    printf '%s\n' "$FUZZY_VALIDATOR_DOCKER_NETWORK"
+    return 0
+  fi
+  if ! docker inspect ork3-php8-app >/dev/null 2>&1; then
+    echo "fuzzy-validator: ork3-php8-app is not running." >&2
+    echo "Start the php8 stack first: docker compose -f docker-compose.php8.yml up -d" >&2
+    return 1
+  fi
+  local nets first
+  nets="$(docker inspect ork3-php8-app -f '{{range $k, $v := .NetworkSettings.Networks}}{{println $k}}{{end}}' 2>/dev/null || true)"
+  first="$(printf '%s\n' "$nets" | grep -E 'php8-net' | head -n1 || true)"
+  if [[ -z "$first" ]]; then
+    first="$(printf '%s\n' "$nets" | head -n1 | tr -d '[:space:]')"
+  fi
+  if [[ -z "$first" ]]; then
+    echo "fuzzy-validator: could not detect docker network for ork3-php8-app" >&2
+    echo "Set FUZZY_VALIDATOR_DOCKER_NETWORK explicitly." >&2
+    return 1
+  fi
+  printf '%s\n' "$first"
+}
+
+runner_running() {
+  local state
+  state="$(docker inspect -f '{{.State.Running}}' "$RUNNER_NAME" 2>/dev/null || echo false)"
+  [[ "$state" == "true" ]]
+}
+
+ensure_runner_running() {
+  local net
+  net="$(detect_php8_network)" || return 1
+  export FUZZY_VALIDATOR_DOCKER_NETWORK="$net"
+
+  if runner_running; then
+    return 0
+  fi
+
+  echo "fuzzy-validator: starting runner (network=$net)…" >&2
+
+  local need_build=0
+  if [[ "${FUZZY_VALIDATOR_REBUILD:-}" == "1" ]] || ! docker image inspect ork3-fuzzy-validator-runner:local >/dev/null 2>&1; then
+    need_build=1
+  fi
+
+  (
+    cd "$REPO_ROOT"
+    if [[ "$need_build" -eq 1 ]]; then
+      FUZZY_VALIDATOR_DOCKER_NETWORK="$net" \
+        docker compose -f "$COMPOSE_FILE" up -d --build
+    else
+      FUZZY_VALIDATOR_DOCKER_NETWORK="$net" \
+        docker compose -f "$COMPOSE_FILE" up -d
+    fi
+  )
+
+  local i
+  for i in $(seq 1 90); do
+    if docker exec "$RUNNER_NAME" true >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "fuzzy-validator: runner did not become ready (container=$RUNNER_NAME)" >&2
+  return 1
+}
+
+ensure_runner_running || exit 1
+
+exec_env=(
+  -e FUZZY_VALIDATOR_IN_CONTAINER=1
+  -e "ORK3_E2E_BASE_URL=${ORK3_E2E_BASE_URL:-http://ork3-php8-app/orkui/}"
+  -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+)
+
+# Pass through auth, clock, CI, and fuzzy/fuzz knobs when set on the host.
+pass_keys=(
+  ORK3_E2E_USERNAME
+  ORK3_E2E_PASSWORD
+  ORK3_E2E_PLAYER_ID
+  ORK3_CLOCK_DATE
+  CI
+  FUZZY_VALIDATOR_SKIP_NPM_CI
+  FUZZ_PAGES
+  FUZZ_MODE
+  FUZZ_REPEAT
+  FUZZ_TOOL_ROOT
+  FUZZ_PAGES_MANIFEST
+)
+for key in "${pass_keys[@]}"; do
+  if [[ -n "${!key:-}" ]]; then
+    exec_env+=(-e "${key}=${!key}")
+  fi
+done
+
+exec docker exec -i -w /ork3 "${exec_env[@]}" "$RUNNER_NAME" \
+  /ork3/tools/fuzzy-validator/bin/fuzzy-validator-native "${forward_args[@]}"
