@@ -1,8 +1,12 @@
 # Version 2.1 — Design
 
-**Status:** Plan  
+**Status:** Implemented (as-built deltas in [README.md](./README.md))  
 **Parent:** [README.md](./README.md)  
 **Requirements:** [01-requirements.md](./01-requirements.md)
+
+### As-built addendum — ork-db DB ports
+
+`tools/ork-db/manifests/wiring.json5` keeps host-published endpoints `127.0.0.1:19306` / `19307`. The runner entrypoint starts **socat** listeners that forward those ports to `ork3-php8-db:3306` and `ork3-php8-test-db:3306` on the php8 network so tier classification and PDO DSNs work without rewriting wiring.
 
 ---
 

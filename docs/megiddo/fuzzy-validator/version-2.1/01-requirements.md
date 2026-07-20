@@ -1,6 +1,6 @@
 # Version 2.1 — Requirements
 
-**Status:** Plan  
+**Status:** Implemented (see [README.md](./README.md) as-built)  
 **Parent:** [README.md](./README.md)
 
 ---

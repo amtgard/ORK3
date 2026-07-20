@@ -4,7 +4,7 @@ Automated refactor-stability harness for Megiddo R-*: **hard CSS/JS byte checks*
 
 **Run:** `bin/fuzzy-validator record|validate|refuzz|setpoint …`  
 **Code:** `tools/fuzzy-validator/`  
-**Status:** v1 shipped (FU-0 … FU-16). v2 overlays shipped: [version-2/](./version-2/). Next product work (plan): [version-2.1/](./version-2.1/) — containerized Ubuntu 26.04 + pinned Chromium runner for stable setpoints.
+**Status:** v1 shipped (FU-0 … FU-16). v2 overlays shipped: [version-2/](./version-2/). **v2.1 runner shipped:** [version-2.1/](./version-2.1/) — default containerized Ubuntu 26.04 + pinned Chromium.
 
 ---
 
@@ -26,6 +26,7 @@ docker compose -f docker-compose.php8.yml up -d
 bin/ork-db deploy-sandbox
 bin/fuzzy-validator setpoint restore
 
+# Default path auto-starts the Ubuntu 26.04 runner (pinned Chromium).
 bin/fuzzy-validator validate --pages home-anonymous,player-profile --phase all
 open tools/fuzzy-validator/reports/run-*/index.html
 ```

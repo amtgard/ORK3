@@ -22,19 +22,22 @@ It produces **exit code pass/fail** (for CI) and an **HTML report** (for humans)
 
 ## One-time setup
 
+**Default path (recommended):** Docker + php8 stack. The CLI starts a long-lived **fuzzy-validator runner** (Ubuntu 26.04 + Playwright-pinned Chromium). Host Node/Python/Playwright installs are **not** required for day-to-day `bin/fuzzy-validator`.
+
 ```bash
 # Repo root
-npm ci
-npx playwright install chromium
-pip install -r tools/fuzzy-validator/python/requirements.txt
-
 docker compose -f docker-compose.php8.yml up -d
-bin/ork-db deploy-sandbox              # required for test profile
+bin/ork-db deploy-sandbox              # required for test profile (run on host)
 
+# Optional: host browsers / humans still use localhost
 export ORK3_E2E_BASE_URL=http://localhost:19080/orkui/
 export ORK3_E2E_USERNAME=admin ORK3_E2E_PASSWORD=password   # mirror (local docker)
 export ORK3_E2E_TEST_PASSWORD=test-db-player               # test profile (optional)
 ```
+
+First `bin/fuzzy-validator …` builds/starts `ork3-fuzzy-validator-runner` if needed (leaves it running; `restart: "no"`).
+
+**Native escape hatch** (debug only — not sign-off): `FUZZY_VALIDATOR_NATIVE=1` or `--host` (requires host `npm ci`, `npx playwright install chromium`, and pip deps).
 
 ### Restore baselines (required after clone)
 
@@ -272,7 +275,7 @@ Details: [04-operating-guide.md §10](./reference/04-operating-guide.md).
 | Record aborts (assets unstable) | Fix flaky scripts; stub network |
 | Empty fuzz manifest | Page fully deterministic — OK |
 | Dimension mismatch | Content height changed — update baseline |
-| macOS local fail, Linux pass | Prefer a Linux docker/host gate as the sign-off surface when screenshots disagree |
+| macOS native vs runner visual disagree | Expected if baselines were recorded on host Chrome — re-record / publish setpoint via default (container) path; do not use `--host` for gold master |
 
 More: [04-operating-guide.md §7](./reference/04-operating-guide.md).
 
