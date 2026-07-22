@@ -867,7 +867,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 							data-share-tip="Show this event on <?= htmlspecialchars($sk['KingdomName']) ?>'s events list"
 							<?php if (!$sk['IsShared']): ?>data-tip="Show this event on <?= htmlspecialchars($sk['KingdomName']) ?>'s events list"<?php endif; ?>
 							onclick="evToggleShare(this)">
-							<i class="fas fa-share-nodes ev-share-ic-on"></i>
+							<i class="fas fa-share-alt ev-share-ic-on"></i>
 							<i class="fas fa-ban ev-share-ic-stop"></i>
 							<span class="ev-share-label"><?= $sk['IsShared'] ? 'Shared with ' . htmlspecialchars($sk['KingdomName']) : 'Share with My Kingdom' ?></span>
 							<span class="ev-share-stop-label">Stop Sharing?</span>
@@ -875,7 +875,7 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 					<?php else: ?>
 						<div class="ev-share-wrap">
 							<button type="button" class="ev-share-btn" onclick="evToggleShareMenu(this)">
-								<i class="fas fa-share-nodes"></i> <span class="ev-share-label">Share with my kingdom(s)</span>
+								<i class="fas fa-share-alt"></i> <span class="ev-share-label">Share with my kingdom(s)</span>
 								<i class="fas fa-caret-down" style="margin-left:6px"></i>
 							</button>
 							<div class="ev-share-menu" id="ev-share-menu" hidden>

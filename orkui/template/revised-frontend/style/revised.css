@@ -9888,6 +9888,20 @@ html[data-theme="dark"] [data-tip]:not(.kn-officer-pill):not(.pk-officer-pill):n
 	top: calc(100% + 6px) !important;
 }
 
+/* "Share with My Kingdom" button sits at the right end of the event hero action
+   row, so its long centered tooltip ("Show this event on <Kingdom>'s events
+   list") overflows and clips at the right viewport edge. Right-anchor it to the
+   button's right edge (extending leftward) and let it wrap so it always stays
+   on-screen. !important: the generic [data-tip] rule above has higher
+   specificity. */
+.ev-share-btn[data-tip]:hover::after {
+	left: auto !important;
+	right: 0 !important;
+	transform: none !important;
+	white-space: normal !important;
+	max-width: 260px !important;
+}
+
 /* Kingdomnew Save-as-draft button */
 .kn-emod-draft-btn,
 .pk-emod-draft-btn {
