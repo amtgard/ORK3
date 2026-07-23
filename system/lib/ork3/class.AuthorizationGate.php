@@ -14,10 +14,15 @@ class AuthorizationGate extends Ork3
 
     /**
      * JSON/SOAP API: HasAuthority request → { Status, Authorized }.
+     * Actor is resolved from Token; client MundaneId is ignored (privilege-oracle fix).
      */
     public function HasAuthority(array $request): array
     {
-        $mundaneId = isset($request['MundaneId']) ? (int) $request['MundaneId'] : 0;
+        $actorId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        if ($actorId <= 0) {
+            return array_merge(BadToken(), ['Authorized' => false]);
+        }
+
         $type = $request['Type'] ?? '';
         $id = array_key_exists('Id', $request) ? $request['Id'] : null;
         if ($id !== null && $id !== '') {
@@ -27,7 +32,7 @@ class AuthorizationGate extends Ork3
 
         return [
             'Status' => Success(),
-            'Authorized' => $this->check($mundaneId, $type, $id, $role),
+            'Authorized' => $this->check($actorId, $type, $id, $role),
         ];
     }
 }

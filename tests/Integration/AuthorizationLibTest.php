@@ -78,6 +78,47 @@ final class AuthorizationLibTest extends TestCase
         $this->assertFalse((bool) $auth->HasAuthority($player['mundane_id'], AUTH_PARK, -1, AUTH_EDIT));
     }
 
+    public function testAuthorizationGateIgnoresClientMundaneId(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $admin = $this->fixture->createPlayer($parkId, 'c07-admin');
+        $this->fixture->insertGlobalAdmin($admin['mundane_id']);
+        $stranger = $this->fixture->createPlayer($parkId, 'c07-stranger');
+        $gate = new AuthorizationGate();
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $noToken = $gate->HasAuthority([
+            'MundaneId' => $admin['mundane_id'],
+            'Type' => AUTH_PARK,
+            'Id' => $parkId,
+            'Role' => AUTH_EDIT,
+        ]);
+        $this->assertSame(ServiceErrorIds::SecureTokenFailure, $noToken['Status'] ?? null);
+        $this->assertFalse($noToken['Authorized']);
+
+        // Stranger Token + admin MundaneId must not privilege-escalate.
+        unset($_SESSION['is_authorized_mundane_id']);
+        $oracle = $gate->HasAuthority([
+            'Token' => $stranger['token'],
+            'MundaneId' => $admin['mundane_id'],
+            'Type' => AUTH_PARK,
+            'Id' => $parkId,
+            'Role' => AUTH_EDIT,
+        ]);
+        $this->assertSame(0, $oracle['Status']['Status'] ?? $oracle['Status'] ?? 1);
+        $this->assertFalse($oracle['Authorized']);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $ok = $gate->HasAuthority([
+            'Token' => $admin['token'],
+            'MundaneId' => $stranger['mundane_id'],
+            'Type' => AUTH_PARK,
+            'Id' => $parkId,
+            'Role' => AUTH_EDIT,
+        ]);
+        $this->assertTrue($ok['Authorized']);
+    }
+
     private function insertEventAuth(int $mundaneId, int $eventId, string $role): void
     {
         global $DB;
