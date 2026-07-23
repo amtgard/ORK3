@@ -736,6 +736,7 @@ $server->wsdl->addComplexType(
     'all',
     '',
     array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
                 'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
                 'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
                 'Fees' => array('name' => 'Fees','type' => 'xsd:string'),
@@ -750,6 +751,7 @@ $server->wsdl->addComplexType(
     'all',
     '',
     array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
                 'EventId' => array('name' => 'EventId','type' => 'xsd:int'),
                 'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
                 'EventType' => array('name' => 'EventType','type' => 'xsd:string'),

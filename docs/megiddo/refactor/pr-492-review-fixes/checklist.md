@@ -19,7 +19,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 11 | C-07 AuthorizationGate privilege oracle | [x] | | |
 | 12 | C-08 LiveService Token gate | [x] | | |
 | 13 | C-13 WeatherService Token gate | [x] | | |
-| 14 | C-10 Calendar detail write auth | [ ] | | |
+| 14 | C-10 Calendar detail write auth | [x] | | |
 | 15 | C-12 SetRsvp/WithdrawRsvp Token | [ ] | | |
 | 16 | C-09 GetOccurrencePageData auth | [ ] | | |
 | 17 | C-11 GetDietarySummary auth | [ ] | | |
@@ -40,7 +40,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 11. [x] C-07 AuthorizationGate privilege oracle
 12. [x] C-08 LiveService Token gate
 13. [x] C-13 WeatherService Token gate
-14. [ ] C-10 Calendar detail write auth
+14. [x] C-10 Calendar detail write auth
 15. [ ] C-12 SetRsvp/WithdrawRsvp Token
 16. [ ] C-09 GetOccurrencePageData auth
 17. [ ] C-11 GetDietarySummary auth

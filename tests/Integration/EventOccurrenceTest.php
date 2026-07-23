@@ -104,8 +104,31 @@ final class EventOccurrenceTest extends TestCase
     {
         $ctx = $this->fixture->createPublishedEvent('fees-links');
         $this->fixture->insertFee($ctx['detail_id'], 'Old', 5.0);
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_EVENT, $ctx['event_id'], AUTH_EDIT, 'fees-auth');
+        unset($_SESSION['is_authorized_mundane_id']);
 
+        $denied = $this->planning->SetCalendarDetailFeesAndLinks([
+            'EventId' => $ctx['event_id'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+            'Fees' => [['AdmissionType' => 'Hack', 'Cost' => 1]],
+            'Links' => [],
+        ]);
+        $this->assertSame(ServiceErrorIds::SecureTokenFailure, $denied['Status'] ?? null);
+        $this->assertCount(1, $this->fixture->fetchFees($ctx['detail_id']));
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $noAuth = $this->planning->SetCalendarDetailFeesAndLinks([
+            'Token' => md5('not-a-real-token-c10xxxxxxxx'),
+            'EventId' => $ctx['event_id'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+            'Fees' => [['AdmissionType' => 'Hack', 'Cost' => 1]],
+            'Links' => [],
+        ]);
+        $this->assertSame(ServiceErrorIds::SecureTokenFailure, $noAuth['Status'] ?? null);
+
+        unset($_SESSION['is_authorized_mundane_id']);
         $sync = $this->planning->SetCalendarDetailFeesAndLinks([
+            'Token' => $grantor['token'],
             'EventId' => $ctx['event_id'],
             'EventCalendarDetailId' => $ctx['detail_id'],
             'Fees' => [
@@ -155,6 +178,7 @@ final class EventOccurrenceTest extends TestCase
         }
 
         $r = $this->planning->SetCalendarDetailEventType([
+            'Token' => $grantor['token'],
             'EventId' => $ctx['event_id'],
             'EventCalendarDetailId' => $ctx['detail_id'],
             'EventType' => 'Day Event',
@@ -331,12 +355,15 @@ final class EventOccurrenceTest extends TestCase
     public function testSetCalendarDetailEventTypeRejectsInvalid(): void
     {
         $ctx = $this->fixture->createPublishedEvent('bad-type');
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_EVENT, $ctx['event_id'], AUTH_EDIT, 'bad-type-auth');
+        unset($_SESSION['is_authorized_mundane_id']);
         $r = $this->planning->SetCalendarDetailEventType([
+            'Token' => $grantor['token'],
             'EventId' => $ctx['event_id'],
             'EventCalendarDetailId' => $ctx['detail_id'],
             'EventType' => 'Not A Real Type',
         ]);
-        $this->assertNotSame(0, $r['Status']['Status']);
+        $this->assertNotSame(0, $r['Status']['Status'] ?? $r['Status'] ?? 0);
     }
 
     public function testGetOccurrencePageDataRejectsForeignDetail(): void

@@ -375,9 +375,10 @@ class Model_Event extends Model
         return $r;
     }
 
-    public function set_calendar_detail_fees_and_links($event_id, $detail_id, $fees, $links)
+    public function set_calendar_detail_fees_and_links($event_id, $detail_id, $fees, $links, $token = '')
     {
         $r = $this->_planning()->SetCalendarDetailFeesAndLinks([
+            'Token' => (string) $token,
             'EventId' => (int) $event_id,
             'EventCalendarDetailId' => (int) $detail_id,
             'Fees' => is_array($fees) ? $fees : [],
@@ -392,9 +393,10 @@ class Model_Event extends Model
         ];
     }
 
-    public function set_calendar_detail_event_type($event_id, $detail_id, $event_type)
+    public function set_calendar_detail_event_type($event_id, $detail_id, $event_type, $token = '')
     {
         $r = $this->_planning()->SetCalendarDetailEventType([
+            'Token' => (string) $token,
             'EventId' => (int) $event_id,
             'EventCalendarDetailId' => (int) $detail_id,
             'EventType' => (string) $event_type,

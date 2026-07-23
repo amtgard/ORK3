@@ -304,9 +304,21 @@ class EventPlanning extends Ork3
 
     public function SetCalendarDetailFeesAndLinks($request)
     {
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        $eventId = (int) ($request['EventId'] ?? 0);
         $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
-        if (!valid_id($detailId)) {
+        if ($mundaneId <= 0) {
+            return BadToken();
+        }
+        if (!valid_id($detailId) || !valid_id($eventId)) {
             return InvalidParameter('Invalid detail id');
+        }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return InvalidParameter('Detail does not belong to event');
+        }
+        if (!$this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'manage')
+            && !Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+            return NoAuthorization();
         }
 
         $feesIn = is_array($request['Fees'] ?? null) ? $request['Fees'] : [];
@@ -314,12 +326,7 @@ class EventPlanning extends Ork3
         $sync = $this->syncCalendarDetailFeesAndLinks($detailId, $feesIn, $linksIn);
 
         if ($sync['feesOk'] && $sync['linksOk']) {
-            $eventId = (int) ($request['EventId'] ?? 0);
-            if (valid_id($eventId)) {
-                $this->bustCalendarDetailCaches($eventId, $detailId);
-            } else {
-                Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', Ork3::$Lib->ghettocache->key([$detailId]));
-            }
+            $this->bustCalendarDetailCaches($eventId, $detailId);
         }
 
         return [
@@ -331,10 +338,22 @@ class EventPlanning extends Ork3
 
     public function SetCalendarDetailEventType($request)
     {
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        $eventId = (int) ($request['EventId'] ?? 0);
         $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
         $eventType = trim((string) ($request['EventType'] ?? ''));
-        if (!valid_id($detailId)) {
+        if ($mundaneId <= 0) {
+            return BadToken();
+        }
+        if (!valid_id($detailId) || !valid_id($eventId)) {
             return InvalidParameter('Invalid detail id');
+        }
+        if (!$this->detailBelongsToEvent($detailId, $eventId)) {
+            return InvalidParameter('Detail does not belong to event');
+        }
+        if (!$this->CanManageEventDetail($mundaneId, $eventId, $detailId, 'manage')
+            && !Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+            return NoAuthorization();
         }
         if ($eventType !== '' && !in_array($eventType, self::CALENDAR_DETAIL_EVENT_TYPES, true)) {
             return InvalidParameter('Invalid event type');
@@ -347,10 +366,7 @@ class EventPlanning extends Ork3
             . ' WHERE event_calendardetail_id = ' . $detailId
         );
 
-        $eventId = (int) ($request['EventId'] ?? 0);
-        if (valid_id($eventId)) {
-            Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', Ork3::$Lib->ghettocache->key([$detailId]));
-        }
+        Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', Ork3::$Lib->ghettocache->key([$detailId]));
 
         return ['Status' => Success()];
     }

@@ -336,7 +336,7 @@ class Controller_Event extends Controller
                         'EventType'             => $this->request->Eventnew_edit->EventType,
                     ]);
                     $_evType = trim($this->request->Eventnew_edit->EventType ?? '');
-                    $this->Event->set_calendar_detail_event_type($event_id, $detail_id, $_evType);
+                    $this->Event->set_calendar_detail_event_type($event_id, $detail_id, $_evType, $this->session->token);
                     if ($this->Event->event_api_ok($r)) {
                         $this->request->clear('Eventnew_edit');
                         $_feesJson = trim($_POST['Fees'] ?? '');
@@ -347,7 +347,8 @@ class Controller_Event extends Controller
                             $event_id,
                             $detail_id,
                             is_array($_feesIn) ? $_feesIn : [],
-                            is_array($_linksIn) ? $_linksIn : []
+                            is_array($_linksIn) ? $_linksIn : [],
+                            $this->session->token
                         );
                         $_feesOk = $sync['feesOk'];
                         $_linksOk = $sync['linksOk'];
@@ -627,7 +628,8 @@ class Controller_Event extends Controller
                         $event_id,
                         $new_id,
                         is_array($_feesIn) ? $_feesIn : [],
-                        is_array($_linksIn2) ? $_linksIn2 : []
+                        is_array($_linksIn2) ? $_linksIn2 : [],
+                        $this->session->token
                     );
                     $_feesOk = empty($_feesIn) || $sync['feesOk'];
                     $_linksOk = empty($_linksIn2) || $sync['linksOk'];
