@@ -8,13 +8,13 @@ class Model_Live extends Model
         $this->Live = new JSONModel('Live');
     }
 
-    public function stats(): array
+    public function stats(string $token = ''): array
     {
-        return $this->Live->GetStats();
+        return $this->Live->GetStats($token);
     }
 
-    public function recent(): array
+    public function recent(string $token = ''): array
     {
-        return $this->Live->GetRecent();
+        return $this->Live->GetRecent($token);
     }
 }

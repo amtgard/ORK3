@@ -39,7 +39,7 @@ class Controller_Live extends Controller
             echo json_encode(array('status' => 5, 'error' => 'Not logged in'));
             exit;
         }
-        $data = $this->Live->stats();
+        $data = $this->Live->stats((string) ($this->session->token ?? ''));
         echo json_encode(array('status' => 0) + $data);
         exit;
     }
@@ -51,7 +51,7 @@ class Controller_Live extends Controller
             echo json_encode(array('status' => 5, 'error' => 'Not logged in'));
             exit;
         }
-        $data = $this->Live->recent();
+        $data = $this->Live->recent((string) ($this->session->token ?? ''));
         echo json_encode(array('status' => 0) + $data);
         exit;
     }

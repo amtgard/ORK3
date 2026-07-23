@@ -17,7 +17,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 9 | C-05 Scoped/Kingdom/Event auth getters | [x] | | |
 | 10 | C-06 Server health getters auth | [x] | | |
 | 11 | C-07 AuthorizationGate privilege oracle | [x] | | |
-| 12 | C-08 LiveService Token gate | [ ] | | |
+| 12 | C-08 LiveService Token gate | [x] | | |
 | 13 | C-13 WeatherService Token gate | [ ] | | |
 | 14 | C-10 Calendar detail write auth | [ ] | | |
 | 15 | C-12 SetRsvp/WithdrawRsvp Token | [ ] | | |
@@ -38,7 +38,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 9. [x] C-05 Scoped/Kingdom/Event auth getters
 10. [x] C-06 Server health getters auth
 11. [x] C-07 AuthorizationGate privilege oracle
-12. [ ] C-08 LiveService Token gate
+12. [x] C-08 LiveService Token gate
 13. [ ] C-13 WeatherService Token gate
 14. [ ] C-10 Calendar detail write auth
 15. [ ] C-12 SetRsvp/WithdrawRsvp Token
