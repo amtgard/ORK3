@@ -186,84 +186,24 @@ class Controller_ParkAjax extends Controller
                 exit;
             }
 
-            global $DB;
-            $pid  = (int)$park_id;
-
-            // Parse optional "KD:PK search term" abbreviation prefix
-            $filterKid = 0;
-            $filterPid = 0;
-            $searchQ   = $q;
-            if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\*)?\s+(.+)$/i', $q, $m)) {
-                $kAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[1]);
-                $rs = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
-                if ($rs && $rs->Next()) {
-                    $filterKid = (int)$rs->kingdom_id;
-                }
-                if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
-                    $pAbbr = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $m[2]);
-                    $rs = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
-                    if ($rs && $rs->Next()) {
-                        $filterPid = (int)$rs->park_id;
-                    }
-                }
-                $searchQ = trim($m[3]);
-            }
-            $term = str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $searchQ);
-
-            if ($scope === 'own') {
-                $park_clause = "AND m.park_id = {$pid}";
-            } elseif ($scope === 'exclude') {
-                $park_clause = "AND m.park_id != {$pid}";
-            } else {
-                $park_clause = '';
+            $scopeKey = 'park_own';
+            if ($scope === 'exclude') {
+                $scopeKey = 'park_exclude';
+            } elseif ($scope === 'all') {
+                $scopeKey = 'park_all';
             }
 
-            $order_clause = $prioritize
-                ? "CASE WHEN m.park_id = {$pid} THEN 0 WHEN m.kingdom_id = (SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$pid} LIMIT 1) THEN 1 ELSE 2 END,"
-                : "";
-
-            // Abbreviation prefix overrides scope filter when specific kingdom/park matched
-            if ($filterPid > 0) {
-                $park_clause = "AND m.park_id = {$filterPid}";
-            } elseif ($filterKid > 0) {
-                $park_clause = "AND m.kingdom_id = {$filterKid}";
-            }
-
-            $sql = "
-				SELECT m.mundane_id, m.persona, m.park_id AS m_park_id, m.kingdom_id AS m_kingdom_id,
-				       k.name AS kingdom_name, p.name AS park_name,
-				       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
-				       m.suspended, m.active
-				FROM ork_mundane m
-				LEFT JOIN ork_kingdom k ON k.kingdom_id = m.kingdom_id
-				LEFT JOIN ork_park p ON p.park_id = m.park_id
-				WHERE LENGTH(m.persona) > 0
-				  " . ($include_suspended ? "" : "AND m.suspended = 0") . "
-				  " . ($include_inactive ? "" : "AND m.active = 1")    . "
-				  {$park_clause}
-				  AND (m.persona LIKE '%{$term}%'
-				    OR m.given_name LIKE '%{$term}%'
-				    OR m.surname LIKE '%{$term}%'
-				    OR m.username LIKE '%{$term}%')
-				ORDER BY m.suspended ASC, m.active DESC, {$order_clause} m.persona
-				LIMIT 15";
-            $DB->Clear();
-            $rs      = $DB->DataSet($sql);
-            $results = [];
-            while ($rs->Next()) {
-                $results[] = [
-                    'MundaneId'   => (int)$rs->mundane_id,
-                    'Persona'     => $rs->persona,
-                    'KingdomId'   => (int)$rs->m_kingdom_id,
-                    'ParkId'      => (int)$rs->m_park_id,
-                    'KingdomName' => $rs->kingdom_name,
-                    'ParkName'    => $rs->park_name,
-                    'KAbbr'       => $rs->k_abbr,
-                    'PAbbr'       => $rs->p_abbr,
-                    'Suspended'   => (int)$rs->suspended,
-                    'Active'      => (int)$rs->active,
-                ];
-            }
+            $this->load_model('Search');
+            $results = $this->Search->scoped_player_search([
+                'Query'            => $q,
+                'Scope'            => $scopeKey,
+                'ParkId'           => (int)$park_id,
+                'IncludeInactive'  => $include_inactive,
+                'IncludeSuspended' => $include_suspended,
+                'Prioritize'       => $prioritize,
+                'Limit'            => 15,
+                'Format'           => 'kingdom',
+            ]);
 
             echo json_encode($results);
 
@@ -380,7 +320,7 @@ class Controller_ParkAjax extends Controller
 
         } elseif ($action === 'deletedrecommendations') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -390,7 +330,7 @@ class Controller_ParkAjax extends Controller
 
         } elseif ($action === 'restorerecommendation') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -410,7 +350,7 @@ class Controller_ParkAjax extends Controller
 
         } elseif ($action === 'addauth') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -423,22 +363,22 @@ class Controller_ParkAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Invalid player.']);
                 exit;
             }
-            global $DB;
-            $DB->Clear();
-            $DB->Execute("INSERT INTO ork_authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
-				VALUES ({$mid}, {$park_id}, 0, 0, 0, '{$role}', NOW())");
-            $DB->Clear();
-            $rs = $DB->DataSet("SELECT a.authorization_id, m.persona FROM ork_authorization a
-				LEFT JOIN ork_mundane m ON m.mundane_id = a.mundane_id
-				WHERE a.mundane_id = {$mid} AND a.park_id = {$park_id}
-				ORDER BY a.authorization_id DESC LIMIT 1");
-            $authId = 0;
-            $persona = '';
-            if ($rs && $rs->Next()) {
-                $authId = (int)$rs->authorization_id;
-                $persona = $rs->persona;
+            $this->load_model('Authorization');
+            $r = $this->Authorization->add_auth([
+                'Token'     => $this->session->token,
+                'MundaneId' => $mid,
+                'Type'      => AUTH_PARK,
+                'Id'        => $park_id,
+                'Role'      => $role,
+            ]);
+            if ($r['Status'] != 0) {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . (isset($r['Detail']) && $r['Detail'] !== '' ? ': ' . $r['Detail'] : '')]);
+                exit;
             }
-            Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_PARK, 'Id' => $park_id, 'Role' => $role], 'Player', $mid, null, [
+            $authId = (int)($r['Detail'] ?? 0);
+            $this->load_model('Player');
+            $persona = $this->Player->get_persona($mid);
+            (new Dangeraudit())->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_PARK, 'Id' => $park_id, 'Role' => $role], 'Player', $mid, null, [
                 'authorization_id' => $authId,
                 'mundane_id'       => $mid,
                 'park_id'          => (int)$park_id,
@@ -451,7 +391,7 @@ class Controller_ParkAjax extends Controller
 
         } elseif ($action === 'removeauth') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -542,7 +482,7 @@ class Controller_ParkAjax extends Controller
 
         if ($action === 'create') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized to create parks in this kingdom.']);
                 exit;
             }
@@ -573,16 +513,13 @@ class Controller_ParkAjax extends Controller
             ]);
 
             if ($r['Status'] == 0) {
-                $bustKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kingdom_id]);
-                Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkAverages', $bustKey);
-                Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkMonthlyAverages', $bustKey);
                 echo json_encode(['status' => 0, 'parkId' => (int)($r['Detail'] ?? 0)]);
             } else {
                 echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
             }
         } elseif ($action === 'editpark') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized to edit parks in this kingdom.']);
                 exit;
             }
@@ -598,10 +535,8 @@ class Controller_ParkAjax extends Controller
                 exit;
             }
             // Verify the park belongs to this kingdom
-            global $DB;
-            $DB->Clear();
-            $pkCheck = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} AND kingdom_id = {$kingdom_id} LIMIT 1");
-            if (!$pkCheck || !$pkCheck->Next()) {
+            $this->load_model('ParkProfile');
+            if (!$this->ParkProfile->park_belongs_to_kingdom($park_id, $kingdom_id)) {
                 echo json_encode(['status' => 1, 'error' => 'Park does not belong to this kingdom.']);
                 exit;
             }
@@ -633,19 +568,15 @@ class Controller_ParkAjax extends Controller
                 echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
             }
         } elseif ($action === 'checkabbr') {
-            $abbr        = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
-            $excludeId   = (int)($_POST['ExcludeParkId'] ?? 0);
+            $abbr      = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
+            $excludeId = (int)($_POST['ExcludeParkId'] ?? 0);
             if (!strlen($abbr)) {
                 echo json_encode(['status' => 0, 'taken' => false]);
                 exit;
             }
-            global $DB;
-            $DB->Clear();
-            $excludeClause = $excludeId > 0 ? " AND park_id != {$excludeId}" : '';
-            $rs = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$abbr}' AND kingdom_id = {$kingdom_id}{$excludeClause} LIMIT 1");
-            echo ($rs && $rs->Next())
-                ? json_encode(['status' => 0, 'taken' => true])
-                : json_encode(['status' => 0, 'taken' => false]);
+            $this->load_model('ParkProfile');
+            $taken = $this->ParkProfile->abbreviation_taken((int)$kingdom_id, $abbr, $excludeId);
+            echo json_encode(['status' => 0, 'taken' => $taken]);
 
         } else {
             echo json_encode(['status' => 1, 'error' => 'Unknown action']);
@@ -672,148 +603,15 @@ class Controller_ParkAjax extends Controller
             exit;
         }
 
-        $uid = (int)$this->session->user_id;
-        $canEdit = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_EDIT);
-        if (!$canEdit) {
-            echo json_encode(['status' => 5, 'error' => 'Not authorized to edit this park.']);
-            exit;
-        }
-
-        global $DB;
-
-        // I2 fix: refuse banner uploads / config changes on retired parks.
-        // The canonical "is active" check elsewhere compares park.active to 'Active'
-        // (see system/lib/ork3/class.Park.php). Block update + config; remove is allowed
-        // so admins can still clear stale banners after retirement.
-        if ($action === 'update' || $action === 'config') {
-            $DB->Clear();
-            $activeRow = $DB->DataSet('SELECT active FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
-            if ($activeRow && $activeRow->Next() && trim((string)$activeRow->active) !== 'Active') {
-                echo json_encode(['status' => 1, 'error' => 'This park is retired. Restore the park before changing its banner.']);
-                exit;
-            }
-        }
-
-        if ($action === 'remove') {
-            $DB->Clear();
-            // Reset display toggles AND framing offsets to defaults so a future
-            // upload starts fresh instead of inheriting the removed banner's config.
-            $DB->Execute('UPDATE ' . DB_PREFIX . 'park SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1, banner_offset_x = 50, banner_offset_y = 50 WHERE park_id = ' . $park_id);
-            // I4 fix: verify the UPDATE landed before deleting the file.
-            // If the DB update silently failed and we delete the file, the
-            // banner column stays 1 but the file is gone -> broken banner.
-            $DB->Clear();
-            $removeCheck = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
-            if (!$removeCheck || !$removeCheck->Next() || (int)$removeCheck->has_banner !== 0) {
-                echo json_encode(['status' => 1, 'error' => 'Could not clear banner flag in database. Please try again.']);
-                exit;
-            }
-            $base = DIR_PARK_BANNER . sprintf('%05d', $park_id);
-            if (file_exists($base . '.jpg')) {
-                unlink($base . '.jpg');
-            }
-            if (file_exists($base . '.png')) {
-                unlink($base . '.png');
-            }
-            echo json_encode(['status' => 0]);
-            exit;
-        }
-
-        if ($action === 'config') {
-            // Refuse silent no-ops: config only meaningful with a banner present.
-            $DB->Clear();
-            $row = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
-            if (!$row || !$row->Next() || (int)$row->has_banner !== 1) {
-                echo json_encode(['status' => 1, 'error' => 'Upload a banner first before saving settings.']);
-                exit;
-            }
-            $showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
-            $vignette = !empty($_POST['Vignette']) ? 1 : 0;
-            $offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
-            $offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
-            $DB->Clear();
-            $DB->Execute('UPDATE ' . DB_PREFIX . 'park SET banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE park_id = ' . $park_id);
-            // F1 fix: verify-after-write — mirror update/remove branches. YapoMysql
-            // can swallow failures silently; re-read one column to confirm the write.
-            $DB->Clear();
-            $cfgVerify = $DB->DataSet('SELECT banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
-            if (!$cfgVerify || !$cfgVerify->Next()
-                || (int)$cfgVerify->banner_show_logo !== $showLogo
-                || (int)$cfgVerify->banner_vignette  !== $vignette
-                || (int)$cfgVerify->banner_offset_x  !== $offX
-                || (int)$cfgVerify->banner_offset_y  !== $offY) {
-                echo json_encode(['status' => 1, 'error' => 'Could not save banner settings. Please try again.']);
-                exit;
-            }
-            echo json_encode(['status' => 0]);
-            exit;
-        }
-
-        if ($action === 'update') {
-            if (empty($_FILES['Banner']['tmp_name'])) {
-                echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
-                exit;
-            }
-            // I2 fix: validate the upload came via a real HTTP file upload (prevents spoofing).
-            if (!is_uploaded_file($_FILES['Banner']['tmp_name'])) {
-                echo json_encode(['status' => 1, 'error' => 'Invalid upload.']);
-                exit;
-            }
-            // I5 fix: server-side file size check (JS resize can be bypassed via curl).
-            if (($_FILES['Banner']['size'] ?? 0) > 1024 * 1024) {
-                echo json_encode(['status' => 1, 'error' => 'File too large (max 1 MB).']);
-                exit;
-            }
-            $tmp  = $_FILES['Banner']['tmp_name'];
-            // I3 fix: use exif_imagetype() (magic-byte check) instead of the
-            // browser-supplied MIME type, which is trivially spoofable.
-            $detectedType = exif_imagetype($tmp);
-            if ($detectedType !== IMAGETYPE_JPEG && $detectedType !== IMAGETYPE_PNG) {
-                echo json_encode(['status' => 1, 'error' => 'Only JPEG and PNG images are supported.']);
-                exit;
-            }
-            $mime = ($detectedType === IMAGETYPE_PNG) ? 'image/png' : 'image/jpeg';
-            if (!is_dir(DIR_PARK_BANNER)) {
-                @mkdir(DIR_PARK_BANNER, 0775, true);
-            }
-            $ext  = ($mime === 'image/png') ? 'png' : 'jpg';
-            $base = DIR_PARK_BANNER . sprintf('%05d', $park_id);
-            // Delete any previous banner files (both extensions) before saving the
-            // new one so we never leave the old image behind when the user switches
-            // formats. resolve_image_ext picks whichever file survives.
-            if (file_exists($base . '.jpg')) {
-                @unlink($base . '.jpg');
-            }
-            if (file_exists($base . '.png')) {
-                @unlink($base . '.png');
-            }
-            if (!@move_uploaded_file($tmp, $base . '.' . $ext)) {
-                echo json_encode(['status' => 1, 'error' => 'Could not save uploaded file.']);
-                exit;
-            }
-            $showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
-            $vignette = !empty($_POST['Vignette']) ? 1 : 0;
-            $offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
-            $offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
-            $DB->Clear();
-            $DB->Execute('UPDATE ' . DB_PREFIX . 'park SET has_banner = 1, banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE park_id = ' . $park_id);
-            // $DB->Execute() is void; the YapoMysql layer can silently swallow
-            // failures (sql_mode=STRICT etc). Verify the update landed by
-            // re-reading has_banner. If it didn't, roll back the file so we
-            // don't leave an orphan whose flag is still 0.
-            $DB->Clear();
-            $verify = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id);
-            if (!$verify || !$verify->Next() || (int)$verify->has_banner !== 1) {
-                @unlink($base . '.' . $ext);
-                echo json_encode(['status' => 1, 'error' => 'Saved file but could not update the database. Please try again.']);
-                exit;
-            }
-            echo json_encode(['status' => 0]);
-            exit;
-        }
-
-        echo json_encode(['status' => 1, 'error' => 'Unknown action.']);
-        exit;
+        $this->load_model('Banner');
+        $this->Banner->handle_ajax(
+            'Park',
+            $action,
+            $park_id,
+            $this->session->token,
+            $_POST,
+            $_FILES,
+        );
     }
 
 }

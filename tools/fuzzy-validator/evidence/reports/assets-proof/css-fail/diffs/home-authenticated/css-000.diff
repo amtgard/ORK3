@@ -1,0 +1,7 @@
+--- baseline/css-000
++++ candidate/css-000
+@@ -80,3 +80,4 @@
+ 	--ork-blue-link:     #63b3ed;  /* Table links in dark mode */
+ 	--ork-teal-accent:   #4fd1c5;  /* Lighter teal, readable on dark bg */
+ }
++X

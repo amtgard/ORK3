@@ -1,0 +1,287 @@
+{
+  "schemaVersion": 1,
+  "setpoints": {
+    "20260707T224643Z-608f5b18-1d9fef8a07db63d0.zip": {
+      "gitSha": "608f5b18",
+      "capturedAt": "2026-07-07T22:00:00Z",
+      "contentSha256": "1d9fef8a07db63d09c799e5b3c60c4394b011546671a7e7bc797b6fc43c5dd5e",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 3
+    },
+    "20260708T200305Z-40f4fa2c-63e14e488ffb0074.zip": {
+      "gitSha": "40f4fa2c",
+      "capturedAt": "2026-07-08T20:03:05Z",
+      "contentSha256": "63e14e488ffb0074ab52a612c5bca766e06e5ae252724d406d26eeefd9775252",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 26
+    },
+    "20260708T202710Z-40f4fa2c-475cb1e88995ea50.zip": {
+      "gitSha": "40f4fa2c",
+      "capturedAt": "2026-07-08T20:27:10Z",
+      "contentSha256": "475cb1e88995ea50c9749ebf57a51930ff78dbb875465831fc040e27a30c1214",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 26
+    },
+    "20260708T203739Z-40f4fa2c-f57c83277eff1e3f.zip": {
+      "gitSha": "40f4fa2c",
+      "capturedAt": "2026-07-08T20:37:39Z",
+      "contentSha256": "f57c83277eff1e3fe374ce6648d71ef19f30a60677a707b2b574043b54d21adf",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 26
+    },
+    "20260708T210408Z-40f4fa2c-8c3e8c67a96f30bc.zip": {
+      "gitSha": "40f4fa2c",
+      "capturedAt": "2026-07-08T21:04:08Z",
+      "contentSha256": "8c3e8c67a96f30bcb735fefcf3c701d34ec2259acbf8a624d0cd376651c8f42d",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 26
+    },
+    "20260709T115402Z-e3424d8d-ff8a75e835fae324.zip": {
+      "gitSha": "e3424d8d",
+      "capturedAt": "2026-07-09T11:54:02Z",
+      "contentSha256": "ff8a75e835fae3248956877814b0b948b0e5e39e22bf8e8f02b1500540c568ca",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 28
+    },
+    "20260709T115759Z-1a9074bd-ceba7bb0f585398f.zip": {
+      "gitSha": "1a9074bd",
+      "capturedAt": "2026-07-09T11:57:59Z",
+      "contentSha256": "ceba7bb0f585398f5ce3ed3d8f45482b5911a1ac4fe390c5a8754c055ce6ad1d",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
+    },
+    "20260709T115950Z-ace42b47-45a67d7dbbbc06ed.zip": {
+      "gitSha": "ace42b47",
+      "capturedAt": "2026-07-09T11:59:50Z",
+      "contentSha256": "45a67d7dbbbc06ed1091e9febbf0574648c878a75ca9035279d73d30e6c47e8c",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
+    },
+    "20260709T120305Z-f3803e49-bd94cb83b9a612bc.zip": {
+      "gitSha": "f3803e49",
+      "capturedAt": "2026-07-09T12:03:05Z",
+      "contentSha256": "bd94cb83b9a612bc5333b52b7a4dcb92c620bb631fc0e3d389fa3c0f2fc95afb",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
+    },
+    "20260709T131018Z-e72ab1d8-4c7384d15f151fc2.zip": {
+      "gitSha": "e72ab1d8",
+      "capturedAt": "2026-07-09T13:10:18Z",
+      "contentSha256": "4c7384d15f151fc2e20b7e2ae5e85b2cbef318c45777699f86c8a3820334d60d",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
+    },
+    "20260709T132003Z-9ee7e50f-534b10cf31f823bd.zip": {
+      "gitSha": "9ee7e50f",
+      "capturedAt": "2026-07-09T13:20:03Z",
+      "contentSha256": "534b10cf31f823bd48c37157f6183db12e7ea9a70c08114277442e900651ea76",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
+    },
+    "20260709T173049Z-1591950d-6b22e991bb478256.zip": {
+      "gitSha": "1591950d",
+      "capturedAt": "2026-07-09T17:30:49Z",
+      "contentSha256": "6b22e991bb478256e624a82c7d1c1670c1a66f654b53ea2aa1dc45c11f431672",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
+    },
+    "20260710T205044Z-b19fb375-f078d1411b72efe5.zip": {
+      "gitSha": "b19fb375",
+      "capturedAt": "2026-07-10T20:50:44Z",
+      "contentSha256": "f078d1411b72efe51ea49b74df20a3cebfd975b942878b471bcd623819bec910",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
+    },
+    "20260712T221041Z-c330d69b-af9ae3139c2ada41.zip": {
+      "gitSha": "c330d69b",
+      "capturedAt": "2026-07-12T22:10:41Z",
+      "contentSha256": "af9ae3139c2ada4158d197816285dfe2ca75b2612fbe89447b2f5bed7d38576c",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
+    },
+    "20260712T233808Z-b4ddc98c-810b9accf0e0c8c8.zip": {
+      "gitSha": "b4ddc98c",
+      "capturedAt": "2026-07-12T23:38:08Z",
+      "contentSha256": "810b9accf0e0c8c8498b5f3abbe4f31b6288c9033486b4c1f915846c9f1bbacc",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
+    },
+    "20260713T132354Z-d17c1ebc-cd44d7ec32e13bcf.zip": {
+      "gitSha": "d17c1ebc",
+      "capturedAt": "2026-07-13T13:23:54Z",
+      "contentSha256": "cd44d7ec32e13bcf303d4489bfc405ad0d231c10034023e587621549227e78bb",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
+    },
+    "20260713T140302Z-0e76d981-187fdf67eff9bede.zip": {
+      "gitSha": "0e76d981",
+      "capturedAt": "2026-07-13T14:03:02Z",
+      "contentSha256": "187fdf67eff9bede7aad4bb000089ec42b2d7dd91a1b630d179549597aad62a2",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
+    },
+    "20260713T161319Z-0e76d981-ae00423ddd53e412.zip": {
+      "gitSha": "0e76d981",
+      "capturedAt": "2026-07-13T16:13:19Z",
+      "contentSha256": "ae00423ddd53e4128b40f35f5dfb6b9508fcf01291651c1c8ffcfc76a13f9139",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
+    },
+    "20260713T162337Z-bed5e87d-7d1c3c41e8ebe338.zip": {
+      "gitSha": "bed5e87d",
+      "capturedAt": "2026-07-13T16:23:37Z",
+      "contentSha256": "7d1c3c41e8ebe3386f899710733fac357ea6bf47a9f75cfa3543c863eb259ade",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
+    },
+    "20260714T032101Z-3cd6d803-b5bf99b9776808d8.zip": {
+      "gitSha": "3cd6d803",
+      "capturedAt": "2026-07-14T03:21:01Z",
+      "contentSha256": "b5bf99b9776808d82b052171f78718fd47e1b60eb0bd459204eb82c49f7d63ba",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 30
+    },
+    "20260718T004158Z-7631d0ba-4a87bda41c7efac6.zip": {
+      "gitSha": "7631d0ba",
+      "capturedAt": "2026-07-18T00:41:58Z",
+      "contentSha256": "4a87bda41c7efac6b14a29540540a99829d2945f0555c58c262b621756de9594",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 20
+    },
+    "20260718T021458Z-7631d0ba-143cce8249789b4b.zip": {
+      "gitSha": "7631d0ba",
+      "capturedAt": "2026-07-18T02:14:58Z",
+      "contentSha256": "143cce8249789b4b6ce6847085ce659dde5933a20cef0d49df0ead179b694cab",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 20
+    },
+    "20260718T022903Z-7631d0ba-f347679edd270573.zip": {
+      "gitSha": "7631d0ba",
+      "capturedAt": "2026-07-18T02:29:03Z",
+      "contentSha256": "f347679edd270573ab7a5ad9948034468aa2d74bc4311b4330a13da67f5c4201",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 20
+    },
+    "20260718T024146Z-7631d0ba-8dd18cc9c57c7fe9.zip": {
+      "gitSha": "7631d0ba",
+      "capturedAt": "2026-07-18T02:41:46Z",
+      "contentSha256": "8dd18cc9c57c7fe96c67397a42ec12eafc58a5594cb7e18be47f281d606297c9",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 20
+    },
+    "20260718T030809Z-7631d0ba-fd37ea34a9523a28.zip": {
+      "gitSha": "7631d0ba",
+      "capturedAt": "2026-07-18T03:08:09Z",
+      "contentSha256": "fd37ea34a9523a28c11f9a1eeb2956b0afc6d1ce93b664e75cbcb9345bae765a",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 20
+    },
+    "20260718T230634Z-671c108b-b16eae2472f1daa9.zip": {
+      "gitSha": "671c108b",
+      "capturedAt": "2026-07-18T23:06:34Z",
+      "contentSha256": "b16eae2472f1daa93befcda3eff9b9f86cf6c1dcc45150b419a2775e865d04f6",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 20
+    },
+    "20260719T042339Z-671c108b-f95bafa0edb03f53.zip": {
+      "gitSha": "671c108b",
+      "capturedAt": "2026-07-19T04:23:39Z",
+      "contentSha256": "f95bafa0edb03f530c0c00aa316ae4d1e26da05e4e46db18b57168f4275760c8",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 20
+    },
+    "20260719T124448Z-671c108b-149b83ec1220a285.zip": {
+      "gitSha": "671c108b",
+      "capturedAt": "2026-07-19T12:44:48Z",
+      "contentSha256": "149b83ec1220a28585303611843acfd4d7d6e401e7baa816f242544bb51f115e",
+      "profiles": [
+        "test",
+        "mirror"
+      ],
+      "pageCount": 20
+    }
+  },
+  "latestBundle": "20260719T124448Z-671c108b-149b83ec1220a285.zip",
+  "driveFolder": "ORK3 Fuzzy Setpoints"
+}

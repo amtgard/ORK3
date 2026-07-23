@@ -22,7 +22,7 @@
 				<li><a href='<?=UIR ?>Admin/claimplayer/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Move Player</a></li>
 				<li><a href='<?=UIR ?>Admin/mergeplayer/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Merge Players</a></li>
 				<li><a href='<?=UIR ?>Admin/suspendplayer/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Suspensions</a></li>
-				<?php if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)) : ?>
+				<?php if (!empty($CanResetWaivers)) : ?>
 				<li><a href='<?=UIR ?>Admin/resetwaivers/kingdom/<?=$KingdomInfo['KingdomId'] ?>' class='confirm-reset-waivers'>Reset Waivers</a></li>
 			<?php endif; ?>
 			</ul>
@@ -36,7 +36,7 @@
 		<li><a href='<?=UIR ?>Admin/downloadkingdom/<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Download <?=$IsPrinz?'Principality':'Kingdom' ?> Dataset</a></li>
 		<li><a href='<?=UIR ?>Tournament/create&KingdomId=<?=$KingdomInfo['KingdomId'] ?>' class='unimplemented'>Create Tournament</a></li>	</ul>
 </div>
-<?php if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $KingdomInfo['KingdomId'], AUTH_EDIT)) : ?>
+<?php if (!empty($CanEditKingdomReports)) : ?>
 <div class='info-container'>
 	<h3><?=$KingdomInfo['KingdomName'] ?> Reports</h3>
 	<ul>

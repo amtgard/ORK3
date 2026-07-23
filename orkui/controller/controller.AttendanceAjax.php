@@ -27,25 +27,11 @@ class Controller_AttendanceAjax extends Controller
                 (float)($_POST['Credits'] ?? 1)
             );
             if ($r['Status'] == 0) {
-                // Auto-reactivate the player's profile if marked inactive. Adding
-                // attendance for an inactive player implicitly reactivates them.
-                $reactivated = 0;
-                if ($mundaneId > 0) {
-                    global $DB;
-                    $DB->Clear();
-                    $chk = $DB->DataSet("SELECT active FROM " . DB_PREFIX . "mundane WHERE mundane_id = " . $mundaneId . " LIMIT 1");
-                    if ($chk && $chk->Size() > 0 && $chk->Next() && (int)$chk->active === 0) {
-                        $DB->Clear();
-                        $DB->Execute("UPDATE " . DB_PREFIX . "mundane SET active = 1 WHERE mundane_id = " . $mundaneId);
-                        $reactivated = 1;
-                    }
-                }
-                if ($mundaneId) {
-                    $this->load_model('Player');
-                    $key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundaneId]);
-                    Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $key);
-                }
-                echo json_encode(['status' => 0, 'attendanceId' => (int)($r['Detail'] ?? 0), 'reactivated' => $reactivated]);
+                echo json_encode([
+                    'status' => 0,
+                    'attendanceId' => (int)($r['Detail'] ?? 0),
+                    'reactivated' => (int)($r['Reactivated'] ?? 0),
+                ]);
             } else {
                 echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
             }
@@ -83,7 +69,8 @@ class Controller_AttendanceAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Invalid date']);
                 exit;
             }
-            $wx = Ork3::$Lib->weather->archive_for_date($park_id, $date);
+            $this->load_model('Attendance');
+            $wx = $this->Attendance->get_weather_archive_for_park($park_id, $date);
             echo json_encode(['status' => 0, 'weather' => $wx]);
         } else {
             echo json_encode(['status' => 1, 'error' => 'Unknown action']);
@@ -116,7 +103,8 @@ class Controller_AttendanceAjax extends Controller
             echo json_encode(['status' => 1, 'error' => 'Invalid date']);
             exit;
         }
-        $wx = Ork3::$Lib->weather->archive_for_coords((float)$lat, (float)$lng, $date);
+        $this->load_model('Attendance');
+        $wx = $this->Attendance->get_weather_archive_for_coords((float)$lat, (float)$lng, $date);
         echo json_encode(['status' => 0, 'weather' => $wx]);
         exit;
     }
@@ -155,15 +143,11 @@ class Controller_AttendanceAjax extends Controller
             }
             $r = $this->Attendance->update_attendance($this->session->token, $attendance_id, $date, $credits, $classId, $mundaneId);
             if ($r['Status'] == 0) {
-                $editorId      = (int)$this->session->user_id;
-                $editorPersona = '';
-                global $DB;
-                $DB->Clear();
-                $row = $DB->DataSet("SELECT persona FROM " . DB_PREFIX . "mundane WHERE mundane_id = " . $editorId . " LIMIT 1");
-                if ($row && $row->Size() > 0 && $row->Next()) {
-                    $editorPersona = $row->persona;
-                }
-                echo json_encode(['status' => 0, 'editor_id' => $editorId, 'editor_persona' => $editorPersona]);
+                echo json_encode([
+                    'status' => 0,
+                    'editor_id' => (int)($r['EditorId'] ?? 0),
+                    'editor_persona' => (string)($r['EditorPersona'] ?? ''),
+                ]);
             } else {
                 echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
             }

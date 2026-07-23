@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "pageId": "event-list",
+  "imageWidth": 1280,
+  "imageHeight": 1140,
+  "calibratedAt": "2026-07-19T04:20:16Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [],
+  "manualZones": [],
+  "calibratedFromCommit": "671c108b"
+}

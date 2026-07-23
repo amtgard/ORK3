@@ -7,7 +7,10 @@ class Model_Attendance extends Model
         parent::__construct();
         $this->Attendance = new APIModel('Attendance');
         $this->Report = new APIModel('Report');
-        $this->Search = new JSONMOdel('Search');
+        $this->Search = new JSONModel('Search');
+        $this->Event = new APIModel('Event');
+        $this->Player = new APIModel('Player');
+        $this->Weather = new APIModel('Weather');
         $this->Log = $LOG;
     }
 
@@ -19,16 +22,12 @@ class Model_Attendance extends Model
     public function add_attendance($token, $date, $park_id, $detail_id, $mundane_id, $class_id, $credits)
     {
         logtrace("Model_Attendance->add_attendance()", array($token, $date, $park_id, $detail_id, $mundane_id, $class_id, $credits));
-        $r = $this->Attendance->AddAttendance(array('Token' => $token, 'Date' => $date, 'ParkId' => $park_id, 'EventCalendarDetailId' => $detail_id, 'MundaneId' => $mundane_id, 'ClassId' => $class_id, 'Credits' => $credits));
-        if (isset($r['Status']) && $r['Status'] == 0 && $mundane_id) {
-            $this->bust_player_attendance_caches($mundane_id);
-        }
-        return $r;
+        return $this->Attendance->AddAttendance(array('Token' => $token, 'Date' => $date, 'ParkId' => $park_id, 'EventCalendarDetailId' => $detail_id, 'MundaneId' => $mundane_id, 'ClassId' => $class_id, 'Credits' => $credits));
     }
 
     public function update_attendance($token, $attendance_id, $date, $credits, $class_id, $mundane_id)
     {
-        $r = $this->Attendance->SetAttendance(array(
+        return $this->Attendance->SetAttendance(array(
             'Token'        => $token,
             'AttendanceId' => $attendance_id,
             'MundaneId'    => $mundane_id,
@@ -36,44 +35,16 @@ class Model_Attendance extends Model
             'Credits'      => $credits,
             'ClassId'      => $class_id,
         ));
-        if ($r['Status'] == 0 && $mundane_id) {
-            $this->bust_player_attendance_caches($mundane_id);
-        }
-        return $r;
     }
 
     public function lookup_by_faces($request)
     {
-        $p = new APIModel("Player");
-        return $p->LookupByFaces($request);
+        return $this->Player->LookupByFaces($request);
     }
 
     public function delete_attendance($token, $attendance_id, $mundane_id = null)
     {
-        $r = $this->Attendance->RemoveAttendance(array('Token' => $token, 'AttendanceId' => $attendance_id ));
-        if ($r['Status'] == 0 && $mundane_id) {
-            $this->bust_player_attendance_caches($mundane_id);
-        }
-        return $r;
-    }
-
-    // Bust every cache that holds a player's attendance shape: the attendance
-    // list, the awards/classes bundle (Class credits change when attendance is
-    // reconciled), and the first/last sign-in date caches surfaced on the
-    // profile header.
-    private function bust_player_attendance_caches($mundane_id)
-    {
-        $mid = (int)$mundane_id;
-        if ($mid <= 0) {
-            return;
-        }
-        $cache = Ork3::$Lib->ghettocache;
-        $assocKey = $cache->key(['MundaneId' => $mid]);
-        $idKey    = $cache->key(array($mid));
-        $cache->bust('Model_Player.fetch_player_details', $assocKey);
-        $cache->bust('Model_Player.fetch_player_attendance', $assocKey);
-        $cache->bust('Player.get_latest_attendance_date', $idKey);
-        $cache->bust('Player.get_earliest_attendance_date', $idKey);
+        return $this->Attendance->RemoveAttendance(array('Token' => $token, 'AttendanceId' => $attendance_id ));
     }
 
     public function get_attendance_for_date($park_id, $date)
@@ -113,8 +84,6 @@ class Model_Attendance extends Model
         return $r;
     }
 
-
-
     public function get_player_last_class($mundane_id)
     {
         return $this->Attendance->GetPlayerLastClass(['MundaneId' => (int)$mundane_id]);
@@ -142,22 +111,75 @@ class Model_Attendance extends Model
 
     public function get_adjacent_park_dates($park_id, $date)
     {
-        global $DB;
-        $pid  = (int)$park_id;
-        $date = date('Y-m-d', strtotime($date));
-        $DB->Clear();
-        $prev = null;
-        $r = $DB->DataSet("SELECT DATE(date) AS att_date FROM " . DB_PREFIX . "attendance WHERE park_id = {$pid} AND date < '{$date}' ORDER BY date DESC LIMIT 1");
-        if ($r && $r->Next()) {
-            $prev = $r->att_date;
+        $r = $this->Attendance->GetAdjacentParkDates(['ParkId' => (int)$park_id, 'Date' => $date]);
+        if (($r['Status'] ?? 1) == 0 && is_array($r['Detail'] ?? null)) {
+            return $r['Detail'];
         }
-        $DB->Clear();
-        $next = null;
-        $r = $DB->DataSet("SELECT DATE(date) AS att_date FROM " . DB_PREFIX . "attendance WHERE park_id = {$pid} AND date > '{$date}' ORDER BY date ASC LIMIT 1");
-        if ($r && $r->Next()) {
-            $next = $r->att_date;
+        return ['prev' => null, 'next' => null];
+    }
+
+    public function get_active_events_at_scope($scope, $scope_id, $date)
+    {
+        return $this->Event->GetActiveEventsAtScope([
+            'Scope'   => $scope,
+            'ScopeId' => (int)$scope_id,
+            'Date'    => $date,
+        ]);
+    }
+
+    public function get_weather_archive_for_park($park_id, $date)
+    {
+        $r = $this->Weather->GetArchiveForPark(['ParkId' => (int)$park_id, 'Date' => $date]);
+        if (($r['Status'] ?? 1) == 0) {
+            return $r['Detail']['Weather'] ?? null;
         }
-        return ['prev' => $prev, 'next' => $next];
+        return null;
+    }
+
+    public function get_weather_archive_for_coords($lat, $lng, $date)
+    {
+        $r = $this->Weather->GetArchiveForCoords(['Lat' => $lat, 'Lng' => $lng, 'Date' => $date]);
+        if (($r['Status'] ?? 1) == 0) {
+            return $r['Detail']['Weather'] ?? null;
+        }
+        return null;
+    }
+
+    /**
+     * Merge active class list with per-player progression from domain credits.
+     *
+     * @param list<array<string, mixed>> $classes
+     * @return list<array<string, mixed>>
+     */
+    public function enrich_classes_with_progress(int $mundane_id, array $classes): array
+    {
+        $progress = $this->Player->ComputeClassProgress(['MundaneId' => $mundane_id]);
+        if (($progress['Status'] ?? 1) != 0) {
+            return array_values($classes);
+        }
+
+        $byClass = [];
+        foreach ($progress['Detail'] ?? [] as $row) {
+            $byClass[(int)($row['ClassId'] ?? 0)] = $row;
+        }
+
+        $enriched = [];
+        foreach (array_values($classes) as $c) {
+            $cid = (int)($c['ClassId'] ?? 0);
+            if (isset($byClass[$cid])) {
+                $c['Credits'] = $byClass[$cid]['Credits'];
+                $c['Level'] = $byClass[$cid]['Level'];
+                $c['ToNext'] = $byClass[$cid]['ToNext'];
+            } else {
+                $levelInfo = ClassLevel::computeClassLevel(0.0);
+                $c['Credits'] = 0.0;
+                $c['Level'] = $levelInfo['Level'];
+                $c['ToNext'] = $levelInfo['ToNext'];
+            }
+            $enriched[] = $c;
+        }
+
+        return $enriched;
     }
 
     public function get_attendance_links($token, $scope, $id, $event_calendardetail_id = 0)

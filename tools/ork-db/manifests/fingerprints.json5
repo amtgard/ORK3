@@ -1,0 +1,35 @@
+{
+  "kingdoms": [
+    { "id": 100001, "name": "Empire of Ashkara", "abbreviation": "EAK", "parent_kingdom_id": 0 },
+    { "id": 100002, "name": "Kingdom of Meridia", "abbreviation": "KMR", "parent_kingdom_id": 0 },
+    { "id": 100003, "name": "Sultanate of Zanzibarr", "abbreviation": "SZ", "parent_kingdom_id": 0 },
+    { "id": 100004, "name": "Tsardom of Vyatka", "abbreviation": "TVK", "parent_kingdom_id": 0 },
+    { "id": 100005, "name": "Grand Duchy of Litavia", "abbreviation": "GDL", "parent_kingdom_id": 100001 }
+  ],
+  "park_count_by_seed": {
+    "42": 20
+  },
+  "parks_per_kingdom_range": [2, 6],
+  "real_kingdom_name_blocklist": [
+    "Northern Lights",
+    "Dragonspine",
+    "Wetlands",
+    "Burning Lands",
+    "Emerald Hills",
+    "Golden Plains",
+    "Iron Mountains",
+    "Rising Winds",
+    "Valley",
+    "Wolfs Eye"
+  ],
+  "render_seed_default": 42,
+  "content_seed": 42,
+  "content_seed_basis": null,
+  "schema_fingerprint": null,
+  "catalog_hashes": {
+    "award": "sha256:aa39e5312c714dbedcd5adc93c15a5b85196bfd06a4a0666d28a6dc540a368d3",
+    "class": "sha256:6108479ca17b6e80e9baa87c8536150eb5ac3011ea7f603ddeb1c52b19ad580e",
+    "parktitle": "sha256:ccc8cc59bb4d871451d66f16c2e5578a63b6510e4b13b4e3797e04495ab7aa5b",
+    "pronoun": "sha256:9c8b8cdb13a14abc6ca3feca51fc456a5437dad22b0cfc5c81f7a9cae38f3e0e"
+  }
+}

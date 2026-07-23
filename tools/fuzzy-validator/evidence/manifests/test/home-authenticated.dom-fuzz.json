@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "pageId": "home-authenticated",
+  "calibratedAt": "2026-07-07T22:43:26Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]",
+      "mode": "attributes",
+      "attrs": [
+        "data-session-token"
+      ],
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "calibratedFromCommit": "0380ae0a"
+}

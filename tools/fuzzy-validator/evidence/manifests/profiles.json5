@@ -1,0 +1,19 @@
+{
+  "profiles": {
+    "test": {
+      "orkDbUse": "dev",
+      "label": "Sandbox (evidence)",
+      "thresholds": {
+        "assetsMinScore": 1.0,
+        "domMinScore": 1.0,
+        "visualMinScore": 1.0
+      },
+      "auth": {
+        "username": "megiddo",
+        "passwordEnv": "ORK3_E2E_TEST_PASSWORD",
+        "passwordDefault": "test-db-player"
+      }
+    }
+  },
+  "defaultProfiles": ["test"]
+}

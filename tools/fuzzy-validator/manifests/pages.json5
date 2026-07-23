@@ -1,0 +1,2686 @@
+{
+  "defaults": {
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "repeat": 5,
+    "waitAfterMs": 500,
+    "stableHeightMs": 0,
+    "auth": "none"
+  },
+  "pages": [
+    {
+      "id": "home-anonymous",
+      "url": "./index.php?Route=",
+      "auth": "none",
+      "readySelector": "body",
+      "waitAfterMs": 3000,
+      "skip": true,
+      "notes": "Class: Home \u2014 skip visual capture; deferred inline JS inconsistent across runs (home-authenticated covers Home)"
+    },
+    {
+      "id": "home-authenticated",
+      "url": "./index.php?Route=",
+      "auth": "login",
+      "readySelector": "#main, body",
+      "waitAfterMs": 1500,
+      "stableHeightMs": 800,
+      "driftClass": "natural",
+      "notes": "Class: Home \u2014 post-login home; RSVP/event widgets + nav (refuzz on setpoint refresh)"
+    },
+    {
+      "id": "player-profile",
+      "url": "./index.php?Route=Player/profile",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "driftClass": "stable",
+      "notes": "Class: Player \u2014 logged-in player profile default route (rsvp.spec.ts)"
+    },
+    {
+      "id": "player-profile-sandbox",
+      "url": "./index.php?Route=Player/profile/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "driftClass": "natural",
+      "notes": "Class: Player \u2014 sandbox player id 1 (player-profile.spec.ts)"
+    },
+    {
+      "id": "park-profile",
+      "url": "./index.php?Route=Park/profile/1",
+      "auth": "login",
+      "skip": true,
+      "notes": "Class: Park \u2014 skip twin; Park/profile/{id} covered by active park-auth-sandbox. Mirror park id 1 historically drifted assets."
+    },
+    {
+      "id": "kingdom-profile",
+      "url": "./index.php?Route=Kingdom/profile/1",
+      "auth": "login",
+      "driftClass": "stable",
+      "notes": "Class: Kingdom \u2014 kingdom id 1 mirror; sandbox uses 100001+ (kingdom-profile.spec.ts)"
+    },
+    {
+      "id": "kingdom-auth-sandbox",
+      "url": "./index.php?Route=Kingdom/profile/100001",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "driftClass": "natural",
+      "notes": "V-02 auth \u2014 sandbox Empire of Ashkara permissions host; mirror id absent \u2192 home chrome"
+    },
+    {
+      "id": "park-auth-sandbox",
+      "url": "./index.php?Route=Park/profile/1000001",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "driftClass": "natural",
+      "notes": "V-02 auth / V-03 banner \u2014 sandbox Silver Fen park host; mirror id absent \u2192 home chrome"
+    },
+    {
+      "id": "event-list",
+      "url": "./index.php?Route=Event",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "driftClass": "natural",
+      "notes": "Class: Event \u2014 event list landing (event-planning.spec.ts)"
+    },
+    {
+      "id": "event-detail",
+      "url": "./index.php?Route=Event/detail/4/1",
+      "auth": "login",
+      "notes": "Class: Event \u2014 detail event 4 / detail 1; enabled with longer waits (was skip: known hang). Residual capture risk if fullPage still hangs.",
+      "waitAfterMs": 2500,
+      "stableHeightMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural"
+    },
+    {
+      "id": "event-detail-rsvp",
+      "url": "./index.php?Route=Event/detail/80000/1",
+      "auth": "none",
+      "skip": true,
+      "notes": "V-01 RSVP \u2014 skip visual capture; Event/detail fullPage hang (same class as event-detail). Sandbox pin event 80000 / detail 1 for R-01 e2e"
+    },
+    {
+      "id": "event-detail-auth-rsvp",
+      "url": "./index.php?Route=Event/detail/80000/1",
+      "auth": "login",
+      "skip": true,
+      "notes": "V-01 RSVP \u2014 skip visual capture; auth detail hang. Use EventRsvpAjaxTest + rsvp.spec.ts for behavior"
+    },
+    {
+      "id": "event-index-rsvp",
+      "url": "./index.php?Route=Event/index/80000",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "driftClass": "natural",
+      "notes": "V-01 RSVP \u2014 Spring War index RSVP batch counts; sandbox event 80000; mirror id absent \u2192 home chrome"
+    },
+    {
+      "id": "event-index-rsvp-gok",
+      "url": "./index.php?Route=Event/index/80003",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "driftClass": "natural",
+      "notes": "V-01 RSVP \u2014 Gathering of Kingdoms index variant; sandbox event 80003; mirror \u2192 home chrome"
+    },
+    {
+      "id": "event-template",
+      "url": "./index.php?Route=Event/template/80000",
+      "auth": "login",
+      "waitAfterMs": 2000,
+      "notes": "Class: Event \u2014 template event 80000; enabled with longer waits (was skip: Playwright goto hang).",
+      "stableHeightMs": 800,
+      "readySelector": "#main, body",
+      "driftClass": "natural"
+    },
+    {
+      "id": "event-index",
+      "url": "./index.php?Route=Event/index/1",
+      "auth": "login",
+      "skip": true,
+      "notes": "V-00 only \u2014 skip visual capture; mirror event table row href churn (time-sensitive list). R-05 gate coverage via event-index-rsvp* + event-create (v-05-event-validation.md)"
+    },
+    {
+      "id": "event-create",
+      "url": "./index.php?Route=Event/create/1",
+      "auth": "login",
+      "driftClass": "stable",
+      "notes": "Class: Event \u2014 create form park id 1 (event-detail.spec.ts)"
+    },
+    {
+      "id": "event-kingdom",
+      "url": "./index.php?Route=Event/kingdom/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "driftClass": "natural",
+      "notes": "DEAD ROUTE \u2014 Controller_Event has no kingdom/park action (empty __call). Excluded from UI include list.",
+      "skip": true
+    },
+    {
+      "id": "event-park",
+      "url": "./index.php?Route=Event/park/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "driftClass": "natural",
+      "notes": "DEAD ROUTE \u2014 Controller_Event has no kingdom/park action (empty __call). Excluded from UI include list.",
+      "skip": true
+    },
+    {
+      "id": "admin-dashboard",
+      "url": "./index.php?Route=Admin",
+      "auth": "login",
+      "driftClass": "stable",
+      "notes": "Class: Admin \u2014 dashboard (admin-dashboard.spec.ts)"
+    },
+    {
+      "id": "admin-state-of-amtgard",
+      "url": "./index.php?Route=Admin/stateofamtgard",
+      "auth": "login",
+      "driftClass": "stable",
+      "notes": "Class: Admin \u2014 state of amtgard report (admin-dashboard.spec.ts)"
+    },
+    {
+      "id": "admin-permissions",
+      "url": "./index.php?Route=Admin/permissions",
+      "auth": "login",
+      "driftClass": "stable",
+      "notes": "Class: Admin \u2014 global permissions (auth-permissions.spec.ts)"
+    },
+    {
+      "id": "search",
+      "url": "./index.php?Route=Search",
+      "auth": "none",
+      "waitAfterMs": 3000,
+      "notes": "ENABLED registry expansion \u2014 template Search/index",
+      "driftClass": "natural"
+    },
+    {
+      "id": "search-unitsearch",
+      "url": "./index.php?Route=Search/unitsearch",
+      "auth": "login",
+      "notes": "Class: Search \u2014 unit search; enabled for registry expansion",
+      "waitAfterMs": 2000,
+      "stableHeightMs": 800,
+      "driftClass": "natural"
+    },
+    {
+      "id": "attendance",
+      "url": "./index.php?Route=Attendance",
+      "auth": "none",
+      "notes": "ENABLED registry expansion \u2014 template Attendance/index",
+      "waitAfterMs": 2000,
+      "driftClass": "natural"
+    },
+    {
+      "id": "sign-in-invalid",
+      "url": "./index.php?Route=SignIn/index/abc",
+      "auth": "none",
+      "notes": "Class: Attendance \u2014 invalid token error page",
+      "waitAfterMs": 1000,
+      "driftClass": "natural"
+    },
+    {
+      "id": "reports-officer-directory",
+      "url": "./index.php?Route=Reports/kingdom_officer_directory",
+      "auth": "none",
+      "notes": "ENABLED registry expansion \u2014 template Reports/kingdom_officer_directory",
+      "waitAfterMs": 2000,
+      "driftClass": "natural"
+    },
+    {
+      "id": "reports-voting-eligible",
+      "url": "./index.php?Route=Reports/voting_eligible&KingdomId=14",
+      "auth": "login",
+      "driftClass": "natural",
+      "notes": "Class: Reports \u2014 voting eligible kingdom id 14 mirror (reports.spec.ts)"
+    },
+    {
+      "id": "reports-ladder-grid",
+      "url": "./index.php?Route=Reports/ladder_grid&KingdomId=14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "stableHeightMs": 1000,
+      "driftClass": "natural",
+      "notes": "Class: Reports \u2014 ladder grid kingdom id 14 mirror (reports.spec.ts)"
+    },
+    {
+      "id": "reports-attendance",
+      "url": "./index.php?Route=Reports/attendance&KingdomId=14",
+      "auth": "login",
+      "driftClass": "natural",
+      "notes": "Class: Reports \u2014 attendance report kingdom id 14 mirror (reports.spec.ts)"
+    },
+    {
+      "id": "live-stats",
+      "url": "./index.php?Route=Live/stats",
+      "auth": "login",
+      "notes": "Class: Infrastructure \u2014 live stats; DOM may be volatile on mirror",
+      "waitAfterMs": 1500,
+      "driftClass": "natural"
+    },
+    {
+      "id": "weather",
+      "url": "./index.php?Route=Weather",
+      "auth": "login",
+      "driftClass": "natural",
+      "notes": "Class: Infrastructure \u2014 weather widget; may need stubs in test env (lib-service.spec.ts)"
+    },
+    {
+      "id": "tournament",
+      "url": "./index.php?Route=Tournament",
+      "auth": "login",
+      "driftClass": "stable",
+      "notes": "Class: Infrastructure \u2014 tournament page (lib-service.spec.ts)"
+    },
+    {
+      "id": "health-endpoint",
+      "url": "./index.php?Route=Health",
+      "auth": "none",
+      "skip": true,
+      "notes": "Class: Infrastructure \u2014 plain-text health probe; skip visual capture (infrastructure.spec.ts)"
+    },
+    {
+      "id": "search-ajax-universal",
+      "url": "./index.php?Route=SearchAjax/universal&q=test",
+      "auth": "login",
+      "skip": true,
+      "notes": "Class: Search \u2014 AJAX JSON; skip visual capture (search.spec.ts)"
+    },
+    {
+      "id": "attendance-ajax-getday",
+      "url": "./index.php?Route=AttendanceAjax/park/1/getday",
+      "auth": "login",
+      "skip": true,
+      "notes": "Class: Attendance \u2014 AJAX JSON; skip visual capture (attendance.spec.ts)"
+    },
+    {
+      "id": "qr-link-api",
+      "url": "./index.php?Route=QR/link/abc",
+      "auth": "none",
+      "skip": true,
+      "notes": "Class: Attendance \u2014 JSON API; skip visual capture (attendance.spec.ts)"
+    },
+    {
+      "id": "era-phoenice-api",
+      "url": "./index.php?Route=EraPhoenice/today",
+      "auth": "none",
+      "skip": true,
+      "notes": "Class: Infrastructure \u2014 JSON API; skip visual capture (lib-service.spec.ts)"
+    },
+    {
+      "id": "kingdom-ics",
+      "url": "./index.php?Route=Kingdom/ics/1",
+      "auth": "login",
+      "skip": true,
+      "notes": "RESIDUAL SKIP \u2014 ICS calendar download (not HTML UI). Template Kingdom/ics/{id} remains on include list but not active-gated."
+    },
+    {
+      "id": "admin-auditlog",
+      "url": "./index.php?Route=Admin/auditlog",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/auditlog"
+    },
+    {
+      "id": "admin-authorization",
+      "url": "./index.php?Route=Admin/authorization",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/authorization"
+    },
+    {
+      "id": "admin-banplayer",
+      "url": "./index.php?Route=Admin/banplayer",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/banplayer"
+    },
+    {
+      "id": "admin-claimplayer",
+      "url": "./index.php?Route=Admin/claimplayer",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/claimplayer"
+    },
+    {
+      "id": "admin-claimplayer-2",
+      "url": "./index.php?Route=Admin/claimplayer/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/claimplayer/{id}"
+    },
+    {
+      "id": "admin-createevent",
+      "url": "./index.php?Route=Admin/createevent",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/createevent"
+    },
+    {
+      "id": "admin-createkingdom",
+      "url": "./index.php?Route=Admin/createkingdom",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/createkingdom"
+    },
+    {
+      "id": "admin-createpark",
+      "url": "./index.php?Route=Admin/createpark",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/createpark"
+    },
+    {
+      "id": "admin-createpark-2",
+      "url": "./index.php?Route=Admin/createpark/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/createpark/{id}"
+    },
+    {
+      "id": "admin-createplayer",
+      "url": "./index.php?Route=Admin/createplayer",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/createplayer"
+    },
+    {
+      "id": "admin-createplayer-2",
+      "url": "./index.php?Route=Admin/createplayer/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/createplayer/{id}"
+    },
+    {
+      "id": "admin-editkingdom",
+      "url": "./index.php?Route=Admin/editkingdom/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/editkingdom/{id}"
+    },
+    {
+      "id": "admin-editpark",
+      "url": "./index.php?Route=Admin/editpark",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/editpark"
+    },
+    {
+      "id": "admin-editpark-2",
+      "url": "./index.php?Route=Admin/editpark/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/editpark/{id}"
+    },
+    {
+      "id": "admin-editparks",
+      "url": "./index.php?Route=Admin/editparks/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/editparks/{id}"
+    },
+    {
+      "id": "admin-event",
+      "url": "./index.php?Route=Admin/event",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/event"
+    },
+    {
+      "id": "admin-event-2",
+      "url": "./index.php?Route=Admin/event/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/event/{id}"
+    },
+    {
+      "id": "admin-inactivekingdoms",
+      "url": "./index.php?Route=Admin/inactivekingdoms",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/inactivekingdoms"
+    },
+    {
+      "id": "admin-inactiveparks",
+      "url": "./index.php?Route=Admin/inactiveparks",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/inactiveparks"
+    },
+    {
+      "id": "admin-kingdom",
+      "url": "./index.php?Route=Admin/kingdom",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/kingdom"
+    },
+    {
+      "id": "admin-kingdom-2",
+      "url": "./index.php?Route=Admin/kingdom/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/kingdom/{id}"
+    },
+    {
+      "id": "admin-manageevent",
+      "url": "./index.php?Route=Admin/manageevent",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/manageevent"
+    },
+    {
+      "id": "admin-mergepark",
+      "url": "./index.php?Route=Admin/mergepark",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/mergepark"
+    },
+    {
+      "id": "admin-mergeplayer",
+      "url": "./index.php?Route=Admin/mergeplayer",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/mergeplayer"
+    },
+    {
+      "id": "admin-mergeplayer-2",
+      "url": "./index.php?Route=Admin/mergeplayer/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/mergeplayer/{id}"
+    },
+    {
+      "id": "admin-mergeunit",
+      "url": "./index.php?Route=Admin/mergeunit",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/mergeunit"
+    },
+    {
+      "id": "admin-moveplayer",
+      "url": "./index.php?Route=Admin/moveplayer",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/moveplayer"
+    },
+    {
+      "id": "admin-new-player-attendance",
+      "url": "./index.php?Route=Admin/new_player_attendance",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/new_player_attendance"
+    },
+    {
+      "id": "admin-park",
+      "url": "./index.php?Route=Admin/park",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/park"
+    },
+    {
+      "id": "admin-park-2",
+      "url": "./index.php?Route=Admin/park/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/park/{id}"
+    },
+    {
+      "id": "admin-permissions-2",
+      "url": "./index.php?Route=Admin/permissions/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/permissions/{id}"
+    },
+    {
+      "id": "admin-player",
+      "url": "./index.php?Route=Admin/player",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/player"
+    },
+    {
+      "id": "admin-player-2",
+      "url": "./index.php?Route=Admin/player/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/player/{id}"
+    },
+    {
+      "id": "admin-player-bak",
+      "url": "./index.php?Route=Admin/player_bak/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/player_bak/{id}"
+    },
+    {
+      "id": "admin-resetwaivers",
+      "url": "./index.php?Route=Admin/resetwaivers",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/resetwaivers"
+    },
+    {
+      "id": "admin-resetwaivers-2",
+      "url": "./index.php?Route=Admin/resetwaivers/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/resetwaivers/{id}"
+    },
+    {
+      "id": "admin-serverhealth",
+      "url": "./index.php?Route=Admin/serverhealth",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/serverhealth"
+    },
+    {
+      "id": "admin-serverhealth-weather-stats",
+      "url": "./index.php?Route=Admin/serverhealth_weather_stats",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/serverhealth_weather_stats"
+    },
+    {
+      "id": "admin-setkingdomofficers",
+      "url": "./index.php?Route=Admin/setkingdomofficers",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/setkingdomofficers"
+    },
+    {
+      "id": "admin-setparkofficers",
+      "url": "./index.php?Route=Admin/setparkofficers",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/setparkofficers"
+    },
+    {
+      "id": "admin-suspendplayer",
+      "url": "./index.php?Route=Admin/suspendplayer",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/suspendplayer"
+    },
+    {
+      "id": "admin-topparks",
+      "url": "./index.php?Route=Admin/topparks",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/topparks"
+    },
+    {
+      "id": "admin-topparks-2",
+      "url": "./index.php?Route=Admin/topparks/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/topparks/{id}"
+    },
+    {
+      "id": "admin-tournament",
+      "url": "./index.php?Route=Admin/tournament",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Legacy menu target; redirects to Tournament (no Admin tournament editor)"
+    },
+    {
+      "id": "admin-transferpark",
+      "url": "./index.php?Route=Admin/transferpark",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/transferpark"
+    },
+    {
+      "id": "admin-transferpark-2",
+      "url": "./index.php?Route=Admin/transferpark/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/transferpark/{id}"
+    },
+    {
+      "id": "admin-unit",
+      "url": "./index.php?Route=Admin/unit",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/unit"
+    },
+    {
+      "id": "admin-unit-2",
+      "url": "./index.php?Route=Admin/unit/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/unit/{id}"
+    },
+    {
+      "id": "admin-vacatekingdomofficer",
+      "url": "./index.php?Route=Admin/vacatekingdomofficer",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/vacatekingdomofficer"
+    },
+    {
+      "id": "admin-vacateparkofficer",
+      "url": "./index.php?Route=Admin/vacateparkofficer",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Admin/vacateparkofficer"
+    },
+    {
+      "id": "atlas-index",
+      "url": "./index.php?Route=Atlas",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Atlas/index"
+    },
+    {
+      "id": "atlas-index-2",
+      "url": "./index.php?Route=Atlas/index/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Atlas/index/{id}"
+    },
+    {
+      "id": "atlas-map",
+      "url": "./index.php?Route=Atlas/map",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Atlas/map"
+    },
+    {
+      "id": "atlas-map-2",
+      "url": "./index.php?Route=Atlas/map/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Atlas/map/{id}"
+    },
+    {
+      "id": "attendance-behold",
+      "url": "./index.php?Route=Attendance/behold/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Attendance/behold/{id}"
+    },
+    {
+      "id": "attendance-event",
+      "url": "./index.php?Route=Attendance/event/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Attendance/event/{id}"
+    },
+    {
+      "id": "attendance-index",
+      "url": "./index.php?Route=Attendance/index/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Attendance/index/{id}"
+    },
+    {
+      "id": "attendance-kingdom",
+      "url": "./index.php?Route=Attendance/kingdom/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Attendance/kingdom/{id}"
+    },
+    {
+      "id": "attendance-park",
+      "url": "./index.php?Route=Attendance/park",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Attendance/park"
+    },
+    {
+      "id": "attendance-park-2",
+      "url": "./index.php?Route=Attendance/park/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Attendance/park/{id}"
+    },
+    {
+      "id": "authorization-add-auth",
+      "url": "./index.php?Route=Authorization/add_auth/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "HTTP path is not a mutation API; redirects to Admin/authorization"
+    },
+    {
+      "id": "authorization-del-auth",
+      "url": "./index.php?Route=Authorization/del_auth/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "HTTP path is not a mutation API; redirects to Admin/authorization"
+    },
+    {
+      "id": "authorization-index",
+      "url": "./index.php?Route=Authorization",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Authorization/index"
+    },
+    {
+      "id": "authorization-index-2",
+      "url": "./index.php?Route=Authorization/index/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Authorization/index/{id}"
+    },
+    {
+      "id": "award-index",
+      "url": "./index.php?Route=Award",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Award/index"
+    },
+    {
+      "id": "award-index-2",
+      "url": "./index.php?Route=Award/index/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Award/index/{id}"
+    },
+    {
+      "id": "award-kingdom",
+      "url": "./index.php?Route=Award/kingdom/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Award/kingdom/{id}"
+    },
+    {
+      "id": "award-park",
+      "url": "./index.php?Route=Award/park/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Award/park/{id}"
+    },
+    {
+      "id": "event-create-2",
+      "url": "./index.php?Route=Event/create",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Event/create"
+    },
+    {
+      "id": "event-detail-2",
+      "url": "./index.php?Route=Event/detail",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Event/detail"
+    },
+    {
+      "id": "event-detail-3",
+      "url": "./index.php?Route=Event/detail/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Event/detail/{id}"
+    },
+    {
+      "id": "event-list-2",
+      "url": "./index.php?Route=Event/list",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Event/list"
+    },
+    {
+      "id": "event-template-2",
+      "url": "./index.php?Route=Event/template",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Event/template"
+    },
+    {
+      "id": "event-view",
+      "url": "./index.php?Route=Event/view",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Event/view"
+    },
+    {
+      "id": "eventembed-index",
+      "url": "./index.php?Route=EventEmbed",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template EventEmbed/index \u2014 JSON embed API (not HTML UI) \u2014 skip visual setpoint",
+      "skip": true
+    },
+    {
+      "id": "eventembed-index-2",
+      "url": "./index.php?Route=EventEmbed/index/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template EventEmbed/index/{id} \u2014 JSON embed API (not HTML UI) \u2014 skip visual setpoint",
+      "skip": true
+    },
+    {
+      "id": "eventembed-schedule",
+      "url": "./index.php?Route=EventEmbed/schedule",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template EventEmbed/schedule \u2014 JSON embed API (not HTML UI) \u2014 skip visual setpoint",
+      "skip": true
+    },
+    {
+      "id": "eventembed-schedule-2",
+      "url": "./index.php?Route=EventEmbed/schedule/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template EventEmbed/schedule/{id} \u2014 JSON embed API (not HTML UI) \u2014 skip visual setpoint",
+      "skip": true
+    },
+    {
+      "id": "eventembed-schedule-3",
+      "url": "./index.php?Route=EventEmbed/schedule/1/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template EventEmbed/schedule/{id}/{id} \u2014 JSON embed API (not HTML UI) \u2014 skip visual setpoint",
+      "skip": true
+    },
+    {
+      "id": "heraldry-index",
+      "url": "./index.php?Route=Heraldry",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Heraldry/index"
+    },
+    {
+      "id": "home-index-login",
+      "url": "./index.php?Route=Home/index/login",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Home/index/login"
+    },
+    {
+      "id": "kingdom-events-more",
+      "url": "./index.php?Route=Kingdom/events_more",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Kingdom/events_more"
+    },
+    {
+      "id": "kingdom-events-more-2",
+      "url": "./index.php?Route=Kingdom/events_more/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Kingdom/events_more/{id}"
+    },
+    {
+      "id": "kingdom-ics-2",
+      "url": "./index.php?Route=Kingdom/ics",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Kingdom/ics"
+    },
+    {
+      "id": "kingdom-index",
+      "url": "./index.php?Route=Kingdom",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Kingdom/index"
+    },
+    {
+      "id": "kingdom-index-2",
+      "url": "./index.php?Route=Kingdom/index/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Kingdom/index/{id}"
+    },
+    {
+      "id": "kingdom-map",
+      "url": "./index.php?Route=Kingdom/map",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Kingdom/map"
+    },
+    {
+      "id": "kingdom-map-2",
+      "url": "./index.php?Route=Kingdom/map/100001",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion — template Kingdom/map/{id}; sandbox kingdom 100001"
+    },
+    {
+      "id": "kingdom-park-averages-json",
+      "url": "./index.php?Route=Kingdom/park_averages_json",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Kingdom/park_averages_json"
+    },
+    {
+      "id": "kingdom-park-averages-json-2",
+      "url": "./index.php?Route=Kingdom/park_averages_json/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Kingdom/park_averages_json/{id}"
+    },
+    {
+      "id": "kingdom-park-monthly-json",
+      "url": "./index.php?Route=Kingdom/park_monthly_json",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Kingdom/park_monthly_json"
+    },
+    {
+      "id": "kingdom-park-monthly-json-2",
+      "url": "./index.php?Route=Kingdom/park_monthly_json/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Kingdom/park_monthly_json/{id}"
+    },
+    {
+      "id": "kingdom-players-json",
+      "url": "./index.php?Route=Kingdom/players_json",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Kingdom/players_json"
+    },
+    {
+      "id": "kingdom-players-json-2",
+      "url": "./index.php?Route=Kingdom/players_json/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Kingdom/players_json/{id}"
+    },
+    {
+      "id": "kingdom-profile-2",
+      "url": "./index.php?Route=Kingdom/profile",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Kingdom/profile"
+    },
+    {
+      "id": "kingdom-recommendations-panel",
+      "url": "./index.php?Route=Kingdom/recommendations_panel",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Bare panel requires {id}; product redirects home (same as Kingdom/profile). Prefer kingdom-recommendations-panel-2 for HTML capture."
+    },
+    {
+      "id": "kingdom-recommendations-panel-2",
+      "url": "./index.php?Route=Kingdom/recommendations_panel/100001",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion — template Kingdom/recommendations_panel/{id}; sandbox kingdom 100001"
+    },
+    {
+      "id": "live-index",
+      "url": "./index.php?Route=Live",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Live/index"
+    },
+    {
+      "id": "live-index-2",
+      "url": "./index.php?Route=Live/index/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Live/index/{id}"
+    },
+    {
+      "id": "live-recent",
+      "url": "./index.php?Route=Live/recent",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Live/recent"
+    },
+    {
+      "id": "login-forgotpassword",
+      "url": "./index.php?Route=Login/forgotpassword",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Login/forgotpassword"
+    },
+    {
+      "id": "login-forgotpassword-2",
+      "url": "./index.php?Route=Login/forgotpassword/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Login/forgotpassword/{id}"
+    },
+    {
+      "id": "login-index",
+      "url": "./index.php?Route=Login",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Login/index"
+    },
+    {
+      "id": "login-index-2",
+      "url": "./index.php?Route=Login/index/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Login/index/{id}"
+    },
+    {
+      "id": "login-login",
+      "url": "./index.php?Route=Login/login/Player/profile",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Login/login/{return} (canonicalizes all Login/login/*)"
+    },
+    {
+      "id": "login-login-oauth",
+      "url": "./index.php?Route=Login/login_oauth",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Login/login_oauth \u2014 External OAuth/IdP redirect \u2014 not local HTML UI",
+      "skip": true
+    },
+    {
+      "id": "login-logout",
+      "url": "./index.php?Route=Login/logout",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Login/logout"
+    },
+    {
+      "id": "login-logout-2",
+      "url": "./index.php?Route=Login/logout/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Login/logout/{id}"
+    },
+    {
+      "id": "login-oauth-callback",
+      "url": "./index.php?Route=Login/oauth_callback",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Login/oauth_callback"
+    },
+    {
+      "id": "park-index",
+      "url": "./index.php?Route=Park",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Park/index"
+    },
+    {
+      "id": "park-index-2",
+      "url": "./index.php?Route=Park/index/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Park/index/{id}"
+    },
+    {
+      "id": "park-profile-2",
+      "url": "./index.php?Route=Park/profile",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Park/profile"
+    },
+    {
+      "id": "player-index",
+      "url": "./index.php?Route=Player",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Player/index"
+    },
+    {
+      "id": "player-index-2",
+      "url": "./index.php?Route=Player/index/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Player/index/{id}"
+    },
+    {
+      "id": "player-reconcile",
+      "url": "./index.php?Route=Player/reconcile",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Player/reconcile"
+    },
+    {
+      "id": "player-reconcile-2",
+      "url": "./index.php?Route=Player/reconcile/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Player/reconcile/{id}"
+    },
+    {
+      "id": "playernew-index",
+      "url": "./index.php?Route=Playernew",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Playernew/index"
+    },
+    {
+      "id": "principality-index",
+      "url": "./index.php?Route=Principality",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Principality/index"
+    },
+    {
+      "id": "principality-index-2",
+      "url": "./index.php?Route=Principality/index/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Principality/index/{id}"
+    },
+    {
+      "id": "qr-index",
+      "url": "./index.php?Route=QR",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QR/index"
+    },
+    {
+      "id": "qualtest-export",
+      "url": "./index.php?Route=QualTest/export",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QualTest/export"
+    },
+    {
+      "id": "qualtest-export-2",
+      "url": "./index.php?Route=QualTest/export/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QualTest/export/{id}"
+    },
+    {
+      "id": "qualtest-index",
+      "url": "./index.php?Route=QualTest",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QualTest/index"
+    },
+    {
+      "id": "qualtest-manage",
+      "url": "./index.php?Route=QualTest/manage",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QualTest/manage"
+    },
+    {
+      "id": "qualtest-manage-2",
+      "url": "./index.php?Route=QualTest/manage/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QualTest/manage/{id}"
+    },
+    {
+      "id": "qualtest-question",
+      "url": "./index.php?Route=QualTest/question",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QualTest/question"
+    },
+    {
+      "id": "qualtest-question-create",
+      "url": "./index.php?Route=QualTest/question/create/1/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template QualTest/question/create/{id}/{id}"
+    },
+    {
+      "id": "qualtest-question-edit",
+      "url": "./index.php?Route=QualTest/question/edit/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QualTest/question/edit/{id}"
+    },
+    {
+      "id": "qualtest-question-2",
+      "url": "./index.php?Route=QualTest/question/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QualTest/question/{id}"
+    },
+    {
+      "id": "qualtest-questions",
+      "url": "./index.php?Route=QualTest/questions",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QualTest/questions"
+    },
+    {
+      "id": "qualtest-questions-2",
+      "url": "./index.php?Route=QualTest/questions/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QualTest/questions/{id}"
+    },
+    {
+      "id": "qualtest-questions-3",
+      "url": "./index.php?Route=QualTest/questions/1/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QualTest/questions/{id}/{id}"
+    },
+    {
+      "id": "qualtest-take",
+      "url": "./index.php?Route=QualTest/take",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QualTest/take"
+    },
+    {
+      "id": "qualtest-take-2",
+      "url": "./index.php?Route=QualTest/take/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QualTest/take/{id}"
+    },
+    {
+      "id": "qualtest-take-3",
+      "url": "./index.php?Route=QualTest/take/1/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template QualTest/take/{id}/{id}"
+    },
+    {
+      "id": "recap-index",
+      "url": "./index.php?Route=Recap",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Recap/index"
+    },
+    {
+      "id": "recap-index-2",
+      "url": "./index.php?Route=Recap/index/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Recap/index/{id}"
+    },
+    {
+      "id": "recap-json",
+      "url": "./index.php?Route=Recap/json",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Recap/json \u2014 JSON API endpoint (not HTML UI) \u2014 skip visual setpoint",
+      "skip": true
+    },
+    {
+      "id": "recap-json-2",
+      "url": "./index.php?Route=Recap/json/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Recap/json/{id} \u2014 JSON API endpoint (not HTML UI) \u2014 skip visual setpoint",
+      "skip": true
+    },
+    {
+      "id": "recap-json-kingdom",
+      "url": "./index.php?Route=Recap/json_kingdom",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Recap/json_kingdom \u2014 JSON API endpoint (not HTML UI) \u2014 skip visual setpoint",
+      "skip": true
+    },
+    {
+      "id": "recap-json-kingdom-2",
+      "url": "./index.php?Route=Recap/json_kingdom/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Recap/json_kingdom/{id} \u2014 JSON API endpoint (not HTML UI) \u2014 skip visual setpoint",
+      "skip": true
+    },
+    {
+      "id": "recap-kingdom",
+      "url": "./index.php?Route=Recap/kingdom",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Recap/kingdom"
+    },
+    {
+      "id": "recap-kingdom-2",
+      "url": "./index.php?Route=Recap/kingdom/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Recap/kingdom/{id}"
+    },
+    {
+      "id": "releasenotes-index",
+      "url": "./index.php?Route=ReleaseNotes",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template ReleaseNotes/index"
+    },
+    {
+      "id": "releasenotes-index-2",
+      "url": "./index.php?Route=ReleaseNotes/index/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template ReleaseNotes/index/{id}"
+    },
+    {
+      "id": "reports-active",
+      "url": "./index.php?Route=Reports/active",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/active"
+    },
+    {
+      "id": "reports-active-2",
+      "url": "./index.php?Route=Reports/active/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/active/{id}"
+    },
+    {
+      "id": "reports-active-duespaid",
+      "url": "./index.php?Route=Reports/active_duespaid",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/active_duespaid"
+    },
+    {
+      "id": "reports-active-duespaid-2",
+      "url": "./index.php?Route=Reports/active_duespaid/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/active_duespaid/{id}"
+    },
+    {
+      "id": "reports-active-waivered-duespaid",
+      "url": "./index.php?Route=Reports/active_waivered_duespaid",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/active_waivered_duespaid"
+    },
+    {
+      "id": "reports-active-waivered-duespaid-2",
+      "url": "./index.php?Route=Reports/active_waivered_duespaid/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/active_waivered_duespaid/{id}"
+    },
+    {
+      "id": "reports-attendance-2",
+      "url": "./index.php?Route=Reports/attendance",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/attendance"
+    },
+    {
+      "id": "reports-attendance-3",
+      "url": "./index.php?Route=Reports/attendance/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/attendance/{id}"
+    },
+    {
+      "id": "reports-beltline-explorer",
+      "url": "./index.php?Route=Reports/beltline_explorer",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/beltline_explorer"
+    },
+    {
+      "id": "reports-beltline-explorer-2",
+      "url": "./index.php?Route=Reports/beltline_explorer/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/beltline_explorer/{id}"
+    },
+    {
+      "id": "reports-class-masters",
+      "url": "./index.php?Route=Reports/class_masters",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/class_masters"
+    },
+    {
+      "id": "reports-class-masters-2",
+      "url": "./index.php?Route=Reports/class_masters/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/class_masters/{id}"
+    },
+    {
+      "id": "reports-closest-parks",
+      "url": "./index.php?Route=Reports/closest_parks",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/closest_parks"
+    },
+    {
+      "id": "reports-closest-parks-2",
+      "url": "./index.php?Route=Reports/closest_parks/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/closest_parks/{id}"
+    },
+    {
+      "id": "reports-corpora",
+      "url": "./index.php?Route=Reports/corpora",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/corpora"
+    },
+    {
+      "id": "reports-corpora-2",
+      "url": "./index.php?Route=Reports/corpora/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/corpora/{id}"
+    },
+    {
+      "id": "reports-corpora-test-results",
+      "url": "./index.php?Route=Reports/corpora_test_results",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/corpora_test_results"
+    },
+    {
+      "id": "reports-corpora-test-results-2",
+      "url": "./index.php?Route=Reports/corpora_test_results/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/corpora_test_results/{id}"
+    },
+    {
+      "id": "reports-custom-awards",
+      "url": "./index.php?Route=Reports/custom_awards",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/custom_awards"
+    },
+    {
+      "id": "reports-custom-awards-2",
+      "url": "./index.php?Route=Reports/custom_awards/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/custom_awards/{id}"
+    },
+    {
+      "id": "reports-dues",
+      "url": "./index.php?Route=Reports/dues",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/dues"
+    },
+    {
+      "id": "reports-dues-2",
+      "url": "./index.php?Route=Reports/dues/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/dues/{id}"
+    },
+    {
+      "id": "reports-duespaid",
+      "url": "./index.php?Route=Reports/duespaid",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/duespaid"
+    },
+    {
+      "id": "reports-duespaid-2",
+      "url": "./index.php?Route=Reports/duespaid/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/duespaid/{id}"
+    },
+    {
+      "id": "reports-event-attendance",
+      "url": "./index.php?Route=Reports/event_attendance",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/event_attendance"
+    },
+    {
+      "id": "reports-event-attendance-kingdom",
+      "url": "./index.php?Route=Reports/event_attendance/Kingdom",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/event_attendance/Kingdom"
+    },
+    {
+      "id": "reports-event-attendance-2",
+      "url": "./index.php?Route=Reports/event_attendance/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/event_attendance/{id}"
+    },
+    {
+      "id": "reports-eventheraldry",
+      "url": "./index.php?Route=Reports/eventheraldry",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/eventheraldry"
+    },
+    {
+      "id": "reports-eventheraldry-2",
+      "url": "./index.php?Route=Reports/eventheraldry/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/eventheraldry/{id}"
+    },
+    {
+      "id": "reports-guilds",
+      "url": "./index.php?Route=Reports/guilds",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/guilds"
+    },
+    {
+      "id": "reports-guilds-2",
+      "url": "./index.php?Route=Reports/guilds/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/guilds/{id}"
+    },
+    {
+      "id": "reports-inactive",
+      "url": "./index.php?Route=Reports/inactive",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/inactive"
+    },
+    {
+      "id": "reports-inactive-2",
+      "url": "./index.php?Route=Reports/inactive/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/inactive/{id}"
+    },
+    {
+      "id": "reports-index",
+      "url": "./index.php?Route=Reports",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/index"
+    },
+    {
+      "id": "reports-index-2",
+      "url": "./index.php?Route=Reports/index/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/index/{id}"
+    },
+    {
+      "id": "reports-kingdom-officer-directory",
+      "url": "./index.php?Route=Reports/kingdom_officer_directory/14",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/kingdom_officer_directory/{id}"
+    },
+    {
+      "id": "reports-kingdomheraldry",
+      "url": "./index.php?Route=Reports/kingdomheraldry",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/kingdomheraldry"
+    },
+    {
+      "id": "reports-kingdomheraldry-2",
+      "url": "./index.php?Route=Reports/kingdomheraldry/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/kingdomheraldry/{id}"
+    },
+    {
+      "id": "reports-knights",
+      "url": "./index.php?Route=Reports/knights",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/knights"
+    },
+    {
+      "id": "reports-knights-2",
+      "url": "./index.php?Route=Reports/knights/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/knights/{id}"
+    },
+    {
+      "id": "reports-knights-and-masters",
+      "url": "./index.php?Route=Reports/knights_and_masters",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/knights_and_masters"
+    },
+    {
+      "id": "reports-knights-and-masters-2",
+      "url": "./index.php?Route=Reports/knights_and_masters/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/knights_and_masters/{id}"
+    },
+    {
+      "id": "reports-knights-list",
+      "url": "./index.php?Route=Reports/knights_list",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/knights_list"
+    },
+    {
+      "id": "reports-knights-list-2",
+      "url": "./index.php?Route=Reports/knights_list/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/knights_list/{id}"
+    },
+    {
+      "id": "reports-ladder-grid-2",
+      "url": "./index.php?Route=Reports/ladder_grid",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/ladder_grid"
+    },
+    {
+      "id": "reports-ladder-grid-3",
+      "url": "./index.php?Route=Reports/ladder_grid/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/ladder_grid/{id}"
+    },
+    {
+      "id": "reports-masters",
+      "url": "./index.php?Route=Reports/masters",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/masters"
+    },
+    {
+      "id": "reports-masters-2",
+      "url": "./index.php?Route=Reports/masters/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/masters/{id}"
+    },
+    {
+      "id": "reports-masters-list",
+      "url": "./index.php?Route=Reports/masters_list",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/masters_list"
+    },
+    {
+      "id": "reports-masters-list-2",
+      "url": "./index.php?Route=Reports/masters_list/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/masters_list/{id}"
+    },
+    {
+      "id": "reports-new-player-attendance",
+      "url": "./index.php?Route=Reports/new_player_attendance",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/new_player_attendance"
+    },
+    {
+      "id": "reports-new-player-attendance-2",
+      "url": "./index.php?Route=Reports/new_player_attendance/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/new_player_attendance/{id}"
+    },
+    {
+      "id": "reports-orkremental",
+      "url": "./index.php?Route=Reports/orkremental",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/orkremental"
+    },
+    {
+      "id": "reports-orkremental-2",
+      "url": "./index.php?Route=Reports/orkremental/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/orkremental/{id}"
+    },
+    {
+      "id": "reports-park-attendance-explorer",
+      "url": "./index.php?Route=Reports/park_attendance_explorer",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/park_attendance_explorer"
+    },
+    {
+      "id": "reports-park-attendance-explorer-2",
+      "url": "./index.php?Route=Reports/park_attendance_explorer/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/park_attendance_explorer/{id}"
+    },
+    {
+      "id": "reports-park-distance-matrix",
+      "url": "./index.php?Route=Reports/park_distance_matrix",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/park_distance_matrix"
+    },
+    {
+      "id": "reports-park-distance-matrix-2",
+      "url": "./index.php?Route=Reports/park_distance_matrix/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/park_distance_matrix/{id}"
+    },
+    {
+      "id": "reports-parkheraldry",
+      "url": "./index.php?Route=Reports/parkheraldry",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/parkheraldry"
+    },
+    {
+      "id": "reports-parkheraldry-2",
+      "url": "./index.php?Route=Reports/parkheraldry/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/parkheraldry/{id}"
+    },
+    {
+      "id": "reports-player-award-recommendations",
+      "url": "./index.php?Route=Reports/player_award_recommendations",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/player_award_recommendations"
+    },
+    {
+      "id": "reports-player-award-recommendations-2",
+      "url": "./index.php?Route=Reports/player_award_recommendations/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/player_award_recommendations/{id}"
+    },
+    {
+      "id": "reports-player-awards",
+      "url": "./index.php?Route=Reports/player_awards",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/player_awards"
+    },
+    {
+      "id": "reports-player-awards-2",
+      "url": "./index.php?Route=Reports/player_awards/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/player_awards/{id}"
+    },
+    {
+      "id": "reports-player-status-reconciliation",
+      "url": "./index.php?Route=Reports/player_status_reconciliation",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/player_status_reconciliation"
+    },
+    {
+      "id": "reports-player-status-reconciliation-2",
+      "url": "./index.php?Route=Reports/player_status_reconciliation/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/player_status_reconciliation/{id}"
+    },
+    {
+      "id": "reports-playerheraldry",
+      "url": "./index.php?Route=Reports/playerheraldry",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/playerheraldry"
+    },
+    {
+      "id": "reports-playerheraldry-2",
+      "url": "./index.php?Route=Reports/playerheraldry/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/playerheraldry/{id}"
+    },
+    {
+      "id": "reports-reeve",
+      "url": "./index.php?Route=Reports/reeve",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/reeve"
+    },
+    {
+      "id": "reports-reeve-2",
+      "url": "./index.php?Route=Reports/reeve/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/reeve/{id}"
+    },
+    {
+      "id": "reports-reeve-test-results",
+      "url": "./index.php?Route=Reports/reeve_test_results",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/reeve_test_results"
+    },
+    {
+      "id": "reports-reeve-test-results-2",
+      "url": "./index.php?Route=Reports/reeve_test_results/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/reeve_test_results/{id}"
+    },
+    {
+      "id": "reports-release-utilization",
+      "url": "./index.php?Route=Reports/release_utilization",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/release_utilization"
+    },
+    {
+      "id": "reports-release-utilization-2",
+      "url": "./index.php?Route=Reports/release_utilization/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/release_utilization/{id}"
+    },
+    {
+      "id": "reports-roster",
+      "url": "./index.php?Route=Reports/roster",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/roster"
+    },
+    {
+      "id": "reports-roster-2",
+      "url": "./index.php?Route=Reports/roster/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/roster/{id}"
+    },
+    {
+      "id": "reports-set-player-active-json",
+      "url": "./index.php?Route=Reports/set_player_active_json",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/set_player_active_json"
+    },
+    {
+      "id": "reports-suspended",
+      "url": "./index.php?Route=Reports/suspended",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/suspended"
+    },
+    {
+      "id": "reports-suspended-kingdom-q-id",
+      "url": "./index.php?Route=Reports/suspended/Kingdom&id",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/suspended/Kingdom?id"
+    },
+    {
+      "id": "reports-suspended-2",
+      "url": "./index.php?Route=Reports/suspended/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/suspended/{id}"
+    },
+    {
+      "id": "reports-unitheraldry",
+      "url": "./index.php?Route=Reports/unitheraldry",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/unitheraldry"
+    },
+    {
+      "id": "reports-unitheraldry-2",
+      "url": "./index.php?Route=Reports/unitheraldry/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/unitheraldry/{id}"
+    },
+    {
+      "id": "reports-unwaivered",
+      "url": "./index.php?Route=Reports/unwaivered",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/unwaivered"
+    },
+    {
+      "id": "reports-unwaivered-2",
+      "url": "./index.php?Route=Reports/unwaivered/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/unwaivered/{id}"
+    },
+    {
+      "id": "reports-voting-eligible-2",
+      "url": "./index.php?Route=Reports/voting_eligible",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/voting_eligible"
+    },
+    {
+      "id": "reports-voting-eligible-3",
+      "url": "./index.php?Route=Reports/voting_eligible/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/voting_eligible/{id}"
+    },
+    {
+      "id": "reports-waivered",
+      "url": "./index.php?Route=Reports/waivered",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/waivered"
+    },
+    {
+      "id": "reports-waivered-2",
+      "url": "./index.php?Route=Reports/waivered/14",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Reports/waivered/{id}"
+    },
+    {
+      "id": "search-event",
+      "url": "./index.php?Route=Search/event",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Search/event"
+    },
+    {
+      "id": "search-index",
+      "url": "./index.php?Route=Search/index/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Search/index/{id}"
+    },
+    {
+      "id": "search-kingdom",
+      "url": "./index.php?Route=Search/kingdom",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Search/kingdom"
+    },
+    {
+      "id": "search-kingdom-2",
+      "url": "./index.php?Route=Search/kingdom/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Search/kingdom/{id}"
+    },
+    {
+      "id": "search-park",
+      "url": "./index.php?Route=Search/park",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Search/park"
+    },
+    {
+      "id": "search-park-2",
+      "url": "./index.php?Route=Search/park/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Search/park/{id}"
+    },
+    {
+      "id": "search-tournament",
+      "url": "./index.php?Route=Search/tournament",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Search/tournament"
+    },
+    {
+      "id": "search-unit",
+      "url": "./index.php?Route=Search/unit",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Search/unit"
+    },
+    {
+      "id": "search-unitactivity",
+      "url": "./index.php?Route=Search/unitactivity",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Search/unitactivity"
+    },
+    {
+      "id": "selfreg-check-username",
+      "url": "./index.php?Route=SelfReg/check_username",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template SelfReg/check_username"
+    },
+    {
+      "id": "selfreg-check-username-2",
+      "url": "./index.php?Route=SelfReg/check_username/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template SelfReg/check_username/{id}"
+    },
+    {
+      "id": "selfreg-form",
+      "url": "./index.php?Route=SelfReg/form",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template SelfReg/form"
+    },
+    {
+      "id": "selfreg-form-2",
+      "url": "./index.php?Route=SelfReg/form/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template SelfReg/form/{id}"
+    },
+    {
+      "id": "selfreg-index",
+      "url": "./index.php?Route=SelfReg",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template SelfReg/index"
+    },
+    {
+      "id": "signin-index",
+      "url": "./index.php?Route=SignIn",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template SignIn/index"
+    },
+    {
+      "id": "signin-index-2",
+      "url": "./index.php?Route=SignIn/index/1",
+      "auth": "none",
+      "waitAfterMs": 1000,
+      "readySelector": "body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template SignIn/index/{id}"
+    },
+    {
+      "id": "tournament-create",
+      "url": "./index.php?Route=Tournament/create",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Tournament/create"
+    },
+    {
+      "id": "tournament-worksheet",
+      "url": "./index.php?Route=Tournament/worksheet",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Tournament/worksheet"
+    },
+    {
+      "id": "tournament-worksheet-2",
+      "url": "./index.php?Route=Tournament/worksheet/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Tournament/worksheet/{id}"
+    },
+    {
+      "id": "unit-create",
+      "url": "./index.php?Route=Unit/create/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "stable",
+      "notes": "Registry expansion \u2014 template Unit/create/{id}"
+    },
+    {
+      "id": "unit-index",
+      "url": "./index.php?Route=Unit",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Unit/index"
+    },
+    {
+      "id": "unit-index-2",
+      "url": "./index.php?Route=Unit/index/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Unit/index/{id}"
+    },
+    {
+      "id": "unit-unitlist",
+      "url": "./index.php?Route=Unit/unitlist",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Unit/unitlist"
+    },
+    {
+      "id": "unit-unitlist-2",
+      "url": "./index.php?Route=Unit/unitlist/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Unit/unitlist/{id}"
+    },
+    {
+      "id": "unit-unitlist-q-kingdomid",
+      "url": "./index.php?Route=Unit/unitlist&KingdomId",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Unit/unitlist?KingdomId"
+    },
+    {
+      "id": "unit-unitlist-q-parkid",
+      "url": "./index.php?Route=Unit/unitlist&ParkId",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Unit/unitlist?ParkId"
+    },
+    {
+      "id": "weather-day",
+      "url": "./index.php?Route=Weather/day",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Weather/day"
+    },
+    {
+      "id": "weather-day-2",
+      "url": "./index.php?Route=Weather/day/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Weather/day/{id}"
+    },
+    {
+      "id": "weather-index",
+      "url": "./index.php?Route=Weather/index/1",
+      "auth": "login",
+      "waitAfterMs": 1000,
+      "readySelector": "#main, body",
+      "driftClass": "natural",
+      "notes": "Registry expansion \u2014 template Weather/index/{id}"
+    }
+  ]
+}

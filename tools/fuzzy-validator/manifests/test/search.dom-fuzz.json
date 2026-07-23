@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "search",
+  "calibratedAt": "2026-07-08T17:37:35Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "40f4fa2c"
+}

@@ -68,111 +68,19 @@ function _jsonDecode($json, $fallbackKeys = []) {
 	return [];
 }
 
-// ── Batch ID → Name lookups ──────────────────────────────────
-// Collect all IDs from the 50 rendered rows upfront, then resolve
-// in three IN queries so the page never issues per-row DB calls.
-global $DB;
-$_parkIds = []; $_kingdomIds = []; $_mundaneIds = []; $_eventIds = []; $_kawardIds = []; $_unitIds = [];
-foreach ($AuditRows as $_lr) {
-	foreach ([$_lr['Parameters'], $_lr['PriorState'], $_lr['PostState']] as $_js) {
-		$_d = @json_decode($_js, true);
-		if (!is_array($_d)) $_d = _jsonExtract($_js ?? '', ['ParkId','park_id','KingdomId','kingdom_id','MundaneId','mundane_id','given_by_id','stripped_from','RecipientId','FromMundaneId','ToMundaneId','event_id','at_park_id','at_kingdom_id','at_event_id','kingdomaward_id','KingdomAwardId','old_kingdom_id','new_kingdom_id','from_park_id','to_park_id','from_kingdom_id','to_kingdom_id','from_mundane_id','to_mundane_id']);
-		foreach (['park_id','at_park_id','ParkId','from_park_id','to_park_id'] as $_k) if (!empty($_d[$_k])) $_parkIds[(int)$_d[$_k]] = true;
-		foreach (['kingdom_id','at_kingdom_id','KingdomId','old_kingdom_id','new_kingdom_id','from_kingdom_id','to_kingdom_id'] as $_k) if (!empty($_d[$_k])) $_kingdomIds[(int)$_d[$_k]] = true;
-		foreach (['mundane_id','given_by_id','given_by','stripped_from','MundaneId','RecipientId','FromMundaneId','ToMundaneId','SuspendedById','recommended_by_id','SupporterMundaneId','supporter_mundane_id','from_mundane_id','to_mundane_id'] as $_k) if (!empty($_d[$_k]) && is_numeric($_d[$_k])) $_mundaneIds[(int)$_d[$_k]] = true;
-	// Route entity_id into the correct lookup map based on the audit row's
-	// `entity` column. Defaults to mundane when entity is unset (older rows).
-	if (!empty($_lr['EntityId'])) {
-		$_e = (int)$_lr['EntityId'];
-		switch ($_lr['Entity'] ?? 'Player') {
-			case 'Park':    $_parkIds[$_e]    = true; break;
-			case 'Kingdom': $_kingdomIds[$_e] = true; break;
-			case 'Event':   $_eventIds[$_e]   = true; break;
-			case 'Unit':    $_unitIds[$_e]    = true; break;
-			default:        $_mundaneIds[$_e] = true; break;
-		}
-	}
-		foreach (['event_id','at_event_id','EventId'] as $_k) if (!empty($_d[$_k]) && (int)$_d[$_k] > 0) $_eventIds[(int)$_d[$_k]] = true;
-		foreach (['kingdomaward_id','KingdomAwardId'] as $_k) if (!empty($_d[$_k])) $_kawardIds[(int)$_d[$_k]] = true;
-		foreach (['unit_id','UnitId'] as $_k) if (!empty($_d[$_k]) && (int)$_d[$_k] > 0) $_unitIds[(int)$_d[$_k]] = true;
-	}
-}
-$_parkMap = []; $_kingdomMap = []; $_mundaneMap = []; $_eventMap = []; $_kawardMap = []; $_classMap = []; $_unitMap = [];
-if ($_parkIds) {
-	$_ids = implode(',', array_keys($_parkIds));
-	$DB->Clear(); $_r = $DB->DataSet("SELECT park_id, name FROM ork_park WHERE park_id IN ($_ids)");
-	if ($_r && $_r->Size() > 0) do { $_parkMap[(int)$_r->park_id] = $_r->name; } while ($_r->Next());
-}
-if ($_kingdomIds) {
-	$_ids = implode(',', array_keys($_kingdomIds));
-	$DB->Clear(); $_r = $DB->DataSet("SELECT kingdom_id, name FROM ork_kingdom WHERE kingdom_id IN ($_ids)");
-	if ($_r && $_r->Size() > 0) do { $_kingdomMap[(int)$_r->kingdom_id] = $_r->name; } while ($_r->Next());
-}
-if ($_mundaneIds) {
-	$_ids = implode(',', array_keys($_mundaneIds));
-	$DB->Clear(); $_r = $DB->DataSet("SELECT mundane_id, persona FROM ork_mundane WHERE mundane_id IN ($_ids)");
-	if ($_r && $_r->Size() > 0) do { $_mundaneMap[(int)$_r->mundane_id] = $_r->persona; } while ($_r->Next());
-}
-if ($_eventIds) {
-	$_ids = implode(',', array_keys($_eventIds));
-	$DB->Clear(); $_r = $DB->DataSet("SELECT event_id, name FROM ork_event WHERE event_id IN ($_ids)");
-	if ($_r && $_r->Size() > 0) do { $_eventMap[(int)$_r->event_id] = $_r->name; } while ($_r->Next());
-}
-if ($_kawardIds) {
-	$_ids = implode(',', array_keys($_kawardIds));
-	$DB->Clear(); $_r = $DB->DataSet("SELECT kingdomaward_id, name FROM ork_kingdomaward WHERE kingdomaward_id IN ($_ids)");
-	if ($_r && $_r->Size() > 0) do { $_kawardMap[(int)$_r->kingdomaward_id] = $_r->name; } while ($_r->Next());
-}
-if ($_unitIds) {
-	$_ids = implode(',', array_keys($_unitIds));
-	$DB->Clear(); $_r = $DB->DataSet("SELECT unit_id, name FROM ork_unit WHERE unit_id IN ($_ids)");
-	if ($_r && $_r->Size() > 0) do { $_unitMap[(int)$_r->unit_id] = $_r->name; } while ($_r->Next());
-}
-$DB->Clear(); $_r = $DB->DataSet("SELECT class_id, name FROM ork_class ORDER BY class_id");
-if ($_r && $_r->Size() > 0) do { $_classMap[(int)$_r->class_id] = $_r->name; } while ($_r->Next());
-$DB->Clear();
-
-// Resolve names for the current filter IDs so the picker shows names, not raw numbers.
-// ByWhom is always a player; EntityFilter is resolved against whichever table the
-// EntityType column points at (Player/Park/Kingdom/Event).
-$_filterPlayerNames = [];
-$_entityFilterName  = '';
+// ── Batch ID → Name lookups (precomputed in Controller_Admin::auditlog) ──
+$_parkMap = $AuditParkMap ?? [];
+$_kingdomMap = $AuditKingdomMap ?? [];
+$_mundaneMap = $AuditMundaneMap ?? [];
+$_eventMap = $AuditEventMap ?? [];
+$_kawardMap = $AuditKawardMap ?? [];
+$_unitMap = $AuditUnitMap ?? [];
+$_classMap = $AuditClassMap ?? [];
+$_filterPlayerNames = $AuditFilterPlayerNames ?? [];
+$_entityFilterName = $AuditEntityFilterName ?? '';
 $_bywhomInt = (int)($ByWhomFilter ?? 0);
 $_entityInt = (int)($EntityFilter ?? 0);
 $_entityType = $EntityTypeFilter ?? '';
-// "By Whom" lookup (always a player)
-$_playerIds = $_bywhomInt > 0 ? [$_bywhomInt] : [];
-// "Affected Record" lookup — only treat as a player when scope is Player (or unset)
-if ($_entityInt > 0 && ($_entityType === '' || $_entityType === 'Player')) {
-	$_playerIds[] = $_entityInt;
-}
-if (!empty($_playerIds)) {
-	$_ids = implode(',', array_unique($_playerIds));
-	$DB->Clear(); $_r = $DB->DataSet("SELECT mundane_id, persona FROM ork_mundane WHERE mundane_id IN ($_ids)");
-	while ($_r && $_r->Next()) { $_filterPlayerNames[(int)$_r->mundane_id] = $_r->persona; }
-	$DB->Clear();
-}
-if ($_entityInt > 0) {
-	if ($_entityType === 'Park') {
-		$DB->Clear();
-		$_r = $DB->DataSet("SELECT name FROM ork_park WHERE park_id = {$_entityInt}");
-		if ($_r && $_r->Next()) $_entityFilterName = $_r->name;
-	} elseif ($_entityType === 'Kingdom') {
-		$DB->Clear();
-		$_r = $DB->DataSet("SELECT name FROM ork_kingdom WHERE kingdom_id = {$_entityInt}");
-		if ($_r && $_r->Next()) $_entityFilterName = $_r->name;
-	} elseif ($_entityType === 'Event') {
-		$DB->Clear();
-		$_r = $DB->DataSet("SELECT name FROM ork_event WHERE event_id = {$_entityInt}");
-		if ($_r && $_r->Next()) $_entityFilterName = $_r->name;
-	} elseif ($_entityType === 'Unit') {
-		$DB->Clear();
-		$_r = $DB->DataSet("SELECT name FROM ork_unit WHERE unit_id = {$_entityInt}");
-		if ($_r && $_r->Next()) $_entityFilterName = $_r->name;
-	} elseif ($_entityType === '' || $_entityType === 'Player') {
-		$_entityFilterName = $_filterPlayerNames[$_entityInt] ?? '';
-	}
-}
 
 // Helper: render an ID cell as "Name (link)" or plain "#id" fallback
 function _auditIdLink($type, $id, $nameMap) {

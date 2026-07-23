@@ -1,6 +1,11 @@
 node_modules/
 package-lock.json
+build/
 *config.php
+# Local docker / env overlays (do not commit secrets)
+.env
+.env.*
+!.env.example
 !assets/.gitkeep
 assets/heraldry/*
 !assets/heraldry/.gitkeep
@@ -44,3 +49,20 @@ ork.zip
 config.tmpprod.php
 .DS_Store
 .vscode/
+.ork3-db.local
+tools/ork-db/extracted/
+tools/ork-db/rendered/
+tools/ork-db/.last-apply.json
+tools/fuzzy-validator/calibrations/
+tools/fuzzy-validator/reports/
+tools/fuzzy-validator/setpoints/out/
+tools/fuzzy-validator/setpoints/cache/
+tools/fuzzy-validator/baselines/**
+!tools/fuzzy-validator/baselines/.gitkeep
+__pycache__/
+*.pyc
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+test-results/

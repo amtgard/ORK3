@@ -5,6 +5,7 @@ class Controller_QualTest extends Controller
     public function __construct($call = null, $id = null)
     {
         parent::__construct($call, $id);
+        $this->load_model('QualTest');
     }
 
     // -----------------------------------------------------------------------
@@ -20,30 +21,30 @@ class Controller_QualTest extends Controller
             $this->data['Error'] = 'Invalid kingdom.';
             return;
         }
-        if (!Ork3::$Lib->qualtest->canManage($uid, $kingdom_id)) {
+        if (!$this->QualTest->can_manage($uid, $kingdom_id)) {
             $this->data['Error'] = 'You do not have permission to manage qualification tests for this kingdom.';
             return;
         }
 
-        $kingdom_name = Ork3::$Lib->qualtest->getKingdomName($kingdom_id);
+        $kingdom_name = $this->QualTest->kingdom_name($kingdom_id);
 
-        $reeve_config   = Ork3::$Lib->qualtest->getConfig($kingdom_id, 'reeve');
-        $corpora_config = Ork3::$Lib->qualtest->getConfig($kingdom_id, 'corpora');
+        $reeve_config   = $this->QualTest->config($kingdom_id, 'reeve');
+        $corpora_config = $this->QualTest->config($kingdom_id, 'corpora');
 
         $this->data['KingdomId']     = $kingdom_id;
         $this->data['KingdomName']   = $kingdom_name;
         $this->data['ReeveConfig']   = $reeve_config;
         $this->data['CorporaConfig'] = $corpora_config;
-        $this->data['ReeveCount']    = Ork3::$Lib->qualtest->countActiveQuestions($kingdom_id, 'reeve');
-        $this->data['CorporaCount']  = Ork3::$Lib->qualtest->countActiveQuestions($kingdom_id, 'corpora');
-        $this->data['Managers']      = Ork3::$Lib->qualtest->getManagers($kingdom_id);
+        $this->data['ReeveCount']    = $this->QualTest->count_active_questions($kingdom_id, 'reeve');
+        $this->data['CorporaCount']  = $this->QualTest->count_active_questions($kingdom_id, 'corpora');
+        $this->data['Managers']      = $this->QualTest->managers($kingdom_id);
         $this->data['Uid']           = $uid;
 
         // The rules/corpora version belongs to the published VERSION, not to these settings —
         // settings shows it read-only. Two editable copies of one fact drift, and the config
         // copy used to be the one that won on a player's permanent attempt record.
-        $this->data['ReeveLiveSet']   = Ork3::$Lib->qualtest->getPublishedSet($kingdom_id, 'reeve');
-        $this->data['CorporaLiveSet'] = Ork3::$Lib->qualtest->getPublishedSet($kingdom_id, 'corpora');
+        $this->data['ReeveLiveSet']   = $this->QualTest->published_set($kingdom_id, 'reeve');
+        $this->data['CorporaLiveSet'] = $this->QualTest->published_set($kingdom_id, 'corpora');
     }
 
     // -----------------------------------------------------------------------
@@ -62,22 +63,22 @@ class Controller_QualTest extends Controller
             $this->data['Error'] = 'Invalid kingdom.';
             return;
         }
-        if (!Ork3::$Lib->qualtest->canManage($uid, $kingdom_id)) {
+        if (!$this->QualTest->can_manage($uid, $kingdom_id)) {
             $this->data['Error'] = 'You do not have permission to manage qualification tests for this kingdom.';
             return;
         }
 
-        $kingdom_name = Ork3::$Lib->qualtest->getKingdomName($kingdom_id);
+        $kingdom_name = $this->QualTest->kingdom_name($kingdom_id);
 
-        $questions = Ork3::$Lib->qualtest->getAllQuestions($kingdom_id, $test_type);
-        $config    = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);
+        $questions = $this->QualTest->all_questions($kingdom_id, $test_type);
+        $config    = $this->QualTest->config($kingdom_id, $test_type);
 
         // Question-set versioning. The live test draws only from the PUBLISHED set, so a
         // draft can be built without touching it. New questions (add / bulk import /
         // library) land in whichever set the admin is working in — the draft when one
         // exists, otherwise the live set.
-        $published = Ork3::$Lib->qualtest->getPublishedSet($kingdom_id, $test_type);
-        $draft     = Ork3::$Lib->qualtest->getDraftSet($kingdom_id, $test_type);
+        $published = $this->QualTest->published_set($kingdom_id, $test_type);
+        $draft     = $this->QualTest->draft_set($kingdom_id, $test_type);
         $target    = $draft ? (int)$draft['SetId'] : ($published ? (int)$published['SetId'] : 0);
 
         $this->data['KingdomId']    = $kingdom_id;
@@ -86,7 +87,7 @@ class Controller_QualTest extends Controller
         $this->data['Questions']    = $questions;
         $this->data['Config']       = $config;
         $this->data['Uid']          = $uid;
-        $this->data['Sets']         = Ork3::$Lib->qualtest->getSets($kingdom_id, $test_type);
+        $this->data['Sets']         = $this->QualTest->sets($kingdom_id, $test_type);
         $this->data['PublishedSet'] = $published;
         $this->data['DraftSet']     = $draft;
         $this->data['TargetSetId']  = $target;
@@ -121,12 +122,12 @@ class Controller_QualTest extends Controller
                 $this->data['Error'] = 'Invalid question.';
                 return;
             }
-            $q = Ork3::$Lib->qualtest->getQuestion($question_id);
+            $q = $this->QualTest->question($question_id);
             if (!$q) {
                 $this->data['Error'] = 'Question not found.';
                 return;
             }
-            if (!Ork3::$Lib->qualtest->canManage($uid, $q['KingdomId'])) {
+            if (!$this->QualTest->can_manage($uid, $q['KingdomId'])) {
                 $this->data['Error'] = 'You do not have permission to edit this question.';
                 return;
             }
@@ -137,7 +138,7 @@ class Controller_QualTest extends Controller
             // create
             $kingdom_id = (int)preg_replace('/[^0-9]/', '', $param1 ?? '');
             $test_type  = ($param2 === 'corpora') ? 'corpora' : 'reeve';
-            if (!valid_id($kingdom_id) || !Ork3::$Lib->qualtest->canManage($uid, $kingdom_id)) {
+            if (!valid_id($kingdom_id) || !$this->QualTest->can_manage($uid, $kingdom_id)) {
                 $this->data['Error'] = 'Invalid kingdom or insufficient permissions.';
                 return;
             }
@@ -151,15 +152,15 @@ class Controller_QualTest extends Controller
         // set the edit changes the running test immediately, so the form warns about it.
         $_kid  = (int)$this->data['KingdomId'];
         $_type = $this->data['TestType'];
-        $_pub  = Ork3::$Lib->qualtest->getPublishedSet($_kid, $_type);
-        $_drf  = Ork3::$Lib->qualtest->getDraftSet($_kid, $_type);
+        $_pub  = $this->QualTest->published_set($_kid, $_type);
+        $_drf  = $this->QualTest->draft_set($_kid, $_type);
         $this->data['TargetSetId'] = $_drf ? (int)$_drf['SetId'] : ($_pub ? (int)$_pub['SetId'] : 0);
         $this->data['TargetSetName'] = $_drf ? $_drf['Name'] : ($_pub ? $_pub['Name'] : '');
         $this->data['TargetIsDraft'] = (bool)$_drf;
 
         $this->data['EditingLiveQuestion'] = false;
         if (($action ?? '') === 'edit' && $_pub && !empty($this->data['Question'])) {
-            $bank = Ork3::$Lib->qualtest->getAllQuestions($_kid, $_type);
+            $bank = $this->QualTest->all_questions($_kid, $_type);
             foreach ($bank as $bq) {
                 if ((int)$bq['QualQuestionId'] === (int)$this->data['Question']['QualQuestionId']) {
                     $this->data['EditingLiveQuestion'] = !empty($bq['InLive']);
@@ -168,7 +169,7 @@ class Controller_QualTest extends Controller
             }
         }
 
-        $this->data['KingdomName'] = Ork3::$Lib->qualtest->getKingdomName($_kid);
+        $this->data['KingdomName'] = $this->QualTest->kingdom_name($_kid);
         $this->data['Action'] = $action ?? 'create';
         $this->data['Uid']    = $uid;
     }
@@ -206,17 +207,17 @@ class Controller_QualTest extends Controller
         }
         // Switched on is not the same as ready. Without this, a player reaching this page (or
         // an old link) is shown the whole test-taking UI for a test that cannot start.
-        if (!Ork3::$Lib->qualtest->hasTakeableVersion($kingdom_id, $test_type)) {
+        if (!$this->QualTest->has_takeable_version($kingdom_id, $test_type)) {
             $this->data['Error'] = 'This test is not ready yet — your kingdom is still putting the questions together. Check back soon.';
             return;
         }
 
-        $kingdom_name = Ork3::$Lib->qualtest->getKingdomName($kingdom_id);
+        $kingdom_name = $this->QualTest->kingdom_name($kingdom_id);
 
         // Fetch player results and config
-        $player_results = Ork3::$Lib->qualtest->getPlayerResults($uid, $kingdom_id);
+        $player_results = $this->QualTest->player_results($uid, $kingdom_id);
         $player_result  = $player_results[$test_type] ?? null;
-        $config         = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);
+        $config         = $this->QualTest->config($kingdom_id, $test_type);
 
         // Treat retake-only records (no actual passing result) as "not taken"
         if ($player_result && empty($player_result['QualResultId'])) {
@@ -225,7 +226,7 @@ class Controller_QualTest extends Controller
 
         // Check retake limit
         $retake_blocked = false;
-        $retake_count   = Ork3::$Lib->qualtest->getRetakeCount($uid, $kingdom_id, $test_type);
+        $retake_count   = $this->QualTest->retake_count($uid, $kingdom_id, $test_type);
         if (($config['MaxRetakes'] ?? 0) > 0) {
             $retake_blocked = $retake_count >= $config['MaxRetakes'];
         }
@@ -235,7 +236,7 @@ class Controller_QualTest extends Controller
         // The "Based on ..." footer must name the version the player is ACTUALLY sitting, which
         // is the published set — not the kingdom-config copy, which publishSet() only mirrors
         // and which is stale for any kingdom that never saved its settings.
-        $_liveSet = Ork3::$Lib->qualtest->getPublishedSet($kingdom_id, $test_type);
+        $_liveSet = $this->QualTest->published_set($kingdom_id, $test_type);
         if ($_liveSet && trim((string)$_liveSet['RulesVersion']) !== '') {
             $config['RulesVersion'] = $_liveSet['RulesVersion'];
         }
@@ -253,7 +254,7 @@ class Controller_QualTest extends Controller
         $this->data['Uid']            = $uid;
         // Durable attempt history for this player+test (pass and fail), newest
         // first — powers the "Your Test History" review list on the take page.
-        $this->data['PlayerAttempts'] = Ork3::$Lib->qualtest->getPlayerAttempts($uid, $kingdom_id, $test_type);
+        $this->data['PlayerAttempts'] = $this->QualTest->player_attempts($uid, $kingdom_id, $test_type);
     }
 
     // -----------------------------------------------------------------------
@@ -272,7 +273,7 @@ class Controller_QualTest extends Controller
         $set_id = (int)preg_replace('/[^0-9]/', '', $parts[0] ?? '');
         $uid    = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
-        $set = Ork3::$Lib->qualtest->getSetById($set_id);
+        $set = $this->QualTest->set_by_id($set_id);
         if ($set === null) {
             $this->data['Error'] = 'Version not found.';
             return;
@@ -280,13 +281,13 @@ class Controller_QualTest extends Controller
         // Same gate as the rest of test management, checked against the SET's own kingdom —
         // never a kingdom id from the request, or this would export any kingdom's bank
         // (answers included) to anyone who could guess a set id.
-        if (!Ork3::$Lib->qualtest->canManage($uid, (int)$set['KingdomId'])) {
+        if (!$this->QualTest->can_manage($uid, (int)$set['KingdomId'])) {
             $this->data['Error'] = 'You do not have permission to export this test.';
             return;
         }
 
         $lines = [];
-        foreach (Ork3::$Lib->qualtest->getSetQuestions($set_id) as $q) {
+        foreach ($this->QualTest->set_questions($set_id) as $q) {
             // Archived questions are skipped: they are not part of the test any more, and
             // re-importing this file should not quietly resurrect them as active.
             if (!empty($q['Archived'])) {
@@ -306,7 +307,7 @@ class Controller_QualTest extends Controller
             $lines[] = '';   // blank line = block separator, which is what the parser splits on
         }
 
-        $kingdom = Ork3::$Lib->qualtest->getKingdomName((int)$set['KingdomId']);
+        $kingdom = $this->QualTest->kingdom_name((int)$set['KingdomId']);
         $name    = preg_replace('/[^a-z0-9]+/i', '-', $kingdom . '-' . $set['TestType'] . '-' . $set['Name']);
         $name    = trim(strtolower($name), '-');
 

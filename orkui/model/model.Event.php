@@ -1,299 +1,486 @@
 <?php
 
-class Model_Event extends Model {
+class Model_Event extends Model
+{
+    public function __construct()
+    {
+        parent::__construct();
+        $this->Kingdom = new APIModel('Kingdom');
+        $this->Report = new APIModel('Report');
+        $this->Event = new APIModel('Event');
+        $this->Heraldry = new APIModel('Heraldry');
+        $this->Search = new JSONModel('Search');
+        $this->Log = $LOG;
+    }
 
-	function __construct() {
-		parent::__construct();
-		$this->Kingdom = new APIModel('Kingdom');
-		$this->Report = new APIModel('Report');
-		$this->Event = new APIModel('Event');
-		$this->Heraldry = new APIModel('Heraldry');
-		$this->Search = new JSONModel('Search');
-		$this->Log = $LOG;
-	}
-	
-	function create_event($token, $kingdom_id, $park_id, $mundane_id, $unit_id, $name) {
-		$request = array('Token'=>$token, 'KingdomId'=>$kingdom_id, 'ParkId'=>$park_id, 'MundaneId'=>$mundane_id, 'UnitId'=>$unit_id, 'Name'=>$name);
-		logtrace("create_event()", $request);
-		$r = $this->Event->CreateEvent($request);
-		return $r;
-	}
-	
-	function get_event_details($event_id) {
-		
-		$r = $this->Event->GetEvent(array('EventId'=>$event_id));
-		if ($r['Status']['Status'] == 0) {
-			$ret = $r;
+    public function create_event($token, $kingdom_id, $park_id, $mundane_id, $unit_id, $name, $status = 'published')
+    {
+        $request = array(
+            'Token' => $token,
+            'KingdomId' => $kingdom_id,
+            'ParkId' => $park_id,
+            'MundaneId' => $mundane_id,
+            'UnitId' => $unit_id,
+            'Name' => $name,
+            'Status' => $status,
+        );
+        logtrace("create_event()", $request);
+        $r = $this->Event->CreateEvent($request);
+        return $r;
+    }
 
-			$detailsResult = $this->Event->GetEventDetails(array('EventId'=>$event_id));
-			if (isset($detailsResult['Status']['Status']) && $detailsResult['Status']['Status'] == 0) {
-				$ret['CalendarEventDetails'] = $detailsResult['CalendarEventDetails'];
-			} else {
-				$ret['CalendarEventDetails'] = array();
-			}
+    public function get_event_details($event_id)
+    {
 
-			$searchResult = $this->Search->Search_Event(null, null, null, null, null, 1, $event_id);
-			if (is_array($searchResult)) {
-				$ret['EventInfo'] = $searchResult;
-			} else {
-				$ret['EventInfo'] = array();
-			}
+        $r = $this->Event->GetEvent(array('EventId' => $event_id));
+        if ($r['Status']['Status'] == 0) {
+            $ret = $r;
 
-			// Reuse the first GetEvent() result ($r) instead of calling GetEvent() again
-			$ret['HeraldryUrl'] = $r['HeraldryUrl'] ?? '';
-			$ret['HasHeraldry'] = $r['HasHeraldry'] ?? false;
+            $detailsResult = $this->Event->GetEventDetails(array('EventId' => $event_id));
+            if (isset($detailsResult['Status']['Status']) && $detailsResult['Status']['Status'] == 0) {
+                $ret['CalendarEventDetails'] = $detailsResult['CalendarEventDetails'];
+            } else {
+                $ret['CalendarEventDetails'] = array();
+            }
 
-			// Merge banner-image fields onto EventInfo[0] so the template (which
-			// reads $info[0] from Search_Event) sees them alongside HasHeraldry.
-			if (isset($ret['EventInfo'][0]) && is_array($ret['EventInfo'][0])) {
-				$ret['EventInfo'][0]['HasBanner']      = $r['HasBanner']      ?? 0;
-				$ret['EventInfo'][0]['BannerShowLogo'] = $r['BannerShowLogo'] ?? 1;
-				$ret['EventInfo'][0]['BannerVignette'] = $r['BannerVignette'] ?? 1;
-				$ret['EventInfo'][0]['BannerOffsetX']  = $r['BannerOffsetX']  ?? 50;
-				$ret['EventInfo'][0]['BannerOffsetY']  = $r['BannerOffsetY']  ?? 50;
-			}
+            $searchResult = $this->Search->Search_Event(null, null, null, null, null, 1, $event_id);
+            if (is_array($searchResult)) {
+                $ret['EventInfo'] = $searchResult;
+            } else {
+                $ret['EventInfo'] = array();
+            }
 
-			return $ret;
-		} else {
-			return $r;
-		}
-	}
-	
-	function update_event_detail($request) {
-		$r = $this->Event->SetEventDetails($request);
-		logtrace("update_event_detail", array($request, $r));
-		return $r;
-	}
-	
-	function add_event_detail($request) {
-		$r = $this->Event->CreateEventDetails($request);
-		logtrace("add_event_detail", array($request, $r));
-		return $r;
-	}
-	
-	function delete_calendar_detail($token, $detail_id) {
-		$r = $this->Event->DeleteEventDetail(array('Token'=>$token, 'EventCalendarDetailId'=>$detail_id));
-		return $r;
-	}
-	
-	function get_rsvp($detail_id, $mundane_id) {
-		global $DB;
-		$DB->Clear();
-		$r = $DB->DataSet("SELECT status FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = " . (int)$detail_id . " AND mundane_id = " . (int)$mundane_id . " LIMIT 1");
-		if ($r && $r->Next()) return $r->status;
-		return false;
-	}
+            // Reuse the first GetEvent() result ($r) instead of calling GetEvent() again
+            $ret['HeraldryUrl'] = $r['HeraldryUrl'] ?? '';
+            $ret['HasHeraldry'] = $r['HasHeraldry'] ?? false;
 
-	// Sets RSVP to $status ('going'|'interested'). If already that status, removes it (toggle off).
-	function set_rsvp($detail_id, $mundane_id, $status) {
-		global $DB;
-		$status = in_array($status, ['going', 'interested']) ? $status : 'going';
-		$DB->Clear();
-		$DB->Execute('START TRANSACTION');
-		$existing = $DB->DataSet("SELECT rsvp_id, status FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = " . (int)$detail_id . " AND mundane_id = " . (int)$mundane_id . " LIMIT 1");
-		if ($existing && $existing->Next()) {
-			if ($existing->status === $status) {
-				// Same status — toggle off
-				$DB->Clear();
-				$ok = $DB->Execute("DELETE FROM " . DB_PREFIX . "event_rsvp WHERE rsvp_id = " . (int)$existing->rsvp_id);
-				if ($ok === false) { $DB->Execute('ROLLBACK'); return false; }
-				$DB->Execute('COMMIT');
-				return false;
-			}
-			// Different status — update
-			$DB->Clear();
-			$ok = $DB->Execute("UPDATE " . DB_PREFIX . "event_rsvp SET status = '" . $status . "', modified = NOW() WHERE rsvp_id = " . (int)$existing->rsvp_id);
-			if ($ok === false) { $DB->Execute('ROLLBACK'); return false; }
-			$DB->Execute('COMMIT');
-			return $status;
-		}
-		$DB->Clear();
-		$ok = $DB->Execute("INSERT INTO " . DB_PREFIX . "event_rsvp (event_calendardetail_id, mundane_id, status) VALUES (" . (int)$detail_id . ", " . (int)$mundane_id . ", '" . $status . "')");
-		if ($ok === false) { $DB->Execute('ROLLBACK'); return false; }
-		$DB->Execute('COMMIT');
-		return $status;
-	}
+            // Merge banner-image fields onto EventInfo[0] so the template (which
+            // reads $info[0] from Search_Event) sees them alongside HasHeraldry.
+            if (isset($ret['EventInfo'][0]) && is_array($ret['EventInfo'][0])) {
+                $ret['EventInfo'][0]['HasBanner']      = $r['HasBanner']      ?? 0;
+                $ret['EventInfo'][0]['BannerShowLogo'] = $r['BannerShowLogo'] ?? 1;
+                $ret['EventInfo'][0]['BannerVignette'] = $r['BannerVignette'] ?? 1;
+                $ret['EventInfo'][0]['BannerOffsetX']  = $r['BannerOffsetX']  ?? 50;
+                $ret['EventInfo'][0]['BannerOffsetY']  = $r['BannerOffsetY']  ?? 50;
+            }
 
-	function toggle_rsvp($detail_id, $mundane_id) {
-		return $this->set_rsvp($detail_id, $mundane_id, 'going');
-	}
+            return $ret;
+        } else {
+            return $r;
+        }
+    }
 
-	function remove_rsvp($detail_id, $mundane_id) {
-		global $DB;
-		$rsvp = new yapo($DB, DB_PREFIX . 'event_rsvp');
-		$rsvp->clear();
-		$rsvp->event_calendardetail_id = (int)$detail_id;
-		$rsvp->mundane_id = (int)$mundane_id;
-		if ($rsvp->find()) {
-			$rsvp->delete();
-			return true;
-		}
-		return false;
-	}
+    public function update_event_detail($request)
+    {
+        $r = $this->Event->SetEventDetails($request);
+        logtrace("update_event_detail", array($request, $r));
+        return $r;
+    }
 
-	function get_rsvp_count($detail_id) {
-		global $DB;
-		$DB->Clear();
-		$r = $DB->DataSet("SELECT status, COUNT(*) as cnt FROM " . DB_PREFIX . "event_rsvp WHERE event_calendardetail_id = " . (int)$detail_id . " GROUP BY status");
-		$counts = ['going' => 0, 'interested' => 0, 'total' => 0];
-		if ($r) while ($r->Next()) {
-			$counts[$r->status] = (int)$r->cnt;
-			$counts['total'] += (int)$r->cnt;
-		}
-		return $counts;
-	}
+    public function add_event_detail($request)
+    {
+        $r = $this->Event->CreateEventDetails($request);
+        logtrace("add_event_detail", array($request, $r));
+        return $r;
+    }
 
-	function get_rsvp_list($detail_id) {
-		global $DB;
-		$DB->Clear();
-		// last-attendance lookup uses a derived-table JOIN on MAX(attendance_id) per mundane,
-		// instead of a per-row correlated subquery — runs once instead of O(n) seeks on ork_attendance.
-		$r = $DB->DataSet("SELECT m.mundane_id, m.persona, er.status, m.waivered, p.park_id, p.abbreviation AS park_abbr, k.kingdom_id, k.abbreviation AS kingdom_abbr, la.class_id AS last_class_id, c.name AS last_class_name FROM " . DB_PREFIX . "event_rsvp er JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = er.mundane_id LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id LEFT JOIN (SELECT mundane_id, MAX(attendance_id) AS last_aid FROM " . DB_PREFIX . "attendance GROUP BY mundane_id) la_max ON la_max.mundane_id = m.mundane_id LEFT JOIN " . DB_PREFIX . "attendance la ON la.attendance_id = la_max.last_aid LEFT JOIN " . DB_PREFIX . "class c ON c.class_id = la.class_id WHERE er.event_calendardetail_id = " . (int)$detail_id . " ORDER BY er.status, m.persona");
-		$list = [];
-		if ($r) while ($r->Next()) {
-			$list[] = ['MundaneId' => $r->mundane_id, 'Persona' => $r->persona, 'Status' => $r->status, 'Waivered' => (bool)$r->waivered, 'KingdomId' => $r->kingdom_id, 'KingdomAbbr' => $r->kingdom_abbr, 'ParkId' => $r->park_id, 'ParkAbbr' => $r->park_abbr, 'LastClassId' => $r->last_class_id, 'LastClassName' => $r->last_class_name];
-		}
-		return $list;
-	}
+    public function delete_calendar_detail($token, $detail_id)
+    {
+        $r = $this->Event->DeleteEventDetail(array('Token' => $token, 'EventCalendarDetailId' => $detail_id));
+        return $r;
+    }
 
-	function get_upcoming_rsvps($mundane_id) {
-		global $DB;
-		$DB->Clear();
-		$r = $DB->DataSet(
-			"SELECT er.event_calendardetail_id, e.event_id, e.name AS event_name, cd.event_start, cd.event_end" .
-			" FROM " . DB_PREFIX . "event_rsvp er" .
-			" JOIN " . DB_PREFIX . "event_calendardetail cd ON cd.event_calendardetail_id = er.event_calendardetail_id" .
-			" JOIN " . DB_PREFIX . "event e ON e.event_id = cd.event_id" .
-			" WHERE er.mundane_id = " . (int)$mundane_id .
-			" AND cd.event_start > NOW()" .
-			" ORDER BY cd.event_start ASC"
-		);
-		$list = [];
-		if ($r) {
-			while ($r->Next()) {
-				$list[] = [
-					'EventCalendarDetailId' => $r->event_calendardetail_id,
-					'EventId'               => $r->event_id,
-					'EventName'             => $r->event_name,
-					'EventStart'            => $r->event_start,
-					'EventEnd'              => $r->event_end,
-				];
-			}
-		}
-		return $list;
-	}
+    private function _eventApiOk($r)
+    {
+        if (is_array($r['Status'] ?? null)) {
+            return ($r['Status']['Status'] ?? 1) == 0;
+        }
+        return ($r['Status'] ?? 1) == 0;
+    }
 
-	function get_kingdom_upcoming_events($kingdom_id, $exclude_mundane_id) {
-		global $DB;
-		$DB->Clear();
-		$r = $DB->DataSet(
-			"SELECT DISTINCT cd.event_calendardetail_id, e.event_id, e.name AS event_name, cd.event_start, cd.event_end," .
-			" p.abbreviation AS park_abbreviation" .
-			" FROM " . DB_PREFIX . "event_calendardetail cd" .
-			" JOIN " . DB_PREFIX . "event e ON e.event_id = cd.event_id" .
-			" LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = e.park_id" .
-			" WHERE e.kingdom_id = " . (int)$kingdom_id .
-			" AND (e.status IS NULL OR e.status = 'published')" .
-			" AND cd.event_start > NOW()" .
-			" AND cd.event_calendardetail_id NOT IN (" .
-			"   SELECT event_calendardetail_id FROM " . DB_PREFIX . "event_rsvp WHERE mundane_id = " . (int)$exclude_mundane_id .
-			" )" .
-			" ORDER BY cd.event_start ASC LIMIT 6"
-		);
-		$list = [];
-		if ($r) while ($r->Next()) {
-			$list[] = [
-				'EventCalendarDetailId' => $r->event_calendardetail_id,
-				'EventId'               => $r->event_id,
-				'EventName'             => $r->event_name,
-				'EventStart'            => $r->event_start,
-				'EventEnd'              => $r->event_end,
-				'ParkAbbreviation'      => $r->park_abbreviation,
-			];
-		}
-		return $list;
-	}
+    public function event_api_ok($r)
+    {
+        return $this->_eventApiOk($r);
+    }
 
-	function delete_event($token, $event_id) {
-		$r = $this->Event->DeleteEvent(array('Token' => $token, 'EventId' => (int)$event_id));
-		return $r;
-	}
+    public function event_api_status($r)
+    {
+        if (is_array($r['Status'] ?? null)) {
+            return (int)($r['Status']['Status'] ?? 1);
+        }
+        return (int)($r['Status'] ?? 1);
+    }
 
-	function update_event($token, $event_id, $kingdom_id, $park_id, $mundane_id, $unit_id, $name, $heraldry, $type) {
-		$r = $this->Event->SetEvent(array('Token'=>$token, 'EventId'=> $event_id, 'KingdomId'=>$kingdom_id, 'ParkId'=>$park_id,
-			'MundaneId'=>$mundane_id, 'UnitId'=>$unit_id,'Name'=>$name, 'Heraldry'=>$heraldry, 'HeraldryMimeType'=>$type));
-		logtrace("update_event($token, $event_id, $kingdom_id, $park_id, $mundane_id, $unit_id, $name)", array($r));
-		return $r;
-	}
+    public function set_rsvp_dated($detail_id, $mundane_id, $status, $token = '')
+    {
+        return $this->Event->SetRsvp([
+            'Token' => (string) $token,
+            'EventCalendarDetailId' => (int)$detail_id,
+            'MundaneId' => (int)$mundane_id,
+            'Status' => $status,
+            'EndDateGate' => 'datetime',
+        ]);
+    }
 
-	/**
-	 * Schedule items for a single event occurrence (event_calendardetail_id),
-	 * ordered by start time, each with its leads attached. Shared by the event
-	 * page and the public embed endpoint so both draw from one query.
-	 */
-	function get_schedule($detail_id) {
-		global $DB;
-		$detail_id = (int)$detail_id;
-		if ($detail_id <= 0) return array();
+    public function withdraw_rsvp_self($detail_id, $mundane_id, $token = '')
+    {
+        return $this->Event->WithdrawRsvp([
+            'Token' => (string) $token,
+            'EventCalendarDetailId' => (int)$detail_id,
+            'MundaneId' => (int)$mundane_id,
+        ]);
+    }
 
-		$DB->Clear();
-		$scheduleRows = $DB->DataSet(
-			'SELECT event_schedule_id AS EventScheduleId, title AS Title,
-			        start_time AS StartTime, end_time AS EndTime,
-			        location AS Location, description AS Description, category AS Category,
-			        secondary_category AS SecondaryCategory,
-			        menu AS Menu, cost AS Cost, dietary AS Dietary, allergens AS Allergens
-			FROM ' . DB_PREFIX . 'event_schedule
-			WHERE event_calendardetail_id = ' . $detail_id . '
-			ORDER BY start_time'
-		);
-		$scheduleList = array();
-		if ($scheduleRows) {
-			while ($scheduleRows->Next()) {
-				$scheduleList[] = array(
-					'EventScheduleId'   => (int)$scheduleRows->EventScheduleId,
-					'Title'             => $scheduleRows->Title,
-					'StartTime'         => $scheduleRows->StartTime,
-					'EndTime'           => $scheduleRows->EndTime,
-					'Location'          => $scheduleRows->Location,
-					'Description'       => $scheduleRows->Description,
-					'Category'          => $scheduleRows->Category,
-					'SecondaryCategory' => $scheduleRows->SecondaryCategory ?? '',
-					'Menu'              => $scheduleRows->Menu,
-					'Cost'              => $scheduleRows->Cost !== null ? (float)$scheduleRows->Cost : null,
-					'Dietary'           => $scheduleRows->Dietary,
-					'Allergens'         => $scheduleRows->Allergens,
-				);
-			}
-		}
-		// Batch-load leads for all schedule items
-		if (!empty($scheduleList)) {
-			$slIds = implode(',', array_map('intval', array_column($scheduleList, 'EventScheduleId')));
-			$DB->Clear();
-			$leadRows = $DB->DataSet(
-				'SELECT sl.event_schedule_id AS EventScheduleId, m.mundane_id AS MundaneId, m.persona AS Persona
-				FROM ' . DB_PREFIX . 'event_schedule_lead sl
-				JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = sl.mundane_id
-				WHERE sl.event_schedule_id IN (' . $slIds . ')
-				ORDER BY m.persona'
-			);
-			$leadsMap = array();
-			if ($leadRows) {
-				while ($leadRows->Next()) {
-					$leadsMap[(int)$leadRows->EventScheduleId][] = array(
-						'MundaneId' => (int)$leadRows->MundaneId,
-						'Persona'   => $leadRows->Persona,
-					);
-				}
-			}
-			foreach ($scheduleList as &$schItem) {
-				$schItem['Leads'] = $leadsMap[(int)$schItem['EventScheduleId']] ?? array();
-			}
-			unset($schItem);
-		}
-		return $scheduleList;
-	}
+    public function get_rsvp($detail_id, $mundane_id)
+    {
+        $r = $this->Event->GetRsvpStatus([
+            'EventCalendarDetailId' => (int)$detail_id,
+            'MundaneId' => (int)$mundane_id,
+        ]);
+        if (!$this->_eventApiOk($r)) {
+            return false;
+        }
+        $status = (string)($r['RsvpStatus'] ?? '');
+        return $status !== '' ? $status : false;
+    }
+
+    // Sets RSVP to $status ('going'|'interested'). If already that status, removes it (toggle off).
+    public function set_rsvp($detail_id, $mundane_id, $status, $token = '')
+    {
+        $r = $this->Event->SetRsvp([
+            'Token' => (string) $token,
+            'EventCalendarDetailId' => (int)$detail_id,
+            'MundaneId' => (int)$mundane_id,
+            'Status' => $status,
+            'AllowToggleOff' => true,
+            'CoerceInvalidStatus' => true,
+            'EndDateGate' => 'none',
+        ]);
+        if (!$this->_eventApiOk($r)) {
+            return false;
+        }
+        if (!empty($r['ToggledOff'])) {
+            return false;
+        }
+        $myStatus = (string)($r['MyStatus'] ?? '');
+        return $myStatus !== '' ? $myStatus : false;
+    }
+
+    public function toggle_rsvp($detail_id, $mundane_id, $token = '')
+    {
+        return $this->set_rsvp($detail_id, $mundane_id, 'going', $token);
+    }
+
+    public function remove_rsvp($detail_id, $mundane_id)
+    {
+        $r = $this->Event->RemoveRsvp([
+            'EventCalendarDetailId' => (int)$detail_id,
+            'TargetMundaneId' => (int)$mundane_id,
+            'AuthorizedByController' => true,
+        ]);
+        return $this->_eventApiOk($r);
+    }
+
+    public function get_rsvp_summary_batch($detail_ids, $mundane_id = 0)
+    {
+        if (!is_array($detail_ids) || empty($detail_ids)) {
+            return [];
+        }
+        $request = ['EventCalendarDetailIds' => array_values(array_map('intval', $detail_ids))];
+        if ((int)$mundane_id > 0) {
+            $request['MundaneId'] = (int)$mundane_id;
+        }
+        $r = $this->Event->GetRsvpSummaryBatch($request);
+        if (!$this->_eventApiOk($r)) {
+            return [];
+        }
+        $byDetail = [];
+        foreach ($r['Items'] ?? [] as $item) {
+            $did = (int)$item['EventCalendarDetailId'];
+            $byDetail[$did] = [
+                'going' => (int)($item['Going'] ?? 0),
+                'interested' => (int)($item['Interested'] ?? 0),
+                'total' => (int)($item['Total'] ?? 0),
+                'status' => (string)($item['RsvpStatus'] ?? ''),
+            ];
+        }
+        return $byDetail;
+    }
+
+    public function get_rsvp_total_counts_batch($detail_ids)
+    {
+        $summary = $this->get_rsvp_summary_batch($detail_ids, 0);
+        $totals = [];
+        foreach ($summary as $did => $counts) {
+            $totals[$did] = (int)$counts['total'];
+        }
+        return $totals;
+    }
+
+    public function get_rsvp_count($detail_id)
+    {
+        $r = $this->Event->GetRsvpCounts(['EventCalendarDetailId' => (int)$detail_id]);
+        if (!$this->_eventApiOk($r)) {
+            return ['going' => 0, 'interested' => 0, 'total' => 0];
+        }
+        return [
+            'going' => (int)($r['Going'] ?? 0),
+            'interested' => (int)($r['Interested'] ?? 0),
+            'total' => (int)($r['Total'] ?? 0),
+        ];
+    }
+
+    public function get_rsvp_list($detail_id)
+    {
+        $r = $this->Event->GetRsvpList(['EventCalendarDetailId' => (int)$detail_id]);
+        if (!$this->_eventApiOk($r)) {
+            return [];
+        }
+        return $r['RsvpPlayers'] ?? [];
+    }
+
+    public function get_upcoming_rsvps($mundane_id)
+    {
+        $r = $this->Event->GetUpcomingRsvps(['MundaneId' => (int)$mundane_id]);
+        if (!$this->_eventApiOk($r)) {
+            return [];
+        }
+        $list = [];
+        foreach ($r['UpcomingRsvps'] ?? [] as $row) {
+            $list[] = [
+                'EventCalendarDetailId' => $row['EventCalendarDetailId'],
+                'EventId' => $row['EventId'],
+                'EventName' => $row['EventName'],
+                'EventStart' => $row['EventStart'],
+                'EventEnd' => $row['EventEnd'],
+            ];
+        }
+        return $list;
+    }
+
+    public function get_kingdom_upcoming_events($kingdom_id, $exclude_mundane_id)
+    {
+        $r = $this->Event->GetKingdomUpcomingEventsWithoutRsvp([
+            'KingdomId' => (int)$kingdom_id,
+            'MundaneId' => (int)$exclude_mundane_id,
+            'Limit' => 6,
+        ]);
+        if (!$this->_eventApiOk($r)) {
+            return [];
+        }
+        $list = [];
+        foreach ($r['KingdomEvents'] ?? [] as $row) {
+            $list[] = [
+                'EventCalendarDetailId' => $row['EventCalendarDetailId'],
+                'EventId' => $row['EventId'],
+                'EventName' => $row['EventName'],
+                'EventStart' => $row['EventStart'],
+                'EventEnd' => $row['EventEnd'],
+                'ParkAbbreviation' => $row['ParkAbbreviation'] ?? '',
+            ];
+        }
+        return $list;
+    }
+
+    public function delete_event($token, $event_id)
+    {
+        $r = $this->Event->DeleteEvent(array('Token' => $token, 'EventId' => (int)$event_id));
+        return $r;
+    }
+
+    public function update_event($token, $event_id, $kingdom_id, $park_id, $mundane_id, $unit_id, $name, $heraldry, $type)
+    {
+        $r = $this->Event->SetEvent(array('Token' => $token, 'EventId' => $event_id, 'KingdomId' => $kingdom_id, 'ParkId' => $park_id,
+            'MundaneId' => $mundane_id, 'UnitId' => $unit_id,'Name' => $name, 'Heraldry' => $heraldry, 'HeraldryMimeType' => $type));
+        logtrace("update_event($token, $event_id, $kingdom_id, $park_id, $mundane_id, $unit_id, $name)", array($r));
+        return $r;
+    }
+
+    /**
+     * Schedule items for one event occurrence. The query remains in
+     * EventPlanning so the event page and public embed share a thin model API.
+     */
+    public function get_schedule($detail_id)
+    {
+        $r = $this->_planning()->GetSchedule([
+            'EventCalendarDetailId' => (int) $detail_id,
+        ]);
+        return $this->_eventApiOk($r) ? ($r['ScheduleList'] ?? []) : [];
+    }
+
+    /**
+     * Public schedule embed: published event + occurrence + schedule list (RB-N).
+     * On failure returns ['ok' => false, 'error' => string, 'http' => int].
+     */
+    public function get_published_schedule_embed($event_id, $detail_id = 0)
+    {
+        $r = $this->_embed()->GetPublishedScheduleEmbed([
+            'EventId' => (int) $event_id,
+            'EventCalendarDetailId' => (int) $detail_id,
+        ]);
+        if ($this->_eventApiOk($r)) {
+            return [
+                'ok' => true,
+                'event_id' => (int) ($r['EventId'] ?? 0),
+                'detail_id' => (int) ($r['EventCalendarDetailId'] ?? 0),
+                'name' => (string) ($r['Name'] ?? ''),
+                'park_name' => (string) ($r['ParkName'] ?? ''),
+                'event_start' => (string) ($r['EventStart'] ?? ''),
+                'event_end' => (string) ($r['EventEnd'] ?? ''),
+                'schedule' => $r['ScheduleList'] ?? [],
+            ];
+        }
+
+        $detail = is_array($r['Status'] ?? null)
+            ? (string) ($r['Status']['Detail'] ?? '')
+            : (string) ($r['Detail'] ?? '');
+        if ($detail === 'Invalid event id') {
+            return ['ok' => false, 'error' => $detail, 'http' => 400];
+        }
+        if ($detail === '') {
+            $detail = 'Event not found';
+        }
+
+        return ['ok' => false, 'error' => $detail, 'http' => 404];
+    }
+
+    public function detail_belongs_to_event($event_id, $detail_id)
+    {
+        $r = $this->_planning()->AssertDetailBelongsToEvent([
+            'EventId' => (int) $event_id,
+            'EventCalendarDetailId' => (int) $detail_id,
+        ]);
+        return $this->_eventApiOk($r) && !empty($r['Belongs']);
+    }
+
+    public function get_default_occurrence_id($event_id)
+    {
+        $r = $this->_planning()->GetDefaultOccurrenceId(['EventId' => (int) $event_id]);
+        if (!$this->_eventApiOk($r)) {
+            return 0;
+        }
+        return (int) ($r['EventCalendarDetailId'] ?? 0);
+    }
+
+    public function get_occurrence_page_data($event_id, $detail_id, $mundane_id = 0, $at_park_id = 0, $fallback_park_id = 0, $include_dietary = false, $token = '')
+    {
+        $r = $this->_planning()->GetOccurrencePageData([
+            'Token' => (string) $token,
+            'EventId' => (int) $event_id,
+            'EventCalendarDetailId' => (int) $detail_id,
+            'MundaneId' => (int) $mundane_id,
+            'AtParkId' => (int) $at_park_id,
+            'FallbackParkId' => (int) $fallback_park_id,
+            'IncludeDietary' => $include_dietary ? 1 : 0,
+        ]);
+        if (!$this->_eventApiOk($r)) {
+            return null;
+        }
+        return $r;
+    }
+
+    public function set_calendar_detail_fees_and_links($event_id, $detail_id, $fees, $links, $token = '')
+    {
+        $r = $this->_planning()->SetCalendarDetailFeesAndLinks([
+            'Token' => (string) $token,
+            'EventId' => (int) $event_id,
+            'EventCalendarDetailId' => (int) $detail_id,
+            'Fees' => is_array($fees) ? $fees : [],
+            'Links' => is_array($links) ? $links : [],
+        ]);
+        if (!$this->_eventApiOk($r)) {
+            return ['feesOk' => false, 'linksOk' => false];
+        }
+        return [
+            'feesOk' => !empty($r['FeesOk']),
+            'linksOk' => !empty($r['LinksOk']),
+        ];
+    }
+
+    public function set_calendar_detail_event_type($event_id, $detail_id, $event_type, $token = '')
+    {
+        $r = $this->_planning()->SetCalendarDetailEventType([
+            'Token' => (string) $token,
+            'EventId' => (int) $event_id,
+            'EventCalendarDetailId' => (int) $detail_id,
+            'EventType' => (string) $event_type,
+        ]);
+        return $this->_eventApiOk($r);
+    }
+
+    public function reconcile_past_attendance($token, $event_id, $detail_id)
+    {
+        $r = $this->_planning()->ReconcilePastAttendance([
+            'Token' => $token,
+            'EventId' => (int) $event_id,
+            'EventCalendarDetailId' => (int) $detail_id,
+        ]);
+        if (!$this->_eventApiOk($r)) {
+            return 0;
+        }
+        return (int) ($r['NewEventCalendarDetailId'] ?? 0);
+    }
+
+    public function get_detail_dependency_counts($detail_id)
+    {
+        $r = $this->_planning()->GetDetailDependencyCounts([
+            'EventCalendarDetailId' => (int) $detail_id,
+        ]);
+        if (!$this->_eventApiOk($r)) {
+            return ['attendance' => 0, 'rsvp' => 0];
+        }
+        return [
+            'attendance' => (int) ($r['AttendanceCount'] ?? 0),
+            'rsvp' => (int) ($r['RsvpCount'] ?? 0),
+        ];
+    }
+
+    public function get_event_redirect_scope($event_id)
+    {
+        $r = $this->_planning()->GetEventRedirectScope(['EventId' => (int) $event_id]);
+        if (!$this->_eventApiOk($r)) {
+            return ['kingdom_id' => 0, 'park_id' => 0];
+        }
+        return [
+            'kingdom_id' => (int) ($r['KingdomId'] ?? 0),
+            'park_id' => (int) ($r['ParkId'] ?? 0),
+        ];
+    }
+
+    public function get_park_name($park_id)
+    {
+        $r = $this->_planning()->GetParkName(['ParkId' => (int) $park_id]);
+        if (!$this->_eventApiOk($r)) {
+            return '';
+        }
+        return (string) ($r['Name'] ?? '');
+    }
+
+    public function is_draft_blocked_for_viewer($event_status, $creator_id, $mundane_id, $can_manage, $staff_caps)
+    {
+        $r = $this->_planning()->IsDraftBlockedForViewer([
+            'EventStatus' => (string) $event_status,
+            'CreatorId' => (int) $creator_id,
+            'MundaneId' => (int) $mundane_id,
+            'CanManageEvent' => $can_manage ? 1 : 0,
+            'StaffCaps' => is_array($staff_caps) ? $staff_caps : [],
+        ]);
+        return $this->_eventApiOk($r) && !empty($r['Blocked']);
+    }
+
+    public function get_event_templates_for_kingdom($kingdom_id)
+    {
+        return $this->Event->GetEventTemplatesForKingdom((int) $kingdom_id);
+    }
+
+    private function _planning(): EventPlanning
+    {
+        return new EventPlanning();
+    }
+
+    private function _embed(): EventEmbed
+    {
+        return new EventEmbed();
+    }
 
 }
-
-?>

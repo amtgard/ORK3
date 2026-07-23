@@ -23,7 +23,7 @@ class Controller_Player extends Controller
             $this->session->kingdom_name = $park_info['KingdomInfo']['KingdomName'];
         }
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if ($_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
+        if ($_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
             $this->data['menu']['admin'] = array( 'url' => UIR.'Admin/player/'.$id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
         }
         $this->data['menulist']['admin'] = array(
@@ -234,7 +234,8 @@ class Controller_Player extends Controller
         $this->data['AllDues'] = $this->Player->get_dues($id, 0, false);
         $this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1, 'Lightweight' => 1 ));
         $this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$id", 'display' => $this->data['Player']['Persona'] );
-        $canEdit    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+        $canEdit    = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+        $this->data['canDeleteRecommendation'] = $this->award_rec_can_delete($uid, AUTH_EDIT);
         if ($canEdit) {
             $this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
         }
@@ -279,6 +280,7 @@ class Controller_Player extends Controller
     public function profile($id = null)
     {
         $this->template = '../revised-frontend/Playernew_index.tpl';
+        $this->load_model('QualTest');
 
         $params    = explode('/', $id ?? '');
         $id        = (int) $params[0];
@@ -382,15 +384,7 @@ class Controller_Player extends Controller
 
         // Custom Title alias dropdown data
         $this->data['CustomAwardId'] = 94;
-        global $DB;
-        $DB->Clear();
-        $_ctSentinel = $DB->DataSet("SELECT award_id FROM " . DB_PREFIX . "award WHERE name = 'Custom Title' AND officer_role='none' LIMIT 1");
-        $_ctid = 0;
-        if ($_ctSentinel && $_ctSentinel->Size() > 0) {
-            $_ctSentinel->Next();
-            $_ctid = (int)$_ctSentinel->award_id;
-        }
-        $this->data['CustomTitleAwardId'] = $_ctid;
+        $this->data['CustomTitleAwardId'] = $this->Player->get_custom_title_award_id();
         $this->data['CustomTitleAliasOptions'] = $this->Award->fetch_custom_title_alias_options();
         $this->data['PronounOptions'] = $this->Pronoun->fetch_pronoun_option_list($this->data['Player']['PronounId']);
         $this->data['PronounList']    = $this->Pronoun->fetch_pronoun_list();
@@ -398,14 +392,20 @@ class Controller_Player extends Controller
         $this->data['Notes']         = [];  // loaded via AJAX on Notes tab click
         // Count-only check so the Notes tab visibility (and the infobox copy)
         // can be accurate on initial PHP render without fetching note bodies.
-        global $DB;
-        $DB->Clear();
-        $_nc = $DB->DataSet("SELECT COUNT(*) AS n FROM " . DB_PREFIX . "mundane_note WHERE mundane_id = " . (int)$id);
-        $this->data['HasNotes']      = ($_nc && $_nc->Next()) ? ((int)$_nc->n > 0) : false;
+        $this->data['HasNotes']      = $this->Player->has_notes($id);
         $this->data['Dues']          = $this->Player->get_dues($id, 1, true);
         $this->data['AllDues']       = [];  // loaded via AJAX when dues modal opens
         $this->data['Units']         = $this->Unit->get_unit_list(['MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1, 'Lightweight' => 1]);
-        $canEdit    = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+        $canEdit    = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+        $playerParkId = (int)($this->data['Player']['ParkId'] ?? 0);
+        $playerKingdomId = (int)($this->data['Player']['KingdomId'] ?? 0);
+        $this->data['canEditAdmin'] = $canEdit;
+        $this->data['canDeleteRecommendation'] = $this->award_rec_can_delete($uid, AUTH_CREATE);
+        $this->data['pnCanManageBanner'] = ($uid === (int)$id)
+            || $canEdit
+            || ($playerKingdomId > 0 && $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $playerKingdomId, AUTH_EDIT))
+            || ($uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN));
+        $this->data['canManageAwards'] = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_CREATE);
         $knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
         $recsPublic = isset($knConfigs['AwardRecsPublic']) ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
         $this->data['ShowRecsTab']          = $recsPublic || $canEdit;
@@ -414,119 +414,20 @@ class Controller_Player extends Controller
 
         // Voting eligibility badge loaded via AJAX after page render (PlayerAjax/voting_eligible)
 
-        global $DB;
-        $DB->Clear();
-        $officerSql   = "SELECT o.role, o.park_id,
-			CASE WHEN o.park_id > 0 THEN IFNULL(pt.title, 'Park')
-			     WHEN k.parent_kingdom_id > 0 THEN 'Principality'
-			     ELSE 'Kingdom' END AS entity_type,
-			CASE WHEN o.park_id > 0 THEN p.name ELSE k.name END AS entity_name
-			FROM ork_officer o
-			LEFT JOIN ork_kingdom k ON o.kingdom_id = k.kingdom_id
-			LEFT JOIN ork_park p ON o.park_id = p.park_id AND o.park_id > 0
-			LEFT JOIN ork_parktitle pt ON p.parktitle_id = pt.parktitle_id
-			WHERE o.mundane_id = " . (int)$id . "
-			  AND k.active = 'Active'
-			  AND (o.park_id = 0 OR p.active = 'Active')
-			ORDER BY o.park_id DESC, o.role";
-        $officerResult = $DB->DataSet($officerSql);
-        $officerRoles  = [];
-        if ($officerResult->Size() > 0) {
-            while ($officerResult->Next()) {
-                $officerRoles[] = [
-                    'role'        => $officerResult->role,
-                    'entity_type' => $officerResult->entity_type,
-                    'entity_name' => $officerResult->entity_name,
-                ];
-            }
-        }
-        $this->data['OfficerRoles'] = $officerRoles;
+        $this->data['OfficerRoles'] = $this->Player->get_officer_roles($id);
 
         $this->data['RevokedAwards'] = [];
         $this->data['RevokedTitles'] = [];
         if ($canEdit) {
-            $revokedBaseSql = "SELECT a.awards_id, a.rank, a.date, a.revoked_at, a.revocation,
-				COALESCE(NULLIF(a.custom_name,''), ka.name, aw.name) AS award_name,
-				m.persona AS revoked_by
-				FROM ork_awards a
-				LEFT JOIN ork_kingdomaward ka ON a.kingdomaward_id = ka.kingdomaward_id
-				LEFT JOIN ork_award aw ON a.award_id = aw.award_id
-				LEFT JOIN ork_mundane m ON a.revoked_by_id = m.mundane_id
-				WHERE a.stripped_from = " . (int)$id . "
-				  AND a.revoked = 1";
-            $revokedAwardsSql = $revokedBaseSql . "
-				  AND (aw.officer_role = 'none' OR aw.officer_role IS NULL)
-				  AND (ka.is_title IS NULL OR ka.is_title = 0)
-				ORDER BY a.revoked_at DESC, a.date DESC";
-            $revokedTitlesSql = $revokedBaseSql . "
-				  AND (aw.officer_role != 'none' OR ka.is_title = 1)
-				ORDER BY a.revoked_at DESC, a.date DESC";
-            foreach (['RevokedAwards' => $revokedAwardsSql, 'RevokedTitles' => $revokedTitlesSql] as $key => $sql) {
-                $DB->Clear();
-                $result = $DB->DataSet($sql);
-                $rows = [];
-                if ($result->Size() > 0) {
-                    while ($result->Next()) {
-                        $rows[] = [
-                            'AwardsId'   => $result->awards_id,
-                            'AwardName'  => $result->award_name,
-                            'Rank'       => $result->rank,
-                            'Date'       => $result->date,
-                            'RevokedAt'  => $result->revoked_at,
-                            'Revocation' => $result->revocation,
-                            'RevokedBy'  => $result->revoked_by,
-                        ];
-                    }
-                }
-                $this->data[$key] = $rows;
-            }
+            $revoked = $this->Player->get_revoked_awards($id);
+            $this->data['RevokedAwards'] = $revoked['RevokedAwards'] ?? [];
+            $this->data['RevokedTitles'] = $revoked['RevokedTitles'] ?? [];
         }
 
-        $DB->Clear();
-        $adminCheck = $DB->DataSet(
-            "SELECT 1 FROM ork_authorization
-			 WHERE mundane_id = " . (int)$id . "
-			   AND role = 'admin'
-			   AND park_id = 0 AND kingdom_id = 0 AND event_id = 0 AND unit_id = 0
-			 LIMIT 1"
-        );
-        $this->data['IsOrkAdmin']       = ($adminCheck && $adminCheck->Size() > 0);
-        $this->data['ViewerIsOrkAdmin'] = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, null, null);
-        $DB->Clear();
-
-        // Scoped park/kingdom admin grants — surfaces "untitled" admins. Includes
-        // role='admin' and role='create' because they grant the same effective
-        // power under HasAuthority (both short-circuit to true in the role
-        // switch). Officer-row grants are filtered out so a titled officer
-        // doesn't appear as both Crown and Park Admin. Event and unit grants
-        // are intentionally excluded — they accumulate across the player's
-        // history and clutter the banner without communicating identity.
-        // GROUP BY collapses duplicate grants on the same scope into one badge.
-        $DB->Clear();
-        $adminGrants = $DB->DataSet(
-            "SELECT a.park_id, MAX(p.name) AS park_name,
-			        a.kingdom_id, MAX(k.name) AS kingdom_name
-			 FROM ork_authorization a
-			 LEFT JOIN ork_park    p ON p.park_id    = a.park_id
-			 LEFT JOIN ork_kingdom k ON k.kingdom_id = a.kingdom_id
-			 LEFT JOIN ork_officer o ON o.authorization_id = a.authorization_id
-			 WHERE a.mundane_id = " . (int)$id . "
-			   AND a.role IN ('admin', 'create')
-			   AND (a.park_id > 0 OR a.kingdom_id > 0)
-			   AND o.authorization_id IS NULL
-			 GROUP BY a.park_id, a.kingdom_id"
-        );
-        $_adminBadges = [];
-        if ($adminGrants && $adminGrants->Size() > 0) {
-            do {
-                if ($adminGrants->park_id > 0) {
-                    $_adminBadges[] = ['scope' => 'Park',    'id' => (int)$adminGrants->park_id,    'name' => $adminGrants->park_name];
-                } elseif ($adminGrants->kingdom_id > 0) {
-                    $_adminBadges[] = ['scope' => 'Kingdom', 'id' => (int)$adminGrants->kingdom_id, 'name' => $adminGrants->kingdom_name];
-                }
-            } while ($adminGrants->Next());
-        }
-        $this->data['AdminGrants'] = $_adminBadges;
+        $displayGrants = $this->Player->get_display_grants($id);
+        $this->data['IsOrkAdmin']       = $displayGrants['IsOrkAdmin'];
+        $this->data['ViewerIsOrkAdmin'] = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, null, null);
+        $this->data['AdminGrants'] = $displayGrants['AdminGrants'];
 
         // Attendance loaded async — counts start at 0 and are updated via AJAX
         $this->data['Stats'] = [
@@ -595,173 +496,21 @@ class Controller_Player extends Controller
         $this->data['Player']['ParkName'] = $this->session->park_name;
 
 
-        // Beltline: My Peers (who gave this player peerage awards)
-        $DB->Clear();
-        $__peerSql = "SELECT m.mundane_id AS PeerId, m.persona AS Persona,
-			COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name) AS TitleName,
-			COALESCE(alias.peerage, a.peerage) AS Peerage, ma.date AS Date
-			FROM ork_awards ma
-			JOIN ork_award a ON a.award_id = ma.award_id
-			LEFT JOIN ork_award alias ON alias.award_id = ma.alias_award_id
-			LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-			JOIN ork_mundane m ON m.mundane_id = ma.given_by_id
-			WHERE ma.mundane_id = " . (int)$id . "
-				AND (COALESCE(alias.peerage, a.peerage) IN ('Squire','Man-At-Arms','Page','Lords-Page')
-					OR LOWER(COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name)) LIKE '%woman%at%arms%')
-				AND (ma.revoked = 0 OR ma.revoked IS NULL)
-				AND ma.given_by_id > 0
-			ORDER BY CASE COALESCE(alias.peerage, a.peerage)
-				WHEN 'Squire' THEN 1 WHEN 'Man-At-Arms' THEN 2
-				WHEN 'Lords-Page' THEN 3 WHEN 'Page' THEN 4 ELSE 5 END, m.persona ASC";
-        $__peerResult = $DB->DataSet($__peerSql);
-        $__peers = [];
-        if ($__peerResult) {
-            while ($__peerResult->Next()) {
-                $__peers[] = [
-                    'PeerId'    => (int)$__peerResult->PeerId,
-                    'Persona'   => $__peerResult->Persona,
-                    'TitleName' => $__peerResult->TitleName,
-                    'Peerage'   => $__peerResult->Peerage,
-                    'Date'      => $__peerResult->Date,
-                ];
-            }
+        // Beltline peers, associates, and title list (domain aggregate)
+        $beltline = $this->Player->get_beltline_for_player($id, $uid);
+        $this->data['BeltlinePeers'] = $beltline['Peers'];
+        $this->data['BeltlineAssociates'] = $beltline['Associates'];
+        if ($uid === (int)$id) {
+            $this->data['MyAssociates'] = $beltline['MyAssociates'];
         }
-        $DB->Clear();
-        $this->data['BeltlinePeers'] = $__peers;
-
-        // Beltline: My Associates (who this player gave peerage awards to)
-        $DB->Clear();
-        $__blAssocSql = "SELECT ma.mundane_id AS RecipientId, m.persona AS Persona,
-			COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name) AS TitleName,
-			COALESCE(alias.peerage, a.peerage) AS Peerage, ma.date AS Date
-			FROM ork_awards ma
-			JOIN ork_award a ON a.award_id = ma.award_id
-			LEFT JOIN ork_award alias ON alias.award_id = ma.alias_award_id
-			LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-			JOIN ork_mundane m ON m.mundane_id = ma.mundane_id
-			WHERE ma.given_by_id = " . (int)$id . "
-				AND (COALESCE(alias.peerage, a.peerage) IN ('Squire','Man-At-Arms','Page','Lords-Page')
-					OR LOWER(COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name)) LIKE '%woman%at%arms%')
-				AND (ma.revoked = 0 OR ma.revoked IS NULL)
-			ORDER BY CASE COALESCE(alias.peerage, a.peerage)
-				WHEN 'Squire' THEN 1 WHEN 'Man-At-Arms' THEN 2
-				WHEN 'Lords-Page' THEN 3 WHEN 'Page' THEN 4 ELSE 5 END, m.persona ASC";
-        $__blAssocResult = $DB->DataSet($__blAssocSql);
-        $__blAssocs = [];
-        if ($__blAssocResult) {
-            while ($__blAssocResult->Next()) {
-                $__blAssocs[] = [
-                    'RecipientId' => (int)$__blAssocResult->RecipientId,
-                    'Persona'     => $__blAssocResult->Persona,
-                    'TitleName'   => $__blAssocResult->TitleName,
-                    'Peerage'     => $__blAssocResult->Peerage,
-                    'Date'        => $__blAssocResult->Date,
-                ];
-            }
-        }
-        $DB->Clear();
-        $this->data['BeltlineAssociates'] = $__blAssocs;
 
         // Feast preferences for the About-tab "Feast Preferences" card.
         // Always loaded — the template gates visibility on Show My Feast
         // Preferences + presence of meaningful data. Cheap single-row read.
-        $this->data['FeastPrefs'] = $this->Player->GetDietaryPreferences((int)$id);
+        $this->data['FeastPrefs'] = $this->Player->get_dietary_preferences((int)$id);
 
-        if ($uid === (int)$id) {
-            $DB->Clear();
-            $__assocSql = "SELECT ma.mundane_id AS RecipientId, m.persona AS Persona,
-				COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name) AS TitleName,
-				COALESCE(alias.peerage, a.peerage) AS Peerage, ma.date AS Date
-				FROM ork_awards ma
-				JOIN ork_award a ON a.award_id = ma.award_id
-				LEFT JOIN ork_award alias ON alias.award_id = ma.alias_award_id
-				LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-				JOIN ork_mundane m ON m.mundane_id = ma.mundane_id
-				WHERE ma.given_by_id = $uid
-					AND (COALESCE(alias.peerage, a.peerage) IN ('Squire','Man-At-Arms','Page','Lords-Page')
-						OR LOWER(COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name)) LIKE '%woman%at%arms%')
-					AND (ma.revoked = 0 OR ma.revoked IS NULL)
-				ORDER BY CASE COALESCE(alias.peerage, a.peerage)
-					WHEN 'Squire' THEN 1 WHEN 'Man-At-Arms' THEN 2
-					WHEN 'Lords-Page' THEN 3 WHEN 'Page' THEN 4 ELSE 5 END, m.persona ASC";
-            $__assocResult = $DB->DataSet($__assocSql);
-            $__assocs = [];
-            if ($__assocResult) {
-                while ($__assocResult->Next()) {
-                    $__assocs[] = [
-                        'RecipientId' => (int)$__assocResult->RecipientId,
-                        'Persona'     => $__assocResult->Persona,
-                        'TitleName'   => $__assocResult->TitleName,
-                        'Peerage'     => $__assocResult->Peerage,
-                        'Date'        => $__assocResult->Date,
-                    ];
-                }
-            }
-            $DB->Clear();
-            // Same dedupe — first occurrence per recipient is the highest
-            // peerage rank, so the "My Associates" list collapses to one
-            // row per associate at their current rank.
-            $__assocSeen = [];
-            $__assocs    = array_values(array_filter($__assocs, function ($r) use (&$__assocSeen) {
-                if (isset($__assocSeen[$r['RecipientId']])) {
-                    return false;
-                }
-                $__assocSeen[$r['RecipientId']] = true;
-                return true;
-            }));
-            $this->data['MyAssociates'] = $__assocs;
-        }
-
-        // Player titles for the design modal's prefix/suffix dropdowns. Belongs
-        // to the *profile owner*, not the viewer — so it must populate for any
-        // editor (self or ORK admin), not just self-views.
-        $DB->Clear();
-        $__titleSql = "SELECT DISTINCT
-			COALESCE(NULLIF(ma.custom_name,''), NULLIF(ka.name,''), a.name) AS title_name,
-			COALESCE(alias.officer_role, a.officer_role) AS officer_role,
-			COALESCE(alias.peerage, a.peerage) AS peerage,
-			GREATEST(IFNULL(ka.is_title, 0), IFNULL(alias.is_title, 0), a.is_title) AS is_title
-			FROM ork_awards ma
-			JOIN ork_award a ON a.award_id = ma.award_id
-			LEFT JOIN ork_award alias ON alias.award_id = ma.alias_award_id
-			LEFT JOIN ork_kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
-			WHERE ma.mundane_id = " . (int)$id . "
-			  AND (ma.revoked = 0 OR ma.revoked IS NULL)
-			  AND (COALESCE(alias.officer_role, a.officer_role) != 'none'
-			       OR IFNULL(ka.is_title, 0) = 1 OR IFNULL(alias.is_title, 0) = 1 OR a.is_title = 1
-			       OR COALESCE(alias.peerage, a.peerage) NOT IN ('None',''))
-			ORDER BY COALESCE(alias.peerage, a.peerage) ASC, title_name ASC";
-        $__titleResult = $DB->DataSet($__titleSql);
-        $__titles = [];
-        if ($__titleResult) {
-            while ($__titleResult->Next()) {
-                $__titles[] = [
-                    'TitleName'   => $__titleResult->title_name,
-                    'OfficerRole' => $__titleResult->officer_role,
-                    'Peerage'     => $__titleResult->peerage,
-                    'IsTitle'     => (int)$__titleResult->is_title,
-                ];
-            }
-        }
-        $DB->Clear();
-        // Add standalone Master/Paragon if player has any Master X or Paragon X awards
-        $hasMaster = false;
-        $hasParagon = false;
-        foreach ($__titles as $_t) {
-            if ($_t['Peerage'] === 'Master') {
-                $hasMaster = true;
-            }
-            if ($_t['Peerage'] === 'Paragon') {
-                $hasParagon = true;
-            }
-        }
-        if ($hasMaster) {
-            array_unshift($__titles, ['TitleName' => 'Master', 'OfficerRole' => 'none', 'Peerage' => 'Master', 'IsTitle' => 0]);
-        }
-        if ($hasParagon) {
-            array_unshift($__titles, ['TitleName' => 'Paragon', 'OfficerRole' => 'none', 'Peerage' => 'Paragon', 'IsTitle' => 0]);
-        }
-        $this->data['PlayerTitles'] = $__titles;
+        // Player titles for the design modal's prefix/suffix dropdowns.
+        $this->data['PlayerTitles'] = $beltline['Titles'];
 
         // ===== Milestones Timeline Data =====
         $__milestones = [];
@@ -961,16 +710,16 @@ class Controller_Player extends Controller
         // be told "Not enough active questions available" — inviting them to do something that
         // cannot be done. A test is takeable only if it is ALSO published with enough questions.
         $this->data['QualTakeable'] = [
-            'reeve'   => $qualReeveEnabled   && Ork3::$Lib->qualtest->hasTakeableVersion($playerKingdomId, 'reeve'),
-            'corpora' => $qualCorporaEnabled && Ork3::$Lib->qualtest->hasTakeableVersion($playerKingdomId, 'corpora'),
+            'reeve'   => $qualReeveEnabled   && $this->QualTest->has_takeable_version($playerKingdomId, 'reeve'),
+            'corpora' => $qualCorporaEnabled && $this->QualTest->has_takeable_version($playerKingdomId, 'corpora'),
         ];
 
         if ($qualReeveEnabled || $qualCorporaEnabled) {
-            $this->data['QualResults']   = Ork3::$Lib->qualtest->getPlayerResults((int)$id, $playerKingdomId);
-            $this->data['QualCanManage'] = $canEdit || Ork3::$Lib->qualtest->canManage($uid, $playerKingdomId);
+            $this->data['QualResults']   = $this->QualTest->player_results((int)$id, $playerKingdomId);
+            $this->data['QualCanManage'] = $canEdit || $this->QualTest->can_manage($uid, $playerKingdomId);
             $this->data['QualConfigs']   = [
-                'reeve'   => $qualReeveEnabled ? Ork3::$Lib->qualtest->getConfig($playerKingdomId, 'reeve') : null,
-                'corpora' => $qualCorporaEnabled ? Ork3::$Lib->qualtest->getConfig($playerKingdomId, 'corpora') : null,
+                'reeve'   => $qualReeveEnabled ? $this->QualTest->config($playerKingdomId, 'reeve') : null,
+                'corpora' => $qualCorporaEnabled ? $this->QualTest->config($playerKingdomId, 'corpora') : null,
             ];
         } else {
             $this->data['QualResults']   = [];
@@ -998,7 +747,7 @@ class Controller_Player extends Controller
         $this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 
         $playerParkId = (int)($this->data['Player']['ParkId'] ?? 0);
-        $canEditAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $playerParkId, AUTH_EDIT);
+        $canEditAdmin = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_EDIT);
         $isOwnProfile = $uid === $id;
         if (!$canEditAdmin && !$isOwnProfile) {
             header('Location: ' . UIR . "Player/profile/$id");
@@ -1029,18 +778,22 @@ class Controller_Player extends Controller
         $this->data['PreloadOfficers'] = $preloadOfficers;
 
         // AwardId → KingdomAwardId map for current kingdom (pre-match historical award dropdowns)
-        global $DB;
-        $DB->Clear();
-        $rs = $DB->DataSet(
-            'SELECT kingdomaward_id, award_id FROM ork_kingdomaward WHERE kingdom_id = ' . (int)$this->session->kingdom_id . ' AND is_title = 0'
-        );
-        $awardIdMap = [];
-        if ($rs) {
-            while ($rs->Next()) {
-                $awardIdMap[(int)$rs->award_id] = (int)$rs->kingdomaward_id;
-            }
+        $this->data['AwardIdToKingdomAwardId'] = $this->Player->get_reconcile_award_map((int)$this->session->kingdom_id);
+    }
+
+    private function award_rec_can_delete(int $uid, string $role): bool
+    {
+        if ($uid <= 0) {
+            return false;
         }
-        $this->data['AwardIdToKingdomAwardId'] = $awardIdMap;
+        if (isset($this->session->park_id) && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$this->session->park_id, $role)) {
+            return true;
+        }
+        if (isset($this->session->kingdom_id) && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, $role)) {
+            return true;
+        }
+
+        return false;
     }
 
 }

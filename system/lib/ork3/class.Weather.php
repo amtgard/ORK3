@@ -355,6 +355,35 @@ class Weather extends Ork3
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.archive_for_coords', $key, $result);
     }
 
+    public function GetArchiveForPark($request)
+    {
+        $parkId = (int)($request['ParkId'] ?? 0);
+        $date = (string)($request['Date'] ?? '');
+        if (!valid_id($parkId)) {
+            return InvalidParameter('Invalid park ID');
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return InvalidParameter('Invalid date');
+        }
+
+        return Success(['Weather' => $this->archive_for_date($parkId, $date)]);
+    }
+
+    public function GetArchiveForCoords($request)
+    {
+        $lat = $request['Lat'] ?? null;
+        $lng = $request['Lng'] ?? null;
+        $date = (string)($request['Date'] ?? '');
+        if (!is_numeric($lat) || !is_numeric($lng)) {
+            return InvalidParameter('Invalid coordinates');
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return InvalidParameter('Invalid date');
+        }
+
+        return Success(['Weather' => $this->archive_for_coords((float)$lat, (float)$lng, $date)]);
+    }
+
     /**
      * Convenience: look up a park's forecast for a date AND its 7-day daily
      * block in one call, return the badges for that date with week-relative
@@ -447,6 +476,33 @@ class Weather extends Ork3
             return array($lat, $lng);
         }
         return $this->parse_location_blob($rs->location);
+    }
+
+    /**
+     * Event occurrence coordinates when set on event_calendardetail (R-18).
+     *
+     * @return array{0: float, 1: float}|null
+     */
+    public function coords_for_calendar_detail(int $detailId): ?array
+    {
+        $detailId = (int) $detailId;
+        if ($detailId <= 0) {
+            return null;
+        }
+        $rs = $this->db->query(
+            'SELECT latitude, longitude FROM ' . DB_PREFIX . 'event_calendardetail
+             WHERE event_calendardetail_id = ' . $detailId . ' LIMIT 1'
+        );
+        if (!$rs || $rs->size() === 0 || !$rs->next()) {
+            return null;
+        }
+        $lat = (float) $rs->latitude;
+        $lng = (float) $rs->longitude;
+        if ($lat === 0.0 && $lng === 0.0) {
+            return null;
+        }
+
+        return [$lat, $lng];
     }
 
     /**
@@ -1501,5 +1557,45 @@ class Weather extends Ork3
             return $body;
         }
         return @file_get_contents($url);
+    }
+
+    /**
+     * @return array{total_active: int, fresh: int, aging: int, stale_row: int}
+     */
+    public function GetFreshnessBuckets(): array
+    {
+        $admin = new Administration();
+
+        return $admin->GetServerHealthWeatherSummary();
+    }
+
+    public function GetPreviousFetchedAt(): ?string
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet('SELECT MAX(fetched_at) AS prev FROM ' . DB_PREFIX . 'park_weather');
+        if ($rs && $rs->Size() > 0 && $rs->Next()) {
+            return $rs->prev ?: null;
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{count: int, elapsed_ms: int, previous_fetched_at: ?string, previous_age_min: ?int}
+     */
+    public function AdminRefreshWithPrior(): array
+    {
+        $prev = $this->GetPreviousFetchedAt();
+        $prevAgeMin = $prev ? (int) round((time() - strtotime($prev)) / 60) : null;
+        $start = microtime(true);
+        $count = $this->refresh_all_active_parks();
+        $elapsedMs = (int) round((microtime(true) - $start) * 1000);
+
+        return [
+            'count' => $count,
+            'elapsed_ms' => $elapsedMs,
+            'previous_fetched_at' => $prev,
+            'previous_age_min' => $prevAgeMin,
+        ];
     }
 }

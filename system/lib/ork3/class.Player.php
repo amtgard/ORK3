@@ -30,6 +30,407 @@ class Player extends Ork3
         return $this->_customTitleAwardId;
     }
 
+    /**
+     * @return bool True when the player has at least one note (T-PLR-02).
+     */
+    public function GetNotesCount($mundaneId)
+    {
+        if (!valid_id($mundaneId)) {
+            return false;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT COUNT(*) AS n FROM ' . DB_PREFIX . 'mundane_note WHERE mundane_id = ' . (int) $mundaneId
+        );
+
+        return ($rs && $rs->Next()) ? ((int) $rs->n > 0) : false;
+    }
+
+    /**
+     * @return list<array{role: mixed, entity_type: mixed, entity_name: mixed}>
+     */
+    public function GetOfficerRoles($mundaneId)
+    {
+        if (!valid_id($mundaneId)) {
+            return [];
+        }
+        $this->db->Clear();
+        $officerSql = "SELECT o.role, o.park_id,
+            CASE WHEN o.park_id > 0 THEN IFNULL(pt.title, 'Park')
+                 WHEN k.parent_kingdom_id > 0 THEN 'Principality'
+                 ELSE 'Kingdom' END AS entity_type,
+            CASE WHEN o.park_id > 0 THEN p.name ELSE k.name END AS entity_name
+            FROM " . DB_PREFIX . 'officer o
+            LEFT JOIN ' . DB_PREFIX . 'kingdom k ON o.kingdom_id = k.kingdom_id
+            LEFT JOIN ' . DB_PREFIX . 'park p ON o.park_id = p.park_id AND o.park_id > 0
+            LEFT JOIN ' . DB_PREFIX . 'parktitle pt ON p.parktitle_id = pt.parktitle_id
+            WHERE o.mundane_id = ' . (int) $mundaneId . "
+              AND k.active = 'Active'
+              AND (o.park_id = 0 OR p.active = 'Active')
+            ORDER BY o.park_id DESC, o.role";
+        $officerResult = $this->db->DataSet($officerSql);
+        $officerRoles = [];
+        if ($officerResult && $officerResult->Size() > 0) {
+            while ($officerResult->Next()) {
+                $officerRoles[] = [
+                    'role' => $officerResult->role,
+                    'entity_type' => $officerResult->entity_type,
+                    'entity_name' => $officerResult->entity_name,
+                ];
+            }
+        }
+
+        return $officerRoles;
+    }
+
+    /**
+     * Beltline peers, associates, owner-only associates, and title list (T-PLR-06).
+     *
+     * @return array{Peers: list<array>, Associates: list<array>, MyAssociates: list<array>, Titles: list<array>}
+     */
+    public function GetBeltlineForPlayer($mundaneId, $viewerMundaneId = 0)
+    {
+        $mundaneId = (int) $mundaneId;
+        $viewerMundaneId = (int) $viewerMundaneId;
+        $peerOrder = "ORDER BY CASE COALESCE(alias.peerage, a.peerage)
+            WHEN 'Squire' THEN 1 WHEN 'Man-At-Arms' THEN 2
+            WHEN 'Lords-Page' THEN 3 WHEN 'Page' THEN 4 ELSE 5 END, m.persona ASC";
+        $peerFilter = "(COALESCE(alias.peerage, a.peerage) IN ('Squire','Man-At-Arms','Page','Lords-Page')
+            OR LOWER(COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name)) LIKE '%woman%at%arms%')";
+
+        $this->db->Clear();
+        $peerSql = "SELECT m.mundane_id AS PeerId, m.persona AS Persona,
+            COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name) AS TitleName,
+            COALESCE(alias.peerage, a.peerage) AS Peerage, ma.date AS Date
+            FROM " . DB_PREFIX . 'awards ma
+            JOIN ' . DB_PREFIX . 'award a ON a.award_id = ma.award_id
+            LEFT JOIN ' . DB_PREFIX . 'award alias ON alias.award_id = ma.alias_award_id
+            LEFT JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+            JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = ma.given_by_id
+            WHERE ma.mundane_id = ' . $mundaneId . "
+                AND {$peerFilter}
+                AND (ma.revoked = 0 OR ma.revoked IS NULL)
+                AND ma.given_by_id > 0
+            {$peerOrder}";
+        $peerResult = $this->db->DataSet($peerSql);
+        $peers = [];
+        if ($peerResult) {
+            while ($peerResult->Next()) {
+                $peers[] = [
+                    'PeerId' => (int) $peerResult->PeerId,
+                    'Persona' => $peerResult->Persona,
+                    'TitleName' => $peerResult->TitleName,
+                    'Peerage' => $peerResult->Peerage,
+                    'Date' => $peerResult->Date,
+                ];
+            }
+        }
+
+        $this->db->Clear();
+        $assocSql = "SELECT ma.mundane_id AS RecipientId, m.persona AS Persona,
+            COALESCE(NULLIF(ma.custom_name,''), ka.name, a.name) AS TitleName,
+            COALESCE(alias.peerage, a.peerage) AS Peerage, ma.date AS Date
+            FROM " . DB_PREFIX . 'awards ma
+            JOIN ' . DB_PREFIX . 'award a ON a.award_id = ma.award_id
+            LEFT JOIN ' . DB_PREFIX . 'award alias ON alias.award_id = ma.alias_award_id
+            LEFT JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+            JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = ma.mundane_id
+            WHERE ma.given_by_id = ' . $mundaneId . "
+                AND {$peerFilter}
+                AND (ma.revoked = 0 OR ma.revoked IS NULL)
+            {$peerOrder}";
+        $assocResult = $this->db->DataSet($assocSql);
+        $associates = [];
+        if ($assocResult) {
+            while ($assocResult->Next()) {
+                $associates[] = [
+                    'RecipientId' => (int) $assocResult->RecipientId,
+                    'Persona' => $assocResult->Persona,
+                    'TitleName' => $assocResult->TitleName,
+                    'Peerage' => $assocResult->Peerage,
+                    'Date' => $assocResult->Date,
+                ];
+            }
+        }
+
+        $myAssociates = [];
+        if ($viewerMundaneId > 0 && $viewerMundaneId === $mundaneId) {
+            $myAssociates = $associates;
+            $seen = [];
+            $myAssociates = array_values(array_filter($myAssociates, function ($row) use (&$seen) {
+                if (isset($seen[$row['RecipientId']])) {
+                    return false;
+                }
+                $seen[$row['RecipientId']] = true;
+
+                return true;
+            }));
+        }
+
+        $this->db->Clear();
+        $titleSql = "SELECT DISTINCT
+            COALESCE(NULLIF(ma.custom_name,''), NULLIF(ka.name,''), a.name) AS title_name,
+            COALESCE(alias.officer_role, a.officer_role) AS officer_role,
+            COALESCE(alias.peerage, a.peerage) AS peerage,
+            GREATEST(IFNULL(ka.is_title, 0), IFNULL(alias.is_title, 0), a.is_title) AS is_title
+            FROM " . DB_PREFIX . 'awards ma
+            JOIN ' . DB_PREFIX . 'award a ON a.award_id = ma.award_id
+            LEFT JOIN ' . DB_PREFIX . 'award alias ON alias.award_id = ma.alias_award_id
+            LEFT JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = ma.kingdomaward_id
+            WHERE ma.mundane_id = ' . $mundaneId . "
+              AND (ma.revoked = 0 OR ma.revoked IS NULL)
+              AND (COALESCE(alias.officer_role, a.officer_role) != 'none'
+                   OR IFNULL(ka.is_title, 0) = 1 OR IFNULL(alias.is_title, 0) = 1 OR a.is_title = 1
+                   OR COALESCE(alias.peerage, a.peerage) NOT IN ('None',''))
+            ORDER BY COALESCE(alias.peerage, a.peerage) ASC, title_name ASC";
+        $titleResult = $this->db->DataSet($titleSql);
+        $titles = [];
+        if ($titleResult) {
+            while ($titleResult->Next()) {
+                $titles[] = [
+                    'TitleName' => $titleResult->title_name,
+                    'OfficerRole' => $titleResult->officer_role,
+                    'Peerage' => $titleResult->peerage,
+                    'IsTitle' => (int) $titleResult->is_title,
+                ];
+            }
+        }
+        $hasMaster = false;
+        $hasParagon = false;
+        foreach ($titles as $titleRow) {
+            if ($titleRow['Peerage'] === 'Master') {
+                $hasMaster = true;
+            }
+            if ($titleRow['Peerage'] === 'Paragon') {
+                $hasParagon = true;
+            }
+        }
+        if ($hasMaster) {
+            array_unshift($titles, ['TitleName' => 'Master', 'OfficerRole' => 'none', 'Peerage' => 'Master', 'IsTitle' => 0]);
+        }
+        if ($hasParagon) {
+            array_unshift($titles, ['TitleName' => 'Paragon', 'OfficerRole' => 'none', 'Peerage' => 'Paragon', 'IsTitle' => 0]);
+        }
+
+        return [
+            'Peers' => $peers,
+            'Associates' => $associates,
+            'MyAssociates' => $myAssociates,
+            'Titles' => $titles,
+        ];
+    }
+
+    /**
+     * @return array<int, int> award_id => kingdomaward_id
+     */
+    public function GetReconcileAwardMap($kingdomId)
+    {
+        if (!valid_id($kingdomId)) {
+            return [];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT kingdomaward_id, award_id FROM ' . DB_PREFIX . 'kingdomaward
+             WHERE kingdom_id = ' . (int) $kingdomId . ' AND is_title = 0'
+        );
+        $awardIdMap = [];
+        if ($rs) {
+            while ($rs->Next()) {
+                $awardIdMap[(int) $rs->award_id] = (int) $rs->kingdomaward_id;
+            }
+        }
+
+        return $awardIdMap;
+    }
+
+    public function CheckUsernameAvailable($username, $excludeMundaneId = 0)
+    {
+        $username = trim((string) $username);
+        if (strlen($username) < 4) {
+            return false;
+        }
+        $this->mundane->clear();
+        $this->mundane->username = $username;
+        if (!$this->mundane->find()) {
+            return true;
+        }
+
+        return valid_id($excludeMundaneId) && (int) $this->mundane->mundane_id === (int) $excludeMundaneId;
+    }
+
+    /**
+     * @return array<int, int> award_id => max_rank
+     */
+    public function GetAwardMaxRanks($mundaneId)
+    {
+        if (!valid_id($mundaneId)) {
+            return [];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT ka.award_id, MAX(aw.rank) AS max_rank
+             FROM ' . DB_PREFIX . 'awards aw
+             INNER JOIN ' . DB_PREFIX . 'kingdomaward ka ON ka.kingdomaward_id = aw.kingdomaward_id
+             WHERE aw.mundane_id = ' . (int) $mundaneId . ' AND aw.rank > 0
+             GROUP BY ka.award_id'
+        );
+        $ranks = [];
+        while ($rs && $rs->Next()) {
+            $ranks[(int) $rs->award_id] = (int) $rs->max_rank;
+        }
+
+        return $ranks;
+    }
+
+    public function SaveOwnEmail($request)
+    {
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        if (!$mundaneId) {
+            return NoAuthorization();
+        }
+        $email = trim($request['Email'] ?? '');
+        if (!strlen($email)) {
+            return InvalidParameter('Email address is required.');
+        }
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return InvalidParameter('Please enter a valid email address.');
+        }
+        $this->mundane->clear();
+        $this->mundane->mundane_id = $mundaneId;
+        if (!$this->mundane->find()) {
+            return InvalidParameter('Player not found.');
+        }
+        $this->mundane->email = $email;
+        $this->mundane->modified = date('Y-m-d H:i:s');
+        $this->mundane->save();
+
+        return Success();
+    }
+
+    public function bustRosterCachesForPlayer($mundaneId)
+    {
+        if (!valid_id($mundaneId)) {
+            return;
+        }
+        $info = $this->player_info($mundaneId);
+        if (!$info) {
+            return;
+        }
+        $kid = (int) ($info['KingdomId'] ?? 0);
+        $pid = (int) ($info['ParkId'] ?? 0);
+        if ($kid > 0) {
+            $kKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kid]);
+            Ork3::$Lib->ghettocache->bust('KingdomProfile.GetKingdomPlayersRoster', $kKey);
+        }
+        if ($pid > 0) {
+            $pKey = Ork3::$Lib->ghettocache->key(['ParkId' => $pid]);
+            Ork3::$Lib->ghettocache->bust('ParkProfile.GetParkPlayersRoster', $pKey);
+        }
+    }
+
+    public function bustPlayerProfileCaches(int $mundaneId): void
+    {
+        if ($mundaneId <= 0) {
+            return;
+        }
+        $cache = Ork3::$Lib->ghettocache;
+        $assocKey = $cache->key(['MundaneId' => $mundaneId]);
+        $cache->bust('Player.GetPlayerProfileDetails', $assocKey);
+        $cache->bust('Player.GetPlayerAttendanceList', $assocKey);
+    }
+
+    public function GetPlayerProfileDetails(int $mundaneId)
+    {
+        $key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundaneId]);
+        if (($cache = Ork3::$Lib->ghettocache->get('Player.GetPlayerProfileDetails', $key, 60)) !== false) {
+            return $cache;
+        }
+        $awards = $this->AwardsForPlayer(['MundaneId' => $mundaneId]);
+        if (($awards['Status']['Status'] ?? 1) != 0) {
+            return $awards;
+        }
+        $classes = $this->GetPlayerClasses(['MundaneId' => $mundaneId]);
+        if (($classes['Status']['Status'] ?? 1) != 0) {
+            return $classes;
+        }
+        $details = [
+            'Awards' => $awards['Awards'],
+            'Attendance' => [],
+            'Classes' => $classes['Classes'],
+        ];
+
+        return Ork3::$Lib->ghettocache->cache('Player.GetPlayerProfileDetails', $key, $details);
+    }
+
+    public function GetPlayerAttendanceList(int $mundaneId): array
+    {
+        $key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundaneId]);
+        if (($cache = Ork3::$Lib->ghettocache->get('Player.GetPlayerAttendanceList', $key, 60)) !== false) {
+            return $cache;
+        }
+        $attendance = $this->AttendanceForPlayer(['MundaneId' => $mundaneId]);
+        if (($attendance['Status']['Status'] ?? 1) != 0) {
+            return [];
+        }
+
+        return Ork3::$Lib->ghettocache->cache('Player.GetPlayerAttendanceList', $key, $attendance['Attendance'] ?? []);
+    }
+
+    /**
+     * Profile admin badge data (T-PLR-05).
+     *
+     * @return array{IsOrkAdmin: bool, AdminGrants: list<array{scope: string, id: int, name: mixed}>}
+     */
+    public function GetDisplayGrants($mundaneId)
+    {
+        if (!valid_id($mundaneId)) {
+            return ['IsOrkAdmin' => false, 'AdminGrants' => []];
+        }
+        $this->db->Clear();
+        $adminCheck = $this->db->DataSet(
+            'SELECT 1 FROM ' . DB_PREFIX . 'authorization
+             WHERE mundane_id = ' . (int) $mundaneId . "
+               AND role = 'admin'
+               AND park_id = 0 AND kingdom_id = 0 AND event_id = 0 AND unit_id = 0
+             LIMIT 1"
+        );
+        $isOrkAdmin = (bool) ($adminCheck && $adminCheck->Size() > 0);
+        $this->db->Clear();
+        $adminGrants = $this->db->DataSet(
+            'SELECT a.park_id, MAX(p.name) AS park_name,
+                    a.kingdom_id, MAX(k.name) AS kingdom_name
+             FROM ' . DB_PREFIX . 'authorization a
+             LEFT JOIN ' . DB_PREFIX . 'park p ON p.park_id = a.park_id
+             LEFT JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = a.kingdom_id
+             LEFT JOIN ' . DB_PREFIX . 'officer o ON o.authorization_id = a.authorization_id
+             WHERE a.mundane_id = ' . (int) $mundaneId . "
+               AND a.role IN ('admin', 'create')
+               AND (a.park_id > 0 OR a.kingdom_id > 0)
+               AND o.authorization_id IS NULL
+             GROUP BY a.park_id, a.kingdom_id"
+        );
+        $badges = [];
+        if ($adminGrants && $adminGrants->Size() > 0) {
+            do {
+                if ($adminGrants->park_id > 0) {
+                    $badges[] = [
+                        'scope' => 'Park',
+                        'id' => (int) $adminGrants->park_id,
+                        'name' => $adminGrants->park_name,
+                    ];
+                } elseif ($adminGrants->kingdom_id > 0) {
+                    $badges[] = [
+                        'scope' => 'Kingdom',
+                        'id' => (int) $adminGrants->kingdom_id,
+                        'name' => $adminGrants->kingdom_name,
+                    ];
+                }
+            } while ($adminGrants->Next());
+        }
+
+        return ['IsOrkAdmin' => $isOrkAdmin, 'AdminGrants' => $badges];
+    }
+
     public function AddOneShotFaceImage($request)
     {
         $mundane = $this->player_info($request['MundaneId']);
@@ -601,6 +1002,41 @@ class Player extends Ork3
         return array_values(array_map('intval', array_keys($set)));
     }
 
+    /**
+     * Per-class credits, level, and credits-to-next using GetPlayerClasses semantics (T-SIN-03, T-SIN-04).
+     */
+    public function ComputeClassProgress($request)
+    {
+        $mundaneId = (int)($request['MundaneId'] ?? 0);
+        if (!valid_id($mundaneId)) {
+            return InvalidParameter();
+        }
+
+        $classesResponse = $this->GetPlayerClasses(['MundaneId' => $mundaneId]);
+        if (($classesResponse['Status']['Status'] ?? 1) != 0) {
+            return $classesResponse['Status'];
+        }
+
+        $progress = [];
+        foreach ($classesResponse['Classes'] ?? [] as $row) {
+            $classId = (int)($row['ClassId'] ?? 0);
+            if ($classId <= 0) {
+                continue;
+            }
+            $credits = (float)($row['Credits'] ?? 0) + (float)($row['Reconciled'] ?? 0);
+            $levelInfo = ClassLevel::computeClassLevel($credits);
+            $progress[] = [
+                'ClassId'   => $classId,
+                'ClassName' => (string)($row['ClassName'] ?? ''),
+                'Credits'   => $credits,
+                'Level'     => $levelInfo['Level'],
+                'ToNext'    => $levelInfo['ToNext'],
+            ];
+        }
+
+        return Success($progress);
+    }
+
     public function GetPlayerClasses($request)
     {
         // Cold-cache the dedupe-by-date subquery costs ~185ms for the busiest player
@@ -1159,8 +1595,8 @@ class Player extends Ork3
     // Bust caches affected by a change to this player's recommendation data:
     //   - Report.PlayerAwardRecommendations under the three scopes (player,
     //     kingdom, park) that could hold this player's row.
-    //   - Model_Player.fetch_player_details — recommendation/second changes
-    //     show up on the player's awards tab and the 60-min cache there
+    //   - Player.GetPlayerProfileDetails — recommendation/second changes
+    //     show up on the player's awards tab and the 60s cache there
     //     needs invalidating.
     // Pass kingdom_id/park_id when the caller already knows them (e.g.
     // merge/delete after the row is gone); otherwise we look them up.
@@ -1197,10 +1633,7 @@ class Player extends Ork3
                 Ork3::$Lib->ghettocache->key($kd)
             );
         }
-        Ork3::$Lib->ghettocache->bust(
-            'Model_Player.fetch_player_details',
-            Ork3::$Lib->ghettocache->key(['MundaneId' => $mid])
-        );
+        $this->bustPlayerProfileCaches($mid);
     }
 
     public function MergePlayer($request)
@@ -1389,6 +1822,29 @@ class Player extends Ork3
     {
         $sql = "update " . DB_PREFIX . "mundane set suspended = 0, suspended_by_id = null, suspended_at = null, suspended_until = null, suspension = null, suspension_propagates = 1 where suspended_until < curdate() and suspended_until is not null and suspended_until != '0000-00-00'";
         $this->db->query($sql);
+    }
+
+    /**
+     * Infer SuspendedById when not explicitly submitted (T-ADM-05).
+     */
+    public function InferSuspendedById(int $mundaneId, int $submittedById, int $sessionUserId): int
+    {
+        if ($submittedById > 0) {
+            return $submittedById;
+        }
+
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT suspended_by_id, suspended FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
+        );
+        $existingById = 0;
+        $isSuspended = false;
+        if ($rs && $rs->Next()) {
+            $existingById = (int) $rs->suspended_by_id;
+            $isSuspended = (bool) $rs->suspended;
+        }
+
+        return $isSuspended ? ($existingById ?: 0) : $sessionUserId;
     }
 
     public function SetPlayerSuspension($request)
@@ -2461,10 +2917,7 @@ class Player extends Ork3
                 }
                 Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $_audit_mundane, $_audit_prior, $_audit_after);
 
-                Ork3::$Lib->ghettocache->bust(
-                    'Model_Player.fetch_player_details',
-                    Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$_audit_mundane])
-                );
+                $this->bustPlayerProfileCaches((int) $_audit_mundane);
 
                 return Success($set_awards_id);
             } else {
@@ -2547,10 +3000,7 @@ class Player extends Ork3
                 }
                 Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $_audit_mundane, $_audit_prior, $_audit_after);
 
-                Ork3::$Lib->ghettocache->bust(
-                    'Model_Player.fetch_player_details',
-                    Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$_audit_mundane])
-                );
+                $this->bustPlayerProfileCaches((int) $_audit_mundane);
 
                 return Success($set_awards_id);
             } else {
@@ -3072,7 +3522,9 @@ class Player extends Ork3
                 'KingdomAwardId'           => (int)$awardRec->kingdomaward_id,
                 'Rank'                     => (int)$awardRec->rank,
             ], (int)$awardRec->mundane_id, $mundane_id);
-            return Success($_existingId);
+            $response = Success($_existingId);
+            $response['SupporterPersona'] = $this->supporter_persona($mundane_id);
+            return $response;
         }
 
         $second = new yapo($this->db, DB_PREFIX . 'recommendation_seconds');
@@ -3091,7 +3543,20 @@ class Player extends Ork3
             'KingdomAwardId'           => (int)$awardRec->kingdomaward_id,
             'Rank'                     => (int)$awardRec->rank,
         ], (int)$awardRec->mundane_id, $mundane_id);
-        return Success($second->recommendation_seconds_id);
+        $response = Success($second->recommendation_seconds_id);
+        $response['SupporterPersona'] = $this->supporter_persona($mundane_id);
+        return $response;
+    }
+
+    private function supporter_persona($mundaneId)
+    {
+        $this->mundane->clear();
+        $this->mundane->mundane_id = (int) $mundaneId;
+        if ($this->mundane->find()) {
+            return (string) $this->mundane->persona;
+        }
+
+        return '';
     }
 
     /**
@@ -3527,6 +3992,237 @@ class Player extends Ork3
         $date = $r->earliest_date;
         $out = $date ? date('Y-m-d', strtotime($date)) : null;
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $out);
+    }
+
+    /**
+     * Viewer accessibility-font preferences (T-INF-04).
+     *
+     * @return array{BasicFonts: int, DyslexiaFonts: int}
+     */
+    public function GetViewerPreferences(int $mundaneId): array
+    {
+        if (!valid_id($mundaneId)) {
+            return ['BasicFonts' => 0, 'DyslexiaFonts' => 0];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT basic_fonts, dyslexia_fonts FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = '
+            . (int) $mundaneId . ' LIMIT 1'
+        );
+        if ($rs && $rs->Next()) {
+            return [
+                'BasicFonts' => (int) $rs->basic_fonts,
+                'DyslexiaFonts' => (int) $rs->dyslexia_fonts,
+            ];
+        }
+
+        return ['BasicFonts' => 0, 'DyslexiaFonts' => 0];
+    }
+
+    /**
+     * Home kingdom context for the logged-in user (T-INF-05).
+     *
+     * @return array{KingdomId: int, ParentKingdomId: int}
+     */
+    public function GetHomeKingdom(int $mundaneId): array
+    {
+        if (!valid_id($mundaneId)) {
+            return ['KingdomId' => 0, 'ParentKingdomId' => 0];
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT p.kingdom_id, k.parent_kingdom_id FROM ' . DB_PREFIX . 'mundane m
+             INNER JOIN ' . DB_PREFIX . 'park p ON p.park_id = m.park_id
+             INNER JOIN ' . DB_PREFIX . 'kingdom k ON k.kingdom_id = p.kingdom_id
+             WHERE m.mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
+        );
+        if ($rs && $rs->Size() > 0 && $rs->Next()) {
+            return [
+                'KingdomId' => (int) $rs->kingdom_id,
+                'ParentKingdomId' => (int) $rs->parent_kingdom_id,
+            ];
+        }
+
+        return ['KingdomId' => 0, 'ParentKingdomId' => 0];
+    }
+
+    /**
+     * Record that the user dismissed the What's New modal (T-WN-01).
+     */
+    public function DismissWhatsNew(int $mundaneId, string $version): array
+    {
+        if (!valid_id($mundaneId)) {
+            return InvalidParameter('MundaneId is required.');
+        }
+        $version = preg_replace('/[^a-zA-Z0-9_\-]/', '', $version);
+        if ($version === '') {
+            return InvalidParameter('Version is required.');
+        }
+        $this->db->Clear();
+        $this->db->Execute(
+            'INSERT IGNORE INTO ' . DB_PREFIX . "whats_new_seen (mundane_id, version) VALUES ("
+            . (int) $mundaneId . ", '" . mysql_real_escape_string($version) . "')"
+        );
+
+        return Success();
+    }
+
+    /**
+     * Whether the user has already seen a What's New version (T-WN-01).
+     */
+    public function GetWhatsNewSeen(int $mundaneId, string $version): bool
+    {
+        if (!valid_id($mundaneId) || $version === '') {
+            return false;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT 1 FROM ' . DB_PREFIX . "whats_new_seen WHERE mundane_id = " . (int) $mundaneId
+            . " AND version = '" . mysql_real_escape_string($version) . "' LIMIT 1"
+        );
+
+        return (bool) ($rs && $rs->Next());
+    }
+
+    /**
+     * Display persona for a mundane id (R-18 residual $DB removal).
+     */
+    public function GetPersona(int $mundaneId): string
+    {
+        if (!valid_id($mundaneId)) {
+            return '';
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT persona FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
+        );
+        if ($rs && $rs->Next() && $rs->persona !== null && $rs->persona !== '') {
+            return (string) $rs->persona;
+        }
+
+        return '';
+    }
+
+    /**
+     * Whether the logged-in viewer should see the email prompt modal.
+     */
+    public function NeedsEmailPrompt(int $mundaneId): bool
+    {
+        if (!valid_id($mundaneId)) {
+            return false;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT email FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
+        );
+
+        return $rs && $rs->Next() && trim((string) ($rs->email ?? '')) === '';
+    }
+
+    /**
+     * Home kingdom/park quick-link context for nav chrome (T-INF-05 extension).
+     *
+     * @return array{
+     *   park_id: int,
+     *   park_name: string,
+     *   kingdom_id: int,
+     *   kingdom_name: string,
+     *   parent_kingdom_id: int,
+     *   parent_kingdom_name: string
+     * }|null
+     */
+    public function GetHomeNavContext(int $mundaneId): ?array
+    {
+        if (!valid_id($mundaneId)) {
+            return null;
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT p.park_id, p.name AS park_name, k.kingdom_id, k.name AS kingdom_name,
+                    k.parent_kingdom_id, pk.name AS parent_kingdom_name
+             FROM ' . DB_PREFIX . 'mundane m
+             LEFT JOIN ' . DB_PREFIX . 'park p ON m.park_id = p.park_id
+             LEFT JOIN ' . DB_PREFIX . 'kingdom k ON p.kingdom_id = k.kingdom_id
+             LEFT JOIN ' . DB_PREFIX . 'kingdom pk ON k.parent_kingdom_id = pk.kingdom_id
+             WHERE m.mundane_id = ' . (int) $mundaneId . ' LIMIT 1'
+        );
+        if (!$rs || !$rs->Next() || !(int) $rs->park_id) {
+            return null;
+        }
+
+        return [
+            'park_id' => (int) $rs->park_id,
+            'park_name' => (string) $rs->park_name,
+            'kingdom_id' => (int) $rs->kingdom_id,
+            'kingdom_name' => (string) $rs->kingdom_name,
+            'parent_kingdom_id' => (int) $rs->parent_kingdom_id,
+            'parent_kingdom_name' => (string) ($rs->parent_kingdom_name ?? ''),
+        ];
+    }
+
+    /**
+     * Revoked awards and titles stripped from a player profile (editor view).
+     *
+     * @return array{RevokedAwards: list<array<string, mixed>>, RevokedTitles: list<array<string, mixed>>}
+     */
+    public function GetRevokedAwardsForPlayer(int $mundaneId): array
+    {
+        if (!valid_id($mundaneId)) {
+            return ['RevokedAwards' => [], 'RevokedTitles' => []];
+        }
+        // Mirror active-grant / revoke classification: alias-backed titles must
+        // use COALESCE(officer_role) + GREATEST(is_title) across award/alias/ka.
+        $baseSql = 'SELECT a.awards_id, a.rank, a.date, a.revoked_at, a.revocation,
+                COALESCE(NULLIF(a.custom_name,\'\'), ka.name, alias.name, aw.name) AS award_name,
+                m.persona AS revoked_by,
+                COALESCE(alias.officer_role, aw.officer_role) AS effective_officer_role,
+                GREATEST(IFNULL(ka.is_title, 0), IFNULL(alias.is_title, 0), IFNULL(aw.is_title, 0)) AS effective_is_title
+            FROM ' . DB_PREFIX . 'awards a
+            LEFT JOIN ' . DB_PREFIX . 'kingdomaward ka ON a.kingdomaward_id = ka.kingdomaward_id
+            LEFT JOIN ' . DB_PREFIX . 'award aw ON a.award_id = aw.award_id
+            LEFT JOIN ' . DB_PREFIX . 'award alias ON alias.award_id = a.alias_award_id
+            LEFT JOIN ' . DB_PREFIX . 'mundane m ON a.revoked_by_id = m.mundane_id
+            WHERE a.stripped_from = ' . (int) $mundaneId . '
+              AND a.revoked = 1';
+        $awardsSql = $baseSql . "
+              AND (COALESCE(alias.officer_role, aw.officer_role) = 'none'
+                   OR COALESCE(alias.officer_role, aw.officer_role) IS NULL)
+              AND GREATEST(IFNULL(ka.is_title, 0), IFNULL(alias.is_title, 0), IFNULL(aw.is_title, 0)) = 0
+            ORDER BY a.revoked_at DESC, a.date DESC";
+        $titlesSql = $baseSql . "
+              AND (COALESCE(alias.officer_role, aw.officer_role) != 'none'
+                   OR GREATEST(IFNULL(ka.is_title, 0), IFNULL(alias.is_title, 0), IFNULL(aw.is_title, 0)) = 1)
+            ORDER BY a.revoked_at DESC, a.date DESC";
+
+        return [
+            'RevokedAwards' => $this->fetchRevokedAwardRows($awardsSql),
+            'RevokedTitles' => $this->fetchRevokedAwardRows($titlesSql),
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function fetchRevokedAwardRows(string $sql): array
+    {
+        $this->db->Clear();
+        $result = $this->db->DataSet($sql);
+        $rows = [];
+        if ($result && $result->Size() > 0) {
+            while ($result->Next()) {
+                $rows[] = [
+                    'AwardsId' => (int) $result->awards_id,
+                    'AwardName' => (string) $result->award_name,
+                    'Rank' => $result->rank,
+                    'Date' => $result->date,
+                    'RevokedAt' => $result->revoked_at,
+                    'Revocation' => $result->revocation,
+                    'RevokedBy' => $result->revoked_by,
+                ];
+            }
+        }
+
+        return $rows;
     }
 
 }

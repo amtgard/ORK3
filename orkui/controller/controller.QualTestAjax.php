@@ -5,6 +5,7 @@ class Controller_QualTestAjax extends Controller
     public function __construct($call = null, $id = null)
     {
         parent::__construct($call, $id);
+        $this->load_model('QualTest');
     }
 
     // -----------------------------------------------------------------------
@@ -67,7 +68,7 @@ class Controller_QualTestAjax extends Controller
     private function requireAdmin($kingdom_id)
     {
         $uid = $this->requireLogin();
-        if (!Ork3::$Lib->qualtest->canManage($uid, $kingdom_id)) {
+        if (!$this->QualTest->can_manage($uid, $kingdom_id)) {
             $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
         }
         return $uid;
@@ -112,12 +113,12 @@ class Controller_QualTestAjax extends Controller
         // label off the live test every time someone saved an unrelated setting.
         // (The old "required for the Reeve's Test" check moved to publishSet(), where it now
         // applies to both tests — you cannot publish any version without a label.)
-        $existing        = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);
+        $existing        = $this->QualTest->config($kingdom_id, $test_type);
         $rules_version   = array_key_exists('RulesVersion', $_POST)
                              ? trim($_POST['RulesVersion'])
                              : (string)($existing['RulesVersion'] ?? '');
 
-        Ork3::$Lib->qualtest->saveConfig($kingdom_id, $test_type, $question_count, $pass_percent, $valid_days, $valid_until, $max_retakes, $share_questions, $instructions, $rules_version, $show_correct);
+        $this->QualTest->save_config($kingdom_id, $test_type, $question_count, $pass_percent, $valid_days, $valid_until, $max_retakes, $share_questions, $instructions, $rules_version, $show_correct);
 
         $this->jsonOut(['status' => 0]);
     }
@@ -137,7 +138,7 @@ class Controller_QualTestAjax extends Controller
 
         // If editing, verify the question belongs to this kingdom
         if ($question_id > 0) {
-            $existing = Ork3::$Lib->qualtest->getQuestion($question_id);
+            $existing = $this->QualTest->question($question_id);
             if (!$existing || (int)$existing['KingdomId'] !== $kingdom_id) {
                 $this->jsonOut(['status' => 1, 'error' => 'Question not found.']);
             }
@@ -193,7 +194,7 @@ class Controller_QualTestAjax extends Controller
 
         // New questions join the set the admin is working in (draft or live). Editing an
         // existing question never changes membership.
-        $saved_id = Ork3::$Lib->qualtest->saveQuestion($question_id, [
+        $saved_id = $this->QualTest->save_question($question_id, [
             'SetId'        => (int)($_POST['SetId'] ?? 0),
             'KingdomId'    => $kingdom_id,
             'TestType'     => $test_type,
@@ -227,12 +228,12 @@ class Controller_QualTestAjax extends Controller
         }
 
         // Verify ownership
-        $q = Ork3::$Lib->qualtest->getQuestion($question_id);
+        $q = $this->QualTest->question($question_id);
         if (!$q || (int)$q['KingdomId'] !== $kingdom_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Question not found.']);
         }
 
-        Ork3::$Lib->qualtest->setQuestionStatus($question_id, $status);
+        $this->QualTest->set_question_status($question_id, $status);
 
         $this->jsonOut(['status' => 0, 'new_status' => $status]);
     }
@@ -251,17 +252,17 @@ class Controller_QualTestAjax extends Controller
         if (!valid_id($kingdom_id) || !valid_id($question_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid request.']);
         }
-        if (!Ork3::$Lib->qualtest->canManage($uid, $kingdom_id)) {
+        if (!$this->QualTest->can_manage($uid, $kingdom_id)) {
             $this->jsonOut(['status' => 1, 'error' => 'Insufficient permissions.']);
         }
 
         // Verify ownership — question must belong to this kingdom (IDOR guard)
-        $q = Ork3::$Lib->qualtest->getQuestion($question_id);
+        $q = $this->QualTest->question($question_id);
         if (!$q || (int)$q['KingdomId'] !== $kingdom_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Question not found.']);
         }
 
-        Ork3::$Lib->qualtest->resetQuestionStats($question_id);
+        $this->QualTest->reset_question_stats($question_id);
         $this->jsonOut(['status' => 0]);
     }
 
@@ -285,12 +286,12 @@ class Controller_QualTestAjax extends Controller
         }
 
         // Verify the question exists
-        $q = Ork3::$Lib->qualtest->getQuestion($question_id);
+        $q = $this->QualTest->question($question_id);
         if (!$q) {
             $this->jsonOut(['status' => 1, 'error' => 'Question not found.']);
         }
 
-        Ork3::$Lib->qualtest->reportQuestion($question_id, $uid, $reason);
+        $this->QualTest->report_question($question_id, $uid, $reason);
 
         $this->jsonOut(['status' => 0]);
     }
@@ -309,9 +310,8 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid question.']);
         }
 
-        $counts    = Ork3::$Lib->qualtest->getReportCounts($question_id);
-        $reporters = Ork3::$Lib->qualtest->getReportDetails($question_id);
-        $this->jsonOut(['status' => 0, 'counts' => $counts, 'reporters' => $reporters]);
+        $counts = $this->QualTest->report_counts($question_id);
+        $this->jsonOut(['status' => 0, 'counts' => $counts]);
     }
 
     // -----------------------------------------------------------------------
@@ -328,7 +328,7 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid question.']);
         }
 
-        Ork3::$Lib->qualtest->clearReports($question_id);
+        $this->QualTest->clear_reports($question_id);
         $this->jsonOut(['status' => 0]);
     }
 
@@ -342,7 +342,7 @@ class Controller_QualTestAjax extends Controller
         $this->requireAdmin($kingdom_id);
 
         // Verify this kingdom is opted in
-        $config = Ork3::$Lib->qualtest->getConfig($kingdom_id, 'reeve');
+        $config = $this->QualTest->config($kingdom_id, 'reeve');
         if (!$config['ShareQuestions']) {
             $this->jsonOut(['status' => 1, 'error' => 'Your kingdom is not opted in to the Global Question Library.']);
         }
@@ -351,15 +351,15 @@ class Controller_QualTestAjax extends Controller
         // already imported everything shared", and the UI must not report the first when it is
         // the second. Only the model knows which, because it does the dedup.
         $stats = null;
-        $questions = Ork3::$Lib->qualtest->getLibraryQuestions($kingdom_id, $stats);
+        $questions = $this->QualTest->library_questions($kingdom_id, $stats);
 
         // The version the browsing Kingdom is BUILDING (the draft, or the live set if there is no
         // draft). Every Kingdom plays the same rulebook, but they rewrite their tests at different
         // speeds — so the useful comparison is not "is this question valid" but "is this Kingdom's
         // test as current as mine". Sending it lets the UI flag questions written against a
         // different edition, without the model having to guess what "current" means.
-        $_draft   = Ork3::$Lib->qualtest->getDraftSet($kingdom_id, 'reeve');
-        $_pub     = Ork3::$Lib->qualtest->getPublishedSet($kingdom_id, 'reeve');
+        $_draft   = $this->QualTest->draft_set($kingdom_id, 'reeve');
+        $_pub     = $this->QualTest->published_set($kingdom_id, 'reeve');
         $_working = $_draft ?: $_pub;
         $my_version = $_working ? trim((string)$_working['RulesVersion']) : '';
 
@@ -386,7 +386,7 @@ class Controller_QualTestAjax extends Controller
         }
 
         // Verify source kingdom is opted in and source question is reeve+active
-        $src = Ork3::$Lib->qualtest->getQuestion($question_id);
+        $src = $this->QualTest->question($question_id);
         if (!$src || $src['TestType'] !== 'reeve' || $src['Status'] !== 'active') {
             $this->jsonOut(['status' => 1, 'error' => 'Source question not available.']);
         }
@@ -394,13 +394,16 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'That question already belongs to your kingdom.']);
         }
 
-        $src_config = Ork3::$Lib->qualtest->getConfig((int)$src['KingdomId'], 'reeve');
+        $src_config = $this->QualTest->config((int)$src['KingdomId'], 'reeve');
         if (!$src_config['ShareQuestions']) {
             $this->jsonOut(['status' => 1, 'error' => 'Source kingdom is not sharing questions.']);
         }
 
-        $new_id = Ork3::$Lib->qualtest->copyQuestionToKingdom(
-            $question_id, $kingdom_id, $uid, (int)($_POST['SetId'] ?? 0)
+        $new_id = $this->QualTest->copy_question_to_kingdom(
+            $question_id,
+            $kingdom_id,
+            $uid,
+            (int)($_POST['SetId'] ?? 0)
         );
         if (!$new_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Failed to copy question.']);
@@ -418,7 +421,7 @@ class Controller_QualTestAjax extends Controller
         $kingdom_id = (int)($_POST['KingdomId'] ?? 0);
         $this->requireAdmin($kingdom_id);
         $test_type = $_POST['TestType'] ?? 'reeve';
-        Ork3::$Lib->qualtest->resetAllRetakes($kingdom_id, $test_type);
+        $this->QualTest->reset_all_retakes($kingdom_id, $test_type);
         $this->jsonOut(['status' => 0]);
     }
 
@@ -437,11 +440,12 @@ class Controller_QualTestAjax extends Controller
         }
         // IDOR guard: confirm the target player belongs to this kingdom
         // before allowing a cross-kingdom admin to reset their retakes.
-        $player_info = Ork3::$Lib->player->player_info($player_id);
+        $this->load_model('Player');
+        $player_info = $this->Player->player_info($player_id);
         if (!$player_info || (int)$player_info['KingdomId'] !== $kingdom_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Invalid player.']);
         }
-        Ork3::$Lib->qualtest->resetPlayerRetakes($player_id, $kingdom_id, $test_type);
+        $this->QualTest->reset_player_retakes($player_id, $kingdom_id, $test_type);
         $this->jsonOut(['status' => 0]);
     }
 
@@ -460,12 +464,12 @@ class Controller_QualTestAjax extends Controller
         }
 
         // Verify the mundane exists; fetch persona + park for the response row.
-        $info = Ork3::$Lib->qualtest->getMundaneDisplay($mundane_id);
+        $info = $this->QualTest->mundane_display($mundane_id);
         if ($info === null) {
             $this->jsonOut(['status' => 1, 'error' => 'Persona not found.']);
         }
 
-        Ork3::$Lib->qualtest->addManager($kingdom_id, $mundane_id);
+        $this->QualTest->add_manager($kingdom_id, $mundane_id);
 
         $this->jsonOut(['status' => 0, 'mundane_id' => $mundane_id, 'name' => $info['Name'], 'park' => $info['Park']]);
     }
@@ -484,7 +488,7 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid persona ID.']);
         }
 
-        Ork3::$Lib->qualtest->removeManager($kingdom_id, $mundane_id);
+        $this->QualTest->remove_manager($kingdom_id, $mundane_id);
 
         $this->jsonOut(['status' => 0]);
     }
@@ -516,20 +520,19 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid request.']);
         }
 
-        $correct_map = Ork3::$Lib->qualtest->getCorrectAnswers([$question_id], $kingdom_id, $test_type);
+        $correct_map = $this->QualTest->correct_answers([$question_id], $kingdom_id, $test_type);
         if (!isset($correct_map[$question_id])) {
             $this->jsonOut(['status' => 1, 'error' => 'Question not found.']);
         }
 
         // Score via the same predicate that scoreTest() uses so a per-question
         // "correct" verdict never disagrees with the aggregate result.
-        $qtmp    = Ork3::$Lib->qualtest;
-        $score   = $qtmp->scoreTest([$question_id => $correct_map[$question_id]], [$question_id => $answer_ids]);
+        $score   = $this->QualTest->score_test([$question_id => $correct_map[$question_id]], [$question_id => $answer_ids]);
         $is_correct = ($score['correct'] === 1);
 
         // Only reveal correct answers when the player got it right, or when the
         // kingdom has opted into showing correct answers on incorrect submissions.
-        $cfg    = $qtmp->getConfig($kingdom_id, $test_type);
+        $cfg    = $this->QualTest->config($kingdom_id, $test_type);
         $reveal = $is_correct || !empty($cfg['ShowCorrectOnIncorrect']);
 
         $out = [
@@ -566,18 +569,18 @@ class Controller_QualTestAjax extends Controller
 
         $this->requireTestEnabled($kingdom_id, $test_type);
 
-        $config = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);
+        $config = $this->QualTest->config($kingdom_id, $test_type);
 
         // Retake limit check
         if ($config['MaxRetakes'] > 0) {
-            $taken = Ork3::$Lib->qualtest->getRetakeCount($uid, $kingdom_id, $test_type);
+            $taken = $this->QualTest->retake_count($uid, $kingdom_id, $test_type);
             if ($taken >= $config['MaxRetakes']) {
                 $this->jsonOut(['status' => 2, 'retake_blocked' => true,
                     'error' => 'You may not retake this test again. Please reach out to your local monarchy for further instructions.']);
             }
         }
 
-        $questions = Ork3::$Lib->qualtest->getQuestionsForTest($kingdom_id, $test_type, $config['QuestionCount']);
+        $questions = $this->QualTest->questions_for_test($kingdom_id, $test_type, $config['QuestionCount']);
 
         if ($questions === null) {
             $this->jsonOut(['status' => 1, 'error' => 'Not enough active questions available for this test.']);
@@ -627,9 +630,9 @@ class Controller_QualTestAjax extends Controller
             }
         }
 
-        $config      = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);
+        $config      = $this->QualTest->config($kingdom_id, $test_type);
 
-        $correct_map = Ork3::$Lib->qualtest->getCorrectAnswers(array_keys($submitted), $kingdom_id, $test_type);
+        $correct_map = $this->QualTest->correct_answers(array_keys($submitted), $kingdom_id, $test_type);
 
         // Verify the question IDs belong to this kingdom+type to prevent spoofing
         if (count($correct_map) !== count($submitted)) {
@@ -638,19 +641,19 @@ class Controller_QualTestAjax extends Controller
 
         // Atomically consume a retake slot — prevents TOCTOU races and ensures
         // tampered/stale question sets (caught above) never burn a legitimate slot.
-        if (!Ork3::$Lib->qualtest->tryConsumeRetake($uid, $kingdom_id, $test_type, (int)$config['MaxRetakes'])) {
+        if (!$this->QualTest->try_consume_retake($uid, $kingdom_id, $test_type, (int)$config['MaxRetakes'])) {
             $this->jsonOut(['status' => 1, 'error' => 'You may not retake this test again. Please reach out to your local monarchy for further instructions.']);
         }
 
-        $result  = Ork3::$Lib->qualtest->scoreTest($correct_map, $submitted);
-        Ork3::$Lib->qualtest->recordQuestionStats($correct_map, $submitted);
+        $result  = $this->QualTest->score_test($correct_map, $submitted);
+        $this->QualTest->record_question_stats($correct_map, $submitted);
         $passed  = $result['score_percent'] >= $config['PassPercent'];
         $expires = null;
 
         // Durable, reviewable-for-all-time record of THIS attempt (pass or fail),
         // with a full snapshot of the questions/options as seen. Distinct from the
         // pass-only recordResult() upsert below.
-        $attempt_id = Ork3::$Lib->qualtest->recordAttempt(
+        $attempt_id = $this->QualTest->record_attempt(
             $uid,
             $kingdom_id,
             $test_type,
@@ -662,7 +665,7 @@ class Controller_QualTestAjax extends Controller
         );
 
         if ($passed) {
-            $expires = Ork3::$Lib->qualtest->recordResult(
+            $expires = $this->QualTest->record_result(
                 $uid,
                 $kingdom_id,
                 $test_type,
@@ -671,7 +674,7 @@ class Controller_QualTestAjax extends Controller
                 $config['ValidUntil'] ?? null,
                 $config['RulesVersion'] ?? ''
             );
-            Ork3::$Lib->qualtest->syncMundaneQual($uid, $test_type, $expires);
+            $this->QualTest->sync_mundane_qual($uid, $test_type, $expires);
         }
 
         $this->jsonOut([
@@ -712,7 +715,7 @@ class Controller_QualTestAjax extends Controller
         }
 
 
-        $result = Ork3::$Lib->qualtest->setQuestionStatusBatch($kingdom_id, $question_ids, $status);
+        $result = $this->QualTest->set_question_status_batch($kingdom_id, $question_ids, $status);
 
         if ($result === false) {
             $this->jsonOut(['status' => 1, 'error' => 'One or more questions do not belong to this kingdom.']);
@@ -735,12 +738,12 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid question.']);
         }
 
-        $q = Ork3::$Lib->qualtest->getQuestion($question_id);
+        $q = $this->QualTest->question($question_id);
         if (!$q || (int)$q['KingdomId'] !== $kingdom_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Question not found.']);
         }
 
-        $new_id = Ork3::$Lib->qualtest->duplicateQuestion($question_id, $kingdom_id);
+        $new_id = $this->QualTest->duplicate_question($question_id, $kingdom_id);
         if (!$new_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Failed to duplicate question.']);
         }
@@ -762,7 +765,7 @@ class Controller_QualTestAjax extends Controller
         $this->requireAdmin($kingdom_id);
 
         $test_type = $_POST['TestType'] ?? 'reeve';
-        $config    = Ork3::$Lib->qualtest->getConfig($kingdom_id, $test_type);
+        $config    = $this->QualTest->config($kingdom_id, $test_type);
 
         // Preview the set the GMR is WORKING IN — the draft when one is open, otherwise the live
         // set. It used to always draw from the published set, so while you were building the next
@@ -774,7 +777,7 @@ class Controller_QualTestAjax extends Controller
         $working = null;
         $want    = (int)($_POST['SetId'] ?? 0);
         if ($want > 0) {
-            $s = Ork3::$Lib->qualtest->getSetById($want);
+            $s = $this->QualTest->set_by_id($want);
             // Must be THIS kingdom's set, for THIS test. Otherwise a hand-crafted SetId would
             // preview another kingdom's bank — answers and all.
             if ($s === null || (int)$s['KingdomId'] !== $kingdom_id || $s['TestType'] !== $test_type) {
@@ -782,8 +785,8 @@ class Controller_QualTestAjax extends Controller
             }
             $working = $s;
         } else {
-            $draft   = Ork3::$Lib->qualtest->getDraftSet($kingdom_id, $test_type);
-            $pub     = Ork3::$Lib->qualtest->getPublishedSet($kingdom_id, $test_type);
+            $draft   = $this->QualTest->draft_set($kingdom_id, $test_type);
+            $pub     = $this->QualTest->published_set($kingdom_id, $test_type);
             $working = $draft ?: $pub;
         }
 
@@ -792,8 +795,11 @@ class Controller_QualTestAjax extends Controller
         }
 
         $need      = (int)$config['QuestionCount'];
-        $questions = Ork3::$Lib->qualtest->getQuestionsForPreview(
-            $kingdom_id, $test_type, $need, (int)$working['SetId']
+        $questions = $this->QualTest->questions_for_preview(
+            $kingdom_id,
+            $test_type,
+            $need,
+            (int)$working['SetId']
         );
 
         if ($questions === null) {
@@ -837,8 +843,12 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Maximum 200 questions per batch.']);
         }
 
-        $result = Ork3::$Lib->qualtest->saveQuestionBatch(
-            $kingdom_id, $test_type, $questions, $uid, (int)($_POST['SetId'] ?? 0)
+        $result = $this->QualTest->save_question_batch(
+            $kingdom_id,
+            $test_type,
+            $questions,
+            $uid,
+            (int)($_POST['SetId'] ?? 0)
         );
 
         $this->jsonOut([
@@ -859,7 +869,7 @@ class Controller_QualTestAjax extends Controller
     /** Load a set and authorize the caller against ITS kingdom. Exits on failure. */
     private function requireSet($set_id)
     {
-        $set = Ork3::$Lib->qualtest->getSetById((int)$set_id);
+        $set = $this->QualTest->set_by_id((int)$set_id);
         if ($set === null) {
             $this->jsonOut(['status' => 1, 'error' => 'Version not found.']);
         }
@@ -882,13 +892,17 @@ class Controller_QualTestAjax extends Controller
         // a draft and no published set: every new question would land in the draft and the live
         // test would stay empty until publish. The button is hidden in this state; this stops a
         // stale page from posting anyway.
-        $published = Ork3::$Lib->qualtest->getPublishedSet($kingdom_id, $test_type);
+        $published = $this->QualTest->published_set($kingdom_id, $test_type);
         if ($published === null) {
             $this->jsonOut(['status' => 1, 'error' => 'There is no current version yet. Add your first question — the current version is created automatically — then start the next one.']);
         }
         // Clones the live set's membership, so carried-over questions are NOT duplicated.
-        $id = Ork3::$Lib->qualtest->createDraft(
-            $kingdom_id, $test_type, $name, trim($_POST['RulesVersion'] ?? ''), $uid
+        $id = $this->QualTest->create_draft(
+            $kingdom_id,
+            $test_type,
+            $name,
+            trim($_POST['RulesVersion'] ?? ''),
+            $uid
         );
         if ($id <= 0) {
             $this->jsonOut(['status' => 1, 'error' => 'A draft version already exists for this test.']);
@@ -906,12 +920,12 @@ class Controller_QualTestAjax extends Controller
         // Both fields fall back to the CURRENT value, never to ''. updateSet() writes both
         // columns unconditionally, so defaulting RulesVersion to '' would have let a
         // name-only save silently blank the version label — the one field publishing requires.
-        $name = array_key_exists('Name', $_POST)         ? trim($_POST['Name'])         : $set['Name'];
+        $name = array_key_exists('Name', $_POST) ? trim($_POST['Name']) : $set['Name'];
         $ver  = array_key_exists('RulesVersion', $_POST) ? trim($_POST['RulesVersion']) : (string)$set['RulesVersion'];
         if ($name === '') {
             $this->jsonOut(['status' => 1, 'error' => 'A version needs a name.']);
         }
-        Ork3::$Lib->qualtest->updateSet((int)$set['SetId'], $name, $ver);
+        $this->QualTest->update_set((int)$set['SetId'], $name, $ver);
         $this->jsonOut(['status' => 0, 'name' => $name]);
     }
 
@@ -919,7 +933,7 @@ class Controller_QualTestAjax extends Controller
     public function publishset($p = null)
     {
         $set = $this->requireSet($_POST['SetId'] ?? 0);
-        $res = Ork3::$Lib->qualtest->publishSet((int)$set['SetId']);
+        $res = $this->QualTest->publish_set((int)$set['SetId']);
         if (!$res['ok']) {
             $this->jsonOut(['status' => 1, 'error' => $res['error']]);
         }
@@ -933,7 +947,7 @@ class Controller_QualTestAjax extends Controller
         if ($set['Status'] !== 'draft') {
             $this->jsonOut(['status' => 1, 'error' => 'Only a draft can be discarded.']);
         }
-        Ork3::$Lib->qualtest->discardDraft((int)$set['SetId']);
+        $this->QualTest->discard_draft((int)$set['SetId']);
         $this->jsonOut(['status' => 0]);
     }
 
@@ -955,7 +969,7 @@ class Controller_QualTestAjax extends Controller
                 'Status'       => $set['Status'],
                 'PublishedAt'  => $set['PublishedAt'],
             ],
-            'questions' => Ork3::$Lib->qualtest->getSetQuestions((int)$set['SetId']),
+            'questions' => $this->QualTest->set_questions((int)$set['SetId']),
         ]);
     }
 
@@ -966,14 +980,14 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Previous versions cannot be edited.']);
         }
         $qid = (int)($_POST['QuestionId'] ?? 0);
-        $q   = Ork3::$Lib->qualtest->getQuestion($qid);
+        $q   = $this->QualTest->question($qid);
         if (!$q || (int)$q['KingdomId'] !== (int)$set['KingdomId']) {
             $this->jsonOut(['status' => 1, 'error' => 'Question not found.']);
         }
         if (!empty($_POST['In'])) {
-            Ork3::$Lib->qualtest->addQuestionToSet((int)$set['SetId'], $qid);
+            $this->QualTest->add_question_to_set((int)$set['SetId'], $qid);
         } else {
-            Ork3::$Lib->qualtest->removeQuestionFromSet((int)$set['SetId'], $qid);
+            $this->QualTest->remove_question_from_set((int)$set['SetId'], $qid);
         }
         $this->jsonOut(['status' => 0, 'in' => !empty($_POST['In'])]);
     }
@@ -997,14 +1011,14 @@ class Controller_QualTestAjax extends Controller
         // Viewing another player's history is a manager action and MUST be scoped
         // to a kingdom the caller manages (no cross-kingdom fishing).
         if ($player_id !== $uid) {
-            if ($kingdom_id <= 0 || !Ork3::$Lib->qualtest->canManage($uid, $kingdom_id)) {
+            if ($kingdom_id <= 0 || !$this->QualTest->can_manage($uid, $kingdom_id)) {
                 $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
             }
         }
 
         $this->jsonOut([
             'status'   => 0,
-            'attempts' => Ork3::$Lib->qualtest->getPlayerAttempts($player_id, $kingdom_id, $test_type),
+            'attempts' => $this->QualTest->player_attempts($player_id, $kingdom_id, $test_type),
         ]);
     }
 
@@ -1022,12 +1036,12 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid attempt.']);
         }
 
-        $detail = Ork3::$Lib->qualtest->getAttemptDetail($attempt_id);
+        $detail = $this->QualTest->attempt_detail($attempt_id);
         if ($detail === null) {
             $this->jsonOut(['status' => 1, 'error' => 'Attempt not found.']);
         }
 
-        $isManager = Ork3::$Lib->qualtest->canManage($uid, (int)$detail['KingdomId']);
+        $isManager = $this->QualTest->can_manage($uid, (int)$detail['KingdomId']);
         if ((int)$detail['PlayerId'] !== $uid && !$isManager) {
             $this->jsonOut(['status' => 3, 'error' => 'Not authorized.']);
         }
@@ -1037,7 +1051,7 @@ class Controller_QualTestAjax extends Controller
         // got wrong (otherwise a player could harvest the key by failing and then
         // reviewing). Managers always see the full detail.
         if (!$isManager) {
-            $cfg = Ork3::$Lib->qualtest->getConfig((int)$detail['KingdomId'], $detail['TestType']);
+            $cfg = $this->QualTest->config((int)$detail['KingdomId'], $detail['TestType']);
             if (empty($cfg['ShowCorrectOnIncorrect'])) {
                 foreach ($detail['Questions'] as &$q) {
                     if (empty($q['Correct'])) {
