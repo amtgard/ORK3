@@ -95,8 +95,10 @@ class Controller_Kingdom extends Controller
     {
         session_write_close();
         $kingdom_id = (int)preg_replace('/[^0-9]/', '', (string)$kingdom_id);
+        // Partial requires a kingdom id (JS loads Kingdom/recommendations_panel/{id}).
+        // Mirror profile()'s missing-id behavior: redirect home rather than 400.
         if ($kingdom_id <= 0) {
-            http_response_code(400);
+            header('Location: ' . UIR);
             exit;
         }
         $this->load_model('Reports');
@@ -156,17 +158,27 @@ class Controller_Kingdom extends Controller
 
     public function map($kingdom_id = null)
     {
+        // Always provide Parks for Kingdom_map.tpl; missing kingdom / empty result
+        // used to leave Parks unset/null and array_filter TypeError'd (HTTP 500).
+        $this->data['Parks'] = ['Parks' => []];
         if (valid_id($kingdom_id)) {
             $kingdom_details = $this->Kingdom->get_kingdom_details($kingdom_id);
-            $this->data[ 'page_title' ] = $kingdom_details['KingdomInfo']['KingdomName'] . " Map";
+            if (is_array($kingdom_details['KingdomInfo'] ?? null)
+                && isset($kingdom_details['KingdomInfo']['KingdomName'])) {
+                $this->data['page_title'] = $kingdom_details['KingdomInfo']['KingdomName'] . " Map";
+            }
 
             $all_parks = $this->Kingdom->get_parks($kingdom_id);
-            $all_parks['Parks'] = array_filter(
-                $all_parks['Parks'],
-                function ($park) {
-                    return $park['Active'] == 'Active';
+            $park_list = is_array($all_parks['Parks'] ?? null) ? $all_parks['Parks'] : [];
+            if (!is_array($all_parks)) {
+                $all_parks = [];
+            }
+            $all_parks['Parks'] = array_values(array_filter(
+                $park_list,
+                static function ($park) {
+                    return is_array($park) && ($park['Active'] ?? '') == 'Active';
                 }
-            );
+            ));
             $this->data['Parks'] = $all_parks;
         }
     }

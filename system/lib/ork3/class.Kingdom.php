@@ -491,7 +491,8 @@ class Kingdom extends Ork3
                     );
             }
         } else {
-            $response['Status'] = InvalidParameter();
+            // Always include Parks so callers (e.g. Kingdom/map) never array_filter(null).
+            $response = array('Status' => InvalidParameter(), 'Parks' => array());
         }
         return $response;
     }

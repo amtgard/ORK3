@@ -156,6 +156,16 @@ final class KingdomProfileTest extends TestCase
         $this->assertSame(0, $monthly['Status']['Status']);
     }
 
+    public function testGetParksUnknownKingdomReturnsEmptyParksArray(): void
+    {
+        // KingdomId 1 is not a seeded sandbox kingdom; miss path used to omit Parks
+        // and Kingdom/map array_filter()'d null → HTTP 500.
+        $parks = $this->kingdomDomain->GetParks(['KingdomId' => 1]);
+        $this->assertIsArray($parks['Parks'] ?? null);
+        $this->assertSame([], $parks['Parks']);
+        $this->assertNotSame(0, $parks['Status']['Status'] ?? 0);
+    }
+
     public function testReportAveragesShapeAndValues(): void
     {
         $kid = $this->fixture->firstKingdomId();
