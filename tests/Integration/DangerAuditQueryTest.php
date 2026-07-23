@@ -90,6 +90,39 @@ final class DangerAuditQueryTest extends TestCase
         $this->auditDomain->audit('T08ADM.TestAudit', ['foo' => 'bar'], 'Player', $actor['mundane_id']);
     }
 
+    public function testMethodCallWhitelistRejectsInjection(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $actor = $this->fixture->createPlayer($parkId, 'c03-inject');
+        $method = 'T08ADM.C03Legit.' . bin2hex(random_bytes(4));
+        $this->fixture->insertAuditRow($method, $actor['mundane_id'], 'Player', $actor['mundane_id']);
+
+        $start = date('Y-m-d', strtotime('-7 days'));
+        $end = date('Y-m-d');
+
+        $legit = $this->auditDomain->ListAuditLog([
+            'Start' => $start,
+            'End' => $end,
+            'MethodCall' => $method,
+        ]);
+        $this->assertSame(1, $legit['total']);
+
+        $unfiltered = $this->auditDomain->ListAuditLog([
+            'Start' => $start,
+            'End' => $end,
+        ]);
+        $this->assertGreaterThanOrEqual(1, $unfiltered['total']);
+
+        // Payload that would broaden results if interpolated unescaped.
+        $injection = $this->auditDomain->ListAuditLog([
+            'Start' => $start,
+            'End' => $end,
+            'MethodCall' => $method . "' OR '1'='1",
+        ]);
+        $this->assertSame(0, $injection['total']);
+        $this->assertLessThan($unfiltered['total'], $injection['total'] + 1);
+    }
+
     public function testAuthAddAuditKingdomScope(): void
     {
         $this->assertAuthAddAuditRow(AUTH_KINGDOM, $this->fixture->firstKingdomId(), [

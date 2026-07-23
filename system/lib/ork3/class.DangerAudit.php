@@ -70,9 +70,22 @@ class Dangeraudit extends Ork3
             $entityTypeFilter = '';
         }
 
+        // MethodCall is client-controlled; mysql_real_escape_string is a no-op shim.
+        // Whitelist against distinct method_call values — reject unknowns (do not
+        // drop the filter, which would broaden results under injection payloads).
+        $methodFilterAllowed = true;
+        if ($methodFilter !== '') {
+            $allowedMethods = $this->ListAuditMethods();
+            if (!in_array($methodFilter, $allowedMethods, true)) {
+                $methodFilterAllowed = false;
+            }
+        }
+
         $where = "da.modified_at >= '" . mysql_real_escape_string($start) . " 00:00:00'"
             . " AND da.modified_at <= '" . mysql_real_escape_string($end) . " 23:59:59'";
-        if ($methodFilter !== '') {
+        if (!$methodFilterAllowed) {
+            $where .= ' AND 1=0';
+        } elseif ($methodFilter !== '') {
             $where .= " AND da.method_call = '" . mysql_real_escape_string($methodFilter) . "'";
         }
         if ($byWhomFilter > 0) {

@@ -11,7 +11,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 3 | C-15 Event permissions breadcrumbs | [x] | | |
 | 4 | C-16 UniversalSearch active units | [x] | | |
 | 5 | C-18 Revoked awards alias titles | [x] | | |
-| 6 | C-03 DangerAudit MethodCall SQLi | [ ] | | |
+| 6 | C-03 DangerAudit MethodCall SQLi | [x] | | |
 | 7 | C-02 Banner CopyBanner auth | [ ] | | |
 | 8 | C-04 GetGlobalAdminGrants auth | [ ] | | |
 | 9 | C-05 Scoped/Kingdom/Event auth getters | [ ] | | |
@@ -32,7 +32,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 3. [x] C-15 Event permissions breadcrumbs
 4. [x] C-16 UniversalSearch active units
 5. [x] C-18 Revoked awards alias titles
-6. [ ] C-03 DangerAudit MethodCall SQLi
+6. [x] C-03 DangerAudit MethodCall SQLi
 7. [ ] C-02 Banner CopyBanner auth
 8. [ ] C-04 GetGlobalAdminGrants auth
 9. [ ] C-05 Scoped/Kingdom/Event auth getters
