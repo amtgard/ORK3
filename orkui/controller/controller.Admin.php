@@ -1841,6 +1841,20 @@ class Controller_Admin extends Controller
         $this->data['Kingdoms'] = $this->AdminDashboard->list_all_kingdom_names();
     }
 
+    /**
+     * Legacy menu target from Tournament worksheets. No admin tournament editor
+     * exists here — send callers to the live Tournament UI instead of 500'ing.
+     */
+    public function tournament($id = null)
+    {
+        if (valid_id($id)) {
+            header('Location: ' . UIR . 'Tournament/worksheet/' . (int)$id);
+        } else {
+            header('Location: ' . UIR . 'Tournament');
+        }
+        exit;
+    }
+
     public function topparks($limit = null)
     {
         $this->load_model('Admin');
