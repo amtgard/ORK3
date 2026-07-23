@@ -378,16 +378,68 @@ final class EventOccurrenceTest extends TestCase
         $this->assertNotSame(0, $r['Status']['Status']);
     }
 
-    public function testOccurrencePageDataIncludesDietaryWhenRequested(): void
+    public function testGetOccurrencePageDataRejectsAnonymousDraft(): void
+    {
+        $ctx = $this->fixture->createPublishedEvent('c09-draft', 'draft');
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $denied = $this->planning->GetOccurrencePageData([
+            'EventId' => $ctx['event_id'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+            'MundaneId' => 0,
+        ]);
+        $this->assertSame(ServiceErrorIds::SecureTokenFailure, $denied['Status']);
+
+        $stranger = $this->fixture->createGrantorWithoutAuth('c09-draft-stranger');
+        unset($_SESSION['is_authorized_mundane_id']);
+        $noAuth = $this->planning->GetOccurrencePageData([
+            'Token' => $stranger['token'],
+            'EventId' => $ctx['event_id'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+            'MundaneId' => $stranger['mundane_id'],
+        ]);
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $noAuth['Status']);
+    }
+
+    public function testOccurrencePageDataIgnoresDietaryWithoutFeastAuth(): void
     {
         $ctx = $this->fixture->createPublishedEvent('page-diet');
         $player = $this->fixture->createPlayer('page-diet-player');
         $this->fixture->insertRsvp($ctx['detail_id'], $player, 'going');
+        unset($_SESSION['is_authorized_mundane_id']);
 
         $r = $this->planning->GetOccurrencePageData([
             'EventId' => $ctx['event_id'],
             'EventCalendarDetailId' => $ctx['detail_id'],
             'MundaneId' => 0,
+            'IncludeDietary' => 1,
+        ]);
+        $this->assertSame(0, $r['Status']['Status']);
+        $this->assertSame([], $r['DietarySummary'] ?? null);
+    }
+
+    public function testOccurrencePageDataIncludesDietaryForFeastToken(): void
+    {
+        $ctx = $this->fixture->createPublishedEvent('page-diet-feast');
+        $player = $this->fixture->createPlayer('page-diet-feast-player');
+        $this->fixture->insertRsvp($ctx['detail_id'], $player, 'going');
+        $feast = $this->fixture->createGrantorWithoutAuth('c09-feast');
+        $this->fixture->insertStaff(
+            $ctx['detail_id'],
+            $feast['mundane_id'],
+            'Feast',
+            false,
+            false,
+            false,
+            true,
+        );
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $r = $this->planning->GetOccurrencePageData([
+            'Token' => $feast['token'],
+            'EventId' => $ctx['event_id'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+            'MundaneId' => $feast['mundane_id'],
             'IncludeDietary' => 1,
         ]);
         $this->assertSame(0, $r['Status']['Status']);

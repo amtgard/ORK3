@@ -362,9 +362,10 @@ class Model_Event extends Model
         return (int) ($r['EventCalendarDetailId'] ?? 0);
     }
 
-    public function get_occurrence_page_data($event_id, $detail_id, $mundane_id = 0, $at_park_id = 0, $fallback_park_id = 0, $include_dietary = false)
+    public function get_occurrence_page_data($event_id, $detail_id, $mundane_id = 0, $at_park_id = 0, $fallback_park_id = 0, $include_dietary = false, $token = '')
     {
         $r = $this->_planning()->GetOccurrencePageData([
+            'Token' => (string) $token,
             'EventId' => (int) $event_id,
             'EventCalendarDetailId' => (int) $detail_id,
             'MundaneId' => (int) $mundane_id,

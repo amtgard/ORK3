@@ -246,7 +246,15 @@ class Controller_Event extends Controller
         $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
 
         $occurrencePage = ($detail_id > 0)
-            ? $this->Event->get_occurrence_page_data($event_id, $detail_id, $uid)
+            ? $this->Event->get_occurrence_page_data(
+                $event_id,
+                $detail_id,
+                $uid,
+                0,
+                0,
+                false,
+                (string)($this->session->token ?? '')
+            )
             : null;
         $staffCaps = is_array($occurrencePage['StaffCaps'] ?? null) ? $occurrencePage['StaffCaps'] : [];
         $uid_staff_can_manage     = !empty($staffCaps['CanManage']);
@@ -473,7 +481,8 @@ class Controller_Event extends Controller
             $uid,
             $atParkId,
             (int)($this->data['EventInfo']['ParkId'] ?? 0),
-            $this->data['CanManageFeast']
+            $this->data['CanManageFeast'],
+            (string)($this->session->token ?? '')
         );
         $atPark = is_array($occurrencePage['AtPark'] ?? null) ? $occurrencePage['AtPark'] : [];
         $this->data['AtParkName']       = $atPark['Name'] ?? '';

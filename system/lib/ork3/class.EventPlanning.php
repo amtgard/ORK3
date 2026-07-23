@@ -234,8 +234,10 @@ class EventPlanning extends Ork3
     {
         $eventId = (int) ($request['EventId'] ?? 0);
         $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
-        $mundaneId = (int) ($request['MundaneId'] ?? 0);
-        $includeDietary = !empty($request['IncludeDietary']);
+        $requestMundaneId = (int) ($request['MundaneId'] ?? 0);
+        $wantDietary = !empty($request['IncludeDietary']);
+        $token = (string) ($request['Token'] ?? '');
+        $actorId = Ork3::$Lib->authorization->IsAuthorized($token);
 
         if (!valid_id($eventId) || !valid_id($detailId)) {
             return InvalidParameter('Invalid event or detail id');
@@ -259,6 +261,27 @@ class EventPlanning extends Ork3
             $kingdomId = (int) ($evtStatusRow->kingdom_id ?? 0);
             $parkId = (int) ($evtStatusRow->park_id ?? 0);
         }
+
+        if ($eventStatus !== 'published') {
+            if (!valid_id($actorId)) {
+                return BadToken();
+            }
+            $isAdmin = Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_CREATE);
+            $canViewDraft = $isAdmin
+                || (int) $actorId === $creatorId
+                || $this->CanManageEventDetail($actorId, $eventId, $detailId, 'manage')
+                || $this->CanManageEventDetail($actorId, $eventId, $detailId, 'attendance')
+                || $this->CanManageEventDetail($actorId, $eventId, $detailId, 'schedule')
+                || $this->CanManageEventDetail($actorId, $eventId, $detailId, 'feast');
+            if (!$canViewDraft) {
+                return NoAuthorization();
+            }
+        }
+
+        $mundaneId = valid_id($actorId) ? (int) $actorId : $requestMundaneId;
+        $includeDietary = $wantDietary
+            && valid_id($actorId)
+            && $this->CanManageEventDetail((int) $actorId, $eventId, $detailId, 'feast');
 
         $staffCaps = $this->fetchSelfStaffCaps($detailId, $mundaneId);
         $this->db->Clear();
