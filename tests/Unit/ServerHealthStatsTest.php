@@ -45,6 +45,32 @@ final class ServerHealthStatsTest extends TestCase
         $this->assertGreaterThanOrEqual(0, $stats['stale_row']);
     }
 
+    public function testServerHealthGettersRequireAdminToken(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $admin = $this->fixture->createPlayer($parkId, 'c06-admin');
+        $this->fixture->insertGlobalAdmin($admin['mundane_id']);
+        $stranger = $this->fixture->createPlayer($parkId, 'c06-stranger');
+        $wanted = ['Uptime', 'Threads_connected'];
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $deniedDb = $this->adminDomain->GetServerHealthDbStatus($wanted, $stranger['token']);
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $deniedDb['Status'] ?? null);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $deniedProc = $this->adminDomain->GetServerHealthProcesses(5, '');
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $deniedProc['Status'] ?? null);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $db = $this->adminDomain->GetServerHealthDbStatus($wanted, $admin['token']);
+        $this->assertArrayNotHasKey('Status', $db);
+        $this->assertIsArray($db);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $procs = $this->adminDomain->GetServerHealthProcesses(5, $admin['token']);
+        $this->assertArrayNotHasKey('Status', $procs);
+        $this->assertIsArray($procs);
+    }
+
     public function testSetPlayerSuspensionByIdInference(): void
     {
         $parkId = $this->fixture->firstParkId();

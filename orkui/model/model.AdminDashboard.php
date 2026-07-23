@@ -70,14 +70,24 @@ class Model_AdminDashboard extends Model
         return $this->_dangeraudit()->ListAuditMethods();
     }
 
-    public function server_health_db_status(array $wanted): array
+    public function server_health_db_status(array $wanted, string $token = ''): array
     {
-        return $this->_administration()->GetServerHealthDbStatus($wanted);
+        $r = $this->_administration()->GetServerHealthDbStatus($wanted, $token);
+        if (isset($r['Status'])) {
+            return [];
+        }
+
+        return $r;
     }
 
-    public function server_health_processes(int $limit = 20): array
+    public function server_health_processes(int $limit = 20, string $token = ''): array
     {
-        return $this->_administration()->GetServerHealthProcesses($limit);
+        $r = $this->_administration()->GetServerHealthProcesses($limit, $token);
+        if (isset($r['Status'])) {
+            return [];
+        }
+
+        return $r;
     }
 
     public function server_health_weather_summary(): array

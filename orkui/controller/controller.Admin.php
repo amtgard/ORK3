@@ -2247,8 +2247,9 @@ class Controller_Admin extends Controller
 
             $wanted = ['Slow_queries','Threads_connected','Threads_running','Questions','Uptime','Max_used_connections','Connections','Com_select','Com_insert','Com_update','Com_delete','Com_show_fields','Com_show_keys','Innodb_row_lock_current_waits','Innodb_row_lock_waits','Innodb_row_lock_time'];
             $this->load_model('AdminDashboard');
-            $db_status = $this->AdminDashboard->server_health_db_status($wanted);
-            $processes = $this->AdminDashboard->server_health_processes(20);
+            $sessionToken = (string) ($this->session->token ?? '');
+            $db_status = $this->AdminDashboard->server_health_db_status($wanted, $sessionToken);
+            $processes = $this->AdminDashboard->server_health_processes(20, $sessionToken);
 
             $weather   = null;
             $wr = $this->AdminDashboard->server_health_weather_summary();

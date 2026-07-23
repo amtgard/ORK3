@@ -74,12 +74,18 @@ class Administration
 
     /**
      * SHOW GLOBAL STATUS subset for server health panel (T-ADM-04).
+     * Requires Token + global AUTH_ADMIN (same gate as PurgeLogs).
      *
      * @param list<string> $wanted
-     * @return array<string, string>
+     * @return array<string, string>|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
-    public function GetServerHealthDbStatus(array $wanted): array
+    public function GetServerHealthDbStatus(array $wanted, $Token = null): array
     {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($Token ?? '')) <= 0
+            || !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
+            return NoAuthorization();
+        }
+
         $this->db->Clear();
         $rs = $this->db->DataSet(
             "SHOW GLOBAL STATUS WHERE Variable_name IN ('" . implode("','", $wanted) . "')"
@@ -95,10 +101,15 @@ class Administration
     }
 
     /**
-     * @return list<array{id: int, user: mixed, host: string, command: mixed, time: int, state: string, info: string}>
+     * @return list<array{id: int, user: mixed, host: string, command: mixed, time: int, state: string, info: string}>|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
-    public function GetServerHealthProcesses(int $limit = 20): array
+    public function GetServerHealthProcesses(int $limit = 20, $Token = null): array
     {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($Token ?? '')) <= 0
+            || !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
+            return NoAuthorization();
+        }
+
         $this->db->Clear();
         $pr = $this->db->DataSet(
             'SELECT ID, USER, HOST, COMMAND, TIME, STATE, LEFT(INFO, 300) AS INFO
