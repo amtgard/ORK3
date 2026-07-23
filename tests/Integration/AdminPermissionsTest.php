@@ -35,7 +35,18 @@ final class AdminPermissionsTest extends TestCase
         $player = $this->fixture->createPlayer($parkId, 'global-admin');
         $this->fixture->insertGlobalAdmin($player['mundane_id']);
 
-        $grants = $this->adminDomain->GetGlobalAdminGrants();
+        unset($_SESSION['is_authorized_mundane_id']);
+        $denied = $this->adminDomain->GetGlobalAdminGrants('');
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $denied['Status'] ?? null);
+
+        $stranger = $this->fixture->createPlayer($parkId, 'c04-stranger');
+        unset($_SESSION['is_authorized_mundane_id']);
+        $nonAdmin = $this->adminDomain->GetGlobalAdminGrants($stranger['token']);
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $nonAdmin['Status'] ?? null);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $grants = $this->adminDomain->GetGlobalAdminGrants($player['token']);
+        $this->assertArrayNotHasKey('Status', $grants);
         $match = array_filter($grants, static fn ($row) => (int) $row['MundaneId'] === $player['mundane_id']);
 
         $this->assertNotEmpty($match);

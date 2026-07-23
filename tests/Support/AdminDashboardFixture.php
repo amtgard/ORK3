@@ -69,7 +69,7 @@ final class AdminDashboardFixture
     }
 
     /**
-     * @return array{mundane_id: int, park_id: int, kingdom_id: int}
+     * @return array{mundane_id: int, park_id: int, kingdom_id: int, token: string}
      */
     public function createPlayer(int $parkId, string $suffix = 'player', bool $suspended = false, int $suspendedById = 0): array
     {
@@ -77,7 +77,7 @@ final class AdminDashboardFixture
         $token = md5(self::MARKER . $suffix . bin2hex(random_bytes(8)));
         $mundaneId = $this->insertMundane($suffix, $parkId, $kingdomId, $token, $suspended, $suspendedById);
 
-        return ['mundane_id' => $mundaneId, 'park_id' => $parkId, 'kingdom_id' => $kingdomId];
+        return ['mundane_id' => $mundaneId, 'park_id' => $parkId, 'kingdom_id' => $kingdomId, 'token' => $token];
     }
 
     public function insertGlobalAdmin(int $mundaneId): int

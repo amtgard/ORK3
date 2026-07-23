@@ -7,9 +7,14 @@ class Model_AdminDashboard extends Model
         return $this->_report()->GetAdminDashboardStats();
     }
 
-    public function global_admin_grants(): array
+    public function global_admin_grants(string $token = ''): array
     {
-        return $this->_administration()->GetGlobalAdminGrants();
+        $r = $this->_administration()->GetGlobalAdminGrants($token);
+        if (isset($r['Status'])) {
+            return [];
+        }
+
+        return $r;
     }
 
     public function active_kingdoms_for_permissions(): array

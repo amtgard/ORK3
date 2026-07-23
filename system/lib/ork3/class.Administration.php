@@ -232,11 +232,17 @@ class Administration
 
     /**
      * Global ORK admin grants with last login and last credit (T-ADM-02).
+     * Requires Token + global AUTH_ADMIN (same gate as PurgeLogs).
      *
-     * @return list<array<string, mixed>>
+     * @return list<array<string, mixed>>|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
-    public function GetGlobalAdminGrants(): array
+    public function GetGlobalAdminGrants($Token = null): array
     {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($Token ?? '')) <= 0
+            || !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
+            return NoAuthorization();
+        }
+
         $this->db->Clear();
         $rs = $this->db->DataSet(
             'SELECT a.authorization_id, a.mundane_id, a.role, a.modified,

@@ -778,7 +778,7 @@ class Controller_Admin extends Controller
                 exit;
             }
             $this->load_model('AdminDashboard');
-            $this->data['AdminAuths'] = $this->AdminDashboard->global_admin_grants();
+            $this->data['AdminAuths'] = $this->AdminDashboard->global_admin_grants((string) ($this->session->token ?? ''));
             $this->data['Kingdoms'] = $this->AdminDashboard->active_kingdoms_for_permissions();
             $this->template = 'Admin_permissions_global.tpl';
             return;
