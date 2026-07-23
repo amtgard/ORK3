@@ -299,7 +299,7 @@ class Model_Event extends Model
      */
     public function get_schedule($detail_id)
     {
-        $r = $this->Event->GetSchedule([
+        $r = $this->_planning()->GetSchedule([
             'EventCalendarDetailId' => (int) $detail_id,
         ]);
         return $this->_eventApiOk($r) ? ($r['ScheduleList'] ?? []) : [];
@@ -311,7 +311,7 @@ class Model_Event extends Model
      */
     public function get_published_schedule_embed($event_id, $detail_id = 0)
     {
-        $r = $this->Event->GetPublishedScheduleEmbed([
+        $r = $this->_embed()->GetPublishedScheduleEmbed([
             'EventId' => (int) $event_id,
             'EventCalendarDetailId' => (int) $detail_id,
         ]);
@@ -343,7 +343,7 @@ class Model_Event extends Model
 
     public function detail_belongs_to_event($event_id, $detail_id)
     {
-        $r = $this->Event->AssertDetailBelongsToEvent([
+        $r = $this->_planning()->AssertDetailBelongsToEvent([
             'EventId' => (int) $event_id,
             'EventCalendarDetailId' => (int) $detail_id,
         ]);
@@ -352,7 +352,7 @@ class Model_Event extends Model
 
     public function get_default_occurrence_id($event_id)
     {
-        $r = $this->Event->GetDefaultOccurrenceId(['EventId' => (int) $event_id]);
+        $r = $this->_planning()->GetDefaultOccurrenceId(['EventId' => (int) $event_id]);
         if (!$this->_eventApiOk($r)) {
             return 0;
         }
@@ -361,7 +361,7 @@ class Model_Event extends Model
 
     public function get_occurrence_page_data($event_id, $detail_id, $mundane_id = 0, $at_park_id = 0, $fallback_park_id = 0, $include_dietary = false)
     {
-        $r = $this->Event->GetOccurrencePageData([
+        $r = $this->_planning()->GetOccurrencePageData([
             'EventId' => (int) $event_id,
             'EventCalendarDetailId' => (int) $detail_id,
             'MundaneId' => (int) $mundane_id,
@@ -377,7 +377,7 @@ class Model_Event extends Model
 
     public function set_calendar_detail_fees_and_links($event_id, $detail_id, $fees, $links)
     {
-        $r = $this->Event->SetCalendarDetailFeesAndLinks([
+        $r = $this->_planning()->SetCalendarDetailFeesAndLinks([
             'EventId' => (int) $event_id,
             'EventCalendarDetailId' => (int) $detail_id,
             'Fees' => is_array($fees) ? $fees : [],
@@ -394,7 +394,7 @@ class Model_Event extends Model
 
     public function set_calendar_detail_event_type($event_id, $detail_id, $event_type)
     {
-        $r = $this->Event->SetCalendarDetailEventType([
+        $r = $this->_planning()->SetCalendarDetailEventType([
             'EventId' => (int) $event_id,
             'EventCalendarDetailId' => (int) $detail_id,
             'EventType' => (string) $event_type,
@@ -404,7 +404,7 @@ class Model_Event extends Model
 
     public function reconcile_past_attendance($token, $event_id, $detail_id)
     {
-        $r = $this->Event->ReconcilePastAttendance([
+        $r = $this->_planning()->ReconcilePastAttendance([
             'Token' => $token,
             'EventId' => (int) $event_id,
             'EventCalendarDetailId' => (int) $detail_id,
@@ -417,7 +417,7 @@ class Model_Event extends Model
 
     public function get_detail_dependency_counts($detail_id)
     {
-        $r = $this->Event->GetDetailDependencyCounts([
+        $r = $this->_planning()->GetDetailDependencyCounts([
             'EventCalendarDetailId' => (int) $detail_id,
         ]);
         if (!$this->_eventApiOk($r)) {
@@ -431,7 +431,7 @@ class Model_Event extends Model
 
     public function get_event_redirect_scope($event_id)
     {
-        $r = $this->Event->GetEventRedirectScope(['EventId' => (int) $event_id]);
+        $r = $this->_planning()->GetEventRedirectScope(['EventId' => (int) $event_id]);
         if (!$this->_eventApiOk($r)) {
             return ['kingdom_id' => 0, 'park_id' => 0];
         }
@@ -443,7 +443,7 @@ class Model_Event extends Model
 
     public function get_park_name($park_id)
     {
-        $r = $this->Event->GetParkName(['ParkId' => (int) $park_id]);
+        $r = $this->_planning()->GetParkName(['ParkId' => (int) $park_id]);
         if (!$this->_eventApiOk($r)) {
             return '';
         }
@@ -452,7 +452,7 @@ class Model_Event extends Model
 
     public function is_draft_blocked_for_viewer($event_status, $creator_id, $mundane_id, $can_manage, $staff_caps)
     {
-        $r = $this->Event->IsDraftBlockedForViewer([
+        $r = $this->_planning()->IsDraftBlockedForViewer([
             'EventStatus' => (string) $event_status,
             'CreatorId' => (int) $creator_id,
             'MundaneId' => (int) $mundane_id,
@@ -465,6 +465,16 @@ class Model_Event extends Model
     public function get_event_templates_for_kingdom($kingdom_id)
     {
         return $this->Event->GetEventTemplatesForKingdom((int) $kingdom_id);
+    }
+
+    private function _planning(): EventPlanning
+    {
+        return new EventPlanning();
+    }
+
+    private function _embed(): EventEmbed
+    {
+        return new EventEmbed();
     }
 
 }

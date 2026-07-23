@@ -24,7 +24,7 @@ class Model_EventPlanning extends Model
 
     public function set_status(string $token, int $eventId, string $status): array
     {
-        return $this->Event->SetEventStatus([
+        return $this->_planning()->SetEventStatus([
             'Token' => $token,
             'EventId' => $eventId,
             'Status' => $status,
@@ -33,7 +33,7 @@ class Model_EventPlanning extends Model
 
     public function get_preview(int $eventId, int $detailId, int $mundaneId = 0): array
     {
-        return $this->Event->GetEventPreview([
+        return $this->_planning()->GetEventPreview([
             'EventId' => $eventId,
             'EventCalendarDetailId' => $detailId,
             'MundaneId' => $mundaneId,
@@ -42,27 +42,27 @@ class Model_EventPlanning extends Model
 
     public function add_staff(array $request): array
     {
-        return $this->Event->AddEventStaff($request);
+        return $this->_planning()->AddEventStaff($request);
     }
 
     public function remove_staff(array $request): array
     {
-        return $this->Event->RemoveEventStaff($request);
+        return $this->_planning()->RemoveEventStaff($request);
     }
 
     public function add_schedule(array $request): array
     {
-        return $this->Event->AddEventSchedule($request);
+        return $this->_planning()->AddEventSchedule($request);
     }
 
     public function update_schedule(array $request): array
     {
-        return $this->Event->UpdateEventSchedule($request);
+        return $this->_planning()->UpdateEventSchedule($request);
     }
 
     public function remove_schedule(string $token, int $eventId, int $detailId, int $scheduleId): array
     {
-        return $this->Event->RemoveEventSchedule([
+        return $this->_planning()->RemoveEventSchedule([
             'Token' => $token,
             'EventId' => $eventId,
             'EventCalendarDetailId' => $detailId,
@@ -72,7 +72,7 @@ class Model_EventPlanning extends Model
 
     public function copy_source_list(int $kingdomId, int $parkId, string $query, int $excludeEventId = 0): array
     {
-        return $this->Event->ListCopySourceEvents([
+        return $this->_planning()->ListCopySourceEvents([
             'KingdomId' => $kingdomId,
             'ParkId' => $parkId,
             'Query' => $query,
@@ -82,7 +82,7 @@ class Model_EventPlanning extends Model
 
     public function create_with_copy(array $request): array
     {
-        return $this->Event->CreateEventWithCopy($request);
+        return $this->_planning()->CreateEventWithCopy($request);
     }
 
     public function remove_heraldry(string $token, int $eventId): array
