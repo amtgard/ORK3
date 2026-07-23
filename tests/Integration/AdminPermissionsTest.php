@@ -62,9 +62,23 @@ final class AdminPermissionsTest extends TestCase
         $ctx = $this->fixture->createPublishedEvent($parkId, 'inherited');
         $holder = $this->fixture->createPlayer($parkId, 'park-holder');
         $this->fixture->insertParkAuth($holder['mundane_id'], $parkId, 'admin');
+        // Park admin (create-capable) can read inherited permissions for events in park.
+        $viewer = $this->fixture->createPlayer($parkId, 'c05-viewer');
+        $this->fixture->insertParkAuth($viewer['mundane_id'], $parkId, AUTH_CREATE);
 
-        $inherited = $this->adminDomain->GetEventInheritedPermissions($ctx['event_id']);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $denied = $this->adminDomain->GetEventInheritedPermissions($ctx['event_id'], '');
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $denied['Status'] ?? null);
 
+        $stranger = $this->fixture->createPlayer($parkId, 'c05-stranger');
+        unset($_SESSION['is_authorized_mundane_id']);
+        $crossTenant = $this->adminDomain->GetEventInheritedPermissions($ctx['event_id'], $stranger['token']);
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $crossTenant['Status'] ?? null);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $inherited = $this->adminDomain->GetEventInheritedPermissions($ctx['event_id'], $viewer['token']);
+
+        $this->assertArrayNotHasKey('Status', $inherited);
         $this->assertNotNull($inherited['creator']);
         $this->assertSame($ctx['mundane_id'], $inherited['creator']['MundaneId']);
         $this->assertSame($parkId, (int) $inherited['parkId']);
@@ -76,5 +90,22 @@ final class AdminPermissionsTest extends TestCase
         $playerDomain = new Player();
         $customTitleId = $playerDomain->getCustomTitleAwardId();
         $this->assertGreaterThanOrEqual(0, $customTitleId);
+    }
+
+    public function testScopedAuthsRequiresCreateAuthority(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $holder = $this->fixture->createPlayer($parkId, 'c05-scoped');
+        $this->fixture->insertParkAuth($holder['mundane_id'], $parkId, AUTH_CREATE);
+        $stranger = $this->fixture->createPlayer($parkId, 'c05-scoped-x');
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $denied = $this->adminDomain->GetScopedAuths('Park', $parkId, $stranger['token']);
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $denied['Status'] ?? null);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $ok = $this->adminDomain->GetScopedAuths('Park', $parkId, $holder['token']);
+        $this->assertArrayNotHasKey('Status', $ok);
+        $this->assertContains($holder['mundane_id'], array_column($ok, 'MundaneId'));
     }
 }

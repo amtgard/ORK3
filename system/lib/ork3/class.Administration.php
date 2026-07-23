@@ -304,14 +304,19 @@ class Administration
     }
 
     /**
-     * @return list<array<string, mixed>>
+     * @return list<array<string, mixed>>|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
-    public function GetScopedAuths(string $type, int $id): array
+    public function GetScopedAuths(string $type, int $id, $Token = null): array
     {
-        $scopeColMap = ['Kingdom' => 'a.kingdom_id', 'Park' => 'a.park_id', 'Event' => 'a.event_id'];
-        if (!isset($scopeColMap[$type])) {
+        $authTypeMap = ['Kingdom' => AUTH_KINGDOM, 'Park' => AUTH_PARK, 'Event' => AUTH_EVENT];
+        if (!isset($authTypeMap[$type])) {
             return [];
         }
+        if (!$this->isAdminOrScopedCreate($Token, $authTypeMap[$type], (int) $id)) {
+            return NoAuthorization();
+        }
+
+        $scopeColMap = ['Kingdom' => 'a.kingdom_id', 'Park' => 'a.park_id', 'Event' => 'a.event_id'];
         $scopeCol = $scopeColMap[$type];
         $eid = (int) $id;
         $this->db->Clear();
@@ -347,10 +352,14 @@ class Administration
     }
 
     /**
-     * @return list<array<string, mixed>>
+     * @return list<array<string, mixed>>|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
-    public function GetKingdomParkAuths(int $kingdomId): array
+    public function GetKingdomParkAuths(int $kingdomId, $Token = null): array
     {
+        if (!$this->isAdminOrScopedCreate($Token, AUTH_KINGDOM, (int) $kingdomId)) {
+            return NoAuthorization();
+        }
+
         $eid = (int) $kingdomId;
         $this->db->Clear();
         $rs = $this->db->DataSet(
@@ -398,8 +407,12 @@ class Administration
      *   kingdomId: int
      * }
      */
-    public function GetEventInheritedPermissions(int $eventId): array
+    public function GetEventInheritedPermissions(int $eventId, $Token = null): array
     {
+        if (!$this->isAdminOrScopedCreate($Token, AUTH_EVENT, (int) $eventId)) {
+            return NoAuthorization();
+        }
+
         $eid = (int) $eventId;
         $eventCreator = null;
         $inheritedParkAuths = [];
@@ -496,6 +509,19 @@ class Administration
             'parkId' => $evParkId,
             'kingdomId' => $evKingdomId,
         ];
+    }
+
+    private function isAdminOrScopedCreate($Token, string $authType, int $scopeId): bool
+    {
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($Token ?? '');
+        if ($mundaneId <= 0) {
+            return false;
+        }
+        if (Ork3::$Lib->authorization->HasAuthority($mundaneId, AUTH_ADMIN, 0, AUTH_CREATE)) {
+            return true;
+        }
+
+        return (bool) Ork3::$Lib->authorization->HasAuthority($mundaneId, $authType, $scopeId, AUTH_CREATE);
     }
 
     /**

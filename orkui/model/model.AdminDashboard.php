@@ -22,19 +22,42 @@ class Model_AdminDashboard extends Model
         return $this->_administration()->GetActiveKingdomsForPermissions();
     }
 
-    public function scoped_auths(string $type, int $id): array
+    public function scoped_auths(string $type, int $id, string $token = ''): array
     {
-        return $this->_administration()->GetScopedAuths($type, $id);
+        $r = $this->_administration()->GetScopedAuths($type, $id, $token);
+        if (isset($r['Status'])) {
+            return [];
+        }
+
+        return $r;
     }
 
-    public function kingdom_park_auths(int $kingdomId): array
+    public function kingdom_park_auths(int $kingdomId, string $token = ''): array
     {
-        return $this->_administration()->GetKingdomParkAuths($kingdomId);
+        $r = $this->_administration()->GetKingdomParkAuths($kingdomId, $token);
+        if (isset($r['Status'])) {
+            return [];
+        }
+
+        return $r;
     }
 
-    public function event_inherited_permissions(int $eventId): array
+    public function event_inherited_permissions(int $eventId, string $token = ''): array
     {
-        return $this->_administration()->GetEventInheritedPermissions($eventId);
+        $r = $this->_administration()->GetEventInheritedPermissions($eventId, $token);
+        if (isset($r['Status'])) {
+            return [
+                'creator' => null,
+                'parkAuths' => [],
+                'kingdomAuths' => [],
+                'parkName' => '',
+                'kingdomName' => '',
+                'parkId' => 0,
+                'kingdomId' => 0,
+            ];
+        }
+
+        return $r;
     }
 
     public function audit_log(array $filters): array

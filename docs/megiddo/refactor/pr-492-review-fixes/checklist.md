@@ -14,7 +14,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 6 | C-03 DangerAudit MethodCall SQLi | [x] | | |
 | 7 | C-02 Banner CopyBanner auth | [x] | | |
 | 8 | C-04 GetGlobalAdminGrants auth | [x] | | |
-| 9 | C-05 Scoped/Kingdom/Event auth getters | [ ] | | |
+| 9 | C-05 Scoped/Kingdom/Event auth getters | [x] | | |
 | 10 | C-06 Server health getters auth | [ ] | | |
 | 11 | C-07 AuthorizationGate privilege oracle | [ ] | | |
 | 12 | C-08 LiveService Token gate | [ ] | | |
@@ -35,7 +35,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 6. [x] C-03 DangerAudit MethodCall SQLi
 7. [x] C-02 Banner CopyBanner auth
 8. [x] C-04 GetGlobalAdminGrants auth
-9. [ ] C-05 Scoped/Kingdom/Event auth getters
+9. [x] C-05 Scoped/Kingdom/Event auth getters
 10. [ ] C-06 Server health getters auth
 11. [ ] C-07 AuthorizationGate privilege oracle
 12. [ ] C-08 LiveService Token gate

@@ -815,12 +815,13 @@ class Controller_Admin extends Controller
 
         // All grants at this type+id level (officers + non-officers), including modified timestamp
         $this->load_model('AdminDashboard');
-        $auths = $this->AdminDashboard->scoped_auths($type, $id);
+        $sessionToken = (string) ($this->session->token ?? '');
+        $auths = $this->AdminDashboard->scoped_auths($type, $id, $sessionToken);
 
         // For kingdom pages: all park-level grants for every park in the kingdom
         $parkAuths = [];
         if ($type === 'Kingdom') {
-            $parkAuths = $this->AdminDashboard->kingdom_park_auths($id);
+            $parkAuths = $this->AdminDashboard->kingdom_park_auths($id, $sessionToken);
         }
 
         // For event pages: show inherited access (creator + park/kingdom grant holders)
@@ -830,7 +831,7 @@ class Controller_Admin extends Controller
         $inheritedParkName      = '';
         $inheritedKingdomName   = '';
         if ($type === 'Event') {
-            $inherited = $this->AdminDashboard->event_inherited_permissions($id);
+            $inherited = $this->AdminDashboard->event_inherited_permissions($id, $sessionToken);
             $eventCreator = $inherited['creator'];
             $inheritedParkAuths = $inherited['parkAuths'];
             $inheritedKingdomAuths = $inherited['kingdomAuths'];
