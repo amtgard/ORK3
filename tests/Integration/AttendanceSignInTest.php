@@ -59,13 +59,14 @@ final class AttendanceSignInTest extends TestCase
         $this->assertSame(1, $this->fixture->fetchActive($player['mundane_id']));
     }
 
-    public function testUseLinkReactivatesInactive(): void
+    public function testUseLinkDoesNotReactivateInactive(): void
     {
         $parkId = $this->fixture->firstParkId();
         $kingdomId = $this->fixture->kingdomIdForPark($parkId);
         $officer = $this->fixture->createParkOfficer($parkId, 'link-off');
         $player = $this->fixture->createPlayer($parkId, 'link-player', active: false);
         $link = $this->fixture->insertParkLink($parkId, $kingdomId, $officer['mundane_id']);
+        $this->assertSame(0, $this->fixture->fetchActive($player['mundane_id']));
 
         unset($_SESSION['is_authorized_mundane_id']);
         $use = $this->attendanceDomain->UseAttendanceLink([
@@ -74,8 +75,11 @@ final class AttendanceSignInTest extends TestCase
             'ClassId' => $this->fixture->firstClassId(),
         ]);
         $this->assertSame(0, $use['Status']);
+        if (!empty($use['Detail'])) {
+            $this->fixture->trackAttendance((int) $use['Detail']);
+        }
 
-        $this->assertSame(1, $this->fixture->fetchActive($player['mundane_id']));
+        $this->assertSame(0, $this->fixture->fetchActive($player['mundane_id']));
     }
 
     public function testGetAdjacentParkDates(): void

@@ -770,7 +770,6 @@ class Attendance extends Ork3
             $this->db->query(
                 'UPDATE ' . DB_PREFIX . 'attendance SET date_year = YEAR(`date`), date_month = MONTH(`date`), date_week3 = WEEK(`date`, 3), date_week6 = WEEK(`date`, 6) WHERE attendance_id = ' . $this->attendance->attendance_id
             );
-            $this->reactivateInactiveMundane($mundane_id);
             $this->bustPlayerAttendanceCaches($mundane_id);
             return Success($this->attendance->attendance_id);
         }
