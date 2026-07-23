@@ -63,19 +63,51 @@ final class WeatherServiceTest extends TestCase
 
     public function testWeatherServiceGetArchiveForParkMissReturnsEmptyArray(): void
     {
+        $fixture = AdminDashboardFixture::create();
+        $parkId = $fixture->firstParkId();
+        $player = $fixture->createPlayer($parkId, 'c14-wx');
         $service = new WeatherService();
 
+        unset($_SESSION['is_authorized_mundane_id']);
         // Invalid park id → archive_for_date null; must not TypeError on : array.
-        $invalidPark = $service->GetArchiveForPark(0, '2020-01-15');
+        $invalidPark = $service->GetArchiveForPark($player['token'], 0, '2020-01-15');
         $this->assertSame([], $invalidPark);
 
         // Date inside ARCHIVE_LAG window → null coalesced to [].
-        $recent = $service->GetArchiveForPark(1, date('Y-m-d'));
+        unset($_SESSION['is_authorized_mundane_id']);
+        $recent = $service->GetArchiveForPark($player['token'], 1, date('Y-m-d'));
         $this->assertSame([], $recent);
 
         // Bad date format → null coalesced to [].
-        $badDate = $service->GetArchiveForPark(1, 'not-a-date');
+        unset($_SESSION['is_authorized_mundane_id']);
+        $badDate = $service->GetArchiveForPark($player['token'], 1, 'not-a-date');
         $this->assertSame([], $badDate);
+
+        $fixture->cleanup();
+    }
+
+    public function testWeatherServiceRequiresToken(): void
+    {
+        $fixture = AdminDashboardFixture::create();
+        $parkId = $fixture->firstParkId();
+        $player = $fixture->createPlayer($parkId, 'c13-wx');
+        $service = new WeatherService();
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $denied = $service->GetDailySummary('', date('Y-m-d'));
+        $this->assertSame(ServiceErrorIds::SecureTokenFailure, $denied['Status'] ?? null);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $ok = $service->GetDailySummary($player['token'], date('Y-m-d'));
+        $this->assertArrayNotHasKey('Status', $ok);
+        $this->assertIsArray($ok);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $this->assertSame('', $service->GetFreshnessPhrase(''));
+        unset($_SESSION['is_authorized_mundane_id']);
+        $this->assertIsString($service->GetFreshnessPhrase($player['token']));
+
+        $fixture->cleanup();
     }
 
     public function testAdminRefreshWithPriorShape(): void

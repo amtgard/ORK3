@@ -32,11 +32,12 @@ class Controller_Weather extends Controller
         $this->template = '../revised-frontend/Weather_index.tpl';
         $this->data['page_title'] = 'Weather Forecast';
         $today = EraPhoenice::todayDateString();
+        $token = (string) ($this->session->token ?? '');
         $this->data['SelectedDate']    = $today;
-        $this->data['Rundown']         = $this->Weather->daily_summary($today);
-        $this->data['PlayToday']       = $this->Weather->play_for_date($today);
-        $this->data['UpcomingEvents']  = $this->Weather->upcoming_events_with_forecast(7);
-        $this->data['FreshnessPhrase'] = $this->Weather->freshness_phrase();
+        $this->data['Rundown']         = $this->Weather->daily_summary($today, $token);
+        $this->data['PlayToday']       = $this->Weather->play_for_date($today, $token);
+        $this->data['UpcomingEvents']  = $this->Weather->upcoming_events_with_forecast(7, $token);
+        $this->data['FreshnessPhrase'] = $this->Weather->freshness_phrase($token);
         // 7-day strip of pills (today + next 6 days), anchored to clock-pinned today.
         $strip = array();
         $todayTs = strtotime($today . ' 12:00:00');
@@ -49,7 +50,7 @@ class Controller_Weather extends Controller
                 'is_today'  => $i === 0,
             );
         }
-        $severities = $this->Weather->strip_severities(array_column($strip, 'date'));
+        $severities = $this->Weather->strip_severities(array_column($strip, 'date'), $token);
         foreach ($strip as &$pill) {
             $pill['severity'] = $severities[$pill['date']] ?? 'ok';
         }
@@ -73,11 +74,12 @@ class Controller_Weather extends Controller
             echo json_encode(array('status' => 1, 'error' => 'Invalid date'));
             exit;
         }
+        $token = (string) ($this->session->token ?? '');
         echo json_encode(array(
             'status'   => 0,
             'date'     => $date,
-            'rundown'  => $this->Weather->daily_summary($date),
-            'play'     => $this->Weather->play_for_date($date),
+            'rundown'  => $this->Weather->daily_summary($date, $token),
+            'play'     => $this->Weather->play_for_date($date, $token),
         ));
         exit;
     }

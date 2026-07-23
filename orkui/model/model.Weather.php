@@ -8,29 +8,29 @@ class Model_Weather extends Model
         $this->Weather = new JSONModel('Weather');
     }
 
-    public function daily_summary(string $date): array
+    public function daily_summary(string $date, string $token = ''): array
     {
-        return $this->Weather->GetDailySummary($date);
+        return $this->Weather->GetDailySummary($token, $date);
     }
 
-    public function play_for_date(string $date): array
+    public function play_for_date(string $date, string $token = ''): array
     {
-        return $this->Weather->GetPlayForDate($date);
+        return $this->Weather->GetPlayForDate($token, $date);
     }
 
-    public function upcoming_events_with_forecast(int $days = 7): array
+    public function upcoming_events_with_forecast(int $days = 7, string $token = ''): array
     {
-        return $this->Weather->GetUpcomingEventsWithForecast($days);
+        return $this->Weather->GetUpcomingEventsWithForecast($token, $days);
     }
 
-    public function freshness_phrase(): string
+    public function freshness_phrase(string $token = ''): string
     {
-        return $this->Weather->GetFreshnessPhrase();
+        return $this->Weather->GetFreshnessPhrase($token);
     }
 
-    public function strip_severities(array $dates): array
+    public function strip_severities(array $dates, string $token = ''): array
     {
-        return $this->Weather->GetStripSeverities(json_encode(array_values($dates)));
+        return $this->Weather->GetStripSeverities($token, json_encode(array_values($dates)));
     }
 
     public function for_park($park_id)
