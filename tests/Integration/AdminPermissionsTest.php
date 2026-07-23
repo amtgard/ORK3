@@ -56,6 +56,8 @@ final class AdminPermissionsTest extends TestCase
 
         $this->assertNotNull($inherited['creator']);
         $this->assertSame($ctx['mundane_id'], $inherited['creator']['MundaneId']);
+        $this->assertSame($parkId, (int) $inherited['parkId']);
+        $this->assertGreaterThan(0, (int) $inherited['kingdomId']);
 
         $holderIds = array_column($inherited['parkAuths'], 'MundaneId');
         $this->assertContains($holder['mundane_id'], $holderIds);

@@ -836,6 +836,8 @@ class Controller_Admin extends Controller
             $inheritedKingdomAuths = $inherited['kingdomAuths'];
             $inheritedParkName = $inherited['parkName'];
             $inheritedKingdomName = $inherited['kingdomName'];
+            $evParkId = (int) ($inherited['parkId'] ?? 0);
+            $evKingdomId = (int) ($inherited['kingdomId'] ?? 0);
         }
 
         // Set breadcrumbs from the actual entity, not the logged-in user's session kingdom/park

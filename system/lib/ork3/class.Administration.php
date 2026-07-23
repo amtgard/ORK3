@@ -387,7 +387,9 @@ class Administration
      *   parkAuths: list<array<string, mixed>>,
      *   kingdomAuths: list<array<string, mixed>>,
      *   parkName: string,
-     *   kingdomName: string
+     *   kingdomName: string,
+     *   parkId: int,
+     *   kingdomId: int
      * }
      */
     public function GetEventInheritedPermissions(int $eventId): array
@@ -485,6 +487,8 @@ class Administration
             'kingdomAuths' => $inheritedKingdomAuths,
             'parkName' => $inheritedParkName,
             'kingdomName' => $inheritedKingdomName,
+            'parkId' => $evParkId,
+            'kingdomId' => $evKingdomId,
         ];
     }
 
