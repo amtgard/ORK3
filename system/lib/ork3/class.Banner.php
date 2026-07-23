@@ -190,7 +190,8 @@ class Banner extends Ork3
     }
 
     /**
-     * Internal helper for event copy flows (R-04 T-EVA-13).
+     * Copy banner files/config from source entity to target (R-04 T-EVA-13).
+     * Requires Token + canEditBanner on both source and target.
      */
     public function CopyBanner($request)
     {
@@ -199,6 +200,15 @@ class Banner extends Ork3
         $targetId = (int)($request['TargetId'] ?? 0);
         if (!$this->isValidEntity($type) || !valid_id($sourceId) || !valid_id($targetId)) {
             return InvalidParameter();
+        }
+
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        if ($mundaneId <= 0) {
+            return BadToken();
+        }
+        if (!$this->canEditBanner($mundaneId, $type, $sourceId)
+            || !$this->canEditBanner($mundaneId, $type, $targetId)) {
+            return NoAuthorization();
         }
 
         $meta = $this->entityMeta($type);

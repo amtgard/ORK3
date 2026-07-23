@@ -308,7 +308,7 @@ final class EventPlanningTest extends TestCase
             'SourceEventId' => $source['event_id'],
             'NewStart' => date('Y-m-d H:i:s', strtotime('+14 days')),
             'NewEnd' => date('Y-m-d H:i:s', strtotime('+14 days +6 hours')),
-            'Modules' => ['staff' => true, 'schedule' => true],
+            'Modules' => ['staff' => true, 'schedule' => true, 'banner' => true],
             'Status' => 'published',
         ]);
 
@@ -316,6 +316,7 @@ final class EventPlanningTest extends TestCase
         $newEventId = (int) $r['EventId'];
         $this->fixture->trackEvent($newEventId);
         $this->assertGreaterThan(0, $newEventId);
+        $this->assertSame([], $r['Warnings'] ?? []);
 
         global $DB;
         $DB->Clear();

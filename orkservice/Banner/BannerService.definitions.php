@@ -56,6 +56,7 @@ $server->wsdl->addComplexType(
     'all',
     '',
     array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
                 'Type' => array('name' => 'Type','type' => 'xsd:string'),
                 'SourceId' => array('name' => 'SourceId','type' => 'xsd:int'),
                 'TargetId' => array('name' => 'TargetId','type' => 'xsd:int'),

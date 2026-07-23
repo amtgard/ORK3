@@ -1418,6 +1418,7 @@ class EventPlanning extends Ork3
         if ($mod['banner']) {
             $banner = new Banner();
             $br = $banner->CopyBanner([
+                'Token' => $token,
                 'Type' => 'Event',
                 'SourceId' => $srcEvtId,
                 'TargetId' => $newEventId,

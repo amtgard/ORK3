@@ -327,6 +327,67 @@ final class BannerTest extends TestCase
         $this->assertFalse(file_exists($base));
     }
 
+    public function testCopyBannerRequiresTokenAndAuth(): void
+    {
+        $source = $this->fixture->createEvent('c02-src');
+        $target = $this->fixture->createEvent('c02-tgt');
+        $this->assertSame($source['park_id'], $target['park_id']);
+        $grantor = $this->fixture->createGrantorWithAuth(AUTH_PARK, $source['park_id'], AUTH_EDIT, 'c02-park');
+
+        $tmp = $this->fixture->createTempJpeg();
+        $set = $this->banner->SetBanner([
+            'Token' => $grantor['token'],
+            'Type' => 'Event',
+            'Id' => $source['event_id'],
+            'Banner' => base64_encode((string) file_get_contents($tmp)),
+            'BannerMimeType' => 'image/jpeg',
+            'ShowLogo' => 1,
+            'Vignette' => 0,
+            'OffsetX' => 40,
+            'OffsetY' => 60,
+        ]);
+        $this->assertSame(ServiceErrorIds::Success, $set['Status']);
+        $srcBase = DIR_EVENT_BANNER . sprintf('%05d', $source['event_id']);
+        if (file_exists($srcBase . '.jpg')) {
+            $this->fixture->trackBannerFile($srcBase . '.jpg');
+        }
+
+        // IsAuthorized prefers session over request Token — clear after SetBanner.
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $noToken = $this->banner->CopyBanner([
+            'Type' => 'Event',
+            'SourceId' => $source['event_id'],
+            'TargetId' => $target['event_id'],
+        ]);
+        $this->assertSame(ServiceErrorIds::SecureTokenFailure, $noToken['Status']);
+
+        $stranger = $this->fixture->createGrantorWithoutAuth('c02-stranger');
+        unset($_SESSION['is_authorized_mundane_id']);
+        $denied = $this->banner->CopyBanner([
+            'Token' => $stranger['token'],
+            'Type' => 'Event',
+            'SourceId' => $source['event_id'],
+            'TargetId' => $target['event_id'],
+        ]);
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $denied['Status']);
+        $this->assertSame(0, (int) $this->fixture->fetchEventBanner($target['event_id'])['has_banner']);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $ok = $this->banner->CopyBanner([
+            'Token' => $grantor['token'],
+            'Type' => 'Event',
+            'SourceId' => $source['event_id'],
+            'TargetId' => $target['event_id'],
+        ]);
+        $this->assertSame(ServiceErrorIds::Success, $ok['Status']);
+        $this->assertSame(1, (int) $this->fixture->fetchEventBanner($target['event_id'])['has_banner']);
+        $tgtBase = DIR_EVENT_BANNER . sprintf('%05d', $target['event_id']);
+        if (file_exists($tgtBase . '.jpg')) {
+            $this->fixture->trackBannerFile($tgtBase . '.jpg');
+        }
+    }
+
     private function uploadParkBanner(
         string $token,
         int $parkId,
