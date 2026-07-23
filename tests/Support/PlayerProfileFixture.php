@@ -18,6 +18,9 @@ final class PlayerProfileFixture
     /** @var list<int> */
     private array $noteIds = [];
 
+    /** @var list<int> */
+    private array $awardIds = [];
+
     public function __construct(
         private readonly PDO $pdo,
     ) {
@@ -112,6 +115,57 @@ final class PlayerProfileFixture
         return $id;
     }
 
+    /**
+     * Insert a revoked award row already stripped onto stripped_from.
+     *
+     * @return int awards_id
+     */
+    public function insertRevokedAward(
+        int $strippedFromMundaneId,
+        int $awardId,
+        int $aliasAwardId = 0,
+        int $kingdomAwardId = 0,
+        int $rank = 1,
+    ): int {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'awards
+             (kingdomaward_id, mundane_id, stripped_from, unit_id, park_id, kingdom_id, team_id, rank, date,
+              given_by_id, note, at_park_id, at_kingdom_id, at_event_id, custom_name, alias_award_id,
+              award_id, by_whom_id, entered_at, revoked, revoked_at, revocation, revoked_by_id)
+             VALUES (?, 0, ?, 0, 0, 0, 0, ?, CURDATE(), 0, \'\', 0, 0, 0, \'\', ?,
+                     ?, 0, NOW(), 1, NOW(), \'C18 fixture revoke\', 0)'
+        );
+        $stmt->execute([
+            $kingdomAwardId,
+            $strippedFromMundaneId,
+            $rank,
+            $aliasAwardId > 0 ? $aliasAwardId : null,
+            $awardId,
+        ]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->awardIds[] = $id;
+
+        return $id;
+    }
+
+    public function ladderAwardId(): int
+    {
+        return (int) $this->pdo->query(
+            'SELECT award_id FROM ' . DB_PREFIX . "award
+             WHERE IFNULL(is_title, 0) = 0 AND (officer_role = 'none' OR officer_role IS NULL)
+             ORDER BY award_id ASC LIMIT 1"
+        )->fetchColumn();
+    }
+
+    public function titleAliasAwardId(): int
+    {
+        return (int) $this->pdo->query(
+            'SELECT award_id FROM ' . DB_PREFIX . 'award
+             WHERE IFNULL(is_title, 0) = 1
+             ORDER BY award_id ASC LIMIT 1'
+        )->fetchColumn();
+    }
+
     public function insertGlobalAdmin(int $mundaneId): int
     {
         $stmt = $this->pdo->prepare(
@@ -154,6 +208,10 @@ final class PlayerProfileFixture
     {
         foreach ($this->noteIds as $id) {
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'mundane_note WHERE mundane_note_id = ' . (int) $id);
+        }
+
+        foreach ($this->awardIds as $id) {
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'awards WHERE awards_id = ' . (int) $id);
         }
 
         foreach ($this->authIds as $id) {

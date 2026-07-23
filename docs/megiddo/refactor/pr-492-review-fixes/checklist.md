@@ -10,7 +10,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 2 | C-14 WeatherService GetArchiveForPark null TypeError | [x] | | |
 | 3 | C-15 Event permissions breadcrumbs | [x] | | |
 | 4 | C-16 UniversalSearch active units | [x] | | |
-| 5 | C-18 Revoked awards alias titles | [ ] | | |
+| 5 | C-18 Revoked awards alias titles | [x] | | |
 | 6 | C-03 DangerAudit MethodCall SQLi | [ ] | | |
 | 7 | C-02 Banner CopyBanner auth | [ ] | | |
 | 8 | C-04 GetGlobalAdminGrants auth | [ ] | | |
@@ -31,7 +31,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 2. [x] C-14 WeatherService GetArchiveForPark null TypeError
 3. [x] C-15 Event permissions breadcrumbs
 4. [x] C-16 UniversalSearch active units
-5. [ ] C-18 Revoked awards alias titles
+5. [x] C-18 Revoked awards alias titles
 6. [ ] C-03 DangerAudit MethodCall SQLi
 7. [ ] C-02 Banner CopyBanner auth
 8. [ ] C-04 GetGlobalAdminGrants auth

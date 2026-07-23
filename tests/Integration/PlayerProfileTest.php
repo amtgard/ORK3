@@ -104,6 +104,36 @@ final class PlayerProfileTest extends TestCase
         $this->assertNotEmpty($domain);
     }
 
+    public function testGetRevokedAwardsClassifiesAliasTitles(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $player = $this->fixture->createPlayer($parkId, 'c18-revoked');
+        $ladderId = $this->fixture->ladderAwardId();
+        $titleAliasId = $this->fixture->titleAliasAwardId();
+        $this->assertGreaterThan(0, $ladderId);
+        $this->assertGreaterThan(0, $titleAliasId);
+
+        $aliasTitleId = $this->fixture->insertRevokedAward(
+            $player['mundane_id'],
+            $ladderId,
+            $titleAliasId,
+        );
+        $plainLadderId = $this->fixture->insertRevokedAward(
+            $player['mundane_id'],
+            $ladderId,
+            0,
+        );
+
+        $revoked = $this->playerDomain->GetRevokedAwardsForPlayer($player['mundane_id']);
+        $titleIds = array_column($revoked['RevokedTitles'], 'AwardsId');
+        $awardIds = array_column($revoked['RevokedAwards'], 'AwardsId');
+
+        $this->assertContains($aliasTitleId, $titleIds);
+        $this->assertNotContains($aliasTitleId, $awardIds);
+        $this->assertContains($plainLadderId, $awardIds);
+        $this->assertNotContains($plainLadderId, $titleIds);
+    }
+
     public function testReportDatabaseInitialized(): void
     {
         $report = new Report();

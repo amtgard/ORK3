@@ -4170,21 +4170,28 @@ class Player extends Ork3
         if (!valid_id($mundaneId)) {
             return ['RevokedAwards' => [], 'RevokedTitles' => []];
         }
+        // Mirror active-grant / revoke classification: alias-backed titles must
+        // use COALESCE(officer_role) + GREATEST(is_title) across award/alias/ka.
         $baseSql = 'SELECT a.awards_id, a.rank, a.date, a.revoked_at, a.revocation,
-                COALESCE(NULLIF(a.custom_name,\'\'), ka.name, aw.name) AS award_name,
-                m.persona AS revoked_by
+                COALESCE(NULLIF(a.custom_name,\'\'), ka.name, alias.name, aw.name) AS award_name,
+                m.persona AS revoked_by,
+                COALESCE(alias.officer_role, aw.officer_role) AS effective_officer_role,
+                GREATEST(IFNULL(ka.is_title, 0), IFNULL(alias.is_title, 0), IFNULL(aw.is_title, 0)) AS effective_is_title
             FROM ' . DB_PREFIX . 'awards a
             LEFT JOIN ' . DB_PREFIX . 'kingdomaward ka ON a.kingdomaward_id = ka.kingdomaward_id
             LEFT JOIN ' . DB_PREFIX . 'award aw ON a.award_id = aw.award_id
+            LEFT JOIN ' . DB_PREFIX . 'award alias ON alias.award_id = a.alias_award_id
             LEFT JOIN ' . DB_PREFIX . 'mundane m ON a.revoked_by_id = m.mundane_id
             WHERE a.stripped_from = ' . (int) $mundaneId . '
               AND a.revoked = 1';
         $awardsSql = $baseSql . "
-              AND (aw.officer_role = 'none' OR aw.officer_role IS NULL)
-              AND (ka.is_title IS NULL OR ka.is_title = 0)
+              AND (COALESCE(alias.officer_role, aw.officer_role) = 'none'
+                   OR COALESCE(alias.officer_role, aw.officer_role) IS NULL)
+              AND GREATEST(IFNULL(ka.is_title, 0), IFNULL(alias.is_title, 0), IFNULL(aw.is_title, 0)) = 0
             ORDER BY a.revoked_at DESC, a.date DESC";
         $titlesSql = $baseSql . "
-              AND (aw.officer_role != 'none' OR ka.is_title = 1)
+              AND (COALESCE(alias.officer_role, aw.officer_role) != 'none'
+                   OR GREATEST(IFNULL(ka.is_title, 0), IFNULL(alias.is_title, 0), IFNULL(aw.is_title, 0)) = 1)
             ORDER BY a.revoked_at DESC, a.date DESC";
 
         return [
