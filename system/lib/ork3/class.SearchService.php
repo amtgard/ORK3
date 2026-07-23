@@ -685,7 +685,7 @@ class SearchService extends Ork3
         }
         $playerBudget += $kingdomBudget - count($kingdoms);
 
-        $unitWhere = $fold('name') . " LIKE '%{$term}%'";
+        $unitWhere = "active = 'Active' AND (" . $fold('name') . " LIKE '%{$term}%')";
         $this->db->clear();
         $rs = $this->db->query("
 			SELECT unit_id, name, type

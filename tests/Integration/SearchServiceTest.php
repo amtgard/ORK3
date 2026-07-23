@@ -188,6 +188,29 @@ final class SearchServiceTest extends TestCase
         $this->assertGreaterThanOrEqual(1, $counts[$unit['unit_id']]);
     }
 
+    public function testUniversalSearchExcludesRetiredUnits(): void
+    {
+        $marker = 'C16Unit' . bin2hex(random_bytes(3));
+        $active = $this->fixture->createUnit('c16act');
+        $retired = $this->fixture->createUnit('c16ret');
+
+        $pdo = new PDO(
+            sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8', DB_HOSTNAME, DB_PORT, DB_DATABASE),
+            DB_USERNAME,
+            DB_PASSWORD,
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
+        );
+        $pdo->prepare('UPDATE ' . DB_PREFIX . 'unit SET name = ? WHERE unit_id = ?')
+            ->execute([$marker . ' Active', $active['unit_id']]);
+        $pdo->prepare('UPDATE ' . DB_PREFIX . "unit SET name = ?, active = 'Retired' WHERE unit_id = ?")
+            ->execute([$marker . ' Retired', $retired['unit_id']]);
+
+        $results = $this->searchService->UniversalSearch(['Query' => $marker]);
+        $ids = array_column($results['units'], 'id');
+        $this->assertContains($active['unit_id'], $ids);
+        $this->assertNotContains($retired['unit_id'], $ids);
+    }
+
     private function pdoUpdateMundaneName(int $mundaneId, string $given, string $surname): void
     {
         $pdo = new PDO(
