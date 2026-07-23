@@ -258,11 +258,45 @@ final class EventOccurrenceTest extends TestCase
         $ctx = $this->fixture->createPublishedEvent('dietary');
         $player = $this->fixture->createPlayer('diet-player');
         $this->fixture->insertRsvp($ctx['detail_id'], $player, 'going');
+        $feast = $this->fixture->createGrantorWithoutAuth('c11-feast');
+        $this->fixture->insertStaff(
+            $ctx['detail_id'],
+            $feast['mundane_id'],
+            'Feast',
+            false,
+            false,
+            false,
+            true,
+        );
+        unset($_SESSION['is_authorized_mundane_id']);
 
-        $summaryZero = $this->planning->GetDietarySummaryForOccurrence(['EventCalendarDetailId' => 0]);
+        $anonymous = $this->planning->GetDietarySummaryForOccurrence([
+            'EventCalendarDetailId' => $ctx['detail_id'],
+        ]);
+        $this->assertSame(ServiceErrorIds::SecureTokenFailure, $anonymous['Status']);
+
+        $stranger = $this->fixture->createGrantorWithoutAuth('c11-stranger');
+        unset($_SESSION['is_authorized_mundane_id']);
+        $denied = $this->planning->GetDietarySummaryForOccurrence([
+            'Token' => $stranger['token'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+        ]);
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $denied['Status']);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $summaryZero = $this->planning->GetDietarySummaryForOccurrence([
+            'Token' => $feast['token'],
+            'EventCalendarDetailId' => 0,
+        ]);
+        $this->assertSame(0, $summaryZero['Status']['Status']);
         $this->assertSame([], $summaryZero['Items']);
 
-        $summary = $this->planning->GetDietarySummaryForOccurrence(['EventCalendarDetailId' => $ctx['detail_id']]);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $summary = $this->planning->GetDietarySummaryForOccurrence([
+            'Token' => $feast['token'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+        ]);
+        $this->assertSame(0, $summary['Status']['Status']);
         $this->assertNotEmpty($summary['Items']);
         $this->assertSame($player, $summary['Items'][0]['MundaneId']);
     }

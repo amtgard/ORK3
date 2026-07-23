@@ -22,7 +22,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 14 | C-10 Calendar detail write auth | [x] | | |
 | 15 | C-12 SetRsvp/WithdrawRsvp Token | [x] | | |
 | 16 | C-09 GetOccurrencePageData auth | [x] | | |
-| 17 | C-11 GetDietarySummary auth | [ ] | | |
+| 17 | C-11 GetDietarySummary auth | [x] | | |
 | 18 | C-17 Attendance reactivation policy | [ ] | | |
 
 ## Simple checklist (copy-friendly)
@@ -43,5 +43,5 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 14. [x] C-10 Calendar detail write auth
 15. [x] C-12 SetRsvp/WithdrawRsvp Token
 16. [x] C-09 GetOccurrencePageData auth
-17. [ ] C-11 GetDietarySummary auth
+17. [x] C-11 GetDietarySummary auth
 18. [ ] C-17 Attendance reactivation policy

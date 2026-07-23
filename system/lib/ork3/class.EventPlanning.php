@@ -517,12 +517,30 @@ class EventPlanning extends Ork3
 
     public function GetDietarySummaryForOccurrence($request)
     {
+        $mundaneId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        if (!valid_id($mundaneId)) {
+            return BadToken();
+        }
+
         $detailId = (int) ($request['EventCalendarDetailId'] ?? 0);
         if ($detailId <= 0) {
             return [
                 'Status' => Success(),
                 'Items' => [],
             ];
+        }
+
+        $this->db->Clear();
+        $detailRow = $this->db->DataSet(
+            'SELECT event_id FROM ' . DB_PREFIX . 'event_calendardetail
+             WHERE event_calendardetail_id = ' . $detailId . ' LIMIT 1'
+        );
+        if (!$detailRow || !$detailRow->Next()) {
+            return InvalidParameter('Event occurrence not found.');
+        }
+        $eventId = (int) $detailRow->event_id;
+        if (!$this->CanManageEventDetail((int) $mundaneId, $eventId, $detailId, 'feast')) {
+            return NoAuthorization();
         }
 
         return [

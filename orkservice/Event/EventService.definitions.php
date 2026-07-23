@@ -711,6 +711,7 @@ $server->wsdl->addComplexType(
     'all',
     '',
     array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
                 'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int'),
             )
 );
