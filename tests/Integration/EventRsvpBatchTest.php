@@ -70,16 +70,17 @@ final class EventRsvpBatchTest extends TestCase
     {
         $ctxA = $this->fixture->createPublishedEvent('toggle-own-a');
         $ctxB = $this->fixture->createPublishedEvent('toggle-own-b');
-        $player = $this->fixture->createPlayer('toggle-player');
+        $player = $this->fixture->createGrantorWithoutAuth('toggle-player');
+        unset($_SESSION['is_authorized_mundane_id']);
 
         $allowed = $this->detailBelongsToEvent($ctxA['event_id'], $ctxA['detail_id']);
         $this->assertTrue($allowed);
-        $this->model->toggle_rsvp($ctxA['detail_id'], $player);
-        $this->assertSame('going', $this->model->get_rsvp($ctxA['detail_id'], $player));
+        $this->model->toggle_rsvp($ctxA['detail_id'], $player['mundane_id'], $player['token']);
+        $this->assertSame('going', $this->model->get_rsvp($ctxA['detail_id'], $player['mundane_id']));
 
         $foreign = $this->detailBelongsToEvent($ctxA['event_id'], $ctxB['detail_id']);
         $this->assertFalse($foreign);
-        $this->assertFalse($this->model->get_rsvp($ctxB['detail_id'], $player));
+        $this->assertFalse($this->model->get_rsvp($ctxB['detail_id'], $player['mundane_id']));
     }
 
     public function testRsvpSummaryBatchIncludesUserStatus(): void

@@ -51,7 +51,7 @@ class Controller_Event extends Controller
         if ($uid > 0 && isset($this->request->rsvp_detail_id)) {
             $detail_id = (int)$this->request->rsvp_detail_id;
             if ($this->Event->detail_belongs_to_event($event_id, $detail_id)) {
-                $this->Event->toggle_rsvp($detail_id, $uid);
+                $this->Event->toggle_rsvp($detail_id, $uid, (string)($this->session->token ?? ''));
             }
             header('Location: ' . UIR . 'Event/index/' . $event_id);
             return;
@@ -295,7 +295,7 @@ class Controller_Event extends Controller
                 return;
             }
             $status = isset($_POST['status']) && $_POST['status'] === 'interested' ? 'interested' : 'going';
-            $this->Event->set_rsvp($detail_id, $uid, $status);
+            $this->Event->set_rsvp($detail_id, $uid, $status, (string)($this->session->token ?? ''));
             header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id);
             return;
         }

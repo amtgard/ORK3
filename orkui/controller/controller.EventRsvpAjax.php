@@ -24,7 +24,7 @@ class Controller_EventRsvpAjax extends Controller
 
         $uid = (int)$this->session->user_id;
         $this->load_model('Event');
-        $r = $this->Event->set_rsvp_dated($detailId, $uid, $status);
+        $r = $this->Event->set_rsvp_dated($detailId, $uid, $status, (string) ($this->session->token ?? ''));
         if (!$this->Event->event_api_ok($r)) {
             $error = is_array($r['Status'] ?? null)
                 ? ($r['Status']['Detail'] ?? $r['Status']['Error'] ?? 'Error')
@@ -58,7 +58,7 @@ class Controller_EventRsvpAjax extends Controller
 
         $uid = (int)$this->session->user_id;
         $this->load_model('Event');
-        $r = $this->Event->withdraw_rsvp_self($detailId, $uid);
+        $r = $this->Event->withdraw_rsvp_self($detailId, $uid, (string) ($this->session->token ?? ''));
         if (!$this->Event->event_api_ok($r)) {
             $error = is_array($r['Status'] ?? null)
                 ? ($r['Status']['Detail'] ?? $r['Status']['Error'] ?? 'Error')

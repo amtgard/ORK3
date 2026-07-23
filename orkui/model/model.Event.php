@@ -111,9 +111,10 @@ class Model_Event extends Model
         return (int)($r['Status'] ?? 1);
     }
 
-    public function set_rsvp_dated($detail_id, $mundane_id, $status)
+    public function set_rsvp_dated($detail_id, $mundane_id, $status, $token = '')
     {
         return $this->Event->SetRsvp([
+            'Token' => (string) $token,
             'EventCalendarDetailId' => (int)$detail_id,
             'MundaneId' => (int)$mundane_id,
             'Status' => $status,
@@ -121,9 +122,10 @@ class Model_Event extends Model
         ]);
     }
 
-    public function withdraw_rsvp_self($detail_id, $mundane_id)
+    public function withdraw_rsvp_self($detail_id, $mundane_id, $token = '')
     {
         return $this->Event->WithdrawRsvp([
+            'Token' => (string) $token,
             'EventCalendarDetailId' => (int)$detail_id,
             'MundaneId' => (int)$mundane_id,
         ]);
@@ -143,9 +145,10 @@ class Model_Event extends Model
     }
 
     // Sets RSVP to $status ('going'|'interested'). If already that status, removes it (toggle off).
-    public function set_rsvp($detail_id, $mundane_id, $status)
+    public function set_rsvp($detail_id, $mundane_id, $status, $token = '')
     {
         $r = $this->Event->SetRsvp([
+            'Token' => (string) $token,
             'EventCalendarDetailId' => (int)$detail_id,
             'MundaneId' => (int)$mundane_id,
             'Status' => $status,
@@ -163,9 +166,9 @@ class Model_Event extends Model
         return $myStatus !== '' ? $myStatus : false;
     }
 
-    public function toggle_rsvp($detail_id, $mundane_id)
+    public function toggle_rsvp($detail_id, $mundane_id, $token = '')
     {
-        return $this->set_rsvp($detail_id, $mundane_id, 'going');
+        return $this->set_rsvp($detail_id, $mundane_id, 'going', $token);
     }
 
     public function remove_rsvp($detail_id, $mundane_id)

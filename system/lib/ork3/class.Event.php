@@ -104,6 +104,11 @@ class Event extends Ork3
             return InvalidParameter('EventCalendarDetailId and MundaneId are required.');
         }
 
+        $auth = $this->_authorizeRsvpActor($request, $detailId, $mundaneId);
+        if ($auth !== null) {
+            return $auth;
+        }
+
         $gateMode = (string)($request['EndDateGate'] ?? 'none');
         if ($gateMode !== 'none') {
             $ended = $this->_isDetailEnded($detailId, $gateMode);
@@ -188,6 +193,11 @@ class Event extends Ork3
             return InvalidParameter('EventCalendarDetailId and MundaneId are required.');
         }
 
+        $auth = $this->_authorizeRsvpActor($request, $detailId, $mundaneId);
+        if ($auth !== null) {
+            return $auth;
+        }
+
         $this->rsvp->clear();
         $this->rsvp->event_calendardetail_id = $detailId;
         $this->rsvp->mundane_id = $mundaneId;
@@ -202,6 +212,43 @@ class Event extends Ork3
             'Interested' => $counts['Interested'],
             'Total' => $counts['Total'],
         ]);
+    }
+
+    /**
+     * Token required. Own RSVP always OK; other MundaneId needs RemoveRsvp-equivalent authority.
+     * @return array|null error response, or null when authorized
+     */
+    private function _authorizeRsvpActor(array $request, int $detailId, int $targetMundaneId): ?array
+    {
+        $actorId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        if (!valid_id($actorId)) {
+            return BadToken();
+        }
+        if ((int) $actorId === (int) $targetMundaneId) {
+            return null;
+        }
+
+        $this->detail->clear();
+        $this->detail->event_calendardetail_id = $detailId;
+        if (!$this->detail->find()) {
+            return InvalidParameter('Event occurrence not found.');
+        }
+        $eventId = (int) $this->detail->event_id;
+        if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_EVENT, $eventId, AUTH_EDIT)) {
+            return null;
+        }
+        $this->db->Clear();
+        $staffRow = $this->db->DataSet(
+            'SELECT 1 FROM ' . DB_PREFIX . 'event_staff
+			 WHERE event_calendardetail_id = ' . (int) $detailId . '
+			   AND mundane_id = ' . (int) $actorId . '
+			   AND can_attendance = 1 LIMIT 1'
+        );
+        if ($staffRow && $staffRow->Next()) {
+            return null;
+        }
+
+        return NoAuthorization();
     }
 
     public function RemoveRsvp($request)
