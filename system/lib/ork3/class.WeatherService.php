@@ -48,6 +48,8 @@ class WeatherService extends Ork3
 
     public function GetArchiveForPark(int $parkId, string $date): array
     {
-        return $this->weather->archive_for_date($parkId, $date);
+        // archive_for_date returns null on invalid park / lag window / miss;
+        // coalesce so the : array return type never TypeErrors.
+        return $this->weather->archive_for_date($parkId, $date) ?? [];
     }
 }

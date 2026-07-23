@@ -61,6 +61,23 @@ final class WeatherServiceTest extends TestCase
         }
     }
 
+    public function testWeatherServiceGetArchiveForParkMissReturnsEmptyArray(): void
+    {
+        $service = new WeatherService();
+
+        // Invalid park id → archive_for_date null; must not TypeError on : array.
+        $invalidPark = $service->GetArchiveForPark(0, '2020-01-15');
+        $this->assertSame([], $invalidPark);
+
+        // Date inside ARCHIVE_LAG window → null coalesced to [].
+        $recent = $service->GetArchiveForPark(1, date('Y-m-d'));
+        $this->assertSame([], $recent);
+
+        // Bad date format → null coalesced to [].
+        $badDate = $service->GetArchiveForPark(1, 'not-a-date');
+        $this->assertSame([], $badDate);
+    }
+
     public function testAdminRefreshWithPriorShape(): void
     {
         $refresh = $this->weather->AdminRefreshWithPrior();
