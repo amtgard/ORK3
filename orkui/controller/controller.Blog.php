@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/trait.CmsScope.php';
+
 /**
  * Controller_Blog — public-facing blog (CMS posts).
  *
@@ -24,6 +26,8 @@
  */
 class Controller_Blog extends Controller
 {
+    use CmsScopeContext;
+
     /** Posts per page on the index feed. */
     public const PER_PAGE = 12;
 
@@ -229,17 +233,17 @@ class Controller_Blog extends Controller
         if ($uid <= 0) {
             return;
         }
-        $this->load_model('CmsAuth');
-        // Resolve capabilities once instead of two cms_can() round-trips: a
-        // super-admin passes everything; otherwise union the granted caps and
-        // test in memory (mirrors Controller_Cms::_capFlags()).
-        $isSuper = (bool) $this->CmsAuth->is_super_admin($uid);
-        $caps    = $isSuper ? array() : $this->CmsAuth->get_user_capabilities($uid, self::$SCOPE);
-        if ($isSuper || in_array('page.edit', $caps, true)) {
+        // #29: edit gate via the single shared CmsCan-backed helper (super-admin,
+        // a global or matching kingdom/park ork_cms_grant, or the officer
+        // AUTH_EDIT bridge — replacing the old hand-rolled super-admin + caps path).
+        if ($this->_cmsCanEditScope($uid, self::$SCOPE)) {
             $this->data['cmsEditUrl'] = $editUrl;
             $this->data['cmsEditTip'] = $editTip;
         }
-        if ($isSuper || in_array('page.create', $caps, true)) {
+        // The new-post FAB still needs the distinct create capability; resolve it
+        // through the same CmsCan surface for consistency.
+        $this->load_model('CmsAuth');
+        if ($this->CmsAuth->cms_can($uid, 'page.create', self::$SCOPE)) {
             $this->data['cmsNewPostUrl'] = UIR . 'Cms/editpost/new';
             $this->data['cmsNewPostTip'] = 'New post';
         }

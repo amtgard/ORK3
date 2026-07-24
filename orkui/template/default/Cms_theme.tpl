@@ -277,8 +277,6 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
 (function () {
     'use strict';
 
-    var AJAX = <?= json_encode(UIR) ?> + 'CmsAjax/';
-    var CSRF = window.CMS_CSRF || '';
     var savedThemeId = window.THEME_ACTIVE_ID || 0;
 
     /* ---- Unsaved-work guard (mirrors the page/post editors) ---- */
@@ -296,28 +294,11 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
         if (dirty) { e.preventDefault(); e.returnValue = ''; }
     });
 
-    /* ---- Toast ---- */
-    var toastEl = document.getElementById('teToast');
-    var toastTimer = null;
-    function toast(msg, kind) {
-        if (!toastEl) { return; }
-        toastEl.textContent = msg;
-        toastEl.className = 'cms-toast cms-show' + (kind ? ' cms-toast-' + kind : '');
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(function () { toastEl.className = 'cms-toast'; }, 3200);
-    }
+    /* ---- Toast (shared: CmsAdmin.toast — resolves the page's .cms-toast) ---- */
+    var toast = CmsAdmin.toast;
 
-    /* ---- POST helper ---- */
-    function post(endpoint, params) {
-        var body = new URLSearchParams();
-        Object.keys(params).forEach(function (k) { body.append(k, params[k]); });
-        return fetch(AJAX + endpoint + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': CSRF },
-            credentials: 'same-origin',
-            body: body.toString()
-        }).then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); });
-    }
+    /* ---- POST helper (shared: CmsAdmin.post — CSRF header + scope) ---- */
+    var post = CmsAdmin.post;
 
     /* ---- Token sync helpers ---- */
     function syncToken(token, value, exceptEl) {
@@ -516,21 +497,9 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
     var confirmOkEl    = document.getElementById('teConfirmOk');
     var confirmCb      = null;
 
-    function openModal(el)  { if (el) { el.classList.add('cms-open'); } }
-    function closeModal(el) { if (el) { el.classList.remove('cms-open'); } }
-
-    document.addEventListener('click', function (e) {
-        var closer = e.target.closest('[data-close-modal]');
-        if (closer) { closeModal(closer.closest('.cms-modal-overlay')); return; }
-        if (e.target.classList && e.target.classList.contains('cms-modal-overlay')) {
-            closeModal(e.target);
-        }
-    });
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
-            document.querySelectorAll('.cms-modal-overlay.cms-open').forEach(closeModal);
-        }
-    });
+    /* modal open/close are shared (CmsAdmin.modal); backdrop/Esc handled there. */
+    var openModal = CmsAdmin.modal.open;
+    var closeModal = CmsAdmin.modal.close;
 
     function tnConfirm(opts) {
         if (confirmTitleEl) { confirmTitleEl.textContent = opts.title || 'Confirm'; }

@@ -28,6 +28,10 @@ require_once DIR_TEMPLATE . 'default/frontdoor/_helpers.tpl';
 // persists across the loop below (and dedupes repeated block types). Keyed by
 // block type, e.g. $fdStyleOnce['heading'].
 $fdStyleOnce = isset($fdStyleOnce) && is_array($fdStyleOnce) ? $fdStyleOnce : [];
+// #90: preview/admin surfaces (an authorized officer previewing an unpublished
+// site, or the CMS draft preview) get a visible placeholder when a block throws,
+// so authors can see something is wrong. Public visitors keep the silent swallow.
+$fdIsPreview = ! empty($data['SitePreview']) || ! empty($PreviewPage);
 foreach ($fdBlocks as $block) {
     if (empty($block['enabled'])) {
         continue;
@@ -44,7 +48,16 @@ foreach ($fdBlocks as $block) {
     try {
         include $partial;
     } catch (\Throwable $e) {
-        // Intentionally swallow; one bad block shouldn't take down the page.
+        // Public visitors: intentionally swallow — one bad block shouldn't take
+        // down the page. Preview/admin only: emit a small inline placeholder so
+        // the author knows a block failed. Never leak exception details.
+        if ($fdIsPreview) {
+            echo '<div class="fd-pad" style="margin:12px 16px;padding:14px 16px;'
+                . 'border:1px dashed #c9a227;border-radius:10px;background:#fbf6e7;'
+                . 'color:#5c4a12;font-size:14px;line-height:1.5;">'
+                . '<strong>This block could not be rendered.</strong>'
+                . ' It is hidden from public visitors.</div>';
+        }
     }
 }
 // Balance the increment above so the shared counter reflects true nesting depth

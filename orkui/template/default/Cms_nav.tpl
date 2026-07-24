@@ -291,44 +291,15 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var AJAX = UIR + 'CmsAjax/';
     var MENU = <?= json_encode($menu) ?>;
 
-    /* ---- toast ---- */
-    var toastEl = document.getElementById('cmsToast');
-    var toastTimer = null;
-    function toast(msg, kind) {
-        if (!toastEl) { return; }
-        toastEl.textContent = msg;
-        toastEl.className = 'cms-toast cms-show' + (kind ? ' cms-toast-' + kind : '');
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(function () { toastEl.className = 'cms-toast'; }, 3200);
-    }
+    /* ---- toast (shared: CmsAdmin.toast) ---- */
+    var toast = CmsAdmin.toast;
 
-    /* ---- modal helpers ---- */
-    function openModal(el) { if (el) { el.classList.add('cms-open'); } }
-    function closeModal(el) { if (el) { el.classList.remove('cms-open'); } }
-    document.addEventListener('click', function (e) {
-        var closer = e.target.closest('[data-close-modal]');
-        if (closer) { closeModal(closer.closest('.cms-modal-overlay')); return; }
-        if (e.target.classList && e.target.classList.contains('cms-modal-overlay')) {
-            closeModal(e.target);
-        }
-    });
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
-            document.querySelectorAll('.cms-modal-overlay.cms-open').forEach(closeModal);
-        }
-    });
+    /* ---- modal helpers (shared: CmsAdmin.modal; backdrop/Esc handled there) ---- */
+    var openModal = CmsAdmin.modal.open;
+    var closeModal = CmsAdmin.modal.close;
 
-    /* ---- POST helper ---- */
-    function post(endpoint, params) {
-        var body = new URLSearchParams();
-        Object.keys(params).forEach(function (k) { body.append(k, params[k]); });
-        return fetch(AJAX + endpoint + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': (window.CMS_CSRF || '') },
-            credentials: 'same-origin',
-            body: body.toString()
-        }).then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); });
-    }
+    /* ---- POST helper (shared: CmsAdmin.post — CSRF header + scope) ---- */
+    var post = CmsAdmin.post;
 
     /* ---- Edit/Add modal wiring ---- */
     var modal   = document.getElementById('cmsNavModal');

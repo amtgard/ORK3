@@ -21,16 +21,18 @@ require_once __DIR__ . '/class.CmsSanitizer.php';
 class CmsPage extends CmsBase
 {
     /**
-     * Block field keys whose values hold authored rich-text/HTML and MUST be
-     * run through CmsSanitizer::Clean before storage. Kept in lockstep with
-     * Controller_CmsAjax::$HTML_FIELDS — sanitizing HERE (the choke point every
-     * writer passes through) is the authoritative defense; the controller copy
-     * is redundant belt-and-suspenders.
+     * E36: single source of truth for the block-field sanitize choke-point lists.
+     * Block field keys whose values hold authored rich-text/HTML and MUST be run
+     * through CmsSanitizer::Clean before storage. PUBLIC so the controller layer
+     * (Controller_CmsAjax) references THESE constants instead of maintaining its
+     * own duplicated copy — this class (the choke point every writer passes
+     * through) owns the canonical membership; the controller copy is redundant
+     * belt-and-suspenders keyed off the same constant.
      */
-    private static $HTML_FIELDS = array('body', 'html');
+    public const HTML_FIELDS = array('body', 'html');
 
-    /** Block field keys holding a URL → must pass URL-scheme validation on save. */
-    private static $URL_FIELDS = array('href', 'more_href', 'url', 'link', 'cta_href', 'button_href', 'src', 'thumb', 'poster');
+    /** E36: block field keys holding a URL → must pass URL-scheme validation on save. */
+    public const URL_FIELDS = array('href', 'more_href', 'url', 'link', 'cta_href', 'button_href', 'src', 'thumb', 'poster');
 
     /** Max revision snapshots retained per owner (older ones pruned on write). */
     private static $MAX_REVISIONS = 25;
@@ -58,8 +60,9 @@ class CmsPage extends CmsBase
      * front-door / site render path resolves a page + its enabled blocks on every
      * request; caching the (enabled) block set per (scope, page_id, updated_at)
      * collapses the block query. The updated_at component makes any page-meta edit
-     * self-busting; block-only edits (ReplaceBlocks does NOT touch page.updated_at)
-     * are busted explicitly via _bustPageWithBlocksCache(). Mirrors the RSS cache
+     * self-busting; #121 also bumps updated_at on a block-only edit (ReplaceBlocks),
+     * which re-keys this cache — ReplaceBlocks still busts the OLD key explicitly
+     * BEFORE the write via _bustPageWithBlocksCache(). Mirrors the RSS cache
      * pattern in CmsPost.
      */
     private const PWB_CACHE_CALL = 'CmsPage.page_with_blocks';
@@ -354,9 +357,9 @@ class CmsPage extends CmsBase
     /**
      * C1/#9: bust a page's cached GetPageWithBlocks block set. Reads the page's
      * CURRENT (scope, updated_at) so the key matches what GetPageWithBlocks stored
-     * — safe to call while updated_at is unchanged (ReplaceBlocks / DeletePage
-     * soft-delete / RestorePage) and BEFORE a meta write bumps updated_at
-     * (UpdatePage). No-op when memcache isn't wired up or the row is gone.
+     * — safe to call while updated_at is unchanged (DeletePage soft-delete /
+     * RestorePage) and BEFORE a write bumps updated_at (UpdatePage, and #121's
+     * ReplaceBlocks owner stamp). No-op when memcache isn't wired up or row gone.
      *
      * @param int $pageId
      * @return void
@@ -461,7 +464,16 @@ class CmsPage extends CmsBase
         // INSERT IGNORE, ROW_COUNT() race arbitration and authoritative
         // read-back-by-live-tuple all live in CmsBase::_insertWithDupGuard so
         // CreatePage/CreatePost stay in lockstep.
-        return $this->_insertWithDupGuard('cms_page', 'page_id', $cols);
+        $pageId = $this->_insertWithDupGuard('cms_page', 'page_id', $cols);
+
+        // #62: audit the content-creating write (not just delete/restore/publish).
+        // Actor = whoever the create attributed the row to; scope from the new row.
+        if ($pageId > 0) {
+            $actorId = (int)($cols['updated_by'] ?? ($cols['created_by'] ?? 0));
+            $this->_cmsAudit($actorId, 'update', 'page', $pageId, $cols['scope_type'], (int)$cols['scope_id']);
+        }
+
+        return $pageId;
     }
 
     /**
@@ -769,6 +781,17 @@ class CmsPage extends CmsBase
                 );
             }
         }
+
+        // #62: audit the content-mutating write. Scope = the effective (post-edit)
+        // scope — an in-flight scope move wins, else the row's current scope.
+        $auditType = array_key_exists('scope_type', $data)
+            ? $this->_normalizeScopeType($data['scope_type'])
+            : (string)$curRow['scope_type'];
+        $auditId = array_key_exists('scope_id', $data)
+            ? (int)$data['scope_id']
+            : (int)$curRow['scope_id'];
+        $auditActor = (isset($data['updated_by']) && (int)$data['updated_by'] > 0) ? (int)$data['updated_by'] : 0;
+        $this->_cmsAudit($auditActor, 'update', 'page', $pageId, $auditType, $auditId);
 
         return true;
     }
@@ -1385,17 +1408,31 @@ class CmsPage extends CmsBase
      * @param string $ownerType   'page' | 'post'
      * @param int    $ownerId     owner row id
      * @param array  $blocksArray ordered list of block definitions
+     * @param int    $actorId     acting mundane_id (#121: stamped as the owner's
+     *                            updated_by + attributed to the revision; 0 = unknown,
+     *                            leaves updated_by untouched). Optional so existing
+     *                            callers are unaffected.
      * @return int number of blocks stored (-1 on partial-write rollback)
      */
-    public function ReplaceBlocks($ownerType, $ownerId, $blocksArray)
+    public function ReplaceBlocks($ownerType, $ownerId, $blocksArray, $actorId = 0)
     {
         global $DB;
 
         $ownerType = ($ownerType === 'post') ? 'post' : 'page';
         $ownerId = (int)$ownerId;
+        $actorId = (int)$actorId;
 
         // C3: normalize + sanitize up front, outside the transaction.
         $normalized = $this->_normalizeBlocks($blocksArray);
+
+        // C1/#9/#121: the owner's updated_at is now bumped inside the txn below
+        // (#121), which RE-KEYS the GetPageWithBlocks cache. Bust the CURRENT
+        // (old-updated_at) key BEFORE the write — mirroring UpdatePage — so the
+        // pre-edit block set can't keep serving; the new updated_at then makes
+        // subsequent reads self-fresh. Pages only (posts aren't PWB-cached).
+        if ($ownerType === 'page') {
+            $this->_bustPageWithBlocksCache($ownerId);
+        }
 
         $DB->Clear();
         $DB->Execute('START TRANSACTION');
@@ -1418,6 +1455,13 @@ class CmsPage extends CmsBase
             return -1;
         }
 
+        // #121: stamp the owning page/post row (updated_at = now, updated_by =
+        // actor) so a block-only edit surfaces in ListPages/ListPosts ORDER BY
+        // updated_at, and — crucially BEFORE the snapshot below — so the revision
+        // authorship (_ownerMeta reads updated_by) is attributed to the actor.
+        // Inside the txn so a rollback reverts it too.
+        $this->_stampOwnerWrite($ownerType, $ownerId, $actorId);
+
         // C2: snapshot the state we just wrote (inside the txn so a rollback
         // would discard it too), then prune to the retention cap.
         $this->_snapshotRevision($ownerType, $ownerId, $normalized);
@@ -1425,14 +1469,71 @@ class CmsPage extends CmsBase
         $DB->Clear();
         $DB->Execute('COMMIT');
 
-        // C1/#9: a block write does NOT bump page.updated_at (it touches the block
-        // table only), so the GetPageWithBlocks cache would keep serving the OLD
-        // block set — bust it explicitly. Pages only (posts aren't PWB-cached).
-        if ($ownerType === 'page') {
-            $this->_bustPageWithBlocksCache($ownerId);
+        // #62: audit the content-mutating block write (not just delete/restore/
+        // publish). Best-effort, post-commit; scope resolved from the owner row.
+        $ownerScope = $this->_ownerScope($ownerType, $ownerId);
+        if ($ownerScope !== null) {
+            $this->_cmsAudit($actorId, 'blocks_replace', $ownerType, $ownerId, $ownerScope['type'], $ownerScope['id']);
         }
 
         return $expected;
+    }
+
+    /**
+     * #121: stamp an owner (page/post) row's updated_at (always) + updated_by
+     * (only when a real actor is known — yapo drops null, and 0 would clobber a
+     * legitimate prior author). Called INSIDE the ReplaceBlocks transaction.
+     *
+     * @param string $ownerType 'page' | 'post'
+     * @param int    $ownerId
+     * @param int    $actorId   acting mundane_id (0 = unknown → updated_by left as-is)
+     * @return void
+     */
+    private function _stampOwnerWrite($ownerType, $ownerId, $actorId)
+    {
+        global $DB;
+
+        $table = ($ownerType === 'post') ? 'cms_post' : 'cms_page';
+        $pk    = ($ownerType === 'post') ? 'post_id' : 'page_id';
+
+        $set = 'updated_at = :updated_at';
+        $DB->Clear();
+        $DB->updated_at = date('Y-m-d H:i:s');
+        if ((int)$actorId > 0) {
+            $set .= ', updated_by = :updated_by';
+            $DB->updated_by = (int)$actorId;
+        }
+        $DB->owner_pk = (int)$ownerId;
+        $DB->Execute(
+            'UPDATE ' . DB_PREFIX . $table . ' SET ' . $set . ' WHERE ' . $pk . ' = :owner_pk'
+        );
+    }
+
+    /**
+     * The (scope_type, scope_id) of a page/post owner, for the block-write audit
+     * trail. Returns ['type'=>string,'id'=>int] or null when the owner is gone.
+     *
+     * @param string $ownerType 'page' | 'post'
+     * @param int    $ownerId
+     * @return array|null
+     */
+    private function _ownerScope($ownerType, $ownerId)
+    {
+        global $DB;
+
+        $table = ($ownerType === 'post') ? 'cms_post' : 'cms_page';
+        $pk    = ($ownerType === 'post') ? 'post_id' : 'page_id';
+
+        $DB->Clear();
+        $DB->owner_pk = (int)$ownerId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT scope_type, scope_id FROM ' . DB_PREFIX . $table
+            . ' WHERE ' . $pk . ' = :owner_pk LIMIT 1'
+        ));
+        if ($row === null) {
+            return null;
+        }
+        return array('type' => (string)$row['scope_type'], 'id' => (int)$row['scope_id']);
     }
 
     /**
@@ -1738,9 +1839,9 @@ class CmsPage extends CmsBase
         foreach ($fields as $key => $val) {
             if (is_array($val)) {
                 $fields[$key] = $this->_sanitizeBlockFields($val);
-            } elseif (is_string($val) && in_array($key, self::$HTML_FIELDS, true)) {
+            } elseif (is_string($val) && in_array($key, self::HTML_FIELDS, true)) {
                 $fields[$key] = CmsSanitizer::Clean($val);
-            } elseif (is_string($val) && in_array($key, self::$URL_FIELDS, true)) {
+            } elseif (is_string($val) && in_array($key, self::URL_FIELDS, true)) {
                 $fields[$key] = CmsSanitizer::IsSafeUrl($val) ? $val : '#';
             }
         }
@@ -2078,6 +2179,117 @@ class CmsPage extends CmsBase
             $out['total'] += $c;
         }
         return $out;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * E117/#117 — maintenance cleanup (hard-purge trashed + orphan sweep)
+     * ------------------------------------------------------------------ */
+
+    /**
+     * E117/#117: HARD-delete pages that have been soft-deleted (deleted_at NOT
+     * NULL) for longer than $olderThanDays, together with their blocks and
+     * revisions, then run the orphan-block sweep. NON-DESTRUCTIVE to live content:
+     * only rows already trashed past the cutoff (and blocks whose owner is truly
+     * gone) are removed — a live or recently-trashed (still restorable) page is
+     * never touched. Idempotent and safe to re-run.
+     *
+     * @param int $olderThanDays retention window in days (clamped to >= 0)
+     * @return array counts ['pages','blocks','revisions','orphan_blocks']
+     */
+    public function PurgeTrashed($olderThanDays = 30)
+    {
+        global $DB;
+
+        $days = max(0, (int)$olderThanDays);
+        $out  = array('pages' => 0, 'blocks' => 0, 'revisions' => 0, 'orphan_blocks' => 0);
+
+        // Cutoff is a code-controlled int → inline (INTERVAL n DAY can't be bound
+        // portably through the emulated prepare layer). Collect the doomed page ids
+        // first so the block/revision deletes target exactly this set.
+        $DB->Clear();
+        $ids = array();
+        foreach ($this->_eachRow($DB->DataSet(
+            'SELECT page_id FROM ' . DB_PREFIX . 'cms_page'
+            . ' WHERE deleted_at IS NOT NULL AND deleted_at < (NOW() - INTERVAL ' . $days . ' DAY)'
+        )) as $row) {
+            $ids[] = (int)$row['page_id'];
+        }
+
+        if (!empty($ids)) {
+            $idList = implode(',', array_map('intval', $ids));
+
+            // Blocks owned by the doomed pages.
+            $DB->Clear();
+            $DB->Execute(
+                'DELETE FROM ' . DB_PREFIX . 'cms_block'
+                . " WHERE owner_type = 'page' AND owner_id IN (" . $idList . ')'
+            );
+            $out['blocks'] = $this->_affectedRows();
+
+            // Revisions owned by the doomed pages (table is migration-gated).
+            if ($this->_tableExists(DB_PREFIX . 'cms_revision')) {
+                $DB->Clear();
+                $DB->Execute(
+                    'DELETE FROM ' . DB_PREFIX . 'cms_revision'
+                    . " WHERE owner_type = 'page' AND owner_id IN (" . $idList . ')'
+                );
+                $out['revisions'] = $this->_affectedRows();
+            }
+
+            // The pages themselves — re-assert the trashed+cutoff predicate so a
+            // page restored between the SELECT and here is never hard-deleted.
+            $DB->Clear();
+            $DB->Execute(
+                'DELETE FROM ' . DB_PREFIX . 'cms_page'
+                . ' WHERE page_id IN (' . $idList . ')'
+                . ' AND deleted_at IS NOT NULL AND deleted_at < (NOW() - INTERVAL ' . $days . ' DAY)'
+            );
+            $out['pages'] = $this->_affectedRows();
+        }
+
+        $out['orphan_blocks'] = $this->SweepOrphanBlocks();
+
+        return $out;
+    }
+
+    /**
+     * E117/#117: delete ork_cms_block rows whose owner page/post no longer exists
+     * (the owner row is ABSENT). Blocks of a still-present-but-trashed owner are
+     * DELIBERATELY retained so a soft-deleted page/post stays restorable with its
+     * content — those are reclaimed only once PurgeTrashed hard-deletes the aged-out
+     * owner. Idempotent and non-destructive to any live/restorable content.
+     *
+     * @return int number of orphaned block rows removed
+     */
+    public function SweepOrphanBlocks()
+    {
+        global $DB;
+
+        $DB->Clear();
+        $DB->Execute(
+            'DELETE b FROM ' . DB_PREFIX . 'cms_block b'
+            . ' LEFT JOIN ' . DB_PREFIX . "cms_page pg ON b.owner_type = 'page' AND pg.page_id = b.owner_id"
+            . ' LEFT JOIN ' . DB_PREFIX . "cms_post po ON b.owner_type = 'post' AND po.post_id = b.owner_id"
+            . " WHERE (b.owner_type = 'page' AND pg.page_id IS NULL)"
+            . "    OR (b.owner_type = 'post' AND po.post_id IS NULL)"
+        );
+        return $this->_affectedRows();
+    }
+
+    /**
+     * Affected-row count of the immediately-preceding write on the shared $DB
+     * connection (Execute() is void under ERRMODE_WARNING). Read via ROW_COUNT()
+     * before any other query intervenes.
+     *
+     * @return int
+     */
+    private function _affectedRows()
+    {
+        global $DB;
+
+        $DB->Clear();
+        $row = $this->_firstRow($DB->DataSet('SELECT ROW_COUNT() AS rc'));
+        return ($row !== null && isset($row['rc'])) ? (int)$row['rc'] : 0;
     }
 
 }

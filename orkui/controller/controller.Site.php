@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/trait.CmsScope.php';
+
 /**
  * Controller_Site — public renderer for per-org CMS "sites" (CMS Multi-Site).
  *
@@ -47,8 +49,13 @@
  */
 class Controller_Site extends Controller
 {
+    use CmsScopeContext;
+
     /** Posts per page on the scoped blog index. */
     public const PER_PAGE = 12;
+
+    /** Hard cap on rows enumerated into the XML sitemap (per entity type). */
+    private const SITEMAP_MAX = 5000;
 
     /** True when the viewer is an authorized officer previewing an unpublished site. */
     private $_isPreview = false;
@@ -373,9 +380,155 @@ class Controller_Site extends Controller
         exit;
     }
 
+    /**
+     * #126: XML sitemap for a site: Site/sitemap/{slug} (→ /k|/p/{slug}/sitemap.xml).
+     *
+     * Emits every PUBLISHED, live, in-scope page (full nested paths via PagePath)
+     * and every PUBLISHED post, using the SAME published+due filter the public
+     * page/post routes use (ListPages status='published' after _promoteScheduled;
+     * ListPosts without includeDrafts). Only a published public site has a sitemap;
+     * an unknown / unbuilt / draft slug (and any preview) gets a bare 404 — a
+     * sitemap is inherently public/indexable, so it never exposes pre-launch content
+     * (mirrors rss()).
+     */
+    public function sitemap($slug = null)
+    {
+        $site = $this->_resolveSite($slug);
+        if ($site === null || (string) ($site['status'] ?? 'unbuilt') !== 'published') {
+            $this->_renderRssNotFound();
+            return;
+        }
+        // Honor the /k vs /p canonical-prefix 301 like the other routes.
+        if ($this->_enforcePrefix($site)) {
+            return;
+        }
+
+        $scopeType = (string) $site['scope_type'];
+        $scopeId   = (int) $site['scope_id'];
+        $base      = $this->_siteBaseUrl($site);
+        $homeId    = (int) ($site['home_page_id'] ?? 0);
+
+        $this->load_model('CmsPage');
+        $this->load_model('CmsPost');
+
+        // 1) Site home (the home_page_id page renders at the bare base URL).
+        $urls   = array();
+        $urls[] = array('loc' => $base, 'lastmod' => (string) ($site['updated_at'] ?? ''));
+
+        // 2) Published, live, in-scope pages. ListPages() promotes any due
+        //    scheduled rows first, so status='published' is exactly the live set.
+        //    Skip the home page — it is already canonicalized at the base above.
+        $pages = $this->CmsPage->list_pages(array(
+            'status'     => 'published',
+            'scope_type' => $scopeType,
+            'scope_id'   => $scopeId,
+            'limit'      => self::SITEMAP_MAX,
+        ));
+        foreach ((is_array($pages) ? $pages : array()) as $pg) {
+            $pid = (int) ($pg['page_id'] ?? 0);
+            if ($pid <= 0 || $pid === $homeId) {
+                continue;
+            }
+            $path = trim((string) $this->CmsPage->PagePath($pid), '/');
+            if ($path === '') {
+                continue;   // pathless page collapses onto the base; skip the dupe
+            }
+            $urls[] = array('loc' => $base . '/' . $path, 'lastmod' => (string) ($pg['updated_at'] ?? ''));
+        }
+
+        // 3) The blog index + every published post (same public filter as blog()).
+        $postResult = $this->CmsPost->list_posts(array(
+            'scope_type' => $scopeType,
+            'scope_id'   => $scopeId,
+            'limit'      => self::SITEMAP_MAX,
+        ));
+        $postRows = (is_array($postResult) && isset($postResult['rows']) && is_array($postResult['rows']))
+            ? $postResult['rows'] : array();
+        if (!empty($postRows)) {
+            $urls[] = array('loc' => $base . '/blog', 'lastmod' => (string) ($postRows[0]['updated_at'] ?? ''));
+        }
+        foreach ($postRows as $po) {
+            $pslug = trim((string) ($po['slug'] ?? ''));
+            if ($pslug === '') {
+                continue;
+            }
+            $urls[] = array(
+                'loc'     => $base . '/post/' . rawurlencode($pslug),
+                'lastmod' => (string) ($po['updated_at'] ?? ($po['published_at'] ?? '')),
+            );
+        }
+
+        $xml  = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+        $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+        foreach ($urls as $u) {
+            $loc = (string) $u['loc'];
+            if ($loc === '') {
+                continue;
+            }
+            $xml .= '  <url><loc>' . $this->_xmlEscape($loc) . '</loc>';
+            $mod = $this->_w3cDate((string) ($u['lastmod'] ?? ''));
+            if ($mod !== '') {
+                $xml .= '<lastmod>' . $mod . '</lastmod>';
+            }
+            $xml .= "</url>\n";
+        }
+        $xml .= '</urlset>' . "\n";
+
+        header('Content-Type: application/xml; charset=utf-8');
+        echo $xml;
+        exit;
+    }
+
+    /**
+     * #126: per-site robots.txt: Site/robots/{slug} (→ /k|/p/{slug}/robots.txt).
+     * Advertises the site's sitemap so crawlers can discover it. Only a published
+     * public site is served (mirrors sitemap()/rss()); anything else gets a bare
+     * 404 so an in-progress site stays indistinguishable from an unknown slug.
+     */
+    public function robots($slug = null)
+    {
+        $site = $this->_resolveSite($slug);
+        if ($site === null || (string) ($site['status'] ?? 'unbuilt') !== 'published') {
+            $this->_renderRssNotFound();
+            return;
+        }
+        if ($this->_enforcePrefix($site)) {
+            return;
+        }
+
+        $base = $this->_siteBaseUrl($site);
+        $body = "User-agent: *\n"
+            . "Allow: /\n"
+            . 'Sitemap: ' . $base . "/sitemap.xml\n";
+
+        header('Content-Type: text/plain; charset=utf-8');
+        echo $body;
+        exit;
+    }
+
     /* ==================================================================
      * Internals
      * ================================================================ */
+
+    /** XML-escape a text value for safe inclusion in the sitemap body. */
+    private function _xmlEscape($s)
+    {
+        return htmlspecialchars((string) $s, ENT_QUOTES | ENT_XML1, 'UTF-8');
+    }
+
+    /**
+     * Normalize a DB datetime ('Y-m-d H:i:s') to a W3C/ISO-8601 sitemap
+     * <lastmod> value, or '' when unparseable/empty.
+     */
+    private function _w3cDate($dt)
+    {
+        $dt = trim((string) $dt);
+        if ($dt === '' || $dt === '0000-00-00 00:00:00') {
+            return '';
+        }
+        $ts = strtotime($dt);
+        return ($ts !== false && $ts > 0) ? date('c', $ts) : '';
+    }
 
     /**
      * Resolve a slug to a site row (or null). The slug is normalized to the
@@ -459,10 +612,11 @@ class Controller_Site extends Controller
     }
 
     /**
-     * True when the current viewer is an officer authorized to EDIT this site's
-     * org (kingdom/park) — they may preview it before it is published. Uses the
-     * same HasAuthority(AUTH_EDIT) gate as the CMS admin (super-admins pass via
-     * HasAuthority's all-zero short-circuit).
+     * True when the current viewer may EDIT this site's org (kingdom/park) — they
+     * may preview it before it is published. Resolves through the single shared
+     * _cmsCanEditScope() gate (#29), so a super-admin, a global/matching
+     * kingdom/park ork_cms_grant, OR the HasAuthority(AUTH_EDIT) officer bridge
+     * all qualify — identically to the edit FAB everywhere else.
      *
      * @param array $site
      * @return bool
@@ -472,17 +626,16 @@ class Controller_Site extends Controller
         if ($this->_canEditMemo !== null) {
             return $this->_canEditMemo;
         }
-        $ok  = false;
-        $uid = (int) ($this->session->user_id ?? 0);
-        if ($uid > 0 && is_array($site) && is_object(Ork3::$Lib->authorization)) {
-            $type     = (string) ($site['scope_type'] ?? '');
-            $id       = (int) ($site['scope_id'] ?? 0);
-            $authType = ($type === 'park') ? AUTH_PARK : AUTH_KINGDOM;
-            $ok = $id > 0
-                && Ork3::$Lib->authorization->HasAuthority($uid, $authType, $id, AUTH_EDIT);
-        }
-        $this->_canEditMemo = $ok;
-        return $ok;
+        // #29: resolve through the single shared CmsCan-backed edit-scope gate so a
+        // kingdom/park (or global) ork_cms_grant — not only a raw HasAuthority
+        // officer role — lets its holder preview the unpublished site, matching the
+        // edit FAB gate used everywhere else.
+        $uid   = (int) ($this->session->user_id ?? 0);
+        $scope = is_array($site)
+            ? array('type' => (string) ($site['scope_type'] ?? ''), 'id' => (int) ($site['scope_id'] ?? 0))
+            : array('type' => '', 'id' => 0);
+        $this->_canEditMemo = $this->_cmsCanEditScope($uid, $scope);
+        return $this->_canEditMemo;
     }
 
     /**

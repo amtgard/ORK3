@@ -634,6 +634,15 @@ class CmsPost extends CmsBase
         // read-back-by-live-tuple all live in CmsBase::_insertWithDupGuard.
         $id = $this->_insertWithDupGuard('cms_post', 'post_id', $cols);
         $this->_invalidateListCache();
+
+        // #62: audit the content-creating write (mirrors CmsPage::CreatePage) so
+        // content mutations are trailed, not just delete/restore/publish. Actor =
+        // whoever the create attributed the row to; scope from the new row.
+        if ($id > 0) {
+            $actorId = (int)($cols['updated_by'] ?? ($cols['created_by'] ?? 0));
+            $this->_cmsAudit($actorId, 'update', 'post', $id, $cols['scope_type'], (int)$cols['scope_id']);
+        }
+
         return $id;
     }
 
@@ -698,8 +707,11 @@ class CmsPost extends CmsBase
         // precedes the bind loop below.
         $DB->Clear();
         $DB->post_id = $postId;
+        // Carry scope_type/scope_id too so the #62 audit below has the row's scope
+        // without a second read.
         $existRow = $this->_firstRow($DB->DataSet(
-            'SELECT post_id FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id AND deleted_at IS NULL LIMIT 1'
+            'SELECT post_id, scope_type, scope_id FROM ' . DB_PREFIX . 'cms_post'
+            . ' WHERE post_id = :post_id AND deleted_at IS NULL LIMIT 1'
         ));
         if ($existRow === null) {
             return false;
@@ -894,6 +906,18 @@ class CmsPost extends CmsBase
 
         // Covers SetStatus too (it delegates here).
         $this->_invalidateListCache();
+
+        // #62: audit the content-mutating write. Scope = the effective (post-edit)
+        // scope — an in-flight scope move wins, else the row's current scope.
+        $auditType = array_key_exists('scope_type', $data)
+            ? $this->_normalizeScopeType($data['scope_type'])
+            : (string)$existRow['scope_type'];
+        $auditId = array_key_exists('scope_id', $data)
+            ? (int)$data['scope_id']
+            : (int)$existRow['scope_id'];
+        $auditActor = (isset($data['updated_by']) && (int)$data['updated_by'] > 0) ? (int)$data['updated_by'] : 0;
+        $this->_cmsAudit($auditActor, 'update', 'post', $postId, $auditType, $auditId);
+
         return true;
     }
 
@@ -1353,6 +1377,39 @@ class CmsPost extends CmsBase
             $out['total'] += $c;
         }
         return $out;
+    }
+
+    /**
+     * E117/#117: prune tags with ZERO live post_tag usage from ork_cms_tag. A tag
+     * is deleted only when no ork_cms_post_tag row references it — i.e. it labels
+     * no post at all (an empty vocabulary entry left behind after retag/delete).
+     * NON-DESTRUCTIVE: any tag still attached to any post is retained; nothing that
+     * a live surface uses is touched. Idempotent and safe to re-run.
+     *
+     * @return int number of unused tag rows removed
+     */
+    public function PruneUnusedTags()
+    {
+        global $DB;
+
+        // LEFT JOIN / IS NULL form (rather than NOT IN) so an empty link table is
+        // handled cleanly and the DELETE target isn't referenced in a subquery.
+        $DB->Clear();
+        $DB->Execute(
+            'DELETE t FROM ' . DB_PREFIX . 'cms_tag t'
+            . ' LEFT JOIN ' . DB_PREFIX . 'cms_post_tag pt ON pt.tag_id = t.tag_id'
+            . ' WHERE pt.post_id IS NULL'
+        );
+
+        // Affected-row count via ROW_COUNT() before any other query intervenes.
+        $DB->Clear();
+        $row = $this->_firstRow($DB->DataSet('SELECT ROW_COUNT() AS rc'));
+        $removed = ($row !== null && isset($row['rc'])) ? (int)$row['rc'] : 0;
+
+        if ($removed > 0) {
+            $this->_invalidateListCache();
+        }
+        return $removed;
     }
 
 }

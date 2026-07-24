@@ -234,28 +234,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
         });
     }
 
-    /* ---- toast ---- */
-    var toastEl = document.getElementById('cmsToast');
-    var toastTimer = null;
-    function toast(msg, kind) {
-        if (!toastEl) { return; }
-        toastEl.textContent = msg;
-        toastEl.className = 'cms-toast cms-show' + (kind ? ' cms-toast-' + kind : '');
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(function () { toastEl.className = 'cms-toast'; }, 3200);
-    }
+    /* ---- toast (shared: CmsAdmin.toast) ---- */
+    var toast = CmsAdmin.toast;
 
-    /* ---- POST helper (urlencoded → JSON) ---- */
-    function post(endpoint, params) {
-        var body = new URLSearchParams();
-        Object.keys(params).forEach(function (k) { body.append(k, params[k]); });
-        return fetch(AJAX + endpoint + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': (window.CMS_CSRF || '') },
-            credentials: 'same-origin',
-            body: body.toString()
-        }).then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); });
-    }
+    /* ---- POST helper (shared: CmsAdmin.post — CSRF header + scope) ---- */
+    var post = CmsAdmin.post;
 
     /* ---- shared confirm/info modal (no native confirm()/alert()). Title, body,
        an optional detail region, and the primary button are all set per call.
@@ -269,8 +252,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var modalCancel = document.getElementById('cmsMediaConfirmCancel');
     var modalAction = null;
 
-    function openModal(el) { if (el) { el.classList.add('cms-open'); } }
-    function closeModal(el) { if (el) { el.classList.remove('cms-open'); } }
+    /* modal open/close are shared (CmsAdmin.modal); backdrop/Esc handled there. */
+    var openModal = CmsAdmin.modal.open;
+    var closeModal = CmsAdmin.modal.close;
     function hideModal() { closeModal(modalEl); }
 
     function showConfirm(opts) {
@@ -298,16 +282,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             if (typeof modalAction === 'function') { modalAction(); }
         });
     }
-    document.addEventListener('click', function (e) {
-        var closer = e.target.closest('[data-close-modal]');
-        if (closer) { closeModal(closer.closest('.cms-modal-overlay')); return; }
-        if (e.target.classList && e.target.classList.contains('cms-modal-overlay')) { closeModal(e.target); }
-    });
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
-            document.querySelectorAll('.cms-modal-overlay.cms-open').forEach(closeModal);
-        }
-    });
+    // Backdrop-click / [data-close-modal] / Esc closing is handled by CmsAdmin.
 
     /* ---- bulk selection state (media_id string → true) ---- */
     var selected = Object.create(null);

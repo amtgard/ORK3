@@ -81,6 +81,8 @@ if ($fdbUserTitle !== '') {
     $fdbTitle = $fdbUserTitle;
 }
 ?>
+<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
+<?php if (empty($fdStyleOnce['video_embed'])) : $fdStyleOnce['video_embed'] = true; ?>
 <style>
 /* scoped: fdb-video */
 .fdb-video-wrap {
@@ -111,6 +113,7 @@ if ($fdbUserTitle !== '') {
 }
 html[data-theme="dark"] .fdb-video-cap { color: #9aa6c0; }
 </style>
+<?php endif; ?>
 <div class="fd-pad">
     <div class="fdb-video-wrap">
         <div class="fdb-video-frame">

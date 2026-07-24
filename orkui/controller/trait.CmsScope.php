@@ -176,6 +176,36 @@ trait CmsScopeContext
     }
 
     /**
+     * #29: THE single "may this user edit-FAB / preview this scope" gate for the
+     * public CMS surfaces (Page/Blog/Site). Resolves via CmsCan('page.edit', $scope)
+     * so ALL of — an ORK super-admin, a global ork_cms_grant, a matching
+     * kingdom/park ork_cms_grant, AND the HasAuthority(AUTH_EDIT) officer bridge —
+     * consistently govern the edit FAB and the unpublished-site preview EVERYWHERE.
+     *
+     * This replaces three divergent per-controller implementations: Controller_Page
+     * called CmsCan directly, Controller_Blog hand-rolled is_super_admin +
+     * get_user_capabilities, and Controller_Site called HasAuthority(AUTH_EDIT)
+     * raw (which silently ignored ork_cms_grant). Routing them all through one
+     * helper means a kingdom/park content grant now governs the gate uniformly.
+     *
+     * @param int   $uid   acting mundane_id (from $this->session->user_id)
+     * @param array $scope ['type'=>'global'|'kingdom'|'park','id'=>int]
+     * @return bool
+     */
+    private function _cmsCanEditScope($uid, $scope)
+    {
+        $uid = (int) $uid;
+        if ($uid <= 0) {
+            return false;
+        }
+        if (!is_array($scope)) {
+            $scope = array('type' => 'global', 'id' => 0);
+        }
+        $this->load_model('CmsAuth');
+        return (bool) $this->CmsAuth->cms_can($uid, 'page.edit', $scope);
+    }
+
+    /**
      * True when a page/post/media row belongs to the resolved scope — the IDOR
      * guard for every by-id mutation. A row with no scope columns is treated as
      * global ('global', 0), matching the libs' create defaults.

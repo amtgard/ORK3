@@ -348,32 +348,12 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var UIR  = <?= json_encode(UIR) ?>;
     var AJAX = UIR + 'CmsAjax/';
 
-    /* ---- toast ---- */
-    var toastEl = document.getElementById('cmsSitesToast');
-    var toastTimer = null;
-    function toast(msg, kind) {
-        if (!toastEl) { return; }
-        toastEl.textContent = msg;
-        toastEl.className = 'cms-toast cms-show' + (kind ? ' cms-toast-' + kind : '');
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(function () { toastEl.className = 'cms-toast'; }, 3200);
-    }
+    /* ---- toast (shared: CmsAdmin.toast — resolves the page's .cms-toast) ---- */
+    var toast = CmsAdmin.toast;
 
-    /* ---- modal helpers ---- */
-    function openModal(el) { if (el) { el.classList.add('cms-open'); } }
-    function closeModal(el) { if (el) { el.classList.remove('cms-open'); } }
-    document.addEventListener('click', function (e) {
-        var closer = e.target.closest('[data-close-modal]');
-        if (closer) { closeModal(closer.closest('.cms-modal-overlay')); return; }
-        if (e.target.classList && e.target.classList.contains('cms-modal-overlay')) {
-            closeModal(e.target);
-        }
-    });
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
-            document.querySelectorAll('.cms-modal-overlay.cms-open').forEach(closeModal);
-        }
-    });
+    /* ---- modal helpers (shared: CmsAdmin.modal; backdrop/Esc handled there) ---- */
+    var openModal = CmsAdmin.modal.open;
+    var closeModal = CmsAdmin.modal.close;
 
     var newModal = document.getElementById('cmsNewSiteModal');
     ['cmsNewSiteBtn', 'cmsNewSiteEmptyBtn'].forEach(function (id) {

@@ -104,6 +104,13 @@
    blog_feed / kingdom_* section wrappers. */
 .fd-section-light {
     background: #fff;
+    /* Skip style/layout/paint for off-screen block sections (below the fold).
+       The above-the-fold hero uses .fd-carousel (NOT a section wrapper), so it
+       is never lazy-rendered. `contain-intrinsic-size: auto <h>` seeds a
+       placeholder height, then remembers the real rendered size once painted —
+       keeping scrollbar length and #anchor offsets stable. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 600px;
 }
 
 /* Muted band — the soft off-white used by card_grid / kingdoms_teaser section
@@ -112,6 +119,9 @@
    `.fd-section-muted` lives with the other section overrides below. */
 .fd-section-muted {
     background: #f7f8fb;
+    /* See .fd-section-light — same off-screen render skipping; hero excluded. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 600px;
 }
 
 /* ---- Buttons & links --------------------------------------- */
@@ -138,6 +148,19 @@
 #theme_container a.fd-btn-ghost:hover {
     color: #fff !important;
     text-shadow: 0 1px 2px rgba(0, 0, 0, .45);
+}
+
+/* "Ways to Play" path cards are <a class="fd-path"> sitting on a dark scrim, so
+   their title/blurb are meant to be white. The global `#theme_container a` (ID
+   specificity) drags the link + its inherited children to link-blue in dark
+   mode; restore white with matching specificity. Color only (no text-shadow) so
+   light mode — already white via .fd-path — is visually unchanged. The gold
+   icon keeps its own inline color:var(--gold) (not matched here). */
+#theme_container a.fd-path,
+#theme_container a.fd-path:hover,
+#theme_container a.fd-path .fd-path-label,
+#theme_container a.fd-path .fd-serif {
+    color: #fff !important;
 }
 
 .fd-btn-ghost {
@@ -1033,7 +1056,7 @@ html[data-theme="dark"] .bf-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45);
 }
 .blog-card {
     display: flex; flex-direction: column; text-decoration: none; color: inherit;
-    background: #fff; border: 1px solid #e4e8f0; border-radius: 12px;
+    background: var(--fd-bg); border: 1px solid #e4e8f0; border-radius: 12px;
     overflow: hidden; transition: box-shadow .15s ease, transform .15s ease;
 }
 .blog-card:hover { box-shadow: 0 8px 24px rgba(20,30,60,.12); transform: translateY(-2px); }

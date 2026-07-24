@@ -41,6 +41,10 @@ $canEdit    = !empty($caps['edit']);
 $canPublish = !empty($caps['publish']);
 $canDelete  = !empty($caps['delete']);
 
+// E128: per-row lifetime view counts (page_id => int). Defensive — a missing or
+// empty map means counts simply don't render.
+$pageViewCounts = isset($pageViewCounts) && is_array($pageViewCounts) ? $pageViewCounts : array();
+
 $h = function ($v) {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 };
@@ -145,6 +149,12 @@ include __DIR__ . '/cms/_shell_top.tpl';
                                 <?php else: ?>
                                     <div class="cms-pg-slug">/<?= $h($slug) ?></div>
                                 <?php endif; ?>
+                            <?php endif; ?>
+                            <?php // E128: per-row lifetime views — only when the map has this page. ?>
+                            <?php if (array_key_exists($pid, $pageViewCounts)): ?>
+                                <div class="cms-pg-slug cms-muted" data-tip="Lifetime views on the public site">
+                                    <i class="fas fa-chart-line"></i> <?= number_format((int)$pageViewCounts[$pid]) ?> view<?= (int)$pageViewCounts[$pid] === 1 ? '' : 's' ?>
+                                </div>
                             <?php endif; ?>
                         </td>
                         <td data-label="Type"><?= $h($typeLabel) ?></td>
@@ -276,16 +286,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
     }
     <?php endif; ?>
 
-    /* ---- toast ---- */
+    /* ---- toast (shared: CmsAdmin.toast) ---- */
+    var toast = CmsAdmin.toast;
+    // toastEl/toastTimer remain local for the undoable-toast variant below.
     var toastEl = document.getElementById('cmsToast');
     var toastTimer = null;
-    function toast(msg, kind) {
-        if (!toastEl) { return; }
-        toastEl.textContent = msg;
-        toastEl.className = 'cms-toast cms-show' + (kind ? ' cms-toast-' + kind : '');
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(function () { toastEl.className = 'cms-toast'; }, 3200);
-    }
 
     /* ---- C2: undoable toast — delete is a soft-delete (deleted_at), so the row
        can be brought back. Show an Undo affordance that calls the restore endpoint
@@ -311,21 +316,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
         toastTimer = setTimeout(function () { toastEl.className = 'cms-toast'; }, 7000);
     }
 
-    /* ---- modal helpers ---- */
-    function openModal(el) { if (el) { el.classList.add('cms-open'); } }
-    function closeModal(el) { if (el) { el.classList.remove('cms-open'); } }
-    document.addEventListener('click', function (e) {
-        var closer = e.target.closest('[data-close-modal]');
-        if (closer) { closeModal(closer.closest('.cms-modal-overlay')); return; }
-        if (e.target.classList && e.target.classList.contains('cms-modal-overlay')) {
-            closeModal(e.target);
-        }
-    });
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
-            document.querySelectorAll('.cms-modal-overlay.cms-open').forEach(closeModal);
-        }
-    });
+    /* ---- modal helpers (shared: CmsAdmin.modal; backdrop/Esc handled there) ---- */
+    var openModal = CmsAdmin.modal.open;
+    var closeModal = CmsAdmin.modal.close;
 
     /* ---- New Page ---- */
     var newModal = document.getElementById('cmsNewModal');
@@ -336,17 +329,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
         });
     }
 
-    /* ---- POST helper ---- */
-    function post(endpoint, params) {
-        var body = new URLSearchParams();
-        Object.keys(params).forEach(function (k) { body.append(k, params[k]); });
-        return fetch(AJAX + endpoint + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': (window.CMS_CSRF || '') },
-            credentials: 'same-origin',
-            body: body.toString()
-        }).then(function (r) { return r.json(); });
-    }
+    /* ---- POST helper (shared: CmsAdmin.post — CSRF header + scope) ---- */
+    var post = CmsAdmin.post;
 
     /* ---- Publish / Unpublish ---- */
     document.querySelectorAll('[data-pubtoggle]').forEach(function (btn) {

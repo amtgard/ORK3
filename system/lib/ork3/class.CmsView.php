@@ -36,6 +36,13 @@ class CmsView extends CmsBase
     /** Rolling window (days) for the "recent" tally surfaced as "last 30 days". */
     public const RECENT_DAYS = 30;
 
+    /**
+     * Guard so fastcgi_finish_request() is invoked at most once per request even
+     * when several views are recorded (each defers its own shutdown writer).
+     * @var bool
+     */
+    private static $_clientFlushed = false;
+
     public function __construct()
     {
         parent::__construct();
@@ -62,13 +69,49 @@ class CmsView extends CmsBase
      */
     public function RecordView($scopeType, $scopeId, $entityType, $entityId)
     {
-        global $DB;
-
         $entityType = $this->_normalizeEntityType($entityType);
         $entityId   = (int)$entityId;
         if ($entityId <= 0) {
             return;
         }
+        // Normalize eagerly so the deferred closure captures clean scalars only.
+        $scopeType = $this->_normalizeScopeType($scopeType);
+        $scopeId   = (int)$scopeId;
+
+        // #-perf: move the counter write OUT of the render critical path. A
+        // trending page previously serialized concurrent requests on the
+        // INSERT ... ON DUPLICATE KEY row lock BEFORE the template rendered.
+        // Instead, register the +1 to run at shutdown — after the response body
+        // has been produced — and, when the SAPI supports it, flush + close the
+        // client connection first (fastcgi_finish_request) so the visitor never
+        // waits on the analytics write at all. The write stays best-effort: any
+        // failure (incl. a pre-migration missing table) is swallowed downstream.
+        // A closure declared here is bound to the class scope, so it can reach
+        // the private writer despite running from global shutdown context.
+        register_shutdown_function(function () use ($scopeType, $scopeId, $entityType, $entityId) {
+            if (!self::$_clientFlushed && function_exists('fastcgi_finish_request')) {
+                self::$_clientFlushed = true;
+                @fastcgi_finish_request();
+            }
+            $this->_recordViewNow($scopeType, $scopeId, $entityType, $entityId);
+        });
+    }
+
+    /**
+     * The actual counter upsert, run AFTER the response is flushed (see
+     * RecordView). Best-effort and fire-and-forget: a pre-migration missing
+     * table is skipped silently and every error is swallowed — nothing here may
+     * ever surface, because by shutdown the response is already on the wire.
+     *
+     * @param string $scopeType  normalized scope type
+     * @param int    $scopeId
+     * @param string $entityType normalized entity type
+     * @param int    $entityId
+     * @return void
+     */
+    private function _recordViewNow($scopeType, $scopeId, $entityType, $entityId)
+    {
+        global $DB;
 
         try {
             // Silent no-op before the analytics migration has been applied.
@@ -77,10 +120,10 @@ class CmsView extends CmsBase
             }
 
             $DB->Clear();
-            $DB->scope_type  = $this->_normalizeScopeType($scopeType);
+            $DB->scope_type  = $scopeType;
             $DB->scope_id    = (int)$scopeId;
             $DB->entity_type = $entityType;
-            $DB->entity_id   = $entityId;
+            $DB->entity_id   = (int)$entityId;
             // CURDATE() keys the day server-side; the UNIQUE (scope,entity,day)
             // turns a repeat view into a single +1 on the existing counter.
             $DB->Execute(
@@ -90,8 +133,7 @@ class CmsView extends CmsBase
                 . ' ON DUPLICATE KEY UPDATE views = views + 1'
             );
         } catch (\Throwable $e) {
-            // Best-effort only — an analytics-write failure must never surface to
-            // (or slow) the public render that triggered it.
+            // Best-effort only — an analytics-write failure must never surface.
         }
     }
 
@@ -234,6 +276,149 @@ class CmsView extends CmsBase
             }
         } catch (\Throwable $e) {
             // Read failure → empty list; the card renders its empty state.
+        }
+
+        return $out;
+    }
+
+    /**
+     * #128: per-entity all-time view totals for a set of ids, so the page/post
+     * ADMIN LISTS can show a "N views" column without an N+1. Scope-bound (a
+     * stray cross-scope entity_id can't leak a count) and best-effort (missing
+     * table / read error → empty map).
+     *
+     * @param string $scopeType
+     * @param int    $scopeId
+     * @param string $entityType 'page'|'post'
+     * @param int[]  $ids
+     * @return array<int,int> entityId => total views (ids with no rows omitted)
+     */
+    public function GetCountsForEntities($scopeType, $scopeId, $entityType, $ids)
+    {
+        global $DB;
+
+        $out = array();
+        $entityType = $this->_normalizeEntityType($entityType);
+
+        // Dedup + int-cast the id set; anything non-positive is dropped.
+        $clean = array();
+        foreach ((is_array($ids) ? $ids : array()) as $id) {
+            $id = (int)$id;
+            if ($id > 0) {
+                $clean[$id] = true;
+            }
+        }
+        if (empty($clean)) {
+            return $out;
+        }
+
+        try {
+            if (!$this->_tableExists(DB_PREFIX . 'cms_view')) {
+                return $out;
+            }
+
+            // Ids are sanitized ints (never user-concatenated strings), so the IN
+            // list is inlined — the same idiom this lib uses for LIMIT, and the
+            // reason a single batched read replaces one query per row.
+            $inList = implode(',', array_map('intval', array_keys($clean)));
+
+            $DB->Clear();
+            $DB->scope_type  = $this->_normalizeScopeType($scopeType);
+            $DB->scope_id    = (int)$scopeId;
+            $DB->entity_type = $entityType;
+            $rows = $this->_eachRow($DB->DataSet(
+                'SELECT entity_id, COALESCE(SUM(views), 0) AS total'
+                . ' FROM ' . DB_PREFIX . 'cms_view'
+                . ' WHERE scope_type = :scope_type AND scope_id = :scope_id'
+                . ' AND entity_type = :entity_type'
+                . ' AND entity_id IN (' . $inList . ')'
+                . ' GROUP BY entity_id'
+            ));
+            foreach ($rows as $row) {
+                $out[(int)$row['entity_id']] = (int)$row['total'];
+            }
+        } catch (\Throwable $e) {
+            // Read failure → empty map; the list renders without counts.
+        }
+
+        return $out;
+    }
+
+    /**
+     * #128: the top pages/posts by views over the last $days, for the dashboard
+     * "Top content (30 days)" panel. Scope-bound joins to the LIVE entity so a
+     * deleted/foreign entity never appears and each row carries its title + slug.
+     *
+     * @param string $scopeType
+     * @param int    $scopeId
+     * @param int    $days   rolling window (clamped 1..3650)
+     * @param int    $limit  max rows (clamped 1..50)
+     * @return array list of ['entity_type','entity_id','title','slug','count']
+     */
+    public function GetTopContent($scopeType, $scopeId, $days = self::RECENT_DAYS, $limit = 5)
+    {
+        global $DB;
+
+        $days = (int)$days;
+        if ($days < 1) {
+            $days = self::RECENT_DAYS;
+        }
+        if ($days > 3650) {
+            $days = 3650;
+        }
+        $limit = (int)$limit;
+        if ($limit < 1) {
+            $limit = 1;
+        }
+        if ($limit > 50) {
+            $limit = 50;
+        }
+
+        $out = array();
+
+        try {
+            if (!$this->_tableExists(DB_PREFIX . 'cms_view')) {
+                return $out;
+            }
+
+            $DB->Clear();
+            $DB->scope_type  = $this->_normalizeScopeType($scopeType);
+            $DB->scope_id    = (int)$scopeId;
+            $DB->win_days    = $days - 1;   // inclusive window (today + N-1 prior days)
+            // $limit is a clamped int literal (see GetViewStats for the rationale).
+            $rows = $this->_eachRow($DB->DataSet(
+                'SELECT v.entity_type,'
+                . ' v.entity_id,'
+                . ' COALESCE(SUM(v.views), 0) AS cnt,'
+                . ' COALESCE(pg.title, po.title) AS title,'
+                . ' COALESCE(pg.slug, po.slug) AS slug'
+                . ' FROM ' . DB_PREFIX . 'cms_view v'
+                . ' LEFT JOIN ' . DB_PREFIX . 'cms_page pg'
+                . "   ON v.entity_type = 'page' AND pg.page_id = v.entity_id"
+                . '   AND pg.scope_type = v.scope_type AND pg.scope_id = v.scope_id'
+                . '   AND pg.deleted_at IS NULL'
+                . ' LEFT JOIN ' . DB_PREFIX . 'cms_post po'
+                . "   ON v.entity_type = 'post' AND po.post_id = v.entity_id"
+                . '   AND po.scope_type = v.scope_type AND po.scope_id = v.scope_id'
+                . '   AND po.deleted_at IS NULL'
+                . ' WHERE v.scope_type = :scope_type AND v.scope_id = :scope_id'
+                . ' AND v.`day` >= (CURDATE() - INTERVAL :win_days DAY)'
+                . ' GROUP BY v.entity_type, v.entity_id'
+                . ' HAVING title IS NOT NULL'
+                . ' ORDER BY cnt DESC, v.entity_id ASC'
+                . ' LIMIT ' . $limit
+            ));
+            foreach ($rows as $row) {
+                $out[] = array(
+                    'entity_type' => $this->_normalizeEntityType($row['entity_type']),
+                    'entity_id'   => (int)$row['entity_id'],
+                    'title'       => (string)$row['title'],
+                    'slug'        => (string)$row['slug'],
+                    'count'       => (int)$row['cnt'],
+                );
+            }
+        } catch (\Throwable $e) {
+            // Read failure → empty list; the panel renders its empty state.
         }
 
         return $out;

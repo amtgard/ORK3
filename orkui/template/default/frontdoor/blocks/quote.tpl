@@ -7,6 +7,8 @@
 $text = $blockFields['text'] ?? '';
 $cite = $blockFields['cite'] ?? '';
 ?>
+<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
+<?php if (empty($fdStyleOnce['quote'])) : $fdStyleOnce['quote'] = true; ?>
 <style>
 .fdb-quote-wrap { display: flex; justify-content: center; }
 .fdb-quote {
@@ -38,6 +40,7 @@ $cite = $blockFields['cite'] ?? '';
 html[data-theme="dark"] .fdb-quote { color: #eef2fb; }
 html[data-theme="dark"] .fdb-quote-cite { color: #9aa7c4; }
 </style>
+<?php endif; ?>
 <?php if ($text !== ''): ?>
 <div class="fd-pad fdb-quote-wrap">
     <blockquote class="fdb-quote">

@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/trait.CmsScope.php';
+
 /**
  * Controller_Page — renders a published CMS page through the shared block renderer.
  *
@@ -19,6 +21,8 @@
  */
 class Controller_Page extends Controller
 {
+    use CmsScopeContext;
+
     /** v2 scope: org-wide. */
     private static $SCOPE = array('type' => 'global', 'id' => 0);
 
@@ -73,13 +77,11 @@ class Controller_Page extends Controller
         $this->data['PageAncestors'] = $this->CmsPage->GetPageAncestors((int) $page['page_id']);
 
         // Show the floating editor FAB to CMS editors (rendered by default.theme).
+        // #29: single shared edit-scope gate (CmsCan-backed).
         $uid = (int) ($this->session->user_id ?? 0);
-        if ($uid > 0) {
-            $this->load_model('CmsAuth');
-            if ($this->CmsAuth->cms_can($uid, 'page.edit', self::$SCOPE)) {
-                $this->data['cmsEditUrl'] = UIR . 'Cms/edit/' . (int) $page['page_id'];
-                $this->data['cmsEditTip'] = 'Edit this page';
-            }
+        if ($this->_cmsCanEditScope($uid, self::$SCOPE)) {
+            $this->data['cmsEditUrl'] = UIR . 'Cms/edit/' . (int) $page['page_id'];
+            $this->data['cmsEditTip'] = 'Edit this page';
         }
     }
 

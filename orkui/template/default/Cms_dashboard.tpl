@@ -36,6 +36,12 @@ $pageTypes = isset($PageTypes) && is_array($PageTypes) ? $PageTypes : array(
 );
 
 $canCreate = !empty($caps['create']);
+$canManage = !empty($caps['edit']) || !empty($caps['publish']) || !empty($caps['create']);
+$isSuper   = !empty($caps['super']);
+
+// E128: "Top content (30 days)" panel — [{title,url,count}]. Defensive: a missing
+// or empty map renders nothing.
+$topContent = isset($topContent) && is_array($topContent) ? $topContent : array();
 
 $statPages  = (int)($stats['pages'] ?? 0);
 $statPosts  = (int)($stats['posts'] ?? 0);
@@ -170,6 +176,39 @@ include __DIR__ . '/cms/_shell_top.tpl';
         </div>
     </div>
 
+    <?php // E128: Top content over the last 30 days — [{title,url,count}]. Rendered
+          // only when the controller supplied rows (defensive; empty → nothing). ?>
+    <?php if (!empty($topContent)): ?>
+    <div class="cms-dash-block">
+        <h3 class="cms-dash-section-title">Top content (30 days)</h3>
+        <div class="cms-recent-list">
+            <?php foreach ($topContent as $tc):
+                $tcTitle = (string)($tc['title'] ?? '(untitled)');
+                $tcUrl   = (string)($tc['url'] ?? '');
+                $tcCount = (int)($tc['count'] ?? 0);
+            ?>
+                <div class="cms-recent-item">
+                    <span class="cms-recent-kind" data-tip="Views in the last 30 days">
+                        <i class="fas fa-chart-line"></i>
+                    </span>
+                    <div class="cms-recent-main">
+                        <div class="cms-recent-title">
+                            <?php if ($tcUrl !== ''): ?>
+                                <a href="<?= $h($tcUrl) ?>" target="_blank" rel="noopener"><?= $h($tcTitle) ?></a>
+                            <?php else: ?>
+                                <?= $h($tcTitle) ?>
+                            <?php endif; ?>
+                        </div>
+                        <div class="cms-recent-meta">
+                            <strong><?= $h($nf($tcCount)) ?></strong> view<?= $tcCount === 1 ? '' : 's' ?> in the last 30 days
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <?php // #09: most-viewed content — closes the "does anyone see this?" loop. ?>
     <div class="cms-dash-block">
         <h3 class="cms-dash-section-title">Most viewed</h3>
@@ -248,6 +287,29 @@ include __DIR__ . '/cms/_shell_top.tpl';
         <?php endif; ?>
     </div>
 
+    <?php // E71 / E117: site maintenance tools. Refresh-cache is for anyone who can
+          // manage content (scope-checked server-side); the destructive-adjacent
+          // cleanup sweep is super-admin-only. Both POST via CmsAdmin.post. ?>
+    <?php if ($canManage || $isSuper): ?>
+    <div class="cms-dash-block">
+        <h3 class="cms-dash-section-title">Site tools</h3>
+        <div class="cms-quick-row">
+            <?php if ($canManage): ?>
+            <button type="button" class="cms-btn cms-btn-ghost" id="cmsRefreshCacheBtn"
+                    data-tip="Rebuilds the cached officer / parks / map panels on your public front door.">
+                <i class="fas fa-sync-alt"></i> Refresh public site cache
+            </button>
+            <?php endif; ?>
+            <?php if ($isSuper): ?>
+            <button type="button" class="cms-btn cms-btn-ghost" id="cmsRunMaintenanceBtn"
+                    data-tip="Purges trashed pages, orphaned blocks, and unused tags. Never touches live content.">
+                <i class="fas fa-broom"></i> Run maintenance cleanup
+            </button>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <div class="cms-dash-block">
         <a class="cms-dash-livelink" href="<?= htmlspecialchars(isset($SiteLiveUrl) ? $SiteLiveUrl : UIR) ?>" target="_blank" rel="noopener">
             <i class="fas fa-external-link-alt"></i> View live site
@@ -290,26 +352,13 @@ include __DIR__ . '/cms/_shell_top.tpl';
        if JS is unavailable). */
     var newModal = document.getElementById('cmsNewModal');
     var newPageCard = document.getElementById('cmsDashNewPage');
-    function openModal(el) { if (el) { el.classList.add('cms-open'); } }
-    function closeModal(el) { if (el) { el.classList.remove('cms-open'); } }
+    /* modal open/close are shared (CmsAdmin.modal); backdrop/Esc handled there. */
     if (newPageCard && newModal) {
         newPageCard.addEventListener('click', function (e) {
             e.preventDefault();
-            openModal(newModal);
+            CmsAdmin.modal.open(newModal);
         });
     }
-    document.addEventListener('click', function (e) {
-        var closer = e.target.closest('[data-close-modal]');
-        if (closer) { closeModal(closer.closest('.cms-modal-overlay')); return; }
-        if (e.target.classList && e.target.classList.contains('cms-modal-overlay')) {
-            closeModal(e.target);
-        }
-    });
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
-            document.querySelectorAll('.cms-modal-overlay.cms-open').forEach(closeModal);
-        }
-    });
     <?php endif; ?>
 
     /* ---- Public-site publish / unpublish (org scope only) ---- */
@@ -359,6 +408,46 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
         if (pubBtn) { pubBtn.addEventListener('click', function () { siteAction('publishsite', pubBtn); }); }
         if (unpubBtn) { unpubBtn.addEventListener('click', function () { siteAction('unpublishsite', unpubBtn); }); }
+    }
+
+    /* ---- E71: refresh the public-site block caches for the acting scope ---- */
+    var refreshBtn = document.getElementById('cmsRefreshCacheBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function () {
+            var original = refreshBtn.innerHTML;
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing…';
+            CmsAdmin.post('clearrendercache', {}).then(function (res) {
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = original;
+                if (!res || !res.ok) { CmsAdmin.toast((res && res.error) || 'Could not refresh the cache.', 'error'); return; }
+                CmsAdmin.toast(res.message || 'Public site cache refreshed.', 'ok');
+            }).catch(function () {
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = original;
+                CmsAdmin.toast('Network error refreshing the cache.', 'error');
+            });
+        });
+    }
+
+    /* ---- E117: super-admin maintenance sweep (trash purge + orphan/tag cleanup) ---- */
+    var maintBtn = document.getElementById('cmsRunMaintenanceBtn');
+    if (maintBtn) {
+        maintBtn.addEventListener('click', function () {
+            var original = maintBtn.innerHTML;
+            maintBtn.disabled = true;
+            maintBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cleaning up…';
+            CmsAdmin.post('runmaintenance', {}).then(function (res) {
+                maintBtn.disabled = false;
+                maintBtn.innerHTML = original;
+                if (!res || !res.ok) { CmsAdmin.toast((res && res.error) || 'Maintenance could not run.', 'error'); return; }
+                CmsAdmin.toast(res.message || 'Maintenance cleanup complete.', 'ok');
+            }).catch(function () {
+                maintBtn.disabled = false;
+                maintBtn.innerHTML = original;
+                CmsAdmin.toast('Network error running maintenance.', 'error');
+            });
+        });
     }
 })();
 </script>

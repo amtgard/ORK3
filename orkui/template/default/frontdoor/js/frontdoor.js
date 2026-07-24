@@ -10,6 +10,27 @@
     var toggle = car.querySelector('.fd-carousel-toggle');
     if (slides.length < 2) return;
 
+    // Expose the carousel as a labelled region so assistive tech announces it
+    // as a "carousel" and users can navigate to it. Respect any role/label the
+    // template already set.
+    if (!car.hasAttribute('role')) { car.setAttribute('role', 'region'); }
+    car.setAttribute('aria-roledescription', 'carousel');
+    if (!car.getAttribute('aria-label') && !car.getAttribute('aria-labelledby')) {
+      car.setAttribute('aria-label', 'Featured highlights');
+    }
+
+    // Visually-hidden polite live region for slide-change announcements. Only
+    // user-initiated changes update it (see go(n, true)); the auto-advance
+    // timer stays silent so it doesn't nag screen-reader users.
+    var live = document.createElement('div');
+    live.className = 'fd-carousel-live';
+    live.setAttribute('aria-live', 'polite');
+    live.setAttribute('aria-atomic', 'true');
+    live.style.cssText = 'position:absolute;width:1px;height:1px;padding:0;'
+      + 'margin:-1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);'
+      + 'white-space:nowrap;border:0;';
+    car.appendChild(live);
+
     var i = 0,
       ms = parseInt(car.getAttribute('data-autoplay') || '4500', 10),
       t = null,
@@ -33,7 +54,7 @@
     // Initial state: only the active slide is exposed.
     slides.forEach(function (s, idx) { if (idx === i) { showSlide(s); } else { hideSlide(s); } });
 
-    function go(n) {
+    function go(n, announce) {
       slides[i].classList.remove('is-active');
       hideSlide(slides[i]);
       if (dots[i]) { dots[i].classList.remove('on'); dots[i].removeAttribute('aria-current'); }
@@ -41,6 +62,8 @@
       slides[i].classList.add('is-active');
       showSlide(slides[i]);
       if (dots[i]) { dots[i].classList.add('on'); dots[i].setAttribute('aria-current', 'true'); }
+      // Announce only on user-initiated changes, never on the autoplay timer.
+      if (announce) { live.textContent = 'Slide ' + (i + 1) + ' of ' + slides.length; }
     }
     function stop() { if (t) { clearInterval(t); t = null; } }
     function restart() {
@@ -62,7 +85,7 @@
     }
 
     dots.forEach(function (d, idx) {
-      d.addEventListener('click', function () { go(idx); restart(); });
+      d.addEventListener('click', function () { go(idx, true); restart(); });
     });
 
     // Pause auto-advance while the pointer or keyboard focus is inside the

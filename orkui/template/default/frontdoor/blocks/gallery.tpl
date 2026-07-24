@@ -193,6 +193,43 @@ html[data-theme="dark"] .fdb-gallery-cap { color: #9aa6c0; }
     var closeBtn = lb.querySelector('.fdb-gallery-lb-close');
     var cur      = 0;
     var lastFocused = null;
+    var prevBodyOverflow = '';
+    var inertNodes = [];   // {el, hadAriaHidden, prevAriaHidden, hadInert}
+
+    // Make everything outside the lightbox inert + aria-hidden so SR/keyboard
+    // users can't Tab or scroll past the trap. We hide the siblings of the
+    // lightbox at every level from its parent up to <body>.
+    function setBackgroundInert(on) {
+        if (on) {
+            inertNodes = [];
+            var node = lb;
+            while (node && node.parentNode && node.parentNode.nodeType === 1) {
+                var parent = node.parentNode;
+                var kids = parent.children;
+                for (var k = 0; k < kids.length; k++) {
+                    var sib = kids[k];
+                    if (sib === node) { continue; }
+                    inertNodes.push({
+                        el: sib,
+                        hadAriaHidden: sib.hasAttribute('aria-hidden'),
+                        prevAriaHidden: sib.getAttribute('aria-hidden'),
+                        hadInert: sib.hasAttribute('inert')
+                    });
+                    sib.setAttribute('aria-hidden', 'true');
+                    sib.setAttribute('inert', '');
+                }
+                if (parent === document.body || parent.tagName === 'BODY') { break; }
+                node = parent;
+            }
+        } else {
+            inertNodes.forEach(function (r) {
+                if (r.hadAriaHidden) { r.el.setAttribute('aria-hidden', r.prevAriaHidden); }
+                else { r.el.removeAttribute('aria-hidden'); }
+                if (!r.hadInert) { r.el.removeAttribute('inert'); }
+            });
+            inertNodes = [];
+        }
+    }
 
     function show(i) {
         if (!thumbs.length) { return; }
@@ -210,6 +247,11 @@ html[data-theme="dark"] .fdb-gallery-cap { color: #9aa6c0; }
     function open(i) {
         lastFocused = document.activeElement;
         show(i);
+        // Lock body scroll and inert the background BEFORE showing so the
+        // background can't be scrolled or tabbed into behind the overlay.
+        prevBodyOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        setBackgroundInert(true);
         lb.classList.add('fdb-gallery-open');
         document.addEventListener('keydown', onKey, true);
         // Move focus into the dialog so keyboard users land inside it.
@@ -218,6 +260,9 @@ html[data-theme="dark"] .fdb-gallery-cap { color: #9aa6c0; }
     function close() {
         lb.classList.remove('fdb-gallery-open');
         document.removeEventListener('keydown', onKey, true);
+        // Reverse the background inerting + restore body scroll.
+        setBackgroundInert(false);
+        document.body.style.overflow = prevBodyOverflow;
         // Restore focus to the thumb (or whatever) that opened the lightbox.
         if (lastFocused && typeof lastFocused.focus === 'function') { lastFocused.focus(); }
     }

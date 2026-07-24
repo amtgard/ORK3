@@ -34,11 +34,29 @@ class Controller_CmsAjax extends Controller
 {
     use CmsScopeContext;
 
-    /** Block field bodies that hold authored HTML → must be sanitized on save. */
+    /**
+     * E36/#36: the sanitized-field name lists now live as the single source of
+     * truth on the CmsPage lib (CmsPage::HTML_FIELDS / CmsPage::URL_FIELDS — the
+     * storage choke point that actually sanitizes). _htmlFields()/_urlFields()
+     * read those constants; the arrays below are ONLY a pre-integration fallback
+     * for the window where that lib change hasn't landed yet, never a second
+     * source of truth. Once the constants exist they win.
+     */
     private static $HTML_FIELDS = array('body', 'html');
 
-    /** Block fields that hold a URL → must pass URL-scheme validation on save. */
     private static $URL_FIELDS = array('href', 'more_href', 'url', 'link', 'cta_href', 'button_href', 'src');
+
+    /** The authored-HTML field names — CmsPage::HTML_FIELDS when defined (E36). */
+    private static function _htmlFields()
+    {
+        return defined('CmsPage::HTML_FIELDS') ? CmsPage::HTML_FIELDS : self::$HTML_FIELDS;
+    }
+
+    /** The URL field names — CmsPage::URL_FIELDS when defined (E36). */
+    private static function _urlFields()
+    {
+        return defined('CmsPage::URL_FIELDS') ? CmsPage::URL_FIELDS : self::$URL_FIELDS;
+    }
 
     public function __construct($call = null, $action = null)
     {
@@ -755,15 +773,44 @@ class Controller_CmsAjax extends Controller
         }
 
         $this->load_model('CmsMedia');
+
+        // #21: batch the per-id IDOR/scope check into ONE query (media_id IN (…))
+        // instead of a GetMedia round-trip per id. Ids are already int-cast + capped
+        // by _parseIdList (no injection surface), so the IN list is inlined. This is
+        // a bounded read that mirrors the raw-$DB precedent in Controller_Cms::sites()
+        // — no batch scope-lister exists on the CmsMedia lib to route it through. The
+        // mutation (DeleteMedia) and the on-refusal where-used probe (ReferenceUsage)
+        // stay per-id: neither has a batch lib API and the probe only fires on failure.
+        global $DB;
+        $ownedSet = array();
+        $inList = implode(',', array_map('intval', $ids));
+        if ($inList !== '') {
+            $DB->Clear();
+            $DB->scope_type = (string)$scope['type'];
+            $DB->scope_id   = (int)$scope['id'];
+            // deleted_at IS NULL mirrors GetMedia (a trashed row is not deletable
+            // again); scope columns enforce the same ownership as _rowInScope.
+            $ownRows = $DB->DataSet(
+                'SELECT media_id FROM ' . DB_PREFIX . 'cms_media'
+                . ' WHERE media_id IN (' . $inList . ')'
+                . ' AND scope_type = :scope_type AND scope_id = :scope_id'
+                . ' AND deleted_at IS NULL'
+            );
+            if ($ownRows !== false) {
+                while ($ownRows->Next()) {
+                    $ownedSet[(int)$ownRows->media_id] = true;
+                }
+            }
+            $DB->Clear();
+        }
+
         $deleted = array();
         $inUse   = array();
         $failed  = array();
         foreach ($ids as $mediaId) {
-            // Per-id IDOR guard: a row not owned by this scope is skipped, not fatal
-            // (so one forged id can't abort the whole batch). get_media hides
-            // trashed rows, so a null (foreign/absent/trashed) row → skip.
-            $row = $this->CmsMedia->get_media($mediaId);
-            if (!$this->_rowInScope($row, $scope)) {
+            // A row not owned by this scope (foreign / absent / already trashed) is
+            // skipped, not fatal — one forged id can't abort the whole batch.
+            if (empty($ownedSet[$mediaId])) {
                 $failed[] = $mediaId;
                 continue;
             }
@@ -1189,6 +1236,132 @@ class Controller_CmsAjax extends Controller
     }
 
     /* ------------------------------------------------------------------ *
+     * clearrendercache — force-refresh the public site's live-data blocks
+     * ------------------------------------------------------------------ */
+
+    /**
+     * E71/#71: bust the GhettoCache entries the kingdom_officers / kingdom_parks /
+     * kingdom_parks_map front-door blocks populate (300s TTL), so an officer can
+     * force their public site to pick up an officer change / new park immediately
+     * instead of waiting the window out. POST + CSRF-guarded (via _begin) and
+     * scope-checked (page.edit in scope). Only the ACTING scope's kingdom is
+     * cleared (a scoped officer can't flush another org's cache).
+     *
+     * These blocks render only under a KINGDOM scope and key every entry on the
+     * kingdom_id (plus per-block knobs: officers by limit; parks by limit/sort/
+     * heraldry; map by kingdom alone). GhettoCache/Memcached has no prefix-scan,
+     * so the bounded key space per kingdom is enumerated exactly (the ranges are
+     * the clamps in each block .tpl). A park/global scope has no such cache → no-op.
+     */
+    public function clearrendercache($action = null)
+    {
+        $uid   = $this->_begin();
+        $scope = $this->_scope($uid);
+        // Editing the site is the bar for forcing its public cache to refresh.
+        $this->_require($uid, 'page.edit', $scope);
+
+        // The live blocks source by kingdom_id and render nothing outside a kingdom
+        // scope, so only a kingdom scope has anything to clear.
+        $kid = ((string)$scope['type'] === 'kingdom') ? (int)$scope['id'] : 0;
+
+        $cache = (isset(Ork3::$Lib) && is_object(Ork3::$Lib)
+            && isset(Ork3::$Lib->ghettocache) && is_object(Ork3::$Lib->ghettocache))
+            ? Ork3::$Lib->ghettocache : null;
+
+        $cleared = 0;
+        if ($cache !== null && $kid > 0) {
+            // kingdom_officers: key 'k{kid}.l{limit}', limit clamped 1..24.
+            for ($l = 1; $l <= 24; $l++) {
+                $cache->bust('frontdoor.kingdom_officers', 'k' . $kid . '.l' . $l);
+                $cleared++;
+            }
+            // kingdom_parks: key 'k{kid}.l{limit}.s{sort}.h{0|1}',
+            // limit 1..60, sort in {name,city,state}, heraldry {0,1}.
+            foreach (array('name', 'city', 'state') as $sort) {
+                foreach (array(0, 1) as $h) {
+                    for ($l = 1; $l <= 60; $l++) {
+                        $cache->bust('frontdoor.kingdom_parks', 'k' . $kid . '.l' . $l . '.s' . $sort . '.h' . $h);
+                        $cleared++;
+                    }
+                }
+            }
+            // kingdom_parks_map: key 'k{kid}'.
+            $cache->bust('frontdoor.kingdom_parks_map', 'k' . $kid);
+            $cleared++;
+        }
+
+        $this->_ok(array(
+            'cleared'    => $cleared,
+            'kingdom_id' => $kid,
+            // Signal when there was nothing scoped to clear (park/global site).
+            'scoped'     => ($kid > 0),
+        ));
+    }
+
+    /* ------------------------------------------------------------------ *
+     * runmaintenance — super-admin housekeeping sweep
+     * ------------------------------------------------------------------ */
+
+    /**
+     * E117/#117: super-admin-only maintenance cleanup — hard-purge long-trashed
+     * pages (+ their blocks/revisions), sweep orphaned blocks, and prune zero-usage
+     * post tags (all non-destructive to live rows; only trashed/orphaned data is
+     * removed). POST + CSRF-guarded. The heavy lifting lives in the CmsPage /
+     * CmsPost libs; each call is method_exists-guarded so the endpoint degrades
+     * gracefully (0 counts) rather than fataling if a lib method is unavailable.
+     */
+    public function runmaintenance($action = null)
+    {
+        $uid   = $this->_begin();
+        $scope = $this->_scope($uid);
+        // Cross-org housekeeping is a strictly super-admin action.
+        if (!$this->CmsAuth->IsSuperAdmin($uid)) {
+            $this->_denyCapability('super-admin');
+        }
+
+        $olderThanDays = (int)($_POST['older_than_days'] ?? 30);
+        if ($olderThanDays < 1) {
+            $olderThanDays = 30;
+        }
+
+        $summary = array(
+            'pages'         => 0,
+            'blocks'        => 0,
+            'revisions'     => 0,
+            'orphan_blocks' => 0,
+            'tags_pruned'   => 0,
+        );
+        $ran = array();
+
+        // PurgeTrashed hard-deletes aged-out trashed pages and their blocks/
+        // revisions AND runs the orphan-block sweep itself (so SweepOrphanBlocks is
+        // NOT called separately here — that would double-count). Returns per-bucket
+        // counts ['pages','blocks','revisions','orphan_blocks'].
+        if (method_exists('CmsPage', 'PurgeTrashed')) {
+            $purge = $this->CmsPage->PurgeTrashed($olderThanDays);
+            if (is_array($purge)) {
+                $summary['pages']         = (int)($purge['pages'] ?? 0);
+                $summary['blocks']        = (int)($purge['blocks'] ?? 0);
+                $summary['revisions']     = (int)($purge['revisions'] ?? 0);
+                $summary['orphan_blocks'] = (int)($purge['orphan_blocks'] ?? 0);
+            }
+            $ran[] = 'purge_trashed';
+        }
+        // Prune zero-usage post tags (returns the count of removed tag rows).
+        if (method_exists('CmsPost', 'PruneUnusedTags')) {
+            $summary['tags_pruned'] = (int)$this->CmsPost->PruneUnusedTags();
+            $ran[] = 'prune_tags';
+        }
+
+        $this->_ok(array(
+            'summary' => $summary,
+            // Which sweeps actually ran (the lib method existed) — so the UI can
+            // distinguish "0 cleaned" from "not yet available".
+            'ran'     => $ran,
+        ));
+    }
+
+    /* ------------------------------------------------------------------ *
      * personlookup
      * ------------------------------------------------------------------ */
 
@@ -1335,8 +1508,32 @@ class Controller_CmsAjax extends Controller
     private function _require($uid, $capability, $scope)
     {
         if (!$this->CmsAuth->cms_can($uid, $capability, $scope)) {
-            $this->_fail('You are not authorized to perform this action.', 5);
+            // #129: name the missing capability so the client can surface exactly
+            // what the user lacks (and window.CMS_CAPS can pre-disable the action).
+            $this->_denyCapability($capability);
         }
+    }
+
+    /**
+     * #129: authorization-denied response that NAMES the missing capability (in
+     * both the human message and a machine-readable `capability` key), instead of
+     * the generic "not authorized". $capability may be a string or a list of
+     * acceptable capabilities (any-of).
+     *
+     * @param string|string[] $capability
+     * @return void (emits JSON + exit)
+     */
+    private function _denyCapability($capability)
+    {
+        $caps = is_array($capability) ? array_values(array_map('strval', $capability)) : array((string)$capability);
+        $label = implode(' or ', $caps);
+        echo json_encode(array(
+            'ok'         => false,
+            'status'     => 5,
+            'error'      => 'You are not authorized to perform this action (requires: ' . $label . ').',
+            'capability' => (count($caps) === 1) ? $caps[0] : $caps,
+        ));
+        exit;
     }
 
     /**
@@ -1462,13 +1659,17 @@ class Controller_CmsAjax extends Controller
      */
     private function _sanitizeFields(array $fields)
     {
+        // E36: resolve the shared field lists once per level from the CmsPage
+        // constants (fallback to the local arrays pre-integration).
+        $htmlFields = self::_htmlFields();
+        $urlFields  = self::_urlFields();
         foreach ($fields as $key => $val) {
             if (is_array($val)) {
                 // Nested sub-structure (e.g. accordion items array or columns).
                 $fields[$key] = $this->_sanitizeFields($val);
-            } elseif (is_string($val) && in_array($key, self::$HTML_FIELDS, true)) {
+            } elseif (is_string($val) && in_array($key, $htmlFields, true)) {
                 $fields[$key] = $this->CmsSanitizer->clean($val);
-            } elseif (is_string($val) && in_array($key, self::$URL_FIELDS, true)) {
+            } elseif (is_string($val) && in_array($key, $urlFields, true)) {
                 // Leave an empty optional URL empty; only rewrite non-empty unsafe values.
                 $fields[$key] = ($val === '' || CmsSanitizer::IsSafeUrl($val)) ? $val : '#';
             }
@@ -1523,10 +1724,15 @@ class Controller_CmsAjax extends Controller
         return trim((string)$src, '-');
     }
 
-    /** Clamp the page type to the supported enum. */
+    /**
+     * Clamp the page type to the supported enum. #110: the allowlist is the
+     * canonical page-type key set owned by Controller_Cms (the SAME list that
+     * drives the presets/labels), so a type added to the presets can never be
+     * silently clamped back to 'composed' here.
+     */
     private function _normalizeType($type)
     {
-        $allowed = array('composed', 'article', 'media', 'about', 'blog_index', 'resource', 'dynamic');
+        $allowed = Controller_Cms::CanonicalPageTypes();
         return in_array($type, $allowed, true) ? $type : 'composed';
     }
 
@@ -1669,7 +1875,8 @@ class Controller_CmsAjax extends Controller
         if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
             && !$this->CmsAuth->cms_can($uid, 'page.edit_own', $scope)
         ) {
-            $this->_fail('You are not authorized to perform this action.', 5);
+            // #129: name the acceptable capabilities (either satisfies this gate).
+            $this->_denyCapability(array('page.edit', 'page.edit_own'));
         }
         $row = ($ownerType === 'post')
             ? $this->CmsPost->get_post($ownerId)

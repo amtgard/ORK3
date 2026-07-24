@@ -57,6 +57,8 @@ if (is_string($fdbHref) && $fdbHref !== '' && CmsSanitizer::IsSafeUrl($fdbHref))
     $fdbHrefSafe = $fdbHref;
 }
 ?>
+<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
+<?php if (empty($fdStyleOnce['image'])) : $fdStyleOnce['image'] = true; ?>
 <style>
 /* scoped: fdb-img */
 .fdb-img-figure {
@@ -93,6 +95,7 @@ html[data-theme="dark"] .fdb-img-caption {
     color: #9aa6c0;
 }
 </style>
+<?php endif; ?>
 <div class="fd-pad">
     <figure class="fdb-img-figure" style="<?= $fdbMaxWCss ?><?= $fdbFigAlign ?>">
         <?php if ($fdbHrefSafe !== ''): ?>

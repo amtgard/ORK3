@@ -10,6 +10,8 @@ if (!is_array($items)) {
     $items = [];
 }
 ?>
+<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
+<?php if (empty($fdStyleOnce['accordion'])) : $fdStyleOnce['accordion'] = true; ?>
 <style>
 .fdb-accordion {
     max-width: 760px;
@@ -64,6 +66,7 @@ html[data-theme="dark"] .fdb-accordion-answer {
     color: #c8d3ea;
 }
 </style>
+<?php endif; ?>
 <?php if (!empty($items)): ?>
 <div class="fd-pad">
     <div class="fdb-accordion">

@@ -38,6 +38,16 @@ class Controller_Cms extends Controller
     /** Memoized site row for the current non-global scope (false = not yet looked up). */
     private $_scopeSiteMemo = false;
 
+    /**
+     * #21: per-request memo of the block catalog. _blockCatalog() is otherwise
+     * recomputed ~15x per Cms/edit — once per _starter() call inside _pageTypes()
+     * (each starter re-derived the dynamic-type set from a fresh catalog build) —
+     * each rebuild doing a file_exists() probe per block type. Cached here so the
+     * whole editor load costs exactly one catalog build. (null = not yet built.)
+     * @var array|null
+     */
+    private $_blockCatalogMemo = null;
+
     public function __construct($call = null, $action = null)
     {
         parent::__construct($call, $action);
@@ -162,6 +172,26 @@ class Controller_Cms extends Controller
             'recent_days' => (int)($viewSummary['recent_days'] ?? 30),
         );
         $this->data['TopViewed'] = $topViewed;
+
+        // #128: "Top content (30 days)" panel — the most-viewed pages/posts over
+        // the rolling window as {title,url,count}, url deep-linking into the editor
+        // (mirrors TopViewed so an officer can act on it). Best-effort in the lib
+        // (pre-migration → empty), so this never breaks the dashboard.
+        $topContentRows = $this->CmsView->GetTopContent($sf['scope_type'], $sf['scope_id'], 30, 5);
+        $topContent = array();
+        foreach ((is_array($topContentRows) ? $topContentRows : array()) as $tc) {
+            $kind = ((string)($tc['entity_type'] ?? 'page') === 'post') ? 'post' : 'page';
+            $id   = (int)($tc['entity_id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $topContent[] = array(
+                'title' => (string)($tc['title'] ?? '(untitled)'),
+                'url'   => UIR . ($kind === 'post' ? 'Cms/editpost/' : 'Cms/edit/') . $id . $this->_scopeQuery($scope),
+                'count' => (int)($tc['count'] ?? 0),
+            );
+        }
+        $this->data['topContent'] = $topContent;
 
         $this->data['Recent'] = $recent;
         $this->data['Stats']  = array(
@@ -344,6 +374,8 @@ class Controller_Cms extends Controller
 
         // Rail flag: this is a super-admin so the "All sites" entry is shown.
         $this->data['Caps'] = $this->_capFlags($uid);
+        // #129: held-capability set for window.CMS_CAPS (super-admin → full set).
+        $this->data['CmsCaps'] = $this->_capList($uid);
     }
 
     /* ------------------------------------------------------------------ *
@@ -425,6 +457,20 @@ class Controller_Cms extends Controller
         $this->data['Pages']      = $pages;
         $this->data['Search']     = $search;
         $this->data['StatusFilter'] = $status;
+
+        // #128: per-row view counts for the list's "Views" column — one batched
+        // read (page_id IN …) for the whole page, not an N+1. Best-effort in the
+        // lib (pre-migration → empty map); the template falls back to ?? [].
+        $this->load_model('CmsView');
+        $pageIds = array();
+        foreach ($pages as $pr) {
+            $pid = (int)($pr['page_id'] ?? 0);
+            if ($pid > 0) {
+                $pageIds[] = $pid;
+            }
+        }
+        $pageViewCounts = $this->CmsView->GetCountsForEntities($filters['scope_type'], $filters['scope_id'], 'page', $pageIds);
+        $this->data['pageViewCounts'] = is_array($pageViewCounts) ? $pageViewCounts : array();
 
         // Full human label map for the Type column (covers types not present in
         // PageTypes, e.g. legacy/system page types). Unknown keys → ucwords.
@@ -623,6 +669,20 @@ class Controller_Cms extends Controller
         $this->data['TagFilter'] = $tag;
         $this->data['AllTags']   = $this->CmsPost->list_all_tags();
         $this->data['Caps']      = $this->_capFlags($uid, $scope);
+
+        // #128: per-row view counts for the post list's "Views" column — one
+        // batched read (post_id IN …), best-effort (template falls back to ?? []).
+        $this->load_model('CmsView');
+        $sf = $this->_scopeFilters($scope);
+        $postIds = array();
+        foreach ($rows as $pr) {
+            $pid = (int)($pr['post_id'] ?? 0);
+            if ($pid > 0) {
+                $postIds[] = $pid;
+            }
+        }
+        $postViewCounts = $this->CmsView->GetCountsForEntities($sf['scope_type'], $sf['scope_id'], 'post', $postIds);
+        $this->data['postViewCounts'] = is_array($postViewCounts) ? $postViewCounts : array();
     }
 
     /* ------------------------------------------------------------------ *
@@ -856,6 +916,48 @@ class Controller_Cms extends Controller
     }
 
     /**
+     * #129: the FLAT list of capability strings the user actually holds in a
+     * scope, for the shell to emit as window.CMS_CAPS (admin-templates annotates /
+     * disables actions the user lacks). A super-admin holds everything, so return
+     * the full canonical set for them (nothing gets disabled). Never breaks an
+     * empty case — an unauthenticated / capless caller yields [].
+     *
+     * @param int        $uid
+     * @param array|null $scope
+     * @return string[]
+     */
+    private function _capList($uid, $scope = null)
+    {
+        $resolved = $this->_resolveCapabilities($uid, $scope);
+        if (!empty($resolved['is_super'])) {
+            return self::_allCmsCapabilities();
+        }
+        return array_values(array_unique(array_map('strval', (array)$resolved['caps'])));
+    }
+
+    /**
+     * #129: every CMS capability string the admin UI knows about — the set a
+     * super-admin is treated as holding, and the vocabulary the shell annotates
+     * against. Keep in sync with the _capFlags() mapping.
+     *
+     * @return string[]
+     */
+    private static function _allCmsCapabilities()
+    {
+        return array(
+            'page.create',
+            'page.edit',
+            'page.edit_own',
+            'page.publish',
+            'page.delete',
+            'media.manage',
+            'nav.manage',
+            'roles.manage',
+            'theme.manage',
+        );
+    }
+
+    /**
      * Resolve a user's CMS capabilities ONCE per request (cached by uid).
      *
      * Issues exactly 2 DB queries total (1 IsSuperAdmin + 1 GetUserGrants),
@@ -939,7 +1041,11 @@ class Controller_Cms extends Controller
             ? (bool)$this->CmsAuth->cms_can($uid, $capability, $scope)
             : (bool)$capability($uid, $scope);
         if (!$ok) {
-            $this->_denyRedirect();
+            // #129: when the gate is a single named capability, pass it through so
+            // the deny page can tell the user exactly what they're missing. A
+            // callable gate (any-of / dashboard "any capability") has no single
+            // name → null.
+            $this->_denyRedirect(is_string($capability) ? $capability : null);
             return false;
         }
         $this->_applyScopeData($scope);
@@ -964,6 +1070,10 @@ class Controller_Cms extends Controller
         // The "View live site" target for THIS scope: the org's own public home
         // (/k|/p route) for a scoped site, or the global front door otherwise.
         $this->data['SiteLiveUrl']   = $this->_scopeLiveHome($scope);
+        // #129: the caller's held capability set, for the shell to emit as
+        // window.CMS_CAPS so the admin UI can annotate/disable actions the user
+        // lacks. Every scoped render path funnels through here.
+        $this->data['CmsCaps']       = $this->_capList($this->_uid(), $scope);
     }
 
     /**
@@ -1108,10 +1218,10 @@ class Controller_Cms extends Controller
      *     dead-ends the user. Instead render a plain-language permission page that
      *     tells them who can grant access, mirroring the dashboard site-card's tone.
      */
-    private function _denyRedirect()
+    private function _denyRedirect($missingCap = null)
     {
         if ($this->_uid() > 0) {
-            return $this->_denyPermission();
+            return $this->_denyPermission($missingCap);
         }
         header('X-Robots-Tag: noindex, nofollow');
         header('Location: ' . UIR . 'Login');
@@ -1134,13 +1244,17 @@ class Controller_Cms extends Controller
      * bypasses the themed View pipeline — a denied viewer holds no CMS scope to
      * build the shell chrome from).
      */
-    private function _denyPermission()
+    private function _denyPermission($missingCap = null)
     {
         header('X-Robots-Tag: noindex, nofollow');
         if (function_exists('http_response_code')) {
             http_response_code(403);
         }
         $HomeUrl = (string)UIR;
+        // #129: the specific capability the user lacked (when the gate was a single
+        // named capability), for the deny page to name. '' when unknown (a scope
+        // failure or an any-of gate) — the template falls back to generic copy.
+        $MissingCapability = ($missingCap !== null) ? (string)$missingCap : '';
         $tpl = DIR_TEMPLATE . 'default/Cms_deny.tpl';
         if (is_file($tpl)) {
             include $tpl;
@@ -1157,6 +1271,11 @@ class Controller_Cms extends Controller
      */
     private function _blockCatalog()
     {
+        // #21: return the per-request memo when present — the editor load builds
+        // the catalog once instead of ~15 times (see $_blockCatalogMemo).
+        if (is_array($this->_blockCatalogMemo)) {
+            return $this->_blockCatalogMemo;
+        }
         // #42: the canonical type => meta map is the SINGLE source of truth for
         // block types, shared with Controller_CmsAjax (which derives its save-time
         // allowlist from CanonicalBlockTypes()). Kept as pure data in one static
@@ -1181,6 +1300,7 @@ class Controller_Cms extends Controller
                 'addable'     => !isset($meta[5]) ? true : (bool)$meta[5],
             );
         }
+        $this->_blockCatalogMemo = $catalog;
         return $catalog;
     }
 
@@ -1255,61 +1375,65 @@ class Controller_Cms extends Controller
     private function _pageTypes()
     {
         $labels = $this->_typeLabels();
+        // #21: build the catalog ONCE and thread it into every _starter() call so
+        // the ~15 starters below don't each rebuild it (memoized too, belt-and-
+        // suspenders). The starter only needs the catalog's dynamic-type flags.
+        $catalog = $this->_blockCatalog();
         return array(
             array(
                 'type'   => 'composed',
                 'label'  => $labels['composed'],
                 'blocks' => array(
-                    $this->_starter('hero_carousel'),
-                    $this->_starter('rich_text'),
-                    $this->_starter('cta_band'),
+                    $this->_starter('hero_carousel', $catalog),
+                    $this->_starter('rich_text', $catalog),
+                    $this->_starter('cta_band', $catalog),
                 ),
             ),
             array(
                 'type'   => 'article',
                 'label'  => $labels['article'],
                 'blocks' => array(
-                    $this->_starter('heading'),
-                    $this->_starter('rich_text'),
+                    $this->_starter('heading', $catalog),
+                    $this->_starter('rich_text', $catalog),
                 ),
             ),
             array(
                 'type'   => 'media',
                 'label'  => $labels['media'],
                 'blocks' => array(
-                    $this->_starter('heading'),
-                    $this->_starter('gallery'),
+                    $this->_starter('heading', $catalog),
+                    $this->_starter('gallery', $catalog),
                 ),
             ),
             array(
                 'type'   => 'about',
                 'label'  => $labels['about'],
                 'blocks' => array(
-                    $this->_starter('rich_text'),
-                    $this->_starter('staff_roster'),
+                    $this->_starter('rich_text', $catalog),
+                    $this->_starter('staff_roster', $catalog),
                 ),
             ),
             array(
                 'type'   => 'resource',
                 'label'  => $labels['resource'],
                 'blocks' => array(
-                    $this->_starter('heading'),
-                    $this->_starter('file_download'),
+                    $this->_starter('heading', $catalog),
+                    $this->_starter('file_download', $catalog),
                 ),
             ),
             array(
                 'type'   => 'blog_index',
                 'label'  => $labels['blog_index'],
                 'blocks' => array(
-                    $this->_starter('heading'),
-                    $this->_starter('blog_feed'),
+                    $this->_starter('heading', $catalog),
+                    $this->_starter('blog_feed', $catalog),
                 ),
             ),
             array(
                 'type'   => 'dynamic',
                 'label'  => $labels['dynamic'],
                 'blocks' => array(
-                    $this->_starter('kingdoms_teaser'),
+                    $this->_starter('kingdoms_teaser', $catalog),
                 ),
             ),
         );
@@ -1381,6 +1505,21 @@ class Controller_Cms extends Controller
      */
     private function _typeLabels()
     {
+        return self::_pageTypeLabelMap();
+    }
+
+    /**
+     * #110: the canonical page-type => label map — the SINGLE source of truth for
+     * which page types exist. Pure static data so both the presets/labels path
+     * (here) and Controller_CmsAjax::_normalizeType's save-time allowlist read the
+     * SAME key set (via CanonicalPageTypes()). Previously the enum was declared
+     * twice; a type added to the presets could be silently clamped back to
+     * 'composed' by a stale allowlist. One list now makes that impossible.
+     *
+     * @return array<string,string>
+     */
+    private static function _pageTypeLabelMap()
+    {
         return array(
             'composed'   => 'Composed / Landing',
             'article'    => 'Article / Text',
@@ -1393,18 +1532,36 @@ class Controller_Cms extends Controller
     }
 
     /**
+     * #110: the canonical list of valid page-type keys — the shared write-side
+     * allowlist Controller_CmsAjax::_normalizeType clamps unknown types against.
+     * Derived from the ONE label map above so the presets and the save allowlist
+     * can never drift.
+     *
+     * @return string[]
+     */
+    public static function CanonicalPageTypes()
+    {
+        return array_keys(self::_pageTypeLabelMap());
+    }
+
+    /**
      * Build one starter block for a preset: a fully-formed block object with
      * sensible empty field defaults matching that block type's partial keys.
      *
      * @return array{type:string,enabled:int,source:string,fields:array}
      */
-    private function _starter($type)
+    private function _starter($type, $catalog = null)
     {
         // Dynamic blocks (pull data at render time) are flagged source=dynamic.
         // Derive the set from the catalog's `dynamic` flag so it stays in sync
         // with a single source of truth rather than a duplicated hand-list.
+        // #21: the caller (_pageTypes) passes the already-built catalog so this
+        // isn't rebuilt per starter; fall back to the memoized build otherwise.
+        if (!is_array($catalog)) {
+            $catalog = $this->_blockCatalog();
+        }
         $dynamicTypes = array();
-        foreach ($this->_blockCatalog() as $c) {
+        foreach ($catalog as $c) {
             if (!empty($c['dynamic'])) {
                 $dynamicTypes[$c['type']] = true;
             }

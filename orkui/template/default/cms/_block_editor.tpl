@@ -266,15 +266,12 @@ window.CmsBlockEditor = (function () {
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
-    /* ---- toast ---- */
-    var toastEl, toastTimer = null;
+    /* ---- toast (shared: CmsAdmin.toast — identical behaviour, one source) ----
+     * The modal focus-trap (openModal/closeModal below) and the throw-on-non-OK
+     * post() are intentionally NOT shared: this editor needs the focus trap and
+     * relies on post() rejecting on HTTP errors, so they stay local. */
     function toast(msg, kind) {
-        if (!toastEl) { toastEl = document.getElementById('cmsToast'); }
-        if (!toastEl) { return; }
-        toastEl.textContent = msg;
-        toastEl.className = 'cms-toast cms-show' + (kind ? ' cms-toast-' + kind : '');
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(function () { toastEl.className = 'cms-toast'; }, 3200);
+        if (window.CmsAdmin && CmsAdmin.toast) { CmsAdmin.toast(msg, kind); }
     }
 
     /* ---- modal helpers + shared focus trap ----
@@ -1943,7 +1940,8 @@ window.CmsBlockEditor = (function () {
         head.appendChild(collapseBtn);
         head.appendChild(el('span', 'cms-block-icon', '<i class="fas ' + esc(iconFor(block.type)) + '"></i>'));
         head.appendChild(el('span', 'cms-block-type', esc(labelFor(block.type))));
-        head.appendChild(el('span', 'cms-block-typekey', esc(block.type)));
+        // #100: author-facing header shows the friendly label + icon only — never
+        // the raw machine block-type slug (dev jargon).
         head.appendChild(el('span', 'cms-block-summary', esc(summarize(block))));
 
         var tools = el('div', 'cms-block-tools');
@@ -2249,12 +2247,13 @@ window.CmsBlockEditor = (function () {
         var descHtml = c.description
             ? '<span class="cms-typecard-desc">' + esc(c.description) + '</span>'
             : '';
+        // #100: the add-block chooser card shows the friendly label + icon +
+        // description only — never the raw machine block-type slug (dev jargon).
         cardBtn.innerHTML =
             icoHtml +
             '<span class="cms-typecard-text">' +
                 '<strong>' + esc(c.label) + badge + '</strong>' +
                 descHtml +
-                '<span class="cms-typecard-key">' + esc(c.type) + '</span>' +
             '</span>';
         if (c.available) {
             cardBtn.addEventListener('click', function () {
@@ -2718,7 +2717,7 @@ window.CmsBlockEditor = (function () {
 
         listEl  = document.getElementById('cmsBlockList');
         emptyEl = document.getElementById('cmsBlockEmpty');
-        toastEl = document.getElementById('cmsToast');
+        // toast is delegated to CmsAdmin.toast, which resolves .cms-toast itself.
 
         confirmModal = document.getElementById('cmsConfirmModal');
         confirmTitle = document.getElementById('cmsConfirmTitle');

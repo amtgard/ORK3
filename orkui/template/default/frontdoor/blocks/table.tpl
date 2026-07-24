@@ -12,6 +12,8 @@ if (!is_array($rows)) {
     $rows = [];
 }
 ?>
+<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
+<?php if (empty($fdStyleOnce['table'])) : $fdStyleOnce['table'] = true; ?>
 <style>
 .fdb-table-scroll {
     max-width: 920px;
@@ -63,6 +65,7 @@ html[data-theme="dark"] .fdb-table tbody tr:nth-child(even) td {
     background: #131a29;
 }
 </style>
+<?php endif; ?>
 <?php if (!empty($rows)): ?>
 <div class="fd-pad">
     <div class="fdb-table-scroll">

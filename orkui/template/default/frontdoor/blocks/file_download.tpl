@@ -52,6 +52,8 @@ if (empty($fdbRows)) {
     return;
 }
 ?>
+<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
+<?php if (empty($fdStyleOnce['file_download'])) : $fdStyleOnce['file_download'] = true; ?>
 <style>
 /* scoped: fdb-file */
 .fdb-file-list {
@@ -135,6 +137,7 @@ html[data-theme="dark"] .fdb-file-meta { color: #7d88a6; }
 html[data-theme="dark"] .fdb-file-dl { color: #a9b3d0; }
 html[data-theme="dark"] .fdb-file-card:hover .fdb-file-dl { color: #7ea2ff; }
 </style>
+<?php endif; ?>
 <div class="fd-pad">
     <div class="fdb-file-list">
         <?php foreach ($fdbRows as $fdbRow): ?>
