@@ -36,8 +36,40 @@
     /* ---- modal controller ----
      * open/close toggle `.cms-open`. A single document-level delegate closes on
      * [data-close-modal] clicks, backdrop clicks, and Esc — installed once. */
-    function openModal(el) { if (el) { el.classList.add('cms-open'); } }
-    function closeModal(el) { if (el) { el.classList.remove('cms-open'); } }
+    var FOCUSABLE = 'a[href],area[href],button:not([disabled]),input:not([disabled]),'
+        + 'select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"]),'
+        + 'iframe,object,embed,[contenteditable="true"]';
+
+    // Visible, focusable descendants in DOM order.
+    function focusables(el) {
+        return Array.prototype.filter.call(el.querySelectorAll(FOCUSABLE), function (n) {
+            return n.offsetWidth > 0 || n.offsetHeight > 0 || n.getClientRects().length > 0;
+        });
+    }
+
+    function openModal(el) {
+        if (!el) { return; }
+        // Remember the opener so focus can be restored on close.
+        el._cmsOpener = document.activeElement;
+        el.classList.add('cms-open');
+        var f = focusables(el);
+        if (f.length) {
+            f[0].focus();
+        } else {
+            // No focusable content — park focus on the dialog container itself.
+            if (!el.hasAttribute('tabindex')) { el.setAttribute('tabindex', '-1'); }
+            el.focus();
+        }
+    }
+    function closeModal(el) {
+        if (!el) { return; }
+        el.classList.remove('cms-open');
+        var opener = el._cmsOpener;
+        el._cmsOpener = null;
+        if (opener && typeof opener.focus === 'function' && document.contains(opener)) {
+            opener.focus();
+        }
+    }
 
     document.addEventListener('click', function (e) {
         var closer = e.target.closest('[data-close-modal]');
@@ -49,6 +81,31 @@
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
             document.querySelectorAll('.cms-modal-overlay.cms-open').forEach(closeModal);
+            return;
+        }
+        // Trap Tab / Shift+Tab within the topmost open overlay.
+        if (e.key === 'Tab') {
+            var open = document.querySelectorAll('.cms-modal-overlay.cms-open');
+            if (!open.length) { return; }
+            var overlay = open[open.length - 1];
+            var f = focusables(overlay);
+            if (!f.length) {
+                // Nothing tabbable — keep focus pinned to the dialog container.
+                e.preventDefault();
+                if (!overlay.hasAttribute('tabindex')) { overlay.setAttribute('tabindex', '-1'); }
+                overlay.focus();
+                return;
+            }
+            var first = f[0], last = f[f.length - 1], active = document.activeElement;
+            if (e.shiftKey) {
+                if (active === first || !overlay.contains(active)) {
+                    e.preventDefault();
+                    last.focus();
+                }
+            } else if (active === last || !overlay.contains(active)) {
+                e.preventDefault();
+                first.focus();
+            }
         }
     });
 

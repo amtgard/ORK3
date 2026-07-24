@@ -75,7 +75,7 @@ $keRows = array_slice($keRows, 0, $keLimit);
 .ke-card:hover { box-shadow: 0 6px 18px rgba(20,30,60,.12); transform: translateY(-2px); }
 .ke-card-accent { height: 8px; background: var(--gold, #d4af37); }
 .ke-card-body { padding: 16px; }
-.ke-card-date { font-size: 12px; color: #b8860b; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.ke-card-date { font-size: 12px; color: #7a5c00; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
 .ke-card-name { font-weight: 700; font-size: 15px; margin: 4px 0; color: var(--fd-text); }
 .ke-card-sub { font-size: 12px; color: #778; }
 .ke-card-rsvp { font-size: 12px; color: #1d4ed8; margin-top: 6px; font-weight: 600; }

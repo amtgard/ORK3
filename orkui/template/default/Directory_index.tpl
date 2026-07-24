@@ -1,67 +1,67 @@
 <?php
-	// Pre-process kingdoms and principalities
-	$hmKingdoms = [];
-	$hmPrinz    = [];
-	$hmTotalParks = 0;
-	$hmTotalAttendance = 0;
-	$hmWkStart  = date('Y-m-d', strtotime('-6 month'));
-	$hmWkEnd    = date('Y-m-d');
-	$hmWkCount  = max(1, (int)ceil((strtotime($hmWkEnd) - strtotime($hmWkStart)) / (7 * 86400)));
-	if (is_array($ActiveKingdomSummary['ActiveKingdomsSummaryList'])) {
-		foreach ($ActiveKingdomSummary['ActiveKingdomsSummaryList'] as $r) {
-			$r['_weekly']   = $r['Attendance'] > 0 ? round($r['Attendance'] / $hmWkCount, 1) : 0;
-			$r['_monthly']  = $r['MonthlyAvg'] > 0 ? $r['MonthlyAvg'] : 0;
-			$r['_heraldry'] = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf('%04d', (int)$r['KingdomId']));
-			if ((int)$r['ParentKingdomId'] === 0) {
-				$hmKingdoms[]       = $r;
-				$hmTotalParks      += (int)$r['ParkCount'];
-				$hmTotalAttendance += (int)$r['Attendance'];
-			} else {
-				$hmPrinz[] = $r;
-			}
-		}
-	}
-	// Pin the logged-in user's home kingdom / principality to the first slot
-	$hmUserKingdomId       = isset($UserKingdomId)       ? (int)$UserKingdomId       : 0;
-	$hmUserParentKingdomId = isset($UserParentKingdomId) ? (int)$UserParentKingdomId : 0;
+// Pre-process kingdoms and principalities
+$hmKingdoms = [];
+$hmPrinz    = [];
+$hmTotalParks = 0;
+$hmTotalAttendance = 0;
+$hmWkStart  = date('Y-m-d', strtotime('-6 month'));
+$hmWkEnd    = date('Y-m-d');
+$hmWkCount  = max(1, (int)ceil((strtotime($hmWkEnd) - strtotime($hmWkStart)) / (7 * 86400)));
+if (is_array($ActiveKingdomSummary['ActiveKingdomsSummaryList'])) {
+    foreach ($ActiveKingdomSummary['ActiveKingdomsSummaryList'] as $r) {
+        $r['_weekly']   = $r['Attendance'] > 0 ? round($r['Attendance'] / $hmWkCount, 1) : 0;
+        $r['_monthly']  = $r['MonthlyAvg'] > 0 ? $r['MonthlyAvg'] : 0;
+        $r['_heraldry'] = HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf('%04d', (int)$r['KingdomId']));
+        if ((int)$r['ParentKingdomId'] === 0) {
+            $hmKingdoms[]       = $r;
+            $hmTotalParks      += (int)$r['ParkCount'];
+            $hmTotalAttendance += (int)$r['Attendance'];
+        } else {
+            $hmPrinz[] = $r;
+        }
+    }
+}
+// Pin the logged-in user's home kingdom / principality to the first slot
+$hmUserKingdomId       = isset($UserKingdomId) ? (int)$UserKingdomId : 0;
+$hmUserParentKingdomId = isset($UserParentKingdomId) ? (int)$UserParentKingdomId : 0;
 
-	// Build a sort key by stripping common leading words before alphabetizing
-	$hmSortKey = function($name) {
-		$words    = preg_split('/\s+/', trim($name));
-		$skip     = ['the', 'kingdom', 'empire', 'of'];
-		$filtered = array_filter($words, function($w) use ($skip) {
-			return !in_array(strtolower($w), $skip);
-		});
-		return strtolower(implode(' ', array_values($filtered)));
-	};
-	// Sort kingdoms alphabetically, ignoring "The", "Kingdom", "Empire", "Of"
-	usort($hmKingdoms, function($a, $b) use ($hmSortKey) {
-		return strcmp($hmSortKey($a['KingdomName']), $hmSortKey($b['KingdomName']));
-	});
-	usort($hmPrinz, function($a, $b) use ($hmSortKey) {
-		return strcmp($hmSortKey($a['KingdomName']), $hmSortKey($b['KingdomName']));
-	});
-	// Move user's home kingdom to front after sorting (only if not in a principality)
-	if ($hmUserParentKingdomId === 0 && $hmUserKingdomId > 0) {
-		$pinIdx = array_search($hmUserKingdomId, array_map('intval', array_column($hmKingdoms, 'KingdomId')));
-		if ($pinIdx !== false) {
-			$pinned = array_splice($hmKingdoms, $pinIdx, 1);
-			$pinned[0]['_pinned'] = true;
-			array_unshift($hmKingdoms, $pinned[0]);
-		}
-	}
-	// Pin the user's principality in $hmPrinz
-	if ($hmUserParentKingdomId > 0 && $hmUserKingdomId > 0) {
-		$prinzIdx = array_search($hmUserKingdomId, array_map('intval', array_column($hmPrinz, 'KingdomId')));
-		if ($prinzIdx !== false) {
-			$pinnedPrinz = array_splice($hmPrinz, $prinzIdx, 1);
-			$pinnedPrinz[0]['_pinned'] = true;
-			array_unshift($hmPrinz, $pinnedPrinz[0]);
-		}
-	}
+// Build a sort key by stripping common leading words before alphabetizing
+$hmSortKey = function ($name) {
+    $words    = preg_split('/\s+/', trim($name));
+    $skip     = ['the', 'kingdom', 'empire', 'of'];
+    $filtered = array_filter($words, function ($w) use ($skip) {
+        return !in_array(strtolower($w), $skip);
+    });
+    return strtolower(implode(' ', array_values($filtered)));
+};
+// Sort kingdoms alphabetically, ignoring "The", "Kingdom", "Empire", "Of"
+usort($hmKingdoms, function ($a, $b) use ($hmSortKey) {
+    return strcmp($hmSortKey($a['KingdomName']), $hmSortKey($b['KingdomName']));
+});
+usort($hmPrinz, function ($a, $b) use ($hmSortKey) {
+    return strcmp($hmSortKey($a['KingdomName']), $hmSortKey($b['KingdomName']));
+});
+// Move user's home kingdom to front after sorting (only if not in a principality)
+if ($hmUserParentKingdomId === 0 && $hmUserKingdomId > 0) {
+    $pinIdx = array_search($hmUserKingdomId, array_map('intval', array_column($hmKingdoms, 'KingdomId')));
+    if ($pinIdx !== false) {
+        $pinned = array_splice($hmKingdoms, $pinIdx, 1);
+        $pinned[0]['_pinned'] = true;
+        array_unshift($hmKingdoms, $pinned[0]);
+    }
+}
+// Pin the user's principality in $hmPrinz
+if ($hmUserParentKingdomId > 0 && $hmUserKingdomId > 0) {
+    $prinzIdx = array_search($hmUserKingdomId, array_map('intval', array_column($hmPrinz, 'KingdomId')));
+    if ($prinzIdx !== false) {
+        $pinnedPrinz = array_splice($hmPrinz, $prinzIdx, 1);
+        $pinnedPrinz[0]['_pinned'] = true;
+        array_unshift($hmPrinz, $pinnedPrinz[0]);
+    }
+}
 
-	$hmWeeklyAvg = $hmTotalAttendance > 0 ? round($hmTotalAttendance / $hmWkCount) : 0;
-	$hmEventList = is_array($EventSummary) ? $EventSummary : [];
+$hmWeeklyAvg = $hmTotalAttendance > 0 ? round($hmTotalAttendance / $hmWkCount) : 0;
+$hmEventList = is_array($EventSummary) ? $EventSummary : [];
 ?>
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap">
@@ -165,6 +165,11 @@
 	font-size: 17px;
 	font-weight: 700;
 	color: var(--ork-text);
+	margin: 0;
+	padding: 0;
+	background: none;
+	border: none;
+	border-radius: 0;
 }
 .hm-section-title i { margin-right: 7px; color: var(--ork-text-secondary); }
 .hm-section-hint { font-size: 12px; color: var(--ork-text-muted); font-style: italic; }
@@ -523,6 +528,25 @@ html[data-theme="dark"] .hm-visit-site[data-tip]::after { background: #0b1220; }
 	/* Last item spanning both columns when count is odd */
 	.hm-stat-item:last-child:nth-child(odd) { grid-column: span 2; border-right: none; }
 	.hm-stat-value { font-size: 20px; }
+	/* "Visit site" badge: on touch/narrow screens drop it out of the card's tap
+	   area into normal flow beneath the card, with a full-size touch target. */
+	.hm-card-wrap { flex-direction: column; }
+	.hm-visit-site {
+		position: static;
+		top: auto;
+		left: auto;
+		align-self: stretch;
+		justify-content: center;
+		min-height: 40px;
+		padding: 9px 14px;
+		margin-top: 6px;
+		border-radius: 8px;
+		font-size: 12px;
+	}
+	.hm-visit-site i { font-size: 11px; }
+	/* Anchor the tooltip below the now full-width badge. */
+	.hm-visit-site[data-tip]::after { left: 50%; transform: translate(-50%, 4px); }
+	.hm-visit-site[data-tip]:hover::after { transform: translate(-50%, 0); }
 }
 
 /* ========================================
@@ -624,16 +648,16 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
      ============================================= -->
 <div class="hm-section">
 	<div class="hm-section-header">
-		<span class="hm-section-title"><i class="fas fa-crown"></i> Kingdoms</span>
+		<h2 class="hm-section-title"><i class="fas fa-crown"></i> Kingdoms</h2>
 		<div style="display:flex;gap:8px;align-items:center;">
 			<a class="hm-find-item" href="https://play.amtgard.com" target="_blank" rel="noopener"><i class="fas fa-map-marker-alt"></i> Find a Chapter</a>
-			<a class="hm-find-item hm-map-btn" href="<?= UIR ?>Atlas"><i class="fas fa-map-marked-alt"></i><span class="hm-map-label"> Kingdom Map</span></a>
+			<a class="hm-find-item hm-map-btn" href="<?= UIR ?>Atlas" aria-label="Kingdom Map" data-tip="Kingdom Map"><i class="fas fa-map-marked-alt"></i><span class="hm-map-label"> Kingdom Map</span></a>
 		</div>
 	</div>
 	<div class="hm-kingdoms-grid">
 		<?php foreach ($hmKingdoms as $k):
-			$kSiteSlug = isset($KingdomSiteSlugs[(int)$k['KingdomId']]) ? (string)$KingdomSiteSlugs[(int)$k['KingdomId']] : '';
-		?>
+		    $kSiteSlug = isset($KingdomSiteSlugs[(int)$k['KingdomId']]) ? (string)$KingdomSiteSlugs[(int)$k['KingdomId']] : '';
+		    ?>
 		<div class="hm-card-wrap">
 			<a class="hm-kingdom-card<?= !empty($k['_pinned']) ? ' hm-pinned' : '' ?>" href="<?= UIR ?>Kingdom/profile/<?= (int)$k['KingdomId'] ?>">
 				<div class="hm-card-heraldry-wrap">
@@ -680,12 +704,12 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 	<?php if (count($hmPrinz) > 0): ?>
 	<div class="hm-bottom-main">
 		<div class="hm-section-header">
-			<span class="hm-section-title"><i class="fas fa-shield-alt"></i> Principalities</span>
+			<h2 class="hm-section-title"><i class="fas fa-shield-alt"></i> Principalities</h2>
 		</div>
 		<div class="hm-prinz-grid">
 			<?php foreach ($hmPrinz as $p):
-				$pSiteSlug = isset($KingdomSiteSlugs[(int)$p['KingdomId']]) ? (string)$KingdomSiteSlugs[(int)$p['KingdomId']] : '';
-			?>
+			    $pSiteSlug = isset($KingdomSiteSlugs[(int)$p['KingdomId']]) ? (string)$KingdomSiteSlugs[(int)$p['KingdomId']] : '';
+			    ?>
 			<div class="hm-card-wrap">
 				<a class="hm-prinz-card<?= !empty($p['_pinned']) ? ' hm-pinned' : '' ?>" href="<?= UIR ?>Kingdom/profile/<?= (int)$p['KingdomId'] ?>">
 					<div class="hm-card-heraldry-wrap" style="position:relative">
@@ -713,7 +737,7 @@ html[data-theme="dark"] .hm-prinz-card.hm-pinned {
 	<!-- Reports and Utilities -->
 	<div class="hm-bottom-side">
 		<div class="hm-section-header">
-			<span class="hm-section-title"><i class="fas fa-search"></i> Reports and Utilities</span>
+			<h2 class="hm-section-title"><i class="fas fa-search"></i> Reports and Utilities</h2>
 			<?php if (empty($LoggedIn)): ?>
 			<span class="hm-section-hint">More available when logged in</span>
 			<?php endif; ?>

@@ -106,7 +106,7 @@ if (empty($fdbRows)) {
 }
 .fdb-file-meta {
     font-size: 12px;
-    color: #8a93ab;
+    color: #5a648a;
     margin-top: 4px;
 }
 .fdb-file-meta span + span::before {

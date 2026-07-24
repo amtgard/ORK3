@@ -69,8 +69,8 @@ if ($ktResolved === null) {
 $shown        = $ktResolved['shown'];
 $moreCount    = (int)$ktResolved['total'] - count($shown);
 ?>
-<div class="fd-pad fd-section-muted" style="background:#f7f8fb;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;">
+<div class="fd-pad fd-section-muted">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
         <div>
             <?php if (!empty($kicker)): ?>
                 <div class="fd-kicker fd-kicker-d">
@@ -84,7 +84,7 @@ $moreCount    = (int)$ktResolved['total'] - count($shown);
             <?php endif; ?>
         </div>
         <?php if (!empty($moreHref)): ?>
-            <a class="fd-link" href="<?= htmlspecialchars($moreHref, ENT_QUOTES) ?>">Browse the full Kingdoms Directory &rarr;</a>
+            <a class="fd-link" href="<?= htmlspecialchars($moreHref, ENT_QUOTES) ?>" style="white-space:nowrap;">Browse the full Kingdoms Directory &rarr;</a>
         <?php endif; ?>
     </div>
 

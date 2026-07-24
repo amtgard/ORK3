@@ -70,7 +70,7 @@
 }
 
 .fd-kicker-d {
-    color: #b8860b;
+    color: #8a6608;
 }
 
 .fd-sec-title {
@@ -93,6 +93,13 @@
     font-size: .85em;
     opacity: .7;
 }
+
+/* Clamp embedded media/tables/code so pasted rich-text (richtext + its rich_text
+   alias) can't force horizontal scroll on phones. */
+.fd-body-text { overflow-wrap: anywhere; }
+.fd-body-text img { max-width: 100%; height: auto; }
+.fd-body-text table { display: block; max-width: 100%; overflow-x: auto; }
+.fd-body-text pre { overflow-x: auto; max-width: 100%; }
 
 .fd-pad {
     padding: 42px 44px;
@@ -228,6 +235,25 @@
     padding: 24px 16px;
 }
 
+/* ---- Preview-only block-render error placeholder ----------- */
+/* Emitted by render_blocks.tpl when a block throws (preview/admin only). Themed
+   so the dark-mode preview isn't a light-only card on a dark page. */
+.fd-block-error {
+    margin: 12px 16px;
+    padding: 14px 16px;
+    border: 1px dashed #c9a227;
+    border-radius: 10px;
+    background: #fbf6e7;
+    color: #5c4a12;
+    font-size: 14px;
+    line-height: 1.5;
+}
+html[data-theme="dark"] .fd-block-error {
+    border-color: #7a5b10;
+    background: #241d0c;
+    color: #e6cf8a;
+}
+
 /* ---- events_feed card sub-text (contrast on dark cards) ----
    Light-mode values match the block's original inline colors; the dark
    overrides lift them to >=4.5:1 on the #1b2233 card (was #778 / #1d4ed8,
@@ -244,6 +270,17 @@
 }
 html[data-theme="dark"] .fd-ev-sub { color: #b6c0d4; }
 html[data-theme="dark"] .fd-ev-rsvp { color: #7ba7f2; }
+
+/* Event date label — darkened from #b8860b (2.9:1 on white, fails AA) to
+   #8a5d00 (>=4.5:1), matching the .fd-ev-sub treatment. Dark override keeps the
+   warm gold legible on the #1b2233 card. */
+.fd-ev-date {
+    font-size: 12px;
+    color: #8a5d00;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+html[data-theme="dark"] .fd-ev-date { color: #e0b64d; }
 
 /* ---- Hero Carousel ----------------------------------------- */
 .fd-carousel {
@@ -496,12 +533,12 @@ html[data-theme="dark"] .fd-ev-rsvp { color: #7ba7f2; }
 
 .fd-navitem > a:hover {
     background: #f2f4f8;
-    color: #b8860b;
+    color: #8a6608;
 }
 
 /* Active top-level nav item (current page or one of its children). */
 .fd-navitem > a.is-active {
-    color: #b8860b;
+    color: #8a6608;
     box-shadow: inset 0 -2px 0 var(--gold);
     border-radius: 6px 6px 0 0;
 }
@@ -798,7 +835,13 @@ html[data-theme="dark"] .fd-btn-ghost {
 
     .fd-mosaic > * {
         grid-row: span 1 !important;
-        height: 200px;
+        /* !important beats the tile's inline height:100% so stacked tiles are a
+           uniform 200px on phones (otherwise the image height wins). */
+        height: 200px !important;
+    }
+
+    .fd-mosaic > * img {
+        object-fit: cover;
     }
 }
 
@@ -816,14 +859,16 @@ html[data-theme="dark"] .fd-btn-ghost {
         font-size: 34px !important;
     }
 
+    /* Raised above the 2-row (2×2) stat ticker so the dots + play/pause toggle
+       don't collide with it on phones (ticker wraps to ~double height here). */
     .fd-dots {
         left: 24px;
-        bottom: 60px;
+        bottom: 150px;
     }
 
     .fd-carousel-toggle {
         right: 24px;
-        bottom: 58px;
+        bottom: 148px;
     }
 
     /* Stat ticker: 2×2 grid */
@@ -907,12 +952,14 @@ html[data-theme="dark"] .fd-btn-ghost {
         width: 100%;
     }
 
-    /* Member bar: home-only chrome; hide on mobile to reclaim above-the-fold. */
+    /* Member bar: home-only chrome; hide on mobile to reclaim above-the-fold.
+       !important beats the template's inline display:flex (otherwise the bar
+       stays on-screen on phones). */
     .fd-member-bar {
-        display: none;
+        display: none !important;
         flex-wrap: wrap;
-        gap: 8px 14px;
-        padding: 10px 16px;
+        gap: 8px 14px !important;
+        padding: 10px 16px !important;
     }
 
     /* Path grid already 2-col from 900px break */
@@ -946,6 +993,23 @@ html[data-theme="dark"] .fd-btn-ghost {
     }
 }
 
+/* ---- 680px: heading block font sizes step down ------------- */
+/* Matches the tpl's `.fdb-heading-wrap .fdb-heading-N` specificity so the
+   reduced sizes win (a media query adds no specificity). Mirrors the hero
+   headline responsive step-down. */
+@media (max-width: 680px) {
+    .fdb-heading-wrap .fdb-heading-1 { font-size: 30px !important; }
+    .fdb-heading-wrap .fdb-heading-2 { font-size: 26px !important; }
+}
+
+/* ---- 520px: path grid collapses to a single column --------- */
+/* !important required: the 900px rule setting 2-col is itself !important, so an
+   unmarked 1-col rule here would lose the importance tie. Mirrors the
+   gallery/kingdoms/events step-down to one column on phones. */
+@media (max-width: 520px) {
+    .fd-paths-grid { grid-template-columns: 1fr !important; }
+}
+
 @media (max-width: 420px) {
     /* !important required: the <=680px 3-col rule above is itself !important, so
        an unmarked 2-col rule here would lose the specificity/importance tie. */
@@ -958,6 +1022,11 @@ html[data-theme="dark"] .fd-btn-ghost {
 a.fd-roster-card:hover{box-shadow:0 6px 18px rgba(20,30,60,.12);transform:translateY(-2px);}
 .fd-roster-photo{width:96px;height:96px;border-radius:50%;object-fit:cover;margin-bottom:12px;background:#eef0f6;}
 .fd-roster-photo-empty{display:flex;align-items:center;justify-content:center;background:var(--navy);color:var(--gold);font-weight:700;font-size:32px;line-height:1;font-family:var(--fd-font-body);}
+/* Roster subheading (intro line under the section title). Light-mode value
+   matches the block's original #667; the dark override lifts it to a legible
+   muted tone once the blocks-tpl shard swaps the inline #667 for this class. */
+.fd-roster-sub{color:#667;margin:6px 0 0;font-size:15px;text-align:center;}
+html[data-theme="dark"] .fd-roster-sub{color:#9aa3b8;}
 .fd-roster-name{font-size:19px;font-weight:600;color:#1b2a4a;}
 .fd-roster-secondary{font-size:13px;color:#6b7488;margin-top:2px;}
 .fd-roster-role{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--gold);margin-top:6px;font-weight:600;}
@@ -990,7 +1059,7 @@ html[data-theme="dark"] .fd-roster-photo-empty{background:var(--navy);color:var(
 }
 .ko-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .ko-avatar i { font-size: 28px; color: #b8bfce; }
-.ko-role { font-size: 12px; color: #b8860b; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.ko-role { font-size: 12px; color: #8a6608; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
 .ko-name { font-weight: 700; font-size: 15px; margin-top: 4px; color: var(--fd-text); }
 .ko-empty { color: #8899aa; font-style: italic; text-align: center; padding: 18px; }
 
@@ -1021,7 +1090,7 @@ html[data-theme="dark"] .ko-avatar i { color: #7d8aa5; }
 .bf-card:hover { box-shadow: 0 6px 18px rgba(20,30,60,.12); transform: translateY(-2px); }
 .bf-card-accent { height: 6px; background: var(--gold, #d4af37); }
 .bf-card-body { padding: 14px 16px 16px; }
-.bf-card-date { font-size: 12px; color: #b8860b; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.bf-card-date { font-size: 12px; color: #8a6608; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
 .bf-card-title { font-weight: 700; font-size: 15px; margin: 5px 0 6px; line-height: 1.3; color: var(--fd-text); }
 .bf-card-excerpt { font-size: 13px; color: #50596e; line-height: 1.45; margin: 0; }
 .bf-empty { color: #8899aa; font-style: italic; text-align: center; padding: 18px; }
@@ -1044,7 +1113,7 @@ html[data-theme="dark"] .bf-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45);
 }
 .blog-rss {
     display: inline-flex; align-items: center; gap: 6px;
-    color: #b8860b; font-weight: 700; font-size: 13px; text-decoration: none;
+    color: #8a6608; font-weight: 700; font-size: 13px; text-decoration: none;
 }
 .blog-rss:hover { text-decoration: underline; }
 .blog-tagnote { font-size: 13px; color: #667; margin: -14px 0 22px; }

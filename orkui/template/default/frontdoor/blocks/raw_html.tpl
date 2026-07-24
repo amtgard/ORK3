@@ -29,6 +29,8 @@ $fdbIsPreview = !empty($data['SitePreview']);
 .fdb-rawhtml { word-wrap: break-word; overflow-wrap: anywhere; }
 .fdb-rawhtml img { max-width: 100%; height: auto; }
 .fdb-rawhtml iframe { max-width: 100%; }
+.fdb-rawhtml table { display: block; width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.fdb-rawhtml pre { overflow-x: auto; max-width: 100%; }
 html[data-theme="dark"] .fdb-rawhtml { color: #e6e8ee; }
 </style>
 <div class="fd-pad fdb-rawhtml">

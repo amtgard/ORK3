@@ -104,6 +104,9 @@
 	#ork-offline-banner { display:none; position:fixed; bottom:0; left:0; right:0; z-index:99999; background:#92400e; color:#fff; text-align:center; padding:10px 16px; font-size:0.85rem; font-weight:600; box-shadow:0 -2px 8px rgba(0,0,0,0.25); }
 	html[data-theme="dark"] #ork-offline-banner { background:#78350f; }
 
+	/* CMS/blog pages render their own site_header nav — suppress the stacked app nav */
+	body.cms-page #newmenu { display:none !important; }
+
 	/* What's New modal */
 	.wn-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; }
 	.wn-overlay.wn-open { display:flex; }
@@ -192,6 +195,7 @@
 	}
 	#ork-help-panel.ork-help-open { transform: translateY(0); }
 	#ork-help-panel.ork-help-minimized { transform: translateY(calc(100% - 46px)); }
+	@media (max-width:680px){ #ork-help-panel{ left:0; right:0; width:auto; max-height:80vh; border-radius:12px 12px 0 0; } }
 	.ork-help-header {
 		display: flex; align-items: center; justify-content: space-between;
 		padding: 0 14px; height: 46px;
@@ -262,7 +266,7 @@
 	.ork-help-empty { color: #718096; font-size: 13px; text-align: center; padding: 24px 0; }
 	</style>
 </head>
-	<body class="<?= !empty($ViewerDyslexiaFonts) ? 'ork-dyslexia-font ' : '' ?><?= !empty($IsFrontDoor) ? 'fd-home' : '' ?>">
+	<body class="<?= !empty($ViewerDyslexiaFonts) ? 'ork-dyslexia-font ' : '' ?><?= !empty($IsFrontDoor) ? 'fd-home' : (!empty($IsCmsPage) ? 'cms-page' : '') ?>">
 <?php if (empty($IsOrgSite)): // ORK's own Google Tag Manager — omit on standalone org sites ?>
 		<!-- Google Tag Manager (noscript) -->
 		<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5HZHGSLT"
@@ -282,9 +286,11 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 ?>
 		<div id='theme_container'>
 <?php if (!empty($downtime_start)): ?>
-		<div id="nav-maintenance-mobile" style="display:none;background:#92400e;color:#fff;text-align:center;padding:6px 12px;font-size:0.8rem;font-weight:600;cursor:pointer;" onclick="(function(){var d=document.getElementById('nm-mobile-detail');d.style.display=d.style.display==='none'?'block':'none';})()" >
-			<i class="fas fa-tools" style="margin-right:5px"></i>Scheduled Maintenance &nbsp;<i class="fas fa-info-circle" style="opacity:0.8"></i>
-			<div id="nm-mobile-detail" style="display:none;font-weight:400;font-size:0.78rem;padding-top:5px;border-top:1px solid rgba(255,255,255,0.3);margin-top:5px;">
+		<div id="nav-maintenance-mobile" style="display:none;background:#92400e;color:#fff;font-size:0.8rem;font-weight:600;">
+			<button type="button" aria-expanded="false" aria-controls="nm-mobile-detail" onclick="(function(btn){var d=document.getElementById('nm-mobile-detail');var open=d.style.display==='none';d.style.display=open?'block':'none';btn.setAttribute('aria-expanded',open?'true':'false');})(this)" style="display:block;width:100%;background:none;border:none;color:inherit;font:inherit;text-align:center;padding:6px 12px;cursor:pointer;">
+				<i class="fas fa-tools" style="margin-right:5px"></i>Scheduled Maintenance &nbsp;<i class="fas fa-info-circle" style="opacity:0.8"></i>
+			</button>
+			<div id="nm-mobile-detail" style="display:none;font-weight:400;font-size:0.78rem;padding:5px 12px 6px;border-top:1px solid rgba(255,255,255,0.3);margin-top:0;">
 				<span class="nm-time"></span>
 <?php if (!empty($downtime_note)): ?>
 				<span style="display:block;margin-top:3px;opacity:0.9;"><?= htmlspecialchars($downtime_note) ?></span>
@@ -302,7 +308,7 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 
 <?php if (empty($IsOrgSite)): // standalone org sites render their own header, not the global ORK nav ?>
 	<nav id='newmenu'>
-		<a id='nav-mobile-home' href='<?=UIR?>'><i class='fas fa-home'></i></a>
+		<a id='nav-mobile-home' href='<?=UIR?>' aria-label='Home'><i class='fas fa-home' aria-hidden='true'></i></a>
 		<!-- Left: breadcrumb navigation -->
 		<?php if (isset($menu) && is_array($menu) && count($menu) > 0) : ?>
 		<div id='navmenu'>
@@ -356,7 +362,7 @@ $downtime_note  = 'ORK downtime to migrate to the Rose 3.5.3 Release';
 		<div id='controls'>
 			<!-- Universal search -->
 			<div id='nav-search-wrap'>
-				<a class='nav-icon-btn' id='nav-search-toggle' onclick='nsToggle(this)' title='Search'><i class='fas fa-search'></i></a>
+				<button type='button' class='nav-icon-btn' id='nav-search-toggle' onclick='nsToggle(this)' aria-label='Search'><i class='fas fa-search' aria-hidden='true'></i></button>
 				<div id='nav-search-input-wrap'>
 					<input id='UniversalSearch' placeholder='Search active players, parks, kingdoms&hellip;' class='nav-search-input' autocomplete='off' />
 					<div id='nav-search-dropdown'></div>
@@ -780,7 +786,7 @@ endif;
 .emp-body { font-size:13px; color:#4a5568; line-height:1.6; margin-bottom:14px; }
 .emp-field { margin-bottom:12px; }
 .emp-field label { display:block; font-size:12px; font-weight:600; color:#4a5568; margin-bottom:4px; }
-.emp-field input[type="email"] { width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #e2e8f0; border-radius:5px; font-size:14px; color:#2d3748; }
+.emp-field input[type="email"] { width:100%; box-sizing:border-box; padding:7px 10px; border:1px solid #e2e8f0; border-radius:5px; font-size:16px; color:#2d3748; }
 .emp-field input[type="email"]:focus { outline:none; border-color:#4299e1; box-shadow:0 0 0 3px rgba(66,153,225,.15); }
 .emp-error { display:none; color:#e53e3e; font-size:12px; margin-top:4px; }
 .emp-actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:4px; }
@@ -798,6 +804,18 @@ endif;
 .emp-suggestion-use:hover { background:#2b6cb0; }
 .emp-suggestion-dismiss { background:none; border:none; color:#90cdf4; font-size:16px; line-height:1; cursor:pointer; padding:0 2px; flex-shrink:0; }
 .emp-suggestion-dismiss:hover { color:#4299e1; }
+
+/* Recovery-email modal dark mode */
+html[data-theme="dark"] .emp-overlay { background:rgba(0,0,0,0.7); }
+html[data-theme="dark"] .emp-modal { background:#2d3748; color:#e2e8f0; box-shadow:0 8px 40px rgba(0,0,0,0.5); }
+html[data-theme="dark"] .emp-title { color:#e2e8f0; }
+html[data-theme="dark"] .emp-body { color:#cbd5e0; }
+html[data-theme="dark"] .emp-field label { color:#cbd5e0; }
+html[data-theme="dark"] .emp-field input[type="email"] { background:#1a202c; border-color:#4a5568; color:#e2e8f0; }
+html[data-theme="dark"] .emp-field input[type="email"]:focus { border-color:#63b3ed; box-shadow:0 0 0 3px rgba(99,179,237,.2); }
+html[data-theme="dark"] .emp-skip { color:#718096; }
+html[data-theme="dark"] .emp-skip:hover { color:#a0aec0; }
+html[data-theme="dark"] .emp-suggestion { background:#2c3e50; border-color:#4a5568; color:#90cdf4; }
 </style>
 <div class="emp-overlay" id="emp-overlay">
   <div class="emp-modal" role="dialog" aria-modal="true" aria-labelledby="emp-title">

@@ -107,7 +107,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
 ?>
 
     <div class="cms-filters">
-        <input type="text" class="cms-input" id="cmsMediaSearch" placeholder="Search media…" value="<?= $h($search) ?>">
+        <input type="text" class="cms-input" id="cmsMediaSearch" placeholder="Search media…" aria-label="Search media" value="<?= $h($search) ?>">
         <button type="button" class="cms-btn cms-btn-sm" id="cmsMediaSearchBtn"><i class="fas fa-search"></i> Search</button>
     </div>
 

@@ -34,7 +34,8 @@ $bandStyle = $isDark ? ' style="background:var(--navy);color:var(--fd-primary-co
 
     <?php if (!empty($steps)): ?>
         <style>
-            @media (max-width:680px){.fdb-steps-grid{grid-template-columns:1fr !important;}}
+            @media (max-width:760px){.fdb-steps-grid{grid-template-columns:repeat(2,1fr) !important;}}
+            @media (max-width:480px){.fdb-steps-grid{grid-template-columns:1fr !important;}}
         </style>
         <div class="fdb-steps-grid" style="display:grid;grid-template-columns:repeat(<?= count($steps) ?>,1fr);gap:20px;">
             <?php foreach ($steps as $step): ?>
@@ -61,7 +62,7 @@ $bandStyle = $isDark ? ' style="background:var(--navy);color:var(--fd-primary-co
                               // on save; a second htmlspecialchars() here double-encoded "&" → "&amp;amp;".
                               // Emit the sanitized value raw (like richtext). white-space:pre-line
                               // (#87) keeps authored newlines. ?>
-                        <div class="fd-body-text" style="font-size:14px;white-space:pre-line;<?= $isDark ? 'opacity:.75;' : '' ?>">
+                        <div class="<?= $isDark ? '' : 'fd-body-text' ?>" style="font-size:14px;white-space:pre-line;<?= $isDark ? 'color:var(--fd-primary-contrast);opacity:.85;' : '' ?>">
                             <?= $body ?>
                         </div>
                     <?php endif; ?>

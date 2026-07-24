@@ -31,6 +31,9 @@
     gap: 12px;
     text-decoration: none;
     flex-shrink: 0;
+    /* Allow the brand to shrink below its content width so a long org name
+       ellipsizes instead of pushing the hamburger toggle off-screen. */
+    min-width: 0;
 }
 
 .fd-org-logo {
@@ -47,6 +50,11 @@
     line-height: 1.1;
     color: var(--fd-text);
     letter-spacing: .01em;
+    /* Long org names ellipsize rather than overflow the nav / shove the
+       hamburger toggle off-screen on narrow phones. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Push the scoped links to the right of the brand. */

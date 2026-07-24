@@ -2445,6 +2445,10 @@ window.CmsBlockEditor = (function () {
     // (writes through to the media row) without picking.
     function buildMediaTile(m) {
         var tile = el('div', 'cms-media-tile');
+        // Make the whole tile a real, keyboard-operable control (not mouse-only).
+        tile.setAttribute('role', 'button');
+        tile.setAttribute('tabindex', '0');
+        tile.setAttribute('aria-label', 'Use image: ' + (m.alt || m.filename || ('#' + (m.media_id || ''))));
         var img = el('img');
         img.alt = m.alt || '';
         var cap = el('div', 'cms-media-cap', esc(m.alt || m.filename || ('#' + (m.media_id || ''))));
@@ -2455,6 +2459,15 @@ window.CmsBlockEditor = (function () {
         }
         img.addEventListener('click', pick);
         cap.addEventListener('click', pick);
+        // Enter/Space activate the tile like a click — but only when the tile itself
+        // has focus, so typing in the inline alt-editor input doesn't fire pick().
+        tile.addEventListener('keydown', function (e) {
+            if (e.target !== tile) { return; }
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                e.preventDefault();
+                pick();
+            }
+        });
         // #95: a broken thumbnail swaps to the fa-image placeholder (sized to the
         // tile so it never overlaps the caption below), keeping the tile clickable.
         img.addEventListener('error', function () {

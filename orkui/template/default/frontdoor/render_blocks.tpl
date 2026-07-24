@@ -52,9 +52,7 @@ foreach ($fdBlocks as $block) {
         // down the page. Preview/admin only: emit a small inline placeholder so
         // the author knows a block failed. Never leak exception details.
         if ($fdIsPreview) {
-            echo '<div class="fd-pad" style="margin:12px 16px;padding:14px 16px;'
-                . 'border:1px dashed #c9a227;border-radius:10px;background:#fbf6e7;'
-                . 'color:#5c4a12;font-size:14px;line-height:1.5;">'
+            echo '<div class="fd-block-error">'
                 . '<strong>This block could not be rendered.</strong>'
                 . ' It is hidden from public visitors.</div>';
         }

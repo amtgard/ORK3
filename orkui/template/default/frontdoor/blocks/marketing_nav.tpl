@@ -105,7 +105,7 @@ $fdItemIsActive = static function ($item) use ($fdHrefMatchesCurrent): bool {
             <div class="fd-navitem">
                 <?php if (!empty($item['children'])): ?>
                     <a<?= $fdActiveCls ?> href="<?= htmlspecialchars(CmsSanitizer::SafeHrefOrHash($item['href'] ?? ''), ENT_QUOTES) ?>"<?= !empty($item['target']) ? ' target="' . htmlspecialchars($item['target'], ENT_QUOTES) . '" rel="noopener"' : '' ?> aria-haspopup="true" aria-expanded="false">
-                        <?= htmlspecialchars($item['label'] ?? '', ENT_QUOTES) ?> &#9660;
+                        <?= htmlspecialchars($item['label'] ?? '', ENT_QUOTES) ?> <span aria-hidden="true">&#9660;</span>
                     </a>
                     <div class="fd-dropdown">
                         <?php foreach ($item['children'] as $child): ?>

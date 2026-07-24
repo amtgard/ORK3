@@ -192,13 +192,13 @@ include __DIR__ . '/cms/_shell_top.tpl';
             <div class="cms-preview-pane-head">
                 <span class="cms-preview-pane-title"><i class="fas fa-eye"></i> Preview</span>
                 <div class="cms-preview-devtoggle" role="group" aria-label="Preview width">
-                    <button type="button" class="cms-devbtn cms-devbtn-active" data-device="desktop" data-tip="Desktop width"><i class="fas fa-desktop"></i></button>
-                    <button type="button" class="cms-devbtn" data-device="mobile" data-tip="Mobile width"><i class="fas fa-mobile-alt"></i></button>
+                    <button type="button" class="cms-devbtn cms-devbtn-active" data-device="desktop" data-tip="Desktop width" aria-label="Desktop width"><i class="fas fa-desktop" aria-hidden="true"></i></button>
+                    <button type="button" class="cms-devbtn" data-device="mobile" data-tip="Mobile width" aria-label="Mobile width"><i class="fas fa-mobile-alt" aria-hidden="true"></i></button>
                 </div>
                 <span class="cms-spacer"></span>
-                <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewRefresh" data-tip="Refresh preview"><i class="fas fa-redo"></i></button>
-                <a class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewOpen" href="<?= $pageId > 0 ? UIR . 'Cms/preview/' . $pageId . $scopeQ : '#' ?>" target="_blank" rel="noopener" data-tip="Open in new tab"><i class="fas fa-external-link-alt"></i></a>
-                <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-preview-close" id="cmsPreviewClose" data-tip="Close preview"><i class="fas fa-times"></i></button>
+                <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewRefresh" data-tip="Refresh preview" aria-label="Refresh preview"><i class="fas fa-redo" aria-hidden="true"></i></button>
+                <a class="cms-btn cms-btn-sm cms-btn-ghost" id="cmsPreviewOpen" href="<?= $pageId > 0 ? UIR . 'Cms/preview/' . $pageId . $scopeQ : '#' ?>" target="_blank" rel="noopener" data-tip="Open in new tab" aria-label="Open preview in new tab"><i class="fas fa-external-link-alt" aria-hidden="true"></i></a>
+                <button type="button" class="cms-btn cms-btn-sm cms-btn-ghost cms-preview-close" id="cmsPreviewClose" data-tip="Close preview" aria-label="Close preview"><i class="fas fa-times" aria-hidden="true"></i></button>
             </div>
             <div class="cms-preview-pane-body">
                 <div class="cms-preview-frame-wrap" id="cmsPreviewFrameWrap" data-device="desktop">

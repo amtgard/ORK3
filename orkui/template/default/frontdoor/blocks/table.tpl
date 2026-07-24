@@ -68,7 +68,7 @@ html[data-theme="dark"] .fdb-table tbody tr:nth-child(even) td {
 <?php endif; ?>
 <?php if (!empty($rows)): ?>
 <div class="fd-pad">
-    <div class="fdb-table-scroll">
+    <div class="fdb-table-scroll" tabindex="0" role="region" aria-label="<?= htmlspecialchars($caption !== '' ? $caption : 'Table', ENT_QUOTES) ?>">
         <table class="fdb-table">
             <?php if ($caption !== ''): ?>
                 <caption><?= htmlspecialchars($caption, ENT_QUOTES) ?></caption>

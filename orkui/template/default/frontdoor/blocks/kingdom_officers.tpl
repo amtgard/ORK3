@@ -158,7 +158,7 @@ $koRoleLabels = [
                             <img src="<?= htmlspecialchars($koAvatarUrl, ENT_QUOTES) ?>"
                                  style="display:none;"
                                  onload="this.style.display='';this.parentNode.querySelector('i').style.display='none';"
-                                 alt="<?= $koNameOut ?>">
+                                 alt="">
                         <?php endif; ?>
                     </div>
                     <?php if ($koRoleOut !== ''): ?>

@@ -57,7 +57,7 @@ $rows    = $hasRows ? array_slice($EventSummary, 0, $limit) : [];
                     <div style="height:8px;background:var(--gold);"></div>
                     <div style="padding:16px;">
                         <?php if (!empty($dateLabel)): ?>
-                            <div style="font-size:12px;color:#b8860b;font-weight:700;text-transform:uppercase;">
+                            <div class="fd-ev-date">
                                 <?= htmlspecialchars($dateLabel, ENT_QUOTES) ?>
                             </div>
                         <?php endif; ?>

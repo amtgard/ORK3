@@ -28,20 +28,23 @@ $links   = $blockFields['links']   ?? '';
         </p>
     <?php endif; ?>
 
-    <?php foreach ($ctas as $i => $cta): ?>
-        <?php
-        $btnClass = ($cta['style'] ?? '') === 'gold' ? 'fd-btn-gold' : 'fd-btn-ghost';
-        $marginLeft = $i > 0 ? ' style="margin-left:10px;"' : '';
-        $ctaHref = CmsSanitizer::SafeHrefOrHash($cta['href'] ?? '');
-        ?>
-        <a class="<?= htmlspecialchars($btnClass, ENT_QUOTES) ?>"
-           href="<?= htmlspecialchars($ctaHref, ENT_QUOTES) ?>"<?= $marginLeft ?>>
-            <?= htmlspecialchars($cta['label'] ?? '', ENT_QUOTES) ?>
-        </a>
-    <?php endforeach; ?>
+    <?php if (!empty($ctas)): ?>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;">
+            <?php foreach ($ctas as $i => $cta): ?>
+                <?php
+                $btnClass = ($cta['style'] ?? '') === 'gold' ? 'fd-btn-gold' : 'fd-btn-ghost';
+                $ctaHref = CmsSanitizer::SafeHrefOrHash($cta['href'] ?? '');
+                ?>
+                <a class="<?= htmlspecialchars($btnClass, ENT_QUOTES) ?>"
+                   href="<?= htmlspecialchars($ctaHref, ENT_QUOTES) ?>">
+                    <?= htmlspecialchars($cta['label'] ?? '', ENT_QUOTES) ?>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 
     <?php if (!empty($links)): ?>
-        <div style="margin-top:18px;font-size:12px;opacity:.5;">
+        <div style="margin-top:18px;font-size:13px;opacity:.75;">
             <?= htmlspecialchars($links, ENT_QUOTES) ?>
         </div>
     <?php endif; ?>

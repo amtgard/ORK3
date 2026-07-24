@@ -51,7 +51,7 @@ if (empty($renderSlides)) {
     return;
 }
 ?>
-<div class="fd-carousel" data-autoplay="<?= $autoplayMs ?>">
+<div class="fd-carousel" data-autoplay="<?= $autoplayMs ?>" role="region" aria-roledescription="carousel" aria-label="Featured highlights">
 
     <?php /* Logo intentionally omitted here — the marketing nav above already shows it. */ ?>
 
@@ -78,14 +78,17 @@ if (empty($renderSlides)) {
             <?php if ($subcopy !== ''): ?>
             <p style="margin:0 0 26px;font-size:18px;color:rgba(255,255,255,.88);max-width:470px"><?= $subcopy ?></p>
             <?php endif; ?>
-            <?php foreach ($ctas as $ctaIdx => $cta):
-                $ctaLabel = htmlspecialchars($cta['label'] ?? '', ENT_QUOTES, 'UTF-8');
-                $ctaHref  = htmlspecialchars(CmsSanitizer::SafeHrefOrHash($cta['href'] ?? ''), ENT_QUOTES, 'UTF-8');
-                $ctaClass = ($cta['style'] ?? '') === 'ghost' ? 'fd-btn-ghost' : 'fd-btn-gold';
-                $ctaStyle = $ctaIdx > 0 ? ' style="margin-left:10px"' : '';
-            ?>
-            <a class="<?= htmlspecialchars($ctaClass, ENT_QUOTES) ?>" href="<?= $ctaHref ?>"<?= $ctaStyle ?>><?= $ctaLabel ?></a>
-            <?php endforeach; ?>
+            <?php if (!empty($ctas)): ?>
+            <div style="display:flex;flex-wrap:wrap;gap:10px">
+                <?php foreach ($ctas as $ctaIdx => $cta):
+                    $ctaLabel = htmlspecialchars($cta['label'] ?? '', ENT_QUOTES, 'UTF-8');
+                    $ctaHref  = htmlspecialchars(CmsSanitizer::SafeHrefOrHash($cta['href'] ?? ''), ENT_QUOTES, 'UTF-8');
+                    $ctaClass = ($cta['style'] ?? '') === 'ghost' ? 'fd-btn-ghost' : 'fd-btn-gold';
+                ?>
+                <a class="<?= htmlspecialchars($ctaClass, ENT_QUOTES) ?>" href="<?= $ctaHref ?>"><?= $ctaLabel ?></a>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
         </div>
     </div>
     <?php endforeach; ?>

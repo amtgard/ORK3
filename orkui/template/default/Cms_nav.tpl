@@ -86,13 +86,13 @@ $renderItem = function ($item, $isChild) use ($h, $canManage) {
             <?php endif; ?>
             <?php if ($canManage): ?>
             <div class="cms-block-tools">
-                <button type="button" class="cms-icon-btn" data-act="up" data-tip="Move up"><i class="fas fa-arrow-up"></i></button>
-                <button type="button" class="cms-icon-btn" data-act="down" data-tip="Move down"><i class="fas fa-arrow-down"></i></button>
+                <button type="button" class="cms-icon-btn" data-act="up" data-tip="Move up" aria-label="Move up"><i class="fas fa-arrow-up" aria-hidden="true"></i></button>
+                <button type="button" class="cms-icon-btn" data-act="down" data-tip="Move down" aria-label="Move down"><i class="fas fa-arrow-down" aria-hidden="true"></i></button>
                 <?php if (!$isChild): ?>
-                    <button type="button" class="cms-icon-btn" data-act="addchild" data-tip="Add sub-item"><i class="fas fa-level-down-alt"></i></button>
+                    <button type="button" class="cms-icon-btn" data-act="addchild" data-tip="Add sub-item" aria-label="Add sub-item"><i class="fas fa-level-down-alt" aria-hidden="true"></i></button>
                 <?php endif; ?>
-                <button type="button" class="cms-icon-btn" data-act="edit" data-tip="Edit"><i class="fas fa-pen"></i></button>
-                <button type="button" class="cms-icon-btn cms-icon-danger" data-act="delete" data-tip="Delete"><i class="fas fa-trash"></i></button>
+                <button type="button" class="cms-icon-btn" data-act="edit" data-tip="Edit" aria-label="Edit"><i class="fas fa-pen" aria-hidden="true"></i></button>
+                <button type="button" class="cms-icon-btn cms-icon-danger" data-act="delete" data-tip="Delete" aria-label="Delete"><i class="fas fa-trash" aria-hidden="true"></i></button>
             </div>
             <?php endif; ?>
         </div>

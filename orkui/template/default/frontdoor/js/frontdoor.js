@@ -105,6 +105,29 @@
       });
     }
 
+    // Touch-swipe: horizontal drag past a threshold advances/rewinds a slide.
+    // Only act when the gesture is clearly horizontal so vertical page scroll
+    // isn't hijacked. Passive listeners — we never preventDefault.
+    var swipeX = null, swipeY = null;
+    car.addEventListener('touchstart', function (e) {
+      var tt = e.changedTouches && e.changedTouches[0];
+      if (!tt) { return; }
+      swipeX = tt.clientX;
+      swipeY = tt.clientY;
+    }, { passive: true });
+    car.addEventListener('touchend', function (e) {
+      if (swipeX === null) { return; }
+      var tt = e.changedTouches && e.changedTouches[0];
+      if (!tt) { swipeX = swipeY = null; return; }
+      var dx = tt.clientX - swipeX,
+        dy = tt.clientY - swipeY;
+      swipeX = swipeY = null;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+        go(dx < 0 ? i + 1 : i - 1, true);
+        restart();
+      }
+    }, { passive: true });
+
     syncToggle();
     restart();
   });

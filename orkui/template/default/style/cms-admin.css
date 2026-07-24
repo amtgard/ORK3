@@ -12,6 +12,11 @@
  * Responsive: layouts stack on narrow viewports.
  * ========================================================================== */
 
+/* Warning/accent token used by Cms_media.tpl ("In use" label) and note-live
+   surfaces. Defined globally so it isn't left undefined (bad contrast). */
+:root { --ork-warn: #9c4221; }
+html[data-theme="dark"] { --ork-warn: #fbd38d; }
+
 .cms-wrap {
     /* Admin brand accent tokens, scoped to the admin shell */
     --cms-gold: #f0b429;
@@ -317,8 +322,17 @@ html[data-theme="dark"] .cms-crumb[href]:hover { color: var(--cms-gold, #f0b429)
 @media (max-width: 560px) {
     .cms-rail-word { display: none; }
     .cms-rail-brand { padding: 0 8px 0 4px; }
-    .cms-rail-item .cms-rail-label { display: none; }
-    .cms-rail-item-quiet .cms-rail-label { display: none; }
+    /* Keep the label in the a11y tree (screen readers / accessible name)
+       while hiding it visually — icon-only rail must not strip names. */
+    .cms-rail-item .cms-rail-label,
+    .cms-rail-item-quiet .cms-rail-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
     .cms-rail-item { padding: 8px 10px; }
     .cms-rail-icon { font-size: 16px; }
     .cms-shell-actions { margin-left: 0; width: 100%; }
@@ -957,6 +971,39 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 }
 .cms-icon-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
 .cms-icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+/* Touch: enlarge the block-editor icon controls toward the ~44px minimum and
+   space them out so they aren't clustered below the finger-friendly size. */
+@media (max-width: 680px) {
+    .cms-block-tools { gap: 8px; }
+    .cms-block-tools .cms-icon-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 15px;
+    }
+}
+
+/* Narrow phones: let the nav-manager row wrap so the action buttons drop to
+   their own full-width row (no off-screen clipping) and stay tappable. */
+@media (max-width: 560px) {
+    .cms-nav-item .cms-block-head { flex-wrap: wrap; }
+    .cms-nav-item .cms-block-tools {
+        width: 100%;
+        margin-left: 0;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+    .cms-nav-item .cms-block-tools .cms-icon-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 15px;
+    }
+    .cms-nav-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
 .cms-icon-btn.cms-icon-danger:hover { background: var(--ork-badge-red-bg); color: var(--ork-badge-red-text); }
 
 .cms-block-body { padding: 10px 12px; }
@@ -1177,6 +1224,7 @@ html[data-theme="dark"] .cms-note a { color: var(--cms-gold, #f0b429); }
 }
 .cms-media-tile:hover { border-color: var(--cms-gold-deep, #caa23a); transform: translateY(-1px); }
 .cms-media-tile.cms-selected { border-color: var(--cms-gold, #f0b429); box-shadow: 0 0 0 2px rgba(240, 180, 41, .45); }
+.cms-media-tile:focus-visible { outline: 2px solid var(--cms-gold, #f0b429); outline-offset: 2px; }
 .cms-media-tile img {
     width: 100%; height: 92px; object-fit: cover; display: block; background: var(--ork-bg-tertiary);
 }
@@ -2334,7 +2382,15 @@ html[data-theme="dark"] .cms-sitecard-badge-pub { background: #2e9d55; }
 html[data-theme="dark"] .cms-dash-livelink:hover { color: var(--cms-gold, #f0b429); }
 
 @media (max-width: 560px) {
-    .cms-recent-actions .cms-btn-label { display: none; }
+    /* Collapse the label visually but keep the accessible name. */
+    .cms-recent-actions .cms-btn-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
 }
 
 /* ============================================================================

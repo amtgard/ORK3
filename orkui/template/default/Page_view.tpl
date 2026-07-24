@@ -26,7 +26,7 @@ $fdCrumbCurrent   = (isset($CurrentPage) && is_array($CurrentPage)) ? (string) (
 if ($fdCrumbCurrent !== ''):
 ?>
 <nav class="fd-breadcrumbs" aria-label="Breadcrumb">
-	<a href="/orkui/index.php">Home</a>
+	<a href="<?= htmlspecialchars(UIR, ENT_QUOTES) ?>">Home</a>
 	<?php foreach ($fdCrumbAncestors as $fdAnc): ?>
 		<?php if (!is_array($fdAnc)) { continue; } ?>
 		<span class="fd-crumb-sep" aria-hidden="true">&rsaquo;</span>

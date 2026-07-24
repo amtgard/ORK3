@@ -24,7 +24,7 @@ $people       = $blockFields['people']       ?? [];
             <h2 class="fd-sec-title"><?= htmlspecialchars($heading, ENT_QUOTES) ?></h2>
         <?php endif; ?>
         <?php if (!empty($subheading)): ?>
-            <p style="color:#667;margin:6px 0 0;font-size:15px;text-align:center;"><?= htmlspecialchars($subheading, ENT_QUOTES) ?></p>
+            <p class="fd-roster-sub" style="margin:6px 0 0;font-size:15px;text-align:center;"><?= htmlspecialchars($subheading, ENT_QUOTES) ?></p>
         <?php endif; ?>
     </div>
 
@@ -109,9 +109,7 @@ $people       = $blockFields['people']       ?? [];
                     <?php if ($bio !== ''): ?>
                         <div class="fd-roster-bio"><?= nl2br(htmlspecialchars($bio, ENT_QUOTES)) ?></div>
                     <?php endif; ?>
-                    <?php if ($bio !== '' || $link !== ''): ?>
-                        <div class="fd-roster-more">View details &rarr;</div>
-                    <?php endif; ?>
+                    <div class="fd-roster-more">View details &rarr;</div>
                 <?= $close ?>
             <?php endforeach; ?>
         </div>
@@ -176,8 +174,45 @@ if (empty($GLOBALS['__fd_roster_modal_emitted'])):
         var elBio   = document.getElementById('fdRModalBio');
         var elProfile = document.getElementById('fdRModalProfile');
         var lastTrigger = null;
+        var inertNodes = [];   // {el, hadAriaHidden, prevAriaHidden, hadInert}
 
         function setField(el, val) { if (val) { el.textContent = val; el.hidden = false; } else { el.textContent = ''; el.hidden = true; } }
+
+        // Make everything outside the modal inert + aria-hidden so SR/keyboard
+        // users can't Tab or scroll past the dialog. Walk the siblings of the
+        // modal at every level from its parent up to <body> (mirrors the gallery
+        // lightbox inert pattern).
+        function setBackgroundInert(on) {
+            if (on) {
+                inertNodes = [];
+                var node = modal;
+                while (node && node.parentNode && node.parentNode.nodeType === 1) {
+                    var parent = node.parentNode;
+                    var kids = parent.children;
+                    for (var k = 0; k < kids.length; k++) {
+                        var sib = kids[k];
+                        if (sib === node) { continue; }
+                        inertNodes.push({
+                            el: sib,
+                            hadAriaHidden: sib.hasAttribute('aria-hidden'),
+                            prevAriaHidden: sib.getAttribute('aria-hidden'),
+                            hadInert: sib.hasAttribute('inert')
+                        });
+                        sib.setAttribute('aria-hidden', 'true');
+                        sib.setAttribute('inert', '');
+                    }
+                    if (parent === document.body || parent.tagName === 'BODY') { break; }
+                    node = parent;
+                }
+            } else {
+                inertNodes.forEach(function (r) {
+                    if (r.hadAriaHidden) { r.el.setAttribute('aria-hidden', r.prevAriaHidden); }
+                    else { r.el.removeAttribute('aria-hidden'); }
+                    if (!r.hadInert) { r.el.removeAttribute('inert'); }
+                });
+                inertNodes = [];
+            }
+        }
 
         function open(trigger) {
             var d = trigger.dataset;
@@ -201,6 +236,7 @@ if (empty($GLOBALS['__fd_roster_modal_emitted'])):
             modal.hidden = false;
             modal.classList.add('is-open');
             modal.setAttribute('aria-hidden', 'false');
+            setBackgroundInert(true);
             document.body.style.overflow = 'hidden';
             cardEl.focus();
         }
@@ -208,6 +244,7 @@ if (empty($GLOBALS['__fd_roster_modal_emitted'])):
             modal.classList.remove('is-open');
             modal.hidden = true;
             modal.setAttribute('aria-hidden', 'true');
+            setBackgroundInert(false);
             document.body.style.overflow = '';
             if (lastTrigger && typeof lastTrigger.focus === 'function') { lastTrigger.focus(); }
             lastTrigger = null;
