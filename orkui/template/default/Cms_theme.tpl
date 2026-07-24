@@ -219,7 +219,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     src="<?= $h(UIR) ?>"
                     title="Theme preview"
                     sandbox="allow-same-origin allow-scripts"></iframe>
-            <div class="te-preview-note">Live preview &mdash; changes are not applied to your site until you Save.</div>
+            <div class="te-preview-note">Live preview &mdash; changes are <strong>not applied to your public site</strong> until you click <strong>Apply to site</strong>. Saving only stores a draft theme.</div>
         </div><!-- /.te-preview -->
 
     </div><!-- /.te-layout -->
@@ -229,11 +229,19 @@ include __DIR__ . '/cms/_shell_top.tpl';
         <button type="button" id="te-reset" class="te-btn te-btn-ghost">
             <i class="fas fa-undo" aria-hidden="true"></i> Reset to defaults
         </button>
+        <div class="te-active-status" id="te-active-status" data-active="<?= $activeId > 0 ? '1' : '0' ?>">
+            <?php if ($activeId > 0): ?>
+                <i class="fas fa-circle" aria-hidden="true"></i> A saved theme is currently applied to your public site.
+            <?php else: ?>
+                <i class="fas fa-circle-notch" aria-hidden="true"></i> No theme applied yet &mdash; your public site uses default styling.
+            <?php endif; ?>
+        </div>
         <div class="te-actions-right">
-            <button type="button" id="te-save" class="te-btn">
-                <i class="fas fa-save" aria-hidden="true"></i> Save
+            <span class="cms-editbar-hint" id="teDirtyHint"></span>
+            <button type="button" id="te-save" class="te-btn" data-tip="Store your changes as a draft theme without changing your public site.">
+                <i class="fas fa-save" aria-hidden="true"></i> Save draft theme
             </button>
-            <button type="button" id="te-activate" class="te-btn te-btn-primary">
+            <button type="button" id="te-activate" class="te-btn te-btn-primary" data-tip="Save and make this the live theme on your public site.">
                 <i class="fas fa-check" aria-hidden="true"></i> Apply to site
             </button>
         </div>
@@ -272,6 +280,21 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
     var AJAX = <?= json_encode(UIR) ?> + 'CmsAjax/';
     var CSRF = window.CMS_CSRF || '';
     var savedThemeId = window.THEME_ACTIVE_ID || 0;
+
+    /* ---- Unsaved-work guard (mirrors the page/post editors) ---- */
+    var dirty = false;
+    var dirtyHint = document.getElementById('teDirtyHint');
+    function markDirty() {
+        dirty = true;
+        if (dirtyHint) { dirtyHint.textContent = 'Unsaved changes…'; dirtyHint.className = 'cms-editbar-hint cms-editbar-hint-dirty'; }
+    }
+    function clearDirty() {
+        dirty = false;
+        if (dirtyHint) { dirtyHint.textContent = ''; dirtyHint.className = 'cms-editbar-hint'; }
+    }
+    window.addEventListener('beforeunload', function (e) {
+        if (dirty) { e.preventDefault(); e.returnValue = ''; }
+    });
 
     /* ---- Toast ---- */
     var toastEl = document.getElementById('teToast');
@@ -360,6 +383,7 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
             });
             schedulePreview();
             runContrastCheck();
+            markDirty();
         } else if (hexFor) {
             var hex = el.value;
             if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
@@ -371,6 +395,7 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
                 });
                 schedulePreview();
                 runContrastCheck();
+                markDirty();
             }
         }
     }
@@ -408,6 +433,7 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
             });
             schedulePreview();
             runContrastCheck();
+            markDirty();
         });
     });
 
@@ -542,7 +568,8 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
             setBusy(false);
             if (!res || !res.ok) { toast((res && res.error) || 'Save failed.', 'error'); return; }
             if (res.theme_id) { savedThemeId = parseInt(res.theme_id, 10) || savedThemeId; }
-            toast('Theme saved.', 'ok');
+            clearDirty();
+            toast('Draft theme saved.', 'ok');
             if (cb) { cb(); }
         }).catch(function () {
             setBusy(false);
@@ -563,7 +590,13 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
                 post('activatetheme', { theme_id: savedThemeId }).then(function (res) {
                     setBusy(false);
                     if (!res || !res.ok) { toast((res && res.error) || 'Activate failed.', 'error'); return; }
-                    toast('Theme applied to your site.', 'ok');
+                    clearDirty();
+                    var statusEl = document.getElementById('te-active-status');
+                    if (statusEl) {
+                        statusEl.setAttribute('data-active', '1');
+                        statusEl.innerHTML = '<i class="fas fa-circle" aria-hidden="true"></i> A saved theme is currently applied to your public site.';
+                    }
+                    toast('Theme applied to your public site.', 'ok');
                 }).catch(function () { setBusy(false); toast('Network error.', 'error'); });
             });
         });
@@ -583,6 +616,8 @@ window.THEME_ACTIVE_ID = <?= (int)$activeId ?>;
                         setBusy(false);
                         if (!res || !res.ok) { toast((res && res.error) || 'Reset failed.', 'error'); return; }
                         toast('Theme reset to defaults.', 'ok');
+                        // Clear the dirty guard so the reload isn't blocked by beforeunload.
+                        clearDirty();
                         // Reload to repopulate controls from factory defaults.
                         window.location.reload();
                     }).catch(function () { setBusy(false); toast('Network error.', 'error'); });

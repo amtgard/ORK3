@@ -7,8 +7,9 @@
  * one published global CMS page per spec, re-hosting images into the CMS media
  * library and self-hosting linked PDFs under assets/cms-docs/.
  *
- * Idempotent: non-system pages are deleted by slug then recreated; media is
- * deduped by a deterministic filename (amtg-<slug>-<file>); docs deduped by name.
+ * Idempotent: an existing non-system page with the same slug is UPDATED in place
+ * (its page_id is preserved so nav links / bookmarks survive); media is deduped
+ * by a deterministic filename (amtg-<slug>-<file>); docs deduped by name.
  * Parents are created before children so parent_id resolves.
  *
  * Media src/thumb are stored ROOT-RELATIVE (/assets/...) so content is
@@ -203,6 +204,52 @@ $copyDoc = function ($slug, $file, $label, $name) use ($STG, $docsDir) {
         fwrite(STDERR, "  missing doc $slug/$file\n");
         return null;
     }
+
+    // Only real documents may land in the web-servable /assets/cms-docs/ dir.
+    // Validate against BOTH a document extension allowlist AND a sniffed-MIME
+    // allowlist (finfo) so an active-content file (.html/.svg/.js — or one whose
+    // extension was spoofed to .pdf) is rejected and logged, never copied into a
+    // path the web server would hand back and, for HTML/SVG, execute.
+    static $allowExt = array(
+        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+        'txt', 'csv', 'rtf', 'odt', 'ods', 'odp',
+    );
+    static $allowMime = array(
+        'application/pdf',
+        'application/msword',
+        'application/vnd.ms-excel',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'application/vnd.oasis.opendocument.text',
+        'application/vnd.oasis.opendocument.spreadsheet',
+        'application/vnd.oasis.opendocument.presentation',
+        'application/rtf', 'text/rtf',
+        'text/plain', 'text/csv',
+        // OOXML/ODF are ZIP containers; legacy MS Office is an OLE compound file.
+        'application/zip', 'application/x-ole-storage', 'application/CDFV2',
+    );
+    $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+    if (!in_array($ext, $allowExt, true)) {
+        fwrite(STDERR, "  REJECT doc $slug/$file (extension '$ext' not an allowed document type)\n");
+        return null;
+    }
+    $mime = '';
+    if (function_exists('finfo_open')) {
+        $fi = @finfo_open(FILEINFO_MIME_TYPE);
+        if ($fi) {
+            $mime = (string) @finfo_file($fi, $abs);
+            finfo_close($fi);
+        }
+    }
+    // When finfo produced a type, it MUST be on the allowlist (this is what
+    // catches an .html/.svg/.js file renamed to look like a document).
+    if ($mime !== '' && !in_array($mime, $allowMime, true)) {
+        fwrite(STDERR, "  REJECT doc $slug/$file (sniffed MIME '$mime' not an allowed document type)\n");
+        return null;
+    }
+
     $safe = preg_replace('/[^A-Za-z0-9._-]/', '_', $name ?: basename($file));
     if (!is_file("$docsDir/$safe")) {
         @copy($abs, "$docsDir/$safe");
@@ -312,9 +359,7 @@ foreach ($order as $slug) {
     }
 
     $existing = $cms->GetPageBySlug($slug, 'global', 0, false);
-    if (!empty($existing) && empty($existing['is_system'])) {
-        $cms->DeletePage((int) $existing['page_id']);
-    } elseif (!empty($existing) && !empty($existing['is_system'])) {
+    if (!empty($existing) && !empty($existing['is_system'])) {
         $report[] = "$slug: SKIPPED (system page)";
         continue;
     }
@@ -322,7 +367,11 @@ foreach ($order as $slug) {
     $parentId = (!empty($spec['parent_slug']) && isset($idBySlug[$spec['parent_slug']]))
         ? $idBySlug[$spec['parent_slug']] : null;
 
-    $pid = (int) $cms->CreatePage(array(
+    // Update-in-place when the page already exists: preserve its page_id (so nav
+    // relink targets / bookmarks keep resolving) and refresh meta + body, instead
+    // of the old DeletePage+CreatePage churn that minted a new id and orphaned
+    // nav links / blocks each run.
+    $pageData = array(
         'slug' => $slug,
         'type' => isset($spec['type']) ? $spec['type'] : 'composed',
         'title' => isset($spec['title']) ? $spec['title'] : $slug,
@@ -331,10 +380,18 @@ foreach ($order as $slug) {
         'scope_type' => 'global', 'scope_id' => 0, 'is_system' => 0,
         'parent_id' => $parentId,
         'created_by' => $by, 'created_at' => $now, 'updated_by' => $by, 'updated_at' => $now,
-    ));
-    if ($pid <= 0) {
-        $report[] = "$slug: CREATE FAILED";
-        continue;
+    );
+    if (!empty($existing) && !empty($existing['page_id'])) {
+        $pid = (int) $existing['page_id'];
+        // UpdatePage writes only whitelisted columns (created_by/created_at are
+        // ignored, preserving the original creation stamps).
+        $cms->UpdatePage($pid, $pageData);
+    } else {
+        $pid = (int) $cms->CreatePage($pageData);
+        if ($pid <= 0) {
+            $report[] = "$slug: CREATE FAILED";
+            continue;
+        }
     }
     $idBySlug[$slug] = $pid;
     $cms->SetStatus($pid, 'published', $by);

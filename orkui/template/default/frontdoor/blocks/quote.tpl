@@ -20,6 +20,8 @@ $cite = $blockFields['cite'] ?? '';
     line-height: 1.45;
     font-style: italic;
     color: var(--ink, #1a2236);
+    /* Preserve newlines authored in the textarea (text is escaped, not HTML). */
+    white-space: pre-line;
 }
 .fdb-quote-text::before { content: "\201C"; }
 .fdb-quote-text::after  { content: "\201D"; }

@@ -11,9 +11,13 @@ $steps   = $blockFields['steps']   ?? [];
 $cta     = $blockFields['cta']     ?? [];
 
 $isDark  = ($band === 'dark');
-$bgStyle = $isDark ? 'background:var(--navy);color:var(--fd-primary-contrast);' : 'background:#f7f8fb;';
+// Light band: render via the .fd-section-muted class (no inline background) so
+// the html[data-theme="dark"] override can win. The dark band keeps its inline
+// navy (a deliberately dark band in either theme).
+$bandClass = $isDark ? '' : ' fd-section-muted';
+$bandStyle = $isDark ? ' style="background:var(--navy);color:var(--fd-primary-contrast);"' : '';
 ?>
-<div class="fd-pad" style="<?= $bgStyle ?>">
+<div class="fd-pad<?= $bandClass ?>"<?= $bandStyle ?>>
     <div style="text-align:center;margin-bottom:26px;">
         <?php if (!empty($kicker)): ?>
             <div class="fd-kicker" style="margin-bottom:8px;">
@@ -53,8 +57,12 @@ $bgStyle = $isDark ? 'background:var(--navy);color:var(--fd-primary-contrast);' 
                     <?php endif; ?>
 
                     <?php if (!empty($body)): ?>
-                        <div class="fd-body-text" style="font-size:14px;<?= $isDark ? 'opacity:.75;' : '' ?>">
-                            <?= htmlspecialchars($body, ENT_QUOTES) ?>
+                        <?php // #79: 'body' is an HTML field already run through CmsSanitizer::Clean
+                              // on save; a second htmlspecialchars() here double-encoded "&" → "&amp;amp;".
+                              // Emit the sanitized value raw (like richtext). white-space:pre-line
+                              // (#87) keeps authored newlines. ?>
+                        <div class="fd-body-text" style="font-size:14px;white-space:pre-line;<?= $isDark ? 'opacity:.75;' : '' ?>">
+                            <?= $body ?>
                         </div>
                     <?php endif; ?>
                 </div>

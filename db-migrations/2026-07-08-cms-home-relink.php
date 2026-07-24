@@ -15,8 +15,11 @@
  * a FUTURE re-seed — it does not touch the already-stored row. This migration
  * patches the stored row directly so the live HOME page's links work today.
  *
- * Scope: only fields matched by (a) exact href === '#' AND (b) a sibling
- * label/title we recognize are rewritten. The marketing_nav block's items are
+ * Scope: (1) fields matched by (a) exact href === '#' AND (b) a sibling
+ * label/title we recognize are rewritten to real internal destinations; and
+ * (2) any href/more_href/url already BAKED to an absolute host by an earlier
+ * absolute-UIR seed run (e.g. 'http://localhost:19080/orkui/index.php?Route=…')
+ * is stripped back to a host-agnostic '/orkui/…' path. The marketing_nav block's items are
  * intentionally left untouched — marketing_nav.tpl sources the real menu live
  * from the editable CmsNav 'marketing' store (already relinked by
  * 2026-07-08-cms-nav-relink-amtgard.php) whenever that store is non-empty, so
@@ -54,7 +57,12 @@ if (empty($home) || empty($home['page_id'])) {
 }
 $pageId = (int) $home['page_id'];
 
-$blocks = $cms->GetPageBlocks($pageId);
+// C2: hydrate through GetBlocksForEditor (ALL blocks incl. disabled) — NOT the
+// enabled-only GetPageBlocks/GetBlocks. We ReplaceBlocks() the full set back
+// below, so fetching only enabled rows would silently DROP any disabled block
+// on this page. GetBlocksForEditor returns the same block shape (id/type/order/
+// source/fields) as GetBlocks.
+$blocks = $cms->GetBlocksForEditor('page', $pageId);
 if (empty($blocks)) {
     fwrite(STDERR, "Home page #$pageId has no blocks; nothing to relink.\n");
     exit(1);
@@ -103,6 +111,27 @@ $resolve = function ($item) use ($linkFor) {
         return null;
     }
     return $linkFor[$label];
+};
+
+/**
+ * Repair an ALREADY-BAKED absolute internal link. An earlier seed run that
+ * defined UIR from HTTP_UI_REMOTE baked hrefs/more_href to the seed machine's
+ * host (e.g. 'http://localhost:19080/orkui/index.php?Route=Search/event'). Strip
+ * the scheme+host so the stored link is host-agnostic again. Returns the
+ * relativized value, or the original when it is not a baked-absolute internal
+ * link (idempotent: a bare-relative '/orkui/...' value is left untouched).
+ *
+ * @param mixed $v
+ * @return mixed
+ */
+$relativize = function ($v) {
+    if (!is_string($v) || $v === '') {
+        return $v;
+    }
+    if (preg_match('#^https?://[^/]+(/orkui/index\.php\?Route=.*)$#i', $v, $m)) {
+        return $m[1];
+    }
+    return $v;
 };
 
 $changed = array();
@@ -154,6 +183,27 @@ foreach ($blocks as $block) {
                 $new
             );
             $fields[$listKey][$i]['href'] = $new;
+        }
+    }
+
+    // Repair any baked-absolute internal link left by an earlier absolute-UIR
+    // seed (events_feed/kingdoms_teaser 'more_href', plus any top-level
+    // 'href'/'url'). Host-agnostic '/orkui/...' values are left untouched.
+    foreach (array('more_href', 'href', 'url') as $urlKey) {
+        if (!isset($fields[$urlKey]) || !is_string($fields[$urlKey])) {
+            continue;
+        }
+        $fixed = $relativize($fields[$urlKey]);
+        if ($fixed !== $fields[$urlKey]) {
+            $changed[] = sprintf(
+                "block #%d (%s) %s: '%s' -> '%s'",
+                $block['id'],
+                $block['type'],
+                $urlKey,
+                $fields[$urlKey],
+                $fixed
+            );
+            $fields[$urlKey] = $fixed;
         }
     }
 

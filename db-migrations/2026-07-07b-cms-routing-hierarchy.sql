@@ -12,10 +12,11 @@
 --   C17 Reserved slugs + 301 redirects — ork_cms_redirect maps an old path to a
 --       page (or external URL) so a renamed page's inbound links keep working.
 --
--- Idempotent where MariaDB allows it (ADD COLUMN IF NOT EXISTS, CREATE TABLE IF
--- NOT EXISTS). The FK add is NOT guarded (older MariaDB lacks IF NOT EXISTS for
--- FKs); re-running it on an already-migrated DB warns harmlessly. InnoDB /
--- utf8mb4 throughout. No destructive ops.
+-- Idempotent (ADD COLUMN IF NOT EXISTS, CREATE TABLE IF NOT EXISTS). Each named
+-- FK is added via a DROP FOREIGN KEY IF EXISTS (no-op the first run) immediately
+-- followed by ADD CONSTRAINT, so re-running does NOT raise MariaDB ERROR 1826
+-- ("duplicate foreign key constraint name") and abort. MariaDB 10.0.2+ supports
+-- DROP FOREIGN KEY IF EXISTS. InnoDB / utf8mb4 throughout. No destructive ops.
 
 -- ---------------------------------------------------------------------------
 -- C13 — Page hierarchy. A page may nest under one parent page (same scope).
@@ -28,8 +29,10 @@ ALTER TABLE `ork_cms_page`
   ADD COLUMN IF NOT EXISTS `parent_id` int(11) DEFAULT NULL AFTER `scope_id`,
   ADD KEY IF NOT EXISTS `ix_page_parent` (`parent_id`);
 
--- FK NOT guarded (no IF NOT EXISTS for FKs on older MariaDB). ork_cms_page is
--- InnoDB (converted in the safety-net migration), so a self-FK is valid.
+-- ork_cms_page is InnoDB (converted in the safety-net migration), so a self-FK
+-- is valid. DROP-if-exists then ADD keeps re-runs from raising ERROR 1826.
+ALTER TABLE `ork_cms_page`
+  DROP FOREIGN KEY IF EXISTS `fk_cms_page_parent`;
 ALTER TABLE `ork_cms_page`
   ADD CONSTRAINT `fk_cms_page_parent`
     FOREIGN KEY (`parent_id`) REFERENCES `ork_cms_page` (`page_id`)
@@ -68,6 +71,9 @@ CREATE TABLE IF NOT EXISTS `ork_cms_redirect` (
 
 -- Target-page FK (InnoDB→InnoDB). ON DELETE SET NULL so a hard-deleted target
 -- leaves the row as a dead redirect (the app skips rows with neither target).
+-- DROP-if-exists then ADD keeps re-runs from raising ERROR 1826.
+ALTER TABLE `ork_cms_redirect`
+  DROP FOREIGN KEY IF EXISTS `fk_cms_redirect_page`;
 ALTER TABLE `ork_cms_redirect`
   ADD CONSTRAINT `fk_cms_redirect_page`
     FOREIGN KEY (`to_page_id`) REFERENCES `ork_cms_page` (`page_id`)

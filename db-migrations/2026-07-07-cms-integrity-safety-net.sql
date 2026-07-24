@@ -10,10 +10,13 @@
 --   C8  Referential integrity — InnoDB FKs where BOTH sides are InnoDB.
 --   C14 Audit trail — append-only ork_cms_audit.
 --
--- Idempotent where MariaDB allows it (ADD COLUMN IF NOT EXISTS, CREATE TABLE
--- IF NOT EXISTS). FK additions are NOT guarded (older MariaDB lacks IF NOT
--- EXISTS for FKs); re-running the FK block on an already-migrated DB will warn
--- harmlessly. InnoDB / utf8mb4 throughout. No destructive ops.
+-- Idempotent (ADD COLUMN IF NOT EXISTS, CREATE TABLE IF NOT EXISTS). Each named
+-- FK is added via a DROP FOREIGN KEY IF EXISTS (no-op the first run) immediately
+-- followed by ADD CONSTRAINT, so re-running does NOT raise MariaDB ERROR 1826
+-- ("duplicate foreign key constraint name") and abort the rest of the file.
+-- MariaDB 10.0.2+ supports DROP FOREIGN KEY IF EXISTS. InnoDB / utf8mb4
+-- throughout. No destructive ops (dropping a constraint to immediately re-add
+-- the identical one leaves the referential integrity unchanged).
 --
 -- ENGINE NOTE: ork_park / ork_kingdom / ork_mundane are MyISAM/latin1, so the
 -- scope columns (scope_type/scope_id) and creator columns (created_by,
@@ -124,7 +127,13 @@ UPDATE `ork_cms_site` s
   WHERE s.`home_page_id` IS NOT NULL AND p.`page_id` IS NULL;
 
 -- Foreign keys --------------------------------------------------------------
+-- Each ADD is preceded by a matching DROP FOREIGN KEY IF EXISTS so re-running
+-- this file is a safe no-op instead of ERROR 1826 (duplicate constraint name).
+--
 -- post_tag -> post / tag : CASCADE (a purged post/tag drops its links).
+ALTER TABLE `ork_cms_post_tag`
+  DROP FOREIGN KEY IF EXISTS `fk_post_tag_post`,
+  DROP FOREIGN KEY IF EXISTS `fk_post_tag_tag`;
 ALTER TABLE `ork_cms_post_tag`
   ADD CONSTRAINT `fk_post_tag_post` FOREIGN KEY (`post_id`)
     REFERENCES `ork_cms_post` (`post_id`) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -135,6 +144,10 @@ ALTER TABLE `ork_cms_post_tag`
 -- dangling id). nav_item.parent_id -> nav_item : CASCADE (drop a dropdown's
 -- children with its parent), mirroring CmsNav::DeleteItem's behavior.
 ALTER TABLE `ork_cms_nav_item`
+  DROP FOREIGN KEY IF EXISTS `fk_nav_page`,
+  DROP FOREIGN KEY IF EXISTS `fk_nav_post`,
+  DROP FOREIGN KEY IF EXISTS `fk_nav_parent`;
+ALTER TABLE `ork_cms_nav_item`
   ADD CONSTRAINT `fk_nav_page` FOREIGN KEY (`page_id`)
     REFERENCES `ork_cms_page` (`page_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_nav_post` FOREIGN KEY (`post_id`)
@@ -143,6 +156,8 @@ ALTER TABLE `ork_cms_nav_item`
     REFERENCES `ork_cms_nav_item` (`nav_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- site.home_page_id -> page : SET NULL (a purged home page unsets the pointer).
+ALTER TABLE `ork_cms_site`
+  DROP FOREIGN KEY IF EXISTS `fk_site_home_page`;
 ALTER TABLE `ork_cms_site`
   ADD CONSTRAINT `fk_site_home_page` FOREIGN KEY (`home_page_id`)
     REFERENCES `ork_cms_page` (`page_id`) ON DELETE SET NULL ON UPDATE CASCADE;

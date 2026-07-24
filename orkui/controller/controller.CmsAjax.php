@@ -1,6 +1,9 @@
 <?php
 
 require_once __DIR__ . '/trait.CmsScope.php';
+// #42: the canonical block-type allowlist lives on Controller_Cms as the single
+// source of truth; require it so the save-time parser can read it statically.
+require_once __DIR__ . '/controller.Cms.php';
 
 /**
  * Controller_CmsAjax — JSON endpoints for the CMS admin editor.
@@ -37,20 +40,6 @@ class Controller_CmsAjax extends Controller
     /** Block fields that hold a URL → must pass URL-scheme validation on save. */
     private static $URL_FIELDS = array('href', 'more_href', 'url', 'link', 'cta_href', 'button_href', 'src');
 
-    /**
-     * Canonical block-type allowlist — kept in lockstep with the keys of
-     * Controller_Cms::_blockCatalog()'s $known map (the authoritative catalog).
-     * Used by _parseBlocks() to drop blocks with an unknown/forged type.
-     */
-    private static $BLOCK_TYPES = array(
-        'marketing_nav', 'member_bar', 'hero_carousel', 'richtext', 'card_grid',
-        'steps', 'events_feed', 'photo_mosaic', 'kingdoms_teaser', 'cta_band',
-        'staff_roster', 'rich_text', 'heading', 'divider', 'spacer', 'accordion',
-        'quote', 'table', 'image', 'gallery', 'video_embed', 'file_download',
-        'columns', 'raw_html',
-        'blog_feed', 'kingdom_officers', 'kingdom_parks', 'kingdom_parks_map', 'kingdom_events',
-    );
-
     public function __construct($call = null, $action = null)
     {
         parent::__construct($call, $action);
@@ -85,7 +74,7 @@ class Controller_CmsAjax extends Controller
             $this->_require($uid, 'page.create', $scope);
         } else {
             $existing = $this->_requireOwnerEditable($uid, 'page', $pageId, $scope);
-            $this->_guardConcurrency($existing);
+            $this->_guardConcurrency($existing, 'page', $pageId);
         }
 
         // ---- Page meta ----
@@ -142,17 +131,22 @@ class Controller_CmsAjax extends Controller
         }
 
         $count = (int)$this->CmsPage->replace_blocks('page', $pageId, $blocks);
-
-        // Echo the fresh version token so the client can send it back as
-        // base_version on its next save (C15 concurrency contract).
-        $fresh = $this->CmsPage->get_page($pageId);
+        // #40: ReplaceBlocks returns -1 when the post-write verification fails (the
+        // blocks did NOT persist as intended). Fail loudly instead of reporting a
+        // successful save the content didn't actually land in.
+        if ($count < 0) {
+            $this->_fail('Could not save the page content. Please reload and try again.');
+        }
 
         $this->_ok(array(
             'page_id'     => $pageId,
             'slug'        => $slug,
             'block_count' => $count,
             'is_new'      => $isNew,
-            'version'     => (is_array($fresh) && isset($fresh['updated_at'])) ? $fresh['updated_at'] : null,
+            // #49: the version token is now the latest block revision_id (a
+            // monotonic int), which the client resends as base_version — immune to
+            // the second-granular updated_at collision the timestamp token had.
+            'version'     => $this->_latestRevisionId('page', $pageId),
             'saved_at'    => date('c'),
         ));
     }
@@ -262,7 +256,7 @@ class Controller_CmsAjax extends Controller
             $this->_require($uid, 'page.create', $scope);
         } else {
             $existing = $this->_requireOwnerEditable($uid, 'post', $postId, $scope);
-            $this->_guardConcurrency($existing);
+            $this->_guardConcurrency($existing, 'post', $postId);
         }
 
         // ---- Post meta ----
@@ -330,12 +324,14 @@ class Controller_CmsAjax extends Controller
 
         // Body blocks live in the shared polymorphic store under owner_type='post'.
         $count = (int)$this->CmsPage->replace_blocks('post', $postId, $blocks);
+        // #40: -1 means the post-write verification failed — the body blocks did not
+        // persist. Fail loudly rather than reporting a save that didn't land.
+        if ($count < 0) {
+            $this->_fail('Could not save the post content. Please reload and try again.');
+        }
 
         // Echo back the resolved tag set (slugified/deduped) for the editor.
         $tags = $this->CmsPost->get_tags($postId);
-
-        // Fresh version token for the C15 concurrency contract.
-        $fresh = $this->CmsPost->get_post($postId);
 
         $this->_ok(array(
             'post_id'     => $postId,
@@ -343,7 +339,8 @@ class Controller_CmsAjax extends Controller
             'block_count' => $count,
             'is_new'      => $isNew,
             'tags'        => $tags,
-            'version'     => (is_array($fresh) && isset($fresh['updated_at'])) ? $fresh['updated_at'] : null,
+            // #49: latest block revision_id (see savepage) as the concurrency token.
+            'version'     => $this->_latestRevisionId('post', $postId),
             'saved_at'    => date('c'),
         ));
     }
@@ -1204,7 +1201,14 @@ class Controller_CmsAjax extends Controller
     {
         $uid = $this->_begin();
         $scope = $this->_scope($uid);
-        $this->_require($uid, 'page.edit', $scope);
+        // #25: the roster editor is reachable by contributors too — gate on
+        // page.edit OR page.edit_own (an edit_own contributor building their own
+        // draft must be able to resolve a persona), not page.edit alone.
+        if (!$this->CmsAuth->cms_can($uid, 'page.edit', $scope)
+            && !$this->CmsAuth->cms_can($uid, 'page.edit_own', $scope)
+        ) {
+            $this->_fail('You are not authorized to perform this action.', 5);
+        }
 
         $mundaneId = (int)($_GET['mundane_id'] ?? $_POST['mundane_id'] ?? 0);
         if ($mundaneId <= 0) {
@@ -1214,6 +1218,19 @@ class Controller_CmsAjax extends Controller
         $info = Ork3::$Lib->player->player_info($mundaneId);
         if (!$info || empty($info['Persona'])) {
             $this->_fail('Person not found.', 4);
+        }
+
+        // #23: real names are resolvable ONLY behind the CMS capability boundary
+        // AND only for people WITHIN the caller's resolved scope — a kingdom/park
+        // officer must not resolve arbitrary system-wide personas to real names.
+        // Global scope (the front door / super-admin) is unrestricted by design.
+        $scopeType = (string)$scope['type'];
+        $scopeId   = (int)$scope['id'];
+        if ($scopeType === 'kingdom' && (int)($info['KingdomId'] ?? 0) !== $scopeId) {
+            $this->_fail('That person is not a member of this site\'s kingdom.', 4);
+        }
+        if ($scopeType === 'park' && (int)($info['ParkId'] ?? 0) !== $scopeId) {
+            $this->_fail('That person is not a member of this site\'s park.', 4);
         }
 
         $mundaneName = trim(($info['GivenName'] ?? '') . ' ' . ($info['Surname'] ?? ''));
@@ -1397,17 +1414,27 @@ class Controller_CmsAjax extends Controller
 
         $this->load_model('CmsSanitizer');
 
+        // #42: the canonical allowlist comes from Controller_Cms (single source of
+        // truth); resolve it once, not per block.
+        $allowedTypes = Controller_Cms::CanonicalBlockTypes();
+
         $out = array();
         foreach ($decoded as $block) {
             if (!is_array($block) || empty($block['type'])) {
                 continue;
             }
             // Drop blocks whose type is not in the canonical catalog (forged/unknown).
-            if (!in_array((string)$block['type'], self::$BLOCK_TYPES, true)) {
+            if (!in_array((string)$block['type'], $allowedTypes, true)) {
                 continue;
             }
             $fields = (isset($block['fields']) && is_array($block['fields'])) ? $block['fields'] : array();
             $fields = $this->_sanitizeFields($fields);
+            // #103: defense-in-depth — a `columns` block must never contain another
+            // `columns` child (the render side already caps recursion depth). Strip
+            // any nested columns at save so the invalid structure never persists.
+            if ((string)$block['type'] === 'columns') {
+                $fields = $this->_rejectNestedColumns($fields);
+            }
             $out[] = array(
                 // C15: carry the STABLE block id so CmsPage::ReplaceBlocks can
                 // upsert in place (preserve the row) instead of delete-all/reinsert.
@@ -1450,6 +1477,40 @@ class Controller_CmsAjax extends Controller
     }
 
     /**
+     * #103: strip any `columns` child from a columns block's column lists so a
+     * columns-in-columns structure can never be persisted (defense-in-depth; the
+     * render side also caps recursion depth). Each entry in fields['columns'] is
+     * an ordered list of child block objects ({type,...}); a child of type
+     * 'columns' is dropped.
+     *
+     * @param array $fields the columns block's fields
+     * @return array the same fields with nested columns removed
+     */
+    private function _rejectNestedColumns(array $fields)
+    {
+        if (!isset($fields['columns']) || !is_array($fields['columns'])) {
+            return $fields;
+        }
+        $cols = array();
+        foreach ($fields['columns'] as $col) {
+            if (!is_array($col)) {
+                $cols[] = $col;
+                continue;
+            }
+            $kept = array();
+            foreach ($col as $child) {
+                if (is_array($child) && isset($child['type']) && (string)$child['type'] === 'columns') {
+                    continue; // reject nested columns
+                }
+                $kept[] = $child;
+            }
+            $cols[] = array_values($kept);
+        }
+        $fields['columns'] = $cols;
+        return $fields;
+    }
+
+    /**
      * Coerce a slug: prefer the supplied value, fall back to the title; lower,
      * spaces/punct → hyphens, collapse + trim hyphens. Empty → '' (caller fails).
      */
@@ -1487,15 +1548,42 @@ class Controller_CmsAjax extends Controller
      * Editor contract (seam): read `version` from every load AND every save
      * response, and resend it as POST `base_version` on the next save.
      *
-     * @param array $existing the loaded owner row (carries updated_at)
+     * #49: the durable token is the owner's LATEST block revision_id — a
+     * monotonic integer bumped by every ReplaceBlocks — which the save responses
+     * echo and the client resends. A revision-id token is compared exactly and
+     * rejects on ANY change (no more second-granular strtotime() collision, and
+     * no schema change: the revision table already exists). A DATETIME token
+     * (only the very first save after a fresh page load, before a save response
+     * has handed the client a revision id — the initial token is emitted by the
+     * editor template) falls back to the legacy timestamp compare.
+     *
+     * @param array  $existing  the loaded owner row (carries updated_at)
+     * @param string $ownerType 'page' | 'post'
+     * @param int    $ownerId
      * @return void
      */
-    private function _guardConcurrency($existing)
+    private function _guardConcurrency($existing, $ownerType = 'page', $ownerId = 0)
     {
         $baseVersion = trim((string)($_POST['base_version'] ?? ''));
         if ($baseVersion === '') {
             return;   // no token supplied — preserve legacy behavior
         }
+
+        // Revision-id token (all saves after the first): exact compare, reject on
+        // any mismatch. A base of 0 means "loaded with no revisions yet".
+        if (ctype_digit($baseVersion)) {
+            $current = $this->_latestRevisionId($ownerType, (int)$ownerId);
+            if ((int)$baseVersion !== $current) {
+                $this->_fail(
+                    'This content was changed by someone else after you loaded it. '
+                    . 'Reload to get the latest version before saving.',
+                    12
+                );
+            }
+            return;
+        }
+
+        // Legacy datetime token fallback (first save after a fresh load).
         $stored = (is_array($existing) && isset($existing['updated_at'])) ? (string)$existing['updated_at'] : '';
         if ($stored === '') {
             return;
@@ -1509,6 +1597,24 @@ class Controller_CmsAjax extends Controller
                 12
             );
         }
+    }
+
+    /**
+     * #49: the owner's latest block revision_id (0 when none) — the concurrency
+     * token. ListRevisions is newest-first, so the first row is the latest.
+     *
+     * @param string $ownerType 'page' | 'post'
+     * @param int    $ownerId
+     * @return int
+     */
+    private function _latestRevisionId($ownerType, $ownerId)
+    {
+        $ownerType = ($ownerType === 'post') ? 'post' : 'page';
+        $list = $this->CmsPage->ListRevisions($ownerType, (int)$ownerId, 1);
+        if (is_array($list) && isset($list[0]['revision_id'])) {
+            return (int)$list[0]['revision_id'];
+        }
+        return 0;
     }
 
     /**
@@ -1530,15 +1636,13 @@ class Controller_CmsAjax extends Controller
         $when = ($rawWhen !== '') ? strtotime($rawWhen) : false;
 
         if ($when !== false && $when > time()) {
-            // NOTE: call the lib's 4-param SetStatus (via __call), NOT the model's
-            // set_status wrapper — that wrapper is 3-param and silently DROPS the
-            // published_at timestamp, which would schedule with published_at=NOW
-            // (immediate go-live on the next read) instead of the requested future
-            // time, defeating C7 scheduling entirely.
-            $model->SetStatus((int)$id, 'scheduled', (int)$uid, date('Y-m-d H:i:s', $when));
+            // #63: the set_status wrapper now mirrors the lib's 4-param signature
+            // and forwards published_at, so a future timestamp schedules correctly
+            // (no more __call bypass to reach the 4-param SetStatus).
+            $model->set_status((int)$id, 'scheduled', (int)$uid, date('Y-m-d H:i:s', $when));
             return 'scheduled';
         }
-        $model->SetStatus((int)$id, 'published', (int)$uid);
+        $model->set_status((int)$id, 'published', (int)$uid);
         return 'published';
     }
 

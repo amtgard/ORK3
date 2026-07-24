@@ -7,6 +7,11 @@
 $kicker   = $blockFields['kicker']    ?? '';
 $heading  = $blockFields['heading']   ?? '';
 $limit    = (int)($blockFields['limit'] ?? 3);
+// A cleared number input arrives as 0/blank — fall back to a sane default rather
+// than slicing to an empty grid under a live heading (sibling blocks do the same).
+if ($limit < 1) {
+    $limit = 3;
+}
 $moreHref = $blockFields['more_href'] ?? '';
 
 $hasRows = is_array($EventSummary) && count($EventSummary) > 0;
@@ -59,11 +64,11 @@ $rows    = $hasRows ? array_slice($EventSummary, 0, $limit) : [];
                         <div style="font-weight:700;font-size:15px;margin:4px 0;">
                             <?= $name ?>
                         </div>
-                        <div style="font-size:12px;color:#778;">
+                        <div class="fd-ev-sub">
                             <?= $kingdomName ?>
                         </div>
                         <?php if ($rsvpGoing > 0): ?>
-                            <div style="font-size:12px;color:#1d4ed8;margin-top:6px;font-weight:600;">
+                            <div class="fd-ev-rsvp">
                                 <?= $rsvpGoing ?> going
                             </div>
                         <?php endif; ?>

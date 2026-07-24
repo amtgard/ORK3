@@ -27,17 +27,41 @@ $slides     = $blockFields['slides']      ?? [];
 $ctas       = $blockFields['ctas']        ?? [];
 $slides     = is_array($slides) ? $slides : [];
 $ctas       = is_array($ctas)   ? $ctas   : [];
+
+// #82: keep only slides that actually have something to show (image, headline,
+// subcopy, or kicker). With no renderable slides, render nothing for visitors;
+// in the author preview (SitePreview) surface a hint so the empty state is
+// discoverable in the editor instead of a blank strip.
+$renderSlides = array_values(array_filter($slides, static function ($s) {
+    if (!is_array($s)) {
+        return false;
+    }
+    $imgRef = is_array($s['image'] ?? null) ? $s['image'] : [];
+    return trim(
+        (string)($imgRef['src'] ?? '')
+        . (string)($s['headline'] ?? '')
+        . (string)($s['subcopy'] ?? '')
+        . (string)($s['kicker'] ?? '')
+    ) !== '';
+}));
+if (empty($renderSlides)) {
+    if (!empty($data['SitePreview'])) {
+        echo '<div class="fd-pad" style="text-align:center;color:#8a97ad;font-style:italic;">This carousel has no slides yet.</div>';
+    }
+    return;
+}
 ?>
 <div class="fd-carousel" data-autoplay="<?= $autoplayMs ?>">
 
     <?php /* Logo intentionally omitted here — the marketing nav above already shows it. */ ?>
 
-    <?php foreach ($slides as $idx => $slide):
+    <?php foreach ($renderSlides as $idx => $slide):
         $isFirst   = ($idx === 0);
         // The first slide's headline is the page H1; later slides (alternate
         // views of the same hero) use H2 so the page keeps a single H1.
         $hlTag     = $isFirst ? 'h1' : 'h2';
-        $imgSrc    = htmlspecialchars($slide['image']['src'] ?? '', ENT_QUOTES, 'UTF-8');
+        // C4: prefer the mid-size "display" rendition for the hero background.
+        $imgSrc    = htmlspecialchars($slide['image']['display'] ?? $slide['image']['src'] ?? '', ENT_QUOTES, 'UTF-8');
         $imgAlt    = htmlspecialchars($slide['image']['alt'] ?? '', ENT_QUOTES, 'UTF-8');
         $kicker    = htmlspecialchars($slide['kicker']   ?? '', ENT_QUOTES, 'UTF-8');
         $headline  = htmlspecialchars($slide['headline'] ?? '', ENT_QUOTES, 'UTF-8');
@@ -66,9 +90,9 @@ $ctas       = is_array($ctas)   ? $ctas   : [];
     </div>
     <?php endforeach; ?>
 
-    <?php if (count($slides) > 1): ?>
+    <?php if (count($renderSlides) > 1): ?>
     <div class="fd-dots">
-        <?php foreach ($slides as $idx => $slide): ?>
+        <?php foreach ($renderSlides as $idx => $slide): ?>
         <button type="button" class="fd-dot<?= $idx === 0 ? ' on' : '' ?>"
                 aria-label="Go to slide <?= (int)$idx + 1 ?>"<?= $idx === 0 ? ' aria-current="true"' : '' ?>></button>
         <?php endforeach; ?>

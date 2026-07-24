@@ -3,8 +3,9 @@
 /**
  * Seed two staff_roster exemplar pages (content adapted from amtgard.com:
  * /teamleads and /bod) to demonstrate the new Staff Roster block. Pages are
- * created as DRAFTS (staged for review, not published). Idempotent: deletes any
- * existing non-system page with the same slug, then recreates it. Run once:
+ * created as DRAFTS (staged for review, not published). Idempotent: an existing
+ * non-system page with the same slug is UPDATED in place (page_id preserved so
+ * nav links survive) and re-drafted; otherwise it is created. Run once:
  *   docker exec ork3-php8-app php /var/www/ork.amtgard.com/db-migrations/2026-06-27-cms-seed-staff-roster.php
  *
  * Team Leads cards carry their public amtgard.com headshots + a mailto: link.
@@ -106,20 +107,30 @@ $report = array();
 foreach ($pages as $def) {
     $slug = $def['page']['slug'];
     $existing = $cms->GetPageBySlug($slug, 'global', 0, false);
-    if (!empty($existing) && empty($existing['is_system'])) {
-        $cms->DeletePage((int) $existing['page_id']); // fresh re-seed
-    } elseif (!empty($existing) && !empty($existing['is_system'])) {
+    if (!empty($existing) && !empty($existing['is_system'])) {
         $report[] = "$slug: SKIPPED (system page)";
         continue;
     }
+    // Update-in-place when the page already exists: preserve its page_id (so nav
+    // links / bookmarks keep resolving) and refresh meta + body, instead of the
+    // old DeletePage+CreatePage churn that minted a new id and orphaned links.
+    $updateInPlace = (!empty($existing) && !empty($existing['page_id']));
     $data = array_merge($def['page'], array(
         'status' => 'draft', 'published_at' => null, 'scope_type' => 'global', 'scope_id' => 0,
         'is_system' => 0, 'created_by' => $by, 'created_at' => $now, 'updated_by' => $by, 'updated_at' => $now,
     ));
-    $pid = (int) $cms->CreatePage($data);
-    if ($pid <= 0) {
-        $report[] = "$slug: FAILED to create";
-        continue;
+    if ($updateInPlace) {
+        $pid = (int) $existing['page_id'];
+        // UpdatePage only writes whitelisted columns (created_by/created_at are
+        // ignored, so the original creation stamps are preserved). Re-seeding a
+        // page a reviewer already published intentionally re-drafts it here.
+        $cms->UpdatePage($pid, $data);
+    } else {
+        $pid = (int) $cms->CreatePage($data);
+        if ($pid <= 0) {
+            $report[] = "$slug: FAILED to create";
+            continue;
+        }
     }
     $blocks = array();
     $i = 0;

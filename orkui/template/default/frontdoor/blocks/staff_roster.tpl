@@ -75,24 +75,23 @@ $people       = $blockFields['people']       ?? [];
                 if ($initials === '') { $initials = '?'; }
                 $photoSrc = !empty($img['src']) ? (string) $img['src'] : '';
 
-                if ($link !== '') {
-                    // Linked card (member profile / explicit URL) keeps navigating.
-                    $open  = '<a class="fd-roster-card" href="' . htmlspecialchars($link, ENT_QUOTES) . '">';
-                    $close = '</a>';
-                } else {
-                    // Unlinked card → clickable trigger for the contact-card modal.
-                    // Carries the FULL (untruncated) bio so the modal can show it in
-                    // full even though the card body clamps it.
-                    $open = '<div class="fd-roster-card fd-roster-card-modal" role="button" tabindex="0"'
-                        . ' aria-haspopup="dialog" aria-label="' . htmlspecialchars('View ' . $primary, ENT_QUOTES) . '"'
-                        . ' data-fd-name="' . htmlspecialchars($primary, ENT_QUOTES) . '"'
-                        . ' data-fd-secondary="' . htmlspecialchars($secondary, ENT_QUOTES) . '"'
-                        . ' data-fd-role="' . htmlspecialchars($role, ENT_QUOTES) . '"'
-                        . ' data-fd-bio="' . htmlspecialchars($bio, ENT_QUOTES) . '"'
-                        . ' data-fd-initials="' . htmlspecialchars($initials, ENT_QUOTES) . '"'
-                        . ' data-fd-img="' . htmlspecialchars($photoSrc, ENT_QUOTES) . '">';
-                    $close = '</div>';
-                }
+                // EVERY card opens the shared contact-card modal — identical-looking
+                // cards must behave identically. A card that has a destination (member
+                // profile / explicit URL) carries it as data-fd-link so the modal shows
+                // a "View full profile ->" link, rather than silently navigating into
+                // the internal app on click. Carries the FULL (untruncated) bio so the
+                // modal can show it even though the card body clamps it.
+                $open = '<div class="fd-roster-card fd-roster-card-modal" role="button" tabindex="0"'
+                    . ' aria-haspopup="dialog" aria-label="' . htmlspecialchars('View ' . $primary, ENT_QUOTES) . '"'
+                    . ' data-fd-name="' . htmlspecialchars($primary, ENT_QUOTES) . '"'
+                    . ' data-fd-secondary="' . htmlspecialchars($secondary, ENT_QUOTES) . '"'
+                    . ' data-fd-role="' . htmlspecialchars($role, ENT_QUOTES) . '"'
+                    . ' data-fd-bio="' . htmlspecialchars($bio, ENT_QUOTES) . '"'
+                    . ' data-fd-initials="' . htmlspecialchars($initials, ENT_QUOTES) . '"'
+                    . ' data-fd-img="' . htmlspecialchars($photoSrc, ENT_QUOTES) . '"'
+                    . ($link !== '' ? ' data-fd-link="' . htmlspecialchars($link, ENT_QUOTES) . '"' : '')
+                    . '>';
+                $close = '</div>';
                 ?>
                 <?= $open ?>
                     <?php if ($photoSrc !== ''): ?>
@@ -109,7 +108,9 @@ $people       = $blockFields['people']       ?? [];
                     <?php endif; ?>
                     <?php if ($bio !== ''): ?>
                         <div class="fd-roster-bio"><?= nl2br(htmlspecialchars($bio, ENT_QUOTES)) ?></div>
-                        <?php if ($link === ''): ?><div class="fd-roster-more">View details &rarr;</div><?php endif; ?>
+                    <?php endif; ?>
+                    <?php if ($bio !== '' || $link !== ''): ?>
+                        <div class="fd-roster-more">View details &rarr;</div>
                     <?php endif; ?>
                 <?= $close ?>
             <?php endforeach; ?>
@@ -133,6 +134,7 @@ if (empty($GLOBALS['__fd_roster_modal_emitted'])):
         <div class="fd-rmodal-secondary" id="fdRModalSecondary" hidden></div>
         <div class="fd-rmodal-role" id="fdRModalRole" hidden></div>
         <div class="fd-rmodal-bio" id="fdRModalBio" hidden></div>
+        <a class="fd-rmodal-profile" id="fdRModalProfile" hidden><i class="fas fa-external-link-alt"></i> View full profile &rarr;</a>
     </div>
 </div>
 <style>
@@ -153,6 +155,9 @@ if (empty($GLOBALS['__fd_roster_modal_emitted'])):
 .fd-rmodal-secondary { color: var(--fd-text-muted, #5b6472); font-size: 14px; margin: 0 0 8px; }
 .fd-rmodal-role { text-transform: uppercase; letter-spacing: .09em; font-size: 12.5px; font-weight: 700; color: var(--gold, #f0b429); margin: 0 0 20px; }
 .fd-rmodal-bio { text-align: left; font-size: 15.5px; line-height: 1.7; color: var(--fd-text, #1a2236); white-space: pre-line; border-top: 1px solid var(--fd-border, #e2e6ec); padding-top: 18px; }
+.fd-rmodal-profile { display: inline-flex; align-items: center; gap: 8px; margin-top: 22px; padding: 10px 20px; background: var(--navy, #0b1120); color: var(--gold, #f0b429); text-decoration: none; font-weight: 700; font-size: 14px; letter-spacing: .02em; border-radius: 9px; transition: filter .15s; }
+.fd-rmodal-profile:hover { filter: brightness(1.12); color: var(--gold, #f0b429); }
+.fd-rmodal-profile:focus-visible { outline: 2px solid var(--gold, #f0b429); outline-offset: 3px; }
 @media (max-width: 520px) { .fd-rmodal-card { padding: 28px 20px 24px; } .fd-rmodal-name { font-size: 23px; } }
 </style>
 <script>
@@ -169,6 +174,7 @@ if (empty($GLOBALS['__fd_roster_modal_emitted'])):
         var elSec   = document.getElementById('fdRModalSecondary');
         var elRole  = document.getElementById('fdRModalRole');
         var elBio   = document.getElementById('fdRModalBio');
+        var elProfile = document.getElementById('fdRModalProfile');
         var lastTrigger = null;
 
         function setField(el, val) { if (val) { el.textContent = val; el.hidden = false; } else { el.textContent = ''; el.hidden = true; } }
@@ -187,6 +193,10 @@ if (empty($GLOBALS['__fd_roster_modal_emitted'])):
             setField(elSec, d.fdSecondary || '');
             setField(elRole, d.fdRole || '');
             setField(elBio, d.fdBio || '');
+            if (elProfile) {
+                if (d.fdLink) { elProfile.setAttribute('href', d.fdLink); elProfile.hidden = false; }
+                else { elProfile.removeAttribute('href'); elProfile.hidden = true; }
+            }
             lastTrigger = trigger;
             modal.hidden = false;
             modal.classList.add('is-open');

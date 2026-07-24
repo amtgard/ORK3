@@ -2,8 +2,9 @@
 
 /**
  * Seed exemplar CMS pages (content adapted from amtgard.com) to demonstrate the
- * CMS block system. Idempotent: deletes any existing non-system page with the
- * same slug, then recreates it published at global scope. Run once:
+ * CMS block system. Idempotent: an existing non-system page with the same slug
+ * is UPDATED in place (page_id preserved so nav links survive) and republished
+ * at global scope; otherwise it is created. Run once:
  *   docker exec ork3-php8-app php /var/www/ork.amtgard.com/db-migrations/2026-06-23-cms-seed-exemplars.php
  */
 // Web-reachable file: refuse any non-CLI (HTTP) invocation.
@@ -30,8 +31,14 @@ $now  = date('Y-m-d H:i:s');
 $by   = 1; // seed author (super-admin)
 // Host-agnostic relative path (HTTP_TEMPLATE is host-dependent and empty in CLI).
 $IMG  = '/orkui/template/default/img/frontdoor/';
+// HARD requirement: never store raw, unsanitized HTML. If the sanitizer cannot
+// load, fail loudly rather than silently seeding unfiltered markup.
+if (!class_exists('CmsSanitizer')) {
+    fwrite(STDERR, "FATAL: CmsSanitizer is unavailable; refusing to seed unsanitized HTML.\n");
+    exit(1);
+}
 $clean = function ($html) {
-    return class_exists('CmsSanitizer') ? CmsSanitizer::Clean($html) : $html;
+    return CmsSanitizer::Clean($html);
 };
 $img = function ($n, $alt = '') use ($IMG) {
     return array('key' => 'hero-' . $n, 'src' => $IMG . 'hero-' . $n . '.jpg', 'alt' => $alt);
@@ -168,20 +175,29 @@ $report = array();
 foreach ($pages as $def) {
     $slug = $def['page']['slug'];
     $existing = $cms->GetPageBySlug($slug, 'global', 0, false);
-    if (!empty($existing) && empty($existing['is_system'])) {
-        $cms->DeletePage((int) $existing['page_id']); // fresh re-seed
-    } elseif (!empty($existing) && !empty($existing['is_system'])) {
+    if (!empty($existing) && !empty($existing['is_system'])) {
         $report[] = "$slug: SKIPPED (system page)";
         continue;
     }
+    // Update-in-place when the page already exists: preserve its page_id (so nav
+    // links / bookmarks keep resolving) and refresh meta + body, instead of the
+    // old DeletePage+CreatePage churn that minted a new id and orphaned links.
+    $updateInPlace = (!empty($existing) && !empty($existing['page_id']));
     $data = array_merge($def['page'], array(
         'status' => 'published', 'published_at' => $now, 'scope_type' => 'global', 'scope_id' => 0,
         'is_system' => 0, 'created_by' => $by, 'created_at' => $now, 'updated_by' => $by, 'updated_at' => $now,
     ));
-    $pid = (int) $cms->CreatePage($data);
-    if ($pid <= 0) {
-        $report[] = "$slug: FAILED to create";
-        continue;
+    if ($updateInPlace) {
+        $pid = (int) $existing['page_id'];
+        // UpdatePage only writes whitelisted columns (created_by/created_at are
+        // ignored, so the original creation stamps are preserved).
+        $cms->UpdatePage($pid, $data);
+    } else {
+        $pid = (int) $cms->CreatePage($data);
+        if ($pid <= 0) {
+            $report[] = "$slug: FAILED to create";
+            continue;
+        }
     }
     // ensure published (in case CreatePage defaults to draft)
     if (method_exists($cms, 'SetStatus')) {

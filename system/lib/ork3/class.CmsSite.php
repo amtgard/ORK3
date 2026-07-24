@@ -56,6 +56,61 @@ class CmsSite extends CmsBase
         return ((string)$scopeType === 'park') ? 'park' : 'kingdom';
     }
 
+    /** GhettoCache handle, or null when the memcache layer isn't wired up. */
+    private function _cache()
+    {
+        if (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache)
+            && is_object(Ork3::$Lib->ghettocache)
+        ) {
+            return Ork3::$Lib->ghettocache;
+        }
+        return null;
+    }
+
+    /**
+     * Bust the GetSiteBySlug cross-request cache for a single slug. Called from
+     * every site mutator that can change (or newly claim) a slug so the public
+     * /k/{slug} resolver never serves a stale row. A no-op when the slug is empty
+     * or the cache layer isn't wired up.
+     *
+     * @param string $slug already-stored slug (case as persisted)
+     * @return void
+     */
+    private function _bustSlugCache($slug)
+    {
+        $slug = (string)$slug;
+        if ($slug === '') {
+            return;
+        }
+        $cache = $this->_cache();
+        if ($cache !== null) {
+            $cache->bust(__CLASS__ . '.GetSiteBySlug', $slug);
+        }
+    }
+
+    /**
+     * Read the currently-stored slug for a site id (empty string when the row is
+     * missing). Used by the mutators to know which cache key to bust.
+     *
+     * @param int $siteId
+     * @return string
+     */
+    private function _slugForSite($siteId)
+    {
+        global $DB;
+
+        $siteId = (int)$siteId;
+        if ($siteId <= 0) {
+            return '';
+        }
+        $DB->Clear();
+        $DB->site_id = $siteId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT slug FROM ' . DB_PREFIX . 'cms_site WHERE site_id = :site_id LIMIT 1'
+        ));
+        return ($row !== null && isset($row['slug'])) ? (string)$row['slug'] : '';
+    }
+
     /**
      * Public resolver: the site row for a slug, or null. Used by the public
      * router to map /k/{slug} -> (scope_type, scope_id).
@@ -74,11 +129,31 @@ class CmsSite extends CmsBase
             return null;
         }
 
+        // #15: cross-request GhettoCache keyed by slug. This is the public
+        // /k/{slug} router hot path (one lookup per anonymous pageview), yet the
+        // row changes only on an officer mutation. Cache the resolved row and let
+        // the mutators (UpdateSite/SetPublished/SetDraft/EnsureSite) bust the key.
+        // Only POSITIVE hits are cached — a miss (unknown slug) is the 404 path
+        // and stays uncached so a later provision is seen immediately; is_array()
+        // distinguishes a cached row from memcached's false-on-miss.
+        $cache = $this->_cache();
+        if ($cache !== null) {
+            $cached = $cache->get(__CLASS__ . '.GetSiteBySlug', $slug, 1800);
+            if (is_array($cached)) {
+                return $cached;
+            }
+        }
+
         $DB->Clear();
         $DB->slug = $slug;
-        return $this->_firstRow($DB->DataSet(
+        $row = $this->_firstRow($DB->DataSet(
             'SELECT * FROM ' . DB_PREFIX . 'cms_site WHERE slug = :slug LIMIT 1'
         ));
+
+        if ($cache !== null && is_array($row)) {
+            $cache->cache(__CLASS__ . '.GetSiteBySlug', $slug, $row);
+        }
+        return $row;
     }
 
     /**
@@ -136,9 +211,31 @@ class CmsSite extends CmsBase
             return null;
         }
 
-        // Idempotency: return the existing row untouched (no INSERT).
+        // #116: finer-grained idempotency. A site row can exist while its starter
+        // template is only PARTIALLY seeded — a first-run that died mid-seed, or a
+        // pre-seed legacy row — leaving the nav menu empty and/or home_page_id
+        // unset. Rather than short-circuit on "row exists" (which permanently
+        // strands such a site with dead nav and a "being built" home), re-run the
+        // seed for the missing pieces. Every piece is safe to re-enter: CreatePage
+        // self-guards the UNIQUE (scope, slug) tuple and $makePage recovers the
+        // existing id on collision, the nav critical section is row-locked +
+        // empty-menu guarded, and home_page_id is (re)set via UpdateSite. When the
+        // template already looks complete, return the row untouched (no writes).
         $existing = $this->GetSiteForScope($scopeType, $scopeId);
         if ($existing !== null) {
+            $existingId = isset($existing['site_id']) ? (int)$existing['site_id'] : 0;
+            $homeSet    = isset($existing['home_page_id']) && (int)$existing['home_page_id'] > 0;
+            $navSeeded  = false;
+            if (class_exists('CmsNav')) {
+                $nav      = new CmsNav();
+                $navItems = $nav->ListItems('marketing', $scopeType, $scopeId);
+                $navSeeded = is_array($navItems) && count($navItems) > 0;
+            }
+            if ($existingId > 0 && (!$homeSet || !$navSeeded)) {
+                $this->_seedStarterTemplate($existingId, $scopeType, $scopeId, $uid);
+                $existing = $this->GetSiteForScope($scopeType, $scopeId);
+            }
+            $this->_bustSlugCache(($existing !== null && isset($existing['slug'])) ? (string)$existing['slug'] : '');
             return $existing;
         }
 
@@ -175,6 +272,12 @@ class CmsSite extends CmsBase
             $this->_seedStarterTemplate((int) $created['site_id'], $scopeType, $scopeId, $uid);
             // Re-read so the returned row carries the freshly-set home_page_id.
             $created = $this->GetSiteForScope($scopeType, $scopeId);
+        }
+
+        // Newly-claimed slug: bust any negative-lookup absence a racing reader
+        // might otherwise re-cache (defensive — misses aren't cached today).
+        if ($created !== null && isset($created['slug'])) {
+            $this->_bustSlugCache((string)$created['slug']);
         }
 
         return $created;
@@ -571,12 +674,14 @@ class CmsSite extends CmsBase
             'SELECT s.*,'
             . ' COALESCE(CONVERT(k.name USING utf8mb4), CONVERT(p.name USING utf8mb4)) AS org_name,'
             . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_page pg'
-            . '    WHERE pg.scope_type = s.scope_type AND pg.scope_id = s.scope_id) AS pages_total,'
+            . '    WHERE pg.scope_type = s.scope_type AND pg.scope_id = s.scope_id'
+            . '      AND pg.deleted_at IS NULL) AS pages_total,'
             . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_page pg'
             . '    WHERE pg.scope_type = s.scope_type AND pg.scope_id = s.scope_id'
-            . "      AND pg.status = 'published') AS pages_published,"
+            . "      AND pg.status = 'published' AND pg.deleted_at IS NULL) AS pages_published,"
             . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_post po'
-            . '    WHERE po.scope_type = s.scope_type AND po.scope_id = s.scope_id) AS posts_total'
+            . '    WHERE po.scope_type = s.scope_type AND po.scope_id = s.scope_id'
+            . '      AND po.deleted_at IS NULL) AS posts_total'
             . ' FROM ' . DB_PREFIX . 'cms_site s'
             . ' LEFT JOIN ' . DB_PREFIX . "kingdom k ON s.scope_type = 'kingdom' AND k.kingdom_id = s.scope_id"
             . ' LEFT JOIN ' . DB_PREFIX . "park    p ON s.scope_type = 'park'    AND p.park_id    = s.scope_id"
@@ -601,12 +706,14 @@ class CmsSite extends CmsBase
         $row = $this->_firstRow($DB->DataSet(
             'SELECT'
             . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_page pg'
-            . "    WHERE pg.scope_type = 'global' AND pg.scope_id = 0) AS pages_total,"
+            . "    WHERE pg.scope_type = 'global' AND pg.scope_id = 0"
+            . '      AND pg.deleted_at IS NULL) AS pages_total,'
             . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_page pg'
             . "    WHERE pg.scope_type = 'global' AND pg.scope_id = 0"
-            . "      AND pg.status = 'published') AS pages_published,"
+            . "      AND pg.status = 'published' AND pg.deleted_at IS NULL) AS pages_published,"
             . ' (SELECT COUNT(*) FROM ' . DB_PREFIX . 'cms_post po'
-            . "    WHERE po.scope_type = 'global' AND po.scope_id = 0) AS posts_total"
+            . "    WHERE po.scope_type = 'global' AND po.scope_id = 0"
+            . '      AND po.deleted_at IS NULL) AS posts_total'
         ));
         return array(
             'pages_total'     => (int)($row['pages_total'] ?? 0),
@@ -636,7 +743,7 @@ class CmsSite extends CmsBase
         $DB->Clear();
         $DB->site_id = $siteId;
         $row = $this->_firstRow($DB->DataSet(
-            'SELECT published_at FROM ' . DB_PREFIX . 'cms_site WHERE site_id = :site_id LIMIT 1'
+            'SELECT slug, published_at FROM ' . DB_PREFIX . 'cms_site WHERE site_id = :site_id LIMIT 1'
         ));
         if ($row === null) {
             return false;
@@ -654,6 +761,9 @@ class CmsSite extends CmsBase
             . " SET status = 'published', published_at = :published_at, updated_by = :updated_by"
             . ' WHERE site_id = :site_id'
         );
+
+        // #15: status change alters the cached row served by the /k/{slug} router.
+        $this->_bustSlugCache(isset($row['slug']) ? (string)$row['slug'] : '');
         return true;
     }
 
@@ -674,6 +784,9 @@ class CmsSite extends CmsBase
             return false;
         }
 
+        // Capture the slug before the write so we can bust its cached row.
+        $slug = $this->_slugForSite($siteId);
+
         $DB->Clear();
         $DB->updated_by = (int)$uid;
         $DB->site_id    = $siteId;
@@ -681,6 +794,9 @@ class CmsSite extends CmsBase
             'UPDATE ' . DB_PREFIX . 'cms_site'
             . " SET status = 'draft', updated_by = :updated_by WHERE site_id = :site_id"
         );
+
+        // #15: status change alters the cached row served by the /k/{slug} router.
+        $this->_bustSlugCache($slug);
         return true;
     }
 
@@ -706,6 +822,12 @@ class CmsSite extends CmsBase
         if ($siteId <= 0 || !is_array($fields)) {
             return 'Invalid site.';
         }
+
+        // Capture the slug as currently stored BEFORE any write so we can bust its
+        // cached /k/{slug} row (and, when the slug itself changes, the new one too).
+        // Safe to read now — the bind-at-the-end rule below means no staged $DB
+        // state is clobbered by this read.
+        $oldSlug = $this->_slugForSite($siteId);
 
         // Gather SET clauses + bind values LOCALLY first. Slug validation calls
         // ValidateSlug(), which runs $DB->Clear() internally — so binding onto $DB
@@ -786,6 +908,13 @@ class CmsSite extends CmsBase
             'UPDATE ' . DB_PREFIX . 'cms_site SET ' . implode(', ', $set)
             . ' WHERE site_id = :site_id'
         );
+
+        // #15: bust the cached row under the old slug, and — when the slug changed —
+        // under the new slug as well so neither key can serve stale data.
+        $this->_bustSlugCache($oldSlug);
+        if (isset($binds['slug'])) {
+            $this->_bustSlugCache((string)$binds['slug']);
+        }
         return true;
     }
 

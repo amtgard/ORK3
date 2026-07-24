@@ -692,6 +692,19 @@ class CmsPost extends CmsBase
             return false;
         }
 
+        // #54: existence + not-trashed guard. A nonexistent OR trashed post
+        // short-circuits to false here rather than running a no-op UPDATE that
+        // "succeeds" against zero rows. Runs its own Clear()/DataSet(), so it
+        // precedes the bind loop below.
+        $DB->Clear();
+        $DB->post_id = $postId;
+        $existRow = $this->_firstRow($DB->DataSet(
+            'SELECT post_id FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id AND deleted_at IS NULL LIMIT 1'
+        ));
+        if ($existRow === null) {
+            return false;
+        }
+
         // IDOR guard (opt-in, mirrors UpdatePage/DeletePost): refuse to touch a
         // post in a different org, and refuse to relocate it OUT of the guarded
         // scope. Runs its own Clear()/DataSet(), so it precedes the bind loop.
@@ -825,10 +838,22 @@ class CmsPost extends CmsBase
         }
 
         $DB->post_id = $postId;
+        // #54: the deleted_at IS NULL guard means a post trashed between the top
+        // existence check and here matches zero rows → ROW_COUNT() < 1 → false.
         $DB->Execute(
             'UPDATE ' . DB_PREFIX . 'cms_post SET ' . implode(', ', $set)
-            . ' WHERE post_id = :post_id'
+            . ' WHERE post_id = :post_id AND deleted_at IS NULL'
         );
+
+        // #54: confirm a live row was actually updated. updated_at is bumped on
+        // every save, so a matching non-trashed row always reports >= 1 changed
+        // row; a nonexistent/trashed target reports 0. Read immediately after the
+        // Execute on the same connection (before any other query).
+        $DB->Clear();
+        $rcRow = $this->_firstRow($DB->DataSet('SELECT ROW_COUNT() AS rc'));
+        if ($rcRow === null || (int)$rcRow['rc'] < 1) {
+            return false;
+        }
 
         // After a slug rename, verify the new slug actually LANDED before
         // reporting success. Execute() is void under ERRMODE_WARNING, so a
@@ -842,6 +867,28 @@ class CmsPost extends CmsBase
             ));
             if ($verify === null || (string)$verify['slug'] !== (string)$newSlug) {
                 return false;   // rename didn't take — signal failure
+            }
+
+            // #57: 301 the OLD post path to the new one so inbound links / bookmarks
+            // keep resolving. A post target can't use to_page_id (that FK references
+            // cms_page), so record the post's NEW path as a relative to_url — the
+            // site router resolves it under the org's pretty base. Recorded under
+            // the OLD scope (where the old URL lived); best-effort via the shared
+            // redirect store on CmsPage. NOTE: a further rename supersedes the
+            // middle path (this to_url is a snapshot, not a live-resolved page).
+            $oldSlug = ($preRow !== null) ? (string)$preRow['slug'] : '';
+            if ($oldSlug !== '' && $oldSlug !== (string)$newSlug) {
+                $sType = ($preRow !== null) ? (string)$preRow['scope_type'] : 'global';
+                $sId   = ($preRow !== null) ? (int)$preRow['scope_id'] : 0;
+                $actor = (isset($data['updated_by']) && (int)$data['updated_by'] > 0) ? (int)$data['updated_by'] : 0;
+                $this->_pages()->RecordRedirect(
+                    $sType,
+                    $sId,
+                    'post/' . $oldSlug,
+                    null,
+                    'post/' . (string)$newSlug,
+                    $actor
+                );
             }
         }
 

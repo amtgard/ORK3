@@ -47,7 +47,10 @@ if (empty($_SERVER['HTTP_HOST'])) {
 require_once __DIR__ . '/../startup.php';
 
 if (!defined('UIR')) {
-    define('UIR', HTTP_UI_REMOTE . 'index.php?Route=');
+    // Host-agnostic RELATIVE internal-link base (matches the sibling CMS seeds).
+    // Do NOT bake HTTP_UI_REMOTE's absolute dev host into the stored nav-item
+    // hrefs — CreateItem persists these urls verbatim.
+    define('UIR', '/orkui/index.php?Route=');
 }
 
 // Model_FrontDoor lives in the orkui model dir (DIR_MODEL); pull it in directly

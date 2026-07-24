@@ -155,6 +155,17 @@ html[data-theme="dark"] .kpm-unavailable { border-color: #2c3650; }
 .kpm-profile-btn { display: inline-flex; align-items: center; gap: 7px; background: #1b3a6b; color: #fff; text-decoration: none; font-weight: 600; font-size: 14px; padding: 9px 16px; border-radius: 8px; }
 .kpm-profile-btn:hover { background: #16305a; color: #fff; }
 .kpm-hint { font-size: 12px; color: #8a97ad; margin-top: 7px; }
+.kpm-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+.kpm-list-item { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; background: #f7f9fc; border: 1px solid #e4e8f0; border-radius: 8px; padding: 8px 11px; cursor: pointer; font: inherit; color: #24303f; transition: background .12s, border-color .12s; }
+.kpm-list-item:hover { background: #eef2f8; }
+.kpm-list-item:focus-visible { outline: 2px solid #1b3a6b; outline-offset: 2px; }
+.kpm-list-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 0 2px rgba(255,255,255,.7); }
+.kpm-list-text { display: flex; flex-direction: column; min-width: 0; }
+.kpm-list-name { font-weight: 600; font-size: 13.5px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpm-list-loc { font-size: 11.5px; color: #7a8699; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-theme="dark"] .kpm-list-item { background: #222b40; border-color: #2c3650; color: #cad3e2; }
+html[data-theme="dark"] .kpm-list-item:hover { background: #29334c; }
+html[data-theme="dark"] .kpm-list-loc { color: #8794a8; }
 @media (max-width: 820px) { .kpm-layout { grid-template-columns: 1fr; } .kpm-map, .kpm-loading { height: 46vh; min-height: 300px; } .kpm-sidebar { min-height: 0; } }
 html[data-theme="dark"] .kpm-map, html[data-theme="dark"] .kpm-sidebar { border-color: #2c3650; }
 html[data-theme="dark"] .kpm-sidebar { background: #1b2233; }
@@ -184,7 +195,27 @@ html[data-theme="dark"] .kpm-title { color: #eef2fa; }
             <?php else: ?>
                 <div class="kpm-loading" data-kpm-loading><i class="fas fa-spinner fa-spin"></i> Loading map&hellip;</div>
                 <div class="kpm-map" data-kpm-map style="display:none;"></div>
-                <div class="kpm-hint"><i class="fas fa-hand-point-up"></i> Click a park pin for details.</div>
+                <div class="kpm-hint"><i class="fas fa-hand-point-up"></i> Click a park pin &mdash; or a park below &mdash; for details.</div>
+                <ul class="kpm-list" aria-label="Parks on this map">
+                    <?php foreach (array_values($kpmParks) as $__ki => $__kp): ?>
+                        <?php
+                        $__kloc = trim(implode(', ', array_filter([(string) ($__kp['city'] ?? ''), (string) ($__kp['province'] ?? '')])));
+                        $__khex = preg_replace('/[^0-9a-fA-F]/', '', substr((string) ($__kp['color'] ?? '718096'), 0, 6));
+                        if ($__khex === '') {
+                            $__khex = '718096';
+                        }
+                        ?>
+                        <li>
+                            <button type="button" class="kpm-list-item" data-kpm-index="<?= (int) $__ki ?>">
+                                <span class="kpm-list-dot" style="background:#<?= $__khex ?>"></span>
+                                <span class="kpm-list-text">
+                                    <span class="kpm-list-name"><?= $__kp['name'] // pre-escaped when $kpmParks was built ?></span>
+                                    <?php if ($__kloc !== ''): ?><span class="kpm-list-loc"><?= $__kloc // city/province pre-escaped ?></span><?php endif; ?>
+                                </span>
+                            </button>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
             <?php endif; ?>
         </div>
         <div class="kpm-sidebar">
@@ -238,6 +269,26 @@ html[data-theme="dark"] .kpm-title { color: #eef2fa; }
         ROOT.querySelector('[data-kpm-empty]').style.display = 'none';
         ROOT.querySelector('[data-kpm-park]').style.display = 'flex';
     }
+    // Live map handle (set once init() runs) so the keyboard list can pan it.
+    var MAP = null;
+    // Keyboard-accessible park list: each real <button> selects a park via the
+    // SAME renderSidebar handler the map pins use, and pans/zooms the map to it.
+    // If the map has not lazy-loaded yet, kick off the load (the sidebar is
+    // already populated, and the pan will apply on the next selection).
+    ROOT.querySelectorAll('[data-kpm-index]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var idx = parseInt(btn.getAttribute('data-kpm-index'), 10);
+            var loc = LOCS[idx];
+            if (!loc) { return; }
+            renderSidebar(loc);
+            if (MAP && window.google && window.google.maps) {
+                MAP.panTo(new google.maps.LatLng(loc.lat, loc.lng));
+                MAP.setZoom(Math.max(MAP.getZoom() || 4, 11));
+            } else {
+                loadMaps();
+            }
+        });
+    });
     async function init() {
         var loadingEl = ROOT.querySelector('[data-kpm-loading]');
         var mapEl = ROOT.querySelector('[data-kpm-map]');
@@ -247,6 +298,7 @@ html[data-theme="dark"] .kpm-title { color: #eef2fa; }
         await google.maps.importLibrary('maps');
         var markerLib = await google.maps.importLibrary('marker');
         var map = new google.maps.Map(mapEl, { center: { lat: 39, lng: -98 }, zoom: 4, mapId: 'ORK3_MAP_ID' });
+        MAP = map;
         var info = new google.maps.InfoWindow();
         var bounds = new google.maps.LatLngBounds();
         LOCS.forEach(function (loc) {

@@ -59,6 +59,7 @@ html[data-theme="dark"] .cms-preview-banner .cms-preview-publish:hover{backgroun
 
 <?php if ( $pvCanPublish && $pvId > 0 ) : ?>
 <script>
+window.CMS_CSRF = "<?= htmlspecialchars( $CmsCsrf ?? '', ENT_QUOTES ) ?>";
 (function () {
 	var btn = document.getElementById('cmsPreviewPublish');
 	if (!btn) { return; }

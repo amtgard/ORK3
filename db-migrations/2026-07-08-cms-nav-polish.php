@@ -15,6 +15,12 @@
  *
  * Matching is by exact label within menu='marketing', scope global. Idempotent.
  *
+ * RUN ORDER: run this BEFORE 2026-07-08-cms-nav-relink-amtgard.php in
+ * seed-cms-demo.sh. The "AI Programs" -> "Programs" rename here changes the
+ * label that relink matches on; relink is hardened to accept BOTH labels, so
+ * the two are actually order-insensitive, but polish-then-relink is the
+ * canonical sequence.
+ *
  * Run:
  *   docker exec ork3-php8-app php \
  *     /var/www/ork.amtgard.com/db-migrations/2026-07-08-cms-nav-polish.php

@@ -95,7 +95,7 @@ $fdItemIsActive = static function ($item) use ($fdHrefMatchesCurrent): bool {
 <nav class="fd-nav">
     <?php if (!empty($logo['src'])): ?>
         <img class="fd-logo"
-             src="<?= htmlspecialchars($logo['src'], ENT_QUOTES) ?>"
+             src="<?= htmlspecialchars($logo['display'] ?? $logo['src'], ENT_QUOTES) ?>"
              alt="<?= htmlspecialchars($logo['alt'] ?? '', ENT_QUOTES) ?>">
     <?php endif; ?>
 

@@ -30,6 +30,16 @@ class CmsAuth extends CmsBase
     private static $ROLES = array('contributor', 'author', 'editor', 'publisher', 'admin');
 
     /**
+     * #26: fail-closed sentinel for an unrecognized scope_type. _normalizeScopeType
+     * (overridden below for this RBAC layer) returns this — NOT 'global' — for any
+     * input that isn't exactly global/kingdom/park, so a garbage/forged scope can
+     * never be silently promoted to the highest-privilege GLOBAL scope. It matches
+     * no real scope enum value, so GrantRole/RevokeRole reject it outright and
+     * CmsCan's grant/bridge checks never fire for it.
+     */
+    private const INVALID_SCOPE = '__invalid__';
+
+    /**
      * Per-role capability *increments*. The public capability set for a role
      * is the union of its own increment plus every lower role's increment
      * (cumulative). Keep these increments non-overlapping.
@@ -61,6 +71,27 @@ class CmsAuth extends CmsBase
     public function __construct()
     {
         parent::__construct();
+    }
+
+    /**
+     * #26: RBAC-layer scope normalization that FAILS CLOSED. The base
+     * CmsBase::_normalizeScopeType clamps any unrecognized input to 'global'
+     * (fine for a media/content scope filter), but for authorization that would
+     * let a typo'd/forged scope_type silently target the site-wide GLOBAL scope.
+     * Here an exact global/kingdom/park passes through; anything else collapses to
+     * INVALID_SCOPE — a value that matches no real scope, so every grant read,
+     * grant write, and capability check that flows through this method fails safe.
+     *
+     * @param string $scopeType
+     * @return string 'global'|'kingdom'|'park'|INVALID_SCOPE
+     */
+    protected function _normalizeScopeType($scopeType)
+    {
+        $scopeType = (string)$scopeType;
+        if ($scopeType === 'global' || $scopeType === 'kingdom' || $scopeType === 'park') {
+            return $scopeType;
+        }
+        return self::INVALID_SCOPE;
     }
 
     /* ------------------------------------------------------------------ *
@@ -143,11 +174,14 @@ class CmsAuth extends CmsBase
         $DB->mundane_id = $uid;
 
         if ($scopeType !== null) {
+            $normType = $this->_normalizeScopeType($scopeType);
             $sql .= ' AND scope_type = :scope_type';
-            $DB->scope_type = $this->_normalizeScopeType($scopeType);
+            $DB->scope_type = $normType;
             if ($scopeId !== null) {
+                // #27: a global grant is always keyed at scope_id 0; never let a
+                // (global, nonzero-id) filter go out and miss the real row.
                 $sql .= ' AND scope_id = :scope_id';
-                $DB->scope_id = (int)$scopeId;
+                $DB->scope_id = ($normType === 'global') ? 0 : (int)$scopeId;
             }
         }
         $sql .= ' ORDER BY grant_id ASC';
@@ -308,7 +342,12 @@ class CmsAuth extends CmsBase
             return 0;
         }
         $scopeType = $this->_normalizeScopeType($scopeType);
-        $scopeId   = (int)$scopeId;
+        // #26: fail closed — an unrecognized scope_type never becomes a real grant.
+        if ($scopeType === self::INVALID_SCOPE) {
+            return 0;
+        }
+        // #27: a global grant always lives at scope_id 0 (no phantom global/nonzero).
+        $scopeId   = ($scopeType === 'global') ? 0 : (int)$scopeId;
         $grantedBy = (int)$grantedBy;
 
         // Authorization: the actor must hold roles.manage on the target scope.
@@ -387,7 +426,12 @@ class CmsAuth extends CmsBase
             return false;
         }
         $scopeType = $this->_normalizeScopeType($scopeType);
-        $scopeId   = (int)$scopeId;
+        // #26: fail closed — an unrecognized scope_type can never match a real grant.
+        if ($scopeType === self::INVALID_SCOPE) {
+            return false;
+        }
+        // #27: a global grant always lives at scope_id 0.
+        $scopeId   = ($scopeType === 'global') ? 0 : (int)$scopeId;
 
         // Authorization (fail-closed, mirrors GrantRole): the actor MUST hold
         // roles.manage on the target scope. A missing/zero actor is a denial, not
@@ -434,12 +478,19 @@ class CmsAuth extends CmsBase
         if ($revoked) {
             $this->_cmsAudit((int)$actorUid, 'revoke.' . $role, 'grant', $uid, $scopeType, $scopeId);
 
-            // C21: orphaned-authorship guard. If this was the grantee's LAST grant
-            // in this scope, they can no longer manage content here — reassign any
-            // posts they authored in this scope to a neutral author (author_id NULL)
-            // so the public byline reads the scope label ('Staff'/'Kingdom') instead
-            // of continuing to credit a departed member (see CmsPost::_neutralAuthorSql).
-            if (empty($this->GetUserGrants($uid, $scopeType, $scopeId))) {
+            // C21 + #24: orphaned-authorship guard. Reassign this member's posts to
+            // a neutral author (author_id NULL, so the byline falls back to the
+            // scope label) ONLY when they can genuinely no longer manage content
+            // here. The old test — "no raw grant left in this scope" — was too
+            // eager: a member who still edits via a GLOBAL CMS grant (global grants
+            // apply to every scope) or via the officer→HasAuthority bridge would be
+            // wrongly de-credited. Probe REAL residual capability instead. CmsCan
+            // reads the just-busted grant cache, so it reflects the post-revoke
+            // state and folds in super-admin + global grant + the scope bridge.
+            $scope = array('type' => $scopeType, 'id' => $scopeId);
+            $stillManages = $this->CmsCan($uid, 'page.edit', $scope)
+                || $this->CmsCan($uid, 'page.edit_own', $scope);
+            if (!$stillManages) {
                 $this->_reassignAuthoredPosts($uid, $scopeType, $scopeId, (int)$actorUid);
             }
         }

@@ -43,7 +43,10 @@ class Controller_Page extends Controller
 
         $slug = trim((string) $slug);
         $this->load_model('CmsPage');
-        $page = ($slug !== '') ? $this->CmsPage->get_page_by_slug($slug, 'global', 0, true) : null;
+        // C1: one GhettoCache-backed bundle (page row + its enabled blocks) instead
+        // of a separate GetPageBySlug() + GetPageBlocks() pair.
+        $bundle = ($slug !== '') ? $this->CmsPage->get_page_with_blocks('global', 0, $slug) : null;
+        $page   = (is_array($bundle) && !empty($bundle['page'])) ? $bundle['page'] : null;
 
         if (empty($page)) {
             http_response_code(404);
@@ -54,9 +57,15 @@ class Controller_Page extends Controller
             return;
         }
 
-        $this->data['FrontDoor']  = $this->CmsPage->get_page_blocks((int) $page['page_id']);
+        $this->data['FrontDoor']  = (is_array($bundle) && isset($bundle['blocks']) && is_array($bundle['blocks']))
+            ? $bundle['blocks'] : array();
         $this->_attachFrontDoorTheme();
         $this->data['page_title'] = $page['title'];
+
+        // #122: per-page canonical + Open Graph (mirrors Controller_Site::_setPageMeta)
+        // so a shared CMS page carries its own canonical/og:* instead of leaking the
+        // global front-door defaults.
+        $this->_setPageMeta($page, $slug);
 
         // Wayfinding: breadcrumbs (root → current) + active-nav matching.
         $this->data['CurrentSlug']  = $slug;
@@ -72,5 +81,49 @@ class Controller_Page extends Controller
                 $this->data['cmsEditTip'] = 'Edit this page';
             }
         }
+    }
+
+    /**
+     * #122: publish a per-page $PageMeta (canonical + og:*) for a global CMS page,
+     * mirroring Controller_Site::_setPageMeta. Canonical is the page's public
+     * Page/view URL (built from UIR); og:image comes from the page's hero_media_id
+     * when set (else default.theme's ORK fallback applies).
+     *
+     * @param array  $page page row (title, meta_description, hero_media_id, slug)
+     * @param string $slug the requested slug
+     */
+    private function _setPageMeta($page, $slug)
+    {
+        $slug = trim((string) $slug);
+        $canon = ($slug === 'home' || $slug === '')
+            ? UIR
+            : UIR . 'Page/view/' . rawurlencode($slug);
+
+        // og:image ← hero (absolute); relative media urls get the request origin.
+        $host   = (string) ($_SERVER['HTTP_HOST'] ?? '');
+        $https  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || ((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+        $origin = ($host !== '') ? (($https ? 'https://' : 'http://') . $host) : '';
+
+        $ogImage = '';
+        $mediaId = (int) ($page['hero_media_id'] ?? 0);
+        if ($mediaId > 0) {
+            $this->load_model('CmsMedia');
+            $hm = $this->CmsMedia->get_media($mediaId);
+            if (is_array($hm) && !empty($hm['url'])) {
+                $u = (string) $hm['url'];
+                $ogImage = preg_match('#^https?://#i', $u) ? $u : ($origin . '/' . ltrim($u, '/'));
+            }
+        }
+
+        $title = trim((string) ($page['title'] ?? ''));
+        $this->data['PageMeta'] = array(
+            'canonical'   => $canon,
+            'og_type'     => 'article',
+            'og_title'    => ($title !== '' ? $title : 'ORK 3 - Amtgard Online Record Keeper'),
+            'og_desc'     => trim((string) ($page['meta_description'] ?? '')),
+            'og_image'    => $ogImage,
+            'og_sitename' => 'ORK 3 - Amtgard Online Record Keeper',
+        );
     }
 }

@@ -87,6 +87,7 @@ html[data-theme="dark"] .ke-block { background: transparent; }
 html[data-theme="dark"] .ke-card { background: #1b2233; border-color: #2c3650; }
 html[data-theme="dark"] .ke-card-name { color: #eef2fa; }
 html[data-theme="dark"] .ke-card-sub { color: #b6c0d4; }
+html[data-theme="dark"] .ke-card-rsvp { color: #7ba7f2; }
 html[data-theme="dark"] .ke-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45); }
 </style>
 <?php endif; ?>

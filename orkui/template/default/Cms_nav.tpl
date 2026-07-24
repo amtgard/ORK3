@@ -494,8 +494,20 @@ include __DIR__ . '/cms/_shell_top.tpl';
         });
     }
 
+    /* ---- Reorder rollback (#76) ----
+     * The click handler is delegated on #cmsNavTree itself, so snapshotting and
+     * restoring the tree's innerHTML is safe (no per-card listeners are lost).
+     * preMoveOrderHtml holds the last KNOWN-GOOD (persisted) order; it is captured
+     * before the first move of a not-yet-saved burst and used to revert if the
+     * debounced reordernav POST fails. */
+    var navTreeEl = document.getElementById('cmsNavTree');
+    var preMoveOrderHtml = null;
+
     /* ---- Move up/down within the item's sibling group, then persist order ---- */
     function moveCard(card, dir) {
+        // Snapshot the pre-move order before the FIRST move of a pending batch, so a
+        // failed save can roll the whole burst back to the last persisted state.
+        if (preMoveOrderHtml === null && navTreeEl) { preMoveOrderHtml = navTreeEl.innerHTML; }
         // The reorderable unit at top level is the .cms-nav-group wrapper;
         // children move within their .cms-nav-children container.
         var isChild = card.getAttribute('data-child') === '1';
@@ -570,11 +582,25 @@ include __DIR__ . '/cms/_shell_top.tpl';
         reorderTimer = setTimeout(function () {
             var items = collectOrder();
             post('reordernav', { menu: MENU, items: JSON.stringify(items) }).then(function (res) {
-                if (!res || !res.ok) { toast((res && res.error) || 'Reorder failed.', 'error'); return; }
+                if (!res || !res.ok) { revertOrder((res && res.error) || 'Order not saved — retry.'); return; }
+                // Saved — this order is the new known-good baseline.
+                preMoveOrderHtml = null;
                 toast('Order saved.', 'ok');
                 refreshMoveArrows();
-            }).catch(function () { toast('Network error.', 'error'); });
+            }).catch(function () { revertOrder('Order not saved — check your connection and retry.'); });
         }, 500);
+    }
+
+    // #76: the save failed — roll the tree back to the last persisted order so the
+    // on-screen order never diverges from what's stored, and surface a persistent
+    // error toast prompting a retry (rather than a silent success illusion).
+    function revertOrder(msg) {
+        if (preMoveOrderHtml !== null && navTreeEl) {
+            navTreeEl.innerHTML = preMoveOrderHtml;
+            preMoveOrderHtml = null;
+        }
+        refreshMoveArrows();
+        toast(msg, 'error');
     }
 
     syncPickers();

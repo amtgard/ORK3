@@ -35,6 +35,9 @@ class Controller_Blog extends Controller
         parent::__construct($call, $method);
         unset($this->data['menu']['kingdom'], $this->data['menu']['park']);
         $this->data['menu']['blog'] = array('url' => UIR . 'Blog', 'display' => 'News');
+        // #123: the public blog is a CMS-styled surface (not the front-door home),
+        // so the brand serif must load — default.theme gates it on this flag.
+        $this->data['IsCmsPage'] = true;
     }
 
     /**
@@ -90,6 +93,23 @@ class Controller_Blog extends Controller
         $this->data['per_page']    = $perPage;
         $this->data['tag']         = $tag;
         $this->data['page_title']  = ($tag !== '') ? ('News — ' . $tag) : 'News';
+        // #123: load the front-door theme tokens on the index too (post() already
+        // does) so the blog list matches the CMS look.
+        $this->_attachFrontDoorTheme();
+
+        // #122: canonical + OG for the blog index (type=website). Page 1 canonicals
+        // to /Blog; deeper pages self-canonical with ?p= to avoid duplicate content.
+        $canon = UIR . 'Blog'
+            . ($tag !== '' ? '/index&tag=' . rawurlencode($tag) : '')
+            . ($page > 1 ? (($tag !== '' ? '&' : '/index&') . 'p=' . $page) : '');
+        $this->data['PageMeta'] = array(
+            'canonical'   => $canon,
+            'og_type'     => 'website',
+            'og_title'    => ($tag !== '' ? ('News — ' . $tag) : 'Amtgard News'),
+            'og_desc'     => 'Latest news and announcements from the Amtgard Online Record Keeper.',
+            'og_image'    => '',
+            'og_sitename' => 'ORK 3 - Amtgard Online Record Keeper',
+        );
         $this->_cmsFab(UIR . 'Cms/posts', 'Manage posts');
     }
 
@@ -132,7 +152,44 @@ class Controller_Blog extends Controller
         $this->data['hero']        = $hero;
         $this->data['page_title']  = $post['title'];
         $this->data['meta_description'] = isset($post['excerpt']) ? (string) $post['excerpt'] : '';
+        // #122: per-post canonical + OG (type=article; hero → og:image), mirroring
+        // Controller_Site::_setPostMeta.
+        $this->_setPostMeta($post, $hero);
         $this->_cmsFab(UIR . 'Cms/editpost/' . (int) $post['post_id'], 'Edit this post');
+    }
+
+    /**
+     * #122: publish a per-post $PageMeta (canonical + og:*) for a global blog post,
+     * mirroring Controller_Site::_setPostMeta. Canonical is the post's public
+     * Blog/post URL (from UIR); og:image comes from the hero media row when set.
+     *
+     * @param array      $post post row (title, slug, excerpt)
+     * @param array|null $hero resolved hero media row (carries url) or null
+     */
+    private function _setPostMeta($post, $hero = null)
+    {
+        $canon = UIR . 'Blog/post/' . rawurlencode((string) ($post['slug'] ?? ''));
+
+        $host   = (string) ($_SERVER['HTTP_HOST'] ?? '');
+        $https  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || ((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+        $origin = ($host !== '') ? (($https ? 'https://' : 'http://') . $host) : '';
+
+        $ogImage = '';
+        if (is_array($hero) && !empty($hero['url'])) {
+            $u = (string) $hero['url'];
+            $ogImage = preg_match('#^https?://#i', $u) ? $u : ($origin . '/' . ltrim($u, '/'));
+        }
+
+        $title = trim((string) ($post['title'] ?? ''));
+        $this->data['PageMeta'] = array(
+            'canonical'   => $canon,
+            'og_type'     => 'article',
+            'og_title'    => ($title !== '' ? $title : 'Amtgard News'),
+            'og_desc'     => trim((string) ($post['excerpt'] ?? '')),
+            'og_image'    => $ogImage,
+            'og_sitename' => 'ORK 3 - Amtgard Online Record Keeper',
+        );
     }
 
     /**

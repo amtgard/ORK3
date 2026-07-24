@@ -50,6 +50,8 @@ if (!is_array($items)) {
     font-size: 15px;
     line-height: 1.6;
     color: #444c5e;
+    /* Preserve newlines authored in the textarea (answer is escaped, not HTML). */
+    white-space: pre-line;
 }
 html[data-theme="dark"] .fdb-accordion-item {
     background: #161d2e;

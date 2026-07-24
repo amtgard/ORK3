@@ -33,8 +33,14 @@ $pages = new CmsPage(); // shared polymorphic block store (owner_type='post')
 $now   = date('Y-m-d H:i:s');
 $by    = 1; // seed actor (super-admin)
 
+// HARD requirement: never store raw, unsanitized HTML. If the sanitizer cannot
+// load, fail loudly rather than silently seeding unfiltered markup.
+if (!class_exists('CmsSanitizer')) {
+    fwrite(STDERR, "FATAL: CmsSanitizer is unavailable; refusing to seed unsanitized HTML.\n");
+    exit(1);
+}
 $clean = function ($html) {
-    return class_exists('CmsSanitizer') ? CmsSanitizer::Clean($html) : $html;
+    return CmsSanitizer::Clean($html);
 };
 
 // ---------------------------------------------------------------------------

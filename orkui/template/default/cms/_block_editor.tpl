@@ -2447,7 +2447,6 @@ window.CmsBlockEditor = (function () {
     function buildMediaTile(m) {
         var tile = el('div', 'cms-media-tile');
         var img = el('img');
-        img.src = m.thumb || m.src;
         img.alt = m.alt || '';
         var cap = el('div', 'cms-media-cap', esc(m.alt || m.filename || ('#' + (m.media_id || ''))));
 
@@ -2457,6 +2456,14 @@ window.CmsBlockEditor = (function () {
         }
         img.addEventListener('click', pick);
         cap.addEventListener('click', pick);
+        // #95: a broken thumbnail swaps to the fa-image placeholder (sized to the
+        // tile so it never overlaps the caption below), keeping the tile clickable.
+        img.addEventListener('error', function () {
+            var ph = el('div', 'cms-media-tile-fallback', '<i class="fas fa-image" aria-hidden="true"></i>');
+            ph.addEventListener('click', pick);
+            if (img.parentNode) { img.parentNode.replaceChild(ph, img); }
+        });
+        img.src = m.thumb || m.src;
 
         tile.appendChild(img);
         tile.appendChild(cap);

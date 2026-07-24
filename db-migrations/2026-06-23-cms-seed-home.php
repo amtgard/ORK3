@@ -44,7 +44,13 @@ if (empty($_SERVER['HTTP_HOST'])) {
 require_once __DIR__ . '/../startup.php';
 
 if (!defined('UIR')) {
-    define('UIR', HTTP_UI_REMOTE . 'index.php?Route=');
+    // Host-agnostic RELATIVE internal-link base (matches the sibling CMS seeds,
+    // e.g. 2026-07-08-cms-seed-amtgard.php). Do NOT bake HTTP_UI_REMOTE's
+    // absolute dev host (http://localhost:19080/...) into the stored home-page
+    // block hrefs (hero/card/cta/events/kingdoms "more" links) — those get
+    // persisted verbatim by ReplaceBlocks and would otherwise point at the seed
+    // machine's host in every environment.
+    define('UIR', '/orkui/index.php?Route=');
 }
 
 // Model_FrontDoor lives in the orkui model dir (DIR_MODEL); pull it in directly

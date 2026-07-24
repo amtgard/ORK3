@@ -14,7 +14,9 @@
  * authored string with htmlspecialchars(..., ENT_QUOTES).
  */
 $fdbImg     = $blockFields['image'] ?? [];
-$fdbSrc     = is_array($fdbImg) ? ($fdbImg['src'] ?? '') : '';
+// C4: prefer the mid-size "display" rendition for the on-page image; fall back
+// to the full-res original only when no rendition exists.
+$fdbSrc     = is_array($fdbImg) ? ($fdbImg['display'] ?? $fdbImg['src'] ?? '') : '';
 $fdbAlt     = is_array($fdbImg) ? ($fdbImg['alt'] ?? '') : '';
 $fdbFocal   = is_array($fdbImg) ? ($fdbImg['focal'] ?? '') : '';
 $fdbCaption = $blockFields['caption'] ?? '';

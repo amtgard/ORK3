@@ -7,7 +7,9 @@
  * (because system/lib/ork3/class.CmsPage.php exists), and Model::__call
  * forwards any unknown method to it. The explicit methods below mirror the
  * lib surface for clarity; all are pure forwards (no business logic here —
- * DB work lives in the lib).
+ * DB work lives in the lib). Each snake_case wrapper mirrors the FULL lib
+ * signature so no caller has to reach past the wrapper (via __call) to pass a
+ * later positional argument.
  */
 class Model_CmsPage extends Model
 {
@@ -27,9 +29,27 @@ class Model_CmsPage extends Model
         return $this->CmsPage->GetHomePage();
     }
 
+    /**
+     * C1: GhettoCache-backed bundle — the resolved page row + its ENABLED blocks
+     * in one call. $slug null → the scope's home page.
+     */
+    public function get_page_with_blocks($scopeType, $scopeId, $slug = null)
+    {
+        return $this->CmsPage->GetPageWithBlocks($scopeType, $scopeId, $slug);
+    }
+
     public function get_blocks($ownerType, $ownerId)
     {
         return $this->CmsPage->GetBlocks($ownerType, $ownerId);
+    }
+
+    /**
+     * C2: ALL blocks for the editor (INCLUDING disabled), unlike the public
+     * get_blocks() which returns enabled-only.
+     */
+    public function get_blocks_for_editor($ownerType, $ownerId)
+    {
+        return $this->CmsPage->GetBlocksForEditor($ownerType, $ownerId);
     }
 
     public function get_page_blocks($pageId)
@@ -47,19 +67,19 @@ class Model_CmsPage extends Model
         return $this->CmsPage->GetPage($pageId);
     }
 
-    public function update_page($pageId, $data)
+    public function update_page($pageId, $data, $scopeType = null, $scopeId = null)
     {
-        return $this->CmsPage->UpdatePage($pageId, $data);
+        return $this->CmsPage->UpdatePage($pageId, $data, $scopeType, $scopeId);
     }
 
-    public function set_status($pageId, $status, $updatedBy = 0)
+    public function set_status($pageId, $status, $updatedBy = 0, $publishedAt = null)
     {
-        return $this->CmsPage->SetStatus($pageId, $status, $updatedBy);
+        return $this->CmsPage->SetStatus($pageId, $status, $updatedBy, $publishedAt);
     }
 
-    public function delete_page($pageId, $scopeType = null, $scopeId = null)
+    public function delete_page($pageId, $scopeType = null, $scopeId = null, $actorId = 0)
     {
-        return $this->CmsPage->DeletePage($pageId, $scopeType, $scopeId);
+        return $this->CmsPage->DeletePage($pageId, $scopeType, $scopeId, $actorId);
     }
 
     public function replace_blocks($ownerType, $ownerId, $blocksArray)

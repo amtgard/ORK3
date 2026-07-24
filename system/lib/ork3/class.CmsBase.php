@@ -41,9 +41,87 @@ class CmsBase extends Ork3
      */
     private static $_promotedThisRequest = false;
 
+    /**
+     * Ghettocache "call" namespace + fixed key + TTL for the "does any scheduled
+     * content exist?" flag (#10). Lets _promoteScheduled() skip its two UPDATEs
+     * in the overwhelmingly common case where nothing is scheduled. The flag is
+     * SELF-HEALING: on an unknown/cold value _promoteScheduled runs the UPDATEs
+     * and then recomputes the flag, and _markScheduledContent() flips it to
+     * "present" the moment a future published_at is stored.
+     */
+    protected const SCHED_CACHE_CALL = 'CmsBase.has_scheduled';
+    protected const SCHED_CACHE_KEY  = 'flag';
+    protected const SCHED_CACHE_TTL  = 3600;
+
     public function __construct()
     {
         parent::__construct();
+    }
+
+    /**
+     * Shared GhettoCache handle, or null when the memcache layer isn't wired up.
+     * (CmsPost keeps its own private _cache() — a protected duplicate here would
+     * be an illegal visibility narrowing, so this uses a distinct name.)
+     *
+     * @return Ghettocache|null
+     */
+    protected function _ghettoCache()
+    {
+        if (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache)
+            && is_object(Ork3::$Lib->ghettocache)
+        ) {
+            return Ork3::$Lib->ghettocache;
+        }
+        return null;
+    }
+
+    /**
+     * #10: flag that scheduled content now exists so the next _promoteScheduled()
+     * runs its UPDATEs instead of taking the fast-path skip. Called by CmsPage /
+     * CmsPost / _setStatus whenever a row is written with status='scheduled'
+     * (a future published_at). No-op when memcache isn't wired up (the promote
+     * path then always runs the UPDATEs, i.e. old behavior).
+     *
+     * @return void
+     */
+    protected function _markScheduledContent()
+    {
+        $gc = $this->_ghettoCache();
+        if ($gc === null) {
+            return;
+        }
+        // Prime the lifetime (GhettoCache reads it back in cache()), then store 1.
+        $gc->get(self::SCHED_CACHE_CALL, self::SCHED_CACHE_KEY, self::SCHED_CACHE_TTL);
+        $gc->cache(self::SCHED_CACHE_CALL, self::SCHED_CACHE_KEY, 1);
+    }
+
+    /**
+     * Recompute the has-scheduled flag after a promotion pass: 1 when any
+     * still-scheduled row remains in either table, else 0 (the sentinel that lets
+     * subsequent requests skip both UPDATEs). Best-effort.
+     *
+     * @param Ghettocache $gc
+     * @return void
+     */
+    private function _refreshScheduledFlag($gc)
+    {
+        global $DB;
+
+        try {
+            $DB->Clear();
+            $row = $this->_firstRow($DB->DataSet(
+                'SELECT ('
+                . '(SELECT COUNT(*) FROM ' . DB_PREFIX . "cms_page WHERE status = 'scheduled')"
+                . ' + '
+                . '(SELECT COUNT(*) FROM ' . DB_PREFIX . "cms_post WHERE status = 'scheduled')"
+                . ') AS c'
+            ));
+            $has = ($row !== null && (int)$row['c'] > 0) ? 1 : 0;
+            $gc->get(self::SCHED_CACHE_CALL, self::SCHED_CACHE_KEY, self::SCHED_CACHE_TTL);
+            $gc->cache(self::SCHED_CACHE_CALL, self::SCHED_CACHE_KEY, $has);
+        } catch (\Throwable $e) {
+            // Best-effort — leave the flag as-is on any probe error.
+        }
     }
 
     /**
@@ -62,6 +140,21 @@ class CmsBase extends Ork3
         }
         self::$_promotedThisRequest = true;
 
+        // #10: fast-path skip. When memcache is wired up AND the flag explicitly
+        // says "no scheduled content" (sentinel 0), neither UPDATE can promote
+        // anything — skip both. A missing/unknown flag (false) falls through to
+        // run the UPDATEs and then recompute the flag (self-healing on a cold
+        // cache); a present flag (1) also runs them.
+        $gc = $this->_ghettoCache();
+        if ($gc !== null) {
+            $flag = $gc->get(self::SCHED_CACHE_CALL, self::SCHED_CACHE_KEY, self::SCHED_CACHE_TTL);
+            if ($flag !== false && (int)$flag === 0) {
+                return;
+            }
+        }
+
+        // #50: each table UPDATE is wrapped in its own try/catch so a failure on
+        // one (e.g. a lock timeout) still lets the other run.
         try {
             $DB->Clear();
             $DB->Execute(
@@ -69,6 +162,10 @@ class CmsBase extends Ork3
                 . " SET status = 'published'"
                 . " WHERE status = 'scheduled' AND published_at IS NOT NULL AND published_at <= NOW()"
             );
+        } catch (\Throwable $e) {
+            // Non-fatal — a scheduled page simply stays scheduled until next read.
+        }
+        try {
             $DB->Clear();
             $DB->Execute(
                 'UPDATE ' . DB_PREFIX . 'cms_post'
@@ -76,7 +173,13 @@ class CmsBase extends Ork3
                 . " WHERE status = 'scheduled' AND published_at IS NOT NULL AND published_at <= NOW()"
             );
         } catch (\Throwable $e) {
-            // Non-fatal — a scheduled row simply stays scheduled until the next read.
+            // Non-fatal — a scheduled post simply stays scheduled until next read.
+        }
+
+        // Refresh the flag so the next request can fast-path skip once nothing
+        // future remains scheduled (or keep running while it does).
+        if ($gc !== null) {
+            $this->_refreshScheduledFlag($gc);
         }
     }
 
@@ -188,15 +291,57 @@ class CmsBase extends Ork3
      * inbound URL segment for LOOKUP — the public resolvers deliberately keep
      * their strip-to-charset canonicalization so stored slugs still match.
      *
-     * @param string $raw human-entered title/name/slug
-     * @return string normalized slug ([a-z0-9] and single hyphens; may be '')
+     * #58: transliteration + an optional length clamp are folded in here so every
+     * caller (pages, posts, tag _slugify) derives identically. With the default
+     * arguments the output is unchanged from the historical behavior except that
+     * accented/Unicode input is now transliterated to ASCII ('Café' -> 'cafe')
+     * rather than dropped, so existing callers are unaffected.
+     *
+     * @param string      $raw           human-entered title/name/slug
+     * @param int         $maxLen        clamp to this byte length (0 = no clamp)
+     * @param string|null $emptyFallback when derivation yields '', fall back to a
+     *                                   GUARANTEED-nonempty slug: normalize this
+     *                                   string, else a collision-resistant token.
+     *                                   null keeps the legacy '' return (callers
+     *                                   that treat '' as "skip"/"invalid").
+     * @return string normalized slug ([a-z0-9] and single hyphens)
      */
-    protected function _normalizeSlug($raw)
+    protected function _normalizeSlug($raw, $maxLen = 0, $emptyFallback = null)
     {
-        $slug = strtolower(trim((string)$raw));
+        $slug = (string)$raw;
+
+        // #58: best-effort transliteration to ASCII so accented letters survive
+        // as their base form instead of being stripped to nothing.
+        if (function_exists('iconv')) {
+            $converted = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $slug);
+            if ($converted !== false) {
+                $slug = $converted;
+            }
+        }
+
+        $slug = strtolower(trim($slug));
         $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
         $slug = preg_replace('/-+/', '-', $slug);
-        return trim($slug, '-');
+        $slug = trim($slug, '-');
+
+        $maxLen = (int)$maxLen;
+        if ($maxLen > 0 && strlen($slug) > $maxLen) {
+            $slug = rtrim(substr($slug, 0, $maxLen), '-');
+        }
+
+        if ($slug === '' && $emptyFallback !== null) {
+            if (is_string($emptyFallback) && $emptyFallback !== '') {
+                // Re-normalize the fallback ONCE (null → no further recursion).
+                $slug = $this->_normalizeSlug($emptyFallback, $maxLen, null);
+            }
+            if ($slug === '') {
+                // Guaranteed-nonempty, collision-resistant default (leads with a
+                // letter so it's always a valid slug head).
+                $slug = 'n' . substr(md5(uniqid('', true)), 0, 11);
+            }
+        }
+
+        return $slug;
     }
 
     /**
@@ -270,7 +415,9 @@ class CmsBase extends Ork3
      * @param string $table full-suffix table ('cms_page'|'cms_post')
      * @param string $pk     primary-key column ('page_id'|'post_id')
      * @param array  $cols   column => value map (must include slug/scope_type/scope_id)
-     * @return int new row id (0 on collision / lost race / failure)
+     * @return int new row id (>0); 0 on a genuine live-slug collision / lost race;
+     *             -1 on a non-collision write failure (#44). Callers treating any
+     *             non-positive value as failure keep working.
      */
     protected function _insertWithDupGuard($table, $pk, array $cols)
     {
@@ -312,7 +459,22 @@ class CmsBase extends Ork3
         $DB->Clear();
         $rc = $this->_firstRow($DB->DataSet('SELECT ROW_COUNT() AS rc'));
         if ($rc === null || (int)$rc['rc'] < 1) {
-            return 0;   // lost the race (or nothing inserted) — signal collision
+            // #44: ROW_COUNT()==0 does NOT prove a slug collision — INSERT IGNORE
+            // also swallows OTHER integrity errors (a bad FK, a NOT-NULL drop,
+            // etc.). Re-run the live collision SELECT: only when a live row
+            // actually holds the tuple is this a genuine slug collision (0);
+            // otherwise the insert failed for another reason, signalled distinctly
+            // as -1 so the caller can tell "slug taken" from "write failed".
+            $DB->Clear();
+            $DB->slug       = $slug;
+            $DB->scope_type = $scopeType;
+            $DB->scope_id   = $scopeId;
+            $live = $this->_firstRow($DB->DataSet(
+                'SELECT ' . $pk . ' AS id FROM ' . DB_PREFIX . $table
+                . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND slug = :slug'
+                . ' AND deleted_at IS NULL LIMIT 1'
+            ));
+            return ($live !== null) ? 0 : -1;
         }
 
         // Authoritative read-back by the LIVE unique tuple.
@@ -588,6 +750,9 @@ class CmsBase extends Ork3
         if ($status === 'scheduled') {
             // Scheduling needs a target time; fall back to now (== publish now).
             $data['published_at'] = ($publishedAt !== null) ? $publishedAt : date('Y-m-d H:i:s');
+            // #10: scheduled content now exists — flip the flag so the read-path
+            // promotion stops fast-path-skipping.
+            $this->_markScheduledContent();
         } elseif ($status === 'published') {
             if ($publishedAt !== null) {
                 $data['published_at'] = $publishedAt;

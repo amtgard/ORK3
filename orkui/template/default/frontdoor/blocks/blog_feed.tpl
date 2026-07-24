@@ -20,11 +20,21 @@ if ($bfLimit > 12) {
 }
 $bfTag = isset($blockFields['tag']) ? trim((string) $blockFields['tag']) : '';
 
+// Scope to the owning org when rendered on a kingdom/park site (mirrors
+// kingdom_events.tpl); fall back to the GLOBAL news feed on the front door and
+// on any page without a site scope, so behavior there is unchanged.
+$bfScopeType = isset($SiteNavScopeType) ? (string) $SiteNavScopeType : 'global';
+$bfScopeId   = isset($SiteNavScopeId) ? (int) $SiteNavScopeId : 0;
+if ($bfScopeType !== 'kingdom' && $bfScopeType !== 'park') {
+    $bfScopeType = 'global';
+    $bfScopeId   = 0;
+}
+
 $bfPosts = [];
 if (class_exists('APIModel')) {
     try {
         $bfModel = new APIModel('CmsPost');
-        $bfOpts  = ['limit' => $bfLimit, 'offset' => 0, 'scope_type' => 'global', 'scope_id' => 0];
+        $bfOpts  = ['limit' => $bfLimit, 'offset' => 0, 'scope_type' => $bfScopeType, 'scope_id' => $bfScopeId];
         if ($bfTag !== '') {
             $bfOpts['tag'] = $bfTag;
         }
@@ -36,7 +46,14 @@ if (class_exists('APIModel')) {
         $bfPosts = [];
     }
 }
-$bfMoreHref = UIR . 'Blog/index' . ($bfTag !== '' ? ('&tag=' . rawurlencode($bfTag)) : '');
+// "All news" points at the scoped org blog (Site/blog/{slug}) on an org site,
+// else the global Blog index.
+$bfSiteSlug = isset($SiteSlug) ? (string) $SiteSlug : '';
+if ($bfScopeType !== 'global' && $bfSiteSlug !== '') {
+    $bfMoreHref = UIR . 'Site/blog/' . rawurlencode($bfSiteSlug);
+} else {
+    $bfMoreHref = UIR . 'Blog/index' . ($bfTag !== '' ? ('&tag=' . rawurlencode($bfTag)) : '');
+}
 // Static .bf-* CSS lives in frontdoor.css (loaded on the front door AND under
 // orgsite.css on org sites) — no per-render inline <style>.
 ?>

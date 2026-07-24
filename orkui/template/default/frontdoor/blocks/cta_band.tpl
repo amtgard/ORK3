@@ -11,7 +11,7 @@ $links   = $blockFields['links']   ?? '';
 ?>
 <div class="fd-pad" style="background:var(--navy);color:var(--fd-primary-contrast);text-align:center;">
     <?php if (!empty($logo['src'])): ?>
-        <img src="<?= htmlspecialchars($logo['src'], ENT_QUOTES) ?>"
+        <img src="<?= htmlspecialchars($logo['display'] ?? $logo['src'], ENT_QUOTES) ?>"
              alt="<?= htmlspecialchars($logo['alt'] ?? '', ENT_QUOTES) ?>"
              style="height:54px;margin-bottom:18px;opacity:.95;">
     <?php endif; ?>
@@ -23,7 +23,7 @@ $links   = $blockFields['links']   ?? '';
     <?php endif; ?>
 
     <?php if (!empty($subcopy)): ?>
-        <p style="opacity:.8;margin:0 0 20px;">
+        <p style="opacity:.8;margin:0 0 20px;white-space:pre-line;">
             <?= htmlspecialchars($subcopy, ENT_QUOTES) ?>
         </p>
     <?php endif; ?>

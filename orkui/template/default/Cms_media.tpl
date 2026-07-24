@@ -40,6 +40,12 @@ $h = function ($v) {
 .cms-media-card-thumb {
     width: 100%; height: 130px; object-fit: cover; display: block; background: var(--ork-bg-tertiary);
 }
+/* #95: broken-image fallback — same 130px footprint, centered fa-image, so it
+   never overlaps the top-left bulk-select checkbox or the caption below. */
+.cms-media-card-thumb.cms-empty-thumb {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ork-text-lighter, #9aa2ad); font-size: 30px;
+}
 .cms-media-card-body { padding: 10px 12px; }
 .cms-media-card-name {
     font-weight: 600; font-size: 13px; color: var(--ork-text);
@@ -73,6 +79,21 @@ $h = function ($v) {
 /* Upload drop-zone sits below the library; slimmer than the primary surface */
 .cms-upload-drop-slim { margin-top: 16px; padding: 14px; }
 </style>
+
+<script>
+// #95: swap a broken media thumbnail for the fa-image placeholder. Defined up front
+// (before the grid) so it exists by the time any <img> onerror fires. Sized via the
+// .cms-media-card-thumb.cms-empty-thumb rule so the fallback keeps the tile footprint
+// and never overlaps the bulk-select checkbox or the caption.
+window.cmsMediaThumbFallback = function (img) {
+    if (!img || img.dataset.fbApplied) { return; }
+    img.dataset.fbApplied = '1';
+    var ph = document.createElement('div');
+    ph.className = 'cms-media-card-thumb cms-empty-thumb';
+    ph.innerHTML = '<i class="fas fa-image" aria-hidden="true"></i>';
+    if (img.parentNode) { img.parentNode.replaceChild(ph, img); }
+};
+</script>
 
 <?php
 /* ---- CMS shell setup (persistent rail + masthead) ---- */
@@ -119,7 +140,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                         <?php if (!empty($caps['media'])): ?>
                             <label class="cms-media-card-sel"><input type="checkbox" class="cms-media-check" data-media-id="<?= $mid ?>" aria-label="Select <?= $h($fn) ?>"></label>
                         <?php endif; ?>
-                        <img class="cms-media-card-thumb" src="<?= $h($thumb) ?>" alt="<?= $h($alt) ?>" loading="lazy">
+                        <img class="cms-media-card-thumb" src="<?= $h($thumb) ?>" alt="<?= $h($alt) ?>" loading="lazy" onerror="cmsMediaThumbFallback(this)">
                         <div class="cms-media-card-body" data-media-id="<?= $mid ?>">
                             <div class="cms-media-card-name" data-tip="<?= $h($fn) ?>"><?= $h($fn) ?></div>
                             <?php if ($title !== ''): ?>
@@ -344,7 +365,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 (canEditMedia
                     ? '<label class="cms-media-card-sel"><input type="checkbox" class="cms-media-check" data-media-id="' + esc(mid) + '" aria-label="Select ' + esc(m.filename || ('#' + mid)) + '"></label>'
                     : '') +
-                '<img class="cms-media-card-thumb" src="' + esc(m.thumb || m.src) + '" alt="' + esc(alt) + '" loading="lazy">' +
+                '<img class="cms-media-card-thumb" src="' + esc(m.thumb || m.src) + '" alt="' + esc(alt) + '" loading="lazy" onerror="cmsMediaThumbFallback(this)">' +
                 cardBodyHtml(m);
             grid.appendChild(card);
         });
@@ -741,7 +762,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 card.className = 'cms-media-card';
                 card.setAttribute('data-trash-media-id', m.media_id || '');
                 card.innerHTML =
-                    '<img class="cms-media-card-thumb" src="' + esc(m.thumb || m.src) + '" alt="' + esc(alt) + '" loading="lazy">' +
+                    '<img class="cms-media-card-thumb" src="' + esc(m.thumb || m.src) + '" alt="' + esc(alt) + '" loading="lazy" onerror="cmsMediaThumbFallback(this)">' +
                     '<div class="cms-media-card-body">' +
                         '<div class="cms-media-card-name" data-tip="' + esc(fn) + '">' + esc(fn) + '</div>' +
                         '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">' +

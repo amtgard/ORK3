@@ -205,6 +205,23 @@
     padding: 24px 16px;
 }
 
+/* ---- events_feed card sub-text (contrast on dark cards) ----
+   Light-mode values match the block's original inline colors; the dark
+   overrides lift them to >=4.5:1 on the #1b2233 card (was #778 / #1d4ed8,
+   both failing on the dark surface). */
+.fd-ev-sub {
+    font-size: 12px;
+    color: #778;
+}
+.fd-ev-rsvp {
+    font-size: 12px;
+    color: #1d4ed8;
+    margin-top: 6px;
+    font-weight: 600;
+}
+html[data-theme="dark"] .fd-ev-sub { color: #b6c0d4; }
+html[data-theme="dark"] .fd-ev-rsvp { color: #7ba7f2; }
+
 /* ---- Hero Carousel ----------------------------------------- */
 .fd-carousel {
     position: relative;
@@ -319,8 +336,10 @@
     right: 0;
     bottom: 0;
     z-index: 2;
-    background: rgba(7, 11, 22, .74);
-    backdrop-filter: blur(4px);
+    /* Solid semi-opaque fill instead of backdrop-filter: blur() — the blur
+       recomputed every frame over the animating carousel behind it (jank on
+       low-end GPUs). A solid rgba reads the same and costs nothing. */
+    background: rgba(7, 11, 22, .85);
     border-top: 1px solid rgba(240, 180, 41, .3);
     display: flex;
     color: #fff;
@@ -675,7 +694,9 @@ html[data-theme="dark"] .fd-dropdown {
 }
 
 html[data-theme="dark"] .fd-nav-toggle {
-    color: #1a2236;
+    /* The mobile hamburger is the ONLY nav opener <=680px; the old #1a2236 made
+       it near-invisible (~1.2:1) on the dark nav. Use a light glyph color. */
+    color: #e8edf8;
 }
 
 /* Section titles and body text */
@@ -903,7 +924,9 @@ html[data-theme="dark"] .fd-btn-ghost {
 }
 
 @media (max-width: 420px) {
-    .fd-kingdoms-grid { grid-template-columns: repeat(2, 1fr); }
+    /* !important required: the <=680px 3-col rule above is itself !important, so
+       an unmarked 2-col rule here would lose the specificity/importance tie. */
+    .fd-kingdoms-grid { grid-template-columns: repeat(2, 1fr) !important; }
 }
 
 /* ---- staff_roster block ---- */

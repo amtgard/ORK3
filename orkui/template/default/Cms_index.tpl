@@ -399,7 +399,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         btn.addEventListener('click', function () {
             var pid = btn.getAttribute('data-page-id');
             var title = btn.getAttribute('data-title') || 'this page';
-            askConfirm('Delete "' + title + '"? This removes the page and all of its blocks. This cannot be undone.', function () {
+            askConfirm('Delete "' + title + '"? This removes the page and all of its blocks. You can undo this right afterward from the toast that appears.', function () {
                 var okBtn = confirmOk;
                 if (okBtn) { okBtn.disabled = true; }
                 post('deletepage', { page_id: pid }).then(function (res) {

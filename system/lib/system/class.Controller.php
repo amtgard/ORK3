@@ -88,8 +88,12 @@ class Controller
 
         // CMS admin access flag for the user drop-down ("Manage Site Pages").
         // True for any holder of a CMS capability at global scope (and super-admins).
+        // Computed LAZILY: only the non-AJAX (nav-rendering) request path shows the
+        // user drop-down, so skip the capability probe entirely for the *Ajax
+        // controllers (reuse the $_skipTokenCheck detection) — they never render the
+        // nav and so would pay a needless CmsAuth query on every XHR.
         $this->data['CanManageCms'] = false;
-        if ($_uid > 0) {
+        if ($_uid > 0 && !$_skipTokenCheck) {
             $this->load_model('CmsAuth');
             if (isset($this->CmsAuth)) {
                 // One capability probe (not a loop): every CMS role from
@@ -231,9 +235,14 @@ class Controller
         $this->_attachFrontDoorTheme();
         $frontDoorBlocks = null;
         $this->load_model('CmsPage');
-        $home = $this->CmsPage->get_home_page();
+        // C1: one GhettoCache-backed bundle (home page row + its enabled blocks)
+        // instead of a separate GetHomePage() + GetBlocks() pair. A null slug means
+        // "the scope's home page".
+        $bundle = $this->CmsPage->get_page_with_blocks('global', 0, null);
+        $home = (is_array($bundle) && !empty($bundle['page'])) ? $bundle['page'] : null;
+        $homeBlocks = (is_array($bundle) && isset($bundle['blocks']) && is_array($bundle['blocks']))
+            ? $bundle['blocks'] : array();
         if (!empty($home) && !empty($home['page_id'])) {
-            $homeBlocks = $this->CmsPage->get_page_blocks((int) $home['page_id']);
             if (!empty($homeBlocks)) {
                 $frontDoorBlocks = $homeBlocks;
             }

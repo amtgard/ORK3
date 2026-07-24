@@ -11,6 +11,14 @@
  *
  * Matching is by exact label within menu='marketing', scope global. Idempotent.
  *
+ * RUN ORDER: this runs AFTER 2026-07-08-cms-seed-amtgard.php (so the target
+ * pages exist) and is order-INSENSITIVE with 2026-07-08-cms-nav-polish.php,
+ * which relabels "AI Programs" -> "Programs". Because that rename may run either
+ * before or after this relink, $pageFor below carries BOTH labels ("AI Programs"
+ * and "Programs") mapped to the same 'programs' page, so the Programs item is
+ * matched regardless of which script touched it last. seed-cms-demo.sh runs
+ * nav-polish immediately before this relink.
+ *
  * Run:
  *   docker exec ork3-php8-app php \
  *     /var/www/ork.amtgard.com/db-migrations/2026-07-08-cms-nav-relink-amtgard.php
@@ -39,7 +47,11 @@ $pid = function ($slug) use ($cms) {
 
 // label => CMS page slug (internal). Every section we replicated.
 $pageFor = array(
-    'About' => 'about', 'Join' => 'join', 'AI Programs' => 'programs',
+    'About' => 'about', 'Join' => 'join',
+    // Both the original seed label ("AI Programs") and the nav-polish rename
+    // ("Programs") map to the same page, so this relink matches whichever label
+    // is live (see the RUN ORDER note in the file header).
+    'AI Programs' => 'programs', 'Programs' => 'programs',
     'Media' => 'media', 'Official Resources' => 'resources',
     'Mission' => 'mission', 'Staff' => 'staff', 'Volunteers' => 'volunteers',
     'Learn the Basics' => 'learn-the-basics', 'Start a Chapter' => 'start-a-chapter',

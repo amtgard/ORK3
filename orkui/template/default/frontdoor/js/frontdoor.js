@@ -19,11 +19,27 @@
       userPaused = !!prefersReduced;
     if (isNaN(ms) || ms < 100) ms = 4500;
 
+    // Take the outgoing slide out of the tab order / SR output, and restore the
+    // incoming one. inert (where supported) also removes pointer + focus; the
+    // aria-hidden mirror covers assistive tech regardless.
+    function hideSlide(el) {
+      el.setAttribute('aria-hidden', 'true');
+      el.setAttribute('inert', '');
+    }
+    function showSlide(el) {
+      el.removeAttribute('aria-hidden');
+      el.removeAttribute('inert');
+    }
+    // Initial state: only the active slide is exposed.
+    slides.forEach(function (s, idx) { if (idx === i) { showSlide(s); } else { hideSlide(s); } });
+
     function go(n) {
       slides[i].classList.remove('is-active');
+      hideSlide(slides[i]);
       if (dots[i]) { dots[i].classList.remove('on'); dots[i].removeAttribute('aria-current'); }
       i = (n + slides.length) % slides.length;
       slides[i].classList.add('is-active');
+      showSlide(slides[i]);
       if (dots[i]) { dots[i].classList.add('on'); dots[i].setAttribute('aria-current', 'true'); }
     }
     function stop() { if (t) { clearInterval(t); t = null; } }

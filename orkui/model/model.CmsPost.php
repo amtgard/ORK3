@@ -7,7 +7,9 @@
  * (because system/lib/ork3/class.CmsPost.php exists), and Model::__call
  * forwards any unknown method to it. The explicit methods below mirror the
  * lib surface for clarity; all are pure forwards (no business logic here —
- * DB work lives in the lib).
+ * DB work lives in the lib). Each snake_case wrapper mirrors the FULL lib
+ * signature so no caller has to reach past the wrapper (via __call) to pass a
+ * later positional argument.
  */
 class Model_CmsPost extends Model
 {
@@ -42,19 +44,19 @@ class Model_CmsPost extends Model
         return $this->CmsPost->GetPost($postId);
     }
 
-    public function update_post($postId, $data)
+    public function update_post($postId, $data, $scopeType = null, $scopeId = null)
     {
-        return $this->CmsPost->UpdatePost($postId, $data);
+        return $this->CmsPost->UpdatePost($postId, $data, $scopeType, $scopeId);
     }
 
-    public function set_status($postId, $status, $uid = 0)
+    public function set_status($postId, $status, $uid = 0, $publishedAt = null)
     {
-        return $this->CmsPost->SetStatus($postId, $status, $uid);
+        return $this->CmsPost->SetStatus($postId, $status, $uid, $publishedAt);
     }
 
-    public function delete_post($postId, $scopeType = null, $scopeId = null)
+    public function delete_post($postId, $scopeType = null, $scopeId = null, $actorId = 0)
     {
-        return $this->CmsPost->DeletePost($postId, $scopeType, $scopeId);
+        return $this->CmsPost->DeletePost($postId, $scopeType, $scopeId, $actorId);
     }
 
     public function set_tags($postId, array $tagNames)

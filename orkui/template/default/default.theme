@@ -4,6 +4,7 @@
 		<script>
 		(function(){var t=localStorage.getItem('ork_theme');if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');}else if(t==='light'){document.documentElement.setAttribute('data-theme','light');}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.setAttribute('data-theme','dark');}})();
 		</script>
+<?php if (empty($IsOrgSite)): // ORK's own Google Tag Manager — do not load on standalone org sites ?>
 		<!-- Google Tag Manager -->
 		<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 		new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -11,7 +12,16 @@
 		'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 		})(window,document,'script','dataLayer','GTM-5HZHGSLT');</script>
 		<!-- End Google Tag Manager -->
-		<title><?php echo htmlspecialchars((strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title), ENT_QUOTES); ?></title>
+<?php endif; ?>
+		<title><?php
+		// Org sites present their own identity — no "ORK 3:" prefix leaking the
+		// internal app brand into the org's public <title> / browser tab.
+		if (!empty($IsOrgSite)) {
+			echo htmlspecialchars((string)$page_title, ENT_QUOTES);
+		} else {
+			echo htmlspecialchars((strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title), ENT_QUOTES);
+		}
+		?></title>
 		<link rel="icon" type="image/png" sizes="32x32" href="<?= HTTP_ASSETS ?>images/favicon-32x32.png">
 		<link rel="icon" type="image/png" sizes="16x16" href="<?= HTTP_ASSETS ?>images/favicon-16x16.png">
 		<link rel="apple-touch-icon" sizes="180x180" href="<?= HTTP_ASSETS ?>images/favicon-180x180.png">
@@ -253,10 +263,12 @@
 	</style>
 </head>
 	<body class="<?= !empty($ViewerDyslexiaFonts) ? 'ork-dyslexia-font ' : '' ?><?= !empty($IsFrontDoor) ? 'fd-home' : '' ?>">
+<?php if (empty($IsOrgSite)): // ORK's own Google Tag Manager — omit on standalone org sites ?>
 		<!-- Google Tag Manager (noscript) -->
 		<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5HZHGSLT"
 		height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 		<!-- End Google Tag Manager (noscript) -->
+<?php endif; ?>
 <div id="ork-offline-banner"><i class="fas fa-wifi" style="margin-right:6px;opacity:0.8"></i>You&rsquo;re currently offline &mdash; changes may not save until your connection is restored.</div>
 <?php
 // -----------------------------------------------------------------------

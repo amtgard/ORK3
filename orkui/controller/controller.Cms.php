@@ -313,27 +313,33 @@ class Controller_Cms extends Controller
         //      flag for those that already have a site (so the picker can nudge
         //      toward un-provisioned orgs). Opening a scoped dashboard auto-fires
         //      EnsureSite, so provisioning needs no dedicated endpoint. ----
-        $this->load_model('Kingdom');
-        $kres = $this->Kingdom->GetKingdoms(array());
-        $rawKingdoms = (is_array($kres) && isset($kres['Kingdoms']) && is_array($kres['Kingdoms']))
-            ? $kres['Kingdoms']
-            : array();
-
+        // #17: the picker only needs id + name (+ the has_site flag). GetKingdoms()
+        // loads Common::get_configs() per kingdom (an AtlasColor lookup we never use
+        // here) — an N-config fan-out. No light id+name lister exists on the Kingdom
+        // lib, so read the minimal active set directly (a parameterless, static
+        // query — no user input reaches it, so nothing to bind/escape). Ordered in
+        // SQL, so no post-sort is needed.
+        global $DB;
+        $DB->Clear();
+        $krows = $DB->DataSet(
+            'SELECT kingdom_id, name FROM ' . DB_PREFIX . 'kingdom'
+            . " WHERE active = 'Active' ORDER BY name ASC"
+        );
         $pick = array();
-        foreach ($rawKingdoms as $k) {
-            $kid = (int)($k['KingdomId'] ?? 0);
-            if ($kid <= 0) {
-                continue;
+        if ($krows !== false) {
+            while ($krows->Next()) {
+                $kid = (int)$krows->kingdom_id;
+                if ($kid <= 0) {
+                    continue;
+                }
+                $pick[] = array(
+                    'id'       => $kid,
+                    'name'     => (string)$krows->name,
+                    'has_site' => !empty($kingdomHasSite[$kid]),
+                );
             }
-            $pick[] = array(
-                'id'       => $kid,
-                'name'     => (string)($k['KingdomName'] ?? ''),
-                'has_site' => !empty($kingdomHasSite[$kid]),
-            );
         }
-        usort($pick, function ($a, $b) {
-            return strcasecmp((string)$a['name'], (string)$b['name']);
-        });
+        $DB->Clear();
         $this->data['ProvisionKingdoms'] = $pick;
 
         // Rail flag: this is a super-admin so the "All sites" entry is shown.
@@ -399,13 +405,20 @@ class Controller_Cms extends Controller
 
         $pages = $this->CmsPage->list_pages($filters);
         $pages = is_array($pages) ? $pages : array();
+        // #13: resolve every row's nested slug PATH from the fetched rows ONCE (an
+        // in-memory parent_id walk) instead of a per-row PagePath() DB round-trip
+        // (an N+1). Falls back to PagePath for any row whose ancestry can't be
+        // resolved in memory (e.g. a filtered list missing an ancestor, or rows
+        // that don't carry parent_id), so correctness never regresses.
+        $pathMap = $this->_buildScopePathMap($pages);
         // Attach the scope-correct PUBLIC live URL to each row so the list links
         // to the org site (Site/...) in a scoped context, not the global Page route.
         foreach ($pages as &$pRow) {
             $pRow['live_href'] = $this->_pageLiveHref(
                 $scope,
                 (int)($pRow['page_id'] ?? 0),
-                (string)($pRow['slug'] ?? '')
+                (string)($pRow['slug'] ?? ''),
+                $pathMap
             );
         }
         unset($pRow);
@@ -474,9 +487,10 @@ class Controller_Cms extends Controller
                 $this->data['Message'] = 'Page not found.';
                 return;
             }
-            // Editing an existing page returns ALL its blocks (incl. disabled) so
-            // the editor can toggle them; the public renderer filters to enabled.
-            $blocks = $this->CmsPage->get_blocks('page', (int)$page['page_id']);
+            // C2: editing an existing page returns ALL its blocks (incl. disabled)
+            // via GetBlocksForEditor so the editor can toggle them; the public
+            // get_blocks()/renderer path stays enabled-only.
+            $blocks = $this->CmsPage->get_blocks_for_editor('page', (int)$page['page_id']);
             $this->data['page_title'] = 'Edit: ' . $page['title'];
         }
 
@@ -512,6 +526,10 @@ class Controller_Cms extends Controller
         $this->template = 'Cms_preview.tpl';
         $this->data['IsFrontDoor'] = false;
         $this->data['no_index']    = true;
+        // C3: Cms_preview.tpl emits window.CMS_CSRF from $CmsCsrf so the preview's
+        // inline editor actions carry the token. Set explicitly here (the
+        // constructor also sets it) so the emit is guaranteed non-empty.
+        $this->data['CmsCsrf']     = $this->_csrfToken();
 
         $page = $this->CmsPage->get_page((int)$id);
         // IDOR guard: never preview a page belonging to another scope.
@@ -553,6 +571,8 @@ class Controller_Cms extends Controller
         $this->template = 'Cms_preview.tpl';
         $this->data['IsFrontDoor'] = false;
         $this->data['no_index']    = true;
+        // C3: guarantee window.CMS_CSRF is non-empty in the post preview too.
+        $this->data['CmsCsrf']     = $this->_csrfToken();
 
         $post = $this->CmsPost->get_post((int)$id);
         // IDOR guard: never preview a post belonging to another scope.
@@ -721,7 +741,9 @@ class Controller_Cms extends Controller
                 $this->data['Message']   = 'Post not found.';
                 return;
             }
-            $blocks  = $this->CmsPost->get_post_blocks((int)$post['post_id']);
+            // C2: the editor needs ALL body blocks (incl. disabled) so they can be
+            // toggled; get_post_blocks() is the enabled-only public path.
+            $blocks  = $this->CmsPage->get_blocks_for_editor('post', (int)$post['post_id']);
             $heroRef = $this->_heroRef($post);
             $this->data['page_title'] = 'Edit: ' . $post['title'];
         }
@@ -990,12 +1012,15 @@ class Controller_Cms extends Controller
      * other page to Site/page/{siteSlug}/{pageSlug}. Returns '' when a scoped
      * site has no resolvable slug yet (no public URL to link).
      *
-     * @param array  $scope
-     * @param int    $pageId
-     * @param string $pageSlug
+     * @param array      $scope
+     * @param int        $pageId
+     * @param string     $pageSlug
+     * @param array|null $pathMap  optional pageId => full-slug-path map (#13) to
+     *                             resolve nested paths in memory; falls back to a
+     *                             PagePath() DB walk for any id it doesn't cover.
      * @return string
      */
-    private function _pageLiveHref($scope, $pageId, $pageSlug)
+    private function _pageLiveHref($scope, $pageId, $pageSlug, $pathMap = null)
     {
         $pageSlug = (string)$pageSlug;
         if ($this->_scopeIsGlobal($scope)) {
@@ -1011,14 +1036,66 @@ class Controller_Cms extends Controller
             return UIR . 'Site/view/' . rawurlencode($siteSlug);
         }
         // Nested pages live at their FULL slug path (parent/child/…), not the bare
-        // leaf slug — resolve it via PagePath so the live link matches the public
-        // Site/page route (which walks parent_id). Fall back to the leaf slug.
-        $path = (string)$this->CmsPage->PagePath((int)$pageId);
+        // leaf slug — so the live link matches the public Site/page route (which
+        // walks parent_id). #13: prefer the precomputed in-memory path map; only
+        // fall back to a per-row PagePath() DB walk when the map can't resolve it.
+        $path = (is_array($pathMap) && isset($pathMap[(int)$pageId]))
+            ? (string)$pathMap[(int)$pageId]
+            : (string)$this->CmsPage->PagePath((int)$pageId);
         if ($path === '') {
             $path = $pageSlug;
         }
         $encPath = implode('/', array_map('rawurlencode', explode('/', $path)));
         return UIR . 'Site/page/' . rawurlencode($siteSlug) . '/' . $encPath;
+    }
+
+    /**
+     * #13: build a pageId => full-slug-path map from the already-fetched admin
+     * list rows, resolving nested paths with an in-memory parent_id walk — one
+     * pass over the rows instead of a PagePath() DB walk per row. A row is only
+     * mapped when its ENTIRE ancestor chain is present in the same result set and
+     * every row carries the parent_id column; anything not fully resolvable is
+     * simply omitted so _pageLiveHref falls back to a PagePath() lookup for it
+     * (correctness preserved for filtered lists or pre-migration rows).
+     *
+     * @param array $pages ListPages rows (need page_id, slug, parent_id)
+     * @return array<int,string> pageId => 'parent/child/leaf' slug path
+     */
+    private function _buildScopePathMap($pages)
+    {
+        $byId = array();
+        foreach ((is_array($pages) ? $pages : array()) as $p) {
+            $pid = (int)($p['page_id'] ?? 0);
+            // Require the parent_id column to resolve ancestry in memory; without
+            // it, leave the row unmapped (caller falls back to PagePath).
+            if ($pid <= 0 || !array_key_exists('parent_id', $p)) {
+                continue;
+            }
+            $par = ($p['parent_id'] !== null && (int)$p['parent_id'] > 0) ? (int)$p['parent_id'] : 0;
+            $byId[$pid] = array('slug' => (string)($p['slug'] ?? ''), 'parent' => $par);
+        }
+
+        $map = array();
+        foreach ($byId as $pid => $_) {
+            $parts = array();
+            $cur   = $pid;
+            $guard = 0;
+            $ok    = true;
+            while ($cur > 0) {
+                if (!isset($byId[$cur]) || ++$guard > 64) {
+                    $ok = false; // ancestor missing from this list, or a cycle
+                    break;
+                }
+                array_unshift($parts, $byId[$cur]['slug']);
+                $cur = $byId[$cur]['parent'];
+            }
+            if ($ok) {
+                $map[$pid] = implode('/', array_filter($parts, function ($s) {
+                    return $s !== '';
+                }));
+            }
+        }
+        return $map;
     }
 
     /**
@@ -1051,9 +1128,11 @@ class Controller_Cms extends Controller
 
     /**
      * Render a self-contained "you don't have permission" page for a logged-in
-     * user who lacks CMS access, then stop (echo + exit so view() never runs).
-     * Self-contained (inline styles, light+dark) because this surface bypasses
-     * the CMS shell — the viewer holds no CMS scope to build that chrome from.
+     * user who lacks CMS access, then stop. #109: the markup now lives in the
+     * bare-chrome Cms_deny.tpl; the controller keeps only the 403 + X-Robots-Tag
+     * headers and renders that template directly (the deny page deliberately
+     * bypasses the themed View pipeline — a denied viewer holds no CMS scope to
+     * build the shell chrome from).
      */
     private function _denyPermission()
     {
@@ -1061,43 +1140,11 @@ class Controller_Cms extends Controller
         if (function_exists('http_response_code')) {
             http_response_code(403);
         }
-        $home = htmlspecialchars((string)UIR, ENT_QUOTES, 'UTF-8');
-        echo '<!doctype html><html lang="en"><head><meta charset="utf-8">'
-            . '<meta name="viewport" content="width=device-width, initial-scale=1">'
-            . '<meta name="robots" content="noindex, nofollow">'
-            . '<title>Permission needed — Content Management</title>'
-            . '<style>'
-            . ':root{color-scheme:light dark;}'
-            . 'body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;'
-            . 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;'
-            . 'background:#f4f6fa;color:#1b2333;padding:24px;box-sizing:border-box;}'
-            . '.deny-card{max-width:520px;width:100%;background:#fff;border:1px solid #e2e7f0;border-radius:14px;'
-            . 'box-shadow:0 10px 30px rgba(20,32,60,.08);padding:36px 34px;text-align:center;box-sizing:border-box;}'
-            . '.deny-badge{width:60px;height:60px;border-radius:50%;background:#eef2fb;color:#1f3a6e;'
-            . 'display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 18px;}'
-            . '.deny-card h1{font-size:21px;margin:0 0 12px;color:#12213f;}'
-            . '.deny-card p{font-size:15px;line-height:1.55;margin:0 0 14px;color:#41506b;}'
-            . '.deny-card .deny-actions{margin-top:22px;}'
-            . '.deny-btn{display:inline-block;padding:11px 20px;border-radius:9px;background:#1f3a6e;color:#fff;'
-            . 'text-decoration:none;font-weight:600;font-size:14px;}'
-            . '.deny-btn:hover{background:#264a8c;}'
-            . '@media (prefers-color-scheme:dark){'
-            . 'body{background:#0e1420;color:#e7ecf5;}'
-            . '.deny-card{background:#161d2b;border-color:#27324a;box-shadow:0 10px 30px rgba(0,0,0,.4);}'
-            . '.deny-badge{background:#1d2740;color:#8fb2ff;}'
-            . '.deny-card h1{color:#f1f5ff;}.deny-card p{color:#aab6cf;}'
-            . '.deny-btn{background:#2d5bb8;}.deny-btn:hover{background:#3a6dd6;}'
-            . '}'
-            . '</style></head><body>'
-            . '<main class="deny-card">'
-            . '<div class="deny-badge">&#128274;</div>'
-            . '<h1>You don&rsquo;t have permission to manage this site</h1>'
-            . '<p>You&rsquo;re signed in, but your role doesn&rsquo;t include access to the '
-            . 'Content Management tools for this site.</p>'
-            . '<p>Ask your monarch or regent (a kingdom administrator) to grant you CMS access, '
-            . 'then reload this page.</p>'
-            . '<div class="deny-actions"><a class="deny-btn" href="' . $home . '">Return to ORK</a></div>'
-            . '</main></body></html>';
+        $HomeUrl = (string)UIR;
+        $tpl = DIR_TEMPLATE . 'default/Cms_deny.tpl';
+        if (is_file($tpl)) {
+            include $tpl;
+        }
         exit;
     }
 
@@ -1110,15 +1157,44 @@ class Controller_Cms extends Controller
      */
     private function _blockCatalog()
     {
-        // Human labels + grouping + whether the block pulls dynamic data +
-        // a Font Awesome icon + a one-line description. For DYNAMIC blocks the
-        // description is also surfaced as the body of the editor's info card
-        // (it states what the block shows live).
-        // Tuple: [label, group, dynamic, icon, description, addable?].
-        // `addable` (6th element, optional) defaults to true when omitted. A
-        // false value keeps the entry so EXISTING placed blocks still resolve a
-        // label, while the editor's Add-block chooser skips it (no new blocks).
-        $known = array(
+        // #42: the canonical type => meta map is the SINGLE source of truth for
+        // block types, shared with Controller_CmsAjax (which derives its save-time
+        // allowlist from CanonicalBlockTypes()). Kept as pure data in one static
+        // method so neither the catalog view nor the parser hand-duplicates it.
+        $known = self::_blockCatalogMeta();
+
+        $blockDir = DIR_TEMPLATE . 'default/frontdoor/blocks/';
+
+        $catalog = array();
+        foreach ($known as $type => $meta) {
+            $partial   = $blockDir . preg_replace('/[^a-z_]/', '', $type) . '.tpl';
+            $available = file_exists($partial);
+            $catalog[] = array(
+                'type'        => $type,
+                'label'       => $meta[0],
+                'group'       => $meta[1],
+                'dynamic'     => (bool)$meta[2],
+                'icon'        => $meta[3],
+                'description' => $meta[4],
+                'available'   => $available,
+                // 6th tuple element is the addable flag; default true when absent.
+                'addable'     => !isset($meta[5]) ? true : (bool)$meta[5],
+            );
+        }
+        return $catalog;
+    }
+
+    /**
+     * #42: the canonical block-type => meta map — the SINGLE source of truth for
+     * which block types exist. Pure data (no filesystem), so it is safe to call
+     * statically from Controller_CmsAjax's save-time allowlist. Tuple:
+     * [label, group, dynamic, icon, description, addable?].
+     *
+     * @return array<string,array>
+     */
+    private static function _blockCatalogMeta()
+    {
+        return array(
             // Shipped front-door blocks.
             'marketing_nav'   => array('Marketing Nav',      'Layout',   false, 'fa-bars',          'Top navigation bar with logo, menu links, and login / call-to-action buttons. Rendered automatically as site chrome — not added per page.', false),
             'member_bar'      => array('Member Bar',         'Dynamic',  true,  'fa-user-shield',   'Logged-in welcome strip with quick links to the viewer’s kingdom, Live Attendance, and Member Tools. Hidden from signed-out visitors.'),
@@ -1152,26 +1228,18 @@ class Controller_Cms extends Controller
             'kingdom_parks_map' => array('Parks map (live)', 'Dynamic',  true,  'fa-map',           'Interactive map of the kingdom’s active parks with a click-to-open detail sidebar (heraldry, directions, description). Great placed above a Parks list.'),
             'kingdom_events'  => array('Events (live)',      'Dynamic',  true,  'fa-calendar-day',  'Live list of the kingdom’s soonest upcoming events, as date cards linking to each event.'),
         );
+    }
 
-        $blockDir = DIR_TEMPLATE . 'default/frontdoor/blocks/';
-
-        $catalog = array();
-        foreach ($known as $type => $meta) {
-            $partial   = $blockDir . preg_replace('/[^a-z_]/', '', $type) . '.tpl';
-            $available = file_exists($partial);
-            $catalog[] = array(
-                'type'        => $type,
-                'label'       => $meta[0],
-                'group'       => $meta[1],
-                'dynamic'     => (bool)$meta[2],
-                'icon'        => $meta[3],
-                'description' => $meta[4],
-                'available'   => $available,
-                // 6th tuple element is the addable flag; default true when absent.
-                'addable'     => !isset($meta[5]) ? true : (bool)$meta[5],
-            );
-        }
-        return $catalog;
+    /**
+     * #42: the canonical list of valid block-type keys — the shared allowlist
+     * Controller_CmsAjax::_parseBlocks() drops forged/unknown types against.
+     * Derived from the ONE meta map above so the two can never drift.
+     *
+     * @return string[]
+     */
+    public static function CanonicalBlockTypes()
+    {
+        return array_keys(self::_blockCatalogMeta());
     }
 
     /**
@@ -1280,8 +1348,11 @@ class Controller_Cms extends Controller
             'resource'   => array('file_download', 'table', 'accordion', 'columns'),
             // Blog index: the live post feed, with an optional call-to-action.
             'blog_index' => array('blog_feed', 'cta_band'),
-            // Dynamic data: every live feed, plus framing blocks.
-            'dynamic'    => array('events_feed', 'kingdoms_teaser', 'blog_feed', 'kingdom_officers', 'kingdom_parks', 'kingdom_parks_map', 'kingdom_events', 'member_bar', 'card_grid', 'cta_band'),
+            // Dynamic data: every live feed, plus framing blocks. #65: the global
+            // events_feed (org-wide, all kingdoms) is dropped from the chooser in
+            // favor of the scope-correct kingdom_events; existing events_feed blocks
+            // still render and stay editable (blockAllow only governs the chooser).
+            'dynamic'    => array('kingdoms_teaser', 'blog_feed', 'kingdom_officers', 'kingdom_parks', 'kingdom_parks_map', 'kingdom_events', 'member_bar', 'card_grid', 'cta_band'),
             // Blog post bodies behave like articles.
             'post'       => array('accordion', 'table', 'file_download', 'video_embed', 'gallery', 'columns'),
         );

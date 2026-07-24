@@ -28,6 +28,29 @@
 class CmsSanitizer
 {
     /**
+     * #102: hard input byte budget (256 KB). TinyMCE-authored block HTML is far
+     * smaller than this in practice; anything larger is truncated BEFORE the DOM
+     * parse so an authenticated author can't ship a multi-megabyte payload that
+     * pins CPU/memory in DOMDocument::loadHTML + the recursive allowlist walk.
+     */
+    private static $MAX_INPUT_BYTES = 262144; // 256 * 1024
+
+    /**
+     * #102: recursion-depth ceiling for sanitizeNode(). Beyond this the subtree is
+     * dropped wholesale — bounds the deeply-nested-markup DoS (each level costs a
+     * recursion frame + an iterator_to_array snapshot). Legit editor content
+     * (nested lists/tables) never approaches this.
+     */
+    private static $MAX_DEPTH = 60;
+
+    /**
+     * #102: total node budget across the whole walk. A backstop to the byte cap:
+     * once exhausted the remaining siblings are dropped and the walk bails, so a
+     * pathological wide/flat payload can't blow the work budget.
+     */
+    private static $MAX_NODES = 20000;
+
+    /**
      * Tags that survive sanitization. Anything else is unwrapped
      * (children kept, tag removed) unless it is in DROP_TAGS.
      */
@@ -72,6 +95,13 @@ class CmsSanitizer
     {
         if (!is_string($html) || $html === '') {
             return '';
+        }
+
+        // #102: bound the parse cost. Truncate oversize input before the DOM
+        // parse — the allowlist walk is already robust to malformed markup, so a
+        // mid-tag cut is harmless, and this caps the DOMDocument work up front.
+        if (strlen($html) > self::$MAX_INPUT_BYTES) {
+            $html = substr($html, 0, self::$MAX_INPUT_BYTES);
         }
 
         // libxml internal errors: suppress malformed-markup warnings; we
@@ -120,7 +150,9 @@ class CmsSanitizer
             return '';
         }
 
-        self::sanitizeNode($root, $doc);
+        // #102: a shared node budget threaded through the recursive walk.
+        $budget = array('nodes' => self::$MAX_NODES);
+        self::sanitizeNode($root, $doc, 0, $budget);
 
         // Serialize children of the root only (drop the wrapper div).
         $out = '';
@@ -153,10 +185,27 @@ class CmsSanitizer
      *   - not allowed → unwrapped (element removed, children promoted)
      *   - allowed     → attributes filtered, then recurse
      * Text nodes are left as-is (DOMDocument escapes them on output).
+     *
+     * #102: $depth and the shared &$budget bound the walk against an
+     * authenticated deep-nesting / node-flood DoS — past MAX_DEPTH the subtree is
+     * dropped, and once the node budget is exhausted the remaining siblings are
+     * dropped and the walk bails.
      */
-    private static function sanitizeNode(DOMNode $node, DOMDocument $doc)
+    private static function sanitizeNode(DOMNode $node, DOMDocument $doc, $depth = 0, &$budget = null)
     {
+        if ($budget === null) {
+            $budget = array('nodes' => self::$MAX_NODES);
+        }
         if (!$node->hasChildNodes()) {
+            return;
+        }
+
+        // Depth budget: beyond the ceiling, drop the entire subtree rather than
+        // recurse deeper (bounds the recursion-frame + snapshot cost).
+        if ($depth > self::$MAX_DEPTH) {
+            foreach (iterator_to_array($node->childNodes) as $deep) {
+                $node->removeChild($deep);
+            }
             return;
         }
 
@@ -164,6 +213,15 @@ class CmsSanitizer
         $children = iterator_to_array($node->childNodes);
 
         foreach ($children as $child) {
+            // Node budget: once exhausted, drop every remaining sibling and bail.
+            if ($budget['nodes'] <= 0) {
+                if ($child->parentNode !== null) {
+                    $child->parentNode->removeChild($child);
+                }
+                continue;
+            }
+            $budget['nodes']--;
+
             if ($child instanceof DOMElement) {
                 $tag = strtolower($child->tagName);
 
@@ -176,14 +234,14 @@ class CmsSanitizer
                 // 2) Not on the allowlist: recurse to clean descendants,
                 //    then unwrap (promote children, drop the tag itself).
                 if (!in_array($tag, self::$ALLOWED_TAGS, true)) {
-                    self::sanitizeNode($child, $doc);
+                    self::sanitizeNode($child, $doc, $depth + 1, $budget);
                     self::unwrap($child);
                     continue;
                 }
 
                 // 3) Allowed tag: filter attributes, then recurse.
                 self::filterAttributes($child, $tag);
-                self::sanitizeNode($child, $doc);
+                self::sanitizeNode($child, $doc, $depth + 1, $budget);
             } elseif ($child instanceof DOMComment) {
                 // Comments can hide IE conditional-comment script vectors.
                 $child->parentNode->removeChild($child);

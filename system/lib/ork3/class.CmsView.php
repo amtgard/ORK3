@@ -122,12 +122,28 @@ class CmsView extends CmsBase
             $DB->scope_type  = $this->_normalizeScopeType($scopeType);
             $DB->scope_id    = (int)$scopeId;
             $DB->recent_days = self::RECENT_DAYS - 1;   // inclusive window (today + N-1 prior days)
+            // #115: bind the rollup to LIVE entities the same way GetViewStats does
+            // (scope-bound join + deleted_at IS NULL, keeping only rows whose
+            // page/post still resolves). Without this, the masthead total counted
+            // views of deleted pages while the "most viewed" card — which joins to
+            // live entities — did not, so the two figures disagreed. Scope-bound
+            // joins also stop a stray cross-scope entity_id from inflating the tally.
             $row = $this->_firstRow($DB->DataSet(
-                'SELECT COALESCE(SUM(views), 0) AS total,'
-                . ' COALESCE(SUM(CASE WHEN `day` >= (CURDATE() - INTERVAL :recent_days DAY)'
-                . ' THEN views ELSE 0 END), 0) AS recent'
-                . ' FROM ' . DB_PREFIX . 'cms_view'
-                . ' WHERE scope_type = :scope_type AND scope_id = :scope_id'
+                'SELECT COALESCE(SUM(v.views), 0) AS total,'
+                . ' COALESCE(SUM(CASE WHEN v.`day` >= (CURDATE() - INTERVAL :recent_days DAY)'
+                . ' THEN v.views ELSE 0 END), 0) AS recent'
+                . ' FROM ' . DB_PREFIX . 'cms_view v'
+                . ' LEFT JOIN ' . DB_PREFIX . 'cms_page pg'
+                . "   ON v.entity_type = 'page' AND pg.page_id = v.entity_id"
+                . '   AND pg.scope_type = v.scope_type AND pg.scope_id = v.scope_id'
+                . '   AND pg.deleted_at IS NULL'
+                . ' LEFT JOIN ' . DB_PREFIX . 'cms_post po'
+                . "   ON v.entity_type = 'post' AND po.post_id = v.entity_id"
+                . '   AND po.scope_type = v.scope_type AND po.scope_id = v.scope_id'
+                . '   AND po.deleted_at IS NULL'
+                . ' WHERE v.scope_type = :scope_type AND v.scope_id = :scope_id'
+                // Keep only view rows whose entity still resolves to a live page/post.
+                . ' AND COALESCE(pg.page_id, po.post_id) IS NOT NULL'
             ));
             if ($row !== null) {
                 $out['total']  = (int)$row['total'];

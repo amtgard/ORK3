@@ -30,7 +30,7 @@ class CmsPage extends CmsBase
     private static $HTML_FIELDS = array('body', 'html');
 
     /** Block field keys holding a URL → must pass URL-scheme validation on save. */
-    private static $URL_FIELDS = array('href', 'more_href', 'url', 'link', 'cta_href', 'button_href', 'src');
+    private static $URL_FIELDS = array('href', 'more_href', 'url', 'link', 'cta_href', 'button_href', 'src', 'thumb', 'poster');
 
     /** Max revision snapshots retained per owner (older ones pruned on write). */
     private static $MAX_REVISIONS = 25;
@@ -54,6 +54,18 @@ class CmsPage extends CmsBase
     private static $_ancestorMemo = array();
 
     /**
+     * C1/#9: GhettoCache "call" namespace + TTL for GetPageWithBlocks. The
+     * front-door / site render path resolves a page + its enabled blocks on every
+     * request; caching the (enabled) block set per (scope, page_id, updated_at)
+     * collapses the block query. The updated_at component makes any page-meta edit
+     * self-busting; block-only edits (ReplaceBlocks does NOT touch page.updated_at)
+     * are busted explicitly via _bustPageWithBlocksCache(). Mirrors the RSS cache
+     * pattern in CmsPost.
+     */
+    private const PWB_CACHE_CALL = 'CmsPage.page_with_blocks';
+    private const PWB_CACHE_TTL  = 1800;
+
+    /**
      * C17: is $slug a reserved top-level page slug (would be unreachable behind
      * the pretty-URL router)? Public so the controller savepage path can surface
      * a friendly inline error before attempting the write.
@@ -67,9 +79,33 @@ class CmsPage extends CmsBase
         return in_array($slug, self::$RESERVED_PAGE_SLUGS, true);
     }
 
+    /** @var CmsPost|null lazily-instantiated post delegate (revision meta-restore) */
+    private $_postLib = null;
+
     public function __construct()
     {
         parent::__construct();
+    }
+
+    /**
+     * The CmsPost lib instance used when RestoreRevision re-applies snapshotted
+     * meta to a POST owner (so the post's slug-uniqueness + verify path runs).
+     * Mirror of CmsPost::_pages(): prefer the shared Ork3 lib registry, else
+     * instantiate.
+     *
+     * @return CmsPost
+     */
+    private function _posts()
+    {
+        if ($this->_postLib instanceof CmsPost) {
+            return $this->_postLib;
+        }
+        if (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->CmsPost) && Ork3::$Lib->CmsPost instanceof CmsPost) {
+            $this->_postLib = Ork3::$Lib->CmsPost;
+        } else {
+            $this->_postLib = new CmsPost();
+        }
+        return $this->_postLib;
     }
 
     /**
@@ -193,6 +229,167 @@ class CmsPage extends CmsBase
     }
 
     /**
+     * C2/#39: ALL blocks for an owner INCLUDING disabled ones, in the SAME row
+     * shape as GetBlocks (id/type/order/enabled/source/fields). The public
+     * GetBlocks stays enabled-only (the renderer skips disabled blocks); the
+     * editor + the home-relink migration hydrate through THIS so a disabled block
+     * survives an edit/save round-trip instead of being silently dropped.
+     *
+     * @param string $ownerType 'page' | 'post'
+     * @param int    $ownerId   owner row id
+     * @return array list of ['id','type','enabled','order','source','fields']
+     */
+    public function GetBlocksForEditor($ownerType, $ownerId)
+    {
+        global $DB;
+
+        $ownerType = ($ownerType === 'post') ? 'post' : 'page';
+
+        $sql = 'SELECT block_id, owner_type, owner_id, type, ordering, enabled, source, fields_json'
+            . ' FROM ' . DB_PREFIX . 'cms_block'
+            . ' WHERE owner_type = :owner_type AND owner_id = :owner_id'
+            . ' ORDER BY ordering ASC, block_id ASC';
+
+        $DB->Clear();
+        $DB->owner_type = $ownerType;
+        $DB->owner_id = (int)$ownerId;
+        $r = $DB->DataSet($sql);
+
+        $blocks = array();
+        foreach ($this->_eachRow($r) as $row) {
+            $fields = array();
+            if (isset($row['fields_json']) && $row['fields_json'] !== null && $row['fields_json'] !== '') {
+                $decoded = json_decode($row['fields_json'], true);
+                if (is_array($decoded)) {
+                    $fields = $decoded;
+                }
+            }
+            $blocks[] = array(
+                'id'      => (int)$row['block_id'],
+                'type'    => $row['type'],
+                'enabled' => ((int)$row['enabled'] === 1),   // real value (not forced true)
+                'order'   => (int)$row['ordering'],
+                'source'  => $row['source'],
+                'fields'  => $fields,
+            );
+        }
+        return $blocks;
+    }
+
+    /**
+     * C1/#9: resolve a page (by slug, or the system home when $slug is null/'')
+     * within a scope, together with its ENABLED block set, as
+     * ['page' => row|null, 'blocks' => [...]]. The block set is served from (and
+     * stored into) the GhettoCache keyed by (scope, page_id, updated_at) so the
+     * hot render path skips the block query. Busted on
+     * UpdatePage/ReplaceBlocks/SetStatus/DeletePage/RestorePage. A miss (or a
+     * page that isn't found/live) never caches.
+     *
+     * @param string      $scopeType         'global' | 'kingdom' | 'park'
+     * @param int         $scopeId           scope owner id (0 for global)
+     * @param string|null $slugOrNullForHome page slug, or null/'' for the home page
+     * @param bool        $publishedOnly     public gate (default true)
+     * @return array ['page' => array|null, 'blocks' => array]
+     */
+    public function GetPageWithBlocks($scopeType, $scopeId, $slugOrNullForHome, $publishedOnly = true)
+    {
+        $scopeType = $this->_normalizeScopeType($scopeType);
+        $scopeId   = (int)$scopeId;
+
+        if ($slugOrNullForHome === null || $slugOrNullForHome === '') {
+            // The system home page is global by definition (GetHomePage ignores
+            // scope), so the cache key for home always lands on global/0.
+            $page = $this->GetHomePage();
+        } else {
+            $page = $this->GetPageBySlug((string)$slugOrNullForHome, $scopeType, $scopeId, $publishedOnly);
+        }
+        if ($page === null) {
+            return array('page' => null, 'blocks' => array());
+        }
+
+        $pageId    = (int)$page['page_id'];
+        $updatedAt = isset($page['updated_at']) ? (string)$page['updated_at'] : '';
+
+        $gc  = $this->_ghettoCache();
+        $key = null;
+        if ($gc !== null) {
+            $key    = $gc->key(self::_pwbKeyArgs((string)$page['scope_type'], (int)$page['scope_id'], $pageId, $updatedAt));
+            $cached = $gc->get(self::PWB_CACHE_CALL, $key, self::PWB_CACHE_TTL);
+            if ($cached !== false) {
+                $blocks = json_decode((string)$cached, true);
+                if (is_array($blocks)) {
+                    return array('page' => $page, 'blocks' => $blocks);
+                }
+            }
+        }
+
+        $blocks = $this->GetBlocks('page', $pageId);
+        if ($gc !== null && $key !== null) {
+            $gc->cache(
+                self::PWB_CACHE_CALL,
+                $key,
+                json_encode($blocks, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            );
+        }
+        return array('page' => $page, 'blocks' => $blocks);
+    }
+
+    /**
+     * The GhettoCache key ARGS for a page's cached (enabled) block set. Order
+     * matters — Ghettocache::key() implodes the values — so the writer and the
+     * invalidator build the key from this SAME shape.
+     *
+     * @return array
+     */
+    private static function _pwbKeyArgs($scopeType, $scopeId, $pageId, $updatedAt)
+    {
+        return array(
+            'scope_type' => (string)$scopeType,
+            'scope_id'   => (int)$scopeId,
+            'page_id'    => (int)$pageId,
+            'updated_at' => (string)$updatedAt,
+        );
+    }
+
+    /**
+     * C1/#9: bust a page's cached GetPageWithBlocks block set. Reads the page's
+     * CURRENT (scope, updated_at) so the key matches what GetPageWithBlocks stored
+     * — safe to call while updated_at is unchanged (ReplaceBlocks / DeletePage
+     * soft-delete / RestorePage) and BEFORE a meta write bumps updated_at
+     * (UpdatePage). No-op when memcache isn't wired up or the row is gone.
+     *
+     * @param int $pageId
+     * @return void
+     */
+    private function _bustPageWithBlocksCache($pageId)
+    {
+        global $DB;
+
+        $gc = $this->_ghettoCache();
+        if ($gc === null) {
+            return;
+        }
+        $pageId = (int)$pageId;
+        if ($pageId <= 0) {
+            return;
+        }
+
+        $DB->Clear();
+        $DB->page_id = $pageId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT scope_type, scope_id, updated_at FROM ' . DB_PREFIX . 'cms_page WHERE page_id = :page_id LIMIT 1'
+        ));
+        if ($row === null) {
+            return;
+        }
+        $updatedAt = isset($row['updated_at']) ? (string)$row['updated_at'] : '';
+        $gc->bust(
+            self::PWB_CACHE_CALL,
+            $gc->key(self::_pwbKeyArgs((string)$row['scope_type'], (int)$row['scope_id'], $pageId, $updatedAt))
+        );
+    }
+
+    /**
      * Insert a page row.
      *
      * @param array $data keyed subset of page columns (slug, type, title,
@@ -242,11 +439,21 @@ class CmsPage extends CmsBase
             $cols['published_at'] = $now;
         }
 
-        // C17: refuse a router-shadowed slug (blog/post/k/p) — such a page would
-        // be permanently unreachable behind the pretty-URL rewrites. Signalled as
-        // a collision (0) so the caller's "slug in use" path handles it; the
-        // controller pre-checks IsReservedPageSlug for a specific message.
-        if ($this->IsReservedPageSlug($cols['slug'])) {
+        // C17/#59: refuse a router-shadowed slug (blog/post/k/p) ONLY for a
+        // TOP-LEVEL page — the reserved slugs shadow the FIRST path segment, so a
+        // child page (parent_id set) may legitimately be slugged 'blog'/'post'/etc.
+        // Signalled as a collision (0) so the caller's "slug in use" path handles
+        // it; the controller pre-checks IsReservedPageSlug for a specific message.
+        if ($cols['parent_id'] === null && $this->IsReservedPageSlug($cols['slug'])) {
+            return 0;
+        }
+
+        // #55: a supplied parent must be an existing, non-trashed page in the SAME
+        // scope (no cross-scope nesting). A new page has no descendants yet, so no
+        // cycle is possible here — the cycle guard is UpdatePage's concern.
+        if ($cols['parent_id'] !== null
+            && !$this->_parentLinkValid($cols['parent_id'], $cols['scope_type'], $cols['scope_id'], 0)
+        ) {
             return 0;
         }
 
@@ -303,6 +510,42 @@ class CmsPage extends CmsBase
             return false;
         }
 
+        // C1/#9: bust the cached block set BEFORE the write. Reads the CURRENT
+        // updated_at so it hits the exact key GetPageWithBlocks stored; the write
+        // below then bumps updated_at, so subsequent reads key fresh regardless.
+        $this->_bustPageWithBlocksCache($pageId);
+
+        // #54: existence + not-trashed guard. GetPage() filters deleted_at IS NULL,
+        // so a nonexistent OR trashed page short-circuits to false here (and gives
+        // us the live row for the effective-parent / scope derivations below). Runs
+        // its own Clear()/DataSet(), so it precedes the bind loop.
+        $curRow = $this->GetPage($pageId);
+        if ($curRow === null) {
+            return false;
+        }
+
+        // #55/#59: derive the EFFECTIVE parent after this update (in-flight
+        // parent_id change wins, else the current one). Drives the cycle/scope
+        // parent guard (#55) and the top-level-only reserved-slug gate (#59).
+        if (array_key_exists('parent_id', $data)) {
+            $dp        = (int)$data['parent_id'];
+            $effParent = ($dp > 0 && $dp !== $pageId) ? $dp : 0;
+        } else {
+            $effParent = (int)($curRow['parent_id'] ?? 0);
+        }
+        $isTopLevel = ($effParent <= 0);
+
+        // #55: a genuine parent change must reference an existing, non-trashed page
+        // in the SAME (effective) scope and must NOT be this page or one of its
+        // descendants (which would form a cycle). Runs its own Clear()/DataSet().
+        if (array_key_exists('parent_id', $data) && $effParent > 0) {
+            $pScopeType = array_key_exists('scope_type', $data) ? $data['scope_type'] : (string)$curRow['scope_type'];
+            $pScopeId   = array_key_exists('scope_id', $data) ? (int)$data['scope_id'] : (int)$curRow['scope_id'];
+            if (!$this->_parentLinkValid($effParent, $pScopeType, $pScopeId, $pageId)) {
+                return false;
+            }
+        }
+
         // IDOR guard (opt-in, mirrors DeletePage/RestorePage): when the caller
         // supplies its intended scope, refuse to touch a page in a different org
         // AND refuse to relocate this page OUT of the guarded scope. Runs its own
@@ -329,18 +572,19 @@ class CmsPage extends CmsBase
             }
         }
 
-        // C17: if the slug is changing, read the pre-edit row AND its current full
-        // path up front (before any binds accumulate on $DB) so we can record a
-        // 301 from the OLD path after the write. Both PagePath() and GetPage() run
-        // their own Clear()/DataSet(), so they MUST precede the bind loop below or
-        // they would wipe the accumulated placeholders.
-        $preEditRow  = null;
+        // C17/#56: capture the pre-edit row + its current full PATH up front (before
+        // any binds accumulate on $DB) whenever the slug OR the parent changes —
+        // either shifts this page's path, so we record a 301 from the OLD path after
+        // the write. PagePath()/GetPage() run their own Clear()/DataSet(), so they
+        // MUST precede the bind loop below or they would wipe the placeholders.
+        $preEditRow  = $curRow;   // live row already fetched above
         $preEditPath = '';
-        $newSlug     = null; // normalized target slug, computed up front when set
-        if (array_key_exists('slug', $data)) {
-            $preEditRow  = $this->GetPage($pageId);
+        $pathMayChange = array_key_exists('slug', $data) || array_key_exists('parent_id', $data);
+        if ($pathMayChange) {
             $preEditPath = $this->PagePath($pageId);
-
+        }
+        $newSlug = null; // normalized target slug, computed up front when set
+        if (array_key_exists('slug', $data)) {
             // Normalize the incoming slug here (before any binds accumulate on
             // $DB) so we can dup-check it up front — the check runs its own
             // Clear()/DataSet() and must precede the bind loop below. Uses the
@@ -354,10 +598,10 @@ class CmsPage extends CmsBase
             // collision — refuse rather than let the UPDATE silently drop against
             // the uq_page_scope_slug_live key. Trashed rows (deleted_at NOT NULL)
             // have slug_live=NULL and so free the slug for reuse — they must NOT
-            // block a rename. Empty/reserved slugs are handled below (existing
-            // slug kept), so they skip the check.
+            // block a rename. Empty slugs, and reserved slugs on a page that stays
+            // top-level (#59), are handled below (existing slug kept), so skip them.
             if (
-                $newSlug !== '' && !$this->IsReservedPageSlug($newSlug)
+                $newSlug !== '' && !($isTopLevel && $this->IsReservedPageSlug($newSlug))
                 && $preEditRow !== null && $newSlug !== (string)$preEditRow['slug']
             ) {
                 // Effective target scope: an in-flight scope change wins, else the
@@ -387,8 +631,8 @@ class CmsPage extends CmsBase
         }
 
         // Whitelist of editable columns + their normalizers.
-        $set        = array();
-        $slugChange = null; // [oldPath, newSlug] when the slug actually changes
+        $set         = array();
+        $slugChanged = false; // true when the slug column actually changes
         $DB->Clear();
 
         if (array_key_exists('title', $data)) {
@@ -397,21 +641,15 @@ class CmsPage extends CmsBase
         }
         if (array_key_exists('slug', $data)) {
             // $newSlug was normalized (and dup-checked) up front.
-            // C17: never persist a router-shadowed slug (blog/post/k/p) or an
-            // empty one — silently keep the existing slug (the controller
-            // pre-validates and surfaces a friendly message). When it genuinely
-            // changes, stage a redirect record for after the write.
-            if ($newSlug !== '' && !$this->IsReservedPageSlug($newSlug)) {
+            // C17/#59: never persist an empty slug, or a router-shadowed one
+            // (blog/post/k/p) on a page that STAYS top-level — silently keep the
+            // existing slug (the controller pre-validates + surfaces a friendly
+            // message). A child page (not top-level) may keep a reserved slug.
+            if ($newSlug !== '' && !($isTopLevel && $this->IsReservedPageSlug($newSlug))) {
                 $set[] = 'slug = :slug';
                 $DB->slug = $newSlug;
                 if ($preEditRow !== null && $newSlug !== (string)$preEditRow['slug']) {
-                    $slugChange = array(
-                        'old_path'   => $preEditPath,
-                        'new_slug'   => $newSlug,
-                        'scope_type' => (string)$preEditRow['scope_type'],
-                        'scope_id'   => (int)$preEditRow['scope_id'],
-                        'actor'      => (isset($data['updated_by']) && (int)$data['updated_by'] > 0) ? (int)$data['updated_by'] : 0,
-                    );
+                    $slugChanged = true;
                 }
             }
         }
@@ -474,41 +712,60 @@ class CmsPage extends CmsBase
         }
 
         $DB->page_id = $pageId;
+        // #54: the deleted_at IS NULL guard means a page trashed between the top
+        // existence check and here matches zero rows → ROW_COUNT() < 1 → false.
         $DB->Execute(
             'UPDATE ' . DB_PREFIX . 'cms_page SET ' . implode(', ', $set)
-            . ' WHERE page_id = :page_id'
+            . ' WHERE page_id = :page_id AND deleted_at IS NULL'
         );
 
-        // C13: a parent-link change invalidates any memoized ancestor chains.
-        if (array_key_exists('parent_id', $data)) {
+        // #54: confirm a live row was actually updated. updated_at is bumped on
+        // every save, so a matching non-trashed row always reports >= 1 changed
+        // row; a nonexistent/trashed target reports 0. Read immediately after the
+        // Execute on the same connection (before any other query).
+        $DB->Clear();
+        $rcRow = $this->_firstRow($DB->DataSet('SELECT ROW_COUNT() AS rc'));
+        if ($rcRow === null || (int)$rcRow['rc'] < 1) {
+            return false;
+        }
+
+        // C13/#51: a slug OR parent-link change invalidates memoized ancestor
+        // chains (a renamed ancestor changes every descendant's PagePath()).
+        if (array_key_exists('parent_id', $data) || array_key_exists('slug', $data)) {
             self::$_ancestorMemo = array();
         }
 
         // C17: after a slug change, verify the new slug actually LANDED before
         // trusting the rename. Execute() is void under ERRMODE_WARNING, so a
         // silently-dropped UPDATE (e.g. a racing writer claimed the tuple between
-        // the pre-check and the write) leaves the old slug in place — recording a
-        // 301 from the old path or reporting success would both be wrong. Read the
-        // slug back and only then record the redirect / report success.
-        if ($slugChange !== null) {
+        // the pre-check and the write) leaves the old slug in place — reporting
+        // success or recording a 301 would both be wrong.
+        if ($slugChanged) {
             $DB->Clear();
             $DB->page_id = $pageId;
             $verify = $this->_firstRow($DB->DataSet(
                 'SELECT slug FROM ' . DB_PREFIX . 'cms_page WHERE page_id = :page_id LIMIT 1'
             ));
-            if ($verify === null || (string)$verify['slug'] !== (string)$slugChange['new_slug']) {
+            if ($verify === null || (string)$verify['slug'] !== (string)$newSlug) {
                 return false;   // rename didn't take — no bogus redirect, signal failure
             }
-            // 301 the OLD path to this page so inbound links / bookmarks keep
-            // resolving. Best-effort (never fails the save).
-            if ($slugChange['old_path'] !== '') {
+        }
+
+        // C17/#56: after ANY path-affecting change (slug OR parent), 301 the OLD
+        // path to this page so inbound links / bookmarks keep resolving. A single
+        // redirect on the moved page covers its whole descendant subtree — the
+        // descendants share the old path as a prefix, which LookupRedirect resolves
+        // via its prefix fallback. Best-effort (never fails the save).
+        if ($pathMayChange && $preEditPath !== '' && $preEditRow !== null) {
+            $newPath = $this->PagePath($pageId);
+            if ($newPath !== '' && $newPath !== $preEditPath) {
                 $this->RecordRedirect(
-                    $slugChange['scope_type'],
-                    $slugChange['scope_id'],
-                    $slugChange['old_path'],
+                    (string)$preEditRow['scope_type'],
+                    (int)$preEditRow['scope_id'],
+                    $preEditPath,
                     $pageId,
                     null,
-                    $slugChange['actor']
+                    (isset($data['updated_by']) && (int)$data['updated_by'] > 0) ? (int)$data['updated_by'] : 0
                 );
             }
         }
@@ -519,6 +776,79 @@ class CmsPage extends CmsBase
     /* ------------------------------------------------------------------ *
      * C13 — page hierarchy (nested slug paths + breadcrumbs)
      * ------------------------------------------------------------------ */
+
+    /**
+     * #55: validate a proposed parent link for a page. A parent must be an
+     * existing, non-trashed page in the SAME scope, and — for an already-existing
+     * child ($pageId > 0) — must be neither the page itself nor one of its
+     * descendants (which would form a cycle). A new page ($pageId == 0) has no
+     * descendants, so only the exists+same-scope rule applies. Returns true when
+     * the link is legal (a zero/absent parent is always legal — a flat page).
+     *
+     * @param int    $parentId  proposed parent page id
+     * @param string $scopeType the child's (effective) scope_type
+     * @param int    $scopeId   the child's (effective) scope_id
+     * @param int    $pageId    the child page id (0 for a not-yet-created page)
+     * @return bool
+     */
+    private function _parentLinkValid($parentId, $scopeType, $scopeId, $pageId = 0)
+    {
+        global $DB;
+
+        $parentId = (int)$parentId;
+        $pageId   = (int)$pageId;
+        if ($parentId <= 0) {
+            return true;   // no parent → flat page, always valid
+        }
+        if ($pageId > 0 && $parentId === $pageId) {
+            return false;  // self-parent
+        }
+
+        // Parent must exist, be live, and share the (effective) scope.
+        $DB->Clear();
+        $DB->page_id = $parentId;
+        $p = $this->_firstRow($DB->DataSet(
+            'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_page'
+            . ' WHERE page_id = :page_id AND deleted_at IS NULL LIMIT 1'
+        ));
+        if ($p === null) {
+            return false;  // no such live page
+        }
+        if (
+            (string)$p['scope_type'] !== $this->_normalizeScopeType($scopeType)
+            || (int)$p['scope_id'] !== (int)$scopeId
+        ) {
+            return false;  // cross-scope nesting not allowed
+        }
+
+        // Cycle guard: walk UP from the proposed parent; if we reach $pageId, the
+        // parent is a descendant of the page → the link would form a cycle.
+        if ($pageId > 0) {
+            $cursor = $parentId;
+            $seen   = array();
+            $guard  = 0;
+            while ($cursor > 0 && $guard++ < 50) {
+                if ($cursor === $pageId) {
+                    return false;
+                }
+                if (isset($seen[$cursor])) {
+                    break;   // pre-existing corrupt loop above us — stop
+                }
+                $seen[$cursor] = true;
+                $DB->Clear();
+                $DB->page_id = $cursor;
+                $r = $this->_firstRow($DB->DataSet(
+                    'SELECT parent_id FROM ' . DB_PREFIX . 'cms_page WHERE page_id = :page_id LIMIT 1'
+                ));
+                if ($r === null) {
+                    break;
+                }
+                $cursor = (int)($r['parent_id'] ?? 0);
+            }
+        }
+
+        return true;
+    }
 
     /**
      * Walk the parent chain for a page and return its ancestors ordered
@@ -642,7 +972,8 @@ class CmsPage extends CmsBase
 
         $parentId = null; // first segment is a root page
         $row      = null;
-        foreach ($segments as $seg) {
+        $lastIdx  = count($segments) - 1;
+        foreach ($segments as $idx => $seg) {
             $seg = preg_replace('/[^a-z0-9\-]+/', '', strtolower((string)$seg));
             if ($seg === '') {
                 return null;
@@ -651,7 +982,11 @@ class CmsPage extends CmsBase
                 . ' WHERE slug = :slug AND scope_type = :scope_type AND scope_id = :scope_id'
                 . ' AND deleted_at IS NULL'
                 . ($parentId === null ? ' AND parent_id IS NULL' : ' AND parent_id = :parent_id');
-            if ($publishedOnly) {
+            // #60: publish-gate ONLY the LEAF. Intermediate segments are resolved
+            // by slug+scope+parent WITHOUT the status filter so a nested page under
+            // an unpublished (draft/scheduled) ancestor stays reachable — otherwise
+            // publishing a child would silently 404 behind its unpublished parent.
+            if ($publishedOnly && $idx === $lastIdx) {
                 $sql .= " AND status = 'published' AND (published_at IS NULL OR published_at <= NOW())";
             }
             $sql .= ' LIMIT 1';
@@ -758,8 +1093,6 @@ class CmsPage extends CmsBase
      */
     public function LookupRedirect($scopeType, $scopeId, $fromPath)
     {
-        global $DB;
-
         $fromPath = trim((string)$fromPath, '/');
         if ($fromPath === '' || !$this->_redirectTableAvailable()) {
             return null;
@@ -768,19 +1101,71 @@ class CmsPage extends CmsBase
         $scopeType = $this->_normalizeScopeType($scopeType);
         $scopeId   = (int)$scopeId;
 
+        // Exact match first (preserves the historical behavior + shape).
+        $row = $this->_redirectRowFor($scopeType, $scopeId, $fromPath);
+        if ($row !== null) {
+            $resolved = $this->_resolveRedirect($row, $fromPath, '');
+            if ($resolved !== null) {
+                return $resolved;
+            }
+        }
+
+        // #56: prefix fallback for a moved SUBTREE. A page move records ONE
+        // redirect on the moved page's old path; its descendants share that path as
+        // a prefix. Find the LONGEST ancestor prefix that has a redirect and rewrite
+        // it, carrying the remaining suffix onto the target's current path. This
+        // keeps every descendant URL resolving without recording a row per node.
+        $parts = explode('/', $fromPath);
+        for ($i = count($parts) - 1; $i >= 1; $i--) {
+            $prefix = implode('/', array_slice($parts, 0, $i));
+            $suffix = implode('/', array_slice($parts, $i));
+            $prow   = $this->_redirectRowFor($scopeType, $scopeId, $prefix);
+            if ($prow === null) {
+                continue;
+            }
+            $resolved = $this->_resolveRedirect($prow, $fromPath, $suffix);
+            if ($resolved !== null) {
+                return $resolved;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Fetch the raw redirect row for an EXACT (scope, from_path), or null.
+     *
+     * @return array|null ['to_page_id','to_url','code'] or null
+     */
+    private function _redirectRowFor($scopeType, $scopeId, $fromPath)
+    {
+        global $DB;
+
         $DB->Clear();
         $DB->scope_type = $scopeType;
-        $DB->scope_id   = $scopeId;
-        $DB->from_path  = $fromPath;
-        $row = $this->_firstRow($DB->DataSet(
+        $DB->scope_id   = (int)$scopeId;
+        $DB->from_path  = (string)$fromPath;
+        return $this->_firstRow($DB->DataSet(
             'SELECT to_page_id, to_url, code FROM ' . DB_PREFIX . 'cms_redirect'
             . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND from_path = :from_path LIMIT 1'
         ));
-        if ($row === null) {
-            return null;
-        }
+    }
 
-        $code = ((int)$row['code'] === 302) ? 302 : 301;
+    /**
+     * Resolve a raw redirect row into a target ['url','code','to_page_id'], or
+     * null when unusable (dead page target, empty to_url, or a self-resolving
+     * path). $suffix (possibly '') is the descendant tail appended after the
+     * target's current path/url for the #56 prefix fallback.
+     *
+     * @param array  $row      raw redirect row (to_page_id/to_url/code)
+     * @param string $fromPath the requested path (for the self-resolve guard)
+     * @param string $suffix   descendant tail to append ('' for an exact hit)
+     * @return array|null
+     */
+    private function _resolveRedirect($row, $fromPath, $suffix)
+    {
+        $code   = ((int)$row['code'] === 302) ? 302 : 301;
+        $suffix = trim((string)$suffix, '/');
 
         $toPageId = (int)($row['to_page_id'] ?? 0);
         if ($toPageId > 0) {
@@ -789,7 +1174,13 @@ class CmsPage extends CmsBase
                 return null; // dead target — skip (fall through to 404)
             }
             $path = $this->PagePath($toPageId);
-            if ($path === '' || $path === $fromPath) {
+            if ($path === '') {
+                return null;
+            }
+            if ($suffix !== '') {
+                $path .= '/' . $suffix;
+            }
+            if ($path === $fromPath) {
                 return null; // resolves to itself — no redirect
             }
             return array('url' => $path, 'code' => $code, 'to_page_id' => $toPageId);
@@ -798,6 +1189,12 @@ class CmsPage extends CmsBase
         $toUrl = (string)($row['to_url'] ?? '');
         if ($toUrl === '') {
             return null;
+        }
+        if ($suffix !== '') {
+            $toUrl = rtrim($toUrl, '/') . '/' . $suffix;
+        }
+        if ($toUrl === $fromPath) {
+            return null; // resolves to itself
         }
         return array('url' => $toUrl, 'code' => $code, 'to_page_id' => 0);
     }
@@ -916,6 +1313,10 @@ class CmsPage extends CmsBase
         // A parent-link change (child flatten) invalidates memoized ancestor chains.
         if ($ok) {
             self::$_ancestorMemo = array();
+            // C1/#9: a soft-delete leaves page.updated_at untouched, so bust the
+            // cached block set explicitly (public reads gate deleted_at anyway, but
+            // this keeps the cache from holding a trashed page's blocks).
+            $this->_bustPageWithBlocksCache($pageId);
         }
 
         return $ok;
@@ -937,7 +1338,17 @@ class CmsPage extends CmsBase
         // Shared restore skeleton: existence/IDOR guard, live-slug collision guard
         // (a live page may have claimed this slug while we were trashed — see
         // CmsBase::_restore), verified un-trash, C14 audit.
-        return $this->_restore('cms_page', 'page_id', $pageId, $scopeType, $scopeId, $actorId, 'page');
+        $ok = $this->_restore('cms_page', 'page_id', $pageId, $scopeType, $scopeId, $actorId, 'page');
+
+        // C1/#9: restore leaves page.updated_at untouched — bust the cached block
+        // set so the just-restored page serves fresh (a restored parent also frees
+        // its flattened children's ancestor memo).
+        if ($ok) {
+            self::$_ancestorMemo = array();
+            $this->_bustPageWithBlocksCache($pageId);
+        }
+
+        return $ok;
     }
 
     /**
@@ -1013,6 +1424,13 @@ class CmsPage extends CmsBase
 
         $DB->Clear();
         $DB->Execute('COMMIT');
+
+        // C1/#9: a block write does NOT bump page.updated_at (it touches the block
+        // table only), so the GetPageWithBlocks cache would keep serving the OLD
+        // block set — bust it explicitly. Pages only (posts aren't PWB-cached).
+        if ($ownerType === 'page') {
+            $this->_bustPageWithBlocksCache($ownerId);
+        }
 
         return $expected;
     }
@@ -1098,8 +1516,8 @@ class CmsPage extends CmsBase
     /**
      * C15: UPDATE each block carrying a known existing id in place, and collect
      * brand-new blocks for the batch insert. Called inside the ReplaceBlocks
-     * transaction. Returns ['kept'=>[id=>true], 'keptFields'=>[id=>fields_json],
-     * 'inserts'=>[normalized,...]].
+     * transaction. Returns ['kept'=>[id=>true], 'keptFields'=>[id=>['type',
+     * 'ordering','enabled','source','fields_json']], 'inserts'=>[normalized,...]].
      *
      * @param string $ownerType
      * @param int    $ownerId
@@ -1132,7 +1550,15 @@ class CmsPage extends CmsBase
                     . ' WHERE block_id = :block_id AND owner_type = :owner_type AND owner_id = :owner_id'
                 );
                 $kept[$n['id']] = true;
-                $keptFields[$n['id']] = $n['fields_json'];
+                // #41: carry the full intended row (not just fields_json) so the
+                // post-write verify can also compare type/ordering/enabled/source.
+                $keptFields[$n['id']] = array(
+                    'type'        => $n['type'],
+                    'ordering'    => (int)$n['ordering'],
+                    'enabled'     => (int)$n['enabled'],
+                    'source'      => $n['source'],
+                    'fields_json' => $n['fields_json'],
+                );
             } else {
                 $inserts[] = $n;
             }
@@ -1217,17 +1643,21 @@ class CmsPage extends CmsBase
 
     /**
      * Verify the persisted block set matches intent before COMMIT: (1) the total
-     * COUNT(*) equals kept+inserted, and (2) each kept block's fields_json was
-     * stored verbatim (catches a silently-dropped UPDATE that leaves the row —
-     * and thus the count — unchanged under ERRMODE_WARNING). fields_json is
-     * LONGTEXT (stored verbatim, no engine normalization), so an exact string
-     * compare is reliable. Returns false to signal the caller must ROLLBACK.
+     * COUNT(*) equals kept+inserted, and (2) each kept block was stored as
+     * intended — #41 compares type, ordering, enabled and source (not just the
+     * fields), so a silently-dropped UPDATE that leaves the row (and thus the
+     * count) unchanged under ERRMODE_WARNING is caught for ANY column, not only
+     * fields_json. #43 compares the DECODED fields (json_decode(stored) ==
+     * json_decode(intended)) rather than the raw strings: a native-JSON column
+     * canonicalizes key order / whitespace on storage, so an exact string compare
+     * could false-fail even on a correct write. Returns false → caller ROLLBACKs.
      * Called inside the ReplaceBlocks transaction.
      *
      * @param string $ownerType
      * @param int    $ownerId
      * @param int    $expected   count(kept) + count(inserts)
-     * @param array  $keptFields map of kept block_id => intended fields_json
+     * @param array  $keptFields map of kept block_id => ['type','ordering',
+     *                           'enabled','source','fields_json'] (intended)
      * @return bool true when the write verified; false → caller ROLLBACKs
      */
     private function _verifyBlockCount($ownerType, $ownerId, $expected, $keptFields)
@@ -1251,16 +1681,37 @@ class CmsPage extends CmsBase
             $DB->Clear();
             $DB->owner_type = $ownerType;
             $DB->owner_id = $ownerId;
-            $storedFields = array();
+            $stored = array();
             foreach ($this->_eachRow($DB->DataSet(
-                'SELECT block_id, fields_json FROM ' . DB_PREFIX . 'cms_block'
+                'SELECT block_id, type, ordering, enabled, source, fields_json FROM ' . DB_PREFIX . 'cms_block'
                 . ' WHERE owner_type = :owner_type AND owner_id = :owner_id'
                 . ' AND block_id IN (' . $keptIdList . ')'
             )) as $vr) {
-                $storedFields[(int)$vr['block_id']] = isset($vr['fields_json']) ? $vr['fields_json'] : null;
+                $stored[(int)$vr['block_id']] = $vr;
             }
             foreach ($keptFields as $bid => $intended) {
-                if (!array_key_exists((int)$bid, $storedFields) || $storedFields[(int)$bid] !== $intended) {
+                $bid = (int)$bid;
+                if (!isset($stored[$bid])) {
+                    return false;
+                }
+                $s = $stored[$bid];
+                // #41: every persisted column must match intent.
+                if ((string)$s['type'] !== (string)$intended['type']) {
+                    return false;
+                }
+                if ((int)$s['ordering'] !== (int)$intended['ordering']) {
+                    return false;
+                }
+                if ((int)$s['enabled'] !== (int)$intended['enabled']) {
+                    return false;
+                }
+                if ((string)$s['source'] !== (string)$intended['source']) {
+                    return false;
+                }
+                // #43: order-insensitive JSON compare (native-JSON canonicalizes).
+                $storedJson   = json_decode(isset($s['fields_json']) ? (string)$s['fields_json'] : '', true);
+                $intendedJson = json_decode((string)$intended['fields_json'], true);
+                if ($storedJson != $intendedJson) {
                     return false;
                 }
             }
@@ -1448,7 +1899,11 @@ class CmsPage extends CmsBase
     /**
      * Restore an owner's blocks from a revision. Validates the revision belongs
      * to the owner, then re-applies its block set via ReplaceBlocks (which in
-     * turn snapshots the restored state, so history is never lost).
+     * turn snapshots the restored state, so history is never lost). #53: the
+     * snapshotted META (title/slug/status/published_at, plus hero when captured)
+     * is also re-applied — through UpdatePage/UpdatePost so slug-uniqueness and
+     * the redirect trail are honored (best-effort: a slug now taken by a live row
+     * leaves the meta as-is rather than failing the block restore).
      *
      * @param int    $revisionId
      * @param string $ownerType 'page' | 'post'
@@ -1471,19 +1926,52 @@ class CmsPage extends CmsBase
         $DB->owner_type = $ownerType;
         $DB->owner_id = $ownerId;
         $row = $this->_firstRow($DB->DataSet(
-            'SELECT blocks_json FROM ' . DB_PREFIX . 'cms_revision'
+            'SELECT blocks_json, meta_json FROM ' . DB_PREFIX . 'cms_revision'
             . ' WHERE revision_id = :revision_id AND owner_type = :owner_type AND owner_id = :owner_id LIMIT 1'
         ));
         if ($row === null) {
             return false;   // not found, or belongs to a different owner
         }
 
+        // #52: a corrupt/unparseable blocks_json is a HARD failure — restoring to
+        // an empty block set would silently wipe the owner's content. Bail out and
+        // leave the current content intact.
         $blocks = json_decode(isset($row['blocks_json']) ? (string)$row['blocks_json'] : '', true);
         if (!is_array($blocks)) {
-            $blocks = array();
+            return false;
         }
 
-        return $this->ReplaceBlocks($ownerType, $ownerId, $blocks) >= 0;
+        $ok = ($this->ReplaceBlocks($ownerType, $ownerId, $blocks) >= 0);
+        if (!$ok) {
+            return false;
+        }
+
+        // #53: re-apply the snapshotted meta. Only keys the snapshot actually
+        // captured are applied; the Update* path guards slug uniqueness + records
+        // the redirect trail. Best-effort — a meta clash never undoes the block
+        // restore we already committed.
+        $meta = array();
+        if (!empty($row['meta_json'])) {
+            $decodedMeta = json_decode((string)$row['meta_json'], true);
+            if (is_array($decodedMeta)) {
+                $meta = $decodedMeta;
+            }
+        }
+        $metaApply = array();
+        foreach (array('title', 'slug', 'status', 'published_at', 'hero_media_id') as $k) {
+            if (array_key_exists($k, $meta)) {
+                $metaApply[$k] = $meta[$k];
+            }
+        }
+        if (!empty($metaApply)) {
+            if ($ownerType === 'post') {
+                $this->_posts()->UpdatePost($ownerId, $metaApply);
+            } else {
+                $this->UpdatePage($ownerId, $metaApply);
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -1542,7 +2030,9 @@ class CmsPage extends CmsBase
             $limit = ' LIMIT 500';
         }
 
-        $sql = 'SELECT page_id, slug, type, title, status, updated_at'
+        // #13: include parent_id so the admin list can resolve nested live URLs
+        // via an in-memory path map instead of a per-row PagePath() DB walk (N+1).
+        $sql = 'SELECT page_id, parent_id, slug, type, title, status, updated_at'
             . ' FROM ' . DB_PREFIX . 'cms_page'
             . ' WHERE ' . implode(' AND ', $where)
             . ' ORDER BY updated_at DESC, page_id DESC'

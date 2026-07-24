@@ -48,7 +48,7 @@ $cards      = $blockFields['cards']      ?? [];
                 ?>
                 <<?= $fdcTag ?> class="<?= $fdcClass ?>"<?php if ($hasHref): ?> href="<?= htmlspecialchars($href, ENT_QUOTES) ?>"<?php endif; ?>>
                     <?php if (!empty($img['src'])): ?>
-                        <img src="<?= htmlspecialchars($img['src'], ENT_QUOTES) ?>"
+                        <img src="<?= htmlspecialchars($img['display'] ?? $img['src'], ENT_QUOTES) ?>"
                              alt="<?= htmlspecialchars($img['alt'] ?? '', ENT_QUOTES) ?>">
                     <?php endif; ?>
                     <div class="fd-path-scrim"></div>

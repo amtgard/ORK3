@@ -127,7 +127,7 @@ class CmsNav extends CmsBase
         $childrenByParent = array();  // parent nav_id (0=top) => [child nav_id, ...]
         foreach ($rows as $row) {
             $navId = (int)$row['nav_id'];
-            $item = $this->_resolveItem($row);
+            $item = $this->_resolveItem($row, true);
             $item['children'] = array();
             $resolved[$navId] = $item;
             $pid = ($row['parent_id'] === null) ? 0 : (int)$row['parent_id'];
@@ -743,7 +743,11 @@ class CmsNav extends CmsBase
                 . ' WHERE n.menu = :menu AND n.scope_type = :scope_type AND n.scope_id = :scope_id';
         } else {
             $sql = 'SELECT n.*, pg.slug AS page_slug, pg.title AS page_title,'
-                . ' po.slug AS post_slug, po.title AS post_title'
+                . ' pg.status AS page_status, pg.published_at AS page_published_at,'
+                . ' pg.deleted_at AS page_deleted_at,'
+                . ' po.slug AS post_slug, po.title AS post_title,'
+                . ' po.status AS post_status, po.published_at AS post_published_at,'
+                . ' po.deleted_at AS post_deleted_at'
                 . ' FROM ' . DB_PREFIX . 'cms_nav_item n'
                 // Scope-bound joins: a nav item can only resolve a page/post in
                 // its OWN scope, so a cross-scope target id (should one ever be
@@ -774,10 +778,10 @@ class CmsNav extends CmsBase
      * @param array $row raw nav row (+ joined slugs)
      * @return array
      */
-    private function _resolveItem($row)
+    private function _resolveItem($row, $requirePublished = false)
     {
         $linkType = $this->_normalizeLinkType(isset($row['link_type']) ? $row['link_type'] : 'page');
-        $href = $this->_resolveHref($linkType, $row);
+        $href = $this->_resolveHref($linkType, $row, $requirePublished);
         $target = '';
         if ($linkType === 'url' && $this->_isExternal(isset($row['url']) ? $row['url'] : '')) {
             $target = '_blank';
@@ -793,6 +797,26 @@ class CmsNav extends CmsBase
     }
 
     /**
+     * #73: is the JOINed page/post target actually LIVE for a public visitor —
+     * i.e. published, publish time reached (or unset), and not trashed? Mirrors
+     * the live-content semantics the public renderer uses so the nav never links
+     * a visitor to a draft/scheduled/deleted target it would otherwise 404/hide.
+     *
+     * @param array  $row  a nav row with $kind.'_status'/'_deleted_at'/'_published_at'
+     * @param string $kind 'page' or 'post'
+     * @return bool
+     */
+    private function _targetIsLive($row, $kind)
+    {
+        $status = (string)(isset($row[$kind . '_status']) ? $row[$kind . '_status'] : '');
+        $deleted = isset($row[$kind . '_deleted_at']) ? $row[$kind . '_deleted_at'] : null;
+        $published = isset($row[$kind . '_published_at']) ? $row[$kind . '_published_at'] : null;
+        return $status === 'published'
+            && empty($deleted)
+            && (empty($published) || strtotime((string)$published) <= time());
+    }
+
+    /**
      * Compute the renderable href for a row given its (normalized) link_type.
      * See class docblock for the per-type rules. Broken/missing targets => '#'.
      *
@@ -800,17 +824,27 @@ class CmsNav extends CmsBase
      * @param array  $row
      * @return string
      */
-    private function _resolveHref($linkType, $row)
+    private function _resolveHref($linkType, $row, $requirePublished = false)
     {
         $uir = $this->_uir();
 
         switch ($linkType) {
             case 'page':
                 $slug = isset($row['page_slug']) ? (string)$row['page_slug'] : '';
+                // #73: on the PUBLIC menu, a page target resolves only when it is
+                // actually live (published, publish time reached, not trashed) — a
+                // draft/scheduled/deleted page must read as unresolved ('#') so the
+                // nav never links a visitor to content the public renderer hides.
+                if ($requirePublished && !$this->_targetIsLive($row, 'page')) {
+                    return '#';
+                }
                 return ($slug !== '') ? $uir . 'Page/view/' . rawurlencode($slug) : '#';
 
             case 'post':
                 $slug = isset($row['post_slug']) ? (string)$row['post_slug'] : '';
+                if ($requirePublished && !$this->_targetIsLive($row, 'post')) {
+                    return '#';
+                }
                 return ($slug !== '') ? $uir . 'Blog/post/' . rawurlencode($slug) : '#';
 
             case 'url':

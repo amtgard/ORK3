@@ -158,6 +158,13 @@ include __DIR__ . '/cms/_shell_top.tpl';
     </div>
     <?php endif; ?>
 
+    <?php if ($canEdit): ?>
+    <div class="cms-note cms-note-live" role="note" id="cmsPublishedLiveNote"<?= $isPublished ? '' : ' style="display:none;"' ?>>
+        <i class="fas fa-exclamation-triangle"></i>
+        <span>This page is <strong>published</strong> &mdash; any edit you save goes live to the public immediately. Autosave is turned off here so you can review before saving.</span>
+    </div>
+    <?php endif; ?>
+
     <?php if ($isFrontDoor): ?>
     <div class="cms-frontdoor-banner" role="note">
         <span class="cms-frontdoor-mark"><i class="fas fa-home"></i></span>
@@ -290,12 +297,19 @@ include __DIR__ . '/cms/_shell_top.tpl';
     var dirty = false;
     var autosaveTimer = null;
     var saving = false;
+    // #98: the block engine fires onDirty as it paints the initial starter scaffold
+    // (BE.init + seedFromPreset below). Stay un-armed until that first render is done
+    // so a brand-new, untouched page never triggers the leave-site prompt.
+    var booted = false;
 
     function markDirty() {
+        if (!booted) { return; }
         dirty = true;
         if (savedHint) { savedHint.textContent = 'Unsaved changes…'; savedHint.className = 'cms-editbar-hint cms-editbar-hint-dirty'; }
         clearTimeout(autosaveTimer);
-        if (STATE.canEdit) {
+        // #45: never autosave an already-published page — a save goes live instantly,
+        // so the author must save deliberately. STATE.published flips true on publish.
+        if (STATE.canEdit && !STATE.published) {
             autosaveTimer = setTimeout(function () { doSave(true); }, 3000);
         }
     }
@@ -446,6 +460,9 @@ include __DIR__ . '/cms/_shell_top.tpl';
                     statusBadge.className = 'cms-badge cms-badge-' + (nowPub ? 'published' : 'draft');
                     statusBadge.textContent = nowPub ? 'Published' : 'Draft';
                 }
+                // #45: reflect the live-edits warning (and autosave state follows STATE.published).
+                var liveNote = document.getElementById('cmsPublishedLiveNote');
+                if (liveNote) { liveNote.style.display = nowPub ? '' : 'none'; }
                 toast(nowPub ? 'Page published.' : 'Page unpublished.', 'ok');
                 refreshPreview();
             }).catch(function () { pubBtn.disabled = false; toast('Network error.', 'error'); });
@@ -547,5 +564,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
             BE.seedFromPreset(typeInput.value);
         }
     }
+    // #98: initial scaffold render is complete — from here on, onDirty/markDirty
+    // reflect genuine user interaction and may arm the unsaved-changes guard.
+    booted = true;
 })();
 </script>

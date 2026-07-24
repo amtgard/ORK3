@@ -18,6 +18,9 @@
     --cms-gold-deep: #caa23a;
     --cms-navy: #0b1120;
     --cms-navy2: #121a30;
+    /* #93: the global #newmenu navbar is position:fixed at 48px tall (see orkui.css).
+       Sticky elements below must clear it or they hide behind it on scroll. */
+    --ork-header-h: 48px;
 
     max-width: 1180px;
     margin: 0 auto;
@@ -116,7 +119,7 @@
     width: 220px;
     align-self: flex-start;
     position: sticky;
-    top: 14px;
+    top: calc(var(--ork-header-h, 48px) + 14px); /* #93: clear the fixed 48px navbar */
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -724,7 +727,7 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 }
 .cms-meta-panel {
     position: sticky;
-    top: 14px;
+    top: calc(var(--ork-header-h, 48px) + 14px); /* #93: clear the fixed 48px navbar */
     border: 1px solid var(--ork-border);
     border-radius: 10px;
     background: var(--ork-card-bg);
@@ -1021,6 +1024,13 @@ a.cms-btn-primary:hover { color: #1a1205 !important; }
 }
 .cms-note > i { color: var(--cms-gold, #f0b429); margin-top: 2px; }
 .cms-note a { color: var(--cms-gold-deep, #caa23a); font-weight: 600; }
+/* #45: "edits to a published page go live immediately" — amber warning variant. */
+.cms-note-live {
+    border-left-color: var(--ork-warn, #b8860b);
+    background: rgba(184, 134, 11, .08);
+}
+.cms-note-live > i { color: var(--ork-warn, #b8860b); }
+html[data-theme="dark"] .cms-note-live { background: rgba(184, 134, 11, .14); }
 
 /* dynamic-block info card (icon + one-line live description) */
 .cms-dyninfo {
@@ -1169,6 +1179,12 @@ html[data-theme="dark"] .cms-note a { color: var(--cms-gold, #f0b429); }
 .cms-media-tile.cms-selected { border-color: var(--cms-gold, #f0b429); box-shadow: 0 0 0 2px rgba(240, 180, 41, .45); }
 .cms-media-tile img {
     width: 100%; height: 92px; object-fit: cover; display: block; background: var(--ork-bg-tertiary);
+}
+/* #95: broken-thumbnail fallback for picker tiles — same 92px footprint as the
+   image, centered fa-image, sitting above the caption so nothing overlaps. */
+.cms-media-tile-fallback {
+    width: 100%; height: 92px; display: flex; align-items: center; justify-content: center;
+    background: var(--ork-bg-tertiary); color: var(--ork-text-lighter, #9aa2ad); font-size: 24px;
 }
 .cms-media-tile .cms-media-cap {
     font-size: 11px; padding: 6px 8px; color: var(--ork-text-secondary);
@@ -1515,7 +1531,7 @@ html[data-theme="dark"] .cms-overflow-menu { box-shadow: 0 12px 32px rgba(0, 0, 
 
 .cms-editbar {
     position: sticky;
-    top: 0;
+    top: var(--ork-header-h, 48px); /* #93: was 0 — hid behind the fixed 48px navbar */
     z-index: 30;
     display: flex;
     align-items: center;
@@ -2129,6 +2145,17 @@ html[data-theme="dark"] .te-preview-frame { border-color: #2c3650; }
     align-items: center;
 }
 html[data-theme="dark"] .te-actions { border-top-color: #2c3650; }
+/* #97: currently-active-theme indicator in the action bar. */
+.te-active-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--ork-text-muted, #5b6472);
+}
+.te-active-status[data-active="1"] { color: var(--ork-text-secondary, #47506a); }
+.te-active-status[data-active="1"] > i { color: #16a34a; font-size: 9px; }
+.te-active-status[data-active="0"] > i { color: var(--ork-text-lighter, #9aa2ad); font-size: 10px; }
 
 /* ---- Shared button styles for the editor ---- */
 .te-btn {
