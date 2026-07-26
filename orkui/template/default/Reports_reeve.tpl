@@ -4,10 +4,12 @@ $total        = 0;
 $expiring     = 0; // expires within 30 days
 $now          = time();
 $soon         = strtotime('+30 days');
+$rp_kingdoms  = array(); // distinct KingdomName values in the result set
 
 if (is_array($reeve_qualified)) {
 	foreach ($reeve_qualified as $player) {
 		$total++;
+		$rp_kingdoms[$player['KingdomName'] ?? ''] = true;
 		if (!empty($player['ReeveQualifiedUntil'])) {
 			$exp = strtotime($player['ReeveQualifiedUntil']);
 			if ($exp !== false && $exp >= $now && $exp <= $soon) $expiring++;
@@ -38,11 +40,10 @@ if (($ScopeType ?? '') === 'park' && !empty($ScopeId)) {
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
-<div class="rp-root">
+<div class="rp-root qt-page">
 
 	<!-- ── Header ─────────────────────────────────────────── -->
 	<div class="rp-header">
@@ -166,25 +167,32 @@ if (($ScopeType ?? '') === 'park' && !empty($ScopeId)) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
-<script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
 <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
 
 <script>
 $(function() {
+	// On a narrow screen a pinned first column eats a third of the reading
+	// width, and on a single-kingdom report the Kingdom column is one repeated
+	// value already shown in the header chip — so drop it below 768. A
+	// principality rollup returns rows from 2+ kingdoms, so it keeps the column.
+	var rpScoped      = <?=((($ScopeType ?? '') !== '') && count($rp_kingdoms) <= 1) ? 'true' : 'false'?>;
+	var rpNarrow      = window.matchMedia('(max-width: 768px)').matches;
+	var rpHideKingdom = rpScoped && rpNarrow;
+	var rpExportCols  = rpHideKingdom ? '' : ':visible';
+
 	var table = $('#reeve-report-table').DataTable({
 		dom: 'lfrtip',
 		buttons: [
-			{ extend: 'csv',   filename: 'Reeve Qualified', exportOptions: { columns: ':visible' } },
-			{ extend: 'print', exportOptions: { columns: ':visible' } }
+			{ extend: 'csv',   filename: 'Reeve Qualified', exportOptions: { columns: rpExportCols } },
+			{ extend: 'print', exportOptions: { columns: rpExportCols } }
 		],
 		columnDefs: [
 			{ targets: [3], type: 'date', className: 'dt-right' }
-		],
+		].concat(rpHideKingdom ? [{ targets: 0, visible: false }] : []),
 		pageLength: 25,
 		order: [[0, 'asc'], [1, 'asc'], [2, 'asc']],
-		fixedHeader : { headerOffset: 48 },
 		scrollX     : true,
-		fixedColumns: { left: 1 }
+		fixedColumns: rpNarrow ? false : { left: 1 }
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });

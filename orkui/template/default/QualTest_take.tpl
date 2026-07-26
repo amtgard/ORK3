@@ -250,8 +250,29 @@
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
+	gap: 10px;
 	margin-bottom: 10px;
 }
+/* Wraps only the two live-updating readouts, so the Exit button next to them
+   isn't re-announced every time the question changes. */
+.qt-progress-live {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 10px;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+.qt-exit-link {
+	background: none;
+	border: 0;
+	color: var(--rp-text-muted);
+	font-size: 0.85rem;
+	padding: 8px;
+	cursor: pointer;
+	flex: 0 0 auto;
+}
+.qt-exit-link:hover { color: var(--rp-accent); }
 .qt-progress-text {
 	font-size: 0.82rem;
 	font-weight: 600;
@@ -376,6 +397,27 @@
 	pointer-events: none;
 	opacity: 0.55;
 }
+/* Correct/incorrect must not be carried by colour alone — scored options get a
+   ✓/✗ glyph plus off-screen text for assistive tech. */
+.qt-ans-marker {
+	margin-left: auto;
+	flex-shrink: 0;
+	padding-left: 8px;
+}
+.qt-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+/* Programmatic focus targets for view transitions — no visible ring wanted. */
+.qt-q-text:focus,
+.qt-result-heading:focus { outline: none; }
 
 /* Feedback bar with slide-down animation */
 .qt-feedback {
@@ -393,7 +435,8 @@
 	margin-top: 0;
 }
 .qt-feedback.qt-feedback-show {
-	max-height: 80px;
+	/* em, not px — a px cap clips the message at large text sizes (WCAG 1.4.4). */
+	max-height: 8em;
 	opacity: 1;
 	padding: 12px 18px;
 	margin-top: 14px;
@@ -463,6 +506,10 @@
 	border: 1px solid #cbd5e0;
 	border-radius: 4px;
 	font-size: 0.85rem;
+	/* A native select sizes to its widest option; clamp it to the flex row. */
+	box-sizing: border-box;
+	min-width: 0;
+	max-width: 100%;
 }
 .qt-report-submit {
 	padding: 5px 12px;
@@ -506,9 +553,12 @@
 	font-size: 1rem;
 	opacity: 0;
 	transition: opacity 0.2s ease;
+	/* opacity:0 alone still reserved a 186px blank band above the overview. */
+	display: none;
 }
 .qt-loading.qt-loading-show {
 	opacity: 1;
+	display: block;
 }
 .qt-loading-spinner {
 	font-size: 2rem;
@@ -651,6 +701,9 @@
 .qt-history-date { font-size: 0.8rem; color: #718096; }
 .qt-history-chevron { margin-left: auto; color: #a0aec0; }
 .qt-history-detail { padding: 4px 14px 2px; }
+/* Shared muted text for the JS-rendered loading/empty states (was inline #718096,
+   which has no dark override and measures 2.99:1 on the dark card). */
+.qt-modal-muted { color: #718096; }
 
 html[data-theme="dark"] .qt-review-q,
 html[data-theme="dark"] .qt-history-item { background: #2d3748; border-color: #4a5568; }
@@ -675,10 +728,12 @@ html[data-theme="dark"] .qt-review-toggle:hover { background: #374151; }
 	.qt-overview-icon { width: 44px; height: 44px; font-size: 1.2rem; border-radius: 10px; }
 	.qt-overview-title { font-size: 1.1rem; }
 	.qt-stat-chips { padding: 16px 18px; gap: 8px; }
-	.qt-stat-chip { min-width: calc(50% - 8px); flex: 1 1 calc(50% - 8px); padding: 8px 12px; }
+	/* Border-box + half-gap subtraction, else the chip's own padding/border pushes
+	   the intended 2-up row down to 1-up. */
+	.qt-stat-chip { box-sizing: border-box; min-width: calc(50% - 4px); flex: 1 1 calc(50% - 4px); padding: 8px 12px; }
 	.qt-status-section, .qt-instructions-section, .qt-expect-section, .qt-cta-section { padding: 16px 18px; }
 	.qt-begin-btn { width: 100%; justify-content: center; padding: 14px 20px; }
-	.qt-cta-back { display: flex; justify-content: center; }
+	.qt-cta-back { display: flex; justify-content: center; align-items: center; min-height: 44px; }
 	.qt-question-card { padding: 18px 16px; }
 	.qt-answer-label { padding: 12px 14px; }
 	.qt-nav-row { flex-direction: column; }
@@ -688,6 +743,90 @@ html[data-theme="dark"] .qt-review-toggle:hover { background: #374151; }
 	.qt-result-actions { flex-direction: column; }
 	.qt-back-link { width: 100%; justify-content: center; }
 	.qt-blocked-msg { margin-left: 0; margin-right: 0; }
+	/* The width:100% rules above assume border-box; without it the padding
+	   overhangs the column (Back to Kingdom rendered 289px in a 238px column). */
+	.qt-begin-btn, .qt-nav-btn, .qt-back-link, .qt-review-toggle, .qt-blocked-msg, .qt-confirm-btn { box-sizing: border-box; }
+	/* Progress row wraps so the readouts and Exit don't fight for 238px. */
+	.qt-progress-header { flex-wrap: wrap; gap: 4px 10px; }
+	.qt-progress-live { flex: 1 1 100%; }
+	.qt-exit-link { margin-left: auto; min-height: 44px; }
+	/* Non-colour cue for answered segments (they are only 8px tall). */
+	.qt-progress-seg-done {
+		background-image: linear-gradient(45deg, rgba(255,255,255,.35) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.35) 50%, rgba(255,255,255,.35) 75%, transparent 75%);
+		background-size: 6px 6px;
+	}
+	/* Report form: stack, and 16px on the select so iOS doesn't zoom on focus. */
+	.qt-report-form { flex-direction: column; align-items: stretch; }
+	.qt-report-select { width: 100%; font-size: 16px; }
+	/* Touch targets */
+	.qt-nav-btn, #qt-multi-submit-btn { padding: 13px 26px; min-height: 48px; }
+	.qt-report-toggle-btn, .qt-report-submit, .qt-report-cancel, .qt-review-toggle {
+		min-height: 44px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+	/* column-reverse keeps the confirming action furthest from the resting thumb. */
+	.qt-confirm-footer { flex-direction: column-reverse; gap: 12px; }
+	.qt-confirm-btn { width: 100%; min-height: 44px; }
+	.qt-confirm-overlay { padding: 12px; }
+}
+/* A coarse pointer on a wider screen (tablet) hits the same iOS zoom threshold. */
+@media (pointer: coarse) {
+	.qt-report-select { font-size: 16px; min-height: 44px; }
+}
+/* Landscape phones: the static page chrome eats 30% of a 390px-tall viewport and
+   the action row sits below the fold on every question. */
+@media (max-width: 900px) and (max-height: 520px) {
+	.rp-header, .rp-context { display: none; }
+	/* reports.css gives .rp-table-area overflow-x:auto, which forces overflow-y to
+	   compute to auto, making it the nearest scrolling ancestor of the rows below.
+	   Its height is uncapped so it never scrolls, and position:sticky resolved
+	   against it would never pin. `clip` is the one non-visible value that does NOT
+	   establish a scroll container, so overflow-y stays visible and sticky binds to
+	   the viewport. No DataTables render on this route, so nothing needs the
+	   horizontal scroller here. */
+	.rp-table-area { overflow-x: clip; }
+	#qt-multi-submit-row, .qt-nav-row {
+		position: sticky;
+		bottom: 0;
+		z-index: 5;
+		padding: 10px 0;
+		background: var(--ork-card-bg, #fff);
+		box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.10);
+	}
+	html[data-theme="dark"] #qt-multi-submit-row,
+	html[data-theme="dark"] .qt-nav-row { background: var(--ork-card-bg, #2d3748); }
+}
+/* Respect the OS "reduce motion" preference. */
+@media (prefers-reduced-motion: reduce) {
+	.qt-view, .qt-answer-label, .qt-feedback, .qt-question-content, .qt-progress-seg {
+		transition: none !important;
+		animation: none !important;
+	}
+	.qt-answer-label:hover, .qt-begin-btn:hover, .qt-nav-btn:hover, .qt-back-link:hover { transform: none !important; }
+}
+/* Press + keyboard-focus feedback, paired with (not replacing) the hover rules
+   so touch gets an acknowledgement and desktop is unchanged. */
+.qt-nav-btn:active, .qt-begin-btn:active, .qt-back-link:active, .qt-review-toggle:active,
+.qt-report-submit:active, .qt-report-cancel:active, .qt-report-toggle-btn:active,
+.qt-confirm-btn:active, .qt-history-item:active, .qt-exit-link:active {
+	filter: brightness(0.88);
+	transform: scale(0.97);
+}
+.qt-nav-btn:focus-visible, .qt-begin-btn:focus-visible, .qt-back-link:focus-visible,
+.qt-review-toggle:focus-visible, .qt-report-submit:focus-visible, .qt-report-cancel:focus-visible,
+.qt-report-toggle-btn:focus-visible, .qt-confirm-btn:focus-visible, .qt-history-item:focus-visible,
+.qt-exit-link:focus-visible, .qt-answer-label:focus-visible {
+	outline: 2px solid #2b6cb0;
+	outline-offset: 2px;
+}
+/* WebKit synthesises a hover on tap and leaves it latched until the next tap. */
+@media (hover: none) {
+	.qt-report-toggle-btn:hover { color: #718096; }
+	.qt-exit-link:hover { color: var(--rp-text-muted); }
+	.qt-answer-label:hover:not(.qt-ans-disabled):not(.qt-ans-correct):not(.qt-ans-wrong),
+	.qt-begin-btn:hover, .qt-nav-btn:hover, .qt-back-link:hover { transform: none; }
 }
 
 /* ── Dark mode ────────────────────────────────────────── */
@@ -732,11 +871,14 @@ html[data-theme="dark"] .qt-q-text {
 }
 html[data-theme="dark"] .qt-progress-text  { color: var(--ork-text-muted, #a0aec0); }
 html[data-theme="dark"] .qt-progress-score { color: var(--ork-text-muted, #a0aec0); }
-html[data-theme="dark"] .qt-progress-seg   { background: #4a5568; }
+/* background-COLOR, not the shorthand: the shorthand resets background-image and
+   would wipe the mobile non-colour stripe on .qt-progress-seg-done (it out-specifies
+   and post-dates the 600px rule). */
+html[data-theme="dark"] .qt-progress-seg   { background-color: #4a5568; }
 /* Done/current need brighter fills on the dark modal — the light-mode green/blue
    and the faint current-glow both wash out against #2d3748, so you can't tell
    which question you're on. */
-html[data-theme="dark"] .qt-progress-seg-done    { background: #48bb78; }
+html[data-theme="dark"] .qt-progress-seg-done    { background-color: #48bb78; }
 html[data-theme="dark"] .qt-progress-seg-current { background: #63b3ed; box-shadow: 0 0 0 2px rgba(99,179,237,0.5); }
 html[data-theme="dark"] .qt-answer-label {
 	background: var(--ork-bg-tertiary, #374151);
@@ -787,19 +929,32 @@ html[data-theme="dark"] .rp-context[style*="fed7d7"] {
 	color: #feb2b2 !important;
 }
 html[data-theme="dark"] .rp-context[style*="fed7d7"] .rp-context-icon { color: #fc8181 !important; }
-/* Report-question form inside question view */
-html[data-theme="dark"] .qt-report-area button,
-html[data-theme="dark"] .qt-report-toggle-btn { color: var(--ork-text-secondary, #cbd5e0); }
+/* Report-question form inside question view.
+   Scoped to the ghost controls — the blanket `.qt-report-area button` also hit
+   the red Submit button and washed its white label down to 2.78:1. */
+html[data-theme="dark"] .qt-report-toggle-btn,
+html[data-theme="dark"] .qt-report-cancel { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .qt-report-cancel { border-color: var(--ork-border, #4a5568); }
+html[data-theme="dark"] .qt-report-submit { color: #fff; }
+html[data-theme="dark"] .qt-report-thanks { color: #68d391; }
 html[data-theme="dark"] .qt-report-select {
 	background: var(--ork-input-bg, #374151);
 	border-color: var(--ork-input-border, #4a5568);
 	color: var(--ork-text, #e2e8f0);
 }
 html[data-theme="dark"] .qt-loading { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-exit-link { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .qt-exit-link:hover { color: #90cdf4; }
+/* #718096 is only 2.99:1 on the dark card — muted text needs the lighter token. */
+html[data-theme="dark"] .qt-history-title,
+html[data-theme="dark"] .qt-history-date,
+html[data-theme="dark"] .qt-modal-muted { color: var(--ork-text-muted, #a0aec0); }
 /* ── In-product confirm modal (replaces native confirm) ── */
-.qt-confirm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9500; align-items:center; justify-content:center; }
+.qt-confirm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9500; align-items:center; justify-content:center; overscroll-behavior:contain; }
 .qt-confirm-overlay.qt-open { display:flex; }
-.qt-confirm-modal { background:#fff; border-radius:8px; padding:22px 24px; min-width:300px; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
+/* box-sizing + min-width:0 so the 300px floor and the 24px padding can't push the
+   modal past a 320px viewport; max-width still governs the desktop width. */
+.qt-confirm-modal { background:#fff; border-radius:8px; padding:22px 24px; box-sizing:border-box; min-width:0; max-width:420px; width:100%; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
 .qt-confirm-title { margin:0 0 10px; font-size:1rem; font-weight:700; color:#2d3748; }
 /* orkui.css paints every h1..h6 as a grey "chip" (background + border + white text-shadow),
    which on a modal title reads as a pale box — a glaring white box in dark mode. Strip it.
@@ -1029,11 +1184,14 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				<div class="qt-question-card">
 					<div class="qt-question-content" id="qt-question-content">
 						<div class="qt-progress-header">
-							<div class="qt-progress-text" id="qt-progress-text">Question 1 of 10</div>
-							<div class="qt-progress-score" id="qt-progress-score"></div>
+							<div class="qt-progress-live" role="status" aria-live="polite" aria-atomic="true">
+								<div class="qt-progress-text" id="qt-progress-text">Question 1 of 10</div>
+								<div class="qt-progress-score" id="qt-progress-score"></div>
+							</div>
+							<button type="button" class="qt-exit-link" id="qt-exit-btn">Exit test</button>
 						</div>
-						<div class="qt-progress-segments" id="qt-progress-segments"></div>
-						<div class="qt-q-text" id="qt-q-text"></div>
+						<div class="qt-progress-segments" id="qt-progress-segments" role="img" aria-label=""></div>
+						<div class="qt-q-text" id="qt-q-text" tabindex="-1"></div>
 						<!-- Hint shown for multi-correct questions; hidden for single. -->
 						<div class="qt-multi-hint" id="qt-multi-hint" style="display:none;font-size:0.82rem;color:#4a5568;margin:6px 0 10px;">
 							<i class="fas fa-check-square" style="margin-right:5px;color:#2b6cb0;"></i>Select all that apply, then submit.
@@ -1044,7 +1202,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 						<div id="qt-multi-submit-row" style="display:none;margin:0 0 14px;">
 							<button class="qt-nav-btn" id="qt-multi-submit-btn" disabled><i class="fas fa-check"></i> Submit Answer</button>
 						</div>
-						<div class="qt-feedback" id="qt-feedback"></div>
+						<div class="qt-feedback" id="qt-feedback" role="status" aria-live="polite" aria-atomic="true"></div>
 						<div class="qt-report-area" id="qt-report-area" style="display:none;">
 							<button class="qt-report-toggle-btn" id="qt-report-btn">
 								<i class="fas fa-flag" style="color:#e53e3e;"></i> Report Question
@@ -1083,7 +1241,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			<div id="qt-result-view" class="qt-view">
 				<div class="qt-result-card">
 					<div class="qt-result-icon" id="qt-result-icon"></div>
-					<h2 class="qt-result-heading" id="qt-result-heading"></h2>
+					<h2 class="qt-result-heading" id="qt-result-heading" tabindex="-1"></h2>
 					<div class="qt-result-score" id="qt-result-score"></div>
 					<div class="qt-result-breakdown" id="qt-result-breakdown"></div>
 					<div class="qt-result-detail" id="qt-result-detail"></div>
@@ -1115,7 +1273,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 </div><!-- /.rp-root -->
 
 <!-- In-product confirm modal -->
-<div class="qt-confirm-overlay" id="qt-confirm-overlay">
+<div class="qt-confirm-overlay" id="qt-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="qt-confirm-title" aria-describedby="qt-confirm-body">
 	<div class="qt-confirm-modal">
 		<h4 class="qt-confirm-title" id="qt-confirm-title"></h4>
 		<div class="qt-confirm-body" id="qt-confirm-body"></div>
@@ -1130,6 +1288,11 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 <script>
 (function() {
 	var BASE_URL    = '<?= UIR ?>';
+	// True when the OS asks for reduced motion — gates confetti, the score
+	// count-up and smooth scrolling.
+	function qtReducedMotion() {
+		return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+	}
 	// In-product replacement for native confirm() — qtConfirm({title, body, confirmLabel, onConfirm})
 	var qtConfirm = (function() {
 		var overlay  = document.getElementById('qt-confirm-overlay');
@@ -1138,17 +1301,41 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 		var cancelEl = document.getElementById('qt-confirm-cancel');
 		var okEl     = document.getElementById('qt-confirm-ok');
 		var pending  = null;
-		function close() { overlay.classList.remove('qt-open'); pending = null; }
+		var lastFocus = null;
+		function close() {
+			overlay.classList.remove('qt-open');
+			pending = null;
+			document.body.style.overflow = '';
+			if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+			lastFocus = null;
+		}
 		okEl.addEventListener('click', function() { var cb = pending; close(); if (cb) cb(); });
 		cancelEl.addEventListener('click', close);
 		overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+		// Escape closes; Tab is trapped between the two footer buttons.
+		overlay.addEventListener('keydown', function(e) {
+			if (!overlay.classList.contains('qt-open')) return;
+			if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+			if (e.key !== 'Tab') return;
+			e.preventDefault();
+			var focusable = [cancelEl, okEl];
+			var pos  = focusable.indexOf(document.activeElement);
+			var step = e.shiftKey ? -1 : 1;
+			var next = focusable[(Math.max(pos, 0) + step + focusable.length) % focusable.length];
+			if (next) next.focus();
+		});
 		return function(opts) {
 			opts = opts || {};
 			titleEl.textContent = opts.title || 'Please Confirm';
 			bodyEl.textContent  = opts.body || '';
 			okEl.textContent    = opts.confirmLabel || 'Confirm';
 			pending = typeof opts.onConfirm === 'function' ? opts.onConfirm : null;
+			lastFocus = document.activeElement;
 			overlay.classList.add('qt-open');
+			// Stop the page behind the scrim from scrolling with the modal open.
+			document.body.style.overflow = 'hidden';
+			// Land on the least-destructive action.
+			cancelEl.focus();
 		};
 	})();
 	var KINGDOM_ID  = <?= (int)$KingdomId ?>;
@@ -1210,6 +1397,8 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	var passPercent  = <?= (int)$Config['PassPercent'] ?>;
 	var maxRetakes   = <?= (int)$Config['MaxRetakes'] ?>;
 	var retakesTaken = <?= (int)$RetakeCount ?>;
+	// True between "Begin Test" and the result view — gates the unload warning.
+	var attemptInProgress = false;
 
 	function showError(msg) {
 		errorMsgEl.textContent = msg;
@@ -1264,6 +1453,23 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				target.classList.add('qt-view-active');
 			});
 		}
+
+		// Without this the new view renders wherever the previous one left the
+		// scroll position — the question stem landed 238px above the fold after
+		// Next, and the pass/fail heading was entirely off-screen after Submit.
+		// This theme puts overflow:auto on html AND body, so reset both.
+		var scroller = document.scrollingElement || document.documentElement;
+		if (scroller) scroller.scrollTop = 0;
+		document.body.scrollTop = 0;
+
+		// Move focus to the top of the new view so assistive tech follows along
+		// (preventScroll keeps the reset above intact).
+		var focusTarget = null;
+		if (viewName === 'question') focusTarget = qTextEl;
+		if (viewName === 'result')   focusTarget = resultHeading;
+		if (focusTarget && typeof focusTarget.focus === 'function') {
+			try { focusTarget.focus({ preventScroll: true }); } catch (err) { focusTarget.focus(); }
+		}
 	}
 
 	// Begin button
@@ -1300,6 +1506,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				}
 				questions   = j.questions;
 				passPercent = j.pass_percent;
+				attemptInProgress = true;
 				buildProgressSegments();
 				renderQuestion(0);
 			})
@@ -1323,10 +1530,12 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 
 	function updateProgressSegments() {
 		var segs = progressSegs.querySelectorAll('.qt-progress-seg');
+		var answered = 0;
 		for (var i = 0; i < segs.length; i++) {
 			segs[i].className = 'qt-progress-seg';
 			if (answers.hasOwnProperty(questions[i].QualQuestionId)) {
 				segs[i].classList.add('qt-progress-seg-done');
+				answered++;
 			}
 			if (i === currentIdx) {
 				// Current overrides done styling while answering
@@ -1335,6 +1544,8 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 				}
 			}
 		}
+		// The strip is otherwise pure colour — give it a text equivalent.
+		progressSegs.setAttribute('aria-label', answered + ' of ' + segs.length + ' answered');
 	}
 
 	function renderQuestion(idx) {
@@ -1371,15 +1582,23 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			singleSelected = null;
 
 			answersEl.innerHTML = '';
-			q.Answers.forEach(function(a) {
+			// A bare `radio` outside a radiogroup is invalid ARIA — the options
+			// announce with no group name and no set position.
+			answersEl.setAttribute('role', isMulti ? 'group' : 'radiogroup');
+			answersEl.setAttribute('aria-labelledby', 'qt-q-text');
+			q.Answers.forEach(function(a, ansIdx) {
 				var li    = document.createElement('li');
 				li.className = 'qt-answer-item';
 				var label = document.createElement('label');
 				label.className = 'qt-answer-label';
 				label.dataset.answerId = a.QualAnswerId;
-				label.setAttribute('tabindex', '0');
+				// Roving tabindex in single mode: the group is one tab stop, not
+				// one per option. Multi keeps every checkbox tabbable.
+				label.setAttribute('tabindex', (isMulti || ansIdx === 0) ? '0' : '-1');
 				label.setAttribute('role', isMulti ? 'checkbox' : 'radio');
 				label.setAttribute('aria-checked', 'false');
+				label.setAttribute('aria-setsize', q.Answers.length);
+				label.setAttribute('aria-posinset', ansIdx + 1);
 
 				// Selection indicator — same visual pill, filled per aria-checked
 				// so single (radio) and multi (checkbox) look consistent.
@@ -1421,15 +1640,32 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 						answersEl.querySelectorAll('.qt-answer-label').forEach(function(l) {
 							l.classList.remove('qt-ans-selected');
 							l.setAttribute('aria-checked', 'false');
+							l.setAttribute('tabindex', '-1');
 						});
 						label.classList.add('qt-ans-selected');
 						label.setAttribute('aria-checked', 'true');
+						label.setAttribute('tabindex', '0');
 						singleSelected = a.QualAnswerId;
 						multiSubmitBtn.disabled = false;
 					};
 					label.addEventListener('click', selectSingle);
 					label.addEventListener('keydown', function(e) {
-						if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSingle(); }
+						if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSingle(); return; }
+						if (isChecking) return;
+						// Arrow keys move + select within the radiogroup, per the
+						// ARIA radio pattern.
+						var step = 0;
+						if (e.key === 'ArrowDown' || e.key === 'ArrowRight') step = 1;
+						if (e.key === 'ArrowUp'   || e.key === 'ArrowLeft')  step = -1;
+						if (!step) return;
+						e.preventDefault();
+						var all = answersEl.querySelectorAll('.qt-answer-label');
+						var pos = Array.prototype.indexOf.call(all, label);
+						if (pos === -1 || !all.length) return;
+						var next = all[(pos + step + all.length) % all.length];
+						if (!next) return;
+						next.click();
+						next.focus();
 					});
 				}
 				li.appendChild(label);
@@ -1444,6 +1680,18 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	}
 
 	var isChecking = false;
+	// Scored options differ only by hue, which a deuteranope can't read and a
+	// screen reader never sees — stamp a glyph plus off-screen text on each.
+	function markScored(label, kind) {
+		if (!label || label.querySelector('.qt-ans-marker')) return;
+		var icon = (kind === 'wrong') ? 'fa-times' : 'fa-check';
+		var text = (kind === 'wrong') ? 'Your answer — incorrect'
+			: (kind === 'missed') ? 'Correct answer — not selected'
+			: 'Correct answer';
+		label.insertAdjacentHTML('beforeend',
+			'<span class="qt-ans-marker"><i class="fas ' + icon + '" aria-hidden="true"></i>'
+			+ '<span class="qt-sr-only">' + text + '</span></span>');
+	}
 	// `selected` is a number for single-select and an array of numbers for
 	// multi-select. Both cases funnel through here so the feedback + scoring
 	// pathway is identical.
@@ -1516,7 +1764,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 					var pickedIds = isMulti ? selected : [selected];
 					pickedIds.forEach(function(id) {
 						var l = answersEl.querySelector('[data-answer-id="' + id + '"]');
-						if (l) { l.classList.remove('qt-ans-selected'); l.classList.add('qt-ans-correct'); }
+						if (l) { l.classList.remove('qt-ans-selected'); l.classList.add('qt-ans-correct'); markScored(l, 'correct'); }
 					});
 					feedbackEl.className = 'qt-feedback qt-fb-correct';
 					feedbackEl.innerHTML = '<i class="fas fa-check-circle" style="margin-right:6px;"></i> Correct!';
@@ -1529,14 +1777,14 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 						// Wrong pick unless it's also in the correct set — in which
 						// case it was partially right; still show as correct so
 						// the player sees which of their picks was right.
-						if (correctIds.indexOf(id) !== -1) l.classList.add('qt-ans-correct');
-						else                               l.classList.add('qt-ans-wrong');
+						if (correctIds.indexOf(id) !== -1) { l.classList.add('qt-ans-correct'); markScored(l, 'correct'); }
+						else                               { l.classList.add('qt-ans-wrong');   markScored(l, 'wrong'); }
 					});
 					// Also mark any correct answers the player MISSED.
 					correctIds.forEach(function(id) {
 						if (pickedIdsW.indexOf(id) !== -1) return;
 						var l = answersEl.querySelector('[data-answer-id="' + id + '"]');
-						if (l) { l.classList.remove('qt-ans-disabled'); l.classList.add('qt-ans-correct'); }
+						if (l) { l.classList.remove('qt-ans-disabled'); l.classList.add('qt-ans-correct'); markScored(l, 'missed'); }
 					});
 					feedbackEl.className = 'qt-feedback qt-fb-wrong';
 					feedbackEl.innerHTML = '<i class="fas fa-times-circle" style="margin-right:6px;"></i> Sorry, that\'s not correct.';
@@ -1552,9 +1800,16 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 
 				isChecking = false;
 
-				// Slide-down feedback
+				// Slide-down feedback. In landscape the banner and the Next
+				// button land ~245px below the fold, so bring them into view.
 				requestAnimationFrame(function() {
 					feedbackEl.classList.add('qt-feedback-show');
+					if (feedbackEl.scrollIntoView) {
+						feedbackEl.scrollIntoView({
+							block: 'nearest',
+							behavior: qtReducedMotion() ? 'auto' : 'smooth'
+						});
+					}
 				});
 
 				// Update progress
@@ -1671,8 +1926,34 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 		});
 	});
 
+	// Exit test — the question view otherwise offers no way out but the global
+	// nav or a browser back gesture. Abandoning simply leaves; nothing is
+	// recorded server-side until Submit Test.
+	var exitBtn = document.getElementById('qt-exit-btn');
+	if (exitBtn) {
+		exitBtn.addEventListener('click', function() {
+			qtConfirm({
+				title: 'Leave This Test?',
+				body: 'Leave this test? Your progress will be lost and this attempt will not be recorded.',
+				confirmLabel: 'Leave Test',
+				onConfirm: function() {
+					attemptInProgress = false;
+					window.location.href = BASE_URL + 'Kingdom/profile/' + KINGDOM_ID;
+				}
+			});
+		});
+	}
+
+	// Warn only while an attempt is actually in flight.
+	window.addEventListener('beforeunload', function(e) {
+		if (!attemptInProgress) return;
+		e.preventDefault();
+		e.returnValue = '';
+	});
+
 	// Animated score counter using requestAnimationFrame
 	function animateScore(targetPercent, duration) {
+		if (qtReducedMotion()) { resultScore.textContent = targetPercent + '%'; return; }
 		var startTime = null;
 		function step(timestamp) {
 			if (!startTime) startTime = timestamp;
@@ -1689,6 +1970,8 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	}
 
 	function fireConfetti() {
+		// A 2s full-viewport particle burst is exactly what "reduce motion" means.
+		if (qtReducedMotion()) return;
 		if (typeof window.confetti !== 'function') return;
 		var end = Date.now() + 2000;
 		var colors = ['#276749', '#48bb78', '#f6e05e', '#ffffff'];
@@ -1714,6 +1997,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	}
 
 	function showResult(j) {
+		attemptInProgress = false;
 		if (j.passed) {
 			resultIcon.innerHTML    = '<i class="fas fa-check-circle qt-result-pass" style="font-size:inherit;"></i>';
 			resultHeading.className = 'qt-result-heading qt-result-heading-pass';
@@ -1773,7 +2057,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 	// Build the review HTML from an attempt-detail object (see QualTest::getAttemptDetail).
 	function renderReview(attempt) {
 		if (!attempt || !attempt.Questions || !attempt.Questions.length) {
-			return '<div style="color:#718096;font-size:0.9rem;">No answer detail was recorded for this attempt.</div>';
+			return '<div class="qt-modal-muted" style="font-size:0.9rem;">No answer detail was recorded for this attempt.</div>';
 		}
 		var html = '';
 		attempt.Questions.forEach(function(q, i) {
@@ -1831,7 +2115,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			wrap.style.display = open ? 'block' : 'none';
 			if (label) label.textContent = open ? 'Hide Your Answers' : 'Review Your Answers';
 			if (open && !loaded) {
-				wrap.innerHTML = '<div style="color:#718096;font-size:0.9rem;">Loading…</div>';
+				wrap.innerHTML = '<div class="qt-modal-muted" style="font-size:0.9rem;">Loading…</div>';
 				fetchAttempt(attemptId, function(att) {
 					loaded = true;
 					wrap.innerHTML = renderReview(att);
@@ -1853,7 +2137,7 @@ html[data-theme="dark"] .qt-confirm-cancel:hover { background: #718096; }
 			var chev = btn.querySelector('.qt-history-chevron i');
 			if (chev) chev.className = open ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
 			if (!open && !loaded) {
-				detail.innerHTML = '<div style="color:#718096;font-size:0.9rem;padding:6px 0;">Loading…</div>';
+				detail.innerHTML = '<div class="qt-modal-muted" style="font-size:0.9rem;padding:6px 0;">Loading…</div>';
 				fetchAttempt(id, function(att) {
 					loaded = true;
 					detail.innerHTML = renderReview(att);
