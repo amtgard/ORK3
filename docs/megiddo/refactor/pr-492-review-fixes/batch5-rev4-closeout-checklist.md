@@ -30,7 +30,7 @@ Before a stacked branch may close:
 | Milestone | Branch | Purpose | PHPUnit | Coverage Δ | Infection floor | Commit | Closed |
 |---|---|---|---|---|---|---|---|
 | M0 | `fix-pr-492-batch5-m0-baseline` | Restore Drive-corrupted WT to HEAD; isolate fuzzy-validator WIP; record baseline numbers | [x] RED recorded | log 25.40%; remasured same host 25.14% (6417/25528) | config minMsi 15 | `0dd41871` | [x] |
-| M1 | `fix-pr-492-batch5-m1-phpunit` | Fix any Rev4 regressions until full suite green; raise tests if needed | [x] GREEN | new PHP 100%; suite 25.24% (6443/25529) ≥ remasured M0 | ≥ M0 | `45b51e85` | [x] |
+| M1 | `fix-pr-492-batch5-m1-phpunit` | Fix any Rev4 regressions until full suite green; raise tests if needed | [x] GREEN | new PHP 100%; suite 25.24% (6443/25529) ≥ remasured M0 | ≥ M0 | `7997bb30` | [x] |
 | M2 | `fix-pr-492-batch5-m2-infection` | Rev4-touched infection configs green; raise floors monotonically where evidence supports | [ ] | ≥ M1 | ≥ M1 | | [ ] |
 | M3 | `fix-pr-492-batch5-m3-docs` | Checklist SHA fill (C-28/C-29), plan Mac-skip note, Batch5 checklist sync | [ ] | n/a docs | n/a | | [ ] |
 | M4 | `fix-pr-492-batch5-m4-pr-hygiene` | Post pending-replies + REVISION-4; push `fix-pr-492` + mirror `megiddo/fuzzy-validator-v2` | [ ] | n/a | n/a | | [ ] |
@@ -77,7 +77,7 @@ Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 
 | Metric | Value | Recorded |
 |---|---|---|
-| Branch tip | `45b51e85` | 2026-08-01 |
+| Branch tip | `32dd0430` | 2026-08-01 |
 | PHPUnit | **GREEN** — Tests: 310, Assertions: 1115, Errors: 0, Failures: 0, Skipped: 2 (`build/batch5-m1-phpunit.log`) | 2026-08-01 |
 | Line coverage (suite) | **25.24%** lines (6443/25529); methods 16.09% (136/845); classes 10.87% | 2026-08-01 |
 | New PHP coverage | `SearchService::Player` session-clear line covered (100% of new executable stmts) | 2026-08-01 |
