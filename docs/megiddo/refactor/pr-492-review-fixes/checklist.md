@@ -6,24 +6,24 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 
 | # | ID | Status | Commit | PR reply |
 |---|----|--------|--------|----------|
-| 1 | C-01 Event APIModel delegation fatal | [x] | | |
-| 2 | C-14 WeatherService GetArchiveForPark null TypeError | [x] | | |
-| 3 | C-15 Event permissions breadcrumbs | [x] | | |
-| 4 | C-16 UniversalSearch active units | [x] | | |
-| 5 | C-18 Revoked awards alias titles | [x] | | |
-| 6 | C-03 DangerAudit MethodCall SQLi | [x] | | |
-| 7 | C-02 Banner CopyBanner auth | [x] | | |
-| 8 | C-04 GetGlobalAdminGrants auth | [x] | | |
-| 9 | C-05 Scoped/Kingdom/Event auth getters | [x] | | |
-| 10 | C-06 Server health getters auth | [x] | | |
-| 11 | C-07 AuthorizationGate privilege oracle | [x] | | |
-| 12 | C-08 LiveService Token gate | [x] | | |
-| 13 | C-13 WeatherService Token gate | [x] | | |
-| 14 | C-10 Calendar detail write auth | [x] | | |
-| 15 | C-12 SetRsvp/WithdrawRsvp Token | [x] | | |
-| 16 | C-09 GetOccurrencePageData auth | [x] | | |
-| 17 | C-11 GetDietarySummary auth | [x] | | |
-| 18 | C-17 Attendance reactivation policy | [x] | | |
+| 1 | C-01 Event APIModel delegation fatal | [x] | 656480ae | |
+| 2 | C-14 WeatherService GetArchiveForPark null TypeError | [x] | 7f8b3dbe | |
+| 3 | C-15 Event permissions breadcrumbs | [x] | 5b5d794e | |
+| 4 | C-16 UniversalSearch active units | [x] | 67249fe1 | |
+| 5 | C-18 Revoked awards alias titles | [x] | 31a37d88 | |
+| 6 | C-03 DangerAudit MethodCall SQLi | [x] | b1875f63 | |
+| 7 | C-02 Banner CopyBanner auth | [x] | 4c13c14f | |
+| 8 | C-04 GetGlobalAdminGrants auth | [x] | b71d8fd8 | |
+| 9 | C-05 Scoped/Kingdom/Event auth getters | [x] | 302fb5de | |
+| 10 | C-06 Server health getters auth | [x] | 8a9e41fc | |
+| 11 | C-07 AuthorizationGate privilege oracle | [x] | 7bb32f59 | |
+| 12 | C-08 LiveService Token gate | [x] | b1bb4fca | |
+| 13 | C-13 WeatherService Token gate | [x] | ee24353c | |
+| 14 | C-10 Calendar detail write auth | [x] | 15cba9a6 | |
+| 15 | C-12 SetRsvp/WithdrawRsvp Token | [x] | 46981030 | |
+| 16 | C-09 GetOccurrencePageData auth | [x] | d4a49221 | |
+| 17 | C-11 GetDietarySummary auth | [x] | 24824641 | |
+| 18 | C-17 Attendance reactivation policy | [x] | cf50d7ad | |
 | 19 | C-19 RemoveRsvp AuthorizedByController trust | [x] | 71ddcd29 | pending-replies/C-19.md |
 | 20 | C-20 GetRsvpList ungated | [x] | 53fffd48 | pending-replies/C-20.md |
 | 21 | C-21 Player getters ungated | [x] | 8574690a | pending-replies/C-21.md |
@@ -32,9 +32,9 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 24 | C-24 GetServerHealthDbStatus Wanted SQLi | [x] | 9a6b9b78 | pending-replies/C-24.md |
 | 25 | C-25 AddAttendance reactivation narrow | [x] | 2654ca7b | pending-replies/C-25.md |
 | 26 | C-26 QualTest getreports reporters | [x] | 56a3220a | pending-replies/C-26.md |
-| 27 | C-27 Park ladder-grid master parity | [x] | c9656250 | pending-replies/C-27.md |
-| 28 | C-28 ScopedPlayerSearch KD sort | [x] | | pending-replies/C-28.md |
-| 29 | C-29 Weather calendar coords sentinel | [x] | | pending-replies/C-29.md |
+| 27 | C-27 Park ladder-grid master parity | [x] | 6834b1cd | pending-replies/C-27.md |
+| 28 | C-28 ScopedPlayerSearch KD sort | [x] | ea4a6608 | pending-replies/C-28.md |
+| 29 | C-29 Weather calendar coords sentinel | [x] | ae4f0864 | pending-replies/C-29.md |
 | 30 | C-30 Award option HTML order | [x] | 6d06e4c0 | pending-replies/C-30.md |
 | 31 | C-31 Json/SOAP auth inventory | [x] | d9a17b36 | pending-replies/C-31.md |
 

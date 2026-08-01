@@ -32,7 +32,7 @@ Before a stacked branch may close:
 | M0 | `fix-pr-492-batch5-m0-baseline` | Restore Drive-corrupted WT to HEAD; isolate fuzzy-validator WIP; record baseline numbers | [x] RED recorded | log 25.40%; remasured same host 25.14% (6417/25528) | config minMsi 15 | `0dd41871` | [x] |
 | M1 | `fix-pr-492-batch5-m1-phpunit` | Fix any Rev4 regressions until full suite green; raise tests if needed | [x] GREEN | new PHP 100%; suite 25.24% (6443/25529) ≥ remasured M0 | ≥ M0 | `7997bb30` | [x] |
 | M2 | `fix-pr-492-batch5-m2-infection` | Rev4-touched infection configs green; raise floors monotonically where evidence supports | [x] GREEN | suite 25.32% ≥ M1 25.24%; no new PHP | floors raised (see runlist) | `256995ec` | [x] |
-| M3 | `fix-pr-492-batch5-m3-docs` | Checklist SHA fill (C-28/C-29), plan Mac-skip note, Batch5 checklist sync | [ ] | n/a docs | n/a | | [ ] |
+| M3 | `fix-pr-492-batch5-m3-docs` | Checklist SHA fill (C-28/C-29 + C-01…C-18), plan Mac-skip note, Batch5 checklist sync | [x] n/a docs | n/a docs | n/a | *(tip SHA follow-up)* | [x] |
 | M4 | `fix-pr-492-batch5-m4-pr-hygiene` | Post pending-replies + REVISION-4; push `fix-pr-492` + mirror `megiddo/fuzzy-validator-v2` | [ ] | n/a | n/a | | [ ] |
 
 Note: Git ref names use hyphens (`fix-pr-492-batch5-m*`), not nested `fix-pr-492/...`, because branch `fix-pr-492` already exists.
@@ -114,6 +114,7 @@ Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 - 2026-08-01: M0 PHPUnit baseline RED (1 error / 4 failures). Coverage 25.40% lines. Handing off to M1.
 - 2026-08-01: M1 cleared all five baseline failures. Suite green (310 / 1115). Coverage 25.24% ≥ remasured M0 25.14%. Fixes: `ReportsFixture::firstParkId`; C-22 auth session tokens in AttendanceDates/OfficerDirectory tests; `SearchService::Player` clears `$_SESSION['is_authorized_mundane_id']` before Token auth.
 - 2026-08-01: M2 Infection closeout — 8/8 scoped configs PASS ≥15; floors raised monotonically (see `batch5-m2-infection-runlist.md`). Fixed `phpUnit.configDir` on t01/t08/t11/t12/t14. Prior R-* raise targets 46/47/51/~62 not fully reproduced; floors set to M2 achieved (or documented 17/55, 18/18, 40/40 where exceeded).
+- 2026-08-01: M3 docs closeout — filled checklist Commit SHAs for C-28 (`ea4a6608`), C-29 (`ae4f0864`), and verified blanks C-01…C-18 from `FIX-PR492` history; corrected C-27 to tip-reachable `6834b1cd` (orphan twin `c9656250` not on HEAD). Mac Phase A skip already noted in plan. Docs-only; PHPUnit not re-run. Remaining: Phase D / M4 (pending-replies + push/mirror). Fuzzy-validator WIP stays stashed.
 
 ### M2 result log
 

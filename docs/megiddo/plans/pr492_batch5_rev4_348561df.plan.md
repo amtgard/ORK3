@@ -26,6 +26,8 @@ isProject: false
 
 Phase A (Linux host tool install / cross-platform vendor bootstrap) applies only to the separate Linux Insync agent and is **skipped on Mac**. This Mac checkout already has PHP 8.4+, Docker compose stack, `vendor` → `$HOME/.cache/ork3/vendor`, and authenticated `gh`. Execution continues at Phase B verification → Phase C → Phase D. Progress: [`docs/megiddo/refactor/pr-492-review-fixes/batch5-rev4-closeout-checklist.md`](../refactor/pr-492-review-fixes/batch5-rev4-closeout-checklist.md).
 
+**Mac Batch5 progress (2026-08-01):** M0–M2 closed (PHPUnit green; Infection floors raised). **M3 docs closed** on `fix-pr-492-batch5-m3-docs` — checklist Commit SHAs filled (C-28/C-29 + verified C-01…C-18; C-27 corrected to `6834b1cd`). Next: **M4 / Phase D** (post pending-replies + REVISION-4; push/mirror). Do not touch fuzzy-validator stash.
+
 ## Current state (already done locally)
 
 On `fix-pr-492`, C-19…C-31 code/docs are committed; checklist is fully checked; pending thread replies live under [`docs/megiddo/refactor/pr-492-review-fixes/pending-replies/`](docs/megiddo/refactor/pr-492-review-fixes/pending-replies/); `origin/master` was merged cleanly. Tip is ahead of `origin/fix-pr-492`.
