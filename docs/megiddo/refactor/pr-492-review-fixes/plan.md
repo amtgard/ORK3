@@ -173,21 +173,21 @@ Progress is tracked in [checklist.md](./checklist.md).
 
 ---
 
-## Behavior triage (out of scope for this series)
+## Behavior triage (Batch 1 — superseded by Rev4 where noted)
 
-From top-level review https://github.com/amtgard/ORK3/pull/492#pullrequestreview-4736478341 — **not committed here** unless a follow-up is requested:
+From top-level review https://github.com/amtgard/ORK3/pull/492#pullrequestreview-4736478341:
 
-| Item | Classification |
-|------|----------------|
-| GetLadderAwardGrid kingdomaward + master map | Confirm intentional |
-| GetVotingEligible VotingRules merge | Accept / document SOAP bare-call change |
-| ScopedPlayerSearch KD: ordering | Clear bug — follow-up candidate |
-| GetAwardOptionListHtml custom above Ladder | Clear UX regression — follow-up candidate |
-| coords_for_calendar_detail both-zero | Align with siblings — follow-up candidate |
+| Item | Classification | Rev4 |
+|------|----------------|------|
+| GetLadderAwardGrid kingdomaward + master map | Confirm intentional | **C-27** — restore master park parity |
+| GetVotingEligible VotingRules merge | Accept / document SOAP bare-call change | Closed by Batch 5 (not a regression) |
+| ScopedPlayerSearch KD: ordering | Clear bug | **C-28** |
+| GetAwardOptionListHtml custom above Ladder | Clear UX regression | **C-30** |
+| coords_for_calendar_detail both-zero | Align with siblings | **C-29** |
 
 ---
 
-## Suggested commit order
+## Suggested commit order (Rev2 — complete)
 
 1. C-01 (runtime blocker)  
 2. C-14, C-15, C-16, C-18 (localized correctness)  
@@ -197,3 +197,110 @@ From top-level review https://github.com/amtgard/ORK3/pull/492#pullrequestreview
 6. C-10, C-12 (writes)  
 7. C-09, C-11 (dietary/draft reads)  
 8. C-17 (policy)
+
+---
+
+# Rev4 — Batch 5 (adversarial review @ `20b0f61f`)
+
+Review summary: https://github.com/amtgard/ORK3/pull/492#pullrequestreview-4890000000 (Batch 5 COMMENTED 2026-07-31). Inline comment ids below.
+
+## C-19 — RemoveRsvp trusts AuthorizedByController
+
+- **PR reference:** https://github.com/amtgard/ORK3/pull/492#discussion_r3691046630 · id `3691046630`
+- **Summary:** Client-supplied `AuthorizedByController` skips Token/authority checks on JSON/SOAP; anonymous callers can delete any RSVP with no audit actor.
+- **Proposed fix:** Remove the trust flag. Always authorize via `_authorizeRsvpActor` (or equivalent Token→actor + RemoveRsvp authority). Update `model.Event` / `model.EventPlanning` to pass session `Token` instead of the boolean.
+- **Tests:** No Token + `AuthorizedByController:true` → BadToken/deny; authorized staff/self path still succeeds through model wrappers.
+
+## C-20 — GetRsvpList ungated
+
+- **PR reference:** https://github.com/amtgard/ORK3/pull/492#discussion_r3691046638 · id `3691046638`
+- **Summary:** Full attendee roster (PII) with no Token; SOAP uses `GetRsvpCountsRequest` which has no Token field.
+- **Proposed fix:** Require Token; gate on manage/attendance authority (same as RemoveRsvp staff path / `CanManageEventDetail`). Add `GetRsvpListRequest` (or Token on request type); thread session token from orkui models.
+- **Tests:** Anonymous denied; manage/attendance Token succeeds.
+
+## C-21 — Four new Player:: getters ungated
+
+- **PR reference:** https://github.com/amtgard/ORK3/pull/492#discussion_r3691046642 · id `3691046642`
+- **Summary:** `GetDisplayGrants`, `GetOfficerRoles`, `GetBeltlineForPlayer`, `GetRevokedAwardsForPlayer` on Json allowlist with no Token.
+- **Proposed fix:** Require Token; gate like `controller.Player` (actor === mundaneId, or AUTH_PARK/AUTH_KINGDOM EDIT on player scope, or AUTH_ADMIN). Thread session token through orkui model wrappers.
+- **Tests:** Anonymous/stranger denied; self/admin/scoped editor succeeds for each method.
+
+## C-22 — Five new Report:: methods ungated
+
+- **PR reference:** https://github.com/amtgard/ORK3/pull/492#discussion_r3691046645 · id `3691046645`
+- **Summary:** `GetAdminDashboardStats`, `GetVotingEligibleForPlayer`, `GetAttendanceDates`, `GetKingdomOfficerDirectoryMerged`, `GetLadderAwardGrid` have no Token.
+- **Proposed fix:** Token + restore former controller gates (`AUTH_ADMIN` for dashboard stats; scoped CREATE/EDIT for the rest). Update models/controllers to pass session token.
+- **Tests:** Non-admin denied for dashboard; scoped denial/success for park/kingdom reports.
+
+## C-23 — GetServerHealthWeatherSummary ungated sibling
+
+- **PR reference:** https://github.com/amtgard/ORK3/pull/492#discussion_r3691046651 · id `3691046651`
+- **Summary:** Left ungated while C-06 gated the two sibling health getters; tests assert ungated success.
+- **Proposed fix:** Identical AUTH_ADMIN + Token gate as siblings; thread token via `model.AdminDashboard`; update `ServerHealthStatsTest`.
+- **Tests:** Non-admin denied; admin Token returns summary.
+
+## C-24 — GetServerHealthDbStatus Wanted[] SQLi
+
+- **PR reference:** https://github.com/amtgard/ORK3/pull/492#discussion_r3691046657 · id `3691046657`
+- **Summary:** Client array interpolated into `SHOW GLOBAL STATUS WHERE Variable_name IN (...)`.
+- **Proposed fix:** Whitelist `$wanted` against a fixed allowed status-variable list (C-03 pattern).
+- **Tests:** Injection / unknown names rejected or filtered; legitimate names still return.
+
+## C-25 — AddAttendance reactivation broadened
+
+- **PR reference:** https://github.com/amtgard/ORK3/pull/492#discussion_r3691046664 · id `3691046664`
+- **Summary:** C-17 fixed the public link path, but reactivation still runs for every `AddAttendance` caller (event sheet, kingdom/park forms, SOAP) without audit.
+- **Decision:** Only reactivate when `ReactivateInactive` is explicitly set (park-add AttendanceAjax path). Write `dangeraudit` naming `by_whom_id`.
+- **Tests:** Without flag, inactive player stays inactive; with flag + auth, reactivates and audit exists; existing park-add path sets the flag.
+
+## C-26 — QualTest getreports dropped reporters
+
+- **PR reference:** https://github.com/amtgard/ORK3/pull/492#discussion_r3691046669 · id `3691046669`
+- **Summary:** Refactor returns only `counts`; UI `renderReporters` always empty.
+- **Proposed fix:** `Model_QualTest::report_details()` → `QualTest::getReportDetails()`; `getreports` returns `reporters` key.
+- **Tests:** getreports payload includes reporters for a flagged question.
+
+## C-27 — Park ladder-grid kingdom derivation
+
+- **PR reference:** https://github.com/amtgard/ORK3/pull/492#discussion_r3691046675 · id `3691046675`
+- **Summary:** Park-only requests now derive kingdom_id and use kingdomaward columns; master used global `is_ladder=1`.
+- **Decision:** Restore master parity — drop park→kingdom_id lookup so park-only requests keep the global branch.
+- **Tests:** ParkId-only request uses global ladder column source (kingdom_id stays 0 / is_ladder path).
+
+## C-28 — ScopedPlayerSearch KD: sort regression
+
+- **PR reference:** https://github.com/amtgard/ORK3/pull/492#discussion_r3691046681 · id `3691046681`
+- **Summary:** Abbreviation-prefix path never sets suspended/active ordering.
+- **Proposed fix:** Initialize `$orderClause = 'm.suspended ASC, m.active DESC, m.persona'` before filter branches (or set in both filterPid/filterKid branches).
+- **Tests:** KD:/KD:PK prefix search orders inactive/suspended below active.
+
+## C-29 — coords_for_calendar_detail both-zero guard
+
+- **PR reference:** https://github.com/amtgard/ORK3/pull/492#discussion_r3691046691 · id `3691046691`
+- **Summary:** Rejects only when both lat and lng are 0.0; half-populated rows hit Open-Meteo at lng 0.
+- **Proposed fix:** `if ($lat === 0.0 || $lng === 0.0) return null;` (match `coords_for_park`).
+- **Tests:** One-axis-zero returns null; both non-zero returns coords.
+
+## C-30 — Award option HTML order
+
+- **PR reference:** https://github.com/amtgard/ORK3/pull/492#discussion_r3691046700 · id `3691046700`
+- **Summary:** StandaloneOptions (custom) render above Ladder Awards optgroup.
+- **Proposed fix:** Emit Groups loop before StandaloneOptions loop.
+- **Tests:** HTML contains Ladder Awards optgroup before first custom standalone option (or equivalent order assertion).
+
+## C-31 — Json/SOAP auth inventory (analysis)
+
+- **PR reference:** Batch 5 summary ask (inventory pass) — no single inline id; reply via issue comment.
+- **Summary:** Reviewer asks to enumerate allowlisted/registered public methods and assert actor resolution before first read/write.
+- **Proposed deliverable:** Doc `auth-inventory-rev4.md` listing Json allowlist + registration entries as gated / ungated / pre-existing-on-master; list only **branch-introduced** leftovers beyond C-19…C-23 as follow-ups. No mass gating in this revision.
+- **Tests:** Full suite still green (no product code required).
+
+---
+
+## Suggested commit order (Rev4)
+
+1. C-19 (blocker)  
+2. C-20, C-21, C-22, C-23 (auth surface)  
+3. C-24, C-25 (harden)  
+4. C-26, C-27, C-28, C-29, C-30 (parity)  
+5. C-31 (inventory doc)

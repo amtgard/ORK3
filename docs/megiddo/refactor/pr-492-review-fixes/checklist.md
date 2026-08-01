@@ -24,6 +24,19 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 16 | C-09 GetOccurrencePageData auth | [x] | | |
 | 17 | C-11 GetDietarySummary auth | [x] | | |
 | 18 | C-17 Attendance reactivation policy | [x] | | |
+| 19 | C-19 RemoveRsvp AuthorizedByController trust | [ ] | | |
+| 20 | C-20 GetRsvpList ungated | [ ] | | |
+| 21 | C-21 Player getters ungated | [ ] | | |
+| 22 | C-22 Report methods ungated | [ ] | | |
+| 23 | C-23 GetServerHealthWeatherSummary ungated | [ ] | | |
+| 24 | C-24 GetServerHealthDbStatus Wanted SQLi | [ ] | | |
+| 25 | C-25 AddAttendance reactivation narrow | [ ] | | |
+| 26 | C-26 QualTest getreports reporters | [ ] | | |
+| 27 | C-27 Park ladder-grid master parity | [ ] | | |
+| 28 | C-28 ScopedPlayerSearch KD sort | [ ] | | |
+| 29 | C-29 Weather calendar coords sentinel | [ ] | | |
+| 30 | C-30 Award option HTML order | [ ] | | |
+| 31 | C-31 Json/SOAP auth inventory | [ ] | | |
 
 ## Simple checklist (copy-friendly)
 
@@ -45,3 +58,16 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 16. [x] C-09 GetOccurrencePageData auth
 17. [x] C-11 GetDietarySummary auth
 18. [x] C-17 Attendance reactivation policy
+19. [ ] C-19 RemoveRsvp AuthorizedByController trust
+20. [ ] C-20 GetRsvpList ungated
+21. [ ] C-21 Player getters ungated
+22. [ ] C-22 Report methods ungated
+23. [ ] C-23 GetServerHealthWeatherSummary ungated
+24. [ ] C-24 GetServerHealthDbStatus Wanted SQLi
+25. [ ] C-25 AddAttendance reactivation narrow
+26. [ ] C-26 QualTest getreports reporters
+27. [ ] C-27 Park ladder-grid master parity
+28. [ ] C-28 ScopedPlayerSearch KD sort
+29. [ ] C-29 Weather calendar coords sentinel
+30. [ ] C-30 Award option HTML order
+31. [ ] C-31 Json/SOAP auth inventory
