@@ -369,11 +369,13 @@ class SearchService extends Ork3
         list($search, $kingdom_id, $park_id) = $this->magic_search($search, $kingdom_id, $park_id);
 
         // ORK admins may search by mundane info regardless of a player's restricted flag.
-        // IsAuthorized/HasAuthority run yapo internally which leaves bound parameters on the
-        // shared DB handle; clear them so the next raw query in this function doesn't try
-        // to bind them.
+        // IsAuthorized_h caches the first authorized mundane_id in $_SESSION for the request;
+        // clear it so an explicit Token is evaluated for this call (not a prior actor).
+        // IsAuthorized/HasAuthority also leave bound parameters on the shared DB handle;
+        // clear them so the next raw query in this function doesn't try to bind them.
         $is_ork_admin = false;
         if (!empty($token)) {
+            unset($_SESSION['is_authorized_mundane_id']);
             $_caller_uid = Ork3::$Lib->authorization->IsAuthorized($token);
             if ($_caller_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_caller_uid, AUTH_ADMIN, null, null)) {
                 $is_ork_admin = true;

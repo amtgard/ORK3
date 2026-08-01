@@ -38,6 +38,11 @@ final class AttendanceDatesTest extends TestCase
         $this->fixture->insertAttendance($player['mundane_id'], $parkId, $kid, '2024-06-15');
         $this->fixture->insertAttendance($player['mundane_id'], $parkId, $kid, '2024-07-01');
 
+        $editor = $this->fixture->createPlayer($parkId, 'att-k-ed');
+        $this->fixture->insertScopedAuth($editor['mundane_id'], 0, $kid, AUTH_CREATE);
+        $this->reportsModel->session = (object) ['token' => $editor['token']];
+        unset($_SESSION['is_authorized_mundane_id']);
+
         $modelDates = $this->reportsModel->get_attendance_dates('Kingdom', $kid);
         $mirrorDates = $this->mirrorAttendanceDates('Kingdom', $kid);
 
@@ -55,6 +60,11 @@ final class AttendanceDatesTest extends TestCase
         $parkId = $this->fixture->parkIdInKingdom($kid);
         $player = $this->fixture->createPlayer($parkId, 'att-p');
         $this->fixture->insertAttendance($player['mundane_id'], $parkId, $kid, '2024-08-10');
+
+        $editor = $this->fixture->createPlayer($parkId, 'att-p-ed');
+        $this->fixture->insertScopedAuth($editor['mundane_id'], $parkId, 0, AUTH_CREATE);
+        $this->reportsModel->session = (object) ['token' => $editor['token']];
+        unset($_SESSION['is_authorized_mundane_id']);
 
         $modelDates = $this->reportsModel->get_attendance_dates('Park', $parkId);
         $mirrorDates = $this->mirrorAttendanceDates('Park', $parkId);

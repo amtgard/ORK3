@@ -61,6 +61,13 @@ final class ReportsFixture
         )->fetchColumn();
     }
 
+    public function firstParkId(): int
+    {
+        return (int) $this->pdo->query(
+            'SELECT park_id FROM ' . DB_PREFIX . "park WHERE active = 'Active' ORDER BY park_id ASC LIMIT 1"
+        )->fetchColumn();
+    }
+
     public function kingdomWithLadderAwards(): int
     {
         $kid = (int) $this->pdo->query(

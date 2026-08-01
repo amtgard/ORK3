@@ -33,6 +33,12 @@ final class OfficerDirectoryTest extends TestCase
     public function testKingdomOfficerDirectory(): void
     {
         $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $editor = $this->fixture->createPlayer($parkId, 'off-dir');
+        $this->fixture->insertScopedAuth($editor['mundane_id'], 0, $kid, AUTH_CREATE);
+        $this->reportsModel->session = (object) ['token' => $editor['token']];
+        unset($_SESSION['is_authorized_mundane_id']);
+
         $result = $this->reportsModel->kingdom_officer_directory($kid);
 
         $this->assertArrayHasKey('Rows', $result);
@@ -54,6 +60,12 @@ final class OfficerDirectoryTest extends TestCase
     public function testPrincipalityMerge(): void
     {
         $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $editor = $this->fixture->createPlayer($parkId, 'off-pr');
+        $this->fixture->insertScopedAuth($editor['mundane_id'], 0, $kid, AUTH_CREATE);
+        $this->reportsModel->session = (object) ['token' => $editor['token']];
+        unset($_SESSION['is_authorized_mundane_id']);
+
         $includesPrincipality = Ork3::$Lib->kingdom->StatsIncludesPrincipalities($kid);
 
         $result = $this->reportsModel->kingdom_officer_directory($kid);

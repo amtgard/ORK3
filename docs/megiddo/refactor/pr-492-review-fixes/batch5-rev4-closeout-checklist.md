@@ -10,7 +10,7 @@ PR: https://github.com/amtgard/ORK3/pull/492
 |---|---|---|
 | A Host tool prerequisites (Linux) | **SKIPPED** | Linux-only preamble; Mac already has PHP 8.4, Docker, vendor→`~/.cache/ork3/vendor`, `gh` auth |
 | B Local stack bring-up | [x] | `ork3db`/`ork3testdb`/`ork3archivedb` Up; drift-check PASS |
-| C Prove Rev4 (PHPUnit) | [ ] | Full `sh bin/run-unit-tests.sh` green required |
+| C Prove Rev4 (PHPUnit) | [x] | Full suite green on M1 (`build/batch5-m1-phpunit.log`) |
 | D PR hygiene | [ ] | Post pending-replies C-19…C-31 + REVISION-4; push + mirror |
 
 ## Orchestration gates (every stacked branch)
@@ -29,8 +29,8 @@ Before a stacked branch may close:
 
 | Milestone | Branch | Purpose | PHPUnit | Coverage Δ | Infection floor | Commit | Closed |
 |---|---|---|---|---|---|---|---|
-| M0 | `fix-pr-492-batch5-m0-baseline` | Restore Drive-corrupted WT to HEAD; isolate fuzzy-validator WIP; record baseline numbers | [x] RED recorded | baseline 25.40% lines | config minMsi 15 | `0dd41871` | [x] |
-| M1 | `fix-pr-492-batch5-m1-phpunit` | Fix any Rev4 regressions until full suite green; raise tests if needed | [ ] | ≥95% new / ≥ M0 | ≥ M0 | | [ ] |
+| M0 | `fix-pr-492-batch5-m0-baseline` | Restore Drive-corrupted WT to HEAD; isolate fuzzy-validator WIP; record baseline numbers | [x] RED recorded | log 25.40%; remasured same host 25.14% (6417/25528) | config minMsi 15 | `0dd41871` | [x] |
+| M1 | `fix-pr-492-batch5-m1-phpunit` | Fix any Rev4 regressions until full suite green; raise tests if needed | [x] GREEN | new PHP 100%; suite 25.24% (6443/25529) ≥ remasured M0 | ≥ M0 | `45b51e85` | [x] |
 | M2 | `fix-pr-492-batch5-m2-infection` | Rev4-touched infection configs green; raise floors monotonically where evidence supports | [ ] | ≥ M1 | ≥ M1 | | [ ] |
 | M3 | `fix-pr-492-batch5-m3-docs` | Checklist SHA fill (C-28/C-29), plan Mac-skip note, Batch5 checklist sync | [ ] | n/a docs | n/a | | [ ] |
 | M4 | `fix-pr-492-batch5-m4-pr-hygiene` | Post pending-replies + REVISION-4; push `fix-pr-492` + mirror `megiddo/fuzzy-validator-v2` | [ ] | n/a | n/a | | [ ] |
@@ -43,10 +43,27 @@ Note: Git ref names use hyphens (`fix-pr-492-batch5-m*`), not nested `fix-pr-492
 |---|---|---|
 | HEAD SHA | `8a68493d` | 2026-08-01 |
 | PHPUnit | **RED** — Tests: 310, Errors: 1, Failures: 4, Skipped: 2 (`build/batch5-m0-phpunit.log`) | 2026-08-01 |
-| Line coverage (suite) | **25.40%** lines (6485/25528); methods 15.98%; classes 10.87% | 2026-08-01 |
-| Infection configs run | deferred to M2 (explore mapping in flight) | |
-| Operating MSI floor (min observed pass / config min) | config floor **15** (`tools/infection/*.json5`); several prior logs below floor — do not lower | 2026-08-01 |
-| Operating Covered MSI floor | config floor **15** | 2026-08-01 |
+| Line coverage (suite) | **25.40%** lines (6485/25528) in M0 log; **remasured** on same host at M0 tip: **25.14%** (6417/25528); methods 15.98%; classes 10.87% | 2026-08-01 |
+| Infection configs run | M2 list locked (see below); explore map complete | 2026-08-01 |
+| Operating MSI floor (min observed pass / config min) | config floor **15** (`tools/infection/*.json5`); do not lower; Jul-18 rbh wide-source fails are not the gate | 2026-08-01 |
+| Operating Covered MSI floor | config floor **15**; raise toward R-* scoped pass floors after green M2 | 2026-08-01 |
+
+### M2 infection run list (from explore map)
+
+Scoped `--only-covered` + file/test filters per V-* §2.4 (not unscoped rbh sweeps):
+
+| # | Config | Rev4 | Notes |
+|---|---|---|---|
+| 1 | `infection.t01-rsvp.json5` | C-19/20 | `class.Event.php` + EventRsvp |
+| 2 | `infection.t09-player.json5` | C-21 | Player getters |
+| 3 | `infection.t10-reports.json5` | C-22/27/30 | Report + Award |
+| 4 | `infection.t08-admin.json5` | C-23/24 | `--filter=class.Administration.php` + ServerHealthStatsTest |
+| 5 | `infection.t14-lib-live-weather.json5` | C-23/29 | Weather |
+| 6 | `infection.t12-attendance.json5` | C-25 | Attendance reactivation |
+| 7 | `infection.t-qualtest.json5` | C-26 | `--filter=class.QualTest.php` |
+| 8 | `infection.t11-search.json5` | C-28 | SearchService KD sort |
+
+Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 
 ### Baseline failures (M1 input)
 
@@ -55,6 +72,16 @@ Note: Git ref names use hyphens (`fix-pr-492-batch5-m*`), not nested `fix-pr-492
 3. `AttendanceDatesTest::testDistinctDatesByPark` — expected date list, got `[]`
 4. `OfficerDirectoryTest::testKingdomOfficerDirectory` — expected `'parks'`, got `'kingdoms'`
 5. `SearchServiceTest::testOrkAdminRestrictedBypass` — array missing `100006752`
+
+### M1 result log
+
+| Metric | Value | Recorded |
+|---|---|---|
+| Branch tip | `45b51e85` | 2026-08-01 |
+| PHPUnit | **GREEN** — Tests: 310, Assertions: 1115, Errors: 0, Failures: 0, Skipped: 2 (`build/batch5-m1-phpunit.log`) | 2026-08-01 |
+| Line coverage (suite) | **25.24%** lines (6443/25529); methods 16.09% (136/845); classes 10.87% | 2026-08-01 |
+| New PHP coverage | `SearchService::Player` session-clear line covered (100% of new executable stmts) | 2026-08-01 |
+| Monotonic vs M0 | 25.24% ≥ remasured M0 25.14% (original log 25.40% not reproducible on this host/DB) | 2026-08-01 |
 
 ## Phase D reply posting
 
@@ -85,3 +112,4 @@ Note: Git ref names use hyphens (`fix-pr-492-batch5-m*`), not nested `fix-pr-492
 - 2026-08-01: Plan synced locally. Linux Phase A skipped per operator. WT had Drive-sync reverts of C-21/C-22 auth in `class.Player.php` / `class.Report.php` (+ related); restored from HEAD for baseline.
 - 2026-08-01: Fuzzy-validator WIP stashed as `stash@{0}` (`batch5: park fuzzy-validator WIP outside closeout`).
 - 2026-08-01: M0 PHPUnit baseline RED (1 error / 4 failures). Coverage 25.40% lines. Handing off to M1.
+- 2026-08-01: M1 cleared all five baseline failures. Suite green (310 / 1115). Coverage 25.24% ≥ remasured M0 25.14%. Fixes: `ReportsFixture::firstParkId`; C-22 auth session tokens in AttendanceDates/OfficerDirectory tests; `SearchService::Player` clears `$_SESSION['is_authorized_mundane_id']` before Token auth.

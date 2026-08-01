@@ -13,7 +13,7 @@ todos:
     status: pending
   - id: phpunit-rev4
     content: "Run full sh bin/run-unit-tests.sh on fix-pr-492; fix any Rev4 regressions until green"
-    status: pending
+    status: completed
   - id: pr-hygiene
     content: "Post pending-replies C-19…C-31 + REVISION-4.md; push fix-pr-492 and mirror to megiddo/fuzzy-validator-v2; optional /babysit"
     status: pending
@@ -147,7 +147,9 @@ Optional but recommended once stack is up: confirm `admin`/`password` and `megid
 
 ## Phase C — Prove Rev4 (PHPUnit)
 
-On branch `fix-pr-492`:
+**Mac closeout (2026-08-01):** Proven green on stacked branch `fix-pr-492-batch5-m1-phpunit` (see checklist M1 result log). Five baseline failures cleared (C-22 auth test wiring + SearchService session Token cache).
+
+On branch `fix-pr-492` (or stacked M1 tip before merge):
 
 ```bash
 sh bin/run-unit-tests.sh
