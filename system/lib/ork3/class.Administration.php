@@ -2,6 +2,26 @@
 
 class Administration
 {
+    /** @var list<string> SHOW GLOBAL STATUS names used by admin server-health panel */
+    public const SERVER_HEALTH_DB_STATUS_VARIABLES = [
+        'Slow_queries',
+        'Threads_connected',
+        'Threads_running',
+        'Questions',
+        'Uptime',
+        'Max_used_connections',
+        'Connections',
+        'Com_select',
+        'Com_insert',
+        'Com_update',
+        'Com_delete',
+        'Com_show_fields',
+        'Com_show_keys',
+        'Innodb_row_lock_current_waits',
+        'Innodb_row_lock_waits',
+        'Innodb_row_lock_time',
+    ];
+
     public function __construct()
     {
         global $DB;
@@ -86,9 +106,20 @@ class Administration
             return NoAuthorization();
         }
 
+        $allowed = $this->ListServerHealthDbStatusVariables();
+        $wantedFiltered = [];
+        foreach ($wanted as $name) {
+            if (is_string($name) && in_array($name, $allowed, true)) {
+                $wantedFiltered[] = $name;
+            }
+        }
+        if ($wantedFiltered === []) {
+            return [];
+        }
+
         $this->db->Clear();
         $rs = $this->db->DataSet(
-            "SHOW GLOBAL STATUS WHERE Variable_name IN ('" . implode("','", $wanted) . "')"
+            "SHOW GLOBAL STATUS WHERE Variable_name IN ('" . implode("','", $wantedFiltered) . "')"
         );
         $dbStatus = [];
         if ($rs && $rs->Size() > 0) {
@@ -98,6 +129,16 @@ class Administration
         }
 
         return $dbStatus;
+    }
+
+    /**
+     * Allowed Variable_name values for GetServerHealthDbStatus (client-controlled list).
+     *
+     * @return list<string>
+     */
+    public function ListServerHealthDbStatusVariables(): array
+    {
+        return self::SERVER_HEALTH_DB_STATUS_VARIABLES;
     }
 
     /**

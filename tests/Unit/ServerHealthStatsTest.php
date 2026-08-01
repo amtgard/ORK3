@@ -90,6 +90,46 @@ final class ServerHealthStatsTest extends TestCase
         $this->assertArrayHasKey('fresh', $weather);
     }
 
+    public function testGetServerHealthDbStatusFiltersUnknownAndInjectionNames(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $admin = $this->fixture->createPlayer($parkId, 'c24-admin');
+        $this->fixture->insertGlobalAdmin($admin['mundane_id']);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $injectionOnly = $this->adminDomain->GetServerHealthDbStatus(
+            ["Uptime') OR ('1'='1", 'NotARealStatusVariable'],
+            $admin['token']
+        );
+        $this->assertSame([], $injectionOnly);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $mixed = $this->adminDomain->GetServerHealthDbStatus(
+            ['Uptime', "Threads_connected' OR '1'='1", 'bogus'],
+            $admin['token']
+        );
+        $this->assertArrayNotHasKey('Status', $mixed);
+        $this->assertArrayHasKey('Uptime', $mixed);
+        $this->assertArrayNotHasKey("Threads_connected' OR '1'='1", $mixed);
+        $this->assertArrayNotHasKey('bogus', $mixed);
+    }
+
+    public function testGetServerHealthDbStatusReturnsWhitelistedVariables(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $admin = $this->fixture->createPlayer($parkId, 'c24-legit');
+        $this->fixture->insertGlobalAdmin($admin['mundane_id']);
+        $wanted = ['Uptime', 'Threads_connected'];
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $db = $this->adminDomain->GetServerHealthDbStatus($wanted, $admin['token']);
+
+        $this->assertArrayNotHasKey('Status', $db);
+        $this->assertArrayHasKey('Uptime', $db);
+        $this->assertArrayHasKey('Threads_connected', $db);
+        $this->assertMatchesRegularExpression('/^\d+$/', (string) $db['Uptime']);
+    }
+
     public function testSetPlayerSuspensionByIdInference(): void
     {
         $parkId = $this->fixture->firstParkId();
