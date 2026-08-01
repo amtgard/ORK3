@@ -35,8 +35,8 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 27 | C-27 Park ladder-grid master parity | [x] | c9656250 | pending-replies/C-27.md |
 | 28 | C-28 ScopedPlayerSearch KD sort | [x] | | pending-replies/C-28.md |
 | 29 | C-29 Weather calendar coords sentinel | [x] | | pending-replies/C-29.md |
-| 30 | C-30 Award option HTML order | [x] | 896bfc06 | pending-replies/C-30.md |
-| 31 | C-31 Json/SOAP auth inventory | [ ] | | |
+| 30 | C-30 Award option HTML order | [x] | 6d06e4c0 | pending-replies/C-30.md |
+| 31 | C-31 Json/SOAP auth inventory | [x] | PENDING | pending-replies/C-31.md |
 
 ## Simple checklist (copy-friendly)
 
@@ -70,4 +70,4 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 28. [x] C-28 ScopedPlayerSearch KD sort
 29. [x] C-29 Weather calendar coords sentinel
 30. [x] C-30 Award option HTML order
-31. [ ] C-31 Json/SOAP auth inventory
+31. [x] C-31 Json/SOAP auth inventory
