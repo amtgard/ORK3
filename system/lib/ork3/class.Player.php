@@ -47,10 +47,51 @@ class Player extends Ork3
     }
 
     /**
-     * @return list<array{role: mixed, entity_type: mixed, entity_name: mixed}>
+     * Token required; self, park/kingdom EDIT on subject scope, or global admin.
+     *
+     * @return array|null error response, or null when authorized
      */
-    public function GetOfficerRoles($mundaneId)
+    private function _authorizePlayerProfileViewer(array $request, int $subjectMundaneId): ?array
     {
+        if (!valid_id($subjectMundaneId)) {
+            return InvalidParameter('MundaneId is required.');
+        }
+        $actorId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        if (!valid_id($actorId)) {
+            return BadToken();
+        }
+        $subject = $this->player_info($subjectMundaneId);
+        if ($subject === false) {
+            return InvalidParameter('Player not found.');
+        }
+        if ((int) $actorId === (int) $subjectMundaneId) {
+            return null;
+        }
+        $parkId = (int) ($subject['ParkId'] ?? 0);
+        $kingdomId = (int) ($subject['KingdomId'] ?? 0);
+        if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_PARK, $parkId, AUTH_EDIT)) {
+            return null;
+        }
+        if ($kingdomId > 0 && Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_KINGDOM, $kingdomId, AUTH_EDIT)) {
+            return null;
+        }
+        if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            return null;
+        }
+
+        return NoAuthorization();
+    }
+
+    /**
+     * @return list<array{role: mixed, entity_type: mixed, entity_name: mixed}>|array{Status: mixed, Error?: mixed, Detail?: mixed}
+     */
+    public function GetOfficerRoles($request)
+    {
+        $mundaneId = (int) ($request['MundaneId'] ?? 0);
+        $auth = $this->_authorizePlayerProfileViewer($request, $mundaneId);
+        if ($auth !== null) {
+            return $auth;
+        }
         if (!valid_id($mundaneId)) {
             return [];
         }
@@ -86,12 +127,19 @@ class Player extends Ork3
     /**
      * Beltline peers, associates, owner-only associates, and title list (T-PLR-06).
      *
-     * @return array{Peers: list<array>, Associates: list<array>, MyAssociates: list<array>, Titles: list<array>}
+     * @return array{Peers: list<array>, Associates: list<array>, MyAssociates: list<array>, Titles: list<array>}|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
-    public function GetBeltlineForPlayer($mundaneId, $viewerMundaneId = 0)
+    public function GetBeltlineForPlayer($request)
     {
-        $mundaneId = (int) $mundaneId;
-        $viewerMundaneId = (int) $viewerMundaneId;
+        $mundaneId = (int) ($request['MundaneId'] ?? 0);
+        $auth = $this->_authorizePlayerProfileViewer($request, $mundaneId);
+        if ($auth !== null) {
+            return $auth;
+        }
+        $viewerMundaneId = (int) ($request['ViewerMundaneId'] ?? 0);
+        if (!valid_id($viewerMundaneId)) {
+            $viewerMundaneId = (int) Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        }
         $peerOrder = "ORDER BY CASE COALESCE(alias.peerage, a.peerage)
             WHEN 'Squire' THEN 1 WHEN 'Man-At-Arms' THEN 2
             WHEN 'Lords-Page' THEN 3 WHEN 'Page' THEN 4 ELSE 5 END, m.persona ASC";
@@ -379,10 +427,15 @@ class Player extends Ork3
     /**
      * Profile admin badge data (T-PLR-05).
      *
-     * @return array{IsOrkAdmin: bool, AdminGrants: list<array{scope: string, id: int, name: mixed}>}
+     * @return array{IsOrkAdmin: bool, AdminGrants: list<array{scope: string, id: int, name: mixed}>}|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
-    public function GetDisplayGrants($mundaneId)
+    public function GetDisplayGrants($request)
     {
+        $mundaneId = (int) ($request['MundaneId'] ?? 0);
+        $auth = $this->_authorizePlayerProfileViewer($request, $mundaneId);
+        if ($auth !== null) {
+            return $auth;
+        }
         if (!valid_id($mundaneId)) {
             return ['IsOrkAdmin' => false, 'AdminGrants' => []];
         }
@@ -4163,10 +4216,15 @@ class Player extends Ork3
     /**
      * Revoked awards and titles stripped from a player profile (editor view).
      *
-     * @return array{RevokedAwards: list<array<string, mixed>>, RevokedTitles: list<array<string, mixed>>}
+     * @return array{RevokedAwards: list<array<string, mixed>>, RevokedTitles: list<array<string, mixed>>}|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
-    public function GetRevokedAwardsForPlayer(int $mundaneId): array
+    public function GetRevokedAwardsForPlayer($request): array
     {
+        $mundaneId = (int) ($request['MundaneId'] ?? 0);
+        $auth = $this->_authorizePlayerProfileViewer($request, $mundaneId);
+        if ($auth !== null) {
+            return $auth;
+        }
         if (!valid_id($mundaneId)) {
             return ['RevokedAwards' => [], 'RevokedTitles' => []];
         }

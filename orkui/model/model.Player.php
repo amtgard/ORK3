@@ -304,17 +304,47 @@ class Model_Player extends Model
 
     public function get_officer_roles($mundane_id)
     {
-        return $this->_player()->GetOfficerRoles($mundane_id);
+        $r = $this->_player()->GetOfficerRoles([
+            'Token' => $this->session->token ?? '',
+            'MundaneId' => (int) $mundane_id,
+        ]);
+        if (isset($r['Status'])) {
+            return [];
+        }
+
+        return $r;
     }
 
     public function get_display_grants($mundane_id)
     {
-        return $this->_player()->GetDisplayGrants($mundane_id);
+        $r = $this->_player()->GetDisplayGrants([
+            'Token' => $this->session->token ?? '',
+            'MundaneId' => (int) $mundane_id,
+        ]);
+        if (isset($r['Status'])) {
+            return ['IsOrkAdmin' => false, 'AdminGrants' => []];
+        }
+
+        return $r;
     }
 
     public function get_beltline_for_player($mundane_id, $viewer_mundane_id = 0)
     {
-        return $this->_player()->GetBeltlineForPlayer($mundane_id, $viewer_mundane_id);
+        $r = $this->_player()->GetBeltlineForPlayer([
+            'Token' => $this->session->token ?? '',
+            'MundaneId' => (int) $mundane_id,
+            'ViewerMundaneId' => (int) $viewer_mundane_id,
+        ]);
+        if (isset($r['Status'])) {
+            return [
+                'Peers' => [],
+                'Associates' => [],
+                'MyAssociates' => [],
+                'Titles' => [],
+            ];
+        }
+
+        return $r;
     }
 
     public function get_reconcile_award_map($kingdom_id)
@@ -400,7 +430,15 @@ class Model_Player extends Model
 
     public function get_revoked_awards(int $mundaneId): array
     {
-        return $this->Player->GetRevokedAwardsForPlayer($mundaneId);
+        $r = $this->Player->GetRevokedAwardsForPlayer([
+            'Token' => $this->session->token ?? '',
+            'MundaneId' => $mundaneId,
+        ]);
+        if (isset($r['Status'])) {
+            return ['RevokedAwards' => [], 'RevokedTitles' => []];
+        }
+
+        return $r;
     }
 
     private function _player(): Player
