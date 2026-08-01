@@ -498,7 +498,7 @@ class Weather extends Ork3
         }
         $lat = (float) $rs->latitude;
         $lng = (float) $rs->longitude;
-        if ($lat === 0.0 && $lng === 0.0) {
+        if ($lat === 0.0 || $lng === 0.0) {
             return null;
         }
 

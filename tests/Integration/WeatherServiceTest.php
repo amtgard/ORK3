@@ -110,6 +110,38 @@ final class WeatherServiceTest extends TestCase
         $fixture->cleanup();
     }
 
+    public function testCoordsForCalendarDetailRejectsHalfZeroSentinels(): void
+    {
+        $fixture = AdminDashboardFixture::create();
+        $parkId = $fixture->firstParkId();
+        $ctx = $fixture->createPublishedEvent($parkId, 'c29-wx');
+        $detailId = (int) $ctx['detail_id'];
+        $pdo = new PDO(
+            sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8', DB_HOSTNAME, DB_PORT, DB_DATABASE),
+            DB_USERNAME,
+            DB_PASSWORD,
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
+        );
+        $update = $pdo->prepare(
+            'UPDATE ' . DB_PREFIX . 'event_calendardetail SET latitude = ?, longitude = ? WHERE event_calendardetail_id = ?'
+        );
+
+        $update->execute([0.0, 0.0, $detailId]);
+        $this->assertNull($this->weather->coords_for_calendar_detail($detailId));
+
+        $update->execute([45.5, 0.0, $detailId]);
+        $this->assertNull($this->weather->coords_for_calendar_detail($detailId));
+
+        $update->execute([0.0, -122.4, $detailId]);
+        $this->assertNull($this->weather->coords_for_calendar_detail($detailId));
+
+        $update->execute([45.5123, -122.6789, $detailId]);
+        $coords = $this->weather->coords_for_calendar_detail($detailId);
+        $this->assertSame([45.5123, -122.6789], $coords);
+
+        $fixture->cleanup();
+    }
+
     public function testAdminRefreshWithPriorShape(): void
     {
         $refresh = $this->weather->AdminRefreshWithPrior();
