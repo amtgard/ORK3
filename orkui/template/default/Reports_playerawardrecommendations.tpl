@@ -341,6 +341,7 @@ html[data-theme="dark"] .rp-rec-filter-help-default { color:#718096; }
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
 <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -387,7 +388,7 @@ $(function() {
 	$('#rec-table-wrap').css('opacity', '1');
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(table); });
 
 	$('.rp-rec-filter-btn').on('click', function() {
 		$('.rp-rec-filter-btn').removeClass('rp-rec-filter-active');
