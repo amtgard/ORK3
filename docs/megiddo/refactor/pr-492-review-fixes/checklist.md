@@ -26,7 +26,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 18 | C-17 Attendance reactivation policy | [x] | | |
 | 19 | C-19 RemoveRsvp AuthorizedByController trust | [x] | 71ddcd29 | pending-replies/C-19.md |
 | 20 | C-20 GetRsvpList ungated | [x] | 53fffd48 | pending-replies/C-20.md |
-| 21 | C-21 Player getters ungated | [x] | | pending-replies/C-21.md |
+| 21 | C-21 Player getters ungated | [x] | 8574690a | pending-replies/C-21.md |
 | 22 | C-22 Report methods ungated | [ ] | | |
 | 23 | C-23 GetServerHealthWeatherSummary ungated | [ ] | | |
 | 24 | C-24 GetServerHealthDbStatus Wanted SQLi | [ ] | | |
