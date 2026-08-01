@@ -101,12 +101,12 @@ class Model_EventPlanning extends Model
         ]);
     }
 
-    public function remove_rsvp(int $detailId, int $mundaneId): void
+    public function remove_rsvp(int $detailId, int $mundaneId, string $token): void
     {
         $this->Event->RemoveRsvp([
+            'Token' => $token,
             'EventCalendarDetailId' => $detailId,
             'TargetMundaneId' => $mundaneId,
-            'AuthorizedByController' => true,
         ]);
     }
 

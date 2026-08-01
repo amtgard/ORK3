@@ -171,12 +171,12 @@ class Model_Event extends Model
         return $this->set_rsvp($detail_id, $mundane_id, 'going', $token);
     }
 
-    public function remove_rsvp($detail_id, $mundane_id)
+    public function remove_rsvp($detail_id, $mundane_id, $token = '')
     {
         $r = $this->Event->RemoveRsvp([
+            'Token' => (string) $token,
             'EventCalendarDetailId' => (int)$detail_id,
             'TargetMundaneId' => (int)$mundane_id,
-            'AuthorizedByController' => true,
         ]);
         return $this->_eventApiOk($r);
     }

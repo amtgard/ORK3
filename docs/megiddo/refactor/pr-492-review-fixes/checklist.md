@@ -24,7 +24,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 16 | C-09 GetOccurrencePageData auth | [x] | | |
 | 17 | C-11 GetDietarySummary auth | [x] | | |
 | 18 | C-17 Attendance reactivation policy | [x] | | |
-| 19 | C-19 RemoveRsvp AuthorizedByController trust | [ ] | | |
+| 19 | C-19 RemoveRsvp AuthorizedByController trust | [x] | PLACEHOLDER | pending-replies/C-19.md |
 | 20 | C-20 GetRsvpList ungated | [ ] | | |
 | 21 | C-21 Player getters ungated | [ ] | | |
 | 22 | C-22 Report methods ungated | [ ] | | |
@@ -58,7 +58,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 16. [x] C-09 GetOccurrencePageData auth
 17. [x] C-11 GetDietarySummary auth
 18. [x] C-17 Attendance reactivation policy
-19. [ ] C-19 RemoveRsvp AuthorizedByController trust
+19. [x] C-19 RemoveRsvp AuthorizedByController trust
 20. [ ] C-20 GetRsvpList ungated
 21. [ ] C-21 Player getters ungated
 22. [ ] C-22 Report methods ungated

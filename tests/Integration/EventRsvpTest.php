@@ -62,7 +62,7 @@ final class EventRsvpTest extends TestCase
         $ctx = $this->fixture->createFutureOccurrence('withdraw');
         $this->fixture->insertRsvp($ctx['detail_id'], $ctx['mundane_id'], 'going');
 
-        $removed = $this->model->remove_rsvp($ctx['detail_id'], $ctx['mundane_id']);
+        $removed = $this->model->remove_rsvp($ctx['detail_id'], $ctx['mundane_id'], $ctx['token']);
 
         $this->assertTrue($removed);
         $this->assertFalse($this->model->get_rsvp($ctx['detail_id'], $ctx['mundane_id']));
@@ -156,13 +156,60 @@ final class EventRsvpTest extends TestCase
 
     public function testRemoveRsvpStaffRequiresAuth(): void
     {
-        // Staff authorization is enforced in Controller_EventAjax::delete_rsvp, not Model_Event.
-        // Model remove_rsvp is a direct delete used after auth checks pass.
         $ctx = $this->fixture->createFutureOccurrence('staff-remove');
-        $this->fixture->insertRsvp($ctx['detail_id'], $ctx['mundane_id'], 'going');
+        $target = $this->fixture->createGrantorWithoutAuth('staff-remove-target');
+        $this->fixture->insertRsvp($ctx['detail_id'], $target['mundane_id'], 'going');
+        $stranger = $this->fixture->createGrantorWithoutAuth('staff-remove-stranger');
+        unset($_SESSION['is_authorized_mundane_id']);
 
-        $this->assertTrue($this->model->remove_rsvp($ctx['detail_id'], $ctx['mundane_id']));
-        $this->assertFalse($this->model->get_rsvp($ctx['detail_id'], $ctx['mundane_id']));
+        $event = new Event();
+        $denied = $event->RemoveRsvp([
+            'Token' => $stranger['token'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+            'TargetMundaneId' => $target['mundane_id'],
+        ]);
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $denied['Status']);
+        $this->assertSame('going', $this->model->get_rsvp($ctx['detail_id'], $target['mundane_id']));
+    }
+
+    public function testRemoveRsvpRequiresToken(): void
+    {
+        $ctx = $this->fixture->createFutureOccurrence('c19-no-token');
+        $this->fixture->insertRsvp($ctx['detail_id'], $ctx['mundane_id'], 'going');
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $event = new Event();
+        $noToken = $event->RemoveRsvp([
+            'EventCalendarDetailId' => $ctx['detail_id'],
+            'TargetMundaneId' => $ctx['mundane_id'],
+        ]);
+        $this->assertSame(ServiceErrorIds::SecureTokenFailure, $noToken['Status']);
+        $this->assertSame('going', $this->model->get_rsvp($ctx['detail_id'], $ctx['mundane_id']));
+
+        $bypass = $event->RemoveRsvp([
+            'AuthorizedByController' => true,
+            'EventCalendarDetailId' => $ctx['detail_id'],
+            'TargetMundaneId' => $ctx['mundane_id'],
+        ]);
+        $this->assertSame(ServiceErrorIds::SecureTokenFailure, $bypass['Status']);
+        $this->assertFalse(
+            $this->model->remove_rsvp($ctx['detail_id'], $ctx['mundane_id'], '')
+        );
+    }
+
+    public function testRemoveRsvpStaffCanRemoveOther(): void
+    {
+        $ctx = $this->fixture->createFutureOccurrence('c19-staff');
+        $target = $this->fixture->createGrantorWithoutAuth('c19-target');
+        $staff = $this->fixture->createGrantorWithoutAuth('c19-staffer');
+        $this->fixture->insertRsvp($ctx['detail_id'], $target['mundane_id'], 'going');
+        $this->fixture->insertAttendanceStaff($ctx['detail_id'], $staff['mundane_id']);
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $this->assertTrue(
+            $this->model->remove_rsvp($ctx['detail_id'], $target['mundane_id'], $staff['token'])
+        );
+        $this->assertFalse($this->model->get_rsvp($ctx['detail_id'], $target['mundane_id']));
     }
 
     public function testToggleOffSemantics(): void

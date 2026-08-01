@@ -221,7 +221,7 @@ class Controller_EventAjax extends Controller
             exit;
         }
 
-        $this->EventPlanning->remove_rsvp($detail_id, $mundane_id);
+        $this->EventPlanning->remove_rsvp($detail_id, $mundane_id, $this->session->token);
         echo json_encode(['status' => 0]);
         exit;
     }

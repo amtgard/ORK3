@@ -259,32 +259,9 @@ class Event extends Ork3
             return InvalidParameter('EventCalendarDetailId and TargetMundaneId are required.');
         }
 
-        if (empty($request['AuthorizedByController'])) {
-            $token = (string)($request['Token'] ?? '');
-            $actorId = Ork3::$Lib->authorization->IsAuthorized($token);
-            if (!valid_id($actorId)) {
-                return BadToken();
-            }
-
-            $this->detail->clear();
-            $this->detail->event_calendardetail_id = $detailId;
-            if (!$this->detail->find()) {
-                return InvalidParameter('Event occurrence not found.');
-            }
-            $eventId = (int)$this->detail->event_id;
-            $authorized = Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_EVENT, $eventId, AUTH_EDIT);
-            if (!$authorized) {
-                $this->db->Clear();
-                $staffRow = $this->db->DataSet(
-                    'SELECT 1 FROM ' . DB_PREFIX . 'event_staff
-					 WHERE event_calendardetail_id = ' . (int)$detailId . '
-					   AND mundane_id = ' . (int)$actorId . '
-					   AND can_attendance = 1 LIMIT 1'
-                );
-                if (!($staffRow && $staffRow->Next())) {
-                    return NoAuthorization();
-                }
-            }
+        $auth = $this->_authorizeRsvpActor($request, $detailId, $targetMundaneId);
+        if ($auth !== null) {
+            return $auth;
         }
 
         $this->rsvp->clear();

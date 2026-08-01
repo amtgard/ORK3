@@ -84,12 +84,15 @@ final class EventAttendanceAjaxTest extends TestCase
     {
         $ctx = $this->fixture->createPublishedEvent('rsvp-del');
         $player = $this->fixture->createPlayer('rsvp-player');
+        $staff = $this->fixture->createGrantorWithoutAuth('rsvp-staff');
+        $this->fixture->insertStaff($ctx['detail_id'], $staff['mundane_id'], 'Sign-in', canAttendance: true);
         $this->fixture->insertRsvp($ctx['detail_id'], $player, 'going');
 
         $model = new Model_Event();
         $this->assertSame('going', $model->get_rsvp($ctx['detail_id'], $player));
 
-        $removed = $model->remove_rsvp($ctx['detail_id'], $player);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $removed = $model->remove_rsvp($ctx['detail_id'], $player, $staff['token']);
         $this->assertTrue($removed);
         $this->assertFalse($model->get_rsvp($ctx['detail_id'], $player));
     }
