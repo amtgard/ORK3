@@ -444,18 +444,6 @@ class Award extends Ork3
         $pseudoLadderIds = $grouped['PseudoLadderIds'] ?? self::pseudoLadderKingdomAwardIds();
         $options = '';
 
-        foreach ($grouped['StandaloneOptions'] ?? [] as $award) {
-            $sysName = $award['AwardName'] ?? $award['KingdomAwardName'];
-            $kaName = $award['KingdomAwardName'] ?? $sysName;
-            $dataAttrs = '';
-            if ($sysName === 'Custom Title' && $kaName === 'Custom Title') {
-                $dataAttrs = " data-custom-title='1' data-award-id='" . htmlspecialchars($award['AwardId'], ENT_QUOTES) . "'";
-            } elseif ($sysName === 'Custom Award' && $kaName === 'Custom Award') {
-                $dataAttrs = " data-custom-award='1' data-award-id='" . htmlspecialchars($award['AwardId'], ENT_QUOTES) . "'";
-            }
-            $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'" . $dataAttrs . ">" . htmlspecialchars($kaName, ENT_QUOTES) . "</option>";
-        }
-
         foreach ($grouped['Groups'] ?? [] as $group) {
             $label = $group['Label'] ?? '';
             $items = $group['Items'] ?? [];
@@ -475,6 +463,18 @@ class Award extends Ork3
                 $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'{$extra}>" . htmlspecialchars($award['KingdomAwardName'], ENT_QUOTES) . "</option>";
             }
             $options .= "</optgroup>";
+        }
+
+        foreach ($grouped['StandaloneOptions'] ?? [] as $award) {
+            $sysName = $award['AwardName'] ?? $award['KingdomAwardName'];
+            $kaName = $award['KingdomAwardName'] ?? $sysName;
+            $dataAttrs = '';
+            if ($sysName === 'Custom Title' && $kaName === 'Custom Title') {
+                $dataAttrs = " data-custom-title='1' data-award-id='" . htmlspecialchars($award['AwardId'], ENT_QUOTES) . "'";
+            } elseif ($sysName === 'Custom Award' && $kaName === 'Custom Award') {
+                $dataAttrs = " data-custom-award='1' data-award-id='" . htmlspecialchars($award['AwardId'], ENT_QUOTES) . "'";
+            }
+            $options .= "<option value='" . htmlspecialchars($award['KingdomAwardId'], ENT_QUOTES) . "'" . $dataAttrs . ">" . htmlspecialchars($kaName, ENT_QUOTES) . "</option>";
         }
 
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.GetAwardOptionListHtml', $cacheKey, $options);

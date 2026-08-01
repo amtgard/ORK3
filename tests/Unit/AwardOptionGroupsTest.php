@@ -73,6 +73,27 @@ final class AwardOptionGroupsTest extends TestCase
         $this->assertStringContainsString('<option', $html);
     }
 
+    public function testFetchAwardOptionListLadderOptgroupBeforeCustomStandalone(): void
+    {
+        $html = $this->awardModel->fetch_award_option_list(0);
+        $this->assertIsString($html);
+
+        $ladderPos = strpos($html, "optgroup label='Ladder Awards'");
+        if ($ladderPos === false) {
+            $this->markTestSkipped('No Ladder Awards optgroup in seed data.');
+        }
+
+        $customPos = strpos($html, "data-custom-award='1'");
+        if ($customPos === false) {
+            $customPos = strpos($html, "data-custom-title='1'");
+        }
+        if ($customPos === false) {
+            $this->markTestSkipped('No custom standalone award options in seed data.');
+        }
+
+        $this->assertLessThan($customPos, $ladderPos);
+    }
+
     /**
      * @return list<int>
      */
