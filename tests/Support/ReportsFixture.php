@@ -226,6 +226,22 @@ final class ReportsFixture
         ];
     }
 
+    public function awardGlobalName(int $awardId): string
+    {
+        $stmt = $this->pdo->prepare('SELECT name FROM ' . DB_PREFIX . 'award WHERE award_id = ?');
+        $stmt->execute([$awardId]);
+
+        return (string) $stmt->fetchColumn();
+    }
+
+    public function renameKingdomAward(int $kingdomAwardId, string $name): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE ' . DB_PREFIX . 'kingdomaward SET name = ? WHERE kingdomaward_id = ?'
+        );
+        $stmt->execute([$name, $kingdomAwardId]);
+    }
+
     public function insertLadderAward(int $mundaneId, int $parkId, int $kingdomId, int $kingdomAwardId, int $awardId, int $rank = 3): int
     {
         $stmt = $this->pdo->prepare(

@@ -50,6 +50,31 @@ final class LadderGridTest extends TestCase
         }
     }
 
+    public function testParkOnlyGridUsesGlobalLadderColumns(): void
+    {
+        $kid = $this->fixture->kingdomWithLadderAwards();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $ladder = $this->fixture->firstLadderAward($kid);
+        $globalName = $this->fixture->awardGlobalName($ladder['award_id']);
+        $alias = 'Park-only ladder alias ' . substr(md5((string) microtime(true)), 0, 8);
+        $this->fixture->renameKingdomAward($ladder['kingdomaward_id'], $alias);
+
+        $editor = $this->fixture->createPlayer($parkId, 'ladder-park-only');
+        $this->fixture->insertScopedAuth($editor['mundane_id'], $parkId, $kid, AUTH_CREATE);
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $report = new Report();
+        $assembly = $report->GetLadderAwardGrid([
+            'KingdomId' => 0,
+            'ParkId' => $parkId,
+            'Token' => $editor['token'],
+        ]);
+
+        $this->assertArrayHasKey($ladder['award_id'], $assembly['LadderAwards']);
+        $this->assertSame($globalName, $assembly['LadderAwards'][$ladder['award_id']]['Name']);
+        $this->assertNotSame($alias, $assembly['LadderAwards'][$ladder['award_id']]['Name']);
+    }
+
     public function testKnightGroupAliasing(): void
     {
         $knightGroupMap = [

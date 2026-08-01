@@ -32,7 +32,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 24 | C-24 GetServerHealthDbStatus Wanted SQLi | [x] | 9a6b9b78 | pending-replies/C-24.md |
 | 25 | C-25 AddAttendance reactivation narrow | [x] | 2654ca7b | pending-replies/C-25.md |
 | 26 | C-26 QualTest getreports reporters | [x] | 56a3220a | pending-replies/C-26.md |
-| 27 | C-27 Park ladder-grid master parity | [ ] | | |
+| 27 | C-27 Park ladder-grid master parity | [x] | c9656250 | pending-replies/C-27.md |
 | 28 | C-28 ScopedPlayerSearch KD sort | [ ] | | |
 | 29 | C-29 Weather calendar coords sentinel | [ ] | | |
 | 30 | C-30 Award option HTML order | [ ] | | |
@@ -66,7 +66,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 24. [x] C-24 GetServerHealthDbStatus Wanted SQLi
 25. [x] C-25 AddAttendance reactivation narrow
 26. [x] C-26 QualTest getreports reporters
-27. [ ] C-27 Park ladder-grid master parity
+27. [x] C-27 Park ladder-grid master parity
 28. [ ] C-28 ScopedPlayerSearch KD sort
 29. [ ] C-29 Weather calendar coords sentinel
 30. [ ] C-30 Award option HTML order

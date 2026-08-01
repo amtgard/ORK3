@@ -6438,16 +6438,6 @@ class Report extends Ork3
             ];
         }
 
-        if ($parkId > 0 && $kingdomId <= 0) {
-            $this->db->Clear();
-            $pr = $this->db->DataSet(
-                'SELECT kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $parkId . ' LIMIT 1'
-            );
-            if ($pr && $pr->Next()) {
-                $kingdomId = (int) $pr->kingdom_id;
-            }
-        }
-
         $scopeName = '';
         if ($parkId > 0) {
             $this->db->Clear();

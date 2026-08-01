@@ -419,6 +419,9 @@ final class ReportDomainCoverageTest extends TestCase
         $kingdomName = $this->fixture->kingdomName($kid);
         $parkName = $this->fixture->parkName($parkId);
         $ladder = $this->fixture->firstLadderAward($kid);
+        $globalAwardName = $this->fixture->awardGlobalName($ladder['award_id']);
+        $kingdomAlias = 'C27 park grid alias ' . substr(md5((string) microtime(true)), 0, 8);
+        $this->fixture->renameKingdomAward($ladder['kingdomaward_id'], $kingdomAlias);
 
         $player = $this->fixture->createPlayer($parkId, 'ladder-grid');
         $this->fixture->insertLadderAward(
@@ -452,7 +455,8 @@ final class ReportDomainCoverageTest extends TestCase
             preg_replace('/^Order of (?:the )?/i', '', $col['Name']),
             $col['DisplayName'],
         );
-        $this->assertSame($ladder['name'], $col['Name']);
+        $this->assertSame($globalAwardName, $col['Name']);
+        $this->assertNotSame($kingdomAlias, $col['Name']);
         $knightMap = [
             'Order of Battle' => 'Battle',
             'Order of the Warrior' => 'Sword',
@@ -489,6 +493,7 @@ final class ReportDomainCoverageTest extends TestCase
         ]);
         $this->assertSame($kingdomName, $kingdomGrid['ScopeName']);
         $this->assertNotEmpty($kingdomGrid['LadderAwards']);
+        $this->assertSame($kingdomAlias, $kingdomGrid['LadderAwards'][$ladder['award_id']]['Name']);
     }
 
     public function testOfficerDirectoryParkPivotAndMerged(): void
