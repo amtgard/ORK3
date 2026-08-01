@@ -18,12 +18,12 @@
     "mutators": {
         "@default": true
     },
-    "minMsi": 15,
-    "minCoveredMsi": 15,
+    "minMsi": 17,
+    "minCoveredMsi": 55,
     "testFramework": "phpunit",
     "bootstrap": "tests/bootstrap.php",
     "phpUnit": {
-        "configDir": "."
+        "configDir": "../.."
     },
     "tmpDir": "build/infection-t01"
 }

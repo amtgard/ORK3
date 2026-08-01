@@ -13,12 +13,12 @@
     "mutators": {
         "@default": true
     },
-    "minMsi": 15,
-    "minCoveredMsi": 15,
+    "minMsi": 23,
+    "minCoveredMsi": 23,
     "testFramework": "phpunit",
     "bootstrap": "tests/bootstrap.php",
     "phpUnit": {
-        "configDir": "."
+        "configDir": "../.."
     },
     "tmpDir": "build/infection-t14-live-weather"
 }

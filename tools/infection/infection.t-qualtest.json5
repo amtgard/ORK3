@@ -15,8 +15,8 @@
     "mutators": {
         "@default": true
     },
-    "minMsi": 15,
-    "minCoveredMsi": 15,
+    "minMsi": 50,
+    "minCoveredMsi": 50,
     "testFramework": "phpunit",
     "bootstrap": "tests/bootstrap.php",
     "phpUnit": {

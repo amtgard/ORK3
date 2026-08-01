@@ -31,7 +31,7 @@ Before a stacked branch may close:
 |---|---|---|---|---|---|---|---|
 | M0 | `fix-pr-492-batch5-m0-baseline` | Restore Drive-corrupted WT to HEAD; isolate fuzzy-validator WIP; record baseline numbers | [x] RED recorded | log 25.40%; remasured same host 25.14% (6417/25528) | config minMsi 15 | `0dd41871` | [x] |
 | M1 | `fix-pr-492-batch5-m1-phpunit` | Fix any Rev4 regressions until full suite green; raise tests if needed | [x] GREEN | new PHP 100%; suite 25.24% (6443/25529) ≥ remasured M0 | ≥ M0 | `7997bb30` | [x] |
-| M2 | `fix-pr-492-batch5-m2-infection` | Rev4-touched infection configs green; raise floors monotonically where evidence supports | [ ] | ≥ M1 | ≥ M1 | | [ ] |
+| M2 | `fix-pr-492-batch5-m2-infection` | Rev4-touched infection configs green; raise floors monotonically where evidence supports | [x] GREEN | suite 25.32% ≥ M1 25.24%; no new PHP | floors raised (see runlist) | (tip after commit) | [x] |
 | M3 | `fix-pr-492-batch5-m3-docs` | Checklist SHA fill (C-28/C-29), plan Mac-skip note, Batch5 checklist sync | [ ] | n/a docs | n/a | | [ ] |
 | M4 | `fix-pr-492-batch5-m4-pr-hygiene` | Post pending-replies + REVISION-4; push `fix-pr-492` + mirror `megiddo/fuzzy-validator-v2` | [ ] | n/a | n/a | | [ ] |
 
@@ -45,8 +45,8 @@ Note: Git ref names use hyphens (`fix-pr-492-batch5-m*`), not nested `fix-pr-492
 | PHPUnit | **RED** — Tests: 310, Errors: 1, Failures: 4, Skipped: 2 (`build/batch5-m0-phpunit.log`) | 2026-08-01 |
 | Line coverage (suite) | **25.40%** lines (6485/25528) in M0 log; **remasured** on same host at M0 tip: **25.14%** (6417/25528); methods 15.98%; classes 10.87% | 2026-08-01 |
 | Infection configs run | M2 list locked (see below); explore map complete | 2026-08-01 |
-| Operating MSI floor (min observed pass / config min) | config floor **15** (`tools/infection/*.json5`); do not lower; Jul-18 rbh wide-source fails are not the gate | 2026-08-01 |
-| Operating Covered MSI floor | config floor **15**; raise toward R-* scoped pass floors after green M2 | 2026-08-01 |
+| Operating MSI floor (min observed pass / config min) | M2 raised per-config (t01 **17**, t09 **33**, t10 **25**, t08 **18**, t14 **23**, t12 **49**, t-qualtest **50**, t11 **40**); never lowered; Jul-18 rbh wide-source fails are not the gate | 2026-08-01 |
+| Operating Covered MSI floor | M2 raised (t01 **55**, others match MSI floors above); prior R-* 46/47/51/62 not fully reproduced on Rev4 surface — floors raised to M2 achieved | 2026-08-01 |
 
 ### M2 infection run list (from explore map)
 
@@ -113,3 +113,16 @@ Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 - 2026-08-01: Fuzzy-validator WIP stashed as `stash@{0}` (`batch5: park fuzzy-validator WIP outside closeout`).
 - 2026-08-01: M0 PHPUnit baseline RED (1 error / 4 failures). Coverage 25.40% lines. Handing off to M1.
 - 2026-08-01: M1 cleared all five baseline failures. Suite green (310 / 1115). Coverage 25.24% ≥ remasured M0 25.14%. Fixes: `ReportsFixture::firstParkId`; C-22 auth session tokens in AttendanceDates/OfficerDirectory tests; `SearchService::Player` clears `$_SESSION['is_authorized_mundane_id']` before Token auth.
+- 2026-08-01: M2 Infection closeout — 8/8 scoped configs PASS ≥15; floors raised monotonically (see `batch5-m2-infection-runlist.md`). Fixed `phpUnit.configDir` on t01/t08/t11/t12/t14. Prior R-* raise targets 46/47/51/~62 not fully reproduced; floors set to M2 achieved (or documented 17/55, 18/18, 40/40 where exceeded).
+
+### M2 result log
+
+| Metric | Value | Recorded |
+|---|---|---|
+| Branch | `fix-pr-492-batch5-m2-infection` | 2026-08-01 |
+| Infection 8/8 | t01 58/58; t09 33/33; t10 25/25; t08 31/31; t14 23/23; t12 49/49; t-qualtest 70/70; t11 51/51 — all PASS | 2026-08-01 |
+| Floors raised | t01 17/55; t09 33/33; t10 25/25; t08 18/18; t14 23/23; t12 49/49; t-qualtest 50/50; t11 40/40 | 2026-08-01 |
+| PHPUnit | **GREEN** — Tests: 310, Assertions: 1115, Errors: 0, Failures: 0, Skipped: 2 (`build/batch5-m2-phpunit.log`) | 2026-08-01 |
+| Line coverage (suite) | **25.32%** lines (6465/25529) ≥ M1 25.24%; methods 16.33%; classes 10.87% | 2026-08-01 |
+| New PHP coverage | n/a (Infection configDir + floor bumps + docs only; no product PHP) | 2026-08-01 |
+| Runlist | `batch5-m2-infection-runlist.md` | 2026-08-01 |
