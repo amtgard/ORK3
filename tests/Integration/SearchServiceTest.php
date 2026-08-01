@@ -158,6 +158,37 @@ final class SearchServiceTest extends TestCase
         $this->assertSame($local['mundane_id'], $results[0]['MundaneId']);
     }
 
+    public function testScopedPlayerSearchKdPrefixOrdersActiveBeforeInactive(): void
+    {
+        $kid = $this->fixture->firstKingdomId();
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $kAbbr = $this->fixture->kingdomAbbreviation($kid);
+        $pAbbr = $this->fixture->parkAbbreviation($parkId);
+        $marker = 'C28Sort' . bin2hex(random_bytes(3));
+
+        $active = $this->fixture->createPlayer($parkId, 'c28act', 'T11SRC ' . $marker . ' Active');
+        $inactive = $this->fixture->createPlayer($parkId, 'c28ina', 'T11SRC ' . $marker . ' Inactive');
+        $suspended = $this->fixture->createPlayer($parkId, 'c28sus', 'T11SRC ' . $marker . ' Suspended');
+        $this->pdoUpdateMundaneMembership($inactive['mundane_id'], active: 0, suspended: 0);
+        $this->pdoUpdateMundaneMembership($suspended['mundane_id'], active: 1, suspended: 1);
+
+        $requestBase = [
+            'IncludeInactive'  => true,
+            'IncludeSuspended' => true,
+            'Limit'            => 50,
+        ];
+
+        $kdResults = $this->searchService->ScopedPlayerSearch(array_merge($requestBase, [
+            'Query' => "{$kAbbr}: {$marker}",
+        ]));
+        $this->assertScopedPlayerSearchMembershipOrder($kdResults, $active, $inactive, $suspended);
+
+        $kdpkResults = $this->searchService->ScopedPlayerSearch(array_merge($requestBase, [
+            'Query' => "{$kAbbr}:{$pAbbr} {$marker}",
+        ]));
+        $this->assertScopedPlayerSearchMembershipOrder($kdpkResults, $active, $inactive, $suspended);
+    }
+
     public function testAdminGlobalSearch(): void
     {
         $kid = $this->fixture->firstKingdomId();
@@ -209,6 +240,41 @@ final class SearchServiceTest extends TestCase
         $ids = array_column($results['units'], 'id');
         $this->assertContains($active['unit_id'], $ids);
         $this->assertNotContains($retired['unit_id'], $ids);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $results
+     * @param array{mundane_id: int} $active
+     * @param array{mundane_id: int} $inactive
+     * @param array{mundane_id: int} $suspended
+     */
+    private function assertScopedPlayerSearchMembershipOrder(
+        array $results,
+        array $active,
+        array $inactive,
+        array $suspended,
+    ): void {
+        $indexById = [];
+        foreach ($results as $i => $row) {
+            $indexById[(int) $row['MundaneId']] = $i;
+        }
+        $this->assertArrayHasKey($active['mundane_id'], $indexById);
+        $this->assertArrayHasKey($inactive['mundane_id'], $indexById);
+        $this->assertArrayHasKey($suspended['mundane_id'], $indexById);
+        $this->assertLessThan($indexById[$inactive['mundane_id']], $indexById[$active['mundane_id']]);
+        $this->assertLessThan($indexById[$suspended['mundane_id']], $indexById[$inactive['mundane_id']]);
+    }
+
+    private function pdoUpdateMundaneMembership(int $mundaneId, int $active, int $suspended): void
+    {
+        $pdo = new PDO(
+            sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8', DB_HOSTNAME, DB_PORT, DB_DATABASE),
+            DB_USERNAME,
+            DB_PASSWORD,
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
+        );
+        $stmt = $pdo->prepare('UPDATE ' . DB_PREFIX . 'mundane SET active = ?, suspended = ? WHERE mundane_id = ?');
+        $stmt->execute([$active, $suspended, $mundaneId]);
     }
 
     private function pdoUpdateMundaneName(int $mundaneId, string $given, string $surname): void

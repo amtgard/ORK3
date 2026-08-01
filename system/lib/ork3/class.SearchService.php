@@ -807,7 +807,7 @@ class SearchService extends Ork3
 
         $kingdomClause = '';
         $parkClause    = '';
-        $orderClause   = 'm.persona';
+        $orderClause   = 'm.suspended ASC, m.active DESC, m.persona';
 
         if ($filterPid > 0) {
             $parkClause = "AND m.park_id = {$filterPid}";
