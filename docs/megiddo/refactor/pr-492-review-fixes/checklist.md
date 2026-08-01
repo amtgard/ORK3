@@ -28,7 +28,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 20 | C-20 GetRsvpList ungated | [x] | 53fffd48 | pending-replies/C-20.md |
 | 21 | C-21 Player getters ungated | [x] | 8574690a | pending-replies/C-21.md |
 | 22 | C-22 Report methods ungated | [x] | 96445e11 | pending-replies/C-22.md |
-| 23 | C-23 GetServerHealthWeatherSummary ungated | [x] | | pending-replies/C-23.md |
+| 23 | C-23 GetServerHealthWeatherSummary ungated | [x] | a3aec596 | pending-replies/C-23.md |
 | 24 | C-24 GetServerHealthDbStatus Wanted SQLi | [ ] | | |
 | 25 | C-25 AddAttendance reactivation narrow | [ ] | | |
 | 26 | C-26 QualTest getreports reporters | [ ] | | |
