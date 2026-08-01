@@ -16,7 +16,7 @@ todos:
     status: completed
   - id: pr-hygiene
     content: "Post pending-replies C-19…C-31 + REVISION-4.md; push fix-pr-492 and mirror to megiddo/fuzzy-validator-v2; optional /babysit"
-    status: pending
+    status: completed
 isProject: false
 ---
 
@@ -26,7 +26,7 @@ isProject: false
 
 Phase A (Linux host tool install / cross-platform vendor bootstrap) applies only to the separate Linux Insync agent and is **skipped on Mac**. This Mac checkout already has PHP 8.4+, Docker compose stack, `vendor` → `$HOME/.cache/ork3/vendor`, and authenticated `gh`. Execution continues at Phase B verification → Phase C → Phase D. Progress: [`docs/megiddo/refactor/pr-492-review-fixes/batch5-rev4-closeout-checklist.md`](../refactor/pr-492-review-fixes/batch5-rev4-closeout-checklist.md).
 
-**Mac Batch5 progress (2026-08-01):** M0–M2 closed (PHPUnit green; Infection floors raised). **M3 docs closed** on `fix-pr-492-batch5-m3-docs` @ `a68c6273` — checklist Commit SHAs filled (C-28/C-29 + verified C-01…C-18; C-27 corrected to `6834b1cd`). Next: **M4 / Phase D** (post pending-replies + REVISION-4; push/mirror). Do not touch fuzzy-validator stash.
+**Mac Batch5 progress (2026-08-01):** M0–M4 closed. **M4 PR hygiene** on `fix-pr-492-batch5-m4-pr-hygiene` — posted C-19…C-31 + REVISION-4; Phase D checklist filled; `fix-pr-492` fast-forwarded and pushed with mirror to `megiddo/fuzzy-validator-v2`. Do not touch fuzzy-validator stash. Optional `/babysit` remains.
 
 ## Current state (already done locally)
 

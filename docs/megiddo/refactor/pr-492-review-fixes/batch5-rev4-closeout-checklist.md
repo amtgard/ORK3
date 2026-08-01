@@ -11,7 +11,7 @@ PR: https://github.com/amtgard/ORK3/pull/492
 | A Host tool prerequisites (Linux) | **SKIPPED** | Linux-only preamble; Mac already has PHP 8.4, Docker, vendor→`~/.cache/ork3/vendor`, `gh` auth |
 | B Local stack bring-up | [x] | `ork3db`/`ork3testdb`/`ork3archivedb` Up; drift-check PASS |
 | C Prove Rev4 (PHPUnit) | [x] | Full suite green on M1 (`build/batch5-m1-phpunit.log`) |
-| D PR hygiene | [ ] | Post pending-replies C-19…C-31 + REVISION-4; push + mirror |
+| D PR hygiene | [x] | Posted C-19…C-31 + REVISION-4; push + mirror (see Phase D table) |
 
 ## Orchestration gates (every stacked branch)
 
@@ -33,7 +33,7 @@ Before a stacked branch may close:
 | M1 | `fix-pr-492-batch5-m1-phpunit` | Fix any Rev4 regressions until full suite green; raise tests if needed | [x] GREEN | new PHP 100%; suite 25.24% (6443/25529) ≥ remasured M0 | ≥ M0 | `7997bb30` | [x] |
 | M2 | `fix-pr-492-batch5-m2-infection` | Rev4-touched infection configs green; raise floors monotonically where evidence supports | [x] GREEN | suite 25.32% ≥ M1 25.24%; no new PHP | floors raised (see runlist) | `256995ec` | [x] |
 | M3 | `fix-pr-492-batch5-m3-docs` | Checklist SHA fill (C-28/C-29 + C-01…C-18), plan Mac-skip note, Batch5 checklist sync | [x] n/a docs | n/a docs | n/a | `a68c6273` | [x] |
-| M4 | `fix-pr-492-batch5-m4-pr-hygiene` | Post pending-replies + REVISION-4; push `fix-pr-492` + mirror `megiddo/fuzzy-validator-v2` | [ ] | n/a | n/a | | [ ] |
+| M4 | `fix-pr-492-batch5-m4-pr-hygiene` | Post pending-replies + REVISION-4; push `fix-pr-492` + mirror `megiddo/fuzzy-validator-v2` | [x] n/a docs | n/a docs | n/a | _(this commit)_ | [x] |
 
 Note: Git ref names use hyphens (`fix-pr-492-batch5-m*`), not nested `fix-pr-492/...`, because branch `fix-pr-492` already exists.
 
@@ -87,20 +87,20 @@ Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 
 | File | Posted | Thread / comment URL |
 |---|---|---|
-| pending-replies/C-19.md | [ ] | |
-| pending-replies/C-20.md | [ ] | |
-| pending-replies/C-21.md | [ ] | |
-| pending-replies/C-22.md | [ ] | |
-| pending-replies/C-23.md | [ ] | |
-| pending-replies/C-24.md | [ ] | |
-| pending-replies/C-25.md | [ ] | |
-| pending-replies/C-26.md | [ ] | |
-| pending-replies/C-27.md | [ ] | |
-| pending-replies/C-28.md | [ ] | |
-| pending-replies/C-29.md | [ ] | |
-| pending-replies/C-30.md | [ ] | |
-| pending-replies/C-31.md | [ ] | |
-| pending-replies/REVISION-4.md | [ ] | |
+| pending-replies/C-19.md | [x] | https://github.com/amtgard/ORK3/pull/492#discussion_r3696396788 |
+| pending-replies/C-20.md | [x] | https://github.com/amtgard/ORK3/pull/492#discussion_r3696396854 |
+| pending-replies/C-21.md | [x] | https://github.com/amtgard/ORK3/pull/492#discussion_r3696396902 |
+| pending-replies/C-22.md | [x] | https://github.com/amtgard/ORK3/pull/492#discussion_r3696396943 |
+| pending-replies/C-23.md | [x] | https://github.com/amtgard/ORK3/pull/492#discussion_r3696396984 |
+| pending-replies/C-24.md | [x] | https://github.com/amtgard/ORK3/pull/492#discussion_r3696397015 |
+| pending-replies/C-25.md | [x] | https://github.com/amtgard/ORK3/pull/492#discussion_r3696397049 |
+| pending-replies/C-26.md | [x] | https://github.com/amtgard/ORK3/pull/492#discussion_r3696397078 |
+| pending-replies/C-27.md | [x] | https://github.com/amtgard/ORK3/pull/492#discussion_r3696397114 |
+| pending-replies/C-28.md | [x] | https://github.com/amtgard/ORK3/pull/492#discussion_r3696397166 |
+| pending-replies/C-29.md | [x] | https://github.com/amtgard/ORK3/pull/492#discussion_r3696397217 |
+| pending-replies/C-30.md | [x] | https://github.com/amtgard/ORK3/pull/492#discussion_r3696397248 |
+| pending-replies/C-31.md | [x] | https://github.com/amtgard/ORK3/pull/492#issuecomment-5152957911 |
+| pending-replies/REVISION-4.md | [x] | https://github.com/amtgard/ORK3/pull/492#issuecomment-5152957963 |
 
 ## Out of band (do not mix into Batch5 branches)
 
@@ -115,6 +115,7 @@ Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 - 2026-08-01: M1 cleared all five baseline failures. Suite green (310 / 1115). Coverage 25.24% ≥ remasured M0 25.14%. Fixes: `ReportsFixture::firstParkId`; C-22 auth session tokens in AttendanceDates/OfficerDirectory tests; `SearchService::Player` clears `$_SESSION['is_authorized_mundane_id']` before Token auth.
 - 2026-08-01: M2 Infection closeout — 8/8 scoped configs PASS ≥15; floors raised monotonically (see `batch5-m2-infection-runlist.md`). Fixed `phpUnit.configDir` on t01/t08/t11/t12/t14. Prior R-* raise targets 46/47/51/~62 not fully reproduced; floors set to M2 achieved (or documented 17/55, 18/18, 40/40 where exceeded).
 - 2026-08-01: M3 docs closeout — filled checklist Commit SHAs for C-28 (`ea4a6608`), C-29 (`ae4f0864`), and verified blanks C-01…C-18 from `FIX-PR492` history; corrected C-27 to tip-reachable `6834b1cd` (orphan twin `c9656250` not on HEAD). Mac Phase A skip already noted in plan. Docs-only; PHPUnit not re-run. Remaining: Phase D / M4 (pending-replies + push/mirror). Fuzzy-validator WIP stays stashed.
+- 2026-08-01: M4 PR hygiene — posted C-19…C-30 thread replies + C-31/REVISION-4 issue comments; refreshed REVISION-4 tip/validation for Batch5 M1–M3; FF `fix-pr-492` to M4 tip; push `origin/fix-pr-492` + mirror `megiddo/fuzzy-validator-v2`. Docs-only; PHPUnit not re-run. Fuzzy-validator WIP stays stashed.
 
 ### M2 result log
 
@@ -137,3 +138,14 @@ Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 | PHPUnit | skipped (no PHP changes) | 2026-08-01 |
 | Checklist SHAs filled | C-28 `ea4a6608`; C-29 `ae4f0864`; C-01…C-18 verified from history; C-27 corrected `c9656250`→`6834b1cd` | 2026-08-01 |
 | Remaining | M4 / Phase D pending-replies + push/mirror; fuzzy-validator WIP stashed | 2026-08-01 |
+
+### M4 result log
+
+| Metric | Value | Recorded |
+|---|---|---|
+| Branch | `fix-pr-492-batch5-m4-pr-hygiene` | 2026-08-01 |
+| Scope | Docs/PR hygiene — post pending-replies + REVISION-4; checklist Posted URLs; push/mirror | 2026-08-01 |
+| PHPUnit | skipped (no PHP changes) | 2026-08-01 |
+| Replies posted | C-19…C-30 thread replies; C-31 + REVISION-4 issue comments (all ok) | 2026-08-01 |
+| Push | `origin/fix-pr-492` + `megiddo/fuzzy-validator-v2` (see progress note / return) | 2026-08-01 |
+| Remaining | optional `/babysit`; fuzzy-validator WIP stashed | 2026-08-01 |

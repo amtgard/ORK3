@@ -29,8 +29,8 @@ Merged `origin/master` (`f6ef56a2` Chrome print-crash fix) into `fix-pr-492` wit
 
 ### Validation note
 
-Full PHPUnit was **not** executed in the Rev4 agent environment (no local `php` / `vendor/bin/phpunit` / Docker DB). Characterization tests were added/updated per item; please run `sh bin/run-unit-tests.sh` before merge.
+Batch5 Mac closeout re-ran full PHPUnit on this host: **green** (310 tests / 1115 assertions; M1 tip `7997bb30`). Suite line coverage **25.32%** at M2 (Infection floors raised; see closeout checklist). M3 filled checklist Commit SHAs; M4 posts these thread replies and pushes/mirrors.
 
-Per-thread replies drafted under `docs/megiddo/refactor/pr-492-review-fixes/pending-replies/` (C-19…C-31) for posting when `gh` auth is available.
+Per-thread replies under `docs/megiddo/refactor/pr-492-review-fixes/pending-replies/` (C-19…C-31).
 
-Tip: `6ae13404` (includes merge of origin/master print-crash fix)
+Tip: `6fe91c49` (Batch5 M3 docs tip; stack includes M1 product fix `7997bb30`, M2 Infection closeout, and merge of `origin/master` print-crash fix)
