@@ -99,9 +99,14 @@ class Model_AdminDashboard extends Model
         return $r;
     }
 
-    public function server_health_weather_summary(): array
+    public function server_health_weather_summary(string $token = ''): array
     {
-        return $this->_administration()->GetServerHealthWeatherSummary();
+        $r = $this->_administration()->GetServerHealthWeatherSummary($token);
+        if (isset($r['Status'])) {
+            return [];
+        }
+
+        return $r;
     }
 
     public function api_stats(int $days = 3): array

@@ -2266,7 +2266,7 @@ class Controller_Admin extends Controller
             $processes = $this->AdminDashboard->server_health_processes(20, $sessionToken);
 
             $weather   = null;
-            $wr = $this->AdminDashboard->server_health_weather_summary();
+            $wr = $this->AdminDashboard->server_health_weather_summary($sessionToken);
             $total     = (int)$wr['total_active'];
             $fresh     = (int)$wr['fresh'];
             $aging     = (int)$wr['aging'];

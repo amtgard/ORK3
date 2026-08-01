@@ -138,6 +138,7 @@ class Administration
 
     /**
      * Weather freshness buckets for active parks (T-ADM-04, T-ADM-08).
+     * Requires Token + global AUTH_ADMIN (same gate as GetServerHealthDbStatus / GetServerHealthProcesses).
      *
      * @return array{
      *   total_active: int,
@@ -147,10 +148,15 @@ class Administration
      *   oldest_min: ?int,
      *   events_upcoming: int,
      *   events_with_coords: int
-     * }
+     * }|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
-    public function GetServerHealthWeatherSummary(): array
+    public function GetServerHealthWeatherSummary($Token = null): array
     {
+        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($Token ?? '')) <= 0
+            || !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_CREATE)) {
+            return NoAuthorization();
+        }
+
         $nowLocal = date('Y-m-d H:i:s');
         $cutoffFresh = date('Y-m-d H:i:s', time() - 90 * 60);
         $cutoffAging = date('Y-m-d H:i:s', time() - 4 * 3600);

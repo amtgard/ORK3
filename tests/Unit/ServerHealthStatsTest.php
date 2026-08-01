@@ -33,8 +33,14 @@ final class ServerHealthStatsTest extends TestCase
 
     public function testWeatherFreshnessBuckets(): void
     {
-        $stats = $this->adminDomain->GetServerHealthWeatherSummary();
+        $parkId = $this->fixture->firstParkId();
+        $admin = $this->fixture->createPlayer($parkId, 'c23-weather-admin');
+        $this->fixture->insertGlobalAdmin($admin['mundane_id']);
 
+        unset($_SESSION['is_authorized_mundane_id']);
+        $stats = $this->adminDomain->GetServerHealthWeatherSummary($admin['token']);
+
+        $this->assertArrayNotHasKey('Status', $stats);
         $this->assertArrayHasKey('total_active', $stats);
         $this->assertArrayHasKey('fresh', $stats);
         $this->assertArrayHasKey('aging', $stats);
@@ -61,6 +67,13 @@ final class ServerHealthStatsTest extends TestCase
         $this->assertSame(ServiceErrorIds::NoAuthorization, $deniedProc['Status'] ?? null);
 
         unset($_SESSION['is_authorized_mundane_id']);
+        $deniedWeather = $this->adminDomain->GetServerHealthWeatherSummary($stranger['token']);
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $deniedWeather['Status'] ?? null);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $deniedWeatherEmpty = $this->adminDomain->GetServerHealthWeatherSummary('');
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $deniedWeatherEmpty['Status'] ?? null);
+
+        unset($_SESSION['is_authorized_mundane_id']);
         $db = $this->adminDomain->GetServerHealthDbStatus($wanted, $admin['token']);
         $this->assertArrayNotHasKey('Status', $db);
         $this->assertIsArray($db);
@@ -69,6 +82,12 @@ final class ServerHealthStatsTest extends TestCase
         $procs = $this->adminDomain->GetServerHealthProcesses(5, $admin['token']);
         $this->assertArrayNotHasKey('Status', $procs);
         $this->assertIsArray($procs);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $weather = $this->adminDomain->GetServerHealthWeatherSummary($admin['token']);
+        $this->assertArrayNotHasKey('Status', $weather);
+        $this->assertArrayHasKey('total_active', $weather);
+        $this->assertArrayHasKey('fresh', $weather);
     }
 
     public function testSetPlayerSuspensionByIdInference(): void

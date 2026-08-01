@@ -1560,13 +1560,13 @@ class Weather extends Ork3
     }
 
     /**
-     * @return array{total_active: int, fresh: int, aging: int, stale_row: int}
+     * @return array{total_active: int, fresh: int, aging: int, stale_row: int}|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
-    public function GetFreshnessBuckets(): array
+    public function GetFreshnessBuckets($Token = null): array
     {
         $admin = new Administration();
 
-        return $admin->GetServerHealthWeatherSummary();
+        return $admin->GetServerHealthWeatherSummary($Token);
     }
 
     public function GetPreviousFetchedAt(): ?string
