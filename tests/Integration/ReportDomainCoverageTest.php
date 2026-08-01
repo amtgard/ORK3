@@ -82,6 +82,17 @@ final class ReportDomainCoverageTest extends TestCase
         }
     }
 
+    /**
+     * Kingdom-scoped editor token (park CREATE or kingdom EDIT).
+     */
+    private function scopedReportToken(int $parkId, int $kingdomId, string $suffix = 'report-scope'): string
+    {
+        $editor = $this->fixture->createPlayer($parkId, $suffix);
+        $this->fixture->insertScopedAuth($editor['mundane_id'], 0, $kingdomId, AUTH_CREATE);
+
+        return $editor['token'];
+    }
+
     public function testAttendanceDatesDomainContract(): void
     {
         $invalid = $this->report->GetAttendanceDates(['Type' => 'Kingdom', 'Id' => 0]);
@@ -90,11 +101,13 @@ final class ReportDomainCoverageTest extends TestCase
 
         $kid = $this->fixture->firstKingdomId();
         $parkId = $this->fixture->parkIdInKingdom($kid);
+        $token = $this->scopedReportToken($parkId, $kid, 'dates-dom');
         $player = $this->fixture->createPlayer($parkId, 'dates-dom');
         $this->fixture->insertAttendance($player['mundane_id'], $parkId, $kid, '2025-03-01');
         $this->fixture->insertAttendance($player['mundane_id'], $parkId, $kid, '2025-03-15');
 
-        $kingdom = $this->report->GetAttendanceDates(['Type' => 'Kingdom', 'Id' => $kid]);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $kingdom = $this->report->GetAttendanceDates(['Type' => 'Kingdom', 'Id' => $kid, 'Token' => $token]);
         $this->assertSame(0, $kingdom['Status']['Status']);
         $this->assertContains('2025-03-15', $kingdom['Dates']);
         $this->assertContains('2025-03-01', $kingdom['Dates']);
@@ -102,7 +115,14 @@ final class ReportDomainCoverageTest extends TestCase
         rsort($sorted);
         $this->assertSame($sorted, $kingdom['Dates']);
 
-        $park = $this->report->GetAttendanceDates(['Type' => 'Park', 'Id' => $parkId]);
+        $parkEditor = $this->fixture->createPlayer($parkId, 'dates-park-editor');
+        $this->fixture->insertScopedAuth($parkEditor['mundane_id'], $parkId, $kid, AUTH_CREATE);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $park = $this->report->GetAttendanceDates([
+            'Type' => 'Park',
+            'Id' => $parkId,
+            'Token' => $parkEditor['token'],
+        ]);
         $this->assertSame(0, $park['Status']['Status']);
         $this->assertContains('2025-03-15', $park['Dates']);
     }
@@ -377,6 +397,7 @@ final class ReportDomainCoverageTest extends TestCase
         $result = $this->report->GetVotingEligibleForPlayer([
             'MundaneId' => $player['mundane_id'],
             'KingdomId' => $kid,
+            'Token' => $player['token'],
             'AttendanceMode' => 'count',
             'AttendanceRequired' => 2,
             'MonthsWindow' => 6,
@@ -394,6 +415,7 @@ final class ReportDomainCoverageTest extends TestCase
     {
         $kid = $this->fixture->kingdomWithLadderAwards();
         $parkId = $this->fixture->parkIdInKingdom($kid);
+        $gridToken = $this->scopedReportToken($parkId, $kid, 'ladder-grid-auth');
         $kingdomName = $this->fixture->kingdomName($kid);
         $parkName = $this->fixture->parkName($parkId);
         $ladder = $this->fixture->firstLadderAward($kid);
@@ -414,7 +436,14 @@ final class ReportDomainCoverageTest extends TestCase
             date('Y-m-d', strtotime('-30 days')),
         );
 
-        $parkGrid = $this->report->GetLadderAwardGrid(['KingdomId' => 0, 'ParkId' => $parkId]);
+        $parkEditor = $this->fixture->createPlayer($parkId, 'ladder-park-editor');
+        $this->fixture->insertScopedAuth($parkEditor['mundane_id'], $parkId, $kid, AUTH_CREATE);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $parkGrid = $this->report->GetLadderAwardGrid([
+            'KingdomId' => 0,
+            'ParkId' => $parkId,
+            'Token' => $parkEditor['token'],
+        ]);
         $this->assertSame($kingdomName . ' — ' . $parkName, $parkGrid['ScopeName']);
         $this->assertArrayHasKey($ladder['award_id'], $parkGrid['LadderAwards']);
 
@@ -452,7 +481,12 @@ final class ReportDomainCoverageTest extends TestCase
         $this->assertTrue($found['RecentSignIn']);
         $this->assertIsArray($found['KnightGroups']);
 
-        $kingdomGrid = $this->report->GetLadderAwardGrid(['KingdomId' => $kid, 'ParkId' => 0]);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $kingdomGrid = $this->report->GetLadderAwardGrid([
+            'KingdomId' => $kid,
+            'ParkId' => 0,
+            'Token' => $gridToken,
+        ]);
         $this->assertSame($kingdomName, $kingdomGrid['ScopeName']);
         $this->assertNotEmpty($kingdomGrid['LadderAwards']);
     }
@@ -486,7 +520,12 @@ final class ReportDomainCoverageTest extends TestCase
         $this->assertArrayHasKey('MonarchEmail', $parkRow);
         $this->assertArrayHasKey('GMRId', $parkRow);
 
-        $merged = $this->report->GetKingdomOfficerDirectoryMerged(['KingdomId' => $kid]);
+        $dirToken = $this->scopedReportToken($parkId, $kid, 'off-dir-auth');
+        unset($_SESSION['is_authorized_mundane_id']);
+        $merged = $this->report->GetKingdomOfficerDirectoryMerged([
+            'KingdomId' => $kid,
+            'Token' => $dirToken,
+        ]);
         $this->assertSame(0, $merged['Status']['Status']);
         $this->assertSame('parks', $merged['Mode']);
         $this->assertIsArray($merged['Principalities']);

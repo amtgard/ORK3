@@ -17,6 +17,86 @@ class Report extends Ork3
         parent::__construct();
     }
 
+    /**
+     * Token + global AUTH_ADMIN (same gate as Administration::PurgeLogs).
+     *
+     * @return array|null error response, or null when authorized
+     */
+    private function _authorizeGlobalAdmin($token): ?array
+    {
+        $actorId = Ork3::$Lib->authorization->IsAuthorized($token ?? '');
+        if (!valid_id($actorId)) {
+            return BadToken();
+        }
+        if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_CREATE)) {
+            return null;
+        }
+
+        return NoAuthorization();
+    }
+
+    /**
+     * Token + park CREATE, kingdom EDIT, or global admin (Controller_Reports scope gates).
+     *
+     * @return array|null error response, or null when authorized
+     */
+    private function _authorizeKingdomParkReportScope($token, string $scopeType, int $scopeId): ?array
+    {
+        if (!valid_id($scopeId)) {
+            return InvalidParameter('Scope id is required.');
+        }
+        $actorId = Ork3::$Lib->authorization->IsAuthorized($token ?? '');
+        if (!valid_id($actorId)) {
+            return BadToken();
+        }
+        if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_ADMIN)
+            || Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_CREATE)) {
+            return null;
+        }
+        if ($scopeType === 'Park' || $scopeType === AUTH_PARK) {
+            if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_PARK, $scopeId, AUTH_CREATE)) {
+                return null;
+            }
+        } elseif ($scopeType === 'Kingdom' || $scopeType === AUTH_KINGDOM) {
+            if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_KINGDOM, $scopeId, AUTH_EDIT)) {
+                return null;
+            }
+        }
+
+        return NoAuthorization();
+    }
+
+    /**
+     * Token + self or park CREATE / kingdom EDIT / admin (SetPlayerActiveStatus-style).
+     *
+     * @return array|null error response, or null when authorized
+     */
+    private function _authorizeReportPlayerScope(array $request, int $mundaneId): ?array
+    {
+        if (!valid_id($mundaneId)) {
+            return InvalidParameter('MundaneId is required.');
+        }
+        $actorId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        if (!valid_id($actorId)) {
+            return BadToken();
+        }
+        if ((int) $actorId === (int) $mundaneId) {
+            return null;
+        }
+        $mundane = new yapo($this->db, DB_PREFIX . 'mundane');
+        $mundane->mundane_id = $mundaneId;
+        if (!$mundane->find()) {
+            return InvalidParameter('Player not found.');
+        }
+        if (Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_PARK, (int) $mundane->park_id, AUTH_CREATE)
+            || Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_KINGDOM, (int) $mundane->kingdom_id, AUTH_EDIT)
+            || Ork3::$Lib->authorization->HasAuthority($actorId, AUTH_ADMIN, 0, AUTH_EDIT)) {
+            return null;
+        }
+
+        return NoAuthorization();
+    }
+
     public function HeraldryReport($request)
     {
         // WithMissingHeraldries [No, Yes, Only]
@@ -6105,8 +6185,13 @@ class Report extends Ork3
      *   PrevMonthly: array<int, int>
      * }
      */
-    public function GetAdminDashboardStats(): array
+    public function GetAdminDashboardStats($Token = null): array
     {
+        $auth = $this->_authorizeGlobalAdmin($Token);
+        if ($auth !== null) {
+            return $auth;
+        }
+
         $thisYearStart = date('Y') . '-01-01';
         $lastYearStart = (date('Y') - 1) . '-01-01';
         $lastYearEnd = date('Y-m-d', strtotime('-1 year'));
@@ -6210,6 +6295,11 @@ class Report extends Ork3
             return ['Status' => InvalidParameter(), 'Players' => [], 'KingdomId' => 0];
         }
 
+        $auth = $this->_authorizeReportPlayerScope($request, $mundaneId);
+        if ($auth !== null) {
+            return array_merge($auth, ['Players' => [], 'KingdomId' => 0]);
+        }
+
         if ($kingdomId <= 0) {
             $this->db->Clear();
             $row = $this->db->DataSet(
@@ -6241,6 +6331,11 @@ class Report extends Ork3
             return ['Status' => InvalidParameter(), 'Dates' => []];
         }
 
+        $auth = $this->_authorizeKingdomParkReportScope($request['Token'] ?? '', $type, $id);
+        if ($auth !== null) {
+            return ['Status' => $auth, 'Dates' => []];
+        }
+
         $col = ($type === 'Kingdom') ? 'kingdom_id' : 'park_id';
         $this->db->Clear();
         $rs = $this->db->DataSet(
@@ -6262,6 +6357,20 @@ class Report extends Ork3
     public function GetKingdomOfficerDirectoryMerged($request)
     {
         $kingdomId = valid_id($request['KingdomId'] ?? 0) ? (int) $request['KingdomId'] : null;
+        if ($kingdomId === null) {
+            $auth = $this->_authorizeGlobalAdmin($request['Token'] ?? '');
+        } else {
+            $auth = $this->_authorizeKingdomParkReportScope($request['Token'] ?? '', AUTH_KINGDOM, $kingdomId);
+        }
+        if ($auth !== null) {
+            return [
+                'Status' => $auth,
+                'Rows' => [],
+                'Mode' => 'kingdoms',
+                'Principalities' => [],
+            ];
+        }
+
         $r = $this->KingdomOfficerDirectory($request);
         if (($r['Status']['Status'] ?? 1) != 0) {
             return [
@@ -6307,6 +6416,27 @@ class Report extends Ork3
         $parkId = valid_id($request['ParkId'] ?? 0) ? (int) $request['ParkId'] : 0;
         $type = $parkId > 0 ? 'Park' : 'Kingdom';
         $id = $parkId > 0 ? $parkId : $kingdomId;
+
+        if ($parkId > 0) {
+            $auth = $this->_authorizeKingdomParkReportScope($request['Token'] ?? '', AUTH_PARK, $parkId);
+        } elseif ($kingdomId > 0) {
+            $auth = $this->_authorizeKingdomParkReportScope($request['Token'] ?? '', AUTH_KINGDOM, $kingdomId);
+        } else {
+            return [
+                'Status' => InvalidParameter(),
+                'ScopeName' => '',
+                'LadderAwards' => [],
+                'GridRows' => [],
+            ];
+        }
+        if ($auth !== null) {
+            return [
+                'Status' => $auth,
+                'ScopeName' => '',
+                'LadderAwards' => [],
+                'GridRows' => [],
+            ];
+        }
 
         if ($parkId > 0 && $kingdomId <= 0) {
             $this->db->Clear();

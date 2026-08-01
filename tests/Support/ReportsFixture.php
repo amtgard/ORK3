@@ -24,6 +24,9 @@ final class ReportsFixture
     /** @var list<int> */
     private array $officerIds = [];
 
+    /** @var list<int> */
+    private array $authIds = [];
+
     public function __construct(
         private readonly PDO $pdo,
     ) {
@@ -91,7 +94,7 @@ final class ReportsFixture
     }
 
     /**
-     * @return array{mundane_id: int, park_id: int, kingdom_id: int}
+     * @return array{mundane_id: int, park_id: int, kingdom_id: int, token: string}
      */
     public function createPlayer(int $parkId, string $suffix = 'player'): array
     {
@@ -100,7 +103,40 @@ final class ReportsFixture
         $username = strtolower(self::MARKER . '_' . $suffix . '_' . substr($token, 0, 8));
         $mundaneId = $this->insertMundane($suffix, $parkId, $kingdomId, $token, $username);
 
-        return ['mundane_id' => $mundaneId, 'park_id' => $parkId, 'kingdom_id' => $kingdomId];
+        return [
+            'mundane_id' => $mundaneId,
+            'park_id' => $parkId,
+            'kingdom_id' => $kingdomId,
+            'token' => $token,
+        ];
+    }
+
+    public function insertScopedAuth(int $mundaneId, int $parkId, int $kingdomId, string $role = 'admin'): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'authorization
+             (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
+             VALUES (?, ?, ?, 0, 0, ?, NOW())'
+        );
+        $stmt->execute([$mundaneId, $parkId, $kingdomId, $role]);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->authIds[] = $id;
+
+        return $id;
+    }
+
+    public function insertGlobalAdmin(int $mundaneId): int
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ' . DB_PREFIX . 'authorization
+             (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
+             VALUES (?, 0, 0, 0, 0, ?, NOW())'
+        );
+        $stmt->execute([$mundaneId, 'admin']);
+        $id = (int) $this->pdo->lastInsertId();
+        $this->authIds[] = $id;
+
+        return $id;
     }
 
     public function insertAttendance(int $mundaneId, int $parkId, int $kingdomId, string $date): int
@@ -247,6 +283,12 @@ final class ReportsFixture
 
     public function cleanup(): void
     {
+        if ($this->authIds !== []) {
+            $in = implode(',', array_map('intval', $this->authIds));
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "authorization WHERE authorization_id IN ({$in})");
+            $this->authIds = [];
+        }
+
         if ($this->officerIds !== []) {
             $in = implode(',', array_map('intval', $this->officerIds));
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . "officer WHERE officer_id IN ({$in})");

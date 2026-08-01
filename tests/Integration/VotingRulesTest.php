@@ -84,16 +84,24 @@ final class VotingRulesTest extends TestCase
         }
 
         $player = $this->fixture->createPlayer($parkId, 'vote-badge');
+        $this->reportsModel->session = (object) ['token' => $player['token']];
         $modelResult = $this->reportsModel->get_voting_eligible_for_player($player['mundane_id'], $kid);
         $domainResult = $this->reportDomain->GetVotingEligible(array_merge(
             $this->mirrorVotingRules($kid) ?? [],
             ['KingdomId' => $kid, 'MundaneId' => $player['mundane_id']],
         ));
+        $domainViaForPlayer = $this->reportDomain->GetVotingEligibleForPlayer([
+            'MundaneId' => $player['mundane_id'],
+            'KingdomId' => $kid,
+            'Token' => $player['token'],
+        ]);
 
         $this->assertArrayHasKey('Players', $modelResult);
         $this->assertArrayHasKey('Players', $domainResult);
+        $this->assertArrayHasKey('Players', $domainViaForPlayer);
         $this->assertLessThanOrEqual(1, count($modelResult['Players']));
         $this->assertSame(count($modelResult['Players']), count($domainResult['Players']));
+        $this->assertSame(count($modelResult['Players']), count($domainViaForPlayer['Players']));
     }
 
     /**

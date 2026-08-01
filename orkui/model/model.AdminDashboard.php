@@ -4,7 +4,16 @@ class Model_AdminDashboard extends Model
 {
     public function dashboard_stats(): array
     {
-        return $this->_report()->GetAdminDashboardStats();
+        $r = $this->_report()->GetAdminDashboardStats($this->session->token ?? '');
+        if (isset($r['Status']) && !isset($r['TrendStats'])) {
+            return [
+                'TrendStats' => [],
+                'PrevWeekly' => [],
+                'PrevMonthly' => [],
+            ];
+        }
+
+        return $r;
     }
 
     public function global_admin_grants(string $token = ''): array

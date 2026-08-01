@@ -139,7 +139,11 @@ class Model_Reports extends Model
 
     public function get_attendance_dates($type, $id)
     {
-        $r = $this->_report_domain()->GetAttendanceDates(['Type' => $type, 'Id' => (int) $id]);
+        $r = $this->_report_domain()->GetAttendanceDates([
+            'Type' => $type,
+            'Id' => (int) $id,
+            'Token' => $this->session->token ?? '',
+        ]);
 
         return $r['Dates'] ?? [];
     }
@@ -333,6 +337,7 @@ class Model_Reports extends Model
         return $this->_report_domain()->GetVotingEligibleForPlayer([
             'MundaneId' => (int) $mundane_id,
             'KingdomId' => (int) $kingdom_id,
+            'Token' => $this->session->token ?? '',
         ]);
     }
 
@@ -341,10 +346,16 @@ class Model_Reports extends Model
      */
     public function ladder_award_grid(string $type, int $kingdomId, int $parkId): array
     {
-        return $this->_report_domain()->GetLadderAwardGrid([
+        $r = $this->_report_domain()->GetLadderAwardGrid([
             'KingdomId' => $kingdomId,
             'ParkId' => $parkId,
+            'Token' => $this->session->token ?? '',
         ]);
+        if (isset($r['Status']) && is_array($r['Status']) && ($r['Status']['Status'] ?? 0) !== 0) {
+            return ['ScopeName' => '', 'LadderAwards' => [], 'GridRows' => []];
+        }
+
+        return $r;
     }
 
     public function get_kingdom_parks($kingdom_id)
@@ -359,7 +370,10 @@ class Model_Reports extends Model
 
     public function kingdom_officer_directory($kingdom_id = null)
     {
-        $r = $this->_report_domain()->GetKingdomOfficerDirectoryMerged(['KingdomId' => $kingdom_id]);
+        $r = $this->_report_domain()->GetKingdomOfficerDirectoryMerged([
+            'KingdomId' => $kingdom_id,
+            'Token' => $this->session->token ?? '',
+        ]);
         if (($r['Status']['Status'] ?? 1) != 0) {
             return ['Rows' => [], 'Mode' => 'kingdoms', 'Principalities' => []];
         }

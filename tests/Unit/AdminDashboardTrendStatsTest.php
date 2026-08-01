@@ -11,9 +11,21 @@ final class AdminDashboardTrendStatsTest extends TestCase
 {
     private Report $reportDomain;
 
+    private ?AdminDashboardFixture $fixture = null;
+
     protected function setUp(): void
     {
         $this->reportDomain = new Report();
+        if (ork3_test_db_available()) {
+            $this->fixture = AdminDashboardFixture::create();
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->fixture !== null) {
+            $this->fixture->cleanup();
+        }
     }
 
     public function testYoYWindowBoundaries(): void
@@ -37,7 +49,11 @@ final class AdminDashboardTrendStatsTest extends TestCase
             $this->markTestSkipped('Test database is not available.');
         }
 
-        $stats = $this->reportDomain->GetAdminDashboardStats();
+        $parkId = $this->fixture->firstParkId();
+        $admin = $this->fixture->createPlayer($parkId, 'adm-trend');
+        $this->fixture->insertGlobalAdmin($admin['mundane_id']);
+        unset($_SESSION['is_authorized_mundane_id']);
+        $stats = $this->reportDomain->GetAdminDashboardStats($admin['token']);
         $weekly = $stats['PrevWeekly'];
         $monthly = $stats['PrevMonthly'];
 

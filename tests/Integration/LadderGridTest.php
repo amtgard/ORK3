@@ -31,7 +31,7 @@ final class LadderGridTest extends TestCase
     {
         $kid = $this->fixture->kingdomWithLadderAwards();
         $report = new Report();
-        $assembly = $report->GetLadderAwardGrid(['KingdomId' => $kid, 'ParkId' => 0]);
+        $assembly = $report->GetLadderAwardGrid($this->kingdomGridRequest($kid));
 
         $this->assertArrayHasKey('ScopeName', $assembly);
         $this->assertArrayHasKey('LadderAwards', $assembly);
@@ -66,7 +66,7 @@ final class LadderGridTest extends TestCase
 
         $kid = $this->fixture->kingdomWithLadderAwards();
         $report = new Report();
-        $assembly = $report->GetLadderAwardGrid(['KingdomId' => $kid, 'ParkId' => 0]);
+        $assembly = $report->GetLadderAwardGrid($this->kingdomGridRequest($kid));
 
         foreach ($assembly['LadderAwards'] as $col) {
             if (isset($knightGroupMap[$col['Name']])) {
@@ -89,5 +89,22 @@ final class LadderGridTest extends TestCase
         }
 
         $this->assertGreaterThan(count($controllerMap), count($domainMap));
+    }
+
+    /**
+     * @return array{KingdomId: int, ParkId: int, Token: string}
+     */
+    private function kingdomGridRequest(int $kid): array
+    {
+        $parkId = $this->fixture->parkIdInKingdom($kid);
+        $editor = $this->fixture->createPlayer($parkId, 'ladder-grid');
+        $this->fixture->insertScopedAuth($editor['mundane_id'], 0, $kid, AUTH_CREATE);
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        return [
+            'KingdomId' => $kid,
+            'ParkId' => 0,
+            'Token' => $editor['token'],
+        ];
     }
 }
