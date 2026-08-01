@@ -33,7 +33,7 @@ Before a stacked branch may close:
 | M1 | `fix-pr-492-batch5-m1-phpunit` | Fix any Rev4 regressions until full suite green; raise tests if needed | [x] GREEN | new PHP 100%; suite 25.24% (6443/25529) ≥ remasured M0 | ≥ M0 | `7997bb30` | [x] |
 | M2 | `fix-pr-492-batch5-m2-infection` | Rev4-touched infection configs green; raise floors monotonically where evidence supports | [x] GREEN | suite 25.32% ≥ M1 25.24%; no new PHP | floors raised (see runlist) | `256995ec` | [x] |
 | M3 | `fix-pr-492-batch5-m3-docs` | Checklist SHA fill (C-28/C-29 + C-01…C-18), plan Mac-skip note, Batch5 checklist sync | [x] n/a docs | n/a docs | n/a | `a68c6273` | [x] |
-| M4 | `fix-pr-492-batch5-m4-pr-hygiene` | Post pending-replies + REVISION-4; push `fix-pr-492` + mirror `megiddo/fuzzy-validator-v2` | [x] n/a docs | n/a docs | n/a | _(this commit)_ | [x] |
+| M4 | `fix-pr-492-batch5-m4-pr-hygiene` | Post pending-replies + REVISION-4; push `fix-pr-492` + mirror `megiddo/fuzzy-validator-v2` | [x] n/a docs | n/a docs | n/a | `4792ea6f` | [x] |
 
 Note: Git ref names use hyphens (`fix-pr-492-batch5-m*`), not nested `fix-pr-492/...`, because branch `fix-pr-492` already exists.
 
@@ -143,6 +143,7 @@ Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 
 | Metric | Value | Recorded |
 |---|---|---|
+| Branch tip | `4792ea6f` | 2026-08-01 |
 | Branch | `fix-pr-492-batch5-m4-pr-hygiene` | 2026-08-01 |
 | Scope | Docs/PR hygiene — post pending-replies + REVISION-4; checklist Posted URLs; push/mirror | 2026-08-01 |
 | PHPUnit | skipped (no PHP changes) | 2026-08-01 |
