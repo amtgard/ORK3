@@ -32,7 +32,7 @@ Before a stacked branch may close:
 | M0 | `fix-pr-492-batch5-m0-baseline` | Restore Drive-corrupted WT to HEAD; isolate fuzzy-validator WIP; record baseline numbers | [x] RED recorded | log 25.40%; remasured same host 25.14% (6417/25528) | config minMsi 15 | `0dd41871` | [x] |
 | M1 | `fix-pr-492-batch5-m1-phpunit` | Fix any Rev4 regressions until full suite green; raise tests if needed | [x] GREEN | new PHP 100%; suite 25.24% (6443/25529) ≥ remasured M0 | ≥ M0 | `7997bb30` | [x] |
 | M2 | `fix-pr-492-batch5-m2-infection` | Rev4-touched infection configs green; raise floors monotonically where evidence supports | [x] GREEN | suite 25.32% ≥ M1 25.24%; no new PHP | floors raised (see runlist) | `256995ec` | [x] |
-| M3 | `fix-pr-492-batch5-m3-docs` | Checklist SHA fill (C-28/C-29 + C-01…C-18), plan Mac-skip note, Batch5 checklist sync | [x] n/a docs | n/a docs | n/a | *(tip SHA follow-up)* | [x] |
+| M3 | `fix-pr-492-batch5-m3-docs` | Checklist SHA fill (C-28/C-29 + C-01…C-18), plan Mac-skip note, Batch5 checklist sync | [x] n/a docs | n/a docs | n/a | `a68c6273` | [x] |
 | M4 | `fix-pr-492-batch5-m4-pr-hygiene` | Post pending-replies + REVISION-4; push `fix-pr-492` + mirror `megiddo/fuzzy-validator-v2` | [ ] | n/a | n/a | | [ ] |
 
 Note: Git ref names use hyphens (`fix-pr-492-batch5-m*`), not nested `fix-pr-492/...`, because branch `fix-pr-492` already exists.
@@ -127,3 +127,13 @@ Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 | Line coverage (suite) | **25.32%** lines (6465/25529) ≥ M1 25.24%; methods 16.33%; classes 10.87% | 2026-08-01 |
 | New PHP coverage | n/a (Infection configDir + floor bumps + docs only; no product PHP) | 2026-08-01 |
 | Runlist | `batch5-m2-infection-runlist.md` | 2026-08-01 |
+
+### M3 result log
+
+| Metric | Value | Recorded |
+|---|---|---|
+| Branch tip | `a68c6273` | 2026-08-01 |
+| Scope | Docs only — checklist Commit SHAs + closeout/plan sync | 2026-08-01 |
+| PHPUnit | skipped (no PHP changes) | 2026-08-01 |
+| Checklist SHAs filled | C-28 `ea4a6608`; C-29 `ae4f0864`; C-01…C-18 verified from history; C-27 corrected `c9656250`→`6834b1cd` | 2026-08-01 |
+| Remaining | M4 / Phase D pending-replies + push/mirror; fuzzy-validator WIP stashed | 2026-08-01 |
