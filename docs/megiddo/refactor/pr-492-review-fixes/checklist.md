@@ -36,7 +36,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 28 | C-28 ScopedPlayerSearch KD sort | [x] | | pending-replies/C-28.md |
 | 29 | C-29 Weather calendar coords sentinel | [x] | | pending-replies/C-29.md |
 | 30 | C-30 Award option HTML order | [x] | 6d06e4c0 | pending-replies/C-30.md |
-| 31 | C-31 Json/SOAP auth inventory | [x] | PENDING | pending-replies/C-31.md |
+| 31 | C-31 Json/SOAP auth inventory | [x] | d9a17b36 | pending-replies/C-31.md |
 
 ## Simple checklist (copy-friendly)
 
