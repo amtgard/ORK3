@@ -111,4 +111,46 @@ final class QualTestScoreTest extends TestCase
         $this->assertSame(2, $result['total']);
         $this->assertSame(50, $result['score_percent']);
     }
+
+    public function testModelQualTestReportDetailsWrapperDelegates(): void
+    {
+        if (!ork3_test_db_available()) {
+            $this->markTestSkipped('Test database is not available.');
+        }
+
+        require_once DIR_UI . 'model/model.QualTest.php';
+        $model = new Model_QualTest();
+        $domain = new QualTest();
+
+        global $DB;
+        $DB->Clear();
+        $parkRow = $DB->DataSet(
+            'SELECT park_id, kingdom_id FROM ' . DB_PREFIX . "park WHERE active = 'Active' ORDER BY park_id ASC LIMIT 1"
+        );
+        $this->assertTrue($parkRow && $parkRow->Next());
+        $kingdomId = (int) $parkRow->kingdom_id;
+
+        $DB->Clear();
+        $DB->Execute(
+            'INSERT INTO ' . DB_PREFIX . 'qual_question
+             (kingdom_id, test_type, question_text, answer_mode, status, created_by)
+             VALUES (' . $kingdomId . ', \'reeve\', \'wrapper report details\', \'single\', \'active\', 0)'
+        );
+        $DB->Clear();
+        $idRow = $DB->DataSet('SELECT LAST_INSERT_ID() AS id');
+        $this->assertTrue($idRow && $idRow->Next());
+        $questionId = (int) $idRow->id;
+
+        try {
+            $domain->reportQuestion($questionId, 1, 'other');
+            $viaModel = $model->report_details($questionId);
+            $viaDomain = $domain->getReportDetails($questionId);
+            $this->assertSame($viaDomain, $viaModel);
+        } finally {
+            $DB->Clear();
+            $DB->Execute('DELETE FROM ' . DB_PREFIX . 'qual_report WHERE qual_question_id = ' . $questionId);
+            $DB->Clear();
+            $DB->Execute('DELETE FROM ' . DB_PREFIX . 'qual_question WHERE qual_question_id = ' . $questionId);
+        }
+    }
 }

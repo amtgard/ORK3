@@ -310,8 +310,9 @@ class Controller_QualTestAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid question.']);
         }
 
-        $counts = $this->QualTest->report_counts($question_id);
-        $this->jsonOut(['status' => 0, 'counts' => $counts]);
+        $counts    = $this->QualTest->report_counts($question_id);
+        $reporters = $this->QualTest->report_details($question_id);
+        $this->jsonOut(['status' => 0, 'counts' => $counts, 'reporters' => $reporters]);
     }
 
     // -----------------------------------------------------------------------

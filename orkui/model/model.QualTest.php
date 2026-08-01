@@ -145,6 +145,11 @@ class Model_QualTest extends Model
         return $this->_qual_test()->getReportCounts($questionId);
     }
 
+    public function report_details(int $questionId): array
+    {
+        return $this->_qual_test()->getReportDetails($questionId);
+    }
+
     public function clear_reports(int $questionId)
     {
         return $this->_qual_test()->clearReports($questionId);
