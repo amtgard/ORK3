@@ -23,10 +23,14 @@ Addresses **Batch 5** adversarial review from @baltinerdist at `20b0f61f` (12 in
 
 Analysis-only doc: `docs/megiddo/refactor/pr-492-review-fixes/auth-inventory-rev4.md` (`d9a17b36`). Named Batch 5 holes closed; remaining branch-introduced RSVP count/helper reads listed as follow-ups; no mass-gating of pre-existing master surfaces.
 
+### Master merge
+
+Merged `origin/master` (`f6ef56a2` Chrome print-crash fix) into `fix-pr-492` with no conflicts (`6ae13404`).
+
 ### Validation note
 
 Full PHPUnit was **not** executed in the Rev4 agent environment (no local `php` / `vendor/bin/phpunit` / Docker DB). Characterization tests were added/updated per item; please run `sh bin/run-unit-tests.sh` before merge.
 
 Per-thread replies drafted under `docs/megiddo/refactor/pr-492-review-fixes/pending-replies/` (C-19…C-31) for posting when `gh` auth is available.
 
-Tip: `2c00ebcd`
+Tip: `6ae13404` (includes merge of origin/master print-crash fix)
