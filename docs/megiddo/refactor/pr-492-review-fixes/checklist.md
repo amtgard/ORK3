@@ -29,7 +29,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 | 21 | C-21 Player getters ungated | [x] | 8574690a | pending-replies/C-21.md |
 | 22 | C-22 Report methods ungated | [x] | 96445e11 | pending-replies/C-22.md |
 | 23 | C-23 GetServerHealthWeatherSummary ungated | [x] | a3aec596 | pending-replies/C-23.md |
-| 24 | C-24 GetServerHealthDbStatus Wanted SQLi | [ ] | | |
+| 24 | C-24 GetServerHealthDbStatus Wanted SQLi | [x] | 9a6b9b78 | pending-replies/C-24.md |
 | 25 | C-25 AddAttendance reactivation narrow | [ ] | | |
 | 26 | C-26 QualTest getreports reporters | [ ] | | |
 | 27 | C-27 Park ladder-grid master parity | [ ] | | |
@@ -63,7 +63,7 @@ Mark each item `[x]` only after: fix + unit tests + full PHPUnit green + checkli
 21. [x] C-21 Player getters ungated
 22. [x] C-22 Report methods ungated
 23. [x] C-23 GetServerHealthWeatherSummary ungated
-24. [ ] C-24 GetServerHealthDbStatus Wanted SQLi
+24. [x] C-24 GetServerHealthDbStatus Wanted SQLi
 25. [ ] C-25 AddAttendance reactivation narrow
 26. [ ] C-26 QualTest getreports reporters
 27. [ ] C-27 Park ladder-grid master parity
