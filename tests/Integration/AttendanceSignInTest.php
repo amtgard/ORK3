@@ -34,7 +34,7 @@ final class AttendanceSignInTest extends TestCase
         }
     }
 
-    public function testAddAttendanceReactivatesInactive(): void
+    public function testAddAttendanceWithoutReactivateFlagLeavesInactive(): void
     {
         $parkId = $this->fixture->firstParkId();
         $officer = $this->fixture->createParkOfficer($parkId, 'react-off');
@@ -51,11 +51,71 @@ final class AttendanceSignInTest extends TestCase
             'Date' => date('Y-m-d'),
         ]);
         $this->assertSame(0, $add['Status']);
+        $this->assertSame(0, (int) ($add['Reactivated'] ?? 0));
+        if (!empty($add['Detail'])) {
+            $this->fixture->trackAttendance((int) $add['Detail']);
+        }
+
+        $this->assertSame(0, $this->fixture->fetchActive($player['mundane_id']));
+    }
+
+    public function testAddAttendanceWithReactivateFlagReactivatesAndAudits(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $officer = $this->fixture->createParkOfficer($parkId, 'react-flag-off');
+        $player = $this->fixture->createPlayer($parkId, 'react-flag-player', active: false);
+        $this->assertSame(0, $this->fixture->fetchActive($player['mundane_id']));
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $add = $this->attendanceDomain->AddAttendance([
+            'Token' => $officer['token'],
+            'ParkId' => $parkId,
+            'MundaneId' => $player['mundane_id'],
+            'ClassId' => $this->fixture->firstClassId(),
+            'Credits' => 1,
+            'Date' => date('Y-m-d'),
+            'ReactivateInactive' => true,
+        ]);
+        $this->assertSame(0, $add['Status']);
         $this->assertSame(1, (int) ($add['Reactivated'] ?? 0));
         if (!empty($add['Detail'])) {
             $this->fixture->trackAttendance((int) $add['Detail']);
         }
 
+        $this->assertSame(1, $this->fixture->fetchActive($player['mundane_id']));
+
+        $audit = $this->fixture->fetchLatestDangerAuditForPlayer(
+            $player['mundane_id'],
+            'Attendance::ReactivateInactiveMundane',
+        );
+        $this->assertNotNull($audit);
+        $this->assertSame($officer['mundane_id'], $audit['by_whom_id']);
+        $this->assertSame('{"active":0}', $audit['prior_state']);
+        $this->assertSame('{"active":1}', $audit['post_state']);
+    }
+
+    public function testModelAddAttendanceSetsReactivateInactiveFlag(): void
+    {
+        $parkId = $this->fixture->firstParkId();
+        $officer = $this->fixture->createParkOfficer($parkId, 'model-react-off');
+        $player = $this->fixture->createPlayer($parkId, 'model-react-player', active: false);
+
+        unset($_SESSION['is_authorized_mundane_id']);
+        $model = new Model_Attendance();
+        $add = $model->add_attendance(
+            $officer['token'],
+            date('Y-m-d'),
+            $parkId,
+            null,
+            $player['mundane_id'],
+            $this->fixture->firstClassId(),
+            1.0,
+        );
+        $this->assertSame(0, $add['Status']);
+        $this->assertSame(1, (int) ($add['Reactivated'] ?? 0));
+        if (!empty($add['Detail'])) {
+            $this->fixture->trackAttendance((int) $add['Detail']);
+        }
         $this->assertSame(1, $this->fixture->fetchActive($player['mundane_id']));
     }
 

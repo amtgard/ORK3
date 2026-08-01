@@ -28,7 +28,7 @@ final class AttendanceFixture
     private array $linkIds = [];
 
     /** @var list<int> */
-    private array $reconciliationIds = [];
+    private array $dangerAuditIds = [];
 
     public function __construct(
         private readonly PDO $pdo,
@@ -140,6 +140,31 @@ final class AttendanceFixture
         $stmt->execute([$mundaneId]);
 
         return (string) $stmt->fetchColumn();
+    }
+
+    /**
+     * @return array{method_call: string, by_whom_id: int, prior_state: string, post_state: string}|null
+     */
+    public function fetchLatestDangerAuditForPlayer(int $mundaneId, string $methodCall): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT danger_audit_id, method_call, by_whom_id, prior_state, post_state FROM ' . DB_PREFIX . 'danger_audit
+             WHERE entity = ? AND entity_id = ? AND method_call = ?
+             ORDER BY danger_audit_id DESC LIMIT 1'
+        );
+        $stmt->execute(['Player', $mundaneId, $methodCall]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            return null;
+        }
+        $this->dangerAuditIds[] = (int) $row['danger_audit_id'];
+
+        return [
+            'method_call' => (string) $row['method_call'],
+            'by_whom_id' => (int) $row['by_whom_id'],
+            'prior_state' => (string) $row['prior_state'],
+            'post_state' => (string) $row['post_state'],
+        ];
     }
 
     public function insertParkAttendance(
@@ -296,6 +321,10 @@ final class AttendanceFixture
 
     public function cleanup(): void
     {
+        foreach ($this->dangerAuditIds as $id) {
+            $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'danger_audit WHERE danger_audit_id = ' . (int) $id);
+        }
+
         foreach ($this->attendanceIds as $id) {
             $this->pdo->exec('DELETE FROM ' . DB_PREFIX . 'attendance WHERE attendance_id = ' . (int) $id);
         }

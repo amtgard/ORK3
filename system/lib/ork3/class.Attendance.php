@@ -151,7 +151,13 @@ class Attendance extends Ork3
         ));
 
         if ($this->attendance->attendance_id) {
-            $reactivated = $this->reactivateInactiveMundane((int)$this->attendance->mundane_id);
+            $reactivated = 0;
+            if (!empty($request['ReactivateInactive'])) {
+                $reactivated = $this->reactivateInactiveMundane(
+                    (int)$this->attendance->mundane_id,
+                    (int)$this->attendance->by_whom_id,
+                );
+            }
             $this->bustPlayerAttendanceCaches((int)$this->attendance->mundane_id);
             $response = Success($this->attendance->attendance_id);
             $response['Reactivated'] = $reactivated;
@@ -379,7 +385,7 @@ class Attendance extends Ork3
         ];
     }
 
-    private function reactivateInactiveMundane(int $mundaneId): int
+    private function reactivateInactiveMundane(int $mundaneId, int $byWhomId): int
     {
         if ($mundaneId <= 0) {
             return 0;
@@ -393,6 +399,14 @@ class Attendance extends Ork3
         }
         $this->db->Clear();
         $this->db->Execute('UPDATE ' . DB_PREFIX . 'mundane SET active = 1 WHERE mundane_id = ' . $mundaneId);
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . '::ReactivateInactiveMundane',
+            ['MundaneId' => $mundaneId, 'by_whom_id' => $byWhomId],
+            'Player',
+            $mundaneId,
+            ['active' => 0],
+            ['active' => 1],
+        );
         return 1;
     }
 

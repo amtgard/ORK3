@@ -22,7 +22,16 @@ class Model_Attendance extends Model
     public function add_attendance($token, $date, $park_id, $detail_id, $mundane_id, $class_id, $credits)
     {
         logtrace("Model_Attendance->add_attendance()", array($token, $date, $park_id, $detail_id, $mundane_id, $class_id, $credits));
-        return $this->Attendance->AddAttendance(array('Token' => $token, 'Date' => $date, 'ParkId' => $park_id, 'EventCalendarDetailId' => $detail_id, 'MundaneId' => $mundane_id, 'ClassId' => $class_id, 'Credits' => $credits));
+        return $this->Attendance->AddAttendance(array(
+            'Token' => $token,
+            'Date' => $date,
+            'ParkId' => $park_id,
+            'EventCalendarDetailId' => $detail_id,
+            'MundaneId' => $mundane_id,
+            'ClassId' => $class_id,
+            'Credits' => $credits,
+            'ReactivateInactive' => true,
+        ));
     }
 
     public function update_attendance($token, $attendance_id, $date, $credits, $class_id, $mundane_id)
