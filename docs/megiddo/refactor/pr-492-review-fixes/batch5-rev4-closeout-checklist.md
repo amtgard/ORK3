@@ -77,7 +77,7 @@ Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 
 | Metric | Value | Recorded |
 |---|---|---|
-| Branch tip | `32dd0430` | 2026-08-01 |
+| Branch tip | `7997bb30` | 2026-08-01 |
 | PHPUnit | **GREEN** — Tests: 310, Assertions: 1115, Errors: 0, Failures: 0, Skipped: 2 (`build/batch5-m1-phpunit.log`) | 2026-08-01 |
 | Line coverage (suite) | **25.24%** lines (6443/25529); methods 16.09% (136/845); classes 10.87% | 2026-08-01 |
 | New PHP coverage | `SearchService::Player` session-clear line covered (100% of new executable stmts) | 2026-08-01 |
