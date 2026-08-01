@@ -29,7 +29,7 @@ Before a stacked branch may close:
 
 | Milestone | Branch | Purpose | PHPUnit | Coverage Δ | Infection floor | Commit | Closed |
 |---|---|---|---|---|---|---|---|
-| M0 | `fix-pr-492-batch5-m0-baseline` | Restore Drive-corrupted WT to HEAD; isolate fuzzy-validator WIP; record baseline numbers | [x] RED recorded | baseline 25.40% lines | config minMsi 15 | | [ ] |
+| M0 | `fix-pr-492-batch5-m0-baseline` | Restore Drive-corrupted WT to HEAD; isolate fuzzy-validator WIP; record baseline numbers | [x] RED recorded | baseline 25.40% lines | config minMsi 15 | `0dd41871` | [x] |
 | M1 | `fix-pr-492-batch5-m1-phpunit` | Fix any Rev4 regressions until full suite green; raise tests if needed | [ ] | ≥95% new / ≥ M0 | ≥ M0 | | [ ] |
 | M2 | `fix-pr-492-batch5-m2-infection` | Rev4-touched infection configs green; raise floors monotonically where evidence supports | [ ] | ≥ M1 | ≥ M1 | | [ ] |
 | M3 | `fix-pr-492-batch5-m3-docs` | Checklist SHA fill (C-28/C-29), plan Mac-skip note, Batch5 checklist sync | [ ] | n/a docs | n/a | | [ ] |
