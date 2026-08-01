@@ -230,9 +230,15 @@ class Model_Event extends Model
         ];
     }
 
-    public function get_rsvp_list($detail_id)
+    public function get_rsvp_list($detail_id, $token = '')
     {
-        $r = $this->Event->GetRsvpList(['EventCalendarDetailId' => (int)$detail_id]);
+        if ($token === '' && isset($this->session->token)) {
+            $token = (string) $this->session->token;
+        }
+        $r = $this->Event->GetRsvpList([
+            'Token' => (string) $token,
+            'EventCalendarDetailId' => (int) $detail_id,
+        ]);
         if (!$this->_eventApiOk($r)) {
             return [];
         }

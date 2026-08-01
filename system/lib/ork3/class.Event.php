@@ -251,6 +251,31 @@ class Event extends Ork3
         return NoAuthorization();
     }
 
+    /**
+     * Token required; manage or attendance authority on the occurrence.
+     * @return array|null error response, or null when authorized
+     */
+    private function _authorizeRsvpListViewer(array $request, int $detailId): ?array
+    {
+        $actorId = Ork3::$Lib->authorization->IsAuthorized($request['Token'] ?? '');
+        if (!valid_id($actorId)) {
+            return BadToken();
+        }
+        $this->detail->clear();
+        $this->detail->event_calendardetail_id = $detailId;
+        if (!$this->detail->find()) {
+            return InvalidParameter('Event occurrence not found.');
+        }
+        $eventId = (int) $this->detail->event_id;
+        $planning = new EventPlanning();
+        if ($planning->CanManageEventDetail((int) $actorId, $eventId, $detailId, 'manage')
+            || $planning->CanManageEventDetail((int) $actorId, $eventId, $detailId, 'attendance')) {
+            return null;
+        }
+
+        return NoAuthorization();
+    }
+
     public function RemoveRsvp($request)
     {
         $detailId = (int)($request['EventCalendarDetailId'] ?? 0);
@@ -387,6 +412,10 @@ class Event extends Ork3
         $detailId = (int)($request['EventCalendarDetailId'] ?? 0);
         if (!valid_id($detailId)) {
             return InvalidParameter('EventCalendarDetailId is required.');
+        }
+        $auth = $this->_authorizeRsvpListViewer($request, $detailId);
+        if ($auth !== null) {
+            return $auth;
         }
         $this->db->Clear();
         $r = $this->db->DataSet(

@@ -128,7 +128,7 @@ $server->register(
 
 $server->register(
     'Event.GetRsvpList',
-    array('GetRsvpCountsRequest' => 'tns:GetRsvpCountsRequest'),
+    array('GetRsvpListRequest' => 'tns:GetRsvpListRequest'),
     array('return' => 'tns:GetRsvpListResponse'),
     $namespace
 );

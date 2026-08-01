@@ -347,6 +347,18 @@ $server->wsdl->addComplexType(
 );
 
 $server->wsdl->addComplexType(
+    'GetRsvpListRequest',
+    'complexType',
+    'struct',
+    'all',
+    '',
+    array(
+                'Token' => array('name' => 'Token','type' => 'xsd:string'),
+                'EventCalendarDetailId' => array('name' => 'EventCalendarDetailId','type' => 'xsd:int')
+            )
+);
+
+$server->wsdl->addComplexType(
     'GetRsvpCountsResponse',
     'complexType',
     'struct',

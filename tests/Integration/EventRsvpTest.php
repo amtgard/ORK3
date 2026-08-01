@@ -115,8 +115,15 @@ final class EventRsvpTest extends TestCase
     {
         $ctx = $this->fixture->createFutureOccurrence('list-fields');
         $this->fixture->insertRsvp($ctx['detail_id'], $ctx['mundane_id'], 'going');
+        $editor = $this->fixture->createGrantorWithAuth(
+            AUTH_EVENT,
+            $ctx['event_id'],
+            AUTH_EDIT,
+            'list-fields-editor'
+        );
+        unset($_SESSION['is_authorized_mundane_id']);
 
-        $list = $this->model->get_rsvp_list($ctx['detail_id']);
+        $list = $this->model->get_rsvp_list($ctx['detail_id'], $editor['token']);
 
         $this->assertCount(1, $list);
         $row = $list[0];
@@ -127,6 +134,57 @@ final class EventRsvpTest extends TestCase
         $this->assertArrayHasKey('KingdomAbbr', $row);
         $this->assertArrayHasKey('LastClassId', $row);
         $this->assertArrayHasKey('LastClassName', $row);
+    }
+
+    public function testGetRsvpListRequiresToken(): void
+    {
+        $ctx = $this->fixture->createFutureOccurrence('c20-no-token');
+        $this->fixture->insertRsvp($ctx['detail_id'], $ctx['mundane_id'], 'going');
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $event = new Event();
+        $noToken = $event->GetRsvpList([
+            'EventCalendarDetailId' => $ctx['detail_id'],
+        ]);
+        $this->assertSame(ServiceErrorIds::SecureTokenFailure, $noToken['Status']);
+
+        $this->assertSame([], $this->model->get_rsvp_list($ctx['detail_id'], ''));
+    }
+
+    public function testGetRsvpListDeniedWithoutManageOrAttendance(): void
+    {
+        $ctx = $this->fixture->createFutureOccurrence('c20-stranger');
+        $this->fixture->insertRsvp($ctx['detail_id'], $ctx['mundane_id'], 'going');
+        $stranger = $this->fixture->createGrantorWithoutAuth('c20-stranger');
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $event = new Event();
+        $denied = $event->GetRsvpList([
+            'Token' => $stranger['token'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+        ]);
+        $this->assertSame(ServiceErrorIds::NoAuthorization, $denied['Status']);
+        $this->assertSame([], $this->model->get_rsvp_list($ctx['detail_id'], $stranger['token']));
+    }
+
+    public function testGetRsvpListStaffCanView(): void
+    {
+        $ctx = $this->fixture->createFutureOccurrence('c20-staff');
+        $this->fixture->insertRsvp($ctx['detail_id'], $ctx['mundane_id'], 'going');
+        $staff = $this->fixture->createGrantorWithoutAuth('c20-staffer');
+        $this->fixture->insertAttendanceStaff($ctx['detail_id'], $staff['mundane_id']);
+        unset($_SESSION['is_authorized_mundane_id']);
+
+        $event = new Event();
+        $ok = $event->GetRsvpList([
+            'Token' => $staff['token'],
+            'EventCalendarDetailId' => $ctx['detail_id'],
+        ]);
+        $this->assertSame(ServiceErrorIds::Success, $ok['Status']['Status']);
+        $this->assertCount(1, $ok['RsvpPlayers'] ?? []);
+
+        $list = $this->model->get_rsvp_list($ctx['detail_id'], $staff['token']);
+        $this->assertCount(1, $list);
     }
 
     public function testGetUpcomingRsvpsExcludesPast(): void
