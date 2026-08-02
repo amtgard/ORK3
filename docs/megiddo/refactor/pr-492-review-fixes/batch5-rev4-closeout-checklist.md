@@ -35,7 +35,7 @@ Before a stacked branch may close:
 | M3 | `fix-pr-492-batch5-m3-docs` | Checklist SHA fill (C-28/C-29 + C-01…C-18), plan Mac-skip note, Batch5 checklist sync | [x] n/a docs | n/a docs | n/a | `a68c6273` | [x] |
 | M4 | `fix-pr-492-batch5-m4-pr-hygiene` | Post pending-replies + REVISION-4; push `fix-pr-492` + mirror `megiddo/fuzzy-validator-v2` | [x] n/a docs | n/a docs | n/a | `4792ea6f` | [x] |
 | M5 | `fix-pr-492-batch5-m5-fuzzy-expanded` | Expanded fuzzy-validator setpoint for full active page registry via Docker runner (FV21) | [x] n/a tool | n/a tool | n/a | `c31d6693` | [x] |
-| M5b | `fix-pr-492` | Keep `kingdom-map`/`kingdom-map-2` active; large `#map` pixel + DOM fuzz; dual-profile revalidate | [x] n/a tool | n/a tool | n/a | *(tip after push)* | [ ] |
+| M5b | `fix-pr-492` | Keep `kingdom-map`/`kingdom-map-2` active; large `#map` pixel + DOM fuzz; dual-profile revalidate | [x] n/a tool | n/a tool | n/a | `1acafde8` | [x] |
 
 Note: Git ref names use hyphens (`fix-pr-492-batch5-m*`), not nested `fix-pr-492/...`, because branch `fix-pr-492` already exists.
 
