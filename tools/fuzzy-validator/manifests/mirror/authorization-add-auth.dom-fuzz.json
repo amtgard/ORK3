@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "authorization-add-auth",
+  "calibratedAt": "2026-08-01T20:19:37Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

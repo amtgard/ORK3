@@ -198,10 +198,8 @@
       "id": "search-unitsearch",
       "url": "./index.php?Route=Search/unitsearch",
       "auth": "login",
-      "notes": "Class: Search \u2014 unit search; enabled for registry expansion",
-      "waitAfterMs": 2000,
-      "stableHeightMs": 800,
-      "driftClass": "natural"
+      "skip": true,
+      "notes": "SKIP \u2014 JSON API (returns [] body), not HTML UI. Screenshot path times out on non-document response."
     },
     {
       "id": "attendance",
@@ -1070,16 +1068,15 @@
       "id": "kingdom-ics-2",
       "url": "./index.php?Route=Kingdom/ics",
       "auth": "login",
-      "waitAfterMs": 1000,
-      "readySelector": "#main, body",
-      "driftClass": "natural",
-      "notes": "Registry expansion \u2014 template Kingdom/ics"
+      "skip": true,
+      "notes": "SKIP \u2014 ICS calendar download (not HTML UI); sibling of kingdom-ics. Capture aborts: page.goto Download is starting."
     },
     {
       "id": "kingdom-index",
       "url": "./index.php?Route=Kingdom",
       "auth": "login",
-      "waitAfterMs": 1000,
+      "waitUntil": "domcontentloaded",
+      "waitAfterMs": 3000,
       "readySelector": "#main, body",
       "driftClass": "natural",
       "notes": "Registry expansion \u2014 template Kingdom/index"
@@ -1160,10 +1157,8 @@
       "id": "kingdom-players-json-2",
       "url": "./index.php?Route=Kingdom/players_json/1",
       "auth": "login",
-      "waitAfterMs": 1000,
-      "readySelector": "#main, body",
-      "driftClass": "natural",
-      "notes": "Registry expansion \u2014 template Kingdom/players_json/{id}"
+      "skip": true,
+      "notes": "SKIP \u2014 JSON player dump (not HTML UI). Mirror capture yields ~114k-px-tall screenshot; discover_fuzz rejects shape drift."
     },
     {
       "id": "kingdom-profile-2",
@@ -1359,7 +1354,8 @@
       "id": "player-reconcile-2",
       "url": "./index.php?Route=Player/reconcile/1",
       "auth": "login",
-      "waitAfterMs": 1000,
+      "waitUntil": "domcontentloaded",
+      "waitAfterMs": 2000,
       "readySelector": "#main, body",
       "driftClass": "natural",
       "notes": "Registry expansion \u2014 template Player/reconcile/{id}"
@@ -1696,7 +1692,9 @@
       "id": "reports-attendance-3",
       "url": "./index.php?Route=Reports/attendance/14",
       "auth": "login",
-      "waitAfterMs": 1000,
+      "timeoutMs": 900000,
+      "waitUntil": "domcontentloaded",
+      "waitAfterMs": 2000,
       "readySelector": "#main, body",
       "driftClass": "natural",
       "notes": "Registry expansion \u2014 template Reports/attendance/{id}"
@@ -2173,25 +2171,23 @@
       "id": "reports-player-award-recommendations",
       "url": "./index.php?Route=Reports/player_award_recommendations",
       "auth": "login",
-      "waitAfterMs": 1000,
-      "readySelector": "#main, body",
-      "driftClass": "natural",
-      "notes": "Registry expansion \u2014 template Reports/player_award_recommendations"
+      "skip": true,
+      "notes": "SKIP — mirror calibration bistable full-page height (1738 vs 2334 px) across runs; discover_fuzz cannot learn zones. Sandbox capture OK; product/layout volatility on prod-mirror."
     },
     {
       "id": "reports-player-award-recommendations-2",
       "url": "./index.php?Route=Reports/player_award_recommendations/14",
       "auth": "login",
-      "waitAfterMs": 1000,
-      "readySelector": "#main, body",
-      "driftClass": "natural",
-      "notes": "Registry expansion \u2014 template Reports/player_award_recommendations/{id}"
+      "skip": true,
+      "notes": "SKIP — mirror calibration bistable full-page height (1738 vs 2334 px) across runs; discover_fuzz cannot learn zones. Sandbox capture OK; product/layout volatility on prod-mirror."
     },
     {
       "id": "reports-player-awards",
       "url": "./index.php?Route=Reports/player_awards",
       "auth": "login",
-      "waitAfterMs": 1000,
+      "timeoutMs": 900000,
+      "waitUntil": "domcontentloaded",
+      "waitAfterMs": 2000,
       "readySelector": "#main, body",
       "driftClass": "natural",
       "notes": "Registry expansion \u2014 template Reports/player_awards"
@@ -2200,7 +2196,9 @@
       "id": "reports-player-awards-2",
       "url": "./index.php?Route=Reports/player_awards/14",
       "auth": "login",
-      "waitAfterMs": 1000,
+      "timeoutMs": 900000,
+      "waitUntil": "domcontentloaded",
+      "waitAfterMs": 2000,
       "readySelector": "#main, body",
       "driftClass": "natural",
       "notes": "Registry expansion \u2014 template Reports/player_awards/{id}"

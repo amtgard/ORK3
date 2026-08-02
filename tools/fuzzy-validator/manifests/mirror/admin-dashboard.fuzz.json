@@ -3,14 +3,59 @@
   "pageId": "admin-dashboard",
   "imageWidth": 1280,
   "imageHeight": 1976,
-  "calibratedAt": "2026-07-19T04:23:10Z",
+  "calibratedAt": "2026-08-01T19:45:06Z",
   "calibrationRuns": 5,
   "params": {
     "colorThreshold": 20,
     "minAreaPx": 64,
     "padPx": 4
   },
-  "fuzzZones": [],
+  "fuzzZones": [
+    {
+      "x": 153,
+      "y": 480,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 753,
+      "y": 480,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 353,
+      "y": 496,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 954,
+      "y": 499,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 353,
+      "y": 761,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 753,
+      "y": 761,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    }
+  ],
   "manualZones": [],
-  "calibratedFromCommit": "671c108b"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T01:58:01Z",
+  "refuzzedFromCommit": "5bc623cd"
 }

@@ -101,3 +101,18 @@ python3 tools/fuzzy-validator/scripts/validate_page_http.py --profile test \
 ## Out of scope
 
 Full setpoint capture/publish for new pages, product 500 fixes, cleaning unrelated dirty mirror/test fuzz manifests from prior gold runs.
+
+
+## Batch5 M5 capture residuals (2026-08-02)
+
+Additional registry `skip` after expanded Docker-runner setpoint capture:
+
+| id | Reason |
+|----|--------|
+| `kingdom-ics-2` | ICS download (`page.goto: Download is starting`), sibling of `kingdom-ics` |
+| `kingdom-players-json-2` | JSON dump → ~114k-px mirror screenshot; discover_fuzz shape reject |
+| `search-unitsearch` | JSON API (`[]` body), not HTML UI |
+| `reports-player-award-recommendations` | Mirror bistable full-page height (1738 vs 2334) across calibration runs |
+| `reports-player-award-recommendations-2` | Same bistable-height failure on mirror |
+
+Tool fixes landed with M5: first-party-only asset capture (exclude `maps.googleapis.com` CDN drift); runner local-cache mounts for Drive bind-mount deadlocks; `deploy-sandbox --yes` from runner; optional `waitUntil` / `timeoutMs` page fields.

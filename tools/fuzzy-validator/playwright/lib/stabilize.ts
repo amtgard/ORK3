@@ -16,11 +16,13 @@ export interface StabilizeOptions {
   readySelector?: string;
   waitAfterMs?: number;
   stableHeightMs?: number;
+  /** Load state to await before screenshot work; default load. */
+  loadState?: 'load' | 'domcontentloaded' | 'networkidle';
 }
 
 /** Apply render stabilization before each screenshot (architecture §4.3). */
 export async function stabilizePage(page: Page, options: StabilizeOptions = {}): Promise<void> {
-  await page.waitForLoadState('load');
+  await page.waitForLoadState(options.loadState ?? 'load');
   await page.addStyleTag({ content: STABILIZE_CSS });
 
   if (options.readySelector) {

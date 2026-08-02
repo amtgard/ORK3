@@ -56,7 +56,7 @@ def activate_profile(
     profile = get_profile(config, profile_name)
     if profile_name == "test" and ensure_sandbox:
         deploy = run_subprocess(
-            [str(root / "bin" / "ork-db"), "deploy-sandbox"],
+            [str(root / "bin" / "ork-db"), "deploy-sandbox", "--yes"],
             cwd=root,
             env=env,
             check=False,

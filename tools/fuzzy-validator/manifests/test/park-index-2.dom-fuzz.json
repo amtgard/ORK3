@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "park-index-2",
+  "calibratedAt": "2026-08-01T23:02:45Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

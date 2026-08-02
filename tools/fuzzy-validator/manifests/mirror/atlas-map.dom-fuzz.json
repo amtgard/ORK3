@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "pageId": "atlas-map",
+  "calibratedAt": "2026-08-01T23:01:44Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[0]",
+      "mode": "attributes",
+      "attrs": [
+        "aria-describedby"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[0]/div[0]",
+      "mode": "attributes",
+      "attrs": [
+        "id"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[1]/div[0]/div[0]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[1]/div[0]/div[0]/div[5]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[1]/div[0]/div[1]/div[0]/div[2]/span[0]",
+      "mode": "attributes",
+      "attrs": [
+        "id"
+      ],
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

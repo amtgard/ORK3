@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-dues-2",
+  "calibratedAt": "2026-08-01T21:15:54Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

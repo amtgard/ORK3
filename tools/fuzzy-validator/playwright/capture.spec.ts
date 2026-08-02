@@ -45,6 +45,10 @@ async function blockVolatileThirdPartyAssets(page: import('@playwright/test').Pa
 
 for (const pageEntry of capturePages) {
   test(`capture ${pageEntry.id}`, async ({ page, baseURL }, testInfo) => {
+    if (pageEntry.timeoutMs && pageEntry.timeoutMs > 0) {
+      testInfo.setTimeout(pageEntry.timeoutMs);
+    }
+
     if (!baseURL || !(await appReachable(baseURL))) {
       testInfo.skip(true, 'ORK3 app not reachable — start docker compose php8 stack');
     }
@@ -81,11 +85,13 @@ for (const pageEntry of capturePages) {
       const captureUrl = new URL(pageEntry.url, baseURL!).href;
       const assetSession = startAssetCapture(page, captureUrl);
 
-      await page.goto(pageEntry.url, { waitUntil: 'load' });
+      const waitUntil = pageEntry.waitUntil ?? 'load';
+      await page.goto(pageEntry.url, { waitUntil });
       await stabilizePage(page, {
         readySelector: pageEntry.readySelector,
         waitAfterMs,
         stableHeightMs,
+        loadState: waitUntil === 'commit' ? 'domcontentloaded' : waitUntil,
       });
 
       const fileName = singleCapture ? 'candidate.png' : `${runLabel}.png`;

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "pageId": "login-logout",
+  "calibratedAt": "2026-08-01T20:42:29Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": []
+}

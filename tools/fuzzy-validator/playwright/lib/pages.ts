@@ -10,6 +10,10 @@ export interface PageEntry {
   waitAfterMs?: number;
   readySelector?: string;
   stableHeightMs?: number;
+  /** Playwright goto waitUntil; default load. Use domcontentloaded for chatty third-party pages. */
+  waitUntil?: 'load' | 'domcontentloaded' | 'commit';
+  /** Per-page Playwright test timeout in ms (default from project config, usually 300000). */
+  timeoutMs?: number;
   driftClass?: 'stable' | 'natural';
   skip?: boolean;
   notes?: string;

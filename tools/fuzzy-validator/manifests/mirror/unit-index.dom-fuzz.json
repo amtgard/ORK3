@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "unit-index",
+  "calibratedAt": "2026-08-01T22:10:06Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

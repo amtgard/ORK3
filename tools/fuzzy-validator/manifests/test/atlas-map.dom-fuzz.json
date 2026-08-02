@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "pageId": "atlas-map",
+  "calibratedAt": "2026-08-01T23:01:31Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[1]",
+      "mode": "attributes",
+      "attrs": [
+        "aria-describedby"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[1]/div[0]",
+      "mode": "attributes",
+      "attrs": [
+        "id"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[14]/div[0]/button[0]",
+      "mode": "attributes",
+      "attrs": [
+        "aria-describedby"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[2]/div[0]/div[0]/ul[0]",
+      "mode": "attributes",
+      "attrs": [
+        "aria-labelledby"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[2]/div[0]/div[1]/ul[0]",
+      "mode": "attributes",
+      "attrs": [
+        "aria-labelledby"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[2]/div[0]/div[0]/button[0]",
+      "mode": "attributes",
+      "attrs": [
+        "id"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[2]/div[0]/div[1]/button[0]",
+      "mode": "attributes",
+      "attrs": [
+        "id"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[14]/div[0]/button[0]/span[0]",
+      "mode": "attributes",
+      "attrs": [
+        "id"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[0]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[1]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[4]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[5]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[7]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[9]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[10]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[11]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[13]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[1]/div[0]/div[2]/span[0]",
+      "mode": "attributes",
+      "attrs": [
+        "id"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[0]/img[0]",
+      "mode": "attributes",
+      "attrs": [
+        "src"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[1]/img[0]",
+      "mode": "attributes",
+      "attrs": [
+        "src"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[4]/img[0]",
+      "mode": "attributes",
+      "attrs": [
+        "src"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[5]/img[0]",
+      "mode": "attributes",
+      "attrs": [
+        "src"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[7]/img[0]",
+      "mode": "attributes",
+      "attrs": [
+        "src"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[9]/img[0]",
+      "mode": "attributes",
+      "attrs": [
+        "src"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[10]/img[0]",
+      "mode": "attributes",
+      "attrs": [
+        "src"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[11]/img[0]",
+      "mode": "attributes",
+      "attrs": [
+        "src"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[13]/img[0]",
+      "mode": "attributes",
+      "attrs": [
+        "src"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[11]/div[0]/gmp-internal-camera-control[0]/menu[0]",
+      "mode": "attributes",
+      "attrs": [
+        "id"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[11]/div[0]/gmp-internal-camera-control[0]/button[0]",
+      "mode": "attributes",
+      "attrs": [
+        "aria-controls"
+      ],
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

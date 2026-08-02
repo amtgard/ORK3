@@ -2,12 +2,27 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw
 
 from lib.diff_regions import Rect
+
+
+def _save_image_atomic(image: Image.Image, out: Path) -> None:
+    """Write via temp file + replace to reduce cloud-sync overwrite deadlocks."""
+    tmp = out.with_name(f".{out.stem}.tmp-{os.getpid()}{out.suffix}")
+    try:
+        image.save(tmp)
+        os.replace(tmp, out)
+    finally:
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
 
 
 def _apply_colored_boxes(
@@ -56,7 +71,7 @@ def draw_calibration_overlay(
     annotated = _apply_colored_boxes(base, boxes, color, alpha)
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    annotated.save(out)
+    _save_image_atomic(annotated, out)
     return out
 
 
@@ -76,5 +91,5 @@ def draw_gate_annotation(
     annotated = _apply_colored_boxes(annotated, failure_boxes, (220, 40, 40), 0.45)
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    annotated.save(out)
+    _save_image_atomic(annotated, out)
     return out

@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "pageId": "reports-ladder-grid",
   "imageWidth": 1280,
-  "imageHeight": 15532,
-  "calibratedAt": "2026-07-19T04:23:12Z",
+  "imageHeight": 776,
+  "calibratedAt": "2026-08-01T19:54:11Z",
   "calibrationRuns": 5,
   "params": {
     "colorThreshold": 20,
@@ -12,5 +12,5 @@
   },
   "fuzzZones": [],
   "manualZones": [],
-  "calibratedFromCommit": "671c108b"
+  "calibratedFromCommit": "5bc623cd"
 }

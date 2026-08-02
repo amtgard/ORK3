@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "pageId": "kingdom-map-2",
+  "calibratedAt": "2026-08-01T23:02:33Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]",
+      "mode": "subtree",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

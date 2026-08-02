@@ -19,6 +19,12 @@ services:
       - ../..:/ork3
       - fv-node-modules:/ork3/node_modules
       - /var/run/docker.sock:/var/run/docker.sock
+      # Hot capture dirs on local disk — Google Drive bind mounts hit errno 35
+      # ("Resource deadlock avoided") on overwrite from Docker Desktop.
+      - ${FUZZY_VALIDATOR_CACHE:-${HOME}/.cache/ork3/fuzzy-validator}/reports:/ork3/tools/fuzzy-validator/reports
+      - ${FUZZY_VALIDATOR_CACHE:-${HOME}/.cache/ork3/fuzzy-validator}/calibrations:/ork3/tools/fuzzy-validator/calibrations
+      - ${FUZZY_VALIDATOR_CACHE:-${HOME}/.cache/ork3/fuzzy-validator}/baselines:/ork3/tools/fuzzy-validator/baselines
+      - ${FUZZY_VALIDATOR_CACHE:-${HOME}/.cache/ork3/fuzzy-validator}/setpoints-out:/ork3/tools/fuzzy-validator/setpoints/out
     environment:
       ORK3_E2E_BASE_URL: ${ORK3_E2E_BASE_URL:-http://ork3-php8-app/orkui/}
       FUZZY_VALIDATOR_IN_CONTAINER: "1"

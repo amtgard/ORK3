@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "pageId": "kingdom-map",
+  "imageWidth": 1280,
+  "imageHeight": 813,
+  "calibratedAt": "2026-08-01T23:01:56Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [
+    {
+      "x": 111,
+      "y": 516,
+      "width": 26,
+      "height": 20,
+      "source": "auto"
+    },
+    {
+      "x": 53,
+      "y": 518,
+      "width": 31,
+      "height": 17,
+      "source": "auto"
+    },
+    {
+      "x": 137,
+      "y": 518,
+      "width": 32,
+      "height": 20,
+      "source": "auto"
+    },
+    {
+      "x": 54,
+      "y": 566,
+      "width": 17,
+      "height": 18,
+      "source": "auto"
+    },
+    {
+      "x": 75,
+      "y": 566,
+      "width": 26,
+      "height": 19,
+      "source": "auto"
+    },
+    {
+      "x": 147,
+      "y": 637,
+      "width": 44,
+      "height": 18,
+      "source": "auto"
+    },
+    {
+      "x": 51,
+      "y": 567,
+      "width": 57,
+      "height": 29,
+      "source": "refuzz"
+    }
+  ],
+  "manualZones": [],
+  "refuzzedAt": "2026-08-02T01:57:29Z",
+  "refuzzedFromCommit": "5bc623cd"
+}

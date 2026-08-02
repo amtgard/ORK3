@@ -172,5 +172,12 @@ for key in "${pass_keys[@]}"; do
   fi
 done
 
-exec docker exec -i -w /ork3 "${exec_env[@]}" "$RUNNER_NAME" \
+# Avoid -i unless stdin is a TTY: -i would otherwise consume a caller's redirected
+# stdin (e.g. a pages list feeding a while-read loop).
+docker_exec_flags=(-w /ork3)
+if [[ -t 0 ]]; then
+  docker_exec_flags+=(-i)
+fi
+
+exec docker exec "${docker_exec_flags[@]}" "${exec_env[@]}" "$RUNNER_NAME" \
   /ork3/tools/fuzzy-validator/bin/fuzzy-validator-native "${forward_args[@]}"

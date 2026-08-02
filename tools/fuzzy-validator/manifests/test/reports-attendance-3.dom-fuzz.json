@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-attendance-3",
+  "calibratedAt": "2026-08-02T00:05:24Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[0]/table[0]/tbody[0]/tr[0]/td[0]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[0]/table[0]/tbody[0]/tr[0]/td[1]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[0]/table[0]/tbody[0]/tr[0]/td[2]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[0]/table[0]/tbody[0]/tr[0]/td[1]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[0]/table[0]/tbody[0]/tr[0]/td[2]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "pageId": "park-auth-sandbox",
   "imageWidth": 1280,
-  "imageHeight": 961,
-  "calibratedAt": "2026-07-19T04:20:16Z",
+  "imageHeight": 942,
+  "calibratedAt": "2026-08-01T19:41:21Z",
   "calibrationRuns": 5,
   "params": {
     "colorThreshold": 20,
@@ -12,5 +12,5 @@
   },
   "fuzzZones": [],
   "manualZones": [],
-  "calibratedFromCommit": "671c108b"
+  "calibratedFromCommit": "5bc623cd"
 }

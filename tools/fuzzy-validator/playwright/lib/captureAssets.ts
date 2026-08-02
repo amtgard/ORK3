@@ -139,6 +139,15 @@ export class AssetCaptureSession {
         return;
       }
       const canonical = canonicalizeAssetUrl(response.url(), this.pageUrl);
+      // First-party only: third-party CDNs (e.g. maps.googleapis.com v=weekly) are
+      // not byte-stable across calibration runs and are outside the ORK refactor contract.
+      try {
+        if (new URL(canonical).origin !== new URL(this.pageUrl).origin) {
+          return;
+        }
+      } catch {
+        return;
+      }
       const body = Buffer.from(await response.body());
       this.collector.addNetworkAsset(isCss ? 'css' : 'js', canonical, body);
     } catch {

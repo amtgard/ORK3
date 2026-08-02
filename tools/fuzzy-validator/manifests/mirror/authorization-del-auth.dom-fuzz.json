@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "pageId": "authorization-del-auth",
+  "calibratedAt": "2026-08-01T20:19:59Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": []
+}

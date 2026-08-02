@@ -34,6 +34,7 @@ Before a stacked branch may close:
 | M2 | `fix-pr-492-batch5-m2-infection` | Rev4-touched infection configs green; raise floors monotonically where evidence supports | [x] GREEN | suite 25.32% ≥ M1 25.24%; no new PHP | floors raised (see runlist) | `256995ec` | [x] |
 | M3 | `fix-pr-492-batch5-m3-docs` | Checklist SHA fill (C-28/C-29 + C-01…C-18), plan Mac-skip note, Batch5 checklist sync | [x] n/a docs | n/a docs | n/a | `a68c6273` | [x] |
 | M4 | `fix-pr-492-batch5-m4-pr-hygiene` | Post pending-replies + REVISION-4; push `fix-pr-492` + mirror `megiddo/fuzzy-validator-v2` | [x] n/a docs | n/a docs | n/a | `4792ea6f` | [x] |
+| M5 | `fix-pr-492-batch5-m5-fuzzy-expanded` | Expanded fuzzy-validator setpoint for full active page registry via Docker runner (FV21) | [x] n/a tool | n/a tool | n/a | `ae53eb49` | [x] |
 
 Note: Git ref names use hyphens (`fix-pr-492-batch5-m*`), not nested `fix-pr-492/...`, because branch `fix-pr-492` already exists.
 
@@ -117,6 +118,9 @@ Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 - 2026-08-01: M3 docs closeout — filled checklist Commit SHAs for C-28 (`ea4a6608`), C-29 (`ae4f0864`), and verified blanks C-01…C-18 from `FIX-PR492` history; corrected C-27 to tip-reachable `6834b1cd` (orphan twin `c9656250` not on HEAD). Mac Phase A skip already noted in plan. Docs-only; PHPUnit not re-run. Remaining: Phase D / M4 (pending-replies + push/mirror). Fuzzy-validator WIP stays stashed.
 - 2026-08-01: M4 PR hygiene — posted C-19…C-30 thread replies + C-31/REVISION-4 issue comments; refreshed REVISION-4 tip/validation for Batch5 M1–M3; FF `fix-pr-492` to M4 tip; push `origin/fix-pr-492` + mirror `megiddo/fuzzy-validator-v2`. Docs-only; PHPUnit not re-run. Fuzzy-validator WIP stays stashed.
 
+
+- 2026-08-02: M5 fuzzy expanded setpoint — Docker runner capture for active registry (273 dual-profile after policy skips). Bundle `setpoint.json` → latestBundle pageCount 277; bootstrap zip copied. Smoke validate (6 pages): assets green after first-party asset filter; 5/6 dual-profile PASS after targeted refuzz; `kingdom-map` remains DOM-volatile on re-validate (documented). Policy skips: kingdom-ics-2, kingdom-players-json-2, search-unitsearch, reports-player-award-recommendations{,-2}. Stash `stash@{0}` left untouched. Runner: local-cache volume mounts for Drive deadlock; `deploy-sandbox --yes`.
+
 ### M2 result log
 
 | Metric | Value | Recorded |
@@ -150,3 +154,18 @@ Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 | Replies posted | C-19…C-30 thread replies; C-31 + REVISION-4 issue comments (all ok) | 2026-08-01 |
 | Push | `origin/fix-pr-492` + `megiddo/fuzzy-validator-v2` (see progress note / return) | 2026-08-01 |
 | Remaining | optional `/babysit`; fuzzy-validator WIP stashed | 2026-08-01 |
+
+### M5 result log
+
+| Metric | Value | Recorded |
+|---|---|---|
+| Branch tip | `ae53eb49` | 2026-08-02 |
+| Branch | `fix-pr-492-batch5-m5-fuzzy-expanded` | 2026-08-02 |
+| Scope | Expanded fuzzy-validator setpoint (Docker runner) for full active page registry | 2026-08-02 |
+| Active pages | 273 (301 registry; 28 skip) | 2026-08-02 |
+| Profiles | test, mirror | 2026-08-02 |
+| Capture | 273/273 dual-profile OK; logs under `build/batch5-m5-fuzzy-*.log` | 2026-08-02 |
+| Setpoint | `setpoint.json` latestBundle pageCount 277; bootstrap zip present | 2026-08-02 |
+| Smoke validate | 5/6 dual-profile PASS after refuzz; `kingdom-map` residual DOM volatility | 2026-08-02 |
+| PHPUnit | skipped (no product PHP) | 2026-08-02 |
+| Fuzzy stash | untouched (`stash@{0}`) | 2026-08-02 |

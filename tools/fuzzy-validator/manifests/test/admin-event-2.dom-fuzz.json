@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "pageId": "admin-event-2",
+  "calibratedAt": "2026-08-01T20:02:24Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/form[0]/div[0]/span[1]/img[0]",
+      "mode": "attributes",
+      "attrs": [
+        "src"
+      ],
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

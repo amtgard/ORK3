@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "selfreg-index",
+  "calibratedAt": "2026-08-01T22:07:15Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-player-awards",
+  "calibratedAt": "2026-08-02T00:53:29Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

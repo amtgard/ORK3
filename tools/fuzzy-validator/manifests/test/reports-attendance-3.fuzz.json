@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-attendance-3",
+  "imageWidth": 1280,
+  "imageHeight": 1330,
+  "calibratedAt": "2026-08-02T00:05:24Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [
+    {
+      "x": 763,
+      "y": 745,
+      "width": 76,
+      "height": 20,
+      "source": "auto"
+    },
+    {
+      "x": 974,
+      "y": 745,
+      "width": 71,
+      "height": 20,
+      "source": "auto"
+    }
+  ],
+  "manualZones": [],
+  "calibratedFromCommit": "5bc623cd"
+}

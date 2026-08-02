@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "admin-permissions-2",
+  "calibratedAt": "2026-08-01T20:08:06Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}
