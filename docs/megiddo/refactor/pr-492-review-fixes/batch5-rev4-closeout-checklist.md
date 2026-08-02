@@ -34,7 +34,7 @@ Before a stacked branch may close:
 | M2 | `fix-pr-492-batch5-m2-infection` | Rev4-touched infection configs green; raise floors monotonically where evidence supports | [x] GREEN | suite 25.32% ≥ M1 25.24%; no new PHP | floors raised (see runlist) | `256995ec` | [x] |
 | M3 | `fix-pr-492-batch5-m3-docs` | Checklist SHA fill (C-28/C-29 + C-01…C-18), plan Mac-skip note, Batch5 checklist sync | [x] n/a docs | n/a docs | n/a | `a68c6273` | [x] |
 | M4 | `fix-pr-492-batch5-m4-pr-hygiene` | Post pending-replies + REVISION-4; push `fix-pr-492` + mirror `megiddo/fuzzy-validator-v2` | [x] n/a docs | n/a docs | n/a | `4792ea6f` | [x] |
-| M5 | `fix-pr-492-batch5-m5-fuzzy-expanded` | Expanded fuzzy-validator setpoint for full active page registry via Docker runner (FV21) | [x] n/a tool | n/a tool | n/a | `ae53eb49` | [x] |
+| M5 | `fix-pr-492-batch5-m5-fuzzy-expanded` | Expanded fuzzy-validator setpoint for full active page registry via Docker runner (FV21) | [x] n/a tool | n/a tool | n/a | `c31d6693` | [x] |
 
 Note: Git ref names use hyphens (`fix-pr-492-batch5-m*`), not nested `fix-pr-492/...`, because branch `fix-pr-492` already exists.
 
@@ -159,13 +159,13 @@ Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 
 | Metric | Value | Recorded |
 |---|---|---|
-| Branch tip | `ae53eb49` | 2026-08-02 |
+| Branch tip | `c31d6693` | 2026-08-02 |
 | Branch | `fix-pr-492-batch5-m5-fuzzy-expanded` | 2026-08-02 |
 | Scope | Expanded fuzzy-validator setpoint (Docker runner) for full active page registry | 2026-08-02 |
 | Active pages | 273 (301 registry; 28 skip) | 2026-08-02 |
 | Profiles | test, mirror | 2026-08-02 |
 | Capture | 273/273 dual-profile OK; logs under `build/batch5-m5-fuzzy-*.log` | 2026-08-02 |
-| Setpoint | `setpoint.json` latestBundle pageCount 277; bootstrap zip present | 2026-08-02 |
+| Setpoint | `setpoint.json` latestBundle pageCount 277; bootstrap zip local/Drive-only (GitHub 100MB limit) | 2026-08-02 |
 | Smoke validate | 5/6 dual-profile PASS after refuzz; `kingdom-map` residual DOM volatility | 2026-08-02 |
 | PHPUnit | skipped (no product PHP) | 2026-08-02 |
 | Fuzzy stash | untouched (`stash@{0}`) | 2026-08-02 |

@@ -116,3 +116,5 @@ Additional registry `skip` after expanded Docker-runner setpoint capture:
 | `reports-player-award-recommendations-2` | Same bistable-height failure on mirror |
 
 Tool fixes landed with M5: first-party-only asset capture (exclude `maps.googleapis.com` CDN drift); runner local-cache mounts for Drive bind-mount deadlocks; `deploy-sandbox --yes` from runner; optional `waitUntil` / `timeoutMs` page fields.
+
+**Publish note:** Expanded bundle ~205MB exceeds GitHub 100MB; commit `setpoint.json` + manifests only. Keep zip under `setpoints/bootstrap/` locally and/or Drive.
