@@ -3,6 +3,166 @@
   "pageId": "authorization-del-auth",
   "calibratedAt": "2026-08-01T20:19:59Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
-  "manualNodes": []
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[0]/td[0]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[0]/td[7]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[1]/td[0]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[1]/td[7]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[2]/td[0]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[2]/td[7]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[3]/td[0]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[3]/td[7]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[4]/td[0]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[4]/td[7]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[5]/td[0]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[5]/td[7]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[6]/td[0]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[6]/td[7]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[0]/td[5]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[4]/td[5]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[0]/td[0]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[1]/td[0]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[2]/td[0]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[3]/td[0]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[4]/td[0]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[5]/td[0]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/table[0]/tbody[0]/tr[6]/td[0]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "refuzzedAt": "2026-08-02T18:54:19Z",
+  "refuzzedFromCommit": "05389516"
 }

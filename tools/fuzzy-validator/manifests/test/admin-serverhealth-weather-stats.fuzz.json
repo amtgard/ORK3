@@ -38,8 +38,122 @@
       "width": 19,
       "height": 19,
       "source": "auto"
+    },
+    {
+      "x": 2,
+      "y": 45,
+      "width": 20,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 111,
+      "y": 60,
+      "width": 20,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 0,
+      "y": 75,
+      "width": 14,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 2,
+      "y": 105,
+      "width": 20,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 714,
+      "y": 135,
+      "width": 20,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 738,
+      "y": 135,
+      "width": 66,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 1012,
+      "y": 135,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 2,
+      "y": 150,
+      "width": 67,
+      "height": 36,
+      "source": "refuzz"
+    },
+    {
+      "x": 111,
+      "y": 180,
+      "width": 20,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 0,
+      "y": 195,
+      "width": 14,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 2,
+      "y": 225,
+      "width": 20,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 714,
+      "y": 255,
+      "width": 20,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 738,
+      "y": 255,
+      "width": 66,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 1012,
+      "y": 255,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 2,
+      "y": 270,
+      "width": 67,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 2,
+      "y": 150,
+      "width": 67,
+      "height": 21,
+      "source": "refuzz"
     }
   ],
   "manualZones": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T18:51:51Z",
+  "refuzzedFromCommit": "05389516"
 }

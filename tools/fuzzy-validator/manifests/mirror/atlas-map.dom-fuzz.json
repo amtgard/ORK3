@@ -5,6 +5,11 @@
   "calibrationRuns": 5,
   "fuzzNodes": [
     {
+      "path": "/html[0]/head[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
       "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[0]",
       "mode": "attributes",
       "attrs": [
@@ -37,6 +42,22 @@
       "source": "auto"
     },
     {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[1]/div[0]/div[1]/div[0]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[1]/div[0]/div[0]/div[5]/div[0]/img[0]",
+      "mode": "attributes",
+      "attrs": [
+        "src"
+      ],
+      "source": "auto"
+    },
+    {
       "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[1]/div[0]/div[1]/div[0]/div[2]/span[0]",
       "mode": "attributes",
       "attrs": [
@@ -46,5 +67,7 @@
     }
   ],
   "manualNodes": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T18:54:05Z",
+  "refuzzedFromCommit": "05389516"
 }

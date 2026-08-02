@@ -3,6 +3,14 @@
   "pageId": "attendance-park-2",
   "calibratedAt": "2026-08-01T20:19:14Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
-  "manualNodes": []
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/h1[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "refuzzedAt": "2026-08-02T16:53:30Z",
+  "refuzzedFromCommit": "05389516"
 }

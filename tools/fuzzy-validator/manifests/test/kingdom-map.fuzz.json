@@ -59,9 +59,39 @@
       "width": 57,
       "height": 29,
       "source": "refuzz"
+    },
+    {
+      "x": 111,
+      "y": 516,
+      "width": 59,
+      "height": 22,
+      "source": "refuzz"
+    },
+    {
+      "x": 53,
+      "y": 517,
+      "width": 32,
+      "height": 18,
+      "source": "refuzz"
+    },
+    {
+      "x": 52,
+      "y": 566,
+      "width": 56,
+      "height": 32,
+      "source": "refuzz"
     }
   ],
-  "manualZones": [],
-  "refuzzedAt": "2026-08-02T01:57:29Z",
-  "refuzzedFromCommit": "5bc623cd"
+  "manualZones": [
+    {
+      "x": 20,
+      "y": 90,
+      "width": 1240,
+      "height": 600,
+      "source": "manual",
+      "label": "#map canvas (Google Maps tiles/markers/viewport); CSS height 540px"
+    }
+  ],
+  "refuzzedAt": "2026-08-02T14:11:04Z",
+  "refuzzedFromCommit": "05389516"
 }

@@ -10,7 +10,213 @@
     "minAreaPx": 64,
     "padPx": 4
   },
-  "fuzzZones": [],
+  "fuzzZones": [
+    {
+      "x": 392,
+      "y": 159,
+      "width": 20,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 475,
+      "y": 159,
+      "width": 20,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 1018,
+      "y": 241,
+      "width": 130,
+      "height": 26,
+      "source": "refuzz"
+    },
+    {
+      "x": 759,
+      "y": 245,
+      "width": 46,
+      "height": 29,
+      "source": "refuzz"
+    },
+    {
+      "x": 1141,
+      "y": 326,
+      "width": 47,
+      "height": 58,
+      "source": "refuzz"
+    },
+    {
+      "x": 99,
+      "y": 340,
+      "width": 98,
+      "height": 22,
+      "source": "refuzz"
+    },
+    {
+      "x": 233,
+      "y": 364,
+      "width": 39,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 282,
+      "y": 364,
+      "width": 44,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 330,
+      "y": 364,
+      "width": 77,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 411,
+      "y": 364,
+      "width": 44,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 464,
+      "y": 364,
+      "width": 39,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 533,
+      "y": 364,
+      "width": 19,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 572,
+      "y": 364,
+      "width": 39,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 621,
+      "y": 364,
+      "width": 44,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 674,
+      "y": 364,
+      "width": 72,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 750,
+      "y": 364,
+      "width": 44,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 803,
+      "y": 364,
+      "width": 39,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 863,
+      "y": 364,
+      "width": 28,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 912,
+      "y": 364,
+      "width": 38,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 960,
+      "y": 364,
+      "width": 44,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 1009,
+      "y": 364,
+      "width": 76,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 1089,
+      "y": 364,
+      "width": 44,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 1202,
+      "y": 364,
+      "width": 28,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 543,
+      "y": 442,
+      "width": 66,
+      "height": 24,
+      "source": "refuzz"
+    },
+    {
+      "x": 673,
+      "y": 442,
+      "width": 328,
+      "height": 55,
+      "source": "refuzz"
+    },
+    {
+      "x": 447,
+      "y": 469,
+      "width": 131,
+      "height": 28,
+      "source": "refuzz"
+    },
+    {
+      "x": 343,
+      "y": 470,
+      "width": 43,
+      "height": 23,
+      "source": "refuzz"
+    },
+    {
+      "x": 116,
+      "y": 495,
+      "width": 20,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 116,
+      "y": 552,
+      "width": 20,
+      "height": 21,
+      "source": "refuzz"
+    }
+  ],
   "manualZones": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T18:54:00Z",
+  "refuzzedFromCommit": "05389516"
 }

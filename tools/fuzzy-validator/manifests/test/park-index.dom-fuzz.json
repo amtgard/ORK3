@@ -3,7 +3,50 @@
   "pageId": "park-index",
   "calibratedAt": "2026-08-01T20:43:34Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[0]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[1]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[2]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[3]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[4]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[5]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[6]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[4]/table[0]/tbody[0]/tr[7]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
   "manualNodes": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:46:26Z",
+  "refuzzedFromCommit": "05389516"
 }

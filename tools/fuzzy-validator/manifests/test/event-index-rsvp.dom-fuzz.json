@@ -3,7 +3,88 @@
   "pageId": "event-index-rsvp",
   "calibratedAt": "2026-08-01T19:43:04Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[0]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-order"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[0]/td[3]",
+      "mode": "attributes",
+      "attrs": [
+        "data-order"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[1]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-order"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[1]/td[3]",
+      "mode": "attributes",
+      "attrs": [
+        "data-order"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[2]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-order"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[2]/td[3]",
+      "mode": "attributes",
+      "attrs": [
+        "data-order"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[0]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[0]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[1]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[1]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[2]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[2]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
   "manualNodes": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:45:03Z",
+  "refuzzedFromCommit": "05389516"
 }

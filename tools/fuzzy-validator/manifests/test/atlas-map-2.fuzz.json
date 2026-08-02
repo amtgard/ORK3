@@ -11,5 +11,7 @@
     "padPx": 4
   },
   "fuzzZones": [],
-  "manualZones": []
+  "manualZones": [],
+  "refuzzedAt": "2026-08-02T18:52:11Z",
+  "refuzzedFromCommit": "05389516"
 }

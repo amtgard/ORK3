@@ -10,6 +10,46 @@
     "minAreaPx": 64,
     "padPx": 4
   },
-  "fuzzZones": [],
-  "manualZones": []
+  "fuzzZones": [
+    {
+      "x": 51,
+      "y": 515,
+      "width": 34,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 110,
+      "y": 515,
+      "width": 60,
+      "height": 25,
+      "source": "refuzz"
+    },
+    {
+      "x": 51,
+      "y": 564,
+      "width": 36,
+      "height": 34,
+      "source": "refuzz"
+    },
+    {
+      "x": 146,
+      "y": 635,
+      "width": 40,
+      "height": 20,
+      "source": "refuzz"
+    }
+  ],
+  "manualZones": [
+    {
+      "x": 20,
+      "y": 90,
+      "width": 1240,
+      "height": 600,
+      "source": "manual",
+      "label": "#map canvas (Google Maps tiles/markers/viewport); CSS height 540px"
+    }
+  ],
+  "refuzzedAt": "2026-08-02T14:11:09Z",
+  "refuzzedFromCommit": "05389516"
 }

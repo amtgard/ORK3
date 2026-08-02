@@ -3,14 +3,27 @@
   "pageId": "kingdom-map",
   "calibratedAt": "2026-08-01T23:02:08Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [
+  "fuzzNodes": [],
+  "manualNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]",
+      "mode": "subtree",
+      "source": "manual",
+      "label": "#map element subtree"
+    },
+    {
+      "path": "/html[0]/head[0]",
+      "mode": "subtree",
+      "source": "manual",
+      "label": "Google Maps injects/reorders head <script> tags"
+    },
     {
       "path": "/html[0]/body[0]",
       "mode": "subtree",
-      "source": "auto"
+      "source": "manual",
+      "label": "Maps/weather optional body siblings; chrome still gated by visual outside #map zone"
     }
   ],
-  "manualNodes": [],
-  "refuzzedAt": "2026-08-02T01:57:57Z",
-  "refuzzedFromCommit": "5bc623cd"
+  "refuzzedAt": "2026-08-02T14:31:10Z",
+  "refuzzedFromCommit": "05389516"
 }

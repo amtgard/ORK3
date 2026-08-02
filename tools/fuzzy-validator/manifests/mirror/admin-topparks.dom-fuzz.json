@@ -3,6 +3,1030 @@
   "pageId": "admin-topparks",
   "calibratedAt": "2026-08-01T20:12:49Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
-  "manualNodes": []
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[2]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[3]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[1]/span[0]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[1]/span[0]/strong[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[2]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[9]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[0]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[1]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[2]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[3]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[4]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[5]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[6]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[7]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[8]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[9]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[0]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[1]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[2]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[3]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[4]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[5]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[6]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[7]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[8]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[9]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[10]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[11]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[12]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[13]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[14]",
+      "mode": "attributes",
+      "attrs": [
+        "transform"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[10]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[11]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[12]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[13]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[14]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[15]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[16]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[17]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[18]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[19]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[20]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[21]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[22]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[23]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[24]",
+      "mode": "attributes",
+      "attrs": [
+        "onclick"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[0]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[1]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[2]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[3]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[4]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[5]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[6]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[7]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[8]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[9]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[10]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[11]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[12]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[13]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[5]/g[0]/rect[14]",
+      "mode": "attributes",
+      "attrs": [
+        "height",
+        "y"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[0]/div[1]/form[0]/div[0]/input[0]",
+      "mode": "attributes",
+      "attrs": [
+        "value"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[0]/div[1]/form[0]/div[1]/input[0]",
+      "mode": "attributes",
+      "attrs": [
+        "value"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[0]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[0]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[1]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[1]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[2]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[3]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[3]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[4]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[4]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[5]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[5]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[6]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[6]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[7]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[7]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[8]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[8]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[9]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[9]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[10]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[10]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[11]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[11]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[12]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[12]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[13]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[14]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[14]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[15]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[15]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[16]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[16]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[17]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[17]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[18]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[18]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[19]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[19]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[20]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[20]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[21]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[21]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[22]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[22]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[23]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[23]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[24]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[24]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[13]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[1]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[2]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[3]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[4]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[5]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[6]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[7]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[8]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[9]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[10]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[11]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[12]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[13]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[8]/text[14]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[0]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[1]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[2]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[3]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[4]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[5]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[6]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[7]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[8]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[9]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[0]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[1]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[2]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[3]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[4]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[5]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[6]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[7]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[8]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[9]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[10]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[11]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[12]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[13]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[14]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[15]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[16]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[17]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[18]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[19]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[20]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[21]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[22]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[23]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/table[0]/tbody[0]/tr[24]/td[1]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[10]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[11]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[12]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[13]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[3]/div[0]/div[0]/svg[0]/g[6]/g[14]/text[0]/tspan[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "refuzzedAt": "2026-08-02T18:53:55Z",
+  "refuzzedFromCommit": "05389516"
 }

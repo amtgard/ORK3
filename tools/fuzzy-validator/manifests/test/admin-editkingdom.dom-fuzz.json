@@ -5,6 +5,11 @@
   "calibrationRuns": 5,
   "fuzzNodes": [
     {
+      "path": "/html[0]/body[0]/nav[0]/div[0]/ul[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
       "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/form[0]/div[0]/span[1]/img[0]",
       "mode": "attributes",
       "attrs": [
@@ -14,5 +19,7 @@
     }
   ],
   "manualNodes": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:42:21Z",
+  "refuzzedFromCommit": "05389516"
 }

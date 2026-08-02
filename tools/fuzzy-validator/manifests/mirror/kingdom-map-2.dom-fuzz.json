@@ -10,6 +10,27 @@
       "source": "auto"
     }
   ],
-  "manualNodes": [],
-  "calibratedFromCommit": "5bc623cd"
+  "manualNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]",
+      "mode": "subtree",
+      "source": "manual",
+      "label": "#map element subtree"
+    },
+    {
+      "path": "/html[0]/head[0]",
+      "mode": "subtree",
+      "source": "manual",
+      "label": "Google Maps injects/reorders head <script> tags"
+    },
+    {
+      "path": "/html[0]/body[0]",
+      "mode": "subtree",
+      "source": "manual",
+      "label": "Maps/weather optional body siblings; chrome still gated by visual outside #map zone"
+    }
+  ],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T14:31:15Z",
+  "refuzzedFromCommit": "05389516"
 }

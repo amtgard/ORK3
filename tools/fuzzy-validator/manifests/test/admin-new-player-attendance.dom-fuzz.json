@@ -3,7 +3,26 @@
   "pageId": "admin-new-player-attendance",
   "calibratedAt": "2026-08-01T20:06:53Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[1]/form[0]/div[0]/input[0]",
+      "mode": "attributes",
+      "attrs": [
+        "value"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[1]/form[0]/div[1]/input[0]",
+      "mode": "attributes",
+      "attrs": [
+        "value"
+      ],
+      "source": "auto"
+    }
+  ],
   "manualNodes": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:43:00Z",
+  "refuzzedFromCommit": "05389516"
 }

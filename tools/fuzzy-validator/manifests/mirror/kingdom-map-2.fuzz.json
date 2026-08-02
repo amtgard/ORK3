@@ -11,6 +11,17 @@
     "padPx": 4
   },
   "fuzzZones": [],
-  "manualZones": [],
-  "calibratedFromCommit": "5bc623cd"
+  "manualZones": [
+    {
+      "x": 20,
+      "y": 90,
+      "width": 1240,
+      "height": 600,
+      "source": "manual",
+      "label": "#map canvas (Google Maps tiles/markers/viewport); CSS height 540px"
+    }
+  ],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T14:11:20Z",
+  "refuzzedFromCommit": "05389516"
 }

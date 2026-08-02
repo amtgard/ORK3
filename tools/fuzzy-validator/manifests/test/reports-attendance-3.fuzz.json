@@ -24,8 +24,24 @@
       "width": 71,
       "height": 20,
       "source": "auto"
+    },
+    {
+      "x": 770,
+      "y": 745,
+      "width": 69,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 968,
+      "y": 745,
+      "width": 87,
+      "height": 33,
+      "source": "refuzz"
     }
   ],
   "manualZones": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T18:53:29Z",
+  "refuzzedFromCommit": "05389516"
 }

@@ -1097,7 +1097,7 @@
       "waitAfterMs": 1000,
       "readySelector": "#main, body",
       "driftClass": "natural",
-      "notes": "Registry expansion \u2014 template Kingdom/map"
+      "notes": "Kingdom/map — keep active; large manual fuzz zone covers #map canvas (tiles/markers/viewport)."
     },
     {
       "id": "kingdom-map-2",
@@ -1106,7 +1106,7 @@
       "waitAfterMs": 1000,
       "readySelector": "#main, body",
       "driftClass": "natural",
-      "notes": "Registry expansion — template Kingdom/map/{id}; sandbox kingdom 100001"
+      "notes": "Kingdom/map/{id} — same #map canvas fuzz as kingdom-map; sandbox kingdom 100001."
     },
     {
       "id": "kingdom-park-averages-json",

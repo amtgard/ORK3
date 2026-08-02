@@ -3,6 +3,14 @@
   "pageId": "kingdom-park-averages-json-2",
   "calibratedAt": "2026-08-01T20:32:42Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
-  "manualNodes": []
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/pre[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "refuzzedAt": "2026-08-02T16:54:50Z",
+  "refuzzedFromCommit": "05389516"
 }

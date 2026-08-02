@@ -13,6 +13,6 @@
   "fuzzZones": [],
   "manualZones": [],
   "calibratedFromCommit": "5bc623cd",
-  "refuzzedAt": "2026-08-02T01:57:19Z",
-  "refuzzedFromCommit": "5bc623cd"
+  "refuzzedAt": "2026-08-02T16:46:42Z",
+  "refuzzedFromCommit": "05389516"
 }

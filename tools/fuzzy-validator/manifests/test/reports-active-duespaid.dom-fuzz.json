@@ -3,7 +3,389 @@
   "pageId": "reports-active-duespaid",
   "calibratedAt": "2026-08-01T21:01:43Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[1]/div[5]/div[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[1]/div[5]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[1]/div[5]/div[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[1]/div[5]/div[2]/span[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[4]/div[2]/a[0]/div[0]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[4]/div[2]/a[1]/div[0]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[4]/div[2]/a[2]/div[0]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[4]/div[2]/a[3]/div[0]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[4]/div[2]/a[4]/div[0]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[4]/div[2]/a[5]/div[0]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[4]/div[2]/a[6]/div[0]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[0]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[1]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[2]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[3]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[4]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[5]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[6]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[7]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[8]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[9]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[10]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[11]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[12]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[13]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[14]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[15]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[16]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[17]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[0]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[2]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[3]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[4]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[5]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[6]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[7]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[8]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[9]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[10]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[11]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[12]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[13]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[14]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[15]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[16]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[1]/details[0]/div[0]/a[17]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[0]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[1]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[2]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[3]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[4]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[5]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[6]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[7]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[8]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[9]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[10]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[11]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[12]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[13]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[14]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[15]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[16]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[0]/div[3]/div[2]/details[0]/table[0]/tbody[0]/tr[17]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
   "manualNodes": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T18:53:09Z",
+  "refuzzedFromCommit": "05389516"
 }

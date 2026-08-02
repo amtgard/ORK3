@@ -10,6 +10,44 @@
     "minAreaPx": 64,
     "padPx": 4
   },
-  "fuzzZones": [],
-  "manualZones": []
+  "fuzzZones": [
+    {
+      "x": 123,
+      "y": 322,
+      "width": 60,
+      "height": 45,
+      "source": "refuzz"
+    },
+    {
+      "x": 380,
+      "y": 324,
+      "width": 25,
+      "height": 31,
+      "source": "refuzz"
+    },
+    {
+      "x": 608,
+      "y": 324,
+      "width": 49,
+      "height": 31,
+      "source": "refuzz"
+    },
+    {
+      "x": 878,
+      "y": 324,
+      "width": 27,
+      "height": 31,
+      "source": "refuzz"
+    },
+    {
+      "x": 34,
+      "y": 692,
+      "width": 290,
+      "height": 90,
+      "source": "refuzz"
+    }
+  ],
+  "manualZones": [],
+  "refuzzedAt": "2026-08-02T18:55:06Z",
+  "refuzzedFromCommit": "05389516"
 }

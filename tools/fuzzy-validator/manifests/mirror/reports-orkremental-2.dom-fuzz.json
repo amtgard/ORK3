@@ -3,7 +3,87 @@
   "pageId": "reports-orkremental-2",
   "calibratedAt": "2026-08-01T21:29:11Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[0]/div[0]/span[2]/div[0]/div[0]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[0]/div[0]/span[2]/div[2]/div[0]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[0]/div[0]/div[2]/span[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[0]/div[0]/span[2]/div[0]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[0]/div[0]/ul[0]/li[0]/span[1]/span[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[0]/div[0]/ul[0]/li[1]/span[1]/span[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[0]/div[2]/div[0]/table[0]/tbody[0]/tr[1]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[0]/div[2]/div[0]/table[0]/tbody[0]/tr[1]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[1]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[0]/div[2]/div[0]/table[0]/tbody[0]/tr[1]/td[0]/div[0]/div[0]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[1]/td[0]/div[0]/div[0]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[0]/div[2]/div[0]/table[0]/tbody[0]/tr[1]/td[2]/div[1]/span[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/div[0]/div[2]/div[0]/table[0]/tbody[0]/tr[7]/td[0]/span[0]/span[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
   "manualNodes": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T18:56:48Z",
+  "refuzzedFromCommit": null
 }

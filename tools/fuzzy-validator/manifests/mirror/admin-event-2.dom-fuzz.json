@@ -14,5 +14,7 @@
     }
   ],
   "manualNodes": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:51:31Z",
+  "refuzzedFromCommit": "05389516"
 }

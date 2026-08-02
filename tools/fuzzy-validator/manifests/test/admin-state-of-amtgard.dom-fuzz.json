@@ -3,7 +3,20 @@
   "pageId": "admin-state-of-amtgard",
   "calibratedAt": "2026-08-01T19:45:16Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[0]/div[2]/button[0]",
+      "mode": "attributes",
+      "attrs": [
+        "data-max",
+        "data-min",
+        "title"
+      ],
+      "source": "auto"
+    }
+  ],
   "manualNodes": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:43:45Z",
+  "refuzzedFromCommit": "05389516"
 }

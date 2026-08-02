@@ -10,7 +10,31 @@
     "minAreaPx": 64,
     "padPx": 4
   },
-  "fuzzZones": [],
+  "fuzzZones": [
+    {
+      "x": 573,
+      "y": 310,
+      "width": 20,
+      "height": 42,
+      "source": "refuzz"
+    },
+    {
+      "x": 1118,
+      "y": 322,
+      "width": 22,
+      "height": 23,
+      "source": "refuzz"
+    },
+    {
+      "x": 75,
+      "y": 325,
+      "width": 23,
+      "height": 25,
+      "source": "refuzz"
+    }
+  ],
   "manualZones": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T18:56:48Z",
+  "refuzzedFromCommit": null
 }

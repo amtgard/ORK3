@@ -10,6 +10,16 @@
     "minAreaPx": 64,
     "padPx": 4
   },
-  "fuzzZones": [],
-  "manualZones": []
+  "fuzzZones": [
+    {
+      "x": 367,
+      "y": 85,
+      "width": 24,
+      "height": 26,
+      "source": "refuzz"
+    }
+  ],
+  "manualZones": [],
+  "refuzzedAt": "2026-08-02T16:53:30Z",
+  "refuzzedFromCommit": "05389516"
 }

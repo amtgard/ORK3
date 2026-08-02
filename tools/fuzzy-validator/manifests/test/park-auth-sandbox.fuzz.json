@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "pageId": "park-auth-sandbox",
   "imageWidth": 1280,
-  "imageHeight": 942,
+  "imageHeight": 957,
   "calibratedAt": "2026-08-01T19:41:21Z",
   "calibrationRuns": 5,
   "params": {
@@ -10,7 +10,24 @@
     "minAreaPx": 64,
     "padPx": 4
   },
-  "fuzzZones": [],
+  "fuzzZones": [
+    {
+      "x": 1080,
+      "y": 296,
+      "width": 101,
+      "height": 69,
+      "source": "refuzz"
+    },
+    {
+      "x": 1073,
+      "y": 296,
+      "width": 108,
+      "height": 84,
+      "source": "refuzz"
+    }
+  ],
   "manualZones": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T18:52:59Z",
+  "refuzzedFromCommit": "05389516"
 }

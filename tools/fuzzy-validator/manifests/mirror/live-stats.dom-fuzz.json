@@ -3,7 +3,15 @@
   "pageId": "live-stats",
   "calibratedAt": "2026-08-01T19:54:56Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/pre[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
   "manualNodes": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:55:11Z",
+  "refuzzedFromCommit": "05389516"
 }

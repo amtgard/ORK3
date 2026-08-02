@@ -3,6 +3,14 @@
   "pageId": "reports-player-awards-2",
   "calibratedAt": "2026-08-01T23:59:44Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
-  "manualNodes": []
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[0]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "refuzzedAt": "2026-08-02T16:49:43Z",
+  "refuzzedFromCommit": "05389516"
 }

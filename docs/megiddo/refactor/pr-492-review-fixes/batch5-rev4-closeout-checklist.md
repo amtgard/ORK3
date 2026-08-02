@@ -35,6 +35,7 @@ Before a stacked branch may close:
 | M3 | `fix-pr-492-batch5-m3-docs` | Checklist SHA fill (C-28/C-29 + C-01…C-18), plan Mac-skip note, Batch5 checklist sync | [x] n/a docs | n/a docs | n/a | `a68c6273` | [x] |
 | M4 | `fix-pr-492-batch5-m4-pr-hygiene` | Post pending-replies + REVISION-4; push `fix-pr-492` + mirror `megiddo/fuzzy-validator-v2` | [x] n/a docs | n/a docs | n/a | `4792ea6f` | [x] |
 | M5 | `fix-pr-492-batch5-m5-fuzzy-expanded` | Expanded fuzzy-validator setpoint for full active page registry via Docker runner (FV21) | [x] n/a tool | n/a tool | n/a | `c31d6693` | [x] |
+| M5b | `fix-pr-492` | Keep `kingdom-map`/`kingdom-map-2` active; large `#map` pixel + DOM fuzz; dual-profile revalidate | [x] n/a tool | n/a tool | n/a | *(tip after push)* | [ ] |
 
 Note: Git ref names use hyphens (`fix-pr-492-batch5-m*`), not nested `fix-pr-492/...`, because branch `fix-pr-492` already exists.
 
@@ -120,6 +121,7 @@ Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 
 
 - 2026-08-02: M5 fuzzy expanded setpoint — Docker runner capture for active registry (273 dual-profile after policy skips). Bundle `setpoint.json` → latestBundle pageCount 277; bootstrap zip copied. Smoke validate (6 pages): assets green after first-party asset filter; 5/6 dual-profile PASS after targeted refuzz; `kingdom-map` remains DOM-volatile on re-validate (documented). Policy skips: kingdom-ics-2, kingdom-players-json-2, search-unitsearch, reports-player-award-recommendations{,-2}. Stash `stash@{0}` left untouched. Runner: local-cache volume mounts for Drive deadlock; `deploy-sandbox --yes`.
+- 2026-08-02: **M5b** — Do **not** skip maps. `kingdom-map` / `kingdom-map-2` stay active. Pixel `manualZones` `{x:20,y:90,w:1240,h:600}` over `#map` (1280×813; CSS height 540px) on test+mirror. DOM `manualNodes`: `#map` subtree + head/body subtree for Google Maps script/sibling injection (chrome still gated by visual outside the map zone). Map dual-profile validate **PASS**. Full `validate --all` (273×2): **EXIT:1** — line scores **522 PASS / 24 FAIL** (`build/batch5-m5b-fuzzy-validate-all.log`); residuals listed in M5b result log. Bootstrap zip untracked; `stash@{0}` untouched.
 
 ### M2 result log
 
@@ -167,5 +169,19 @@ Skip: t05-event (covered by t01), t07-park, t14-lib-auth-era.
 | Capture | 273/273 dual-profile OK; logs under `build/batch5-m5-fuzzy-*.log` | 2026-08-02 |
 | Setpoint | `setpoint.json` latestBundle pageCount 277; bootstrap zip local/Drive-only (GitHub 100MB limit) | 2026-08-02 |
 | Smoke validate | 5/6 dual-profile PASS after refuzz; `kingdom-map` residual DOM volatility | 2026-08-02 |
+| PHPUnit | skipped (no product PHP) | 2026-08-02 |
+| Fuzzy stash | untouched (`stash@{0}`) | 2026-08-02 |
+
+### M5b result log
+
+| Metric | Value | Recorded |
+|---|---|---|
+| Scope | Keep kingdom-map pages active; large `#map` fuzz zones; dual-profile revalidate | 2026-08-02 |
+| Active pages | 273 (301 registry; 28 policy skips; maps **not** skipped) | 2026-08-02 |
+| Pixel zone | `manualZones` x=20 y=90 w=1240 h=600 on test+mirror `kingdom-map{,-2}.fuzz.json` | 2026-08-02 |
+| DOM manuals | `#map` path subtree + `/html[0]/head[0]` + `/html[0]/body[0]` subtree (Maps injects) | 2026-08-02 |
+| Map validate | **PASS** 4/4 (`kingdom-map`, `kingdom-map-2` × test,mirror) | 2026-08-02 |
+| Full validate | **EXIT:1** — 522 PASS / 24 FAIL line scores; unexpected=118 (`build/batch5-m5b-fuzzy-validate-all.log`) | 2026-08-02 |
+| Residuals | test: event-detail-2, event-template{,-2}, park-auth-sandbox, reports-active-duespaid{,-2}, reports-active-waivered-duespaid{,-2}, reports-attendance-3, reports-index{,-2}, weather-index; mirror: admin-authorization, admin-topparks{,-2}, attendance-event, event-detail{,-2,-3}, event-template{,-2}, park-index-2, reports-orkremental-2, unit-index | 2026-08-02 |
 | PHPUnit | skipped (no product PHP) | 2026-08-02 |
 | Fuzzy stash | untouched (`stash@{0}`) | 2026-08-02 |

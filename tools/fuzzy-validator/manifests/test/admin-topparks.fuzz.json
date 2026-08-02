@@ -10,7 +10,52 @@
     "minAreaPx": 64,
     "padPx": 4
   },
-  "fuzzZones": [],
+  "fuzzZones": [
+    {
+      "x": 133,
+      "y": 395,
+      "width": 64,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 133,
+      "y": 423,
+      "width": 64,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 130,
+      "y": 508,
+      "width": 67,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 130,
+      "y": 536,
+      "width": 67,
+      "height": 20,
+      "source": "refuzz"
+    },
+    {
+      "x": 130,
+      "y": 564,
+      "width": 68,
+      "height": 22,
+      "source": "refuzz"
+    },
+    {
+      "x": 130,
+      "y": 593,
+      "width": 68,
+      "height": 22,
+      "source": "refuzz"
+    }
+  ],
   "manualZones": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T18:51:56Z",
+  "refuzzedFromCommit": "05389516"
 }

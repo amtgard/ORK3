@@ -5,5 +5,7 @@
   "calibrationRuns": 5,
   "fuzzNodes": [],
   "manualNodes": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:50:00Z",
+  "refuzzedFromCommit": "05389516"
 }

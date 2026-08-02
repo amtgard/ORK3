@@ -6,6 +6,6 @@
   "fuzzNodes": [],
   "manualNodes": [],
   "calibratedFromCommit": "5bc623cd",
-  "refuzzedAt": "2026-08-02T01:57:34Z",
-  "refuzzedFromCommit": "5bc623cd"
+  "refuzzedAt": "2026-08-02T16:42:17Z",
+  "refuzzedFromCommit": "05389516"
 }

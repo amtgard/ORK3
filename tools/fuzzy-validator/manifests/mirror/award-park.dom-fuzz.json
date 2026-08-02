@@ -3,7 +3,36 @@
   "pageId": "award-park",
   "calibratedAt": "2026-08-01T20:22:15Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/nav[0]/div[0]/ul[0]/li[1]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/nav[0]/div[0]/ul[0]/li[2]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/nav[0]/div[0]/ul[0]/li[1]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/nav[0]/div[0]/ul[0]/li[2]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
   "manualNodes": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:53:43Z",
+  "refuzzedFromCommit": "05389516"
 }

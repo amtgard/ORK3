@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "pageId": "reports-custom-awards-2",
   "imageWidth": 1280,
-  "imageHeight": 2334,
+  "imageHeight": 2370,
   "calibratedAt": "2026-08-01T21:15:05Z",
   "calibrationRuns": 5,
   "params": {
@@ -12,5 +12,7 @@
   },
   "fuzzZones": [],
   "manualZones": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:58:39Z",
+  "refuzzedFromCommit": "05389516"
 }

@@ -3,223 +3,27 @@
   "pageId": "kingdom-map-2",
   "calibratedAt": "2026-08-01T23:02:21Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [
+  "fuzzNodes": [],
+  "manualNodes": [
     {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[1]",
-      "mode": "attributes",
-      "attrs": [
-        "aria-describedby"
-      ],
-      "source": "auto"
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]",
+      "mode": "subtree",
+      "source": "manual",
+      "label": "#map element subtree"
     },
     {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[1]/div[0]",
-      "mode": "attributes",
-      "attrs": [
-        "id"
-      ],
-      "source": "auto"
+      "path": "/html[0]/head[0]",
+      "mode": "subtree",
+      "source": "manual",
+      "label": "Google Maps injects/reorders head <script> tags"
     },
     {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[14]/div[0]/button[0]",
-      "mode": "attributes",
-      "attrs": [
-        "aria-describedby"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[2]/div[0]/div[0]/ul[0]",
-      "mode": "attributes",
-      "attrs": [
-        "aria-labelledby"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[2]/div[0]/div[1]/ul[0]",
-      "mode": "attributes",
-      "attrs": [
-        "aria-labelledby"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[2]/div[0]/div[0]/button[0]",
-      "mode": "attributes",
-      "attrs": [
-        "id"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[2]/div[0]/div[1]/button[0]",
-      "mode": "attributes",
-      "attrs": [
-        "id"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[14]/div[0]/button[0]/span[0]",
-      "mode": "attributes",
-      "attrs": [
-        "id"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[0]",
-      "mode": "attributes",
-      "attrs": [
-        "style"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[2]",
-      "mode": "attributes",
-      "attrs": [
-        "style"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[4]",
-      "mode": "attributes",
-      "attrs": [
-        "style"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[7]",
-      "mode": "attributes",
-      "attrs": [
-        "style"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[8]",
-      "mode": "attributes",
-      "attrs": [
-        "style"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[10]",
-      "mode": "attributes",
-      "attrs": [
-        "style"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[12]",
-      "mode": "attributes",
-      "attrs": [
-        "style"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[15]",
-      "mode": "attributes",
-      "attrs": [
-        "style"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[1]/div[0]/div[2]/span[0]",
-      "mode": "attributes",
-      "attrs": [
-        "id"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[0]/img[0]",
-      "mode": "attributes",
-      "attrs": [
-        "src"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[2]/img[0]",
-      "mode": "attributes",
-      "attrs": [
-        "src"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[4]/img[0]",
-      "mode": "attributes",
-      "attrs": [
-        "src"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[7]/img[0]",
-      "mode": "attributes",
-      "attrs": [
-        "src"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[8]/img[0]",
-      "mode": "attributes",
-      "attrs": [
-        "src"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[10]/img[0]",
-      "mode": "attributes",
-      "attrs": [
-        "src"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[12]/img[0]",
-      "mode": "attributes",
-      "attrs": [
-        "src"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[0]/div[0]/div[4]/div[0]/div[15]/img[0]",
-      "mode": "attributes",
-      "attrs": [
-        "src"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[11]/div[0]/gmp-internal-camera-control[0]/menu[0]",
-      "mode": "attributes",
-      "attrs": [
-        "id"
-      ],
-      "source": "auto"
-    },
-    {
-      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[0]/div[0]/div[0]/div[2]/div[11]/div[0]/gmp-internal-camera-control[0]/button[0]",
-      "mode": "attributes",
-      "attrs": [
-        "aria-controls"
-      ],
-      "source": "auto"
+      "path": "/html[0]/body[0]",
+      "mode": "subtree",
+      "source": "manual",
+      "label": "Maps/weather optional body siblings; chrome still gated by visual outside #map zone"
     }
   ],
-  "manualNodes": []
+  "refuzzedAt": "2026-08-02T14:31:04Z",
+  "refuzzedFromCommit": "05389516"
 }

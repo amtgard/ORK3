@@ -3,6 +3,35 @@
   "pageId": "admin-topparks-2",
   "calibratedAt": "2026-08-01T20:13:01Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
-  "manualNodes": []
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[1]/span[0]/strong[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[1]/span[0]/strong[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[0]/div[1]/form[0]/div[0]/input[0]",
+      "mode": "attributes",
+      "attrs": [
+        "value"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[0]/div[0]/div[1]/form[0]/div[1]/input[0]",
+      "mode": "attributes",
+      "attrs": [
+        "value"
+      ],
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "refuzzedAt": "2026-08-02T18:52:01Z",
+  "refuzzedFromCommit": "05389516"
 }

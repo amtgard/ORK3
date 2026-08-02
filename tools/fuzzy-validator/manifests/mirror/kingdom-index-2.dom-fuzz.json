@@ -3,7 +3,179 @@
   "pageId": "kingdom-index-2",
   "calibratedAt": "2026-08-01T20:31:37Z",
   "calibrationRuns": 5,
-  "fuzzNodes": [],
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[1]/div[2]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/ul[0]/li[3]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[1]/a[3]/div[1]/div[2]/div[0]/div[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[1]/a[5]/div[1]/div[2]/div[0]/div[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[1]/a[5]/div[1]/div[2]/div[1]/div[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[1]/a[9]/div[1]/div[2]/div[0]/div[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[3]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[3]/td[4]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[5]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[5]/td[3]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[5]/td[4]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[5]/td[5]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[9]/td[2]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[9]/td[4]",
+      "mode": "attributes",
+      "attrs": [
+        "data-sortval"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[3]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[3]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[5]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[5]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[5]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[5]/td[5]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[9]/td[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tbody[0]/tr[9]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tfoot[0]/tr[0]/td[1]/div[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tfoot[0]/tr[0]/td[2]/div[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tfoot[0]/tr[0]/td[3]/div[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[1]/table[0]/tfoot[0]/tr[0]/td[4]/div[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[2]/div[0]/table[0]/tfoot[0]/tr[0]/td[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[2]/div[0]/table[0]/tfoot[0]/tr[0]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/div[0]/div[1]/div[2]/div[0]/div[1]/div[2]/div[0]/table[0]/tfoot[0]/tr[0]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
   "manualNodes": [],
-  "calibratedFromCommit": "5bc623cd"
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:54:46Z",
+  "refuzzedFromCommit": "05389516"
 }
