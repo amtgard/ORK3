@@ -14,6 +14,15 @@ class Controller_Court extends Controller
     // -----------------------------------------------------------------------
     public function list($context = null, $id = null)
     {
+        // The front controller collapses trailing route segments into one string
+        // when the route has more than 3 parts, so `Court/list/kingdom/17` arrives
+        // as $context = 'kingdom/17' with $id = null. Split it back apart.
+        if (($id === null || $id === '') && is_string($context) && strpos($context, '/') !== false) {
+            $parts   = explode('/', $context);
+            $context = $parts[0];
+            $id      = $parts[1] ?? null;
+        }
+
         $id = (int)preg_replace('/[^0-9]/', '', $id ?? '');
         $context = ($context === 'park') ? 'park' : 'kingdom';
 

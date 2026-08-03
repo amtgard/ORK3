@@ -17,8 +17,9 @@ $stagedCount  = (int)($StagedCount ?? 0);
 $prevSkipped  = $PrevSkipped  ?? [];
 
 $statusLabel = ['draft' => 'Draft', 'published' => 'Published', 'complete' => 'Complete'];
-$statusColor = ['draft' => '#718096', 'published' => '#2b6cb0', 'complete' => '#276749'];
-$statusBg    = ['draft' => '#edf2f7', 'published' => '#ebf8ff', 'complete' => '#f0fff4'];
+// Class-driven so html[data-theme="dark"] can reach the badge; an inline style could not
+// be overridden without !important. Light-mode palette matches the old inline colours.
+$statusBadgeClass = ['draft' => 'cp-badge-draft', 'published' => 'cp-badge-published', 'complete' => 'cp-badge-complete'];
 
 $awardStatusLabel = ['planned' => 'Planned', 'announced' => 'Announced', 'staged' => 'Staged', 'given' => 'Given', 'cancelled' => 'Skipped'];
 $awardStatusColor = ['planned' => '#4a5568', 'announced' => '#2b6cb0', 'staged' => '#b7791f', 'given' => '#276749', 'cancelled' => '#c53030'];
@@ -79,6 +80,10 @@ if (!function_exists('cp_track_label')) {
 .cp-hero-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-direction: column; align-items: flex-end; }
 .cp-hero-back-row { padding: 10px 24px 0; }
 .cp-badge { display: inline-block; padding: 4px 11px; border-radius: 12px; font-size: 12px; font-weight: 700; }
+/* Court status modifiers — same palette the inline style used, now themeable. */
+.cp-badge-draft     { background: #edf2f7; color: #718096; }
+.cp-badge-published { background: #ebf8ff; color: #2b6cb0; }
+.cp-badge-complete  { background: #f0fff4; color: #276749; }
 
 /* Published mode: Grant / Skip */
 .cp-grant-actions { display: flex; gap: 6px; justify-content: flex-end; }
@@ -108,8 +113,8 @@ if (!function_exists('cp_track_label')) {
 
 /* Award rows */
 /* QW#1a / S3: horizontal scroll so the Grant/Skip columns are reachable on narrow
-   viewports (the page <html> is overflow-x:hidden). Below 640px the grid collapses to
-   stacked cards (see the mobile @media block) so this scroll only bites at 641–800px. */
+   viewports (the page <html> is overflow-x:hidden). Below 600px the grid collapses to
+   stacked cards (see the mobile @media block) so this scroll only bites at 601–768px. */
 .cp-award-list { border: 1px solid #e2e8f0; border-radius: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 20px; }
 .cp-award-row { background: #fff; border-bottom: 1px solid #edf2f7; }
 .cp-award-row:last-child { border-bottom: none; }
@@ -148,6 +153,9 @@ html[data-theme="dark"] .cp-award-row-main:has(+ .cp-award-row-expand.open) { ba
 .cp-expand-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 .cp-expand-label { font-size: 11px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 3px; }
 .cp-expand-val { font-size: 13px; color: #2d3748; }
+/* Base font-size for the maker autocompletes; was inline, moved here so the
+   pointer:coarse 16px rule can win without an inline style outranking it. */
+.cp-maker-ac { font-size: 13px; }
 .cp-notes-area { width: 100%; border: 1px solid #cbd5e0; border-radius: 5px; padding: 7px 10px; font-size: 13px; resize: vertical; min-height: 60px; box-sizing: border-box; }
 .cp-pc-label-row { display: flex; align-items: center; gap: 8px; }
 .cp-rec-hint-btn { background: none; border: none; padding: 0; cursor: pointer; font-size: 12px; color: #3182ce; line-height: 1; }
@@ -156,6 +164,9 @@ html[data-theme="dark"] .cp-award-row-main:has(+ .cp-award-row-expand.open) { ba
 .cp-rec-hint { position: absolute; top: 1px; left: 1px; right: 1px; padding: 7px 10px; font-size: 13px; line-height: 1.35; color: #718096; font-style: italic; white-space: normal; overflow: hidden; pointer-events: none; box-sizing: border-box; max-height: calc(100% - 2px); }
 .cp-artisan-row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 4px; }
 .cp-expand-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+/* Pass-to-Local: the LABEL carries the hit area (see the coarse-pointer block). */
+.cp-ptl-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.cp-ptl-check { width: auto; }
 
 /* Reorder arrows */
 .cp-reorder-btns { display: flex; flex-direction: column; gap: 1px; }
@@ -292,6 +303,9 @@ html[data-theme="dark"] .cp-toast { background: #9b2c2c; }
     font-size: 14px;
     margin-left: 4px;
 }
+/* Always rendered, hidden until the stacked-card layout — the tracking state must not be
+   hover-only on touch. Text comes from cp_track_label()/cpTrackLabel(), never a 3rd copy. */
+.cp-track-label { display: none; }
 .cp-tracking-icon[data-status="0"] { background-color: #ccc; color: #fff; } /* Gray */
 .cp-tracking-icon[data-status="1"] { background-color: #e53e3e; color: #fff; } /* Red */
 .cp-tracking-icon[data-status="2"] { background-color: #38a169; color: #fff; } /* Green */
@@ -325,7 +339,20 @@ html[data-theme="dark"] .cp-tracking-icon[data-status="2"]::after { color: #9ae6
 .cp-sb-toggle-btn:hover { background: #e2e8f0; }
 .cp-sb-toggle-btn.active { background: #2c5282; border-color: #2c5282; color: #fff; }
 .cp-sb-toggle-btn.active:hover { background: #2a4a7f; }
-@media (max-width: 800px) { .cp-body { flex-direction: column; } .cp-sidebar { width: 100%; } }
+/* House breakpoint (768px). .cp-body has align-items:flex-start, so once it stacks the
+   children are shrink-to-fit in the cross axis — .cp-main-content would size to the
+   header button row's max-content and overflow the viewport. Force it to the column. */
+@media (max-width: 768px) {
+    .cp-body { flex-direction: column; }
+    .cp-sidebar { width: 100%; }
+    .cp-main-content { width: 100%; min-width: 0; }
+    /* --- Section header: the nowrap button row keeps a ~707px min-content floor, so the
+       four action buttons run off the right edge across the whole stacked range. Wrap. --- */
+    .cp-section-header { flex-wrap: wrap; row-gap: 8px; }
+    .cp-section-header h2 { flex: 1 1 100%; }
+    .cp-section-header .cp-header-actions { flex: 1 1 100%; flex-wrap: wrap; }
+    .cp-section-header #cp-script-btn { flex: 0 0 auto; }
+}
 /* ---- Court Script preview modal ---- */
 .cp-script-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.5); display: flex; align-items: flex-start; justify-content: center; padding: 30px 16px; overflow: auto; }
 .cp-script-overlay[hidden] { display: none; }
@@ -402,6 +429,8 @@ html[data-theme="dark"] .cp-script-cite-artisans { color: #a0aec0; }
 .cp-stat-ready { color:#276749; font-weight:600; }
 .cp-stat-wip   { color:#c05621; font-weight:600; }
 .cp-stat-none  { color:#718096; }
+/* Run-mode sticky progress/sync bar — phone only; shown in the ≤600px block. */
+.cp-mobile-runbar { display: none; }
 
 /* Award type accent border */
 .cp-aw-type-title  { border-left: 4px solid #d69e2e !important; }
@@ -698,6 +727,9 @@ html[data-theme="dark"] .cp-cell-chevron   { color: #4a5568; }
 html[data-theme="dark"] .cp-award-row-expand { background: #1a2030; border-color: #2d3748; }
 html[data-theme="dark"] .cp-sidebar-collapse-btn { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
 html[data-theme="dark"] .cp-sidebar-collapse-btn:hover { background: #2d3748; }
+/* Collapsed rail: the state rule re-sizes the button at higher specificity, so restate
+   the dark palette at that specificity or the chevron reads as a light-grey box. */
+html[data-theme="dark"] .cp-body.cp-sidebar-collapsed .cp-sidebar-collapse-btn { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
 
 /* Status bar + section heading */
 html[data-theme="dark"] .cp-status-bar { background: #1f2733; border-color: #2d3748; color: #cbd5e0; }
@@ -727,6 +759,9 @@ html[data-theme="dark"] .cp-about-legend { background: #1f2733; border-color: #2
 html[data-theme="dark"] .cp-pill-draft     { background: rgba(160,174,192,.15);  color: #cbd5e0; }
 html[data-theme="dark"] .cp-pill-published { background: rgba(99,179,237,.18);   color: #90cdf4; }
 html[data-theme="dark"] .cp-pill-complete  { background: rgba(72,187,120,.18);   color: #9ae6b4; }
+html[data-theme="dark"] .cp-badge-draft     { background: rgba(160,174,192,.15); color: #cbd5e0; }
+html[data-theme="dark"] .cp-badge-published { background: rgba(99,179,237,.18);  color: #90cdf4; }
+html[data-theme="dark"] .cp-badge-complete  { background: rgba(72,187,120,.18);  color: #9ae6b4; }
 html[data-theme="dark"] .cp-pill-grant     { background: rgba(72,187,120,.18);   color: #9ae6b4; border-color: rgba(72,187,120,.4); }
 html[data-theme="dark"] .cp-pill-skip      { background: rgba(160,174,192,.15);  color: #cbd5e0; border-color: rgba(160,174,192,.3); }
 
@@ -1019,18 +1054,42 @@ html[data-theme="dark"] .cp-script-park { color: #97a3b4; }
 
 /* QW#7 tap targets — coarse pointers get ≥44px hit area (padding, not larger glyphs) */
 @media (pointer: coarse) {
-    .cp-reorder-btn { min-width: 34px; min-height: 30px; }
-    .cp-row-grid .cp-reorder-btn { width: 34px; height: 30px; }
-    .cp-tracking-icon { min-width: 40px; min-height: 40px; line-height: 40px; }
-    .cp-btn-grant, .cp-btn-skip, .cp-btn-undo, .cp-btn-unskip { min-height: 40px; }
+    /* NOTE: the tracking-icon and reorder-arrow touch sizes are deliberately NOT here.
+       Above 600px .cp-row-grid is still the fixed spreadsheet grid (…30px 30px 96px 22px
+       with an 8px column-gap), so 44px controls overflow their tracks and the scroll and
+       regalia pills overlap — on any touch device at tablet width. Those rules live in the
+       @media (max-width: 600px) block instead, where the grid has already collapsed to
+       stacked cards. Same for .cp-script-check, sized in the ≤600px script-stacking block. */
+    .cp-btn-grant, .cp-btn-skip, .cp-btn-undo, .cp-btn-unskip { min-height: 44px; }
     .cp-list-published .cp-grant-actions .cp-btn-grant,
-    .cp-list-published .cp-grant-actions .cp-btn-skip { padding: 8px 12px; }
+    .cp-list-published .cp-grant-actions .cp-btn-skip { padding: 10px 12px; }
     .cp-modal-close { min-width: 44px; min-height: 44px; }
-    .cp-note-btn, .cp-btn-danger-sm, .cp-rm-trash, #cp-note-popup-close, .cp-pb-dismiss { min-width: 40px; min-height: 40px; }
+    .cp-note-btn, .cp-btn-danger-sm, .cp-rm-trash, #cp-note-popup-close, .cp-pb-dismiss { min-width: 44px; min-height: 44px; }
+    .cp-ac-item { min-height: 44px; display: flex; align-items: center; }
+    /* The controls that actually carry the workflow, not just the icons. 16px on inputs
+       keeps iOS from zooming the viewport on focus. */
+    .cp-field input, .cp-field select, .cp-field textarea,
+    .cp-rm-search, .cp-maker-ac { min-height: 44px; font-size: 16px; }
+    .cp-notes-area { font-size: 16px; }
+    .cp-modal-footer { gap: 16px; }
+    .cp-modal-footer button { min-height: 44px; padding: 10px 16px; }
+    /* Terminal action of the ceremony — real width, real separation from Cancel. */
+    #cp-grant-confirm { min-width: 140px; justify-content: center; }
+    .cp-rm-row { min-height: 44px; }
+    .cp-rm-check { width: 28px; height: 28px; font-size: 14px; }
+    .cp-rm-sort-btn, .cp-rm-view-btn { min-height: 44px; padding: 6px 14px; }
+    .cp-giver-pill { min-height: 44px; padding: 6px 14px; }
+    .cp-expand-actions button { min-height: 44px; }
+    .cp-script-density button, .cp-script-actions button { min-height: 44px; }
+    /* Pass to Local: the whole label strip is the hit area — padding on the LABEL, not a
+       bigger checkbox glyph. */
+    .cp-ptl-label { min-height: 44px; gap: 12px; padding: 4px 2px; }
+    .cp-ptl-check { width: 20px; height: 20px; flex: 0 0 auto; }
 }
 
-/* QW#1 / S3 — mobile stacked-card award list (also the run-mode touch layout) */
-@media (max-width: 640px) {
+/* QW#1 / S3 — mobile stacked-card award list (also the run-mode touch layout).
+   House breakpoint (600px); the module's only other breakpoint is 768px above. */
+@media (max-width: 600px) {
     /* Column header makes no sense stacked */
     #cp-list-header { display: none !important; }
     /* Collapse the fixed-px grid into a flowing card */
@@ -1044,20 +1103,121 @@ html[data-theme="dark"] .cp-script-park { color: #97a3b4; }
     .cp-cell-type      { order: 6; flex: 0 0 auto; }
     .cp-cell-type > *  { width: auto; }
     .cp-cell-flags     { order: 7; flex: 0 0 auto; }
-    .cp-cell-scroll    { order: 8; flex: 0 0 auto; margin-left: auto; }
-    .cp-cell-regalia   { order: 9; flex: 0 0 auto; }
+    /* Scroll/regalia readiness gets its own full-width row so the glyph can carry a
+       visible caption — hover is not available to state it here. */
+    .cp-cell-scroll    { order: 8; flex: 1 1 100%; justify-content: flex-start; margin-left: 0; }
+    .cp-cell-regalia   { order: 9; flex: 1 1 100%; justify-content: flex-start; }
     /* Status + actions span the full card width, stacked */
     .cp-cell-status    { order: 10; flex: 1 1 100%; flex-direction: column; align-items: stretch; gap: 8px; }
     .cp-cell-status .cp-aw-badge   { align-self: flex-start; }
     .cp-cell-status .cp-grant-static { align-self: flex-start; }
     .cp-cell-status .cp-grant-actions { display: flex; width: 100%; gap: 8px; justify-content: stretch; }
     .cp-cell-status .cp-grant-actions > button { flex: 1 1 auto; justify-content: center; min-height: 44px; font-size: 14px; padding: 10px 12px; }
-    /* Reachable, roomy tracking + reorder on the phone */
-    .cp-tracking-icon { width: 34px; height: 34px; line-height: 34px; }
-    .cp-row-grid .cp-reorder-btn { width: 30px; height: 22px; font-size: 10px; }
+    /* Reachable, roomy tracking + reorder on the phone. Both were losing to the
+       .cp-density-* rules, which are more specific — so drive the density TOKENS, and
+       match .cp-density-cozy .cp-row-grid .cp-reorder-btn (0,3,0) for the arrows. */
+    .cp-page .cp-award-list { --cp-track-size: 44px; --cp-track-font: 18px; }
+    .cp-page .cp-row-grid .cp-reorder-btns { gap: 8px; }
+    .cp-page .cp-row-grid .cp-reorder-btn { width: 44px; height: 36px; font-size: 13px; min-height: 36px; }
+    /* Glyph + caption are ONE ≥44px tap target: the icon becomes a labelled pill. */
+    .cp-page .cp-cell-scroll .cp-tracking-icon,
+    .cp-page .cp-cell-regalia .cp-tracking-icon {
+        display: inline-flex; align-items: center; gap: 8px;
+        width: auto; min-height: 44px; padding: 0 14px;
+        border-radius: 22px; line-height: 1; margin-left: 0;
+    }
+    .cp-cell-scroll .cp-track-label,
+    .cp-cell-regalia .cp-track-label { display: inline; font-size: 13px; font-weight: 600; }
+    /* #ccc under white text is unreadable once it carries words. */
+    .cp-page .cp-cell-scroll .cp-tracking-icon[data-status="0"],
+    .cp-page .cp-cell-regalia .cp-tracking-icon[data-status="0"] { background-color: #718096; }
+    html[data-theme="dark"] .cp-page .cp-cell-scroll .cp-tracking-icon[data-status="0"],
+    html[data-theme="dark"] .cp-page .cp-cell-regalia .cp-tracking-icon[data-status="0"] { background-color: #2d3748; color: #cbd5e0; }
+    /* The corner state chip is redundant once the state is spelled out. */
+    .cp-cell-scroll .cp-tracking-icon::after,
+    .cp-cell-regalia .cp-tracking-icon::after { display: none; }
     /* Compact the toolbar so it doesn't wrap awkwardly */
     .cp-list-toolbar { gap: 6px; }
+
+    /* --- Hero: stack so the <h1> court name isn't squeezed to 0px and the run-mode
+       controls stay inside the viewport. Keep every global-h1 pill-box reset. --- */
+    .cp-hero { min-height: 0; }
+    .cp-hero-content { flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px; }
+    .cp-heraldry-frame,
+    .cp-hero-heraldry-placeholder { width: 64px; height: 64px; }
+    .cp-hero-heraldry-placeholder { font-size: 22px; }
+    .cp-hero-info { width: 100%; }
+    .cp-hero-supertitle { overflow-wrap: anywhere; line-height: 1.5; }
+    .cp-hero-name { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; min-width: 0; font-size: 20px;
+                    background: none; border: none; padding: 0; border-radius: 0; text-shadow: 0 1px 4px rgba(0,0,0,.4); }
+    .cp-hero-actions { flex-direction: row; flex-wrap: wrap; flex-shrink: 1; width: 100%; align-items: stretch; }
+    .cp-hero-actions > button { flex: 1 1 auto; min-height: 44px; margin-top: 0 !important; justify-content: center; }
+
+    /* --- Expanded award row: the fixed 2-column grid put Pass to Local and
+       Regalia Maker off-screen. One column, and children must be shrinkable. --- */
+    .cp-expand-grid { grid-template-columns: 1fr; }
+    .cp-expand-grid > * { min-width: 0; }
+    .cp-expand-actions { gap: 12px 24px; }
+    .cp-expand-actions button { min-height: 44px; }
+    /* Push destructive Remove away from Save (mis-tap deletes an award) */
+    .cp-expand-actions .cp-btn-danger-inline { margin-left: auto; }
+
+    /* --- Run-mode sticky bar: progress + presence + sync always on screen --- */
+    #cp-mobile-runbar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 900;
+                        align-items: center; gap: 8px; height: 40px; padding: 0 12px; box-sizing: border-box;
+                        background: #1a2744; color: rgba(255,255,255,.85); font-size: 12px; line-height: 1;
+                        white-space: nowrap; overflow: hidden; box-shadow: 0 -2px 8px rgba(0,0,0,.25); }
+    #cp-mobile-runbar .cp-mrb-name { font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+    #cp-mobile-runbar .cp-mrb-progress { flex: 0 0 auto; margin-left: auto; }
+    #cp-mobile-runbar .cp-mrb-presence,
+    #cp-mobile-runbar .cp-mrb-sync { flex: 0 0 auto; color: rgba(255,255,255,.6); }
+    #cp-mobile-runbar .cp-mrb-sync[data-state="reconnecting"] { color: #f6ad55; }
+    /* Don't let the fixed bar cover the last award row / page footer */
+    body:has(#cp-mobile-runbar) { padding-bottom: 48px; }
+
+    /* --- Overlays: below 600px max-width never engages, so every sheet was bezel-to-bezel
+       with its corners off-screen. Give it gutters, and size to the DYNAMIC viewport so a
+       mobile browser toolbar can't sit on top of the modal footer buttons. The 90vh
+       fallback stays immediately before the dvh line for engines without dvh. --- */
+    .cp-overlay { padding: 16px 16px 0; align-items: flex-end; }
+    .cp-modal { max-height: 90vh; max-height: 88dvh; border-radius: 12px 12px 0 0; }
+    .cp-modal-body { overscroll-behavior: contain; }
+    /* Full-width footer with the confirm on top (column-reverse: last child first), so the
+       terminal action is a full-width target well clear of Cancel. */
+    .cp-modal-footer { flex-direction: column-reverse; gap: 12px; }
+    .cp-modal-footer button { width: 100%; min-height: 44px; justify-content: center; text-align: center; }
+
+    /* --- Recommendation rows: .cp-rm-head was nowrap + overflow:hidden with a fixed-width
+       tail, so the award name, rank, date and the colour-coded age badge were destroyed off
+       the right edge. Stack the meta instead; the bullets become noise once wrapped. --- */
+    .cp-rm-head { flex-wrap: wrap; overflow: visible; white-space: normal; row-gap: 3px; align-items: center; }
+    .cp-rm-sep { display: none; }
+    .cp-rm-persona { flex: 0 1 auto; max-width: 100%; white-space: normal; overflow: visible; text-overflow: clip; font-size: 14px; }
+    .cp-rm-award { flex: 1 1 100%; min-width: 0; white-space: normal; overflow: visible; text-overflow: clip; font-size: 13px; }
+    .cp-rm-rank, .cp-rm-date, .cp-rm-age-badge { flex-shrink: 1; }
+
+    /* --- Court Script: Close painted over half the Citation toggle on the same row. Put
+       each control group on its own centred row so a mis-tap can't dismiss the herald's
+       script mid-ceremony, and keep Print away from Close. --- */
+    .cp-script-controls { flex-wrap: wrap; row-gap: 8px; justify-content: center; }
+    /* Segmented control: it is bordered + overflow:hidden, so centring the buttons would
+       leave empty gaps inside the pill. Let the buttons fill it instead. */
+    .cp-script-density { display: flex; flex: 1 1 100%; }
+    .cp-script-density button { flex: 1 1 auto; }
+    .cp-script-actions { flex: 1 1 100%; justify-content: center; gap: 20px; }
+    /* Stack each entry — the 4-column table squeezed the award to ~54px and broke the
+       name over five lines. This is the one genuinely on-stage surface: reading scale. */
+    .cp-script-compact tr { display: block; padding: 10px 0; border-bottom: 1px solid #eee; }
+    .cp-script-compact td { display: block; width: auto; padding: 0; border-bottom: none; }
+    .cp-script-compact .cp-script-num   { display: inline-block; width: auto; font-size: 14px; margin-right: 8px; vertical-align: middle; }
+    .cp-script-compact .cp-script-check { display: inline-block; width: auto; font-size: 26px; line-height: 1; margin-right: 8px; vertical-align: middle; }
+    .cp-script-compact .cp-script-recip { display: inline; white-space: normal; width: auto; font-size: 18px; line-height: 1.45; }
+    .cp-script-compact .cp-script-award { font-size: 16px; line-height: 1.45; margin-top: 3px; }
+    html[data-theme="dark"] .cp-script-compact tr { border-color: #2d3748; }
 }
+
+html[data-theme="dark"] #cp-mobile-runbar { background: #11182a; color: #cbd5e0; box-shadow: 0 -2px 8px rgba(0,0,0,.5); }
+html[data-theme="dark"] #cp-mobile-runbar .cp-mrb-name { color: #e2e8f0; }
 
 </style>
 
@@ -1115,8 +1275,7 @@ html[data-theme="dark"] .cp-script-park { color: #97a3b4; }
         <!-- Status + actions -->
         <div class="cp-hero-actions">
             <div style="display:flex;align-items:center;gap:8px">
-                <span class="cp-badge" id="cp-status-badge"
-                      style="background:<?= $statusBg[$courtSt] ?? '#edf2f7' ?>;color:<?= $statusColor[$courtSt] ?? '#718096' ?>">
+                <span class="cp-badge <?= $statusBadgeClass[$courtSt] ?? 'cp-badge-draft' ?>" id="cp-status-badge">
                     <?= $statusLabel[$courtSt] ?? $courtSt ?>
                 </span>
                 <?php if (in_array($courtSt, ['published', 'complete'])): ?>
@@ -1197,6 +1356,16 @@ $_total_awards = count($courtAwards ?? []);
     <?php endif; ?>
 </div>
 </div>
+<?php if ($courtSt === 'published'): ?>
+<!-- Run mode only: one-line sticky progress/sync/presence bar for phones (shown in the
+     ≤600px block). The existing progress + heartbeat updaters mirror into these spans. -->
+<div class="cp-mobile-runbar" id="cp-mobile-runbar">
+    <span class="cp-mrb-name"><?= htmlspecialchars($court['Name']) ?></span>
+    <span class="cp-mrb-progress" id="cp-mini-progress">0 of <?= $_total_awards ?> granted</span>
+    <span class="cp-mrb-presence" id="cp-mini-presence">1 viewing</span>
+    <span class="cp-mrb-sync" id="cp-mini-sync">Connecting…</span>
+</div>
+<?php endif; ?>
 <?php endif; ?>
 
 <div class="cp-page"><div class="cp-body" id="cp-body">
@@ -1283,7 +1452,7 @@ $_total_awards = count($courtAwards ?? []);
             Order of Court <span id="cp-award-count" class="cp-count">(<?= count($courtAwards) ?>)</span>
         </h2>
         <?php if ($courtSt === 'draft'): ?>
-        <div style="display:flex;gap:8px">
+        <div class="cp-header-actions" style="display:flex;gap:8px">
             <?php if (!empty($pendingRecs)): ?>
             <button class="cp-btn-outline cp-btn-sm" onclick="cpOpenRecModal()">
                 <i class="fas fa-star"></i> Add from Recommendations
@@ -1298,7 +1467,7 @@ $_total_awards = count($courtAwards ?? []);
         </div>
         <?php elseif ($courtSt === 'published'): ?>
         <!-- QW#6: walk-on adds while published — new rows insert as 'planned' at the end. -->
-        <div style="display:flex;gap:8px" id="cp-published-add-tools">
+        <div class="cp-header-actions" style="display:flex;gap:8px" id="cp-published-add-tools">
             <?php if (!empty($pendingRecs)): ?>
             <button class="cp-btn-outline cp-btn-sm" onclick="cpOpenRecModal()" data-tip="Add a walk-on recipient from recommendations">
                 <i class="fas fa-star"></i> Add from Rec
@@ -1401,10 +1570,10 @@ $_total_awards = count($courtAwards ?? []);
                     <?php if ($aw['RecommendationsId']): ?><span class="cp-flag-rec" data-tip="This award came from a submitted recommendation."><i class="fas fa-star"></i></span><?php endif; ?>
                 </div>
                 <div class="cp-cell cp-cell-scroll">
-                    <span class="cp-tracking-icon" data-tip="<?= htmlspecialchars(cp_track_label('scroll', $aw['ScrollStatus'])) ?>" aria-label="<?= htmlspecialchars(cp_track_label('scroll', $aw['ScrollStatus'])) ?>" data-type="scroll" data-status="<?= (int)$aw['ScrollStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'scroll', this)"><i class="fas fa-print"></i></span>
+                    <span class="cp-tracking-icon" data-tip="<?= htmlspecialchars(cp_track_label('scroll', $aw['ScrollStatus'])) ?>" aria-label="<?= htmlspecialchars(cp_track_label('scroll', $aw['ScrollStatus'])) ?>" data-type="scroll" data-status="<?= (int)$aw['ScrollStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'scroll', this)"><i class="fas fa-print"></i><span class="cp-track-label"><?= htmlspecialchars(cp_track_label('scroll', $aw['ScrollStatus'])) ?></span></span>
                 </div>
                 <div class="cp-cell cp-cell-regalia">
-                    <span class="cp-tracking-icon" data-tip="<?= htmlspecialchars(cp_track_label('regalia', $aw['RegaliaStatus'])) ?>" aria-label="<?= htmlspecialchars(cp_track_label('regalia', $aw['RegaliaStatus'])) ?>" data-type="regalia" data-status="<?= (int)$aw['RegaliaStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'regalia', this)"><i class="fas fa-medal"></i></span>
+                    <span class="cp-tracking-icon" data-tip="<?= htmlspecialchars(cp_track_label('regalia', $aw['RegaliaStatus'])) ?>" aria-label="<?= htmlspecialchars(cp_track_label('regalia', $aw['RegaliaStatus'])) ?>" data-type="regalia" data-status="<?= (int)$aw['RegaliaStatus'] ?>" onclick="cpUpdateTracking(event, <?= (int)$aw['CourtAwardId'] ?>, 'regalia', this)"><i class="fas fa-medal"></i><span class="cp-track-label"><?= htmlspecialchars(cp_track_label('regalia', $aw['RegaliaStatus'])) ?></span></span>
                 </div>
                 <div class="cp-cell cp-cell-status">
                     <span class="cp-aw-badge" style="background:<?= $abg ?>;color:<?= $aclr ?>"><?= $albl ?></span>
@@ -1466,10 +1635,9 @@ $_total_awards = count($courtAwards ?? []);
                             <?php endif; ?>
                         <?php else: ?>
                             <div class="cp-expand-label">Pass to Local</div>
-                            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px">
-                                <input type="checkbox" id="cp-ptl-<?= (int)$aw['CourtAwardId'] ?>"
-                                       <?= $aw['PassToLocal'] ? 'checked' : '' ?>
-                                       style="width:auto">
+                            <label class="cp-ptl-label" style="margin-top:4px">
+                                <input type="checkbox" class="cp-ptl-check" id="cp-ptl-<?= (int)$aw['CourtAwardId'] ?>"
+                                       <?= $aw['PassToLocal'] ? 'checked' : '' ?>>
                                 <span style="font-size:13px;color:#4a5568">Kingdom approves — Park to give</span>
                             </label>
                         <?php endif; ?>
@@ -1487,7 +1655,7 @@ $_total_awards = count($courtAwards ?? []);
                                    placeholder="Search by persona…"
                                    value="<?= htmlspecialchars($aw['ScrollMakerPersona'] ?? '') ?>"
                                    autocomplete="off"
-                                   style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px">
+                                   style="width:100%;padding:5px 8px;border:1px solid #cbd5e0;border-radius:5px">
                             <input type="hidden" id="cp-scroll-maker-id-<?= (int)$aw['CourtAwardId'] ?>" value="<?= (int)($aw['ScrollMakerId'] ?? 0) ?>">
                             <div id="cp-scroll-drop-<?= (int)$aw['CourtAwardId'] ?>" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div>
                         </div>
@@ -1501,7 +1669,7 @@ $_total_awards = count($courtAwards ?? []);
                                    placeholder="Search by persona…"
                                    value="<?= htmlspecialchars($aw['RegaliaMakerPersona'] ?? '') ?>"
                                    autocomplete="off"
-                                   style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px">
+                                   style="width:100%;padding:5px 8px;border:1px solid #cbd5e0;border-radius:5px">
                             <input type="hidden" id="cp-regalia-maker-id-<?= (int)$aw['CourtAwardId'] ?>" value="<?= (int)($aw['RegaliaMakerId'] ?? 0) ?>">
                             <div id="cp-regalia-drop-<?= (int)$aw['CourtAwardId'] ?>" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div>
                         </div>
@@ -1730,14 +1898,14 @@ $_total_awards = count($courtAwards ?? []);
             </div>
             <div class="cp-field">
                 <label for="cp-adhoc-notes">Internal Notes</label>
-                <textarea id="cp-adhoc-notes" rows="3" placeholder="Monarchy notes (not public)…" style="width:100%;padding:8px 10px;border:1px solid #cbd5e0;border-radius:5px;font-size:14px;resize:vertical;box-sizing:border-box"></textarea>
+                <textarea id="cp-adhoc-notes" rows="3" placeholder="Monarchy notes (not public)…" style="width:100%;padding:8px 10px;border:1px solid #cbd5e0;border-radius:5px;resize:vertical;box-sizing:border-box"></textarea>
             </div>
             <div class="cp-field">
                 <label for="cp-adhoc-pubcomment">Public Comment</label>
-                <textarea id="cp-adhoc-pubcomment" rows="3" placeholder="Shown on the public Court Report…" style="width:100%;padding:8px 10px;border:1px solid #cbd5e0;border-radius:5px;font-size:14px;resize:vertical;box-sizing:border-box"></textarea>
+                <textarea id="cp-adhoc-pubcomment" rows="3" placeholder="Shown on the public Court Report…" style="width:100%;padding:8px 10px;border:1px solid #cbd5e0;border-radius:5px;resize:vertical;box-sizing:border-box"></textarea>
             </div>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#4a5568;margin-bottom:12px">
-                <input type="checkbox" id="cp-adhoc-ptl" style="width:auto">
+            <label class="cp-ptl-label" style="font-size:13px;color:#4a5568;margin-bottom:12px">
+                <input type="checkbox" class="cp-ptl-check" id="cp-adhoc-ptl">
                 Pass to Local (Kingdom approves, Park to give)
             </label>
             <div class="cp-error" id="cp-adhoc-error"></div>
@@ -1820,7 +1988,7 @@ $_total_awards = count($courtAwards ?? []);
             </div>
             <div class="cp-field">
                 <label for="cp-grant-reason">Reason / Citation</label>
-                <textarea id="cp-grant-reason" rows="3" placeholder="Citation shown on the public Court Report…" style="width:100%;padding:8px 10px;border:1px solid #cbd5e0;border-radius:5px;font-size:14px;resize:vertical;box-sizing:border-box"></textarea>
+                <textarea id="cp-grant-reason" rows="3" placeholder="Citation shown on the public Court Report…" style="width:100%;padding:8px 10px;border:1px solid #cbd5e0;border-radius:5px;resize:vertical;box-sizing:border-box"></textarea>
             </div>
             <div class="cp-error" id="cp-grant-error"></div>
         </div>
@@ -2338,6 +2506,18 @@ $_total_awards = count($courtAwards ?? []);
         return noun + ': not tracked';
     }
 
+    // Single writer for a tracking glyph: status + tooltip + aria-label + the visible
+    // stacked-card caption, so the touch label can never drift from the state.
+    function cpApplyTrackState(el, type, status) {
+        if (!el) return;
+        el.dataset.status = status;
+        var lbl = cpTrackLabel(type, status);
+        el.dataset.tip = lbl;
+        el.setAttribute('aria-label', lbl);
+        var lblEl = el.querySelector('.cp-track-label');
+        if (lblEl) lblEl.textContent = lbl;
+    }
+
     window.cpUpdateTracking = function(event, caid, type, element) {
         event.stopPropagation();
         var fd = new FormData();
@@ -2346,11 +2526,8 @@ $_total_awards = count($courtAwards ?? []);
 
         post('CourtAjax/update_award_tracking_status', fd).then(function(d) {
             if (d.status === 0) {
-                element.dataset.status = d.newStatus;
-                // Keep the tooltip + screen-reader label describing the CURRENT state.
-                var lbl = cpTrackLabel(type, d.newStatus);
-                element.dataset.tip = lbl;
-                element.setAttribute('aria-label', lbl);
+                // Keep the tooltip + screen-reader label + visible caption on the CURRENT state.
+                cpApplyTrackState(element, type, d.newStatus);
                 const award = courtAwards.find(a => a.CourtAwardId === caid);
                 if (award) {
                     if (type === 'scroll') award.ScrollStatus = d.newStatus;
@@ -2401,6 +2578,9 @@ $_total_awards = count($courtAwards ?? []);
             '<span style="color:#276749;font-weight:600"><i class="fas fa-check-circle"></i> ' + granted + ' granted</span>' +
             (skipped > 0 ? ' &nbsp;<span style="color:#718096">' + skipped + ' skipped</span>' : '') +
             ' &nbsp;<span style="color:#4a5568">' + remaining + ' remaining</span>';
+        // Mirror into the phone sticky run bar (mobile-only element).
+        var mini = document.getElementById('cp-mini-progress');
+        if (mini) mini.textContent = granted + ' of ' + total + ' granted';
     }
     // Initialise progress counter on page load
     if (document.querySelector('#cp-sb-progress')) cpRefreshProgress();
@@ -2499,8 +2679,8 @@ $_total_awards = count($courtAwards ?? []);
                 'onclick="cpSendToLocal(' + caid + ')"><i class="fas fa-arrow-down"></i> Send to Local Park</button>';
         }
         return '<div class="cp-expand-label">Pass to Local</div>' +
-            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px">' +
-            '<input type="checkbox" id="cp-ptl-' + caid + '" style="width:auto"' + (passToLocal ? ' checked' : '') + '>' +
+            '<label class="cp-ptl-label" style="margin-top:4px">' +
+            '<input type="checkbox" class="cp-ptl-check" id="cp-ptl-' + caid + '"' + (passToLocal ? ' checked' : '') + '>' +
             '<span style="font-size:13px;color:#4a5568">Kingdom approves — Park to give</span></label>';
     }
 
@@ -2749,6 +2929,7 @@ $_total_awards = count($courtAwards ?? []);
                 : '<i class="fas fa-check"></i> Grant';
         }
         gid('cp-grant-modal').style.display = 'flex';
+        cpSyncScrollLock();
         // QW#8: move focus into the dialog on open (giver input, else the confirm button).
         setTimeout(function() {
             var gi = gid('cp-grant-giver-text') || gid('cp-grant-confirm');
@@ -2759,8 +2940,8 @@ $_total_awards = count($courtAwards ?? []);
     window.cpCloseGrantModal = function() {
         var m = gid('cp-grant-modal');
         if (m) m.style.display = 'none';
-        var drop = gid('cp-grant-giver-ac');
-        if (drop) drop.style.display = 'none';
+        cpHideAcDropdowns();
+        cpSyncScrollLock();
     };
 
     window.cpGrantConfirm = function() {
@@ -2988,9 +3169,10 @@ $_total_awards = count($courtAwards ?? []);
         cpRmUpdateCount();
         gid('cp-rec-error').style.display = 'none';
         gid('cp-rec-modal').style.display = 'flex';
+        cpSyncScrollLock();
         setTimeout(function() { var fi = gid('cp-rm-filter'); if (fi) fi.focus(); }, 50);
     };
-    window.cpCloseRecModal = function() { gid('cp-rec-modal').style.display = 'none'; };
+    window.cpCloseRecModal = function() { gid('cp-rec-modal').style.display = 'none'; cpHideAcDropdowns(); cpSyncScrollLock(); };
 
     window.cpDismissRec = function(btn, recId) {
         var row = document.getElementById('cp-rec-' + recId);
@@ -3082,6 +3264,7 @@ $_total_awards = count($courtAwards ?? []);
     window.cpOpenAdhocModal = function(mode) {
         cpAdhocMode = (mode === 'title') ? 'title' : 'award';
         var isTitle = cpAdhocMode === 'title';
+        cpHideAcDropdowns();   // mirror of the close path — never reopen over stale results
         // Retitle the shared modal shell + award field for the chosen type.
         gid('cp-adhoc-modal-title').innerHTML = '<i class="fas fa-award" style="margin-right:8px;color:#4a5568"></i>Add ' + (isTitle ? 'Title' : 'Award') + ' to Court';
         gid('cp-adhoc-award-label').firstChild.textContent = (isTitle ? 'Title ' : 'Award ');
@@ -3103,9 +3286,17 @@ $_total_awards = count($courtAwards ?? []);
         gid('cp-adhoc-rank-wrap').style.display = 'none';
         gid('cp-adhoc-error').style.display     = 'none';
         gid('cp-adhoc-modal').style.display     = 'flex';
+        cpSyncScrollLock();
         setTimeout(function() { gid('cp-adhoc-persona').focus(); }, 50);
     };
-    window.cpCloseAdhocModal = function() { gid('cp-adhoc-modal').style.display = 'none'; };
+    window.cpCloseAdhocModal = function() {
+        gid('cp-adhoc-modal').style.display = 'none';
+        // Add Award and Add Title share this shell, so a leftover recipient list would
+        // float over the next (blank) field — clear the hidden MundaneId with it.
+        cpHideAcDropdowns();
+        gid('cp-adhoc-mundane-id').value = '';
+        cpSyncScrollLock();
+    };
 
     // Typeable autocomplete for the ad-hoc modal. Scoped to the current mode —
     // 'award' shows the award-type groups, 'title' shows the title-type groups —
@@ -3168,6 +3359,7 @@ $_total_awards = count($courtAwards ?? []);
         var drop = gid('cp-adhoc-award-ac');
         drop.style.display = 'none';
         drop.innerHTML = '';
+        if (cpAcOpenDrop === drop) cpAcUnbind();
         cpAdhocAwardChange();
     };
 
@@ -3276,8 +3468,8 @@ $_total_awards = count($courtAwards ?? []);
             '</div>' +
             '<div class="cp-cell cp-cell-type"><span class="' + typeClass + '" data-tip="' + esc(typeTip) + '">' + typeLabel + '</span></div>' +
             '<div class="cp-cell cp-cell-flags cp-award-flags">' + ptlBadge + recBadge + '</div>' +
-            '<div class="cp-cell cp-cell-scroll"><span class="cp-tracking-icon" data-tip="' + esc(cpTrackLabel('scroll', aw.ScrollStatus)) + '" aria-label="' + esc(cpTrackLabel('scroll', aw.ScrollStatus)) + '" data-type="scroll" data-status="' + aw.ScrollStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'scroll\', this)"><i class="fas fa-print"></i></span></div>' +
-            '<div class="cp-cell cp-cell-regalia"><span class="cp-tracking-icon" data-tip="' + esc(cpTrackLabel('regalia', aw.RegaliaStatus)) + '" aria-label="' + esc(cpTrackLabel('regalia', aw.RegaliaStatus)) + '" data-type="regalia" data-status="' + aw.RegaliaStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'regalia\', this)"><i class="fas fa-medal"></i></span></div>' +
+            '<div class="cp-cell cp-cell-scroll"><span class="cp-tracking-icon" data-tip="' + esc(cpTrackLabel('scroll', aw.ScrollStatus)) + '" aria-label="' + esc(cpTrackLabel('scroll', aw.ScrollStatus)) + '" data-type="scroll" data-status="' + aw.ScrollStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'scroll\', this)"><i class="fas fa-print"></i><span class="cp-track-label">' + esc(cpTrackLabel('scroll', aw.ScrollStatus)) + '</span></span></div>' +
+            '<div class="cp-cell cp-cell-regalia"><span class="cp-tracking-icon" data-tip="' + esc(cpTrackLabel('regalia', aw.RegaliaStatus)) + '" aria-label="' + esc(cpTrackLabel('regalia', aw.RegaliaStatus)) + '" data-type="regalia" data-status="' + aw.RegaliaStatus + '" onclick="cpUpdateTracking(event, ' + aw.CourtAwardId + ', \'regalia\', this)"><i class="fas fa-medal"></i><span class="cp-track-label">' + esc(cpTrackLabel('regalia', aw.RegaliaStatus)) + '</span></span></div>' +
             '<div class="cp-cell cp-cell-status"><span class="cp-aw-badge" style="background:#edf2f7;color:#4a5568">Planned</span></div>' +
             '<div class="cp-cell cp-cell-chevron"><i class="fas fa-chevron-down"></i></div>' +
             '</div>' +
@@ -3288,8 +3480,8 @@ $_total_awards = count($courtAwards ?? []);
             '</div>' +
             '</div>' +
             '<div class="cp-expand-grid" style="margin-top:8px">' +
-            '<div><div class="cp-expand-label">Scroll Maker</div><div style="position:relative"><input type="text" id="cp-scroll-maker-text-' + aw.CourtAwardId + '" class="cp-maker-ac" data-drop="cp-scroll-drop-' + aw.CourtAwardId + '" data-hidden="cp-scroll-maker-id-' + aw.CourtAwardId + '" placeholder="Search by persona…" autocomplete="off" style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px"><input type="hidden" id="cp-scroll-maker-id-' + aw.CourtAwardId + '" value="0"><div id="cp-scroll-drop-' + aw.CourtAwardId + '" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div></div></div>' +
-            '<div><div class="cp-expand-label">Regalia Maker</div><div style="position:relative"><input type="text" id="cp-regalia-maker-text-' + aw.CourtAwardId + '" class="cp-maker-ac" data-drop="cp-regalia-drop-' + aw.CourtAwardId + '" data-hidden="cp-regalia-maker-id-' + aw.CourtAwardId + '" placeholder="Search by persona…" autocomplete="off" style="width:100%;padding:5px 8px;font-size:13px;border:1px solid #cbd5e0;border-radius:5px"><input type="hidden" id="cp-regalia-maker-id-' + aw.CourtAwardId + '" value="0"><div id="cp-regalia-drop-' + aw.CourtAwardId + '" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div></div></div>' +
+            '<div><div class="cp-expand-label">Scroll Maker</div><div style="position:relative"><input type="text" id="cp-scroll-maker-text-' + aw.CourtAwardId + '" class="cp-maker-ac" data-drop="cp-scroll-drop-' + aw.CourtAwardId + '" data-hidden="cp-scroll-maker-id-' + aw.CourtAwardId + '" placeholder="Search by persona…" autocomplete="off" style="width:100%;padding:5px 8px;border:1px solid #cbd5e0;border-radius:5px"><input type="hidden" id="cp-scroll-maker-id-' + aw.CourtAwardId + '" value="0"><div id="cp-scroll-drop-' + aw.CourtAwardId + '" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div></div></div>' +
+            '<div><div class="cp-expand-label">Regalia Maker</div><div style="position:relative"><input type="text" id="cp-regalia-maker-text-' + aw.CourtAwardId + '" class="cp-maker-ac" data-drop="cp-regalia-drop-' + aw.CourtAwardId + '" data-hidden="cp-regalia-maker-id-' + aw.CourtAwardId + '" placeholder="Search by persona…" autocomplete="off" style="width:100%;padding:5px 8px;border:1px solid #cbd5e0;border-radius:5px"><input type="hidden" id="cp-regalia-maker-id-' + aw.CourtAwardId + '" value="0"><div id="cp-regalia-drop-' + aw.CourtAwardId + '" class="cp-ac-dropdown" style="display:none;position:fixed;z-index:1000;background:#fff;border:1px solid #e2e8f0;border-radius:5px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:200px;overflow-y:auto"></div></div></div>' +
             '</div>' +
             '<div style="margin-bottom:10px"><div class="cp-expand-label" style="margin-bottom:6px">Contributing Artisans</div><div id="cp-artisans-' + aw.CourtAwardId + '"></div>' +
             '<button class="cp-btn-sm cp-btn-outline" style="margin-top:6px" onclick="cpOpenArtisanModal(' + aw.CourtAwardId + ')"><i class="fas fa-plus"></i> Add Artisan</button></div>' +
@@ -3314,9 +3506,15 @@ $_total_awards = count($courtAwards ?? []);
         gid('cp-art-contribution').value  = '';
         gid('cp-art-error').style.display = 'none';
         gid('cp-artisan-modal').style.display = 'flex';
+        cpSyncScrollLock();
         setTimeout(function() { gid('cp-art-persona').focus(); }, 50);
     };
-    window.cpCloseArtisanModal = function() { gid('cp-artisan-modal').style.display = 'none'; };
+    window.cpCloseArtisanModal = function() {
+        gid('cp-artisan-modal').style.display = 'none';
+        cpHideAcDropdowns();
+        gid('cp-art-mundane-id').value = '';
+        cpSyncScrollLock();
+    };
 
     window.cpSubmitArtisan = function() {
         var mundaneId    = gid('cp-art-mundane-id').value;
@@ -3376,12 +3574,97 @@ $_total_awards = count($courtAwards ?? []);
     });
 
     // ---- Autocomplete ----
-    // Position a fixed dropdown under its input — safe inside modals with overflow-y: auto
+    // Position a fixed dropdown under its input — safe inside modals with overflow-y: auto.
+    // Flips above the input when there is no room below (phone + software keyboard) and
+    // clamps to the visual viewport the same way cpShowNote does.
     function cpPositionAc(input, drop) {
-        var r = input.getBoundingClientRect();
-        drop.style.top   = (r.bottom + 2) + 'px';
-        drop.style.left  = r.left + 'px';
-        drop.style.width = r.width + 'px';
+        var vv = window.visualViewport;
+        var vh = vv ? vv.height : window.innerHeight;
+        var vw = vv ? vv.width  : window.innerWidth;
+        var r  = input.getBoundingClientRect();
+        // Size + show first: offsetHeight is 0 while display:none, so the flip test needs it.
+        drop.style.width   = r.width + 'px';
+        drop.style.display = 'block';
+        var dh = drop.offsetHeight;
+        var dw = drop.offsetWidth || r.width;
+        var top = r.bottom + 2;
+        if (top + dh > vh - 8) top = r.top - dh - 2;
+        var left = r.left;
+        if (left + dw > vw - 8) left = vw - dw - 8;
+        drop.style.top  = Math.max(8, top)  + 'px';
+        drop.style.left = Math.max(8, left) + 'px';
+        cpAcBind(drop);
+    }
+
+    // A position:fixed dropdown is stranded by any ancestor scroll, so dismiss it instead
+    // of chasing the input. Listeners are bound only while a dropdown is open, and always
+    // removed on hide — a leaked capture-phase scroll listener per search is a real leak.
+    var cpAcOpenDrop = null;
+    function cpAcDismiss(e) {
+        // The dropdown is itself max-height:200px/overflow-y:auto with sticky group headers,
+        // and `scroll` reaches a capture-phase window listener from ANY descendant — so
+        // scrolling the results list must not dismiss the list.
+        if (e && e.target && cpAcOpenDrop && e.target.nodeType === 1 &&
+            (e.target === cpAcOpenDrop || cpAcOpenDrop.contains(e.target))) return;
+        if (cpAcOpenDrop) cpAcOpenDrop.style.display = 'none';
+        cpAcUnbind();
+    }
+    function cpAcBind(drop) {
+        if (cpAcOpenDrop === drop) return;
+        cpAcUnbind();
+        cpAcOpenDrop = drop;
+        window.addEventListener('scroll', cpAcDismiss, true);
+        window.addEventListener('resize', cpAcDismiss);
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', cpAcDismiss);
+            window.visualViewport.addEventListener('scroll', cpAcDismiss);
+        }
+    }
+    function cpAcUnbind() {
+        if (!cpAcOpenDrop) return;
+        cpAcOpenDrop = null;
+        window.removeEventListener('scroll', cpAcDismiss, true);
+        window.removeEventListener('resize', cpAcDismiss);
+        if (window.visualViewport) {
+            window.visualViewport.removeEventListener('resize', cpAcDismiss);
+            window.visualViewport.removeEventListener('scroll', cpAcDismiss);
+        }
+    }
+
+    // Single sweep used by the outside-click handler AND every modal close path, so a
+    // stale result list can never float over the next modal that opens.
+    // `except` (optional) = a click target whose own field keeps its dropdown open.
+    function cpHideAcDropdowns(except) {
+        document.querySelectorAll('.cp-ac-dropdown').forEach(function(d) {
+            if (except && d.parentElement && d.parentElement.contains(except)) return;
+            d.style.display = 'none';
+            if (!except) d.innerHTML = '';
+        });
+        if (cpAcOpenDrop && cpAcOpenDrop.style.display === 'none') cpAcUnbind();
+    }
+
+    // Scroll lock, derived from the DOM rather than a counter so it cannot desync across
+    // the six open paths + the shared backdrop/Escape closers. It must go on <html>, NOT
+    // <body>: orkui.css sets html{overflow-x:hidden}, so the root is the scroll container
+    // and overflow no longer propagates from body — a body lock would do nothing to the
+    // page behind the modal while making body its own scroll container (which suspends
+    // the sticky list header). Restores the PREVIOUS inline value, not ''.
+    var cpPrevRootOverflow = null;
+    function cpSyncScrollLock() {
+        var open = false;
+        document.querySelectorAll('.cp-overlay[id]').forEach(function(o) {
+            if (o.style.display === 'flex') open = true;
+        });
+        var root = document.documentElement;
+        if (open) {
+            if (cpPrevRootOverflow === null) {
+                cpPrevRootOverflow = root.style.overflowY;
+                root.style.overflowY = 'hidden';
+            }
+        } else if (cpPrevRootOverflow !== null) {
+            root.style.overflowY = cpPrevRootOverflow;
+            cpPrevRootOverflow = null;
+        }
     }
 
     var cpAcTimer = null;
@@ -3389,7 +3672,7 @@ $_total_awards = count($courtAwards ?? []);
         var q = input.value.trim();
         var drop = gid(dropdownId);
         gid(hiddenId).value = '';
-        if (q.length < 2) { drop.style.display = 'none'; drop.innerHTML = ''; return; }
+        if (q.length < 2) { drop.style.display = 'none'; drop.innerHTML = ''; if (cpAcOpenDrop === drop) cpAcUnbind(); return; }
         clearTimeout(cpAcTimer);
         cpAcTimer = setTimeout(function() {
             fetch(uir + 'KingdomAjax/playersearch/' + kidId + '&q=' + encodeURIComponent(q))
@@ -3410,13 +3693,14 @@ $_total_awards = count($courtAwards ?? []);
                         input.value = p.Persona;
                         gid(hiddenId).value = p.MundaneId;
                         drop.style.display = 'none';
+                        if (cpAcOpenDrop === drop) cpAcUnbind();
                     });
                     drop.appendChild(div);
                 });
                 cpPositionAc(input, drop);
                 drop.style.display = 'block';
             })
-            .catch(function() { drop.style.display = 'none'; });
+            .catch(function() { drop.style.display = 'none'; if (cpAcOpenDrop === drop) cpAcUnbind(); });
         }, 200);
     };
 
@@ -3444,9 +3728,11 @@ $_total_awards = count($courtAwards ?? []);
     window.cpOpenPublishModal = function() {
         var e = gid('cp-publish-error'); if (e) e.style.display = 'none';
         gid('cp-publish-modal').style.display = 'flex';
+        cpSyncScrollLock();
     };
     window.cpClosePublishModal = function() {
         var m = gid('cp-publish-modal'); if (m) m.style.display = 'none';
+        cpSyncScrollLock();
     };
     window.cpDoPublish = function(mode) {
         var fd = new FormData();
@@ -3536,9 +3822,11 @@ $_total_awards = count($courtAwards ?? []);
                     '<div class="cp-co-desc">Close out this court.</div></div></div>';
         }
         gid('cp-complete-modal').style.display = 'flex';
+        cpSyncScrollLock();
     };
     window.cpCloseCompleteModal = function() {
         var m = gid('cp-complete-modal'); if (m) m.style.display = 'none';
+        cpSyncScrollLock();
     };
     window.cpDoFinalize = function(skipRemaining) {
         var opts = gid('cp-complete-opts');
@@ -3665,9 +3953,9 @@ $_total_awards = count($courtAwards ?? []);
         if (rmId)   rmId.value   = sa.RegaliaMakerId || 0;
         // Scroll / regalia tracking status icons.
         var si = row.querySelector('.cp-tracking-icon[data-type="scroll"]');
-        if (si && String(si.dataset.status) !== String(sa.ScrollStatus)) si.dataset.status = sa.ScrollStatus;
+        if (si && String(si.dataset.status) !== String(sa.ScrollStatus)) cpApplyTrackState(si, 'scroll', sa.ScrollStatus);
         var ri = row.querySelector('.cp-tracking-icon[data-type="regalia"]');
-        if (ri && String(ri.dataset.status) !== String(sa.RegaliaStatus)) ri.dataset.status = sa.RegaliaStatus;
+        if (ri && String(ri.dataset.status) !== String(sa.RegaliaStatus)) cpApplyTrackState(ri, 'regalia', sa.RegaliaStatus);
     }
 
     // Full-field reconcile (S5): drive the row set from awards_full — status, giver,
@@ -3763,6 +4051,8 @@ $_total_awards = count($courtAwards ?? []);
         if (!chip) return;
         var n = (list && list.length) ? list.length : 1;
         chip.innerHTML = '<i class="fas fa-users" style="margin-right:4px"></i>' + n + ' viewing';
+        var mini = gid('cp-mini-presence');
+        if (mini) mini.textContent = n + ' viewing';
         if (list && list.length) {
             chip.dataset.tip = list.map(function(o) { return o.name || ('Officer #' + o.uid); }).join(', ');
         }
@@ -3772,7 +4062,11 @@ $_total_awards = count($courtAwards ?? []);
         var el = gid('cp-sync-indicator');
         if (!el) return;
         if (ok) { cpLastSyncAt = Date.now(); el.dataset.state = 'synced'; cpRenderSync(); }
-        else    { el.dataset.state = 'reconnecting'; el.innerHTML = '<i class="fas fa-exclamation-triangle" style="margin-right:4px;color:#dd6b20"></i>Reconnecting…'; }
+        else    {
+            el.dataset.state = 'reconnecting'; el.innerHTML = '<i class="fas fa-exclamation-triangle" style="margin-right:4px;color:#dd6b20"></i>Reconnecting…';
+            var miniErr = gid('cp-mini-sync');
+            if (miniErr) { miniErr.textContent = 'Reconnecting…'; miniErr.dataset.state = 'reconnecting'; }
+        }
     }
     function cpRenderSync() {
         var el = gid('cp-sync-indicator');
@@ -3780,6 +4074,8 @@ $_total_awards = count($courtAwards ?? []);
         var secs = Math.max(0, Math.round((Date.now() - cpLastSyncAt) / 1000));
         var ago  = secs < 5 ? 'just now' : (secs + 's ago');
         el.innerHTML = '<i class="fas fa-check-circle" style="margin-right:4px;color:#38a169"></i>Synced ' + ago;
+        var mini = gid('cp-mini-sync');
+        if (mini) { mini.textContent = 'Synced ' + ago; mini.dataset.state = 'synced'; }
     }
 
     window.cpHeartbeatPoll = function(force) {
@@ -3860,9 +4156,7 @@ $_total_awards = count($courtAwards ?? []);
 
     // Close dropdowns and note popup on outside click
     document.addEventListener('click', function(e) {
-        document.querySelectorAll('.cp-ac-dropdown').forEach(function(d) {
-            if (!d.parentElement.contains(e.target)) d.style.display = 'none';
-        });
+        cpHideAcDropdowns(e.target);
         var popup = gid('cp-note-popup');
         if (popup && popup.style.display !== 'none' && !popup.contains(e.target) && !e.target.closest('.cp-note-btn')) {
             popup.style.display = 'none';
@@ -3872,7 +4166,12 @@ $_total_awards = count($courtAwards ?? []);
     // Close modals on backdrop / Escape
     ['cp-rec-modal','cp-adhoc-modal','cp-artisan-modal','cp-grant-modal','cp-publish-modal','cp-complete-modal'].forEach(function(id) {
         var el = gid(id);
-        if (el) el.addEventListener('click', function(e) { if (e.target === this) this.style.display = 'none'; });
+        if (el) el.addEventListener('click', function(e) {
+            if (e.target !== this) return;
+            this.style.display = 'none';
+            cpHideAcDropdowns();
+            cpSyncScrollLock();
+        });
     });
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
@@ -3880,6 +4179,8 @@ $_total_awards = count($courtAwards ?? []);
             ['cp-rec-modal','cp-adhoc-modal','cp-artisan-modal','cp-grant-modal','cp-publish-modal','cp-complete-modal'].forEach(function(id) {
                 var el = gid(id); if (el) el.style.display = 'none';
             });
+            cpHideAcDropdowns();
+            cpSyncScrollLock();
             var cpso = gid('cp-script-overlay'); if (cpso && !cpso.hidden) cpCloseScript();
         }
     });

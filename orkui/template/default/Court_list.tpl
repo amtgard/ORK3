@@ -1,6 +1,6 @@
 <?php
-$courtList      = $courtList      ?? [];
-$upcomingEvents = $upcomingEvents ?? [];
+$courtList      = $CourtList      ?? [];
+$upcomingEvents = $UpcomingEvents ?? [];
 $kingdom_id     = $KingdomId      ?? 0;
 $park_id        = $ParkId         ?? 0;
 $context        = $Context        ?? 'kingdom';
@@ -113,6 +113,27 @@ html[data-theme="dark"] .cp-mode-opt.cp-mode-sel { border-color: #4299e1; backgr
 
 /* Status badges (inline style!important: override common pastels) */
 html[data-theme="dark"] .cp-badge { box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
+
+/* ----- Mobile ----- */
+@media (max-width: 600px) {
+    .cp-header { flex-wrap: wrap; row-gap: 10px; }
+    .cp-header h1 { flex: 1 1 100%; }
+    .cp-court-card { flex-wrap: wrap; align-items: flex-start; }
+    .cp-court-date { white-space: normal; min-width: 0; }
+    .cp-court-badges { flex-wrap: wrap; flex-shrink: 1; }
+    .cp-btn-link { flex: 1 1 100%; width: 100%; text-align: center; min-height: 44px; line-height: 44px; padding-top: 0; padding-bottom: 0; margin-top: 8px; }
+    .cp-overlay { padding: 16px; }
+    .cp-modal { max-height: 88vh; max-height: 88dvh; overflow-y: auto; }
+    .cp-mode-opts { flex-direction: column; }
+    .cp-mode-opt { width: 100%; }
+}
+
+@media (pointer: coarse) {
+    .cp-modal-close { min-width: 44px; min-height: 44px; }
+    .cp-btn-primary, .cp-btn-outline { min-height: 44px; box-sizing: border-box; }
+    .cp-btn-link { min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
+    .cp-field input, .cp-field select { min-height: 44px; }
+}
 </style>
 
 <div class="cp-page">
