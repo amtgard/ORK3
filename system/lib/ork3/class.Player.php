@@ -2610,32 +2610,70 @@ class Player extends Ork3
     public function AddDues($request)
     {
         $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-        $dues = new yapo($this->db, DB_PREFIX . 'dues');
-        $dues->clear();
-
-        if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) {
-            $dues->mundane_id = $request['MundaneId'];
-            $dues->created_by = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-            $dues->created_on = date('Y-m-d');
-            $dues->park_id = $request['ParkId'];
-            $dues->kingdom_id = $request['KingdomId'];
-            $dues->dues_from = date('Y-m-d', strtotime($request['DuesFrom']));
-            if (!empty($request['Months'])) {
-                $n    = max(1, (int)$request['Months']);
-                $unit = ($request['DuesPeriodType'] === 'week') ? 'weeks' : 'months';
-                $dues->dues_until = date('Y-m-d', strtotime($request['DuesFrom'] . ' + ' . $n . ' ' . $unit));
-                $dues->terms = $n;
-            } else {
-                $dues->dues_until = $this->determine_dues_until($request['KingdomId'], $request['DuesFrom'], $request['Terms']);
-                $dues->terms = $request['Terms'];
-            }
-            $dues->dues_for_life = $request['DuesForLife'];
-            $dues->save();
-
-            return Success($dues->dues_id);
-        } else {
+        if (!valid_id($mundane_id)) {
             return NoAuthorization();
         }
+        if (!valid_id($request['MundaneId'] ?? 0)) {
+            return InvalidParameter('A player must be selected.');
+        }
+
+        // Authorize against the target player's OWN park, never the ParkId that
+        // came in on the request. That value arrives from a hidden form input,
+        // so trusting it let an officer write a dues row for a player in a park
+        // they hold no authority over -- and because the row was then stamped
+        // with the attacker's park, the victim park never saw it while
+        // RevokeDues (which authorizes on the *player's* park) refused to undo
+        // it. RevokeDues is the correct model; this follows it.
+        $thePlayer = $this->player_info($request['MundaneId']);
+        if (!$thePlayer || !valid_id($thePlayer['ParkId'])) {
+            return InvalidParameter('Cannot find player.');
+        }
+
+        if (!Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
+            return NoAuthorization();
+        }
+
+        $dues = new yapo($this->db, DB_PREFIX . 'dues');
+        $dues->clear();
+        $dues->mundane_id = $request['MundaneId'];
+        $dues->created_by = $mundane_id;
+        $dues->created_on = date('Y-m-d');
+        // Stamp the row with the player's real scope so the park that actually
+        // holds the player can see and revoke it.
+        $dues->park_id = $thePlayer['ParkId'];
+        $dues->kingdom_id = $thePlayer['KingdomId'];
+        $dues->dues_from = date('Y-m-d', strtotime($request['DuesFrom']));
+        if (!empty($request['Months'])) {
+            $n    = max(1, (int)$request['Months']);
+            $unit = ($request['DuesPeriodType'] === 'week') ? 'weeks' : 'months';
+            $dues->dues_until = date('Y-m-d', strtotime($request['DuesFrom'] . ' + ' . $n . ' ' . $unit));
+            $dues->terms = $n;
+        } else {
+            $dues->dues_until = $this->determine_dues_until($thePlayer['KingdomId'], $request['DuesFrom'], $request['Terms']);
+            $dues->terms = $request['Terms'];
+        }
+        $dues->dues_for_life = $request['DuesForLife'];
+        $dues->save();
+
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . "::" . __FUNCTION__,
+            $request,
+            'Player',
+            (int)$request['MundaneId'],
+            null,
+            [
+                'dues_id'       => (int)$dues->dues_id,
+                'mundane_id'    => (int)$request['MundaneId'],
+                'park_id'       => (int)$thePlayer['ParkId'],
+                'kingdom_id'    => (int)$thePlayer['KingdomId'],
+                'dues_from'     => $dues->dues_from,
+                'dues_until'    => $dues->dues_until,
+                'terms'         => $dues->terms,
+                'dues_for_life' => (int)$dues->dues_for_life,
+            ]
+        );
+
+        return Success($dues->dues_id);
     }
 
     private function determine_dues_until($kingdom_id, $dues_from = null, $terms = null)
@@ -2725,7 +2763,7 @@ class Player extends Ork3
                 return NoAuthorization();
             }
         } else {
-            return InvalidParamter();
+            return InvalidParameter();
         }
     }
 

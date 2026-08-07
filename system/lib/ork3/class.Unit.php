@@ -528,16 +528,18 @@ class Unit extends Ork3
             return InvalidParameter();
         }
         $unit_id    = (int)$request['UnitId'];
-        $actor_id   = isset($request['ActorId']) ? (int)$request['ActorId'] : null;
+        $prior_active = $this->unit->active;
         $member_ids = array_keys($this->_active_member_roles($unit_id));
         $this->unit->active = $waffle;
         $this->unit->save();
+        // The actor was previously passed in the prior_state slot, which both
+        // lost the real prior state and duplicated by_whom_id.
         Ork3::$Lib->dangeraudit->audit(
             'Unit::' . ($waffle === 'Retired' ? 'RetireUnit' : 'RestoreUnit'),
             $request,
             'Unit',
             $unit_id,
-            $actor_id,
+            ['unit_id' => $unit_id, 'active' => $prior_active],
             ['unit_id' => $unit_id, 'active' => $waffle]
         );
         foreach ($member_ids as $mid) {
@@ -554,14 +556,14 @@ class Unit extends Ork3
         if ($mundane_id === 0) {
             return NoAuthorization();
         }
-        $mundane  = Ork3::$Lib->player->player_info($request['Token']);
         $unit_id  = (int)$request['UnitId'];
 
         $is_manager = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_UNIT, $unit_id, AUTH_CREATE);
-        $is_officer = $mundane && (
-            Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) ||
-            Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
-        );
+        // Officer authority is evaluated against the parks/kingdoms the unit's
+        // roster actually sits in. It used to be evaluated against the
+        // requester's own park/kingdom, so any park monarch anywhere could
+        // retire any unit in the world.
+        $is_officer = Ork3::$Lib->authorization->HasUnitOfficerAuthority($mundane_id, $unit_id);
         // Sole-member exception: the only remaining active roster member may
         // retire even without management rights.
         $members = $this->_active_member_roles($unit_id);
@@ -580,12 +582,10 @@ class Unit extends Ork3
         if ($mundane_id === 0) {
             return NoAuthorization();
         }
-        $mundane = Ork3::$Lib->player->player_info($request['Token']);
-        // Reactivation is monarchy-only — mirrors the KPM unit-auth bypass scope.
-        if ($mundane && (
-            Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) ||
-            Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
-        )) {
+        // Reactivation is monarchy-only — mirrors the KPM unit-auth bypass scope,
+        // evaluated against the unit's own roster scope rather than the
+        // requester's park/kingdom.
+        if (Ork3::$Lib->authorization->HasUnitOfficerAuthority($mundane_id, (int)$request['UnitId'])) {
             return $this->WaffleUnit($request + ['ActorId' => $mundane_id], 'Active');
         }
         return NoAuthorization();

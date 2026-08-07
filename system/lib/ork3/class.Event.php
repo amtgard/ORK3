@@ -539,65 +539,76 @@ class Event extends Ork3
 
         logtrace("SetEventDetails()", $request);
 
-        $isStaffManager = false;
-        if (valid_id($mundane_id) && valid_id($request['EventCalendarDetailId'] ?? '')) {
-            $this->db->Clear();
-            $staffCheck = $this->db->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . (int)$request['EventCalendarDetailId'] . ' AND mundane_id = ' . (int)$mundane_id . ' AND can_manage = 1 LIMIT 1');
-            $isStaffManager = $staffCheck && $staffCheck->Next();
-        }
-        if (valid_id($mundane_id) && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT) || $isStaffManager)) {
-
-            $this->detail->clear();
-            $this->detail->event_id = $request['EventId'];
-            $this->detail->event_calendardetail_id = $request['EventCalendarDetailId'];
-            if (valid_id($request['EventCalendarDetailId']) && $this->detail->find()) {
-
-                $hasAddress = !empty(trim(($request['Address'] ?? '') . ($request['City'] ?? '') . ($request['Province'] ?? '') . ($request['PostalCode'] ?? '')));
-                $details  = $hasAddress ? $this->_geocodeCached($request['Address'], $request['City'], $request['Province'], $request['PostalCode']) : false;
-                $geocode  = ($details && !empty($details['Geocode'])) ? json_decode($details['Geocode']) : null;
-
-                $this->detail->event_id = $request['EventId'];
-                $this->detail->price = $request['Price'];
-                $this->detail->event_start = $request['EventStart'];
-                $this->detail->event_end = $request['EventEnd'];
-                $this->detail->description = trim($request['Description']);
-                $this->detail->url = $request['Url'];
-                $this->detail->url_name = $request['UrlName'];
-                if ($hasAddress) {
-                    $this->detail->address    = isset($details['Address']) ? $details['Address'] : $request['Address'];
-                    $this->detail->province   = isset($details['Province']) ? $details['Province'] : $request['Province'];
-                    $this->detail->postal_code = isset($details['PostalCode']) ? $details['PostalCode'] : $request['PostalCode'];
-                    $this->detail->city       = isset($details['City']) ? $details['City'] : $request['City'];
-                    $this->detail->country    = $request['Country'];
-                } else {
-                    $this->detail->address     = '';
-                    $this->detail->province    = '';
-                    $this->detail->postal_code = '';
-                    $this->detail->city        = '';
-                    $this->detail->country     = '';
-                }
-                $this->detail->map_url = $request['MapUrl'];
-                $this->detail->map_url_name = $request['MapUrlName'];
-                $this->detail->event_type = $request['EventType'] ?? null;
-                $this->detail->modified = date('Y-m-d H:i:s');
-                $this->detail->google_geocode = $details ? $details['Geocode'] : null;
-                $this->detail->location = $details ? $details['Location'] : null;
-                $this->detail->latitude = ($geocode && isset($geocode->results[0])) ? $geocode->results[0]->geometry->location->lat : null;
-                $this->detail->longitude = ($geocode && isset($geocode->results[0])) ? $geocode->results[0]->geometry->location->lng : null;
-                Ork3::$Lib->heraldry->SetEventHeraldry($request);
-                $this->detail->save();
-                if (valid_id($request['Current'])) {
-                    logtrace("SetEventDetails", array( 'Token' => $request['Token'], 'EventId' => $request['EventId'], 'EventCalendarDetailId' => $request['EventCalendarDetailId'], 'Current' => 1));
-                    $this->SetCurrent(array( 'Token' => $request['Token'], 'EventCalendarDetailId' => $request['EventCalendarDetailId'], 'Current' => 1));
-                }
-                logtrace('SetEventDetails', $request);
-                return Success();
-            } else {
-                return InvalidParameter('');
-            }
-        } else {
+        if (!valid_id($mundane_id)) {
             return NoAuthorization();
         }
+        if (!valid_id($request['EventCalendarDetailId'] ?? '')) {
+            return InvalidParameter('');
+        }
+
+        $this->db->Clear();
+        $staffCheck = $this->db->DataSet('SELECT 1 FROM ' . DB_PREFIX . 'event_staff WHERE event_calendardetail_id = ' . (int)$request['EventCalendarDetailId'] . ' AND mundane_id = ' . (int)$mundane_id . ' AND can_manage = 1 LIMIT 1');
+        $isStaffManager = $staffCheck && $staffCheck->Next();
+
+        // Load the occurrence FIRST, then authorize against the event it actually
+        // belongs to -- never against the caller-supplied EventId. Setting both
+        // event_id and the primary key before find() is not an ownership filter:
+        // YapoWhere::GenerateSql drops every non-PK field from the WHERE clause
+        // once the primary key is set, so the lookup collapses to
+        // "WHERE event_calendardetail_id = ?" and matches any occurrence in any
+        // kingdom.
+        $this->detail->clear();
+        $this->detail->event_calendardetail_id = $request['EventCalendarDetailId'];
+        if (!$this->detail->find()) {
+            return InvalidParameter('');
+        }
+        $owning_event_id = (int)$this->detail->event_id;
+
+        if (!$isStaffManager && !Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $owning_event_id, AUTH_EDIT)) {
+            return NoAuthorization();
+        }
+
+        $hasAddress = !empty(trim(($request['Address'] ?? '') . ($request['City'] ?? '') . ($request['Province'] ?? '') . ($request['PostalCode'] ?? '')));
+        $details  = $hasAddress ? $this->_geocodeCached($request['Address'], $request['City'], $request['Province'], $request['PostalCode']) : false;
+        $geocode  = ($details && !empty($details['Geocode'])) ? json_decode($details['Geocode']) : null;
+
+        // event_id is deliberately NOT reassigned from the request. Editing an
+        // occurrence must never re-parent it onto a different event.
+        $this->detail->price = $request['Price'];
+        $this->detail->event_start = $request['EventStart'];
+        $this->detail->event_end = $request['EventEnd'];
+        $this->detail->description = trim($request['Description']);
+        $this->detail->url = $request['Url'];
+        $this->detail->url_name = $request['UrlName'];
+        if ($hasAddress) {
+            $this->detail->address    = isset($details['Address']) ? $details['Address'] : $request['Address'];
+            $this->detail->province   = isset($details['Province']) ? $details['Province'] : $request['Province'];
+            $this->detail->postal_code = isset($details['PostalCode']) ? $details['PostalCode'] : $request['PostalCode'];
+            $this->detail->city       = isset($details['City']) ? $details['City'] : $request['City'];
+            $this->detail->country    = $request['Country'];
+        } else {
+            $this->detail->address     = '';
+            $this->detail->province    = '';
+            $this->detail->postal_code = '';
+            $this->detail->city        = '';
+            $this->detail->country     = '';
+        }
+        $this->detail->map_url = $request['MapUrl'];
+        $this->detail->map_url_name = $request['MapUrlName'];
+        $this->detail->event_type = $request['EventType'] ?? null;
+        $this->detail->modified = date('Y-m-d H:i:s');
+        $this->detail->google_geocode = $details ? $details['Geocode'] : null;
+        $this->detail->location = $details ? $details['Location'] : null;
+        $this->detail->latitude = ($geocode && isset($geocode->results[0])) ? $geocode->results[0]->geometry->location->lat : null;
+        $this->detail->longitude = ($geocode && isset($geocode->results[0])) ? $geocode->results[0]->geometry->location->lng : null;
+        Ork3::$Lib->heraldry->SetEventHeraldry($request);
+        $this->detail->save();
+        if (valid_id($request['Current'])) {
+            logtrace("SetEventDetails", array( 'Token' => $request['Token'], 'EventId' => $request['EventId'], 'EventCalendarDetailId' => $request['EventCalendarDetailId'], 'Current' => 1));
+            $this->SetCurrent(array( 'Token' => $request['Token'], 'EventCalendarDetailId' => $request['EventCalendarDetailId'], 'Current' => 1));
+        }
+        logtrace('SetEventDetails', $request);
+        return Success();
     }
 
     public function DeleteEvent($request)
