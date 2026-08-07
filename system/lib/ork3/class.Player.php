@@ -57,7 +57,6 @@ class Player extends Ork3
             $result = json_decode($response);
             return $result->result;
         } else {
-            error_log('ORK_DEBUG No Authorization found.: ' . json_encode(null));
             return NoAuthorization();
         }
 
@@ -130,8 +129,15 @@ class Player extends Ork3
         $thePlayer = $this->player_info($request['MundaneId']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
-                    || $mundane_id == $request['MundaneId'])) {
+                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
+            // Notes are an officer-facing record: they are how a park's monarchy
+            // documents a player. The guard used to also accept
+            // "|| $mundane_id == $request['MundaneId']", which let any
+            // non-officer author, edit and delete notes on their own profile
+            // through the endpoint even though the UI never offers the
+            // controls ($canEditNotes is officer-only). Self-service is
+            // limited to ClearNotes, which is a deliberate, advertised feature
+            // for closing out historically imported notes.
             $this->notes->clear();
             $this->notes->mundane_id = $request['MundaneId'];
             $this->notes->note = $request['Note'];
@@ -162,9 +168,9 @@ class Player extends Ork3
             if ($this->notes->find()) {
                 $thePlayer = $this->player_info($this->notes->mundane_id);
 
+                // Officer-only: see AddNote.
                 if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                        && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
-                            || $mundane_id == $request['MundaneId'])) {
+                        && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
 
                     $note->mundane_note_id = $this->notes->mundane_note_id;
                     $note->mundane_id = $this->notes->mundane_id;
@@ -198,9 +204,9 @@ class Player extends Ork3
             return InvalidParameter('Cannot find Note.');
         }
         $thePlayer = $this->player_info($this->notes->mundane_id);
+        // Officer-only: see AddNote.
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-            && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
-                || $mundane_id == $request['MundaneId'])) {
+            && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
             $this->notes->note         = $request['Note'];
             $this->notes->description  = $request['Description'];
             $this->notes->date         = date('Y-m-d', strtotime($request['Date']));
@@ -738,7 +744,6 @@ class Player extends Ork3
             $park->clear();
             $park->park_id = $request['ParkId'];
             if ($park->find()) {
-                error_log('ORK_DEBUG Player->CreatePlayer: ' . json_encode($request));
                 $username = $this->unique_username(trim($request['UserName']), 4);
                 if ($username === false) {
                     return InvalidParameter('No UserName could be generated for this player.  Please try again.');
@@ -1439,7 +1444,6 @@ class Player extends Ork3
             $this->mundane->save();
             $this->bust_player_award_recs_cache((int)$request['MundaneId'], $_oldKid, $_oldPid);
             $this->bust_player_award_recs_cache((int)$request['MundaneId'], (int)$park->kingdom_id, (int)$park->park_id);
-            error_log('ORK_DEBUG MovePlayer(): Success: ' . json_encode($request));
             return Success();
         } else {
             return NoAuthorization();
@@ -1641,7 +1645,6 @@ class Player extends Ork3
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
             if ($this->mundane->find()) {
-                error_log('ORK_DEBUG Updating player: ' . json_encode($request));
 
                 $this->mundane->modified = date('Y-m-d H:i:s', time());
                 $this->mundane->given_name = is_null($request['GivenName']) ? $this->mundane->given_name : $request['GivenName'];
@@ -1839,11 +1842,9 @@ class Player extends Ork3
                 }
                 return Success($notices);
             } else {
-                error_log('ORK_DEBUG No Player found.: ' . json_encode(null));
                 return InvalidParameter();
             }
         } else {
-            error_log('ORK_DEBUG No Authorization found.: ' . json_encode(null));
             return NoAuthorization();
         }
     }

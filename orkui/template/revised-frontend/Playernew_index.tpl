@@ -111,6 +111,15 @@
 	$showLastName  = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowMundaneLast']  ?? 0));
 	$showEmail     = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowEmail']        ?? 0));
 
+	// Account-security details (username, password expiry) -- never public.
+	// $canSeePrivate alone is not enough here: $canEditAdmin is a park-scoped
+	// check, and HasAuthority returns false for AUTH_PARK with id 0, so an ORK
+	// admin viewing a player who has no park would be locked out of their own
+	// admin surface. The unscoped-admin check covers that case.
+	$canSeeAccount = $canSeePrivate
+		|| (isset($this->__session->user_id)
+			&& Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN));
+
 	// Check if player has any reconcilable historical awards (ladder only — matches reconcile page filter)
 	$hasHistorical = false;
 	if ($canManageAwards && is_array($Details['Awards'])) {
@@ -1277,20 +1286,29 @@ html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.0
 				<span class="pn-detail-label">Persona</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['Persona']) ?></span>
 			</div>
+			<?php if ($canSeeAccount): ?>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Username</span>
 				<span class="pn-detail-value"><?= htmlspecialchars($Player['UserName']) ?></span>
 			</div>
+			<?php endif; ?>
 			<?php if ($showEmail && !empty($Player['Email'])): ?>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Email</span>
 				<span class="pn-detail-value"><a href="mailto:<?= htmlspecialchars($Player['Email']) ?>"><?= htmlspecialchars($Player['Email']) ?></a></span>
 			</div>
 			<?php endif; ?>
+			<?php /* Username and Password Expires are account-security details, not
+			   public profile data. GivenName / Surname / Email on this same panel were
+			   correctly gated; these two rows had no gate at all, so an anonymous
+			   visitor was handed a valid login name plus the fact that its password had
+			   expired. Gated to the player themselves and their monarchy/admin. */ ?>
+			<?php if ($canSeeAccount): ?>
 			<div class="pn-detail-row"<?= ($passwordExpired || $passwordSoon) ? ' style="background:var(--ork-alert-warning-bg,#fffbe6);border-left:3px solid var(--ork-alert-warning-border,#f6ad55);padding-left:6px;margin-left:-6px;"' : '' ?>>
 				<span class="pn-detail-label">Password Expires</span>
 				<span class="pn-detail-value" style="<?= $passwordExpired ? 'color:#c53030;font-weight:600;' : ($passwordSoon ? 'color:#b7791f;font-weight:600;' : '') ?>"><?= $passwordExpiring ?><?= $passwordSoon ? ' <i class="fas fa-exclamation-triangle" style="margin-left:5px;font-size:12px;" title="Expires within 2 weeks"></i>' : '' ?></span>
 			</div>
+			<?php endif; ?>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Park Member Since</span>
 				<span class="pn-detail-value"><?= (!empty($Player['ParkMemberSince']) && $Player['ParkMemberSince'] !== '0000-00-00') ? htmlspecialchars($Player['ParkMemberSince']) : 'N/A' ?></span>

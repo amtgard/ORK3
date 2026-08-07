@@ -34,10 +34,13 @@ class Controller_Reports extends Controller
     {
         if (valid_id($this->session->park_id)) {
             header('Location: ' . UIR . 'Park/profile/' . (int)$this->session->park_id . '&tab=reports');
+            exit;
         } elseif (valid_id($this->session->kingdom_id)) {
             header('Location: ' . UIR . 'Kingdom/profile/' . (int)$this->session->kingdom_id . '&tab=reports');
+            exit;
         } else {
             header('Location: ' . UIR);
+            exit;
         }
         exit;
     }

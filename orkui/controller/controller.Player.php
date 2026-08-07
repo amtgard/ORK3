@@ -77,6 +77,7 @@ class Controller_Player extends Controller
             $r = array('Status' => 0);
             if (!isset($this->session->user_id)) {
                 header('Location: '.UIR."Login/login/Player/profile/$id");
+                exit;
             } else {
                 switch ($action) {
                     case 'updateclasses':
@@ -194,6 +195,7 @@ class Controller_Player extends Controller
                     $this->request->clear('Player_index');
                 } elseif ($r['Status'] == 5) {
                     header('Location: '.UIR."Login/login/Player/profile/$id");
+                    exit;
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -333,11 +335,14 @@ class Controller_Player extends Controller
                         $this->request->clear('Player_profile');
                         if ($r['Status'] == 0) {
                             header('Location: ' . UIR . "Player/profile/{$id}");
+                            exit;
                         } elseif ($r['Status'] == 5) {
                             header('Location: ' . UIR . "Login/login/Player/profile/$id");
+                            exit;
                         } else {
                             $msg = urlencode(!empty($r['Detail']) ? $r['Detail'] : $r['Error']);
                             header('Location: ' . UIR . "Player/profile/{$id}&rec_error={$msg}");
+                            exit;
                         }
                         exit;
                     case 'deleterecommendation':
@@ -349,8 +354,10 @@ class Controller_Player extends Controller
                         $this->request->clear('Player_profile');
                         if ($r['Status'] == 5) {
                             header('Location: ' . UIR . "Login/login/Player/profile/$id");
+                            exit;
                         } else {
                             header('Location: ' . UIR . "Player/profile/{$id}");
+                            exit;
                         }
                         exit;
                     case 'quitunit':

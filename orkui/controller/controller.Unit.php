@@ -34,10 +34,13 @@ class Controller_Unit extends Controller
         if (!valid_id($unit_id)) {
             if (valid_id($this->session->park_id)) {
                 header('Location: ' . UIR . 'Unit/unitlist&ParkId=' . (int)$this->session->park_id);
+                exit;
             } elseif (valid_id($this->session->kingdom_id)) {
                 header('Location: ' . UIR . 'Unit/unitlist&KingdomId=' . (int)$this->session->kingdom_id);
+                exit;
             } else {
                 header('Location: ' . UIR . 'Unit/unitlist');
+                exit;
             }
             exit;
         }
@@ -385,8 +388,10 @@ class Controller_Unit extends Controller
                 if ($r['Status'] == 0) {
                     $this->request->clear('Unit_create');
                     header('Location: '.UIR.'Unit/index/' . $r['Detail']);
+                    exit;
                 } elseif ($r['Status'] == 5) {
                     header('Location: '.UIR.'Login/login/Unit/create/' . $mundane_id);
+                    exit;
                 } else {
                     $this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
                 }

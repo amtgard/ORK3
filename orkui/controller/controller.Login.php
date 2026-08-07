@@ -1,156 +1,168 @@
 <?php
 
-class Controller_Login extends Controller {
-
-	public function __construct($call = null, $method = null) {
-		parent::__construct($call, $method);
+class Controller_Login extends Controller
+{
+    public function __construct($call = null, $method = null)
+    {
+        parent::__construct($call, $method);
         $this->load_model('AmtgardIdp');
-		$this->data['page_title'] = 'Login';
-	}
+        $this->data['page_title'] = 'Login';
+    }
 
-	public function index($action = null) {
-		$this->template = '../revised-frontend/Login_index.tpl';
-		if (!empty($_GET['return'])) {
-			$_ret = trim($_GET['return']);
-			if ($_ret !== '' && strncasecmp($_ret, 'Login', 5) !== 0) {
-				$this->session->location = $_ret;
-			}
-		}
-		if (($_GET['msg'] ?? '') === 'session_replaced') {
-			$this->data['session_message'] = 'You were logged in from another device or browser. Please log in again.';
-		}
-	}
+    public function index($action = null)
+    {
+        $this->template = '../revised-frontend/Login_index.tpl';
+        if (!empty($_GET['return'])) {
+            $_ret = trim($_GET['return']);
+            if ($_ret !== '' && strncasecmp($_ret, 'Login', 5) !== 0) {
+                $this->session->location = $_ret;
+            }
+        }
+        if (($_GET['msg'] ?? '') === 'session_replaced') {
+            $this->data['session_message'] = 'You were logged in from another device or browser. Please log in again.';
+        }
+    }
 
-	public function logout($userid = null){
-		$this->session->location = null;
-		$this->Login->logout($userid);
-		header('Location: ' . UIR);
-	}
+    public function logout($userid = null)
+    {
+        $this->session->location = null;
+        $this->Login->logout($userid);
+        header('Location: ' . UIR);
+        exit;
+    }
 
-	public function login($location = null) {
-		$this->template = '../revised-frontend/Login_index.tpl';
-		if (($_GET['msg'] ?? '') === 'session_replaced') {
-			$this->data['session_message'] = 'You were logged in from another device or browser. Please log in again.';
-		}
-		if (!empty($_GET['return'])) {
-			$_ret = trim($_GET['return']);
-			if ($_ret !== '' && strncasecmp($_ret, 'Login', 5) !== 0) {
-				$this->session->location = $_ret;
-			}
-		}
-		if (strlen(trim($this->session->location)) == 0) {
-			$this->session->location = $location;
-		}
+    public function login($location = null)
+    {
+        $this->template = '../revised-frontend/Login_index.tpl';
+        if (($_GET['msg'] ?? '') === 'session_replaced') {
+            $this->data['session_message'] = 'You were logged in from another device or browser. Please log in again.';
+        }
+        if (!empty($_GET['return'])) {
+            $_ret = trim($_GET['return']);
+            if ($_ret !== '' && strncasecmp($_ret, 'Login', 5) !== 0) {
+                $this->session->location = $_ret;
+            }
+        }
+        if (strlen(trim($this->session->location)) == 0) {
+            $this->session->location = $location;
+        }
 
-		if ((strlen($this->request->username) > 0 && strlen($this->request->password) > 0) && ($r = $this->Login->login($this->request->username, $this->request->password)) === true) {
-			if ($this->session->location == null) {
-				$uid = (int)$this->session->user_id;
-				header('Location: ' . UIR . ($uid > 0 ? 'Player/profile/' . $uid : ''));
-			} else {
-				//$this->session->location = null;
-				header('Location: ' . UIR . $this->session->location);
-			}
-		} else {
-			$this->data["error"] = $r['Status']['Error'];
-			$this->data["detail"] = $r['Status']['Detail'];
-		}
-	}
+        if ((strlen($this->request->username) > 0 && strlen($this->request->password) > 0) && ($r = $this->Login->login($this->request->username, $this->request->password)) === true) {
+            if ($this->session->location == null) {
+                $uid = (int)$this->session->user_id;
+                header('Location: ' . UIR . ($uid > 0 ? 'Player/profile/' . $uid : ''));
+                exit;
+            } else {
+                //$this->session->location = null;
+                header('Location: ' . UIR . $this->session->location);
+                exit;
+            }
+        } else {
+            $this->data["error"] = $r['Status']['Error'];
+            $this->data["detail"] = $r['Status']['Detail'];
+        }
+    }
 
-	public function forgotpassword($recover = null) {
-		$this->template = '../revised-frontend/Login_forgotpassword.tpl';
-		if ($recover == 'recover') {
-			if (($r = $this->Login->recover_password($_POST['username'], $_POST['email'])) === true) {
-				$this->data["error"] = "A new password has been emailed to you. The new password will expire in 24 hours. Please log in and change your password immediately.";
-				$this->data["detail"] = "";
-			} else {
-				$this->data["error"] = $r['Error'];
-				$this->data["detail"] = $r['Detail'];
-			}
-		}
-	}
+    public function forgotpassword($recover = null)
+    {
+        $this->template = '../revised-frontend/Login_forgotpassword.tpl';
+        if ($recover == 'recover') {
+            if (($r = $this->Login->recover_password($_POST['username'], $_POST['email'])) === true) {
+                $this->data["error"] = "A new password has been emailed to you. The new password will expire in 24 hours. Please log in and change your password immediately.";
+                $this->data["detail"] = "";
+            } else {
+                $this->data["error"] = $r['Error'];
+                $this->data["detail"] = $r['Detail'];
+            }
+        }
+    }
 
-	private function base64UrlEncode($data)
-	{
-		return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
-	}
+    private function base64UrlEncode($data)
+    {
+        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+    }
 
-	public function login_oauth()
-	{
-		$code_verifier = $this->base64UrlEncode(random_bytes(32));
-		$code_challenge = $this->base64UrlEncode(hash('sha256', $code_verifier, true));
+    public function login_oauth()
+    {
+        $code_verifier = $this->base64UrlEncode(random_bytes(32));
+        $code_challenge = $this->base64UrlEncode(hash('sha256', $code_verifier, true));
 
-		$this->session->code_verifier = $code_verifier;
+        $this->session->code_verifier = $code_verifier;
 
-		$query = http_build_query([
-			'client_id' => IDP_CLIENT_ID,
-			'redirect_uri' => UIR . 'Login/oauth_callback',
-			'response_type' => 'code',
-			'scope' => 'profile email',
-			'code_challenge' => $code_challenge,
-			'code_challenge_method' => 'S256',
-		]);
-		header('Location: ' . IDP_BASE_URL . '/oauth/authorize?' . $query);
-		exit;
-	}
+        $query = http_build_query([
+            'client_id' => IDP_CLIENT_ID,
+            'redirect_uri' => UIR . 'Login/oauth_callback',
+            'response_type' => 'code',
+            'scope' => 'profile email',
+            'code_challenge' => $code_challenge,
+            'code_challenge_method' => 'S256',
+        ]);
+        header('Location: ' . IDP_BASE_URL . '/oauth/authorize?' . $query);
+        exit;
+    }
 
-	public function oauth_callback()
-	{
-		if (!isset($_GET['code'])) {
-			$this->data['error'] = 'No authorization returned from Amtgard IDP';
-			$this->template = '../revised-frontend/Login_index.tpl';
-			return;
-		}
+    public function oauth_callback()
+    {
+        if (!isset($_GET['code'])) {
+            $this->data['error'] = 'No authorization returned from Amtgard IDP';
+            $this->template = '../revised-frontend/Login_index.tpl';
+            return;
+        }
 
-		$token_data = $this->AmtgardIdp->exchangeAuthCodeForAccessToken($_GET['code'], $this->session->code_verifier);
-		$user_data = $this->AmtgardIdp->fetchUserInfo($token_data['access_token']);
+        $token_data = $this->AmtgardIdp->exchangeAuthCodeForAccessToken($_GET['code'], $this->session->code_verifier);
+        $user_data = $this->AmtgardIdp->fetchUserInfo($token_data['access_token']);
 
-		if (isset($user_data['error'])) {
-			error_log("Amtgard IDP OAuth callback: Failed to get user info: " . $user_data['response']);
-			$this->data['error'] = 'Failed to get user info';
-			$this->data['detail'] = $user_data['response'];
-			$this->template = '../revised-frontend/Login_index.tpl';
-			return;
-		}
+        if (isset($user_data['error'])) {
+            error_log("Amtgard IDP OAuth callback: Failed to get user info: " . $user_data['response']);
+            $this->data['error'] = 'Failed to get user info';
+            $this->data['detail'] = $user_data['response'];
+            $this->template = '../revised-frontend/Login_index.tpl';
+            return;
+        }
 
-		error_log("Amtgard IDP OAuth callback: User Data: " . print_r($user_data, true));
+        // Payload deliberately not logged: $user_data carries live OAuth tokens.
+        error_log("Amtgard IDP OAuth callback: user info received");
 
-		$result = $this->authorizeUser($user_data, $token_data);
+        $result = $this->authorizeUser($user_data, $token_data);
 
-		error_log("Amtgard IDP OAuth callback: AuthorizeIdp Result: " . print_r($result, true));
+        // Payload deliberately not logged: $result carries the issued session token.
+        error_log("Amtgard IDP OAuth callback: AuthorizeIdp status " . (int)($result['Status'] ?? -1));
 
-		if ($result['Status']['Status'] === 0) {
-			$this->session->user_id = $result['UserId'];
-			$this->session->user_name = $result['UserName'];
-			$this->session->token = $result['Token'];
-			$this->session->timeout = $result['Timeout'];
-			if (!empty($this->session->location)) {
-				$_dest = $this->session->location;
-				header('Location: ' . UIR . $_dest);
-			} else {
-				$uid = (int)$this->session->user_id;
-				header('Location: ' . UIR . ($uid > 0 ? 'Player/profile/' . $uid : ''));
-			}
-		} else {
-			$this->data['error'] = $result['Status']['Error'];
-			$this->data['detail'] = $result['Status']['Detail'];
-			$this->template = '../revised-frontend/Login_index.tpl';
-		}
-	}
+        if ($result['Status']['Status'] === 0) {
+            $this->session->user_id = $result['UserId'];
+            $this->session->user_name = $result['UserName'];
+            $this->session->token = $result['Token'];
+            $this->session->timeout = $result['Timeout'];
+            if (!empty($this->session->location)) {
+                $_dest = $this->session->location;
+                header('Location: ' . UIR . $_dest);
+                exit;
+            } else {
+                $uid = (int)$this->session->user_id;
+                header('Location: ' . UIR . ($uid > 0 ? 'Player/profile/' . $uid : ''));
+                exit;
+            }
+        } else {
+            $this->data['error'] = $result['Status']['Error'];
+            $this->data['detail'] = $result['Status']['Detail'];
+            $this->template = '../revised-frontend/Login_index.tpl';
+        }
+    }
 
-	private function authorizeUser($userData, $tokenData)
-	{
-		$mundane_id = null;
-		if (isset($userData['ork_profile']) && isset($userData['ork_profile']['mundane_id'])) {
-			$mundane_id = $userData['ork_profile']['mundane_id'];
-		}
+    private function authorizeUser($userData, $tokenData)
+    {
+        $mundane_id = null;
+        if (isset($userData['ork_profile']) && isset($userData['ork_profile']['mundane_id'])) {
+            $mundane_id = $userData['ork_profile']['mundane_id'];
+        }
 
-		$this->session->IdpUserId = $userData['id'];
-		$this->session->Email = $userData['email'];
-		$this->session->MundaneId = $mundane_id;
-		$this->session->AccessToken = $tokenData['access_token'];
-		$this->session->RefreshToken = $tokenData['refresh_token'] ?? null;
-		$this->session->ExpiresAt = time() + ($tokenData['expires_in'] ?? 3600);
+        $this->session->IdpUserId = $userData['id'];
+        $this->session->Email = $userData['email'];
+        $this->session->MundaneId = $mundane_id;
+        $this->session->AccessToken = $tokenData['access_token'];
+        $this->session->RefreshToken = $tokenData['refresh_token'] ?? null;
+        $this->session->ExpiresAt = time() + ($tokenData['expires_in'] ?? 3600);
 
-		return $this->Login->Authorization->AuthorizeIdp();
-	}
+        return $this->Login->Authorization->AuthorizeIdp();
+    }
 }
