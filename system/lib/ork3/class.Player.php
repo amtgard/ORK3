@@ -1438,20 +1438,29 @@ class Player extends Ork3
                Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park->park_id, AUTH_EDIT)          // destination
             || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT); // source
 
-        // What was NOT deliberate is that the same park-level grant also
-        // rewrites the player's KINGDOM. A park officer in one kingdom could
-        // pull any player in the world across a kingdom boundary, with no
-        // authority of any kind over the kingdom they were taken from. A move
-        // that changes the kingdom additionally requires kingdom-level authority
-        // over one of the two kingdoms involved (an unscoped ORK admin passes
-        // either check).
+        // What was NOT deliberate is that ONE park-level grant also rewrites the
+        // player's KINGDOM: a park officer in one kingdom could pull any player
+        // in the world across a kingdom boundary with no authority of any kind
+        // over the kingdom they were taken from. A move that changes the kingdom
+        // therefore needs more than a single park grant.
         //
-        // PRODUCT DECISION: intra-kingdom moves are unchanged. If cross-kingdom
-        // recruitment on park authority alone is wanted back, delete the
-        // $_crossKingdomAuthority term below.
+        // It does NOT need kingdom-level authority, though. Requiring that broke
+        // the ordinary relocation: a player moves house, the receiving park's
+        // Prime Minister transfers them in from the park page's Move Player
+        // modal, and that PM holds park authority only. Holding AUTH_PARK EDIT
+        // over BOTH ends is the real-world "both PMs agree" transfer and is
+        // accepted here. What stays blocked is the one-sided pull -- authority
+        // over the destination alone, or the source alone, across a kingdom
+        // boundary.
+        //
+        // HasAuthority traverses upward (a kingdom grant satisfies a park check)
+        // but never downward, so a kingdom officer passes the both-ends test for
+        // any park in their kingdom, and an unscoped ORK admin passes everything.
         $_crossKingdomAuthority = ($_srcKingdom === $_dstKingdom)
             || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $_dstKingdom, AUTH_EDIT)
-            || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $_srcKingdom, AUTH_EDIT);
+            || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $_srcKingdom, AUTH_EDIT)
+            || (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park->park_id, AUTH_EDIT)
+                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT));
 
         if ($mundane_id > 0 && $_parkAuthority && $_crossKingdomAuthority) {
 
@@ -1471,7 +1480,7 @@ class Player extends Ork3
             $this->bust_player_award_recs_cache((int)$request['MundaneId'], (int)$park->kingdom_id, (int)$park->park_id);
             return Success();
         } elseif ($mundane_id > 0 && $_parkAuthority && !$_crossKingdomAuthority) {
-            return NoAuthorization('Moving a player between kingdoms requires kingdom-level authority over the kingdom they are leaving or the one they are joining.');
+            return NoAuthorization('Moving a player between kingdoms requires authority over both the park they are leaving and the park they are joining, or kingdom-level authority over either kingdom.');
         } else {
             return NoAuthorization();
         }

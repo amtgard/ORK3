@@ -69,9 +69,26 @@ player's **kingdom**: a park officer in one kingdom could pull any player in the
 world across a kingdom boundary with no authority of any kind over the kingdom
 they were taken from.
 
-**Decision:** a move that changes the kingdom additionally requires kingdom-level
-authority over the source or destination kingdom. Intra-kingdom moves are
-untouched. An unscoped ORK admin passes either check.
+**Decision:** a move that changes the kingdom needs more than a *single* park
+grant. It is allowed when the actor holds either kingdom-level authority over
+one of the two kingdoms, **or** park-level `AUTH_EDIT` over **both** ends — the
+real-world "both PMs agree" transfer. What stays blocked is the one-sided pull:
+authority over the destination alone, or the source alone, across a kingdom
+boundary. Intra-kingdom moves are untouched, and an unscoped ORK admin passes
+everything.
+
+The both-ends clause is not optional politeness — an adversarial review of this
+branch showed that requiring kingdom authority broke the ordinary relocation.
+The park page's Move Player modal ("Transfer Into Your Park",
+`Parknew_index.tpl`) is gated on `$CanAdminPark`, i.e. park-level authority, and
+its source-kingdom cascade is populated from the unscoped
+`KingdomAjax::getkingdoms`. A receiving Prime Minister was therefore invited to
+perform a transfer the library then refused — the same UI-offers/library-refuses
+shape this branch fixes in the other direction for `Park::CreatePark`.
+
+Verified: destination-park-only and source-park-only cross-kingdom attempts both
+return Status 5 with no write; holding both ends succeeds; same-kingdom moves on
+a single park grant are unaffected.
 
 **To revert:** delete the `$_crossKingdomAuthority` term in
 `Player::MovePlayer`.
