@@ -390,8 +390,7 @@ class Controller_Unit extends Controller
                     header('Location: '.UIR.'Unit/index/' . $r['Detail']);
                     exit;
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR.'Login/login/Unit/create/' . $mundane_id);
-                    exit;
+                    $this->no_authorization('Unit/create/' . $mundane_id);
                 } else {
                     $this->data['Error'] = $r['Error'].':<p>'.$r['Detail'];
                 }

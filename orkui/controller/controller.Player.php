@@ -194,8 +194,7 @@ class Controller_Player extends Controller
                     }
                     $this->request->clear('Player_index');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR."Login/login/Player/profile/$id");
-                    exit;
+                    $this->no_authorization("Player/profile/$id");
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -337,7 +336,11 @@ class Controller_Player extends Controller
                             header('Location: ' . UIR . "Player/profile/{$id}");
                             exit;
                         } elseif ($r['Status'] == 5) {
-                            header('Location: ' . UIR . "Login/login/Player/profile/$id");
+                            // This case always ends the request with a redirect, so
+                            // carry the authorization message back on the query string
+                            // rather than setting an Error on a page never rendered.
+                            $_authmsg = $this->no_authorization("Player/profile/$id");
+                            header('Location: ' . UIR . "Player/profile/{$id}&rec_error=" . urlencode($_authmsg));
                             exit;
                         } else {
                             $msg = urlencode(!empty($r['Detail']) ? $r['Detail'] : $r['Error']);
@@ -353,7 +356,8 @@ class Controller_Player extends Controller
                         ]);
                         $this->request->clear('Player_profile');
                         if ($r['Status'] == 5) {
-                            header('Location: ' . UIR . "Login/login/Player/profile/$id");
+                            $_authmsg = $this->no_authorization("Player/profile/$id");
+                            header('Location: ' . UIR . "Player/profile/{$id}&rec_error=" . urlencode($_authmsg));
                             exit;
                         } else {
                             header('Location: ' . UIR . "Player/profile/{$id}");
@@ -372,8 +376,7 @@ class Controller_Player extends Controller
                     $this->data['Message'] = $r['Detail'] ?: 'Updated successfully.';
                     $this->request->clear('Player_profile');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: ' . UIR . "Login/login/Player/profile/$id");
-                    exit;
+                    $this->no_authorization("Player/profile/$id");
                 } else {
                     $this->data['Error'] = $r['Error'] . ': ' . $r['Detail'];
                 }

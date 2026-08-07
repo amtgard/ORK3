@@ -126,8 +126,7 @@ class Controller_Admin extends Controller
                     $this->data['Message'] = 'Parks merged.  <a href="' . UIR . 'Park/profile/' . $this->request->Admin_mergepark->ToParkId . '">View your abomination here.</a>';
                     $this->request->clear('Admin_mergepark');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR."Login/login/Admin/mergepark");
-                    exit;
+                    $this->no_authorization("Admin/mergepark");
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -154,8 +153,7 @@ class Controller_Admin extends Controller
                     $this->data['Message'] = 'Units merged.  <a href="' . UIR . 'Unit/index/' . $this->request->Admin_mergeunit->ToUnitId . '">View your abomination here.</a>';
                     $this->request->clear('Admin_mergeunit');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR."Login/login/Admin/mergeunit");
-                    exit;
+                    $this->no_authorization("Admin/mergeunit");
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -183,8 +181,7 @@ class Controller_Admin extends Controller
                     $this->data['Message'] = 'Park transferred to  ' . $this->data['KingdomName'];
                     $this->request->clear('Admin_transferpark');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR."Login/login/Admin/transferpark/$kingdom_id");
-                    exit;
+                    $this->no_authorization("Admin/transferpark/$kingdom_id");
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -376,8 +373,7 @@ class Controller_Admin extends Controller
                 }
                 $error = false;
                 if ($Status['Status'] == 5) {
-                    header('Location: '.UIR.'Login/login/Admin/editpark/' . $park_id);
-                    exit;
+                    $this->no_authorization('Admin/editpark/' . $park_id);
                 } elseif ($Status['Status'] != 0) {
                     $this->data['Error'] .= '<b>'.$Status['Error'].'</b>:<br />'.$Status['Detail'].'<p />';
                     $error = true;
@@ -423,8 +419,7 @@ class Controller_Admin extends Controller
                 $error = false;
                 foreach ($r as $k => $Status) {
                     if ($Status['Status'] == 5) {
-                        header('Location: '.UIR.'Login/login/Admin/editparks/' . $kingdom_id);
-                        exit;
+                        $this->no_authorization('Admin/editparks/' . $kingdom_id);
                     } elseif ($Status['Status'] != 0) {
                         $this->data['Error'] .= '<b>'.$Status['Error'].'</b>:<br />'.$Status['Detail'].'<p />';
                         $error = true;
@@ -476,8 +471,7 @@ class Controller_Admin extends Controller
                         $this->data['Error'] .= '<b>'.$r['Error'].'</b>:<br />'.$r['Detail'].'<p />';
                         $error = true;
                     } elseif ($r['Status'] == 5) {
-                        header('Location: '.UIR.'Login/login/Admin/setkingdomofficers');
-                        exit;
+                        $this->no_authorization('Admin/setkingdomofficers');
                     }
                 }
                 if (!$error) {
@@ -532,8 +526,7 @@ class Controller_Admin extends Controller
                         $this->data['Error'] .= '<b>'.$r['Error'].'</b>:<br />'.$r['Detail'].'<p />';
                         $error = true;
                     } elseif ($r['Status'] == 5) {
-                        header('Location: '.UIR.'Login/login/Admin/setparkofficers');
-                        exit;
+                        $this->no_authorization('Admin/setparkofficers');
                     }
                 }
                 if (!$error) {
@@ -689,8 +682,7 @@ class Controller_Admin extends Controller
                 if ($r['Status'] == 0) {
                     $this->request->clear('Admin_event');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR."Login/login/Admin/event/$event_id");
-                    exit;
+                    $this->no_authorization("Admin/event/$event_id");
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -1440,8 +1432,7 @@ class Controller_Admin extends Controller
                         $this->data['Message'] .= 'Player has been updated:<blockquote>' . $r['Detail'] . '</blockquote>';
                         $this->request->clear('Admin_player');
                     } elseif ($r['Status'] == 5) {
-                        header('Location: '.UIR."Login/login/Admin/player/$id");
-                        exit;
+                        $this->no_authorization("Admin/player/$id");
                     } else {
                         $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                     }
@@ -1968,8 +1959,7 @@ class Controller_Admin extends Controller
                 if ($r['Status'] == 0) {
                     $this->request->clear('Admin_editkingdom');
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR.'Login/login/Admin/editkingdom/' . $id);
-                    exit;
+                    $this->no_authorization('Admin/editkingdom/' . $id);
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
@@ -2028,8 +2018,7 @@ class Controller_Admin extends Controller
                     $this->request->clear('Admin_createpark');
                     //header( 'Location: '.UIR.'Park/profile/'.$r['Detail'] );
                 } elseif ($r['Status'] == 5) {
-                    header('Location: '.UIR.'Login/login/Admin/createpark' . (($post != null) ? ('/'.$post) : ''));
-                    exit;
+                    $this->no_authorization('Admin/createpark' . (($post != null) ? ('/'.$post) : ''));
                 } else {
                     $this->data['Error'] = trim($r['Detail']) === '' ? $r['Error'] : ($r['Error'].':<p>'.$r['Detail']);
                 }
