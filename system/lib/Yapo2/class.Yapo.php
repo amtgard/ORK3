@@ -44,6 +44,16 @@ class Yapo
         $this->__Core->Clear();
     }
 
+    // Opt this lookup out of the PK-only WHERE collapse documented in
+    // YapoWhere::GenerateSql, so every field set on the object participates in
+    // the WHERE clause. Call it AFTER clear() and before setting fields --
+    // clear() resets the flag, because yapo instances are shared across calls
+    // and a sticky flag would leak into unrelated queries.
+    public function strict_where($on = true)
+    {
+        $this->__Core->__strict_where = (bool) $on;
+    }
+
     public function lastSql()
     {
         return $this->__LastSql;

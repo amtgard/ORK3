@@ -1426,9 +1426,34 @@ class Player extends Ork3
             return InvalidParameter();
         }
 
-        if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park->park_id, AUTH_EDIT)		// New Kingdom
-                    || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT))) { // Current Kingdom
+        $mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+        $_srcKingdom = (int)$this->mundane->kingdom_id;
+        $_dstKingdom = (int)$park->kingdom_id;
+
+        // Park-level authority over EITHER end is enough to move a player. The
+        // OR is deliberate and the source comments say so: recruitment normally
+        // means the destination park's officer pulls a player in, and a park
+        // losing a member should be able to push them out. That stays.
+        $_parkAuthority =
+               Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park->park_id, AUTH_EDIT)          // destination
+            || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT); // source
+
+        // What was NOT deliberate is that the same park-level grant also
+        // rewrites the player's KINGDOM. A park officer in one kingdom could
+        // pull any player in the world across a kingdom boundary, with no
+        // authority of any kind over the kingdom they were taken from. A move
+        // that changes the kingdom additionally requires kingdom-level authority
+        // over one of the two kingdoms involved (an unscoped ORK admin passes
+        // either check).
+        //
+        // PRODUCT DECISION: intra-kingdom moves are unchanged. If cross-kingdom
+        // recruitment on park authority alone is wanted back, delete the
+        // $_crossKingdomAuthority term below.
+        $_crossKingdomAuthority = ($_srcKingdom === $_dstKingdom)
+            || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $_dstKingdom, AUTH_EDIT)
+            || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $_srcKingdom, AUTH_EDIT);
+
+        if ($mundane_id > 0 && $_parkAuthority && $_crossKingdomAuthority) {
 
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
 
@@ -1445,6 +1470,8 @@ class Player extends Ork3
             $this->bust_player_award_recs_cache((int)$request['MundaneId'], $_oldKid, $_oldPid);
             $this->bust_player_award_recs_cache((int)$request['MundaneId'], (int)$park->kingdom_id, (int)$park->park_id);
             return Success();
+        } elseif ($mundane_id > 0 && $_parkAuthority && !$_crossKingdomAuthority) {
+            return NoAuthorization('Moving a player between kingdoms requires kingdom-level authority over the kingdom they are leaving or the one they are joining.');
         } else {
             return NoAuthorization();
         }
@@ -2452,9 +2479,10 @@ class Player extends Ork3
             $awards->revocation    = '';
             $awards->revoked_by_id = 0;
             $awards->save();
-            // revoked_at is a nullable DATE, so it cannot be cleared the same way:
-            // yapo's ValidateField would run '' through strtotime() and store
-            // 1969-12-31. Clear it with an explicit statement instead.
+            // revoked_at is a nullable DATE. Assigning '' would store the zero
+            // date rather than NULL (yapo passes the value straight through --
+            // ValidateField is commented out in Yapo::__set), so it is cleared
+            // with an explicit statement to get a true NULL.
             $this->db->Clear();
             $this->db->Execute('UPDATE ' . DB_PREFIX . 'awards SET revoked_at = NULL WHERE awards_id = ' . $_awards_id);
 
