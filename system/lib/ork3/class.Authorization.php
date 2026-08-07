@@ -212,12 +212,13 @@ class Authorization extends Ork3
 					// Any call to an Authorization may have side-effects in the Auth table
 					$response = $this->remove_auth_h($request);
 				} else if ($type == AUTH_UNIT) {
-					$mundane = Ork3::$Lib->player->player_info($requester_id);
-
-					if ($this->HasAuthority($requester_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) ||
-						$this->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+					// KPM unit bypass, scoped to the parks/kingdoms the unit's roster
+					// actually sits in rather than the requester's own.
+					if ($this->HasUnitOfficerAuthority($requester_id, $id)) {
 						logtrace("RemoveAuthorization(): KPM Unit Bypass: ", $requester_id);
 						$response = $this->remove_auth_h($request);
+					} else {
+						$response = NoAuthorization();
 					}
 				} else {
 					$response = NoAuthorization();
@@ -583,6 +584,9 @@ class Authorization extends Ork3
 		if ($this->auth->find()) {
 			$_audit_req = $request;
 			unset($_audit_req['Token']);
+			// $requester_id was never defined in this scope -- the removal was logged
+			// against a null actor. Resolve it from the caller's session/token.
+			$requester_id = $this->IsAuthorized($request['Token'] ?? null);
 			$this->log->Write('Authorization', $requester_id, LOG_REMOVE, $request);
 			// Anchor the audit to the affected player so the entry surfaces on
 			// the grantee's audit history. Authority changes are security-relevant
@@ -616,14 +620,17 @@ class Authorization extends Ork3
 			$response = $this->add_auth_h($request);
 			return $response;
 		} else if (AUTH_UNIT == $request['Type']) {
-			$mundane = Ork3::$Lib->player->player_info($requester_id);
-
-			if ($this->HasAuthority($requester_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) ||
-				$this->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+			// KPM unit bypass, scoped to the parks/kingdoms the unit's roster
+			// actually sits in rather than the requester's own.
+			if ($this->HasUnitOfficerAuthority($requester_id, $request['Id'])) {
 				$this->log->Write('Authorization:KPM Unit Bypass', $requester_id, LOG_ADD, $request);
 				$response = $this->add_auth_h($request);
 				return $response;
 			}
+			// Previously this path fell off the end returning a bare array(). The
+			// controller reads $r['Status'], null == 0 is true in PHP, so a denied
+			// grant reported success and wrote a phantom audit row.
+			$response = NoAuthorization();
 		} else {
 			$response = NoAuthorization();
 		}
@@ -715,6 +722,67 @@ class Authorization extends Ork3
 			$id = $this->auth->authorization_id;
 		}
 		return array($type, $id);
+	}
+
+	// A unit carries no scope of its own -- ork_unit has neither park_id nor
+	// kingdom_id -- so "the unit's scope" is the set of parks and kingdoms its
+	// roster actually sits in. Officer authority over a unit must be checked
+	// against THAT set. The KPM unit bypass used to check the *requester's* own
+	// park and kingdom instead, which meant any park monarch anywhere passed the
+	// guard for any unit in the world.
+	public function HasUnitOfficerAuthority($mundane_id, $unit_id)
+	{
+		if (!valid_id($mundane_id) || !valid_id($unit_id)) {
+			return false;
+		}
+		// Unscoped global admins keep system-wide authority.
+		if ($this->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
+			return true;
+		}
+
+		$scopes = $this->unit_roster_scopes($unit_id, true);
+		if (count($scopes) === 0) {
+			// A unit with no active roster has no derivable scope. Fall back to
+			// everyone who has ever been on it so an emptied unit does not end up
+			// beyond every officer's reach.
+			$scopes = $this->unit_roster_scopes($unit_id, false);
+		}
+
+		foreach ($scopes as $scope) {
+			if (valid_id($scope['kingdom_id'])
+				&& $this->HasAuthority($mundane_id, AUTH_KINGDOM, $scope['kingdom_id'], AUTH_EDIT)) {
+				return true;
+			}
+			if (valid_id($scope['park_id'])
+				&& $this->HasAuthority($mundane_id, AUTH_PARK, $scope['park_id'], AUTH_EDIT)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// Distinct (park_id, kingdom_id) pairs across a unit's roster. The result set
+	// is drained completely before any HasAuthority call runs, because those
+	// calls issue their own queries on the same shared handle.
+	private function unit_roster_scopes($unit_id, $active_only)
+	{
+		global $DB;
+		$sql = "SELECT DISTINCT m.park_id, m.kingdom_id FROM " . DB_PREFIX . "unit_mundane um"
+			. " JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = um.mundane_id"
+			. " WHERE um.unit_id = " . (int)$unit_id;
+		if ($active_only) {
+			$sql .= " AND um.active = 'Active'";
+		}
+		$DB->Clear();
+		$rs = $DB->DataSet($sql);
+		$scopes = array();
+		if ($rs) {
+			while ($rs->Next()) {
+				$scopes[] = array('park_id' => (int)$rs->park_id, 'kingdom_id' => (int)$rs->kingdom_id);
+			}
+		}
+		$DB->Clear();
+		return $scopes;
 	}
 
 	public function HasAuthority($mundane_id, $type, $id, $role, $visited = array())
