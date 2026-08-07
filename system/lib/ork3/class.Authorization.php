@@ -393,7 +393,8 @@ class Authorization extends Ork3
 			'ExpiresAt' => $_SESSION['Session_Vars']['ExpiresAt'],
 		];
 
-		error_log("AuthorizeIdp: Request: " . print_r($request, true));
+		// Payload deliberately not logged: $request carries the IDP access token.
+		error_log("AuthorizeIdp: request received for IdpUserId " . ($request['IdpUserId'] ?? '?'));
 		$this->idp_auth->clear();
 		$this->idp_auth->idp_user_id = $request['IdpUserId'];
 
@@ -578,6 +579,19 @@ class Authorization extends Ork3
 			'role'             => $_priorRs->role,
 		];
 		$DB->Clear();
+
+		// Refuse to delete a grant that an officer position depends on. The
+		// permissions table renders "via officer" instead of a Remove button for
+		// these, but that was the only thing stopping it -- there was no
+		// server-side check, so anything reaching this endpoint directly left
+		// ork_officer.authorization_id pointing at a row that no longer exists.
+		// The officer kept their title and silently lost all authority.
+		$_officerRs = $DB->DataSet("SELECT officer_id FROM " . DB_PREFIX . "officer WHERE authorization_id = " . $_auth_id . " LIMIT 1");
+		$_backs_officer = $_officerRs && $_officerRs->Next();
+		$DB->Clear();
+		if ($_backs_officer) {
+			return InvalidParameter('This permission comes from an officer position. Remove the officer position instead -- deleting the permission on its own would leave the officer holding a title with no authority.');
+		}
 
 		$this->auth->clear();
 		$this->auth->authorization_id = $_auth_id;
