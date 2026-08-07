@@ -218,6 +218,15 @@ class Heraldry extends Ork3
                 }
                 $this->kingdom->has_heraldry = 0;
                 $this->kingdom->save();
+                // Removing heraldry unlinks a file from disk; it wrote no audit row.
+                Ork3::$Lib->dangeraudit->audit(
+                    __CLASS__ . '::' . __FUNCTION__,
+                    $request,
+                    'Kingdom',
+                    (int)$request['KingdomId'],
+                    ['has_heraldry' => 1],
+                    ['has_heraldry' => 0]
+                );
                 return Success();
             } else {
                 return InvalidParameter();
@@ -263,6 +272,15 @@ class Heraldry extends Ork3
                 }
                 $this->park->has_heraldry = 0;
                 $this->park->save();
+                // Removing heraldry unlinks a file from disk; it wrote no audit row.
+                Ork3::$Lib->dangeraudit->audit(
+                    __CLASS__ . '::' . __FUNCTION__,
+                    $request,
+                    'Park',
+                    (int)$request['ParkId'],
+                    ['has_heraldry' => 1],
+                    ['has_heraldry' => 0]
+                );
                 return Success();
             } else {
                 return InvalidParameter();
@@ -308,6 +326,15 @@ class Heraldry extends Ork3
                 }
                 $this->unit->has_heraldry = 0;
                 $this->unit->save();
+                // Removing heraldry unlinks a file from disk; it wrote no audit row.
+                Ork3::$Lib->dangeraudit->audit(
+                    __CLASS__ . '::' . __FUNCTION__,
+                    $request,
+                    'Unit',
+                    (int)$request['UnitId'],
+                    ['has_heraldry' => 1],
+                    ['has_heraldry' => 0]
+                );
                 return Success();
             } else {
                 return InvalidParameter();

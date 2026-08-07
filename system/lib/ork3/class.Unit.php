@@ -302,9 +302,27 @@ class Unit extends Ork3
             $mundane_id = $this->members->mundane_id;
             $unit_id = $this->members->unit_id;
             logtrace("RetireMember()", array($mundane_id, $unit_id));
+            $prior_state = [
+                'unit_mundane_id' => (int)$this->members->unit_mundane_id,
+                'unit_id'         => (int)$unit_id,
+                'mundane_id'      => (int)$mundane_id,
+                'role'            => $this->members->role,
+                'title'           => $this->members->title,
+                'active'          => $this->members->active,
+            ];
             $this->members->active = 'Retired';
             $this->members->save();
             logtrace("RetireMember()", $this->members->lastSql());
+            // Retiring a member also strips their unit authority below, and wrote
+            // no audit row at all.
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $request,
+                'Unit',
+                (int)$unit_id,
+                $prior_state,
+                ['unit_id' => (int)$unit_id, 'mundane_id' => (int)$mundane_id, 'active' => 'Retired']
+            );
             $auths = Ork3::$Lib->authorization->GetAuthorizations(array('MundaneId' => $mundane_id));
             foreach ($auths['Authorizations'] as $k => $auth) {
                 if ($auth['Type'] == AUTH_UNIT && $auth['Id'] == $unit_id) {
@@ -331,7 +349,24 @@ class Unit extends Ork3
             if ($this->members->unit_id != $request['UnitId']) {
                 return NoAuthorization();
             }
+            // Hard-deleting a roster row wrote no audit record of who was removed.
+            $prior_state = [
+                'unit_mundane_id' => (int)$this->members->unit_mundane_id,
+                'unit_id'         => (int)$unit_id,
+                'mundane_id'      => (int)$mundane_id,
+                'role'            => $this->members->role,
+                'title'           => $this->members->title,
+                'active'          => $this->members->active,
+            ];
             $this->members->delete();
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $request,
+                'Unit',
+                (int)$unit_id,
+                $prior_state,
+                null
+            );
             $auths = Ork3::$Lib->authorization->GetAuthorizations(array('MundaneId' => $mundane_id));
             foreach ($auths['Authorizations'] as $k => $auth) {
                 if ($auth['Type'] == AUTH_UNIT && $auth['Id'] == $unit_id) {
@@ -364,6 +399,26 @@ class Unit extends Ork3
             $this->unit->modified = date("Y-m-d H:i:s");
             $this->unit->save();
             $request['UnitId'] = $this->unit->unit_id;
+
+            // Unit creation wrote no audit row. Placed here so it fires on every
+            // path, including the Anonymous early return below. Heraldry is a
+            // base64 image blob and is deliberately kept out of the audit payload.
+            $_audit_req = $request;
+            unset($_audit_req['Heraldry']);
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . '::' . __FUNCTION__,
+                $_audit_req,
+                'Unit',
+                (int)$this->unit->unit_id,
+                null,
+                [
+                    'unit_id'     => (int)$this->unit->unit_id,
+                    'name'        => $this->unit->name,
+                    'type'        => $this->unit->type,
+                    'url'         => $this->unit->url,
+                    'created_by'  => (int)$mundane_id,
+                ]
+            );
 
             if (strlen($request['Heraldry']) > 0) {
                 logtrace("CreateUnit() :2", $request);

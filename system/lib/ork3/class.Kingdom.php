@@ -587,6 +587,15 @@ class Kingdom extends Ork3
             $this->kingdom->clear();
             $this->kingdom->kingdom_id = $request['KingdomId'];
             if ($this->kingdom->find()) {
+                // Park-level record edits audit; their kingdom-level equivalent did
+                // not. Snapshot before/after so the two are symmetrical.
+                $prior_state = [
+                    'kingdom_id'   => (int)$this->kingdom->kingdom_id,
+                    'name'         => $this->kingdom->name,
+                    'abbreviation' => $this->kingdom->abbreviation,
+                    'description'  => $this->kingdom->description,
+                    'url'          => $this->kingdom->url,
+                ];
                 $this->kingdom->name = strlen($request['Name']) > 0 ? $request['Name'] : $this->kingdom->name;
                 $this->kingdom->abbreviation = strlen($request['Abbreviation']) > 0 ? $request['Abbreviation'] : $this->kingdom->abbreviation;
                 if (isset($request['Description'])) {
@@ -597,6 +606,23 @@ class Kingdom extends Ork3
                 }
                 $this->kingdom->modified = date("Y-m-d H:i:s", time());
                 $this->kingdom->save();
+
+                $_audit_req = $request;
+                unset($_audit_req['Heraldry']);
+                Ork3::$Lib->dangeraudit->audit(
+                    __CLASS__ . '::' . __FUNCTION__,
+                    $_audit_req,
+                    'Kingdom',
+                    (int)$this->kingdom->kingdom_id,
+                    $prior_state,
+                    [
+                        'kingdom_id'   => (int)$this->kingdom->kingdom_id,
+                        'name'         => $this->kingdom->name,
+                        'abbreviation' => $this->kingdom->abbreviation,
+                        'description'  => $this->kingdom->description,
+                        'url'          => $this->kingdom->url,
+                    ]
+                );
 
                 Ork3::$Lib->heraldry->SetKingdomHeraldry($request);
 

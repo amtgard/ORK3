@@ -222,7 +222,33 @@ class Player extends Ork3
         if (!$isOwn && !$isAdmin) {
             return NoAuthorization();
         }
-        $this->db->query('DELETE FROM ' . DB_PREFIX . 'mundane_note WHERE mundane_id = ' . intval($request['MundaneId']));
+
+        // Capture what is about to be wiped. RemoveNote audits a single-note
+        // deletion; ClearNotes -- a bulk wipe of officer-visible history -- wrote
+        // nothing at all, which was the sharpest asymmetry in the audit trail.
+        $_mid = (int)$request['MundaneId'];
+        $prior_notes = array();
+        $this->db->Clear();
+        $rs = $this->db->DataSet('SELECT * FROM ' . DB_PREFIX . 'mundane_note WHERE mundane_id = ' . $_mid);
+        if ($rs) {
+            while ($rs->Next()) {
+                $prior_notes[] = $rs->CurrentFieldSet();
+            }
+        }
+        // Without this Clear() the leftover bind params from the SELECT above are
+        // handed to the placeholder-free DELETE, which then fails silently under
+        // PDO's ERRMODE_WARNING and the notes are never removed.
+        $this->db->Clear();
+        $this->db->query('DELETE FROM ' . DB_PREFIX . 'mundane_note WHERE mundane_id = ' . $_mid);
+
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . '::' . __FUNCTION__,
+            $request,
+            'Player',
+            $_mid,
+            ['notes' => $prior_notes, 'count' => count($prior_notes)],
+            null
+        );
         return Success();
     }
 
@@ -1231,7 +1257,15 @@ class Player extends Ork3
                 return InvalidParameter("One of the players could not be found.");
             }
 
-            Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['FromMundaneId'], $from_player['Player'], $to_player['Player']);
+            // Both snapshots are taken before the merge (the source row is about to
+            // be deleted), but they are recorded as one prior_state -- filing the
+            // destination's PRE-merge state under post_state, as this used to,
+            // described a state that never existed after the operation. The real
+            // post_state is written after the merge completes, below.
+            $_merge_prior = [
+                'from' => $from_player['Player'],
+                'to'   => $to_player['Player'],
+            ];
 
             $sql = "DELETE FROM
 						" . DB_PREFIX . "attendance
@@ -1332,6 +1366,13 @@ class Player extends Ork3
             // mundane_design: TO player keeps its own design; drop the FROM player's orphaned row.
             $sql = "DELETE FROM " . DB_PREFIX . "mundane_design WHERE mundane_id = '" . mysql_real_escape_string($fromMundane['id']) . "'";
             $this->db->query($sql);
+            // selfreg_link: both mundane references were left pointing at the row we
+            // just deleted, so a consumed self-registration link and the officer
+            // credit for issuing it both dangled after a merge.
+            $sql = "UPDATE " . DB_PREFIX . "selfreg_link SET used_by = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE used_by = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+            $this->db->query($sql);
+            $sql = "UPDATE " . DB_PREFIX . "selfreg_link SET created_by = '" . mysql_real_escape_string($toMundane['id']) . "' WHERE created_by = '" . mysql_real_escape_string($fromMundane['id']) . "'";
+            $this->db->query($sql);
             // Bust the merged-into player's class cache; the source row is gone.
             $_ck = Ork3::$Lib->ghettocache->key(['MundaneId' => (int)$toMundane['id']]);
             Ork3::$Lib->ghettocache->bust('Player.GetPlayerClasses', $_ck);
@@ -1339,6 +1380,16 @@ class Player extends Ork3
             // players' Report.PlayerAwardRecommendations cache scopes.
             $this->bust_player_award_recs_cache((int)$fromMundane['id'], (int)$fromMundane['kingdom_id'], (int)$fromMundane['park_id']);
             $this->bust_player_award_recs_cache((int)$toMundane['id'], (int)$toMundane['kingdom_id'], (int)$toMundane['park_id']);
+
+            $_merged = $this->GetPlayer(array('MundaneId' => $request['ToMundaneId']));
+            Ork3::$Lib->dangeraudit->audit(
+                __CLASS__ . "::" . __FUNCTION__,
+                $request,
+                'Player',
+                $request['FromMundaneId'],
+                $_merge_prior,
+                ($_merged['Status']['Status'] == 0) ? $_merged['Player'] : null
+            );
             return Success();
         } else {
             return NoAuthorization();
@@ -2152,17 +2203,46 @@ class Player extends Ork3
             return NoAuthorization();
         }
 
+        // A bulk clear of every waiver in a park or kingdom wrote no audit row at
+        // all. Record which players were actually cleared, so the change is
+        // reviewable and reversible.
         if (valid_id($request['KingdomId'])) {
-            $sql = "UPDATE " . DB_PREFIX . "mundane SET waivered = 0 WHERE kingdom_id = '" . mysql_real_escape_string($request['KingdomId']) . "'";
-            $this->db->query($sql);
-            return Success('Waivers have been reset for all players in the kingdom.');
+            $scope_col = 'kingdom_id';
+            $scope_id  = (int)$request['KingdomId'];
+            $entity    = 'Kingdom';
+            $message   = 'Waivers have been reset for all players in the kingdom.';
         } elseif (valid_id($request['ParkId'])) {
-            $sql = "UPDATE " . DB_PREFIX . "mundane SET waivered = 0 WHERE park_id = '" . mysql_real_escape_string($request['ParkId']) . "'";
-            $this->db->query($sql);
-            return Success('Waivers have been reset for all players in the park.');
+            $scope_col = 'park_id';
+            $scope_id  = (int)$request['ParkId'];
+            $entity    = 'Park';
+            $message   = 'Waivers have been reset for all players in the park.';
+        } else {
+            return InvalidParameter('Either KingdomId or ParkId must be specified.');
         }
 
-        return InvalidParameter('Either KingdomId or ParkId must be specified.');
+        $cleared = array();
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            "SELECT mundane_id FROM " . DB_PREFIX . "mundane WHERE " . $scope_col . " = " . $scope_id . " AND waivered = 1"
+        );
+        if ($rs) {
+            while ($rs->Next()) {
+                $cleared[] = (int)$rs->mundane_id;
+            }
+        }
+        $this->db->Clear();
+        $this->db->query("UPDATE " . DB_PREFIX . "mundane SET waivered = 0 WHERE " . $scope_col . " = " . $scope_id);
+
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . '::' . __FUNCTION__,
+            $request,
+            $entity,
+            $scope_id,
+            ['waivered_mundane_ids' => $cleared, 'count' => count($cleared)],
+            ['waivered' => 0]
+        );
+
+        return Success($message);
     }
 
     public function AddAward($request)
