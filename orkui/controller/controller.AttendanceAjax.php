@@ -47,7 +47,7 @@ class Controller_AttendanceAjax extends Controller
                 }
                 echo json_encode(['status' => 0, 'attendanceId' => (int)($r['Detail'] ?? 0), 'reactivated' => $reactivated]);
             } else {
-                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
             }
         } elseif ($action === 'getday') {
             $this->load_model('Attendance');
@@ -165,7 +165,7 @@ class Controller_AttendanceAjax extends Controller
                 }
                 echo json_encode(['status' => 0, 'editor_id' => $editorId, 'editor_persona' => $editorPersona]);
             } else {
-                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
             }
 
         } elseif ($action === 'delete') {
@@ -173,7 +173,7 @@ class Controller_AttendanceAjax extends Controller
             $r = $this->Attendance->delete_attendance($this->session->token, $attendance_id, $mundaneId);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } else {
             echo json_encode(['status' => 1, 'error' => 'Unknown action']);
@@ -208,7 +208,7 @@ class Controller_AttendanceAjax extends Controller
             $r = $this->Attendance->delete_attendance_link($this->session->token, $id);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'list') {
             if (!in_array($scope, ['park', 'kingdom', 'event'], true)) {
@@ -234,7 +234,7 @@ class Controller_AttendanceAjax extends Controller
                 }, $r['Detail'] ?? []);
                 echo json_encode(['status' => 0, 'links' => $links]);
             } else {
-                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
             }
 
         } elseif ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -285,7 +285,7 @@ class Controller_AttendanceAjax extends Controller
                 $expires_iso = gmdate('Y-m-d\TH:i:s\Z', $expires_ts);
                 echo json_encode(['status' => 0, 'url' => $url, 'token' => $token, 'expires' => 'Expires ' . $expires, 'expires_iso' => $expires_iso, 'linkId' => $linkId]);
             } else {
-                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
             }
         } else {
             echo json_encode(['status' => 1, 'error' => 'Unknown action']);

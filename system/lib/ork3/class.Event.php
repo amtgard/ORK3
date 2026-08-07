@@ -424,7 +424,30 @@ class Event extends Ork3
             $this->detail->clear();
             $this->detail->event_calendardetail_id = $request['EventCalendarDetailId'];
             if ($this->detail->find()) {
+                // Hard-deleting an occurrence used to write no audit row at all.
+                $prior_state = [
+                    'event_calendardetail_id' => (int)$this->detail->event_calendardetail_id,
+                    'event_id'    => (int)$this->detail->event_id,
+                    'event_start' => $this->detail->event_start,
+                    'event_end'   => $this->detail->event_end,
+                    'description' => $this->detail->description,
+                    'address'     => $this->detail->address,
+                    'city'        => $this->detail->city,
+                    'province'    => $this->detail->province,
+                    'postal_code' => $this->detail->postal_code,
+                    'country'     => $this->detail->country,
+                    'price'       => $this->detail->price,
+                    'current'     => (int)$this->detail->current,
+                ];
                 $this->detail->delete();
+                Ork3::$Lib->dangeraudit->audit(
+                    __CLASS__ . '::' . __FUNCTION__,
+                    $request,
+                    'Event',
+                    (int)$event_id,
+                    $prior_state,
+                    null
+                );
                 return Success();
             } else {
                 return ProcessingError('Event Calendar Detail is missing after it was found.  Race conditions eminent!');

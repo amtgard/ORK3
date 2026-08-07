@@ -213,7 +213,7 @@ class Controller_Unit extends Controller
                     header('Location: ' . UIR . "Unit/index/$unit_id");
                     exit;
                 } else {
-                    $this->data['SaveError'] = ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '');
+                    $this->data['SaveError'] = rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ');
                 }
             }
         }

@@ -26,49 +26,70 @@ class Unit extends Ork3
             return InvalidParameter('Invalid unit IDs for merge.');
         }
 
+        // Snapshot the unit row before deleting it -- this hard-delete previously
+        // ran with no audit call at all, so a merged-away unit left no record of
+        // what it had been.
+        $this->unit->clear();
+        $this->unit->unit_id = $from;
+        if (!$this->unit->find()) {
+            return InvalidParameter('Source unit not found.');
+        }
+        $prior_state = [
+            'unit_id'     => (int)$this->unit->unit_id,
+            'name'        => $this->unit->name,
+            'type'        => $this->unit->type,
+            'description' => $this->unit->description,
+            'history'     => $this->unit->history,
+            'url'         => $this->unit->url,
+            'active'      => $this->unit->active,
+        ];
+        $member_ids = array_keys($this->_active_member_roles($from));
+
+        // BeginTrans/CommitTrans/RollbackTrans did not exist on the DB layer at
+        // all, so this method fataled on line one with "Call to undefined method
+        // YapoMysql::BeginTrans()" and had never executed. They are implemented
+        // on YapoMysql now. The old guards used query(), which always returns a
+        // YapoResultSet object and is therefore always truthy -- so even once the
+        // transaction worked, a failed statement would have gone unnoticed.
+        // ExecuteChecked reports real failure.
+        $statements = [
+            'unit_mundane update' => "update " . DB_PREFIX . "unit_mundane set unit_id = " . $to . " where unit_id = " . $from,
+            'authorization update' => "update `" . DB_PREFIX . "authorization` set unit_id = " . $to . " where unit_id = " . $from,
+            'awards update' => "update " . DB_PREFIX . "awards set unit_id = " . $to . " where unit_id = " . $from,
+            'event update' => "update " . DB_PREFIX . "event set unit_id = " . $to . " where unit_id = " . $from,
+            'participant update' => "update " . DB_PREFIX . "participant set unit_id = " . $to . " where unit_id = " . $from,
+            'mundane update' => "update " . DB_PREFIX . "mundane set company_id = " . $to . " where company_id = " . $from,
+            'unit delete' => "delete from " . DB_PREFIX . "unit where unit_id = " . $from,
+        ];
+
         $this->db->BeginTrans();
         try {
-            $sql = "update " . DB_PREFIX . "unit_mundane set unit_id = '" . $to . "' where unit_id = '" . $from . "'";
-            if (!$this->db->query($sql)) {
-                throw new Exception('unit_mundane update failed');
+            foreach ($statements as $label => $sql) {
+                $this->db->Clear();
+                if (!$this->db->ExecuteChecked($sql)) {
+                    throw new Exception($label . ' failed');
+                }
             }
-
-            $sql = "update " . DB_PREFIX . "authorization set unit_id = '" . $to . "' where unit_id = '" . $from . "'";
-            if (!$this->db->query($sql)) {
-                throw new Exception('authorization update failed');
-            }
-
-            $sql = "update " . DB_PREFIX . "awards set unit_id = '" . $to . "' where unit_id = '" . $from . "'";
-            if (!$this->db->query($sql)) {
-                throw new Exception('awards update failed');
-            }
-
-            $sql = "update " . DB_PREFIX . "event set unit_id = '" . $to . "' where unit_id = '" . $from . "'";
-            if (!$this->db->query($sql)) {
-                throw new Exception('event update failed');
-            }
-
-            $sql = "update " . DB_PREFIX . "participant set unit_id = '" . $to . "' where unit_id = '" . $from . "'";
-            if (!$this->db->query($sql)) {
-                throw new Exception('participant update failed');
-            }
-
-            $sql = "update " . DB_PREFIX . "mundane set company_id = '" . $to . "' where company_id = '" . $from . "'";
-            if (!$this->db->query($sql)) {
-                throw new Exception('mundane update failed');
-            }
-
-            $sql = "delete from " . DB_PREFIX . "unit where unit_id = '" . $from . "'";
-            if (!$this->db->query($sql)) {
-                throw new Exception('unit delete failed');
-            }
-
             $this->db->CommitTrans();
-            return Success();
         } catch (Exception $e) {
             $this->db->RollbackTrans();
             return array('Status' => 1, 'Error' => 'MergeUnits failed', 'Detail' => $e->getMessage());
         }
+
+        Ork3::$Lib->dangeraudit->audit(
+            __CLASS__ . '::' . __FUNCTION__,
+            $request,
+            'Unit',
+            $from,
+            $prior_state,
+            ['merged_into_unit_id' => $to, 'members_moved' => count($member_ids)]
+        );
+
+        foreach ($member_ids as $mid) {
+            $ck = Ork3::$Lib->ghettocache->key(['MundaneId' => $mid, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1, 'Lightweight' => 1]);
+            Ork3::$Lib->ghettocache->bust('Report.UnitSummary', $ck);
+        }
+        return Success();
     }
 
     public function ConvertToHousehold($request)

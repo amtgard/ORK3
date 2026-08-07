@@ -1433,7 +1433,7 @@ class Controller_Reports extends Controller
             }
             echo json_encode(['status' => 0]);
         } else {
-            echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
         }
         exit;
     }

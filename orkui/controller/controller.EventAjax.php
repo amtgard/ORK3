@@ -45,7 +45,7 @@ class Controller_EventAjax extends Controller
             }
             echo json_encode(['status' => 0, 'eventId' => $newId]);
         } else {
-            echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
         }
         exit;
     }
@@ -337,7 +337,7 @@ class Controller_EventAjax extends Controller
                 echo json_encode(['status' => 0, 'attendance' => null]);
             }
         } else {
-            echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            echo json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
         }
         exit;
     }
@@ -539,7 +539,7 @@ class Controller_EventAjax extends Controller
             ]);
             echo ($r['Status'] == 0)
                 ? json_encode(['status' => 0])
-                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } else {
             echo json_encode(['status' => 1, 'error' => 'Unknown action']);
@@ -1426,7 +1426,7 @@ class Controller_EventAjax extends Controller
         $this->load_model('Event');
         $r = $this->Event->create_event($this->session->token, $kingdom_id, $park_id, 0, 0, $name);
         if ((int)$r['Status'] !== 0) {
-            echo json_encode(['status' => (int)$r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            echo json_encode(['status' => (int)$r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
             exit;
         }
         $new_event_id = (int)($r['Detail'] ?? 0);
