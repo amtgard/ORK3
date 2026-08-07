@@ -1856,7 +1856,9 @@ class Controller_Admin extends Controller
                                     (isset($this->request->Admin_editkingdom->TitleClass[$AwardId]) && $this->request->Admin_editkingdom->TitleClass[$AwardId] != $KAwards['Awards'][$AwardId]['TitleClass'])
                                     )
                                 ) {
-                                    $this->Kingdom->EditAward(array(
+                                    // Keep the first failure so a rejected edit is
+                                    // reported rather than silently swallowed.
+                                    $_er = $this->Kingdom->EditAward(array(
                                         'Token' => $this->session->token,
                                         'KingdomId' => $id,
                                         'KingdomAwardId' => $AwardId,
@@ -1866,6 +1868,9 @@ class Controller_Admin extends Controller
                                         'IsTitle' => $this->request->Admin_editkingdom->IsTitle[$AwardId],
                                         'TitleClass' => $this->request->Admin_editkingdom->TitleClass[$AwardId]
                                     ));
+                                    if (!isset($r) && is_array($_er) && ($_er['Status'] ?? 0) != 0) {
+                                        $r = $_er;
+                                    }
                                 }
                             }
                         }
@@ -1883,12 +1888,21 @@ class Controller_Admin extends Controller
                         }
                         break;
                     case 'deleteaward': {
-                        $this->Kingdom->RemoveAward(array(
+                        // Return value was discarded, so the shared status check
+                        // below inspected whatever $r happened to hold and a
+                        // denied delete reported success.
+                        $r = $this->Kingdom->RemoveAward(array(
                             'Token' => $this->session->token,
                             'KingdomId' => $id,
                             'KingdomAwardId' => $this->request->Admin_editkingdom->KingdomAwardId,
                         ));
+                        break;
                     }
+                }
+                // Not every branch above sets $r; without this the status check
+                // dereferenced an undefined variable.
+                if (!isset($r) || !is_array($r)) {
+                    $r = Success();
                 }
                 if ($r['Status'] == 0) {
                     $this->request->clear('Admin_editkingdom');

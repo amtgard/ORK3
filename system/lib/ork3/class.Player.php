@@ -137,8 +137,12 @@ class Player extends Ork3
             $this->notes->note = $request['Note'];
             $this->notes->description = $request['Description'];
             $this->notes->given_by = $request['GivenBy'];
-            $this->notes->date = date('Y-m-d', strtotime($request['Date']));
-            $this->notes->date_complete = date('Y-m-d', strtotime($request['DateComplete']));
+            // strtotime('') is false, and date('Y-m-d', false) is 1969-12-31 -- a
+            // blank completion date was being stored as the epoch and shown to
+            // users in the notes table (16,550 rows already carry it). EditNote
+            // already guarded this correctly; the two paths now agree.
+            $this->notes->date = $request['Date'] ? date('Y-m-d', strtotime($request['Date'])) : '';
+            $this->notes->date_complete = $request['DateComplete'] ? date('Y-m-d', strtotime($request['DateComplete'])) : '';
             $this->notes->save();
             return Success($this->notes->mundane_note_id);
         } else {
@@ -927,8 +931,14 @@ class Player extends Ork3
             return InvalidParameter('Link not found.');
         }
 
-        // A11: Loose NULL check for used_by (yapo may return '' for DB NULL)
-        if (!empty($this->selfreg_link->used_by) && (int)$this->selfreg_link->used_by > 0) {
+        // Compare the value directly. The previous form led with
+        // !empty($this->selfreg_link->used_by), and empty() on a yapo field goes
+        // through __isset() -- which yapo did not implement -- so it was always
+        // true and the guard never fired once. A consumed link kept serving the
+        // live registration form with a running countdown; SelfRegister() re-reads
+        // FOR UPDATE and rejects the reuse, so there was no data impact, but a
+        // player could fill in the whole form before being told the code was dead.
+        if ((int)$this->selfreg_link->used_by > 0) {
             return InvalidParameter('This registration link has already been used.');
         }
 
@@ -2428,13 +2438,24 @@ class Player extends Ork3
 
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->stripped_from, $this->get_award($awards));
 
+            $_awards_id            = (int)$awards->awards_id;
             $awards->mundane_id    = $awards->stripped_from;
             $awards->stripped_from = 0;
             $awards->revoked       = 0;
-            $awards->revoked_at    = null;
-            $awards->revocation    = null;
+            // yapo drops null-valued fields from the UPDATE entirely, so assigning
+            // null left revoked_at and revocation at their old values -- a
+            // reactivated award kept the reason and timestamp of a revocation that
+            // had been undone. (revoked_by_id cleared only because 0 is not null.)
+            // revocation is varchar NOT NULL, so '' both clears it and survives
+            // yapo's null-skip.
+            $awards->revocation    = '';
             $awards->revoked_by_id = 0;
             $awards->save();
+            // revoked_at is a nullable DATE, so it cannot be cleared the same way:
+            // yapo's ValidateField would run '' through strtotime() and store
+            // 1969-12-31. Clear it with an explicit statement instead.
+            $this->db->Clear();
+            $this->db->Execute('UPDATE ' . DB_PREFIX . 'awards SET revoked_at = NULL WHERE awards_id = ' . $_awards_id);
 
             return Success($awards->awards_id);
         } else {

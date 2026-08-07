@@ -581,7 +581,14 @@ class Controller_Event extends Controller
                                 Ork3::$Lib->ghettocache->bust_event_search($event_id);
                                 Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $oldKey);
                                 Ork3::$Lib->ghettocache->bust('SearchService.CalendarDetail', $newKey);
-                                header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id . '?reconciled=1');
+                                // UIR is "index.php?Route=", so a '?' here is swallowed
+                                // into the Route value: the detail id parsed out of
+                                // "9014?reconciled=1" became 90141 and the officer
+                                // landed on an occurrence that does not exist,
+                                // rendering TBD/0/0 with an Edit form pointed at the
+                                // bogus id and no success message. Query parameters
+                                // appended to a UIR link must use '&'.
+                                header('Location: ' . UIR . 'Event/detail/' . $event_id . '/' . $detail_id . '&reconciled=1');
                                 exit;
                             } else {
                                 $this->data['Error'] = 'Reconciliation failed: could not determine the new occurrence ID.';

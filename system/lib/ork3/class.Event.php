@@ -245,12 +245,14 @@ class Event extends Ork3
         if ($mundane_id > 0 && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_CREATE)) {
 
             if (valid_id($request['Current']) && valid_id($request['EventId'])) {
-                $this->detail->clear();
-                $this->detail->event_id = $request['EventId'];
-                if ($this->detail->find()) {
-                    $this->detail->current = 0;
-                    $this->detail->save();
-                }
+                // find()+save() clears the flag on ONE prior occurrence, so an
+                // event with two or more of them ended up with several rows still
+                // holding current = 1. PlayAmtgard filters on current = 1, so the
+                // public "play Amtgard near me" feed could list the same event
+                // twice or surface a stale occurrence. SetCurrent already used a
+                // set-based UPDATE for exactly this reason; match it.
+                $this->db->Clear();
+                $this->db->Execute('UPDATE ' . DB_PREFIX . 'event_calendardetail SET current = 0 WHERE event_id = ' . (int)$request['EventId']);
             }
 
             $details   = $this->_geocodeCached($request['Address'], $request['City'], $request['Province'], $request['PostalCode']);

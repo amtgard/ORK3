@@ -841,7 +841,7 @@ CREATE TABLE IF NOT EXISTS `ork_unit_mundane` (
   `unit_mundane_id` int(11) NOT NULL AUTO_INCREMENT,
   `unit_id` int(11) NOT NULL,
   `mundane_id` int(11) NOT NULL,
-  `role` enum('captain','lord','member') NOT NULL,
+  `role` enum('captain','lord','member','owner','organizer') NOT NULL,
   `title` varchar(100) NOT NULL,
   `active` enum('Active','Retired') NOT NULL DEFAULT 'Active',
   PRIMARY KEY (`unit_mundane_id`),

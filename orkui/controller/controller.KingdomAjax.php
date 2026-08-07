@@ -324,12 +324,19 @@ class Controller_KingdomAjax extends Controller
                 exit;
             }
 
-            $this->Kingdom->RemoveAward([
+            // The return value used to be discarded and status 0 echoed
+            // unconditionally, so a *denied* delete still reported "Award
+            // deleted." and the JS removed the row from the table while the award
+            // was still in the database. setaward next to it handled status
+            // correctly; only this branch swallowed it.
+            $r = $this->Kingdom->RemoveAward([
                 'Token'          => $this->session->token,
                 'KingdomId'      => $kingdom_id,
                 'KingdomAwardId' => $kawId,
             ]);
-            echo json_encode(['status' => 0]);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'setheraldry') {
             $this->load_model('Kingdom');
