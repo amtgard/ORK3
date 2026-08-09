@@ -82,9 +82,9 @@ class Model_CmsPage extends Model
         return $this->CmsPage->DeletePage($pageId, $scopeType, $scopeId, $actorId);
     }
 
-    public function replace_blocks($ownerType, $ownerId, $blocksArray)
+    public function replace_blocks($ownerType, $ownerId, $blocksArray, $actorId = 0)
     {
-        return $this->CmsPage->ReplaceBlocks($ownerType, $ownerId, $blocksArray);
+        return $this->CmsPage->ReplaceBlocks($ownerType, $ownerId, $blocksArray, $actorId);
     }
 
     public function list_pages($filters = array())

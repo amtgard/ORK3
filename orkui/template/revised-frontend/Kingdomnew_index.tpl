@@ -2213,6 +2213,23 @@ var KnBannerConfig = {
 [data-tip]:hover::before, [data-tip]:hover::after { opacity: 1; }
 /* Wrapping variant for longer help hints so the tooltip doesn't run off-screen */
 [data-tip].kn-tip-wrap::after { white-space: normal; width: max-content; max-width: 240px; text-align: left; }
+/* Actions-column tooltip: right-anchor so the bubble grows leftward instead of
+   clipping off the right edge of the viewport.
+   !important and :hover::after are BOTH required here. revised.css:9804 defines a
+   generic [data-tip]:not(...):not(...)...:hover::after at specificity (0,7,1); a plain
+   .kn-col-edit-btn[data-tip]::after is (0,2,1) and loses every contested property,
+   leaving the bubble centered. Same trap the three existing workarounds at
+   revised.css:9824/:9839/:9852 document. (.cms-fab[data-tip] in default.theme gets
+   away with plain specificity only because CMS admin pages never load revised.css.)
+   transform:none, not translateY(-4px): the winning bottom:calc(100% + 6px) already
+   seats the bubble on the arrow, so re-adding a shift would detach it. min-width:0 is
+   required or revised.css's min-width:max-content defeats the wrap. */
+.kn-col-edit-btn[data-tip]:hover::after {
+	left: auto !important; right: 0 !important; transform: none !important;
+	min-width: 0 !important; max-width: 200px !important;
+	white-space: normal !important; text-align: left;
+}
+.kn-col-edit-btn[data-tip]::before { left: auto; right: 8px; transform: none; }
 
 /* ---- Royal Progress crowns ---- */
 .kn-royal-badge {

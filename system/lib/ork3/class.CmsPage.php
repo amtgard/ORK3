@@ -44,8 +44,15 @@ class CmsPage extends CmsBase
      * of these can never be reached. Rejected at every write path (CreatePage +
      * the controller savepage guard). Compared case-insensitively; applies to the
      * FIRST path segment (a top-level page slug), which is what the router sees.
+     *
+     * 'rss' is the one actually rewritten today (/k|/p/{site}/rss → Site/rss), so it
+     * is the value that matters. 'sitemap' + 'robots' are held in reserve only: the
+     * documented future routes are /k|/p/{site}/sitemap.xml and robots.txt, and
+     * _normalizeSlug() (CmsBase — the page-slug deriver; _slugify() is CmsPost-only)
+     * turns those filenames into 'sitemap-xml'/'robots-txt', which these entries do
+     * NOT cover. They prevent the bare-word collision only.
      */
-    private static $RESERVED_PAGE_SLUGS = array('blog', 'post', 'p', 'k');
+    private static $RESERVED_PAGE_SLUGS = array('blog', 'post', 'p', 'k', 'rss', 'sitemap', 'robots');
 
     /**
      * Per-request memo of the ancestor chain, keyed by page_id (C13). PagePath()
@@ -877,12 +884,22 @@ class CmsPage extends CmsBase
      * Walk the parent chain for a page and return its ancestors ordered
      * root → immediate-parent (the page itself is NOT included). Cycle-guarded
      * (a corrupt parent loop stops at a bounded depth). Each entry carries
-     * page_id, slug, title, status.
+     * page_id, slug, title, status, plus a 'restricted' flag.
      *
-     * @param int $pageId
+     * GetPageByPath publish-gates only the LEAF segment (#60), so a published page
+     * can legitimately sit under a DRAFT/scheduled ancestor. Any PUBLIC consumer
+     * (breadcrumbs, canonical/OG, sitemap) must therefore not echo that ancestor's
+     * title or slug. With $publishedOnly (the default) an ancestor that is not
+     * published-and-due comes back REDACTED: slug '', a generic title, and
+     * restricted => true — the row keeps its position so callers can still see
+     * where the chain is broken. Pass false only for trusted/authoring contexts
+     * (path building, officer preview), which need the real chain.
+     *
+     * @param int  $pageId
+     * @param bool $publishedOnly redact ancestors that are not published + due
      * @return array list of ancestor rows (root first)
      */
-    public function GetPageAncestors($pageId)
+    public function GetPageAncestors($pageId, $publishedOnly = true)
     {
         global $DB;
 
@@ -894,7 +911,9 @@ class CmsPage extends CmsBase
         // Per-request memo: PagePath() + GetPageByPath() re-walk this chain per
         // render. Invalidated on any parent-link change (UpdatePage/DeletePage).
         if (array_key_exists($pageId, self::$_ancestorMemo)) {
-            return self::$_ancestorMemo[$pageId];
+            return $publishedOnly
+                ? $this->_redactUnpublishedAncestors(self::$_ancestorMemo[$pageId])
+                : self::$_ancestorMemo[$pageId];
         }
 
         $chain   = array();
@@ -908,7 +927,9 @@ class CmsPage extends CmsBase
             $DB->Clear();
             $DB->page_id = (int)$cursor;
             $row = $this->_firstRow($DB->DataSet(
-                'SELECT page_id, parent_id, slug, title, status FROM ' . DB_PREFIX . 'cms_page'
+                'SELECT page_id, parent_id, slug, title, status, published_at'
+                . ', (status = \'published\' AND (published_at IS NULL OR published_at <= NOW())) AS is_live'
+                . ' FROM ' . DB_PREFIX . 'cms_page'
                 . ' WHERE page_id = :page_id AND deleted_at IS NULL LIMIT 1'
             ));
             if ($row === null) {
@@ -927,7 +948,37 @@ class CmsPage extends CmsBase
             $cursor = $parentId;
         }
         self::$_ancestorMemo[$pageId] = $chain;
-        return $chain;
+        return $publishedOnly ? $this->_redactUnpublishedAncestors($chain) : $chain;
+    }
+
+    /**
+     * Redact every ancestor row that is not published-and-due: blank the slug,
+     * swap in a generic label, and mark it restricted. Positions are preserved so
+     * a caller can tell WHERE the chain stops being public. See GetPageAncestors.
+     *
+     * @param array $chain ancestor rows (root first)
+     * @return array
+     */
+    private function _redactUnpublishedAncestors($chain)
+    {
+        $out = array();
+        foreach ((is_array($chain) ? $chain : array()) as $row) {
+            // Due-ness is decided by the DB (is_live, selected in GetPageAncestors)
+            // exactly as the GetPageByPath leaf gate does it. Never re-derive it in
+            // PHP: config sets America/Chicago while the DB compares in its own
+            // timezone, so strtotime() on a naive DB datetime skews by hours —
+            // redacting live ancestors, and (if the DB clock leads) leaking
+            // future-dated ones.
+            if ((int)($row['is_live'] ?? 0) === 1) {
+                $row['restricted'] = false;
+            } else {
+                $row['slug']       = '';
+                $row['title']      = 'Private';
+                $row['restricted'] = true;
+            }
+            $out[] = $row;
+        }
+        return $out;
     }
 
     /**
@@ -945,7 +996,10 @@ class CmsPage extends CmsBase
             return '';
         }
         $parts = array();
-        foreach ($this->GetPageAncestors($pageId) as $anc) {
+        // The REAL path (including any draft ancestor's slug) — this is the routing
+        // truth used for redirects/admin links. Public consumers must gate on
+        // GetPageAncestors()'s published-only default before echoing it.
+        foreach ($this->GetPageAncestors($pageId, false) as $anc) {
             $parts[] = (string)$anc['slug'];
         }
         $parts[] = (string)$row['slug'];

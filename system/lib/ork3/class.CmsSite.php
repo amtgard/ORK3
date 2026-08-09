@@ -186,9 +186,15 @@ class CmsSite extends CmsBase
      *
      * On FIRST creation it also seeds the starter template (home + About/History
      * + Our Parks + Officers + Documents pages, a scoped 'marketing' nav menu, and
-     * home_page_id → the seeded home) via _seedStarterTemplate(). The seed runs
-     * ONLY in the create branch below, so it can never double-seed: a later
-     * EnsureSite call finds the existing row and returns early before reaching it.
+     * home_page_id → the seeded home) via _seedStarterTemplate($isRepair=false).
+     *
+     * The seed can ALSO re-enter on an existing row, but only through the repair
+     * gate below: it runs when template_seeded_at IS NULL, i.e. the row has no
+     * record of a completed seed. That call passes $isRepair=true, which makes the
+     * seed non-destructive — deliberately-trashed starter pages stay trashed and an
+     * org's chosen home page is never re-pointed. A row whose marker is set (or
+     * whose column is absent, pre-migration) is treated as seeded and skips it, so
+     * emptying your nav or trashing a starter page can no longer resurrect them.
      * The seed is fully editable/deletable — a seed, not a cage.
      *
      * @param string $scopeType 'kingdom'|'park'
@@ -216,39 +222,57 @@ class CmsSite extends CmsBase
         // pre-seed legacy row — leaving the nav menu empty and/or home_page_id
         // unset. Rather than short-circuit on "row exists" (which permanently
         // strands such a site with dead nav and a "being built" home), re-run the
-        // seed for the missing pieces. Every piece is safe to re-enter: CreatePage
-        // self-guards the UNIQUE (scope, slug) tuple and $makePage recovers the
-        // existing id on collision, the nav critical section is row-locked +
-        // empty-menu guarded, and home_page_id is (re)set via UpdateSite. When the
-        // template already looks complete, return the row untouched (no writes).
+        // seed for the missing pieces.
+        //
+        // The repair MUST be gated on an EXPLICIT "was this site ever seeded?"
+        // marker, never inferred from live content state. Inferring it from
+        // "nav menu is empty" / "home_page_id is unset" cannot tell "never
+        // seeded" apart from "the officers deliberately emptied it", so an org
+        // that deleted the five seeded 'marketing' nav links got them silently
+        // re-inserted (CreateItem is not UNIQUE-guarded) on the next dashboard
+        // load or Publish. ork_cms_site.template_seeded_at
+        // (db-migrations/2026-08-09-cms-site-seed-marker.sql) is that marker:
+        // stamped once at the end of a successful seed, so a seeded-then-emptied
+        // site is never re-seeded. When the column is not present yet (migration
+        // not run), treat the site as seeded — never re-seed on a guess.
         $existing = $this->GetSiteForScope($scopeType, $scopeId);
         if ($existing !== null) {
             $existingId = isset($existing['site_id']) ? (int)$existing['site_id'] : 0;
-            $homeSet    = isset($existing['home_page_id']) && (int)$existing['home_page_id'] > 0;
-            $navSeeded  = false;
-            if (class_exists('CmsNav')) {
-                $nav      = new CmsNav();
-                $navItems = $nav->ListItems('marketing', $scopeType, $scopeId);
-                $navSeeded = is_array($navItems) && count($navItems) > 0;
-            }
-            if ($existingId > 0 && (!$homeSet || !$navSeeded)) {
-                $this->_seedStarterTemplate($existingId, $scopeType, $scopeId, $uid);
+            $seeded     = !array_key_exists('template_seeded_at', $existing)
+                || !empty($existing['template_seeded_at']);
+            if ($existingId > 0 && !$seeded) {
+                $this->_seedStarterTemplate($existingId, $scopeType, $scopeId, $uid, true);
                 $existing = $this->GetSiteForScope($scopeType, $scopeId);
             }
             $this->_bustSlugCache(($existing !== null && isset($existing['slug'])) ? (string)$existing['slug'] : '');
             return $existing;
         }
 
-        // A site row must carry a globally-unique slug (UNIQUE key). Derive a
-        // deterministic placeholder from the scope and disambiguate if taken.
-        $slug = $this->_uniqueSlug($this->DeriveSlug($scopeType . '-' . $scopeId));
+        // A site row must carry a globally-unique slug (UNIQUE key). Prefer the
+        // org's REAL display name for both the site name and the slug — a brand
+        // new site should read "Kingdom of the Burning Lands" / /k/kingdom-of-the-
+        // burning-lands, not a blank name at /k/kingdom-42. Fall back to the
+        // deterministic scope placeholder only when the name lookup comes back
+        // empty or its derived slug is already taken. Mint-new-row path ONLY —
+        // an existing site's slug is never touched here.
+        $orgName = $this->_orgDisplayName($scopeType, $scopeId);
+        $slug    = '';
+        if ($orgName !== '') {
+            $candidate = $this->DeriveSlug($orgName);
+            if ($candidate !== '' && $this->ValidateSlug($candidate, 0) === true) {
+                $slug = $candidate;
+            }
+        }
+        if ($slug === '') {
+            $slug = $this->_uniqueSlug($this->DeriveSlug($scopeType . '-' . $scopeId));
+        }
 
         $DB->Clear();
         $DB->scope_type = $scopeType;
         $DB->scope_id   = $scopeId;
         $DB->slug       = $slug;
         // YapoSave null-skip rule: assign '' (not null) so the column is written.
-        $DB->site_name  = '';
+        $DB->site_name  = $orgName;
         $DB->created_by = $uid;
         $DB->updated_by = $uid;
         $DB->Execute(
@@ -261,15 +285,17 @@ class CmsSite extends CmsBase
         // trusting lastInsertId() (unreliable on dup-key under ERRMODE_WARNING).
         $created = $this->GetSiteForScope($scopeType, $scopeId);
 
-        // FIRST-CREATION ONLY: seed the starter template (pages + blocks + nav)
+        // FIRST-CREATION path: seed the starter template (pages + blocks + nav)
         // and point home_page_id at the seeded home page. This line is reached
-        // exclusively when no prior row existed (the idempotency guard above
-        // returns early for an existing site), so the seed runs EXACTLY once per
-        // scope and can never double-seed — even if a partial failure leaves the
-        // template incomplete, the now-present site row makes every later
-        // EnsureSite call return early before reaching here.
+        // exclusively when no prior row existed. It is NOT the only seed call —
+        // the repair branch above re-enters the seed when template_seeded_at is
+        // still NULL — so $isRepair is passed FALSE here: on a first-ever seed a
+        // pre-existing trashed page at a starter slug is not a decision about
+        // seeded content (there was no prior seed to remove from), and the page
+        // must still be created. UNIQUE(scope_type, scope_id, slug_live) permits
+        // the new live row alongside the trashed ones.
         if ($created !== null && isset($created['site_id'])) {
-            $this->_seedStarterTemplate((int) $created['site_id'], $scopeType, $scopeId, $uid);
+            $this->_seedStarterTemplate((int) $created['site_id'], $scopeType, $scopeId, $uid, false);
             // Re-read so the returned row carries the freshly-set home_page_id.
             $created = $this->GetSiteForScope($scopeType, $scopeId);
         }
@@ -284,30 +310,47 @@ class CmsSite extends CmsBase
     }
 
     /**
-     * Seed the starter template for a freshly-created site: five editable pages
-     * (home, about, parks, officers, documents), a scoped 'marketing' nav menu
-     * linking them, and home_page_id → the seeded home. All pages are DRAFTS in
-     * the site's OWN scope — the site stays unpublished until an AUTH_ADMIN
-     * officer publishes it (Phase 3). Everything is editable: only the home page
-     * is is_system=1 (undeletable, so the site always retains a landing page);
-     * the rest can be freely edited or deleted — a seed, not a cage.
+     * Seed the starter template for a site: five editable pages (home, about,
+     * parks, officers, documents), a scoped 'marketing' nav menu linking them,
+     * and home_page_id → the seeded home. Pages are seeded PUBLISHED in the
+     * site's OWN scope (see $baseAttrs) — the SITE-level status
+     * (unbuilt→draft→published) is the real go-live gate, so nothing is public
+     * until an AUTH_ADMIN officer publishes the site (Phase 3). Everything is
+     * editable: only the home page is is_system=1 (undeletable, so the site
+     * always retains a landing page); the rest can be freely edited or deleted —
+     * a seed, not a cage.
      *
-     * Idempotency: invoked ONLY from EnsureSite's create branch (right after the
-     * INSERT), so it runs once per scope. As belt-and-suspenders, CmsPage's
-     * CreatePage self-guards the UNIQUE (scope_type, scope_id, slug) tuple
-     * (returns 0 on collision) — so even a defensive re-entry cannot duplicate a
-     * page or clobber an officer's later edits; $makePage() recovers the existing
-     * id on collision so nav + home_page_id still link.
+     * Invoked from BOTH EnsureSite branches: the create branch (right after the
+     * INSERT) and the #116 repair branch (an existing row whose
+     * template_seeded_at is still NULL). $isRepair tells the two apart, because
+     * "the org deliberately trashed this starter page" is only meaningful
+     * relative to a seed that already happened:
+     *
+     *   - $isRepair = true  — a TRASHED page at a starter slug is a removal
+     *     decision about previously-seeded content: leave it trashed, create no
+     *     replacement, and drop its nav item.
+     *   - $isRepair = false — first-ever seed: a trashed row at that slug
+     *     predates any seed and is NOT such a decision, so the page is created
+     *     normally (UNIQUE(scope_type, scope_id, slug_live) allows the live row
+     *     alongside trashed ones).
+     *
+     * Idempotency: the marker gate in EnsureSite keeps the repair to at most one
+     * pass per site. As belt-and-suspenders, CmsPage's CreatePage self-guards the
+     * live-slug uniqueness tuple (returns 0 on collision) — so even a defensive
+     * re-entry cannot duplicate a page or clobber an officer's later edits;
+     * $makePage() recovers the existing id on collision so nav + home_page_id
+     * still link.
      *
      * Content goes through the CmsPage/CmsNav libs only — NO raw SQL here.
      *
-     * @param int    $siteId    the new site row id (target of home_page_id)
+     * @param int    $siteId    the site row id (target of home_page_id)
      * @param string $scopeType 'kingdom'|'park'
      * @param int    $scopeId
      * @param int    $uid       acting mundane_id (audit)
+     * @param bool   $isRepair  true only from EnsureSite's repair branch
      * @return void
      */
-    private function _seedStarterTemplate($siteId, $scopeType, $scopeId, $uid)
+    private function _seedStarterTemplate($siteId, $scopeType, $scopeId, $uid, $isRepair = false)
     {
         // Content libs must be loaded (they are, via the ork3 scandir autoload).
         // If not, leave the bare site row rather than fatal.
@@ -355,14 +398,45 @@ class CmsSite extends CmsBase
         );
 
         // Create one page + attach its blocks; returns the new page_id (0 on
-        // hard failure). On a UNIQUE-slug collision (CreatePage returns 0) recover
-        // the existing id so nav + home_page_id still resolve — defensive only;
-        // collisions cannot occur on the once-per-scope create path.
-        $makePage = function ($attrs, $blocks) use ($page, $baseAttrs, $scopeType, $scopeId) {
+        // hard failure, and — on a REPAIR pass only — 0 when a prior copy of this
+        // starter page was TRASHED).
+        //
+        // The pre-check looks up the slug INCLUDING soft-deleted rows. The live
+        // uniqueness key is UNIQUE(scope_type, scope_id, slug_live) and slug_live
+        // is NULL for a trashed row (2026-07-08-cms-slug-live-and-integrity.sql),
+        // so CreatePage's collision guard does NOT fire against a trashed page —
+        // without this check a repair pass would mint a BRAND NEW published page
+        // full of seed placeholder copy for a page the kingdom deliberately
+        // deleted.
+        //
+        // That skip is gated on $isRepair. On a FIRST-EVER seed there was no
+        // prior seed, so a trashed row at a starter slug is just pre-existing
+        // content (trashed 'about'/'documents' rows accumulate under a scope as
+        // soon as officers use the CMS) — skipping would permanently strand the
+        // new site with dead nav and, for 'home', a NULL home_page_id that the
+        // now-stamped marker makes unrepairable. So on the create path we fall
+        // through to CreatePage exactly as before.
+        //
+        // A LIVE match always yields its existing id (either path) so nav +
+        // home_page_id still resolve.
+        $makePage = function ($attrs, $blocks) use ($page, $baseAttrs, $scopeType, $scopeId, $isRepair) {
+            $slug = isset($attrs['slug']) ? (string) $attrs['slug'] : '';
+            if ($slug !== '') {
+                $prior = $this->_anyPageBySlug($slug, $scopeType, $scopeId);
+                if ($prior !== null) {
+                    if (!empty($prior['deleted_at'])) {
+                        if ($isRepair) {
+                            return 0; // deliberately trashed since the seed — never re-create it
+                        }
+                        // First-ever seed: not a removal decision — create it.
+                    } else {
+                        return isset($prior['page_id']) ? (int) $prior['page_id'] : 0;
+                    }
+                }
+            }
             $pid = (int) $page->CreatePage(array_merge($baseAttrs, $attrs));
             if ($pid <= 0) {
-                $slug = isset($attrs['slug']) ? (string) $attrs['slug'] : '';
-                $row  = ($slug !== '') ? $page->GetPageBySlug($slug, $scopeType, $scopeId, false) : null;
+                $row = ($slug !== '') ? $page->GetPageBySlug($slug, $scopeType, $scopeId, false) : null;
                 return ($row !== null && isset($row['page_id'])) ? (int) $row['page_id'] : 0;
             }
             if (is_array($blocks) && count($blocks) > 0) {
@@ -571,9 +645,8 @@ class CmsSite extends CmsBase
             // lock before UpdateSite (its own statement) still sets home_page_id.
             $DB->Clear();
             $DB->Execute('COMMIT');
-            if ($homeId > 0) {
-                $this->UpdateSite($siteId, array('home_page_id' => $homeId), $uid);
-            }
+            $this->_setSeededHomePage($siteId, $homeId, $uid);
+            $this->_stampTemplateSeeded($siteId);
             return;
         }
 
@@ -609,9 +682,148 @@ class CmsSite extends CmsBase
         $DB->Execute('COMMIT');
 
         // ---- Point the site's landing page at the seeded home ----
-        if ($homeId > 0) {
-            $this->UpdateSite($siteId, array('home_page_id' => $homeId), $uid);
+        $this->_setSeededHomePage($siteId, $homeId, $uid);
+
+        // Seed complete — stamp the marker so this site is never re-seeded, no
+        // matter how much of the seeded content the org later deletes.
+        $this->_stampTemplateSeeded($siteId);
+    }
+
+    /**
+     * Point a freshly-seeded site at its seeded home page — but ONLY when the
+     * site has no landing page yet. A repair pass must never re-point an org's
+     * chosen home back at the seeded 'home' page.
+     *
+     * @param int $siteId
+     * @param int $homeId seeded home page_id (0 when it didn't seed)
+     * @param int $uid    acting mundane_id (audit)
+     * @return void
+     */
+    private function _setSeededHomePage($siteId, $homeId, $uid)
+    {
+        global $DB;
+
+        $siteId = (int)$siteId;
+        if ($siteId <= 0 || (int)$homeId <= 0) {
+            return;
         }
+
+        $DB->Clear();
+        $DB->site_id = $siteId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT home_page_id FROM ' . DB_PREFIX . 'cms_site WHERE site_id = :site_id LIMIT 1'
+        ));
+        if ($row !== null && isset($row['home_page_id']) && (int)$row['home_page_id'] > 0) {
+            return; // already has a landing page — leave the org's choice alone
+        }
+
+        $this->UpdateSite($siteId, array('home_page_id' => (int)$homeId), $uid);
+    }
+
+    /**
+     * Stamp ork_cms_site.template_seeded_at once, at the end of a successful
+     * starter-template seed. This is the explicit "this site HAS been seeded"
+     * marker EnsureSite gates its repair on — see the #116 block there. Written
+     * only when still NULL (re-entrant).
+     *
+     * Pre-migration DBs are handled by PROBING for the column, not by a
+     * try/catch: PDO runs under ERRMODE_WARNING here (YapoMysql/YapoDb), so an
+     * unknown-column UPDATE does not throw — execute() just returns false and
+     * raises a PHP Warning on every new-site creation. The probe skips the write
+     * (and the warning) instead. The outcome is safe either way: with the column
+     * absent EnsureSite treats the site as seeded and never re-seeds.
+     *
+     * @param int $siteId
+     * @return void
+     */
+    private function _stampTemplateSeeded($siteId)
+    {
+        global $DB;
+
+        $siteId = (int)$siteId;
+        if ($siteId <= 0) {
+            return;
+        }
+
+        // Same _firstRow-based probe idiom as CmsBase::_tableExists().
+        $DB->Clear();
+        $column = $this->_firstRow($DB->DataSet(
+            'SHOW COLUMNS FROM ' . DB_PREFIX . "cms_site LIKE 'template_seeded_at'"
+        ));
+        if ($column === null) {
+            return; // migration not run yet — nothing to stamp
+        }
+
+        $DB->Clear();
+        $DB->site_id = $siteId;
+        $DB->Execute(
+            'UPDATE ' . DB_PREFIX . 'cms_site SET template_seeded_at = NOW()'
+            . ' WHERE site_id = :site_id AND template_seeded_at IS NULL'
+        );
+
+        // The marker rides on the cached GetSiteBySlug row (see the cache
+        // contract at the top of this class) — bust it like every other mutator
+        // so a row cached before the stamp can't serve template_seeded_at = NULL
+        // for up to 1800s.
+        $this->_bustSlugCache($this->_slugForSite($siteId));
+    }
+
+    /**
+     * Look up a page by slug within a scope INCLUDING soft-deleted rows — the one
+     * lookup CmsPage::GetPageBySlug deliberately cannot do (it always filters
+     * deleted_at IS NULL). Used by the starter seed so a TRASHED starter page is
+     * recognized as "already existed, deliberately removed" rather than re-created.
+     *
+     * @param string $slug
+     * @param string $scopeType 'kingdom'|'park'
+     * @param int    $scopeId
+     * @return array|null the page row (live or trashed), or null when none exists
+     */
+    private function _anyPageBySlug($slug, $scopeType, $scopeId)
+    {
+        global $DB;
+
+        $DB->Clear();
+        $DB->slug       = (string)$slug;
+        $DB->scope_type = (string)$scopeType;
+        $DB->scope_id   = (int)$scopeId;
+        return $this->_firstRow($DB->DataSet(
+            'SELECT * FROM ' . DB_PREFIX . 'cms_page'
+            . ' WHERE slug = :slug AND scope_type = :scope_type AND scope_id = :scope_id'
+            . ' ORDER BY (deleted_at IS NULL) DESC, page_id ASC LIMIT 1'
+        ));
+    }
+
+    /**
+     * The org's real display name for a site scope, via the existing ORK libs
+     * (Kingdom::GetName / Park::GetParkShortInfo). Returns '' when the id is
+     * unknown or the libs aren't wired up.
+     *
+     * @param string $scopeType 'kingdom'|'park'
+     * @param int    $scopeId
+     * @return string
+     */
+    private function _orgDisplayName($scopeType, $scopeId)
+    {
+        $scopeId = (int)$scopeId;
+        if ($scopeId <= 0 || !isset(Ork3::$Lib) || !is_object(Ork3::$Lib)) {
+            return '';
+        }
+
+        if ($scopeType === 'park') {
+            if (!isset(Ork3::$Lib->park) || !is_object(Ork3::$Lib->park)) {
+                return '';
+            }
+            $r = Ork3::$Lib->park->GetParkShortInfo(array('ParkId' => $scopeId));
+            return (is_array($r) && isset($r['ParkInfo']['ParkName']))
+                ? trim((string)$r['ParkInfo']['ParkName'])
+                : '';
+        }
+
+        if (!isset(Ork3::$Lib->kingdom) || !is_object(Ork3::$Lib->kingdom)) {
+            return '';
+        }
+        return trim((string)Ork3::$Lib->kingdom->GetName($scopeId));
     }
 
     /**

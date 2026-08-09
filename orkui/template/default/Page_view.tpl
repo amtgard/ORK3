@@ -30,7 +30,11 @@ if ($fdCrumbCurrent !== ''):
 	<?php foreach ($fdCrumbAncestors as $fdAnc): ?>
 		<?php if (!is_array($fdAnc)) { continue; } ?>
 		<span class="fd-crumb-sep" aria-hidden="true">&rsaquo;</span>
-		<a href="<?= htmlspecialchars(UIR . 'Page/view/' . rawurlencode((string) ($fdAnc['slug'] ?? '')), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($fdAnc['title'] ?? ''), ENT_QUOTES) ?></a>
+		<?php if (trim((string) ($fdAnc['slug'] ?? '')) !== ''): ?>
+			<a href="<?= htmlspecialchars(UIR . 'Page/view/' . rawurlencode((string) ($fdAnc['slug'] ?? '')), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($fdAnc['title'] ?? ''), ENT_QUOTES) ?></a>
+		<?php else: ?>
+			<span class="fd-crumb-private"><?= htmlspecialchars((string) ($fdAnc['title'] ?? ''), ENT_QUOTES) ?></span>
+		<?php endif; ?>
 	<?php endforeach; ?>
 	<span class="fd-crumb-sep" aria-hidden="true">&rsaquo;</span>
 	<span class="fd-crumb-current" aria-current="page"><?= htmlspecialchars($fdCrumbCurrent, ENT_QUOTES) ?></span>

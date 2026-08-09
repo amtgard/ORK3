@@ -25,6 +25,14 @@
 
 class CmsMedia extends CmsBase
 {
+    /**
+     * Ceiling on the id list FilterOwnedIds will accept, so a future caller can't
+     * hand this public API 100k ids and build an unbounded IN(). The only current
+     * caller (CmsAjax::_parseIdList) already caps at 200; this is the lib's own
+     * code-controlled guard, in the spirit of _clampLimit. Over-cap fails closed.
+     */
+    public const MAX_FILTER_IDS = 1000;
+
     /** Hard upload ceiling: 8 MB of decoded image bytes. */
     private static $MAX_BYTES = 8388608; // 8 * 1024 * 1024
 
@@ -391,6 +399,77 @@ class CmsMedia extends CmsBase
     }
 
     /**
+     * IDOR guard: reduce a caller-supplied list of media ids to the subset that
+     * actually exists, is NOT trashed, and belongs to the given scope. Anything
+     * global, another org's, trashed, or nonexistent is dropped silently — the
+     * caller acts only on what comes back.
+     *
+     * Ids are int-cast into the IN() list (never interpolated raw — note
+     * mysql_real_escape_string is a no-op shim in this codebase); the scope is
+     * bound. An empty/all-invalid input short-circuits without a query, and an
+     * over-cap list (see MAX_FILTER_IDS) fails CLOSED so a runaway caller can't
+     * build an unbounded IN() list.
+     *
+     * NOTE: unlike the sibling scope-taking methods (DeleteMedia, RestoreMedia,
+     * PurgeMedia, _scopeOwns), a null $scopeType is NOT accepted here as "no
+     * ownership constraint" — $scopeType is a typed non-nullable string, so
+     * passing null is a fatal TypeError. This is an IDOR filter; it always
+     * requires a concrete scope.
+     *
+     * @param array  $ids       candidate media ids (max MAX_FILTER_IDS)
+     * @param string $scopeType 'global' | 'kingdom' | 'park' (never null)
+     * @param int    $scopeId   scope owner id (0 for global)
+     * @return array the owned subset, as ints, in input order
+     */
+    public function FilterOwnedIds(array $ids, string $scopeType, int $scopeId): array
+    {
+        global $DB;
+
+        // Fail closed on an oversized list rather than building a giant IN().
+        if (count($ids) > self::MAX_FILTER_IDS) {
+            return array();
+        }
+
+        // Int-cast + dedupe (hash-keyed, not an O(n^2) in_array scan), dropping
+        // non-positive ids.
+        $seen  = array();
+        $clean = array();
+        foreach ($ids as $id) {
+            $id = (int)$id;
+            if ($id > 0 && !isset($seen[$id])) {
+                $seen[$id] = true;
+                $clean[] = $id;
+            }
+        }
+        if (empty($clean)) {
+            return array();
+        }
+
+        $DB->Clear();
+        $DB->scope_type = $this->_normalizeScopeType($scopeType);
+        $DB->scope_id   = (int)$scopeId;
+
+        $sql = 'SELECT media_id FROM ' . DB_PREFIX . 'cms_media'
+            . ' WHERE media_id IN (' . implode(',', $clean) . ')'
+            . ' AND scope_type = :scope_type AND scope_id = :scope_id'
+            . ' AND deleted_at IS NULL';
+
+        $owned = array();
+        foreach ($this->_eachRow($DB->DataSet($sql)) as $row) {
+            $owned[(int)$row['media_id']] = true;
+        }
+
+        // Preserve the caller's ordering (hash lookup, not an O(n^2) in_array scan).
+        $out = array();
+        foreach ($clean as $id) {
+            if (isset($owned[$id])) {
+                $out[] = $id;
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Fetch a single media row, enriched with url + thumb_url + media-ref.
      *
      * @param int $mediaId
@@ -682,8 +761,12 @@ class CmsMedia extends CmsBase
         // scope, plus TinyMCE-embedded <img src> URLs). Any remaining reference
         // blocks the purge UNLESS the caller passes an explicit $override
         // acknowledging the destructive unlink.
+        // Trashed page/post owners STILL count here (false): RestorePage can bring
+        // a trashed owner back and DeletePage does not clear hero_media_id, so a
+        // hard DELETE + unlink now would strand a restored live page on a missing
+        // file. Once the trashed owner is itself purged, this media becomes purgeable.
         if (!$override) {
-            $fk = $this->_fkReferenceCount($mediaId);
+            $fk = $this->_fkReferenceCount($mediaId, false);
             $refs = ($fk > 0)
                 ? $fk
                 : $this->_blockReferenceCount($mediaId, (string)$row['path'], null, null);
@@ -767,12 +850,19 @@ class CmsMedia extends CmsBase
             return $out;
         }
 
+        // Only LIVE owners are counted, matching _fkReferenceCount: a hero image on
+        // a trashed page/post is gone from the public site, so reporting it here
+        // would show a phantom "still in use" count (and the single-card Trash
+        // confirm in Cms_media.tpl pre-checks this total, dead-ending the officer
+        // on content DeleteMedia would happily trash).
         $out['pages'] = $this->_countOne(
-            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_page WHERE hero_media_id = :mid',
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_page'
+            . ' WHERE hero_media_id = :mid AND deleted_at IS NULL',
             $mediaId
         );
         $out['posts'] = $this->_countOne(
-            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_post WHERE hero_media_id = :mid',
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_post'
+            . ' WHERE hero_media_id = :mid AND deleted_at IS NULL',
             $mediaId
         );
         $out['logos'] = $this->_countOne(
@@ -806,7 +896,7 @@ class CmsMedia extends CmsBase
         // Cheap, indexed FK checks first (page/post hero, site logo). DeleteMedia
         // only tests this against > 0, so if any FK matches we return immediately
         // and SKIP the block scan.
-        $fk = $this->_fkReferenceCount($mediaId);
+        $fk = $this->_fkReferenceCount($mediaId, true);
         if ($fk > 0) {
             return $fk;
         }
@@ -832,22 +922,44 @@ class CmsMedia extends CmsBase
      * Independent counts (summed) so a missing table in a partial schema (e.g.
      * ork_cms_site absent) can't zero the WHOLE guard — each source fails closed
      * to 0 only for itself. Shared by _referenceCount (scoped) and PurgeMedia (wide).
+     *
+     * $liveOwnersOnly mirrors the scoped-vs-wide split the block scan already uses
+     * (see _referenceCount and PurgeMedia), for the same reversible-vs-irreversible
+     * reason:
+     *  - true (the REVERSIBLE soft-delete guard): a hero image on a soft-deleted
+     *    (trashed) page/post is not a real reference, and counting it would strand
+     *    the asset forever — DeleteMedia would refuse to trash it, so PurgeMedia
+     *    (which requires the row to already be trashed) could never reach it either.
+     *  - false (the IRREVERSIBLE purge guard): trashed owners STILL count. A trashed
+     *    page can be restored (CmsPage::RestorePage) and DeletePage does not clear
+     *    hero_media_id, so hard-DELETEing + unlinking the asset would leave a live
+     *    restored page pointing at a missing file. The asset becomes purgeable once
+     *    the trashed page/post is itself purged.
+     *
+     * @param int  $mediaId
+     * @param bool $liveOwnersOnly true = ignore trashed page/post owners
+     * @return int
      */
-    private function _fkReferenceCount($mediaId)
+    private function _fkReferenceCount($mediaId, $liveOwnersOnly = true)
     {
         $mediaId = (int)$mediaId;
         if ($mediaId <= 0) {
             return 0;
         }
+        $liveOnlySql = $liveOwnersOnly ? ' AND deleted_at IS NULL' : '';
         $fk = 0;
         $fk += $this->_countOne(
-            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_page WHERE hero_media_id = :mid',
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_page'
+            . ' WHERE hero_media_id = :mid' . $liveOnlySql,
             $mediaId
         );
         $fk += $this->_countOne(
-            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_post WHERE hero_media_id = :mid',
+            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_post'
+            . ' WHERE hero_media_id = :mid' . $liveOnlySql,
             $mediaId
         );
+        // ork_cms_site has NO deleted_at column (see db-migrations/2026-07-01-cms-site.sql),
+        // so a site logo reference is always live — no soft-delete filter here.
         $fk += $this->_countOne(
             'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_site WHERE logo_media_id = :mid',
             $mediaId
@@ -904,12 +1016,17 @@ class CmsMedia extends CmsBase
             // #69: bound to blocks whose owning page/post shares the media's scope.
             // COALESCE picks the one joined owner's scope per row (the other join
             // is NULL); an orphan block whose owner was hard-deleted (both NULL)
-            // can never render, so excluding it is safe.
+            // can never render, so excluding it is safe. The joins also require
+            // the owner to be live (deleted_at IS NULL) — a block on a TRASHED
+            // page/post is not a real reference, and counting it would strand the
+            // media permanently (it could never be trashed, so never purged).
             $sql = 'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_block b'
                 . ' LEFT JOIN ' . DB_PREFIX . 'cms_page pg'
                 . " ON b.owner_type = 'page' AND pg.page_id = b.owner_id"
+                . ' AND pg.deleted_at IS NULL'
                 . ' LEFT JOIN ' . DB_PREFIX . 'cms_post po'
                 . " ON b.owner_type = 'post' AND po.post_id = b.owner_id"
+                . ' AND po.deleted_at IS NULL'
                 . ' WHERE (' . $match . ')'
                 . ' AND COALESCE(pg.scope_type, po.scope_type) = :st'
                 . ' AND COALESCE(pg.scope_id, po.scope_id) = :sid';

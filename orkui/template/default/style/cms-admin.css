@@ -1309,6 +1309,11 @@ html[data-theme="dark"] .cms-note a { color: var(--cms-gold, #f0b429); }
  * ========================================================================== */
 
 html[data-theme="dark"] .cms-toast { background: #f0f2f5; color: #1a202c; }
+/* The neutral dark toast above is (0,2,1) and declared after the .cms-toast.cms-toast-*
+   status colors (0,2,0), so it would otherwise repaint an error toast light-gray and
+   throw away the one signal that matters. Re-assert both at matching specificity. */
+html[data-theme="dark"] .cms-toast.cms-toast-error { background: var(--ork-badge-red-text); color: #fff; }
+html[data-theme="dark"] .cms-toast.cms-toast-ok { background: var(--ork-badge-green-text); color: #fff; }
 /* Gold primary button keeps DARK ink in both themes */
 html[data-theme="dark"] .cms-btn-primary,
 html[data-theme="dark"] #theme_container a.cms-btn-primary,

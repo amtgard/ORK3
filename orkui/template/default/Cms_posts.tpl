@@ -170,8 +170,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
                                 <?php endif; ?>
                                 <div class="cms-overflow">
                                     <button type="button" class="cms-overflow-btn" data-overflow-toggle
-                                            aria-haspopup="true" aria-expanded="false" data-tip="More actions">
-                                        <i class="fas fa-ellipsis-h"></i>
+                                            aria-haspopup="true" aria-expanded="false" data-tip="More actions" aria-label="More actions">
+                                        <i class="fas fa-ellipsis-h" aria-hidden="true"></i>
                                     </button>
                                     <div class="cms-overflow-menu" role="menu">
                                         <a class="cms-overflow-item" role="menuitem" href="<?= UIR ?>Cms/previewpost/<?= $pid ?><?= $scopeQ ?>" target="_blank"><i class="fas fa-eye"></i> Preview</a>

@@ -71,6 +71,20 @@ $dashSite      = isset($CmsSite) && is_array($CmsSite) ? $CmsSite : array();
 $dashSiteStatus = (string)($dashSite['status'] ?? 'unbuilt');
 $dashSiteSlug   = (string)($dashSite['slug'] ?? '');
 $dashCanPublish = !empty($CanPublishSite);
+// Site settings (name / URL slug / home page). Naming is edit-tier; the public
+// URL is admin-tier (page.publish), so the slug field is read-only without it.
+$dashSiteName   = (string)($dashSite['site_name'] ?? '');
+$dashSiteHomeId = (int)($dashSite['home_page_id'] ?? 0);
+// Bridge-aware, like $CanPublishSite above — $caps['edit'] is grant-row-only and
+// would hide this from an officer whose CMS rights come from office.
+$dashCanEditSite = !empty($CanEditSite);
+$dashSitePages  = isset($PickerPages) && is_array($PickerPages) ? $PickerPages : array();
+// Public URL namespace for this scope — parks are served at /p/{slug}, everyone
+// else at /k/{slug}. Mirrors Controller_Site::_prefixFor().
+$dashSitePrefix = ((string)($dashScope['type'] ?? '') === 'park') ? 'p' : 'k';
+// Who may change the web address differs by scope (kingdom: monarch/regent;
+// park: the park's own officers) — keep the copy scope-neutral.
+$dashSiteAdminTerm = 'a site administrator';
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 
@@ -110,13 +124,19 @@ include __DIR__ . '/cms/_shell_top.tpl';
                 </div>
                 <div class="cms-sitecard-sub" id="cmsSiteSub">
                     <?php if ($siteIsPublished): ?>
-                        Your public site is live<?php if ($dashSiteSlug !== ''): ?> at <code>/k/<?= $h($dashSiteSlug) ?></code><?php endif; ?>.
+                        Your public site is live<?php if ($dashSiteSlug !== ''): ?> at <code>/<?= $h($dashSitePrefix) ?>/<?= $h($dashSiteSlug) ?></code><?php endif; ?>.
                     <?php else: ?>
                         Your public site is not visible to the public yet.
                     <?php endif; ?>
                 </div>
             </div>
             <div class="cms-sitecard-actions">
+                <?php if ($dashCanEditSite): ?>
+                    <button type="button" class="cms-btn cms-btn-ghost" id="cmsSiteSettingsBtn"
+                            data-tip="Name your public site, set its web address and choose its home page.">
+                        <i class="fas fa-cog"></i> Site settings
+                    </button>
+                <?php endif; ?>
                 <?php if ($dashCanPublish): ?>
                     <button type="button" class="cms-btn cms-btn-primary" id="cmsSitePublishBtn"<?= $siteIsPublished ? ' style="display:none;"' : '' ?>>
                         <i class="fas fa-globe"></i> Publish site
@@ -347,6 +367,61 @@ include __DIR__ . '/cms/_shell_top.tpl';
 </div>
 <?php endif; ?>
 
+<?php /* ---- Site settings (name / public URL / home page) ---- */ ?>
+<?php if ($dashIsOrgSite && $dashCanEditSite): ?>
+<div class="cms-modal-overlay" id="cmsSiteModal">
+    <div class="cms-modal cms-modal-sm" role="dialog" aria-modal="true" aria-label="Site settings">
+        <div class="cms-modal-head">
+            <h3>Site settings</h3>
+            <button type="button" class="cms-modal-close" data-close-modal>&times;</button>
+        </div>
+        <div class="cms-modal-body">
+            <div class="cms-field">
+                <label class="cms-label" for="cmsSiteNameInput">Site name</label>
+                <input type="text" class="cms-input" id="cmsSiteNameInput" maxlength="160"
+                       value="<?= $h($dashSiteName) ?>" placeholder="e.g. Kingdom of the Burning Lands">
+            </div>
+
+            <div class="cms-field">
+                <label class="cms-label" for="cmsSiteSlugInput">Web address</label>
+                <input type="text" class="cms-input" id="cmsSiteSlugInput" maxlength="80"
+                       value="<?= $h($dashSiteSlug) ?>"
+                       <?= $dashCanPublish ? '' : 'readonly disabled data-tip="Only ' . $h($dashSiteAdminTerm) . ' can change the site&#39;s web address."' ?>>
+                <div class="cms-muted" style="font-size:12px;margin-top:4px;">
+                    Your site lives at <code>/<?= $h($dashSitePrefix) ?>/<span id="cmsSiteSlugPreview"><?= $h($dashSiteSlug) ?></span></code>.
+                    <?php if (!$dashCanPublish): ?>Only <?= $h($dashSiteAdminTerm) ?> can change this.<?php endif; ?>
+                </div>
+            </div>
+
+            <div class="cms-field">
+                <label class="cms-label" for="cmsSiteHomeSelect">Home page</label>
+                <select class="cms-select" id="cmsSiteHomeSelect">
+                    <option value="">— No home page chosen —</option>
+                    <?php foreach ($dashSitePages as $sp):
+                        $spId = (int)($sp['page_id'] ?? 0);
+                        $spT  = (string)($sp['title'] ?? '(untitled)');
+                        $spS  = (string)($sp['slug'] ?? '');
+                        $spSt = (string)($sp['status'] ?? '');
+                    ?>
+                        <option value="<?= $spId ?>"<?= $spId === $dashSiteHomeId ? ' selected' : '' ?>><?= $h($spT) ?><?= $spS !== '' ? ' (/' . $h($spS) . ')' : '' ?><?= $spSt === 'draft' ? ' — draft' : '' ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+        <div class="cms-modal-foot">
+            <button type="button" class="cms-btn cms-btn-ghost" data-close-modal>Cancel</button>
+            <button type="button" class="cms-btn cms-btn-primary" id="cmsSiteSaveBtn">Save settings</button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php /* Toast host. Unconditional and OUTSIDE the modal overlay (which is
+         display:none) — cms-admin.js toast() no-ops when .cms-toast is absent,
+         which silently swallowed every save error on this page. Same markup as
+         Cms_nav.tpl:284; z-index 11000 renders it over the still-open modal. */ ?>
+<div class="cms-toast" id="cmsToast" role="status" aria-live="polite" aria-atomic="true"></div>
+
 <script>
 (function () {
     'use strict';
@@ -411,6 +486,65 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
         if (pubBtn) { pubBtn.addEventListener('click', function () { siteAction('publishsite', pubBtn); }); }
         if (unpubBtn) { unpubBtn.addEventListener('click', function () { siteAction('unpublishsite', unpubBtn); }); }
+
+        /* ---- Site settings (name / public URL / home page) ---- */
+        var setBtn    = document.getElementById('cmsSiteSettingsBtn');
+        var setModal  = document.getElementById('cmsSiteModal');
+        var setSave   = document.getElementById('cmsSiteSaveBtn');
+        var setName   = document.getElementById('cmsSiteNameInput');
+        var setSlug   = document.getElementById('cmsSiteSlugInput');
+        var setHome   = document.getElementById('cmsSiteHomeSelect');
+        var slugPrev  = document.getElementById('cmsSiteSlugPreview');
+        /* The home-page <select> is built from a capped page list, so the current
+           home page may not appear as an option. Sending the browser-defaulted
+           first option would silently NULL home_page_id on a rename-only save —
+           so only send it when the user actually changed it. */
+        var homeOrig  = setHome ? setHome.value : '';
+        /* The public URL is admin-tier: an edit-only officer may rename the site
+           but never move it, so the slug is not sent at all in that case. */
+        var canEditSlug = <?= $dashCanPublish ? 'true' : 'false' ?>;
+        /* /k/ for kingdoms, /p/ for parks — must match the server's prefix. */
+        var sitePrefix = '<?= $h($dashSitePrefix) ?>';
+
+        if (setBtn && setModal) {
+            setBtn.addEventListener('click', function () {
+                CmsAdmin.modal.open(setModal);
+            });
+        }
+        if (setSlug && slugPrev && canEditSlug) {
+            setSlug.addEventListener('input', function () { slugPrev.textContent = setSlug.value; });
+        }
+        if (setSave) {
+            setSave.addEventListener('click', function () {
+                var params = { site_name: setName ? setName.value : '' };
+                if (setHome && setHome.value !== homeOrig) { params.home_page_id = setHome.value; }
+                if (canEditSlug && setSlug) { params.slug = setSlug.value; }
+                var original = setSave.innerHTML;
+                setSave.disabled = true;
+                setSave.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+                CmsAdmin.post('savesite', params).then(function (res) {
+                    setSave.disabled = false;
+                    setSave.innerHTML = original;
+                    if (!res || res.ok !== true) {
+                        CmsAdmin.toast((res && res.error) ? res.error : 'Could not save the site settings.', 'error');
+                        return;
+                    }
+                    if (setHome) { homeOrig = setHome.value; }
+                    /* Echo back the stored (normalized) values. */
+                    if (setSlug) { setSlug.value = res.slug || ''; }
+                    if (slugPrev) { slugPrev.textContent = res.slug || ''; }
+                    if (subEl && siteCard.getAttribute('data-status') === 'published') {
+                        subEl.textContent = 'Your public site is live at /' + sitePrefix + '/' + (res.slug || '') + '.';
+                    }
+                    CmsAdmin.modal.close(setModal);
+                    CmsAdmin.toast('Site settings saved.', 'ok');
+                }).catch(function () {
+                    setSave.disabled = false;
+                    setSave.innerHTML = original;
+                    CmsAdmin.toast('Network error — please try again.', 'error');
+                });
+            });
+        }
     }
 
     /* ---- E71: refresh the public-site block caches for the acting scope ---- */

@@ -32,6 +32,16 @@ class Model_CmsMedia extends Model
         return $this->CmsMedia->ListMedia($scope, $limit, $search, $offset);
     }
 
+    /**
+     * NOTE: unlike the other scope-taking CmsMedia methods, $scopeType must NOT be
+     * null here — the lib signature is a typed non-nullable string, so a null
+     * forwarded through this untyped pass-through is a fatal TypeError.
+     */
+    public function filter_owned_ids($ids, $scopeType, $scopeId)
+    {
+        return $this->CmsMedia->FilterOwnedIds($ids, $scopeType, $scopeId);
+    }
+
     public function get_media($mediaId)
     {
         return $this->CmsMedia->GetMedia($mediaId);

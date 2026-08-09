@@ -386,7 +386,7 @@ window.CmsBlockEditor = (function () {
         switch (block.type) {
             case 'rich_text':
             case 'richtext':
-                return strip(f.heading || f.body || '');
+                return f.heading ? strip(f.heading) : stripHtml(f.body || '');
             case 'image':
                 return (f.image && f.image.alt) || (f.image && f.image.src ? 'image set' : 'no image');
             case 'hero_carousel':
@@ -440,11 +440,57 @@ window.CmsBlockEditor = (function () {
                 return 'custom fields (JSON)';
         }
     }
+    // Block fields other than `body`/`html` are PLAIN TEXT on write (CmsPage::HTML_FIELDS
+    // is only body+html), so they must never be parsed as HTML on read — a detached
+    // div + innerHTML still fires <img onerror>. Purely textual, no DOM construction.
     function strip(s) {
-        var d = document.createElement('div');
-        d.innerHTML = String(s || '');
-        var t = (d.textContent || '').trim();
+        var t = String(s || '').replace(/\s+/g, ' ').trim();
         return t.length > 60 ? t.slice(0, 60) + '…' : t;
+    }
+    // rich_text's `body` is the one genuinely-HTML field (CmsSanitizer-cleaned). Drop
+    // its tags textually so the summary isn't raw markup — still never via innerHTML.
+    // Entities must be decoded too: TinyMCE defaults to entity_encoding 'named', so a
+    // body routinely holds &amp;/&mdash;/&nbsp;, and the seed data already does. Without
+    // decoding, esc() at the consumer double-escapes and the card shows "&amp;amp;".
+    // Single pass over the source string, so "&amp;lt;" cannot cascade into a real "<".
+    // Punctuation + the Latin-1 letters. The accented set is not optional: TinyMCE's
+    // 'named' encoding turns every non-ASCII letter into a named entity, so an author
+    // typing "café" stores "caf&eacute;" and a punctuation-only map would render the
+    // summary as literal "caf&eacute;". Built from the HTML4 Latin-1 block so European
+    // persona and park names survive. Anything unmapped is left as-is, never mangled.
+    var STRIP_ENT = (function () {
+        var m = {
+            nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
+            mdash: '—', ndash: '–', hellip: '…', bull: '•', middot: '·',
+            rsquo: '’', lsquo: '‘', ldquo: '“', rdquo: '”', deg: '°',
+            copy: '©', reg: '®', trade: '™', laquo: '«', raquo: '»'
+        };
+        // HTML4 Latin-1 letters, U+00C0–U+00FF, in code-point order.
+        var names = ('Agrave Aacute Acirc Atilde Auml Aring AElig Ccedil Egrave Eacute '
+            + 'Ecirc Euml Igrave Iacute Icirc Iuml ETH Ntilde Ograve Oacute Ocirc Otilde '
+            + 'Ouml times Oslash Ugrave Uacute Ucirc Uuml Yacute THORN szlig '
+            + 'agrave aacute acirc atilde auml aring aelig ccedil egrave eacute '
+            + 'ecirc euml igrave iacute icirc iuml eth ntilde ograve oacute ocirc otilde '
+            + 'ouml divide oslash ugrave uacute ucirc uuml yacute thorn yuml').split(' ');
+        // Keyed by EXACT name — &Eacute; (É) and &eacute; (é) are different characters,
+        // so this table must never be looked up case-insensitively.
+        for (var i = 0; i < names.length; i++) { m[names[i]] = String.fromCharCode(0xC0 + i); }
+        return m;
+    })();
+    function stripHtml(s) {
+        return strip(String(s || '')
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/&#(\d+);/g, function (_, d) { return String.fromCodePoint(+d); })
+            .replace(/&#x([0-9a-f]+);/gi, function (_, h) { return String.fromCodePoint(parseInt(h, 16)); })
+            // Case-EXACT, per the table's own contract above. Folding the key resolves
+            // every uppercase name to its lowercase sibling's code point — &AElig; came
+            // out as 'æ', &THORN; as 'þ', &Eacute; as 'é' — which case-flattens exactly
+            // the Norse/Old-English names the Latin-1 table was added for. TinyMCE emits
+            // the ASCII-punctuation names (rsquo, ldquo, copy, ...) in canonical
+            // lowercase and the table keys those that way, so nothing needs folding.
+            .replace(/&([a-zA-Z]+);/g, function (m, n) {
+                return Object.prototype.hasOwnProperty.call(STRIP_ENT, n) ? STRIP_ENT[n] : m;
+            }));
     }
 
     /* ================= TinyMCE ================= */
@@ -815,6 +861,21 @@ window.CmsBlockEditor = (function () {
         dropdown.style.zIndex = '99999';
     }
 
+    // ONE body-appended autocomplete dropdown for the whole editor instance. The body
+    // append is required so tnFixedAcPosition can position:fixed it outside the
+    // repeater's overflow context, but the repeater's rebuild() (wrap.innerHTML = '')
+    // only detaches the cards — a per-person dropdown would leak one node, with live
+    // listeners, on every add/remove/reorder. Created once, repositioned per input.
+    var personaDd = null;
+    function personaAcDropdown() {
+        if (!personaDd || !personaDd.parentNode) {
+            personaDd = el('div', 'kn-ac-results cms-persona-ac');
+            personaDd.style.display = 'none';
+            document.body.appendChild(personaDd);
+        }
+        return personaDd;
+    }
+
     function personaLinkField(person, onResolve) {
         var wrap = el('div', 'cms-field'); wrap.style.marginBottom = '8px';
         wrap.appendChild(el('label', 'cms-label', 'Link Amtgard persona (optional)'));
@@ -835,8 +896,7 @@ window.CmsBlockEditor = (function () {
 
         var input = el('input', 'cms-input'); input.type = 'text';
         input.placeholder = 'Search by persona or name…';
-        var dd = el('div', 'kn-ac-results cms-persona-ac'); dd.style.display = 'none';
-        document.body.appendChild(dd);
+        var dd = personaAcDropdown();
 
         var timer = null, ctrl = null;
         function closeDd() { dd.classList.remove('kn-ac-open'); dd.style.display = 'none'; }

@@ -1324,26 +1324,21 @@ class CmsPost extends CmsBase
     }
 
     /**
-     * Slugify a string: lowercase, ASCII, non-alnum → single hyphen, trimmed.
+     * Slugify a tag name: lowercase, ASCII, non-alnum → single hyphen, trimmed.
      * Clamped to 80 chars (ork_cms_tag.slug width).
+     *
+     * Routed through CmsBase::_normalizeSlug() rather than carrying its own
+     * transliteration. This used to call iconv('ASCII//TRANSLIT'), whose output is
+     * libc- and locale-dependent, and a tag slug is BOTH a public URL segment
+     * (Blog_post.tpl renders it into 'Blog/index&tag=') and the de-duplication key
+     * in _upsertTag() — so the same tag name entered on two different hosts
+     * produced two ork_cms_tag rows for one tag. The shared helper is
+     * byte-identical everywhere and already matches what glibc iconv produced, so
+     * slugs stored by the container keep resolving.
      */
     private function _slugify($text)
     {
-        $text = (string)$text;
-        // Best-effort transliteration to ASCII.
-        if (function_exists('iconv')) {
-            $converted = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
-            if ($converted !== false) {
-                $text = $converted;
-            }
-        }
-        $text = strtolower($text);
-        $text = preg_replace('/[^a-z0-9]+/', '-', $text);
-        $text = trim((string)$text, '-');
-        if (strlen($text) > 80) {
-            $text = rtrim(substr($text, 0, 80), '-');
-        }
-        return $text;
+        return $this->_normalizeSlug((string)$text, 80);
     }
 
     /**

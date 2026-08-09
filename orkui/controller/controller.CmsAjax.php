@@ -107,7 +107,7 @@ class Controller_CmsAjax extends Controller
         if ($slug === '') {
             $this->_fail('A page slug is required.');
         }
-        // C17: reject a router-shadowed slug (blog/post/k/p) up front with a
+        // C17: reject a router-shadowed slug (blog/post/p/k/rss/sitemap/robots) up front with a
         // specific message — such a page would be unreachable behind the pretty
         // URLs. (CmsPage::CreatePage/UpdatePage also enforce this authoritatively.)
         if ($this->CmsPage->IsReservedPageSlug($slug)) {
@@ -148,7 +148,7 @@ class Controller_CmsAjax extends Controller
             }
         }
 
-        $count = (int)$this->CmsPage->replace_blocks('page', $pageId, $blocks);
+        $count = (int)$this->CmsPage->replace_blocks('page', $pageId, $blocks, $uid);
         // #40: ReplaceBlocks returns -1 when the post-write verification fails (the
         // blocks did NOT persist as intended). Fail loudly instead of reporting a
         // successful save the content didn't actually land in.
@@ -341,7 +341,7 @@ class Controller_CmsAjax extends Controller
         }
 
         // Body blocks live in the shared polymorphic store under owner_type='post'.
-        $count = (int)$this->CmsPage->replace_blocks('post', $postId, $blocks);
+        $count = (int)$this->CmsPage->replace_blocks('post', $postId, $blocks, $uid);
         // #40: -1 means the post-write verification failed — the body blocks did not
         // persist. Fail loudly rather than reporting a save that didn't land.
         if ($count < 0) {
@@ -774,34 +774,16 @@ class Controller_CmsAjax extends Controller
 
         $this->load_model('CmsMedia');
 
-        // #21: batch the per-id IDOR/scope check into ONE query (media_id IN (…))
-        // instead of a GetMedia round-trip per id. Ids are already int-cast + capped
-        // by _parseIdList (no injection surface), so the IN list is inlined. This is
-        // a bounded read that mirrors the raw-$DB precedent in Controller_Cms::sites()
-        // — no batch scope-lister exists on the CmsMedia lib to route it through. The
-        // mutation (DeleteMedia) and the on-refusal where-used probe (ReferenceUsage)
-        // stay per-id: neither has a batch lib API and the probe only fires on failure.
-        global $DB;
+        // #21: batch the per-id IDOR/scope check into ONE query instead of a
+        // GetMedia round-trip per id. The query itself is the lib's job — this is
+        // the IDOR guard, so it lives with the code that defines what "in scope"
+        // and "trashed" mean (CmsMedia::FilterOwnedIds). The mutation (DeleteMedia)
+        // and the on-refusal where-used probe (ReferenceUsage) stay per-id: neither
+        // has a batch lib API and the probe only fires on failure.
         $ownedSet = array();
-        $inList = implode(',', array_map('intval', $ids));
-        if ($inList !== '') {
-            $DB->Clear();
-            $DB->scope_type = (string)$scope['type'];
-            $DB->scope_id   = (int)$scope['id'];
-            // deleted_at IS NULL mirrors GetMedia (a trashed row is not deletable
-            // again); scope columns enforce the same ownership as _rowInScope.
-            $ownRows = $DB->DataSet(
-                'SELECT media_id FROM ' . DB_PREFIX . 'cms_media'
-                . ' WHERE media_id IN (' . $inList . ')'
-                . ' AND scope_type = :scope_type AND scope_id = :scope_id'
-                . ' AND deleted_at IS NULL'
-            );
-            if ($ownRows !== false) {
-                while ($ownRows->Next()) {
-                    $ownedSet[(int)$ownRows->media_id] = true;
-                }
-            }
-            $DB->Clear();
+        $owned = $this->CmsMedia->filter_owned_ids($ids, (string)$scope['type'], (int)$scope['id']);
+        foreach ((is_array($owned) ? $owned : array()) as $ownedId) {
+            $ownedSet[(int)$ownedId] = true;
         }
 
         $deleted = array();
@@ -1233,6 +1215,69 @@ class Controller_CmsAjax extends Controller
         }
         $this->CmsSite->set_draft((int)$site['site_id'], $uid);
         $this->_ok(array('status' => 'draft'));
+    }
+
+    /**
+     * POST: save the resolved org site's identity/settings.
+     *   site_name, logo_media_id, home_page_id → 'page.edit'
+     *   slug                                   → 'page.publish' (AUTH_ADMIN tier)
+     * so an edit-tier officer can name the site but not move its public URL.
+     * Only keys actually present in the POST are written. Slug charset/reserved/
+     * uniqueness and the logo/home-page IDOR checks are enforced authoritatively
+     * in CmsSite::UpdateSite — its error string is surfaced verbatim.
+     */
+    public function savesite($action = null)
+    {
+        $uid = $this->_begin();
+        $scope = $this->_scope($uid);
+        if ($this->_scopeIsGlobal($scope)) {
+            $this->_fail('The global front door has no org site settings.', 3);
+        }
+        $this->_require($uid, 'page.edit', $scope);
+
+        $this->load_model('CmsSite');
+        $site = $this->CmsSite->ensure_site((string)$scope['type'], (int)$scope['id'], $uid);
+        if (empty($site) || empty($site['site_id'])) {
+            $this->_fail('Could not resolve the site.', 4);
+        }
+
+        $fields = array();
+        if (array_key_exists('site_name', $_POST)) {
+            $fields['site_name'] = trim((string)$_POST['site_name']);
+        }
+        if (array_key_exists('logo_media_id', $_POST)) {
+            $fields['logo_media_id'] = (string)$_POST['logo_media_id'];
+        }
+        if (array_key_exists('home_page_id', $_POST)) {
+            $fields['home_page_id'] = (string)$_POST['home_page_id'];
+        }
+        if (array_key_exists('slug', $_POST)) {
+            // The public URL is an admin-tier change even for an officer who may
+            // otherwise edit the site's content and name.
+            if (!$this->CmsAuth->cms_can($uid, 'page.publish', $scope)) {
+                $this->_denyCapability('page.publish');
+            }
+            $fields['slug'] = trim((string)$_POST['slug']);
+        }
+
+        if (empty($fields)) {
+            $this->_fail('Nothing to save.', 4);
+        }
+
+        $res = $this->CmsSite->update_site((int)$site['site_id'], $fields, $uid);
+        if ($res !== true) {
+            $this->_fail(is_string($res) && $res !== '' ? $res : 'Could not save the site settings.', 2);
+        }
+
+        // Echo the stored row back so the card can re-render the canonical values
+        // (the slug is normalized by DeriveSlug on the way in).
+        $saved = $this->CmsSite->get_site_for_scope((string)$scope['type'], (int)$scope['id']);
+        $saved = is_array($saved) ? $saved : array();
+        $this->_ok(array(
+            'site_name'    => (string)($saved['site_name'] ?? ''),
+            'slug'         => (string)($saved['slug'] ?? ''),
+            'home_page_id' => (int)($saved['home_page_id'] ?? 0),
+        ));
     }
 
     /* ------------------------------------------------------------------ *

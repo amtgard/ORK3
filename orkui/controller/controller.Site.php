@@ -433,6 +433,9 @@ class Controller_Site extends Controller
             if ($path === '') {
                 continue;   // pathless page collapses onto the base; skip the dupe
             }
+            if ($this->_hasRestrictedAncestor($pid)) {
+                continue;   // path embeds a draft ancestor's slug — never advertise it
+            }
             $urls[] = array('loc' => $base . '/' . $path, 'lastmod' => (string) ($pg['updated_at'] ?? ''));
         }
 
@@ -903,6 +906,14 @@ class Controller_Site extends Controller
             if ($path !== '') {
                 $canon = $base . '/' . $path;
             }
+            // PagePath() is the ROUTING truth and includes a draft ancestor's slug.
+            // For a public viewer that slug must not ship in rel=canonical/og:url
+            // (nor be handed to a crawler): emit no canonical and mark the page
+            // no-index instead. Officer preview keeps the real URL.
+            if (!$this->_isPreview && $this->_hasRestrictedAncestor((int) $page['page_id'])) {
+                $canon                  = '';
+                $this->data['no_index'] = true;
+            }
         }
 
         $ogImage = $this->_absMediaUrl((int) ($page['hero_media_id'] ?? 0));
@@ -950,22 +961,55 @@ class Controller_Site extends Controller
     }
 
     /**
+     * True when any ancestor of this page is not published+due — i.e. the page's
+     * own public path embeds a slug that was never authorized for publication.
+     * Such a page must not advertise that URL publicly (canonical/og:url, sitemap).
+     *
+     * @param int $pageId
+     * @return bool
+     */
+    private function _hasRestrictedAncestor($pageId)
+    {
+        $this->load_model('CmsPage');
+        $ancestors = $this->CmsPage->GetPageAncestors((int) $pageId, true);
+        foreach ((is_array($ancestors) ? $ancestors : array()) as $anc) {
+            if (!empty($anc['restricted'])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * C13: build the breadcrumb trail (root → this page) for a nested page. Each
      * crumb is ['label','url']; the current page is the last crumb (no url). A
      * flat page yields a single home crumb + itself.
+     *
+     * A published page may sit under a DRAFT/scheduled ancestor (GetPageByPath
+     * publish-gates only the leaf), so for a PUBLIC viewer the ancestors come back
+     * redacted (generic label, no slug) from GetPageAncestors' published-only
+     * default. Such a crumb renders as plain text, and so does everything below it
+     * — a deeper crumb's URL would have to embed the withheld slug. Officer
+     * preview passes false and still sees the real draft chain.
      */
     private function _breadcrumbs($site, $page)
     {
         $base   = $this->_siteBaseUrl($site);
         $crumbs = array(array('label' => 'Home', 'url' => $base));
 
-        $ancestors = $this->CmsPage->GetPageAncestors((int) $page['page_id']);
+        $ancestors = $this->CmsPage->GetPageAncestors((int) $page['page_id'], !$this->_isPreview);
         $prefix    = array();
+        $blocked   = false;
         foreach ((is_array($ancestors) ? $ancestors : array()) as $anc) {
+            if (!empty($anc['restricted'])) {
+                $blocked  = true;   // slug withheld → no linkable path from here down
+                $crumbs[] = array('label' => (string) $anc['title'], 'url' => '');
+                continue;
+            }
             $prefix[] = (string) $anc['slug'];
             $crumbs[] = array(
                 'label' => (string) ($anc['title'] !== '' ? $anc['title'] : $anc['slug']),
-                'url'   => $base . '/' . implode('/', $prefix),
+                'url'   => $blocked ? '' : $base . '/' . implode('/', $prefix),
             );
         }
         $crumbs[] = array('label' => (string) $page['title'], 'url' => '');

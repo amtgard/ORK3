@@ -113,7 +113,21 @@ $site = new CmsSite();
 check('derive lowercases + hyphenates', $site->DeriveSlug('Kingdom of the Burning Lands') === 'kingdom-of-the-burning-lands');
 check('derive collapses runs + strips punctuation', $site->DeriveSlug('  Foo & Bar!!  Baz  ') === 'foo-bar-baz');
 check('derive trims leading/trailing hyphens', $site->DeriveSlug('--Neverwinter--') === 'neverwinter');
-check('derive drops accented/non-ascii to hyphen', $site->DeriveSlug('Créconom') === 'cr-conom');
+check('derive transliterates accents deterministically', $site->DeriveSlug('Créconom') === 'creconom');
+check('derive transliterates ash (AE)', $site->DeriveSlug('Ælfwine') === 'aelfwine');
+check('derive transliterates thorn (TH)', $site->DeriveSlug('Þorvald') === 'thorvald');
+check('derive transliterates slashed O', $site->DeriveSlug('Øresund') === 'oresund');
+check('derive transliterates eszett (ss)', $site->DeriveSlug('Straße') === 'strasse');
+// Decomposed (NFD) input must land on the SAME slug as the precomposed form —
+// a macOS paste stores "e"+U+0301, and the byte encoding of a kingdom's name
+// must not change its public URL. Written as explicit bytes so the assertion
+// cannot be silently normalized by an editor.
+check(
+    'derive converges NFD and NFC on one slug',
+    $site->DeriveSlug("Cre\xcc\x81conom") === 'creconom'
+        && $site->DeriveSlug("Cr\xc3\xa9conom") === 'creconom'
+);
+check('derive handles NFD ring + umlaut', $site->DeriveSlug("A\xcc\x8angstro\xcc\x88m") === 'angstrom');
 check('derive empty stays empty', $site->DeriveSlug('   ') === '');
 
 // --- ValidateSlug: charset (pure, returns before DB) ---

@@ -207,6 +207,40 @@ class Controller_Cms extends Controller
         $this->data['TypeLabels'] = $this->_typeLabels();
         $this->data['Caps']       = $this->_capFlags($uid, $scope);
         $this->data['Greet']      = $this->_greeting();
+
+        // Home-page chooser source for the site-settings form on the site card
+        // (org scope only — the global front door has no /k/{slug} site row).
+        // Only loaded for users who can actually see the form — otherwise this is
+        // a 500-row read on every org dashboard render for nothing.
+        if (!$this->_scopeIsGlobal($scope) && !empty($this->data['CanEditSite'])) {
+            $sitePages = $this->CmsPage->list_pages($sf);
+            $sitePages = is_array($sitePages) ? $sitePages : array();
+            // list_pages() is capped (LIMIT 500, updated_at DESC), so a rarely
+            // edited home page can fall off the list — the picker would then show
+            // nothing selected, i.e. "no home page chosen", which is untrue. Pull
+            // that one row by key and inject it so the select states ground truth.
+            $homeId = (int)($this->data['CmsSite']['home_page_id'] ?? 0);
+            if ($homeId > 0) {
+                $found = false;
+                foreach ($sitePages as $sp) {
+                    if ((int)($sp['page_id'] ?? 0) === $homeId) {
+                        $found = true;
+                        break;
+                    }
+                }
+                if (!$found) {
+                    $homeRow = $this->CmsPage->get_page($homeId);
+                    if (
+                        is_array($homeRow)
+                        && (string)($homeRow['scope_type'] ?? '') === (string)$sf['scope_type']
+                        && (int)($homeRow['scope_id'] ?? 0) === (int)$sf['scope_id']
+                    ) {
+                        array_unshift($sitePages, $homeRow);
+                    }
+                }
+            }
+            $this->data['PickerPages'] = $sitePages;
+        }
     }
 
     /**
@@ -232,6 +266,11 @@ class Controller_Cms extends Controller
         // page.publish bridges to AUTH_ADMIN on the scope, so it is the correct
         // gate: an AUTH_EDIT-only officer sees the "must be published" state.
         $this->data['CanPublishSite'] = $this->CmsAuth->cms_can($uid, 'page.publish', $scope);
+        // Site settings (name / home page) is an edit-tier action. Use the SAME
+        // bridge-aware source as the publish gate above: GetUserCapabilities
+        // (behind $Caps) reads grant rows only, so an officer whose CMS rights
+        // come from OFFICE would see "Publish site" but no "Site settings".
+        $this->data['CanEditSite'] = $this->CmsAuth->cms_can($uid, 'page.edit', $scope);
     }
 
     /**
