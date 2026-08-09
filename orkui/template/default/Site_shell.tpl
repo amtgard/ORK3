@@ -61,7 +61,7 @@ html[data-theme="dark"] .org-preview-banner{background:#8a6420;}
 </style>
 <div class="org-preview-banner" role="status">
     <i class="fas fa-eye" aria-hidden="true"></i>
-    <span><strong>Draft preview</strong> &mdash; this site isn&rsquo;t published yet. Only officers can see it; publish it from the CMS to go live.</span>
+    <span><strong>Draft preview</strong> &mdash; this site isn&rsquo;t published yet. Only officers can see it; publish it from OGRE to go live.</span>
 </div>
 <?php endif; ?>
 <?php include $fdDir . 'org_header.tpl'; ?>

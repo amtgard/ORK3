@@ -87,7 +87,10 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     <div class="cms-dash-block">
         <h2 class="cms-dash-greet"><?= $h($greet) ?>.</h2>
-        <p class="cms-dash-lede">Pick up where you left off, or create something new below.</p>
+        <?php // The one place the acronym is spelled out in visible copy — the
+              // dashboard is where a first-time author lands. ?>
+        <p class="cms-dash-lede">Welcome to <strong>OGRE</strong>, the Online Gallery and Resource
+            Engine. Pick up where you left off, or create something new below.</p>
     </div>
 
     <?php if ($dashIsOrgSite): ?>

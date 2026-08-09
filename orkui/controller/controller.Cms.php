@@ -3,7 +3,9 @@
 require_once __DIR__ . '/trait.CmsScope.php';
 
 /**
- * Controller_Cms — CMS admin (page-rendering surfaces).
+ * Controller_Cms — OGRE admin (page-rendering surfaces).
+ * OGRE = Online Gallery and Resource Engine, the product name for the CMS; the
+ * `Cms*` class / `ork_cms_*` table names are the internal identifiers for it.
  *
  * Routes:
  *   Cms/index            → page list (any CMS capability / super-admin)
@@ -84,7 +86,7 @@ class Controller_Cms extends Controller
         }
 
         $this->template = 'Cms_dashboard.tpl';
-        $this->data['page_title'] = 'Content Management';
+        $this->data['page_title'] = 'OGRE Dashboard';
 
         $sf = $this->_scopeFilters($scope);
 
@@ -275,7 +277,7 @@ class Controller_Cms extends Controller
         $this->load_model('CmsSite');
 
         $this->template = 'Cms_sites.tpl';
-        $this->data['page_title'] = 'CMS Sites';
+        $this->data['page_title'] = 'OGRE Sites';
         $this->data['cmsActive']  = 'sites';
 
         // ---- Pinned front-door summary (Amtgard International) -------------
@@ -423,7 +425,7 @@ class Controller_Cms extends Controller
         }
 
         $this->template = 'Cms_index.tpl';
-        $this->data['page_title'] = 'Content Management';
+        $this->data['page_title'] = 'OGRE — Pages';
 
         $filters = $this->_scopeFilters($scope);
         $search = trim((string)($_GET['q'] ?? ''));
@@ -525,7 +527,7 @@ class Controller_Cms extends Controller
             if (empty($page) || !$this->_rowInScope($page, $scope)) {
                 // No such page — fall back to the list with a message.
                 $this->template = 'Cms_index.tpl';
-                $this->data['page_title'] = 'Content Management';
+                $this->data['page_title'] = 'OGRE — Pages';
                 $this->data['Pages']  = $this->CmsPage->list_pages($this->_scopeFilters($scope));
                 $this->data['Search'] = '';
                 $this->data['StatusFilter'] = '';

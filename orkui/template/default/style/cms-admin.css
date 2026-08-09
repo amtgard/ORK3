@@ -154,9 +154,21 @@ html[data-theme="dark"] { --ork-warn: #fbd38d; }
     font-family: 'Open Sans', system-ui, sans-serif;
     font-size: 20px;
     font-weight: 700;
-    letter-spacing: .01em;
+    /* OGRE wordmark — a 4-letter acronym reads better with a touch of tracking */
+    letter-spacing: .06em;
     line-height: 1.1;
     color: var(--cms-gold, #f0b429);
+}
+/* Visually-hidden text that stays in the a11y tree (same technique the rail
+   already uses to keep icon-only nav labels available to screen readers).
+   Carries the OGRE expansion so the acronym is never read as an opaque token. */
+.cms-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 .cms-rail-nav {
     display: flex;

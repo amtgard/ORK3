@@ -185,7 +185,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
             <div class="cms-field">
                 <label class="cms-label" for="navFieldType">Link type</label>
                 <select class="cms-select" id="navFieldType">
-                    <option value="page">CMS Page</option>
+                    <option value="page">Site Page</option>
                     <option value="post">Blog Post</option>
                     <option value="url">External URL</option>
                     <option value="dynamic">Link to an ORK app page (advanced)</option>

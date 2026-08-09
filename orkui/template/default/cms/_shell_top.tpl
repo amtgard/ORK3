@@ -1,10 +1,11 @@
 <?php
 /**
- * cms/_shell_top.tpl — CMS admin shell (open).
+ * cms/_shell_top.tpl — OGRE admin shell (open).
+ * OGRE = Online Gallery and Resource Engine, the product name for the CMS.
  * PLAIN PHP (extract()+include), NEVER Smarty. Use <?php ?>/<?= ?> only.
  *
  * Renders the persistent left rail + masthead workspace chrome that wraps every
- * CMS admin surface. Include this BEFORE your page content and include
+ * OGRE admin surface. Include this BEFORE your page content and include
  * cms/_shell_bottom.tpl AFTER it. The ORK global app header/footer stay above;
  * this shell owns the workspace beneath them.
  *
@@ -12,7 +13,7 @@
  *   $cmsActive  string  which rail item is highlighted:
  *                       'dashboard'|'pages'|'posts'|'media'|'nav'  (any other
  *                       value, e.g. 'edit', highlights nothing — leaf surfaces).
- *   $cmsTitle   string  masthead display title. Default 'Content'.
+ *   $cmsTitle   string  masthead display title. Default 'OGRE'.
  *   $cmsSub     string  optional subtitle under the title.
  *   $cmsCrumbs  array   optional breadcrumb: list of ['label'=>..,'href'=>?..].
  *                       The last crumb (or any without href) renders as plain text.
@@ -29,7 +30,7 @@
  */
 
 $cmsActive  = isset($cmsActive) ? (string)$cmsActive : '';
-$cmsTitle   = isset($cmsTitle) && $cmsTitle !== '' ? (string)$cmsTitle : 'Content';
+$cmsTitle   = isset($cmsTitle) && $cmsTitle !== '' ? (string)$cmsTitle : 'OGRE';
 $cmsSub     = isset($cmsSub) ? (string)$cmsSub : '';
 $cmsCrumbs  = isset($cmsCrumbs) && is_array($cmsCrumbs) ? $cmsCrumbs : array();
 $cmsActions = isset($cmsActions) ? (string)$cmsActions : '';
@@ -114,9 +115,12 @@ window.CMS_CAPS = <?= json_encode($shCmsCaps, JSON_HEX_TAG) ?>;
 <div class="cms-shell">
 
     <aside class="cms-rail<?= $cmsRailExtra !== '' ? ' cms-rail-wide' : '' ?>" aria-label="Content management navigation">
-        <div class="cms-rail-brand">
+        <div class="cms-rail-brand" data-tip="OGRE — Online Gallery and Resource Engine">
             <i class="fas fa-folder-open cms-rail-mark" aria-hidden="true"></i>
-            <span class="cms-rail-word">Content</span>
+            <span class="cms-rail-word">OGRE</span>
+            <?php // Expansion for screen readers; the wordmark collapses to the
+                  // mark alone on narrow rails, so the name lives here too. ?>
+            <span class="cms-sr-only">Online Gallery and Resource Engine</span>
         </div>
 
         <nav class="cms-rail-nav">

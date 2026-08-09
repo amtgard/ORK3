@@ -18,7 +18,7 @@ $denyHome = htmlspecialchars((string)($HomeUrl ?? ''), ENT_QUOTES, 'UTF-8');
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Permission needed — Content Management</title>
+<title>Permission needed — OGRE</title>
 <style>
 :root { color-scheme: light dark; }
 body {
@@ -57,9 +57,9 @@ body {
 <main class="deny-card">
     <div class="deny-badge">&#128274;</div>
     <h1>You don&rsquo;t have permission to manage this site</h1>
-    <p>You&rsquo;re signed in, but your role doesn&rsquo;t include access to the
-        Content Management tools for this site.</p>
-    <p>Ask your monarch or regent (a kingdom administrator) to grant you CMS access,
+    <p>You&rsquo;re signed in, but your role doesn&rsquo;t include access to
+        OGRE &mdash; the Online Gallery and Resource Engine &mdash; for this site.</p>
+    <p>Ask your monarch or regent (a kingdom administrator) to grant you OGRE access,
         then reload this page.</p>
     <div class="deny-actions"><a class="deny-btn" href="<?= $denyHome ?>">Return to ORK</a></div>
 </main>

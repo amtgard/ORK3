@@ -146,7 +146,7 @@ html[data-theme="dark"] a.cms-sites-slug:hover { color: var(--cms-gold, #f0b429)
 <?php
 /* ---- CMS shell setup (persistent rail + masthead) ---- */
 $cmsActive  = 'sites';
-$cmsTitle   = 'CMS Sites';
+$cmsTitle   = 'OGRE Sites';
 $cmsSub     = 'Every kingdom & park site across the network';
 $cmsActions = '<button type="button" class="cms-btn cms-btn-primary" id="cmsNewSiteBtn"><i class="fas fa-plus"></i> New site</button>';
 include __DIR__ . '/cms/_shell_top.tpl';
@@ -305,7 +305,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         </div>
         <div class="cms-modal-body">
             <p class="cms-muted" style="margin-top:0;font-size:13px;">
-                Opening a site's CMS admin for the first time automatically creates and
+                Opening a site in OGRE for the first time automatically creates and
                 seeds it. Pick a kingdom — or drill into one of its parks — then open the
                 dashboard to build it out.
             </p>

@@ -221,7 +221,7 @@ if ($_heroBgUrl) {
 			</button>
 			<?php endif; ?>
 			<?php if ($CanEditKingdom ?? false): ?>
-			<a class="kn-btn kn-btn-outline" href="<?= UIR ?>Cms/dashboard&scope=k:<?= (int)$kingdom_id ?>" data-tip="Build and publish your kingdom's standalone public website.">
+			<a class="kn-btn kn-btn-outline" href="<?= UIR ?>Cms/dashboard&scope=k:<?= (int)$kingdom_id ?>" data-tip="Build and publish your kingdom's standalone public website in OGRE.">
 				<i class="fas fa-globe"></i> Manage Public Site
 			</a>
 			<?php endif; ?>
