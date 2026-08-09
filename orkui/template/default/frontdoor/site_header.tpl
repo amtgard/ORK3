@@ -25,9 +25,9 @@ $siteLogoBase = HTTP_TEMPLATE . 'default/img/frontdoor/';
 $siteUir      = defined('UIR') ? UIR : 'index.php?Route=';
 $blockFields = [
     'logo'  => ['key' => 'logo', 'src' => $siteLogoBase . 'amtgard-logo.png', 'alt' => 'Amtgard'],
-    // Find a Chapter -> the chapter directory (Atlas); Record Keeper -> the ORK
+    // Find a Chapter -> the chapter directory (Atlas); ORK Login -> the ORK
     // proper (the Kingdoms Directory). Internal routes resolve through UIR.
     'cta'   => ['label' => 'Find a Chapter', 'href' => $siteUir . 'Atlas'],
-    'login' => ['label' => 'Record Keeper', 'href' => $siteUir . 'Directory'],
+    'login' => ['label' => 'ORK Login', 'href' => $siteUir . 'Directory'],
 ];
 include DIR_TEMPLATE . 'default/frontdoor/blocks/marketing_nav.tpl';

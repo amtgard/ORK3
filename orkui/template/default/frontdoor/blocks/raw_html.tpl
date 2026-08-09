@@ -21,7 +21,7 @@ $fdbHtml = $blockFields['html'] ?? '';
 // Editor/preview context? render_blocks shares $data; the Site controller sets
 // SitePreview only for an authorized officer previewing an unpublished site, so
 // this note is NEVER shown to a public visitor.
-$fdbIsPreview = !empty($data['SitePreview']);
+$fdbIsPreview = !empty($SitePreview);
 ?>
 <?php if ($fdbHtml !== ''): ?>
 <style>

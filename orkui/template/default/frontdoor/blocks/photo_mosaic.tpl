@@ -26,7 +26,7 @@ $img3 = $images[3] ?? null;
 if (empty($images)) {
     // #82-style author hint: surface the empty state in the CMS editor/preview
     // (SitePreview) only, so it's discoverable instead of a silently missing block.
-    if (!empty($data['SitePreview'])) {
+    if (!empty($SitePreview)) {
         echo '<div class="fd-pad" style="text-align:center;color:#8a97ad;font-style:italic;">This photo mosaic has no images yet.</div>';
     }
     return;

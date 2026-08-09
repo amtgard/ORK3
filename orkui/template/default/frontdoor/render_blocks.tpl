@@ -31,7 +31,7 @@ $fdStyleOnce = isset($fdStyleOnce) && is_array($fdStyleOnce) ? $fdStyleOnce : []
 // #90: preview/admin surfaces (an authorized officer previewing an unpublished
 // site, or the CMS draft preview) get a visible placeholder when a block throws,
 // so authors can see something is wrong. Public visitors keep the silent swallow.
-$fdIsPreview = ! empty($data['SitePreview']) || ! empty($PreviewPage);
+$fdIsPreview = ! empty($SitePreview) || ! empty($PreviewPage);
 foreach ($fdBlocks as $block) {
     if (empty($block['enabled'])) {
         continue;

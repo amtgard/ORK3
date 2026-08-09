@@ -157,6 +157,23 @@
     text-shadow: 0 1px 2px rgba(0, 0, 0, .45);
 }
 
+/* Same trap for the outline login button: `#theme_container a` is (1,0,1), so a
+   plain .fd-nav-login colour never lands and the button renders link-blue. Restate
+   both themes at ID specificity. (`inherit` is NOT the shortcut here — it would
+   pull the nav bar's colour, not the button's.) */
+#theme_container a.fd-nav-login {
+    color: #56607a;
+}
+#theme_container a.fd-nav-login:hover {
+    color: #1a2236;
+}
+html[data-theme="dark"] #theme_container a.fd-nav-login {
+    color: #c8d2e6;
+}
+html[data-theme="dark"] #theme_container a.fd-nav-login:hover {
+    color: #fff;
+}
+
 /* "Ways to Play" path cards are <a class="fd-path"> sitting on a dark scrim, so
    their title/blurb are meant to be white. The global `#theme_container a` (ID
    specificity) drags the link + its inherited children to link-blue in dark
@@ -591,13 +608,26 @@ html[data-theme="dark"] .fd-ev-date { color: #e0b64d; }
     flex-shrink: 0;
 }
 
+/* Secondary button, deliberately NOT gold: "Find a Chapter" is the single primary
+   CTA on this bar, so this gets an outline treatment at matching metrics rather
+   than a second filled button competing with it. */
 .fd-nav-login {
+    background: transparent;
+    border: 1px solid var(--fd-border, #e2e6ec);
     color: #56607a;
-    font-weight: 600;
+    font-weight: 700;
     font-size: 13px;
+    padding: 8px 15px; /* 1px less than .fd-nav-cta's 9px/16px to absorb the border */
+    border-radius: 7px;
     text-decoration: none;
-    padding: 9px 12px;
     flex-shrink: 0;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.fd-nav-login:hover {
+    background: rgba(240, 180, 41, .12);
+    border-color: var(--gold, #f0b429);
+    color: #1a2236;
 }
 
 /* Mobile nav toggle (hidden by default, shown at ≤680px) */
@@ -746,7 +776,14 @@ html[data-theme="dark"] .fd-navitem > a.is-active {
 }
 
 html[data-theme="dark"] .fd-nav-login {
-    color: #9aa5bc;
+    border-color: #2f3a52;
+    color: #c8d2e6;
+}
+
+html[data-theme="dark"] .fd-nav-login:hover {
+    background: rgba(240, 180, 41, .16);
+    border-color: var(--gold, #f0b429);
+    color: #fff;
 }
 
 html[data-theme="dark"] .fd-dropdown {
@@ -1070,6 +1107,7 @@ html[data-theme="dark"] .ko-block { background: transparent; }
 html[data-theme="dark"] .ko-card { background: #1b2233; border-color: #2c3650; }
 html[data-theme="dark"] .ko-avatar { background: #232c42; }
 html[data-theme="dark"] .ko-name { color: #eef2fa; }
+html[data-theme="dark"] .ko-role { color: #c9940c; }
 html[data-theme="dark"] .ko-avatar i { color: #7d8aa5; }
 
 /* ---- blog_feed block (was per-render inline <style>) ----
@@ -1100,6 +1138,7 @@ html[data-theme="dark"] .ko-avatar i { color: #7d8aa5; }
 html[data-theme="dark"] .bf-block { background: transparent; }
 html[data-theme="dark"] .bf-card { background: #1b2233; border-color: #2c3650; }
 html[data-theme="dark"] .bf-card-title { color: #eef2fa; }
+html[data-theme="dark"] .bf-card-date { color: #c9940c; }
 html[data-theme="dark"] .bf-card-excerpt { color: #b6c0d4; }
 html[data-theme="dark"] .bf-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45); }
 
@@ -1158,6 +1197,11 @@ html[data-theme="dark"] .bf-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45);
 @media (max-width: 860px) { .blog-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 560px) { .blog-grid { grid-template-columns: 1fr; } }
 
+/* :hover paired deliberately — .blog-rss is an <a>, and orkui.css's global
+   html[data-theme="dark"] a:hover (0,2,2) outranks a bare (0,2,1) rule here, which
+   would flip the link from gold to blue on hover in dark mode only. */
+html[data-theme="dark"] .blog-rss,
+html[data-theme="dark"] .blog-rss:hover { color: #c9940c; }
 html[data-theme="dark"] .blog-card { background: #1b2233; border-color: #2c3650; }
 html[data-theme="dark"] .blog-card-title { color: #eef2fa; }
 html[data-theme="dark"] .blog-card-excerpt { color: #b6c0d4; }
