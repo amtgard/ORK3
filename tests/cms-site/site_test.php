@@ -80,8 +80,20 @@ class FakeDB
 $GLOBALS['DB'] = new FakeDB();
 $DB = &$GLOBALS['DB'];
 
+// _seedOrgTheme() (below) probes a heraldry file path off DIR_HERALDRY before
+// ever reading it — defined defensively so that codepath can't fatal on an
+// undefined constant even though the fake DB's empty queue keeps the has_
+// heraldry gate closed and the real is_readable() check unreached.
+if (!defined('DIR_HERALDRY')) {
+    define('DIR_HERALDRY', '/nonexistent');
+}
+
 require __DIR__ . '/../../system/lib/ork3/class.CmsBase.php';
 require __DIR__ . '/../../system/lib/ork3/class.CmsSite.php';
+// _seedOrgTheme() consumes both of these — CmsTheme pulls in CmsThemeTokens
+// itself via its own require_once.
+require __DIR__ . '/../../system/lib/ork3/class.CmsHeraldryColor.php';
+require __DIR__ . '/../../system/lib/ork3/class.CmsTheme.php';
 
 $fails = 0;
 function check($label, $cond)
@@ -312,6 +324,28 @@ foreach (array_unique(array_merge($kingdomTypes, $parkTypes)) as $t) {
     }
 }
 check('every seeded block type has a render partial (' . implode(',', $missing) . ')', $missing === array());
+
+// --- Seeded theme row -----------------------------------------------------
+// A new site used to seed NO theme row at all, so every org inherited whatever
+// the CSS defaulted to — which was MedievalSharp. The seeder must now always
+// create and ACTIVATE a row, and its --fd-primary must come from the org's own
+// device so no two of the 342 parks look alike.
+$seedTheme = new ReflectionMethod('CmsSite', '_seedOrgTheme');
+
+$DB->executed = array();
+$DB->queue    = array(array());        // no existing theme row
+$primary = $seedTheme->invoke($site, 'park', 1049, 99);
+
+check('_seedOrgTheme returns a hex primary', preg_match('/^#[0-9a-f]{6}$/', $primary) === 1);
+check('_seedOrgTheme never returns the empty string', $primary !== '');
+check('_seedOrgTheme wrote a theme row', (function () use ($DB) {
+    foreach ($DB->executed as $sql) {
+        if (stripos($sql, 'cms_theme') !== false) {
+            return true;
+        }
+    }
+    return false;
+})());
 
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";
 exit($fails === 0 ? 0 : 1);

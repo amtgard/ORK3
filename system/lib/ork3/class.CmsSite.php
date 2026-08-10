@@ -512,6 +512,10 @@ class CmsSite extends CmsBase
         // ---- Point the site's landing page at the seeded home ----
         $this->_setSeededHomePage($siteId, $homeId, $uid);
 
+        // Palette before the marker: a site that fails mid-seed should not be
+        // stamped as seeded, and the theme is part of "seeded".
+        $this->_seedOrgTheme($scopeType, $scopeId, $uid);
+
         // Seed complete — stamp the marker so this site is never re-seeded, no
         // matter how much of the seeded content the org later deletes.
         $this->_stampTemplateSeeded($siteId);
@@ -847,6 +851,115 @@ class CmsSite extends CmsBase
         // so a row cached before the stamp can't serve template_seeded_at = NULL
         // for up to 1800s.
         $this->_bustSlugCache($this->_slugForSite($siteId));
+    }
+
+    /**
+     * Give a freshly-provisioned org site its own palette, derived from its own
+     * heraldry, and ACTIVATE it.
+     *
+     * Before this, a new site seeded no theme row at all, so GetActiveCss()
+     * returned '' and every org fell through to the raw CSS defaults — which is
+     * how all 342 parks ended up rendering in MedievalSharp. Seeding a row is
+     * therefore not a nicety: it is the only thing that makes the org's own
+     * design tokens reachable.
+     *
+     * Colour cascade: the org's own device, then its PARENT KINGDOM's device (a
+     * park with no arms belongs to a kingdom that almost certainly has some, and
+     * inheriting is meaningful rather than arbitrary), then a deterministic hash
+     * of the name. Never a fixed default — that would make every deviceless park
+     * identical.
+     *
+     * @param string $scopeType 'kingdom' | 'park'
+     * @param int    $scopeId
+     * @param int    $uid acting mundane_id (audit)
+     * @return string the chosen '#rrggbb'
+     */
+    private function _seedOrgTheme($scopeType, $scopeId, $uid)
+    {
+        $scopeType = (string) $scopeType;
+        $scopeId   = (int) $scopeId;
+
+        $primary = '';
+        if (class_exists('CmsHeraldryColor')) {
+            $primary = CmsHeraldryColor::FromFile($this->_heraldryPath($scopeType, $scopeId));
+
+            if ($primary === '' && $scopeType === 'park') {
+                $parentKingdomId = $this->_parentKingdomIdForPark($scopeId);
+                if ($parentKingdomId > 0) {
+                    $primary = CmsHeraldryColor::FromFile(
+                        $this->_heraldryPath('kingdom', $parentKingdomId)
+                    );
+                }
+            }
+            if ($primary === '') {
+                $primary = CmsHeraldryColor::FromName($this->OrgDisplayName($scopeType, $scopeId));
+            }
+        }
+        if ($primary === '') {
+            return '';
+        }
+
+        if (!class_exists('CmsTheme')) {
+            return $primary;
+        }
+        $theme = new CmsTheme();
+        $id = (int) $theme->SaveTheme($scopeType, $scopeId, 'Default', array(
+            '--fd-primary'      => $primary,
+            '--fd-font-heading' => 'Archivo',
+            '--fd-font-body'    => 'Lexend',
+            '--fd-radius'       => '6px',
+        ), (int) $uid);
+
+        if ($id > 0) {
+            $theme->SetActive($scopeType, $scopeId, $id);
+        }
+        return $primary;
+    }
+
+    /**
+     * Absolute path to an org's heraldry master, or '' when it has none.
+     *
+     * Gates on has_heraldry, NOT on a truthy URL: Heraldry::resolve_heraldry_url()
+     * returns a guaranteed-404 path when no file exists, so a URL check would
+     * always look positive.
+     *
+     * @return string absolute path, or ''
+     */
+    private function _heraldryPath($scopeType, $scopeId)
+    {
+        global $DB;
+        $table = ($scopeType === 'park') ? 'park' : 'kingdom';
+        $idCol = $table . '_id';
+
+        $DB->Clear();
+        $DB->org_id = (int) $scopeId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT has_heraldry FROM ' . DB_PREFIX . $table
+            . ' WHERE ' . $idCol . ' = :org_id LIMIT 1'
+        ));
+        if ($row === null || (int) ($row['has_heraldry'] ?? 0) !== 1) {
+            return '';
+        }
+
+        $base = rtrim(DIR_HERALDRY, '/') . '/' . $table . '/' . sprintf('%05d', (int) $scopeId);
+        foreach (array('.png', '.jpg', '.jpeg', '.gif') as $ext) {
+            if (is_readable($base . $ext)) {
+                return $base . $ext;
+            }
+        }
+        return '';
+    }
+
+    /** Parent kingdom of a park, or 0. */
+    private function _parentKingdomIdForPark($parkId)
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->park_id = (int) $parkId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = :park_id LIMIT 1'
+        ));
+        return ($row === null) ? 0 : (int) ($row['kingdom_id'] ?? 0);
     }
 
     /**

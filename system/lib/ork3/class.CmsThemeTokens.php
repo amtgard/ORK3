@@ -227,6 +227,18 @@ class CmsThemeTokens
         $light = array_merge(self::DefaultValues(), self::Validate($userTokens));
         $light['--fd-primary-contrast'] = self::BestText($light['--fd-primary']);
 
+        // The hue alone, so CSS can build the tinted paper scale
+        // (hsl(var(--fd-primary-h) 34% 98.5%)) without re-parsing the hex.
+        $primaryHsl = self::HexToHsl($light['--fd-primary']);
+        $light['--fd-primary-h'] = (string) (int) round($primaryHsl[0]);
+
+        // Gold-on-gold guard: ~6% of hues collide with the ORK accent. Where the
+        // accent would not read on the field, fall back to the field's own
+        // contrast colour instead of special-casing at the template layer.
+        $light['--fd-accent-on-primary'] = (self::Contrast($light['--fd-accent'], $light['--fd-primary']) >= 3.0)
+            ? $light['--fd-accent']
+            : $light['--fd-primary-contrast'];
+
         // Dark color set (color tokens only; shape/type pass through).
         $dark = $light;
         $dark['--fd-bg']         = self::WithL($light['--fd-primary'], 0.08);   // brand-tinted near-black
