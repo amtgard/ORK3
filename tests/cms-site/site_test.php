@@ -299,7 +299,13 @@ check('park starter seeds park_events', in_array('park_events', $parkTypes, true
 
 $parkCopy = $allCopy($parkDefs);
 check('park starter copy never calls the park a kingdom', stripos($parkCopy, 'kingdom') === false);
-check('park starter copy uses the Park noun', stripos($parkCopy, 'Welcome to Our Park') !== false);
+// Task 8 rewrite: the park template is now its own bespoke three-page design
+// (home / new-players / contact), not a $noun-templated trim of the kingdom
+// copy — so the old literal "Welcome to Our Park" string this check looked
+// for no longer exists anywhere in the seed. The check's actual intent (the
+// seeded copy is contextually about a PARK, not a generic org) still holds
+// and is asserted here against the new copy instead of silently dropped.
+check('park starter copy is park-aware (mentions "park")', stripos($parkCopy, 'park') !== false);
 
 // Seeded pages must NOT open with a heading block repeating their own title:
 // Site_shell already promotes the page title to the page <h1>, so such a block
@@ -403,6 +409,57 @@ check(
     '_finishSeed() seeds the theme BEFORE stamping the one-way marker',
     $themeIdx !== null && $stampIdx !== null && $themeIdx < $stampIdx
 );
+
+// --- Park starter is its own template, not a trimmed kingdom one ----------
+$parkDefs2  = $defs->invoke($site, 'park', 1049);
+$parkSlugs  = array_keys($parkDefs2);
+$parkTypes2 = $blockTypes($parkDefs2);
+$parkCopy2  = $allCopy($parkDefs2);
+
+check('park seeds exactly three pages', count($parkSlugs) === 3);
+check(
+    'park pages are home / new-players / contact',
+    $parkSlugs === array('home', 'new-players', 'contact')
+);
+check('park no longer seeds an About page', !isset($parkDefs2['about']));
+check('park no longer seeds a Documents page', !isset($parkDefs2['documents']));
+check(
+    'park seeds no staff_roster (parks have no board)',
+    !in_array('staff_roster', $parkTypes2, true)
+);
+check('park home leads with park_hero', $parkDefs2['home']['blocks'][0]['type'] === 'park_hero');
+check('park home carries park_meeting', in_array('park_meeting', $parkTypes2, true));
+check('park home carries the first-day steps', in_array('steps', $parkTypes2, true));
+check(
+    'new-players carries the FAQ accordion',
+    in_array('accordion', array_map(function ($b) {
+        return $b['type'];
+    }, $parkDefs2['new-players']['blocks']), true)
+);
+check(
+    'contact carries park_officers',
+    in_array('park_officers', array_map(function ($b) {
+        return $b['type'];
+    }, $parkDefs2['contact']['blocks']), true)
+);
+check(
+    'no seeded copy contains author instructions',
+    stripos($parkCopy2, 'replace this placeholder') === false
+    && stripos($parkCopy2, 'describe your park') === false
+    && stripos($parkCopy2, 'tell visitors who you are') === false
+);
+check(
+    'no seeded copy hard-codes a weekday',
+    !preg_match('/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/i', $parkCopy2)
+);
+check('no seeded copy promises a price', stripos($parkCopy2, '$') === false);
+check('nav labels are Home / New Players / Contact', array_map(
+    function ($d) {
+        return $d['nav_label'];
+    },
+    $parkDefs2
+) === array(
+    'home' => 'Home', 'new-players' => 'New Players', 'contact' => 'Contact'));
 
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";
 exit($fails === 0 ? 0 : 1);

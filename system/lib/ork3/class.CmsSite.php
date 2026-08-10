@@ -602,10 +602,132 @@ class CmsSite extends CmsBase
             return class_exists('CmsSanitizer') ? CmsSanitizer::Clean($html) : (string) $html;
         };
 
+        // A park is not a small kingdom — it gets its OWN three-page design,
+        // not a trimmed copy of the kingdom template. Returns early: none of
+        // the shared $officersBlock/$eventsBlock/$defs scaffolding below is
+        // kingdom-scoped anymore, it never runs for a park.
+        //
+        // Three pages only (Home, New Players, Contact) against the kingdom's
+        // five. About Us is gone because its seeded body published author
+        // instructions to the open web; Documents & Resources is gone because
+        // a park has no library to put behind it; the Board of Directors
+        // roster is gone because parks have no board and it published a
+        // fabricated person. No Events page either: 26 of 342 parks have an
+        // upcoming event, so a nav item to an empty page would tell a
+        // prospective newcomer the club is dead before they clicked — Events
+        // stays as a block on Home, where the honest empty state reads as
+        // "nothing beyond our regular park days".
+        //
+        // Every time/place/officer claim below comes from a dynamic block —
+        // never hand-typed — so it can never contradict the live ORK data.
+        if ($isPark) {
+            $uir = defined('UIR') ? UIR : 'index.php?Route=';
+
+            // The steps CTA below links to this SAME site's own 'new-players'
+            // page. A bare 'Page/view/new-players' href (the pre-multi-site
+            // convention seeded content used to follow) 404s here: Controller_
+            // Page::view() is hard-coded to scope_type='global', so it can never
+            // resolve a park-scoped page — only org_header.tpl's nav re-points
+            // 'Page/view/' onto 'Site/page/{slug}/', and that rewrite is nav-only,
+            // never applied to a block-authored CTA href. _sitePageHref() builds
+            // the working 'Site/page/{slug}/{pageSlug}' form directly, so this
+            // link resolves for a public visitor without waiting on that gap to
+            // be closed generically.
+            $newPlayersHref = $this->_sitePageHref($scopeType, $scopeId, 'new-players');
+
+            return array(
+                'home' => array(
+                    'nav_label' => 'Home',
+                    'attrs' => array(
+                        'slug' => 'home', 'type' => 'composed', 'title' => 'Home', 'is_system' => 1,
+                        'meta_description' => 'A local Amtgard chapter — foam combat and medieval hobby, all ages, no experience or equipment needed. See when and where we meet, and what to expect on your first day.',
+                    ),
+                    'blocks' => array(
+                        array('type' => 'park_hero', 'source' => 'dynamic', 'enabled' => 1, 'order' => 10,
+                            'fields' => array('kicker' => '', 'heading' => '', 'show_weather' => 1,
+                                'cta_label' => 'Plan your first visit', 'cta_href' => '#pk-meet')),
+                        array('type' => 'park_meeting', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
+                            'fields' => array('kicker' => 'When can I show up?', 'heading' => 'When & Where We Meet',
+                                'show_map' => 1, 'show_directions' => 1, 'limit' => 6)),
+                        array('type' => 'steps', 'source' => 'authored', 'enabled' => 1, 'order' => 30,
+                            'fields' => array(
+                                'kicker' => 'New here? Start here', 'heading' => 'Your First Day, Start to Finish',
+                                'band' => 'light',
+                                'cta' => array('label' => 'More questions? Read the new player guide', 'href' => $newPlayersHref),
+                                'steps' => array(
+                                    array('title' => 'Just show up.', 'body' => 'You don’t need to email anyone, register, or bring anything but water. Come to the time and place above. Ten minutes early is perfect. An hour late is also fine — we’ll still be out there.'),
+                                    array('title' => 'Say the words "I’m new."', 'body' => 'Walk up to anyone and say it. That is the entire process. They’ll point you at whoever is running the day. Every person on that field said the same sentence once.'),
+                                    array('title' => 'Borrow a sword.', 'body' => 'We keep loaner weapons and shields for exactly this reason. They’re foam over a flexible core. Someone will walk you through the safety basics — what counts as a hit, what’s off-limits — in about five minutes.'),
+                                    array('title' => 'Play, or just watch.', 'body' => 'Jump into a game whenever you’re ready. If you’d rather stand on the sideline your whole first day and figure out what’s going on, that is completely normal and nobody will push you.'),
+                                ))),
+                        array('type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 40,
+                            'fields' => array(
+                                'kicker' => 'What is this, exactly?', 'heading' => 'Who We Are', 'align' => 'left',
+                                'body' => $clean($this->_parkIntroBody($scopeId)))),
+                        array('type' => 'park_events', 'source' => 'dynamic', 'enabled' => 1, 'order' => 50,
+                            'fields' => array('kicker' => 'What’s coming up?', 'heading' => 'Upcoming Events', 'limit' => 3)),
+                        array('type' => 'park_officers', 'source' => 'dynamic', 'enabled' => 1, 'order' => 60,
+                            'fields' => array('kicker' => 'Who do I talk to?', 'heading' => 'Our Officers', 'limit' => 12)),
+                        array('type' => 'cta_band', 'source' => 'authored', 'enabled' => 1, 'order' => 70,
+                            'fields' => $this->_parkCtaFields($scopeId)),
+                    ),
+                ),
+
+                'new-players' => array(
+                    'nav_label' => 'New Players',
+                    'attrs' => array(
+                        'slug' => 'new-players', 'type' => 'article', 'title' => 'New Players',
+                        'meta_description' => 'Everything you need for your first day of Amtgard: what to wear, what it costs, whether it’s safe, and what actually happens at a park day.',
+                    ),
+                    'blocks' => array(
+                        array('type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
+                            'fields' => array(
+                                'kicker' => 'Never played?', 'heading' => 'Start Here', 'align' => 'left',
+                                'body' => $clean('<p>Amtgard is a foam-combat and medieval hobby that meets outdoors in a public park. There is no tryout, no membership to buy, and no experience required. Turn up, borrow a sword, and someone will teach you the rest.</p>'))),
+                        array('type' => 'accordion', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
+                            'fields' => array('items' => array(
+                                array('q' => 'What should I wear?', 'a' => $clean('<p>Clothes you can run in and closed-toe shoes you don’t mind getting grass on. That’s genuinely it — you do not need a costume, armor, or anything medieval, and plenty of regulars play in gym shorts and a t-shirt. Bring water. Sunscreen if it’s that kind of day.</p>')),
+                                array('q' => 'Do I need to buy equipment?', 'a' => $clean('<p>No. We have loaner weapons and shields, and you’re welcome to use them as long as you want — weeks or months, nobody’s counting. When you do want your own, most players build theirs out of foam, tape, and a bit of patience, and someone here will happily show you how. This hobby is much cheaper than it looks.</p>')),
+                                array('q' => 'Does it cost anything?', 'a' => $clean('<p>Coming out and playing doesn’t. Amtgard is run entirely by volunteers — nobody here is paid and nobody is selling you anything. Some groups ask their regular members for small dues later on to keep loaner gear stocked, but nobody is going to ask you for money on your first day.</p>')),
+                                array('q' => 'What actually happens at a park day?', 'a' => $clean('<p>People trickle in, gear gets laid out and safety-checked, and someone starts calling games — team battles, last-one-standing, capture the flag with foam swords. In between, people sit in the shade and talk, work on armor and costume, or practice. You can play as hard or as gently as you like; there’s no fitness requirement and no minimum. Come late, leave early, take breaks whenever you want.</p>')),
+                                array('q' => 'Is it safe? Will I get hurt?', 'a' => $clean('<p>Every weapon is foam over a flexible core and gets checked before it’s used. Intentional hits to the head are against the rules, and so is swinging harder than it takes to feel a hit. You may pick up a bruise, the way you would in any sport — real injuries are rare. If someone is playing too hard, tell an officer. That’s what they’re there for.</p>')),
+                                array('q' => 'Will I be the only new person?', 'a' => $clean('<p>Maybe, maybe not — some days there are three newcomers and some days there’s just you. Either way, you won’t be the only person who has ever been new: every single player out there walked up once without knowing anybody. Showing up alone is the normal way to start.</p>')),
+                                array('q' => 'How old do you have to be?', 'a' => $clean('<p>Amtgard is all ages, and most groups have players from grade-schoolers to retirees. If you’re under 18, bring a parent or guardian along the first time — they may need to sign a waiver, and they’ll probably enjoy watching more than they expect.</p>')),
+                                array('q' => 'Do I have to role-play or be in character?', 'a' => $clean('<p>No. Some players have an elaborate persona and a name they go by out here; plenty of others just use their own first name and hit people with foam. Both are completely normal. Nobody is going to make you do an accent.</p>')),
+                            ))),
+                        array('type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 30,
+                            'fields' => array(
+                                'kicker' => 'Not near us?', 'heading' => 'Find Another Group', 'align' => 'left',
+                                'body' => $clean('<p>Amtgard has hundreds of chapters. If we’re too far away, the Atlas will find the one nearest you.</p>'),
+                                'cta' => array('label' => 'Find another Amtgard group', 'href' => $uir . 'Atlas'))),
+                    ),
+                ),
+
+                'contact' => array(
+                    'nav_label' => 'Contact',
+                    'attrs' => array(
+                        'slug' => 'contact', 'type' => 'composed', 'title' => 'Contact & Officers',
+                        'meta_description' => 'The volunteers who run this Amtgard chapter, and how to reach us.',
+                    ),
+                    'blocks' => array(
+                        array('type' => 'park_officers', 'source' => 'dynamic', 'enabled' => 1, 'order' => 10,
+                            'fields' => array('kicker' => 'Who do I talk to?', 'heading' => 'Our Officers', 'limit' => 12)),
+                        array('type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
+                            'fields' => array(
+                                'heading' => 'Visiting from another park?', 'align' => 'left',
+                                'body' => $clean('<p>You’re welcome at any of our park days — just come as you are. If you need to reach someone before you travel, any of the officers above can help.</p>'))),
+                    ),
+                ),
+            );
+        }
+
         // The org's live "who holds office" block. Both partials take the same
         // fields; only the scope they read differs.
+        // NOTE: reached by KINGDOM scope only — the park branch above returns
+        // before this point, so kingdom_officers is the only type ever used
+        // here.
         $officersBlock = array(
-            'type' => $isPark ? 'park_officers' : 'kingdom_officers',
+            'type' => 'kingdom_officers',
             'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
             'fields' => array(
                 'heading' => 'Our Officers',
@@ -614,9 +736,9 @@ class CmsSite extends CmsBase
             ),
         );
 
-        // The org's live upcoming-events block, same story.
+        // The org's live upcoming-events block, same story (kingdom scope only).
         $eventsBlock = array(
-            'type' => $isPark ? 'park_events' : 'kingdom_events',
+            'type' => 'kingdom_events',
             'source' => 'dynamic', 'enabled' => 1, 'order' => 40,
             'fields' => array(
                 'heading' => 'Upcoming Events',
@@ -651,10 +773,10 @@ class CmsSite extends CmsBase
                             'kicker'  => 'Welcome',
                             'heading' => 'Welcome to Our ' . $noun,
                             'align'   => 'center',
+                            // NOTE: reached by KINGDOM scope only — the park branch above
+                            // returns before this point.
                             'body'    => $clean(
-                                $isPark
-                                ? '<p>Foam swords, real friendships, and a place for everyone. Come find us on the field &mdash; your first day is always free.</p>'
-                                : '<p>Foam swords, real friendships, and a place for everyone. Find a park near you and come play &mdash; your first day on the field is always free.</p>'
+                                '<p>Foam swords, real friendships, and a place for everyone. Find a park near you and come play &mdash; your first day on the field is always free.</p>'
                             ),
                         ),
                     ),
@@ -667,19 +789,9 @@ class CmsSite extends CmsBase
                             'body'    => $clean('<p>Tell visitors who you are in a sentence or two. Edit this block to introduce your ' . $nounLower . ', describe what a typical game day looks like, and invite newcomers to their first (always free) day on the field.</p>'),
                         ),
                     ),
-                    // A park's single most useful block: when and where we meet,
-                    // straight from its ORK park-day records. Kingdoms have no
-                    // equivalent — their meeting times live at the park level.
-                    $isPark ? array(
-                        'type' => 'park_meeting', 'source' => 'dynamic', 'enabled' => 1, 'order' => 30,
-                        'fields' => array(
-                            'heading'         => 'When & Where We Meet',
-                            'kicker'          => 'Come play',
-                            'show_map'        => 1,
-                            'show_directions' => 1,
-                            'limit'           => 6,
-                        ),
-                    ) : null,
+                    // Kingdoms have no meeting-time equivalent — their meeting times
+                    // live at the park level. (A park's own home page carries a
+                    // park_meeting block instead — see the park branch above.)
                     $eventsBlock,
                 ))),
             ),
@@ -700,10 +812,10 @@ class CmsSite extends CmsBase
                             'kicker'  => 'Our History',
                             'heading' => 'How We Got Here',
                             'align'   => 'left',
+                            // NOTE: reached by KINGDOM scope only — the park branch above
+                            // returns before this point (and no longer has an About page).
                             'body'    => $clean(
-                                $isPark
-                                ? '<p>Share your park&rsquo;s story: when it was founded, where it plays, and the traditions that make it yours. Replace this placeholder with your own history.</p>'
-                                : '<p>Share your ' . $nounLower . '&rsquo;s story: when it was founded, the lands and parks it covers, and the traditions that make it yours. Replace this placeholder with your own history.</p>'
+                                '<p>Share your ' . $nounLower . '&rsquo;s story: when it was founded, the lands and parks it covers, and the traditions that make it yours. Replace this placeholder with your own history.</p>'
                             ),
                         ),
                     ),
@@ -795,14 +907,125 @@ class CmsSite extends CmsBase
             ),
         );
 
-        // A park has no parks. Drop the page rather than seed a nav link to a
-        // permanently empty page. Done here, at the single source of truth, so the
-        // page seed and the nav seed stay in lockstep automatically.
-        if ($isPark) {
-            unset($defs['parks']);
-        }
-
+        // NOTE: reached by KINGDOM scope only — the park branch above returns its
+        // own three-page array before this point, so there is no park-side "drop
+        // the Our Parks page" step here anymore.
         return $defs;
+    }
+
+    /**
+     * The working public URL for one of THIS site's own pages: Site/page/{slug}/
+     * {pageSlug}, resolved from the scope's already-seeded ork_cms_site row.
+     * Falls back to the pre-multi-site Page/view/{pageSlug} form when this scope
+     * has no site row yet (e.g. a bare unit-test invocation of
+     * _starterPageDefs() with no DB-backed site) — best-effort rather than a
+     * hard failure, and no worse than the seed's previous behaviour.
+     *
+     * Why this matters: Controller_Page::view() (Page/view/{slug}) is
+     * hard-coded to scope_type='global', so it can never resolve a park- or
+     * kingdom-scoped page for a public visitor. org_header.tpl's nav already
+     * works around this by re-pointing a resolved 'Page/view/' href onto
+     * 'Site/page/{slug}/' at render time — but that rewrite only runs for the
+     * CmsNav-sourced nav, never for a block-authored CTA href, so seeded
+     * content linking to one of its own pages has to build the working form
+     * itself.
+     *
+     * @param string $scopeType 'kingdom' | 'park'
+     * @param int    $scopeId
+     * @param string $pageSlug  the target page's own slug (flat, e.g. 'new-players')
+     * @return string
+     */
+    private function _sitePageHref($scopeType, $scopeId, $pageSlug)
+    {
+        global $DB;
+
+        $uir = defined('UIR') ? UIR : 'index.php?Route=';
+
+        $DB->Clear();
+        $DB->scope_type = (string) $scopeType;
+        $DB->scope_id   = (int) $scopeId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT slug FROM ' . DB_PREFIX . 'cms_site WHERE scope_type = :scope_type AND scope_id = :scope_id LIMIT 1'
+        ));
+        $siteSlug = ($row !== null && isset($row['slug'])) ? (string) $row['slug'] : '';
+
+        if ($siteSlug !== '') {
+            return $uir . 'Site/page/' . rawurlencode($siteSlug) . '/' . rawurlencode($pageSlug);
+        }
+        return $uir . 'Page/view/' . rawurlencode($pageSlug);
+    }
+
+    /**
+     * Home's "who we are" body. Uses the park's own ORK description when it has one
+     * (246 of 342 do), so three quarters of parks get a genuinely local paragraph
+     * with nobody typing anything. The fallback is a sentence true of every Amtgard
+     * park — never an instruction to the officer, which is what the old seed
+     * published to the open web.
+     */
+    private function _parkIntroBody($parkId)
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->park_id = (int) $parkId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT description FROM ' . DB_PREFIX . 'park WHERE park_id = :park_id LIMIT 1'
+        ));
+        $desc = trim((string) ($row['description'] ?? ''));
+        if ($desc !== '' && mb_strlen($desc) <= 800) {
+            return '<p>' . htmlspecialchars($desc, ENT_QUOTES, 'UTF-8') . '</p>';
+        }
+        return '<p>We’re a local chapter of Amtgard — an all-ages foam-combat and medieval '
+            . 'hobby group that meets outdoors in a public park. Nothing to buy, nothing to '
+            . 'sign up for, no experience needed. Show up, borrow a sword, and we’ll teach '
+            . 'you the rest.</p>';
+    }
+
+    /**
+     * Closing CTA. Two tiers: showing up (always true, needs no data, and the only
+     * honest ask — there is no self-service signup to point at) plus the park's one
+     * external URL, LABELLED BY WHAT IT ACTUALLY IS. Of 204 parks with a URL, 148 are
+     * Facebook; a generic "visit our website" wastes the reassurance a social link
+     * carries, since a newcomer can see the group is active and lurk before committing.
+     *
+     * Slot 2 is left EMPTY on purpose. ork_park has exactly one url column, which is
+     * why Discord appears only 5 times — the most public thing wins the slot. An empty
+     * CTA renders nothing publicly and prompts loudly in the editor, so officers get an
+     * obvious home for a Discord invite at zero data-model cost.
+     */
+    private function _parkCtaFields($parkId)
+    {
+        global $DB;
+        $DB->Clear();
+        $DB->park_id = (int) $parkId;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT url FROM ' . DB_PREFIX . 'park WHERE park_id = :park_id LIMIT 1'
+        ));
+        $url = trim((string) ($row['url'] ?? ''));
+
+        $ctas = array();
+        if ($url !== '' && preg_match('#^https?://#i', $url)) {
+            $label = 'Visit our page';
+            if (preg_match('#(facebook\.com|fb\.com|fb\.me)#i', $url)) {
+                $label = 'Ask us on Facebook';
+            } elseif (stripos($url, 'discord') !== false) {
+                $label = 'Join our Discord';
+            }
+            // Ghost, never solid: a social link is a LOWER-commitment action than
+            // showing up and will out-click the real goal if given equal weight.
+            $ctas[] = array('label' => $label, 'href' => $url, 'style' => 'ghost');
+        }
+        $ctas[] = array('label' => '', 'href' => '', 'style' => 'ghost');
+
+        return array(
+            'heading' => 'Come Find Us',
+            'subcopy' => 'Still have a question? Ask before you come out — there is no dumb '
+                . 'question about a hobby where adults hit each other with foam. And if you’d '
+                . 'rather just turn up unannounced and see what’s going on, do that instead. '
+                . 'Both work.',
+            'logo'  => array(),
+            'ctas'  => $ctas,
+            'links' => '',
+        );
     }
 
     /**
