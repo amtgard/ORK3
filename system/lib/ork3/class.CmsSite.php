@@ -477,8 +477,7 @@ class CmsSite extends CmsBase
             // lock before UpdateSite (its own statement) still sets home_page_id.
             $DB->Clear();
             $DB->Execute('COMMIT');
-            $this->_setSeededHomePage($siteId, $homeId, $uid);
-            $this->_stampTemplateSeeded($siteId);
+            $this->_finishSeed($siteId, $scopeType, $scopeId, $uid, $homeId);
             return;
         }
 
@@ -509,6 +508,38 @@ class CmsSite extends CmsBase
         $DB->Clear();
         $DB->Execute('COMMIT');
 
+        $this->_finishSeed($siteId, $scopeType, $scopeId, $uid, $homeId);
+    }
+
+    /**
+     * The single shared tail of every _seedStarterTemplate() completion path:
+     * point the site at its seeded home page, seed+activate its palette, THEN
+     * stamp the one-way "seeded" marker.
+     *
+     * _seedStarterTemplate() has TWO completion branches — the early return
+     * taken when the nav menu is found already non-empty under the row lock
+     * (a TOCTOU race between two concurrent first-loads, or a legacy
+     * pre-migration row being repaired), and the normal end-of-method path
+     * after this method's own nav inserts. Both USED to hand-call
+     * _setSeededHomePage()/_stampTemplateSeeded() independently; only the
+     * normal path was updated to also call _seedOrgTheme() when the theme
+     * seed was added, so a site taking the early-return branch got
+     * template_seeded_at stamped — a PERMANENT one-way marker — with no
+     * theme row, and could never be re-seeded with one. Hoisting both
+     * branches onto this one shared tail makes that class of drift
+     * structurally impossible: there is now exactly one call site for
+     * _stampTemplateSeeded() in the whole class, and it can never run
+     * without _seedOrgTheme() having already run immediately before it.
+     *
+     * @param int    $siteId
+     * @param string $scopeType 'kingdom'|'park'
+     * @param int    $scopeId
+     * @param int    $uid       acting mundane_id (audit)
+     * @param int    $homeId    seeded home page_id (0 when it didn't seed)
+     * @return void
+     */
+    private function _finishSeed($siteId, $scopeType, $scopeId, $uid, $homeId)
+    {
         // ---- Point the site's landing page at the seeded home ----
         $this->_setSeededHomePage($siteId, $homeId, $uid);
 

@@ -347,5 +347,62 @@ check('_seedOrgTheme wrote a theme row', (function () use ($DB) {
     return false;
 })());
 
+// --- Fix round 1: a stamping path can no longer skip the theme seed -------
+// _seedStarterTemplate() has TWO completion branches (the early return when
+// the nav menu is found already non-empty under the row lock, and the normal
+// end-of-method path). Only the normal path originally called
+// _seedOrgTheme() before stamping template_seeded_at — a PERMANENT one-way
+// marker — so a site taking the other branch was stamped seeded and could
+// NEVER be re-seeded with a theme. Fixed by hoisting both branches onto one
+// shared _finishSeed() tail.
+//
+// Structural guard: assert there is exactly ONE call site for
+// _stampTemplateSeeded() in the whole class. Two hand-kept call sites are
+// exactly what drifted apart and caused this bug — collapsing to one makes
+// that drift structurally impossible to reintroduce, so this check would
+// fail immediately if a future edit added a second direct stamp call outside
+// _finishSeed().
+$classSrc = file_get_contents(__DIR__ . '/../../system/lib/ork3/class.CmsSite.php');
+check(
+    '_stampTemplateSeeded() has exactly one call site (no drift-prone duplicate)',
+    substr_count($classSrc, '$this->_stampTemplateSeeded(') === 1
+);
+check(
+    '_seedOrgTheme() has exactly one call site, feeding that same completion path',
+    substr_count($classSrc, '$this->_seedOrgTheme(') === 1
+);
+
+// Behavioral guard: the shared completion tail itself really does seed a
+// theme BEFORE it stamps the marker — exercised directly via reflection so
+// it is provable independent of which branch reaches it.
+$finishSeed = new ReflectionMethod('CmsSite', '_finishSeed');
+
+$DB->executed = array();
+$DB->queue    = array(
+    array(),                                       // _heraldryPath: no device on file
+    array(),                                       // _parentKingdomIdForPark: no parent
+    array(),                                       // CmsTheme::_themeIdByName probe: no existing row -> INSERT
+    array(),                                       // CmsTheme::_themeIdByName readback (post-INSERT)
+    array(array('Field' => 'template_seeded_at')), // _stampTemplateSeeded's SHOW COLUMNS probe: column exists
+);
+$finishSeed->invoke($site, 42, 'park', 1049, 99, 0); // homeId=0 -> _setSeededHomePage is a no-op, no extra DB call
+
+$themeIdx = null;
+$stampIdx = null;
+foreach ($DB->executed as $i => $sql) {
+    if ($themeIdx === null && stripos($sql, 'cms_theme') !== false) {
+        $themeIdx = $i;
+    }
+    if ($stampIdx === null && stripos($sql, 'template_seeded_at') !== false) {
+        $stampIdx = $i;
+    }
+}
+check('_finishSeed() seeds a theme row', $themeIdx !== null);
+check('_finishSeed() stamps template_seeded_at', $stampIdx !== null);
+check(
+    '_finishSeed() seeds the theme BEFORE stamping the one-way marker',
+    $themeIdx !== null && $stampIdx !== null && $themeIdx < $stampIdx
+);
+
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";
 exit($fails === 0 ? 0 : 1);
