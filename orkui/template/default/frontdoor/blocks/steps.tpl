@@ -75,8 +75,16 @@ $bandStyle = $isDark ? ' style="background:var(--navy);color:var(--fd-primary-co
     <?php endif; ?>
 
     <?php if (!empty($cta['label'])): ?>
+        <?php
+        // A block-authored href may be the STABLE 'Page/view/{slug}' form the
+        // park starter seeds (CmsSite::_sitePageHref()) rather than an already
+        // site-scoped route, precisely so a site-slug rename can't strand it —
+        // see fdSiteInternalHref()'s docblock in frontdoor/_helpers.tpl. Resolve
+        // it here, at render time, using the CURRENT site slug.
+        $ctaHref = fdSiteInternalHref((string) ($cta['href'] ?? ''), isset($SiteSlug) ? (string) $SiteSlug : '');
+        ?>
         <div style="text-align:center;margin-top:26px;">
-            <a class="fd-btn-gold" href="<?= htmlspecialchars(CmsSanitizer::SafeHrefOrHash($cta['href'] ?? ''), ENT_QUOTES) ?>">
+            <a class="fd-btn-gold" href="<?= htmlspecialchars(CmsSanitizer::SafeHrefOrHash($ctaHref), ENT_QUOTES) ?>">
                 <?= htmlspecialchars($cta['label'], ENT_QUOTES) ?>
             </a>
         </div>

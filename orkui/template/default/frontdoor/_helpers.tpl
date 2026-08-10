@@ -72,6 +72,59 @@ if (!function_exists('fdClampLimit')) {
     }
 }
 
+if (!function_exists('fdSiteInternalHref')) {
+    /**
+     * Re-point a 'Page/view/{slug}' href onto THIS site's own
+     * 'Site/page/{siteSlug}/{slug}' route, at RENDER time.
+     *
+     * Mirrors org_header.tpl's $orgHref rewrite, which already does exactly
+     * this for CmsNav-sourced nav links — CmsNav resolves page links to the
+     * GLOBAL 'Page/view/' form, and org_header.tpl re-points them onto this
+     * site's own route using the CURRENT $SiteSlug on every render. That is
+     * why nav survives a site-slug rename for free (CmsSite::UpdateSite()
+     * allows editing 'slug') and a block-authored href field otherwise would
+     * not: seeding an already-resolved 'Site/page/{slug}/...' href bakes in
+     * whatever slug existed at SEED time, and nothing re-visits already-seeded
+     * block content when an officer later renames their site.
+     *
+     * Seeding the stable 'Page/view/{slug}' form instead (CmsSite::
+     * _sitePageHref()) and rewriting it HERE on every render, using whatever
+     * $SiteSlug is current for THIS request, means a rename fixes the link
+     * everywhere at once — the same guarantee nav already has. First consumer:
+     * steps.tpl's CTA (the park starter's "Your First Day" → New Players link).
+     *
+     * Only ever rewrites the exact prefix this codebase itself seeds/emits —
+     * the block editor's href fields are always free text (no internal-page
+     * picker exists), so an officer's own authored href can't realistically
+     * collide with this prefix. Anything that doesn't match passes through
+     * unchanged, including every existing kingdom-site authored link.
+     *
+     * @param string $href     the stored/authored href
+     * @param string $siteSlug the CURRENT site slug for this render (the
+     *                         $SiteSlug already in scope wherever a block
+     *                         partial renders inside the org site shell); ''
+     *                         when unresolved (e.g. a CMS preview outside the
+     *                         site shell), in which case $href passes through
+     *                         unchanged — the same graceful degrade the seed
+     *                         used before render-time resolution existed.
+     * @return string
+     */
+    function fdSiteInternalHref($href, $siteSlug)
+    {
+        $href     = (string) $href;
+        $siteSlug = (string) $siteSlug;
+        if ($siteSlug === '') {
+            return $href;
+        }
+        $uir        = defined('UIR') ? UIR : 'index.php?Route=';
+        $pagePrefix = $uir . 'Page/view/';
+        if (strpos($href, $pagePrefix) === 0) {
+            return $uir . 'Site/page/' . rawurlencode($siteSlug) . '/' . substr($href, strlen($pagePrefix));
+        }
+        return $href;
+    }
+}
+
 if (!function_exists('fdBlockCache')) {
     /**
      * Read-through GhettoCache wrapper for the DYNAMIC front-door blocks.

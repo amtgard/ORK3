@@ -588,15 +588,6 @@ class CmsSite extends CmsBase
         $scopeType = (string) $scopeType;
         $isPark    = ($scopeType === 'park');
 
-        // "Kingdom" / "Principality" / "Park" — the org's own word for itself.
-        // Falls back to a neutral noun rather than "Kingdom" if the lookup can't
-        // resolve, so a seed can never hard-code the wrong org type.
-        $noun = $this->OrgUnitNoun($scopeType, (int) $scopeId);
-        if ($noun === '') {
-            $noun = 'Group';
-        }
-        $nounLower = strtolower($noun);
-
         // Sanitize authored HTML bodies exactly the way the editor save path does.
         $clean = function ($html) {
             return class_exists('CmsSanitizer') ? CmsSanitizer::Clean($html) : (string) $html;
@@ -624,16 +615,22 @@ class CmsSite extends CmsBase
             $uir = defined('UIR') ? UIR : 'index.php?Route=';
 
             // The steps CTA below links to this SAME site's own 'new-players'
-            // page. A bare 'Page/view/new-players' href (the pre-multi-site
-            // convention seeded content used to follow) 404s here: Controller_
-            // Page::view() is hard-coded to scope_type='global', so it can never
-            // resolve a park-scoped page — only org_header.tpl's nav re-points
-            // 'Page/view/' onto 'Site/page/{slug}/', and that rewrite is nav-only,
-            // never applied to a block-authored CTA href. _sitePageHref() builds
-            // the working 'Site/page/{slug}/{pageSlug}' form directly, so this
-            // link resolves for a public visitor without waiting on that gap to
-            // be closed generically.
-            $newPlayersHref = $this->_sitePageHref($scopeType, $scopeId, 'new-players');
+            // page. A bare relative 'new-players' href 404s: Controller_Page::
+            // view() is hard-coded to scope_type='global', so it can never
+            // resolve a park-scoped page on its own.
+            //
+            // _sitePageHref() deliberately does NOT bake in this site's current
+            // slug here at seed time — an earlier version did, and it went stale
+            // (dead 404) the instant an officer renamed their site via
+            // UpdateSite(), because nothing re-visits already-seeded block
+            // content on a rename. Instead it seeds the SAME global
+            // 'Page/view/{pageSlug}' form CmsNav already resolves page links to.
+            // steps.tpl then rewrites that at RENDER time, using the CURRENT
+            // $SiteSlug (fdSiteInternalHref() in frontdoor/_helpers.tpl) — the
+            // exact mechanism org_header.tpl's $orgHref already uses to keep nav
+            // links working across a rename. A slug rename now fixes this link
+            // everywhere at once, same guarantee nav already had.
+            $newPlayersHref = $this->_sitePageHref('new-players');
 
             return array(
                 'home' => array(
@@ -720,6 +717,21 @@ class CmsSite extends CmsBase
                 ),
             );
         }
+
+        // "Kingdom" / "Principality" / "Park" — the org's own word for itself.
+        // Falls back to a neutral noun rather than "Kingdom" if the lookup can't
+        // resolve, so a seed can never hard-code the wrong org type.
+        //
+        // Computed HERE, after the park branch's early return, not up front:
+        // park copy below never reads $noun/$nounLower (OrgUnitNoun('park', ...)
+        // returns the literal 'Park' with no DB touch, but the call and its
+        // result were still built and then discarded on every park seed). Only
+        // the kingdom scaffolding below uses it.
+        $noun = $this->OrgUnitNoun($scopeType, (int) $scopeId);
+        if ($noun === '') {
+            $noun = 'Group';
+        }
+        $nounLower = strtolower($noun);
 
         // The org's live "who holds office" block. Both partials take the same
         // fields; only the scope they read differs.
@@ -914,45 +926,35 @@ class CmsSite extends CmsBase
     }
 
     /**
-     * The working public URL for one of THIS site's own pages: Site/page/{slug}/
-     * {pageSlug}, resolved from the scope's already-seeded ork_cms_site row.
-     * Falls back to the pre-multi-site Page/view/{pageSlug} form when this scope
-     * has no site row yet (e.g. a bare unit-test invocation of
-     * _starterPageDefs() with no DB-backed site) — best-effort rather than a
-     * hard failure, and no worse than the seed's previous behaviour.
+     * The STABLE public href for one of THIS site's own pages, to be seeded into
+     * authored block content (e.g. a CTA field).
      *
-     * Why this matters: Controller_Page::view() (Page/view/{slug}) is
-     * hard-coded to scope_type='global', so it can never resolve a park- or
-     * kingdom-scoped page for a public visitor. org_header.tpl's nav already
-     * works around this by re-pointing a resolved 'Page/view/' href onto
-     * 'Site/page/{slug}/' at render time — but that rewrite only runs for the
-     * CmsNav-sourced nav, never for a block-authored CTA href, so seeded
-     * content linking to one of its own pages has to build the working form
-     * itself.
+     * Deliberately builds the GLOBAL 'Page/view/{pageSlug}' form — the same form
+     * CmsNav already resolves page links to — rather than resolving this site's
+     * slug and baking an already-scoped 'Site/page/{siteSlug}/{pageSlug}' href in
+     * at seed time. An earlier version did the latter and it went stale: officers
+     * can rename a site's slug (CmsSite::UpdateSite() accepts 'slug' as an
+     * editable field), and nothing re-visits already-seeded block content on a
+     * rename, so the baked-in href 404s the moment they do.
      *
-     * @param string $scopeType 'kingdom' | 'park'
-     * @param int    $scopeId
-     * @param string $pageSlug  the target page's own slug (flat, e.g. 'new-players')
+     * The counterpart to this is at RENDER time: frontdoor/_helpers.tpl's
+     * fdSiteInternalHref() re-points the 'Page/view/' form seeded here onto this
+     * site's CURRENT 'Site/page/{slug}/' route, using the live $SiteSlug for
+     * that render — the exact mechanism org_header.tpl's nav rewrite already
+     * uses, which is why nav already survives a slug rename for free. Seeding
+     * the stable form and resolving it live, instead of resolving once at seed
+     * time, gives block-authored hrefs that same guarantee.
+     *
+     * No DB access needed — this is a pure string builder now that resolution
+     * happens at render time, not seed time.
+     *
+     * @param string $pageSlug the target page's own slug (flat, e.g. 'new-players')
      * @return string
      */
-    private function _sitePageHref($scopeType, $scopeId, $pageSlug)
+    private function _sitePageHref($pageSlug)
     {
-        global $DB;
-
         $uir = defined('UIR') ? UIR : 'index.php?Route=';
-
-        $DB->Clear();
-        $DB->scope_type = (string) $scopeType;
-        $DB->scope_id   = (int) $scopeId;
-        $row = $this->_firstRow($DB->DataSet(
-            'SELECT slug FROM ' . DB_PREFIX . 'cms_site WHERE scope_type = :scope_type AND scope_id = :scope_id LIMIT 1'
-        ));
-        $siteSlug = ($row !== null && isset($row['slug'])) ? (string) $row['slug'] : '';
-
-        if ($siteSlug !== '') {
-            return $uir . 'Site/page/' . rawurlencode($siteSlug) . '/' . rawurlencode($pageSlug);
-        }
-        return $uir . 'Page/view/' . rawurlencode($pageSlug);
+        return $uir . 'Page/view/' . rawurlencode((string) $pageSlug);
     }
 
     /**
