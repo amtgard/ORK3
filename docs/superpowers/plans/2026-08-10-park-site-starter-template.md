@@ -1127,12 +1127,29 @@ try {
     $phPark = array();
 }
 
-$phName    = trim((string) ($phPark['Name'] ?? ''));
+// NOTE the exact keys: Park::GetParkDetails() returns 'ParkName' (not 'Name')
+// and 'KingdomId' (not 'KingdomName'). Verified against class.Park.php:482-528.
+$phName    = trim((string) ($phPark['ParkName'] ?? ''));
 $phTitle   = trim((string) ($phPark['ParkTitle'] ?? ''));
-$phKingdom = trim((string) ($phPark['KingdomName'] ?? ''));
 $phCity    = trim((string) ($phPark['City'] ?? ''));
 $phProv    = trim((string) ($phPark['Province'] ?? ''));
 $phRetired = (string) ($phPark['Active'] ?? 'Active') !== 'Active';
+
+// The kingdom NAME is not in the park detail payload — only its id — so resolve it.
+$phKingdom = '';
+$phKingdomId = (int) ($phPark['KingdomId'] ?? 0);
+if ($phKingdomId > 0) {
+    global $DB;
+    $DB->Clear();
+    $DB->kingdom_id = $phKingdomId;
+    $phKRes = $DB->DataSet(
+        'SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = :kingdom_id LIMIT 1'
+    );
+    // DataSet() needs an explicit Next() before any field read.
+    if ($phKRes && $phKRes->Next()) {
+        $phKingdom = trim((string) $phKRes->name);
+    }
+}
 
 // Eyebrow states the park's real rank and allegiance — Amtgard terminology doing
 // real work, not decoration.
