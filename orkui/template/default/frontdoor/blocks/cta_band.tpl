@@ -57,6 +57,15 @@ if (
         <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;">
             <?php foreach ($ctas as $i => $cta): ?>
                 <?php
+                // Seeders (e.g. the park starter) deliberately ship an EMPTY slot as an
+                // editor affordance — an obvious blank the officer can fill in later
+                // (e.g. a Discord invite). The block-level gate above only decides
+                // whether the whole band renders; it never filters individual entries.
+                // An empty label must never reach the public page as a ghost button, so
+                // skip it here, per-entry.
+                if (!is_array($cta) || trim((string) ($cta['label'] ?? '')) === '') {
+                    continue;
+                }
                 $btnClass = ($cta['style'] ?? '') === 'gold' ? 'fd-btn-gold' : 'fd-btn-ghost';
                 $ctaHref = CmsSanitizer::SafeHrefOrHash($cta['href'] ?? '');
                 ?>
