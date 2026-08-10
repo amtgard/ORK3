@@ -45,7 +45,7 @@ $renderSlides = array_values(array_filter($slides, static function ($s) {
     ) !== '';
 }));
 if (empty($renderSlides)) {
-    if (!empty($SitePreview)) {
+    if (!empty($SitePreview) || !empty($PreviewPage)) {
         echo '<div class="fd-pad" style="text-align:center;color:#8a97ad;font-style:italic;">This carousel has no slides yet.</div>';
     }
     return;

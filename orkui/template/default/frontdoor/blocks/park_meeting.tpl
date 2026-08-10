@@ -137,16 +137,42 @@ $pmPlace = static function (array $d, array $park) {
     $city   = trim((string) ($d['City'] ?? ''));
     $prov   = trim((string) ($d['Province'] ?? ''));
     $post   = trim((string) ($d['PostalCode'] ?? ''));
-    $name   = trim((string) ($d['AlternateLocation'] ?? ($d['Location'] ?? '')));
+    // The venue NAME is the one genuinely unreliable field here, so it gets its own
+    // guard. Two traps, both hit on live data:
+    //
+    //  1. `alternate_location` is a tinyint FLAG (0/1) — "this park day meets
+    //     somewhere other than the park's usual spot" — NOT a name. Reading it as one
+    //     printed a literal "0" on every card, because trim((string) 0) is "0", which
+    //     is non-empty and so passed the `!== ''` guard at the call site.
+    //  2. `location` is nominally a venue name but is in practice a geocode cache:
+    //     of 806 ork_parkday rows, 522 hold a raw JSON blob ({"location":{"lat":…})
+    //     and only 33 hold anything human. ork_park.location is worse — 781 JSON to
+    //     267 human. Emitting it verbatim dumped that JSON onto the page.
+    //
+    // So: take the name from `location` only when it does not look like serialized
+    // data. Anything starting with { or [, or containing a "key": pair, is a cache
+    // artefact and is dropped — the address line below is the reliable venue info
+    // and renders on its own.
+    $pmCleanName = static function ($raw) {
+        $v = trim((string) $raw);
+        if ($v === '' || $v[0] === '{' || $v[0] === '[') {
+            return '';
+        }
+        return preg_match('/"[a-z_]+"\s*:/i', $v) ? '' : $v;
+    };
+    $name = $pmCleanName($d['Location'] ?? '');
 
-    // A park day with no address of its own inherits the park's.
-    if ($street === '' && $city === '') {
+    // A park day with no address of its own inherits the park's — UNLESS it is
+    // flagged as meeting somewhere else, in which case the park's address is the
+    // wrong answer and no address at all is the honest one.
+    $isAlternate = !empty($d['AlternateLocation']);
+    if ($street === '' && $city === '' && !$isAlternate) {
         $street = trim((string) ($park['Address'] ?? ''));
         $city   = trim((string) ($park['City'] ?? ''));
         $prov   = trim((string) ($park['Province'] ?? ''));
         $post   = trim((string) ($park['PostalCode'] ?? ''));
         if ($name === '') {
-            $name = trim((string) ($park['Location'] ?? ''));
+            $name = $pmCleanName($park['Location'] ?? '');
         }
     }
 

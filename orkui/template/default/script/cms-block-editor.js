@@ -246,6 +246,13 @@ window.CmsBlockEditor = (function () {
         lastTinyDark = isDark;
         tinymce.init({
             target: textarea,
+            // TinyMCE 7 is GPL-or-commercial. Without this it assumes a commercial
+            // trial and logs "TinyMCE is running in evaluation mode" to the console
+            // on every editor load — once per rich-text block, so a page with four
+            // of them logs four times. 'gpl' declares we're using it under the open
+            // source licence, which is how it ships here (self-hosted / CDN build,
+            // no Tiny Cloud key). Purely a declaration; no behaviour changes.
+            license_key: 'gpl',
             menubar: false,
             statusbar: true,            // surfaces the word count + resize handle
             // autoresize grows the editor with content instead of a fixed box.

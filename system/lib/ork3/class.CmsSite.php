@@ -354,7 +354,7 @@ class CmsSite extends CmsBase
         // The starter page registry — ONE declaration driving both the page seed
         // below and the nav menu further down (they used to be two hand-kept lists
         // that could drift). Built once here: array order IS nav order.
-        $starters = $this->_starterPageDefs();
+        $starters = $this->_starterPageDefs($scopeType, $scopeId);
 
         // Attributes shared by every seeded page. Seed as PUBLISHED: the
         // site-level status (unbuilt→draft→published) is the real go-live gate —
@@ -520,39 +520,81 @@ class CmsSite extends CmsBase
     /**
      * The starter-page registry for _seedStarterTemplate(): a slug-keyed list of
      * ['nav_label', 'attrs', 'blocks'] in the order the pages are seeded AND the
-     * order their nav items appear (Home, About Us, Our Parks, Officers,
-     * Documents & Resources -> ordering 10..50). ARRAY ORDER IS LOAD-BEARING.
+     * order their nav items appear. ARRAY ORDER IS LOAD-BEARING.
      *
      * Single source of truth: the seed loop and the nav loop both read this, so
      * the page list and the menu can no longer drift apart.
+     *
+     * SCOPE-AWARE. This registry used to be a scope-blind constant, so a PARK site
+     * was seeded with the kingdom template verbatim: three kingdom-scoped dynamic
+     * blocks (kingdom_events, kingdom_parks, kingdom_parks_map, kingdom_officers)
+     * that each correctly render NOTHING outside a kingdom scope, an "Our Parks"
+     * page for an org that has no parks, and copy calling the park a kingdom. The
+     * blocks and the Add-block chooser were both already scope-correct — only this
+     * seeder was not — so the failure was silent: a brand-new park site opened with
+     * three blank pages and no error anywhere. Park scope now seeds the park_*
+     * counterparts (including park_meeting, the most useful block on a park page)
+     * and drops the parks page entirely.
+     *
+     * Copy uses CmsSite::OrgUnitNoun() so a principality reads "Principality" and a
+     * park reads "Park" instead of every org being told it is a kingdom.
      *
      * NOT a static const: the authored HTML bodies must pass through
      * CmsSanitizer::Clean() exactly the way the editor save path does, which is a
      * runtime call. 'attrs' carries only the per-page attributes — the shared
      * ones (status/published_at/scope/audit stamps) are merged in by $makePage.
      *
+     * @param string $scopeType 'kingdom' | 'park'
+     * @param int    $scopeId   owning org id
      * @return array slug => array{nav_label:string, attrs:array, blocks:array}
      */
-    private function _starterPageDefs()
+    private function _starterPageDefs($scopeType, $scopeId)
     {
+        $scopeType = (string) $scopeType;
+        $isPark    = ($scopeType === 'park');
+
+        // "Kingdom" / "Principality" / "Park" — the org's own word for itself.
+        // Falls back to a neutral noun rather than "Kingdom" if the lookup can't
+        // resolve, so a seed can never hard-code the wrong org type.
+        $noun = $this->OrgUnitNoun($scopeType, (int) $scopeId);
+        if ($noun === '') {
+            $noun = 'Group';
+        }
+        $nounLower = strtolower($noun);
+
         // Sanitize authored HTML bodies exactly the way the editor save path does.
         $clean = function ($html) {
             return class_exists('CmsSanitizer') ? CmsSanitizer::Clean($html) : (string) $html;
         };
 
-        // Every seeded content page (all but Home) opens with an identical centered
-        // H2 heading block — only the text differs. One factory instead of four
-        // copy-pasted literals; the field values below are the exact values each
-        // page previously inlined (source=authored, enabled=1, order=10, level=2,
-        // align=center).
-        $heading = function ($text) {
-            return array(
-                'type' => 'heading', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
-                'fields' => array('text' => $text, 'level' => 2, 'align' => 'center'),
-            );
-        };
+        // The org's live "who holds office" block. Both partials take the same
+        // fields; only the scope they read differs.
+        $officersBlock = array(
+            'type' => $isPark ? 'park_officers' : 'kingdom_officers',
+            'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
+            'fields' => array(
+                'heading' => 'Our Officers',
+                'kicker'  => 'Leadership',
+                'limit'   => 12,
+            ),
+        );
 
-        return array(
+        // The org's live upcoming-events block, same story.
+        $eventsBlock = array(
+            'type' => $isPark ? 'park_events' : 'kingdom_events',
+            'source' => 'dynamic', 'enabled' => 1, 'order' => 40,
+            'fields' => array(
+                'heading' => 'Upcoming Events',
+                'kicker'  => "What's happening",
+                'limit'   => 6,
+            ),
+        );
+
+        // NOTE: seeded pages deliberately carry NO leading heading block. Site_shell
+        // already promotes the page title to the page's <h1> whenever no content
+        // block supplies one, so a heading block repeating that title rendered the
+        // page name twice, one directly under the other.
+        $defs = array(
             // ---- HOME (is_system within scope) — welcome + intro + upcoming events ----
             // NOTE: deliberately NOT hero_carousel — that block bakes in a GLOBAL
             // stats ticker (0s on a kingdom scope) and would emit an empty-src <img>
@@ -565,36 +607,46 @@ class CmsSite extends CmsBase
                     'type'             => 'composed',
                     'title'            => 'Home',
                     'is_system'        => 1,
-                    'meta_description' => 'Welcome to our kingdom.',
+                    'meta_description' => 'Welcome to our ' . $nounLower . '.',
                 ),
-                'blocks' => array(
+                'blocks' => array_values(array_filter(array(
                     array(
                         'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
                         'fields' => array(
                             'kicker'  => 'Welcome',
-                            'heading' => 'Welcome to Our Kingdom',
+                            'heading' => 'Welcome to Our ' . $noun,
                             'align'   => 'center',
-                            'body'    => $clean('<p>Foam swords, real friendships, and a place for everyone. Find a park near you and come play &mdash; your first day on the field is always free.</p>'),
+                            'body'    => $clean(
+                                $isPark
+                                ? '<p>Foam swords, real friendships, and a place for everyone. Come find us on the field &mdash; your first day is always free.</p>'
+                                : '<p>Foam swords, real friendships, and a place for everyone. Find a park near you and come play &mdash; your first day on the field is always free.</p>'
+                            ),
                         ),
                     ),
                     array(
                         'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
                         'fields' => array(
                             'kicker'  => 'About Us',
-                            'heading' => 'A Kingdom of Adventurers',
+                            'heading' => 'A ' . $noun . ' of Adventurers',
                             'align'   => 'center',
-                            'body'    => $clean('<p>Tell visitors who you are in a sentence or two. Edit this block to introduce your kingdom, describe what a typical game day looks like, and invite newcomers to their first (always free) day on the field.</p>'),
+                            'body'    => $clean('<p>Tell visitors who you are in a sentence or two. Edit this block to introduce your ' . $nounLower . ', describe what a typical game day looks like, and invite newcomers to their first (always free) day on the field.</p>'),
                         ),
                     ),
-                    array(
-                        'type' => 'kingdom_events', 'source' => 'dynamic', 'enabled' => 1, 'order' => 30,
+                    // A park's single most useful block: when and where we meet,
+                    // straight from its ORK park-day records. Kingdoms have no
+                    // equivalent — their meeting times live at the park level.
+                    $isPark ? array(
+                        'type' => 'park_meeting', 'source' => 'dynamic', 'enabled' => 1, 'order' => 30,
                         'fields' => array(
-                            'heading' => 'Upcoming Events',
-                            'kicker'  => "What's happening",
-                            'limit'   => 6,
+                            'heading'         => 'When & Where We Meet',
+                            'kicker'          => 'Come play',
+                            'show_map'        => 1,
+                            'show_directions' => 1,
+                            'limit'           => 6,
                         ),
-                    ),
-                ),
+                    ) : null,
+                    $eventsBlock,
+                ))),
             ),
 
             // ---- ABOUT US / HISTORY — heading + rich_text placeholder ----
@@ -604,23 +656,29 @@ class CmsSite extends CmsBase
                     'slug'             => 'about',
                     'type'             => 'article',
                     'title'            => 'About Us',
-                    'meta_description' => 'About our kingdom and its history.',
+                    'meta_description' => 'About our ' . $nounLower . ' and its history.',
                 ),
                 'blocks' => array(
-                    $heading('About Us'),
                     array(
                         'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
                         'fields' => array(
                             'kicker'  => 'Our History',
                             'heading' => 'How We Got Here',
                             'align'   => 'left',
-                            'body'    => $clean('<p>Share your kingdom&rsquo;s story: when it was founded, the lands and parks it covers, and the traditions that make it yours. Replace this placeholder with your own history.</p>'),
+                            'body'    => $clean(
+                                $isPark
+                                ? '<p>Share your park&rsquo;s story: when it was founded, where it plays, and the traditions that make it yours. Replace this placeholder with your own history.</p>'
+                                : '<p>Share your ' . $nounLower . '&rsquo;s story: when it was founded, the lands and parks it covers, and the traditions that make it yours. Replace this placeholder with your own history.</p>'
+                            ),
                         ),
                     ),
                 ),
             ),
 
-            // ---- OUR PARKS — heading + kingdom_parks (dynamic) ----
+            // ---- OUR PARKS — kingdom_parks_map + kingdom_parks (both dynamic) ----
+            // KINGDOM SCOPE ONLY. A park has no parks of its own, and both blocks
+            // here are kingdom-scoped, so on a park site this page seeded as a
+            // permanently empty "Our Parks" entry in the nav. Filtered out below.
             'parks' => array(
                 'nav_label' => 'Our Parks',
                 'attrs' => array(
@@ -630,7 +688,6 @@ class CmsSite extends CmsBase
                     'meta_description' => 'Find a park near you.',
                 ),
                 'blocks' => array(
-                    $heading('Our Parks'),
                     array(
                         'type' => 'kingdom_parks_map', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
                         'fields' => array(
@@ -658,24 +715,16 @@ class CmsSite extends CmsBase
                     'slug'             => 'officers',
                     'type'             => 'composed',
                     'title'            => 'Officers',
-                    'meta_description' => 'Meet the officers who keep the kingdom running.',
+                    'meta_description' => 'Meet the officers who keep the ' . $nounLower . ' running.',
                 ),
                 'blocks' => array(
-                    $heading('Officers'),
-                    array(
-                        'type' => 'kingdom_officers', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
-                        'fields' => array(
-                            'heading' => 'Our Officers',
-                            'kicker'  => 'Leadership',
-                            'limit'   => 12,
-                        ),
-                    ),
+                    $officersBlock,
                     array(
                         'type' => 'staff_roster', 'source' => 'authored', 'enabled' => 1, 'order' => 30,
                         'fields' => array(
                             'kicker'       => 'Governance',
                             'heading'      => 'Board of Directors',
-                            'subheading'   => 'Add the members who govern and steward the kingdom.',
+                            'subheading'   => 'Add the members who govern and steward the ' . $nounLower . '.',
                             'presentation' => 'mundane',
                             'people'       => array(
                                 array(
@@ -700,10 +749,9 @@ class CmsSite extends CmsBase
                     'slug'             => 'documents',
                     'type'             => 'media',
                     'title'            => 'Documents & Resources',
-                    'meta_description' => 'Kingdom documents, bylaws, and resources.',
+                    'meta_description' => $noun . ' documents, bylaws, and resources.',
                 ),
                 'blocks' => array(
-                    $heading('Documents & Resources'),
                     array(
                         'type' => 'file_download', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
                         'fields' => array('files' => array()),
@@ -711,6 +759,15 @@ class CmsSite extends CmsBase
                 ),
             ),
         );
+
+        // A park has no parks. Drop the page rather than seed a nav link to a
+        // permanently empty page. Done here, at the single source of truth, so the
+        // page seed and the nav seed stay in lockstep automatically.
+        if ($isPark) {
+            unset($defs['parks']);
+        }
+
+        return $defs;
     }
 
     /**

@@ -535,8 +535,16 @@ class Controller_Cms extends Controller
 
     public function edit($id = null)
     {
+        // No id at all (a bare `Route=Cms/edit`) — there is nothing to edit. This
+        // used to fall through to parent::view() with no template set, which
+        // rendered a zero-byte HTTP 200: a blank white page, no error, no log line.
+        //
+        // Unlike Controller_Site::view(), this method is NOT the framework's render
+        // step — index.php calls $C->view() for that, and only a method literally
+        // named view() collides with it. A zero-arg call here can only be a user
+        // hitting the bare URL, so send them somewhere useful.
         if (func_num_args() === 0) {
-            return parent::view();
+            return $this->_bareRouteRedirect('Cms');
         }
 
         $uid    = $this->_uid();
@@ -607,7 +615,7 @@ class Controller_Cms extends Controller
     public function preview($id = null)
     {
         if (func_num_args() === 0) {
-            return parent::view();
+            return $this->_bareRouteRedirect('Cms');
         }
         return $this->_renderPreview($id, 'page');
     }
@@ -622,9 +630,38 @@ class Controller_Cms extends Controller
     public function previewpost($id = null)
     {
         if (func_num_args() === 0) {
-            return parent::view();
+            return $this->_bareRouteRedirect('Cms/posts');
         }
         return $this->_renderPreview($id, 'post');
+    }
+
+    /**
+     * Send a bare, id-less admin route (`Route=Cms/edit`, `Cms/preview`, …) back to
+     * the list it belongs to, carrying the active scope so an officer lands in
+     * their own site rather than global.
+     *
+     * These actions all took `$id = null` and, on a zero-arg call, fell through to
+     * parent::view() with no template set — a zero-byte HTTP 200. Blank page, no
+     * error, no log line; the same failure shape as the DEV document-root bug fixed
+     * in e16300b7.
+     *
+     * Only safe because these methods are NOT the framework's render step: index.php
+     * performs that by calling $C->view(), which can only collide with a method
+     * literally named view() (hence Controller_Site::view keeps its own guard). A
+     * zero-arg call here is always a user hitting the bare URL.
+     *
+     * @param string $route intra-admin route to land on, e.g. 'Cms' or 'Cms/posts'
+     * @return void
+     */
+    private function _bareRouteRedirect($route)
+    {
+        // Resolve leniently. There is no id to authorize here and we are only
+        // choosing which list to land on, so a malformed or unauthorized selector
+        // ($scope === false) falls back to global rather than blanking the page —
+        // the destination re-checks authority for real.
+        $scope = $this->_resolveScope($this->_uid());
+        $query = is_array($scope) ? $this->_scopeQuery($scope) : '';
+        header('Location: ' . UIR . $route . $query);
     }
 
     /**
@@ -784,7 +821,7 @@ class Controller_Cms extends Controller
     public function editpost($id = null)
     {
         if (func_num_args() === 0) {
-            return parent::view();
+            return $this->_bareRouteRedirect('Cms/posts');
         }
 
         $uid    = $this->_uid();

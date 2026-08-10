@@ -8,6 +8,31 @@ $heading = $blockFields['heading'] ?? '';
 $subcopy = $blockFields['subcopy'] ?? '';
 $ctas    = $blockFields['ctas']    ?? [];
 $links   = $blockFields['links']   ?? '';
+
+// Nothing to say and nowhere to go → render nothing. The wrapper below paints a
+// full-width navy band, so an untouched starter block showed up as a solid navy
+// stripe containing no content at all. Matches the hero_carousel / photo_mosaic
+// pattern: silent for visitors, discoverable hint for the author in preview.
+$ctaHasLabel = false;
+foreach ((array) $ctas as $__cta) {
+    if (is_array($__cta) && trim((string) ($__cta['label'] ?? '')) !== '') {
+        $ctaHasLabel = true;
+        break;
+    }
+}
+if (
+    empty($logo['src'])
+    && trim((string) $heading) === ''
+    && trim((string) $subcopy) === ''
+    && !$ctaHasLabel
+    && trim(strip_tags((string) $links)) === ''
+) {
+    if (!empty($SitePreview) || !empty($PreviewPage)) {
+        echo '<div class="fd-pad" style="text-align:center;color:#8a97ad;font-style:italic;">'
+            . 'This call-to-action band is empty.</div>';
+    }
+    return;
+}
 ?>
 <div class="fd-pad" style="background:var(--navy);color:var(--fd-primary-contrast);text-align:center;">
     <?php if (!empty($logo['src'])): ?>

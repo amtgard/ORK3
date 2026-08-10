@@ -19,6 +19,20 @@ expected content in it.
 
 ## Findings from the 2026-08-10 run
 
+> **ALL SIX FIXED** (2026-08-10, same day). Each fix was re-verified in the browser
+> against a park site re-provisioned from scratch; all five CMS suites still pass and
+> `tests/cms-site` gained 13 regression checks pinning the scope-aware seeder.
+> Already-seeded park sites are repaired by
+> `db-migrations/2026-08-10-cms-park-seed-repair.php` (conservative + re-run safe).
+>
+> One correction worth recording: the **first** attempt at F5 replaced the flag read
+> with `$d['Location']`, which made it worse — it dumped a raw geocode JSON blob onto
+> every card. `ork_parkday.location` is nominally a venue name but is in practice a
+> geocode cache: **522 of 806 rows hold JSON and only 33 hold anything human**
+> (`ork_park.location` is 781 JSON to 267 human). The shipped fix therefore drops any
+> value that looks like serialized data. Caught only because the fix was re-tested in
+> the browser rather than assumed.
+
 ### F1 — Park sites are seeded with the KINGDOM starter template (HIGH)
 Provisioning a park site installs kingdom-scoped blocks and kingdom copy verbatim.
 After seeding park 1049:

@@ -228,5 +228,90 @@ check('UpdateSite executed an UPDATE', (function () use ($DB) {
     return false;
 })());
 
+// --- Starter template is SCOPE-AWARE -------------------------------------
+// A park site used to be seeded with the kingdom template verbatim: kingdom_*
+// dynamic blocks (which correctly render NOTHING outside a kingdom scope), an
+// "Our Parks" page for an org with no parks, and copy calling the park a
+// kingdom. The blocks and the Add-block chooser were already scope-correct, so
+// the only thing wrong was this registry — and the failure was silent.
+// setAccessible() is a no-op (and deprecated) on PHP 8.1+; the reflection
+// handle alone is enough to invoke a private method.
+$defs = new ReflectionMethod('CmsSite', '_starterPageDefs');
+
+/** Flatten every block type a starter registry would seed. */
+$blockTypes = function ($registry) {
+    $out = array();
+    foreach ($registry as $def) {
+        foreach ($def['blocks'] as $b) {
+            $out[] = $b['type'];
+        }
+    }
+    return $out;
+};
+/** Every string value anywhere in the registry, for copy assertions. */
+$allCopy = function ($registry) {
+    $flat = '';
+    array_walk_recursive($registry, function ($v) use (&$flat) {
+        if (is_string($v)) {
+            $flat .= ' ' . $v;
+        }
+    });
+    return $flat;
+};
+
+// OrgUnitNoun() hits the DB for kingdom scope (parent_kingdom_id lookup).
+// Queue a no-parent row so the kingdom registry resolves the noun "Kingdom".
+$DB->queue = array(array(array('parent_kingdom_id' => 0)));
+$kingdomDefs  = $defs->invoke($site, 'kingdom', 7);
+$kingdomTypes = $blockTypes($kingdomDefs);
+
+$parkDefs  = $defs->invoke($site, 'park', 1049);
+$parkTypes = $blockTypes($parkDefs);
+
+check('kingdom starter seeds the parks page', isset($kingdomDefs['parks']));
+check('kingdom starter seeds kingdom_officers', in_array('kingdom_officers', $kingdomTypes, true));
+check('kingdom starter seeds kingdom_events', in_array('kingdom_events', $kingdomTypes, true));
+check('kingdom starter seeds kingdom_parks + map', in_array('kingdom_parks', $kingdomTypes, true)
+    && in_array('kingdom_parks_map', $kingdomTypes, true));
+
+check('park starter seeds NO kingdom_* block at all', count(array_filter(
+    $parkTypes,
+    function ($t) {
+        return strpos($t, 'kingdom_') === 0;
+    }
+)) === 0);
+check('park starter drops the "Our Parks" page', !isset($parkDefs['parks']));
+check('park starter seeds park_meeting', in_array('park_meeting', $parkTypes, true));
+check('park starter seeds park_officers', in_array('park_officers', $parkTypes, true));
+check('park starter seeds park_events', in_array('park_events', $parkTypes, true));
+
+$parkCopy = $allCopy($parkDefs);
+check('park starter copy never calls the park a kingdom', stripos($parkCopy, 'kingdom') === false);
+check('park starter copy uses the Park noun', stripos($parkCopy, 'Welcome to Our Park') !== false);
+
+// Seeded pages must NOT open with a heading block repeating their own title:
+// Site_shell already promotes the page title to the page <h1>, so such a block
+// rendered the page name twice, one line under the other.
+$dupTitleHeading = false;
+foreach (array_merge($kingdomDefs, $parkDefs) as $def) {
+    $title = isset($def['attrs']['title']) ? $def['attrs']['title'] : '';
+    foreach ($def['blocks'] as $b) {
+        if ($b['type'] === 'heading' && trim((string) ($b['fields']['text'] ?? '')) === trim($title)) {
+            $dupTitleHeading = true;
+        }
+    }
+}
+check('no seeded page repeats its title as a heading block', $dupTitleHeading === false);
+
+// Every seeded block type must be one the renderer actually has a partial for.
+$partialDir = __DIR__ . '/../../orkui/template/default/frontdoor/blocks/';
+$missing = array();
+foreach (array_unique(array_merge($kingdomTypes, $parkTypes)) as $t) {
+    if (!file_exists($partialDir . $t . '.tpl')) {
+        $missing[] = $t;
+    }
+}
+check('every seeded block type has a render partial (' . implode(',', $missing) . ')', $missing === array());
+
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";
 exit($fails === 0 ? 0 : 1);
