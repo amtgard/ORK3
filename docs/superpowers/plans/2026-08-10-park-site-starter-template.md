@@ -1219,8 +1219,12 @@ try {
         $phWithinWeek = ($phTs - time()) <= (7 * 86400);
         if ($phWithinWeek && !empty($blockFields['show_weather']) && class_exists('Weather')) {
             $phF = (new Weather())->forecast_for_date($phParkId, date('Y-m-d', $phTs));
-            if (is_array($phF) && isset($phF['high'])) {
-                $phWeather = round((float) $phF['high']) . '°F';
+            // The key is 'hi_f', NOT 'high'. Weather::forecast_from_row() returns
+            // hi_f / lo_f / app_hi_f / …, and every other consumer in the codebase
+            // reads hi_f. Reading 'high' silently yields no weather 100% of the
+            // time while LOOKING like correct degradation past the 7-day horizon.
+            if (is_array($phF) && isset($phF['hi_f']) && $phF['hi_f'] !== null) {
+                $phWeather = round((float) $phF['hi_f']) . '°F';
             }
         }
     }
