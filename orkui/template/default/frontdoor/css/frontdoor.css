@@ -14,7 +14,12 @@
     --fd-text-muted: #5b6472;
     --fd-border:  #e2e6ec;
     --fd-primary-contrast: #ffffff;
-    --fd-font-heading: 'MedievalSharp', Georgia, serif;
+    /* Not a faux-medieval face. A new site seeds no theme row, so whatever is
+       defaulted here is what every org actually ships — and faux-medieval type
+       is exactly the cosplay the brand rule forbids. The old default remains
+       selectable in the theme editor (see the PHP allowlist) for orgs that
+       deliberately want it. */
+    --fd-font-heading: 'Archivo', 'Trebuchet MS', Georgia, serif;
     --fd-font-body: system-ui, -apple-system, sans-serif;
     --fd-font-scale: 1rem;
     --fd-radius: 12px;
@@ -991,14 +996,19 @@ html[data-theme="dark"] .fd-btn-ghost {
         width: 100%;
     }
 
-    /* Member bar: home-only chrome; hide on mobile to reclaim above-the-fold.
-       !important beats the template's inline display:flex (otherwise the bar
-       stays on-screen on phones). */
+    /* Member bar stays VISIBLE on phones for org sites. The original rule hid it
+       "to reclaim above-the-fold", which is right for the global marketing front
+       door and exactly backwards for a park: the highest-frequency visit a park
+       site ever gets is a member checking the time on a phone in a parking lot. */
     .fd-member-bar {
         display: none !important;
         flex-wrap: wrap;
         gap: 8px 14px !important;
         padding: 10px 16px !important;
+    }
+    .fd-org .fd-member-bar,
+    body.fd-org .fd-member-bar {
+        display: flex !important;
     }
 
     /* Path grid already 2-col from 900px break */

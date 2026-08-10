@@ -31,7 +31,11 @@ class CmsThemeTokens
     /** Vetted font families (heading/body must be one of these). */
     public static function FontAllowlist()
     {
-        return array('Open Sans', 'MedievalSharp', 'Lexend', 'Georgia', 'system-ui');
+        // Archivo is the park/org display face: a modern grotesque with real
+        // banner presence and zero medieval connotation. MedievalSharp stays
+        // PICKABLE — an org that wants it can still choose it — it is just no
+        // longer what 342 parks get by accident.
+        return array('Archivo', 'Open Sans', 'MedievalSharp', 'Lexend', 'Georgia', 'system-ui');
     }
 
     /** token => default value (flattened). */
