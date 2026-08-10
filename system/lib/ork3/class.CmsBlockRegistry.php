@@ -366,20 +366,6 @@ class CmsBlockRegistry
             // park page is where someone searching for Amtgard actually lands, so
             // these answer "when do you meet, where, and who do I talk to" from
             // live ORK data instead of copy an officer has to remember to update.
-            'park_hero' => array(
-                'label'          => 'Park hero (live)',
-                'group'          => 'Hero',
-                'dynamic'        => true,
-                'icon'           => 'fa-shield-alt',
-                'description'    => 'Crest-led hero built from the park’s own heraldry and colour, with its next game day. Designed to look finished with no photo — only 5 of 342 parks have one.',
-                'addable'        => true,
-                'scopes'         => array('park'),
-                'starter_fields' => array(
-                    'kicker' => '', 'heading' => '', 'subcopy' => '',
-                    'cta_label' => '', 'cta_href' => '',
-                    'show_weather' => 1, 'placeholder_image' => array(),
-                ),
-            ),
             'park_meeting' => array(
                 'label'          => 'Meeting times (live)',
                 'group'          => 'Dynamic',
@@ -411,6 +397,20 @@ class CmsBlockRegistry
                 'addable'        => true,
                 'scopes'         => array('park'),
                 'starter_fields' => array('kicker' => '', 'heading' => '', 'limit' => 3, 'more_href' => ''),
+            ),
+            'park_hero' => array(
+                'label'          => 'Park hero (live)',
+                'group'          => 'Hero',
+                'dynamic'        => true,
+                'icon'           => 'fa-shield-alt',
+                'description'    => 'Crest-led hero built from the park’s own heraldry and colour, with its next game day. Designed to look finished with no photo — only 5 of 342 parks have one.',
+                'addable'        => true,
+                'scopes'         => array('park'),
+                'starter_fields' => array(
+                    'kicker' => '', 'heading' => '', 'subcopy' => '',
+                    'cta_label' => '', 'cta_href' => '',
+                    'show_weather' => 1, 'placeholder_image' => array(),
+                ),
             ),
         );
 
