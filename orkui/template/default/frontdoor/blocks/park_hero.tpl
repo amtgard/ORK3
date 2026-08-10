@@ -125,8 +125,12 @@ try {
         $phWithinWeek = ($phTs - time()) <= (7 * 86400);
         if ($phWithinWeek && !empty($blockFields['show_weather']) && class_exists('Weather')) {
             $phF = (new Weather())->forecast_for_date($phParkId, date('Y-m-d', $phTs));
-            if (is_array($phF) && isset($phF['high'])) {
-                $phWeather = round((float) $phF['high']) . '°F';
+            // Weather::forecast_from_row() returns 'hi_f' (float|null), NOT 'high' —
+            // see class.Weather.php:99-118. It always sets the key, using null for a
+            // missing reading, so isset() alone is not enough; the explicit !== null
+            // check is load-bearing, not decoration.
+            if (is_array($phF) && isset($phF['hi_f']) && $phF['hi_f'] !== null) {
+                $phWeather = round((float) $phF['hi_f']) . '°F';
             }
         }
     }
