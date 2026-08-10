@@ -67,6 +67,7 @@ html[data-theme="dark"] .org-preview-banner{background:#8a6420;}
 </div>
 <?php endif; ?>
 <?php include $fdDir . 'org_header.tpl'; ?>
+<?php include $fdDir . '_park_strip.tpl'; ?>
 <?php if ($siteHomeWarning !== '') : ?>
 <style>
 .org-home-warning{display:flex;align-items:flex-start;gap:10px;max-width:1120px;margin:16px auto 0;padding:12px 16px;background:#fff4e0;border:1px solid #e6b866;border-left:4px solid #b8862b;border-radius:var(--fd-radius,8px);color:#5a4210;font-family:var(--fd-font-body);font-size:.9rem;line-height:1.45;}
