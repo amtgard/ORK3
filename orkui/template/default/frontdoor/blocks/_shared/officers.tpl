@@ -98,7 +98,13 @@ $fdOffResolved = fdBlockCache(
         foreach ($fdOffRows as $fdOffRow) {
             $fdOffPersona = trim((string) ($fdOffRow['Persona'] ?? ''));
             $fdOffRole    = trim((string) ($fdOffRow['OfficerRole'] ?? $fdOffRow['Role'] ?? ''));
-            if ($fdOffPersona === '' && $fdOffRole === '') {
+            // A seat with no PERSONA is a vacancy, whatever its role says. ork_officer
+            // keeps a row per office with mundane_id = 0 when nobody holds it, and the
+            // LEFT JOIN to ork_mundane then yields a NULL persona while `role` stays
+            // populated ("Champion", "GMR", …). Requiring BOTH to be empty rendered
+            // those vacancies as cards with an office title and nobody in them, on 187
+            // of 342 active parks. A name is required; an office title is not.
+            if ($fdOffPersona === '') {
                 continue;
             }
             $fdOffMundaneId = (int) ($fdOffRow['MundaneId'] ?? 0);
