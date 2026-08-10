@@ -227,64 +227,37 @@ class Controller_Site extends Controller
         $scopeType = (string) $site['scope_type'];
         $scopeId   = (int) $site['scope_id'];
 
-        $pageNo = isset($_GET['p']) ? (int) $_GET['p'] : 1;
-        if ($pageNo < 1) {
-            $pageNo = 1;
-        }
-        $perPage = self::PER_PAGE;
-        $offset  = ($pageNo - 1) * $perPage;
-
-        $this->load_model('CmsPost');
         $listArgs = array(
-            'limit'      => $perPage,
-            'offset'     => $offset,
             'scope_type' => $scopeType,
             'scope_id'   => $scopeId,
         );
         if ($this->_isPreview) {
             $listArgs['includeDrafts'] = true; // officer preview shows draft posts too
         }
-        $result = $this->CmsPost->list_posts($listArgs);
-        $rows  = (isset($result['rows']) && is_array($result['rows'])) ? $result['rows'] : array();
-        $total = isset($result['total']) ? (int) $result['total'] : 0;
-        $pages = ($perPage > 0) ? (int) ceil($total / $perPage) : 1;
-        if ($pages < 1) {
-            $pages = 1;
-        }
-
-        // Clamp an out-of-range page so the OFFSET can never exceed the result
-        // set (mirrors Controller_Blog::index). Refetch the last valid page's
-        // rows only when the requested page number was too high.
-        if ($pageNo > $pages) {
-            $pageNo            = $pages;
-            $listArgs['offset'] = ($pageNo - 1) * $perPage;
-            $result = $this->CmsPost->list_posts($listArgs);
-            $rows   = (isset($result['rows']) && is_array($result['rows'])) ? $result['rows'] : array();
-            $total  = isset($result['total']) ? (int) $result['total'] : $total;
-        }
+        // Shared paginated fetch: clamps an out-of-range ?p= so the OFFSET can
+        // never exceed the result set, refetching only when it was too high
+        // (identical contract to Controller_Blog::index — see trait.CmsScope).
+        $paged  = $this->_cmsPagedPosts($listArgs, self::PER_PAGE, isset($_GET['p']) ? (int) $_GET['p'] : 1);
+        $pageNo = $paged['page'];
 
         $this->data['SiteMode']       = 'blog';
-        $this->data['SitePosts']      = $rows;
+        $this->data['SitePosts']      = $paged['rows'];
         $this->data['SitePostsPage']  = $pageNo;
-        $this->data['SitePostsPages'] = $pages;
-        $this->data['page_title']     = ($this->data['SiteName'] !== '' ? $this->data['SiteName'] . ' — ' : '') . 'News';
+        $this->data['SitePostsPages'] = $paged['pages'];
+        // Leaf only — _bootShell published the org half as SiteTitleOrg.
+        $this->data['page_title']     = 'News';
 
         // C6: canonical + OG for the blog index (type=website). Page 1 canonicals
         // to /blog; deeper pages self-canonical with the ?p= arg to avoid dupes.
         $siteName = trim((string) ($this->data['SiteName'] ?? ''));
-        $canon    = $this->_siteBaseUrl($site) . '/blog' . ($pageNo > 1 ? '?p=' . $pageNo : '');
-        $ogImage  = !empty($this->data['SiteLogoUrl']) ? (string) $this->data['SiteLogoUrl'] : '';
-        if ($ogImage !== '' && !preg_match('#^https?://#i', $ogImage)) {
-            $ogImage = $this->_origin() . '/' . ltrim($ogImage, '/');
-        }
-        $this->data['PageMeta'] = array(
+        $canon    = $this->_siteUrl($site, 'blog') . ($pageNo > 1 ? '?p=' . $pageNo : '');
+        $this->data['PageMeta'] = CmsMeta::Build(array(
             'canonical'   => $canon,
             'og_type'     => 'website',
             'og_title'    => ($siteName !== '' ? $siteName . ' — News' : 'News'),
-            'og_desc'     => '',
-            'og_image'    => $ogImage,
+            'og_image'    => $this->_ogImage(),
             'og_sitename' => $siteName,
-        );
+        ));
 
         $this->_cmsFab($site, UIR . 'Cms/posts' . $this->_scopeQ($site), 'Manage posts', true);
     }
@@ -350,29 +323,18 @@ class Controller_Site extends Controller
      */
     public function rss($slug = null)
     {
-        $site = $this->_resolveSite($slug);
-        if ($site === null || (string) ($site['status'] ?? 'unbuilt') !== 'published') {
-            $this->_renderRssNotFound();
-            return;
-        }
-        // Honor the /k vs /p canonical-prefix 301 like the HTML routes (no-op on
-        // a raw Site/rss route with no &_pfx hint).
-        if ($this->_enforcePrefix($site)) {
-            return;
-        }
-
+        $site      = $this->_resolvePublicSiteOrExit($slug);
         $scopeType = (string) $site['scope_type'];
         $scopeId   = (int) $site['scope_id'];
         $siteName  = trim((string) ($site['site_name'] ?? ''));
-        $base      = $this->_siteBaseUrl($site);
 
         $this->load_model('CmsPost');
         $xml = $this->CmsPost->RssFeedXml($scopeType, $scopeId, array(
             'title'       => ($siteName !== '' ? $siteName . ' — News' : 'News'),
             'description' => ($siteName !== '' ? 'Latest news from ' . $siteName . '.' : 'Latest news.'),
-            'index_link'  => $base . '/blog',
-            'self_link'   => $base . '/rss',
-            'post_base'   => $base . '/post',
+            'index_link'  => $this->_siteUrl($site, 'blog'),
+            'self_link'   => $this->_siteUrl($site, 'rss'),
+            'post_base'   => $this->_siteUrl($site, 'post'),
         ));
 
         header('Content-Type: application/rss+xml; charset=utf-8');
@@ -393,19 +355,23 @@ class Controller_Site extends Controller
      */
     public function sitemap($slug = null)
     {
-        $site = $this->_resolveSite($slug);
-        if ($site === null || (string) ($site['status'] ?? 'unbuilt') !== 'published') {
-            $this->_renderRssNotFound();
-            return;
-        }
-        // Honor the /k vs /p canonical-prefix 301 like the other routes.
-        if ($this->_enforcePrefix($site)) {
-            return;
-        }
+        $site = $this->_resolvePublicSiteOrExit($slug);
+        $this->_emitSitemapXml($this->_sitemapUrls($site, $this->_siteUrl($site)));
+    }
 
+    /**
+     * Enumerate the sitemap entries for a resolved, published site: the home,
+     * every published live in-scope page (full nested path), the blog index and
+     * every published post. See sitemap() for the publish-filter rationale.
+     *
+     * @param array  $site resolved site row (authoritative scope)
+     * @param string $base the site's pretty absolute base URL (no trailing slash)
+     * @return array<int,array{loc:string,lastmod:string}>
+     */
+    private function _sitemapUrls($site, $base)
+    {
         $scopeType = (string) $site['scope_type'];
         $scopeId   = (int) $site['scope_id'];
-        $base      = $this->_siteBaseUrl($site);
         $homeId    = (int) ($site['home_page_id'] ?? 0);
 
         $this->load_model('CmsPage');
@@ -461,6 +427,19 @@ class Controller_Site extends Controller
             );
         }
 
+        return $urls;
+    }
+
+    /**
+     * Serialize sitemap entries to XML and emit them (terminates the request).
+     * Entries with an empty loc are skipped; an unparseable lastmod is omitted
+     * rather than emitted empty (a bare <lastmod></lastmod> is invalid).
+     *
+     * @param array $urls from _sitemapUrls()
+     * @return void
+     */
+    private function _emitSitemapXml(array $urls)
+    {
         $xml  = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
         foreach ($urls as $u) {
@@ -468,7 +447,7 @@ class Controller_Site extends Controller
             if ($loc === '') {
                 continue;
             }
-            $xml .= '  <url><loc>' . $this->_xmlEscape($loc) . '</loc>';
+            $xml .= '  <url><loc>' . CmsSanitizer::XmlEscape($loc) . '</loc>';
             $mod = $this->_w3cDate((string) ($u['lastmod'] ?? ''));
             if ($mod !== '') {
                 $xml .= '<lastmod>' . $mod . '</lastmod>';
@@ -490,19 +469,10 @@ class Controller_Site extends Controller
      */
     public function robots($slug = null)
     {
-        $site = $this->_resolveSite($slug);
-        if ($site === null || (string) ($site['status'] ?? 'unbuilt') !== 'published') {
-            $this->_renderRssNotFound();
-            return;
-        }
-        if ($this->_enforcePrefix($site)) {
-            return;
-        }
-
-        $base = $this->_siteBaseUrl($site);
+        $site = $this->_resolvePublicSiteOrExit($slug);
         $body = "User-agent: *\n"
             . "Allow: /\n"
-            . 'Sitemap: ' . $base . "/sitemap.xml\n";
+            . 'Sitemap: ' . $this->_siteUrl($site, 'sitemap.xml') . "\n";
 
         header('Content-Type: text/plain; charset=utf-8');
         echo $body;
@@ -512,12 +482,6 @@ class Controller_Site extends Controller
     /* ==================================================================
      * Internals
      * ================================================================ */
-
-    /** XML-escape a text value for safe inclusion in the sitemap body. */
-    private function _xmlEscape($s)
-    {
-        return htmlspecialchars((string) $s, ENT_QUOTES | ENT_XML1, 'UTF-8');
-    }
 
     /**
      * Normalize a DB datetime ('Y-m-d H:i:s') to a W3C/ISO-8601 sitemap
@@ -547,6 +511,35 @@ class Controller_Site extends Controller
         $this->load_model('CmsSite');
         $site = $this->CmsSite->get_site_by_slug($slug);
         return (is_array($site) && !empty($site)) ? $site : null;
+    }
+
+    /**
+     * The shared gate for the three MACHINE-READABLE routes (rss/sitemap/robots):
+     * resolve the slug, require a PUBLISHED public site, and honor the /k vs /p
+     * canonical-prefix 301. Returns the site row, or terminates the request.
+     *
+     * A feed/sitemap/robots response is inherently public and indexable, so —
+     * unlike the HTML routes — there is deliberately NO officer-preview escape
+     * hatch here: an unknown, unbuilt or draft slug gets the same bare 404 even
+     * for a viewer who is authorized to preview the site in HTML. Pre-launch
+     * content must never reach an aggregator or a crawler.
+     *
+     * NOTE for callers: this never returns on failure (_renderRssNotFound and
+     * _enforcePrefix both emit and exit), so the result is always a live row.
+     *
+     * @param string $slug
+     * @return array the resolved, published site row
+     */
+    private function _resolvePublicSiteOrExit($slug)
+    {
+        $site = $this->_resolveSite($slug);
+        if ($site === null || (string) ($site['status'] ?? 'unbuilt') !== 'published') {
+            $this->_renderRssNotFound();   // emits a bare 404 and exits
+            exit;                          // unreachable — never fall through to content
+        }
+        // No-op on a raw Site/* route (no &_pfx hint); 301s and exits on a mismatch.
+        $this->_enforcePrefix($site);
+        return $site;
     }
 
     /**
@@ -756,10 +749,14 @@ class Controller_Site extends Controller
         exit;
     }
 
-    /** The single-letter URL/scope prefix for a scope_type: park → 'p', everything else → 'k'. */
+    /**
+     * The single-letter URL/scope prefix for a scope_type: park → 'p', else 'k'.
+     * Delegates to CmsSite so the CMS dashboard (which links out to these public
+     * URLs from a different controller) reads the rule from the same place.
+     */
     private function _prefixFor($scopeType)
     {
-        return ((string) $scopeType === 'park') ? 'p' : 'k';
+        return CmsSite::UrlPrefixFor($scopeType);
     }
 
     /** The '&scope=k:17' / '&scope=p:3' fragment for linking into the scoped CMS admin. */
@@ -783,15 +780,23 @@ class Controller_Site extends Controller
      */
     private function _cmsFab($site, $editUrl, $editTip, $withNewPost = false)
     {
-        if (!$this->_viewerCanPreview($site)) {
-            return;
-        }
-        $this->data['cmsEditUrl'] = $editUrl;
-        $this->data['cmsEditTip'] = $editTip;
-        if ($withNewPost) {
-            $this->data['cmsNewPostUrl'] = UIR . 'Cms/editpost/new' . $this->_scopeQ($site);
-            $this->data['cmsNewPostTip'] = 'New post';
-        }
+        // An ORG site gates BOTH FABs on the same page.edit decision that governs
+        // the unpublished-site preview (_viewerCanPreview) — deliberately NOT the
+        // page.create capability Controller_Blog uses for its new-post FAB. The
+        // shared helper takes the capability per caller for exactly that reason.
+        $this->_cmsFabData(
+            (int) ($this->session->user_id ?? 0),
+            array('type' => (string) ($site['scope_type'] ?? ''), 'id' => (int) ($site['scope_id'] ?? 0)),
+            $editUrl,
+            $editTip,
+            $withNewPost
+                ? array(
+                    'url' => UIR . 'Cms/editpost/new' . $this->_scopeQ($site),
+                    'tip' => 'New post',
+                    'cap' => 'page.edit',
+                )
+                : null
+        );
     }
 
     /**
@@ -818,7 +823,25 @@ class Controller_Site extends Controller
         $this->data['SiteNavScopeType'] = $scopeType;
         $this->data['SiteNavScopeId']   = $scopeId;
         $this->data['SiteLogoUrl']      = $this->_logoUrl($site);
-        $this->data['page_title']       = $siteName !== '' ? $siteName : 'Kingdom Site';
+        // Org-unit noun for public copy ('Kingdom' / 'Principality' / 'Park'). A
+        // principality is stored as an ork_kingdom row with a parent kingdom, so
+        // its site is scope_type='kingdom' — the shell must not therefore call it
+        // a kingdom in front of visitors.
+        $this->load_model('CmsSite');
+        $this->data['SiteOrgNoun']      = (string) $this->CmsSite->org_unit_noun($scopeType, $scopeId);
+        // Browser-tab identity for an org site: "{Kingdom or Park name} - {Page}".
+        // The org half is published once here; each action below sets only the leaf
+        // (the page/post title, 'News', 'Coming soon'), and default.theme joins
+        // them. Actions must NOT prefix the site name themselves or it doubles up.
+        // Falls back to the org's real ORK name: sites created before site_name was
+        // seeded on the create path still have an empty one, and their tab would
+        // otherwise read a bare "Home" with no clue whose site it is.
+        $this->data['SiteTitleOrg']     = $siteName !== ''
+            ? $siteName
+            : (string) $this->CmsSite->org_display_name($scopeType, $scopeId);
+        // Default leaf for the site root; Site::view() overrides it with the real
+        // page title as soon as a page resolves (the seeded home page is 'Home').
+        $this->data['page_title']       = 'Home';
 
         // Per-org theme tokens (scoped to the site's own scope, not global).
         // GetActiveCss caches the resolved CSS in GhettoCache keyed by
@@ -832,7 +855,7 @@ class Controller_Site extends Controller
         // RSS auto-discovery: every org-site page advertises the org's scoped
         // feed (Site/rss/{slug} → /k|/p/{slug}/rss) so readers/aggregators can
         // find it. default.theme emits the <link rel="alternate"> when set.
-        $this->data['rss_feed_url']   = $this->_siteBaseUrl($site) . '/rss';
+        $this->data['rss_feed_url']   = $this->_siteUrl($site, 'rss');
         $this->data['rss_feed_title'] = ($siteName !== '' ? $siteName . ' — News' : 'News');
     }
 
@@ -842,25 +865,39 @@ class Controller_Site extends Controller
 
     /**
      * The scheme+host origin for absolute canonical/OG URLs, derived from the
-     * live request (honors the CF-forwarded proto when present).
+     * live request (honors the CF-forwarded proto when present). Shared with
+     * the other public renderers via CmsMeta so the http/https detection cannot
+     * drift between surfaces.
      */
     private function _origin()
     {
-        $host = (string) ($_SERVER['HTTP_HOST'] ?? '');
-        if ($host === '') {
-            return '';
-        }
-        $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-            || ((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-        return ($https ? 'https://' : 'http://') . $host;
+        return CmsMeta::Origin();
     }
 
-    /** The pretty-URL base for this site: {origin}/{k|p}/{slug} (no trailing slash). */
-    private function _siteBaseUrl($site)
+    /**
+     * THE builder for every public URL on this site: the pretty-URL base
+     * {origin}/{k|p}/{slug} (no trailing slash), plus an optional path below it
+     * ('blog', 'rss', 'post/my-slug', a nested page path…).
+     *
+     * Every canonical, og:url, feed link, breadcrumb and sitemap entry goes
+     * through here, so the /k-vs-/p namespace rule and the slug encoding are
+     * decided in exactly one place.
+     *
+     * NOTE: this is NOT what $SiteHomeUrl in the org chrome emits — that stays
+     * the raw Site/view/{slug} route form, which works with or without the
+     * nginx /k/ rewrite. Changing it would change a shipped public href.
+     *
+     * @param array  $site resolved site row (scope_type + slug)
+     * @param string $path optional path below the base, with or without a leading '/'
+     * @return string
+     */
+    private function _siteUrl($site, $path = '')
     {
         $prefix = $this->_prefixFor($site['scope_type'] ?? 'kingdom');
         $slug   = rawurlencode((string) ($site['slug'] ?? ''));
-        return $this->_origin() . '/' . $prefix . '/' . $slug;
+        $base   = $this->_origin() . '/' . $prefix . '/' . $slug;
+        $path   = ltrim((string) $path, '/');
+        return ($path === '') ? $base : $base . '/' . $path;
     }
 
     /**
@@ -876,14 +913,24 @@ class Controller_Site extends Controller
         $this->load_model('CmsMedia');
         $media = $this->CmsMedia->get_media($mediaId);
         $url   = (is_array($media) && !empty($media['url'])) ? (string) $media['url'] : '';
-        if ($url === '') {
-            return '';
+        return CmsMeta::Absolutize($url, $this->_origin());
+    }
+
+    /**
+     * The og:image for a site surface: the entity's own hero when it has one,
+     * otherwise the site logo (absolutized the same way). '' when neither is set,
+     * which lets default.theme fall back to the ORK default image.
+     *
+     * @param int $heroMediaId 0 for surfaces with no hero of their own (blog index)
+     * @return string
+     */
+    private function _ogImage($heroMediaId = 0)
+    {
+        $url = $this->_absMediaUrl((int) $heroMediaId);
+        if ($url === '' && !empty($this->data['SiteLogoUrl'])) {
+            $url = CmsMeta::Absolutize((string) $this->data['SiteLogoUrl'], $this->_origin());
         }
-        // Already absolute? leave it; otherwise prefix the origin.
-        if (preg_match('#^https?://#i', $url)) {
-            return $url;
-        }
-        return $this->_origin() . '/' . ltrim($url, '/');
+        return $url;
     }
 
     /**
@@ -899,12 +946,16 @@ class Controller_Site extends Controller
      */
     private function _setPageMeta($site, $page, $type = 'article', $isHome = false)
     {
-        $base  = $this->_siteBaseUrl($site);
-        $canon = $base;
+        // PagePath() lives on the CmsPage lib — load it here rather than relying
+        // on a caller having happened to load it inside a conditional branch
+        // (Controller::__call is an empty no-op, so an unset $this->CmsPage would
+        // be a fatal, not a silent miss).
+        $this->load_model('CmsPage');
+        $canon = $this->_siteUrl($site);
         if (!$isHome) {
             $path = $this->CmsPage->PagePath((int) $page['page_id']);
             if ($path !== '') {
-                $canon = $base . '/' . $path;
+                $canon = $this->_siteUrl($site, $path);
             }
             // PagePath() is the ROUTING truth and includes a draft ancestor's slug.
             // For a public viewer that slug must not ship in rel=canonical/og:url
@@ -916,48 +967,38 @@ class Controller_Site extends Controller
             }
         }
 
-        $ogImage = $this->_absMediaUrl((int) ($page['hero_media_id'] ?? 0));
-        if ($ogImage === '' && !empty($this->data['SiteLogoUrl'])) {
-            $logo = (string) $this->data['SiteLogoUrl'];
-            $ogImage = preg_match('#^https?://#i', $logo) ? $logo : ($this->_origin() . '/' . ltrim($logo, '/'));
-        }
-
         $siteName = trim((string) ($this->data['SiteName'] ?? ''));
         $title    = trim((string) ($page['title'] ?? ''));
         $ogTitle  = $title . ($siteName !== '' && $title !== $siteName ? ' — ' . $siteName : '');
 
-        $this->data['PageMeta'] = array(
+        // NOTE: an org-site page falls back to the SITE name, not the ORK brand
+        // (Controller_Page does the opposite for a global CMS page). Keep the
+        // fallback here at the call site — CmsMeta must not homogenize the two.
+        $this->data['PageMeta'] = CmsMeta::Build(array(
             'canonical'   => $canon,
             'og_type'     => ($type === 'website') ? 'website' : 'article',
             'og_title'    => ($ogTitle !== '') ? $ogTitle : $siteName,
             'og_desc'     => trim((string) ($page['meta_description'] ?? '')),
-            'og_image'    => $ogImage,
+            'og_image'    => $this->_ogImage((int) ($page['hero_media_id'] ?? 0)),
             'og_sitename' => $siteName,
-        );
+        ));
     }
 
     /** C6: canonical + OG for a scoped blog POST (/post/{slug}). */
     private function _setPostMeta($site, $post)
     {
-        $base    = $this->_siteBaseUrl($site);
-        $slug    = rawurlencode((string) ($post['slug'] ?? ''));
-        $canon   = $base . '/post/' . $slug;
-        $ogImage = $this->_absMediaUrl((int) ($post['hero_media_id'] ?? 0));
-        if ($ogImage === '' && !empty($this->data['SiteLogoUrl'])) {
-            $logo = (string) $this->data['SiteLogoUrl'];
-            $ogImage = preg_match('#^https?://#i', $logo) ? $logo : ($this->_origin() . '/' . ltrim($logo, '/'));
-        }
+        $canon    = $this->_siteUrl($site, 'post/' . rawurlencode((string) ($post['slug'] ?? '')));
         $siteName = trim((string) ($this->data['SiteName'] ?? ''));
         $title    = trim((string) ($post['title'] ?? ''));
 
-        $this->data['PageMeta'] = array(
+        $this->data['PageMeta'] = CmsMeta::Build(array(
             'canonical'   => $canon,
             'og_type'     => 'article',
             'og_title'    => ($title !== '' ? $title : $siteName),
             'og_desc'     => trim((string) ($post['excerpt'] ?? '')),
-            'og_image'    => $ogImage,
+            'og_image'    => $this->_ogImage((int) ($post['hero_media_id'] ?? 0)),
             'og_sitename' => $siteName,
-        );
+        ));
     }
 
     /**
@@ -994,7 +1035,10 @@ class Controller_Site extends Controller
      */
     private function _breadcrumbs($site, $page)
     {
-        $base   = $this->_siteBaseUrl($site);
+        // GetPageAncestors() lives on the CmsPage lib — load it here rather than
+        // relying on a caller's conditional load (see _setPageMeta).
+        $this->load_model('CmsPage');
+        $base   = $this->_siteUrl($site);
         $crumbs = array(array('label' => 'Home', 'url' => $base));
 
         $ancestors = $this->CmsPage->GetPageAncestors((int) $page['page_id'], !$this->_isPreview);
@@ -1042,7 +1086,7 @@ class Controller_Site extends Controller
         $target = (string) $hit['url'];
         // A relative target (a page path) resolves under this site's pretty base.
         if (!preg_match('#^https?://#i', $target) && $target[0] !== '/') {
-            $target = $this->_siteBaseUrl($site) . '/' . ltrim($target, '/');
+            $target = $this->_siteUrl($site, $target);
         }
         $code = ((int) ($hit['code'] ?? 301) === 302) ? 302 : 301;
         http_response_code($code);
@@ -1084,7 +1128,6 @@ class Controller_Site extends Controller
      */
     private function _renderNotFound($site)
     {
-        http_response_code(404);
         if (is_array($site) && !empty($site)) {
             $this->_bootShell($site);
         } else {
@@ -1097,10 +1140,8 @@ class Controller_Site extends Controller
             $this->data['SiteNavScopeType'] = 'kingdom';
             $this->data['SiteNavScopeId']   = 0;
         }
-        $this->data['SiteMode']   = 'notfound';
-        $this->data['no_index']   = true;
-        $this->data['Message']    = 'This page could not be found.';
-        $this->data['page_title'] = 'Not found';
+        // AFTER the shell boot: _bootShell resets page_title to 'Home'.
+        $this->_markNotFound('This page could not be found.');
     }
 
     /**
@@ -1125,6 +1166,7 @@ class Controller_Site extends Controller
         $this->_bootShell($site);
         $this->data['SiteMode']   = 'comingsoon';
         $this->data['no_index']   = true;
-        $this->data['page_title'] = ($this->data['SiteName'] !== '' ? $this->data['SiteName'] . ' — ' : '') . 'Coming soon';
+        // Leaf only — _bootShell (called above) published the org half.
+        $this->data['page_title'] = 'Coming soon';
     }
 }

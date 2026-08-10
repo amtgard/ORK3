@@ -59,7 +59,7 @@ class CmsTheme extends CmsBase
             return '';
         }
 
-        $cache = $this->_cache();
+        $cache = $this->_ghettoCache();
         if ($cache !== null) {
             $key    = $this->_normalizeScopeType($scopeType) . '.' . (int)$scopeId
                 . '.' . (string)($t['updated_at'] ?? '') . '.' . (int)($t['id'] ?? 0);
@@ -74,15 +74,30 @@ class CmsTheme extends CmsBase
         return CmsThemeTokens::ToCss($t['tokens']);
     }
 
-    /** GhettoCache handle, or null when the memcache layer isn't wired up. */
-    private function _cache()
+    /**
+     * The id of the theme stored under (scope, name), or 0 when there is none.
+     *
+     * Runs its own Clear() + binds, so it must never be called with binds already
+     * staged for another statement.
+     *
+     * @param string $scopeType already-normalized scope_type
+     * @param int    $scopeId
+     * @param string $name      already-trimmed/defaulted theme name
+     * @return int theme id, or 0
+     */
+    private function _themeIdByName($scopeType, $scopeId, $name)
     {
-        if (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache)
-            && is_object(Ork3::$Lib->ghettocache)
-        ) {
-            return Ork3::$Lib->ghettocache;
-        }
-        return null;
+        global $DB;
+
+        $DB->Clear();
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = (int)$scopeId;
+        $DB->name       = $name;
+        $row = $this->_firstRow($DB->DataSet(
+            'SELECT id FROM ' . DB_PREFIX . 'cms_theme'
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND name = :name LIMIT 1'
+        ));
+        return $row ? (int)$row['id'] : 0;
     }
 
     /**
@@ -101,17 +116,11 @@ class CmsTheme extends CmsBase
         $json = json_encode(CmsThemeTokens::Validate($tokens));
         $uid  = (int)$uid;
 
-        // Existing (scope,name) → UPDATE in place.
-        $DB->Clear();
-        $DB->scope_type = $scopeType;
-        $DB->scope_id   = $scopeId;
-        $DB->name       = $name;
-        $existing = $this->_firstRow($DB->DataSet(
-            'SELECT id FROM ' . DB_PREFIX . 'cms_theme'
-            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND name = :name LIMIT 1'
-        ));
-        if ($existing !== null) {
-            $id = (int)$existing['id'];
+        // Existing (scope,name) → UPDATE in place. This probe is what CHOOSES the
+        // UPDATE-vs-INSERT branch; the identical read after the INSERT below is a
+        // separate, mandatory read-back. Do not collapse the two into one call.
+        $id = $this->_themeIdByName($scopeType, $scopeId, $name);
+        if ($id > 0) {
             $DB->Clear();
             $DB->tokens_json = $json;
             $DB->updated_by  = $uid;
@@ -136,15 +145,7 @@ class CmsTheme extends CmsBase
             . ' VALUES (:scope_type, :scope_id, :name, :tokens_json, :updated_by, 0)'
         );
 
-        $DB->Clear();
-        $DB->scope_type = $scopeType;
-        $DB->scope_id   = $scopeId;
-        $DB->name       = $name;
-        $row = $this->_firstRow($DB->DataSet(
-            'SELECT id FROM ' . DB_PREFIX . 'cms_theme'
-            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND name = :name LIMIT 1'
-        ));
-        return $row ? (int)$row['id'] : 0;
+        return $this->_themeIdByName($scopeType, $scopeId, $name);
     }
 
     /** Make one theme active for its scope (deactivating siblings). */

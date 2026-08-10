@@ -239,17 +239,10 @@ include __DIR__ . '/cms/_shell_top.tpl';
     /* ---- toast (delegate to the shared engine) ---- */
     function toast(msg, kind) { if (BE) { BE.toast(msg, kind); } }
 
-    /* ---- POST helper ---- */
-    function post(endpoint, params) {
-        var body = new URLSearchParams();
-        Object.keys(params).forEach(function (k) { body.append(k, params[k]); });
-        return fetch(UIR + 'CmsAjax/' + endpoint + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : ''), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': (window.CMS_CSRF || '') },
-            credentials: 'same-origin',
-            body: body.toString()
-        }).then(function (r) { return r.json(); });
-    }
+    /* ---- POST helper (shared: CmsAdmin.post — same CSRF header + scope append,
+           and like this host's old copy it RESOLVES on a non-OK status; the block
+           engine's own post() is the one that throws, deliberately). ---- */
+    var post = CmsAdmin.post;
 
     /* ================= meta form helpers ================= */
     var titleInput = document.getElementById('cmsTitle');
@@ -295,23 +288,26 @@ include __DIR__ . '/cms/_shell_top.tpl';
     /* ================= save flow ================= */
     var saveBtn = document.getElementById('cmsSaveBtn');
     var dirty = false;
-    var autosaveTimer = null;
     var saving = false;
     // #98: the block engine fires onDirty as it paints the initial starter scaffold
     // (BE.init + seedFromPreset below). Stay un-armed until that first render is done
     // so a brand-new, untouched page never triggers the leave-site prompt.
     var booted = false;
 
+    // Debounced autosave (shared: CmsAdmin.autosave).
+    // #45: never autosave an already-published page — a save goes live instantly,
+    // so the author must save deliberately. STATE.published flips true on publish.
+    var autosaveTimer = CmsAdmin.autosave({
+        delay: 3000,
+        enabled: function () { return STATE.canEdit && !STATE.published; },
+        save: function () { doSave(true); }
+    });
+
     function markDirty() {
         if (!booted) { return; }
         dirty = true;
         if (savedHint) { savedHint.textContent = 'Unsaved changes…'; savedHint.className = 'cms-editbar-hint cms-editbar-hint-dirty'; }
-        clearTimeout(autosaveTimer);
-        // #45: never autosave an already-published page — a save goes live instantly,
-        // so the author must save deliberately. STATE.published flips true on publish.
-        if (STATE.canEdit && !STATE.published) {
-            autosaveTimer = setTimeout(function () { doSave(true); }, 3000);
-        }
+        autosaveTimer.schedule();
     }
 
     function doSave(isAuto) {
@@ -331,7 +327,7 @@ include __DIR__ . '/cms/_shell_top.tpl';
         }
 
         saving = true;
-        clearTimeout(autosaveTimer);
+        autosaveTimer.cancel();
         if (saveBtn) { saveBtn.disabled = true; }
         if (savedHint) { savedHint.innerHTML = '<span class="cms-spin"></span> Saving…'; savedHint.className = 'cms-editbar-hint'; }
 
@@ -436,10 +432,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
         saveBtn.addEventListener('click', function () { doSave(false); });
     }
 
-    // Warn on unload with unsaved changes.
-    window.addEventListener('beforeunload', function (e) {
-        if (dirty) { e.preventDefault(); e.returnValue = ''; }
-    });
+    // Warn on unload with unsaved changes (shared: CmsAdmin.guardUnsaved).
+    CmsAdmin.guardUnsaved(function () { return dirty; });
 
     /* ================= publish / unpublish ================= */
     var pubBtn = document.getElementById('cmsPubBtn');
@@ -487,65 +481,18 @@ include __DIR__ . '/cms/_shell_top.tpl';
         });
     }
 
-    /* ================= in-context preview pane ================= */
-    previewToggle = document.getElementById('cmsPreviewToggle');
-    var previewPane   = document.getElementById('cmsPreviewPane');
-    var previewIframe = document.getElementById('cmsPreviewIframe');
-    var previewWrap   = document.getElementById('cmsPreviewFrameWrap');
-    var previewClose  = document.getElementById('cmsPreviewClose');
-    var previewRefresh = document.getElementById('cmsPreviewRefresh');
-    var editorGrid    = document.getElementById('cmsEditorGrid');
-    var previewLoaded = false;
-
-    function previewUrl() {
-        return UIR + 'Cms/preview/' + STATE.pageId + '?_t=' + Date.now() + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '');
-    }
-    function previewOpen() { return previewPane && previewPane.classList.contains('cms-preview-open'); }
-
-    function loadPreview() {
-        if (STATE.pageId <= 0 || !previewIframe) { return; }
-        previewIframe.src = previewUrl();
-        previewLoaded = true;
-    }
-    // Only reload when the pane is open (or already loaded) — avoids fetching a
-    // preview the editor never opened.
-    function refreshPreview() {
-        if (STATE.pageId <= 0 || !previewIframe) { return; }
-        if (previewOpen() || previewLoaded) { loadPreview(); }
-    }
-
-    function openPreview() {
-        if (STATE.pageId <= 0) { toast('Save the page first to preview it.', 'error'); return; }
-        if (previewPane) { previewPane.classList.add('cms-preview-open'); previewPane.setAttribute('aria-hidden', 'false'); }
-        if (editorGrid) { editorGrid.classList.add('cms-preview-active'); }
-        if (previewToggle) { previewToggle.classList.add('cms-btn-active'); }
-        if (!previewLoaded) { loadPreview(); }
-    }
-    function closePreview() {
-        if (previewPane) { previewPane.classList.remove('cms-preview-open'); previewPane.setAttribute('aria-hidden', 'true'); }
-        if (editorGrid) { editorGrid.classList.remove('cms-preview-active'); }
-        if (previewToggle) { previewToggle.classList.remove('cms-btn-active'); }
-    }
-
-    if (previewToggle) {
-        previewToggle.addEventListener('click', function () {
-            if (previewToggle.disabled) { return; }
-            if (previewOpen()) { closePreview(); } else { openPreview(); }
-        });
-    }
-    if (previewClose) { previewClose.addEventListener('click', closePreview); }
-    if (previewRefresh) { previewRefresh.addEventListener('click', function () { loadPreview(); }); }
-
-    // Desktop / Mobile device-width toggle.
-    Array.prototype.forEach.call(document.querySelectorAll('.cms-devbtn'), function (btn) {
-        btn.addEventListener('click', function () {
-            var dev = btn.getAttribute('data-device') || 'desktop';
-            Array.prototype.forEach.call(document.querySelectorAll('.cms-devbtn'), function (b) {
-                b.classList.toggle('cms-devbtn-active', b === btn);
-            });
-            if (previewWrap) { previewWrap.setAttribute('data-device', dev); }
-        });
+    /* ================= in-context preview pane (shared: CmsAdmin.previewPane) ====
+       Pane/iframe/device-button wiring is identical between the two editors; only
+       the preview URL, the "is it saved yet" test and the toast copy differ. ==== */
+    var preview = CmsAdmin.previewPane({
+        url: function () {
+            return UIR + 'Cms/preview/' + STATE.pageId + '?_t=' + Date.now() + (window.CMS_SCOPE ? '&scope=' + encodeURIComponent(window.CMS_SCOPE) : '');
+        },
+        ready: function () { return STATE.pageId > 0; },
+        notReadyMsg: 'Save the page first to preview it.'
     });
+    // Declared as a hoisted function so the save/publish handlers above can call it.
+    function refreshPreview() { preview.refresh(); }
 
     /* ================= boot the shared block engine ================= */
     if (BE) {

@@ -1,8 +1,13 @@
 <?php
 
 require_once __DIR__ . '/trait.CmsScope.php';
-// #42: the canonical block-type allowlist lives on Controller_Cms as the single
-// source of truth; require it so the save-time parser can read it statically.
+// #42/MOD-18: the block-type and page-type REGISTRIES themselves now live in
+// CmsBlockRegistry (an ork3 lib, loaded for every request by startup.php), but
+// the two canonical KEY LISTS the save-time parser gates on are exposed by
+// Controller_Cms — CanonicalPageTypes in particular applies the null-label
+// filter that keeps the chooser-only 'post' context out of the page-type enum.
+// The router include_once's only the ROUTED controller, so this require is what
+// makes Controller_Cms's statics reachable from here; it is still load-bearing.
 require_once __DIR__ . '/controller.Cms.php';
 
 /**
@@ -26,37 +31,16 @@ require_once __DIR__ . '/controller.Cms.php';
  * thin controller (DB work lives in the libs). Rich-text/HTML block fields are
  * sanitized AUTHORITATIVELY in CmsPage::ReplaceBlocks — the storage choke point
  * every writer passes through (editor, imports, seeding) — so stored content is
- * always clean regardless of entry path. The controller's own _sanitizeFields()
- * pass below is redundant belt-and-suspenders, NOT the sole defense, and there
- * is deliberately no reliance on re-sanitizing at render time.
+ * always clean regardless of entry path (E36/#36: the field-name lists and the
+ * Clean/IsSafeUrl passes all live there, on CmsPage::HTML_FIELDS /
+ * CmsPage::URL_FIELDS). This controller therefore does NOT re-sanitize on the
+ * way in — it only decides which block TYPES may be stored (_parseBlocks'
+ * canonical allowlist + the nested-columns rejection) — and there is
+ * deliberately no reliance on re-sanitizing at render time either.
  */
 class Controller_CmsAjax extends Controller
 {
     use CmsScopeContext;
-
-    /**
-     * E36/#36: the sanitized-field name lists now live as the single source of
-     * truth on the CmsPage lib (CmsPage::HTML_FIELDS / CmsPage::URL_FIELDS — the
-     * storage choke point that actually sanitizes). _htmlFields()/_urlFields()
-     * read those constants; the arrays below are ONLY a pre-integration fallback
-     * for the window where that lib change hasn't landed yet, never a second
-     * source of truth. Once the constants exist they win.
-     */
-    private static $HTML_FIELDS = array('body', 'html');
-
-    private static $URL_FIELDS = array('href', 'more_href', 'url', 'link', 'cta_href', 'button_href', 'src');
-
-    /** The authored-HTML field names — CmsPage::HTML_FIELDS when defined (E36). */
-    private static function _htmlFields()
-    {
-        return defined('CmsPage::HTML_FIELDS') ? CmsPage::HTML_FIELDS : self::$HTML_FIELDS;
-    }
-
-    /** The URL field names — CmsPage::URL_FIELDS when defined (E36). */
-    private static function _urlFields()
-    {
-        return defined('CmsPage::URL_FIELDS') ? CmsPage::URL_FIELDS : self::$URL_FIELDS;
-    }
 
     public function __construct($call = null, $action = null)
     {
@@ -87,7 +71,6 @@ class Controller_CmsAjax extends Controller
         // _requireOwnerEditable encapsulates the full existing-content gate
         // (auth → not-found → IDOR scope → edit_own ownership) used identically by
         // savepost/revisions; then C15 optimistic-concurrency on the loaded row.
-        $existing = null;
         if ($isNew) {
             $this->_require($uid, 'page.create', $scope);
         } else {
@@ -125,12 +108,9 @@ class Controller_CmsAjax extends Controller
             'updated_by'       => $uid,
         );
 
-        if (array_key_exists('hero_media_id', $_POST)) {
-            $hero = (int)$_POST['hero_media_id'];
-            // Only honor an in-scope media id; a cross-scope (forged) id is dropped.
-            $this->load_model('CmsMedia');
-            $meta['hero_media_id'] = ($hero > 0 && $this->_rowInScope($this->CmsMedia->get_media($hero), $scope))
-                ? $hero : null;
+        $hero = $this->_resolveHeroMediaId($scope);
+        if ($hero !== false) {
+            $meta['hero_media_id'] = $hero;
         }
 
         if ($isNew) {
@@ -179,23 +159,7 @@ class Controller_CmsAjax extends Controller
         $scope = $this->_scope($uid);
         $this->_require($uid, 'page.publish', $scope);
 
-        $pageId = (int)($_POST['page_id'] ?? 0);
-        $row = $this->CmsPage->get_page($pageId);
-        if ($pageId <= 0 || empty($row)) {
-            $this->_fail('Page not found.', 4);
-        }
-        $this->_requireOwned($row, $scope);
-
-        // C7: a future published_at schedules the page instead of publishing now;
-        // the read path promotes it to 'published' once that time passes.
-        $status = $this->_applyPublish('page', $pageId, $uid);
-        $row = $this->CmsPage->get_page($pageId);
-
-        $this->_ok(array(
-            'page_id'      => $pageId,
-            'status'       => $status,
-            'published_at' => isset($row['published_at']) ? $row['published_at'] : null,
-        ));
+        $this->_publishEntity('page', $uid, $scope);
     }
 
     public function unpublish($action = null)
@@ -204,19 +168,7 @@ class Controller_CmsAjax extends Controller
         $scope = $this->_scope($uid);
         $this->_require($uid, 'page.publish', $scope);
 
-        $pageId = (int)($_POST['page_id'] ?? 0);
-        $row = $this->CmsPage->get_page($pageId);
-        if ($pageId <= 0 || empty($row)) {
-            $this->_fail('Page not found.', 4);
-        }
-        $this->_requireOwned($row, $scope);
-
-        $this->CmsPage->set_status($pageId, 'draft', $uid);
-
-        $this->_ok(array(
-            'page_id' => $pageId,
-            'status'  => 'draft',
-        ));
+        $this->_unpublishEntity('page', $uid, $scope);
     }
 
     /* ------------------------------------------------------------------ *
@@ -229,24 +181,7 @@ class Controller_CmsAjax extends Controller
         $scope = $this->_scope($uid);
         $this->_require($uid, 'page.delete', $scope);
 
-        $pageId = (int)($_POST['page_id'] ?? 0);
-        $row    = $this->CmsPage->get_page($pageId);
-        if ($pageId <= 0 || empty($row)) {
-            $this->_fail('Page not found.', 4);
-        }
-        // IDOR guard: never delete a page belonging to another scope.
-        $this->_requireOwned($row, $scope);
-        if (!empty($row['is_system'])) {
-            $this->_fail('System pages cannot be deleted.', 3);
-        }
-
-        $deleted = (bool)$this->CmsPage->delete_page($pageId, (string)$scope['type'], (int)$scope['id'], $uid);
-        if (!$deleted) {
-            $this->_fail('Could not delete the page.');
-        }
-
-        // Soft-delete (C2): the page is moved to Trash, recoverable via restore.
-        $this->_ok(array('page_id' => $pageId, 'deleted' => true, 'trashed' => true));
+        $this->_deleteEntity('page', $uid, $scope);
     }
 
     /* ================================================================== *
@@ -269,7 +204,6 @@ class Controller_CmsAjax extends Controller
         // ---- Authorization (mirrors savepage; C16 page.edit_own honored) ----
         // Same shared gate as savepage via _requireOwnerEditable (auth → not-found
         // → IDOR scope → edit_own ownership), then the C15 concurrency guard.
-        $existing = null;
         if ($isNew) {
             $this->_require($uid, 'page.create', $scope);
         } else {
@@ -299,12 +233,9 @@ class Controller_CmsAjax extends Controller
             'updated_by' => $uid,
         );
 
-        if (array_key_exists('hero_media_id', $_POST)) {
-            $hero = (int)$_POST['hero_media_id'];
-            // Only honor an in-scope media id; a cross-scope (forged) id is dropped.
-            $this->load_model('CmsMedia');
-            $meta['hero_media_id'] = ($hero > 0 && $this->_rowInScope($this->CmsMedia->get_media($hero), $scope))
-                ? $hero : null;
+        $hero = $this->_resolveHeroMediaId($scope);
+        if ($hero !== false) {
+            $meta['hero_media_id'] = $hero;
         }
 
         if ($isNew) {
@@ -373,22 +304,7 @@ class Controller_CmsAjax extends Controller
         $scope = $this->_scope($uid);
         $this->_require($uid, 'page.publish', $scope);
 
-        $postId = (int)($_POST['post_id'] ?? 0);
-        $row = $this->CmsPost->get_post($postId);
-        if ($postId <= 0 || empty($row)) {
-            $this->_fail('Post not found.', 4);
-        }
-        $this->_requireOwned($row, $scope);
-
-        // C7: a future published_at schedules the post instead of publishing now.
-        $status = $this->_applyPublish('post', $postId, $uid);
-        $row = $this->CmsPost->get_post($postId);
-
-        $this->_ok(array(
-            'post_id'      => $postId,
-            'status'       => $status,
-            'published_at' => isset($row['published_at']) ? $row['published_at'] : null,
-        ));
+        $this->_publishEntity('post', $uid, $scope);
     }
 
     public function unpublishpost($action = null)
@@ -397,19 +313,7 @@ class Controller_CmsAjax extends Controller
         $scope = $this->_scope($uid);
         $this->_require($uid, 'page.publish', $scope);
 
-        $postId = (int)($_POST['post_id'] ?? 0);
-        $row = $this->CmsPost->get_post($postId);
-        if ($postId <= 0 || empty($row)) {
-            $this->_fail('Post not found.', 4);
-        }
-        $this->_requireOwned($row, $scope);
-
-        $this->CmsPost->set_status($postId, 'draft', $uid);
-
-        $this->_ok(array(
-            'post_id' => $postId,
-            'status'  => 'draft',
-        ));
+        $this->_unpublishEntity('post', $uid, $scope);
     }
 
     /* ------------------------------------------------------------------ *
@@ -422,26 +326,18 @@ class Controller_CmsAjax extends Controller
         $scope = $this->_scope($uid);
         $this->_require($uid, 'page.delete', $scope);
 
-        $postId = (int)($_POST['post_id'] ?? 0);
-        $row    = $this->CmsPost->get_post($postId);
-        if ($postId <= 0 || empty($row)) {
-            $this->_fail('Post not found.', 4);
-        }
-        // IDOR guard: never delete a post belonging to another scope.
-        $this->_requireOwned($row, $scope);
-
-        $deleted = (bool)$this->CmsPost->delete_post($postId, (string)$scope['type'], (int)$scope['id'], $uid);
-        if (!$deleted) {
-            $this->_fail('Could not delete the post.');
-        }
-
-        // Soft-delete (C2): the post is moved to Trash, recoverable via restore.
-        $this->_ok(array('post_id' => $postId, 'deleted' => true, 'trashed' => true));
+        $this->_deleteEntity('post', $uid, $scope);
     }
 
     /* ================================================================== *
      * REVISIONS (C2) — capped block-set history + restore. Shared by pages
-     * and posts (the block store is polymorphic). Editor-lane UI wires these.
+     * and posts (the block store is polymorphic).
+     *
+     * There is NO revision-browser UI wired to these two endpoints today: they
+     * are the API half of the history store, reachable by any authorized client.
+     * The store itself is very much live — every save writes a revision, and
+     * _latestRevisionId reads the newest one as the optimistic-concurrency token
+     * the editor round-trips — so these are an unfinished surface, not dead code.
      * ================================================================== */
 
     /**
@@ -453,7 +349,7 @@ class Controller_CmsAjax extends Controller
         $uid = $this->_begin();
         $scope = $this->_scope($uid);
 
-        $ownerType = ((string)($_GET['owner_type'] ?? $_POST['owner_type'] ?? 'page') === 'post') ? 'post' : 'page';
+        $ownerType = $this->_ownerType($_GET['owner_type'] ?? $_POST['owner_type'] ?? 'page');
         $ownerId   = (int)($_GET['owner_id'] ?? $_POST['owner_id'] ?? 0);
         $this->_requireOwnerEditable($uid, $ownerType, $ownerId, $scope);
 
@@ -473,7 +369,7 @@ class Controller_CmsAjax extends Controller
         $uid = $this->_begin();
         $scope = $this->_scope($uid);
 
-        $ownerType  = ((string)($_POST['owner_type'] ?? 'page') === 'post') ? 'post' : 'page';
+        $ownerType  = $this->_ownerType($_POST['owner_type'] ?? 'page');
         $ownerId    = (int)($_POST['owner_id'] ?? 0);
         $revisionId = (int)($_POST['revision_id'] ?? 0);
         $this->_requireOwnerEditable($uid, $ownerType, $ownerId, $scope);
@@ -502,19 +398,7 @@ class Controller_CmsAjax extends Controller
         $scope = $this->_scope($uid);
         $this->_require($uid, 'page.delete', $scope);
 
-        $pageId = (int)($_POST['page_id'] ?? 0);
-        if ($pageId <= 0) {
-            $this->_fail('Page not found.', 4);
-        }
-        // The lib enforces the scope IDOR guard (must belong to this org).
-        $ok = (bool)$this->CmsPage->RestorePage($pageId, (string)$scope['type'], (int)$scope['id'], $uid);
-        if (!$ok) {
-            if ($this->CmsPage->RestoreSlugConflict($pageId)) {
-                $this->_fail('A live page already uses this address (slug). Rename that page, then restore this one.');
-            }
-            $this->_fail('Could not restore the page (it may not be in the Trash).');
-        }
-        $this->_ok(array('page_id' => $pageId, 'restored' => true));
+        $this->_restoreEntity('page', $uid, $scope);
     }
 
     /** Restore a trashed post. POST: post_id. Gated page.delete in scope (posts
@@ -525,19 +409,7 @@ class Controller_CmsAjax extends Controller
         $scope = $this->_scope($uid);
         $this->_require($uid, 'page.delete', $scope);
 
-        $postId = (int)($_POST['post_id'] ?? 0);
-        if ($postId <= 0) {
-            $this->_fail('Post not found.', 4);
-        }
-        $this->load_model('CmsPost');
-        $ok = (bool)$this->CmsPost->RestorePost($postId, (string)$scope['type'], (int)$scope['id'], $uid);
-        if (!$ok) {
-            if ($this->CmsPost->RestoreSlugConflict($postId)) {
-                $this->_fail('A live post already uses this address (slug). Rename that post, then restore this one.');
-            }
-            $this->_fail('Could not restore the post (it may not be in the Trash).');
-        }
-        $this->_ok(array('post_id' => $postId, 'restored' => true));
+        $this->_restoreEntity('post', $uid, $scope);
     }
 
     /** Restore a trashed media item. POST: media_id. Gated media.manage in scope. */
@@ -555,7 +427,9 @@ class Controller_CmsAjax extends Controller
         // IDOR guard: the target must be in THIS scope's trash. get_media can't be
         // used (it hides trashed rows), so verify against the scope-filtered trash.
         $this->_requireTrashedMediaOwned($mediaId, $scope);
-        $ok = (bool)$this->CmsMedia->RestoreMedia($mediaId, $uid);
+        // Scope passed through as well: RestoreMedia carries its own ownership
+        // guard, and leaving it unarmed made the controller's check the ONLY one.
+        $ok = (bool)$this->CmsMedia->RestoreMedia($mediaId, $uid, (string)$scope['type'], (int)$scope['id']);
         if (!$ok) {
             $this->_fail('Could not restore the media (it may not be in the Trash).');
         }
@@ -577,7 +451,9 @@ class Controller_CmsAjax extends Controller
         // IDOR guard: the target must be in THIS scope's trash. get_media can't be
         // used (it hides trashed rows), so verify against the scope-filtered trash.
         $this->_requireTrashedMediaOwned($mediaId, $scope);
-        $ok = (bool)$this->CmsMedia->PurgeMedia($mediaId, $uid);
+        // Scope passed through as well (see restoremedia) — an irreversible delete
+        // is the last place to rely on a single guard.
+        $ok = (bool)$this->CmsMedia->PurgeMedia($mediaId, $uid, (string)$scope['type'], (int)$scope['id']);
         if (!$ok) {
             $this->_fail('Could not purge the media.');
         }
@@ -596,7 +472,6 @@ class Controller_CmsAjax extends Controller
         $scope = $this->_scope($uid);
         $this->_require($uid, 'page.delete', $scope);
 
-        $this->load_model('CmsPost');
         // PascalCase routes through Model::__call → the lib (no model.* snake-case
         // forwarder exists for this method), same path restorepost/restoremedia use.
         $list = $this->CmsPost->ListTrashed((string)$scope['type'], (int)$scope['id']);
@@ -617,10 +492,7 @@ class Controller_CmsAjax extends Controller
         $scope = $this->_scope($uid);
         $this->_require($uid, 'media.manage', $scope);
 
-        $limit = (int)($_GET['limit'] ?? $_POST['limit'] ?? 200);
-        if ($limit <= 0 || $limit > 500) {
-            $limit = 200;
-        }
+        $limit = $this->_clampLimit($_GET['limit'] ?? $_POST['limit'] ?? 200);
 
         $this->load_model('CmsMedia');
         // PascalCase routes through Model::__call → the lib (mirrors restoremedia).
@@ -669,7 +541,7 @@ class Controller_CmsAjax extends Controller
         // IDOR guard: never alter a media row belonging to another scope. Update
         // itself only touches non-trashed rows, which get_media also returns.
         $this->_requireOwned($this->CmsMedia->get_media($mediaId), $scope);
-        $ok = (bool)$this->CmsMedia->Update($mediaId, $data, $uid);
+        $ok = (bool)$this->CmsMedia->Update($mediaId, $data, $uid, (string)$scope['type'], (int)$scope['id']);
         if (!$ok) {
             $this->_fail('Could not update the media (it may not exist or be in the Trash).');
         }
@@ -731,7 +603,7 @@ class Controller_CmsAjax extends Controller
         // IDOR guard: never delete a media row belonging to another scope.
         $this->_requireOwned($this->CmsMedia->get_media($mediaId), $scope);
 
-        $ok = (bool)$this->CmsMedia->DeleteMedia($mediaId, $uid);
+        $ok = (bool)$this->CmsMedia->DeleteMedia($mediaId, $uid, (string)$scope['type'], (int)$scope['id']);
         if (!$ok) {
             // Most likely cause: still referenced. Surface the where-used breakdown
             // so the officer knows what to detach first (fail-safe: never orphan a
@@ -739,14 +611,12 @@ class Controller_CmsAjax extends Controller
             $usage = $this->CmsMedia->ReferenceUsage($mediaId);
             $total = is_array($usage) ? (int)($usage['total'] ?? 0) : 0;
             if ($total > 0) {
-                echo json_encode(array(
-                    'ok'     => false,
-                    'status' => 8,
-                    'error'  => 'This image is still used in ' . $total . ' place' . ($total === 1 ? '' : 's')
-                        . '. Remove those references before deleting it.',
-                    'usage'  => $usage,
-                ));
-                exit;
+                $this->_fail(
+                    'This image is still used in ' . $total . ' place' . ($total === 1 ? '' : 's')
+                    . '. Remove those references before deleting it.',
+                    8,
+                    array('usage' => $usage)
+                );
             }
             $this->_fail('Could not delete the media (it may not exist or be in the Trash).');
         }
@@ -1060,6 +930,19 @@ class Controller_CmsAjax extends Controller
         $this->load_model('CmsMedia');
         $row = $this->CmsMedia->upload($data, $filename, $alt, $uid, $scope);
         if (empty($row)) {
+            // Every rejection used to read the same way, so an org that had simply
+            // run out of space was told its image was the wrong type — and would
+            // keep retrying a file that was never the problem. Report the two
+            // apart, with the numbers needed to act on it.
+            if ($this->CmsMedia->last_error() === 'quota_exceeded') {
+                $scopeType = (string)($scope['type'] ?? 'global');
+                $usedMb    = round($this->CmsMedia->scope_usage_bytes($scopeType, (int)($scope['id'] ?? 0)) / 1048576, 1);
+                $quotaMb   = round($this->CmsMedia->scope_quota_bytes($scopeType) / 1048576);
+                $this->_fail(
+                    'Your media library is full (' . $usedMb . ' MB of ' . $quotaMb . ' MB used). '
+                    . 'Delete some images and empty the trash to free up space.'
+                );
+            }
             $this->_fail('The image could not be processed (unsupported type or too large).');
         }
 
@@ -1083,10 +966,7 @@ class Controller_CmsAjax extends Controller
 
         $search = trim((string)($_GET['q'] ?? $_POST['q'] ?? ''));
         $search = ($search === '') ? null : $search;
-        $limit  = (int)($_GET['limit'] ?? $_POST['limit'] ?? 200);
-        if ($limit <= 0 || $limit > 500) {
-            $limit = 200;
-        }
+        $limit  = $this->_clampLimit($_GET['limit'] ?? $_POST['limit'] ?? 200);
         // Optional windowed paging for the block-editor media picker's lazy-load.
         // Backward compatible: an absent (or 0) offset yields the original window.
         $offset = (int)($_GET['offset'] ?? $_POST['offset'] ?? 0);
@@ -1189,11 +1069,8 @@ class Controller_CmsAjax extends Controller
         }
         $this->_require($uid, 'page.publish', $scope);
 
-        $this->load_model('CmsSite');
-        $site = $this->CmsSite->ensure_site((string)$scope['type'], (int)$scope['id'], $uid);
-        if (empty($site) || empty($site['site_id'])) {
-            $this->_fail('Could not resolve the site.', 4);
-        }
+        // EnsureSite: a never-opened site must still be publishable.
+        $site = $this->_requireOrgSite($scope, $uid, true);
         $this->CmsSite->set_published((int)$site['site_id'], $uid);
         $this->_ok(array('status' => 'published'));
     }
@@ -1208,11 +1085,8 @@ class Controller_CmsAjax extends Controller
         }
         $this->_require($uid, 'page.publish', $scope);
 
-        $this->load_model('CmsSite');
-        $site = $this->CmsSite->get_site_for_scope((string)$scope['type'], (int)$scope['id']);
-        if (empty($site) || empty($site['site_id'])) {
-            $this->_fail('Could not resolve the site.', 4);
-        }
+        // No EnsureSite here: a site that was never opened has nothing to unpublish.
+        $site = $this->_requireOrgSite($scope, $uid, false);
         $this->CmsSite->set_draft((int)$site['site_id'], $uid);
         $this->_ok(array('status' => 'draft'));
     }
@@ -1235,11 +1109,7 @@ class Controller_CmsAjax extends Controller
         }
         $this->_require($uid, 'page.edit', $scope);
 
-        $this->load_model('CmsSite');
-        $site = $this->CmsSite->ensure_site((string)$scope['type'], (int)$scope['id'], $uid);
-        if (empty($site) || empty($site['site_id'])) {
-            $this->_fail('Could not resolve the site.', 4);
-        }
+        $site = $this->_requireOrgSite($scope, $uid, true);
 
         $fields = array();
         if (array_key_exists('site_name', $_POST)) {
@@ -1285,18 +1155,27 @@ class Controller_CmsAjax extends Controller
      * ------------------------------------------------------------------ */
 
     /**
-     * E71/#71: bust the GhettoCache entries the kingdom_officers / kingdom_parks /
-     * kingdom_parks_map front-door blocks populate (300s TTL), so an officer can
-     * force their public site to pick up an officer change / new park immediately
-     * instead of waiting the window out. POST + CSRF-guarded (via _begin) and
-     * scope-checked (page.edit in scope). Only the ACTING scope's kingdom is
-     * cleared (a scoped officer can't flush another org's cache).
+     * E71/#71: bust the GhettoCache entries the front-door live-data blocks
+     * populate (300s TTL), so an officer can force their public site to pick up
+     * an officer change / new park immediately instead of waiting the window out.
+     * POST + CSRF-guarded (via _begin) and scope-checked (page.edit in scope).
+     * Only the ACTING scope is cleared — a kingdom officer cannot flush another
+     * org's cache, and cannot flush the shared global one either.
      *
-     * These blocks render only under a KINGDOM scope and key every entry on the
-     * kingdom_id (plus per-block knobs: officers by limit; parks by limit/sort/
-     * heraldry; map by kingdom alone). GhettoCache/Memcached has no prefix-scan,
-     * so the bounded key space per kingdom is enumerated exactly (the ranges are
-     * the clamps in each block .tpl). A park/global scope has no such cache → no-op.
+     * GhettoCache/Memcached has no prefix scan, so the bounded key space is
+     * enumerated exactly. Both the enumeration AND the key formats/clamp bounds
+     * it depends on come from CmsRenderCache, which the block partials also read
+     * — the two used to declare them independently, and a drift there fails
+     * silently (this endpoint happily reports a large `cleared` count while
+     * busting keys nothing ever wrote).
+     *
+     * Coverage by scope:
+     *   kingdom → kingdom_officers, kingdom_parks, kingdom_parks_map
+     *   park    → park_officers, park_meeting
+     *   global  → kingdoms_teaser (front-door only; it is the one cached block
+     *             with no org in its key, which is exactly why it went unbusted)
+     * kingdom_events / park_events are NOT here: they render from
+     * SearchService::Event, which caches internally and exposes no bust hook.
      */
     public function clearrendercache($action = null)
     {
@@ -1305,41 +1184,39 @@ class Controller_CmsAjax extends Controller
         // Editing the site is the bar for forcing its public cache to refresh.
         $this->_require($uid, 'page.edit', $scope);
 
-        // The live blocks source by kingdom_id and render nothing outside a kingdom
-        // scope, so only a kingdom scope has anything to clear.
+        // The org blocks source by kingdom_id / park_id and render nothing outside
+        // their own scope, so at most one of these is ever non-zero.
         $kid = ((string)$scope['type'] === 'kingdom') ? (int)$scope['id'] : 0;
+        $pid = ((string)$scope['type'] === 'park') ? (int)$scope['id'] : 0;
 
         $cache = (isset(Ork3::$Lib) && is_object(Ork3::$Lib)
             && isset(Ork3::$Lib->ghettocache) && is_object(Ork3::$Lib->ghettocache))
             ? Ork3::$Lib->ghettocache : null;
 
+        $keys = array();
+        if ($kid > 0) {
+            $keys = CmsRenderCache::KingdomKeys($kid);
+        } elseif ($pid > 0) {
+            $keys = CmsRenderCache::ParkKeys($pid);
+        } else {
+            // Global front door: only its own shared blocks.
+            $keys = CmsRenderCache::GlobalKeys();
+        }
+
         $cleared = 0;
-        if ($cache !== null && $kid > 0) {
-            // kingdom_officers: key 'k{kid}.l{limit}', limit clamped 1..24.
-            for ($l = 1; $l <= 24; $l++) {
-                $cache->bust('frontdoor.kingdom_officers', 'k' . $kid . '.l' . $l);
+        if ($cache !== null) {
+            foreach ($keys as $entry) {
+                $cache->bust($entry['ns'], $entry['key']);
                 $cleared++;
             }
-            // kingdom_parks: key 'k{kid}.l{limit}.s{sort}.h{0|1}',
-            // limit 1..60, sort in {name,city,state}, heraldry {0,1}.
-            foreach (array('name', 'city', 'state') as $sort) {
-                foreach (array(0, 1) as $h) {
-                    for ($l = 1; $l <= 60; $l++) {
-                        $cache->bust('frontdoor.kingdom_parks', 'k' . $kid . '.l' . $l . '.s' . $sort . '.h' . $h);
-                        $cleared++;
-                    }
-                }
-            }
-            // kingdom_parks_map: key 'k{kid}'.
-            $cache->bust('frontdoor.kingdom_parks_map', 'k' . $kid);
-            $cleared++;
         }
 
         $this->_ok(array(
             'cleared'    => $cleared,
             'kingdom_id' => $kid,
-            // Signal when there was nothing scoped to clear (park/global site).
-            'scoped'     => ($kid > 0),
+            'park_id'    => $pid,
+            // Whether the flush targeted a single org (vs. the global front door).
+            'scoped'     => ($kid > 0 || $pid > 0),
         ));
     }
 
@@ -1358,7 +1235,12 @@ class Controller_CmsAjax extends Controller
     public function runmaintenance($action = null)
     {
         $uid   = $this->_begin();
-        $scope = $this->_scope($uid);
+        // Called for its side effect only: _scope() re-validates the request's
+        // scope selector and refuses (JSON 403 + exit) a malformed or
+        // unauthorized one, so a bad selector can never reach the sweep. The
+        // sweep itself is cross-org by definition, so the resolved value is
+        // deliberately unused.
+        $this->_scope($uid);
         // Cross-org housekeeping is a strictly super-admin action.
         if (!$this->CmsAuth->IsSuperAdmin($uid)) {
             $this->_denyCapability('super-admin');
@@ -1492,6 +1374,79 @@ class Controller_CmsAjax extends Controller
         return $out;
     }
 
+    /**
+     * Clamp a posted list-window size to a sane range.
+     *
+     * NOTE the deliberate asymmetry, preserved from both call sites: an
+     * over-large request falls back to the DEFAULT, it is not truncated to $max.
+     * A client asking for 5000 rows is not asking for 500 — it is a client that
+     * has lost track of what it wants, and quietly handing it the ceiling would
+     * mask that while still paying for the biggest page we allow.
+     *
+     * @param mixed $raw     the posted value, unvalidated
+     * @param int   $default fallback for a non-positive or over-large request
+     * @param int   $max     largest window a caller may actually ask for
+     * @return int
+     */
+    private function _clampLimit($raw, $default = 200, $max = 500)
+    {
+        $limit = (int)$raw;
+        return ($limit <= 0 || $limit > (int)$max) ? (int)$default : $limit;
+    }
+
+    /**
+     * Resolve the acting org's site row for the three site-lifecycle endpoints,
+     * or emit the JSON refusal and exit.
+     *
+     * The global-scope rejection and the capability gate stay INLINE in each
+     * endpoint on purpose: publish/unpublish refuse the front door with a
+     * different sentence than savesite does, and savesite gates on 'page.edit'
+     * where the other two gate on 'page.publish'. Only the resolve-or-fail step
+     * is genuinely common.
+     *
+     * @param array $scope  the resolved, authorized (non-global) request scope
+     * @param int   $uid    acting mundane_id (EnsureSite records the creator)
+     * @param bool  $ensure true → EnsureSite (create on first use);
+     *                      false → read only (nothing to act on if absent)
+     * @return array the site row (guaranteed to carry a positive site_id)
+     */
+    private function _requireOrgSite($scope, $uid, $ensure)
+    {
+        $this->load_model('CmsSite');
+        $site = $ensure
+            ? $this->CmsSite->ensure_site((string)$scope['type'], (int)$scope['id'], $uid)
+            : $this->CmsSite->get_site_for_scope((string)$scope['type'], (int)$scope['id']);
+        if (empty($site) || empty($site['site_id'])) {
+            $this->_fail('Could not resolve the site.', 4);
+        }
+        return $site;
+    }
+
+    /**
+     * Resolve the posted hero_media_id for savepage/savepost.
+     *
+     * Three-way result, because "not sent" and "sent as empty" mean different
+     * things to the caller: a request that omits the field must leave the stored
+     * hero UNTOUCHED, while a request that sends a blank/forged one must CLEAR
+     * it. Returning null for both would silently drop every page's hero image on
+     * any save that didn't happen to include the field.
+     *
+     * @param array $scope the resolved, authorized request scope
+     * @return int|null|false the in-scope media id, null to clear it, or FALSE
+     *                        when the field was not sent at all (leave as-is)
+     */
+    private function _resolveHeroMediaId($scope)
+    {
+        if (!array_key_exists('hero_media_id', $_POST)) {
+            return false;
+        }
+        $hero = (int)$_POST['hero_media_id'];
+        // Only honor an in-scope media id; a cross-scope (forged) id is dropped.
+        $this->load_model('CmsMedia');
+        return ($hero > 0 && $this->_rowInScope($this->CmsMedia->get_media($hero), $scope))
+            ? $hero : null;
+    }
+
     /** Decode posted tokens JSON into an assoc array (validation happens in the lib). */
     private function _themeTokensFromPost()
     {
@@ -1513,7 +1468,7 @@ class Controller_CmsAjax extends Controller
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         header('Pragma: no-cache');
 
-        $uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $uid = $this->_uid();
         if ($uid <= 0) {
             $this->_fail('You must be logged in.', 5);
         }
@@ -1572,13 +1527,11 @@ class Controller_CmsAjax extends Controller
     {
         $caps = is_array($capability) ? array_values(array_map('strval', $capability)) : array((string)$capability);
         $label = implode(' or ', $caps);
-        echo json_encode(array(
-            'ok'         => false,
-            'status'     => 5,
-            'error'      => 'You are not authorized to perform this action (requires: ' . $label . ').',
-            'capability' => (count($caps) === 1) ? $caps[0] : $caps,
-        ));
-        exit;
+        $this->_fail(
+            'You are not authorized to perform this action (requires: ' . $label . ').',
+            5,
+            array('capability' => (count($caps) === 1) ? $caps[0] : $caps)
+        );
     }
 
     /**
@@ -1628,21 +1581,41 @@ class Controller_CmsAjax extends Controller
         exit;
     }
 
-    /** Emit {ok:false, status, error} and exit. */
-    private function _fail($message, $status = 1)
+    /**
+     * Emit {ok:false, status, error, ...$extra} and exit.
+     *
+     * $extra carries the machine-readable payload a few refusals attach for the
+     * client (mediadelete's `usage` breakdown, _denyCapability's `capability`).
+     * It is unioned with LEFT precedence exactly like _ok, so an $extra key can
+     * never overwrite ok/status/error — the envelope's three guaranteed keys stay
+     * first and stay authoritative.
+     *
+     * @param string $message
+     * @param int    $status
+     * @param array  $extra
+     * @return void (emits JSON + exit)
+     */
+    private function _fail($message, $status = 1, $extra = array())
     {
         echo json_encode(array(
             'ok'     => false,
             'status' => (int)$status,
             'error'  => (string)$message,
-        ));
+        ) + (is_array($extra) ? $extra : array()));
         exit;
     }
 
     /**
-     * Decode the posted block list (a JSON array string) and sanitize every
-     * authored-HTML field through CmsSanitizer::Clean. Returns the renderer-shape
+     * Decode the posted block list (a JSON array string) into the renderer-shape
      * block array CmsPage::ReplaceBlocks consumes. Invalid/empty → empty array.
+     *
+     * Field CONTENT is not sanitized here: every writer reaches ReplaceBlocks,
+     * whose CmsPage::_normalizeBlocks pass cleans the authored-HTML and URL fields
+     * unconditionally (and strictly more tightly than this controller ever did).
+     * What stays here is the write-side TYPE vocabulary — the canonical allowlist
+     * and the nested-columns rejection — which the lib deliberately does not own,
+     * because seeding and imports may legitimately carry types the editor cannot
+     * add by hand.
      */
     private function _parseBlocks($raw)
     {
@@ -1653,8 +1626,6 @@ class Controller_CmsAjax extends Controller
         if (!is_array($decoded)) {
             return array();
         }
-
-        $this->load_model('CmsSanitizer');
 
         // #42: the canonical allowlist comes from Controller_Cms (single source of
         // truth); resolve it once, not per block.
@@ -1670,7 +1641,6 @@ class Controller_CmsAjax extends Controller
                 continue;
             }
             $fields = (isset($block['fields']) && is_array($block['fields'])) ? $block['fields'] : array();
-            $fields = $this->_sanitizeFields($fields);
             // #103: defense-in-depth — a `columns` block must never contain another
             // `columns` child (the render side already caps recursion depth). Strip
             // any nested columns at save so the invalid structure never persists.
@@ -1692,34 +1662,6 @@ class Controller_CmsAjax extends Controller
             );
         }
         return $out;
-    }
-
-    /**
-     * Recursively walk a block-fields array and sanitize any string value
-     * whose key is in $HTML_FIELDS. Descends into nested arrays (accordion
-     * items, column sub-blocks, etc.) so authored HTML at any depth is cleaned.
-     *
-     * @param array $fields raw fields array (may be nested)
-     * @return array the same structure with HTML fields sanitized
-     */
-    private function _sanitizeFields(array $fields)
-    {
-        // E36: resolve the shared field lists once per level from the CmsPage
-        // constants (fallback to the local arrays pre-integration).
-        $htmlFields = self::_htmlFields();
-        $urlFields  = self::_urlFields();
-        foreach ($fields as $key => $val) {
-            if (is_array($val)) {
-                // Nested sub-structure (e.g. accordion items array or columns).
-                $fields[$key] = $this->_sanitizeFields($val);
-            } elseif (is_string($val) && in_array($key, $htmlFields, true)) {
-                $fields[$key] = $this->CmsSanitizer->clean($val);
-            } elseif (is_string($val) && in_array($key, $urlFields, true)) {
-                // Leave an empty optional URL empty; only rewrite non-empty unsafe values.
-                $fields[$key] = ($val === '' || CmsSanitizer::IsSafeUrl($val)) ? $val : '#';
-            }
-        }
-        return $fields;
     }
 
     /**
@@ -1781,12 +1723,37 @@ class Controller_CmsAjax extends Controller
         return in_array($type, $allowed, true) ? $type : 'composed';
     }
 
-    /** Clamp a nav link_type to the supported enum (default 'page'). */
+    /**
+     * Clamp a nav link_type to the supported enum (default 'page'). AJAX-7: the
+     * enum itself is CmsNav::LINK_TYPES — the lib that stores the column owns the
+     * vocabulary, so the controller's accept-list can never drift from it. The
+     * lib's own _normalizeLinkType stays private: we share the DATA, not the
+     * method (the controller normalizes BEFORE choosing which target column to
+     * validate, well ahead of any write).
+     */
     private function _normalizeNavLinkType($linkType)
     {
-        $allowed = array('page', 'post', 'url', 'dynamic');
         $linkType = strtolower(trim((string)$linkType));
-        return in_array($linkType, $allowed, true) ? $linkType : 'page';
+        return in_array($linkType, CmsNav::LINK_TYPES, true) ? $linkType : 'page';
+    }
+
+    /**
+     * Clamp a polymorphic owner_type to the two the block store supports.
+     * Anything that is not exactly 'post' is a page — the same fail-to-page rule
+     * the revisions endpoints, the concurrency token and the editable-owner gate
+     * each spelled out inline, which is how a third owner kind could once have
+     * been read as 'page' by one site and rejected by another.
+     *
+     * Deliberately NOT paired with a generic _param() reader: the $_GET/$_POST
+     * split around these calls is a CSRF posture (reads may accept GET, mutations
+     * are POST-only), not incidental inconsistency.
+     *
+     * @param mixed $raw
+     * @return string 'page' | 'post'
+     */
+    private function _ownerType($raw)
+    {
+        return ((string)$raw === 'post') ? 'post' : 'page';
     }
 
     /**
@@ -1860,7 +1827,7 @@ class Controller_CmsAjax extends Controller
      */
     private function _latestRevisionId($ownerType, $ownerId)
     {
-        $ownerType = ($ownerType === 'post') ? 'post' : 'page';
+        $ownerType = $this->_ownerType($ownerType);
         $list = $this->CmsPage->ListRevisions($ownerType, (int)$ownerId, 1);
         if (is_array($list) && isset($list[0]['revision_id'])) {
             return (int)$list[0]['revision_id'];
@@ -1874,16 +1841,22 @@ class Controller_CmsAjax extends Controller
      * due); a past/empty timestamp publishes immediately. Returns the resulting
      * status so the caller can echo it.
      *
-     * @param string $kind 'page' | 'post'
+     * The timestamp is passed IN rather than read from $_POST here: this is the
+     * one piece of request state the publish path needs, and taking it as an
+     * argument keeps the helper callable from anywhere (and testable) instead of
+     * being silently coupled to a specific POST field name.
+     *
+     * @param string $kind    'page' | 'post'
      * @param int    $id
-     * @param int    $uid  acting mundane_id
+     * @param int    $uid     acting mundane_id
+     * @param mixed  $rawWhen the raw published_at the client sent ('' = now)
      * @return string 'published' | 'scheduled'
      */
-    private function _applyPublish($kind, $id, $uid)
+    private function _applyPublish($kind, $id, $uid, $rawWhen)
     {
         $model = ($kind === 'post') ? $this->CmsPost : $this->CmsPage;
 
-        $rawWhen = trim((string)($_POST['published_at'] ?? ''));
+        $rawWhen = trim((string)$rawWhen);
         $when = ($rawWhen !== '') ? strtotime($rawWhen) : false;
 
         if ($when !== false && $when > time()) {
@@ -1895,6 +1868,176 @@ class Controller_CmsAjax extends Controller
         }
         $model->set_status((int)$id, 'published', (int)$uid);
         return 'published';
+    }
+
+    /* ------------------------------------------------------------------ *
+     * page/post handler bodies
+     *
+     * The four lifecycle endpoints exist twice — once per owner kind — because
+     * their ROUTE names and their response id keys are a client contract
+     * ('page_id' vs 'post_id'; the editor JS reads them by name). Only the body
+     * is shared, and only along the page/post axis: publish and unpublish stay
+     * separate handlers (scheduling, a reload for the stamped published_at, and a
+     * different response shape are not "the same code with a flag"), as do the
+     * media variants (different capability, different lib, different failure
+     * taxonomy — and purge is irreversible, so looking different is a feature).
+     * ------------------------------------------------------------------ */
+
+    /**
+     * publish / publishpost: publish-or-schedule the posted id and echo the
+     * resulting status + stored published_at.
+     *
+     * @param string $kind  'page' | 'post'
+     * @param int    $uid
+     * @param array  $scope the resolved, authorized request scope
+     * @return void (emits JSON + exit)
+     */
+    private function _publishEntity($kind, $uid, $scope)
+    {
+        $kind   = $this->_ownerType($kind);
+        $model  = ($kind === 'post') ? $this->CmsPost : $this->CmsPage;
+        $getter = 'get_' . $kind;
+
+        $id = (int)($_POST[$kind . '_id'] ?? 0);
+        $this->_loadOwnedEntity($kind, $id, $scope);
+
+        // C7: a future published_at schedules instead of publishing now; the read
+        // path promotes it to 'published' once that time passes.
+        $status = $this->_applyPublish($kind, $id, $uid, $_POST['published_at'] ?? '');
+        // Re-read: set_status stamps published_at, and the client renders it.
+        $row = $model->$getter($id);
+
+        $this->_ok(array(
+            $kind . '_id'  => $id,
+            'status'       => $status,
+            'published_at' => isset($row['published_at']) ? $row['published_at'] : null,
+        ));
+    }
+
+    /**
+     * unpublish / unpublishpost: return the posted id to draft.
+     *
+     * @param string $kind  'page' | 'post'
+     * @param int    $uid
+     * @param array  $scope the resolved, authorized request scope
+     * @return void (emits JSON + exit)
+     */
+    private function _unpublishEntity($kind, $uid, $scope)
+    {
+        $kind  = $this->_ownerType($kind);
+        $model = ($kind === 'post') ? $this->CmsPost : $this->CmsPage;
+
+        $id = (int)($_POST[$kind . '_id'] ?? 0);
+        $this->_loadOwnedEntity($kind, $id, $scope);
+
+        $model->set_status($id, 'draft', $uid);
+
+        $this->_ok(array(
+            $kind . '_id' => $id,
+            'status'      => 'draft',
+        ));
+    }
+
+    /**
+     * deletepage / deletepost: soft-delete (C2 Trash) the posted id.
+     * The is_system refusal is page-only — posts carry no such column.
+     *
+     * @param string $kind  'page' | 'post'
+     * @param int    $uid
+     * @param array  $scope the resolved, authorized request scope
+     * @return void (emits JSON + exit)
+     */
+    private function _deleteEntity($kind, $uid, $scope)
+    {
+        $kind  = $this->_ownerType($kind);
+        $model = ($kind === 'post') ? $this->CmsPost : $this->CmsPage;
+
+        $id = (int)($_POST[$kind . '_id'] ?? 0);
+        // Includes the IDOR guard: never delete content belonging to another scope.
+        $row = $this->_loadOwnedEntity($kind, $id, $scope);
+        if ($kind === 'page' && !empty($row['is_system'])) {
+            $this->_fail('System pages cannot be deleted.', 3);
+        }
+
+        $deleter = 'delete_' . $kind;
+        $deleted = (bool)$model->$deleter($id, (string)$scope['type'], (int)$scope['id'], $uid);
+        if (!$deleted) {
+            $this->_fail('Could not delete the ' . $kind . '.');
+        }
+
+        // Soft-delete (C2): the row is moved to Trash, recoverable via restore.
+        $this->_ok(array($kind . '_id' => $id, 'deleted' => true, 'trashed' => true));
+    }
+
+    /**
+     * restorepage / restorepost: bring the posted id back out of the Trash.
+     * The scope IDOR guard is the LIB's here (RestorePage/RestorePost take the
+     * caller's scope) because a trashed row is invisible to get_page/get_post.
+     *
+     * @param string $kind  'page' | 'post'
+     * @param int    $uid
+     * @param array  $scope the resolved, authorized request scope
+     * @return void (emits JSON + exit)
+     */
+    private function _restoreEntity($kind, $uid, $scope)
+    {
+        $kind  = $this->_ownerType($kind);
+        $model = ($kind === 'post') ? $this->CmsPost : $this->CmsPage;
+
+        $id = (int)($_POST[$kind . '_id'] ?? 0);
+        if ($id <= 0) {
+            $this->_fail(ucfirst($kind) . ' not found.', 4);
+        }
+
+        $restore = 'Restore' . ucfirst($kind);
+        $ok = (bool)$model->$restore($id, (string)$scope['type'], (int)$scope['id'], $uid);
+        if (!$ok) {
+            // A slug collision with a LIVE row is the one recoverable failure —
+            // name it, so the officer knows to rename the other one first.
+            if ($model->RestoreSlugConflict($id)) {
+                $this->_fail(
+                    'A live ' . $kind . ' already uses this address (slug). '
+                    . 'Rename that ' . $kind . ', then restore this one.'
+                );
+            }
+            $this->_fail('Could not restore the ' . $kind . ' (it may not be in the Trash).');
+        }
+        $this->_ok(array($kind . '_id' => $id, 'restored' => true));
+    }
+
+    /**
+     * Load a page/post by id for a by-id mutation, or emit the JSON refusal and
+     * exit: the id <= 0 / not-found check ("<Noun> not found.", status 4) followed
+     * by the scope-ownership IDOR guard. Returns the row.
+     *
+     * This is the LOAD half only. The _begin()/_scope()/_require() preamble stays
+     * spelled out in every endpoint deliberately — _begin() is where the CSRF
+     * check lives, and its literal presence at the top of each handler is how a
+     * reader (or reviewer) sees that CSRF is enforced without following a call.
+     *
+     * NOT used for media: those endpoints intentionally have no not-found branch
+     * at all (a missing media id falls through to _requireOwned and is refused as
+     * status 5, and mediaupdate's "Nothing to update" gate sits BETWEEN its id
+     * check and its ownership check), so routing them through here would change
+     * which error a client gets.
+     *
+     * @param string $kind  'page' | 'post'
+     * @param mixed  $id    the posted owner id (raw)
+     * @param array  $scope the resolved, authorized request scope
+     * @return array the owner row
+     */
+    private function _loadOwnedEntity($kind, $id, $scope)
+    {
+        $kind = $this->_ownerType($kind);
+        $id   = (int)$id;
+        $row  = ($id > 0)
+            ? (($kind === 'post') ? $this->CmsPost->get_post($id) : $this->CmsPage->get_page($id))
+            : null;
+        if ($id <= 0 || empty($row)) {
+            $this->_fail(ucfirst($kind) . ' not found.', 4);
+        }
+        $this->_requireOwned($row, $scope);
+        return $row;
     }
 
     /**
@@ -1910,9 +2053,9 @@ class Controller_CmsAjax extends Controller
      */
     private function _requireOwnerEditable($uid, $ownerType, $ownerId, $scope)
     {
-        $ownerType = ($ownerType === 'post') ? 'post' : 'page';
+        $ownerType = $this->_ownerType($ownerType);
         $ownerId = (int)$ownerId;
-        $label = ($ownerType === 'post') ? 'Post' : 'Page';
+        $label = ucfirst($ownerType);
 
         if ($ownerId <= 0) {
             $this->_fail($label . ' not found.', 4);

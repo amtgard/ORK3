@@ -42,6 +42,8 @@ class Controller_Blog extends Controller
         // #123: the public blog is a CMS-styled surface (not the front-door home),
         // so the brand serif must load — default.theme gates it on this flag.
         $this->data['IsCmsPage'] = true;
+        // The global blog belongs to the Amtgard-level site: "Amtgard - News".
+        $this->data['SiteTitleOrg'] = self::PUBLIC_SITE_BRAND;
     }
 
     /**
@@ -50,20 +52,9 @@ class Controller_Blog extends Controller
     public function index($action = null)
     {
         $this->template = 'Blog_index.tpl';
-        $this->load_model('CmsPost');
 
-        $page = isset($_GET['p']) ? (int) $_GET['p'] : 1;
-        if ($page < 1) {
-            $page = 1;
-        }
-        $tag = isset($_GET['tag']) ? trim((string) $_GET['tag']) : '';
-
-        $perPage = self::PER_PAGE;
-        $offset  = ($page - 1) * $perPage;
-
+        $tag  = isset($_GET['tag']) ? trim((string) $_GET['tag']) : '';
         $opts = array(
-            'limit'      => $perPage,
-            'offset'     => $offset,
             'scope_type' => 'global',
             'scope_id'   => 0,
         );
@@ -71,32 +62,17 @@ class Controller_Blog extends Controller
             $opts['tag'] = $tag;
         }
 
-        $result = $this->CmsPost->list_posts($opts);
-        $rows    = isset($result['rows']) && is_array($result['rows']) ? $result['rows'] : array();
-        $total   = isset($result['total']) ? (int) $result['total'] : 0;
-        $pages   = ($perPage > 0) ? (int) ceil($total / $perPage) : 1;
-        if ($pages < 1) {
-            $pages = 1;
-        }
+        // Shared paginated fetch + out-of-range clamp + refetch (see trait.CmsScope);
+        // Controller_Site::blog uses the same helper at org scope.
+        $paged = $this->_cmsPagedPosts($opts, self::PER_PAGE, isset($_GET['p']) ? (int) $_GET['p'] : 1);
+        $page  = $paged['page'];
 
-        // Clamp an out-of-range page so the OFFSET can never exceed the result
-        // set (an unbounded ?p= would otherwise scan the whole set for nothing).
-        // Refetch the last valid page's rows only when the request was too high.
-        if ($page > $pages) {
-            $page          = $pages;
-            $opts['offset'] = ($page - 1) * $perPage;
-            $result = $this->CmsPost->list_posts($opts);
-            $rows   = isset($result['rows']) && is_array($result['rows']) ? $result['rows'] : array();
-            $total  = isset($result['total']) ? (int) $result['total'] : $total;
-        }
-
-        $this->data['posts']       = $rows;
-        $this->data['total_posts'] = $total;
+        $this->data['posts']       = $paged['rows'];
         $this->data['page']        = $page;
-        $this->data['total_pages'] = $pages;
-        $this->data['per_page']    = $perPage;
+        $this->data['total_pages'] = $paged['pages'];
         $this->data['tag']         = $tag;
-        $this->data['page_title']  = ($tag !== '') ? ('News — ' . $tag) : 'News';
+        // Leaf only — the org half ("Amtgard") is published in the constructor.
+        $this->data['page_title']  = ($tag !== '') ? ('News: ' . $tag) : 'News';
         // #123: load the front-door theme tokens on the index too (post() already
         // does) so the blog list matches the CMS look.
         $this->_attachFrontDoorTheme();
@@ -106,14 +82,13 @@ class Controller_Blog extends Controller
         $canon = UIR . 'Blog'
             . ($tag !== '' ? '/index&tag=' . rawurlencode($tag) : '')
             . ($page > 1 ? (($tag !== '' ? '&' : '/index&') . 'p=' . $page) : '');
-        $this->data['PageMeta'] = array(
+        $this->data['PageMeta'] = CmsMeta::Build(array(
             'canonical'   => $canon,
             'og_type'     => 'website',
             'og_title'    => ($tag !== '' ? ('News — ' . $tag) : 'Amtgard News'),
             'og_desc'     => 'Latest news and announcements from the Amtgard Online Record Keeper.',
-            'og_image'    => '',
-            'og_sitename' => 'ORK 3 - Amtgard Online Record Keeper',
-        );
+            'og_sitename' => self::APP_BRAND,
+        ));
         $this->_cmsFab(UIR . 'Cms/posts', 'Manage posts');
     }
 
@@ -174,26 +149,19 @@ class Controller_Blog extends Controller
     {
         $canon = UIR . 'Blog/post/' . rawurlencode((string) ($post['slug'] ?? ''));
 
-        $host   = (string) ($_SERVER['HTTP_HOST'] ?? '');
-        $https  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-            || ((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-        $origin = ($host !== '') ? (($https ? 'https://' : 'http://') . $host) : '';
-
-        $ogImage = '';
-        if (is_array($hero) && !empty($hero['url'])) {
-            $u = (string) $hero['url'];
-            $ogImage = preg_match('#^https?://#i', $u) ? $u : ($origin . '/' . ltrim($u, '/'));
-        }
+        $ogImage = (is_array($hero) && !empty($hero['url']))
+            ? CmsMeta::Absolutize((string) $hero['url'], CmsMeta::Origin())
+            : '';
 
         $title = trim((string) ($post['title'] ?? ''));
-        $this->data['PageMeta'] = array(
+        $this->data['PageMeta'] = CmsMeta::Build(array(
             'canonical'   => $canon,
             'og_type'     => 'article',
             'og_title'    => ($title !== '' ? $title : 'Amtgard News'),
             'og_desc'     => trim((string) ($post['excerpt'] ?? '')),
             'og_image'    => $ogImage,
-            'og_sitename' => 'ORK 3 - Amtgard Online Record Keeper',
-        );
+            'og_sitename' => self::APP_BRAND,
+        ));
     }
 
     /**
@@ -229,23 +197,21 @@ class Controller_Blog extends Controller
      */
     private function _cmsFab($editUrl, $editTip)
     {
-        $uid = (int) ($this->session->user_id ?? 0);
-        if ($uid <= 0) {
-            return;
-        }
-        // #29: edit gate via the single shared CmsCan-backed helper (super-admin,
-        // a global or matching kingdom/park ork_cms_grant, or the officer
-        // AUTH_EDIT bridge — replacing the old hand-rolled super-admin + caps path).
-        if ($this->_cmsCanEditScope($uid, self::$SCOPE)) {
-            $this->data['cmsEditUrl'] = $editUrl;
-            $this->data['cmsEditTip'] = $editTip;
-        }
-        // The new-post FAB still needs the distinct create capability; resolve it
-        // through the same CmsCan surface for consistency.
-        $this->load_model('CmsAuth');
-        if ($this->CmsAuth->cms_can($uid, 'page.create', self::$SCOPE)) {
-            $this->data['cmsNewPostUrl'] = UIR . 'Cms/editpost/new';
-            $this->data['cmsNewPostTip'] = 'New post';
-        }
+        // #29: both gates resolve through the shared CmsCan surface (super-admin, a
+        // global or matching kingdom/park ork_cms_grant, or the officer AUTH_EDIT
+        // bridge). The new-post FAB keeps its DISTINCT create capability — on the
+        // global blog a contributor may draft a post without holding page.edit —
+        // which is why _cmsFabData takes the capability from the caller.
+        $this->_cmsFabData(
+            (int) ($this->session->user_id ?? 0),
+            self::$SCOPE,
+            $editUrl,
+            $editTip,
+            array(
+                'url' => UIR . 'Cms/editpost/new',
+                'tip' => 'New post',
+                'cap' => 'page.create',
+            )
+        );
     }
 }

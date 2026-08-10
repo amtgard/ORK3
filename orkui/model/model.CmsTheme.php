@@ -1,14 +1,11 @@
 <?php
 
 // orkui/model/model.CmsTheme.php — thin pass-through to the CmsTheme lib.
+// Calling convention: call the snake_case wrapper where one exists; a
+// PascalCase reach-around via Model::__call is the sanctioned form for lib
+// methods that have no wrapper.
 class Model_CmsTheme extends Model
 {
-    public function __construct()
-    {
-        parent::__construct();
-        $this->CmsTheme = new APIModel('CmsTheme');
-    }
-
     public function get_active_theme($scopeType = 'global', $scopeId = 0)
     {
         return $this->CmsTheme->GetActiveTheme($scopeType, $scopeId);

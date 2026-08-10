@@ -6,12 +6,10 @@
  */
 $kicker   = $blockFields['kicker']    ?? '';
 $heading  = $blockFields['heading']   ?? '';
-$limit    = (int)($blockFields['limit'] ?? 3);
 // A cleared number input arrives as 0/blank — fall back to a sane default rather
 // than slicing to an empty grid under a live heading (sibling blocks do the same).
-if ($limit < 1) {
-    $limit = 3;
-}
+// No upper bound here, unlike the sibling list blocks.
+$limit    = fdClampLimit($blockFields['limit'] ?? null, 3);
 $moreHref = $blockFields['more_href'] ?? '';
 
 $hasRows = is_array($EventSummary) && count($EventSummary) > 0;

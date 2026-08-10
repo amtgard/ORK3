@@ -396,6 +396,26 @@ class CmsSanitizer
     }
 
     /**
+     * Escape a string for an XML text node or attribute value.
+     *
+     * XML, NOT HTML5: the ENT_XML1 flag is what makes this correct for the RSS
+     * feeds and the sitemap. HTML5 escaping would emit named entities (e.g.
+     * &apos; handling and the wider HTML5 entity set) that are not defined in
+     * plain XML, producing a document a strict parser rejects.
+     *
+     * Lives here — on the DB-free utility class both the lib and controller
+     * layers already load — so CmsPost's RSS builder and Controller_Site's
+     * sitemap escape identically instead of each carrying a private copy.
+     *
+     * @param mixed $text
+     * @return string
+     */
+    public static function XmlEscape($text)
+    {
+        return htmlspecialchars((string)$text, ENT_QUOTES | ENT_XML1, 'UTF-8');
+    }
+
+    /**
      * Replace an element with its children (unwrap), preserving order.
      */
     private static function unwrap(DOMElement $el)

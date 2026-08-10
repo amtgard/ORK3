@@ -30,8 +30,8 @@ class CmsAuth extends CmsBase
     private static $ROLES = array('contributor', 'author', 'editor', 'publisher', 'admin');
 
     /**
-     * #26: fail-closed sentinel for an unrecognized scope_type. _normalizeScopeType
-     * (overridden below for this RBAC layer) returns this — NOT 'global' — for any
+     * #26: fail-closed sentinel for an unrecognized scope_type. _strictScopeType()
+     * (this layer's own normalizer, below) returns this — NOT 'global' — for any
      * input that isn't exactly global/kingdom/park, so a garbage/forged scope can
      * never be silently promoted to the highest-privilege GLOBAL scope. It matches
      * no real scope enum value, so GrantRole/RevokeRole reject it outright and
@@ -74,18 +74,23 @@ class CmsAuth extends CmsBase
     }
 
     /**
-     * #26: RBAC-layer scope normalization that FAILS CLOSED. The base
-     * CmsBase::_normalizeScopeType clamps any unrecognized input to 'global'
-     * (fine for a media/content scope filter), but for authorization that would
-     * let a typo'd/forged scope_type silently target the site-wide GLOBAL scope.
+     * #26: RBAC-layer scope normalization that FAILS CLOSED. The base scope
+     * clamp in CmsBase collapses any unrecognized input to 'global' (fine for a
+     * media/content scope filter), but for authorization that would let a
+     * typo'd/forged scope_type silently target the site-wide GLOBAL scope.
      * Here an exact global/kingdom/park passes through; anything else collapses to
      * INVALID_SCOPE — a value that matches no real scope, so every grant read,
      * grant write, and capability check that flows through this method fails safe.
      *
+     * This is deliberately a SEPARATE name, not an override of the base clamp:
+     * an override would silently retarget the inherited helpers (_cmsAudit,
+     * _softDelete, _restore) onto a return domain they were never written for.
+     * Every authorization path in this class calls this method explicitly.
+     *
      * @param string $scopeType
      * @return string 'global'|'kingdom'|'park'|INVALID_SCOPE
      */
-    protected function _normalizeScopeType($scopeType)
+    protected function _strictScopeType($scopeType)
     {
         $scopeType = (string)$scopeType;
         if ($scopeType === 'global' || $scopeType === 'kingdom' || $scopeType === 'park') {
@@ -174,7 +179,7 @@ class CmsAuth extends CmsBase
         $DB->mundane_id = $uid;
 
         if ($scopeType !== null) {
-            $normType = $this->_normalizeScopeType($scopeType);
+            $normType = $this->_strictScopeType($scopeType);
             $sql .= ' AND scope_type = :scope_type';
             $DB->scope_type = $normType;
             if ($scopeId !== null) {
@@ -209,7 +214,7 @@ class CmsAuth extends CmsBase
      */
     public function GetUserCapabilities($uid, $scope)
     {
-        $targetType = $this->_normalizeScopeType(isset($scope['type']) ? $scope['type'] : 'global');
+        $targetType = $this->_strictScopeType(isset($scope['type']) ? $scope['type'] : 'global');
         $targetId   = isset($scope['id']) ? (int)$scope['id'] : 0;
 
         $caps = array();
@@ -273,7 +278,7 @@ class CmsAuth extends CmsBase
         }
 
         // (3) Scope bridge — only meaningful for kingdom/park scopes.
-        $scopeType = $this->_normalizeScopeType(isset($scope['type']) ? $scope['type'] : 'global');
+        $scopeType = $this->_strictScopeType(isset($scope['type']) ? $scope['type'] : 'global');
         $scopeId   = isset($scope['id']) ? (int)$scope['id'] : 0;
 
         if (($scopeType === 'kingdom' || $scopeType === 'park') && $scopeId > 0 && is_object(Ork3::$Lib->authorization)) {
@@ -322,6 +327,67 @@ class CmsAuth extends CmsBase
      * ------------------------------------------------------------------ */
 
     /**
+     * Shared validation + authorization preamble for GrantRole/RevokeRole.
+     *
+     * FAIL-CLOSED CONTRACT: the ONLY success signal is a non-null array. Every
+     * rejection returns literal NULL — never false, 0 or '' — and every caller
+     * MUST test `=== null`. A truthiness test would fail OPEN, because a valid
+     * normalized tuple is an array that could otherwise be confused with a
+     * rejection sentinel by a sloppy comparison.
+     *
+     * Rejects, in order:
+     *  - a non-positive grantee uid or a role outside the enum;
+     *  - #26: a scope_type that isn't exactly global/kingdom/park (INVALID_SCOPE
+     *    is never clamped to 'global' — a forged scope can't become site-wide);
+     *  - an absent (<= 0) actor, or an actor lacking roles.manage on the target
+     *    scope. The actor check is mandatory: grantedBy/actorUid used to be
+     *    recorded for audit but never enforced, so any caller could escalate.
+     *
+     * #27 normalization: a global grant always keys at scope_id 0.
+     *
+     * @param int    $uid       grantee mundane_id
+     * @param string $role      one of the allowed enum values
+     * @param string $scopeType 'global'|'kingdom'|'park'
+     * @param int    $scopeId   scope owner id (0 for global)
+     * @param int    $actorUid  acting mundane_id (grantedBy / actorUid)
+     * @return array|null normalized ['uid','role','scope_type','scope_id','actor'],
+     *                    or NULL when the mutation is denied
+     */
+    private function _authorizeGrantMutation($uid, $role, $scopeType, $scopeId, $actorUid)
+    {
+        $uid  = (int)$uid;
+        $role = (string)$role;
+        if ($uid <= 0 || !in_array($role, self::$ROLES, true)) {
+            return null;
+        }
+
+        $scopeType = $this->_strictScopeType($scopeType);
+        // #26: fail closed — an unrecognized scope_type is never a real scope.
+        if ($scopeType === self::INVALID_SCOPE) {
+            return null;
+        }
+        // #27: a global grant always lives at scope_id 0 (no phantom global/nonzero).
+        $scopeId  = ($scopeType === 'global') ? 0 : (int)$scopeId;
+        $actorUid = (int)$actorUid;
+
+        // Authorization: the actor must hold roles.manage on the target scope.
+        // A missing/zero actor is a DENIAL, not a bypass.
+        if ($actorUid <= 0
+            || !$this->CmsCan($actorUid, 'roles.manage', array('type' => $scopeType, 'id' => $scopeId))
+        ) {
+            return null;
+        }
+
+        return array(
+            'uid'        => $uid,
+            'role'       => $role,
+            'scope_type' => $scopeType,
+            'scope_id'   => $scopeId,
+            'actor'      => $actorUid,
+        );
+    }
+
+    /**
      * Idempotently grant a role at a scope. Returns the grant_id (existing row
      * id when the grant already exists, new id otherwise; 0 on invalid input).
      *
@@ -336,28 +402,18 @@ class CmsAuth extends CmsBase
     {
         global $DB;
 
-        $uid  = (int)$uid;
-        $role = (string)$role;
-        if ($uid <= 0 || !in_array($role, self::$ROLES, true)) {
+        // Validation + authorization (#26/#27 + the roles.manage actor check).
+        // MUST be an identity test against null: the helper's only success signal
+        // is a non-null array, and a truthiness test here would fail OPEN.
+        $auth = $this->_authorizeGrantMutation($uid, $role, $scopeType, $scopeId, $grantedBy);
+        if ($auth === null) {
             return 0;
         }
-        $scopeType = $this->_normalizeScopeType($scopeType);
-        // #26: fail closed — an unrecognized scope_type never becomes a real grant.
-        if ($scopeType === self::INVALID_SCOPE) {
-            return 0;
-        }
-        // #27: a global grant always lives at scope_id 0 (no phantom global/nonzero).
-        $scopeId   = ($scopeType === 'global') ? 0 : (int)$scopeId;
-        $grantedBy = (int)$grantedBy;
-
-        // Authorization: the actor must hold roles.manage on the target scope.
-        // Without this any caller could escalate roles (the grantedBy field was
-        // recorded for audit but never enforced).
-        if ($grantedBy <= 0
-            || !$this->CmsCan($grantedBy, 'roles.manage', array('type' => $scopeType, 'id' => $scopeId))
-        ) {
-            return 0;
-        }
+        $uid       = $auth['uid'];
+        $role      = $auth['role'];
+        $scopeType = $auth['scope_type'];
+        $scopeId   = $auth['scope_id'];
+        $grantedBy = $auth['actor'];
 
         // INSERT IGNORE makes the unique-key collision a no-op; we then read
         // the row back by the unique tuple to get the authoritative id (a
@@ -420,29 +476,19 @@ class CmsAuth extends CmsBase
     {
         global $DB;
 
-        $uid  = (int)$uid;
-        $role = (string)$role;
-        if ($uid <= 0 || !in_array($role, self::$ROLES, true)) {
+        // Validation + authorization (#26/#27 + the roles.manage actor check),
+        // identical to GrantRole's. MUST be an identity test against null — the
+        // helper's only success signal is a non-null array, and a truthiness test
+        // here would fail OPEN and let an unauthorized revoke through.
+        $auth = $this->_authorizeGrantMutation($uid, $role, $scopeType, $scopeId, $actorUid);
+        if ($auth === null) {
             return false;
         }
-        $scopeType = $this->_normalizeScopeType($scopeType);
-        // #26: fail closed — an unrecognized scope_type can never match a real grant.
-        if ($scopeType === self::INVALID_SCOPE) {
-            return false;
-        }
-        // #27: a global grant always lives at scope_id 0.
-        $scopeId   = ($scopeType === 'global') ? 0 : (int)$scopeId;
-
-        // Authorization (fail-closed, mirrors GrantRole): the actor MUST hold
-        // roles.manage on the target scope. A missing/zero actor is a denial, not
-        // a bypass — otherwise a caller that forgot to pass the actor could revoke
-        // any grant unchecked.
-        $actorUid = (int)$actorUid;
-        if ($actorUid <= 0
-            || !$this->CmsCan($actorUid, 'roles.manage', array('type' => $scopeType, 'id' => $scopeId))
-        ) {
-            return false;
-        }
+        $uid       = $auth['uid'];
+        $role      = $auth['role'];
+        $scopeType = $auth['scope_type'];
+        $scopeId   = $auth['scope_id'];
+        $actorUid  = $auth['actor'];
 
         $DB->Clear();
         $DB->mundane_id = $uid;
@@ -571,7 +617,7 @@ class CmsAuth extends CmsBase
         $DB->Clear();
         if ($scopeType !== null) {
             $sql .= ' AND g.scope_type = :scope_type';
-            $DB->scope_type = $this->_normalizeScopeType($scopeType);
+            $DB->scope_type = $this->_strictScopeType($scopeType);
             if ($scopeId !== null) {
                 $sql .= ' AND g.scope_id = :scope_id';
                 $DB->scope_id = (int)$scopeId;

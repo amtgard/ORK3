@@ -80,11 +80,22 @@ $dashSiteHomeId = (int)($dashSite['home_page_id'] ?? 0);
 $dashCanEditSite = !empty($CanEditSite);
 $dashSitePages  = isset($PickerPages) && is_array($PickerPages) ? $PickerPages : array();
 // Public URL namespace for this scope — parks are served at /p/{slug}, everyone
-// else at /k/{slug}. Mirrors Controller_Site::_prefixFor().
-$dashSitePrefix = ((string)($dashScope['type'] ?? '') === 'park') ? 'p' : 'k';
+// else at /k/{slug}. Supplied by the controller from CmsSite::UrlPrefixFor(), the
+// single owner of the rule (Controller_Site::_prefixFor reads the same method), so
+// this no longer re-derives it. Falls back for a render that predates the var.
+$dashSitePrefix = isset($SitePrefix) && $SitePrefix !== ''
+    ? (string)$SitePrefix
+    : (((string)($dashScope['type'] ?? '') === 'park') ? 'p' : 'k');
 // Who may change the web address differs by scope (kingdom: monarch/regent;
 // park: the park's own officers) — keep the copy scope-neutral.
 $dashSiteAdminTerm = 'a site administrator';
+// The org-unit NOUN for this scope: 'Kingdom', 'Principality' or 'Park'. Amtgard
+// stores a principality as an ork_kingdom row with a parent kingdom, so a
+// principality's site IS a kingdom-scoped site — but calling it a kingdom in
+// front of its officers states something untrue about their org. Falls back to
+// the neutral 'site' when the controller did not resolve one.
+$dashOrgNoun      = trim((string)($CmsScopeNoun ?? ''));
+$dashOrgNounLower = ($dashOrgNoun !== '') ? strtolower($dashOrgNoun) : 'site';
 ?>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>default/style/cms-admin.css?v=<?= filemtime(__DIR__ . '/style/cms-admin.css') ?>">
 
@@ -145,8 +156,8 @@ include __DIR__ . '/cms/_shell_top.tpl';
                         <i class="fas fa-eye-slash"></i> Unpublish
                     </button>
                 <?php else: ?>
-                    <span class="cms-sitecard-note" data-tip="Only a monarch or regent (kingdom administrator) can publish the public site.">
-                        <i class="fas fa-lock"></i> A monarch or regent must publish this site.
+                    <span class="cms-sitecard-note" data-tip="Only <?= $h($dashSiteAdminTerm) ?> can publish this <?= $h($dashOrgNounLower) ?>&#39;s public site.">
+                        <i class="fas fa-lock"></i> Only <?= $h($dashSiteAdminTerm) ?> can publish this site.
                     </span>
                 <?php endif; ?>
             </div>

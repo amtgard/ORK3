@@ -60,8 +60,6 @@ class CmsBase extends Ork3
 
     /**
      * Shared GhettoCache handle, or null when the memcache layer isn't wired up.
-     * (CmsPost keeps its own private _cache() — a protected duplicate here would
-     * be an illegal visibility narrowing, so this uses a distinct name.)
      *
      * @return Ghettocache|null
      */
@@ -284,8 +282,10 @@ class CmsBase extends Ork3
      * Hoisted here to end the pre-existing inconsistency where CmsPage stripped
      * non-alphanumerics to nothing ('My Page' -> 'mypage') while CmsSite
      * hyphenated ('My Kingdom' -> 'my-kingdom'). Both now route through this, so
-     * derivation is identical everywhere. Length clamping (a column-width concern)
-     * stays with the caller — see CmsSite::DeriveSlug.
+     * derivation is identical everywhere. Length clamping is handled here too via
+     * $maxLen (see #58 below): CmsSite::DeriveSlug passes 160 and CmsPost::_slugify
+     * passes 80, so callers name their column width rather than re-implementing the
+     * substr/rtrim themselves.
      *
      * NOTE: this is for DERIVING a slug from human input, not for normalizing an
      * inbound URL segment for LOOKUP — the public resolvers deliberately keep
@@ -298,12 +298,12 @@ class CmsBase extends Ork3
      * to ASCII ('Café' -> 'cafe') rather than dropped, so existing callers are
      * unaffected.
      *
-     * KNOWN EXCEPTION: tag slugs do NOT come through here. CmsPost::_slugify()
-     * still carries its own iconv('ASCII//TRANSLIT') block, so tag slugs remain
-     * libc-dependent while page/post/site slugs are now deterministic. That is a
-     * real defect — _upsertTag() de-duplicates on the slug, so one tag name can
-     * produce two ork_cms_tag rows across hosts — but it is tracked separately;
-     * do not assume this method already covers it.
+     * TAG SLUGS ROUTE THROUGH HERE TOO: CmsPost::_slugify() is a thin wrapper for
+     * _normalizeSlug($text, 80) (the ork_cms_tag.slug column width), so a tag slug
+     * is derived byte-identically to a page/post/site slug on every host. That
+     * matters twice over — a tag slug is a PUBLIC URL segment and it is also the
+     * de-duplication key in _upsertTag(), so a host-dependent derivation would
+     * split one tag name across two ork_cms_tag rows.
      *
      * @param string      $raw           human-entered title/name/slug
      * @param int         $maxLen        clamp to this byte length (0 = no clamp)
@@ -450,6 +450,76 @@ class CmsBase extends Ork3
     }
 
     /**
+     * Does an already-fetched row sit in the wanted scope?
+     *
+     * FAIL-CLOSED BY DESIGN: only the WANTED side is normalized; the STORED side
+     * is compared raw. A row carrying a scope_type outside the enum (legacy junk,
+     * a bad import) therefore matches NOTHING rather than being clamped to
+     * 'global' and silently becoming visible to every global-scope caller. This
+     * is the exact comparison the trash/restore guards have always made — hoisted
+     * so the three raw-compare sites can't drift apart.
+     *
+     * @param array  $row      row carrying scope_type + scope_id
+     * @param string $wantType caller's intended scope_type (normalized here)
+     * @param int    $wantId   caller's intended scope_id
+     * @return bool
+     */
+    protected function _rowInScope(array $row, $wantType, $wantId)
+    {
+        return (string)($row['scope_type'] ?? '') === $this->_normalizeScopeType($wantType)
+            && (int)($row['scope_id'] ?? 0) === (int)$wantId;
+    }
+
+    /**
+     * Clamp a polymorphic block/revision owner type to the supported enum. The
+     * return domain is a CLOSED set of two literals, which is what makes it safe
+     * for the callers that string-INLINE the value into SQL (see
+     * CmsPage::_snapshotRevision, where the tuple appears twice in one statement
+     * and so cannot be bound) — caller input is never echoed through.
+     *
+     * @param string $t
+     * @return string 'page'|'post'
+     */
+    protected function _normalizeOwnerType($t)
+    {
+        return ((string)$t === 'post') ? 'post' : 'page';
+    }
+
+    /**
+     * The table + primary key for a polymorphic owner type, derived from the
+     * NORMALIZED value (never from raw caller input).
+     *
+     * @param string $t 'page'|'post'
+     * @return array ['table' => string, 'pk' => string]
+     */
+    protected function _ownerTable($t)
+    {
+        return ($this->_normalizeOwnerType($t) === 'post')
+            ? array('table' => 'cms_post', 'pk' => 'post_id')
+            : array('table' => 'cms_page', 'pk' => 'page_id');
+    }
+
+    /**
+     * The canonical "is this row live to the public?" SQL predicate for pages and
+     * posts: published, and past its (optional) schedule time.
+     *
+     * SECURITY: this single expression is what keeps drafts and future-scheduled
+     * content off every public surface (page reads, path resolution, post reads,
+     * post lists, RSS). It is emitted as a WHERE fragment at the read gates and —
+     * at CmsPage::GetPageAncestors — wrapped as an `AS is_live` projection so the
+     * DB (not PHP) decides due-ness. Never re-derive it in PHP: config sets
+     * America/Chicago while the DB compares in its own timezone.
+     *
+     * @param string $alias optional table alias to prefix each column with
+     * @return string boolean SQL expression (no surrounding parentheses)
+     */
+    protected function _publishedGateSql($alias = '')
+    {
+        $p = ((string)$alias !== '') ? (string)$alias . '.' : '';
+        return $p . "status = 'published' AND (" . $p . 'published_at IS NULL OR ' . $p . 'published_at <= NOW())';
+    }
+
+    /**
      * Per-request "does this table exist yet?" probe, memoized by full table
      * name. Used to keep optional/migration-gated writes (audit, revision,
      * redirect) silent before their table exists — one SHOW TABLES per table per
@@ -479,6 +549,184 @@ class CmsBase extends Ork3
         }
         self::$_tableExistsMemo[$tableName] = $exists;
         return $exists;
+    }
+
+    /**
+     * Affected-row count of the IMMEDIATELY-PRECEDING write on the shared $DB
+     * connection (Execute() is void under ERRMODE_WARNING, so a silently-dropped
+     * write is only visible this way).
+     *
+     * MUST be the very next statement after its Execute() — ROW_COUNT() reports
+     * on the last statement run on the connection, so any query in between
+     * (including another helper's Clear()/DataSet()) destroys the answer.
+     *
+     * @return int
+     */
+    protected function _affectedRows()
+    {
+        global $DB;
+
+        $DB->Clear();
+        $row = $this->_firstRow($DB->DataSet('SELECT ROW_COUNT() AS rc'));
+        return ($row !== null && isset($row['rc'])) ? (int)$row['rc'] : 0;
+    }
+
+    /**
+     * Build an INSERT statement for a column => value map: a backticked column
+     * list plus one `:name` placeholder per column, in the map's OWN key order
+     * (the caller binds by the same names). Column order is preserved exactly —
+     * callers rely on the generated statement being stable.
+     *
+     * @param string $table  full-suffix table (DB_PREFIX is prepended here)
+     * @param array  $cols   column => value map (only the KEYS are used)
+     * @param bool   $ignore emit INSERT IGNORE instead of INSERT
+     * @return string
+     */
+    protected function _insertSql($table, array $cols, $ignore = false)
+    {
+        $names        = array_keys($cols);
+        $placeholders = array();
+        foreach ($names as $n) {
+            $placeholders[] = ':' . $n;
+        }
+        return ($ignore ? 'INSERT IGNORE INTO ' : 'INSERT INTO ') . DB_PREFIX . $table
+            . ' (`' . implode('`, `', $names) . '`)'
+            . ' VALUES (' . implode(', ', $placeholders) . ')';
+    }
+
+    /**
+     * The id of the LIVE row owning (scope_type, scope_id, slug) in a page/post
+     * table, or 0 when the slug is free.
+     *
+     * The `deleted_at IS NULL` filter is the whole point: a TRASHED row releases
+     * its slug for reuse (its generated slug_live column goes NULL, which is what
+     * the uq_*_scope_slug_live key enforces at the DB layer). Every slug
+     * uniqueness decision in the CMS — create dup pre-check, rename dup
+     * pre-check, restore collision guard — must ask this question the same way,
+     * or a trashed row starts blocking slugs it no longer owns.
+     *
+     * Runs its OWN $DB->Clear(), so a caller must invoke it BEFORE staging any
+     * binds of its own.
+     *
+     * @param string $table     full-suffix table ('cms_page'|'cms_post')
+     * @param string $pk        primary-key column
+     * @param string $slug      slug to test
+     * @param string $scopeType scope_type to test within (used raw, as stored)
+     * @param int    $scopeId   scope_id to test within
+     * @param int    $excludeId ignore this row id (the row being renamed/restored)
+     * @return int owning row id, or 0 when no live row holds the slug
+     */
+    protected function _liveSlugOwner($table, $pk, $slug, $scopeType, $scopeId, $excludeId = 0)
+    {
+        global $DB;
+
+        $excludeId = (int)$excludeId;
+
+        $sql = 'SELECT ' . $pk . ' AS id FROM ' . DB_PREFIX . $table
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND slug = :slug'
+            . ' AND deleted_at IS NULL';
+        if ($excludeId > 0) {
+            $sql .= ' AND ' . $pk . ' <> :exclude_id';
+        }
+        $sql .= ' LIMIT 1';
+
+        $DB->Clear();
+        $DB->scope_type = (string)$scopeType;
+        $DB->scope_id   = (int)$scopeId;
+        $DB->slug       = (string)$slug;
+        if ($excludeId > 0) {
+            $DB->exclude_id = $excludeId;
+        }
+        $row = $this->_firstRow($DB->DataSet($sql));
+
+        return ($row !== null && isset($row['id'])) ? (int)$row['id'] : 0;
+    }
+
+    /**
+     * OPT-IN IDOR guard for a page/post mutation: does row $id live in the scope
+     * the caller says it is operating on, and does this write leave it there?
+     *
+     * OPT-IN CONTRACT: a null $scopeType means "no guard requested" and returns
+     * true immediately — callers that pass null (internal/system writes) must
+     * keep working exactly as before.
+     *
+     * When $data is supplied it is also checked for an IN-FLIGHT scope MOVE: a
+     * caller guarding scope X may not relocate the row out to scope Y in the same
+     * write. With the default empty $data those two tests are no-ops, so a
+     * compare-only caller gets pure "is it mine?" semantics.
+     *
+     * Runs its OWN $DB->Clear(), so it must precede the caller's bind loop.
+     *
+     * @param string      $table     full-suffix table ('cms_page'|'cms_post')
+     * @param string      $pk        primary-key column
+     * @param int         $id        row id
+     * @param string|null $scopeType caller's intended scope_type (null = no guard)
+     * @param int|null    $scopeId   caller's intended scope_id
+     * @param array       $data      the pending column map (checked for a scope move)
+     * @return bool true when the write may proceed
+     */
+    protected function _scopeGuardOk($table, $pk, $id, $scopeType, $scopeId, array $data = array())
+    {
+        global $DB;
+
+        if ($scopeType === null) {
+            return true;   // opt-in: no guard requested
+        }
+        $wantType = $this->_normalizeScopeType($scopeType);
+
+        $DB->Clear();
+        $DB->{$pk} = (int)$id;
+        $cur = $this->_firstRow($DB->DataSet(
+            'SELECT scope_type, scope_id FROM ' . DB_PREFIX . $table
+            . ' WHERE ' . $pk . ' = :' . $pk . ' LIMIT 1'
+        ));
+        if ($cur === null || !$this->_rowInScope($cur, $wantType, $scopeId)) {
+            return false;
+        }
+
+        // Refuse to relocate the row OUT of the guarded scope in this same write.
+        if (array_key_exists('scope_type', $data) && $this->_normalizeScopeType($data['scope_type']) !== $wantType) {
+            return false;
+        }
+        if (array_key_exists('scope_id', $data) && (int)$data['scope_id'] !== (int)$scopeId) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Status-broken-down LIVE row counts for a scope, via a single GROUP BY (no
+     * full-row fetch). Only non-trashed rows count (deleted_at IS NULL). Statuses
+     * with no rows are simply absent from the map. Shared by CmsPage::CountPages
+     * and CmsPost::CountPosts, which differ only by table.
+     *
+     * @param string $table     full-suffix table ('cms_page'|'cms_post'), a
+     *                          code-supplied literal — never caller input
+     * @param string $scopeType 'global' | 'kingdom' | 'park'
+     * @param int    $scopeId   scope owner id (0 for global)
+     * @return array ['total' => int, '<status>' => int, ...]
+     */
+    protected function _countByStatus($table, $scopeType, $scopeId)
+    {
+        global $DB;
+
+        $scopeType = $this->_normalizeScopeType($scopeType);
+
+        $DB->Clear();
+        $DB->scope_type = $scopeType;
+        $DB->scope_id   = (int)$scopeId;
+        $out = array('total' => 0);
+        foreach ($this->_eachRow($DB->DataSet(
+            'SELECT status, COUNT(*) AS c FROM ' . DB_PREFIX . $table
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND deleted_at IS NULL'
+            . ' GROUP BY status'
+        )) as $row) {
+            $c = (int)$row['c'];
+            $out[(string)$row['status']] = $c;
+            $out['total'] += $c;
+        }
+        return $out;
     }
 
     /**
@@ -518,26 +766,11 @@ class CmsBase extends Ork3
         $scopeId   = isset($cols['scope_id']) ? (int)$cols['scope_id'] : 0;
 
         // Dup pre-check — LIVE rows only (a trashed slug is reusable).
-        $DB->Clear();
-        $DB->slug       = $slug;
-        $DB->scope_type = $scopeType;
-        $DB->scope_id   = $scopeId;
-        $existing = $this->_firstRow($DB->DataSet(
-            'SELECT ' . $pk . ' AS id FROM ' . DB_PREFIX . $table
-            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND slug = :slug'
-            . ' AND deleted_at IS NULL LIMIT 1'
-        ));
-        if ($existing !== null) {
+        if ($this->_liveSlugOwner($table, $pk, $slug, $scopeType, $scopeId) > 0) {
             return 0;   // slug already in use by a live row — signal collision
         }
 
-        $names = array_keys($cols);
-        $placeholders = array();
-        foreach ($names as $n) {
-            $placeholders[] = ':' . $n;
-        }
-        $sql = 'INSERT IGNORE INTO ' . DB_PREFIX . $table . ' (`' . implode('`, `', $names) . '`)'
-            . ' VALUES (' . implode(', ', $placeholders) . ')';
+        $sql = $this->_insertSql($table, $cols, true);
 
         $DB->Clear();
         foreach ($cols as $field => $value) {
@@ -546,38 +779,19 @@ class CmsBase extends Ork3
         $DB->Execute($sql);
 
         // Did WE insert (1) or did a concurrent winner already hold the tuple (0)?
-        $DB->Clear();
-        $rc = $this->_firstRow($DB->DataSet('SELECT ROW_COUNT() AS rc'));
-        if ($rc === null || (int)$rc['rc'] < 1) {
+        // Read immediately after the Execute — nothing may intervene.
+        if ($this->_affectedRows() < 1) {
             // #44: ROW_COUNT()==0 does NOT prove a slug collision — INSERT IGNORE
             // also swallows OTHER integrity errors (a bad FK, a NOT-NULL drop,
             // etc.). Re-run the live collision SELECT: only when a live row
             // actually holds the tuple is this a genuine slug collision (0);
             // otherwise the insert failed for another reason, signalled distinctly
             // as -1 so the caller can tell "slug taken" from "write failed".
-            $DB->Clear();
-            $DB->slug       = $slug;
-            $DB->scope_type = $scopeType;
-            $DB->scope_id   = $scopeId;
-            $live = $this->_firstRow($DB->DataSet(
-                'SELECT ' . $pk . ' AS id FROM ' . DB_PREFIX . $table
-                . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND slug = :slug'
-                . ' AND deleted_at IS NULL LIMIT 1'
-            ));
-            return ($live !== null) ? 0 : -1;
+            return ($this->_liveSlugOwner($table, $pk, $slug, $scopeType, $scopeId) > 0) ? 0 : -1;
         }
 
         // Authoritative read-back by the LIVE unique tuple.
-        $DB->Clear();
-        $DB->slug       = $slug;
-        $DB->scope_type = $scopeType;
-        $DB->scope_id   = $scopeId;
-        $row = $this->_firstRow($DB->DataSet(
-            'SELECT ' . $pk . ' AS id FROM ' . DB_PREFIX . $table
-            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND slug = :slug'
-            . ' AND deleted_at IS NULL LIMIT 1'
-        ));
-        return ($row !== null && isset($row['id'])) ? (int)$row['id'] : 0;
+        return $this->_liveSlugOwner($table, $pk, $slug, $scopeType, $scopeId);
     }
 
     /**
@@ -620,12 +834,10 @@ class CmsBase extends Ork3
         }
 
         // IDOR guard (opt-in, mirrors CmsNav::DeleteItem): reject a cross-scope
-        // delete when the caller supplies its intended scope.
-        if ($scopeType !== null) {
-            $wantType = $this->_normalizeScopeType($scopeType);
-            if ((string)$row['scope_type'] !== $wantType || (int)$row['scope_id'] !== (int)$scopeId) {
-                return false;
-            }
+        // delete when the caller supplies its intended scope. Compare-only — the
+        // row is already in hand, so no second read is needed.
+        if ($scopeType !== null && !$this->_rowInScope($row, $scopeType, $scopeId)) {
+            return false;
         }
 
         // Soft-delete + reference cleanup atomically. If the deleted_at write is
@@ -709,26 +921,22 @@ class CmsBase extends Ork3
             return false;   // not found or not trashed
         }
 
-        if ($scopeType !== null) {
-            $wantType = $this->_normalizeScopeType($scopeType);
-            if ((string)$row['scope_type'] !== $wantType || (int)$row['scope_id'] !== (int)$scopeId) {
-                return false;
-            }
+        // Compare-only IDOR guard — the trashed row is already in hand.
+        if ($scopeType !== null && !$this->_rowInScope($row, $scopeType, $scopeId)) {
+            return false;
         }
 
         // Live-slug collision guard: a live row in the same scope already holds
         // this slug → restoring is impossible without a rename. Fail cleanly.
-        $DB->Clear();
-        $DB->scope_type = (string)$row['scope_type'];
-        $DB->scope_id   = (int)$row['scope_id'];
-        $DB->slug       = (string)$row['slug'];
-        $DB->pk         = $id;
-        $clash = $this->_firstRow($DB->DataSet(
-            'SELECT ' . $pk . ' AS id FROM ' . DB_PREFIX . $table
-            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND slug = :slug'
-            . ' AND deleted_at IS NULL AND ' . $pk . ' <> :pk LIMIT 1'
-        ));
-        if ($clash !== null) {
+        $clash = $this->_liveSlugOwner(
+            $table,
+            $pk,
+            (string)$row['slug'],
+            (string)$row['scope_type'],
+            (int)$row['scope_id'],
+            $id
+        );
+        if ($clash > 0) {
             return false;   // slug taken by a live row — cannot restore
         }
 
@@ -781,18 +989,14 @@ class CmsBase extends Ork3
             return false;   // not trashed → the failure was some other cause
         }
 
-        $DB->Clear();
-        $DB->scope_type = (string)$row['scope_type'];
-        $DB->scope_id   = (int)$row['scope_id'];
-        $DB->slug       = (string)$row['slug'];
-        $DB->pk         = $id;
-        $clash = $this->_firstRow($DB->DataSet(
-            'SELECT ' . $pk . ' AS id FROM ' . DB_PREFIX . $table
-            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND slug = :slug'
-            . ' AND deleted_at IS NULL AND ' . $pk . ' <> :pk LIMIT 1'
-        ));
-
-        return $clash !== null;
+        return $this->_liveSlugOwner(
+            $table,
+            $pk,
+            (string)$row['slug'],
+            (string)$row['scope_type'],
+            (int)$row['scope_id'],
+            $id
+        ) > 0;
     }
 
     /**

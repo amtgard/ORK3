@@ -8,15 +8,13 @@
  * forwards any unknown method to it. The explicit methods below mirror the
  * lib surface for clarity; all are pure forwards (no business logic here —
  * DB work lives in the lib).
+ *
+ * Calling convention: call the snake_case wrapper where one exists; a
+ * PascalCase reach-around via Model::__call is the sanctioned form for lib
+ * methods that have no wrapper.
  */
 class Model_CmsView extends Model
 {
-    public function __construct()
-    {
-        parent::__construct();
-        $this->CmsView = new APIModel('CmsView');
-    }
-
     public function record_view($scopeType, $scopeId, $entityType, $entityId)
     {
         return $this->CmsView->RecordView($scopeType, $scopeId, $entityType, $entityId);

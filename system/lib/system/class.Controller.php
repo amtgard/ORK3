@@ -2,6 +2,28 @@
 
 class Controller
 {
+    /**
+     * Org name used in the browser tab for the Amtgard-level public site: the
+     * front door and the global CMS pages/blog. Kingdom and park sites supply
+     * their own name instead (Controller_Site::_bootShell).
+     *
+     * Deliberately NOT "ORK 3" — that is the internal application brand, and it
+     * still prefixes every in-app page. These are public marketing pages whose
+     * tab should read "Amtgard - About", not "ORK 3: About".
+     */
+    public const PUBLIC_SITE_BRAND = 'Amtgard';
+
+    /**
+     * The full application brand used in og:site_name / og:title on the public
+     * CMS surfaces (front door, global pages, blog, Kingdoms Directory).
+     *
+     * Distinct from PUBLIC_SITE_BRAND above, which is the SHORT org name shown in
+     * the browser tab. default.theme carries its own copies of this string as the
+     * last-resort fallback for a surface that publishes no $PageMeta at all —
+     * those stay where they are on purpose.
+     */
+    public const APP_BRAND = 'ORK 3 - Amtgard Online Record Keeper';
+
     public $data = [ ];
     public $kingdom = null;
     public $view = null;
@@ -171,7 +193,31 @@ class Controller
         return base64_encode($imgbinary);
     }
 
+    /**
+     * The default landing action, inherited verbatim by every controller that
+     * declares no index() of its own (17 of them) as well as by the site root.
+     *
+     * It is TWO separable halves, split out below so a surface can reuse one
+     * without the other: the shared home data every inheritor expects, and the
+     * front-door payload only the site root renders. index() itself must keep
+     * calling both, in this order, so the front door and all the index()-less
+     * controllers stay byte-identical.
+     */
     public function index($action = null)
+    {
+        $this->_indexCommonData();
+        $this->_indexFrontDoor();
+    }
+
+    /**
+     * Half 1 of index(): the shared landing data — the viewer's home kingdom,
+     * the tournament/kingdom/event/recap summaries, the viewer display name and
+     * the top-level menu shape. No front-door / CMS content.
+     *
+     * Controller_Directory calls THIS ONLY: it renders the same summaries under
+     * its own identity and must not pull in the front-door payload.
+     */
+    protected function _indexCommonData()
     {
         // Determine the logged-in user's home kingdom from their profile in the DB.
         // Fall back to the session-cached value only when not logged in.
@@ -227,11 +273,44 @@ class Controller
         }
         $this->data[ 'EventSummary' ] = $eventSummary;
 
+        // Display name for the member bar (logged-in only)
+        $this->data[ 'ViewerName' ] = '';
+        if ($this->data['LoggedIn'] && isset($this->session->user_id)) {
+            global $DB;
+            $DB->Clear();
+            $_vid = (int) $this->session->user_id;
+            $_vn = $DB->DataSet("SELECT persona, given_name FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$_vid} LIMIT 1");
+            if ($_vn && $_vn->Next()) {
+                $this->data[ 'ViewerName' ] = trim((string) $_vn->persona) !== '' ? $_vn->persona : $_vn->given_name;
+            }
+            $DB->Clear();
+        }
+
+        $this->data[ 'menu' ][ 'home' ] = [ 'url' => UIR, 'display' => 'Home <i class="fas fa-home"></i> ', 'no-crumb' => 'no-crumb' ];
+        if ($this->data['LoggedIn']) {
+            $this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin', 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
+        }
+        unset($this->data[ 'menu' ][ 'kingdom' ]);
+        unset($this->data[ 'menu' ][ 'park' ]);
+    }
+
+    /**
+     * Half 2 of index(): the FRONT-DOOR payload — the CMS-backed home blocks (or
+     * the hardcoded Model_FrontDoor defaults), the front-door theme tokens, the
+     * "Amtgard - {Page}" tab identity, the home-page edit FAB, and the home
+     * canonical/OG. Only the site root renders these.
+     */
+    protected function _indexFrontDoor()
+    {
         // ---- Front door (now CMS-backed, with hardcoded defaults as fallback) ----
         // Prefer the CMS-managed `home` system page when it exists and has blocks;
         // otherwise fall back to the hardcoded Model_FrontDoor defaults so the front
         // door always renders even before the home page is seeded.
         $this->data[ 'IsFrontDoor' ] = true;
+        // Browser-tab identity: public site pages read "{Org} - {Page}". The front
+        // door is the Amtgard-level site, so "Amtgard - Home". See
+        // Controller::PUBLIC_SITE_BRAND and the <title> block in default.theme.
+        $this->data[ 'SiteTitleOrg' ] = self::PUBLIC_SITE_BRAND;
         $this->_attachFrontDoorTheme();
         $frontDoorBlocks = null;
         $this->load_model('CmsPage');
@@ -271,49 +350,27 @@ class Controller
         // branding in default.theme is now a FALLBACK, overridden here so the home
         // canonical is the site root and og:image can use the home page's hero
         // when one is set (else the theme falls back to the ORK default image).
-        $_host   = (string) ($_SERVER['HTTP_HOST'] ?? '');
-        $_https  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-            || ((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-        $_origin = ($_host !== '') ? (($_https ? 'https://' : 'http://') . $_host) : '';
+        $_origin  = CmsMeta::Origin();
         $_ogImage = '';
         if (!empty($home) && !empty($home['hero_media_id'])) {
             $this->load_model('CmsMedia');
             if (isset($this->CmsMedia)) {
                 $_hm = $this->CmsMedia->get_media((int) $home['hero_media_id']);
                 if (is_array($_hm) && !empty($_hm['url'])) {
-                    $_u = (string) $_hm['url'];
-                    $_ogImage = preg_match('#^https?://#i', $_u) ? $_u : ($_origin . '/' . ltrim($_u, '/'));
+                    $_ogImage = CmsMeta::Absolutize((string) $_hm['url'], $_origin);
                 }
             }
         }
-        $this->data['PageMeta'] = array(
+        // No Host header (CLI/test render) → no canonical at all rather than a
+        // bare '/' that would resolve against whatever host reads the page.
+        $this->data['PageMeta'] = CmsMeta::Build(array(
             'canonical'   => ($_origin !== '') ? ($_origin . '/') : '',
             'og_type'     => 'website',
-            'og_title'    => 'ORK 3 - Amtgard Online Record Keeper',
+            'og_title'    => self::APP_BRAND,
             'og_desc'     => 'The Online Record Keeper for the Amtgard International LARP.',
             'og_image'    => $_ogImage,
-            'og_sitename' => 'ORK 3 - Amtgard Online Record Keeper',
-        );
-
-        // Display name for the member bar (logged-in only)
-        $this->data[ 'ViewerName' ] = '';
-        if ($this->data['LoggedIn'] && isset($this->session->user_id)) {
-            global $DB;
-            $DB->Clear();
-            $_vid = (int) $this->session->user_id;
-            $_vn = $DB->DataSet("SELECT persona, given_name FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$_vid} LIMIT 1");
-            if ($_vn && $_vn->Next()) {
-                $this->data[ 'ViewerName' ] = trim((string) $_vn->persona) !== '' ? $_vn->persona : $_vn->given_name;
-            }
-            $DB->Clear();
-        }
-
-        $this->data[ 'menu' ][ 'home' ] = [ 'url' => UIR, 'display' => 'Home <i class="fas fa-home"></i> ', 'no-crumb' => 'no-crumb' ];
-        if ($this->data['LoggedIn']) {
-            $this->data[ 'menu' ][ 'admin' ] = [ 'url' => UIR . 'Admin', 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' ];
-        }
-        unset($this->data[ 'menu' ][ 'kingdom' ]);
-        unset($this->data[ 'menu' ][ 'park' ]);
+            'og_sitename' => self::APP_BRAND,
+        ));
     }
 
     /** Resolve the active front-door theme into $data['fdThemeCss'] (global scope, v1). */

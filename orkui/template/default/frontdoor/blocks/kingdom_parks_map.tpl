@@ -52,18 +52,11 @@ if (!function_exists('kpm_map_markdown') && is_file(DIR_LIB . 'Parsedown.php')) 
 // GhettoCache keyed by kingdom_id. Public park geo is safe to share across
 // viewers; a short TTL keeps it fresh. Cached hits skip the DB, Parsedown, and
 // disk probes entirely.
-$kpmParks    = null;
-$kpmCache    = (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache) && is_object(Ork3::$Lib->ghettocache))
-    ? Ork3::$Lib->ghettocache : null;
-$kpmCacheKey = 'k' . $kpmKingdomId;
-if ($kpmCache !== null) {
-    $kpmHit = $kpmCache->get('frontdoor.kingdom_parks_map', $kpmCacheKey, 300);
-    if (is_array($kpmHit)) {
-        $kpmParks = $kpmHit;
-    }
-}
-
-if ($kpmParks === null) {
+$kpmParks = fdBlockCache(
+    CmsRenderCache::NS_KINGDOM_PARKS_MAP,
+    CmsRenderCache::ParksMapKey($kpmKingdomId),
+    CmsRenderCache::TTL,
+    function () use ($kpmKingdomId) {
     $kpmParks = [];
     if (class_exists('APIModel')) {
         try {
@@ -108,10 +101,9 @@ if ($kpmParks === null) {
         }
     }
 
-    if ($kpmCache !== null) {
-        $kpmCache->cache('frontdoor.kingdom_parks_map', $kpmCacheKey, $kpmParks);
+    return $kpmParks;
     }
-}
+);
 
 // Nothing to plot → render nothing (the parks LIST block still stands on its own).
 if (empty($kpmParks)) {
@@ -127,11 +119,13 @@ $kpmKey = (defined('GOOGLE_MAPS_API_KEY') && GOOGLE_MAPS_API_KEY !== '')
     ? (string) GOOGLE_MAPS_API_KEY
     : '';
 ?>
+<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
+<?php if (empty($fdStyleOnce['kingdom_parks_map'])) : $fdStyleOnce['kingdom_parks_map'] = true; ?>
 <style>
 .kpm-block { background: #fff; }
 html[data-theme="dark"] .kpm-block { background: transparent; }
 .kpm-head { margin-bottom: 16px; }
-.kpm-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; margin: 0; font-size: 24px; }
+.kpm-title { margin: 0; font-size: 24px; }
 .kpm-layout { display: grid; grid-template-columns: 1.9fr 1fr; gap: 16px; align-items: stretch; }
 .kpm-map { width: 100%; height: 62vh; min-height: 380px; border-radius: 12px; overflow: hidden; border: 1px solid #e4e8f0; }
 .kpm-loading { display: flex; align-items: center; gap: 10px; justify-content: center; height: 62vh; min-height: 380px; color: #718096; border: 1px dashed #cbd5e0; border-radius: 12px; }
@@ -175,6 +169,7 @@ html[data-theme="dark"] .kpm-section-text { color: #cad3e2; }
 html[data-theme="dark"] .kpm-section-text a { color: #7ba7f2; }
 html[data-theme="dark"] .kpm-title { color: #eef2fa; }
 </style>
+<?php endif; ?>
 <div class="fd-pad fd-section-light kpm-block" id="<?= $kpmId ?>">
     <?php if ($kpmKicker !== '' || $kpmHeading !== ''): ?>
         <div class="kpm-head">

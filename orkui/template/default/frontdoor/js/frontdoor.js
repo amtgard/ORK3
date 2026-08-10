@@ -160,3 +160,125 @@
     });
   });
 })();
+
+// ---- staff_roster: shared contact-card modal ------------------------------
+// Moved verbatim out of frontdoor/blocks/staff_roster.tpl (it contained no PHP)
+// so it is downloaded once and cacheable instead of being inlined per render.
+// The partial still emits the single shared #fdRosterModal markup + its CSS;
+// this behaviour is fully class/attribute-delegated off document, so it does
+// not care how many staff_roster blocks are on the page (or whether any are).
+// Keeps its own DOMContentLoaded shim: frontdoor.js has none and the IIFE above
+// runs at parse time, whereas this needs #fdRosterModal to exist in the DOM.
+(function () {
+    if (window.__fdRosterModalInit) { return; }
+    window.__fdRosterModalInit = true;
+    function ready(fn) { if (document.readyState !== 'loading') { fn(); } else { document.addEventListener('DOMContentLoaded', fn); } }
+    ready(function () {
+        var modal = document.getElementById('fdRosterModal');
+        if (!modal) { return; }
+        var cardEl  = modal.querySelector('.fd-rmodal-card');
+        var avatar  = document.getElementById('fdRModalAvatar');
+        var elName  = document.getElementById('fdRModalName');
+        var elSec   = document.getElementById('fdRModalSecondary');
+        var elRole  = document.getElementById('fdRModalRole');
+        var elBio   = document.getElementById('fdRModalBio');
+        var elProfile = document.getElementById('fdRModalProfile');
+        var lastTrigger = null;
+        var inertNodes = [];   // {el, hadAriaHidden, prevAriaHidden, hadInert}
+
+        function setField(el, val) { if (val) { el.textContent = val; el.hidden = false; } else { el.textContent = ''; el.hidden = true; } }
+
+        // Make everything outside the modal inert + aria-hidden so SR/keyboard
+        // users can't Tab or scroll past the dialog. Walk the siblings of the
+        // modal at every level from its parent up to <body> (mirrors the gallery
+        // lightbox inert pattern).
+        function setBackgroundInert(on) {
+            if (on) {
+                inertNodes = [];
+                var node = modal;
+                while (node && node.parentNode && node.parentNode.nodeType === 1) {
+                    var parent = node.parentNode;
+                    var kids = parent.children;
+                    for (var k = 0; k < kids.length; k++) {
+                        var sib = kids[k];
+                        if (sib === node) { continue; }
+                        inertNodes.push({
+                            el: sib,
+                            hadAriaHidden: sib.hasAttribute('aria-hidden'),
+                            prevAriaHidden: sib.getAttribute('aria-hidden'),
+                            hadInert: sib.hasAttribute('inert')
+                        });
+                        sib.setAttribute('aria-hidden', 'true');
+                        sib.setAttribute('inert', '');
+                    }
+                    if (parent === document.body || parent.tagName === 'BODY') { break; }
+                    node = parent;
+                }
+            } else {
+                inertNodes.forEach(function (r) {
+                    if (r.hadAriaHidden) { r.el.setAttribute('aria-hidden', r.prevAriaHidden); }
+                    else { r.el.removeAttribute('aria-hidden'); }
+                    if (!r.hadInert) { r.el.removeAttribute('inert'); }
+                });
+                inertNodes = [];
+            }
+        }
+
+        function open(trigger) {
+            var d = trigger.dataset;
+            if (d.fdImg) {
+                avatar.textContent = '';
+                var im = document.createElement('img');
+                im.src = d.fdImg; im.alt = '';
+                avatar.appendChild(im);
+            } else {
+                avatar.textContent = d.fdInitials || '?';
+            }
+            elName.textContent = d.fdName || '';
+            setField(elSec, d.fdSecondary || '');
+            setField(elRole, d.fdRole || '');
+            setField(elBio, d.fdBio || '');
+            if (elProfile) {
+                if (d.fdLink) { elProfile.setAttribute('href', d.fdLink); elProfile.hidden = false; }
+                else { elProfile.removeAttribute('href'); elProfile.hidden = true; }
+            }
+            lastTrigger = trigger;
+            modal.hidden = false;
+            modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
+            setBackgroundInert(true);
+            document.body.style.overflow = 'hidden';
+            cardEl.focus();
+        }
+        function close() {
+            modal.classList.remove('is-open');
+            modal.hidden = true;
+            modal.setAttribute('aria-hidden', 'true');
+            setBackgroundInert(false);
+            document.body.style.overflow = '';
+            if (lastTrigger && typeof lastTrigger.focus === 'function') { lastTrigger.focus(); }
+            lastTrigger = null;
+        }
+
+        document.addEventListener('click', function (e) {
+            var trigger = e.target.closest ? e.target.closest('.fd-roster-card-modal') : null;
+            if (trigger) { e.preventDefault(); open(trigger); return; }
+            if (e.target.closest && e.target.closest('[data-fd-close]')) { close(); }
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('is-open')) { close(); return; }
+            var trigger = (e.target.closest) ? e.target.closest('.fd-roster-card-modal') : null;
+            if (trigger && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(trigger); }
+        });
+        // Minimal focus trap: keep Tab within the dialog (close button is the only
+        // focusable control), returning focus to the dialog card when it escapes.
+        modal.addEventListener('keydown', function (e) {
+            if (e.key !== 'Tab' || !modal.classList.contains('is-open')) { return; }
+            var focusables = modal.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])');
+            if (!focusables.length) { e.preventDefault(); cardEl.focus(); return; }
+            var first = focusables[0], last = focusables[focusables.length - 1];
+            if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        });
+    });
+})();

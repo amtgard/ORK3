@@ -30,13 +30,7 @@ if ($keKingdomId <= 0) {
 
 $keKicker   = isset($blockFields['kicker']) ? trim((string) $blockFields['kicker']) : '';
 $keHeading  = isset($blockFields['heading']) ? trim((string) $blockFields['heading']) : 'Upcoming Events';
-$keLimit    = isset($blockFields['limit']) ? (int) $blockFields['limit'] : 3;
-if ($keLimit < 1) {
-    $keLimit = 3;
-}
-if ($keLimit > 12) {
-    $keLimit = 12;
-}
+$keLimit    = fdClampLimit($blockFields['limit'] ?? null, 3, 12);
 $keMoreHref = isset($blockFields['more_href']) ? trim((string) $blockFields['more_href']) : '';
 if ($keMoreHref === '#') {
     // Blank URL fields are rewritten to '#' by the save sanitizer — treat as unset.
@@ -58,39 +52,6 @@ if (class_exists('APIModel')) {
 }
 $keRows = array_slice($keRows, 0, $keLimit);
 ?>
-<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
-<?php if (empty($fdStyleOnce['kingdom_events'])) : $fdStyleOnce['kingdom_events'] = true; ?>
-<style>
-.ke-block { background: var(--fd-bg); }
-.ke-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; gap: 12px; }
-.ke-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; margin: 0; font-size: 24px; }
-.ke-more { color: #1d4ed8; font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
-.ke-more:hover { text-decoration: underline; }
-.ke-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.ke-card {
-    display: block; text-decoration: none; color: inherit;
-    background: var(--fd-bg); border: 1px solid #e4e8f0; border-radius: 10px; overflow: hidden;
-    transition: box-shadow .15s ease, transform .15s ease;
-}
-.ke-card:hover { box-shadow: 0 6px 18px rgba(20,30,60,.12); transform: translateY(-2px); }
-.ke-card-accent { height: 8px; background: var(--gold, #d4af37); }
-.ke-card-body { padding: 16px; }
-.ke-card-date { font-size: 12px; color: #7a5c00; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
-.ke-card-name { font-weight: 700; font-size: 15px; margin: 4px 0; color: var(--fd-text); }
-.ke-card-sub { font-size: 12px; color: #778; }
-.ke-card-rsvp { font-size: 12px; color: #1d4ed8; margin-top: 6px; font-weight: 600; }
-.ke-empty { color: #8899aa; font-style: italic; text-align: center; padding: 18px; }
-
-@media (max-width: 820px) { .ke-grid { grid-template-columns: 1fr; } }
-
-html[data-theme="dark"] .ke-block { background: transparent; }
-html[data-theme="dark"] .ke-card { background: #1b2233; border-color: #2c3650; }
-html[data-theme="dark"] .ke-card-name { color: #eef2fa; }
-html[data-theme="dark"] .ke-card-sub { color: #b6c0d4; }
-html[data-theme="dark"] .ke-card-rsvp { color: #7ba7f2; }
-html[data-theme="dark"] .ke-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45); }
-</style>
-<?php endif; ?>
 <div class="fd-pad fd-section-light ke-block">
     <div class="ke-head">
         <div>

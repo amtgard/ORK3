@@ -33,6 +33,52 @@ class CmsMedia extends CmsBase
      */
     public const MAX_FILTER_IDS = 1000;
 
+    /**
+     * Per-org storage quota, in bytes (512 MB).
+     *
+     * This is a MULTI-TENANT system: every kingdom and park uploads into the same
+     * filesystem and the same table, so without a per-scope ceiling one org
+     * uploading a season of event photos is silently everyone else's problem —
+     * the disk fills and every other org's uploads start failing with no
+     * indication of who caused it or why.
+     *
+     * Counts LIVE media only (deleted_at IS NULL): a soft-deleted image is
+     * recoverable but should not hold an org hostage, and PurgeMedia is the
+     * documented way to actually reclaim it.
+     *
+     * Global scope is exempt — it is the Amtgard site itself, not a tenant.
+     */
+    public const MAX_SCOPE_BYTES = 536870912;
+
+    /**
+     * Why the last Upload() returned null. Upload() reports every rejection the
+     * same way (null), which leaves the caller unable to tell "that is not an
+     * image" from "your org is out of space" — two failures a user must respond
+     * to completely differently. Read immediately after an Upload() that returned
+     * null; not meaningful otherwise.
+     *
+     * @var string
+     */
+    public $LastError = '';
+
+    /**
+     * Accessor for $LastError.
+     *
+     * The model layer reaches this lib through APIModel, which implements
+     * __call() but NOT __get() — so `$this->CmsMedia->LastError` from a model
+     * read an undeclared property and always yielded '', leaving the CmsAjax
+     * 'quota_exceeded' branch permanently unreachable. A method call routes
+     * through __call and reaches the real value. PHP allows a method and a
+     * property to share a name, so the public property stays exactly as-is for
+     * the direct (non-proxied) callers that already set/read it.
+     *
+     * @return string '' when the last Upload() did not record a reason
+     */
+    public function LastError()
+    {
+        return (string)$this->LastError;
+    }
+
     /** Hard upload ceiling: 8 MB of decoded image bytes. */
     private static $MAX_BYTES = 8388608; // 8 * 1024 * 1024
 
@@ -79,6 +125,10 @@ class CmsMedia extends CmsBase
      */
     public function Upload($base64OrDataUri, $filename, $alt, $uploadedBy, $scope = array('type' => 'global', 'id' => 0))
     {
+        // Reset first: LastError is read after a null return, so a value left over
+        // from a previous upload in the same request would misreport this one.
+        $this->LastError = '';
+
         // Strip a data-uri prefix if present: "data:image/png;base64,AAAA..."
         $raw = (string)$base64OrDataUri;
         if (strncmp($raw, 'data:', 5) === 0) {
@@ -100,7 +150,22 @@ class CmsMedia extends CmsBase
         // Size guard on the decoded payload.
         $bytes = strlen($binary);
         if ($bytes > self::$MAX_BYTES) {
+            $this->LastError = 'too_large';
             return null;
+        }
+
+        // Per-org storage quota. Checked here — before any decode, resize or file
+        // write — so an over-quota upload costs nothing and leaves no orphan on
+        // disk. Global scope is the Amtgard site itself, not a tenant, so it is
+        // not metered.
+        $quotaScopeType = (string)($scope['type'] ?? 'global');
+        $quotaScopeId   = (int)($scope['id'] ?? 0);
+        if ($quotaScopeType !== 'global' && $quotaScopeId > 0) {
+            $used = $this->ScopeUsageBytes($quotaScopeType, $quotaScopeId);
+            if (($used + $bytes) > self::MAX_SCOPE_BYTES) {
+                $this->LastError = 'quota_exceeded';
+                return null;
+            }
         }
 
         // Validate it's a real image and capture intrinsic dimensions/mime.
@@ -221,16 +286,8 @@ class CmsMedia extends CmsBase
         // new id) — the row is already fully known in memory, so a SELECT to
         // read back our own INSERT is wasted work. Mirror GetMedia()'s shape.
         $row = array_merge($cols, array('media_id' => $mediaId));
-        $row['url']       = $this->_url($relPath);
-        $row['thumb_url'] = $this->_url($thumbStored !== null ? $thumbStored : $relPath);
 
-        $ref = $this->ToMediaRef($row);
-        $row['key']   = $ref['key'];
-        $row['src']   = $ref['src'];
-        $row['thumb'] = $ref['thumb'];
-        $row['focal'] = $ref['focal'];
-
-        return $row;
+        return $this->_decorateWithRef($row, $relPath, $this->_thumbPathOr($thumbStored, $relPath));
     }
 
     /* ------------------------------------------------------------------ *
@@ -250,9 +307,8 @@ class CmsMedia extends CmsBase
         }
         $id   = isset($row['media_id']) ? (int)$row['media_id'] : 0;
         $path = isset($row['path']) ? (string)$row['path'] : '';
-        $thumbPath = (isset($row['thumb_path']) && $row['thumb_path'] !== null && $row['thumb_path'] !== '')
-            ? (string)$row['thumb_path']
-            : $path; // fall back to the original when no thumb was generated
+        // Falls back to the original when no thumb was generated.
+        $thumbPath = $this->_thumbPathOr($row['thumb_path'] ?? null, $path);
 
         $ref = array(
             'key'      => 'm' . $id,
@@ -273,6 +329,54 @@ class CmsMedia extends CmsBase
         }
 
         return $ref;
+    }
+
+    /**
+     * The thumbnail path to serve for a row, falling back to the original when
+     * no thumb was generated. Canonicalized on the STRICTEST of the historical
+     * forms: a thumb_path that is absent, literal NULL, or '' all fall back.
+     * (yapo stores an absent thumb as NULL; '' can appear on hand-edited rows.)
+     *
+     * @param mixed  $thumbPath raw thumb_path column value (may be null)
+     * @param string $path      the original stored relative path
+     * @return string
+     */
+    private function _thumbPathOr($thumbPath, $path)
+    {
+        return ($thumbPath !== null && $thumbPath !== '')
+            ? (string)$thumbPath
+            : (string)$path;
+    }
+
+    /**
+     * Add the browser URLs + the media-ref keys to a raw media row.
+     *
+     * MERGE ORDER IS DELIBERATE: only ref-ONLY keys are written back, so a raw
+     * DB column of the same name is never clobbered (notably 'alt' and 'focal',
+     * which exist on the row and whose ref forms carry defaults). Shared by
+     * Upload (payload built from the columns just INSERTed) and GetMedia (row
+     * read back from the table) — the two callers whose output shape is
+     * documented to match. NOT used by _mediaListRow, which is its own shared
+     * helper with a different (ref-first) shape.
+     *
+     * @param array  $row       raw media row (or the column map just written)
+     * @param string $path      stored relative path of the original
+     * @param string $thumbPath stored relative path of the thumb (or the original)
+     * @return array the row plus {url,thumb_url,key,src,thumb,focal}
+     */
+    private function _decorateWithRef(array $row, $path, $thumbPath)
+    {
+        $row['url']       = $this->_url($path);
+        $row['thumb_url'] = $this->_url($thumbPath);
+
+        $ref = $this->ToMediaRef($row);
+        // Don't clobber raw columns; only add the ref-only keys.
+        $row['key']   = $ref['key'];
+        $row['src']   = $ref['src'];
+        $row['thumb'] = $ref['thumb'];
+        $row['focal'] = $ref['focal'];
+
+        return $row;
     }
 
     /**
@@ -399,6 +503,46 @@ class CmsMedia extends CmsBase
     }
 
     /**
+     * Total LIVE bytes stored by one org scope.
+     *
+     * Trashed rows are excluded deliberately: soft-deleted media is recoverable,
+     * and counting it would let an org exhaust its quota with content it has
+     * already asked to remove, with no way out except a purge it may not be able
+     * to trigger.
+     *
+     * @param string $scopeType 'global' | 'kingdom' | 'park'
+     * @param int    $scopeId
+     * @return int bytes (0 when nothing is stored)
+     */
+    public function ScopeUsageBytes($scopeType, $scopeId)
+    {
+        global $DB;
+
+        $DB->Clear();
+        $DB->scope_type = $this->_normalizeScopeType($scopeType);
+        $DB->scope_id   = (int)$scopeId;
+
+        $r = $DB->DataSet(
+            'SELECT COALESCE(SUM(bytes), 0) AS used FROM ' . DB_PREFIX . 'cms_media'
+            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id'
+            . ' AND deleted_at IS NULL'
+        );
+        // DataSet() needs an explicit Next() before any field read.
+        return ($r && $r->Next()) ? (int)$r->used : 0;
+    }
+
+    /**
+     * The storage ceiling for a scope, in bytes. 0 means "not metered" (global).
+     *
+     * @param string $scopeType
+     * @return int
+     */
+    public function ScopeQuotaBytes($scopeType)
+    {
+        return ((string)$scopeType === 'global') ? 0 : self::MAX_SCOPE_BYTES;
+    }
+
+    /**
      * IDOR guard: reduce a caller-supplied list of media ids to the subset that
      * actually exists, is NOT trashed, and belongs to the given scope. Anything
      * global, another org's, trashed, or nonexistent is dropped silently — the
@@ -495,22 +639,15 @@ class CmsMedia extends CmsBase
         }
 
         $path = isset($row['path']) ? (string)$row['path'] : '';
-        $thumbPath = (isset($row['thumb_path']) && $row['thumb_path'] !== null && $row['thumb_path'] !== '')
-            ? (string)$row['thumb_path']
-            : $path;
+        $thumbPath = $this->_thumbPathOr($row['thumb_path'] ?? null, $path);
 
         // Augment with browser URLs + the media-ref shape (merged in so callers
-        // get both the raw columns and the ready-to-use ref keys).
-        $row['url']       = $this->_url($path);
-        $row['thumb_url'] = $this->_url($thumbPath);
+        // get both the raw columns and the ready-to-use ref keys; ref-only keys
+        // are added, raw columns are never clobbered).
+        $row = $this->_decorateWithRef($row, $path, $thumbPath);
 
-        $ref = $this->ToMediaRef($row);
-        // Don't clobber raw columns; only add the ref-only keys.
-        $row['key']      = $ref['key'];
+        // media_id comes back from PDO as a string; callers compare it as an int.
         $row['media_id'] = (int)$row['media_id'];
-        $row['src']      = $ref['src'];
-        $row['thumb']    = $ref['thumb'];
-        $row['focal']    = $ref['focal'];
 
         return $row;
     }
@@ -855,20 +992,10 @@ class CmsMedia extends CmsBase
         // would show a phantom "still in use" count (and the single-card Trash
         // confirm in Cms_media.tpl pre-checks this total, dead-ending the officer
         // on content DeleteMedia would happily trash).
-        $out['pages'] = $this->_countOne(
-            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_page'
-            . ' WHERE hero_media_id = :mid AND deleted_at IS NULL',
-            $mediaId
-        );
-        $out['posts'] = $this->_countOne(
-            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_post'
-            . ' WHERE hero_media_id = :mid AND deleted_at IS NULL',
-            $mediaId
-        );
-        $out['logos'] = $this->_countOne(
-            'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_site WHERE logo_media_id = :mid',
-            $mediaId
-        );
+        $fk = $this->_fkCounts($mediaId, true);
+        $out['pages'] = $fk['pages'];
+        $out['posts'] = $fk['posts'];
+        $out['logos'] = $fk['logos'];
         // Block embeds: the media-ref media_id AND (#68) any TinyMCE-embedded
         // <img src> whose URL carries the asset's path (so a rich-text embed
         // counts as used). WIDE (all scopes) — the UI wants the full picture.
@@ -942,29 +1069,51 @@ class CmsMedia extends CmsBase
      */
     private function _fkReferenceCount($mediaId, $liveOwnersOnly = true)
     {
+        return array_sum($this->_fkCounts($mediaId, $liveOwnersOnly));
+    }
+
+    /**
+     * The per-source breakdown behind _fkReferenceCount: page heroes, post
+     * heroes, and site logos, counted independently so a missing table in a
+     * partial schema fails closed to 0 for THAT SOURCE ONLY (see _countOne)
+     * rather than zeroing the whole guard.
+     *
+     * $liveOwnersOnly carries the same reversible-vs-irreversible meaning
+     * documented on _fkReferenceCount — passing it backwards either strands an
+     * asset forever (counting trashed owners on the soft-delete path) or unlinks
+     * a file a restorable page still points at (ignoring them on the purge path).
+     *
+     * @param int  $mediaId
+     * @param bool $liveOwnersOnly true = ignore trashed page/post owners
+     * @return array{pages:int,posts:int,logos:int}
+     */
+    private function _fkCounts($mediaId, $liveOwnersOnly = true)
+    {
+        $out = array('pages' => 0, 'posts' => 0, 'logos' => 0);
+
         $mediaId = (int)$mediaId;
         if ($mediaId <= 0) {
-            return 0;
+            return $out;
         }
+
         $liveOnlySql = $liveOwnersOnly ? ' AND deleted_at IS NULL' : '';
-        $fk = 0;
-        $fk += $this->_countOne(
+        $out['pages'] = $this->_countOne(
             'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_page'
             . ' WHERE hero_media_id = :mid' . $liveOnlySql,
             $mediaId
         );
-        $fk += $this->_countOne(
+        $out['posts'] = $this->_countOne(
             'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_post'
             . ' WHERE hero_media_id = :mid' . $liveOnlySql,
             $mediaId
         );
         // ork_cms_site has NO deleted_at column (see db-migrations/2026-07-01-cms-site.sql),
         // so a site logo reference is always live — no soft-delete filter here.
-        $fk += $this->_countOne(
+        $out['logos'] = $this->_countOne(
             'SELECT COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_site WHERE logo_media_id = :mid',
             $mediaId
         );
-        return $fk;
+        return $out;
     }
 
     /**
@@ -1132,12 +1281,21 @@ class CmsMedia extends CmsBase
      * ------------------------------------------------------------------ */
 
     /**
-     * Build a downscaled copy of $src no wider than THUMB_MAX_W (preserving
-     * aspect ratio). Returns a NEW GD resource (caller destroys it) or false
-     * if no thumbnail is needed/possible. When the source is already within
-     * the cap we still return a copy so the thumb file is always written.
+     * Build a downscaled copy of $src no wider than $maxW (aspect ratio
+     * preserved). Returns a NEW GD resource (caller destroys it) or false when
+     * the source dimensions are unusable / GD refuses the canvas. When the
+     * source is already within the cap we still return a full-size copy, so the
+     * rendition file is always written.
+     *
+     * Shared body of _makeThumb (THUMB_MAX_W) and _makeDisplay (DISPLAY_MAX_W).
+     *
+     * @param resource|\GdImage $src    decoded source image
+     * @param int               $width  source width
+     * @param int               $height source height
+     * @param int               $maxW   max width of the rendition
+     * @return resource|\GdImage|false
      */
-    private function _makeThumb($src, $width, $height)
+    private function _makeScaled($src, $width, $height, $maxW)
     {
         $width  = (int)$width;
         $height = (int)$height;
@@ -1145,11 +1303,12 @@ class CmsMedia extends CmsBase
             return false;
         }
 
+        $maxW    = (int)$maxW;
         $targetW = $width;
         $targetH = $height;
-        if ($width > self::$THUMB_MAX_W) {
-            $scale   = self::$THUMB_MAX_W / $width;
-            $targetW = self::$THUMB_MAX_W;
+        if ($width > $maxW) {
+            $scale   = $maxW / $width;
+            $targetW = $maxW;
             $targetH = max(1, (int)round($height * $scale));
         }
 
@@ -1160,14 +1319,15 @@ class CmsMedia extends CmsBase
                 // imagescale() already produced the resampled pixels; only
                 // enable alpha preservation on the result. Do NOT call
                 // _preserveAlpha() here — its flood-fill would erase the
-                // scaled content and yield a blank thumbnail.
+                // scaled content and yield a blank rendition.
                 @imagealphablending($scaled, false);
                 @imagesavealpha($scaled, true);
                 return $scaled;
             }
         }
 
-        // Manual resample fallback.
+        // Manual resample fallback (a fresh canvas, so the flood-fill in
+        // _preserveAlpha is correct here — there is nothing to erase yet).
         $dst = imagecreatetruecolor($targetW, $targetH);
         if ($dst === false) {
             return false;
@@ -1181,6 +1341,17 @@ class CmsMedia extends CmsBase
     }
 
     /**
+     * Build a downscaled copy of $src no wider than THUMB_MAX_W (preserving
+     * aspect ratio). Returns a NEW GD resource (caller destroys it) or false
+     * if no thumbnail is needed/possible. When the source is already within
+     * the cap we still return a copy so the thumb file is always written.
+     */
+    private function _makeThumb($src, $width, $height)
+    {
+        return $this->_makeScaled($src, $width, $height, self::$THUMB_MAX_W);
+    }
+
+    /**
      * C4/#14: build the mid-size "display" copy of $src no wider than
      * DISPLAY_MAX_W (aspect preserved). Returns a NEW GD resource (caller
      * destroys it) or false. When the source is already within the cap we still
@@ -1189,41 +1360,7 @@ class CmsMedia extends CmsBase
      */
     private function _makeDisplay($src, $width, $height)
     {
-        $width  = (int)$width;
-        $height = (int)$height;
-        if ($width <= 0 || $height <= 0) {
-            return false;
-        }
-
-        $targetW = $width;
-        $targetH = $height;
-        if ($width > self::$DISPLAY_MAX_W) {
-            $scale   = self::$DISPLAY_MAX_W / $width;
-            $targetW = self::$DISPLAY_MAX_W;
-            $targetH = max(1, (int)round($height * $scale));
-        }
-
-        if (function_exists('imagescale')) {
-            $scaled = @imagescale($src, $targetW, $targetH);
-            if ($scaled !== false) {
-                // imagescale() already resampled; only enable alpha preservation
-                // (do NOT flood-fill via _preserveAlpha — it would blank the copy).
-                @imagealphablending($scaled, false);
-                @imagesavealpha($scaled, true);
-                return $scaled;
-            }
-        }
-
-        $dst = imagecreatetruecolor($targetW, $targetH);
-        if ($dst === false) {
-            return false;
-        }
-        $this->_preserveAlpha($dst);
-        if (!@imagecopyresampled($dst, $src, 0, 0, 0, 0, $targetW, $targetH, $width, $height)) {
-            imagedestroy($dst);
-            return false;
-        }
-        return $dst;
+        return $this->_makeScaled($src, $width, $height, self::$DISPLAY_MAX_W);
     }
 
     /**

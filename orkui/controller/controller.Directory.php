@@ -7,26 +7,24 @@ class Controller_Directory extends Controller
     // pinning), then renders Directory_index.tpl.
     public function index($action = null)
     {
-        parent::index($action);
+        // Half 1 of the base index() ONLY — the shared summaries. The front-door
+        // half is deliberately not called: the Directory is an in-app ORK surface,
+        // so it wants none of the front door's payload, its "Amtgard - {Page}" tab
+        // identity, its home-page edit FAB or its home canonical. Skipping the call
+        // is what makes those absent; there is nothing left here to unset.
+        $this->_indexCommonData();
         $this->data[ 'page_title' ] = 'Kingdoms Directory';
-        // We do not need the front-door payload here.
-        $this->data[ 'IsFrontDoor' ] = false;
-        // The Directory is NOT the CMS home page — drop the home-edit FAB flag
-        // that the base index() set so the editor FAB doesn't appear here.
-        unset($this->data[ 'cmsEditUrl' ], $this->data[ 'cmsEditTip' ]);
 
-        // #124: parent::index() also set $PageMeta to the HOME canonical/og (site
-        // root). The Directory is a distinct surface, so overwrite it with its own
-        // canonical — otherwise this page would falsely canonicalize to the home
-        // root (duplicate-content ambiguity).
-        $this->data[ 'PageMeta' ] = array(
+        // #124: the Directory is a distinct surface, so it publishes its OWN
+        // canonical — otherwise it would falsely canonicalize to the site root
+        // (duplicate-content ambiguity).
+        $this->data[ 'PageMeta' ] = CmsMeta::Build(array(
             'canonical'   => UIR . 'Directory',
             'og_type'     => 'website',
             'og_title'    => 'Kingdoms Directory — Amtgard Online Record Keeper',
             'og_desc'     => 'Browse Amtgard kingdoms and their parks in the Online Record Keeper.',
-            'og_image'    => '',
-            'og_sitename' => 'ORK 3 - Amtgard Online Record Keeper',
-        );
+            'og_sitename' => self::APP_BRAND,
+        ));
 
         // Discovery: prefetch published kingdom-site slugs in ONE query (avoids an
         // N+1 per-card GetSiteForScope). The template renders a "Visit site" link

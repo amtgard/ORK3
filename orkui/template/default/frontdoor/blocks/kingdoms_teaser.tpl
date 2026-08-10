@@ -7,16 +7,14 @@
  */
 $kicker   = $blockFields['kicker']    ?? '';
 $heading  = $blockFields['heading']   ?? '';
-$limit    = (int)($blockFields['limit'] ?? 12);
 // #66: a cleared number input arrives as 0/blank → fall back to the default
 // rather than emptying the grid under a live heading.
 // #11: clamp to a hard max so an authored huge value can't blow out the grid.
-if ($limit < 1) {
-    $limit = 12;
-}
-if ($limit > 24) {
-    $limit = 24;
-}
+$limit    = fdClampLimit(
+    $blockFields['limit'] ?? null,
+    CmsRenderCache::TEASER_LIMIT_DEFAULT,
+    CmsRenderCache::TEASER_LIMIT_MAX
+);
 $moreHref = $blockFields['more_href'] ?? '';
 $moreHref = (is_string($moreHref) && $moreHref !== '' && CmsSanitizer::IsSafeUrl($moreHref)) ? $moreHref : '';
 
@@ -27,44 +25,46 @@ $moreHref = (is_string($moreHref) && $moreHref !== '' && CmsSanitizer::IsSafeUrl
 // safe to share across viewers; a short TTL keeps it fresh. Cached hits skip the
 // per-row disk probes entirely.
 // $ktResolved = ['shown' => [ ['id','name','heraldry'], … ], 'total' => int].
-$ktResolved = null;
-$ktCache    = (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache) && is_object(Ork3::$Lib->ghettocache))
-    ? Ork3::$Lib->ghettocache : null;
-$ktCacheKey = 'l' . $limit;
-if ($ktCache !== null) {
-    $ktHit = $ktCache->get('frontdoor.kingdoms_teaser', $ktCacheKey, 300);
-    if (is_array($ktHit)) {
-        $ktResolved = $ktHit;
-    }
-}
-
-if ($ktResolved === null) {
-    // Filter to parent kingdoms only.
-    $allKingdoms = [];
-    if (is_array($ActiveKingdomSummary['ActiveKingdomsSummaryList'] ?? null)) {
-        foreach ($ActiveKingdomSummary['ActiveKingdomsSummaryList'] as $r) {
-            if ((int)$r['ParentKingdomId'] === 0) {
-                $allKingdoms[] = $r;
+//
+// This is the ONE cached block whose key carries no org id — it is the global
+// front door's own. That is why it was invisible to CmsAjax::clearrendercache
+// for so long (the flush loop only ever ran over a kingdom/park id); it is now
+// enumerated there under the global scope, via the same registry.
+// Captured for the closure (which does not inherit template scope): this block
+// is also included from contexts that never inject the summary at all.
+$ktSummary = (isset($ActiveKingdomSummary) && is_array($ActiveKingdomSummary)) ? $ActiveKingdomSummary : [];
+$ktResolved = fdBlockCache(
+    CmsRenderCache::NS_KINGDOMS_TEASER,
+    CmsRenderCache::TeaserKey($limit),
+    CmsRenderCache::TTL,
+    function () use ($limit, $ktSummary) {
+        // Filter to parent kingdoms only.
+        $allKingdoms = [];
+        if (is_array($ktSummary['ActiveKingdomsSummaryList'] ?? null)) {
+            foreach ($ktSummary['ActiveKingdomsSummaryList'] as $r) {
+                if ((int)$r['ParentKingdomId'] === 0) {
+                    $allKingdoms[] = $r;
+                }
             }
         }
-    }
-    $totalParent = count($allKingdoms);
-    $shownRows   = [];
-    foreach (array_slice($allKingdoms, 0, $limit) as $r) {
-        $kid = (int)$r['KingdomId'];
-        $shownRows[] = [
-            'id'       => $kid,
-            'name'     => stripslashes($r['KingdomName'] ?? ''),
-            'heraldry' => HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf('%04d', $kid)),
-        ];
-    }
-    $ktResolved = ['shown' => $shownRows, 'total' => $totalParent];
+        $totalParent = count($allKingdoms);
+        $shownRows   = [];
+        foreach (array_slice($allKingdoms, 0, $limit) as $r) {
+            $kid = (int)$r['KingdomId'];
+            $shownRows[] = [
+                'id'       => $kid,
+                'name'     => stripslashes($r['KingdomName'] ?? ''),
+                'heraldry' => HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf('%04d', $kid)),
+            ];
+        }
+        return ['shown' => $shownRows, 'total' => $totalParent];
+    },
     // Only cache once we actually have kingdom data — never poison the key with an
     // empty result from a context that doesn't inject $ActiveKingdomSummary.
-    if ($ktCache !== null && $totalParent > 0) {
-        $ktCache->cache('frontdoor.kingdoms_teaser', $ktCacheKey, $ktResolved);
+    static function ($built) {
+        return (int)($built['total'] ?? 0) > 0;
     }
-}
+);
 
 $shown        = $ktResolved['shown'];
 $moreCount    = (int)$ktResolved['total'] - count($shown);

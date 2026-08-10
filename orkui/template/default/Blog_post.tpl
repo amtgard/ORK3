@@ -80,4 +80,4 @@ $heroRef   = (isset($hero) && is_array($hero)) ? $hero : null;
     </div>
 <?php endif; ?>
 </div>
-<script src="<?= $fdAssetBase ?>js/frontdoor.js"></script>
+<script src="<?= $fdAssetBase ?>js/frontdoor.js?v=<?= @filemtime($fdDir . 'js/frontdoor.js') ?>"></script>

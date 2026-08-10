@@ -54,7 +54,7 @@ html[data-theme="dark"] .cms-preview-banner .cms-preview-publish:hover{backgroun
 <div class="fd-page">
 <?php include $fdDir . 'render_blocks.tpl'; ?>
 </div>
-<script src="<?= $fdAssetBase ?>js/frontdoor.js"></script>
+<script src="<?= $fdAssetBase ?>js/frontdoor.js?v=<?= @filemtime($fdDir . 'js/frontdoor.js') ?>"></script>
 <?php endif; ?>
 
 <?php if ($pvCanPublish && $pvId > 0) : ?>

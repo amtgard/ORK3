@@ -12,25 +12,25 @@
  * CmsSanitizer's entry points are static, but APIModel/Model::__call routes
  * through an instance; calling them as instance methods works because PHP
  * permits invoking a static method via an object handle.
+ *
+ * Calling convention: call the snake_case wrapper where one exists; a
+ * PascalCase reach-around via Model::__call is the sanctioned form for lib
+ * methods that have no wrapper.
  */
 class Model_CmsSanitizer extends Model
 {
-    public function __construct()
-    {
-        parent::__construct();
-        $this->CmsSanitizer = new APIModel('CmsSanitizer');
-    }
-
     public function clean($html)
     {
         return $this->CmsSanitizer->Clean($html);
     }
 
+    /** @no-callers — mirror surface. */
     public function clean_fragment($html)
     {
         return $this->CmsSanitizer->CleanFragment($html);
     }
 
+    /** @no-callers — mirror surface. */
     public function is_safe_url($url)
     {
         return $this->CmsSanitizer->IsSafeUrl($url);

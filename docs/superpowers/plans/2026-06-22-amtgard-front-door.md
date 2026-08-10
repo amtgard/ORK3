@@ -122,6 +122,9 @@ class Model_FrontDoor extends Model
                     ['label' => 'Merch', 'href' => 'https://www.redbubble.com/people/amtgardmarket/shop'],
                 ],
                 'cta' => ['label' => 'Find a Chapter', 'href' => '#'],
+                // AS SHIPPED (2026-08-09): 'ORK Login', href $uir . 'Directory'.
+                // The '#' placeholders throughout this plan were all resolved to
+                // real UIR routes; read model.FrontDoor.php for current values.
                 'login' => ['label' => 'Record Keeper', 'href' => '#'],
             ],
         ];

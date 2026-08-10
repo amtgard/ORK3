@@ -44,6 +44,9 @@ class Controller_Page extends Controller
         // Distinct from the front-door home: still a CMS-styled public page, so the
         // brand serif (MedievalSharp) must load (default.theme gates on this flag).
         $this->data['IsCmsPage'] = true;
+        // Global-scope CMS pages are the Amtgard-level site, so the tab reads
+        // "Amtgard - About" / "Amtgard - Mission" rather than the in-app "ORK 3:".
+        $this->data['SiteTitleOrg'] = self::PUBLIC_SITE_BRAND;
 
         $slug = trim((string) $slug);
         $this->load_model('CmsPage');
@@ -77,12 +80,14 @@ class Controller_Page extends Controller
         $this->data['PageAncestors'] = $this->CmsPage->GetPageAncestors((int) $page['page_id']);
 
         // Show the floating editor FAB to CMS editors (rendered by default.theme).
-        // #29: single shared edit-scope gate (CmsCan-backed).
-        $uid = (int) ($this->session->user_id ?? 0);
-        if ($this->_cmsCanEditScope($uid, self::$SCOPE)) {
-            $this->data['cmsEditUrl'] = UIR . 'Cms/edit/' . (int) $page['page_id'];
-            $this->data['cmsEditTip'] = 'Edit this page';
-        }
+        // #29: single shared edit-scope gate (CmsCan-backed). No new-post FAB here
+        // — a page surface never offers one.
+        $this->_cmsFabData(
+            (int) ($this->session->user_id ?? 0),
+            self::$SCOPE,
+            UIR . 'Cms/edit/' . (int) $page['page_id'],
+            'Edit this page'
+        );
     }
 
     /**
@@ -102,30 +107,27 @@ class Controller_Page extends Controller
             : UIR . 'Page/view/' . rawurlencode($slug);
 
         // og:image ← hero (absolute); relative media urls get the request origin.
-        $host   = (string) ($_SERVER['HTTP_HOST'] ?? '');
-        $https  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-            || ((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
-        $origin = ($host !== '') ? (($https ? 'https://' : 'http://') . $host) : '';
-
         $ogImage = '';
         $mediaId = (int) ($page['hero_media_id'] ?? 0);
         if ($mediaId > 0) {
             $this->load_model('CmsMedia');
             $hm = $this->CmsMedia->get_media($mediaId);
             if (is_array($hm) && !empty($hm['url'])) {
-                $u = (string) $hm['url'];
-                $ogImage = preg_match('#^https?://#i', $u) ? $u : ($origin . '/' . ltrim($u, '/'));
+                $ogImage = CmsMeta::Absolutize((string) $hm['url'], CmsMeta::Origin());
             }
         }
 
+        // NOTE: a GLOBAL CMS page falls back to the application brand, where an
+        // org-site page falls back to that site's NAME (Controller_Site). Keep both
+        // fallbacks at their call sites — CmsMeta must not homogenize them.
         $title = trim((string) ($page['title'] ?? ''));
-        $this->data['PageMeta'] = array(
+        $this->data['PageMeta'] = CmsMeta::Build(array(
             'canonical'   => $canon,
             'og_type'     => 'article',
-            'og_title'    => ($title !== '' ? $title : 'ORK 3 - Amtgard Online Record Keeper'),
+            'og_title'    => ($title !== '' ? $title : self::APP_BRAND),
             'og_desc'     => trim((string) ($page['meta_description'] ?? '')),
             'og_image'    => $ogImage,
-            'og_sitename' => 'ORK 3 - Amtgard Online Record Keeper',
-        );
+            'og_sitename' => self::APP_BRAND,
+        ));
     }
 }

@@ -698,18 +698,6 @@ html[data-theme="dark"] .fd-crumb-current {
     .fd-breadcrumbs { padding: 10px 16px 0; }
 }
 
-/* ---- Announcement / annotation banner --------------------- */
-.fd-ann {
-    background: rgba(240, 180, 41, .12);
-    border: 1px dashed #c79318;
-    color: #7a5b10;
-    font-size: 12px;
-    padding: 7px 12px;
-    border-radius: 6px;
-    margin: 0;
-    font-style: italic;
-}
-
 /* ============================================================
  * DARK MODE — html[data-theme="dark"]
  * Navy/dark bands stay as-is; light bands get dark surfaces.
@@ -728,13 +716,11 @@ html[data-theme="dark"] .fd-page {
 }
 
 /* Light white bands → dark surface */
-html[data-theme="dark"] .fd-pad[style*="background:#fff"],
-html[data-theme="dark"] .fd-pad-light {
+html[data-theme="dark"] .fd-pad[style*="background:#fff"] {
     background: #1a2236 !important;
 }
 
-html[data-theme="dark"] .fd-pad[style*="background:#f7f8fb"],
-html[data-theme="dark"] .fd-pad-muted {
+html[data-theme="dark"] .fd-pad[style*="background:#f7f8fb"] {
     background: #131c2e !important;
 }
 
@@ -819,13 +805,6 @@ html[data-theme="dark"] .fd-link:hover {
 /* Empty state */
 html[data-theme="dark"] .fd-empty {
     color: #8899aa;
-}
-
-/* Annotation banners */
-html[data-theme="dark"] .fd-ann {
-    background: rgba(240, 180, 41, .08);
-    border-color: #7a5b10;
-    color: #c9940c;
 }
 
 /* Buttons: gold stays, ghost border brightens slightly */
@@ -1083,7 +1062,7 @@ html[data-theme="dark"] .fd-roster-photo-empty{background:var(--navy);color:var(
    sites). Kept byte-for-byte identical to the former inline rules. */
 .ko-block { background: var(--fd-bg); }
 .ko-head { margin-bottom: 18px; }
-.ko-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; margin: 0; font-size: 24px; }
+.ko-title { margin: 0; font-size: 24px; }
 .ko-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .ko-card {
     background: var(--fd-bg); border: 1px solid #e4e8f0; border-radius: 10px;
@@ -1110,13 +1089,132 @@ html[data-theme="dark"] .ko-name { color: #eef2fa; }
 html[data-theme="dark"] .ko-role { color: #c9940c; }
 html[data-theme="dark"] .ko-avatar i { color: #7d8aa5; }
 
+/* ---- park_meeting block (PARK sites) ----
+   "When and where we meet" — the thing a newcomer actually came for, so it reads
+   as an information card rather than a marketing panel. park_officers reuses the
+   .ko-* grid above; only this block and .pe-* below need their own rules.
+   Kept here (not inline style-once) so both themes live in one place. */
+.pm-block { background: var(--fd-bg); }
+.pm-head { margin-bottom: 18px; }
+.pm-title { margin: 0; font-size: 24px; }
+.pm-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.pm-card {
+    background: var(--fd-bg); border: 1px solid #e4e8f0; border-left: 4px solid var(--gold, #d4af37);
+    border-radius: 10px; padding: 16px 18px;
+}
+.pm-when { font-weight: 700; font-size: 15px; color: var(--fd-text); display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.pm-when i { color: var(--gold, #d4af37); }
+.pm-time { font-weight: 600; font-size: 13px; color: #5b6478; }
+.pm-online {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    background: #e8f0fe; color: #1d4ed8; border-radius: 999px; padding: 2px 8px;
+}
+.pm-purpose { font-size: 13px; color: #5b6478; margin-top: 4px; }
+.pm-place { font-weight: 600; font-size: 14px; color: var(--fd-text); margin-top: 8px; }
+.pm-addr { font-size: 13px; color: #778; margin-top: 2px; }
+.pm-note { font-size: 13px; color: #5b6478; margin-top: 8px; line-height: 1.5; }
+.pm-map { display: inline-block; margin-top: 10px; font-size: 13px; font-weight: 600; color: #1d4ed8; text-decoration: none; }
+.pm-map:hover { text-decoration: underline; }
+.pm-map i { font-size: 11px; }
+.pm-empty { color: #8899aa; font-style: italic; text-align: center; padding: 18px; }
+.pm-directions { margin-top: 18px; padding: 14px 16px; background: #f6f8fc; border-radius: 10px; }
+.pm-directions-h { font-weight: 700; font-size: 14px; color: var(--fd-text); margin-bottom: 6px; }
+.pm-directions-h i { color: var(--gold, #d4af37); }
+.pm-directions-b { font-size: 13px; color: #5b6478; line-height: 1.6; }
+
+@media (max-width: 820px) { .pm-grid { grid-template-columns: 1fr; } }
+
+html[data-theme="dark"] .pm-block { background: transparent; }
+html[data-theme="dark"] .pm-card { background: #1b2233; border-color: #2c3650; border-left-color: var(--gold, #d4af37); }
+html[data-theme="dark"] .pm-when { color: #eef2fa; }
+html[data-theme="dark"] .pm-time { color: #b6c0d4; }
+html[data-theme="dark"] .pm-online { background: #24304a; color: #7ba7f2; }
+html[data-theme="dark"] .pm-purpose { color: #b6c0d4; }
+html[data-theme="dark"] .pm-place { color: #eef2fa; }
+html[data-theme="dark"] .pm-addr { color: #9aa6bd; }
+html[data-theme="dark"] .pm-note { color: #b6c0d4; }
+html[data-theme="dark"] .pm-map { color: #7ba7f2; }
+html[data-theme="dark"] .pm-directions { background: #1b2233; }
+html[data-theme="dark"] .pm-directions-h { color: #eef2fa; }
+html[data-theme="dark"] .pm-directions-b { color: #b6c0d4; }
+
+/* ---- park_events block (PARK sites) ----
+   Same date-card treatment as kingdom_events' .ke-*, in its own namespace so the
+   two blocks stay independently editable. They can never co-occur (each returns
+   early outside its own scope), so this is duplication on disk only. */
+.pe-block { background: var(--fd-bg); }
+.pe-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; gap: 12px; }
+.pe-title { margin: 0; font-size: 24px; }
+.pe-more { color: #1d4ed8; font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
+.pe-more:hover { text-decoration: underline; }
+.pe-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.pe-card {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--fd-bg); border: 1px solid #e4e8f0; border-radius: 10px; overflow: hidden;
+    transition: box-shadow .15s ease, transform .15s ease;
+}
+.pe-card:hover { box-shadow: 0 6px 18px rgba(20,30,60,.12); transform: translateY(-2px); }
+.pe-card-accent { height: 8px; background: var(--gold, #d4af37); }
+.pe-card-body { padding: 16px; }
+.pe-card-date { font-size: 12px; color: #7a5c00; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.pe-card-name { font-weight: 700; font-size: 15px; margin: 4px 0; color: var(--fd-text); }
+.pe-card-rsvp { font-size: 12px; color: #1d4ed8; margin-top: 6px; font-weight: 600; }
+.pe-empty { color: #8899aa; font-style: italic; text-align: center; padding: 18px; }
+
+@media (max-width: 820px) { .pe-grid { grid-template-columns: 1fr; } }
+
+html[data-theme="dark"] .pe-block { background: transparent; }
+html[data-theme="dark"] .pe-card { background: #1b2233; border-color: #2c3650; }
+html[data-theme="dark"] .pe-card-name { color: #eef2fa; }
+html[data-theme="dark"] .pe-card-date { color: #d8b74a; }
+html[data-theme="dark"] .pe-card-rsvp { color: #7ba7f2; }
+html[data-theme="dark"] .pe-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+
+/* ---- kingdom_events block (was per-render inline <style>) ----
+   Moved verbatim out of kingdom_events.tpl for the same reason as .ko-* above:
+   downloaded once and cacheable rather than re-emitted per render.
+   NOT merged with the .pe-* set above even though the two look alike — they are
+   deliberately NOT identical. Kingdom cards show the park name (.ke-card-sub has
+   no .pe-* counterpart) and .pe-* carries a dark-mode .pe-card-date rule that
+   .ke-* intentionally does not. Merging would change this block's dark
+   appearance. The two can never co-occur (each returns early outside its own
+   scope), so this is duplication on disk only. */
+.ke-block { background: var(--fd-bg); }
+.ke-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; gap: 12px; }
+.ke-title { margin: 0; font-size: 24px; }
+.ke-more { color: #1d4ed8; font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
+.ke-more:hover { text-decoration: underline; }
+.ke-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.ke-card {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--fd-bg); border: 1px solid #e4e8f0; border-radius: 10px; overflow: hidden;
+    transition: box-shadow .15s ease, transform .15s ease;
+}
+.ke-card:hover { box-shadow: 0 6px 18px rgba(20,30,60,.12); transform: translateY(-2px); }
+.ke-card-accent { height: 8px; background: var(--gold, #d4af37); }
+.ke-card-body { padding: 16px; }
+.ke-card-date { font-size: 12px; color: #7a5c00; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+.ke-card-name { font-weight: 700; font-size: 15px; margin: 4px 0; color: var(--fd-text); }
+.ke-card-sub { font-size: 12px; color: #778; }
+.ke-card-rsvp { font-size: 12px; color: #1d4ed8; margin-top: 6px; font-weight: 600; }
+.ke-empty { color: #8899aa; font-style: italic; text-align: center; padding: 18px; }
+
+@media (max-width: 820px) { .ke-grid { grid-template-columns: 1fr; } }
+
+html[data-theme="dark"] .ke-block { background: transparent; }
+html[data-theme="dark"] .ke-card { background: #1b2233; border-color: #2c3650; }
+html[data-theme="dark"] .ke-card-name { color: #eef2fa; }
+html[data-theme="dark"] .ke-card-sub { color: #b6c0d4; }
+html[data-theme="dark"] .ke-card-rsvp { color: #7ba7f2; }
+html[data-theme="dark"] .ke-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+
 /* ---- blog_feed block (was per-render inline <style>) ----
    Same rationale as .ko-* above. blog_feed is a GLOBAL block (renders on the
    front door too), so it lives here in frontdoor.css — which is loaded in both
    contexts — rather than the org-only orgsite.css. */
 .bf-block { background: var(--fd-bg); }
 .bf-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; gap: 12px; }
-.bf-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; margin: 0; font-size: 24px; }
+.bf-title { margin: 0; font-size: 24px; }
 .bf-more { color: #1d4ed8; font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
 .bf-more:hover { text-decoration: underline; }
 .bf-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
@@ -1147,8 +1245,7 @@ html[data-theme="dark"] .bf-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45);
 .blog-head { display: flex; justify-content: space-between; align-items: flex-end;
     gap: 16px; flex-wrap: wrap; margin-bottom: 26px; }
 .blog-title {
-    background: transparent; border: none; padding: 0; border-radius: 0;
-    text-shadow: none; margin: 0; font-size: 30px; line-height: 1.1;
+    margin: 0; font-size: 30px; line-height: 1.1;
 }
 .blog-rss {
     display: inline-flex; align-items: center; gap: 6px;
@@ -1171,7 +1268,7 @@ html[data-theme="dark"] .bf-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.45);
 .blog-card-accent { height: 6px; background: var(--gold, #d4af37); }
 .blog-card-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .blog-card-meta { font-size: 12px; color: #8a93a6; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
-.blog-card-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; font-size: 18px; font-weight: 700; line-height: 1.25; margin: 0; color: #1a2236; }
+.blog-card-title { font-size: 18px; font-weight: 700; line-height: 1.25; margin: 0; color: #1a2236; }
 .blog-card-excerpt { font-size: 14px; color: #50596e; line-height: 1.5; margin: 0; }
 .blog-card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 6px; }
 /* Tag pill — shared by the blog index (.blog-tag) and single-post (.blogp-tag)
@@ -1227,7 +1324,6 @@ html[data-theme="dark"] .blog-pager-info { color: #9aa6bd; }
 }
 .blogp-back:hover { text-decoration: underline; }
 .blogp-title {
-    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
     margin: 0 0 10px; font-size: 34px; line-height: 1.15; color: #16203a;
 }
 .blogp-meta { font-size: 14px; color: #6b7488; margin-bottom: 14px; }

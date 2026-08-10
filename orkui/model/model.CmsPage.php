@@ -10,20 +10,20 @@
  * DB work lives in the lib). Each snake_case wrapper mirrors the FULL lib
  * signature so no caller has to reach past the wrapper (via __call) to pass a
  * later positional argument.
+ *
+ * Calling convention: call the snake_case wrapper where one exists; a
+ * PascalCase reach-around via Model::__call is the sanctioned form for lib
+ * methods that have no wrapper.
  */
 class Model_CmsPage extends Model
 {
-    public function __construct()
-    {
-        parent::__construct();
-        $this->CmsPage = new APIModel('CmsPage');
-    }
-
+    /** @no-callers — mirror surface. */
     public function get_page_by_slug($slug, $scopeType = 'global', $scopeId = 0, $publishedOnly = true)
     {
         return $this->CmsPage->GetPageBySlug($slug, $scopeType, $scopeId, $publishedOnly);
     }
 
+    /** @no-callers — mirror surface. */
     public function get_home_page()
     {
         return $this->CmsPage->GetHomePage();
@@ -33,11 +33,12 @@ class Model_CmsPage extends Model
      * C1: GhettoCache-backed bundle — the resolved page row + its ENABLED blocks
      * in one call. $slug null → the scope's home page.
      */
-    public function get_page_with_blocks($scopeType, $scopeId, $slug = null)
+    public function get_page_with_blocks($scopeType, $scopeId, $slug = null, $publishedOnly = true)
     {
-        return $this->CmsPage->GetPageWithBlocks($scopeType, $scopeId, $slug);
+        return $this->CmsPage->GetPageWithBlocks($scopeType, $scopeId, $slug, $publishedOnly);
     }
 
+    /** @no-callers — mirror surface. */
     public function get_blocks($ownerType, $ownerId)
     {
         return $this->CmsPage->GetBlocks($ownerType, $ownerId);

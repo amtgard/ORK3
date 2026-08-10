@@ -1,5 +1,10 @@
 <?php
 
+// The RSS builder escapes every emitted value through CmsSanitizer::XmlEscape,
+// so the sanitizer must be loadable from the lib layer even when no controller
+// has require'd it (same guard CmsPage carries). Idempotent.
+require_once __DIR__ . '/class.CmsSanitizer.php';
+
 /*************************************************************************
  * CmsPost — blog-post content store for the CMS.
  *
@@ -89,14 +94,12 @@ class CmsPost extends CmsBase
         // after a role revoke, see CmsAuth::RevokeRole), fall back to a neutral
         // org-scoped label ('Staff' globally, 'Kingdom' for an org site) rather
         // than the person's mundane given name.
-        $sql = 'SELECT p.*, COALESCE(NULLIF(m.persona, \'\'), ' . $this->_neutralAuthorSql() . ') AS author_name'
-            . ' FROM ' . DB_PREFIX . 'cms_post p'
-            . ' LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = p.author_id'
+        $sql = $this->_livePostSelectHead()
             . ' WHERE p.slug = :slug AND p.scope_type = :scope_type AND p.scope_id = :scope_id'
             . ' AND p.deleted_at IS NULL';   // C2: never serve a trashed post
         if ($publishedOnly) {
             // C7: live only once the (optional) schedule time has passed.
-            $sql .= " AND p.status = 'published' AND (p.published_at IS NULL OR p.published_at <= NOW())";
+            $sql .= ' AND ' . $this->_publishedGateSql('p');
         }
         $sql .= ' LIMIT 1';
 
@@ -160,9 +163,9 @@ class CmsPost extends CmsBase
         // C2: trashed posts never appear (admin or public).
         $where = array('p.scope_type = :scope_type', 'p.scope_id = :scope_id', 'p.deleted_at IS NULL');
         if (!$includeDrafts) {
-            // C7: live only once the (optional) schedule time has passed.
-            $where[] = "p.status = 'published'";
-            $where[] = '(p.published_at IS NULL OR p.published_at <= NOW())';
+            // C7: live only once the (optional) schedule time has passed. One
+            // entry rather than two — the imploded ' AND ' string is identical.
+            $where[] = $this->_publishedGateSql('p');
         }
 
         $join = ' LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = p.author_id';
@@ -193,9 +196,7 @@ class CmsPost extends CmsBase
             }
         }
 
-        $sql = 'SELECT p.*, COALESCE(NULLIF(m.persona, \'\'), ' . $this->_neutralAuthorSql() . ') AS author_name'
-            . ' FROM ' . DB_PREFIX . 'cms_post p'
-            . $join
+        $sql = $this->_livePostSelectHead($join)
             . ' WHERE ' . implode(' AND ', $where)
             . ' GROUP BY p.post_id'
             . ' ORDER BY p.published_at DESC, p.post_id DESC'
@@ -237,9 +238,7 @@ class CmsPost extends CmsBase
         $scopeType = $this->_normalizeScopeType($scopeType);
         $scopeId   = (int)$scopeId;
 
-        $sql = 'SELECT p.*, COALESCE(NULLIF(m.persona, \'\'), ' . $this->_neutralAuthorSql() . ') AS author_name'
-            . ' FROM ' . DB_PREFIX . 'cms_post p'
-            . ' LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = p.author_id'
+        $sql = $this->_livePostSelectHead()
             . ' WHERE p.scope_type = :scope_type AND p.scope_id = :scope_id'
             . ' AND p.deleted_at IS NOT NULL'
             . ' ORDER BY p.deleted_at DESC, p.post_id DESC';
@@ -338,17 +337,6 @@ class CmsPost extends CmsBase
         );
     }
 
-    /** GhettoCache handle, or null when the memcache layer isn't wired up. */
-    private function _cache()
-    {
-        if (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache)
-            && is_object(Ork3::$Lib->ghettocache)
-        ) {
-            return Ork3::$Lib->ghettocache;
-        }
-        return null;
-    }
-
     /**
      * Rendered RSS 2.0 XML for one scope's latest published posts, served from
      * (and stored into) the per-scope ghettocache with a 300s TTL. On a cache
@@ -366,7 +354,7 @@ class CmsPost extends CmsBase
         $scopeType = $this->_normalizeScopeType($scopeType);
         $scopeId   = (int)$scopeId;
 
-        $gc  = $this->_cache();
+        $gc  = $this->_ghettoCache();
         $key = null;
         if ($gc !== null) {
             $key    = $gc->key(self::RssCacheKeyArgs($scopeType, $scopeId));
@@ -415,13 +403,13 @@ class CmsPost extends CmsBase
         $xml  = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         $xml .= '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">' . "\n";
         $xml .= "<channel>\n";
-        $xml .= '<title>' . $this->_xmlEscape($title) . "</title>\n";
-        $xml .= '<link>' . $this->_xmlEscape($indexLink) . "</link>\n";
-        $xml .= '<description>' . $this->_xmlEscape($descr) . "</description>\n";
+        $xml .= '<title>' . CmsSanitizer::XmlEscape($title) . "</title>\n";
+        $xml .= '<link>' . CmsSanitizer::XmlEscape($indexLink) . "</link>\n";
+        $xml .= '<description>' . CmsSanitizer::XmlEscape($descr) . "</description>\n";
         $xml .= '<language>en-us</language>' . "\n";
-        $xml .= '<lastBuildDate>' . $this->_xmlEscape($buildDate) . "</lastBuildDate>\n";
+        $xml .= '<lastBuildDate>' . CmsSanitizer::XmlEscape($buildDate) . "</lastBuildDate>\n";
         if ($selfLink !== '') {
-            $xml .= '<atom:link href="' . $this->_xmlEscape($selfLink) . '" rel="self" type="application/rss+xml" />' . "\n";
+            $xml .= '<atom:link href="' . CmsSanitizer::XmlEscape($selfLink) . '" rel="self" type="application/rss+xml" />' . "\n";
         }
 
         foreach ($rows as $row) {
@@ -439,20 +427,20 @@ class CmsPost extends CmsBase
             }
 
             $xml .= "<item>\n";
-            $xml .= '<title>' . $this->_xmlEscape($ptitle) . "</title>\n";
-            $xml .= '<link>' . $this->_xmlEscape($link) . "</link>\n";
-            $xml .= '<guid isPermaLink="true">' . $this->_xmlEscape($link) . "</guid>\n";
+            $xml .= '<title>' . CmsSanitizer::XmlEscape($ptitle) . "</title>\n";
+            $xml .= '<link>' . CmsSanitizer::XmlEscape($link) . "</link>\n";
+            $xml .= '<guid isPermaLink="true">' . CmsSanitizer::XmlEscape($link) . "</guid>\n";
             if ($pubDate !== '') {
-                $xml .= '<pubDate>' . $this->_xmlEscape($pubDate) . "</pubDate>\n";
+                $xml .= '<pubDate>' . CmsSanitizer::XmlEscape($pubDate) . "</pubDate>\n";
             }
             if (isset($row['author_name']) && $row['author_name'] !== '') {
-                $xml .= '<dc:creator>' . $this->_xmlEscape((string)$row['author_name']) . "</dc:creator>\n";
+                $xml .= '<dc:creator>' . CmsSanitizer::XmlEscape((string)$row['author_name']) . "</dc:creator>\n";
             }
             $xml .= '<description><![CDATA[' . $this->_cdataSafe($descText) . "]]></description>\n";
             if (!empty($row['tags']) && is_array($row['tags'])) {
                 foreach ($row['tags'] as $t) {
                     if (!empty($t['name'])) {
-                        $xml .= '<category>' . $this->_xmlEscape((string)$t['name']) . "</category>\n";
+                        $xml .= '<category>' . CmsSanitizer::XmlEscape((string)$t['name']) . "</category>\n";
                     }
                 }
             }
@@ -540,13 +528,11 @@ class CmsPost extends CmsBase
         return rtrim($cut) . '…';
     }
 
-    /** Escape a string for an XML text node / attribute. */
-    private function _xmlEscape($text)
-    {
-        return htmlspecialchars((string)$text, ENT_QUOTES | ENT_XML1, 'UTF-8');
-    }
-
-    /** Make a string safe to nest inside CDATA (only "]]>" can break out). */
+    /**
+     * Make a string safe to nest inside CDATA (only "]]>" can break out).
+     * Deliberately private and local: unlike XML escaping (CmsSanitizer::XmlEscape),
+     * this has exactly one caller — the RSS <description> below.
+     */
     private function _cdataSafe($text)
     {
         return str_replace(']]>', ']]&gt;', (string)$text);
@@ -564,7 +550,7 @@ class CmsPost extends CmsBase
      */
     private function _bustRssCache($postId)
     {
-        $gc = $this->_cache();
+        $gc = $this->_ghettoCache();
         if ($gc === null) {
             return;
         }
@@ -667,9 +653,7 @@ class CmsPost extends CmsBase
         // C2: a trashed post is invisible to editor/publish/delete surfaces;
         // restore reads the trashed row directly (see RestorePost()).
         $row = $this->_firstRow($DB->DataSet(
-            'SELECT p.*, COALESCE(NULLIF(m.persona, \'\'), ' . $this->_neutralAuthorSql() . ') AS author_name'
-            . ' FROM ' . DB_PREFIX . 'cms_post p'
-            . ' LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = p.author_id'
+            $this->_livePostSelectHead()
             . ' WHERE p.post_id = :post_id AND p.deleted_at IS NULL LIMIT 1'
         ));
 
@@ -719,27 +703,10 @@ class CmsPost extends CmsBase
 
         // IDOR guard (opt-in, mirrors UpdatePage/DeletePost): refuse to touch a
         // post in a different org, and refuse to relocate it OUT of the guarded
-        // scope. Runs its own Clear()/DataSet(), so it precedes the bind loop.
-        if ($scopeType !== null) {
-            $wantType = $this->_normalizeScopeType($scopeType);
-            $DB->Clear();
-            $DB->post_id = $postId;
-            $cur = $this->_firstRow($DB->DataSet(
-                'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_post WHERE post_id = :post_id LIMIT 1'
-            ));
-            if (
-                $cur === null
-                || (string)$cur['scope_type'] !== $wantType
-                || (int)$cur['scope_id'] !== (int)$scopeId
-            ) {
-                return false;
-            }
-            if (array_key_exists('scope_type', $data) && $this->_normalizeScopeType($data['scope_type']) !== $wantType) {
-                return false;
-            }
-            if (array_key_exists('scope_id', $data) && (int)$data['scope_id'] !== (int)$scopeId) {
-                return false;
-            }
+        // scope. Shared with UpdatePage via CmsBase::_scopeGuardOk, which runs its
+        // own Clear()/DataSet() — so it precedes the bind loop below.
+        if (!$this->_scopeGuardOk('cms_post', 'post_id', $postId, $scopeType, $scopeId, $data)) {
+            return false;
         }
 
         // Dup-slug pre-check when the slug is genuinely changing (mirrors
@@ -769,17 +736,7 @@ class CmsPost extends CmsBase
                     ? (int)$data['scope_id']
                     : (int)$preRow['scope_id'];
 
-                $DB->Clear();
-                $DB->slug       = $newSlug;
-                $DB->scope_type = $chkType;
-                $DB->scope_id   = $chkId;
-                $DB->post_id    = $postId;
-                $dup = $this->_firstRow($DB->DataSet(
-                    'SELECT post_id FROM ' . DB_PREFIX . 'cms_post'
-                    . ' WHERE scope_type = :scope_type AND scope_id = :scope_id'
-                    . ' AND slug = :slug AND post_id <> :post_id AND deleted_at IS NULL LIMIT 1'
-                ));
-                if ($dup !== null) {
+                if ($this->_liveSlugOwner('cms_post', 'post_id', $newSlug, $chkType, $chkId, $postId) > 0) {
                     return false;   // slug already in use in this scope — collision
                 }
             }
@@ -861,9 +818,7 @@ class CmsPost extends CmsBase
         // every save, so a matching non-trashed row always reports >= 1 changed
         // row; a nonexistent/trashed target reports 0. Read immediately after the
         // Execute on the same connection (before any other query).
-        $DB->Clear();
-        $rcRow = $this->_firstRow($DB->DataSet('SELECT ROW_COUNT() AS rc'));
-        if ($rcRow === null || (int)$rcRow['rc'] < 1) {
+        if ($this->_affectedRows() < 1) {
             return false;
         }
 
@@ -1194,6 +1149,13 @@ class CmsPost extends CmsBase
     /**
      * A single tag row by slug (for a per-tag landing header). Null when unknown.
      *
+     * INTENTIONALLY UNCONSUMED — no caller today. The SHIPPED per-tag path is
+     * Controller_Blog::index (controller.Blog.php:61-73), which passes the raw
+     * ?tag= straight into ListPosts' tag filter and keeps the generic blog page
+     * title. Wiring this in would change both the page title and the response to
+     * an unknown tag, so it is a behavior change, not a cleanup. Kept as the seam
+     * for a future dedicated tag landing.
+     *
      * @param string $slug tag slug
      * @return array|null ['tag_id','name','slug'] or null
      */
@@ -1227,6 +1189,11 @@ class CmsPost extends CmsBase
      * the C2 trash + C7 schedule gates) so the landing can never surface a
      * trashed/unpublished post. The RENDER ROUTE lives in the other lane
      * (controller.Blog); this method only exposes the data + is the seam.
+     *
+     * INTENTIONALLY UNCONSUMED — same rationale as GetTagBySlug above: the
+     * shipped tag path is Controller_Blog::index (controller.Blog.php:61-73).
+     * Do not wire this up as a "cleanup"; it changes the page title and the
+     * unknown-tag response.
      *
      * @param string $tagSlug   tag slug
      * @param string $scopeType 'global' | 'kingdom' | 'park'
@@ -1272,6 +1239,26 @@ class CmsPost extends CmsBase
     private function _neutralAuthorSql()
     {
         return "CASE WHEN p.scope_type = 'global' THEN 'Staff' ELSE 'Kingdom' END";
+    }
+
+    /**
+     * The shared SELECT ... FROM ... JOIN head every full-row post read uses:
+     * the whole post row aliased `p`, plus the C21-safe byline (persona, else the
+     * neutral org-scoped label) as author_name, over the mundane LEFT JOIN the
+     * byline needs. Callers append their own WHERE/GROUP/ORDER/LIMIT.
+     *
+     * @param string|null $join override the join clause (ListPosts appends its
+     *                          optional tag INNER JOINs to the same mundane join)
+     * @return string
+     */
+    private function _livePostSelectHead($join = null)
+    {
+        if ($join === null) {
+            $join = ' LEFT JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = p.author_id';
+        }
+        return 'SELECT p.*, COALESCE(NULLIF(m.persona, \'\'), ' . $this->_neutralAuthorSql() . ') AS author_name'
+            . ' FROM ' . DB_PREFIX . 'cms_post p'
+            . (string)$join;
     }
 
     /**
@@ -1354,24 +1341,7 @@ class CmsPost extends CmsBase
      */
     public function CountPosts($scopeType, $scopeId)
     {
-        global $DB;
-
-        $scopeType = $this->_normalizeScopeType($scopeType);
-
-        $DB->Clear();
-        $DB->scope_type = $scopeType;
-        $DB->scope_id   = (int)$scopeId;
-        $out = array('total' => 0);
-        foreach ($this->_eachRow($DB->DataSet(
-            'SELECT status, COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_post'
-            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND deleted_at IS NULL'
-            . ' GROUP BY status'
-        )) as $row) {
-            $c = (int)$row['c'];
-            $out[(string)$row['status']] = $c;
-            $out['total'] += $c;
-        }
-        return $out;
+        return $this->_countByStatus('cms_post', $scopeType, $scopeId);
     }
 
     /**
@@ -1397,9 +1367,7 @@ class CmsPost extends CmsBase
         );
 
         // Affected-row count via ROW_COUNT() before any other query intervenes.
-        $DB->Clear();
-        $row = $this->_firstRow($DB->DataSet('SELECT ROW_COUNT() AS rc'));
-        $removed = ($row !== null && isset($row['rc'])) ? (int)$row['rc'] : 0;
+        $removed = $this->_affectedRows();
 
         if ($removed > 0) {
             $this->_invalidateListCache();

@@ -113,4 +113,4 @@ $blogPageHref = function ($p) use ($blogTag) {
     <?php endif; ?>
 </div>
 </div>
-<script src="<?= $fdAssetBase ?>js/frontdoor.js"></script>
+<script src="<?= $fdAssetBase ?>js/frontdoor.js?v=<?= @filemtime($fdDir . 'js/frontdoor.js') ?>"></script>

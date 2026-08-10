@@ -11,13 +11,7 @@
  * eagerly loaded at startup). Self-contained scoped style; dark-mode aware.
  */
 $bfHeading = isset($blockFields['heading']) ? trim((string) $blockFields['heading']) : 'Latest News';
-$bfLimit   = isset($blockFields['limit']) ? (int) $blockFields['limit'] : 3;
-if ($bfLimit < 1) {
-    $bfLimit = 3;
-}
-if ($bfLimit > 12) {
-    $bfLimit = 12;
-}
+$bfLimit   = fdClampLimit($blockFields['limit'] ?? null, 3, 12);
 $bfTag = isset($blockFields['tag']) ? trim((string) $blockFields['tag']) : '';
 
 // Scope to the owning org when rendered on a kingdom/park site (mirrors

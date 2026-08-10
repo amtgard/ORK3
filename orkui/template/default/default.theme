@@ -14,10 +14,33 @@
 		<!-- End Google Tag Manager -->
 <?php endif; ?>
 		<title><?php
-		// Org sites present their own identity — no "ORK 3:" prefix leaking the
-		// internal app brand into the org's public <title> / browser tab.
-		if (!empty($IsOrgSite)) {
-			echo htmlspecialchars((string)$page_title, ENT_QUOTES);
+		// Browser tab identity, in three tiers:
+		//
+		//   public site pages  "{Org} - {Page}"   e.g. "Amtgard - About",
+		//                                              "Kingdom of the Burning Lands - Home",
+		//                                              "Wolf's Den - Home"
+		//   org site, no name  "{Page}"           (site_name not yet set)
+		//   the ORK app itself "ORK 3: {Page}"    (unchanged)
+		//
+		// $SiteTitleOrg is published by whichever controller owns the surface:
+		// Controller::index (front door) and Controller_Page/Controller_Blog use
+		// Controller::PUBLIC_SITE_BRAND ('Amtgard'); Controller_Site::_bootShell
+		// uses the kingdom's or park's own name. Those controllers set only the
+		// LEAF in $page_title — they must not prefix the org name themselves, or
+		// it appears twice.
+		//
+		// Note the deliberate lack of ucwords() on this branch: page titles here
+		// are author-entered ("Find a Chapter", "A&S Guide") and title-casing them
+		// mangles the author's own capitalization. The ORK-app branch keeps
+		// ucwords() because its titles are bare route/method names.
+		$_titleOrg  = isset($SiteTitleOrg) ? trim((string)$SiteTitleOrg) : '';
+		$_titleLeaf = trim((string)$page_title);
+		if ($_titleOrg !== '') {
+			echo htmlspecialchars($_titleLeaf !== '' ? ($_titleOrg . ' - ' . $_titleLeaf) : $_titleOrg, ENT_QUOTES);
+		} elseif (!empty($IsOrgSite)) {
+			// Org site whose site_name is still empty: show the page alone rather
+			// than a dangling separator.
+			echo htmlspecialchars($_titleLeaf, ENT_QUOTES);
 		} else {
 			echo htmlspecialchars((strlen($page_title)>0?"ORK 3: ":"ORK 3").ucwords($page_title), ENT_QUOTES);
 		}

@@ -144,7 +144,7 @@ class CmsPage extends CmsBase
         if ($publishedOnly) {
             // C7: a published row is only live once its (optional) schedule time
             // has passed; a NULL published_at means "live immediately".
-            $sql .= " AND status = 'published' AND (published_at IS NULL OR published_at <= NOW())";
+            $sql .= ' AND ' . $this->_publishedGateSql();
         }
         $sql .= ' LIMIT 1';
 
@@ -173,7 +173,7 @@ class CmsPage extends CmsBase
             . " WHERE is_system = 1 AND slug = 'home'"
             . " AND scope_type = 'global' AND scope_id = 0"
             . ' AND deleted_at IS NULL'   // C2: never serve a trashed home page
-            . " AND status = 'published' AND (published_at IS NULL OR published_at <= NOW())"
+            . ' AND ' . $this->_publishedGateSql()
             . ' LIMIT 1';
 
         $DB->Clear();
@@ -192,39 +192,7 @@ class CmsPage extends CmsBase
      */
     public function GetBlocks($ownerType, $ownerId)
     {
-        global $DB;
-
-        $ownerType = ($ownerType === 'post') ? 'post' : 'page';
-
-        $sql = 'SELECT block_id, owner_type, owner_id, type, ordering, enabled, source, fields_json'
-            . ' FROM ' . DB_PREFIX . 'cms_block'
-            . ' WHERE owner_type = :owner_type AND owner_id = :owner_id AND enabled = 1'
-            . ' ORDER BY ordering ASC, block_id ASC';
-
-        $DB->Clear();
-        $DB->owner_type = $ownerType;
-        $DB->owner_id = (int)$ownerId;
-        $r = $DB->DataSet($sql);
-
-        $blocks = array();
-        foreach ($this->_eachRow($r) as $row) {
-            $fields = array();
-            if (isset($row['fields_json']) && $row['fields_json'] !== null && $row['fields_json'] !== '') {
-                $decoded = json_decode($row['fields_json'], true);
-                if (is_array($decoded)) {
-                    $fields = $decoded;
-                }
-            }
-            $blocks[] = array(
-                'id'      => (int)$row['block_id'],
-                'type'    => $row['type'],
-                'enabled' => true, // always true: query filters enabled = 1
-                'order'   => (int)$row['ordering'],
-                'source'  => $row['source'],
-                'fields'  => $fields,
-            );
-        }
-        return $blocks;
+        return $this->_fetchBlocks($ownerType, $ownerId, true);
     }
 
     /**
@@ -251,13 +219,33 @@ class CmsPage extends CmsBase
      */
     public function GetBlocksForEditor($ownerType, $ownerId)
     {
+        return $this->_fetchBlocks($ownerType, $ownerId, false);
+    }
+
+    /**
+     * Shared block read behind GetBlocks (enabled-only) and GetBlocksForEditor
+     * (everything). Same SQL, same ordering, same decoded row shape — the only
+     * difference is the `enabled = 1` filter and how 'enabled' is reported.
+     *
+     * When $enabledOnly is true the 'enabled' key is the LITERAL boolean `true`,
+     * not 1: this array is json_encode()d into the GetPageWithBlocks cache payload
+     * and consumed by the front-door renderer, both of which expect `true`.
+     *
+     * @param string $ownerType   'page' | 'post'
+     * @param int    $ownerId     owner row id
+     * @param bool   $enabledOnly filter to enabled blocks (the public render set)
+     * @return array list of ['id','type','enabled','order','source','fields']
+     */
+    private function _fetchBlocks($ownerType, $ownerId, $enabledOnly)
+    {
         global $DB;
 
-        $ownerType = ($ownerType === 'post') ? 'post' : 'page';
+        $ownerType = $this->_normalizeOwnerType($ownerType);
 
         $sql = 'SELECT block_id, owner_type, owner_id, type, ordering, enabled, source, fields_json'
             . ' FROM ' . DB_PREFIX . 'cms_block'
             . ' WHERE owner_type = :owner_type AND owner_id = :owner_id'
+            . ($enabledOnly ? ' AND enabled = 1' : '')
             . ' ORDER BY ordering ASC, block_id ASC';
 
         $DB->Clear();
@@ -277,7 +265,11 @@ class CmsPage extends CmsBase
             $blocks[] = array(
                 'id'      => (int)$row['block_id'],
                 'type'    => $row['type'],
-                'enabled' => ((int)$row['enabled'] === 1),   // real value (not forced true)
+                // Literal true when the query already filtered enabled = 1;
+                // otherwise the real stored value. KEY ORDER IS LOAD-BEARING —
+                // this array is json_encode()d into the page-with-blocks cache
+                // payload and into the editor's bootstrap JSON.
+                'enabled' => $enabledOnly ? true : ((int)$row['enabled'] === 1),
                 'order'   => (int)$row['ordering'],
                 'source'  => $row['source'],
                 'fields'  => $fields,
@@ -567,28 +559,11 @@ class CmsPage extends CmsBase
 
         // IDOR guard (opt-in, mirrors DeletePage/RestorePage): when the caller
         // supplies its intended scope, refuse to touch a page in a different org
-        // AND refuse to relocate this page OUT of the guarded scope. Runs its own
-        // Clear()/DataSet(), so it must precede the bind loop below.
-        if ($scopeType !== null) {
-            $wantType = $this->_normalizeScopeType($scopeType);
-            $DB->Clear();
-            $DB->page_id = $pageId;
-            $cur = $this->_firstRow($DB->DataSet(
-                'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_page WHERE page_id = :page_id LIMIT 1'
-            ));
-            if (
-                $cur === null
-                || (string)$cur['scope_type'] !== $wantType
-                || (int)$cur['scope_id'] !== (int)$scopeId
-            ) {
-                return false;
-            }
-            if (array_key_exists('scope_type', $data) && $this->_normalizeScopeType($data['scope_type']) !== $wantType) {
-                return false;
-            }
-            if (array_key_exists('scope_id', $data) && (int)$data['scope_id'] !== (int)$scopeId) {
-                return false;
-            }
+        // AND refuse to relocate this page OUT of the guarded scope. Shared with
+        // UpdatePost via CmsBase::_scopeGuardOk, which runs its own
+        // Clear()/DataSet() — so it must precede the bind loop below.
+        if (!$this->_scopeGuardOk('cms_page', 'page_id', $pageId, $scopeType, $scopeId, $data)) {
+            return false;
         }
 
         // C17/#56: capture the pre-edit row + its current full PATH up front (before
@@ -632,18 +607,7 @@ class CmsPage extends CmsBase
                     ? (int)$data['scope_id']
                     : (int)$preEditRow['scope_id'];
 
-                $DB->Clear();
-                $DB->slug       = $newSlug;
-                $DB->scope_type = $chkType;
-                $DB->scope_id   = $chkId;
-                $DB->page_id    = $pageId;
-                $dup = $this->_firstRow($DB->DataSet(
-                    'SELECT page_id FROM ' . DB_PREFIX . 'cms_page'
-                    . ' WHERE scope_type = :scope_type AND scope_id = :scope_id'
-                    . ' AND slug = :slug AND page_id <> :page_id'
-                    . ' AND deleted_at IS NULL LIMIT 1'
-                ));
-                if ($dup !== null) {
+                if ($this->_liveSlugOwner('cms_page', 'page_id', $newSlug, $chkType, $chkId, $pageId) > 0) {
                     return false;   // slug already in use in this scope — collision
                 }
             }
@@ -742,9 +706,7 @@ class CmsPage extends CmsBase
         // every save, so a matching non-trashed row always reports >= 1 changed
         // row; a nonexistent/trashed target reports 0. Read immediately after the
         // Execute on the same connection (before any other query).
-        $DB->Clear();
-        $rcRow = $this->_firstRow($DB->DataSet('SELECT ROW_COUNT() AS rc'));
-        if ($rcRow === null || (int)$rcRow['rc'] < 1) {
+        if ($this->_affectedRows() < 1) {
             return false;
         }
 
@@ -928,7 +890,8 @@ class CmsPage extends CmsBase
             $DB->page_id = (int)$cursor;
             $row = $this->_firstRow($DB->DataSet(
                 'SELECT page_id, parent_id, slug, title, status, published_at'
-                . ', (status = \'published\' AND (published_at IS NULL OR published_at <= NOW())) AS is_live'
+                // Due-ness is evaluated BY THE DB (see _redactUnpublishedAncestors).
+                . ', (' . $this->_publishedGateSql() . ') AS is_live'
                 . ' FROM ' . DB_PREFIX . 'cms_page'
                 . ' WHERE page_id = :page_id AND deleted_at IS NULL LIMIT 1'
             ));
@@ -1064,7 +1027,7 @@ class CmsPage extends CmsBase
             // an unpublished (draft/scheduled) ancestor stays reachable — otherwise
             // publishing a child would silently 404 behind its unpublished parent.
             if ($publishedOnly && $idx === $lastIdx) {
-                $sql .= " AND status = 'published' AND (published_at IS NULL OR published_at <= NOW())";
+                $sql .= ' AND ' . $this->_publishedGateSql();
             }
             $sql .= ' LIMIT 1';
 
@@ -1472,7 +1435,7 @@ class CmsPage extends CmsBase
     {
         global $DB;
 
-        $ownerType = ($ownerType === 'post') ? 'post' : 'page';
+        $ownerType = $this->_normalizeOwnerType($ownerType);
         $ownerId = (int)$ownerId;
         $actorId = (int)$actorId;
 
@@ -1547,8 +1510,9 @@ class CmsPage extends CmsBase
     {
         global $DB;
 
-        $table = ($ownerType === 'post') ? 'cms_post' : 'cms_page';
-        $pk    = ($ownerType === 'post') ? 'post_id' : 'page_id';
+        $owner = $this->_ownerTable($ownerType);
+        $table = $owner['table'];
+        $pk    = $owner['pk'];
 
         $set = 'updated_at = :updated_at';
         $DB->Clear();
@@ -1575,8 +1539,9 @@ class CmsPage extends CmsBase
     {
         global $DB;
 
-        $table = ($ownerType === 'post') ? 'cms_post' : 'cms_page';
-        $pk    = ($ownerType === 'post') ? 'post_id' : 'page_id';
+        $owner = $this->_ownerTable($ownerType);
+        $table = $owner['table'];
+        $pk    = $owner['pk'];
 
         $DB->Clear();
         $DB->owner_pk = (int)$ownerId;
@@ -1896,7 +1861,10 @@ class CmsPage extends CmsBase
             } elseif (is_string($val) && in_array($key, self::HTML_FIELDS, true)) {
                 $fields[$key] = CmsSanitizer::Clean($val);
             } elseif (is_string($val) && in_array($key, self::URL_FIELDS, true)) {
-                $fields[$key] = CmsSanitizer::IsSafeUrl($val) ? $val : '#';
+                // SafeHrefOrHash exists to centralise exactly this ternary. It is
+                // equivalent here: it maps '' to '#', and IsSafeUrl('') is already
+                // false, so the two agree on every input including the empty string.
+                $fields[$key] = CmsSanitizer::SafeHrefOrHash($val);
             }
         }
         return $fields;
@@ -1961,8 +1929,10 @@ class CmsPage extends CmsBase
             // owner_type (exact 'page'|'post' literal) and owner_id (int) are
             // inlined rather than bound because the tuple appears twice in one
             // statement, and named placeholders must not be reused per-statement.
+            // _normalizeOwnerType returns from a CLOSED two-literal set, so the
+            // inlined value can never be caller input.
             $keep = (int)self::$MAX_REVISIONS;
-            $ownerLit = ($ownerType === 'post') ? 'post' : 'page';
+            $ownerLit = $this->_normalizeOwnerType($ownerType);
             $ownerIdInt = (int)$ownerId;
             $DB->Clear();
             $DB->Execute(
@@ -1989,10 +1959,10 @@ class CmsPage extends CmsBase
     {
         global $DB;
 
-        $ownerType = ($ownerType === 'post') ? 'post' : 'page';
         $ownerId = (int)$ownerId;
-        $table = ($ownerType === 'post') ? 'cms_post' : 'cms_page';
-        $pk    = ($ownerType === 'post') ? 'post_id' : 'page_id';
+        $owner = $this->_ownerTable($ownerType);
+        $table = $owner['table'];
+        $pk    = $owner['pk'];
 
         $DB->Clear();
         $DB->owner_pk = $ownerId;
@@ -2017,7 +1987,7 @@ class CmsPage extends CmsBase
     {
         global $DB;
 
-        $ownerType = ($ownerType === 'post') ? 'post' : 'page';
+        $ownerType = $this->_normalizeOwnerType($ownerType);
         $ownerId = (int)$ownerId;
         $limit = (int)$limit;
         if ($limit <= 0 || $limit > 100) {
@@ -2070,7 +2040,7 @@ class CmsPage extends CmsBase
         global $DB;
 
         $revisionId = (int)$revisionId;
-        $ownerType = ($ownerType === 'post') ? 'post' : 'page';
+        $ownerType = $this->_normalizeOwnerType($ownerType);
         $ownerId = (int)$ownerId;
         if ($revisionId <= 0 || $ownerId <= 0) {
             return false;
@@ -2215,24 +2185,7 @@ class CmsPage extends CmsBase
      */
     public function CountPages($scopeType, $scopeId)
     {
-        global $DB;
-
-        $scopeType = $this->_normalizeScopeType($scopeType);
-
-        $DB->Clear();
-        $DB->scope_type = $scopeType;
-        $DB->scope_id   = (int)$scopeId;
-        $out = array('total' => 0);
-        foreach ($this->_eachRow($DB->DataSet(
-            'SELECT status, COUNT(*) AS c FROM ' . DB_PREFIX . 'cms_page'
-            . ' WHERE scope_type = :scope_type AND scope_id = :scope_id AND deleted_at IS NULL'
-            . ' GROUP BY status'
-        )) as $row) {
-            $c = (int)$row['c'];
-            $out[(string)$row['status']] = $c;
-            $out['total'] += $c;
-        }
-        return $out;
+        return $this->_countByStatus('cms_page', $scopeType, $scopeId);
     }
 
     /* ------------------------------------------------------------------ *
@@ -2328,22 +2281,6 @@ class CmsPage extends CmsBase
             . "    OR (b.owner_type = 'post' AND po.post_id IS NULL)"
         );
         return $this->_affectedRows();
-    }
-
-    /**
-     * Affected-row count of the immediately-preceding write on the shared $DB
-     * connection (Execute() is void under ERRMODE_WARNING). Read via ROW_COUNT()
-     * before any other query intervenes.
-     *
-     * @return int
-     */
-    private function _affectedRows()
-    {
-        global $DB;
-
-        $DB->Clear();
-        $row = $this->_firstRow($DB->DataSet('SELECT ROW_COUNT() AS rc'));
-        return ($row !== null && isset($row['rc'])) ? (int)$row['rc'] : 0;
     }
 
 }

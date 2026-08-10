@@ -173,6 +173,17 @@ Chapter, Start a Chapter) `· AI Programs`(Food Fight, Olympiad) `· Media`
 ORK-specific right side: "Record Keeper" link + "Find a Chapter" CTA. **These nav
 items live in the `marketing_nav` block's `items[]` — i.e. CMS-editable later.**
 
+> **AS SHIPPED (amended 2026-08-09).** The right-side link is labelled **"ORK Login"**
+> and renders as an outline button, not a text link. Its destination is unchanged
+> from this spec — `Route=Directory`, the public Kingdoms Directory, which is *not*
+> a login form; the rename was a naming decision, not a routing change.
+>
+> The label lives in **three** places that must agree: `frontdoor/site_header.tpl`,
+> `model.FrontDoor.php` (fallback only), and the `marketing_nav` block row in
+> `ork_cms_block`. The DB row is what the live home page actually renders — once a
+> CMS row exists the model fallback never runs — so changing the PHP alone leaves
+> the site unchanged. See `db-migrations/2026-08-09-cms-nav-ork-login-label.php`.
+
 ### Assets
 
 - Copy the 8 event photos + logo into a committed, optimized location:

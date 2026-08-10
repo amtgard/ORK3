@@ -50,6 +50,15 @@ class Controller_Cms extends Controller
      */
     private $_blockCatalogMemo = null;
 
+    /**
+     * CMS-7: per-request memo of the dynamic block-type set (blockType => true)
+     * derived from the catalog's `dynamic` flags. _pageTypes() fires ~14
+     * _starter() calls per editor load and each one previously re-derived this.
+     * (null = not yet built.)
+     * @var array|null
+     */
+    private $_dynamicTypesMemo = null;
+
     public function __construct($call = null, $action = null)
     {
         parent::__construct($call, $action);
@@ -71,9 +80,7 @@ class Controller_Cms extends Controller
     {
         $uid = $this->_uid();
         // The dashboard is visible to anyone holding ANY CMS capability (or super-admin).
-        $scope = $this->_scopeOrDenyWithCap($uid, function ($uid, $scope) {
-            return $this->_hasAnyCmsCapability($uid, $scope);
-        });
+        $scope = $this->_scopeOrDenyWithCap($uid, $this->_anyCapabilityGate());
         if ($scope === false) {
             return;
         }
@@ -204,8 +211,7 @@ class Controller_Cms extends Controller
             'drafts'      => $pageDrafts + $postDrafts,
         );
         $this->data['PageTypes']  = $this->_pageTypes();
-        $this->data['TypeLabels'] = $this->_typeLabels();
-        $this->data['Caps']       = $this->_capFlags($uid, $scope);
+        $this->data['TypeLabels'] = self::_pageTypeLabelMap();
         $this->data['Greet']      = $this->_greeting();
 
         // Home-page chooser source for the site-settings form on the site card
@@ -258,10 +264,22 @@ class Controller_Cms extends Controller
         $this->load_model('CmsSite');
         $type = (string)$scope['type'];
         $id   = (int)$scope['id'];
-        $site = $ensure
-            ? $this->CmsSite->ensure_site($type, $id, $uid)
-            : $this->CmsSite->get_site_for_scope($type, $id);
+        if ($ensure) {
+            $site = $this->CmsSite->ensure_site($type, $id, $uid);
+        } elseif ($this->_scopeSiteMemo !== false) {
+            // Already resolved this request (e.g. by _scopeLiveHome) — reuse it
+            // rather than firing a second get_site_for_scope for the same scope.
+            $site = $this->_scopeSiteMemo;
+        } else {
+            $site = $this->CmsSite->get_site_for_scope($type, $id);
+        }
         $this->data['CmsSite'] = is_array($site) ? $site : array();
+        // Seed/refresh the _scopeSite() memo with the row resolved here so any
+        // later _scopeSite() in this request is a cache hit. NOTE: this runs
+        // AFTER _applyScopeData (which computed SiteLiveUrl from the PRE-ensure
+        // state, so a never-provisioned org still gets SiteLiveUrl = UIR on its
+        // first dashboard load) — do not reorder the two.
+        $this->_scopeSiteMemo = is_array($site) ? $site : null;
         // Site publish/unpublish is an AUTH_ADMIN-tier action (monarch/regent).
         // page.publish bridges to AUTH_ADMIN on the scope, so it is the correct
         // gate: an AUTH_EDIT-only officer sees the "must be published" state.
@@ -301,7 +319,7 @@ class Controller_Cms extends Controller
      * non-super-admin is bounced to Login via _denyRedirect() with NO site data
      * ever assembled (the ListAllSites query is never reached), so there is no
      * cross-org data leak. This is a GLOBAL page — it deliberately does NOT use
-     * _scopeOrDeny/_applyScopeData (those thread a single org scope); it lists
+     * _scopeOrDenyWithCap/_applyScopeData (those thread a single org scope); it lists
      * every scope at once and builds per-row scope selectors instead.
      */
     public function sites($action = null)
@@ -317,7 +335,6 @@ class Controller_Cms extends Controller
 
         $this->template = 'Cms_sites.tpl';
         $this->data['page_title'] = 'OGRE Sites';
-        $this->data['cmsActive']  = 'sites';
 
         // ---- Pinned front-door summary (Amtgard International) -------------
         // The global front door is NOT an ork_cms_site row — its home lives in
@@ -385,32 +402,24 @@ class Controller_Cms extends Controller
         //      toward un-provisioned orgs). Opening a scoped dashboard auto-fires
         //      EnsureSite, so provisioning needs no dedicated endpoint. ----
         // #17: the picker only needs id + name (+ the has_site flag). GetKingdoms()
-        // loads Common::get_configs() per kingdom (an AtlasColor lookup we never use
-        // here) — an N-config fan-out. No light id+name lister exists on the Kingdom
-        // lib, so read the minimal active set directly (a parameterless, static
-        // query — no user input reaches it, so nothing to bind/escape). Ordered in
-        // SQL, so no post-sort is needed.
-        global $DB;
-        $DB->Clear();
-        $krows = $DB->DataSet(
-            'SELECT kingdom_id, name FROM ' . DB_PREFIX . 'kingdom'
-            . " WHERE active = 'Active' ORDER BY name ASC"
-        );
-        $pick = array();
-        if ($krows !== false) {
-            while ($krows->Next()) {
-                $kid = (int)$krows->kingdom_id;
-                if ($kid <= 0) {
-                    continue;
-                }
-                $pick[] = array(
-                    'id'       => $kid,
-                    'name'     => (string)$krows->name,
-                    'has_site' => !empty($kingdomHasSite[$kid]),
-                );
+        // loads Common::get_configs() per kingdom (an AtlasColor lookup we never
+        // use here) — an N-config fan-out. Kingdom::ListActiveIdName() is the light
+        // lister for exactly this: active kingdoms, id + name, name-ordered in SQL
+        // (so no post-sort here) and no raw $DB in the controller.
+        $this->load_model('Kingdom');
+        $krows = $this->Kingdom->list_active_id_name();
+        $pick  = array();
+        foreach ((is_array($krows) ? $krows : array()) as $krow) {
+            $kid = (int)($krow['kingdom_id'] ?? 0);
+            if ($kid <= 0) {
+                continue;
             }
+            $pick[] = array(
+                'id'       => $kid,
+                'name'     => (string)($krow['name'] ?? ''),
+                'has_site' => !empty($kingdomHasSite[$kid]),
+            );
         }
-        $DB->Clear();
         $this->data['ProvisionKingdoms'] = $pick;
 
         // Rail flag: this is a super-admin so the "All sites" entry is shown.
@@ -427,13 +436,18 @@ class Controller_Cms extends Controller
     {
         $uid = $this->_uid();
         // Media management is its own capability (super-admins pass via _capFlags).
+        //
+        // DELIBERATELY NOT `cms_can('media.manage')`: media.manage is absent from
+        // CmsAuth::$ADMIN_BRIDGE_CAPS, so the officer bridge grants it at AUTH_EDIT
+        // — every AUTH_EDIT officer of the scope would gain the Media Library.
+        // _capFlags reads GRANT rows only (plus the super-admin short-circuit), so
+        // this gate stays narrow. Widening it is a privilege change, not a refactor.
         $scope = $this->_scopeOrDenyWithCap($uid, function ($uid, $scope) {
             return !empty($this->_capFlags($uid, $scope)['media']);
         });
         if ($scope === false) {
             return;
         }
-        $caps = $this->_capFlags($uid, $scope); // cached; no extra DB round-trip
 
         $this->load_model('CmsMedia');
 
@@ -445,7 +459,6 @@ class Controller_Cms extends Controller
         $media = $this->CmsMedia->list_media($scope, 200, ($search === '' ? null : $search));
         $this->data['Media']  = is_array($media) ? $media : array();
         $this->data['Search'] = $search;
-        $this->data['Caps']   = $caps;
     }
 
     /* ------------------------------------------------------------------ *
@@ -456,9 +469,7 @@ class Controller_Cms extends Controller
     {
         $uid = $this->_uid();
         // The list is visible to anyone holding ANY CMS capability (or super-admin).
-        $scope = $this->_scopeOrDenyWithCap($uid, function ($uid, $scope) {
-            return $this->_hasAnyCmsCapability($uid, $scope);
-        });
+        $scope = $this->_scopeOrDenyWithCap($uid, $this->_anyCapabilityGate());
         if ($scope === false) {
             return;
         }
@@ -515,10 +526,7 @@ class Controller_Cms extends Controller
 
         // Full human label map for the Type column (covers types not present in
         // PageTypes, e.g. legacy/system page types). Unknown keys → ucwords.
-        $this->data['TypeLabels'] = $this->_typeLabels();
-
-        // Capability flags the list UI uses to show/hide actions.
-        $this->data['Caps'] = $this->_capFlags($uid, $scope);
+        $this->data['TypeLabels'] = self::_pageTypeLabelMap();
     }
 
     /* ------------------------------------------------------------------ *
@@ -570,7 +578,6 @@ class Controller_Cms extends Controller
                 $this->data['Pages']  = $this->CmsPage->list_pages($this->_scopeFilters($scope));
                 $this->data['Search'] = '';
                 $this->data['StatusFilter'] = '';
-                $this->data['Caps'] = $this->_capFlags($uid, $scope);
                 $this->data['Message'] = 'Page not found.';
                 return;
             }
@@ -591,7 +598,6 @@ class Controller_Cms extends Controller
         // C22: the existing-tags library feeds the blog_feed block's validated tag
         // picker (a free-text tag silently rendered an empty feed on a typo).
         $this->data['AllTags']      = $this->_tagOptions();
-        $this->data['Caps']         = $this->_capFlags($uid, $scope);
     }
 
     /* ------------------------------------------------------------------ *
@@ -603,37 +609,7 @@ class Controller_Cms extends Controller
         if (func_num_args() === 0) {
             return parent::view();
         }
-
-        $uid = $this->_uid();
-        $scope = $this->_scopeOrDenyWithCap($uid, 'page.edit');
-        if ($scope === false) {
-            return;
-        }
-
-        $this->template = 'Cms_preview.tpl';
-        $this->data['IsFrontDoor'] = false;
-        $this->data['no_index']    = true;
-        // C3: Cms_preview.tpl emits window.CMS_CSRF from $CmsCsrf so the preview's
-        // inline editor actions carry the token. Set explicitly here (the
-        // constructor also sets it) so the emit is guaranteed non-empty.
-        $this->data['CmsCsrf']     = $this->_csrfToken();
-
-        $page = $this->CmsPage->get_page((int)$id);
-        // IDOR guard: never preview a page belonging to another scope.
-        if (empty($page) || !$this->_rowInScope($page, $scope)) {
-            $this->data['Message']    = 'Page not found.';
-            $this->data['page_title'] = 'Preview — not found';
-            $this->data['FrontDoor']  = array();
-            $this->data['PreviewPage'] = null;
-            return;
-        }
-
-        // Preview renders the CURRENT (draft) enabled blocks via the shared renderer.
-        $this->data['FrontDoor']   = $this->CmsPage->get_page_blocks((int)$page['page_id']);
-        $this->data['PreviewPage'] = $page;
-        $this->data['PreviewKind'] = 'page';
-        $this->data['CanPublish']  = $this->CmsAuth->cms_can($uid, 'page.publish', $scope);
-        $this->data['page_title']  = 'Preview: ' . $page['title'];
+        return $this->_renderPreview($id, 'page');
     }
 
     /**
@@ -648,6 +624,21 @@ class Controller_Cms extends Controller
         if (func_num_args() === 0) {
             return parent::view();
         }
+        return $this->_renderPreview($id, 'post');
+    }
+
+    /**
+     * The shared draft-preview body for both preview() and previewpost(): gate on
+     * page.edit in the resolved scope, load the row, enforce the scope IDOR guard,
+     * then hand the row's CURRENT (draft) blocks to Cms_preview.tpl.
+     *
+     * @param mixed  $id   raw route id
+     * @param string $kind 'page' | 'post'
+     * @return void
+     */
+    private function _renderPreview($id, $kind)
+    {
+        $isPost = ($kind === 'post');
 
         $uid = $this->_uid();
         $scope = $this->_scopeOrDenyWithCap($uid, 'page.edit');
@@ -658,25 +649,31 @@ class Controller_Cms extends Controller
         $this->template = 'Cms_preview.tpl';
         $this->data['IsFrontDoor'] = false;
         $this->data['no_index']    = true;
-        // C3: guarantee window.CMS_CSRF is non-empty in the post preview too.
-        $this->data['CmsCsrf']     = $this->_csrfToken();
+        // C3: Cms_preview.tpl emits window.CMS_CSRF from $CmsCsrf so the preview's
+        // inline editor actions carry the token. The constructor already set it
+        // (see __construct), so the emit is guaranteed non-empty.
 
-        $post = $this->CmsPost->get_post((int)$id);
-        // IDOR guard: never preview a post belonging to another scope.
-        if (empty($post) || !$this->_rowInScope($post, $scope)) {
-            $this->data['Message']     = 'Post not found.';
+        $row = $isPost
+            ? $this->CmsPost->get_post((int)$id)
+            : $this->CmsPage->get_page((int)$id);
+        // IDOR guard: never preview a row belonging to another scope.
+        if (empty($row) || !$this->_rowInScope($row, $scope)) {
+            $this->data['Message']     = $isPost ? 'Post not found.' : 'Page not found.';
             $this->data['page_title']  = 'Preview — not found';
             $this->data['FrontDoor']   = array();
             $this->data['PreviewPage'] = null;
             return;
         }
 
-        // Preview renders the post's CURRENT (draft) blocks via the shared renderer.
-        $this->data['FrontDoor']   = $this->CmsPost->get_post_blocks((int)$post['post_id']);
-        $this->data['PreviewPage'] = $post;
-        $this->data['PreviewKind'] = 'postrow';
+        // Preview renders the CURRENT (draft) enabled blocks via the shared renderer.
+        $this->data['FrontDoor']   = $isPost
+            ? $this->CmsPost->get_post_blocks((int)$row['post_id'])
+            : $this->CmsPage->get_page_blocks((int)$row['page_id']);
+        $this->data['PreviewPage'] = $row;
+        // 'postrow' (not 'post') is a literal contract: Cms_preview.tpl:14 keys on it.
+        $this->data['PreviewKind'] = $isPost ? 'postrow' : 'page';
         $this->data['CanPublish']  = $this->CmsAuth->cms_can($uid, 'page.publish', $scope);
-        $this->data['page_title']  = 'Preview: ' . $post['title'];
+        $this->data['page_title']  = 'Preview: ' . $row['title'];
     }
 
     /* ------------------------------------------------------------------ *
@@ -687,9 +684,7 @@ class Controller_Cms extends Controller
     {
         $uid = $this->_uid();
         // Same gate as the page list: visible to anyone holding ANY CMS capability.
-        $scope = $this->_scopeOrDenyWithCap($uid, function ($uid, $scope) {
-            return $this->_hasAnyCmsCapability($uid, $scope);
-        });
+        $scope = $this->_scopeOrDenyWithCap($uid, $this->_anyCapabilityGate());
         if ($scope === false) {
             return;
         }
@@ -709,7 +704,6 @@ class Controller_Cms extends Controller
         $this->data['Posts']     = $rows;
         $this->data['TagFilter'] = $tag;
         $this->data['AllTags']   = $this->CmsPost->list_all_tags();
-        $this->data['Caps']      = $this->_capFlags($uid, $scope);
 
         // #128: per-row view counts for the post list's "Views" column — one
         // batched read (post_id IN …), best-effort (template falls back to ?? []).
@@ -754,8 +748,6 @@ class Controller_Cms extends Controller
         $postsRes = $this->CmsPost->list_posts(array('includeDrafts' => true) + $this->_scopeFilters($scope));
         $postRows = (is_array($postsRes) && isset($postsRes['rows']) && is_array($postsRes['rows'])) ? $postsRes['rows'] : array();
         $this->data['PickerPosts'] = $postRows;
-
-        $this->data['Caps'] = $this->_capFlags($uid, $scope);
     }
 
     /* ------------------------------------------------------------------ *
@@ -779,12 +771,10 @@ class Controller_Cms extends Controller
 
         $this->template = 'Cms_theme.tpl';
         $this->data['page_title']    = 'Theme';
-        $this->data['cmsActive']     = 'theme';
         $this->data['ThemeCatalog']  = $this->CmsTheme->catalog();
         $this->data['ThemeFonts']    = $this->CmsTheme->font_allowlist();
         $this->data['ThemeValues']   = array_merge($this->CmsTheme->base_values(), $activeTokens);
         $this->data['ThemeActiveId'] = (is_array($active) && isset($active['id'])) ? (int)$active['id'] : 0;
-        $this->data['Caps']          = $this->_capFlags($uid, $scope);
     }
 
     /* ------------------------------------------------------------------ *
@@ -838,7 +828,6 @@ class Controller_Cms extends Controller
                 $this->data['Posts']     = (is_array($listed) && isset($listed['rows'])) ? $listed['rows'] : array();
                 $this->data['TagFilter'] = '';
                 $this->data['AllTags']   = $this->CmsPost->list_all_tags();
-                $this->data['Caps']      = $this->_capFlags($uid, $scope);
                 $this->data['Message']   = 'Post not found.';
                 return;
             }
@@ -858,7 +847,6 @@ class Controller_Cms extends Controller
         $this->data['BlockAllow']   = $this->_blockAllow($catalog);
         // C22: existing-tags library for the blog_feed block's validated tag picker.
         $this->data['AllTags']      = $this->_tagOptions();
-        $this->data['Caps']         = $this->_capFlags($uid, $scope);
     }
 
     /**
@@ -909,11 +897,6 @@ class Controller_Cms extends Controller
      * Internal helpers
      * ------------------------------------------------------------------ */
 
-    private function _uid()
-    {
-        return isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-    }
-
     /**
      * True when the user holds at least one CMS capability in the given scope
      * (covers super-admin via _resolveCapabilities short-circuit). Scope defaults
@@ -929,6 +912,20 @@ class Controller_Cms extends Controller
             return true;
         }
         return !empty($resolved['caps']);
+    }
+
+    /**
+     * The ONE "holds any CMS capability" gate callable shared by the surfaces that
+     * are visible to any CMS-capable officer (dashboard, page list, post list).
+     * Shaped for _scopeOrDenyWithCap's callable form: fn(int $uid, array $scope): bool.
+     *
+     * @return callable
+     */
+    private function _anyCapabilityGate()
+    {
+        return function ($uid, $scope) {
+            return $this->_hasAnyCmsCapability($uid, $scope);
+        };
     }
 
     /**
@@ -971,31 +968,14 @@ class Controller_Cms extends Controller
     {
         $resolved = $this->_resolveCapabilities($uid, $scope);
         if (!empty($resolved['is_super'])) {
-            return self::_allCmsCapabilities();
+            // The RBAC layer already owns the capability vocabulary (the union of
+            // every role increment). Read it from there rather than re-declaring
+            // the list here, where the two could drift. Same 9-string set; the
+            // consumer (_shell_top.tpl's window.CMS_CAPS reader) tests membership
+            // with indexOf, never position, so the emit order is not a contract.
+            return $this->CmsAuth->all_capabilities();
         }
         return array_values(array_unique(array_map('strval', (array)$resolved['caps'])));
-    }
-
-    /**
-     * #129: every CMS capability string the admin UI knows about — the set a
-     * super-admin is treated as holding, and the vocabulary the shell annotates
-     * against. Keep in sync with the _capFlags() mapping.
-     *
-     * @return string[]
-     */
-    private static function _allCmsCapabilities()
-    {
-        return array(
-            'page.create',
-            'page.edit',
-            'page.edit_own',
-            'page.publish',
-            'page.delete',
-            'media.manage',
-            'nav.manage',
-            'roles.manage',
-            'theme.manage',
-        );
     }
 
     /**
@@ -1040,24 +1020,6 @@ class Controller_Cms extends Controller
     }
 
     /**
-     * Resolve the request scope for a page surface, or emit the deny redirect
-     * when a present selector is malformed / unauthorized. Returns the scope
-     * array on success, or false after arranging the deny (caller must return).
-     *
-     * @param int $uid
-     * @return array{type:string,id:int}|false
-     */
-    private function _scopeOrDeny($uid)
-    {
-        $scope = $this->_resolveScope($uid);
-        if ($scope === false) {
-            $this->_denyRedirect();
-            return false;
-        }
-        return $scope;
-    }
-
-    /**
      * The page-surface preamble every scoped action shares: resolve+authorize the
      * request scope, gate a capability, then publish the scope to the template
      * layer. Returns the resolved scope on success, or false after arranging the
@@ -1074,9 +1036,13 @@ class Controller_Cms extends Controller
      */
     private function _scopeOrDenyWithCap($uid, $capability)
     {
-        $scope = $this->_scopeOrDeny($uid);
+        // Resolve + authorize the ?scope= selector first. A present-but-malformed
+        // or unauthorized selector denies outright — never a silent downgrade to
+        // global — before any capability gate or data load runs.
+        $scope = $this->_resolveScope($uid);
         if ($scope === false) {
-            return false; // deny already arranged by _scopeOrDeny
+            $this->_denyRedirect();
+            return false;
         }
         $ok = is_string($capability)
             ? (bool)$this->CmsAuth->cms_can($uid, $capability, $scope)
@@ -1108,13 +1074,27 @@ class Controller_Cms extends Controller
         $this->data['CmsScopeQuery'] = $this->_scopeQuery($scope);
         $this->data['CmsScopeSel']   = $this->_scopeSelector($scope);
         $this->data['CmsScopeLabel'] = $this->_scopeIsGlobal($scope) ? '' : $this->_scopeOrgLabel($scope);
+        // The org-unit NOUN ('Kingdom' / 'Principality' / 'Park'). Every scoped
+        // admin render funnels through here, so any template that would otherwise
+        // hard-code "kingdom" can say the true thing instead — a principality is
+        // stored as a kingdom row and would otherwise be mislabelled throughout.
+        $this->data['CmsScopeNoun']  = $this->_scopeOrgNoun($scope);
         // The "View live site" target for THIS scope: the org's own public home
         // (/k|/p route) for a scoped site, or the global front door otherwise.
         $this->data['SiteLiveUrl']   = $this->_scopeLiveHome($scope);
+        // The public URL namespace for this scope ('p' for parks, else 'k'), read
+        // from the lib that owns the rule so the dashboard stops re-deriving it.
+        $this->data['SitePrefix']    = CmsSite::UrlPrefixFor($scope['type'] ?? '');
         // #129: the caller's held capability set, for the shell to emit as
         // window.CMS_CAPS so the admin UI can annotate/disable actions the user
         // lacks. Every scoped render path funnels through here.
         $this->data['CmsCaps']       = $this->_capList($this->_uid(), $scope);
+        // Per-capability boolean map the shell rail and every action's UI read to
+        // show/hide controls. Set HERE rather than in each action for the same
+        // reason as CmsCaps above: every scoped page surface funnels through this
+        // method immediately after its capability gate. _capFlags is memoized per
+        // uid+scope, so this costs no additional DB round-trip.
+        $this->data['Caps']          = $this->_capFlags($this->_uid(), $scope);
     }
 
     /**
@@ -1317,28 +1297,46 @@ class Controller_Cms extends Controller
         if (is_array($this->_blockCatalogMemo)) {
             return $this->_blockCatalogMemo;
         }
-        // #42: the canonical type => meta map is the SINGLE source of truth for
-        // block types, shared with Controller_CmsAjax (which derives its save-time
-        // allowlist from CanonicalBlockTypes()). Kept as pure data in one static
-        // method so neither the catalog view nor the parser hand-duplicates it.
-        $known = self::_blockCatalogMeta();
+        // #42: the canonical type => def map is the SINGLE source of truth for
+        // block types (CmsBlockRegistry), shared with Controller_CmsAjax (which
+        // derives its save-time allowlist from CanonicalBlockTypes()). Pure data,
+        // so neither the catalog view nor the parser hand-duplicates it. What
+        // stays HERE is the request-dependent half: the filesystem `available`
+        // probe and the per-scope `addable` gating.
+        $known = CmsBlockRegistry::BlockDefs();
 
         $blockDir = DIR_TEMPLATE . 'default/frontdoor/blocks/';
 
+        // Scope-gate the CHOOSER only. A kingdom_*/park_* block renders nothing
+        // outside its own scope (every partial returns early), so offering one
+        // there is safe but silently produces an invisible block — a confusing
+        // thing to hand an officer. A block already placed on a page keeps
+        // rendering and stays editable regardless, so an org that changes type
+        // never loses content. Read the already-resolved scope memo rather than
+        // re-resolving: every caller of this method runs after the action
+        // resolved its scope, and a null memo means global.
+        $scopeType = is_array($this->_cmsScope) ? (string)($this->_cmsScope['type'] ?? 'global') : 'global';
+
         $catalog = array();
-        foreach ($known as $type => $meta) {
+        foreach ($known as $type => $def) {
             $partial   = $blockDir . preg_replace('/[^a-z_]/', '', $type) . '.tpl';
             $available = file_exists($partial);
+            $addable   = !isset($def['addable']) ? true : (bool)$def['addable'];
+            // A block that cannot render in this scope is not offered for adding.
+            // A null/absent `scopes` means "offered everywhere".
+            $scopes = isset($def['scopes']) ? $def['scopes'] : null;
+            if ($addable && is_array($scopes) && !in_array($scopeType, $scopes, true)) {
+                $addable = false;
+            }
             $catalog[] = array(
                 'type'        => $type,
-                'label'       => $meta[0],
-                'group'       => $meta[1],
-                'dynamic'     => (bool)$meta[2],
-                'icon'        => $meta[3],
-                'description' => $meta[4],
+                'label'       => $def['label'],
+                'group'       => $def['group'],
+                'dynamic'     => (bool)$def['dynamic'],
+                'icon'        => $def['icon'],
+                'description' => $def['description'],
                 'available'   => $available,
-                // 6th tuple element is the addable flag; default true when absent.
-                'addable'     => !isset($meta[5]) ? true : (bool)$meta[5],
+                'addable'     => $addable,
             );
         }
         $this->_blockCatalogMemo = $catalog;
@@ -1346,61 +1344,15 @@ class Controller_Cms extends Controller
     }
 
     /**
-     * #42: the canonical block-type => meta map — the SINGLE source of truth for
-     * which block types exist. Pure data (no filesystem), so it is safe to call
-     * statically from Controller_CmsAjax's save-time allowlist. Tuple:
-     * [label, group, dynamic, icon, description, addable?].
-     *
-     * @return array<string,array>
-     */
-    private static function _blockCatalogMeta()
-    {
-        return array(
-            // Shipped front-door blocks.
-            'marketing_nav'   => array('Marketing Nav',      'Layout',   false, 'fa-bars',          'Top navigation bar with logo, menu links, and login / call-to-action buttons. Rendered automatically as site chrome — not added per page.', false),
-            'member_bar'      => array('Member Bar',         'Dynamic',  true,  'fa-user-shield',   'Logged-in welcome strip with quick links to the viewer’s kingdom, Live Attendance, and Member Tools. Hidden from signed-out visitors.'),
-            'hero_carousel'   => array('Hero Carousel',      'Hero',     false, 'fa-images',        'Full-width rotating hero with slides, logo, and call-to-action buttons.'),
-            'richtext'        => array('Rich Text (legacy)', 'Content',  false, 'fa-align-left',    'Legacy rich-text block. Prefer the newer Rich Text block for new pages.', false),
-            'card_grid'       => array('Card Grid',          'Content',  false, 'fa-th-large',      'Grid of cards, each with an image/icon, title, blurb, and link.'),
-            'steps'           => array('Steps / How-To',     'Content',  false, 'fa-list-ol',       'Numbered steps in a row — great for “How to join” style guides.'),
-            'events_feed'     => array('Events Feed',        'Dynamic',  true,  'fa-calendar-day',  'Shows the soonest upcoming events live across the org, as date cards linking to each event.'),
-            'photo_mosaic'    => array('Photo Mosaic',       'Media',    false, 'fa-icons',         'Asymmetric photo collage (first image large) with a caption tile.'),
-            'kingdoms_teaser' => array('Kingdoms Teaser',    'Dynamic',  true,  'fa-crown',         'Live grid of active parent kingdoms with heraldry, linking to each kingdom profile.'),
-            'cta_band'        => array('Call-to-Action Band', 'Content', false, 'fa-bullhorn',      'Banner with a heading, subcopy, optional logo, and call-to-action buttons.'),
-            'staff_roster'    => array('Staff Roster',       'Content',  false, 'fa-users',         'A roster of people — photo, name, role, and bio, each optionally linked to their Amtgard persona.'),
-            // New CMS block types from the spec (Phase 4 partials).
-            'rich_text'       => array('Rich Text',          'Content',  false, 'fa-paragraph',     'Heading + formatted body text with an optional call-to-action.'),
-            'heading'         => array('Heading',            'Content',  false, 'fa-heading',       'A standalone section heading (H2–H4) with alignment.'),
-            'divider'         => array('Divider',            'Layout',   false, 'fa-grip-lines',    'A thin horizontal rule to separate sections.'),
-            'spacer'          => array('Spacer',             'Layout',   false, 'fa-arrows-alt-v',  'Vertical whitespace between blocks.'),
-            'accordion'       => array('Accordion',          'Content',  false, 'fa-chevron-circle-down', 'Expandable question / answer (FAQ) items.'),
-            'quote'           => array('Quote',              'Content',  false, 'fa-quote-right',   'A pull-quote with an optional attribution.'),
-            'table'           => array('Table',              'Content',  false, 'fa-table',         'A simple data table with an optional caption and header row.'),
-            'image'           => array('Image',              'Media',    false, 'fa-image',         'A single image with an optional caption and link.'),
-            'gallery'         => array('Gallery',            'Media',    false, 'fa-images',        'A multi-column grid of images.'),
-            'video_embed'     => array('Video Embed',        'Media',    false, 'fa-play-circle',   'An embedded YouTube or Vimeo video.'),
-            'file_download'   => array('File Download',      'Content',  false, 'fa-file-download', 'A list of downloadable files with titles and metadata.'),
-            'columns'         => array('Columns',            'Layout',   false, 'fa-columns',       'Multiple side-by-side columns, each holding its own blocks.'),
-            'raw_html'        => array('Custom HTML (limited)', 'Advanced', false, 'fa-code',        'Custom HTML — script/style/iframe/form are stripped on save; use Video Embed for embeds.'),
-            'blog_feed'       => array('Blog Feed',          'Dynamic',  true,  'fa-rss',           'Shows the latest published blog posts live as linked cards. Optionally filtered to a single tag.'),
-            // Phase 4 org-scoped dynamic blocks (kingdom sites): pull live ORK data for the page's owning kingdom.
-            'kingdom_officers' => array('Officers (live)',   'Dynamic',  true,  'fa-user-shield',   'Live grid of the kingdom’s current officers from ORK data (office + persona). Pair with a Staff Roster for your Board of Directors.'),
-            'kingdom_parks'   => array('Parks (live)',       'Dynamic',  true,  'fa-map-marked-alt', 'Live grid of the kingdom’s active parks (heraldry + name + city/state), sortable, each linking to its public park profile.'),
-            'kingdom_parks_map' => array('Parks map (live)', 'Dynamic',  true,  'fa-map',           'Interactive map of the kingdom’s active parks with a click-to-open detail sidebar (heraldry, directions, description). Great placed above a Parks list.'),
-            'kingdom_events'  => array('Events (live)',      'Dynamic',  true,  'fa-calendar-day',  'Live list of the kingdom’s soonest upcoming events, as date cards linking to each event.'),
-        );
-    }
-
-    /**
      * #42: the canonical list of valid block-type keys — the shared allowlist
      * Controller_CmsAjax::_parseBlocks() drops forged/unknown types against.
-     * Derived from the ONE meta map above so the two can never drift.
+     * Derived from the ONE registry map so the two can never drift.
      *
      * @return string[]
      */
     public static function CanonicalBlockTypes()
     {
-        return array_keys(self::_blockCatalogMeta());
+        return array_keys(CmsBlockRegistry::BlockDefs());
     }
 
     /**
@@ -1415,69 +1367,29 @@ class Controller_Cms extends Controller
      */
     private function _pageTypes()
     {
-        $labels = $this->_typeLabels();
         // #21: build the catalog ONCE and thread it into every _starter() call so
-        // the ~15 starters below don't each rebuild it (memoized too, belt-and-
+        // the starters below don't each rebuild it (memoized too, belt-and-
         // suspenders). The starter only needs the catalog's dynamic-type flags.
         $catalog = $this->_blockCatalog();
-        return array(
-            array(
-                'type'   => 'composed',
-                'label'  => $labels['composed'],
-                'blocks' => array(
-                    $this->_starter('hero_carousel', $catalog),
-                    $this->_starter('rich_text', $catalog),
-                    $this->_starter('cta_band', $catalog),
-                ),
-            ),
-            array(
-                'type'   => 'article',
-                'label'  => $labels['article'],
-                'blocks' => array(
-                    $this->_starter('heading', $catalog),
-                    $this->_starter('rich_text', $catalog),
-                ),
-            ),
-            array(
-                'type'   => 'media',
-                'label'  => $labels['media'],
-                'blocks' => array(
-                    $this->_starter('heading', $catalog),
-                    $this->_starter('gallery', $catalog),
-                ),
-            ),
-            array(
-                'type'   => 'about',
-                'label'  => $labels['about'],
-                'blocks' => array(
-                    $this->_starter('rich_text', $catalog),
-                    $this->_starter('staff_roster', $catalog),
-                ),
-            ),
-            array(
-                'type'   => 'resource',
-                'label'  => $labels['resource'],
-                'blocks' => array(
-                    $this->_starter('heading', $catalog),
-                    $this->_starter('file_download', $catalog),
-                ),
-            ),
-            array(
-                'type'   => 'blog_index',
-                'label'  => $labels['blog_index'],
-                'blocks' => array(
-                    $this->_starter('heading', $catalog),
-                    $this->_starter('blog_feed', $catalog),
-                ),
-            ),
-            array(
-                'type'   => 'dynamic',
-                'label'  => $labels['dynamic'],
-                'blocks' => array(
-                    $this->_starter('kingdoms_teaser', $catalog),
-                ),
-            ),
-        );
+
+        $out = array();
+        foreach (CmsBlockRegistry::PageTypeDefs() as $type => $def) {
+            // A def with no starters is not a page-type preset (see the registry
+            // note: 'post' is a chooser-only owner context, not a page type).
+            if (empty($def['starters'])) {
+                continue;
+            }
+            $blocks = array();
+            foreach ($def['starters'] as $blockType) {
+                $blocks[] = $this->_starter($blockType, $catalog);
+            }
+            $out[] = array(
+                'type'   => $type,
+                'label'  => (string)$def['label'],
+                'blocks' => $blocks,
+            );
+        }
+        return $out;
     }
 
     /**
@@ -1502,51 +1414,37 @@ class Controller_Cms extends Controller
         // Sensible on any page: structure + plain content + a single image.
         $universal = array('heading', 'rich_text', 'image', 'divider', 'spacer', 'quote', 'raw_html');
 
-        $extra = array(
-            // Text/article: long-form content + inline media + supporting layout.
-            'article'    => array('accordion', 'table', 'file_download', 'video_embed', 'gallery', 'columns'),
-            // Media/gallery: image-led blocks.
-            'media'      => array('gallery', 'photo_mosaic', 'video_embed', 'card_grid'),
-            // About / Team: a people roster plus supporting content blocks.
-            'about'      => array('staff_roster', 'kingdom_officers', 'kingdom_parks', 'kingdom_parks_map', 'card_grid', 'cta_band', 'gallery'),
-            // Resource/document: downloads + tabular/structured reference.
-            'resource'   => array('file_download', 'table', 'accordion', 'columns'),
-            // Blog index: the live post feed, with an optional call-to-action.
-            'blog_index' => array('blog_feed', 'cta_band'),
-            // Dynamic data: every live feed, plus framing blocks. #65: the global
-            // events_feed (org-wide, all kingdoms) is dropped from the chooser in
-            // favor of the scope-correct kingdom_events; existing events_feed blocks
-            // still render and stay editable (blockAllow only governs the chooser).
-            'dynamic'    => array('kingdoms_teaser', 'blog_feed', 'kingdom_officers', 'kingdom_parks', 'kingdom_parks_map', 'kingdom_events', 'member_bar', 'card_grid', 'cta_band'),
-            // Blog post bodies behave like articles.
-            'post'       => array('accordion', 'table', 'file_download', 'video_embed', 'gallery', 'columns'),
-        );
-
         // composed = all addable block types (the full landing-page kit).
         $composed = array();
+        $addable  = array();
         foreach ($catalog as $c) {
             if (!empty($c['addable'])) {
-                $composed[] = $c['type'];
+                $composed[]              = $c['type'];
+                $addable[$c['type']] = true;
             }
         }
 
         $allow = array('composed' => $composed);
-        foreach ($extra as $type => $types) {
-            $allow[$type] = array_values(array_unique(array_merge($universal, $types)));
+        foreach (CmsBlockRegistry::PageTypeDefs() as $type => $def) {
+            // 'composed' is computed above, not enumerated; a null extra_blocks
+            // means exactly that.
+            if ($type === 'composed' || !isset($def['extra_blocks']) || !is_array($def['extra_blocks'])) {
+                continue;
+            }
+            // Intersect with the addable set so the enumerated groups inherit the
+            // catalog's scope gating. Without this, the kingdom_* entries in
+            // 'about'/'dynamic' would still be offered on a park site (and the
+            // park_* entries on a kingdom site) even though the partial returns
+            // early there and the officer would get an invisible block.
+            $merged      = array_merge($universal, $def['extra_blocks']);
+            $allow[$type] = array_values(array_unique(array_filter(
+                $merged,
+                static function ($t) use ($addable) {
+                    return isset($addable[$t]);
+                }
+            )));
         }
         return $allow;
-    }
-
-    /**
-     * Human label map for page `type` keys, used by both the Type column and the
-     * type chooser. Unknown keys should fall back to a de-underscored ucwords()
-     * form at the call site (e.g. "blog_index" → "Blog Index").
-     *
-     * @return array<string,string>
-     */
-    private function _typeLabels()
-    {
-        return self::_pageTypeLabelMap();
     }
 
     /**
@@ -1557,19 +1455,26 @@ class Controller_Cms extends Controller
      * twice; a type added to the presets could be silently clamped back to
      * 'composed' by a stale allowlist. One list now makes that impossible.
      *
+     * Also the human label map the Type column and the type chooser render from.
+     * Unknown keys (legacy/system page types absent here) fall back to a
+     * de-underscored ucwords() form at the call site (e.g. "blog_index" →
+     * "Blog Index").
+     *
      * @return array<string,string>
      */
     private static function _pageTypeLabelMap()
     {
-        return array(
-            'composed'   => 'Composed / Landing',
-            'article'    => 'Article / Text',
-            'media'      => 'Media / Gallery',
-            'about'      => 'About / Team',
-            'resource'   => 'Resource / Document',
-            'blog_index' => 'Blog Index',
-            'dynamic'    => 'Dynamic Data',
-        );
+        $out = array();
+        foreach (CmsBlockRegistry::PageTypeDefs() as $type => $def) {
+            // A null label marks a chooser-only owner context ('post'), which is
+            // NOT a page type — it must never reach the type chooser, the Type
+            // column's label map, or the save-time page-type allowlist.
+            if (!isset($def['label']) || $def['label'] === null) {
+                continue;
+            }
+            $out[$type] = (string)$def['label'];
+        }
+        return $out;
     }
 
     /**
@@ -1598,55 +1503,34 @@ class Controller_Cms extends Controller
         // with a single source of truth rather than a duplicated hand-list.
         // #21: the caller (_pageTypes) passes the already-built catalog so this
         // isn't rebuilt per starter; fall back to the memoized build otherwise.
-        if (!is_array($catalog)) {
-            $catalog = $this->_blockCatalog();
-        }
-        $dynamicTypes = array();
-        foreach ($catalog as $c) {
-            if (!empty($c['dynamic'])) {
-                $dynamicTypes[$c['type']] = true;
+        // CMS-7: the derived set is memoized for the request — _pageTypes fires
+        // ~14 starters per editor load and each one re-derived it.
+        if ($this->_dynamicTypesMemo === null) {
+            if (!is_array($catalog)) {
+                $catalog = $this->_blockCatalog();
             }
+            $dynamicTypes = array();
+            foreach ($catalog as $c) {
+                if (!empty($c['dynamic'])) {
+                    $dynamicTypes[$c['type']] = true;
+                }
+            }
+            $this->_dynamicTypesMemo = $dynamicTypes;
         }
 
-        // Empty field defaults keyed to each partial's consumed fields.
-        $defaults = array(
-            'hero_carousel'   => array('autoplay_ms' => '', 'logo' => array(), 'slides' => array(), 'ctas' => array()),
-            'rich_text'       => array('kicker' => '', 'heading' => '', 'body' => '', 'align' => 'left', 'cta' => array('label' => '', 'href' => '')),
-            'cta_band'        => array('heading' => '', 'subcopy' => '', 'logo' => array(), 'ctas' => array(), 'links' => ''),
-            'card_grid'       => array('kicker' => '', 'heading' => '', 'subheading' => '', 'cards' => array()),
-            'staff_roster'    => array('kicker' => '', 'heading' => 'Meet the Team', 'subheading' => '', 'presentation' => 'amtgard', 'people' => array()),
-            'heading'         => array('text' => '', 'level' => 2, 'align' => 'left'),
-            'gallery'         => array('images' => array(), 'columns' => 3, 'caption' => ''),
-            'file_download'   => array('files' => array()),
-            'video_embed'     => array('provider' => 'youtube', 'video_id' => '', 'url' => '', 'caption' => ''),
-            'accordion'       => array('items' => array()),
-            'quote'           => array('text' => '', 'cite' => ''),
-            'image'           => array('image' => array(), 'caption' => '', 'href' => '', 'align' => 'center', 'max_width' => ''),
-            // Newly friendly authored types (defaults match each partial's keys).
-            'steps'           => array('kicker' => '', 'heading' => '', 'band' => 'light', 'cta' => array('label' => '', 'href' => ''), 'steps' => array()),
-            'photo_mosaic'    => array('caption' => '', 'images' => array()),
-            'divider'         => array('style' => 'line'),
-            'spacer'          => array('size' => 'md'),
-            'table'           => array('caption' => '', 'header_first_row' => 1, 'rows' => array()),
-            'raw_html'        => array('html' => ''),
-            'marketing_nav'   => array('logo' => array(), 'cta' => array('label' => '', 'href' => ''), 'login' => array('label' => '', 'href' => '')),
-            'columns'         => array('columns' => array()),
-            // Dynamic blocks (sourced live) — only their genuine knobs.
-            'kingdoms_teaser' => array('kicker' => '', 'heading' => '', 'limit' => 12, 'more_href' => ''),
-            'events_feed'     => array('kicker' => '', 'heading' => '', 'limit' => 3, 'more_href' => ''),
-            'blog_feed'       => array('heading' => '', 'limit' => 3, 'tag' => ''),
-            'kingdom_officers' => array('kicker' => '', 'heading' => '', 'limit' => 12),
-            'kingdom_parks'   => array('kicker' => '', 'heading' => '', 'sort' => 'name', 'show_heraldry' => 0, 'limit' => 24, 'more_href' => ''),
-            'kingdom_parks_map' => array('kicker' => '', 'heading' => 'Park Map'),
-            'kingdom_events'  => array('kicker' => '', 'heading' => '', 'limit' => 3, 'more_href' => ''),
-            'member_bar'      => array(),
-        );
+        // Empty field defaults keyed to each partial's consumed fields, declared
+        // once per block type in CmsBlockRegistry alongside that type's catalog
+        // entry. A type with no starter_fields (e.g. the non-addable legacy
+        // 'richtext') seeds an empty field set, exactly as before.
+        $defs = CmsBlockRegistry::BlockDefs();
 
         return array(
             'type'    => $type,
             'enabled' => 1,
-            'source'  => isset($dynamicTypes[$type]) ? 'dynamic' : 'authored',
-            'fields'  => isset($defaults[$type]) ? $defaults[$type] : array(),
+            'source'  => isset($this->_dynamicTypesMemo[$type]) ? 'dynamic' : 'authored',
+            'fields'  => (isset($defs[$type]['starter_fields']) && is_array($defs[$type]['starter_fields']))
+                ? $defs[$type]['starter_fields']
+                : array(),
         );
     }
 }

@@ -176,6 +176,32 @@ when no officers/parks/events exist.
 - A scoped nav menu (`ork_cms_nav_item`, `menu='site'`, scope) linking the pages.
 - `home_page_id` set to the seeded home page.
 
+> **AS SHIPPED (amended 2026-08-09).** Two corrections to this section, both from
+> adversarial review findings:
+>
+> 1. **`home_page_id` is no longer the seeded-or-not signal.** `EnsureSite` used to
+>    infer "never seeded" from live content (empty nav menu and/or NULL
+>    `home_page_id`), which cannot tell *never seeded* apart from *the org deleted
+>    the seeded content*. An org that removed its starter nav links or trashed a
+>    starter page got them silently re-created — as **published** pages full of
+>    placeholder copy. Seeding is now gated on an explicit
+>    `ork_cms_site.template_seeded_at` marker, stamped once at the end of a
+>    successful seed (`db-migrations/2026-08-09-cms-site-seed-marker.sql`). Do not
+>    reintroduce content-based inference.
+>
+> 2. **Park sites are live, not "later".** The `/p/{slug}` prefix is served now, and
+>    parks have their own dynamic blocks — `park_meeting`, `park_officers`,
+>    `park_events` — alongside the `kingdom_*` set. Anything deriving an org URL
+>    must use `Controller_Site::_prefixFor()` rather than assuming `/k/`; hard-coded
+>    `/k/` in the dashboard was a shipped defect.
+>
+> **Principalities need no scope change.** Amtgard stores a principality as an
+> `ork_kingdom` row with a non-zero `parent_kingdom_id`, so a principality's site is
+> already an ordinary `scope_type='kingdom'` site — the ENUM does not grow. What it
+> does need is the right *noun*: `CmsSite::OrgUnitNoun()` returns
+> `Kingdom` / `Principality` / `Park`, and user-facing copy must use it instead of
+> hard-coding "kingdom".
+
 ### 7. Discovery
 
 The kingdom Directory / listing surfaces a "Visit site" link when the org's site is

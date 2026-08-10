@@ -15,6 +15,15 @@ $fdbColumns = is_array($fdbColumns) ? array_values(array_filter($fdbColumns, 'is
 $fdbCount   = count($fdbColumns);
 ?>
 <?php if ($fdbCount > 0): ?>
+<?php // NO $fdStyleOnce guard here, deliberately. Unlike every other block's
+      // static CSS, this <style> is NOT byte-identical across repeats: it
+      // interpolates $fdbCount into grid-template-columns, and .fdb-columns is a
+      // single global selector, so with several columns blocks on one page the
+      // LAST emission wins and sets the column count for all of them. Deduping
+      // by block type would drop later emissions and silently re-flow earlier
+      // blocks; deduping by count would reorder which emission is last. Both
+      // change rendering. Fix properly (per-count class, or an inline style on
+      // the wrapper) before adding a guard. ?>
 <style>
 /* scoped: fdb-columns */
 .fdb-columns {

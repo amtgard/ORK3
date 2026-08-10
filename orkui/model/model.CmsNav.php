@@ -8,15 +8,14 @@
  * forwards any unknown method to it. The explicit methods below mirror the
  * lib surface for clarity; all are pure forwards (no business logic here —
  * DB work lives in the lib).
+ *
+ * Calling convention: call the snake_case wrapper where one exists; a
+ * PascalCase reach-around via Model::__call is the sanctioned form for lib
+ * methods that have no wrapper.
  */
 class Model_CmsNav extends Model
 {
-    public function __construct()
-    {
-        parent::__construct();
-        $this->CmsNav = new APIModel('CmsNav');
-    }
-
+    /** @no-callers — mirror surface. */
     public function get_menu($menu, $scopeType = 'global', $scopeId = 0)
     {
         return $this->CmsNav->GetMenu($menu, $scopeType, $scopeId);

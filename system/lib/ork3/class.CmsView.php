@@ -175,14 +175,7 @@ class CmsView extends CmsBase
                 . ' COALESCE(SUM(CASE WHEN v.`day` >= (CURDATE() - INTERVAL :recent_days DAY)'
                 . ' THEN v.views ELSE 0 END), 0) AS recent'
                 . ' FROM ' . DB_PREFIX . 'cms_view v'
-                . ' LEFT JOIN ' . DB_PREFIX . 'cms_page pg'
-                . "   ON v.entity_type = 'page' AND pg.page_id = v.entity_id"
-                . '   AND pg.scope_type = v.scope_type AND pg.scope_id = v.scope_id'
-                . '   AND pg.deleted_at IS NULL'
-                . ' LEFT JOIN ' . DB_PREFIX . 'cms_post po'
-                . "   ON v.entity_type = 'post' AND po.post_id = v.entity_id"
-                . '   AND po.scope_type = v.scope_type AND po.scope_id = v.scope_id'
-                . '   AND po.deleted_at IS NULL'
+                . $this->_liveEntityJoinSql()
                 . ' WHERE v.scope_type = :scope_type AND v.scope_id = :scope_id'
                 // Keep only view rows whose entity still resolves to a live page/post.
                 . ' AND COALESCE(pg.page_id, po.post_id) IS NOT NULL'
@@ -218,13 +211,7 @@ class CmsView extends CmsBase
     {
         global $DB;
 
-        $limit = (int)$limit;
-        if ($limit < 1) {
-            $limit = 1;
-        }
-        if ($limit > 50) {
-            $limit = 50;
-        }
+        $limit = $this->_clampInt($limit, 1, 50);
 
         $out = array();
 
@@ -249,14 +236,7 @@ class CmsView extends CmsBase
                 . ' COALESCE(pg.title, po.title) AS title,'
                 . ' COALESCE(pg.slug, po.slug) AS slug'
                 . ' FROM ' . DB_PREFIX . 'cms_view v'
-                . ' LEFT JOIN ' . DB_PREFIX . 'cms_page pg'
-                . "   ON v.entity_type = 'page' AND pg.page_id = v.entity_id"
-                . '   AND pg.scope_type = v.scope_type AND pg.scope_id = v.scope_id'
-                . '   AND pg.deleted_at IS NULL'
-                . ' LEFT JOIN ' . DB_PREFIX . 'cms_post po'
-                . "   ON v.entity_type = 'post' AND po.post_id = v.entity_id"
-                . '   AND po.scope_type = v.scope_type AND po.scope_id = v.scope_id'
-                . '   AND po.deleted_at IS NULL'
+                . $this->_liveEntityJoinSql()
                 . ' WHERE v.scope_type = :scope_type AND v.scope_id = :scope_id'
                 . ' GROUP BY v.entity_type, v.entity_id'
                 // Drop entities that no longer resolve to a live page/post.
@@ -359,6 +339,7 @@ class CmsView extends CmsBase
     {
         global $DB;
 
+        // NOT _clampInt: a sub-1 window falls back to RECENT_DAYS, not to 1.
         $days = (int)$days;
         if ($days < 1) {
             $days = self::RECENT_DAYS;
@@ -366,13 +347,7 @@ class CmsView extends CmsBase
         if ($days > 3650) {
             $days = 3650;
         }
-        $limit = (int)$limit;
-        if ($limit < 1) {
-            $limit = 1;
-        }
-        if ($limit > 50) {
-            $limit = 50;
-        }
+        $limit = $this->_clampInt($limit, 1, 50);
 
         $out = array();
 
@@ -393,14 +368,7 @@ class CmsView extends CmsBase
                 . ' COALESCE(pg.title, po.title) AS title,'
                 . ' COALESCE(pg.slug, po.slug) AS slug'
                 . ' FROM ' . DB_PREFIX . 'cms_view v'
-                . ' LEFT JOIN ' . DB_PREFIX . 'cms_page pg'
-                . "   ON v.entity_type = 'page' AND pg.page_id = v.entity_id"
-                . '   AND pg.scope_type = v.scope_type AND pg.scope_id = v.scope_id'
-                . '   AND pg.deleted_at IS NULL'
-                . ' LEFT JOIN ' . DB_PREFIX . 'cms_post po'
-                . "   ON v.entity_type = 'post' AND po.post_id = v.entity_id"
-                . '   AND po.scope_type = v.scope_type AND po.scope_id = v.scope_id'
-                . '   AND po.deleted_at IS NULL'
+                . $this->_liveEntityJoinSql()
                 . ' WHERE v.scope_type = :scope_type AND v.scope_id = :scope_id'
                 . ' AND v.`day` >= (CURDATE() - INTERVAL :win_days DAY)'
                 . ' GROUP BY v.entity_type, v.entity_id'
@@ -433,5 +401,59 @@ class CmsView extends CmsBase
     {
         $entityType = strtolower(trim((string)$entityType));
         return in_array($entityType, self::$ENTITY_TYPES, true) ? $entityType : 'page';
+    }
+
+    /**
+     * The shared polymorphic LEFT JOIN from ork_cms_view (aliased `v`) to the
+     * live owning page (`pg`) / post (`po`).
+     *
+     * Every read in this class resolves a view row's entity the SAME way, and
+     * they must stay in lockstep or the dashboard's figures contradict each
+     * other (#115): the join is SCOPE-BOUND (pinned to v.scope_type/v.scope_id,
+     * so a stray cross-scope entity_id can never leak another org's title/slug)
+     * and LIVE-ONLY (deleted_at IS NULL, so views of deleted content drop out).
+     *
+     * Emits only the JOIN clauses — each caller supplies its own WHERE/HAVING
+     * test for "the entity still resolves" (COALESCE(...) IS NOT NULL vs
+     * HAVING title IS NOT NULL), because those differ by aggregation shape.
+     *
+     * @return string SQL fragment, leading space included
+     */
+    private function _liveEntityJoinSql()
+    {
+        return ' LEFT JOIN ' . DB_PREFIX . 'cms_page pg'
+            . "   ON v.entity_type = 'page' AND pg.page_id = v.entity_id"
+            . '   AND pg.scope_type = v.scope_type AND pg.scope_id = v.scope_id'
+            . '   AND pg.deleted_at IS NULL'
+            . ' LEFT JOIN ' . DB_PREFIX . 'cms_post po'
+            . "   ON v.entity_type = 'post' AND po.post_id = v.entity_id"
+            . '   AND po.scope_type = v.scope_type AND po.scope_id = v.scope_id'
+            . '   AND po.deleted_at IS NULL';
+    }
+
+    /**
+     * Clamp an int into [$min, $max]. Used for the row-count ceilings that are
+     * inlined into LIMIT (bound placeholders aren't reliable for LIMIT under
+     * this PDO driver), so the value MUST be a sanitized int.
+     *
+     * NOTE: this is the plain clamp — out-of-range snaps to the nearest bound.
+     * GetTopContent's $days clamp deliberately does NOT use it: a sub-1 $days
+     * falls back to RECENT_DAYS, not to 1.
+     *
+     * @param mixed $n
+     * @param int   $min
+     * @param int   $max
+     * @return int
+     */
+    private function _clampInt($n, $min, $max)
+    {
+        $n = (int)$n;
+        if ($n < $min) {
+            $n = $min;
+        }
+        if ($n > $max) {
+            $n = $max;
+        }
+        return $n;
     }
 }

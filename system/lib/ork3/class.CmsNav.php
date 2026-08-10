@@ -32,8 +32,14 @@ class CmsNav extends CmsBase
     public const LABEL_MAXLEN = 160;
     public const URL_MAXLEN   = 512;
 
-    /** Allowed link_type enum values. */
-    private static $LINK_TYPES = array('page', 'post', 'url', 'dynamic');
+    /**
+     * Allowed link_type enum values — the single source of truth for the
+     * ork_cms_nav_item.link_type domain. Public so the CmsAjax nav endpoints can
+     * validate against the SAME list instead of re-declaring it (the two used to
+     * drift). The DATA is shared, not the normalizer: _normalizeLinkType() stays
+     * private because it also carries this class's default-to-'page' policy.
+     */
+    public const LINK_TYPES = array('page', 'post', 'url', 'dynamic');
 
     /**
      * Per-request memo for GetMenu() results, keyed by "menu|scope_type|scope_id".
@@ -97,7 +103,7 @@ class CmsNav extends CmsBase
         // a bounded, documented trade-off; a slug-edit-driven bust would live in the
         // page/post write path (a different owner) — see report.
         $ckey  = null;
-        $cache = $this->_cache();
+        $cache = $this->_ghettoCache();
         if ($cache !== null) {
             $sig = $this->_navSignature($menuName, $normScope, $scopeId);
             // Skip caching entirely when the signature probe failed (null) so a
@@ -199,17 +205,6 @@ class CmsNav extends CmsBase
         return (string)(int)$row['cnt'] . '-'
             . (string)(int)$row['mx'] . '-'
             . (string)$row['sig'];
-    }
-
-    /** GhettoCache handle, or null when the memcache layer isn't wired up. */
-    private function _cache()
-    {
-        if (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache)
-            && is_object(Ork3::$Lib->ghettocache)
-        ) {
-            return Ork3::$Lib->ghettocache;
-        }
-        return null;
     }
 
     /**
@@ -499,12 +494,11 @@ class CmsNav extends CmsBase
         }
 
         // Reject cross-scope deletes (IDOR) when an intended scope is supplied.
-        if ($scopeType !== null) {
-            $wantType = $this->_normalizeScopeType($scopeType);
-            $wantId   = (int)$scopeId;
-            if ((string)$existing['scope_type'] !== $wantType || (int)$existing['scope_id'] !== $wantId) {
-                return false;
-            }
+        // _rowInScope normalizes the WANTED side only and compares the STORED side
+        // raw, which is exactly the fail-closed comparison this guard has always
+        // made — a row with an out-of-enum scope_type matches nothing.
+        if ($scopeType !== null && !$this->_rowInScope($existing, $scopeType, $scopeId)) {
+            return false;
         }
 
         // Wrap the two DELETEs in one transaction so a failure between them can't
@@ -951,7 +945,7 @@ class CmsNav extends CmsBase
     private function _normalizeLinkType($linkType)
     {
         $linkType = strtolower(trim((string)$linkType));
-        return in_array($linkType, self::$LINK_TYPES, true) ? $linkType : 'page';
+        return in_array($linkType, self::LINK_TYPES, true) ? $linkType : 'page';
     }
 
     /** Clamp the menu name to its column width (default 'marketing'). */

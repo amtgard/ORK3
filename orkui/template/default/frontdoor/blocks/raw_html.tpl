@@ -24,6 +24,8 @@ $fdbHtml = $blockFields['html'] ?? '';
 $fdbIsPreview = !empty($SitePreview);
 ?>
 <?php if ($fdbHtml !== ''): ?>
+<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
+<?php if (empty($fdStyleOnce['raw_html'])) : $fdStyleOnce['raw_html'] = true; ?>
 <style>
 /* scoped: fdb-rawhtml */
 .fdb-rawhtml { word-wrap: break-word; overflow-wrap: anywhere; }
@@ -33,12 +35,15 @@ $fdbIsPreview = !empty($SitePreview);
 .fdb-rawhtml pre { overflow-x: auto; max-width: 100%; }
 html[data-theme="dark"] .fdb-rawhtml { color: #e6e8ee; }
 </style>
+<?php endif; ?>
 <div class="fd-pad fdb-rawhtml">
     <?php /* sanitized at save (CmsSanitizer::Clean) */ ?>
     <?= $fdbHtml ?>
 </div>
 <?php elseif ($fdbIsPreview): ?>
 <?php /* Empty AFTER sanitize → likely a stripped embed. Author-only hint. */ ?>
+<?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
+<?php if (empty($fdStyleOnce['raw_html_empty'])) : $fdStyleOnce['raw_html_empty'] = true; ?>
 <style>
 /* scoped: fdb-rawhtml-empty (preview-only author note) */
 .fdb-rawhtml-empty { margin: 12px 16px; padding: 14px 16px; border: 1px dashed #c9a227;
@@ -51,6 +56,7 @@ html[data-theme="dark"] .fdb-rawhtml-empty { border-color: #6d5a1c; background: 
 html[data-theme="dark"] .fdb-rawhtml-empty strong { color: #f4ecc7; }
 html[data-theme="dark"] .fdb-rawhtml-empty code { background: rgba(255,255,255,.1); }
 </style>
+<?php endif; ?>
 <div class="fd-pad">
     <div class="fdb-rawhtml-empty" role="note">
         <strong>This Custom HTML block is empty.</strong>

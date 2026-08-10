@@ -30,15 +30,15 @@ if ($kpKingdomId <= 0) {
 
 $kpKicker   = isset($blockFields['kicker']) ? trim((string) $blockFields['kicker']) : '';
 $kpHeading  = isset($blockFields['heading']) ? trim((string) $blockFields['heading']) : 'Our Parks';
-$kpLimit    = isset($blockFields['limit']) ? (int) $blockFields['limit'] : 24;
-if ($kpLimit < 1) {
-    $kpLimit = 24;
-}
-if ($kpLimit > 60) {
-    $kpLimit = 60;
-}
+$kpLimit    = fdClampLimit(
+    $blockFields['limit'] ?? null,
+    CmsRenderCache::PARKS_LIMIT_DEFAULT,
+    CmsRenderCache::PARKS_LIMIT_MAX
+);
+// The sort set is part of this block's cache-key space, so it comes from the
+// same registry CmsAjax::clearrendercache enumerates.
 $kpSort = isset($blockFields['sort']) ? (string) $blockFields['sort'] : 'name';
-if (!in_array($kpSort, array('name', 'city', 'state'), true)) {
+if (!in_array($kpSort, CmsRenderCache::PARKS_SORTS, true)) {
     $kpSort = 'name';
 }
 $kpShowHeraldry = !empty($blockFields['show_heraldry'])
@@ -58,18 +58,11 @@ if ($kpMoreHref === '#') {
 // show_heraldry). Public park data is safe to share across viewers; a short TTL
 // keeps it fresh. Cached hits render with ZERO model calls and ZERO disk probes.
 // $kpResolved: list of ['park_id','name','loc','title','crest'].
-$kpResolved = null;
-$kpCache    = (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache) && is_object(Ork3::$Lib->ghettocache))
-    ? Ork3::$Lib->ghettocache : null;
-$kpCacheKey = 'k' . $kpKingdomId . '.l' . $kpLimit . '.s' . $kpSort . '.h' . ($kpShowHeraldry ? 1 : 0);
-if ($kpCache !== null) {
-    $kpHit = $kpCache->get('frontdoor.kingdom_parks', $kpCacheKey, 300);
-    if (is_array($kpHit)) {
-        $kpResolved = $kpHit;
-    }
-}
-
-if ($kpResolved === null) {
+$kpResolved = fdBlockCache(
+    CmsRenderCache::NS_KINGDOM_PARKS,
+    CmsRenderCache::ParksKey($kpKingdomId, $kpLimit, $kpSort, $kpShowHeraldry),
+    CmsRenderCache::TTL,
+    function () use ($kpKingdomId, $kpLimit, $kpSort, $kpShowHeraldry) {
     $kpRows = [];
     if (class_exists('APIModel')) {
         try {
@@ -157,17 +150,16 @@ if ($kpResolved === null) {
         ];
     }
 
-    if ($kpCache !== null) {
-        $kpCache->cache('frontdoor.kingdom_parks', $kpCacheKey, $kpResolved);
+    return $kpResolved;
     }
-}
+);
 ?>
 <?php // Emit this block's static CSS at most once per request (dedupes repeats). ?>
 <?php if (empty($fdStyleOnce['kingdom_parks'])) : $fdStyleOnce['kingdom_parks'] = true; ?>
 <style>
 .kp-block { background: var(--fd-bg); }
 .kp-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 18px; gap: 12px; }
-.kp-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; margin: 0; font-size: 24px; }
+.kp-title { margin: 0; font-size: 24px; }
 .kp-more { color: #1d4ed8; font-weight: 600; font-size: 14px; text-decoration: none; white-space: nowrap; }
 .kp-more:hover { text-decoration: underline; }
 .kp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }

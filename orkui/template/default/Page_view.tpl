@@ -43,4 +43,4 @@ if ($fdCrumbCurrent !== ''):
 <?php include $fdDir . 'render_blocks.tpl'; ?>
 </div>
 <?php endif; ?>
-<script src="<?= $fdAssetBase ?>js/frontdoor.js"></script>
+<script src="<?= $fdAssetBase ?>js/frontdoor.js?v=<?= @filemtime($fdDir . 'js/frontdoor.js') ?>"></script>

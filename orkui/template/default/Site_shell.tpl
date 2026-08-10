@@ -30,9 +30,15 @@ $siteHomeWarning = (isset($SiteHomeWarning) && $SiteHomeWarning !== '') ? (strin
 $sitePageTitle   = isset($page_title) ? (string) $page_title : '';
 
 // C26 — a page already carries exactly one <h1> when a content block supplies it
-// (hero_carousel's first slide, or a heading block set to level 1). Only then do
-// we suppress the fallback page-title <h1> below, so the outline has one and only
-// one top heading (WCAG 1.3.1).
+// (hero_carousel's first slide). Only then do we suppress the fallback page-title
+// <h1> below, so the outline has one and only one top heading (WCAG 1.3.1).
+//
+// A heading block can NOT be that supplier today: the editor's Level control
+// offers H2/H3/H4 only (script/cms-block-editor.js:1231-1232), so no authored
+// heading block is ever level 1 (0 such rows exist). The level-1 test that used
+// to live in this loop was therefore unreachable and has been removed. If H1 is
+// ever added back to that Level control, this test MUST come back with it, or
+// such a page renders two <h1>s.
 $fdHasBlockH1 = false;
 foreach ($fdBlocks as $__b) {
     if (empty($__b['enabled'])) {
@@ -40,10 +46,6 @@ foreach ($fdBlocks as $__b) {
     }
     $__type = isset($__b['type']) ? (string) $__b['type'] : '';
     if ($__type === 'hero_carousel' && !empty($__b['fields']['slides']) && is_array($__b['fields']['slides'])) {
-        $fdHasBlockH1 = true;
-        break;
-    }
-    if ($__type === 'heading' && (int) ($__b['fields']['level'] ?? 2) === 1 && trim((string) ($__b['fields']['text'] ?? '')) !== '') {
         $fdHasBlockH1 = true;
         break;
     }
@@ -85,7 +87,10 @@ html[data-theme="dark"] .org-home-warning strong{color:#f7ecca;}
         <div class="org-notice-card">
             <i class="fas fa-hard-hat org-notice-icon" aria-hidden="true"></i>
             <h1 class="org-notice-title"><?= htmlspecialchars(!empty($SiteName) ? (string) $SiteName : 'This site') ?> is coming soon</h1>
-            <p class="org-notice-text">This kingdom is building its public website. Please check back soon.</p>
+            <?php // 'Kingdom' / 'Principality' / 'Park' from the site's own scope —
+                  // a principality is stored as a kingdom row, so hard-coding
+                  // "kingdom" here told its visitors the wrong thing. ?>
+            <p class="org-notice-text">This <?= htmlspecialchars(!empty($SiteOrgNoun) ? strtolower((string) $SiteOrgNoun) : 'group') ?> is building its public website. Please check back soon.</p>
         </div>
     </section>
 <?php elseif ($siteMode === 'notfound') : ?>
@@ -183,4 +188,4 @@ html[data-theme="dark"] .org-home-warning strong{color:#f7ecca;}
 <?php endif; ?>
 <?php include $fdDir . 'org_footer.tpl'; ?>
 </div>
-<script src="<?= $fdAssetBase ?>js/frontdoor.js"></script>
+<script src="<?= $fdAssetBase ?>js/frontdoor.js?v=<?= @filemtime($fdDir . 'js/frontdoor.js') ?>"></script>

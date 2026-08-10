@@ -23,4 +23,4 @@ body.fd-home #newmenu { display: none !important; }
 <div class="fd-page">
 <?php include $fdDir . 'render_blocks.tpl'; ?>
 </div>
-<script src="<?= $fdAssetBase ?>js/frontdoor.js"></script>
+<script src="<?= $fdAssetBase ?>js/frontdoor.js?v=<?= @filemtime($fdDir . 'js/frontdoor.js') ?>"></script>

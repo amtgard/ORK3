@@ -10,15 +10,13 @@
  * DB work lives in the lib). Each snake_case wrapper mirrors the FULL lib
  * signature so no caller has to reach past the wrapper (via __call) to pass a
  * later positional argument.
+ *
+ * Calling convention: call the snake_case wrapper where one exists; a
+ * PascalCase reach-around via Model::__call is the sanctioned form for lib
+ * methods that have no wrapper.
  */
 class Model_CmsPost extends Model
 {
-    public function __construct()
-    {
-        parent::__construct();
-        $this->CmsPost = new APIModel('CmsPost');
-    }
-
     public function get_post_by_slug($slug, $scopeType = 'global', $scopeId = 0, $publishedOnly = true)
     {
         return $this->CmsPost->GetPostBySlug($slug, $scopeType, $scopeId, $publishedOnly);

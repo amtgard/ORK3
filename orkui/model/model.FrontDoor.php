@@ -9,6 +9,19 @@ class Model_FrontDoor extends Model
 
     // Single content seam. v1 returns hardcoded defaults; v2 (CMS) will read a store here.
     // $ctx: ['logged_in'=>bool, 'kingdom_id'=>int, ...] — reserved for future scoping.
+    //
+    // MIRRORED BY MIGRATIONS — do NOT shrink or delete any block literal below.
+    // These literals are BOTH the seed source for, and the unseeded-install
+    // fallback of, the editable CmsNav/CmsPage stores. marketing_nav.tpl only
+    // prefers the CmsNav store when GetMenu() comes back non-empty, so on an
+    // install that has not run the seeds the 'marketing_nav' items array IS the
+    // rendered nav (cf. commit e16300b7 — blank document root).
+    // Keep in sync with:
+    //   db-migrations/2026-06-23-cms-seed-nav.php
+    //   db-migrations/2026-07-08-cms-seed-amtgard.php
+    //   db-migrations/2026-06-23-cms-nav-relink.php
+    //   db-migrations/2026-07-08-cms-nav-relink-amtgard.php
+    //   db-migrations/2026-08-09-cms-nav-ork-login-label.php
     public function GetContent($ctx = [])
     {
         $img = HTTP_TEMPLATE . 'default/img/frontdoor/';
@@ -147,10 +160,8 @@ class Model_FrontDoor extends Model
             ],
         ];
 
-        // Stable order; CMS will reorder via 'order' later.
-        usort($blocks, function ($a, $b) {
-            return $a['order'] <=> $b['order'];
-        });
+        // Already emitted in ascending 'order' (10..100); the CMS reorders via
+        // 'order' on the stored copy, not here.
         return $blocks;
     }
 }

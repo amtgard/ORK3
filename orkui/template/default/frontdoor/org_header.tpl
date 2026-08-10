@@ -44,8 +44,13 @@ $orgHref = function ($href) use ($uir, $siteSlug) {
 };
 
 // A resolved href is only emitted if it passes the shared URL-safety gate.
+// The class_exists() guard is NOT redundant and must stay: this header renders on
+// a public shell, so a missing CmsSanitizer has to fail CLOSED to '#' rather than
+// emit an unvetted href. (CmsSanitizer::SafeHrefOrHash already rejects '' as well
+// as unsafe schemes, which is exactly what the former inline IsSafeUrl() call did
+// — IsSafeUrl('') is false.)
 $safeHref = function ($href) {
-    return (class_exists('CmsSanitizer') && CmsSanitizer::IsSafeUrl((string) $href)) ? (string) $href : '#';
+    return class_exists('CmsSanitizer') ? CmsSanitizer::SafeHrefOrHash($href) : '#';
 };
 
 $items = [];

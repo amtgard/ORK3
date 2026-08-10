@@ -30,6 +30,24 @@ trait CmsScopeContext
     private $_cmsScope = null;
     /** Whether _resolveScope() has run this request (false is a valid result). */
     private $_cmsScopeResolved = false;
+    /** Request-scoped memo of _cmsCanScope() decisions, keyed "uid|cap|type|id". */
+    private $_cmsCapMemo = array();
+
+    /**
+     * The acting mundane_id for this request, or 0 when signed out.
+     *
+     * Lives here because it is the INPUT to every other method on this trait —
+     * _resolveScope, _cmsCanScope and _cmsFabData all take a $uid, and both
+     * consuming admin controllers were reading it out of the session with their
+     * own copy of this ternary. Use $this->session->user_id (never $this->__session,
+     * which resolves to uid 0).
+     *
+     * @return int
+     */
+    private function _uid()
+    {
+        return isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+    }
 
     /**
      * Resolve + authorize the admin scope for this request.
@@ -124,7 +142,7 @@ trait CmsScopeContext
         if ($this->_scopeIsGlobal($scope)) {
             return '';
         }
-        $prefix = ((string)$scope['type'] === 'park') ? 'p' : 'k';
+        $prefix = CmsSite::UrlPrefixFor($scope['type']);
         return '&scope=' . $prefix . ':' . (int)$scope['id'];
     }
 
@@ -140,7 +158,7 @@ trait CmsScopeContext
         if ($this->_scopeIsGlobal($scope)) {
             return '';
         }
-        $prefix = ((string)$scope['type'] === 'park') ? 'p' : 'k';
+        $prefix = CmsSite::UrlPrefixFor($scope['type']);
         return $prefix . ':' . (int)$scope['id'];
     }
 
@@ -176,6 +194,31 @@ trait CmsScopeContext
     }
 
     /**
+     * The org-unit NOUN for the active scope: 'Kingdom', 'Principality', 'Park',
+     * or '' for global. Use this anywhere CMS copy would otherwise hard-code
+     * "kingdom".
+     *
+     * Amtgard stores a principality as an ork_kingdom row with a parent kingdom,
+     * so a principality's site is an ordinary kingdom-scoped site — nothing about
+     * the scope model changes. Only the wording does, and getting that wording
+     * wrong tells a principality's officers something untrue about their own org.
+     *
+     * @param array $scope
+     * @return string
+     */
+    private function _scopeOrgNoun($scope)
+    {
+        if ($this->_scopeIsGlobal($scope)) {
+            return '';
+        }
+        $this->load_model('CmsSite');
+        return (string)$this->CmsSite->org_unit_noun(
+            (string)($scope['type'] ?? ''),
+            (int)($scope['id'] ?? 0)
+        );
+    }
+
+    /**
      * #29: THE single "may this user edit-FAB / preview this scope" gate for the
      * public CMS surfaces (Page/Blog/Site). Resolves via CmsCan('page.edit', $scope)
      * so ALL of — an ORK super-admin, a global ork_cms_grant, a matching
@@ -194,6 +237,29 @@ trait CmsScopeContext
      */
     private function _cmsCanEditScope($uid, $scope)
     {
+        return $this->_cmsCanScope($uid, 'page.edit', $scope);
+    }
+
+    /**
+     * One capability probe against the resolved scope, memoized for the request.
+     *
+     * The public renderers ask the same question more than once per render (the
+     * unpublished-site preview gate, then the edit FAB, then the new-post FAB),
+     * and each miss is a grant + officer-authority round trip. The memo is
+     * request-scoped and keyed by the full (uid, capability, scope) tuple, so it
+     * can only ever return the answer cms_can would have returned a moment
+     * earlier — no capability decision changes, only how often it is asked.
+     *
+     * Used by the PUBLIC surfaces (Page/Blog/Site) via _cmsCanEditScope and
+     * _cmsFabData. The admin controllers do not route through here.
+     *
+     * @param int    $uid   acting mundane_id
+     * @param string $cap   CMS capability name ('page.edit', 'page.create', …)
+     * @param array  $scope ['type'=>'global'|'kingdom'|'park','id'=>int]
+     * @return bool
+     */
+    private function _cmsCanScope($uid, $cap, $scope)
+    {
         $uid = (int) $uid;
         if ($uid <= 0) {
             return false;
@@ -201,8 +267,103 @@ trait CmsScopeContext
         if (!is_array($scope)) {
             $scope = array('type' => 'global', 'id' => 0);
         }
-        $this->load_model('CmsAuth');
-        return (bool) $this->CmsAuth->cms_can($uid, 'page.edit', $scope);
+        $key = $uid . '|' . (string) $cap . '|'
+            . (string) ($scope['type'] ?? 'global') . '|' . (int) ($scope['id'] ?? 0);
+        if (!array_key_exists($key, $this->_cmsCapMemo)) {
+            $this->load_model('CmsAuth');
+            $this->_cmsCapMemo[$key] = (bool) $this->CmsAuth->cms_can($uid, (string) $cap, $scope);
+        }
+        return $this->_cmsCapMemo[$key];
+    }
+
+    /**
+     * Publish the floating CMS FAB flags (rendered by default.theme) for a public
+     * surface: the pen "edit" FAB when the viewer may edit this scope, plus an
+     * optional second "new post" FAB.
+     *
+     * THE NEW-POST CAPABILITY IS THE CALLER'S, and that is deliberate: the global
+     * blog gates its new-post FAB on 'page.create' (a contributor may draft a post
+     * without holding edit rights over the surface), while an org site gates it on
+     * 'page.edit' — the same decision that governs its unpublished-site preview.
+     * Collapsing the two would silently widen or narrow who sees the button.
+     *
+     * @param int        $uid     acting mundane_id (from $this->session->user_id)
+     * @param array      $scope   ['type'=>'global'|'kingdom'|'park','id'=>int]
+     * @param string     $editUrl pen-FAB target
+     * @param string     $editTip pen-FAB tooltip
+     * @param array|null $newPost null for no second FAB, else
+     *                            ['url'=>…, 'tip'=>…, 'cap'=>'page.edit'|'page.create']
+     * @return void
+     */
+    private function _cmsFabData($uid, $scope, $editUrl, $editTip, $newPost = null)
+    {
+        $uid = (int) $uid;
+        if ($uid <= 0) {
+            return;   // signed out — no FABs at all
+        }
+        if ($this->_cmsCanEditScope($uid, $scope)) {
+            $this->data['cmsEditUrl'] = $editUrl;
+            $this->data['cmsEditTip'] = $editTip;
+        }
+        if (!is_array($newPost) || empty($newPost['url'])) {
+            return;
+        }
+        if ($this->_cmsCanScope($uid, (string) ($newPost['cap'] ?? 'page.create'), $scope)) {
+            $this->data['cmsNewPostUrl'] = (string) $newPost['url'];
+            $this->data['cmsNewPostTip'] = (string) ($newPost['tip'] ?? 'New post');
+        }
+    }
+
+    /**
+     * The shared paginated post-list read behind BOTH public blog indexes
+     * (Controller_Blog::index at global scope and Controller_Site::blog at org
+     * scope): fetch one page, then clamp a ?p= beyond the last page so the OFFSET
+     * can never run past the result set — an unbounded page number would otherwise
+     * make the DB scan the whole set to return nothing. Only an out-of-range
+     * request costs the second query.
+     *
+     * Callers own everything surface-specific: their own PER_PAGE, their own extra
+     * list_posts options ('tag' for the global index, 'includeDrafts' for an
+     * officer previewing an unpublished org site), and their own view-var names.
+     *
+     * @param array $listArgs scope filters + extra list_posts opts; 'limit' and
+     *                        'offset' are supplied here and must not be passed in
+     * @param int   $perPage
+     * @param int   $pageNo   requested 1-based page (raw user input)
+     * @return array{rows:array,total:int,page:int,pages:int} page = the CLAMPED page
+     */
+    private function _cmsPagedPosts(array $listArgs, $perPage, $pageNo)
+    {
+        $perPage = (int) $perPage;
+        $pageNo  = (int) $pageNo;
+        if ($pageNo < 1) {
+            $pageNo = 1;
+        }
+        // limit/offset lead so the opts hash CmsPost::ListPosts memoizes on is
+        // built from the same key order both callers used before this extraction.
+        $listArgs = array_merge(
+            array('limit' => $perPage, 'offset' => ($pageNo - 1) * $perPage),
+            $listArgs
+        );
+
+        $this->load_model('CmsPost');
+        $result = $this->CmsPost->list_posts($listArgs);
+        $rows   = (isset($result['rows']) && is_array($result['rows'])) ? $result['rows'] : array();
+        $total  = isset($result['total']) ? (int) $result['total'] : 0;
+        $pages  = ($perPage > 0) ? (int) ceil($total / $perPage) : 1;
+        if ($pages < 1) {
+            $pages = 1;
+        }
+
+        if ($pageNo > $pages) {
+            $pageNo             = $pages;
+            $listArgs['offset'] = ($pageNo - 1) * $perPage;
+            $result = $this->CmsPost->list_posts($listArgs);
+            $rows   = (isset($result['rows']) && is_array($result['rows'])) ? $result['rows'] : array();
+            $total  = isset($result['total']) ? (int) $result['total'] : $total;
+        }
+
+        return array('rows' => $rows, 'total' => $total, 'page' => $pageNo, 'pages' => $pages);
     }
 
     /**

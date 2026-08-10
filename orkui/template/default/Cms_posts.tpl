@@ -289,33 +289,11 @@ include __DIR__ . '/cms/_shell_top.tpl';
 
     /* ---- toast (shared: CmsAdmin.toast) ---- */
     var toast = CmsAdmin.toast;
-    // toastEl/toastTimer remain local for the undoable-toast variant below.
-    var toastEl = document.getElementById('cmsToast');
-    var toastTimer = null;
 
-    /* ---- C2: undoable toast — delete is a soft-delete (deleted_at), so the row
-       can be brought back. Show an Undo affordance that calls restorepost
-       (longer dwell, styled inline so it needs no CSS class). Mirrors Cms_index.tpl. ---- */
-    function undoableToast(msg, undoFn) {
-        if (!toastEl) { return; }
-        toastEl.innerHTML = '';
-        var span = document.createElement('span');
-        span.textContent = msg + ' ';
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.textContent = 'Undo';
-        btn.style.cssText = 'background:none;border:none;color:inherit;text-decoration:underline;cursor:pointer;font:inherit;padding:0;margin-left:4px;';
-        btn.addEventListener('click', function () {
-            clearTimeout(toastTimer);
-            toastEl.className = 'cms-toast';
-            undoFn();
-        });
-        toastEl.appendChild(span);
-        toastEl.appendChild(btn);
-        toastEl.className = 'cms-toast cms-show cms-toast-ok';
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(function () { toastEl.className = 'cms-toast'; }, 7000);
-    }
+    /* ---- C2: undoable toast (shared: CmsAdmin.undoableToast) — delete is a
+       soft-delete (deleted_at), so the row can be brought back and the toast
+       offers an Undo that calls restorepost. ---- */
+    var undoableToast = CmsAdmin.undoableToast;
 
     /* ---- modal helpers (shared: CmsAdmin.modal; backdrop/Esc handled there) ---- */
     var openModal = CmsAdmin.modal.open;
@@ -404,101 +382,24 @@ include __DIR__ . '/cms/_shell_top.tpl';
         });
     });
 
-    /* ====================================================================
-     * Row-action overflow menu (⋯) — lightweight dropdown, keyboard-reachable.
-     * ==================================================================== */
-    function closeAllOverflow(except) {
-        document.querySelectorAll('.cms-overflow.cms-open').forEach(function (o) {
-            if (o !== except) {
-                o.classList.remove('cms-open');
-                var b = o.querySelector('[data-overflow-toggle]');
-                if (b) { b.setAttribute('aria-expanded', 'false'); }
-            }
-        });
-    }
-    // Menu is position:fixed (escapes the table-wrap overflow:hidden clip); anchor it
-    // to the trigger and flip upward when it would run past the viewport bottom.
-    function positionOverflowMenu(toggle, menu) {
-        var r = toggle.getBoundingClientRect();
-        menu.style.visibility = 'hidden';
-        menu.style.display = 'block';
-        var mh = menu.offsetHeight, mw = menu.offsetWidth;
-        var left = r.right - mw;                // right-align to the trigger
-        if (left < 6) { left = 6; }
-        if (left + mw > window.innerWidth - 6) { left = window.innerWidth - 6 - mw; }
-        var top = r.bottom + 4;
-        if (top + mh > window.innerHeight - 6 && r.top - 4 - mh > 6) {
-            top = r.top - 4 - mh;              // flip upward
-        }
-        menu.style.left = left + 'px';
-        menu.style.top = top + 'px';
-        menu.style.display = '';
-        menu.style.visibility = '';
-    }
-    document.addEventListener('click', function (e) {
-        var toggle = e.target.closest('[data-overflow-toggle]');
-        if (toggle) {
-            var wrap = toggle.closest('.cms-overflow');
-            var willOpen = !wrap.classList.contains('cms-open');
-            closeAllOverflow(wrap);
-            wrap.classList.toggle('cms-open', willOpen);
-            toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-            if (willOpen) {
-                var menu = wrap.querySelector('.cms-overflow-menu');
-                if (menu) { positionOverflowMenu(toggle, menu); }
-            }
-            return;
-        }
-        if (!e.target.closest('.cms-overflow-menu')) { closeAllOverflow(null); }
-    });
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') { closeAllOverflow(null); }
-    });
-    // A fixed-positioned menu would strand on scroll/resize — just close it.
-    window.addEventListener('scroll', function () { closeAllOverflow(null); }, true);
-    window.addEventListener('resize', function () { closeAllOverflow(null); });
+    /* ---- Row-action overflow menu (⋯) — shared: CmsAdmin.installOverflowMenus.
+       The menu CLOSES on scroll/resize (it does not re-anchor). ---- */
+    CmsAdmin.installOverflowMenus();
 
     /* ====================================================================
      * Bulk select + bulk actions
      * ==================================================================== */
     var bulkBar = document.getElementById('cmsBulkBar');
-    var bulkCount = document.getElementById('cmsBulkCount');
     var checkAll = document.getElementById('cmsCheckAll');
 
-    function visibleRowChecks() {
-        return Array.prototype.slice.call(
-            document.querySelectorAll('#cms-posts-table tbody .cms-row-check')
-        );
-    }
-    function checkedIds() {
-        return visibleRowChecks().filter(function (c) { return c.checked; })
-            .map(function (c) { return c.value; });
-    }
-    function refreshBulkBar() {
-        if (!bulkBar) { return; }
-        var n = checkedIds().length;
-        if (bulkCount) { bulkCount.innerHTML = '<i class="fas fa-check-square"></i>' + n + ' selected'; }
-        bulkBar.classList.toggle('cms-open', n > 0);
-    }
-    function syncSelectAll() {
-        if (!checkAll) { return; }
-        var boxes = visibleRowChecks();
-        var checked = boxes.filter(function (c) { return c.checked; }).length;
-        checkAll.checked = boxes.length > 0 && checked === boxes.length;
-        checkAll.indeterminate = checked > 0 && checked < boxes.length;
-    }
-    if (checkAll) {
-        checkAll.addEventListener('change', function () {
-            visibleRowChecks().forEach(function (c) { c.checked = checkAll.checked; });
-            refreshBulkBar();
-        });
-    }
-    document.addEventListener('change', function (e) {
-        if (e.target.classList && e.target.classList.contains('cms-row-check')) {
-            syncSelectAll();
-            refreshBulkBar();
-        }
-    });
+    // Shared plumbing (CmsAdmin.bulkSelect) — only the table selector differs
+    // between the posts list and the pages list. Kept behind local function
+    // declarations so callers earlier in this IIFE keep working unchanged.
+    var bulk = CmsAdmin.bulkSelect('#cms-posts-table');
+    function visibleRowChecks() { return bulk.visibleRowChecks(); }
+    function checkedIds() { return bulk.checkedIds(); }
+    function refreshBulkBar() { bulk.refreshBulkBar(); }
+    function syncSelectAll() { bulk.syncSelectAll(); }
 
     function setBulkBusy(busy) {
         if (!bulkBar) { return; }

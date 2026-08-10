@@ -56,17 +56,6 @@ class CmsSite extends CmsBase
         return ((string)$scopeType === 'park') ? 'park' : 'kingdom';
     }
 
-    /** GhettoCache handle, or null when the memcache layer isn't wired up. */
-    private function _cache()
-    {
-        if (isset(Ork3::$Lib) && is_object(Ork3::$Lib) && isset(Ork3::$Lib->ghettocache)
-            && is_object(Ork3::$Lib->ghettocache)
-        ) {
-            return Ork3::$Lib->ghettocache;
-        }
-        return null;
-    }
-
     /**
      * Bust the GetSiteBySlug cross-request cache for a single slug. Called from
      * every site mutator that can change (or newly claim) a slug so the public
@@ -82,7 +71,7 @@ class CmsSite extends CmsBase
         if ($slug === '') {
             return;
         }
-        $cache = $this->_cache();
+        $cache = $this->_ghettoCache();
         if ($cache !== null) {
             $cache->bust(__CLASS__ . '.GetSiteBySlug', $slug);
         }
@@ -136,7 +125,7 @@ class CmsSite extends CmsBase
         // Only POSITIVE hits are cached — a miss (unknown slug) is the 404 path
         // and stays uncached so a later provision is seen immediately; is_array()
         // distinguishes a cached row from memcached's false-on-miss.
-        $cache = $this->_cache();
+        $cache = $this->_ghettoCache();
         if ($cache !== null) {
             $cached = $cache->get(__CLASS__ . '.GetSiteBySlug', $slug, 1800);
             if (is_array($cached)) {
@@ -362,22 +351,10 @@ class CmsSite extends CmsBase
         $nav  = new CmsNav();
         $now  = date('Y-m-d H:i:s');
 
-        // Sanitize authored HTML bodies exactly the way the editor save path does.
-        $clean = function ($html) {
-            return class_exists('CmsSanitizer') ? CmsSanitizer::Clean($html) : (string) $html;
-        };
-
-        // Every seeded content page (all but Home) opens with an identical centered
-        // H2 heading block — only the text differs. One factory instead of four
-        // copy-pasted literals; the field values below are the exact values each
-        // page previously inlined (source=authored, enabled=1, order=10, level=2,
-        // align=center).
-        $heading = function ($text) {
-            return array(
-                'type' => 'heading', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
-                'fields' => array('text' => $text, 'level' => 2, 'align' => 'center'),
-            );
-        };
+        // The starter page registry — ONE declaration driving both the page seed
+        // below and the nav menu further down (they used to be two hand-kept lists
+        // that could drift). Built once here: array order IS nav order.
+        $starters = $this->_starterPageDefs();
 
         // Attributes shared by every seeded page. Seed as PUBLISHED: the
         // site-level status (unbuilt→draft→published) is the real go-live gate —
@@ -445,158 +422,13 @@ class CmsSite extends CmsBase
             return $pid;
         };
 
-        // ---- HOME (is_system within scope) — welcome + intro + upcoming events ----
-        // NOTE: deliberately NOT hero_carousel — that block bakes in a GLOBAL
-        // stats ticker (0s on a kingdom scope) and would emit an empty-src <img>
-        // with no seed image. The spec cut the stats ticker; the org adds its own
-        // hero imagery via the editor. Seed a clean welcome rich_text instead.
-        $homeId = $makePage(
-            array(
-                'slug'             => 'home',
-                'type'             => 'composed',
-                'title'            => 'Home',
-                'is_system'        => 1,
-                'meta_description' => 'Welcome to our kingdom.',
-            ),
-            array(
-                array(
-                    'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
-                    'fields' => array(
-                        'kicker'  => 'Welcome',
-                        'heading' => 'Welcome to Our Kingdom',
-                        'align'   => 'center',
-                        'body'    => $clean('<p>Foam swords, real friendships, and a place for everyone. Find a park near you and come play &mdash; your first day on the field is always free.</p>'),
-                    ),
-                ),
-                array(
-                    'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
-                    'fields' => array(
-                        'kicker'  => 'About Us',
-                        'heading' => 'A Kingdom of Adventurers',
-                        'align'   => 'center',
-                        'body'    => $clean('<p>Tell visitors who you are in a sentence or two. Edit this block to introduce your kingdom, describe what a typical game day looks like, and invite newcomers to their first (always free) day on the field.</p>'),
-                    ),
-                ),
-                array(
-                    'type' => 'kingdom_events', 'source' => 'dynamic', 'enabled' => 1, 'order' => 30,
-                    'fields' => array(
-                        'heading' => 'Upcoming Events',
-                        'kicker'  => "What's happening",
-                        'limit'   => 6,
-                    ),
-                ),
-            )
-        );
-
-        // ---- ABOUT US / HISTORY — heading + rich_text placeholder ----
-        $aboutId = $makePage(
-            array(
-                'slug'             => 'about',
-                'type'             => 'article',
-                'title'            => 'About Us',
-                'meta_description' => 'About our kingdom and its history.',
-            ),
-            array(
-                $heading('About Us'),
-                array(
-                    'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
-                    'fields' => array(
-                        'kicker'  => 'Our History',
-                        'heading' => 'How We Got Here',
-                        'align'   => 'left',
-                        'body'    => $clean('<p>Share your kingdom&rsquo;s story: when it was founded, the lands and parks it covers, and the traditions that make it yours. Replace this placeholder with your own history.</p>'),
-                    ),
-                ),
-            )
-        );
-
-        // ---- OUR PARKS — heading + kingdom_parks (dynamic) ----
-        $parksId = $makePage(
-            array(
-                'slug'             => 'parks',
-                'type'             => 'composed',
-                'title'            => 'Our Parks',
-                'meta_description' => 'Find a park near you.',
-            ),
-            array(
-                $heading('Our Parks'),
-                array(
-                    'type' => 'kingdom_parks_map', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
-                    'fields' => array(
-                        'heading' => 'Find a Park Near You',
-                        'kicker'  => 'Our Parks',
-                    ),
-                ),
-                array(
-                    'type' => 'kingdom_parks', 'source' => 'dynamic', 'enabled' => 1, 'order' => 30,
-                    'fields' => array(
-                        'heading' => 'Where We Play',
-                        'kicker'  => '',
-                        'sort'    => 'city',
-                        'show_heraldry' => 1,
-                        'limit'   => 24,
-                    ),
-                ),
-            )
-        );
-
-        // ---- OFFICERS — heading + kingdom_officers (dynamic) + Board roster ----
-        $officersId = $makePage(
-            array(
-                'slug'             => 'officers',
-                'type'             => 'composed',
-                'title'            => 'Officers',
-                'meta_description' => 'Meet the officers who keep the kingdom running.',
-            ),
-            array(
-                $heading('Officers'),
-                array(
-                    'type' => 'kingdom_officers', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
-                    'fields' => array(
-                        'heading' => 'Our Officers',
-                        'kicker'  => 'Leadership',
-                        'limit'   => 12,
-                    ),
-                ),
-                array(
-                    'type' => 'staff_roster', 'source' => 'authored', 'enabled' => 1, 'order' => 30,
-                    'fields' => array(
-                        'kicker'       => 'Governance',
-                        'heading'      => 'Board of Directors',
-                        'subheading'   => 'Add the members who govern and steward the kingdom.',
-                        'presentation' => 'mundane',
-                        'people'       => array(
-                            array(
-                                'image'        => array(),
-                                'persona_name' => '',
-                                'mundane_name' => 'Add a board member',
-                                'role'         => 'Role / title',
-                                'bio'          => '',
-                                'mundane_id'   => 0,
-                                'href'         => '',
-                            ),
-                        ),
-                    ),
-                ),
-            )
-        );
-
-        // ---- DOCUMENTS & RESOURCES — heading + empty file_download library ----
-        $documentsId = $makePage(
-            array(
-                'slug'             => 'documents',
-                'type'             => 'media',
-                'title'            => 'Documents & Resources',
-                'meta_description' => 'Kingdom documents, bylaws, and resources.',
-            ),
-            array(
-                $heading('Documents & Resources'),
-                array(
-                    'type' => 'file_download', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
-                    'fields' => array('files' => array()),
-                ),
-            )
-        );
+        // Seed every starter page in registry order. $pageIds is slug-keyed so
+        // the nav loop below can look each id up by slug (0 = didn't seed).
+        $pageIds = array();
+        foreach ($starters as $starterSlug => $starterDef) {
+            $pageIds[$starterSlug] = $makePage($starterDef['attrs'], $starterDef['blocks']);
+        }
+        $homeId = isset($pageIds['home']) ? (int) $pageIds['home'] : 0;
 
         // ---- Scoped nav menu ('marketing' — the key org_header.tpl reads) ----
         // link_type='page' so items follow slug changes; org_header re-points the
@@ -650,24 +482,20 @@ class CmsSite extends CmsBase
             return;
         }
 
-        $navPages = array(
-            array('label' => 'Home',                  'page_id' => $homeId),
-            array('label' => 'About Us',              'page_id' => $aboutId),
-            array('label' => 'Our Parks',             'page_id' => $parksId),
-            array('label' => 'Officers',              'page_id' => $officersId),
-            array('label' => 'Documents & Resources', 'page_id' => $documentsId),
-        );
+        // Same registry, same order: Home/About/Parks/Officers/Documents at
+        // ordering 10, 20, 30, 40, 50.
         $ordering = 0;
-        foreach ($navPages as $navPage) {
-            if ((int) $navPage['page_id'] <= 0) {
+        foreach ($starters as $starterSlug => $starterDef) {
+            $navPageId = isset($pageIds[$starterSlug]) ? (int) $pageIds[$starterSlug] : 0;
+            if ($navPageId <= 0) {
                 continue; // page failed to seed — skip its nav item
             }
             $ordering += 10;
             $nav->CreateItem(array(
                 'menu'       => 'marketing',
-                'label'      => $navPage['label'],
+                'label'      => $starterDef['nav_label'],
                 'link_type'  => 'page',
-                'page_id'    => (int) $navPage['page_id'],
+                'page_id'    => $navPageId,
                 'parent_id'  => null,
                 'ordering'   => $ordering,
                 'enabled'    => 1,
@@ -687,6 +515,202 @@ class CmsSite extends CmsBase
         // Seed complete — stamp the marker so this site is never re-seeded, no
         // matter how much of the seeded content the org later deletes.
         $this->_stampTemplateSeeded($siteId);
+    }
+
+    /**
+     * The starter-page registry for _seedStarterTemplate(): a slug-keyed list of
+     * ['nav_label', 'attrs', 'blocks'] in the order the pages are seeded AND the
+     * order their nav items appear (Home, About Us, Our Parks, Officers,
+     * Documents & Resources -> ordering 10..50). ARRAY ORDER IS LOAD-BEARING.
+     *
+     * Single source of truth: the seed loop and the nav loop both read this, so
+     * the page list and the menu can no longer drift apart.
+     *
+     * NOT a static const: the authored HTML bodies must pass through
+     * CmsSanitizer::Clean() exactly the way the editor save path does, which is a
+     * runtime call. 'attrs' carries only the per-page attributes — the shared
+     * ones (status/published_at/scope/audit stamps) are merged in by $makePage.
+     *
+     * @return array slug => array{nav_label:string, attrs:array, blocks:array}
+     */
+    private function _starterPageDefs()
+    {
+        // Sanitize authored HTML bodies exactly the way the editor save path does.
+        $clean = function ($html) {
+            return class_exists('CmsSanitizer') ? CmsSanitizer::Clean($html) : (string) $html;
+        };
+
+        // Every seeded content page (all but Home) opens with an identical centered
+        // H2 heading block — only the text differs. One factory instead of four
+        // copy-pasted literals; the field values below are the exact values each
+        // page previously inlined (source=authored, enabled=1, order=10, level=2,
+        // align=center).
+        $heading = function ($text) {
+            return array(
+                'type' => 'heading', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
+                'fields' => array('text' => $text, 'level' => 2, 'align' => 'center'),
+            );
+        };
+
+        return array(
+            // ---- HOME (is_system within scope) — welcome + intro + upcoming events ----
+            // NOTE: deliberately NOT hero_carousel — that block bakes in a GLOBAL
+            // stats ticker (0s on a kingdom scope) and would emit an empty-src <img>
+            // with no seed image. The spec cut the stats ticker; the org adds its own
+            // hero imagery via the editor. Seed a clean welcome rich_text instead.
+            'home' => array(
+                'nav_label' => 'Home',
+                'attrs' => array(
+                    'slug'             => 'home',
+                    'type'             => 'composed',
+                    'title'            => 'Home',
+                    'is_system'        => 1,
+                    'meta_description' => 'Welcome to our kingdom.',
+                ),
+                'blocks' => array(
+                    array(
+                        'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 10,
+                        'fields' => array(
+                            'kicker'  => 'Welcome',
+                            'heading' => 'Welcome to Our Kingdom',
+                            'align'   => 'center',
+                            'body'    => $clean('<p>Foam swords, real friendships, and a place for everyone. Find a park near you and come play &mdash; your first day on the field is always free.</p>'),
+                        ),
+                    ),
+                    array(
+                        'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
+                        'fields' => array(
+                            'kicker'  => 'About Us',
+                            'heading' => 'A Kingdom of Adventurers',
+                            'align'   => 'center',
+                            'body'    => $clean('<p>Tell visitors who you are in a sentence or two. Edit this block to introduce your kingdom, describe what a typical game day looks like, and invite newcomers to their first (always free) day on the field.</p>'),
+                        ),
+                    ),
+                    array(
+                        'type' => 'kingdom_events', 'source' => 'dynamic', 'enabled' => 1, 'order' => 30,
+                        'fields' => array(
+                            'heading' => 'Upcoming Events',
+                            'kicker'  => "What's happening",
+                            'limit'   => 6,
+                        ),
+                    ),
+                ),
+            ),
+
+            // ---- ABOUT US / HISTORY — heading + rich_text placeholder ----
+            'about' => array(
+                'nav_label' => 'About Us',
+                'attrs' => array(
+                    'slug'             => 'about',
+                    'type'             => 'article',
+                    'title'            => 'About Us',
+                    'meta_description' => 'About our kingdom and its history.',
+                ),
+                'blocks' => array(
+                    $heading('About Us'),
+                    array(
+                        'type' => 'rich_text', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
+                        'fields' => array(
+                            'kicker'  => 'Our History',
+                            'heading' => 'How We Got Here',
+                            'align'   => 'left',
+                            'body'    => $clean('<p>Share your kingdom&rsquo;s story: when it was founded, the lands and parks it covers, and the traditions that make it yours. Replace this placeholder with your own history.</p>'),
+                        ),
+                    ),
+                ),
+            ),
+
+            // ---- OUR PARKS — heading + kingdom_parks (dynamic) ----
+            'parks' => array(
+                'nav_label' => 'Our Parks',
+                'attrs' => array(
+                    'slug'             => 'parks',
+                    'type'             => 'composed',
+                    'title'            => 'Our Parks',
+                    'meta_description' => 'Find a park near you.',
+                ),
+                'blocks' => array(
+                    $heading('Our Parks'),
+                    array(
+                        'type' => 'kingdom_parks_map', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
+                        'fields' => array(
+                            'heading' => 'Find a Park Near You',
+                            'kicker'  => 'Our Parks',
+                        ),
+                    ),
+                    array(
+                        'type' => 'kingdom_parks', 'source' => 'dynamic', 'enabled' => 1, 'order' => 30,
+                        'fields' => array(
+                            'heading' => 'Where We Play',
+                            'kicker'  => '',
+                            'sort'    => 'city',
+                            'show_heraldry' => 1,
+                            'limit'   => 24,
+                        ),
+                    ),
+                ),
+            ),
+
+            // ---- OFFICERS — heading + kingdom_officers (dynamic) + Board roster ----
+            'officers' => array(
+                'nav_label' => 'Officers',
+                'attrs' => array(
+                    'slug'             => 'officers',
+                    'type'             => 'composed',
+                    'title'            => 'Officers',
+                    'meta_description' => 'Meet the officers who keep the kingdom running.',
+                ),
+                'blocks' => array(
+                    $heading('Officers'),
+                    array(
+                        'type' => 'kingdom_officers', 'source' => 'dynamic', 'enabled' => 1, 'order' => 20,
+                        'fields' => array(
+                            'heading' => 'Our Officers',
+                            'kicker'  => 'Leadership',
+                            'limit'   => 12,
+                        ),
+                    ),
+                    array(
+                        'type' => 'staff_roster', 'source' => 'authored', 'enabled' => 1, 'order' => 30,
+                        'fields' => array(
+                            'kicker'       => 'Governance',
+                            'heading'      => 'Board of Directors',
+                            'subheading'   => 'Add the members who govern and steward the kingdom.',
+                            'presentation' => 'mundane',
+                            'people'       => array(
+                                array(
+                                    'image'        => array(),
+                                    'persona_name' => '',
+                                    'mundane_name' => 'Add a board member',
+                                    'role'         => 'Role / title',
+                                    'bio'          => '',
+                                    'mundane_id'   => 0,
+                                    'href'         => '',
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+
+            // ---- DOCUMENTS & RESOURCES — heading + empty file_download library ----
+            'documents' => array(
+                'nav_label' => 'Documents & Resources',
+                'attrs' => array(
+                    'slug'             => 'documents',
+                    'type'             => 'media',
+                    'title'            => 'Documents & Resources',
+                    'meta_description' => 'Kingdom documents, bylaws, and resources.',
+                ),
+                'blocks' => array(
+                    $heading('Documents & Resources'),
+                    array(
+                        'type' => 'file_download', 'source' => 'authored', 'enabled' => 1, 'order' => 20,
+                        'fields' => array('files' => array()),
+                    ),
+                ),
+            ),
+        );
     }
 
     /**
@@ -792,6 +816,87 @@ class CmsSite extends CmsBase
             . ' WHERE slug = :slug AND scope_type = :scope_type AND scope_id = :scope_id'
             . ' ORDER BY (deleted_at IS NULL) DESC, page_id ASC LIMIT 1'
         ));
+    }
+
+    /**
+     * The single-letter public URL prefix for a CMS scope: park → 'p', everything
+     * else → 'k'. Canonical home for the rule, because it is consumed from two
+     * unrelated controllers (Controller_Site building public URLs and the CMS
+     * dashboard linking out to them) which cannot reach each other's privates.
+     *
+     * @param string $scopeType 'global' | 'kingdom' | 'park'
+     * @return string 'p' | 'k'
+     */
+    public static function UrlPrefixFor($scopeType)
+    {
+        return ((string)$scopeType === 'park') ? 'p' : 'k';
+    }
+
+    /**
+     * The org-unit NOUN for a CMS scope: 'Kingdom', 'Principality', or 'Park'.
+     *
+     * Amtgard models a principality as an ork_kingdom row carrying a non-zero
+     * parent_kingdom_id — there is no separate table and no separate CMS
+     * scope_type, so a principality's site is already a perfectly ordinary
+     * scope_type='kingdom' site and needs no schema change. What it does need is
+     * to stop being CALLED a kingdom: telling the officers of a principality that
+     * "this kingdom is building its website", or that only a "monarch or regent"
+     * may publish it, is simply false about their org.
+     *
+     * Cheap and cached per request: one keyed read, memoized by scope, and only
+     * ever consulted for kingdom-scoped orgs (park and global are decided without
+     * touching the database).
+     *
+     * @param string $scopeType 'global' | 'kingdom' | 'park'
+     * @param int    $scopeId
+     * @return string 'Kingdom' | 'Principality' | 'Park' | '' for global/unknown
+     */
+    public function OrgUnitNoun($scopeType, $scopeId)
+    {
+        $scopeType = (string)$scopeType;
+        $scopeId   = (int)$scopeId;
+
+        if ($scopeType === 'park') {
+            return 'Park';
+        }
+        if ($scopeType !== 'kingdom' || $scopeId <= 0) {
+            return '';
+        }
+
+        static $memo = array();
+        if (isset($memo[$scopeId])) {
+            return $memo[$scopeId];
+        }
+
+        global $DB;
+        $DB->Clear();
+        $DB->kingdom_id = $scopeId;
+        $r = $DB->DataSet(
+            'SELECT parent_kingdom_id FROM ' . DB_PREFIX . 'kingdom'
+            . ' WHERE kingdom_id = :kingdom_id LIMIT 1'
+        );
+        // DataSet() needs an explicit Next() before any field read.
+        $parent = ($r && $r->Next()) ? (int)$r->parent_kingdom_id : 0;
+
+        $memo[$scopeId] = ($parent > 0) ? 'Principality' : 'Kingdom';
+        return $memo[$scopeId];
+    }
+
+    /**
+     * Public accessor for the owning org's real ORK name (kingdom or park).
+     *
+     * Used as the fallback for the browser-tab identity when a site row's own
+     * site_name is empty — sites created before site_name was seeded on the create
+     * path have one, and their tab would otherwise read a bare "Home" with no
+     * indication of whose site it is.
+     *
+     * @param string $scopeType 'kingdom' | 'park'
+     * @param int    $scopeId
+     * @return string '' when it cannot be resolved
+     */
+    public function OrgDisplayName($scopeType, $scopeId)
+    {
+        return $this->_orgDisplayName($scopeType, $scopeId);
     }
 
     /**
@@ -1139,14 +1244,12 @@ class CmsSite extends CmsBase
      */
     public function DeriveSlug($name)
     {
-        // Shared canonical derivation (CmsBase::_normalizeSlug) + this class's own
-        // column-width clamp on top. The normalization is now identical to the one
-        // CmsPage uses for page slugs.
-        $slug = $this->_normalizeSlug($name);
-        if (strlen($slug) > 160) {
-            $slug = rtrim(substr($slug, 0, 160), '-');
-        }
-        return $slug;
+        // Shared canonical derivation (CmsBase::_normalizeSlug), including the
+        // ork_cms_site.slug column-width clamp — the base helper applies the exact
+        // same rtrim-the-trailing-hyphen clamp this method used to re-implement.
+        // $emptyFallback stays null so an unslugifiable name still returns '',
+        // which callers treat as "no slug derived".
+        return $this->_normalizeSlug($name, 160);
     }
 
     /**
@@ -1201,23 +1304,35 @@ class CmsSite extends CmsBase
     }
 
     /**
-     * C30: validate a proposed home_page_id for a site. The page must exist, not
-     * be trashed, and share the site's exact (scope_type, scope_id) so a public
-     * visitor can never be pointed at a cross-scope or missing page. Returns true
-     * when acceptable, or a human-readable error string.
+     * IDOR guard shared by every "this site may only point at its OWN rows"
+     * validator: the referenced row must exist, not be trashed, and carry the
+     * site's exact (scope_type, scope_id). Returns true when acceptable, or a
+     * human-readable error string supplied by the caller.
      *
-     * @param int $siteId
-     * @param int $pageId
+     * Both scopes are compared RAW (fail-closed): a row carrying a scope_type
+     * outside the enum matches nothing rather than being clamped onto the site.
+     *
+     * $table/$pkCol are CODE-SUPPLIED LITERALS (they are concatenated into the
+     * statement, not bound); only $id is ever caller-influenced and it is cast to
+     * int. Each read runs its own Clear() because both call sites deliberately
+     * invoke this with no binds staged on $DB.
+     *
+     * @param int    $siteId
+     * @param string $table       table name WITHOUT the DB prefix (e.g. 'cms_page')
+     * @param string $pkCol       primary-key column of $table (e.g. 'page_id')
+     * @param int    $id          candidate row id (<= 0 short-circuits to true)
+     * @param string $missingMsg  error when the row is absent/trashed
+     * @param string $mismatchMsg error when the row belongs to another scope
      * @return true|string
      */
-    private function _validateHomePage($siteId, $pageId)
+    private function _validateSameScopeRef($siteId, $table, $pkCol, $id, $missingMsg, $mismatchMsg)
     {
         global $DB;
 
         $siteId = (int)$siteId;
-        $pageId = (int)$pageId;
-        if ($pageId <= 0) {
-            return true; // caller only invokes with a non-null id, but be safe
+        $id     = (int)$id;
+        if ($id <= 0) {
+            return true; // callers only invoke with a non-null id, but be safe
         }
 
         // Read this site's scope (no binds are staged on $DB at the call site).
@@ -1231,22 +1346,44 @@ class CmsSite extends CmsBase
             return 'Invalid site.';
         }
 
-        // Read the candidate page (excluding trashed rows).
+        // Read the candidate row (excluding trashed rows).
         $DB->Clear();
-        $DB->page_id = $pageId;
-        $pageRow = $this->_firstRow($DB->DataSet(
-            'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_page'
-            . ' WHERE page_id = :page_id AND deleted_at IS NULL LIMIT 1'
+        $DB->ref_id = $id;
+        $refRow = $this->_firstRow($DB->DataSet(
+            'SELECT scope_type, scope_id FROM ' . DB_PREFIX . $table
+            . ' WHERE ' . $pkCol . ' = :ref_id AND deleted_at IS NULL LIMIT 1'
         ));
-        if ($pageRow === null) {
-            return 'That page no longer exists. Pick another home page.';
+        if ($refRow === null) {
+            return $missingMsg;
         }
-        if ((string)$pageRow['scope_type'] !== (string)$siteRow['scope_type']
-            || (int)$pageRow['scope_id'] !== (int)$siteRow['scope_id']
+        if ((string)$refRow['scope_type'] !== (string)$siteRow['scope_type']
+            || (int)$refRow['scope_id'] !== (int)$siteRow['scope_id']
         ) {
-            return 'The home page must be one of this site\'s own pages.';
+            return $mismatchMsg;
         }
         return true;
+    }
+
+    /**
+     * C30: validate a proposed home_page_id for a site. The page must exist, not
+     * be trashed, and share the site's exact (scope_type, scope_id) so a public
+     * visitor can never be pointed at a cross-scope or missing page. Returns true
+     * when acceptable, or a human-readable error string.
+     *
+     * @param int $siteId
+     * @param int $pageId
+     * @return true|string
+     */
+    private function _validateHomePage($siteId, $pageId)
+    {
+        return $this->_validateSameScopeRef(
+            $siteId,
+            'cms_page',
+            'page_id',
+            $pageId,
+            'That page no longer exists. Pick another home page.',
+            'The home page must be one of this site\'s own pages.'
+        );
     }
 
     /**
@@ -1261,41 +1398,14 @@ class CmsSite extends CmsBase
      */
     private function _validateLogoMedia($siteId, $mediaId)
     {
-        global $DB;
-
-        $siteId  = (int)$siteId;
-        $mediaId = (int)$mediaId;
-        if ($mediaId <= 0) {
-            return true; // caller only invokes with a non-null id, but be safe
-        }
-
-        // Read this site's scope (no binds are staged on $DB at the call site).
-        $DB->Clear();
-        $DB->site_id = $siteId;
-        $siteRow = $this->_firstRow($DB->DataSet(
-            'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_site'
-            . ' WHERE site_id = :site_id LIMIT 1'
-        ));
-        if ($siteRow === null) {
-            return 'Invalid site.';
-        }
-
-        // Read the candidate media asset (excluding trashed rows).
-        $DB->Clear();
-        $DB->media_id = $mediaId;
-        $mediaRow = $this->_firstRow($DB->DataSet(
-            'SELECT scope_type, scope_id FROM ' . DB_PREFIX . 'cms_media'
-            . ' WHERE media_id = :media_id AND deleted_at IS NULL LIMIT 1'
-        ));
-        if ($mediaRow === null) {
-            return 'That image no longer exists. Pick another logo.';
-        }
-        if ((string)$mediaRow['scope_type'] !== (string)$siteRow['scope_type']
-            || (int)$mediaRow['scope_id'] !== (int)$siteRow['scope_id']
-        ) {
-            return 'The logo must be one of this site\'s own images.';
-        }
-        return true;
+        return $this->_validateSameScopeRef(
+            $siteId,
+            'cms_media',
+            'media_id',
+            $mediaId,
+            'That image no longer exists. Pick another logo.',
+            'The logo must be one of this site\'s own images.'
+        );
     }
 
     /**
