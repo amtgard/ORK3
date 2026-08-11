@@ -20,7 +20,15 @@ $bandStyle = $isDark ? ' style="background:var(--navy);color:var(--fd-primary-co
 <div class="fd-pad<?= $bandClass ?>"<?= $bandStyle ?>>
     <div style="text-align:center;margin-bottom:26px;">
         <?php if (!empty($kicker)): ?>
-            <div class="fd-kicker" style="margin-bottom:8px;">
+            <?php // Fix round 2 (Task 10 review, Finding C): this block renders on
+            // EITHER band depending on the caller's $band field (seeded park pages
+            // pass 'light'). Bare .fd-kicker is var(--gold) — correct on the dark
+            // band, illegible (1.657:1) on the light/muted one. Ten sibling
+            // partials that only ever render on a light band hard-code
+            // "fd-kicker fd-kicker-d"; this one has to pick the modifier at
+            // render time, the same way the heading two lines below already
+            // conditions its color on $isDark. ?>
+            <div class="fd-kicker<?= $isDark ? '' : ' fd-kicker-d' ?>" style="margin-bottom:8px;">
                 <?= htmlspecialchars($kicker, ENT_QUOTES) ?>
             </div>
         <?php endif; ?>
