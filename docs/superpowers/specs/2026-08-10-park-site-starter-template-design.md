@@ -2,6 +2,38 @@
 
 **Date:** 2026-08-10 · **Branch:** `feature/front-door` · **Status:** design, awaiting implementation plan
 
+> **AS SHIPPED (2026-08-11).** Implemented across tasks 1–9 of
+> `docs/superpowers/plans/2026-08-10-park-site-starter-template.md`. Deviations from
+> this design, if any, are recorded here.
+>
+> - **Weather field key.** The hero's live line reads `ork_park_weather.hi_f`, not
+>   the `high` key this design implies. The plan text originally carried the wrong
+>   key (`$phF['high']`), caught by Task 6's review as a defect that made weather
+>   silently never render for any park while mimicking the correct 7-day
+>   degradation path (see `progress.md`, Task 6). Corrected before ship; the plan
+>   itself was fixed in `a915d545`.
+> - **New Players CTA resolves at render time.** `steps`'s "More questions? Read
+>   the new player guide" link is not a bare relative href baked in at seed time.
+>   Task 8's review found `_sitePageHref()` baking an *absolute* URL into
+>   `fields_json` at seed time, which goes stale the moment an officer renames the
+>   site's slug. Fixed by moving resolution to render time via a small helper
+>   (`fdSiteInternalHref()`); `_sitePageHref()` is now a pure builder with no I/O.
+>   Same fix applies to the Atlas link's `Atlas`-prefixed href on **New Players**.
+> - **A second, deliberately empty CTA slot.** The closing `cta_band` on Home
+>   seeds two CTA slots. Slot 1 auto-fills from `ork_park.url` (Facebook/Discord/
+>   generic, per the domain-detection rule below). Slot 2 is seeded **empty on
+>   purpose** — `ork_park` has no second link column, so it is a zero-schema-cost
+>   editor affordance ("Add your Discord or group chat.") rather than dead
+>   markup: an empty CTA renders nothing on the public page and prompts loudly in
+>   the editor only. This is exactly as designed (see "Discord without a schema
+>   change" below), called out here only because a reader skimming the CTA band
+>   markup could otherwise mistake the empty second slot for an unfinished seed.
+>
+> No other deviations were found. Task 10's verification sweep (queries, hero
+> matrix, contrast sweep, overflow measurement, and the `tests/cms-site` run) is
+> recorded separately in
+> `.superpowers/sdd/2026-08-10-park-site-starter-template/task-10-report.md`.
+
 ## Problem
 
 A park's OGRE site at `/p/{slug}` is currently seeded from a lightly-adapted kingdom
