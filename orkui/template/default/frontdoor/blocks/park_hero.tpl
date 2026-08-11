@@ -10,8 +10,10 @@
  *
  * Renders NOTHING outside park scope (same contract as park_meeting).
  *
- * Receives: $blockFields {kicker, heading, subcopy, cta_label, cta_href,
- *           show_weather, placeholder_image}, $SiteNavScope*, UIR.
+ * Receives: $blockFields {kicker, heading, cta_label, cta_href, show_weather,
+ *           placeholder_image}, $SiteNavScope*, UIR. This list is the contract
+ *           the editor schema in cms-block-editor.js mirrors — a field declared
+ *           in one place and not the other is either uneditable or unpublishable.
  */
 $phScopeType = isset($SiteNavScopeType) ? (string) $SiteNavScopeType : 'global';
 $phScopeId   = isset($SiteNavScopeId) ? (int) $SiteNavScopeId : 0;
@@ -102,6 +104,14 @@ $phWeather   = '';
 try {
     $phDays = (new APIModel('Park'))->GetParkDays(array('ParkId' => $phParkId));
     $phSoonest = null;
+    // Park::CalculateNextParkDay() can return a date that has already happened:
+    // 'week-of-month' resolves the Nth weekday of the CURRENT month (1st Sunday
+    // is 2026-08-02 for the whole of August) and 'monthly' behaves the same way.
+    // Taking the min() below would then let a stale date not only publish "next
+    // game day" in the past, but SUPPRESS the park's correct weekly day, which is
+    // strictly worse than showing nothing. The shared calculator is pre-existing
+    // and used elsewhere, so guard here at the consumer rather than change it.
+    $phTodayTs = strtotime('today');
     foreach ((array) ($phDays['ParkDays'] ?? array()) as $phDay) {
         if (!is_array($phDay) || !class_exists('Park')) {
             continue;
@@ -110,7 +120,14 @@ try {
             $phDay['Recurrence'] ?? '', $phDay['WeekOfMonth'] ?? 0, $phDay['MonthDay'] ?? 0,
             $phDay['WeekDay'] ?? '', null, $phDay['StartDate'] ?? null, $phDay['WeekInterval'] ?? 0
         );
-        if ($phWhen && ($phSoonest === null || strtotime($phWhen) < strtotime($phSoonest['d']))) {
+        if (!$phWhen) {
+            continue;
+        }
+        $phWhenTs = strtotime($phWhen);
+        if ($phWhenTs === false || $phWhenTs < $phTodayTs) {
+            continue;
+        }
+        if ($phSoonest === null || $phWhenTs < strtotime($phSoonest['d'])) {
             $phSoonest = array('d' => $phWhen, 't' => (string) ($phDay['Time'] ?? ''));
         }
     }
@@ -152,7 +169,7 @@ $phPhotoSrc = trim((string) ($phPlaceholder['display'] ?? $phPlaceholder['src'] 
 <style>
 /* scoped: pk-hero */
 .pk-hero { position: relative; overflow: hidden; background: var(--fd-primary);
-    color: var(--fd-primary-contrast); border-bottom: 3px solid var(--fd-accent-on-primary, var(--fd-accent));
+    color: var(--fd-primary-contrast); border-bottom: 3px solid var(--fd-accent-on-primary, var(--fd-primary-contrast));
     padding: clamp(40px, 7vw, 84px) clamp(20px, 4vw, 56px); }
 /* Placeholder photo sits BEHIND the field at low opacity so removing it degrades
    to a finished crest hero rather than an empty frame. */
@@ -172,7 +189,7 @@ $phPhotoSrc = trim((string) ($phPlaceholder['display'] ?? $phPlaceholder['src'] 
 .pk-hero-inner { position: relative; max-width: 1120px; margin-inline: auto; display: grid;
     grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: clamp(24px, 5vw, 64px); }
 .pk-eyebrow { font-family: var(--fd-font-body); font-weight: 700; font-size: .6875rem;
-    letter-spacing: .16em; text-transform: uppercase; color: var(--fd-accent-on-primary, var(--fd-accent));
+    letter-spacing: .16em; text-transform: uppercase; color: var(--fd-accent-on-primary, var(--fd-primary-contrast));
     margin: 0 0 10px; }
 /* Reset the orkui global h1-h6 grey pill box. */
 .pk-name { background: none; border: 0; padding: 0; border-radius: 0; margin: 0 0 10px;
@@ -181,17 +198,28 @@ $phPhotoSrc = trim((string) ($phPlaceholder['display'] ?? $phPlaceholder['src'] 
 .pk-place { margin: 0 0 14px; opacity: .86; }
 .pk-place i { margin-right: 7px; }
 .pk-next { display: inline-block; margin: 0 0 22px; padding: 8px 14px;
-    border-left: 3px solid var(--fd-accent-on-primary, var(--fd-accent));
+    border-left: 3px solid var(--fd-accent-on-primary, var(--fd-primary-contrast));
     background: rgba(255,255,255,.09); border-radius: 0 var(--fd-radius, 6px) var(--fd-radius, 6px) 0; }
 .pk-wx { margin-left: 10px; opacity: .85; }
 .pk-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+/* The matting disc is a PLATE, and it is light in BOTH themes on purpose. It
+   used to read --pk-paper, which dark mode remaps to var(--fd-bg) — a near-black
+   — so the disc inverted under artwork that was drawn for white paper: a trimmed
+   PNG device lost its dark outlines entirely and a cover-cropped JPG sat in a
+   black ring. Heraldry is painted on a light field; the plate follows the
+   artwork, not the page. --pk-seal-plate / --pk-seal-ink are defined once in
+   frontdoor.css and deliberately NOT overridden in the dark block. */
 .pk-seal { width: clamp(116px, 17vw, 196px); aspect-ratio: 1; display: grid; place-items: center;
-    border-radius: 50%; background: var(--pk-paper, #fff);
-    box-shadow: 0 0 0 2px var(--fd-accent-on-primary, var(--fd-accent)),
+    border-radius: 50%; background: var(--pk-seal-plate, #fbfcfd);
+    box-shadow: 0 0 0 2px var(--fd-accent-on-primary, var(--fd-primary-contrast)),
                 0 0 0 9px rgba(255,255,255,.13), 0 14px 34px rgba(0,0,0,.28); }
 .pk-seal.is-matted img { width: 78%; height: 78%; object-fit: contain; }
 .pk-seal.is-cut img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
-.pk-seal.is-monogram { color: var(--fd-primary); font-family: var(--fd-font-heading);
+/* Monogram ink, NOT --fd-primary: dark mode lifts the primary to L>=0.55 for
+   legibility on a dark page, and that lifted colour on this permanently light
+   plate is the same contrast failure in reverse. --pk-seal-ink is the org's own
+   hue held dark in both themes. */
+.pk-seal.is-monogram { color: var(--pk-seal-ink, var(--fd-primary)); font-family: var(--fd-font-heading);
     font-size: clamp(2.4rem, 6vw, 4.2rem); font-weight: 700; }
 .pk-hero.is-retired { filter: saturate(.35); }
 @media (max-width: 760px) {

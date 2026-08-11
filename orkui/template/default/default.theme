@@ -101,6 +101,15 @@
 		<?php if (!empty($IsFrontDoor) || !empty($IsOrgSite) || !empty($IsCmsPage)): ?>
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap">
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap">
+		<?php
+		// Lexend belongs here with Archivo, NOT only in the dyslexia branch below.
+		// The org-site seeder writes '--fd-font-body' => 'Lexend' for every site it
+		// creates, so without this link every org site asked for a webfont that was
+		// never loaded and silently fell back to the generic sans in the stack.
+		// Same href as the dyslexia link, so when both branches fire the browser
+		// makes one request, not two.
+		?>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap">
 		<?php endif; ?>
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.8.2/css/all.min.css" integrity="sha384-oS3vJWv+0UjzBfQzYUhtDYW+Pj2yciDJxpsK1OYPAYjqT085Qq/1cq5FLXAZQ7Ay" crossorigin="anonymous" referrerpolicy="no-referrer">
 		<?php if (!empty($ViewerDyslexiaFonts)) : ?>

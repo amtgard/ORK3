@@ -48,6 +48,13 @@ try {
 
     $psDays = $psModel->GetParkDays(array('ParkId' => $psParkId));
     $psBest = null;
+    // Same past-date guard as park_hero.tpl. Park::CalculateNextParkDay() returns
+    // an ALREADY-PAST date for 'week-of-month' (Nth weekday of the current month)
+    // and 'monthly', and the min() below would let that stale candidate win —
+    // pinning a date that has been and gone to the top of every page, and hiding
+    // the park's real weekly day while it did so. Guarded at the consumer: the
+    // calculator is shared and out of scope here.
+    $psTodayTs = strtotime('today');
     foreach ((array) ($psDays['ParkDays'] ?? array()) as $psDay) {
         if (!is_array($psDay) || !class_exists('Park')) {
             continue;
@@ -56,7 +63,14 @@ try {
             $psDay['Recurrence'] ?? '', $psDay['WeekOfMonth'] ?? 0, $psDay['MonthDay'] ?? 0,
             $psDay['WeekDay'] ?? '', null, $psDay['StartDate'] ?? null, $psDay['WeekInterval'] ?? 0
         );
-        if ($psNext && ($psBest === null || strtotime($psNext) < strtotime($psBest['d']))) {
+        if (!$psNext) {
+            continue;
+        }
+        $psNextTs = strtotime($psNext);
+        if ($psNextTs === false || $psNextTs < $psTodayTs) {
+            continue;
+        }
+        if ($psBest === null || $psNextTs < strtotime($psBest['d'])) {
             $psBest = array('d' => $psNext, 't' => (string) ($psDay['Time'] ?? ''),
                             'w' => (string) ($psDay['WeekDay'] ?? ''));
         }
@@ -80,9 +94,12 @@ if ($psWhen === '' && $psWhere === '') {
 .pk-strip { position: sticky; top: 0; z-index: 40; display: flex; flex-wrap: wrap;
     align-items: center; gap: 6px 16px; padding: 9px clamp(14px, 3vw, 28px);
     background: var(--fd-primary); color: var(--fd-primary-contrast);
-    font-size: calc(var(--fd-font-scale, 1) * .9375rem); }
+    /* --fd-font-scale is a LENGTH (`calc(1rem * ratio)`), so the multiplier here
+       must be unitless and the fallback must carry the unit. `* .9375rem` is
+       rem x rem: invalid, and the whole font-size declaration is dropped. */
+    font-size: calc(var(--fd-font-scale, 1rem) * .9375); }
 .pk-strip i { margin-right: 6px; opacity: .8; }
-#theme_container a.pk-strip-link { color: var(--fd-accent-on-primary, var(--fd-accent)); font-weight: 600; }
+#theme_container a.pk-strip-link { color: var(--fd-accent-on-primary, var(--fd-primary-contrast)); font-weight: 600; }
 #theme_container a.pk-strip-link:hover { color: var(--fd-primary-contrast); }
 /* Fix round 1 (Task 10 review): in dark mode, `html[data-theme="dark"]
    #theme_container a` (default.theme) is (1,1,2) — ONE specificity notch above
@@ -93,9 +110,9 @@ if ($psWhen === '' && $psWhere === '') {
    #63b3ed (the trap's color), not the token, at 2.77:1 against the dark
    primary. Restate at matching specificity, same pattern already used below
    for .fd-nav-login. */
-html[data-theme="dark"] #theme_container a.pk-strip-link { color: var(--fd-accent-on-primary, var(--fd-accent)); }
+html[data-theme="dark"] #theme_container a.pk-strip-link { color: var(--fd-accent-on-primary, var(--fd-primary-contrast)); }
 html[data-theme="dark"] #theme_container a.pk-strip-link:hover { color: var(--fd-primary-contrast); }
-@media (max-width: 520px) { .pk-strip { font-size: calc(var(--fd-font-scale, 1) * .875rem); } }
+@media (max-width: 520px) { .pk-strip { font-size: calc(var(--fd-font-scale, 1rem) * .875); } }
 </style>
 <div class="pk-strip">
     <?php if ($psWhen !== ''): ?>

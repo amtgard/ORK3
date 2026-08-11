@@ -891,6 +891,25 @@ window.CmsBlockEditor = (function () {
             { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' },
             { key: 'limit', type: 'number', label: 'Max officers shown', placeholder: '12' }
         ],
+        // park_hero is the FIRST block on every park home page. Without a schema
+        // here a dynamic block renders the live-info card and stops, so this one
+        // was uneditable — an officer could not touch the eyebrow, the headline,
+        // the call-to-action or the weather readout on their own front page.
+        // Keys mirror exactly what park_hero.tpl reads; anything not listed is
+        // pulled live from the park's ORK record and is not an editable field.
+        park_hero: [
+            { key: 'heading', type: 'text', label: 'Headline',
+              help: 'Leave blank to use the park’s own name.' },
+            { key: 'kicker', type: 'text', label: 'Eyebrow',
+              help: 'The small line above the name. Leave blank to use the park’s rank and kingdom, e.g. “Shire · Burning Lands”.' },
+            { key: 'cta_label', type: 'text', label: 'Button label', placeholder: 'Plan your first visit' },
+            { key: 'cta_href', type: 'text', label: 'Button link', placeholder: '#pk-meet',
+              help: 'Defaults to #pk-meet, which jumps to the “When & Where We Meet” block further down this page.' },
+            { key: 'show_weather', type: 'bool', label: 'Show the forecast for the next game day',
+              help: 'Only appears when the next game day is within a week and a reading exists — it never shows a guess.' },
+            { key: 'placeholder_image', type: 'image', label: 'Background photo (optional)',
+              help: 'Sits faintly behind the crest. The hero is designed to look finished with no photo at all, so leave it empty unless you have a good wide shot of your park.' }
+        ],
         park_officers: [
             { key: 'heading', type: 'text', label: 'Heading', placeholder: 'Our Officers' },
             { key: 'kicker', type: 'text', label: 'Kicker', placeholder: 'Small label above heading' },

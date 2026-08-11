@@ -21,6 +21,11 @@
        deliberately want it. */
     --fd-font-heading: 'Archivo', 'Trebuchet MS', Georgia, serif;
     --fd-font-body: system-ui, -apple-system, sans-serif;
+    /* A LENGTH, not a ratio. CmsThemeTokens::Block() emits this token as
+       `calc(1rem * <ratio>)`, so every consumer must multiply it by a UNITLESS
+       number — `var(--fd-font-scale) * 0.6875rem` is rem x rem, which is invalid
+       at computed-value time and silently drops the whole declaration. Any
+       `var(--fd-font-scale, …)` fallback must therefore be `1rem`, never `1`. */
     --fd-font-scale: 1rem;
     --fd-radius: 12px;
     --fd-space: 1;
@@ -37,6 +42,15 @@
     --pk-vellum: hsl(var(--fd-primary-h, 220) 26% 95.5%);
     --pk-line:   hsl(var(--fd-primary-h, 220) 18% 88%);
     --pk-link:   var(--fd-primary);
+
+    /* The crest plate and its monogram ink. These two are the ONLY park tokens
+       that must NOT flip in dark mode — a heraldry device is artwork drawn for a
+       light field, so the disc behind it stays light and the initials on it stay
+       dark whatever the page is doing. See the dark block near the foot of this
+       file: --pk-paper et al are remapped there and these two deliberately are
+       not. */
+    --pk-seal-plate: hsl(var(--fd-primary-h, 220) 34% 98.5%);
+    --pk-seal-ink:   hsl(var(--fd-primary-h, 220) 42% 24%);
 
     /* Legacy aliases (existing rules still reference these) */
     /* STATIC navy — NOT aliased to --fd-primary, which dark mode redefines to a
@@ -83,7 +97,9 @@
 .fd-kicker {
     font-family: var(--fd-font-body);
     font-weight: 700;
-    font-size: calc(var(--fd-font-scale, 1) * 0.6875rem);
+    /* Unit comes from the variable (a length), the literal is the bare ratio —
+       see the --fd-font-scale note in the token block above. */
+    font-size: calc(var(--fd-font-scale, 1rem) * 0.6875);
     line-height: 1;
     letter-spacing: .2em;
     text-transform: uppercase;
