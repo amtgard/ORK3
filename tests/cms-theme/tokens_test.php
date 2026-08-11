@@ -52,6 +52,32 @@ check('dark text/bg contrast >= 4.5', CmsThemeTokens::Contrast($d['dark']['--fd-
 $h = CmsThemeTokens::HexToHsl($d['dark']['--fd-primary']);
 check('primary hue preserved (green-ish)', $h[0] > 90 && $h[0] < 180);
 
+// --- #accent-on-primary: dark must be recomputed against dark's own primary,
+// not inherited from light, and both branches must clear normal-text AA (4.5),
+// not just the 3.0 "large text" bar --fd-primary-contrast uses elsewhere.
+// Regression pin: park 1049's actual seeded primary (a navy-purple, #151a5b)
+// is the exact case Task 10's live-browser sweep caught failing — .pk-strip-link
+// measured 2.77:1 and .pk-eyebrow 3.39:1 in dark before this fix, both of which
+// read --fd-accent-on-primary as their text color against --fd-primary. ---
+$dPark = CmsThemeTokens::Derive(array('--fd-primary' => '#151a5b'));
+check(
+    'accent-on-primary (light) clears normal-text AA for park 1049 hue',
+    CmsThemeTokens::Contrast($dPark['light']['--fd-accent-on-primary'], $dPark['light']['--fd-primary']) >= 4.5
+);
+check(
+    'accent-on-primary (dark) clears normal-text AA for park 1049 hue',
+    CmsThemeTokens::Contrast($dPark['dark']['--fd-accent-on-primary'], $dPark['dark']['--fd-primary']) >= 4.5
+);
+// Recomputed independently, not copied: light and dark are allowed to (and, for
+// this hue, DO) resolve to different colors, because they're judged against
+// different primaries. A future regression that reintroduces `$dark = $light`
+// for this token would collapse this back to the stale, pre-fix behavior.
+check(
+    'accent-on-primary is derived per-branch, not copied from light',
+    CmsThemeTokens::Contrast($dPark['dark']['--fd-accent'], $dPark['dark']['--fd-primary'])
+        !== CmsThemeTokens::Contrast($dPark['light']['--fd-accent'], $dPark['light']['--fd-primary'])
+);
+
 // --- ToCss: CSS emission ---
 $css = CmsThemeTokens::ToCss(array('--fd-primary' => '#1b4d3e'));
 check('emits .fd-page scope', strpos($css, '.fd-page{') !== false);
@@ -168,6 +194,18 @@ foreach ($extremes as $primary) {
     check("dark primary-contrast >= 3.0 for $primary", $pc >= 3.0);
     // Light-mode primary-contrast is one of the two brand ink choices.
     check("light primary-contrast is a brand ink for $primary", in_array($dd['light']['--fd-primary-contrast'], array('#ffffff', '#1a2236'), true));
+    // accent-on-primary: this loop sets accent == primary, so the accent can
+    // never read against its own field (contrast 1.0) and BOTH branches must
+    // fall back to their own primary-contrast — proving the fallback actually
+    // triggers, not just that it exists. 3.0 (not 4.5) matches the documented,
+    // pre-existing floor of the primary-contrast system itself (BestText can't
+    // guarantee 4.5 at every hue once dark's primary is lightness-lifted to
+    // >=0.55 — same limit the sibling "dark primary-contrast >= 3.0" check
+    // above already accepts); a live sweep found the true worst case at 3.98.
+    check("dark accent-on-primary falls back for $primary", $dd['dark']['--fd-accent-on-primary'] === $dd['dark']['--fd-primary-contrast']);
+    check("light accent-on-primary falls back for $primary", $dd['light']['--fd-accent-on-primary'] === $dd['light']['--fd-primary-contrast']);
+    $aopC = CmsThemeTokens::Contrast($dd['dark']['--fd-accent-on-primary'], $dd['dark']['--fd-primary']);
+    check("dark accent-on-primary >= 3.0 for $primary", $aopC >= 3.0);
 }
 
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";

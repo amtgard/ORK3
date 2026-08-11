@@ -84,6 +84,17 @@ if ($psWhen === '' && $psWhere === '') {
 .pk-strip i { margin-right: 6px; opacity: .8; }
 #theme_container a.pk-strip-link { color: var(--fd-accent-on-primary, var(--fd-accent)); font-weight: 600; }
 #theme_container a.pk-strip-link:hover { color: var(--fd-primary-contrast); }
+/* Fix round 1 (Task 10 review): in dark mode, `html[data-theme="dark"]
+   #theme_container a` (default.theme) is (1,1,2) — ONE specificity notch above
+   the plain `#theme_container a.pk-strip-link` rule above ((1,1,1): the extra
+   `html` element in the trap's selector outweighs this rule's extra class), so
+   the global link-blue trap silently won regardless of what
+   --fd-accent-on-primary resolved to. Measured live: "Directions" rendered
+   #63b3ed (the trap's color), not the token, at 2.77:1 against the dark
+   primary. Restate at matching specificity, same pattern already used below
+   for .fd-nav-login. */
+html[data-theme="dark"] #theme_container a.pk-strip-link { color: var(--fd-accent-on-primary, var(--fd-accent)); }
+html[data-theme="dark"] #theme_container a.pk-strip-link:hover { color: var(--fd-primary-contrast); }
 @media (max-width: 520px) { .pk-strip { font-size: calc(var(--fd-font-scale, 1) * .875rem); } }
 </style>
 <div class="pk-strip">

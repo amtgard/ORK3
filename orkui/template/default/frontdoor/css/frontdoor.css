@@ -168,13 +168,26 @@
     text-decoration: none;
 }
 
-/* Gold buttons are <a> tags; the global `#theme_container a` (ID specificity)
-   forces link-blue text in dark mode. Override with matching specificity so the
-   label stays white + legible on the gold. */
+/* Gold-filled buttons are <a> tags; the global `#theme_container a` (ID
+   specificity) forces link-blue text in dark mode. Override with matching
+   specificity, restating the SAME dark ink the base .fd-btn-gold/.fd-nav-cta
+   rules already use (#1a1205, not a token — no "ink on accent" token exists
+   in CmsThemeTokens, and both base rules already hard-code this exact value,
+   so restating it keeps one source of truth rather than inventing a second
+   near-black). Fix round 1: this used to force white here, which measured
+   1.86:1 on the gold background (needs 4.5:1) — backwards from what the old
+   comment claimed. #1a1205 on gold measures ~10.7:1. No text-shadow needed
+   once the ink itself has real contrast. */
 #theme_container a.fd-btn-gold,
 #theme_container a.fd-btn-gold:hover,
 #theme_container a.fd-nav-cta,
-#theme_container a.fd-nav-cta:hover,
+#theme_container a.fd-nav-cta:hover {
+    color: #1a1205 !important;
+}
+
+/* Ghost buttons sit on the DARK hero field (not on gold), where white is the
+   correct, legible choice — kept separate from the gold-filled pair above so
+   a future contrast fix to one never silently changes the other. */
 #theme_container a.fd-btn-ghost,
 #theme_container a.fd-btn-ghost:hover {
     color: #fff !important;

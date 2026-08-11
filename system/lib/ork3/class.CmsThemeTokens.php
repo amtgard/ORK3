@@ -235,7 +235,12 @@ class CmsThemeTokens
         // Gold-on-gold guard: ~6% of hues collide with the ORK accent. Where the
         // accent would not read on the field, fall back to the field's own
         // contrast colour instead of special-casing at the template layer.
-        $light['--fd-accent-on-primary'] = (self::Contrast($light['--fd-accent'], $light['--fd-primary']) >= 3.0)
+        // Threshold is 4.5, not the 3.0 "large text" bar: this token is consumed
+        // by .pk-eyebrow (11px) and .pk-strip-link (~15px/600), neither of which
+        // qualifies as WCAG "large text", so both need the normal-text bar. (Fix
+        // round 1, Task 10 review — see the dark branch below for the rest of
+        // the story.)
+        $light['--fd-accent-on-primary'] = (self::Contrast($light['--fd-accent'], $light['--fd-primary']) >= 4.5)
             ? $light['--fd-accent']
             : $light['--fd-primary-contrast'];
 
@@ -252,6 +257,22 @@ class CmsThemeTokens
         list($ah, $as, $al) = self::HexToHsl($light['--fd-accent']);
         $dark['--fd-accent']  = self::HslToHex($ah, $as, max($al, 0.55));
         $dark['--fd-primary-contrast'] = self::BestText($dark['--fd-primary']);
+
+        // Fix round 1 (Task 10 review): --fd-accent-on-primary was inherited from
+        // $light via the `$dark = $light;` copy above and never recomputed, so it
+        // kept judging contrast against the LIGHT primary/accent pair even though
+        // dark just lifted both of them. .pk-strip-link and .pk-eyebrow (both of
+        // which read this token) measured 2.77:1 / 3.39:1 in dark mode as a
+        // result. Two fixes were needed together, not one: (1) recompute against
+        // dark's own lifted primary/accent instead of the stale light values, and
+        // (2) raise the guard's own bar from 3.0 to 4.5 — for this park's actual
+        // hue the OLD 3.0 bar still passed post-recompute (gold-on-lifted-primary
+        // landed at 3.39, "large text" AA but not the normal-text AA these two
+        // selectors need), so recomputing alone was verified insufficient before
+        // this second change was added. Same 4.5 bar the light branch now uses.
+        $dark['--fd-accent-on-primary'] = (self::Contrast($dark['--fd-accent'], $dark['--fd-primary']) >= 4.5)
+            ? $dark['--fd-accent']
+            : $dark['--fd-primary-contrast'];
 
         // Contrast safety on derived pairs (nudge derived values, not stored ones).
         $dark['--fd-text']       = self::EnsureContrast($dark['--fd-text'], $dark['--fd-bg'], 4.5, true);
