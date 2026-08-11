@@ -12,8 +12,25 @@
  * CONSERVATIVE: skips any scope that already has a theme row, so an officer who has
  * already chosen a palette is never overwritten. Re-run safe.
  *
- * Run: php db-migrations/2026-08-11-park-theme-backfill.php
+ * Run:
+ *   docker exec -w /var/www/ork.amtgard.com ork3-php8-app php \
+ *     db-migrations/2026-08-11-park-theme-backfill.php
  */
+
+// This file lives under the docroot and reflectively invokes a private seeder
+// across EVERY org site, so a stray HTTP request to its path would run a
+// site-wide write with no authentication in front of it. Same guard 11 of the 13
+// sibling migrations already carry.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('CLI only');
+}
+
+// startup.php derives UIR/HTTP_TEMPLATE from HTTP_HOST, which CLI has no reason
+// to set. Same CLI-time default the sibling migrations use.
+if (empty($_SERVER['HTTP_HOST'])) {
+    $_SERVER['HTTP_HOST'] = 'localhost:19080';
+}
 
 require_once __DIR__ . '/../startup.php';
 
