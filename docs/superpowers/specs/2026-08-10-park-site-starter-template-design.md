@@ -29,7 +29,34 @@
 >   change" below), called out here only because a reader skimming the CTA band
 >   markup could otherwise mistake the empty second slot for an unfinished seed.
 >
-> No other deviations were found. Task 10's verification sweep (queries, hero
+> - **A final whole-plan review changed five more things.** It ran after all ten
+>   tasks passed their own reviews and found what only a whole-diff view could:
+>   the heraldry colour extractor was **dead for every kingdom** (`_heraldryPath()`
+>   built `%05d` for both scopes, but kingdom files are pad-4 — so kingdoms got a
+>   name-hash colour and the park→parent-kingdom cascade could never fire), and
+>   `.fd-kicker`'s font-size was invalid CSS (`rem × rem`) that dropped silently on
+>   every front-door page. Both are fixed, the pad widths now come from one
+>   `Heraldry::PAD_LENGTHS` constant, and a regression test pins them. Also fixed:
+>   the hero and strip could display a park day already in the past; `park_hero`
+>   had no block-editor schema and so was uneditable; and the closing CTA band had
+>   no "come to a park day" button (a URL-less park rendered zero buttons).
+> - **`subcopy` was dropped from `park_hero`.** It was declared in the registry but
+>   never read by the partial. The `rich_text` block below the hero is where a
+>   paragraph belongs.
+> - **The seeded Home paragraph now refuses scheduling text.** `_parkIntroBody()`
+>   still inherits `ork_park.description`, but falls through to the evergreen
+>   fallback when the description contains a weekday or a clock time. Measured: 123
+>   of the 246 parks with a description do. Snapshotting one would have published a
+>   meeting time that never refreshes — the exact failure the "never seed a time or
+>   place" invariant exists to prevent.
+> - **The placeholder hero photo was never implemented.** The design called for a
+>   clearly-labelled stock photo seeded behind the crest. `park_hero.tpl` supports
+>   `placeholder_image`, but nothing seeds it and it is not reachable from the
+>   editor, so parks ship crest-and-colour only. Not a defect — the hero was
+>   designed to look finished without it — but the design as written is not fully
+>   delivered here.
+>
+> Task 10's verification sweep (queries, hero
 > matrix, contrast sweep, overflow measurement, and the `tests/cms-site` run) is
 > recorded separately in
 > `.superpowers/sdd/2026-08-10-park-site-starter-template/task-10-report.md`.
