@@ -77,8 +77,17 @@ class CmsHeraldryColor
 
         $w = imagesx($src);
         $h = imagesy($src);
+
+        // Every bitmap in this method is released with unset(), NOT
+        // imagedestroy(). Since PHP 8.0 a GD handle is a GdImage OBJECT freed by
+        // refcount, which is why 8.5 deprecates imagedestroy() outright ("has no
+        // effect since PHP 8.0") and emits a notice for each call — and this
+        // class runs in a loop over every org site, so that is a notice per
+        // image. Dropping the last reference frees the bitmap at exactly the
+        // same point on 8.1 (the container) as on 8.5 (the host): nothing leaks
+        // on either, and neither one warns.
         if ($w < 1 || $h < 1) {
-            imagedestroy($src);
+            unset($src);
             return '';
         }
 
@@ -87,7 +96,7 @@ class CmsHeraldryColor
         imagealphablending($small, false);
         imagesavealpha($small, true);
         imagecopyresampled($small, $src, 0, 0, 0, 0, self::SAMPLE, self::SAMPLE, $w, $h);
-        imagedestroy($src);
+        unset($src);
 
         $buckets = array();
         for ($y = 0; $y < self::SAMPLE; $y++) {
@@ -122,7 +131,7 @@ class CmsHeraldryColor
                 $buckets[$key]['b'] += $b;
             }
         }
-        imagedestroy($small);
+        unset($small);
 
         if (empty($buckets)) {
             return '';

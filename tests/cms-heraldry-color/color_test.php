@@ -32,7 +32,7 @@ function make_png($path, $r, $g, $b)
     imagefilledrectangle($im, 0, 0, 9, 9, imagecolorallocate($im, 252, 252, 252));
     imagefilledrectangle($im, 50, 50, 59, 59, imagecolorallocate($im, 3, 3, 3));
     imagepng($im, $path);
-    imagedestroy($im);
+    unset($im);
 }
 
 $tmp = sys_get_temp_dir() . '/ogre-heraldry-test';

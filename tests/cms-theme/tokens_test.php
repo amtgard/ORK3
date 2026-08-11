@@ -208,5 +208,15 @@ foreach ($extremes as $primary) {
     check("dark accent-on-primary >= 3.0 for $primary", $aopC >= 3.0);
 }
 
+// --- Default heading face is not faux-medieval ----------------------------
+// Defaults() is what the theme editor's "reset to default" writes back, so a
+// MedievalSharp here quietly reinstates the exact default the CSS layer and the
+// org seeder were both changed to get rid of — one click, no warning. It must
+// stay PICKABLE, just not the default.
+$dv = CmsThemeTokens::DefaultValues();
+check('default heading font is Archivo, not MedievalSharp', ($dv['--fd-font-heading'] ?? '') === 'Archivo');
+check('MedievalSharp is still selectable for orgs that want it', in_array('MedievalSharp', CmsThemeTokens::FontAllowlist(), true));
+check('the default heading font is itself allowlisted', in_array($dv['--fd-font-heading'] ?? '', CmsThemeTokens::FontAllowlist(), true));
+
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";
 exit($fails === 0 ? 0 : 1);

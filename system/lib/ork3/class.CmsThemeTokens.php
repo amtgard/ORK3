@@ -18,7 +18,12 @@ class CmsThemeTokens
             '--fd-text-muted'       => array('group' => 'color', 'value' => '#5b6472', 'input' => 'color'),
             '--fd-border'           => array('group' => 'color', 'value' => '#e2e6ec', 'input' => 'color'),
             '--fd-primary-contrast' => array('group' => 'color', 'value' => '#ffffff', 'input' => 'derived'),
-            '--fd-font-heading'     => array('group' => 'type',  'value' => 'MedievalSharp', 'input' => 'font'),
+            // Archivo, NOT MedievalSharp. This value is what the theme editor's
+            // "reset to default" writes back, so leaving it faux-medieval here
+            // re-introduces at one click the exact default the CSS layer and the
+            // seeder were both changed to eliminate. MedievalSharp stays PICKABLE
+            // in FontAllowlist() for an org that deliberately wants it.
+            '--fd-font-heading'     => array('group' => 'type',  'value' => 'Archivo', 'input' => 'font'),
             '--fd-font-body'        => array('group' => 'type',  'value' => 'Open Sans',     'input' => 'font'),
             '--fd-font-scale'       => array('group' => 'type',  'value' => '1',    'input' => 'scale'),
             '--fd-radius'           => array('group' => 'shape', 'value' => '12px', 'input' => 'px'),

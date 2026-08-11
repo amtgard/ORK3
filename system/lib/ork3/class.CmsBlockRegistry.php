@@ -406,8 +406,14 @@ class CmsBlockRegistry
                 'description'    => 'Crest-led hero built from the park’s own heraldry and colour, with its next game day. Designed to look finished with no photo — only 5 of 342 parks have one.',
                 'addable'        => true,
                 'scopes'         => array('park'),
+                // No 'subcopy'. It was declared here and in the partial's docblock
+                // but park_hero.tpl never read it, so it was an editor field that
+                // could be filled in and would then publish nothing. The hero
+                // already carries an eyebrow, the name, the location and the next
+                // game day above two buttons; a further paragraph is what the
+                // rich_text block below it is for. Dropped rather than wired up.
                 'starter_fields' => array(
-                    'kicker' => '', 'heading' => '', 'subcopy' => '',
+                    'kicker' => '', 'heading' => '',
                     'cta_label' => '', 'cta_href' => '',
                     'show_weather' => 1, 'placeholder_image' => array(),
                 ),

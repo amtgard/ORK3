@@ -80,12 +80,16 @@ class FakeDB
 $GLOBALS['DB'] = new FakeDB();
 $DB = &$GLOBALS['DB'];
 
-// _seedOrgTheme() (below) probes a heraldry file path off DIR_HERALDRY before
-// ever reading it — defined defensively so that codepath can't fatal on an
-// undefined constant even though the fake DB's empty queue keeps the has_
-// heraldry gate closed and the real is_readable() check unreached.
+// _seedOrgTheme() (below) probes a heraldry file path off DIR_HERALDRY, and
+// _heraldryPath() really does stat the filesystem, so point the constant at a
+// throwaway tree we control and seed it with files named EXACTLY the way the
+// real asset store names them (see the pad-width test further down). Torn down
+// at the end of the run.
+$heraldryFixtureDir = sys_get_temp_dir() . '/ogre-site-test-heraldry-' . getmypid();
+@mkdir($heraldryFixtureDir . '/kingdom', 0777, true);
+@mkdir($heraldryFixtureDir . '/park', 0777, true);
 if (!defined('DIR_HERALDRY')) {
-    define('DIR_HERALDRY', '/nonexistent');
+    define('DIR_HERALDRY', $heraldryFixtureDir);
 }
 
 require __DIR__ . '/../../system/lib/ork3/class.CmsBase.php';
@@ -94,6 +98,10 @@ require __DIR__ . '/../../system/lib/ork3/class.CmsSite.php';
 // itself via its own require_once.
 require __DIR__ . '/../../system/lib/ork3/class.CmsHeraldryColor.php';
 require __DIR__ . '/../../system/lib/ork3/class.CmsTheme.php';
+// _heraldryPath() reads its zero-pad widths from Heraldry::PAD_LENGTHS rather
+// than re-typing them. Only the static side is touched, so the class loads fine
+// against the stub Ork3 above without the framework.
+require __DIR__ . '/../../system/lib/ork3/class.Heraldry.php';
 
 $fails = 0;
 function check($label, $cond)
@@ -460,6 +468,107 @@ check('nav labels are Home / New Players / Contact', array_map(
     $parkDefs2
 ) === array(
     'home' => 'Home', 'new-players' => 'New Players', 'contact' => 'Contact'));
+
+// --- Seeded Home paragraph never publishes a schedule ---------------------
+// _parkIntroBody() SNAPSHOTS ork_park.description into an authored block and
+// never refreshes it, so a description that states a day or a time freezes that
+// claim on the public page forever. Half the real descriptions do exactly that.
+$introBody = new ReflectionMethod('CmsSite', '_parkIntroBody');
+$intro = function ($desc) use ($introBody, $site) {
+    global $DB;
+    $DB->queue = array(array(array('description' => $desc)));
+    return $introBody->invoke($site, 1049);
+};
+$evergreen = 'local chapter of Amtgard';
+
+check('a safe description is kept verbatim', strpos($intro('We are a friendly chapter with a strong arts and sciences tradition.'), 'arts and sciences') !== false);
+check('weekday description falls through to evergreen', strpos($intro('We meet every Saturday at Lents Family Park.'), $evergreen) !== false);
+check('plural weekday falls through', strpos($intro('Ironwood meets Sundays down by the river.'), $evergreen) !== false);
+check('clock time falls through', strpos($intro('Come find us at 1:00 PM in Centennial Park.'), $evergreen) !== false);
+check('bare am/pm falls through', strpos($intro('Games run 11am til we are done.'), $evergreen) !== false);
+check('spelled-out time falls through', strpos($intro('Fun and Battlegames noon to five-ish!'), $evergreen) !== false);
+check('empty description falls through', strpos($intro(''), $evergreen) !== false);
+check(
+    'the evergreen fallback itself states no day and no time',
+    !preg_match('/\b(mon|tues?|wed(nes)?|thurs?|fri|satur|sun)(day)?s?\b/i', $intro(''))
+        && !preg_match('/\b(noon|midnight|o.?clock)\b/i', $intro(''))
+        && !preg_match('/\d{1,2}\s*(:\d{2})?\s*(am|pm)/i', $intro(''))
+);
+
+// --- Closing CTA band leads with the Tier 1 ask ---------------------------
+// The social link is a LOWER-commitment action than showing up, so it must never
+// be the only button (or the first one) in the band that closes the page.
+$ctaFields = new ReflectionMethod('CmsSite', '_parkCtaFields');
+$ctaFor = function ($url) use ($ctaFields, $site) {
+    global $DB;
+    $DB->queue = array(array(array('url' => $url)));
+    $f = $ctaFields->invoke($site, 1049);
+    return isset($f['ctas']) && is_array($f['ctas']) ? $f['ctas'] : array();
+};
+
+$ctasFb   = $ctaFor('https://www.facebook.com/groups/somepark');
+$ctasNone = $ctaFor('');
+
+check('CTA slot 1 is the park-day ask, not the social link', ($ctasFb[0]['label'] ?? '') === 'Come to a park day');
+check('CTA slot 1 points at the on-page meeting block', ($ctasFb[0]['href'] ?? '') === '#pk-meet');
+check('CTA slot 1 is SOLID (gold), the primary button style', ($ctasFb[0]['style'] ?? '') === 'gold');
+check('the social link stays a ghost, below Tier 1', ($ctasFb[1]['style'] ?? '') === 'ghost' && strpos($ctasFb[1]['label'] ?? '', 'Facebook') !== false);
+check('exactly one solid button in the band', count(array_filter($ctasFb, function ($c) {
+    return ($c['style'] ?? '') === 'gold';
+})) === 1);
+check('a URL-less park still gets a real button', ($ctasNone[0]['label'] ?? '') === 'Come to a park day');
+check('the deliberately-empty editor slot is LAST', trim((string) (end($ctasNone)['label'] ?? 'x')) === ''
+    && trim((string) (end($ctasFb)['label'] ?? 'x')) === '');
+
+// --- Heraldry filename pad width (regression guard) -----------------------
+// The zero-pad width of a heraldry filename DIFFERS per scope type — 4 for a
+// kingdom, 5 for a park — and _heraldryPath() once hard-coded 5 for both. That
+// bug was invisible: a mis-padded probe finds no file, and "no file" is a
+// legitimate answer this method must be able to return, so the kingdom colour
+// extractor silently produced nothing and every kingdom site fell through to the
+// name-hash palette instead of its own arms. These assertions fail loudly if the
+// widths ever drift apart again.
+check('kingdom heraldry pads to 4 (0007, matches assets/heraldry/kingdom/0007.jpg)', Heraldry::BaseName('kingdom', 7) === '0007');
+check('park heraldry pads to 5 (01049, matches assets/heraldry/park/01049.png)', Heraldry::BaseName('park', 1049) === '01049');
+check('player heraldry pads to 6', Heraldry::BaseName('player', 123) === '000123');
+check('pad widths are NOT uniform across scope types', Heraldry::PadLength('kingdom') !== Heraldry::PadLength('park'));
+check('unknown scope type yields no basename rather than a wrong one', Heraldry::BaseName('wombat', 7) === '');
+
+// Behavioral: a REAL file laid down under the kingdom's true 4-wide name must be
+// found. Under the old 5-wide code this returns '' and the check fails.
+$kingdomFixture = DIR_HERALDRY . '/kingdom/0007.jpg';
+$parkFixture    = DIR_HERALDRY . '/park/01049.png';
+file_put_contents($kingdomFixture, 'not-really-a-jpeg');
+file_put_contents($parkFixture, 'not-really-a-png');
+
+$heraldryPath = new ReflectionMethod('CmsSite', '_heraldryPath');
+
+$DB->queue = array(array(array('has_heraldry' => 1)));
+check(
+    '_heraldryPath() resolves a kingdom device at its 4-wide name',
+    $heraldryPath->invoke($site, 'kingdom', 7) === $kingdomFixture
+);
+
+$DB->queue = array(array(array('has_heraldry' => 1)));
+check(
+    '_heraldryPath() resolves a park device at its 5-wide name',
+    $heraldryPath->invoke($site, 'park', 1049) === $parkFixture
+);
+
+// has_heraldry is still the gate: a present file with the flag off stays unused.
+$DB->queue = array(array(array('has_heraldry' => 0)));
+check(
+    '_heraldryPath() still gates on has_heraldry, not on the file existing',
+    $heraldryPath->invoke($site, 'kingdom', 7) === ''
+);
+
+// Fixture teardown — leave the machine exactly as found.
+@unlink($kingdomFixture);
+@unlink($parkFixture);
+@rmdir($heraldryFixtureDir . '/kingdom');
+@rmdir($heraldryFixtureDir . '/park');
+@rmdir($heraldryFixtureDir);
+check('heraldry fixtures cleaned up', !file_exists($heraldryFixtureDir));
 
 echo $fails === 0 ? "\nALL PASS\n" : "\n$fails FAILED\n";
 exit($fails === 0 ? 0 : 1);

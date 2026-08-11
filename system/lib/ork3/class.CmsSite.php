@@ -973,7 +973,35 @@ class CmsSite extends CmsBase
             'SELECT description FROM ' . DB_PREFIX . 'park WHERE park_id = :park_id LIMIT 1'
         ));
         $desc = trim((string) ($row['description'] ?? ''));
-        if ($desc !== '' && mb_strlen($desc) <= 800) {
+
+        // HARD INVARIANT: seeded copy may never state a time or a place.
+        //
+        // This snapshots ork_park.description into an AUTHORED rich_text block —
+        // a one-time copy that is never refreshed when the park edits its ORK
+        // record. 123 of the 246 park descriptions contain a weekday name or a
+        // clock time, so half of them would publish a meeting time frozen at the
+        // moment the site was seeded. The failure mode is not a stale web page,
+        // it is a newcomer driving to an empty field on a Saturday because the
+        // paragraph still says Saturday. The live park_meeting block and the
+        // sticky strip are the only things allowed to state when we meet, because
+        // they read the schedule at render time.
+        //
+        // So: a description that reads like a schedule is dropped in favour of the
+        // evergreen paragraph, which is true of every park on every day.
+        // Deliberately over-eager. A false positive costs a park its bespoke
+        // paragraph in favour of an accurate generic one; a false negative sends
+        // someone to a field on the wrong day. Those are not comparable, so the
+        // patterns lean toward diverting. 'noon' and friends are in here because
+        // a real description reads "Fun and Battlegames noon to five-ish!" — a
+        // published meeting time with no digits and no weekday in it anywhere.
+        $looksScheduled = ($desc !== '') && (
+            preg_match('/\b(mon|tues?|wed(nes)?|thurs?|fri|satur|sun)(day)?s?\b/i', $desc)
+            || preg_match('/\b\d{1,2}\s*(:\s*\d{2})?\s*(am|pm|a\.m\.|p\.m\.)/i', $desc)
+            || preg_match('/\b\d{1,2}:\d{2}\b/', $desc)
+            || preg_match('/\b(noon|midday|midnight|o.?clock)\b/i', $desc)
+        );
+
+        if ($desc !== '' && mb_strlen($desc) <= 800 && !$looksScheduled) {
             return '<p>' . htmlspecialchars($desc, ENT_QUOTES, 'UTF-8') . '</p>';
         }
         return '<p>We’re a local chapter of Amtgard — an all-ages foam-combat and medieval '
@@ -989,7 +1017,7 @@ class CmsSite extends CmsBase
      * Facebook; a generic "visit our website" wastes the reassurance a social link
      * carries, since a newcomer can see the group is active and lurk before committing.
      *
-     * Slot 2 is left EMPTY on purpose. ork_park has exactly one url column, which is
+     * The LAST slot is left EMPTY on purpose. ork_park has exactly one url column, which is
      * why Discord appears only 5 times — the most public thing wins the slot. An empty
      * CTA renders nothing publicly and prompts loudly in the editor, so officers get an
      * obvious home for a Discord invite at zero data-model cost.
@@ -1004,7 +1032,18 @@ class CmsSite extends CmsBase
         ));
         $url = trim((string) ($row['url'] ?? ''));
 
-        $ctas = array();
+        // TIER 1 ALWAYS COMES FIRST, and it is solid ('gold' is the primary button
+        // in cta_band.tpl). The design puts "come to a park day" in the hero AND
+        // again at the foot of the page, because the closing band is where a
+        // visitor who has just read the whole page decides. Without it the band
+        // was social-link-only for the 204 parks that have a URL — a ghost button
+        // to a lower-commitment action, i.e. exactly the "social must never
+        // outweigh Tier 1" inversion — and completely EMPTY for the other 138.
+        // #pk-meet is the park_meeting block's own id on this same page
+        // (park_meeting.tpl), so it needs no data and cannot 404.
+        $ctas = array(
+            array('label' => 'Come to a park day', 'href' => '#pk-meet', 'style' => 'gold'),
+        );
         if ($url !== '' && preg_match('#^https?://#i', $url)) {
             $label = 'Visit our page';
             if (preg_match('#(facebook\.com|fb\.com|fb\.me)#i', $url)) {
@@ -1179,6 +1218,13 @@ class CmsSite extends CmsBase
      * returns a guaranteed-404 path when no file exists, so a URL check would
      * always look positive.
      *
+     * The filename's zero-pad width comes from Heraldry::PAD_LENGTHS and MUST NOT
+     * be re-typed here. It is 5 for a park but 4 for a kingdom, and this method
+     * originally hard-coded 5 for both — so every kingdom probe looked for a file
+     * (00007.jpg) that cannot exist next to the real 0007.jpg, returned '', and
+     * dropped the whole colour cascade onto the name hash. It failed silently
+     * because "no file" is a legitimate answer this method has to be able to give.
+     *
      * @return string absolute path, or ''
      */
     private function _heraldryPath($scopeType, $scopeId)
@@ -1197,7 +1243,11 @@ class CmsSite extends CmsBase
             return '';
         }
 
-        $base = rtrim(DIR_HERALDRY, '/') . '/' . $table . '/' . sprintf('%05d', (int) $scopeId);
+        $name = Heraldry::BaseName($table, (int) $scopeId);
+        if ($name === '') {
+            return '';
+        }
+        $base = rtrim(DIR_HERALDRY, '/') . '/' . $table . '/' . $name;
         foreach (array('.png', '.jpg', '.jpeg', '.gif') as $ext) {
             if (is_readable($base . $ext)) {
                 return $base . $ext;
