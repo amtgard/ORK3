@@ -12,8 +12,7 @@ class Award extends Ork3
      * Map of ladder award_id => metadata used to detect when a player has already reached
      * the top of that ladder or earned its Master-peerage companion award.
      *
-     * Keep in sync with the $pnOrderToMaster / $pnOrderNames maps in
-     * orkui/template/revised-frontend/Playernew_index.tpl (Awards tab).
+     * Sole order→master source of truth (P3-R2). UI must not fork this map.
      */
     public static function GetLadderMasterMap()
     {
@@ -33,6 +32,66 @@ class Award extends Ork3
             239 => ['MasterAwardIds' => [240], 'LadderName' => 'Order of the Crown',   'MasterName' => 'Master Crown',   'MaxRank' => 10],
             243 => ['MasterAwardIds' => [244], 'LadderName' => 'Order of Battle',      'MasterName' => 'Battlemaster',   'MaxRank' => 10],
         ];
+    }
+
+    /**
+     * class_id => Paragon award_id (Class Levels / My Amtgard badge display).
+     *
+     * @return array<int, int>
+     */
+    public static function GetClassParagonMap(): array
+    {
+        return [
+            1 => 37, 2 => 38, 3 => 39, 4 => 40, 5 => 41, 6 => 241, 7 => 42, 8 => 43,
+            9 => 44, 10 => 45, 11 => 46, 12 => 47, 14 => 242, 15 => 49, 16 => 50, 17 => 51,
+        ];
+    }
+
+    /**
+     * Knighthood award_id => short name (milestones + belt detection).
+     * Belt image URLs remain presentation-layer (template).
+     *
+     * @return array<int, string>
+     */
+    public static function GetKnightAwardMap(): array
+    {
+        return [
+            17 => 'Flame',
+            18 => 'Crown',
+            19 => 'Serpent',
+            20 => 'Sword',
+            245 => 'Battle',
+        ];
+    }
+
+    /**
+     * Flatten MasterAwardIds from GetLadderMasterMap (includes Warlord 12).
+     *
+     * @return list<int>
+     */
+    public static function GetMasterAwardIds(): array
+    {
+        $ids = [];
+        foreach (self::GetLadderMasterMap() as $info) {
+            foreach ((array)($info['MasterAwardIds'] ?? []) as $masterId) {
+                $masterId = (int)$masterId;
+                if ($masterId > 0) {
+                    $ids[$masterId] = true;
+                }
+            }
+        }
+
+        return array_map('intval', array_keys($ids));
+    }
+
+    /**
+     * Paragon award_ids (values of GetClassParagonMap).
+     *
+     * @return list<int>
+     */
+    public static function GetParagonAwardIds(): array
+    {
+        return array_values(array_unique(array_map('intval', array_values(self::GetClassParagonMap()))));
     }
 
     public function LookupAward($request)

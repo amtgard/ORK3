@@ -10,70 +10,12 @@
 		exit;
 	}
 
-	// ── Partition awards ────────────────────────────────────────────────────
-	$allAwards          = is_array($Details['Awards']) ? $Details['Awards'] : [];
-	$historicalAwards   = [];
-	$realRanksByAwardId = [];
-
-	foreach ($allAwards as $a) {
-		$isAward = in_array($a['OfficerRole'], ['none', null]) && $a['IsTitle'] != 1;
-		if (!$isAward) continue;
-
-		$isHistorical = (int)(int)$a['GivenById'] === 0 && (int)($a['EnteredById'] ?? 0) === 0;
-
-		if ($isHistorical) {
-			$historicalAwards[] = $a;
-		} else {
-			$aid  = (int)$a['AwardId'];
-			$rank = (int)$a['Rank'];
-			if ($aid > 0) {
-				if (!isset($realRanksByAwardId[$aid])) $realRanksByAwardId[$aid] = [];
-				if ($rank > 0) $realRanksByAwardId[$aid][] = $rank;
-			}
-		}
-	}
-
-	// Keep only ladder awards — non-ladder (Custom Award etc.) are not reconcilable
-	$historicalAwards = array_values(array_filter($historicalAwards, function($a) {
-		return (int)($a['IsLadder'] ?? 0) === 1;
-	}));
-
-	// Sort: AwardId ASC, date ASC (missing last)
-	usort($historicalAwards, function($a, $b) {
-		if ((int)$a['AwardId'] !== (int)$b['AwardId'])
-			return (int)$a['AwardId'] - (int)$b['AwardId'];
-		$da = ($ts = strtotime($a['Date'] ?? '')) > 0 ? $ts : PHP_INT_MAX;
-		$db = ($ts = strtotime($b['Date'] ?? '')) > 0 ? $ts : PHP_INT_MAX;
-		return $da - $db;
-	});
-
-	// ── Smart rank suggestions ───────────────────────────────────────────────
-	$rankSuggestions = [];
-	$groupState      = [];
-	foreach ($historicalAwards as $a) {
-		$aid      = (int)$a['AwardId'];
-		$awardsId = (int)$a['AwardsId'];
-		$isLadder = (int)($a['IsLadder'] ?? 0);
-		if (!$isLadder) { $rankSuggestions[$awardsId] = 0; continue; }
-		if (!isset($groupState[$aid])) {
-			$real = [];
-			foreach ($realRanksByAwardId[$aid] ?? [] as $r) { if ($r > 0) $real[$r] = true; }
-			$groupState[$aid] = ['realRanks' => $real, 'usedRanks' => []];
-		}
-		$existing = (int)$a['Rank'];
-		if ($existing > 0 && !isset($groupState[$aid]['realRanks'][$existing]) && !isset($groupState[$aid]['usedRanks'][$existing])) {
-			$rankSuggestions[$awardsId] = $existing;
-			$groupState[$aid]['usedRanks'][$existing] = true;
-		} else {
-			$c = 1;
-			while (isset($groupState[$aid]['realRanks'][$c]) || isset($groupState[$aid]['usedRanks'][$c])) $c++;
-			$rankSuggestions[$awardsId] = $c;
-			$groupState[$aid]['usedRanks'][$c] = true;
-		}
-	}
-
-	$awardTypeCount = count(array_unique(array_column($historicalAwards, 'AwardId')));
-	$totalCount     = count($historicalAwards);
+	// Partition + smart-rank from domain (Controller_Player::reconcile via get_reconcile_page_data)
+	$historicalAwards   = is_array($HistoricalAwards ?? null) ? $HistoricalAwards : [];
+	$rankSuggestions    = is_array($RankSuggestions ?? null) ? $RankSuggestions : [];
+	$realRanksByAwardId = is_array($RealRanksByAwardId ?? null) ? $RealRanksByAwardId : [];
+	$awardTypeCount     = (int)($AwardTypeCount ?? 0);
+	$totalCount         = (int)($TotalCount ?? 0);
 	$playerId       = (int)($Player['MundaneId'] ?? 0);
 	$persona        = htmlspecialchars($Player['Persona'] ?? 'Player');
 	$heraldryUrl    = ($Player['HasHeraldry'] ?? 0) > 0

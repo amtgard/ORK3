@@ -150,7 +150,7 @@ class Controller_Unit extends Controller
                         // so the audit call lives here to mirror the pattern used by
                         // the raw-INSERT paths. Anchored to the grantee so the entry
                         // shows on the affected player's audit history.
-                        (new Dangeraudit())->audit(
+                        $this->Authorization->audit(
                             'Authorization::AddAuthorization',
                             ['MundaneId' => $_grantee_mid, 'Type' => AUTH_UNIT, 'Id' => $unit_id_int, 'Role' => AUTH_CREATE],
                             'Player',

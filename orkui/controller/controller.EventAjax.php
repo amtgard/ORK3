@@ -325,7 +325,7 @@ class Controller_EventAjax extends Controller
             $authId = (int)($r['Detail'] ?? 0);
             $this->load_model('Player');
             $persona = $this->Player->get_persona($mid);
-            (new Dangeraudit())->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_EVENT, 'Id' => $event_id, 'Role' => $role], 'Player', $mid, null, [
+            $this->Authorization->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_EVENT, 'Id' => $event_id, 'Role' => $role], 'Player', $mid, null, [
                 'authorization_id' => $authId,
                 'mundane_id'       => $mid,
                 'park_id'          => 0,
@@ -414,7 +414,7 @@ class Controller_EventAjax extends Controller
 
         $priorState = $r['PriorState'] ?? null;
         $staff = $r['Staff'] ?? [];
-        (new Dangeraudit())->audit(
+        $this->Authorization->audit(
             $priorState ? 'EventStaff::Update' : 'EventStaff::Add',
             [
                 'EventId'       => $event_id,
@@ -476,7 +476,7 @@ class Controller_EventAjax extends Controller
 
         $priorState = $r['PriorState'] ?? null;
         if ($priorState) {
-            (new Dangeraudit())->audit(
+            $this->Authorization->audit(
                 'EventStaff::Remove',
                 ['EventId' => $event_id, 'DetailId' => $detail_id, 'StaffId' => $staff_id],
                 'Event',
