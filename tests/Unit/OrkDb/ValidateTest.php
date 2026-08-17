@@ -480,8 +480,15 @@ final class ValidateTest extends TestCase
         $render = new \OrkDb\Render(ORK3_ROOT . '/tools/ork-db', ORK3_ROOT);
         $validate = new Validate(new Wiring($toolRoot), $toolRoot, fn (): PDO => $pdo);
 
-        foreach (array_slice($render->mundaneHeraldryIdsForSeed(42), 0, 3) as $id) {
-            $pdo->exec(sprintf('INSERT INTO ork_mundane VALUES (%d, 1, 0)', $id));
+        // Flag every expected id so alignment holds for any extract vintage —
+        // the drift check demands exact set equality, so a fixed slice(0,3)
+        // breaks whenever the mirror's real-player heraldry set changes.
+        foreach ($render->mundaneHeraldryIdsForSeed(42) as $id) {
+            $pdo->exec(sprintf(
+                'INSERT INTO ork_mundane VALUES (%d, 1, 0)'
+                . ' ON CONFLICT(mundane_id) DO UPDATE SET has_heraldry = 1',
+                $id
+            ));
         }
 
         $this->assertFalse($validate->heraldryManifestDrifted($render->mundaneHeraldryIdsForSeed(42)));
