@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "pageId": "admin-resetwaivers",
+  "calibratedAt": "2026-08-01T20:09:47Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "refuzzedAt": "2026-08-02T16:43:24Z",
+  "refuzzedFromCommit": "05389516"
+}

@@ -726,24 +726,24 @@ $(document).ready(function() {
         }
     });
 
-    // ---- Class Level Calculation ----
+    // ---- Class Level Calculation (thresholds from ClassLevel via PnConfig) ----
     $('#pn-classes-table tbody tr').each(function() {
         var credits = Number($(this).find('.pn-credits').text());
+        var thresholds = PnConfig.classLevelThresholds || [];
         var level = 1;
-        if (credits >= 53) level = 6;
-        else if (credits >= 34) level = 5;
-        else if (credits >= 21) level = 4;
-        else if (credits >= 12) level = 3;
-        else if (credits >= 5) level = 2;
+        for (var ti = thresholds.length - 1; ti >= 0; ti--) {
+            if (credits >= thresholds[ti]) { level = ti + 2; break; }
+        }
         $(this).find('.pn-level').text(level);
 
-        var thresholds = [5, 12, 21, 34];
+        var maxCredits = thresholds.length ? thresholds[thresholds.length - 1] : null;
+        var nearThresholds = thresholds.length > 1 ? thresholds.slice(0, -1) : [];
         var badge = '';
-        if (credits >= 53) {
+        if (maxCredits !== null && credits >= maxCredits) {
             badge = 'max';
         } else {
-            for (var i = 0; i < thresholds.length; i++) {
-                var t = thresholds[i];
+            for (var i = 0; i < nearThresholds.length; i++) {
+                var t = nearThresholds[i];
                 if (credits === t) { badge = 'leveled'; break; }
                 else if (credits === t - 1 || credits === t - 2) { badge = 'soon'; break; }
             }

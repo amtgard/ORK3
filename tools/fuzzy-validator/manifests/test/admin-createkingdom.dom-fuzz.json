@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "admin-createkingdom",
+  "calibratedAt": "2026-08-01T19:58:14Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

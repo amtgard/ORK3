@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "pageId": "kingdom-map",
+  "imageWidth": 1280,
+  "imageHeight": 813,
+  "calibratedAt": "2026-08-01T23:02:08Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [
+    {
+      "x": 226,
+      "y": 137,
+      "width": 16,
+      "height": 52,
+      "source": "refuzz"
+    },
+    {
+      "x": 148,
+      "y": 150,
+      "width": 76,
+      "height": 26,
+      "source": "refuzz"
+    },
+    {
+      "x": 79,
+      "y": 151,
+      "width": 47,
+      "height": 29,
+      "source": "refuzz"
+    },
+    {
+      "x": 180,
+      "y": 633,
+      "width": 16,
+      "height": 25,
+      "source": "refuzz"
+    },
+    {
+      "x": 596,
+      "y": 653,
+      "width": 230,
+      "height": 26,
+      "source": "refuzz"
+    },
+    {
+      "x": 718,
+      "y": 312,
+      "width": 61,
+      "height": 36,
+      "source": "refuzz"
+    },
+    {
+      "x": 725,
+      "y": 371,
+      "width": 80,
+      "height": 24,
+      "source": "refuzz"
+    }
+  ],
+  "manualZones": [
+    {
+      "x": 20,
+      "y": 90,
+      "width": 1240,
+      "height": 600,
+      "source": "manual",
+      "label": "#map canvas (Google Maps tiles/markers/viewport); CSS height 540px"
+    }
+  ],
+  "refuzzedAt": "2026-08-02T14:11:15Z",
+  "refuzzedFromCommit": "05389516"
+}

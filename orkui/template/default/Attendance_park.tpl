@@ -437,7 +437,7 @@ html[data-theme="dark"] .att-qa-empty { color: var(--ork-text-muted); }
 				// columns aren't backfilled.
 				$_wxCutoff   = date('Y-m-d', strtotime('-5 days'));
 				$_wxEligible = ($pid > 0
-					&& Ork3::$Lib->weather->park_has_coords($pid)
+					&& wx_park_has_coords($pid)
 					&& $AttendanceDate < $_wxCutoff
 					&& $AttendanceDate >= '1940-01-01');
 			?>
