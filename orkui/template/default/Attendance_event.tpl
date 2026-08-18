@@ -176,7 +176,6 @@
 		<input type='hidden' id='ParkId' name='ParkId' value='<?=valid_id($Attendance_index['ParkId'])?$Attendance_index['ParkId']:$DefaultParkId ?>' />
 		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=$Attendance_index['MundaneId'] ?>' />
 	</form>
-	<a href='<?=UIR ?>Event/index/<?=$Id ?>'>Go to <?=$EventInfo[0]['Name'] ?></a>
 </div>
 
 <div class='info-container'>
@@ -196,9 +195,9 @@
 <?php if (!is_array($AttendanceReport['Attendance'])) $AttendanceReport['Attendance'] = array(); ?>
 <?php foreach ($AttendanceReport['Attendance'] as $key => $detail) : ?>
 			<tr>
-				<td><a href='<?=UIR ?>Kingdom/index/<?=$detail['KingdomId'] ?>'><?=$detail['KingdomName'] ?></a></td>
-				<td><a href='<?=UIR ?>Park/index/<?=$detail['ParkId'] ?>'><?=$detail['ParkName'] ?></a></td>
-				<td><a href='<?=UIR ?>Player/index/<?=$detail['MundaneId'] ?>'><?=$detail['Persona'] ?></a></td>
+				<td><a href='<?=UIR ?>Kingdom/profile/<?=$detail['KingdomId'] ?>'><?=$detail['KingdomName'] ?></a></td>
+				<td><a href='<?=UIR ?>Park/profile/<?=$detail['ParkId'] ?>'><?=$detail['ParkName'] ?></a></td>
+				<td><a href='<?=UIR ?>Player/profile/<?=$detail['MundaneId'] ?>'><?=$detail['Persona'] ?></a></td>
 				<td><?=$detail['ClassName'] ?></td>
 				<td class='data-column'><?=$detail['Credits'] ?></td>
 <?php if ($LoggedIn) : ?>

@@ -1,26 +1,625 @@
 <?php
-
+$_ul_scoped  = !empty($ScopeLabel);
+$_scope_kid  = (int)($ScopeKingdomId ?? 0);
+$_scope_pid  = (int)($ScopeParkId    ?? 0);
 ?>
-<div class='info-container'>
-	<h3>Units</h3>
-	<table class='information-table action-table'>
-		<thead>
-			<tr>
-				<th>Type</th>
-				<th>Name</th>
-				<th>Members</th>
-			</tr>
-		</thead>
-		<tbody>
-<?php if (is_array($Units['Units'])):  ?>
-	<?php foreach ($Units['Units'] as $k => $unit) : ?>
-			<tr onclick='javascript:window.location.href="<?=UIR ?>Unit/index/<?=$unit['UnitId']; ?>";'>
-				<td><?=$unit['Type']; ?></td>
-				<td><a href='<?=UIR ?>Unit/index/<?=$unit['UnitId'] ?>'><?=$unit['Name']; ?></a></td>
-				<td class='data-column'><?=$unit['MemberCount'] ?></td>
-			</tr>
-	<?php endforeach; ?>
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+
+<style>
+.ul-thumb {
+	width: 38px; height: 38px; border-radius: 5px;
+	object-fit: contain; border: 1px solid var(--rp-border);
+	background: transparent; display: block;
+}
+.ul-type-badge {
+	display: inline-block; padding: 2px 8px; border-radius: 10px;
+	font-size: 10px; font-weight: 700; text-transform: uppercase;
+	letter-spacing: 0.04em; margin-left: 6px; vertical-align: middle;
+}
+.ul-badge-company   { background: #e0e7ff; color: #3730a3; }
+.ul-badge-household { background: #d1fae5; color: #065f46; }
+.ul-badge-event     { background: #fef3c7; color: #92400e; }
+.ul-badge-inactive  { background: #fee2e2; color: #991b1b; }
+html[data-theme="dark"] .ul-badge-inactive { background: #450a0a; color: #fca5a5; }
+.ul-badge-retired  { background: #e5e7eb; color: #4b5563; }
+html[data-theme="dark"] .ul-badge-retired { background: #374151; color: #d1d5db; }
+.ul-name-link { font-weight: 600; color: var(--rp-accent); text-decoration: none; }
+.ul-name-link:hover { color: var(--rp-accent-mid); text-decoration: underline; }
+#ul-table td:first-child, #ul-table th:first-child { width: 50px; padding-right: 4px; }
+
+.ul-search-bar {
+	display: flex; gap: 10px; align-items: center; margin-bottom: 14px;
+	max-width: 50%;
+}
+.ul-search-input {
+	flex: 1; padding: 8px 12px; border: 1.5px solid var(--rp-border); border-radius: 6px;
+	font-size: 14px; color: #2d3748; background: #fff; box-sizing: border-box; font-family: inherit;
+	transition: border-color 0.15s;
+}
+.ul-search-input:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 2px rgba(49,130,206,0.12); }
+.ul-search-clear {
+	background: none; border: none; color: #a0aec0; cursor: pointer; font-size: 18px;
+	padding: 0 6px; line-height: 1; display: none;
+}
+.ul-search-clear:hover { color: #4a5568; }
+.ul-search-btn {
+	padding: 8px 18px; background: #38a169; color: #fff; border: none; border-radius: 6px;
+	font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: inherit;
+	transition: background 0.15s;
+}
+.ul-search-btn:hover { background: #2f855a; }
+
+.ul-limit-warn {
+	display: none; align-items: flex-start; gap: 10px;
+	background: #fefce8; border: 1px solid #ca8a04; border-radius: 6px;
+	padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: #854d0e;
+}
+.ul-limit-warn i { color: #ca8a04; margin-top: 2px; flex-shrink: 0; }
+.ul-default-note { display: flex; background: #ebf8ff; border-color: #bee3f8; color: #2c5282; }
+.ul-default-note i { color: #3182ce; }
+html[data-theme="dark"] .ul-limit-warn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ul-default-note { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .ul-default-note i { color: var(--ork-link, #63b3ed); }
+
+.ul-loading { text-align: center; padding: 32px; color: var(--rp-text-muted); font-size: 14px; }
+
+/* Mobile */
+.rp-table-area { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+@media (max-width: 600px) {
+	.ul-col-leaders, .ul-col-web { display: none; }
+	.ul-thumb { width: 28px; height: 28px; }
+	.ul-search-bar { max-width: 100%; }
+	.rp-stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+	.rp-stat-card { flex: unset; }
+}
+
+/* Create Unit Modal */
+.uc-overlay {
+	position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+	display: flex; align-items: center; justify-content: center;
+	z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.18s;
+}
+.uc-overlay.uc-open { opacity: 1; pointer-events: auto; }
+.uc-modal {
+	background: #fff; border-radius: 10px; width: 460px;
+	max-width: calc(100vw - 32px); box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+	transform: translateY(12px); transition: transform 0.18s;
+}
+.uc-overlay.uc-open .uc-modal { transform: none; }
+.uc-modal-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+}
+.uc-modal-title {
+	font-size: 16px; font-weight: 700; color: #1a202c; margin: 0;
+	background: transparent !important; border: none !important; padding: 0 !important;
+	border-radius: 0 !important; text-shadow: none !important;
+}
+html[data-theme="dark"] .uc-modal-title,
+html:not([data-theme="light"]):not([data-theme="dark"]) .uc-modal-title {
+	background: transparent !important; border: none !important; color: #e2e8f0; text-shadow: none !important;
+}
+html[data-theme="dark"] .uc-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .uc-modal-header { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .uc-modal-footer { border-top-color: var(--ork-border); }
+html[data-theme="dark"] .uc-field label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .uc-field input,
+html[data-theme="dark"] .uc-field select { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text); }
+html[data-theme="dark"] .uc-btn-secondary { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .uc-btn-secondary:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .uc-modal div[style*="background:#ebf8ff"] { background: rgba(66,153,225,0.1) !important; border-color: #4299e1 !important; color: #90cdf4 !important; }
+.uc-close-btn { background: none; border: none; font-size: 20px; color: #718096; cursor: pointer; line-height: 1; padding: 0 4px; }
+.uc-close-btn:hover { color: #2d3748; }
+.uc-modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.uc-field label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 5px; }
+.uc-field input, .uc-field select {
+	width: 100%; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 6px;
+	font-size: 14px; color: #2d3748; box-sizing: border-box; font-family: inherit;
+}
+.uc-field input:focus, .uc-field select:focus { outline: none; border-color: #3182ce; box-shadow: 0 0 0 2px rgba(49,130,206,0.12); }
+.uc-modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid #e2e8f0; }
+.uc-btn { border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; padding: 7px 16px; }
+.uc-btn-secondary { background: #edf2f7; color: #4a5568; }
+.uc-btn-secondary:hover { background: #e2e8f0; }
+.uc-btn-primary { background: #3182ce; color: #fff; }
+.uc-btn-primary:hover { background: #2b6cb0; }
+.uc-new-btn {
+	display: inline-flex; align-items: center; gap: 6px;
+	background: #3182ce; color: #fff; border: none; border-radius: 6px;
+	font-size: 13px; font-weight: 600; padding: 6px 14px; cursor: pointer;
+}
+.uc-new-btn:hover { background: #2b6cb0; }
+</style>
+
+<div class="rp-root">
+
+	<!-- Header -->
+	<div class="rp-header">
+		<div class="rp-header-left">
+			<div class="rp-header-icon-title">
+				<i class="fas fa-shield-alt rp-header-icon"></i>
+				<h1 class="rp-header-title">Companies &amp; Households</h1>
+			</div>
+<?php if ($_ul_scoped): ?>
+			<div class="rp-header-scope">
+				<span class="rp-scope-chip">
+					<i class="fas fa-map-marker-alt"></i>
+					<span class="rp-scope-chip-label">Scope:</span>
+					<?=htmlspecialchars($ScopeLabel)?>
+				</span>
+			</div>
 <?php endif; ?>
-		</tbody>
-	</table>
+		</div>
+<?php if (!empty($LoggedIn)): ?>
+		<div class="rp-header-actions">
+			<button class="rp-btn-ghost" id="uc-open-btn">
+				<i class="fas fa-plus"></i> New Unit
+			</button>
+		</div>
+<?php endif; ?>
+	</div>
+
+	<!-- Context banner -->
+	<div class="rp-context" style="border-radius:0;border-left:none;border-right:none;border-top:none;">
+		<i class="fas fa-info-circle rp-context-icon"></i>
+		<span>An <strong>active</strong> unit has at least one member with a sign-in recorded in the past 12 months.</span>
+	</div>
+
+	<!-- Stats row (populated by JS after search) -->
+	<div class="rp-stats-row" id="ul-stats-row" style="display:none">
+		<div class="rp-stat-card">
+			<div class="rp-stat-icon"><i class="fas fa-shield-alt"></i></div>
+			<div class="rp-stat-number" id="ul-stat-total">—</div>
+			<div class="rp-stat-label">Active Units</div>
+		</div>
+		<div class="rp-stat-card">
+			<div class="rp-stat-icon"><i class="fas fa-users"></i></div>
+			<div class="rp-stat-number" id="ul-stat-companies">—</div>
+			<div class="rp-stat-label">Active Companies</div>
+		</div>
+		<div class="rp-stat-card">
+			<div class="rp-stat-icon"><i class="fas fa-home"></i></div>
+			<div class="rp-stat-number" id="ul-stat-households">—</div>
+			<div class="rp-stat-label">Active Households</div>
+		</div>
+		<div class="rp-stat-card">
+			<div class="rp-stat-icon"><i class="fas fa-database"></i></div>
+			<div class="rp-stat-number" id="ul-stat-shown">—</div>
+			<div class="rp-stat-label">Results Shown</div>
+		</div>
+	</div>
+
+	<div class="rp-table-area">
+
+		<!-- Search bar -->
+		<div class="ul-search-bar">
+			<input type="text" class="ul-search-input" id="ul-search-input"
+				placeholder="Search by name (3+ characters)…" autocomplete="off">
+			<button class="ul-search-clear" id="ul-search-clear" title="Clear search">&times;</button>
+			<button class="ul-search-btn" id="ul-search-btn"><i class="fas fa-search"></i> Search</button>
+		</div>
+
+		<!-- result limit warning -->
+		<div class="ul-limit-warn" id="ul-limit-warn">
+			<i class="fas fa-exclamation-triangle"></i>
+			<span>Your search has been limited to 25 results. Update your search criteria and click Search again to refine further.</span>
+		</div>
+		<!-- Default top-by-size note -->
+		<div class="ul-limit-warn ul-default-note" id="ul-default-note">
+			<i class="fas fa-info-circle"></i>
+			<span>Showing the largest companies and households by member size. Search by name above to find other units.</span>
+		</div>
+
+		<!-- Type + activity filter pills -->
+		<div class="rp-filter-pills" style="margin-bottom:14px;">
+			<button class="rp-filter-pill active" data-type="">All Types</button>
+			<button class="rp-filter-pill" data-type="Company">Companies</button>
+			<button class="rp-filter-pill" data-type="Household">Households</button>
+			<button class="rp-filter-pill" id="ul-pill-inactive" data-inactive="0" style="margin-left:8px;">
+				<i class="fas fa-eye-slash" style="font-size:10px;"></i> Include Inactive/Retired
+			</button>
+		</div>
+
+		<div id="ul-loading" class="ul-loading">
+			<i class="fas fa-spinner fa-spin" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.4;"></i>
+			Loading units…
+		</div>
+
+		<div id="ul-table-wrap" style="display:none">
+		<table id="ul-table" class="dataTable" style="width:100%">
+			<thead>
+				<tr>
+					<th></th>
+					<th>Name</th>
+					<th style="display:none">Type</th>
+					<th style="display:none">LastActivity</th>
+<?php if ($_ul_scoped): ?>
+					<th>In <?=htmlspecialchars($ScopeLabel)?></th>
+<?php endif; ?>
+					<th>Active</th>
+					<th>Total</th>
+					<th class="ul-col-leaders">Leaders</th>
+					<th class="ul-col-web" style="text-align:center">Web</th>
+				</tr>
+			</thead>
+			<tbody></tbody>
+		</table>
+		</div>
+
+	</div>
+
+</div><!-- /.rp-root -->
+
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script>
+(function () {
+	var KID          = <?= $_scope_kid ?>;
+	var PID          = <?= $_scope_pid ?>;
+	var HAS_SCOPE    = <?= $_ul_scoped ? 'true' : 'false' ?>;
+	var SCOPE_LABEL  = <?= json_encode($ScopeLabel ?? '') ?>;
+	var HERALDRY     = <?= json_encode(HTTP_UNIT_HERALDRY) ?>;
+	var UIR_BASE     = <?= json_encode(UIR) ?>;
+	var AJAX_BASE    = <?= json_encode(UIR . 'Search/unitsearch') ?>;
+	var ACTIVITY_BASE = <?= json_encode(UIR . 'Search/unitactivity') ?>;
+	var LIMIT        = 25;
+
+	// Column indices (type + activity cols are always hidden at indices 2,3)
+	// Scoped member count at 4 when HAS_SCOPE, else absent
+	var TYPE_COL     = 2;
+	var ACTIVITY_COL = 3;
+	var SCOPE_COL    = HAS_SCOPE ? 4 : -1;
+	var WEB_COL      = HAS_SCOPE ? 8 : 7;
+	var SIZE_COL     = HAS_SCOPE ? SCOPE_COL : 5;  // member-size column for the default sort
+	var defaultMode  = false;                       // true when showing the no-search top-by-size list
+
+	var includeInactive  = false;
+	var activeTypeFilter = '';
+	var currentQuery     = '';
+	var table            = null;
+
+	var oneYearAgo = new Date();
+	oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+	var INACTIVE_BADGE = ' <span class="ul-type-badge ul-badge-inactive">Inactive</span>';
+	// A unit is inactive when no member has signed in within the last 12 months.
+	function isInactive(u) { return !u.LastActivityDate || new Date(u.LastActivityDate) < oneYearAgo; }
+	var RETIRED_BADGE = ' <span class="ul-type-badge ul-badge-retired">Retired</span>';
+	function isRetired(u) { return String(u.Active) === 'Retired'; }
+
+	function badgeClass(type) {
+		if (type === 'Company')  return 'ul-badge-company';
+		if (type === 'Event')    return 'ul-badge-event';
+		return 'ul-badge-household';
+	}
+
+	function webCell(url) {
+		if (!url) return '&nbsp;';
+		var safe = url.replace(/"/g, '&quot;');
+		return '<a href="' + safe + '" target="_blank" rel="noopener" title="' + safe + '"><i class="fas fa-external-link-alt" style="color:#3730a3;font-size:13px"></i></a>';
+	}
+
+	function buildRow(u) {
+		var uid   = parseInt(u.UnitId) || 0;
+		var thumb = HERALDRY + (u.HasHeraldry ? (String(uid).padStart(5, '0') + '.jpg') : '00000.jpg');
+		var imgHtml  = '<img class="ul-thumb" src="' + thumb + '" onerror="this.onerror=null;this.src=\'' + HERALDRY + '00000.jpg\'" alt="">';
+		var nameHtml = '<a class="ul-name-link" href="' + UIR_BASE + 'Unit/index/' + uid + '">'
+			+ $('<span>').text(u.Name || '(Unnamed)').html() + '</a>'
+			+ '<span class="ul-type-badge ' + badgeClass(u.Type) + '">' + (u.Type || '') + '</span>';
+		// In typed-search mode activity is known now; default mode badges after the lazy load.
+		if (isRetired(u)) nameHtml += RETIRED_BADGE;
+		else if (!defaultMode && isInactive(u)) nameHtml += INACTIVE_BADGE;
+
+		var row = [
+			imgHtml,
+			nameHtml,
+			u.Type || '',
+			defaultMode ? '' : (u.LastActivityDate || ''),
+		];
+
+		if (HAS_SCOPE) {
+			row.push(parseInt(u.MemberCount) || 0);
+		}
+
+		// Activity columns aren't computed for the fast default list — show a dash.
+		row.push(
+			defaultMode ? ('<span class="ul-active-cell" data-uid="' + uid + '"><i class="fas fa-spinner fa-spin" style="opacity:.5"></i></span>') : (parseInt(u.ActiveMemberCount) || 0),
+			parseInt(u.TotalMemberCount)  || 0,
+			$('<span>').text(u.LeaderNames || '').html(),
+			webCell(u.Url || '')
+		);
+
+		return row;
+	}
+
+	function updateStats(units) {
+		var oneYear   = oneYearAgo.toISOString().slice(0, 10);
+		var active    = 0, companies = 0, households = 0;
+		units.forEach(function (u) {
+			if (u.LastActivityDate && u.LastActivityDate >= oneYear) {
+				active++;
+				if (u.Type === 'Company')        companies++;
+				else if (u.Type !== 'Event')     households++;
+			}
+		});
+		$('#ul-stat-total').text(active);
+		$('#ul-stat-companies').text(companies);
+		$('#ul-stat-households').text(households);
+		$('#ul-stat-shown').text(units.length);
+		$('#ul-stats-row').show();
+	}
+
+	// Lazy-populate the Active column for the default list once it's on screen.
+	// Works on the DataTables data (all rows), not just the rendered page, so
+	// pagination keeps the resolved counts + Inactive badges.
+	var ACTIVE_DATA_COL = HAS_SCOPE ? 5 : 4;  // index in the row data array
+	function applyActiveCounts(map) {
+		table.rows().every(function () {
+			var d = this.data();
+			var m = String(d[ACTIVE_DATA_COL]).match(/data-uid="(\d+)"/);
+			if (!m) return;                       // already resolved / not a spinner
+			var count = map[m[1]] != null ? map[m[1]] : 0;
+			d[ACTIVE_DATA_COL] = count;
+			if (count === 0 && String(d[1]).indexOf('ul-badge-inactive') === -1
+					&& String(d[1]).indexOf('ul-badge-retired') === -1) {
+				d[1] = d[1] + INACTIVE_BADGE;     // mark the unit inactive (retired already badged)
+			}
+			this.data(d);
+		});
+		table.draw(false);
+	}
+	function loadActiveCounts(units) {
+		var ids = units.map(function (u) { return parseInt(u.UnitId) || 0; }).filter(Boolean);
+		if (!ids.length || !table) return;
+		var CHUNK = 75, merged = {}, batches = [];
+		for (var i = 0; i < ids.length; i += CHUNK) batches.push(ids.slice(i, i + CHUNK));
+		$.when.apply($, batches.map(function (chunk) {
+			return $.getJSON(ACTIVITY_BASE + '&ids=' + chunk.join(','));
+		})).then(function () {
+			var results = batches.length === 1 ? [arguments] : Array.prototype.slice.call(arguments);
+			results.forEach(function (r) { $.extend(merged, r[0] || {}); });
+			applyActiveCounts(merged);
+		}).fail(function () {
+			applyActiveCounts({});
+		});
+	}
+
+	function loadData(q) {
+		defaultMode = !q;
+		$('#ul-loading').html('<i class="fas fa-spinner fa-spin" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.4;"></i>Loading units…').show();
+		$('#ul-table-wrap').hide();
+		$('#ul-limit-warn').hide();
+		if (q) $('#ul-default-note').hide();
+
+		var url = AJAX_BASE + '&q=' + encodeURIComponent(q || '');
+		if (KID) url += '&KingdomId=' + KID;
+		if (PID) url += '&ParkId='    + PID;
+		if (includeInactive) url += '&include=1';
+
+		$.getJSON(url, function (units) {
+			$('#ul-loading').hide();
+			if (!units || !units.length) {
+				$('#ul-table-wrap').hide();
+				$('#ul-loading').html('<i class="fas fa-search" style="font-size:22px;display:block;margin-bottom:8px;opacity:0.3;"></i>No units found.').show();
+				updateStats([]);
+				return;
+			}
+
+			// Show limit warning if results hit the cap
+			if (units.length >= LIMIT) {
+				$('#ul-limit-warn').css('display', 'flex');
+			}
+
+			if (defaultMode) {
+				$('#ul-stats-row').hide();
+				$('#ul-default-note').css('display', 'flex');
+			} else {
+				updateStats(units);
+			}
+			var rows = units.map(buildRow);
+
+			if (table) {
+				table.clear().rows.add(rows).draw();
+			} else {
+				$.fn.dataTable.ext.search.push(function (settings, data) {
+					if (settings.nTable.id !== 'ul-table') return true;
+					if (defaultMode || includeInactive) return true;
+					var lastActivity = data[ACTIVITY_COL];
+					if (!lastActivity) return false;
+					return new Date(lastActivity) >= oneYearAgo;
+				});
+
+				var colDefs = [
+					{ targets: 0,            orderable: false, searchable: false },
+					{ targets: WEB_COL,      orderable: false, searchable: false },
+					{ targets: TYPE_COL,     visible: false },
+					{ targets: ACTIVITY_COL, visible: false }
+				];
+
+				table = $('#ul-table').DataTable({
+					data      : rows,
+					dom       : 'lfrtip',
+					scrollX: true,
+					pageLength: 25,
+					order     : [[1, 'asc']],
+					columnDefs: colDefs
+				});
+			}
+
+			$('#ul-table-wrap').show();
+			table.order(defaultMode ? [[SIZE_COL, 'desc']] : [[1, 'asc']]);
+			table.column(TYPE_COL).search(activeTypeFilter ? '^' + activeTypeFilter + '$' : '', true, false).draw();
+
+			if (defaultMode) loadActiveCounts(units);
+		}).fail(function () {
+			$('#ul-loading').text('Search failed. Please try again.').show();
+		});
+	}
+
+	function doSearch() {
+		var val = $('#ul-search-input').val().trim();
+		if (val.length < 3) return;
+		if (val === currentQuery) return;
+		currentQuery = val;
+		loadData(val);
+	}
+
+	function clearSearch() {
+		$('#ul-search-input').val('');
+		$('#ul-search-clear').hide();
+		currentQuery = '';
+		loadData('');   // back to the default top-by-size list
+	}
+
+	$('#ul-search-input').on('input', function () {
+		$('#ul-search-clear').css('display', this.value.length ? 'block' : 'none');
+	}).on('keydown', function (e) {
+		if (e.key === 'Enter') doSearch();
+	});
+
+	$('#ul-search-btn').on('click', doSearch);
+	$('#ul-search-clear').on('click', clearSearch);
+
+	// Type filter pills
+	$('.rp-filter-pill[data-type]').on('click', function () {
+		$('.rp-filter-pill[data-type]').removeClass('active');
+		$(this).addClass('active');
+		activeTypeFilter = $(this).data('type');
+		if (table) {
+			table.column(TYPE_COL).search(
+				activeTypeFilter ? '^' + activeTypeFilter + '$' : '',
+				true, false
+			).draw();
+		}
+	});
+
+	// Include Inactive toggle
+	$('#ul-pill-inactive').on('click', function () {
+		includeInactive = !includeInactive;
+		$(this).toggleClass('active', includeInactive);
+		$(this).find('i').toggleClass('fa-eye-slash', !includeInactive).toggleClass('fa-eye', includeInactive);
+		// Re-fetch: retired units are a server-side filter (include=1), and the
+		// activity filter (inactive) is applied client-side on redraw.
+		loadData(currentQuery);
+	});
+
+	// Load the default top-by-size list on open (no minimum-character gate).
+	loadData('');
+}());
+</script>
+
+<?php if (!empty($LoggedIn)): ?>
+<div class="uc-overlay" id="uc-overlay">
+	<div class="uc-modal">
+		<div class="uc-modal-header">
+			<h3 class="uc-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#3182ce"></i>Create Company or Household</h3>
+			<button class="uc-close-btn" id="uc-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div style="background:#ebf8ff;border-bottom:1px solid #bee3f8;padding:10px 16px;display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#2c5282;line-height:1.5;">
+			<i class="fas fa-info-circle" style="margin-top:2px;flex-shrink:0;color:#3182ce;"></i>
+			<span>This creates a <strong>brand new</strong> Company or Household with you as the manager. To join an existing unit, ask its manager to add you.</span>
+		</div>
+		<form method="post" action="<?=UIR?>Unit/create/<?=(int)$this->__session->user_id?>" id="uc-create-form">
+			<input type="hidden" name="Action" value="create">
+			<div class="uc-modal-body">
+				<div class="uc-field">
+					<label>Name <span style="color:#e53e3e">*</span></label>
+					<input type="text" name="Name" required placeholder="Enter a name…" id="uc-name-input" autocomplete="off">
+				</div>
+				<div class="uc-field">
+					<label>Type</label>
+					<select name="Type" id="uc-type-select">
+						<option value="Household">Household</option>
+						<option value="Company">Company</option>
+					</select>
+				</div>
+				<div class="uc-field">
+					<label>Website URL <span style="font-weight:400;color:#a0aec0;">(optional)</span></label>
+					<input type="url" name="Url" placeholder="https://…">
+				</div>
+			</div>
+			<div class="uc-modal-footer">
+				<button type="button" class="uc-btn uc-btn-secondary" id="uc-cancel-btn">Cancel</button>
+				<button type="button" class="uc-btn uc-btn-primary" id="uc-submit-btn"><i class="fas fa-plus"></i> Create</button>
+			</div>
+		</form>
+	</div>
 </div>
+<div class="uc-overlay" id="uc-confirm-overlay">
+	<div class="uc-modal" style="max-width:400px;">
+		<div class="uc-modal-header">
+			<h3 class="uc-modal-title"><i class="fas fa-shield-alt" style="margin-right:8px;color:#3182ce"></i>Confirm Creation</h3>
+		</div>
+		<div class="uc-modal-body">
+			<p style="margin:0 0 8px;font-size:14px;">You are about to create a new <strong id="uc-confirm-type"></strong> named <strong id="uc-confirm-name"></strong>.</p>
+			<p style="margin:0;font-size:13px;color:#718096;">You will become its manager. Other players must be added by a manager — they cannot join on their own.</p>
+		</div>
+		<div class="uc-modal-footer">
+			<button type="button" class="uc-btn uc-btn-secondary" id="uc-confirm-back">Go Back</button>
+			<button type="button" class="uc-btn uc-btn-primary" id="uc-confirm-yes"><i class="fas fa-check"></i> Yes, Create It</button>
+		</div>
+	</div>
+</div>
+<script>
+(function() {
+	var overlay        = document.getElementById('uc-overlay');
+	var confirmOverlay = document.getElementById('uc-confirm-overlay');
+	var openBtn        = document.getElementById('uc-open-btn');
+	var closeBtn       = document.getElementById('uc-close-btn');
+	var cancelBtn      = document.getElementById('uc-cancel-btn');
+	var submitBtn      = document.getElementById('uc-submit-btn');
+	var confirmBack    = document.getElementById('uc-confirm-back');
+	var confirmYes     = document.getElementById('uc-confirm-yes');
+	if (!overlay || !openBtn) return;
+	function openModal() {
+		overlay.classList.add('uc-open');
+		document.body.style.overflow = 'hidden';
+		var n = document.getElementById('uc-name-input');
+		if (n) setTimeout(function() { n.focus(); }, 50);
+	}
+	function closeModal() {
+		overlay.classList.remove('uc-open');
+		confirmOverlay.classList.remove('uc-open');
+		document.body.style.overflow = '';
+	}
+	openBtn.addEventListener('click', openModal);
+	closeBtn.addEventListener('click', closeModal);
+	cancelBtn.addEventListener('click', closeModal);
+	overlay.addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+	submitBtn.addEventListener('click', function() {
+		var form = document.getElementById('uc-create-form');
+		if (form && !form.reportValidity()) return;
+		var name = document.getElementById('uc-name-input').value.trim();
+		var type = document.getElementById('uc-type-select').value;
+		document.getElementById('uc-confirm-name').textContent = name || '(unnamed)';
+		document.getElementById('uc-confirm-type').textContent = type;
+		overlay.classList.remove('uc-open');
+		confirmOverlay.classList.add('uc-open');
+	});
+	confirmBack.addEventListener('click', function() {
+		confirmOverlay.classList.remove('uc-open');
+		overlay.classList.add('uc-open');
+	});
+	confirmYes.addEventListener('click', function() {
+		confirmOverlay.classList.remove('uc-open');
+		document.body.style.overflow = '';
+		document.getElementById('uc-create-form').submit();
+	});
+	confirmOverlay.addEventListener('click', function(e) {
+		if (e.target === this) {
+			confirmOverlay.classList.remove('uc-open');
+			overlay.classList.add('uc-open');
+		}
+	});
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape' || e.keyCode === 27) {
+			if (confirmOverlay.classList.contains('uc-open')) {
+				confirmOverlay.classList.remove('uc-open');
+				overlay.classList.add('uc-open');
+			} else if (overlay.classList.contains('uc-open')) {
+				closeModal();
+			}
+		}
+	});
+}());
+</script>
+<?php endif; ?>

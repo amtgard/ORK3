@@ -1,0 +1,523 @@
+<?php
+	// Auth gate — admins can edit, players can view their own
+	$_rcUid       = isset($this->__session->user_id) ? (int)$this->__session->user_id : 0;
+	$_rcPlayerId  = (int)($Player['MundaneId'] ?? 0);
+	$_rcParkId    = (int)($Player['ParkId'] ?? 0);
+	$canEditAdmin = !empty($canEditAdmin);
+	$_isOwnProfile = $_rcUid === $_rcPlayerId;
+	if (!$canEditAdmin && !$_isOwnProfile) {
+		header('Location: ' . UIR . 'Player/profile/' . $_rcPlayerId);
+		exit;
+	}
+
+	// Partition + smart-rank from domain (Controller_Player::reconcile via get_reconcile_page_data)
+	$historicalAwards   = is_array($HistoricalAwards ?? null) ? $HistoricalAwards : [];
+	$rankSuggestions    = is_array($RankSuggestions ?? null) ? $RankSuggestions : [];
+	$realRanksByAwardId = is_array($RealRanksByAwardId ?? null) ? $RealRanksByAwardId : [];
+	$awardTypeCount     = (int)($AwardTypeCount ?? 0);
+	$totalCount         = (int)($TotalCount ?? 0);
+	$playerId       = (int)($Player['MundaneId'] ?? 0);
+	$persona        = htmlspecialchars($Player['Persona'] ?? 'Player');
+	$heraldryUrl    = ($Player['HasHeraldry'] ?? 0) > 0
+		? ($Player['Heraldry'] ?? (HTTP_PLAYER_HERALDRY . '000000.jpg'))
+		: HTTP_PLAYER_HERALDRY . '000000.jpg';
+?>
+<link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
+<style>
+/* ── Reconcile page layout ─────────────────────────────────────── */
+.rc-wrap { max-width: 1200px; margin: 0 auto 80px; }
+
+/* ── Reconcile-specific table/row styles ───────────────────────── */
+.rc-group-hdr td { background: #ebf8ff; color: #2b6cb0; font-weight: 600; font-size: 12px;
+                   padding: 7px 14px; border-top: 2px solid #bee3f8; }
+.rc-real-badge  { display: inline-flex; align-items: center; gap: 4px; background: #fff;
+                  border: 1px solid #90cdf4; border-radius: 10px; padding: 1px 8px;
+                  font-size: 11px; color: #2b6cb0; margin-left: 8px; font-weight: 400; }
+.rc-no-badge    { color: var(--ork-text-hint); border-color: var(--ork-border); background: transparent; }
+
+/* Inline inputs */
+.rc-table input[type="text"],
+.rc-table input[type="number"],
+.rc-table input[type="date"],
+.rc-table select {
+	padding: 5px 7px; border: 1.5px solid var(--ork-border); border-radius: 5px;
+	font-size: 12px; background: #fff; color: #2d3748; width: 100%;
+	box-sizing: border-box; transition: border-color .15s;
+}
+.rc-table input[type="text"]:focus,
+.rc-table input[type="number"]:focus,
+.rc-table input[type="date"]:focus,
+.rc-table select:focus { border-color: #90cdf4; outline: none; box-shadow: 0 0 0 3px rgba(66,153,225,.15); }
+.rc-table input[type="number"] { width: 62px; }
+.rc-table input[type="date"]   { width: 148px; }
+.rc-table select               { min-width: 160px; }
+
+/* Autocomplete */
+.rc-search-wrap   { position: relative; min-width: 130px; }
+.rc-ac-results    { position: absolute; left: 0; right: 0; top: 100%; z-index: 200;
+                    background: #fff; border: 1px solid var(--ork-border); border-top: none;
+                    border-radius: 0 0 6px 6px; max-height: 180px; overflow-y: auto;
+                    box-shadow: 0 4px 12px rgba(0,0,0,.08); display: none; }
+.rc-ac-item       { padding: 6px 10px; cursor: pointer; font-size: 12px; color: #2d3748; }
+.rc-ac-item:hover { background: #ebf8ff; }
+.rc-ac-item-sub   { font-size: 11px; color: var(--ork-text-hint); }
+
+/* Row states */
+.rc-row-done td        { opacity: .55; }
+.rc-row-done input,
+.rc-row-done select    { pointer-events: none; }
+.rc-status-done        { color: #38a169; font-weight: 600; font-size: 12px; white-space: nowrap; }
+.rc-status-skip        { color: var(--ork-text-hint); font-size: 12px; white-space: nowrap; }
+.rc-row-error td       { background: #fff5f5 !important; }
+.rc-row-errmsg         { color: #c53030; font-size: 11px; margin-top: 2px; }
+
+/* Spinner */
+.rc-spinner { display: inline-block; width: 12px; height: 12px; vertical-align: middle;
+              border: 2px solid rgba(255,255,255,.35); border-top-color: #fff;
+              border-radius: 50%; animation: rc-spin .6s linear infinite; }
+@keyframes rc-spin { to { transform: rotate(360deg); } }
+/* =====================================================
+   DARK MODE — Player reconcile table (.rc-*)
+   ===================================================== */
+html[data-theme="dark"] .rc-group-hdr td { background: #1a365d; color: #90cdf4; border-top-color: #2a4365; }
+html[data-theme="dark"] .rc-real-badge { background: var(--ork-bg-secondary); border-color: #2a4365; color: #90cdf4; }
+html[data-theme="dark"] .rc-table input[type="text"],
+html[data-theme="dark"] .rc-table input[type="number"],
+html[data-theme="dark"] .rc-table input[type="date"],
+html[data-theme="dark"] .rc-table select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .rc-ac-results { background: var(--ork-card-bg); border-color: var(--ork-border); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .rc-ac-item { color: var(--ork-text); }
+html[data-theme="dark"] .rc-ac-item:hover { background: var(--ork-bg-secondary); }
+html[data-theme="dark"] .rc-ac-item-sub { color: var(--ork-text-muted); }
+html[data-theme="dark"] .rc-row-error td { background: #742a2a !important; }
+html[data-theme="dark"] .rc-row-errmsg { color: #feb2b2; }
+</style>
+
+<div class="rc-wrap">
+
+	<!-- ── Banner hero (ec- pattern) ── -->
+	<div class="ec-banner" style="border-radius:10px;margin-bottom:0">
+		<div class="ec-banner-bg" style="background-image:url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
+		<div class="ec-banner-heraldry">
+			<img src="<?= htmlspecialchars($heraldryUrl) ?>"
+			     onerror="this.src='<?= HTTP_PLAYER_HERALDRY ?>000000.jpg'"
+			     alt="<?= $persona ?>" crossorigin="anonymous">
+		</div>
+		<div class="ec-banner-info">
+			<div class="ec-banner-label"><i class="fas fa-history" style="margin-right:4px"></i>Reconcile Historical Awards</div>
+			<h1 class="ec-banner-name"><?= $persona ?></h1>
+			<div class="ec-banner-crumb">
+				<a href="<?= UIR ?>Player/profile/<?= $playerId ?>">← Back to <?= $persona ?>'s profile</a>
+				<span>›</span>
+				<span><?= $totalCount ?> award<?= $totalCount !== 1 ? 's' : '' ?> across <?= $awardTypeCount ?> type<?= $awardTypeCount !== 1 ? 's' : '' ?></span>
+			</div>
+		</div>
+	</div>
+
+	<!-- ── Content card ── -->
+	<div class="adm-card" style="border-radius:0 0 10px 10px;border-top:none">
+
+		<?php if (!$canEditAdmin): ?>
+		<!-- Read-only info banner for players viewing their own profile -->
+		<div style="background:#ebf8ff;border:1px solid #90cdf4;border-radius:8px;padding:16px 20px;margin:20px 20px 0">
+			<div style="font-weight:600;color:#2b6cb0;margin-bottom:6px"><i class="fas fa-info-circle" style="margin-right:6px"></i>About Your Historical Awards</div>
+			<p style="margin:0 0 10px;font-size:13px;color:#2d3748;line-height:1.6">These are awards that were imported from historical records before the current award system was in place. They haven't been matched to your official award history yet, which means they may not be reflected in your class levels or progress bars. If you see a progress bar with a ~ before the number, likely it is because of historical records not having a correct rank.</p>
+			<p style="margin:0 0 10px;font-size:13px;color:#2d3748;line-height:1.6">To have these reconciled, contact your park or kingdom leadership and ask them to use the <strong>Reconcile Historical Awards</strong> tool on your profile.</p>
+			<?php if (!empty($PreloadOfficers)): ?>
+			<div style="font-size:13px;color:#2d3748">
+				<strong>People who can help:</strong>
+				<ul style="margin:6px 0 0 18px;padding:0">
+					<?php foreach ($PreloadOfficers as $_po): ?>
+					<li><a href="<?= UIR ?>Player/profile/<?= (int)$_po['MundaneId'] ?>" style="color:#2b6cb0"><?= htmlspecialchars($_po['Persona']) ?></a> — <?= htmlspecialchars($_po['Role']) ?></li>
+					<?php endforeach; ?>
+				</ul>
+			</div>
+			<?php endif; ?>
+		</div>
+		<?php endif; ?>
+
+		<?php if (empty($historicalAwards)): ?>
+			<div class="pn-empty" style="padding:60px 20px">
+				<i class="fas fa-check-circle" style="font-size:40px;color:#68d391;display:block;margin-bottom:10px"></i>
+				No historical awards found — nothing to reconcile.
+			</div>
+		<?php else: ?>
+
+		<div class="adm-card-header">
+			<div class="adm-card-title">
+				<i class="fas fa-table"></i>
+				Historical Awards
+				<?php if ($canEditAdmin): ?>
+				<span class="adm-count" id="rc-pending-count"><?= $totalCount ?> pending</span>
+				<?php else: ?>
+				<span class="adm-count"><?= $totalCount ?> record<?= $totalCount !== 1 ? 's' : '' ?></span>
+				<?php endif; ?>
+			</div>
+			<?php if ($canEditAdmin): ?>
+			<button class="adm-btn adm-btn-primary" id="rc-reconcile-all">
+				<i class="fas fa-check-double"></i> Update All Pending
+			</button>
+			<?php endif; ?>
+		</div>
+
+		<div class="adm-table-wrap rc-table-wrap">
+		<table class="adm-table rc-table" id="rc-table">
+			<thead>
+				<tr>
+					<th class="adm-th-center" style="width:28px"></th>
+					<th style="min-width:120px">Target Award</th>
+					<th style="width:64px">Rank</th>
+					<th style="width:120px">Date</th>
+					<th style="width:130px">Given By</th>
+					<th style="width:120px">Location</th>
+					<th>Note</th>
+					<th style="width:145px"></th>
+				</tr>
+			</thead>
+			<tbody>
+			<?php
+				$prevAwardId = null;
+				foreach ($historicalAwards as $a):
+					$aid      = (int)$a['AwardId'];
+					$awardsId = (int)$a['AwardsId'];
+					$isLadder = (int)($a['IsLadder'] ?? 0);
+					$sugRank  = $rankSuggestions[$awardsId] ?? 0;
+					$maxRank  = ($aid === 30) ? 12 : 10;
+
+					$legacyTs   = strtotime($a['Date'] ?? '');
+					$legacyDate = ($legacyTs > 0) ? date('Y-m-d', $legacyTs) : '';
+					$givenById   = (int)$a['GivenById'];
+					$givenByName = htmlspecialchars($a['GivenBy'] ?? '');
+					$existParkId  = (int)$a['ParkId'];
+					$existKingId  = (int)$a['KingdomId'];
+					$existLocName = '';
+					if (trimlen($a['EventName']   ?? '') > 0) $existLocName = $a['EventName'];
+					elseif (trimlen($a['ParkName']    ?? '') > 0) $existLocName = $a['ParkName'];
+					elseif (trimlen($a['KingdomName'] ?? '') > 0) $existLocName = $a['KingdomName'];
+
+					if ($aid !== $prevAwardId):
+						$prevAwardId = $aid;
+						$realRanks   = $realRanksByAwardId[$aid] ?? [];
+						sort($realRanks);
+			?>
+				<tr class="rc-group-hdr">
+					<td colspan="8">
+						<i class="fas fa-medal" style="margin-right:5px;opacity:.65"></i><?= htmlspecialchars($a['Name']) ?>
+						<?php if (!empty($realRanks)): ?>
+							<span class="rc-real-badge">
+								<i class="fas fa-check" style="color:#38a169"></i>
+								Real awards held: Rank <?= implode(', ', $realRanks) ?>
+							</span>
+						<?php else: ?>
+							<span class="rc-real-badge rc-no-badge">No real awards yet</span>
+						<?php endif; ?>
+					</td>
+				</tr>
+			<?php endif; ?>
+
+				<tr class="rc-award-row" data-awards-id="<?= $awardsId ?>" data-is-ladder="<?= $isLadder ?>">
+					<td class="adm-td-center">
+						<span class="rc-row-status" title="Pending">
+							<i class="fas fa-clock" style="color:#e2e8f0"></i>
+						</span>
+					</td>
+
+					<?php if ($canEditAdmin): ?>
+
+					<td>
+						<?php
+						$_preselect = (int)$a['KingdomAwardId'] > 0
+							? (int)$a['KingdomAwardId']
+							: ($AwardIdToKingdomAwardId[$aid] ?? 0);
+						?>
+						<select class="rc-field-award" required>
+							<option value=""><?= $isLadder ? 'Select order…' : 'Select award…' ?></option>
+							<?= $AwardOptions ?? '' ?>
+						</select>
+						<?php if ($_preselect > 0): ?>
+						<script>(function(){ var s=document.currentScript.previousElementSibling; if(s) s.value='<?= $_preselect ?>'; })();</script>
+						<?php endif; ?>
+					</td>
+
+					<td style="width:64px">
+						<?php if ($isLadder): ?>
+							<input type="number" class="rc-field-rank" min="1" max="<?= $maxRank ?>"
+							       value="<?= $sugRank > 0 ? $sugRank : '' ?>" title="Rank (max <?= $maxRank ?>)">
+						<?php else: ?>
+							<span style="color:#a0aec0">—</span>
+							<input type="hidden" class="rc-field-rank" value="0">
+						<?php endif; ?>
+					</td>
+
+					<td style="width:130px">
+						<input type="date" class="rc-field-date" value="<?= htmlspecialchars($legacyDate) ?>">
+					</td>
+
+					<td>
+						<div class="rc-search-wrap">
+								<input type="text" class="rc-field-givenby-text" placeholder="Search persona…"
+							       autocomplete="off" value="<?= $givenByName ?>">
+							<input type="hidden" class="rc-field-givenby-id" value="<?= $givenById > 0 ? $givenById : '' ?>">
+							<div class="rc-ac-results rc-givenby-results"></div>
+						</div>
+					</td>
+
+					<td>
+						<div class="rc-search-wrap">
+							<input type="text" class="rc-field-loc-text" placeholder="Park or kingdom…"
+							       autocomplete="off" value="<?= htmlspecialchars($existLocName) ?>">
+							<input type="hidden" class="rc-field-loc-park"    value="<?= $existParkId ?>">
+							<input type="hidden" class="rc-field-loc-kingdom" value="<?= $existKingId ?>">
+							<input type="hidden" class="rc-field-loc-event"   value="0">
+							<div class="rc-ac-results rc-loc-results"></div>
+						</div>
+					</td>
+
+					<td>
+						<input type="text" class="rc-field-note" maxlength="400" placeholder="Optional…"
+						       value="<?= htmlspecialchars($a['Note'] ?? '') ?>">
+					</td>
+
+					<td style="white-space:nowrap">
+						<button type="button" class="adm-btn adm-btn-primary rc-do-reconcile" style="padding:5px 12px;font-size:12px">
+							<i class="fas fa-check"></i> Update
+						</button>
+						<button type="button" class="adm-btn adm-btn-ghost rc-do-skip" style="padding:5px 10px;font-size:12px;margin-left:3px">
+							Skip
+						</button>
+					</td>
+
+					<?php else: /* read-only view for own profile */ ?>
+
+					<td><?= htmlspecialchars($a['Name'] ?? '') ?></td>
+					<td style="width:64px"><?= $isLadder && (int)$a['Rank'] > 0 ? (int)$a['Rank'] : '<span style="color:#a0aec0">—</span>' ?></td>
+					<td style="width:130px"><?= $legacyDate ? htmlspecialchars(date('M j, Y', strtotime($legacyDate))) : '<span style="color:#a0aec0">—</span>' ?></td>
+					<td><?= $givenByName ? $givenByName : '<span style="color:#a0aec0">—</span>' ?></td>
+					<td><?= $existLocName ? htmlspecialchars($existLocName) : '<span style="color:#a0aec0">—</span>' ?></td>
+					<td><?= !empty($a['Note']) ? htmlspecialchars($a['Note']) : '<span style="color:#a0aec0">—</span>' ?></td>
+					<td></td>
+
+					<?php endif; ?>
+				</tr>
+			<?php endforeach; ?>
+			</tbody>
+		</table>
+		</div>
+
+		<?php endif; ?>
+	</div><!-- adm-card -->
+
+</div><!-- rc-wrap -->
+
+<script>
+var RcConfig = {
+	uir:       '<?= UIR ?>',
+	playerId:  <?= $playerId ?>,
+	kingdomId: <?= (int)($KingdomId ?? 0) ?>
+};
+</script>
+<?php if ($canEditAdmin): ?>
+<script>
+(function() {
+	'use strict';
+
+	// ── Autocomplete ────────────────────────────────────────────────────────
+	var _t = {};
+	function acSearch(q, cb) {
+		clearTimeout(_t[q]);
+		_t[q] = setTimeout(function() {
+			fetch(RcConfig.uir + 'SearchAjax/universal&q=' + encodeURIComponent(q) + '&kid=' + RcConfig.kingdomId + '&inactive=1')
+				.then(function(r){ return r.json(); }).then(cb).catch(function(){});
+		}, 220);
+	}
+
+	document.addEventListener('click', function(e) {
+		if (!e.target.closest('.rc-search-wrap'))
+			document.querySelectorAll('.rc-ac-results').forEach(function(d){ d.style.display='none'; });
+	});
+
+	// ── Wire a row ──────────────────────────────────────────────────────────
+	function wireRow(row) {
+		// Given By
+		var gbText = row.querySelector('.rc-field-givenby-text');
+		var gbId   = row.querySelector('.rc-field-givenby-id');
+		var gbDrop = row.querySelector('.rc-givenby-results');
+		if (gbText) {
+			gbText.addEventListener('input', function() {
+				gbId.value = '';
+				var q = gbText.value.trim();
+				if (q.length < 2) { gbDrop.style.display = 'none'; return; }
+				acSearch(q, function(data) {
+					var items = data.players || [];
+					if (!items.length) { gbDrop.style.display = 'none'; return; }
+					gbDrop.innerHTML = items.map(function(p) {
+						return '<div class="rc-ac-item" data-id="' + p.id + '" data-name="' + escH(p.name) + '">'
+							+ escH(p.name)
+							+ (p.active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+							+ (p.park ? '<div class="rc-ac-item-sub">' + escH(p.park) + '</div>' : '')
+							+ '</div>';
+					}).join('');
+					gbDrop.style.display = 'block';
+					gbDrop.querySelectorAll('.rc-ac-item').forEach(function(item) {
+						item.addEventListener('mousedown', function(e) {
+							e.preventDefault();
+							gbText.value = item.dataset.name;
+							gbId.value   = item.dataset.id;
+							gbDrop.style.display = 'none';
+						});
+					});
+				});
+			});
+		}
+
+		// Location
+		var locText    = row.querySelector('.rc-field-loc-text');
+		var locPark    = row.querySelector('.rc-field-loc-park');
+		var locKingdom = row.querySelector('.rc-field-loc-kingdom');
+		var locEvent   = row.querySelector('.rc-field-loc-event');
+		var locDrop    = row.querySelector('.rc-loc-results');
+		if (locText) {
+			locText.addEventListener('input', function() {
+				locPark.value = 0; locKingdom.value = 0; locEvent.value = 0;
+				var q = locText.value.trim();
+				if (q.length < 2) { locDrop.style.display = 'none'; return; }
+				acSearch(q, function(data) {
+					var items = [];
+					(data.parks    || []).forEach(function(p){ items.push({id:p.id, name:p.name, sub:p.abbr||'', type:'park'}); });
+					(data.kingdoms || []).forEach(function(k){ items.push({id:k.id, name:k.name, sub:'Kingdom',     type:'kingdom'}); });
+					if (!items.length) { locDrop.style.display = 'none'; return; }
+					locDrop.innerHTML = items.map(function(it) {
+						return '<div class="rc-ac-item" data-id="' + it.id + '" data-type="' + it.type + '" data-name="' + escH(it.name) + '">'
+							+ escH(it.name) + (it.sub ? '<div class="rc-ac-item-sub">' + escH(it.sub) + '</div>' : '') + '</div>';
+					}).join('');
+					locDrop.style.display = 'block';
+					locDrop.querySelectorAll('.rc-ac-item').forEach(function(item) {
+						item.addEventListener('mousedown', function(e) {
+							e.preventDefault();
+							locText.value = item.dataset.name;
+							locPark.value = 0; locKingdom.value = 0; locEvent.value = 0;
+							if (item.dataset.type === 'park')    locPark.value    = item.dataset.id;
+							if (item.dataset.type === 'kingdom') locKingdom.value = item.dataset.id;
+							locDrop.style.display = 'none';
+						});
+					});
+				});
+			});
+		}
+
+		row.querySelector('.rc-do-reconcile').addEventListener('click', function() { doReconcile(row); });
+		row.querySelector('.rc-do-skip').addEventListener('click', function() { markSkipped(row); });
+	}
+
+	// ── Submit one row ──────────────────────────────────────────────────────
+	function doReconcile(row) {
+		var kid = parseInt(row.querySelector('.rc-field-award').value || '0', 10);
+		if (!kid) { flashError(row, 'Please select a target award.'); return; }
+		var gid = parseInt(row.querySelector('.rc-field-givenby-id').value || '0', 10);
+
+		var btn = row.querySelector('.rc-do-reconcile');
+		btn.disabled = true;
+		btn.innerHTML = '<span class="rc-spinner"></span> Saving…';
+
+		fetch(RcConfig.uir + 'PlayerAjax/player/' + RcConfig.playerId + '/reconcileaward', {
+			method: 'POST',
+			body: buildFd(row, kid, gid)
+		})
+		.then(function(r){ return r.json(); })
+		.then(function(d) {
+			if (d.status === 0) { markDone(row); }
+			else {
+				btn.disabled = false;
+				btn.innerHTML = '<i class="fas fa-check"></i> Update';
+				flashError(row, d.error || 'Server error.');
+			}
+		})
+		.catch(function() {
+			btn.disabled = false;
+			btn.innerHTML = '<i class="fas fa-check"></i> Update';
+			flashError(row, 'Network error.');
+		});
+	}
+
+	function buildFd(row, kid, gid) {
+		var fd = new FormData();
+		fd.append('AwardsId',       row.dataset.awardsId);
+		fd.append('KingdomAwardId', kid || parseInt(row.querySelector('.rc-field-award').value||'0',10));
+		fd.append('Rank',           parseInt(row.querySelector('.rc-field-rank').value||'0',10));
+		fd.append('Date',           row.querySelector('.rc-field-date').value);
+		fd.append('GivenById',      gid || parseInt(row.querySelector('.rc-field-givenby-id').value||'0',10));
+		fd.append('Note',           row.querySelector('.rc-field-note').value);
+		fd.append('ParkId',         parseInt(row.querySelector('.rc-field-loc-park').value||'0',10));
+		fd.append('KingdomId',      parseInt(row.querySelector('.rc-field-loc-kingdom').value||'0',10));
+		fd.append('EventId',        parseInt(row.querySelector('.rc-field-loc-event').value||'0',10));
+		return fd;
+	}
+
+	function markDone(row) {
+		row.classList.add('rc-row-done');
+		row.querySelector('.rc-row-status').innerHTML = '<i class="fas fa-check-circle" style="color:#38a169"></i>';
+		row.querySelector('.rc-do-reconcile').closest('td').innerHTML =
+			'<span class="rc-status-done"><i class="fas fa-check-circle"></i> Reconciled</span>';
+		clearRowError(row); updatePendingCount();
+	}
+
+	function markSkipped(row) {
+		row.classList.add('rc-row-done');
+		row.querySelector('.rc-row-status').innerHTML = '<i class="fas fa-minus-circle" style="color:#a0aec0"></i>';
+		row.querySelector('.rc-do-reconcile').closest('td').innerHTML =
+			'<span class="rc-status-skip"><i class="fas fa-minus-circle"></i> Skipped</span>';
+		clearRowError(row); updatePendingCount();
+	}
+
+	function flashError(row, msg) {
+		clearRowError(row); row.classList.add('rc-row-error');
+		var el = document.createElement('div'); el.className = 'rc-row-errmsg'; el.textContent = msg;
+		row.querySelector('td:first-child').appendChild(el);
+	}
+	function clearRowError(row) {
+		row.classList.remove('rc-row-error');
+		var old = row.querySelector('.rc-row-errmsg'); if (old) old.remove();
+	}
+	function updatePendingCount() {
+		var n  = document.querySelectorAll('.rc-award-row:not(.rc-row-done)').length;
+		var el = document.getElementById('rc-pending-count');
+		if (el) el.textContent = n + ' pending';
+	}
+
+	// ── Reconcile All ───────────────────────────────────────────────────────
+	var allBtn = document.getElementById('rc-reconcile-all');
+	if (allBtn) allBtn.addEventListener('click', function() {
+		var pending = Array.from(document.querySelectorAll('.rc-award-row:not(.rc-row-done)'));
+		if (!pending.length) return;
+		allBtn.disabled = true;
+		allBtn.innerHTML = '<span class="rc-spinner"></span> Reconciling…';
+		var i = 0;
+		function next() {
+			if (i >= pending.length) {
+				allBtn.disabled = false;
+				allBtn.innerHTML = '<i class="fas fa-check-double"></i> Reconcile All Pending';
+				return;
+			}
+			var row = pending[i++];
+			if (row.classList.contains('rc-row-done')) { next(); return; }
+			var kid = parseInt(row.querySelector('.rc-field-award').value||'0',10);
+			var gid = parseInt(row.querySelector('.rc-field-givenby-id').value||'0',10);
+			if (!kid || !gid) { next(); return; }
+			fetch(RcConfig.uir + 'PlayerAjax/player/' + RcConfig.playerId + '/reconcileaward', {
+				method: 'POST', body: buildFd(row, kid, gid)
+			})
+			.then(function(r){ return r.json(); })
+			.then(function(d){ if (d.status===0) markDone(row); else flashError(row, d.error||'Error'); next(); })
+			.catch(function(){ flashError(row,'Network error.'); next(); });
+		}
+		next();
+	});
+
+	function escH(s) {
+		return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+	}
+
+	document.querySelectorAll('.rc-award-row').forEach(wireRow);
+})();
+</script>
+<?php endif; // canEditAdmin ?>

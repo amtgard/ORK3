@@ -141,7 +141,7 @@
 			</thead>
 			<tbody>
 <?php foreach ($Unit['Authorizations']['Authorizations'] as $k => $auth) : ?>
-				<tr onClick="javascript:document.location.href='<?=UIR ?>Player/index/<?=$auth['MundaneId'] ?>'">
+				<tr onClick="javascript:document.location.href='<?=UIR ?>Player/profile/<?=$auth['MundaneId'] ?>'">
 					<td><?=$auth['UserName'] ?></td>
 					<td><?=$auth['Persona'] ?></td>
 					<td class='deletion'><a href='<?=UIR . 'Admin/unit/' . $Unit['Details']['Unit']['UnitId'] . '&Action=deleteauth&AuthorizationId=' . $auth['AuthorizationId'] ?>'>&times;</a></td>
@@ -199,7 +199,7 @@
 			<tbody>
 <?php foreach ($Unit['Members']['Roster'] as $k => $member) : ?>
 				<tr onClick="javascript:EditMember($(this), <?=$member['UnitMundaneId'] ?>)">
-					<td><a href='<?=UIR ?>Player/index/<?=$member['MundaneId'] ?>'><?=$member['Persona'] ?></a></td>
+					<td><a href='<?=UIR ?>Player/profile/<?=$member['MundaneId'] ?>'><?=$member['Persona'] ?></a></td>
 					<td><?=ucfirst($member['UnitRole']) ?></td>
 					<td><?=$member['UnitTitle'] ?></td>
 					<td><a href='<?=UIR . 'Admin/unit/' . $Unit['Details']['Unit']['UnitId'] . '&Action=retire&UnitMundaneId=' . $member['UnitMundaneId'] ?>'>Quit</a></td>
@@ -231,8 +231,7 @@
 		<li>Events
 			<ul>
 				<li><a href='<?=UIR ?>Admin/createevent&UnitId=<?=$Unit['Details']['Unit']['UnitId'] ?>'>Schedule an Event</a></li>
-				<li><a href='<?=UIR ?>Admin/manageevent&UnitId=<?=$Unit['Details']['Unit']['UnitId'] ?>'>Event Templates</a></li>
-			</ul>
+				</ul>
 		</li>
 	</ul>
 </div>

@@ -112,8 +112,11 @@
 						Action: 'Search/Player',
 						type: 'all',
 						search: request.term,
-						kingdom_id: <?=$KingdomId ?>,
-						limit: 6
+						// Given By is cross-kingdom: an award can be presented by someone from
+						// any kingdom, so do NOT scope to the page's kingdom. The (KAbbr:PAbbr)
+						// suffix below disambiguates same-named personas across kingdoms.
+						kingdom_id: 0,
+						limit: 12
 					},
 					function( data ) {
 						var suggestions = [];

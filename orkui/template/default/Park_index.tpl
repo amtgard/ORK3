@@ -1,3 +1,7 @@
+<div id='parknew-preview-banner' style='display:block;width:calc(100% - 44px);background:#eaf4fb;border:1px solid #b0d4ea;border-radius:4px;padding:10px 16px;margin:10px;font-size:0.95em;color:#1a5276;'>
+	Want a sneak preview of our new, enhanced park profile? <a href='<?=UIR ?>Park/profile/<?=$park_id ?>'>Check it out here</a>. Note: Clicking any link will return you to the regular design.
+</div>
+
 <div class='info-container'>
 	<h3><?=$this->__session->park_name; ?></h3>
 	<?=$park_info['ParkInfo']['HasHeraldry']==1?"<img src='{$park_info["Heraldry"]["Url"]}' class='heraldry-img' />":"" ?>
@@ -5,12 +9,11 @@
 <?php if ($LoggedIn) : ?>
 		<li><a href='<?=UIR ?>Attendance/park/<?=$park_id ?>'>Enter Attendance</a></li>
 		<li><a href='<?=UIR ?>Award/park/<?=$park_id ?>'>Enter Awards</a></li>
-		<li><a href='<?=UIR ?>Attendance/behold/<?=$park_id ?>'>Behold!</a></li>
+		<?php /* <li><a href='<?=UIR ?>Attendance/behold/<?=$park_id ?>'>Behold!</a></li> */ ?>
 <?php endif ; ?>
 		<li><a href='<?=UIR ?>Search/park/<?=$park_id ?>'>Search Players</a></li>
 		<li><a href='<?=UIR ?>Reports/playerheraldry/<?=$kingdom_id ?>&ParkId=<?=$park_id ?>'>Park Heraldry, Players</a></li>
 		<li><a href='<?=UIR ?>Unit/unitlist&ParkId=<?=$park_id ?>'>Companies and Households</a></li>
-		<li><a href='<?=UIR ?>Treasury/park/<?=$park_info['ParkInfo']['ParkId'] ?>'>Treasury</a></li>
 		<li><?php $location = json_decode(stripslashes($park_info['ParkInfo']['Location'])); $location = ((isset($location->location))?$location->location:$location->bounds->northeast);  ?>
 			<a href="http://maps.google.com/maps?q=@<?= $location->lat . ',' . $location->lng ?>">Park Map</a>
 		</li>
@@ -22,7 +25,7 @@
 	<h4>Park Monarchy</h4>
 		<ul>
 			<?php foreach ($park_officers['Officers'] as $key => $officer): ?>
-				<li><?= $officer['OfficerRole']; ?>: <?php if (!empty($officer['MundaneId']) && $officer['MundaneId'] > 0): ?><a href="<?=UIR.'Player/index/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a><?php else: ?>(Vacant)<?php endif; ?></li>
+				<li><?= $officer['OfficerRole']; ?>: <?php if (!empty($officer['MundaneId']) && $officer['MundaneId'] > 0): ?><a href="<?=UIR.'Player/profile/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a><?php else: ?>(Vacant)<?php endif; ?></li>
 			<?php endforeach; ?>
 		</ul>
 	<?php endif; ?>	
@@ -148,7 +151,7 @@
 				<li><a href='<?=UIR ?>Reports/attendance/Park/<?=$park_id ?>/All'>All</a></li>
 			</ul>
 		</li>
-		<li><a href='' class='unimplemented'>Treasury Report</a></li>
+		<li><a href='<?=UIR ?>Reports/closest_parks&ParkId=<?=$park_id ?>'>Closest Parks</a></li>
 	</ul>
 </div>
 
@@ -164,7 +167,7 @@
 		<tbody>
 <?php if (!is_array($event_summary)) $event_summary = array() ?>
 <?php foreach ($event_summary as $k => $event): ?>
-			<tr onclick='javascript:window.location.href="<?=UIR;?>Event/index/<?=$event['EventId'];?>"'>
+			<tr>
 				<td>
 					<div class='tiny-heraldry'>
 						<?php if ($event['HasHeraldry']==1): ?>
@@ -206,7 +209,7 @@
 	<h3>Find</h3>
 	<ul>
 		<li><a href='<?=UIR ?>Search/park/<?=$park_id ?>'>Players</a></li>
-		<li><a href='<?=UIR ?>Search/unit&ParkId=<?=$park_id ?>'>Companies &amp; Households</a></li>
+		<li><a href='<?=UIR ?>Unit/unitlist&ParkId=<?=$park_id ?>'>Companies &amp; Households</a></li>
 		<li><a href='<?=UIR ?>Search/event&ParkId=<?=$park_id ?>'>Events</a></li>
 	</ul>
 </div>

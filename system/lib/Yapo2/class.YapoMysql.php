@@ -2,132 +2,203 @@
 
 include_once('class.YapoDb.php');
 
-class YapoMysql extends YapoDb {
+class YapoMysql extends YapoDb
+{
+    private $DBH;
 
-	private $DBH;
-	
-	private $Data;
-	
-	function __construct($host, $dbname, $user, $password) {
-		$this->DBH = new PDO("mysql:host=$host;dbname=$dbname", $user, $password);
-		$this->DBH->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
-	}
-	
-	function TableDescription($table) {
-		$Keys = $this->DataSet("SHOW KEYS IN $table");
-		$Fields = $this->DataSet("describe $table");
-		$this->Clear();
-		
-		$keys = array();
-		
-		while ($Keys->Next()) {
-			if (!isset($keys[$Keys->Key_name]) || !is_array($keys[$Keys->Key_name]))
-				$keys[$Keys->Key_name] = array('Unique'=>!$Keys->Non_unique,'Columns'=>array());
-			$keys[$Keys->Key_name]['Columns'][] = $Keys->Column_name;
-		}
-		
-		
-		$fields = array();
-		$primary_key = false;
-		while ($Fields->Next()) {
-			preg_match("/(.+)\((.+)\)/", $Fields->Type, $matches);
-			$fields[$Fields->Field] = array(
-					'MajorType' => count($matches) < 3 ? $Fields->Type : $matches[1],
-					'MinorType' => count($matches) < 3 ? $Fields->Type : $matches[2],
-					'Type' => $Fields->Type,
-					'Null' => $Fields->Null=="NO"?false:true,
-					'Key' => $Fields->Key,
-					'Extra' => $Fields->Extra
-				);
-			if (strtoupper($Fields->Key) == 'PRI') $primary_key = $Fields->Field;
-		}
-		
-		return array("Keys" => $keys, "Fields" => $fields, "PrimaryKey" => $primary_key);
-	}	
-	
-	function GetLastInsertId() {
-		return $this->DBH->lastInsertId();
-	}
-	
-	function GetCore($table) {
-		return new YapoCoreMysql($this, $table);
-	}
-	
-	function Execute($sql) {
-		if ($this->Debug) {
-			echo $sql;
-			print_r($this->Data);
-		}
-		$cnt = 3;
-		do {
-			$Query = $this->DBH->prepare($sql);
-			if (count($this->Data) > 0)
-				$Query->execute($this->Data);
-			else
-				$Query->execute();
-			$failed = $this->handle_errors($cnt--, $Query);
-		} while (!$failed);
-	}
-	
-	function DataSet($sql) {
-		if ($this->Debug) {
-			echo $sql;
-			print_r($this->Data);
-		}
-		$cnt = 3;
-		do {
-			$Query = $this->DBH->prepare($sql);
-			if (is_countable($this->Data) && count($this->Data) > 0)
-				$Query->execute($this->Data);
-			else
-				$Query->execute();
-			$failed = $this->handle_errors($cnt--, $Query);
-		} while (!$failed);
-		return new YapoResultSet($Query, $sql);
-	}
-	
-	function Clear() {
-		$this->Data = array();
-	}
-	
-	function __set($field, $value) {
-		if (is_object($value)) die("you cannot insert an object.");
-		$this->Data[":$field"] = $value;
-	}
-	
-	function SetData($Data) {
-		$this->Data = $Data;
-	}
-	
-	function ValidateField($field_def, $value) {
-		if (stristr($field_def['MajorType'], 'int') || 
-			stristr($field_def['MajorType'], 'float') || 
-			stristr($field_def['MajorType'], 'double') || 
-			stristr($field_def['MajorType'], 'real') ||
-			stristr($field_def['MajorType'], 'decimal') ||
-			stristr($field_def['MajorType'], 'numeric')) {
-			return $value;
-		} else if (strtoupper($field_def['MajorType']) == 'TIME' ||
-					stristr($field_def['MajorType'], 'timestamp')) {
-			if (is_numeric($value)) {
-				return date("Y-m-d H:i:s", $value);
-			} else {
-				return date("Y-m-d H:i:s", strtotime($value));
-			}
-		} else if (stristr($field_def['MajorType'], 'date')) {
-			if (is_numeric($value)) {
-				return date("Y-m-d", $value);
-			} else {
-				return date("Y-m-d", strtotime($value));
-			}
-		} else if (strtoupper($field_def['MajorType']) == 'YEAR') {
-			return date("Y", strtotime($value));
-		} else if (stristr($field_def['MajorType'], 'text')) {
-			// incomplete
-		}
-	}
+    private $Data;
+
+    private static $schema_cache = [];
+
+    public function __construct($host, $dbname, $user, $password)
+    {
+        $fallback = defined('DB_PORT') ? (int) DB_PORT : 3306;
+        list($host, $port) = self::splitHostPort($host, $fallback);
+        $this->DBH = new PDO("mysql:host=$host;port=$port;dbname=$dbname", $user, $password);
+        $this->DBH->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
+    }
+
+    /**
+     * Legacy configs smuggle the port inside DB_HOSTNAME PDO-DSN style
+     * ('db.example.com;port=24306'). Before explicit port support, that
+     * fragment rode into the DSN and worked; appending our own port key
+     * produced a duplicate ('...;port=24306;port=3306') and PDO used the
+     * later one — the 2026-08-18 prod outage. An embedded port therefore
+     * wins over the fallback; the fragment is stripped from the host so
+     * the DSN only ever carries a single port key.
+     *
+     * @return array{0: string, 1: int} [host, port]
+     */
+    public static function splitHostPort($host, $fallbackPort)
+    {
+        $port = (int) $fallbackPort;
+        if (is_string($host) && preg_match('/;\s*port\s*=\s*(\d+)/i', $host, $m)) {
+            $port = (int) $m[1];
+            $host = preg_replace('/;\s*port\s*=\s*\d+/i', '', $host);
+        }
+        return array(trim((string) $host, " \t;"), $port);
+    }
+
+    public function TableDescription($table)
+    {
+        if (isset(self::$schema_cache[$table])) {
+            return self::$schema_cache[$table];
+        }
+        if (function_exists('apcu_fetch')) {
+            $cached = apcu_fetch('yapo_schema_' . $table, $found);
+            // Treat empty Fields as a poisoned entry (DESCRIBE failed when it was cached) —
+            // drop it and re-fetch.
+            if ($found && !empty($cached['Fields'])) {
+                self::$schema_cache[$table] = $cached;
+                return $cached;
+            }
+            if ($found) {
+                apcu_delete('yapo_schema_' . $table);
+            }
+        }
+        // Clear any leftover bound parameters before DESCRIBE/SHOW KEYS so PDO doesn't
+        // try to bind them to these placeholder-free queries (which causes them to fail
+        // silently and return 0 rows — at which point we'd cache an empty schema and
+        // poison every subsequent INSERT/UPDATE/find on this table for 24 hours).
+        $this->Clear();
+        $Keys = $this->DataSet("SHOW KEYS IN $table");
+        $this->Clear();
+        $Fields = $this->DataSet("describe $table");
+        $this->Clear();
+
+        $keys = array();
+
+        while ($Keys->Next()) {
+            if (!isset($keys[$Keys->Key_name]) || !is_array($keys[$Keys->Key_name])) {
+                $keys[$Keys->Key_name] = array('Unique' => !$Keys->Non_unique,'Columns' => array());
+            }
+            $keys[$Keys->Key_name]['Columns'][] = $Keys->Column_name;
+        }
+
+
+        $fields = array();
+        $primary_key = false;
+        while ($Fields->Next()) {
+            preg_match("/(.+)\((.+)\)/", $Fields->Type, $matches);
+            $fields[$Fields->Field] = array(
+                    'MajorType' => count($matches) < 3 ? $Fields->Type : $matches[1],
+                    'MinorType' => count($matches) < 3 ? $Fields->Type : $matches[2],
+                    'Type' => $Fields->Type,
+                    'Null' => $Fields->Null == "NO" ? false : true,
+                    'Key' => $Fields->Key,
+                    'Extra' => $Fields->Extra
+                );
+            if (strtoupper($Fields->Key) == 'PRI') {
+                $primary_key = $Fields->Field;
+            }
+        }
+
+        $result = array("Keys" => $keys, "Fields" => $fields, "PrimaryKey" => $primary_key);
+        // Never cache an empty Fields array — in either tier. An empty schema means
+        // DESCRIBE failed (table missing mid-migration, leftover bound params, etc.).
+        // Caching it would poison every subsequent save/find on this table for the
+        // life of the process, with PDO ERRMODE_WARNING swallowing the error.
+        if (!empty($fields)) {
+            self::$schema_cache[$table] = $result;
+            if (function_exists('apcu_store')) {
+                apcu_store('yapo_schema_' . $table, $result, 86400);
+            }
+        }
+        return $result;
+    }
+
+    public function GetLastInsertId()
+    {
+        return $this->DBH->lastInsertId();
+    }
+
+    public function GetCore($table)
+    {
+        return new YapoCoreMysql($this, $table);
+    }
+
+    public function Execute($sql)
+    {
+        if ($this->Debug) {
+            echo $sql;
+            print_r($this->Data);
+        }
+        $cnt = 3;
+        do {
+            $Query = $this->DBH->prepare($sql);
+            if (count($this->Data) > 0) {
+                $Query->execute($this->Data);
+            } else {
+                $Query->execute();
+            }
+            $failed = $this->handle_errors($cnt--, $Query);
+        } while (!$failed);
+    }
+
+    public function DataSet($sql)
+    {
+        if ($this->Debug) {
+            echo $sql;
+            print_r($this->Data);
+        }
+        $cnt = 3;
+        do {
+            $Query = $this->DBH->prepare($sql);
+            if (is_countable($this->Data) && count($this->Data) > 0) {
+                $Query->execute($this->Data);
+            } else {
+                $Query->execute();
+            }
+            $failed = $this->handle_errors($cnt--, $Query);
+        } while (!$failed);
+        return new YapoResultSet($Query, $sql);
+    }
+
+    public function Clear()
+    {
+        $this->Data = array();
+    }
+
+    public function __set($field, $value)
+    {
+        if (is_object($value)) {
+            die("you cannot insert an object.");
+        }
+        $this->Data[":$field"] = $value;
+    }
+
+    public function SetData($Data)
+    {
+        $this->Data = $Data;
+    }
+
+    public function ValidateField($field_def, $value)
+    {
+        if (stristr($field_def['MajorType'], 'int') ||
+            stristr($field_def['MajorType'], 'float') ||
+            stristr($field_def['MajorType'], 'double') ||
+            stristr($field_def['MajorType'], 'real') ||
+            stristr($field_def['MajorType'], 'decimal') ||
+            stristr($field_def['MajorType'], 'numeric')) {
+            return $value;
+        } elseif (strtoupper($field_def['MajorType']) == 'TIME' ||
+                    stristr($field_def['MajorType'], 'timestamp')) {
+            if (is_numeric($value)) {
+                return date("Y-m-d H:i:s", $value);
+            } else {
+                return date("Y-m-d H:i:s", strtotime($value));
+            }
+        } elseif (stristr($field_def['MajorType'], 'date')) {
+            if (is_numeric($value)) {
+                return date("Y-m-d", $value);
+            } else {
+                return date("Y-m-d", strtotime($value));
+            }
+        } elseif (strtoupper($field_def['MajorType']) == 'YEAR') {
+            return date("Y", strtotime($value));
+        } elseif (stristr($field_def['MajorType'], 'text')) {
+            // incomplete
+        }
+    }
 
 }
-
-
-?>

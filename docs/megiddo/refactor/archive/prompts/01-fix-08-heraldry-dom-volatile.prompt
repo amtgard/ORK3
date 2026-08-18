@@ -1,0 +1,19 @@
+You are executing **Megiddo FIX-08** only — fix reproducible V20-C fuzzy failures after canonical VALIDATE preflight.
+
+Read: docs/megiddo/refactor/skills/phase3-gate-fix/workers/FIX-08-heraldry-dom-volatile.md, docs/megiddo/refactor/skills/phase3-gate-fix/workers/_shared-procedure.md, docs/megiddo/refactor/phase3-audit-report.md (latest V20-C)
+
+| Field | Value |
+|-------|-------|
+| Branch | `megiddo/p3-fix-08-heraldry-dom-volatile` |
+| Stack base | `megiddo/p3-fix-07-fuzzy-baselines` @ checklist |
+| Root cause | Heraldry `?v=` cache-bust in DOM after each `deploy-sandbox`; stale baselines caused spurious dimension failures |
+
+## Tasks
+
+1. Canonical preflight: `deploy-sandbox --yes` → `setpoint restore` → `validate --all` (reproduce).
+2. Fix `tree_diff.py` — normalize heraldry URL query params in DOM compare; add unit tests.
+3. Re-record any residual visual-drift pages; full `setpoint capture` after `deploy-sandbox`.
+4. Repro gate: `validate --all` exit 0, then `deploy-sandbox` → `restore` → `validate --all` exit 0.
+
+Commit: `FIX-08: Stabilize fuzzy DOM gate against heraldry cache-bust drift.`  
+Update milestone checklist; return report.

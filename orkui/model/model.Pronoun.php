@@ -32,22 +32,31 @@ class Model_Pronoun extends Model {
 
         $pronouns = $this->Pronoun->GetPronounList();
         $parts = [
-            'subject' => [],
+            'subjective' => [],
             'objective' => [],
             'possessive' => [],
             'possessivepronoun' => [],
             'reflexive' => []
-        ]; 
+        ];
+        $seen = ['subjective' => [], 'objective' => [], 'possessive' => [], 'possessivepronoun' => [], 'reflexive' => []];
         if ($pronouns['Status']['Status'] == 0) {
 			foreach ($pronouns['Pronouns'] as $k => $pronoun) {
-                $parts['subjective'][] = ['value' => $pronoun['PronounId'], 'display' => $pronoun['Subject']];
-                $parts['objective'][] = ['value' => $pronoun['PronounId'], 'display' => $pronoun['Object']];
-                $parts['possessive'][] = ['value' => $pronoun['PronounId'], 'display' => $pronoun['Possessive']];
-                $parts['possessivepronoun'][] = ['value' => $pronoun['PronounId'], 'display' => $pronoun['PossessivePronoun']];
-                $parts['reflexive'][] = ['value' => $pronoun['PronounId'], 'display' => $pronoun['Reflexive']];
+                $cols = [
+                    'subjective'       => $pronoun['Subject'],
+                    'objective'        => $pronoun['Object'],
+                    'possessive'       => $pronoun['Possessive'],
+                    'possessivepronoun'=> $pronoun['PossessivePronoun'],
+                    'reflexive'        => $pronoun['Reflexive'],
+                ];
+                foreach ($cols as $col => $display) {
+                    if (!in_array($display, $seen[$col])) {
+                        $parts[$col][] = ['value' => $pronoun['PronounId'], 'display' => $display];
+                        $seen[$col][] = $display;
+                    }
+                }
             }
             return $parts;
-        } else { 
+        } else {
             return array();
         }
     }

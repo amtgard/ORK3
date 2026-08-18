@@ -9,7 +9,16 @@ class Controller_Login extends Controller {
 	}
 
 	public function index($action = null) {
-
+		$this->template = '../revised-frontend/Login_index.tpl';
+		if (!empty($_GET['return'])) {
+			$_ret = trim($_GET['return']);
+			if ($_ret !== '' && strncasecmp($_ret, 'Login', 5) !== 0) {
+				$this->session->location = $_ret;
+			}
+		}
+		if (($_GET['msg'] ?? '') === 'session_replaced') {
+			$this->data['session_message'] = 'You were logged in from another device or browser. Please log in again.';
+		}
 	}
 
 	public function logout($userid = null){
@@ -19,14 +28,24 @@ class Controller_Login extends Controller {
 	}
 
 	public function login($location = null) {
-		$this->template = 'Login_index.tpl';
+		$this->template = '../revised-frontend/Login_index.tpl';
+		if (($_GET['msg'] ?? '') === 'session_replaced') {
+			$this->data['session_message'] = 'You were logged in from another device or browser. Please log in again.';
+		}
+		if (!empty($_GET['return'])) {
+			$_ret = trim($_GET['return']);
+			if ($_ret !== '' && strncasecmp($_ret, 'Login', 5) !== 0) {
+				$this->session->location = $_ret;
+			}
+		}
 		if (strlen(trim($this->session->location)) == 0) {
 			$this->session->location = $location;
 		}
 
 		if ((strlen($this->request->username) > 0 && strlen($this->request->password) > 0) && ($r = $this->Login->login($this->request->username, $this->request->password)) === true) {
 			if ($this->session->location == null) {
-				header('Location: ' . UIR);
+				$uid = (int)$this->session->user_id;
+				header('Location: ' . UIR . ($uid > 0 ? 'Player/profile/' . $uid : ''));
 			} else {
 				//$this->session->location = null;
 				header('Location: ' . UIR . $this->session->location);
@@ -38,9 +57,10 @@ class Controller_Login extends Controller {
 	}
 
 	public function forgotpassword($recover = null) {
+		$this->template = '../revised-frontend/Login_forgotpassword.tpl';
 		if ($recover == 'recover') {
 			if (($r = $this->Login->recover_password($_POST['username'], $_POST['email'])) === true) {
-				$this->data["error"] = "Your new password has been sent to you.";
+				$this->data["error"] = "A new password has been emailed to you. The new password will expire in 24 hours. Please log in and change your password immediately.";
 				$this->data["detail"] = "";
 			} else {
 				$this->data["error"] = $r['Error'];
@@ -77,7 +97,7 @@ class Controller_Login extends Controller {
 	{
 		if (!isset($_GET['code'])) {
 			$this->data['error'] = 'No authorization returned from Amtgard IDP';
-			$this->template = 'Login_index.tpl';
+			$this->template = '../revised-frontend/Login_index.tpl';
 			return;
 		}
 
@@ -88,7 +108,7 @@ class Controller_Login extends Controller {
 			error_log("Amtgard IDP OAuth callback: Failed to get user info: " . $user_data['response']);
 			$this->data['error'] = 'Failed to get user info';
 			$this->data['detail'] = $user_data['response'];
-			$this->template = 'Login_index.tpl';
+			$this->template = '../revised-frontend/Login_index.tpl';
 			return;
 		}
 
@@ -103,11 +123,17 @@ class Controller_Login extends Controller {
 			$this->session->user_name = $result['UserName'];
 			$this->session->token = $result['Token'];
 			$this->session->timeout = $result['Timeout'];
-			header('Location: ' . UIR);
+			if (!empty($this->session->location)) {
+				$_dest = $this->session->location;
+				header('Location: ' . UIR . $_dest);
+			} else {
+				$uid = (int)$this->session->user_id;
+				header('Location: ' . UIR . ($uid > 0 ? 'Player/profile/' . $uid : ''));
+			}
 		} else {
 			$this->data['error'] = $result['Status']['Error'];
 			$this->data['detail'] = $result['Status']['Detail'];
-			$this->template = 'Login_index.tpl';
+			$this->template = '../revised-frontend/Login_index.tpl';
 		}
 	}
 

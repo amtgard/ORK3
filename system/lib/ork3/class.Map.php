@@ -40,7 +40,10 @@ class Map extends Ork3 {
                     'Name' => $this->park->name,
                     'KingdomId' => $this->park->kingdom_id,
                     'KingdomName' => $kingdoms['Kingdoms'][$this->park->kingdom_id]['KingdomName'],
-                    'KingdomColor' => $kingdoms['Kingdoms'][$this->park->kingdom_id]['KingdomColor']
+                    'KingdomColor' => $kingdoms['Kingdoms'][$this->park->kingdom_id]['KingdomColor'],
+                    'ParentKingdomId' => (int)($kingdoms['Kingdoms'][$this->park->kingdom_id]['ParentKingdomId'] ?? 0),
+                    'City' => $this->park->city,
+                    'Province' => $this->park->province,
                 );
         } while ($this->park->next());
 				return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, array('Parks'=>$locations));

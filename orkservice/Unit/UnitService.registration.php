@@ -1,9 +1,5 @@
 <?php
-$server->register(
-		'AddVendor',
-		array('AddVendorRequest'=>'tns:AddVendorRequest'),
-		array('return' => 'tns:AddVendorResponse'),
-		$namespace
-	);
+
+// Unit service SOAP registrations (currently served via direct API calls; SOAP layer is legacy/stub)
 
 ?>

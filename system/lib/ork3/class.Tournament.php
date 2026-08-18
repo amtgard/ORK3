@@ -155,6 +155,39 @@ class Tournament extends Ork3 {
 			";
 	}
 
+	public function DeleteTournament($request) {
+		$mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
+		if (!valid_id($mundane_id)) return NoAuthorization();
+
+		$tournament_id = (int)$request['TournamentId'];
+		$this->Tournament->clear();
+		$this->Tournament->tournament_id = $tournament_id;
+		if (!$this->Tournament->find()) return InvalidParameter('Tournament not found.');
+
+		$authorized = false;
+		if (valid_id($this->Tournament->kingdom_id)) {
+			$authorized = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $this->Tournament->kingdom_id, AUTH_EDIT);
+		} else if (valid_id($this->Tournament->park_id)) {
+			$authorized = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->Tournament->park_id, AUTH_EDIT);
+		} else if (valid_id($this->Tournament->event_id)) {
+			$authorized = Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $this->Tournament->event_id, AUTH_EDIT);
+		}
+		if (!$authorized) return NoAuthorization();
+
+		$this->Tournament->delete();
+
+		// Bust TournamentReport cache for the affected kingdom/park
+		$bust_request = ['KingdomId' => $this->Tournament->kingdom_id, 'ParkId' => null, 'EventId' => null, 'EventCalendarDetailId' => null, 'Limit' => null];
+		Ork3::$Lib->ghettocache->bust('Report.TournamentReport', Ork3::$Lib->ghettocache->key($bust_request));
+		if (valid_id($this->Tournament->park_id)) {
+			$bust_request['ParkId'] = $this->Tournament->park_id;
+			$bust_request['KingdomId'] = null;
+			Ork3::$Lib->ghettocache->bust('Report.TournamentReport', Ork3::$Lib->ghettocache->key($bust_request));
+		}
+
+		return Success($tournament_id);
+	}
+
 	public function GetMatches($request) {
 	
 	}

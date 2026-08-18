@@ -6,7 +6,6 @@
 <?php if ($LoggedIn) : ?>
 		<li><a href='<?=UIR ?>Award/principality/<?=$principality_id ?>'>Enter Awards</a></li>
 <?php endif ; ?>
-		<li><a href='<?=UIR ?>Treasury/principality/<?=$PrincipalityInfo['PrincipalityId'] ?>'>Treasury</a></li>
 	</ul>
 </div>
 
@@ -24,7 +23,7 @@
 <?php if (!is_array($park_summary['PrincipalityParkAveragesSummary'])) $park_summary['PrincipalityParkAveragesSummary'] = array(); ?>
 <?php foreach ($park_summary['PrincipalityParkAveragesSummary'] as $k => $park): ?>
 <?php 	if ($park['IsPrincipality'] == 0) : ?>
-			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/index/<?=$park['ParkId'];?>&park_name=<?=$park['ParkName'];?>"'>
+			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/profile/<?=$park['ParkId'];?>&park_name=<?=$park['ParkName'];?>"'>
 				<td><?=$park['ParkName'] ?></td>
 				<td class='data-column'><?=sprintf("%0.02f",($park['AttendanceCount']/26)); ?></td>
 				<td class='data-column'><?=$park['AttendanceCount']; ?></td>
@@ -76,7 +75,6 @@
 				<li><a href='<?=UIR ?>Reports/playerheraldry/<?=$principality_id ?>'>Principality Heraldry, Players</a></li>
 			</ul>
 		</li>
-		<li><a href=''>Treasury Report</a></li>
 		<li><a href='<?=UIR ?>Unit/unitlist&PrincipalityId=<?=$principality_id ?>'>Companies and Households</a></li>
 	</ul>
 </div>
@@ -93,7 +91,7 @@
 		</thead>
 		<tbody>
 <?php foreach ($event_summary as $k => $event): ?>
-			<tr onclick='javascript:window.location.href="<?=UIR;?>Event/index/<?=$event['EventId'];?>"'>
+			<tr>
 				<td><?=$event['ParkName'] ?></td>
 				<td><?=$event['Name'] ?></td>
 				<td><?=0 == $event['NextDate']?"":date("M. j, Y", strtotime($event['NextDate'])) ?></td>

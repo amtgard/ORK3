@@ -18,14 +18,13 @@
 		<li><a href='<?=UIR ?>Admin/createplayer/park/<?=$ParkInfo['ParkId'] ?>'>Create Player</a></li>
 		<li><a href='<?=UIR ?>Admin/claimplayer/park/<?=$ParkInfo['ParkId'] ?>'>Move Player</a></li>
 		<li><a href='<?=UIR ?>Admin/mergeplayer/park/<?=$ParkInfo['ParkId'] ?>'>Merge Players</a></li>
-		<?php if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)) : ?>
+		<?php if (!empty($CanResetWaivers)) : ?>
 			<li><a href='<?=UIR ?>Admin/resetwaivers/park/<?=$ParkInfo['ParkId'] ?>' class='confirm-reset-waivers'>Reset Waivers</a></li>
 		<?php endif; ?>
 		<li>Events
 			<ul>
 				<li><a href='<?=UIR ?>Admin/createevent'>Schedule an Event</a></li>
-				<li><a href='<?=UIR ?>Admin/manageevent'>Event Templates</a></li>
-			</ul>
+				</ul>
 		</li>
 		<li><a href='<?=UIR ?>Tournament/create&ParkId=<?=$ParkInfo['ParkId'] ?>' class='unimplemented'>Create Tournament</a></li>
 	</ul>

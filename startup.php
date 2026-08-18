@@ -1,6 +1,8 @@
 <?php
 
-if (getenv('ENVIRONMENT') == 'DEV') {
+if (getenv('ENVIRONMENT') == 'TEST') {
+	include_once(dirname(__FILE__) . '/config.test.php');
+} elseif (getenv('ENVIRONMENT') == 'DEV') {
 	include_once(dirname(__FILE__) . '/config.dev.php');
 } else {
 	include_once(dirname(__FILE__) . '/config.php');
@@ -12,6 +14,12 @@ function mysql_real_escape_string($str)
 }
 
 // System Setup
+
+global $DB, $LOG;
+
+if (defined('ORK3_STARTUP_COMPLETE')) {
+	return;
+}
 
 if (isset($LOG))
 	return;
@@ -31,7 +39,7 @@ if (!DO_SETUP) {
 	$classes = scandir(DIR_SYSTEMLIB);
 	foreach ($classes as $k => $file) {
 		$path_parts = pathinfo($file);
-		if ('php' == $path_parts['extension']) {
+		if ('php' === ($path_parts['extension'] ?? '')) {
 			require_once(DIR_SYSTEMLIB . $path_parts['basename']);
 		}
 	}
@@ -43,13 +51,13 @@ if (!DO_SETUP) {
 	$LIB = new Ork3LibContainer();
 	foreach ($classes as $k => $file) {
 		$path_parts = pathinfo($file);
-		if ('php' == $path_parts['extension']) {
+		if ('php' === ($path_parts['extension'] ?? '')) {
 			require_once(DIR_ORK3 . $path_parts['basename']);
 		}
 	}
 	foreach ($classes as $k => $file) {
 		$path_parts = pathinfo($file);
-		if ('php' == $path_parts['extension']) {
+		if ('php' === ($path_parts['extension'] ?? '')) {
 			$class = explode('.', $path_parts['basename']);
 			$class_name = $class[1];
 			$chad_name = strtolower($class_name);
@@ -60,4 +68,8 @@ if (!DO_SETUP) {
 	}
 	Ork3::$Lib = $LIB;
 	Ork3::$Lib->Log = $LOG;
+}
+
+if (!defined('ORK3_STARTUP_COMPLETE')) {
+	define('ORK3_STARTUP_COMPLETE', true);
 }

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "pageId": "attendance-event",
+  "imageWidth": 1280,
+  "imageHeight": 1002,
+  "calibratedAt": "2026-08-01T20:17:42Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [],
+  "manualZones": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T18:52:14Z",
+  "refuzzedFromCommit": "05389516"
+}

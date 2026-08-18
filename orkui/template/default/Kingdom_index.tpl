@@ -1,3 +1,7 @@
+<div id='kingdomnew-preview-banner' style='display:block;width:calc(100% - 44px);background:#eaf4fb;border:1px solid #b0d4ea;border-radius:4px;padding:10px 16px;margin:10px;font-size:0.95em;color:#1a5276;'>
+	Want a sneak preview of our new, enhanced kingdom profile? <a href='<?=UIR ?>Kingdom/profile/<?=$kingdom_id ?>'>Check it out here</a>. Note: Clicking any link will return you to the regular design.
+</div>
+
 <div class='info-container'>
 	<h3><?=$kingdom_name; ?></h3>
 	<?=$kingdom_info['Info']['KingdomInfo']['HasHeraldry']==1?"<img src='{$kingdom_info["HeraldryUrl"]["Url"]}' class='heraldry-img' />":"" ?>
@@ -6,15 +10,14 @@
 <?php if ($LoggedIn) : ?>
 		<li><a href='<?=UIR ?>Award/kingdom/<?=$kingdom_id ?>'>Enter Awards</a></li>
 <?php endif ; ?>
-		<li><a href='<?=UIR ?>Kingdom/map/<?=$kingdom_id ?>'>Kingdom Atlas</a></li>
-		<li><a href='<?=UIR ?>Treasury/kingdom/<?=$KingdomInfo['KingdomId'] ?>'>Treasury</a></li>
+		<li><a href='<?=UIR ?>Kingdom/map/<?=$kingdom_id ?>'>Kingdom Map</a></li>
 	</ul>
 
 	<?php if (!empty($kingdom_officers['Officers'])): ?>
 	<h4>Monarchy</h4>
 		<ul>
 			<?php foreach ($kingdom_officers['Officers'] as $key => $officer): ?>
-				<li><?= $officer['OfficerRole']; ?>: <?php if (!empty($officer['MundaneId']) && $officer['MundaneId'] > 0): ?><a href="<?=UIR.'Player/index/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a><?php else: ?>(Vacant)<?php endif; ?></li>
+				<li><?= $officer['OfficerRole']; ?>: <?php if (!empty($officer['MundaneId']) && $officer['MundaneId'] > 0): ?><a href="<?=UIR.'Player/profile/'.$officer['MundaneId'] ?>"><?= $officer['Persona']; ?></a><?php else: ?>(Vacant)<?php endif; ?></li>
 			<?php endforeach; ?>
 		</ul>
 	<?php endif; ?>
@@ -37,7 +40,7 @@
 <?php $att = 0 ?>
 <?php foreach ($park_summary['KingdomParkAveragesSummary'] as $k => $park): ?>
     <?php $att += $park['AttendanceCount']; ?>
-			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/index/<?=$park['ParkId'];?>"' data-park-id='<?=$park['ParkId']?>'>
+			<tr onclick='javascript:window.location.href="<?=UIR;?>Park/profile/<?=$park['ParkId'];?>"' data-park-id='<?=$park['ParkId']?>'>
 				<td>
 					<div class='tiny-heraldry'>
 						<?php if ($park['HasHeraldry']==1): ?>
@@ -93,7 +96,7 @@ jQuery(document).ready(function($) {
 		<tbody>
 <?php if (!is_array($principalities['Principalities'])) $principalities['Principalities'] = array(); ?>
 <?php foreach ($principalities['Principalities'] as $k => $prinz): ?>
-			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/index/<?=$prinz['KingdomId'];?>&kingdom_name=<?=$prinz['Name'];?>"'>
+			<tr onclick='javascript:window.location.href="<?=UIR;?>Kingdom/profile/<?=$prinz['KingdomId'];?>&kingdom_name=<?=$prinz['Name'];?>"'>
 				<td>
 					<div class='tiny-heraldry'>
 						<img src="<?=HTTP_KINGDOM_HERALDRY . Common::resolve_image_ext(DIR_KINGDOM_HERALDRY, sprintf("%04d", $prinz['KingdomId'])) ?>" onerror="this.src='<?=HTTP_KINGDOM_HERALDRY ?>0000.jpg';">
@@ -151,6 +154,7 @@ jQuery(document).ready(function($) {
 				<li><a href='<?=UIR ?>Reports/attendance/Kingdom/<?=$kingdom_id ?>/All'>All</a></li>
 				<li><a href='<?=UIR ?>Reports/park_attendance_explorer'>Park Attendance Explorer</a></li>
 				<li><a href='<?=UIR ?>Reports/new_player_attendance'>New Player Attendance</a></li>
+				<li><a href='<?=UIR ?>Reports/park_distance_matrix&KingdomId=<?=$kingdom_id ?>'>Park Distance Matrix</a></li>
 			</ul>
 		</li>
 		<li>
@@ -160,7 +164,6 @@ jQuery(document).ready(function($) {
 				<li><a href='<?=UIR ?>Reports/playerheraldry/<?=$kingdom_id ?>'><?=$IsPrinz?'Principality':'Kingdom' ?> Heraldry, Players</a></li>
 			</ul>
 		</li>
-		<li><a href='' class='unimplemented'>Treasury Report</a></li>
 		<li><a href='<?=UIR ?>Unit/unitlist&KingdomId=<?=$kingdom_id ?>'>Companies and Households</a></li>
 	</ul>
 </div>
@@ -177,7 +180,7 @@ jQuery(document).ready(function($) {
 		</thead>
 		<tbody>
 <?php foreach ($event_summary as $k => $event): ?>
-			<tr onclick='javascript:window.location.href="<?=UIR;?>Event/index/<?=$event['EventId'];?>"'>
+			<tr>
 				<td><?=$event['ParkName'] ?></td>
 				<td>
 					<div class='tiny-heraldry'>
@@ -222,7 +225,7 @@ jQuery(document).ready(function($) {
 	<h3>Find</h3>
 	<ul>
 		<li><a href='<?=UIR ?>Search/kingdom/<?=$kingdom_id ?>'>Players</a></li>
-		<li><a href='<?=UIR ?>Search/unit&KingdomId=<?=$kingdom_id ?>'>Companies &amp; Households</a></li>
+		<li><a href='<?=UIR ?>Unit/unitlist&KingdomId=<?=$kingdom_id ?>'>Companies &amp; Households</a></li>
 		<li><a href='<?=UIR ?>Search/event&KingdomId=<?=$kingdom_id ?>'>Events</a></li>
 	</ul>
 </div>

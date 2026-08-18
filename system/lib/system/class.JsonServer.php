@@ -199,7 +199,7 @@ class JsonServer {
         return json_encode($data, JSON_NUMERIC_CHECK | JSON_UNESCAPED_UNICODE | JsonServer::$PRETTY | JSON_PARTIAL_OUTPUT_ON_ERROR);
     }
     
-    public static function Result($result, $status = true, $code = Errors::SUCCESS, $message ) {
+    public static function Result($result, $status = true, $code = Errors::SUCCESS, $message = null) {
         $r = array('Result' => $result, 'Status' => $status, 'Code' => $status?Errors::SUCCESS:$code );
         if (!$status && !is_null($message)) $r['ErrorMessage'] = $message;
         return $r;

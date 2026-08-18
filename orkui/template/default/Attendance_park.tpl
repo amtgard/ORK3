@@ -1,250 +1,1132 @@
-<?php global $Session ?>
+<?php
+global $Session;
+
+/* ── Pre-compute stats & chart data ───────────────── */
+$att_rows      = is_array($AttendanceReport['Attendance']) ? $AttendanceReport['Attendance'] : [];
+$total         = count($att_rows);
+$total_credits = 0;
+$class_counts  = [];
+
+$has_events = false;
+foreach ($att_rows as $row) {
+	$total_credits += (int)($row['Credits'] ?? 1);
+	$cname = strlen($row['Flavor'] ?? '') > 0 ? $row['Flavor'] : ($row['ClassName'] ?? 'Unknown');
+	$class_counts[$cname] = ($class_counts[$cname] ?? 0) + 1;
+	if (!empty($row['EventId'])) $has_events = true;
+}
+arsort($class_counts);
+$class_chart_h = 280;
+
+/* MundaneIds already on the attendance list for this date */
+$already_added_ids = [];
+foreach ($att_rows as $row) {
+	$mid = (int)($row['MundaneId'] ?? 0);
+	if ($mid > 0) $already_added_ids[] = $mid;
+}
+$already_added_ids = array_values(array_unique($already_added_ids));
+
+/* Scope — from first row or session */
+$pname = '';
+$pid   = 0;
+$kname = '';
+$kid   = 0;
+if (!empty($att_rows)) {
+	$first = reset($att_rows);
+	$pname = $first['ParkName']    ?? '';
+	$pid   = (int)($first['ParkId']    ?? 0);
+	$kname = $first['KingdomName'] ?? '';
+	$kid   = (int)($first['KingdomId'] ?? 0);
+} elseif (!empty($Session->park_name)) {
+	$pname = $Session->park_name;
+	$pid   = (int)($Session->park_id ?? 0);
+	$kname = $Session->kingdom_name;
+	$kid   = (int)($Session->kingdom_id ?? 0);
+}
+
+$show_chart = $total > 0;
+?>
+
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <style>
-.ui-autocomplete-separator { padding: 2px 12px; cursor: default; pointer-events: none; color: #999; font-size: 11px; }
+/* ── Attendance-specific styles ───────────────────── */
+.att-form-card {
+	background: #fff;
+	border: 1px solid #e5e7eb;
+	border-radius: 10px;
+	overflow: hidden;
+	margin-bottom: 16px;
+}
+.att-form-card-header {
+	background: #f3f4f6;
+	padding: 10px 16px;
+	font-size: 0.82rem;
+	font-weight: 600;
+	color: #374151;
+	border-bottom: 1px solid #e5e7eb;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.att-form-card-body { padding: 14px 16px; }
+.att-form-group { margin-bottom: 10px; }
+.att-form-label {
+	display: block;
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: #6b7280;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	margin-bottom: 3px;
+}
+.att-form-input, .att-form-select {
+	width: 100%;
+	padding: 7px 10px;
+	border: 1px solid #d1d5db;
+	border-radius: 6px;
+	font-size: 0.87rem;
+	color: #111827;
+	background: #fff;
+	box-sizing: border-box;
+}
+.att-form-input:focus, .att-form-select:focus {
+	outline: none;
+	border-color: #6366f1;
+	box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+}
+.att-form-btn {
+	width: 100%;
+	padding: 8px;
+	background: #4338ca;
+	color: #fff;
+	border: none;
+	border-radius: 6px;
+	font-size: 0.87rem;
+	font-weight: 600;
+	cursor: pointer;
+	margin-top: 6px;
+}
+.att-form-btn:hover:not(:disabled) { background: #3730a3; }
+.att-form-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.att-chart-card {
+	background: #fff;
+	border: 1px solid #e5e7eb;
+	border-radius: 10px;
+	overflow: hidden;
+	margin-bottom: 16px;
+}
+.att-chart-title {
+	padding: 10px 16px;
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: #374151;
+	background: #f9fafb;
+	border-bottom: 1px solid #e5e7eb;
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	cursor: pointer;
+	user-select: none;
+}
+.att-chart-title:hover { background: #f1f5f9; }
+.att-chart-chevron { margin-left: auto; transition: transform 0.2s ease; color: #9ca3af; }
+.att-chart-card.att-collapsed .att-chart-chevron { transform: rotate(-90deg); }
+.att-chart-card.att-collapsed .att-chart-body { display: none; }
+.att-chart-body { padding: 12px 8px; }
+.att-del-link {
+	color: #ef4444;
+	text-decoration: none;
+	font-size: 1rem;
+	font-weight: 700;
+}
+.att-del-link:hover { color: #b91c1c; }
+/* ── Edit Attendance Modal ───────────────────────── */
+.att-edit-overlay {
+	display: none; position: fixed; inset: 0;
+	background: rgba(0,0,0,0.45); z-index: 9990;
+	align-items: center; justify-content: center;
+}
+.att-edit-overlay.att-edit-open { display: flex; }
+.att-edit-modal {
+	background: #fff; border-radius: 10px;
+	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+	width: 360px; max-width: 96vw;
+}
+.att-edit-modal-header {
+	background: #1e1b4b; color: #fff;
+	padding: 14px 18px; border-radius: 10px 10px 0 0;
+	display: flex; align-items: center; justify-content: space-between;
+}
+.att-edit-modal-title { font-size: 0.9rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.att-edit-modal-close {
+	background: none; border: none; color: rgba(255,255,255,0.7);
+	font-size: 1.2rem; cursor: pointer; padding: 0 2px; line-height: 1;
+}
+.att-edit-modal-close:hover { color: #fff; }
+.att-edit-modal-body { padding: 18px 18px 10px; }
+.att-edit-field { margin-bottom: 14px; }
+.att-edit-label {
+	display: block; font-size: 0.72rem; font-weight: 600;
+	color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;
+}
+.att-edit-input, .att-edit-select {
+	width: 100%; padding: 7px 10px; border: 1px solid #d1d5db;
+	border-radius: 6px; font-size: 0.87rem; color: #111827;
+	background: #fff; box-sizing: border-box;
+}
+.att-edit-input:focus, .att-edit-select:focus {
+	outline: none; border-color: #6366f1;
+	box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+}
+.att-edit-row { display: flex; gap: 12px; }
+.att-edit-row .att-edit-field { flex: 1; }
+.att-edit-row .att-edit-field.att-edit-field-sm { flex: 0 0 90px; }
+.att-edit-feedback {
+	background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b;
+	border-radius: 6px; padding: 8px 12px; font-size: 0.82rem; margin-bottom: 12px; display: none;
+}
+.att-edit-modal-footer {
+	padding: 12px 18px; border-top: 1px solid #f3f4f6;
+	display: flex; justify-content: flex-end; gap: 8px;
+}
+.att-edit-btn-cancel {
+	padding: 7px 16px; background: #f3f4f6; color: #374151;
+	border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.85rem; cursor: pointer;
+}
+.att-edit-btn-save {
+	padding: 7px 16px; background: #4338ca; color: #fff;
+	border: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+}
+.att-edit-btn-save:hover:not(:disabled) { background: #3730a3; }
+.att-edit-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Active-event banner: surfaced when an event is happening at this scope on
+   the rendered date — nudges the user toward Event-attendance instead. */
+.att-event-nudge {
+	display: flex; gap: 10px; align-items: flex-start;
+	padding: 10px 12px; margin-bottom: 12px;
+	background: var(--ork-alert-info-bg, #ebf8ff);
+	border: 1px solid var(--ork-alert-info-border, #90cdf4);
+	border-left: 3px solid var(--ork-alert-info-border, #90cdf4);
+	border-radius: 6px;
+	color: var(--ork-alert-info-text, #2a4365);
+	font-size: 0.82rem; line-height: 1.45;
+}
+.att-event-nudge-icon { font-size: 16px; color: var(--ork-alert-info-text, #2b6cb0); flex-shrink: 0; margin-top: 1px; }
+.att-event-nudge-body { flex: 1; min-width: 0; }
+.att-event-nudge-text { margin: 0 0 8px 0; }
+.att-event-nudge-btn {
+	display: inline-flex; align-items: center; gap: 6px;
+	padding: 6px 12px; border-radius: 6px;
+	background: var(--ork-link, #2b6cb0); color: #fff;
+	font-size: 0.78rem; font-weight: 600; text-decoration: none;
+	transition: background 0.15s;
+}
+.att-event-nudge-btn:hover { background: var(--ork-link-bright, #3182ce); color: #fff; text-decoration: none; }
+.att-event-nudge-btn i { font-size: 0.7rem; }
+
+.ui-autocomplete-separator {
+	padding: 2px 12px;
+	cursor: default;
+	pointer-events: none;
+	color: #999;
+	font-size: 11px;
+}
+/* ── Quick Add modal ──────────────────────────────── */
+.att-qa-open-btn {
+	width: 100%;
+	padding: 7px;
+	background: #fff;
+	color: #4338ca;
+	border: 1.5px solid #c7d2fe;
+	border-radius: 6px;
+	font-size: 0.85rem;
+	font-weight: 600;
+	cursor: pointer;
+	margin-top: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+}
+.att-qa-open-btn:hover { background: #eef2ff; border-color: #a5b4fc; }
+.att-qa-overlay {
+	display: none;
+	position: fixed;
+	inset: 0;
+	background: rgba(0,0,0,0.45);
+	z-index: 9990;
+	align-items: center;
+	justify-content: center;
+}
+.att-qa-overlay.att-qa-open { display: flex; }
+.att-qa-modal {
+	background: #fff;
+	border-radius: 12px;
+	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+	width: 680px;
+	max-width: 96vw;
+	max-height: 82vh;
+	max-height: 82dvh;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+.att-qa-modal-header {
+	background: #1e1b4b;
+	color: #fff;
+	padding: 14px 20px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-shrink: 0;
+}
+.att-qa-modal-title {
+	font-size: 0.95rem;
+	font-weight: 700;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.att-qa-header-right {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+}
+.att-qa-date-label {
+	font-size: 0.78rem;
+	color: rgba(255,255,255,0.7);
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.att-qa-date-input {
+	padding: 4px 8px;
+	border: 1px solid rgba(255,255,255,0.3);
+	border-radius: 5px;
+	background: rgba(255,255,255,0.12);
+	color: #fff;
+	font-size: 0.82rem;
+	width: 120px;
+}
+.att-qa-close-btn {
+	background: none;
+	border: none;
+	color: rgba(255,255,255,0.7);
+	font-size: 1.3rem;
+	cursor: pointer;
+	line-height: 1;
+	padding: 0 2px;
+}
+.att-qa-close-btn:hover { color: #fff; }
+.att-qa-modal-body {
+	padding: 16px 20px;
+	overflow-y: auto;
+	flex: 1;
+}
+.att-qa-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.87rem;
+}
+.att-qa-table th {
+	text-align: left;
+	font-size: 0.72rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: #6b7280;
+	border-bottom: 2px solid #e5e7eb;
+	padding: 0 8px 8px;
+}
+.att-qa-table td {
+	padding: 6px 8px;
+	border-bottom: 1px solid #f3f4f6;
+	vertical-align: middle;
+}
+.att-qa-table tr.att-qa-done td { opacity: 0.4; }
+.att-qa-table tr:last-child td { border-bottom: none; }
+.att-qa-select {
+	padding: 5px 6px;
+	border: 1px solid #d1d5db;
+	border-radius: 5px;
+	font-size: 0.84rem;
+	min-width: 140px;
+}
+.att-qa-credits-input {
+	padding: 5px 6px;
+	border: 1px solid #d1d5db;
+	border-radius: 5px;
+	font-size: 0.84rem;
+	width: 56px;
+	text-align: center;
+}
+.att-qa-add-btn {
+	padding: 5px 14px;
+	background: #4338ca;
+	color: #fff;
+	border: none;
+	border-radius: 5px;
+	font-size: 0.82rem;
+	font-weight: 600;
+	cursor: pointer;
+	white-space: nowrap;
+}
+.att-qa-add-btn:hover:not(:disabled) { background: #3730a3; }
+.att-qa-add-btn:disabled { opacity: 0.6; cursor: default; }
+.att-qa-done-mark { color: #16a34a; font-weight: 700; font-size: 1rem; }
+.att-qa-empty {
+	text-align: center;
+	color: #9ca3af;
+	padding: 30px 0;
+	font-size: 0.87rem;
+}
+.att-qa-feedback {
+	margin-top: 10px;
+	padding: 8px 12px;
+	border-radius: 6px;
+	font-size: 0.84rem;
+}
+.att-qa-feedback.att-qa-fb-err  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.att-qa-feedback.att-qa-fb-ok   { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+/* =====================================================
+   DARK MODE — Attendance form + edit modal (.att-*)
+   ===================================================== */
+html[data-theme="dark"] .att-form-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .att-form-card-header { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .att-form-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .att-form-input, html[data-theme="dark"] .att-form-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .att-chart-card { background: var(--ork-card-bg); border-color: var(--ork-border); }
+html[data-theme="dark"] .att-chart-title { background: var(--ork-bg-secondary); color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .att-chart-title:hover { background: var(--ork-bg-tertiary); }
+html[data-theme="dark"] .att-edit-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .att-edit-label { color: var(--ork-text-muted); }
+html[data-theme="dark"] .att-edit-input, html[data-theme="dark"] .att-edit-select { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .att-edit-feedback { background: #742a2a; border-color: #9b2c2c; color: #feb2b2; }
+html[data-theme="dark"] .att-edit-modal-footer { border-top-color: var(--ork-border); }
+html[data-theme="dark"] .att-edit-btn-cancel { background: var(--ork-bg-secondary); color: var(--ork-text); border-color: var(--ork-border); }
+html[data-theme="dark"] .att-qa-open-btn { background: var(--ork-bg-secondary); color: var(--ork-link); border-color: var(--ork-border); }
+html[data-theme="dark"] .att-qa-feedback.att-qa-fb-err { background: #742a2a; color: #feb2b2; border-color: #9b2c2c; }
+html[data-theme="dark"] .att-qa-feedback.att-qa-fb-ok  { background: #1c4532; color: #9ae6b4; border-color: #276749; }
+html[data-theme="dark"] .att-qa-modal { background: var(--ork-card-bg); }
+html[data-theme="dark"] .att-qa-table th { color: var(--ork-text-secondary); border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .att-qa-table td { border-bottom-color: var(--ork-border); }
+html[data-theme="dark"] .att-qa-select,
+html[data-theme="dark"] .att-qa-credits-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
+html[data-theme="dark"] .att-qa-empty { color: var(--ork-text-muted); }
 </style>
 
-<script type='text/javascript'>
+<div class="rp-root">
 
-	$(document).ready(function() {
-<?php if (valid_id($Attendance_index['ClassId'])) : ?>
-		$('#Class').val($Attendance_index['ClassId']);
-<?php endif ?>
-		$( '#AttendanceDate' ).datepicker({dateFormat: 'yy-mm-dd'});
-		$( "#KingdomName" ).autocomplete({
-			source: function( request, response ) {
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Kingdom',
-						name: request.term,
-                        limit: 6
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Name, value: val.KingdomId });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				return showLabel('#KingdomName', ui);
-			}, 
-			delay: 250,
-			select: function (e, ui) {
-				showLabel('#KingdomName', ui);
-				$('#KingdomId').val(ui.item.value);
-				return false;
-			},
-			change: function (e, ui) {
-				if (ui.item == null) {
-					showLabel('#KingdomName',null);
-					$('#KingdomId').val(null);
-				}
-				return false;
-			},
-			minLength: 0
-		}).focus(function() {
-			if (this.value == "")
-				$(this).trigger('keydown.autocomplete');
-		});
-		$( "#ParkName" ).autocomplete({
-			source: function( request, response ) {
-				kingdom_id = $('#KingdomId').val();
-				$.getJSON(
-					"<?=HTTP_SERVICE ?>Search/SearchService.php",
-					{
-						Action: 'Search/Park',
-						name: request.term,
-						kingdom_id: kingdom_id,
-                        limit: 6
-					},
-					function( data ) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Name, value: val.ParkId });
-						});
-						response(suggestions);
-					}
-				);
-			},
-			focus: function( event, ui ) {
-				return showLabel('#ParkName', ui);
-			}, 
-			delay: 250,
-			select: function (e, ui) {
-				showLabel('#ParkName', ui);
-				$('#ParkId').val(ui.item.value);
-				return false;
-			},
-			change: function (e, ui) {
-				if (ui.item == null) {
-					showLabel('#ParkName',null);
-					$('#ParkId').val(null);
-				}
-				return false;
-			}
-		}).focus(function() {
-			if (this.value == "")
-				$(this).trigger('keydown.autocomplete');
-		});
-		var playerAC = $( "#PlayerName" ).autocomplete({
-			source: function( request, response ) {
-				var park_id = $('#ParkId').val();
-				var kingdom_id = $('#KingdomId').val();
-				var search = request.term;
-				var svcUrl = "<?=HTTP_SERVICE ?>Search/SearchService.php";
+	<!-- ── Header ──────────────────────────────────────── -->
+	<div class="rp-header">
+		<div class="rp-header-left">
+			<div class="rp-header-icon-title">
+				<i class="fas fa-calendar-day rp-header-icon"></i>
+				<h1 class="rp-header-title">Park Attendance &mdash; <?=htmlspecialchars($AttendanceDate)?></h1>
+			</div>
+			<?php
+				// Only attempt historic weather when the park has coords AND
+				// the date is far enough in the past for Open-Meteo's ERA5
+				// archive to have published (~5-day lag). Coords resolution
+				// falls back to the location-JSON blob when the scalar lat/lng
+				// columns aren't backfilled.
+				$_wxCutoff   = date('Y-m-d', strtotime('-5 days'));
+				$_wxEligible = ($pid > 0
+					&& wx_park_has_coords($pid)
+					&& $AttendanceDate < $_wxCutoff
+					&& $AttendanceDate >= '1940-01-01');
+			?>
+			<div class="rp-header-scope">
+<?php if ($pname) : ?>
+				<a class="rp-scope-chip" href="<?=UIR.'Park/profile/'.$pid?>">
+					<i class="fas fa-tree"></i>
+					<?=htmlspecialchars($pname)?>
+				</a>
+<?php endif; ?>
+<?php if ($kname) : ?>
+				<a class="rp-scope-chip" href="<?=UIR.'Kingdom/profile/'.$kid?>" style="margin-left:4px;">
+					<i class="fas fa-chess-rook"></i>
+					<?=htmlspecialchars($kname)?>
+				</a>
+<?php endif; ?>
+			</div>
+		</div>
+		<div class="rp-header-actions">
+<?php $_adj = isset($AdjacentDates) ? $AdjacentDates : []; ?>
+<?php if (!empty($_adj['prev'])): ?>
+			<a class="rp-btn-ghost" href="<?=UIR?>Attendance/park/<?=$Id?>&AttendanceDate=<?=$_adj['prev']?>" title="Previous park day"><i class="fas fa-chevron-left"></i> Previous</a>
+<?php endif; ?>
+<?php if (!empty($_adj['next'])): ?>
+			<a class="rp-btn-ghost" href="<?=UIR?>Attendance/park/<?=$Id?>&AttendanceDate=<?=$_adj['next']?>">Next <i class="fas fa-chevron-right"></i></a>
+<?php endif; ?>
+			<button class="rp-btn-ghost" id="att-btn-export"><i class="fas fa-download"></i> Export CSV</button>
+			<button class="rp-btn-ghost" id="att-btn-print"><i class="fas fa-print"></i> Print</button>
+		</div>
+	</div>
 
-				if (!park_id || park_id == '0') {
-					$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: search, kingdom_id: kingdom_id, limit: 15 }, function(data) {
-						var suggestions = [];
-						$.each(data, function(i, val) {
-							suggestions.push({label: val.Persona, value: { MundaneId: val.MundaneId, PenaltyBox: val.PenaltyBox }});
-						});
-						response(suggestions);
-					});
-					return;
-				}
+	<!-- ── Stats row ────────────────────────────────────── -->
+	<div class="rp-stats-row">
+		<div class="rp-stat-card">
+			<div class="rp-stat-icon"><i class="fas fa-users"></i></div>
+			<div class="rp-stat-number"><?=$total?></div>
+			<div class="rp-stat-label">Attendees</div>
+		</div>
+		<div class="rp-stat-card">
+			<div class="rp-stat-icon"><i class="fas fa-star"></i></div>
+			<div class="rp-stat-number"><?=$total_credits?></div>
+			<div class="rp-stat-label">Total Credits</div>
+		</div>
+		<div class="rp-stat-card">
+			<div class="rp-stat-icon"><i class="fas fa-shield-alt"></i></div>
+			<div class="rp-stat-number"><?=count($class_counts)?></div>
+			<div class="rp-stat-label">Classes Played</div>
+		</div>
+		<?php if ($_wxEligible): ?>
+		<div class="rp-stat-card" id="att-wx-card"
+		     data-park="<?=(int)$pid?>" data-date="<?=htmlspecialchars($AttendanceDate)?>">
+			<div class="rp-stat-icon" id="att-wx-icon"><i class="fas fa-cloud-sun" style="opacity:.4"></i></div>
+			<div class="rp-stat-number" id="att-wx-temps" style="font-size:1.1rem;padding-top:3px;opacity:.5">—</div>
+			<div class="rp-stat-label" id="att-wx-meta"><em style="opacity:.6">loading historical…</em></div>
+		</div>
+		<?php endif; ?>
+	</div>
 
-				$.when(
-					$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: search, park_id: park_id, kingdom_id: kingdom_id, limit: 8 }),
-					$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: search, kingdom_id: kingdom_id, limit: 15 })
-				).done(function(parkRes, kingdomRes) {
-					var localIds = {};
-					var suggestions = [];
-					$.each(parkRes[0], function(i, val) {
-						localIds[val.MundaneId] = true;
-						suggestions.push({label: val.Persona, value: { MundaneId: val.MundaneId, PenaltyBox: val.PenaltyBox }});
-					});
-					var outsiders = [];
-					$.each(kingdomRes[0], function(i, val) {
-						if (!localIds[val.MundaneId]) {
-							var abbr = (val.KAbbr && val.PAbbr) ? val.KAbbr + ':' + val.PAbbr : val.ParkName;
-							outsiders.push({label: val.Persona + ' (' + abbr + ')', value: { MundaneId: val.MundaneId, PenaltyBox: val.PenaltyBox }});
-						}
-					});
-					if (suggestions.length > 0 && outsiders.length > 0) {
-						suggestions.push({label: '', value: null, separator: true});
-					}
-					response(suggestions.concat(outsiders));
+	<!-- ── Body: form sidebar + main content ────────────── -->
+	<div class="rp-body">
+
+		<!-- Sidebar -->
+<?php if ($CanAddAttendance) : ?>
+		<div class="rp-sidebar">
+			<div class="att-form-card">
+				<div class="att-form-card-header">
+					<i class="fas fa-plus-circle"></i> Add Attendance
+				</div>
+				<div class="att-form-card-body">
+<?php if ($Error) : ?>
+					<div style="color:#dc2626;font-size:0.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-bottom:12px;"><?=$Error?></div>
+<?php endif; ?>
+<?php if (!empty($ActiveEvent)) : ?>
+					<div class="att-event-nudge">
+						<div class="att-event-nudge-icon"><i class="fas fa-info-circle"></i></div>
+						<div class="att-event-nudge-body">
+							<p class="att-event-nudge-text">It looks like <strong><?=htmlspecialchars($ActiveEvent['Name'])?></strong> is currently happening. Would you like to capture attendance on that event instead? Using event attendance makes for better and more accurate reporting.</p>
+							<a class="att-event-nudge-btn" href="<?=UIR?>Event/detail/<?=(int)$ActiveEvent['EventId']?>/<?=(int)$ActiveEvent['EventCalendarDetailId']?>">Go To Event <i class="fas fa-arrow-right"></i></a>
+						</div>
+					</div>
+<?php endif; ?>
+					<form method="post" action="<?=UIR?>Attendance/park/<?=$Id?>/new">
+						<input type="hidden" name="AttendanceDate" id="AttendanceDate" value="<?=htmlspecialchars($AttendanceDate)?>">
+						<div class="att-form-group">
+							<label class="att-form-label" for="KingdomName">Player's Kingdom</label>
+							<input class="att-form-input" type="text" name="KingdomName" id="KingdomName"
+								value="<?=html_encode(trimlen($Attendance_park['KingdomName'])?$Attendance_park['KingdomName']:$DefaultKingdomName)?>">
+						</div>
+						<div class="att-form-group">
+							<label class="att-form-label" for="ParkName">Player's Park</label>
+							<input class="att-form-input" type="text" name="ParkName" id="ParkName"
+								value="<?=html_encode(trimlen($Attendance_park['ParkName'])?$Attendance_park['ParkName']:$DefaultParkName)?>">
+						</div>
+						<div class="att-form-group">
+							<label class="att-form-label" for="PlayerName">Player</label>
+							<input class="att-form-input" type="text" name="PlayerName" id="PlayerName"
+								value="<?=html_encode($Attendance_park['PlayerName'])?>">
+						</div>
+						<div class="att-form-group">
+							<label class="att-form-label" for="ClassId">Class</label>
+							<select class="att-form-select" name="ClassId" id="ClassId">
+								<option value="">— select one —</option>
+<?php foreach ($Classes['Classes'] as $class) : ?>
+								<option value="<?=$class['ClassId']?>"<?=($Attendance_park['ClassId']==$class['ClassId']?' selected':'')?>><?=htmlspecialchars($class['Name'])?></option>
+<?php endforeach; ?>
+							</select>
+						</div>
+						<div class="att-form-group">
+							<label class="att-form-label" for="Credits">Credits</label>
+							<input class="att-form-input" type="text" name="Credits" id="Credits"
+								value="<?=valid_id($Attendance_park['Credits'])?$Attendance_park['Credits']:$DefaultCredits?>">
+						</div>
+					<button class="att-form-btn" type="submit" id="att-submit-btn" disabled>Add Attendance</button>
+					<button class="att-qa-open-btn" type="button" id="att-qa-open">
+						<i class="fas fa-users"></i> Quick Add — Recent Attendees
+					</button>
+					<input type="hidden" id="KingdomId" name="KingdomId"
+							value="<?=valid_id($Attendance_park['KingdomId'])?$Attendance_park['KingdomId']:$DefaultKingdomId?>">
+						<input type="hidden" id="ParkId" name="ParkId"
+							value="<?=valid_id($Attendance_park['ParkId'])?$Attendance_park['ParkId']:$DefaultParkId?>">
+						<input type="hidden" id="MundaneId" name="MundaneId"
+							value="<?=$Attendance_park['MundaneId']?>">
+					</form>
+				</div>
+			</div>
+		</div><!-- /rp-sidebar -->
+<?php endif; ?>
+
+		<!-- Table area -->
+		<div class="rp-table-area">
+<?php if ($show_chart) : ?>
+			<div class="att-chart-card" style="margin-bottom:16px;">
+				<div class="att-chart-title"><i class="fas fa-shield-alt"></i> Attendees by Class <i class="fas fa-chevron-down att-chart-chevron"></i></div>
+				<div class="att-chart-body">
+					<div id="att-class-chart" style="height:<?=$class_chart_h?>px;"></div>
+				</div>
+			</div>
+<?php endif; ?>
+<?php if ($total === 0) : ?>
+			<div style="padding:40px 0;text-align:center;color:#9ca3af;">
+				<i class="fas fa-calendar-times" style="font-size:2rem;margin-bottom:8px;display:block;"></i>
+				No attendance records for this date.
+			</div>
+<?php else : ?>
+			<table id="att-park-table" class="display" style="width:100%">
+				<thead>
+					<tr>
+						<th>Player</th>
+						<th>Home Kingdom</th>
+						<th>Home Park</th>
+						<th>Class</th>
+						<th>Credits</th>
+						<th>Entered By</th>
+<?php if ($has_events) : ?><th>Event</th><?php endif; ?>
+<?php if ($CanAddAttendance) : ?>
+						<th></th>
+<?php endif; ?>
+					</tr>
+				</thead>
+				<tbody>
+<?php foreach ($att_rows as $row) : ?>
+				<tr data-att-id="<?=(int)$row['AttendanceId']?>" data-att-date="<?=htmlspecialchars($AttendanceDate)?>" data-att-class="<?=(int)$row['ClassId']?>" data-att-mundane="<?=(int)$row['MundaneId']?>">
+					<td>
+<?php if ((int)$row['MundaneId'] === 0) : ?>
+						<?=htmlspecialchars($row['AttendancePersona'])?><?=strlen($row['Note']??'')>0?' ('.htmlspecialchars($row['Note']).')':''?>
+<?php else : ?>
+						<a href="<?=UIR.'Player/profile/'.$row['MundaneId']?>"><?=htmlspecialchars($row['Persona'])?></a>
+<?php endif; ?>
+					</td>
+					<td><?php if (!empty($row['FromKingdomId'])) : ?><a href="<?=UIR.'Kingdom/profile/'.$row['FromKingdomId']?>"><?=htmlspecialchars($row['FromKingdomName']??'')?></a><?php else : ?><?=htmlspecialchars($row['FromKingdomName']??'')?><?php endif; ?></td>
+					<td><?php if (!empty($row['FromParkId'])) : ?><a href="<?=UIR.'Park/profile/'.$row['FromParkId']?>"><?=htmlspecialchars($row['FromParkName']??'')?></a><?php else : ?><?=htmlspecialchars($row['FromParkName']??'')?><?php endif; ?></td>
+					<td class="att-class-cell"><?=htmlspecialchars(strlen($row['Flavor']??'')>0?$row['Flavor']:$row['ClassName'])?></td>
+					<td class="att-credits-cell"><?=(int)$row['Credits']?></td>
+					<td class="att-enteredby-cell" data-enteredby-id="<?=(int)$row['EnteredById']?>"><a href="<?=UIR.'Player/profile/'.$row['EnteredById']?>"><?=htmlspecialchars($row['EnteredBy']??'')?></a></td>
+<?php if ($has_events) : ?><td><?php if (!empty($row['EventId'])) : ?><a href="<?=UIR.'Event/detail/'.$row['EventId'].'/'.$row['EventCalendarDetailId']?>"><?=htmlspecialchars($row['EventName']??'')?></a><?php endif; ?></td><?php endif; ?>
+<?php if ($CanAddAttendance) : ?>
+					<td style="text-align:center;white-space:nowrap;">
+						<button class="att-edit-btn" title="Edit class &amp; credits" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:0.8rem;margin-right:4px;" onclick="attOpenEdit(this)"><i class="fas fa-pencil-alt"></i></button>
+						<a class="att-del-link" href="<?=UIR?>Attendance/park/<?=$Id?>/delete/<?=$row['AttendanceId']?>&AttendanceDate=<?=$AttendanceDate?>" title="Remove">&times;</a>
+					</td>
+<?php endif; ?>
+				</tr>
+<?php endforeach; ?>
+				</tbody>
+			</table>
+<?php endif; ?>
+		</div><!-- /rp-table-area -->
+
+	</div><!-- /rp-body -->
+
+</div><!-- /rp-root -->
+
+<?php if ($CanAddAttendance) : ?>
+<!-- ── Quick Add Modal ──────────────────────────────── -->
+<div class="att-qa-overlay" id="att-qa-overlay">
+	<div class="att-qa-modal">
+		<div class="att-qa-modal-header">
+			<div class="att-qa-modal-title">
+				<i class="fas fa-users"></i> Quick Add &mdash; Recent Attendees
+			</div>
+			<div class="att-qa-header-right">
+				<label class="att-qa-date-label">
+					<i class="fas fa-calendar-day"></i>
+					<input class="att-qa-date-input" type="text" id="att-qa-date" readonly>
+				</label>
+				<button class="att-qa-close-btn" id="att-qa-close" title="Close">&times;</button>
+			</div>
+		</div>
+		<div class="att-qa-modal-body">
+			<div id="att-qa-empty" class="att-qa-empty" style="display:none">
+				No attendance records in the last 90 days.
+			</div>
+			<table class="att-qa-table" id="att-qa-table" style="display:none">
+				<thead>
+					<tr>
+						<th>Player</th>
+						<th>Last Seen</th>
+						<th>Class</th>
+						<th>Credits</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody id="att-qa-tbody"></tbody>
+			</table>
+			<div id="att-qa-feedback" class="att-qa-feedback" style="display:none"></div>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<?php if ($CanAddAttendance) : ?>
+<!-- ── Edit Attendance Modal ──────────────────────────── -->
+<div class="att-edit-overlay" id="att-edit-overlay">
+	<div class="att-edit-modal">
+		<div class="att-edit-modal-header">
+			<div class="att-edit-modal-title">
+				<i class="fas fa-pencil-alt"></i> Edit Attendance
+			</div>
+			<button class="att-edit-modal-close" id="att-edit-close" title="Close">&times;</button>
+		</div>
+		<div class="att-edit-modal-body">
+			<div class="att-edit-feedback" id="att-edit-feedback" style="display:none"></div>
+			<input type="hidden" id="att-edit-id">
+			<input type="hidden" id="att-edit-date">
+			<input type="hidden" id="att-edit-mundane">
+			<div class="att-edit-row">
+				<div class="att-edit-field">
+					<label class="att-edit-label">Class</label>
+					<select class="att-edit-select" id="att-edit-class"></select>
+				</div>
+				<div class="att-edit-field att-edit-field-sm">
+					<label class="att-edit-label">Credits</label>
+					<input class="att-edit-input" type="number" id="att-edit-credits" min="0.5" max="4" step="0.5">
+				</div>
+			</div>
+		</div>
+		<div class="att-edit-modal-footer">
+			<button class="att-edit-btn-cancel" id="att-edit-cancel">Cancel</button>
+			<button class="att-edit-btn-save" id="att-edit-save">Save</button>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
+<script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
+
+<script>
+$(function() {
+<?php if ($CanAddAttendance) : ?>
+	/* ── Submit button validation ────────────────────── */
+	function attCheckSubmit() {
+		var ok = parseInt($('#MundaneId').val(), 10) > 0
+			&& $('#ClassId').val() !== ''
+			&& $('#Credits').val().trim() !== '';
+		$('#att-submit-btn').prop('disabled', !ok);
+	}
+	$('#ClassId, #Credits').on('change input', attCheckSubmit);
+
+	/* ── Kingdom autocomplete ────────────────────────── */
+	$('#KingdomName').autocomplete({
+		source: function(request, response) {
+			$.getJSON('<?=HTTP_SERVICE?>Search/SearchService.php', {
+				Action: 'Search/Kingdom', name: request.term, limit: 6
+			}, function(data) {
+				response($.map(data, function(v) { return { label: v.Name, value: v.KingdomId }; }));
+			});
+		},
+		focus:  function(e, ui) { return showLabel('#KingdomName', ui); },
+		delay:  250,
+		select: function(e, ui) { showLabel('#KingdomName', ui); $('#KingdomId').val(ui.item.value); return false; },
+		change: function(e, ui) { if (!ui.item) { showLabel('#KingdomName', null); $('#KingdomId').val(null); } return false; },
+		minLength: 0
+	}).focus(function() { if (!this.value) $(this).trigger('keydown.autocomplete'); });
+
+	/* ── Park autocomplete ───────────────────────────── */
+	$('#ParkName').autocomplete({
+		source: function(request, response) {
+			$.getJSON('<?=HTTP_SERVICE?>Search/SearchService.php', {
+				Action: 'Search/Park', name: request.term,
+				kingdom_id: $('#KingdomId').val(), limit: 6
+			}, function(data) {
+				response($.map(data, function(v) { return { label: v.Name, value: v.ParkId }; }));
+			});
+		},
+		focus:  function(e, ui) { return showLabel('#ParkName', ui); },
+		delay:  250,
+		select: function(e, ui) { showLabel('#ParkName', ui); $('#ParkId').val(ui.item.value); return false; },
+		change: function(e, ui) { if (!ui.item) { showLabel('#ParkName', null); $('#ParkId').val(null); } return false; }
+	}).focus(function() { if (!this.value) $(this).trigger('keydown.autocomplete'); });
+
+	/* ── Player autocomplete (local + kingdom outsiders) */
+	var playerAC = $('#PlayerName').autocomplete({
+		source: function(request, response) {
+			var park_id    = $('#ParkId').val();
+			var kingdom_id = $('#KingdomId').val();
+			var search     = request.term;
+			var svcUrl     = '<?=HTTP_SERVICE?>Search/SearchService.php';
+
+			if (!park_id || park_id == '0') {
+				$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: search, kingdom_id: kingdom_id, limit: 15 }, function(data) {
+					response($.map(data, function(v) { return { label: v.Persona, value: { MundaneId: v.MundaneId, PenaltyBox: v.PenaltyBox } }; }));
 				});
-			},
-			focus: function( event, ui ) {
-				if (!ui.item.value) return false;
-				return showLabel('#PlayerName', ui);
-			},
-			delay: 250,
-			select: function (e, ui) {
-				if (!ui.item.value) return false;
-				showLabel('#PlayerName', ui);
-				$('#MundaneId').val(ui.item.value.MundaneId);
-				if (ui.item.value.PenaltyBox == "0") {
-					$('input[name=Ban]:eq(0)').attr('checked', 'checked');
-				} else {
-					$('input[name=Ban]:eq(1)').attr('checked', 'checked');
-				}
-				return false;
-			},
-			change: function (e, ui) {
-				if (ui.item == null) {
-					showLabel('#PlayerName',null);
-					$('#MundaneId').val(null);
-				}
-				return false;
+				return;
 			}
-		}).focus(function() {
-			if (this.value == "")
-				$(this).trigger('keydown.autocomplete');
-		});
-		playerAC.data('autocomplete')._renderItem = function(ul, item) {
-			if (item.separator) {
-				return $('<li class="ui-autocomplete-separator">').text('── Kingdom ──').appendTo(ul);
-			}
-			return $('<li></li>').data('item.autocomplete', item).append($('<a>').text(item.label)).appendTo(ul);
-		};
-	});
-</script>
-<div class='info-container' id='event-editor'>
-	<h3>Add Attendance to <?=$Session->park_name ?></h3>
-	<form class='form-container' method='post' action='<?=UIR ?>Attendance/park/<?=$Id ?>/new'>
-		<div>
-			<span>Date:</span>
-			<span><input type='text' class='required-field' value='<?=trimlen($Attendance_index['AttendanceDate'])?$Attendance_index['AttendanceDate']:$AttendanceDate ?>' name='AttendanceDate' id='AttendanceDate' /></span>
-		</div>
-		<div>
-			<span>Player's Kingdom:</span>
-			<span><input type='text' class='required-field' value='<?=trimlen($Attendance_index['KingdomName'])?$Attendance_index['KingdomName']:$DefaultKingdomName ?>' name='KingdomName' id='KingdomName' /></span>
-		</div>
-		<div>
-			<span>Player's Park:</span>
-			<span><input type='text' class='required-field' value="<?=html_encode(trimlen($Attendance_index['ParkName'])?$Attendance_index['ParkName']:$DefaultParkName) ?>" name='ParkName' id='ParkName' /></span>
-		</div>
-		<div>
-			<span>Player:</span>
-			<span><input type='text' class='required-field' value="<?=html_encode($Attendance_index['PlayerName']) ?>" name='PlayerName' id='PlayerName' /></span>
-		</div>
-		<div>
-			<span>Class:</span>
-			<span>
-				<select name='ClassId' id='ClassId' class='required-field'>
-					<option value=''>-select one-</option>
-<?php foreach ($Classes['Classes'] as $k => $class) : ?>
-					<option value='<?=$class['ClassId'] ?>'><?=$class['Name'] ?></option>
-<?php endforeach ?>
-				</select>
-			</span>
-		</div>
-		<div>
-			<span>Credits:</span>
-			<span><input type='text' class='required-field numeric-field remove-float' value='<?=valid_id($Attendance_index['Credits'])?$Attendance_index['Credits']:$DefaultCredits ?>' name='Credits' id='Credits' /></span>
-		</div>
-		<div>
-			<span></span>
-<?php if ($LoggedIn) : ?>
-			<span><input value='Add' type='submit' /></span>
-<?php endif ; ?>
-		</div>
-		<input type='hidden' id='KingdomId' name='KingdomId' value='<?=valid_id($Attendance_index['KingdomId'])?$Attendance_index['KingdomId']:$DefaultKingdomId ?>' />
-		<input type='hidden' id='ParkId' name='ParkId' value='<?=valid_id($Attendance_index['ParkId'])?$Attendance_index['ParkId']:$DefaultParkId ?>' />
-		<input type='hidden' id='MundaneId' name='MundaneId' value='<?=$Attendance_index['MundaneId'] ?>' />
-	</form>
-</div>
+			$.when(
+				$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: search, park_id: park_id, kingdom_id: kingdom_id, limit: 8 }),
+				$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: search, kingdom_id: kingdom_id, limit: 15 }),
+				$.getJSON(svcUrl, { Action: 'Search/Player', type: 'all', search: search, limit: 10 })
+			).done(function(parkRes, kingdomRes, globalRes) {
+				var seenIds = {}, suggestions = [], kingdomOutsiders = [], globalOutsiders = [];
+				$.each(parkRes[0], function(i, v) {
+					seenIds[v.MundaneId] = true;
+					suggestions.push({ label: v.Persona, value: { MundaneId: v.MundaneId, PenaltyBox: v.PenaltyBox } });
+				});
+				$.each(kingdomRes[0], function(i, v) {
+					if (!seenIds[v.MundaneId]) {
+						seenIds[v.MundaneId] = true;
+						var abbr = (v.KAbbr && v.PAbbr) ? v.KAbbr + ':' + v.PAbbr : v.ParkName;
+						kingdomOutsiders.push({ label: v.Persona + ' (' + abbr + ')', value: { MundaneId: v.MundaneId, PenaltyBox: v.PenaltyBox } });
+					}
+				});
+				$.each(globalRes[0], function(i, v) {
+					if (!seenIds[v.MundaneId]) {
+						seenIds[v.MundaneId] = true;
+						var abbr = (v.KAbbr && v.PAbbr) ? v.KAbbr + ':' + v.PAbbr : v.ParkName;
+						globalOutsiders.push({ label: v.Persona + ' (' + abbr + ')', value: { MundaneId: v.MundaneId, PenaltyBox: v.PenaltyBox } });
+					}
+				});
+				if (suggestions.length > 0 && (kingdomOutsiders.length > 0 || globalOutsiders.length > 0))
+					suggestions.push({ label: kingdomOutsiders.length > 0 ? '── Kingdom ──' : '── Global ──', value: null, separator: true });
+				if (kingdomOutsiders.length > 0 && globalOutsiders.length > 0)
+					kingdomOutsiders.push({ label: '── Global ──', value: null, separator: true });
+				response(suggestions.concat(kingdomOutsiders).concat(globalOutsiders));
+			});
+		},
+		focus:  function(e, ui) { if (!ui.item.value) return false; return showLabel('#PlayerName', ui); },
+		delay:  250,
+		select: function(e, ui) {
+			if (!ui.item.value) return false;
+			showLabel('#PlayerName', ui);
+			$('#MundaneId').val(ui.item.value.MundaneId);
+			attCheckSubmit();
+			return false;
+		},
+		change: function(e, ui) { if (!ui.item) { showLabel('#PlayerName', null); $('#MundaneId').val(null); } attCheckSubmit(); return false; }
+	}).focus(function() { if (!this.value) $(this).trigger('keydown.autocomplete'); });
 
-<div class='info-container'>
-	<h3><?=$AttendanceDate ?></h3>
-	<table class='information-table form-container' id='EventListTable'>
-		<thead>
-			<tr>
-				<th>Kingdom</th>
-				<th>Park</th>
-				<th>Player</th>
-				<th>Class</th>
-				<th>Credits</th>
-				<th>Entered By</th>
-				<th class='deletion'>&times;</th>
-			</tr>
-		</thead>
-		<tbody>
-<?php if (!is_array($AttendanceReport['Attendance'])) $AttendanceReport['Attendance'] = array(); ?>
-<?php foreach ($AttendanceReport['Attendance'] as $key => $detail) : ?>
-			<tr>
-				<td><a href='<?=UIR ?>Kingdom/index/<?=$detail['KingdomId'] ?>'><?=$detail['KingdomName'] ?></a></td>
-				<td><a href='<?=UIR ?>Park/index/<?=$detail['ParkId'] ?>'><?=$detail['ParkName'] ?></a></td>
-    <?php if ($detail['MundaneId']==0) : ?>
-				<td class='form-informational-field'><?=$detail['AttendancePersona'] ?> (<?=$detail['Note'] ?>)</td>
-    <?php else : ?>
-    			<td><a href='<?=UIR ?>Player/index/<?=$detail['MundaneId'] ?>'><?=$detail['Persona'] ?></a></td>
-    <?php endif ; ?>
-				<td><?=strlen($detail['Flavor'])>0?$detail['Flavor']:$detail['ClassName'] ?></td>
-				<td class='data-column'><?=$detail['Credits'] ?></td>
-				<td class='data-column'><a href="<?=UIR.'Player/index/'.$detail['EnteredById'] ?>"><?=$detail['EnteredBy'] ?></a></td>
-	<?php if ($LoggedIn) : ?>
-				<td class='deletion'><a href='<?=UIR ?>Attendance/park/<?=$Id ?>/delete/<?=$detail['AttendanceId'] ?>&AttendanceDate=<?=$AttendanceDate ?>'>&times;</a></td>
-	<?php endif ; ?>
-			</tr>
-<?php endforeach ?>
-		</tbody>
-	</table>
-</div>
+	playerAC.data('autocomplete')._renderItem = function(ul, item) {
+		if (item.separator)
+			return $('<li class="ui-autocomplete-separator">').text(item.label).appendTo(ul);
+		return $('<li></li>').data('item.autocomplete', item).append($('<a>').text(item.label)).appendTo(ul);
+	};
+
+	var ATT_CLASSES = <?=json_encode(array_values($Classes['Classes'] ?? []))?>;
+
+	/* ── Quick Add Modal ────────────────────────────── */
+	(function() {
+		var RECENT     = <?=json_encode(array_values(is_array($RecentAttendees['Attendees'] ?? null) ? $RecentAttendees['Attendees'] : []))?>;
+		var CLASSES    = ATT_CLASSES;
+		var ADD_URL    = '<?=UIR?>AttendanceAjax/park/<?=(int)$Id?>/add';
+		var ADDED_IDS  = new Set(<?=json_encode($already_added_ids)?>);
+		var dirty      = false;
+		var built      = false;
+
+		function openModal() {
+			document.getElementById('att-qa-date').value = document.getElementById('AttendanceDate').value;
+			if (!built) buildRows();
+			document.getElementById('att-qa-overlay').classList.add('att-qa-open');
+			document.body.style.overflow = 'hidden';
+		}
+		function closeModal() {
+			document.getElementById('att-qa-overlay').classList.remove('att-qa-open');
+			document.body.style.overflow = '';
+			if (dirty) window.location.reload();
+		}
+
+		function makeClassSelect(selectedId) {
+			var sel = document.createElement('select');
+			sel.className = 'att-qa-select';
+			var blank = document.createElement('option');
+			blank.value = ''; blank.textContent = '— class —';
+			sel.appendChild(blank);
+			CLASSES.forEach(function(c) {
+				var opt = document.createElement('option');
+				opt.value = c.ClassId; opt.textContent = c.Name;
+				if (String(c.ClassId) === String(selectedId)) opt.selected = true;
+				sel.appendChild(opt);
+			});
+			return sel;
+		}
+
+		function buildRows() {
+			var tbody    = document.getElementById('att-qa-tbody');
+			var empty    = document.getElementById('att-qa-empty');
+			var table    = document.getElementById('att-qa-table');
+			var eligible = RECENT.filter(function(a) { return !ADDED_IDS.has(a.MundaneId); });
+			if (!eligible.length) { empty.style.display = ''; return; }
+			table.style.display = '';
+			eligible.forEach(function(a) {
+				var tr = document.createElement('tr');
+				tr.dataset.mundaneId = a.MundaneId;
+
+				var td1 = document.createElement('td');
+				td1.innerHTML = '<a href="<?=UIR?>Player/profile/' + a.MundaneId + '" target="_blank">' + a.Persona + '</a>';
+				tr.appendChild(td1);
+
+				var td2 = document.createElement('td');
+				td2.style.color = '#9ca3af';
+				td2.style.fontSize = '0.8rem';
+				td2.textContent = a.LastSignIn || '';
+				tr.appendChild(td2);
+
+				var td3 = document.createElement('td');
+				td3.appendChild(makeClassSelect(a.ClassId));
+				tr.appendChild(td3);
+
+				var td4 = document.createElement('td');
+				var ci  = document.createElement('input');
+				ci.type = 'number'; ci.min = '0.5'; ci.step = '0.5'; ci.value = '1';
+				ci.className = 'att-qa-credits-input';
+				td4.appendChild(ci); tr.appendChild(td4);
+
+				var td5  = document.createElement('td');
+				var btn  = document.createElement('button');
+				btn.className = 'att-qa-add-btn'; btn.textContent = 'Add';
+				btn.addEventListener('click', function() { doAdd(tr, a, btn); });
+				td5.appendChild(btn); tr.appendChild(td5);
+
+				tbody.appendChild(tr);
+			});
+			built = true;
+		}
+
+		function doAdd(tr, attendee, btn) {
+			var classId = tr.querySelector('.att-qa-select').value;
+			var credits = tr.querySelector('.att-qa-credits-input').value;
+			if (!classId) { showFeedback('Select a class for ' + attendee.Persona + '.', false); return; }
+			btn.disabled = true; btn.textContent = '\u2026';
+			$.ajax({
+				url: ADD_URL, type: 'POST',
+				data: {
+					AttendanceDate: document.getElementById('att-qa-date').value,
+					MundaneId: attendee.MundaneId,
+					ClassId:   classId,
+					Credits:   credits
+				},
+				success: function(res) {
+					if (res.status === 0) {
+						tr.classList.add('att-qa-done');
+						btn.parentNode.innerHTML = '<span class="att-qa-done-mark">&#10003;</span>';
+						ADDED_IDS.add(attendee.MundaneId);
+						dirty = true;
+						hideFeedback();
+					} else {
+						btn.disabled = false; btn.textContent = 'Add';
+						showFeedback(res.error || 'An error occurred.', false);
+					}
+				},
+				error: function() {
+					btn.disabled = false; btn.textContent = 'Add';
+					showFeedback('Server error — please try again.', false);
+				}
+			});
+		}
+
+		function showFeedback(msg, ok) {
+			var el = document.getElementById('att-qa-feedback');
+			el.textContent = msg;
+			el.className = 'att-qa-feedback ' + (ok ? 'att-qa-fb-ok' : 'att-qa-fb-err');
+			el.style.display = '';
+		}
+		function hideFeedback() {
+			document.getElementById('att-qa-feedback').style.display = 'none';
+		}
+
+		document.getElementById('att-qa-open').addEventListener('click', openModal);
+		document.getElementById('att-qa-close').addEventListener('click', closeModal);
+		document.getElementById('att-qa-overlay').addEventListener('click', function(e) {
+			if (e.target === this) closeModal();
+		});
+		document.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape') closeModal();
+		});
+	})();
+<?php endif; ?>
+
+	/* ── Chart collapse toggle ──────────────────────── */
+	document.querySelectorAll('.att-chart-title').forEach(function(title) {
+		title.addEventListener('click', function() {
+			title.closest('.att-chart-card').classList.toggle('att-collapsed');
+		});
+	});
+
+<?php if ($total > 0) : ?>
+	/* ── DataTable ───────────────────────────────────── */
+	var table = $('#att-park-table').DataTable({
+		dom: 'lfrtip',
+		buttons: [
+			{ extend: 'csv',   filename: 'Park Attendance <?=addslashes($AttendanceDate)?>', exportOptions: { columns: ':not(:last-child)' } },
+			{ extend: 'print', exportOptions: { columns: ':not(:last-child)' } }
+		],
+		columnDefs: [
+			{ targets: [4], type: 'num', className: 'dt-right' },
+<?php if ($has_events) : ?>
+			{ targets: [6], orderable: false, searchable: false },
+<?php endif; ?>
+<?php if ($CanAddAttendance) : ?>
+			{ targets: [-1], orderable: false, searchable: false },
+<?php endif; ?>
+		],
+		order: [[0, 'asc']],
+		pageLength: 25,
+		fixedHeader: { headerOffset: 48 },
+		scrollX: true
+	});
+	$('#att-btn-export').on('click', function() { table.button(0).trigger(); });
+	$('#att-btn-print' ).on('click', function() { orkPrintTable(table); });
+
+	/* ── Class chart ─────────────────────────────────── */
+	var _isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+	new Highcharts.Chart({
+		chart: { renderTo: 'att-class-chart', type: 'column', backgroundColor: 'transparent',
+			style: { fontFamily: 'inherit' } },
+		title: { text: null },
+		xAxis: {
+			categories: <?=json_encode(array_keys($class_counts))?>,
+			labels: { rotation: -45, align: 'right', style: { fontSize: '12px' } }
+		},
+		yAxis: { title: { text: null }, allowDecimals: false, min: 0 },
+		series: [{ name: 'Attendees', data: <?=json_encode(array_values($class_counts))?>, color: '#7c3aed' }],
+		legend: { enabled: false },
+		credits: { enabled: false },
+		tooltip: {
+			headerFormat: '',
+			pointFormat: '<b>{point.category}</b>: {point.y}',
+			backgroundColor: _isDark ? '#1e293b' : undefined,
+			borderColor: _isDark ? '#334155' : undefined,
+			style: { color: _isDark ? '#e2e8f0' : '#333333' }
+		},
+		plotOptions: { column: { dataLabels: { enabled: true } } }
+	});
+<?php endif; ?>
+
+<?php if ($CanAddAttendance) : ?>
+	/* ── Edit Attendance Modal ─────────────────────────── */
+	var attLastCredits = 1;
+
+	// Populate class select once
+	ATT_CLASSES.forEach(function(c) {
+		$('#att-edit-class').append($('<option>').val(c.ClassId).text(c.Name));
+	});
+
+	window.attOpenEdit = function(btn) {
+		var $tr = $(btn).closest('tr');
+		$('#att-edit-id').val($tr.data('att-id'));
+		$('#att-edit-date').val($tr.data('att-date'));
+		$('#att-edit-mundane').val($tr.data('att-mundane'));
+		$('#att-edit-class').val($tr.data('att-class')).css('border-color', '');
+		$('#att-edit-credits').val(attLastCredits).css('border-color', '');
+		$('#att-edit-feedback').hide().text('');
+		$('#att-edit-save').prop('disabled', false).text('Save');
+		$('#att-edit-overlay').addClass('att-edit-open');
+		document.body.style.overflow = 'hidden';
+	};
+
+	function attCloseEdit() {
+		$('#att-edit-overlay').removeClass('att-edit-open');
+		document.body.style.overflow = '';
+	}
+
+	$('#att-edit-close, #att-edit-cancel').on('click', attCloseEdit);
+	$('#att-edit-overlay').on('click', function(e) {
+		if (e.target === this) attCloseEdit();
+	});
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Escape' && $('#att-edit-overlay').hasClass('att-edit-open')) attCloseEdit();
+	});
+
+	$('#att-edit-save').on('click', function() {
+		var newClassId = parseInt($('#att-edit-class').val(), 10);
+		var newCredits = parseFloat($('#att-edit-credits').val());
+		if (!newClassId) { $('#att-edit-class').css('border-color', '#ef4444'); return; }
+		if (isNaN(newCredits) || newCredits < 0) { $('#att-edit-credits').css('border-color', '#ef4444'); return; }
+		var attId     = $('#att-edit-id').val();
+		var date      = $('#att-edit-date').val();
+		var mundaneId = $('#att-edit-mundane').val();
+		$('#att-edit-save').prop('disabled', true).text('…');
+		$.post('<?=UIR?>AttendanceAjax/attendance/' + attId + '/edit', {
+			Date: date, Credits: newCredits, ClassId: newClassId, MundaneId: mundaneId
+		}, function(r) {
+			if (r.status === 0) {
+				var newClassName = $('#att-edit-class option:selected').text();
+				var $tr = $('#att-park-table').find('tr[data-att-id="' + attId + '"]');
+				$tr.data('att-class', newClassId);
+				$tr.find('.att-class-cell').text(newClassName);
+				$tr.find('.att-credits-cell').text(newCredits);
+				if (r.editor_id && r.editor_persona) {
+					$tr.find('.att-enteredby-cell').html('<a href="<?=UIR?>Player/profile/' + r.editor_id + '">' + $('<span>').text(r.editor_persona).html() + '</a>');
+				}
+				attLastCredits = newCredits;
+				attCloseEdit();
+			} else {
+				$('#att-edit-save').prop('disabled', false).text('Save');
+				$('#att-edit-feedback').text(r.error || 'Failed to save.').show();
+			}
+		}, 'json').fail(function() {
+			$('#att-edit-save').prop('disabled', false).text('Save');
+			$('#att-edit-feedback').text('Request failed.').show();
+		});
+	});
+<?php endif; ?>
+
+	// Lazy-fill the historic weather card for this attendance day. Cache
+	// hits (memcache) come back almost instantly; cache misses make one
+	// ~500ms call to Open-Meteo's archive endpoint. The card starts hidden
+	// and reveals itself when data arrives so it doesn't render an empty
+	// placeholder if the archive has nothing.
+	(function() {
+		var card = document.getElementById('att-wx-card');
+		if (!card) return;
+		var pid = card.dataset.park;
+		var date = card.dataset.date;
+		if (!pid || !date) return;
+		function wxIcon(c) {
+			if (c === 0)                          return '☀️';
+			if (c === 1)                          return '🌤️';
+			if (c === 2)                          return '⛅';
+			if (c === 3)                          return '☁️';
+			if (c === 45 || c === 48)             return '🌫️';
+			if (c >= 51 && c <= 57)               return '🌦️';
+			if (c >= 61 && c <= 67)               return '🌧️';
+			if (c >= 71 && c <= 77)               return '❄️';
+			if (c >= 80 && c <= 82)               return '🌦️';
+			if (c === 85 || c === 86)             return '🌨️';
+			if (c >= 95 && c <= 99)               return '⛈️';
+			return '🌡️';
+		}
+		function showUnavailable() {
+			document.getElementById('att-wx-icon').innerHTML = '<i class="fas fa-cloud-sun" style="opacity:.35"></i>';
+			document.getElementById('att-wx-temps').innerHTML = '<span style="opacity:.55;font-size:12px;font-weight:400">unavailable</span>';
+			document.getElementById('att-wx-meta').innerHTML  = 'Historical';
+		}
+		fetch('<?=UIR?>AttendanceAjax/park/' + pid + '/weather/' + date, { credentials: 'same-origin' })
+			.then(function(r) { return r.json(); })
+			.then(function(d) {
+				if (!d || d.status !== 0 || !d.weather || d.weather.hi_f == null) { showUnavailable(); return; }
+				var w = d.weather;
+				var hi  = Math.round(w.hi_f), hiC = Math.round((w.hi_f - 32) * 5 / 9);
+				var lo  = w.lo_f != null ? Math.round(w.lo_f) : null;
+				var loC = w.lo_f != null ? Math.round((w.lo_f - 32) * 5 / 9) : null;
+				document.getElementById('att-wx-icon').textContent = wxIcon(w.code);
+				document.getElementById('att-wx-temps').style.opacity = '';
+				document.getElementById('att-wx-temps').innerHTML  = hi + '/' + hiC + '°' +
+					(lo != null ? '<div style="font-size:11px;color:var(--ork-text-muted,#718096);font-weight:400;margin-top:1px">L ' + lo + '/' + loC + '°</div>' : '');
+				var metaParts = ['Historical'];
+				if (w.precip_inches != null && w.precip_inches >= 0.1) {
+					var mm = Math.round(w.precip_inches * 25.4);
+					metaParts.push(w.precip_inches.toFixed(2) + '" / ' + mm + ' mm rain');
+				}
+				document.getElementById('att-wx-meta').innerHTML = metaParts.join(' · ') +
+					' <a href="https://open-meteo.com/" target="_blank" rel="noopener" title="Weather data by Open-Meteo.com" aria-label="Weather data by Open-Meteo.com" style="margin-left:4px;opacity:.55;text-decoration:none;font-size:10px">ⓘ</a>';
+			})
+			.catch(showUnavailable);
+	})();
+});
+</script>

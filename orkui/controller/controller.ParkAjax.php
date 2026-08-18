@@ -1,0 +1,617 @@
+<?php
+
+class Controller_ParkAjax extends Controller
+{
+    public function park($p = null)
+    {
+        header('Content-Type: application/json');
+        $parts   = explode('/', $p ?? '');
+        $park_id = (int)preg_replace('/[^0-9]/', '', $parts[0] ?? '');
+        $action  = $parts[1] ?? '';
+
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+
+        if (!valid_id($park_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid park ID']);
+            exit;
+        }
+
+        $this->load_model('Park');
+
+        if ($action === 'setofficers') {
+            $officers = [];
+            foreach ($_POST as $key => $val) {
+                if (preg_match('/^(.+)Id$/', $key, $m) && valid_id((int)$val)) {
+                    $role = str_replace('_', ' ', $m[1]);
+                    $officers[$role] = ['MundaneId' => (int)$val, 'Role' => $role];
+                }
+            }
+            if (empty($officers)) {
+                echo json_encode(['status' => 1, 'error' => 'No officer assignments provided.']);
+                exit;
+            }
+            $results = $this->Park->set_officers($this->session->token, $park_id, $officers);
+            $errors  = [];
+            foreach ($results as $r) {
+                if (isset($r['Status']) && $r['Status'] != 0) {
+                    $errors[] = ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '');
+                }
+            }
+            echo $errors
+                ? json_encode(['status' => 1, 'error' => implode('; ', $errors)])
+                : json_encode(['status' => 0]);
+
+        } elseif ($action === 'vacateofficer') {
+            $role = trim($_POST['Role'] ?? '');
+            if (!strlen($role)) {
+                echo json_encode(['status' => 1, 'error' => 'Role is required.']);
+                exit;
+            }
+            $r = $this->Park->vacate_officer($park_id, $role, $this->session->token);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'addparkday') {
+            $recurrence = trim($_POST['Recurrence'] ?? '');
+            $time       = trim($_POST['Time']       ?? '');
+            if (!strlen($recurrence)) {
+                echo json_encode(['status' => 1, 'error' => 'Recurrence is required.']);
+                exit;
+            }
+            if (!strlen($time)) {
+                echo json_encode(['status' => 1, 'error' => 'Time is required.']);
+                exit;
+            }
+            if ($recurrence === 'every-x-weeks' && !strlen(trim($_POST['StartDate'] ?? ''))) {
+                echo json_encode(['status' => 1, 'error' => 'A start date is required for the "every X weeks" cadence.']);
+                exit;
+            }
+            $online = (($_POST['Online'] ?? '0') === '1') ? 1 : 0;
+            $altLoc = (!$online && (($_POST['AlternateLocation'] ?? '0') === '1')) ? 1 : 0;
+            $r = $this->Park->add_park_day([
+                'Token'             => $this->session->token,
+                'ParkId'            => $park_id,
+                'Recurrence'        => $recurrence,
+                'WeekDay'           => trim($_POST['WeekDay']     ?? ''),
+                'WeekOfMonth'       => (int)($_POST['WeekOfMonth'] ?? 0),
+                'MonthDay'          => (int)($_POST['MonthDay']    ?? 0),
+                'StartDate'         => trim($_POST['StartDate']   ?? ''),
+                'WeekInterval'      => (int)($_POST['WeekInterval'] ?? 0),
+                'Time'              => $time,
+                'Purpose'           => trim($_POST['Purpose']     ?? 'other'),
+                'Description'       => trim($_POST['Description'] ?? ''),
+                'Online'            => $online,
+                'AlternateLocation' => $altLoc,
+                'Address'           => trim($_POST['Address']     ?? ''),
+                'City'              => trim($_POST['City']        ?? ''),
+                'Province'          => trim($_POST['Province']    ?? ''),
+                'PostalCode'        => trim($_POST['PostalCode']  ?? ''),
+                'MapUrl'            => trim($_POST['MapUrl']      ?? ''),
+                'LocationUrl'       => trim($_POST['LocationUrl'] ?? ''),
+            ]);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'editparkday') {
+            $parkDayId  = (int)($_POST['ParkDayId'] ?? 0);
+            $recurrence = trim($_POST['Recurrence'] ?? '');
+            $time       = trim($_POST['Time']       ?? '');
+            if (!valid_id($parkDayId)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid park day ID.']);
+                exit;
+            }
+            if (!strlen($recurrence)) {
+                echo json_encode(['status' => 1, 'error' => 'Recurrence is required.']);
+                exit;
+            }
+            if (!strlen($time)) {
+                echo json_encode(['status' => 1, 'error' => 'Time is required.']);
+                exit;
+            }
+            if ($recurrence === 'every-x-weeks' && !strlen(trim($_POST['StartDate'] ?? ''))) {
+                echo json_encode(['status' => 1, 'error' => 'A start date is required for the "every X weeks" cadence.']);
+                exit;
+            }
+            $online = (($_POST['Online'] ?? '0') === '1') ? 1 : 0;
+            $altLoc = (!$online && (($_POST['AlternateLocation'] ?? '0') === '1')) ? 1 : 0;
+            $r = $this->Park->edit_park_day([
+                'Token'             => $this->session->token,
+                'ParkDayId'         => $parkDayId,
+                'Recurrence'        => $recurrence,
+                'WeekDay'           => trim($_POST['WeekDay']     ?? ''),
+                'WeekOfMonth'       => (int)($_POST['WeekOfMonth'] ?? 0),
+                'MonthDay'          => (int)($_POST['MonthDay']    ?? 0),
+                'StartDate'         => trim($_POST['StartDate']   ?? ''),
+                'WeekInterval'      => (int)($_POST['WeekInterval'] ?? 0),
+                'Time'              => $time,
+                'Purpose'           => trim($_POST['Purpose']     ?? 'other'),
+                'Description'       => trim($_POST['Description'] ?? ''),
+                'Online'            => $online,
+                'AlternateLocation' => $altLoc,
+                'Address'           => trim($_POST['Address']     ?? ''),
+                'City'              => trim($_POST['City']        ?? ''),
+                'Province'          => trim($_POST['Province']    ?? ''),
+                'PostalCode'        => trim($_POST['PostalCode']  ?? ''),
+                'MapUrl'            => trim($_POST['MapUrl']      ?? ''),
+                'LocationUrl'       => trim($_POST['LocationUrl'] ?? ''),
+            ]);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'deleteparkday') {
+            $parkDayId = (int)($_POST['ParkDayId'] ?? 0);
+            if (!valid_id($parkDayId)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid park day ID.']);
+                exit;
+            }
+            $r = $this->Park->delete_park_day([
+                'Token'     => $this->session->token,
+                'ParkDayId' => $parkDayId,
+            ]);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'setdetails') {
+            $r = $this->Park->set_park_details([
+                'Token'       => $this->session->token,
+                'ParkId'      => $park_id,
+                'Url'         => trim($_POST['Url']         ?? ''),
+                'Address'     => trim($_POST['Address']     ?? ''),
+                'City'        => trim($_POST['City']        ?? ''),
+                'Province'    => trim($_POST['Province']    ?? ''),
+                'PostalCode'  => trim($_POST['PostalCode']  ?? ''),
+                'MapUrl'      => trim($_POST['MapUrl']      ?? ''),
+                'Description' => trim($_POST['Description'] ?? ''),
+                'Directions'  => trim($_POST['Directions']  ?? ''),
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'playersearch') {
+            $q                = trim($_GET['q']               ?? '');
+            $scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude' | 'all'
+            $prioritize       = !empty($_GET['prioritize']);
+            $include_inactive  = !empty($_GET['include_inactive']);
+            $include_suspended = !empty($_GET['include_suspended']);
+            if (strlen($q) < 2) {
+                echo json_encode([]);
+                exit;
+            }
+
+            $scopeKey = 'park_own';
+            if ($scope === 'exclude') {
+                $scopeKey = 'park_exclude';
+            } elseif ($scope === 'all') {
+                $scopeKey = 'park_all';
+            }
+
+            $this->load_model('Search');
+            $results = $this->Search->scoped_player_search([
+                'Query'            => $q,
+                'Scope'            => $scopeKey,
+                'ParkId'           => (int)$park_id,
+                'IncludeInactive'  => $include_inactive,
+                'IncludeSuspended' => $include_suspended,
+                'Prioritize'       => $prioritize,
+                'Limit'            => 15,
+                'Format'           => 'kingdom',
+            ]);
+
+            echo json_encode($results);
+
+        } elseif ($action === 'setheraldry') {
+            if (empty($_FILES['Heraldry']['tmp_name']) || !is_uploaded_file($_FILES['Heraldry']['tmp_name'])) {
+                echo json_encode(['status' => 1, 'error' => 'No image file received.']);
+                exit;
+            }
+            $allowed = ['image/png', 'image/jpeg', 'image/gif'];
+            if (!in_array($_FILES['Heraldry']['type'], $allowed)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid image type. Use PNG, JPG, or GIF.']);
+                exit;
+            }
+            $heraldryData = base64_encode(file_get_contents($_FILES['Heraldry']['tmp_name']));
+            $r = $this->Park->SetParkDetails([
+                'Token'            => $this->session->token,
+                'ParkId'           => $park_id,
+                'Heraldry'         => $heraldryData,
+                'HeraldryMimeType' => $_FILES['Heraldry']['type'],
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'removeheraldry') {
+            $r = $this->Park->RemoveParkHeraldry([
+                'Token'  => $this->session->token,
+                'ParkId' => $park_id,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'resetwaivers') {
+            $this->load_model('Player');
+            $r = $this->Player->reset_waivers([
+                'Token'  => $this->session->token,
+                'ParkId' => $park_id,
+            ]);
+            if ($r['Status'] == 5) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+            } elseif ($r['Status'] != 0) {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            } else {
+                echo json_encode(['status' => 0, 'message' => $r['Detail'] ?? 'Waivers reset.']);
+            }
+
+        } elseif ($action === 'moveplayer') {
+            $this->load_model('Player');
+            $mundane_id   = (int)($_POST['MundaneId']  ?? 0);
+            $dest_park_id = (int)($_POST['DestParkId'] ?? 0);
+            if (!valid_id($mundane_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Select a player.']);
+                exit;
+            }
+            if (!valid_id($dest_park_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Select a destination park.']);
+                exit;
+            }
+            $r = $this->Player->move_player(['Token' => $this->session->token, 'MundaneId' => $mundane_id, 'ParkId' => $dest_park_id]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'addrecommendation') {
+            if (!isset($this->session->user_id)) {
+                echo json_encode(['status' => 1, 'error' => 'You must be logged in to submit a recommendation.']);
+                exit;
+            }
+            $this->load_model('Player');
+            $mundane_id   = (int)($_POST['MundaneId']       ?? 0);
+            $award_id     = (int)($_POST['KingdomAwardId']  ?? 0);
+            $rank         = (int)($_POST['Rank']            ?? 0);
+            $reason       = trim($_POST['Reason']           ?? '');
+            if (!valid_id($mundane_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Please select a player.']);
+                exit;
+            }
+            if (!valid_id($award_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Please select an award.']);
+                exit;
+            }
+            if (!$reason) {
+                echo json_encode(['status' => 1, 'error' => 'Please enter a reason.']);
+                exit;
+            }
+            $r = $this->Player->add_player_recommendation([
+                'Token'          => $this->session->token,
+                'MundaneId'      => $mundane_id,
+                'KingdomAwardId' => $award_id,
+                'Rank'           => $rank > 0 ? $rank : null,
+                'GivenById'      => $this->session->user_id,
+                'Reason'         => $reason,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'dismissrecommendation') {
+            $this->load_model('Player');
+            $rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+            if (!valid_id($rec_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']);
+                exit;
+            }
+            $r = $this->Player->delete_player_recommendation([
+                'Token'             => $this->session->token,
+                'RecommendationsId' => $rec_id,
+                'RequestedBy'       => $this->session->user_id,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'deletedrecommendations') {
+            $uid = (int)$this->session->user_id;
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $this->load_model('Reports');
+            $recs = $this->Reports->deleted_recommended_awards(['ParkId' => $park_id, 'KingdomId' => 0, 'PlayerId' => 0]);
+            echo json_encode(['status' => 0, 'recommendations' => is_array($recs) ? array_values($recs) : []]);
+
+        } elseif ($action === 'restorerecommendation') {
+            $uid = (int)$this->session->user_id;
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $this->load_model('Player');
+            $rec_id = (int)($_POST['RecommendationsId'] ?? 0);
+            if (!valid_id($rec_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid recommendation.']);
+                exit;
+            }
+            $r = $this->Player->restore_player_recommendation([
+                'Token'             => $this->session->token,
+                'RecommendationsId' => $rec_id,
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'addauth') {
+            $uid = (int)$this->session->user_id;
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $mid  = (int)($_POST['MundaneId'] ?? 0);
+            // Scoped grants only accept create / edit. The legacy 'admin' role at
+            // park scope is no longer granted from the UI — system-wide admin is
+            // managed on its own page and only ever issued unscoped.
+            $role = in_array($_POST['Role'] ?? '', ['create','edit']) ? $_POST['Role'] : 'create';
+            if (!$mid) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid player.']);
+                exit;
+            }
+            $this->load_model('Authorization');
+            $r = $this->Authorization->add_auth([
+                'Token'     => $this->session->token,
+                'MundaneId' => $mid,
+                'Type'      => AUTH_PARK,
+                'Id'        => $park_id,
+                'Role'      => $role,
+            ]);
+            if ($r['Status'] != 0) {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . (isset($r['Detail']) && $r['Detail'] !== '' ? ': ' . $r['Detail'] : '')]);
+                exit;
+            }
+            $authId = (int)($r['Detail'] ?? 0);
+            $this->load_model('Player');
+            $persona = $this->Player->get_persona($mid);
+            $this->Authorization->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_PARK, 'Id' => $park_id, 'Role' => $role], 'Player', $mid, null, [
+                'authorization_id' => $authId,
+                'mundane_id'       => $mid,
+                'park_id'          => (int)$park_id,
+                'kingdom_id'       => 0,
+                'event_id'         => 0,
+                'unit_id'          => 0,
+                'role'             => $role,
+            ]);
+            echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
+
+        } elseif ($action === 'removeauth') {
+            $uid = (int)$this->session->user_id;
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
+                exit;
+            }
+            $this->load_model('Authorization');
+            $r = $this->Authorization->del_auth([
+                'Token'           => $this->session->token,
+                'AuthorizationId' => (int)($_POST['AuthorizationId'] ?? 0),
+            ]);
+            echo ($r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'createtournament') {
+            $this->load_model('Tournament');
+            $name       = trim($_POST['Name']        ?? '');
+            $when       = trim($_POST['When']        ?? '');
+            $desc       = trim($_POST['Description'] ?? '');
+            $url        = trim($_POST['Url']         ?? '');
+            $kingdom_id = (int)($_POST['KingdomId']  ?? 0);
+            $ecd_id     = (int)($_POST['EventCalendarDetailId'] ?? 0);
+
+            if (!strlen($name)) {
+                echo json_encode(['status' => 1, 'error' => 'Tournament name is required.']);
+                exit;
+            }
+            if (!strlen($when)) {
+                echo json_encode(['status' => 1, 'error' => 'Tournament date is required.']);
+                exit;
+            }
+
+            $r = $this->Tournament->create_tournament([
+                'Token'                 => $this->session->token,
+                'Name'                  => $name,
+                'Description'           => $desc,
+                'Url'                   => $url,
+                'When'                  => $when,
+                'KingdomId'             => $kingdom_id,
+                'ParkId'                => $park_id,
+                'EventCalendarDetailId' => $ecd_id,
+            ]);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'selfreg_link') {
+            $this->load_model('Player');
+            $r = $this->Player->create_selfreg_link([
+                'Token'  => $this->session->token,
+                'ParkId' => $park_id,
+            ]);
+            if ($r['Status'] == 0) {
+                $detail = $r['Detail'];
+                echo json_encode([
+                    'status'            => 0,
+                    'token'             => $detail['token'],
+                    'expires_at'        => $detail['expires_at'],
+                    'seconds_remaining' => $detail['seconds_remaining'],
+                ]);
+            } else {
+                echo json_encode([
+                    'status' => $r['Status'],
+                    'error'  => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''),
+                ]);
+            }
+
+        } else {
+            echo json_encode(['status' => 1, 'error' => 'Unknown action']);
+        }
+        exit;
+    }
+
+    public function kingdom($p = null)
+    {
+        header('Content-Type: application/json');
+        $parts      = explode('/', $p ?? '');
+        $kingdom_id = (int)preg_replace('/[^0-9]/', '', $parts[0] ?? '');
+        $action     = $parts[1] ?? '';
+
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+
+        if (!valid_id($kingdom_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid kingdom ID']);
+            exit;
+        }
+
+        if ($action === 'create') {
+            $uid = (int)$this->session->user_id;
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized to create parks in this kingdom.']);
+                exit;
+            }
+            $this->load_model('Park');
+            $name    = trim($_POST['Name'] ?? '');
+            $abbr    = preg_replace('/[^A-Za-z0-9]/', '', trim($_POST['Abbreviation'] ?? ''));
+            $titleId = (int)($_POST['ParkTitleId'] ?? 0);
+
+            if (!strlen($name)) {
+                echo json_encode(['status' => 1, 'error' => 'Park must have a name.']);
+                exit;
+            }
+            if (!strlen($abbr)) {
+                echo json_encode(['status' => 1, 'error' => 'Park must have an abbreviation.']);
+                exit;
+            }
+            if (!valid_id($titleId)) {
+                echo json_encode(['status' => 1, 'error' => 'Parks must have a title.']);
+                exit;
+            }
+
+            $r = $this->Park->create_park([
+                'Token'        => $this->session->token,
+                'Name'         => $name,
+                'Abbreviation' => $abbr,
+                'KingdomId'    => $kingdom_id,
+                'ParkTitleId'  => $titleId,
+            ]);
+
+            if ($r['Status'] == 0) {
+                echo json_encode(['status' => 0, 'parkId' => (int)($r['Detail'] ?? 0)]);
+            } else {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            }
+        } elseif ($action === 'editpark') {
+            $uid = (int)$this->session->user_id;
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+                echo json_encode(['status' => 5, 'error' => 'Not authorized to edit parks in this kingdom.']);
+                exit;
+            }
+            $this->load_model('Park');
+            $park_id = (int)($_POST['ParkId'] ?? 0);
+            $name    = trim($_POST['Name'] ?? '');
+            $abbr    = preg_replace('/[^A-Za-z0-9]/', '', trim($_POST['Abbreviation'] ?? ''));
+            $titleId = (int)($_POST['ParkTitleId'] ?? 0);
+            $active  = ($_POST['Active'] ?? '') === 'Active' ? 'Active' : 'Retired';
+
+            if (!valid_id($park_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid park ID.']);
+                exit;
+            }
+            // Verify the park belongs to this kingdom
+            $this->load_model('ParkProfile');
+            if (!$this->ParkProfile->park_belongs_to_kingdom($park_id, $kingdom_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Park does not belong to this kingdom.']);
+                exit;
+            }
+            if (!strlen($name)) {
+                echo json_encode(['status' => 1, 'error' => 'Park must have a name.']);
+                exit;
+            }
+            if (!strlen($abbr)) {
+                echo json_encode(['status' => 1, 'error' => 'Park must have an abbreviation.']);
+                exit;
+            }
+            if (!valid_id($titleId)) {
+                echo json_encode(['status' => 1, 'error' => 'Parks must have a title.']);
+                exit;
+            }
+
+            $r = $this->Park->set_park_details([
+                'Token'        => $this->session->token,
+                'ParkId'       => $park_id,
+                'Name'         => $name,
+                'Abbreviation' => $abbr,
+                'ParkTitleId'  => $titleId,
+                'Active'       => $active,
+            ]);
+
+            if ($r['Status'] == 0) {
+                echo json_encode(['status' => 0]);
+            } else {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+            }
+        } elseif ($action === 'checkabbr') {
+            $abbr      = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
+            $excludeId = (int)($_POST['ExcludeParkId'] ?? 0);
+            if (!strlen($abbr)) {
+                echo json_encode(['status' => 0, 'taken' => false]);
+                exit;
+            }
+            $this->load_model('ParkProfile');
+            $taken = $this->ParkProfile->abbreviation_taken((int)$kingdom_id, $abbr, $excludeId);
+            echo json_encode(['status' => 0, 'taken' => $taken]);
+
+        } else {
+            echo json_encode(['status' => 1, 'error' => 'Unknown action']);
+        }
+        exit;
+    }
+
+
+    public function banner($p = null)
+    {
+        header('Content-Type: application/json');
+
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+
+        $params  = explode('/', $p ?? '');
+        $park_id = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $action  = $params[1] ?? '';
+
+        if (!valid_id($park_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid Park ID.']);
+            exit;
+        }
+
+        $this->load_model('Banner');
+        $this->Banner->handle_ajax(
+            'Park',
+            $action,
+            $park_id,
+            $this->session->token,
+            $_POST,
+            $_FILES,
+        );
+    }
+
+}

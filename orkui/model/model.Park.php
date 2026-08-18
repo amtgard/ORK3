@@ -19,6 +19,10 @@ class Model_Park extends Model {
 		return $this->Park->AddParkDay($request);
 	}
 	
+	function edit_park_day($request) {
+		return $this->Park->EditParkDay($request);
+	}
+
 	function delete_park_day($request) {
 		return $this->Park->RemoveParkDay($request);
 	}
@@ -57,6 +61,15 @@ class Model_Park extends Model {
 		logtrace("create_park", $request);
 		$r = $this->Park->CreatePark($request);
 		return $r;
+	}
+
+	function set_park_details($request) {
+		logtrace("set_park_details", $request);
+		return $this->Park->SetParkDetails($request);
+	}
+
+	function RemoveParkHeraldry($request) {
+		return $this->Heraldry->RemoveParkHeraldry($request);
 	}
 	
 	function get_park_info($park_id) {

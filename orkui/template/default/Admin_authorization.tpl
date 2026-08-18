@@ -130,18 +130,18 @@
 <?php if (is_array($NonOfficerAuths)): ?>
 <?php 	foreach ($NonOfficerAuths as $k => $auth): ?>
 			<tr>
-				<td><a href='<?=UIR.'Player/index/'.$auth['MundaneId'] ?>'><?=$auth['Persona'] . ' (' . ($auth['Restricted']?'<span class="restricted-player-display">Restricted</span>':$auth['Surname'].', '.$auth['GivenName']) ?>)</a></td>
+				<td><a href='<?=UIR.'Player/profile/'.$auth['MundaneId'] ?>'><?=$auth['Persona'] . ' (' . ($auth['Restricted']?'<span class="restricted-player-display">Restricted</span>':$auth['Surname'].', '.$auth['GivenName']) ?>)</a></td>
 <?php 		if (!isset($this->__session->kingdom_id) || $display_all) : ?>
-				<td><a href='<?=UIR.'Kingdom/index/'.$auth['KingdomId'] ?>'><?=$auth['KingdomName'] ?></a></td>
+				<td><a href='<?=UIR.'Kingdom/profile/'.$auth['KingdomId'] ?>'><?=$auth['KingdomName'] ?></a></td>
 <?php 		endif; ?>
 <?php 		if (!isset($this->__session->park_id) || $display_all) : ?>
-				<td><a href='<?=UIR.'Park/index/'.$auth['ParkId'] ?>'><?=$auth['ParkName'] ?></a></td>
+				<td><a href='<?=UIR.'Park/profile/'.$auth['ParkId'] ?>'><?=$auth['ParkName'] ?></a></td>
 <?php 		endif; ?>
 <?php 		if (!isset($this->__session->unit_id) || $display_all) : ?>
 				<td><a href='<?=UIR.'Unit/index/'.$auth['UnitId'] ?>'><?=$auth['UnitName'] ?></a></td>
 <?php 		endif; ?>
 <?php 		if (!isset($this->__session->event_id) || $display_all) : ?>
-				<td><a href='<?=UIR.'Event/index/'.$auth['EventId'] ?>'><?=$auth['EventName'] ?></a></td>
+				<td><?=$auth['EventName'] ?></td>
 <?php 		endif; ?>
 				<td><?=$auth['Role'] ?></td>
 				<td><?=$auth['OfficerRole'] ?></td>
