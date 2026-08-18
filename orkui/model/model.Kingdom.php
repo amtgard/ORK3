@@ -202,4 +202,24 @@ class Model_Kingdom extends Model
         return new Kingdom();
     }
 
+	function get_officer_history($kingdom_id, $role = null) {
+		$request = ['KingdomId' => $kingdom_id];
+		if ($role !== null && strlen(trim($role)) > 0) {
+			$request['Role'] = $role;
+		}
+		return $this->Kingdom->GetOfficerHistory($request);
+	}
+
+	function add_officer_history($request) {
+		return $this->Kingdom->AddOfficerHistory($request);
+	}
+
+	function edit_officer_history($request) {
+		return $this->Kingdom->EditOfficerHistory($request);
+	}
+
+	function delete_officer_history($request) {
+		return $this->Kingdom->DeleteOfficerHistory($request);
+	}
+
 }

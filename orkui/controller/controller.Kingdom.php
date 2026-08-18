@@ -26,7 +26,7 @@ class Controller_Kingdom extends Controller
         unset($this->session->park_id);
         unset($this->session->park_name);
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if ($_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$id, AUTH_EDIT)) {
+        if ($_uid > 0 && $this->Authorization->has_permission_or_authority($_uid, 'kingdom.details.edit', 'kingdom', (int)$id, AUTH_EDIT)) {
             $this->data['menu']['admin'] = array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
             $this->data['menulist']['admin'] = array(
                     array( 'url' => UIR.'Admin/kingdom/'.$this->session->kingdom_id, 'display' => 'Kingdom' )
@@ -69,7 +69,7 @@ class Controller_Kingdom extends Controller
         $kingdom_id = preg_replace('/[^0-9]/', '', $kingdom_id);
         $kid     = (int)$kingdom_id;
         $uid     = (int)($this->session->user_id ?? 0);
-        $isAdmin = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $kid, AUTH_EDIT);
+        $isAdmin = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.details.edit', 'kingdom', $kid, AUTH_EDIT);
         $this->load_model('KingdomProfile');
         $result = $this->KingdomProfile->extended_park_averages($kid, $isAdmin);
         header('Content-Type: application/json');
@@ -328,10 +328,12 @@ class Controller_Kingdom extends Controller
         // Pin the logged-in user's home park to the first slot in the parks list
         $this->data['UserParkId'] = $uid > 0 ? $this->KingdomProfile->user_home_park_id($uid) : 0;
         $this->data['CanEditKingdom']   = $uid > 0
-            && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_EDIT);
+            && $this->Authorization->has_permission_or_authority($uid, 'kingdom.details.edit', 'kingdom', (int)$kingdom_id, AUTH_EDIT);
         $this->data['knCanManageBanner'] = $this->data['CanEditKingdom'];
         $this->data['CanManageKingdom'] = $uid > 0
-            && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+            && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.set', 'kingdom', (int)$kingdom_id, AUTH_CREATE);
+        $this->data['can_manage_officer_positions'] = $uid > 0
+            && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.position.manage', 'kingdom', (int)$kingdom_id, AUTH_EDIT);
         $this->data['CanAddPark'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
         $this->data['IsOrkAdmin'] = $uid > 0

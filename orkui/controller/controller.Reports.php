@@ -1171,9 +1171,9 @@ class Controller_Reports extends Controller
         if ($_isOrkAdmin) {
             $can_edit = true;
         } elseif ($type === 'Park' && valid_id($this->request->id)) {
-            $can_edit = $this->Authorization->has_authority($_uid, AUTH_PARK, $this->request->id, AUTH_CREATE);
+            $can_edit = $this->Authorization->has_permission_or_authority($_uid, 'player.active_status.set', 'park', $this->request->id, AUTH_CREATE);
         } elseif ($type === 'Kingdom' && valid_id($this->request->id)) {
-            $can_edit = $this->Authorization->has_authority($_uid, AUTH_KINGDOM, $this->request->id, AUTH_EDIT);
+            $can_edit = $this->Authorization->has_permission_or_authority($_uid, 'player.active_status.set', 'kingdom', $this->request->id, AUTH_EDIT);
         }
         $this->data['can_edit'] = $can_edit;
 
@@ -1229,10 +1229,10 @@ class Controller_Reports extends Controller
         if ($this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
             return true;
         }
-        if (isset($this->session->park_id) && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
+        if (isset($this->session->park_id) && $this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', 'park', (int)$this->session->park_id, AUTH_EDIT)) {
             return true;
         }
-        if (isset($this->session->kingdom_id) && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, AUTH_EDIT)) {
+        if (isset($this->session->kingdom_id) && $this->Authorization->has_permission_or_authority($uid, 'player.recommendation.manage', 'kingdom', (int)$this->session->kingdom_id, AUTH_EDIT)) {
             return true;
         }
 
@@ -1256,11 +1256,11 @@ class Controller_Reports extends Controller
             return ['canRemoveAny' => $_canRemoveAny, 'canRemoveMap' => $_canRemoveMap];
         }
         $_scopeKingdomAuth = $scopeType === 'kingdom' && valid_id($scopeId)
-            && $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$scopeId, AUTH_EDIT);
+            && $this->Authorization->has_permission_or_authority($_uid, 'player.edit', 'kingdom', (int)$scopeId, AUTH_EDIT);
         foreach ($roster as $player) {
             $mid = (int)$player['MundaneId'];
             $can = $_scopeKingdomAuth
-                || $this->Authorization->has_authority($_uid, AUTH_KINGDOM, (int)$player['KingdomId'], AUTH_EDIT);
+                || $this->Authorization->has_permission_or_authority($_uid, 'player.edit', 'kingdom', (int)$player['KingdomId'], AUTH_EDIT);
             $_canRemoveMap[$mid] = $can;
             if ($can) {
                 $_canRemoveAny = true;

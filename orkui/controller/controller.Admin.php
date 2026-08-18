@@ -871,6 +871,28 @@ class Controller_Admin extends Controller
         $this->data['PermInheritedKingdomName']  = $inheritedKingdomName;
     }
 
+    public function permissionsgrid($path = null)
+    {
+        $parts = explode('/', $path ?? '');
+        $type  = in_array($parts[0] ?? '', ['Kingdom', 'Park']) ? $parts[0] : null;
+        $id    = (int)preg_replace('/[^0-9]/', '', $parts[1] ?? '');
+        $uid   = (int)($this->session->user_id ?? 0);
+
+        if (!$type || !$id) {
+            header('Location: ' . UIR . 'Admin');
+            exit;
+        }
+
+        $authTypeMap = ['Kingdom' => AUTH_KINGDOM, 'Park' => AUTH_PARK];
+        $authType = $authTypeMap[$type];
+        if (!$this->Authorization->has_authority($uid, $authType, $id, AUTH_EDIT)) {
+            header('Location: ' . UIR . 'Admin');
+            exit;
+        }
+
+        $this->template = '../revised-frontend/Admin_permissions_grid.tpl';
+    }
+
     public function player($id)
     {
         logtrace("player call", $_REQUEST);
@@ -1217,7 +1239,7 @@ class Controller_Admin extends Controller
         $_parkId = (int)($this->data['Player']['ParkId'] ?? 0);
         $this->data['CanEditPlayerMedia'] = $_uid > 0 && (
             $_uid === (int)$id
-            || $this->Authorization->has_authority($_uid, AUTH_PARK, $_parkId, AUTH_EDIT)
+            || $this->Authorization->has_permission_or_authority($_uid, 'player.heraldry.manage', 'park', $_parkId, AUTH_EDIT)
         );
     }
 
@@ -1738,6 +1760,82 @@ class Controller_Admin extends Controller
         }
     }
 
+    public function roles($path = null)
+    {
+        if (empty($this->session->user_id)) {
+            header('Location: ' . UIR . 'Login');
+            exit;
+        }
+        $parts = explode('/', $path ?? '');
+        $type  = ($parts[0] ?? '') === 'Kingdom' ? 'Kingdom' : null;
+        $id    = (int)preg_replace('/[^0-9]/', '', $parts[1] ?? '');
+        $uid   = (int)($this->session->user_id ?? 0);
+
+        if (!$type || !valid_id($id)) {
+            header('Location: ' . UIR . 'Admin');
+            exit;
+        }
+
+        // Must have kingdom.auth.manage permission or legacy kingdom CREATE auth or be admin
+        if (
+            !$this->Authorization->has_permission_or_authority($uid, 'kingdom.auth.manage', 'kingdom', $id, AUTH_CREATE)
+            && !$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)
+        ) {
+            header('Location: ' . UIR . 'Admin/kingdom/' . $id);
+            exit;
+        }
+
+        $this->kingdom_route($id);
+        $this->load_model('Kingdom');
+        $this->load_model('RBACService');
+
+        $kd = $this->Kingdom->get_kingdom_details($id);
+        foreach ($kd as $key => $detail) {
+            $this->data[$key] = $detail;
+        }
+        $this->data['page_title'] = "RBAC Roles: " . ($this->data['KingdomInfo']['KingdomName'] ?? '');
+        $this->data['IsPrinz']    = $this->data['KingdomInfo']['IsPrincipality'] ?? false;
+        $this->data['IsOrkAdmin'] = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+
+        // Available roles (system + custom for this kingdom)
+        $this->data['AvailableRoles'] = Ork3::$Lib->rbacservice->GetAvailableRoles($id);
+
+        // All role assignments scoped to this kingdom
+        $this->data['RoleAssignments'] = $this->RBACService->GetKingdomRoleAssignments($id);
+
+        // Parks for scope selector
+        $r = $this->Kingdom->get_park_summary($id);
+        $this->data['park_summary'] = $r;
+
+        // All permissions from registry
+        $this->data['AllPermissions'] = PermissionRegistry::GetAll();
+
+        // Effective permissions for current user (escalation prevention)
+        $this->data['UserEffectivePermissions'] = Ork3::$Lib->rbacservice->GetEffectivePermissions($uid, 'kingdom', $id);
+
+        // Custom roles with permission counts
+        $customRoles = [];
+        foreach ($this->data['AvailableRoles'] as $role) {
+            if (!$role['IsSystem'] && $role['KingdomId'] == $id) {
+                $perms = Ork3::$Lib->rbacservice->GetRolePermissions($role['RoleId']);
+                $userCount = $this->RBACService->GetRoleUserCount($role['RoleId']);
+                $customRoles[] = [
+                    'RoleId'       => $role['RoleId'],
+                    'Name'         => $role['Name'],
+                    'DisplayName'  => $role['DisplayName'],
+                    'Description'  => $role['Description'],
+                    'ScopeType'    => $role['ScopeType'],
+                    'Permissions'  => $perms,
+                    'PermCount'    => count($perms),
+                    'UserCount'    => $userCount,
+                ];
+            }
+        }
+        $this->data['CustomRoles'] = $customRoles;
+
+        $this->template = '../revised-frontend/Admin_roles.tpl';
+    }
+
     public function kingdom($id = null)
     {
         if (empty($this->session->user_id)) {
@@ -1749,16 +1847,91 @@ class Controller_Admin extends Controller
             exit;
         }
         $this->kingdom_route($id);
-        $r = $this->Kingdom->get_kingdom_details($id);
-        foreach ($r as $key => $detail) {
+        $kd = $this->Kingdom->get_kingdom_details($id);
+        foreach ($kd as $key => $detail) {
             $this->data[$key] = $detail;
         }
-        $this->data[ 'page_title' ] = "Admin: " . $this->data['KingdomInfo']['KingdomName'];
+        $this->data['page_title'] = "Admin: " . $this->data['KingdomInfo']['KingdomName'];
         $this->data['IsPrinz'] = $this->data['KingdomInfo']['IsPrincipality'];
         $r = $this->Kingdom->get_park_summary($id);
         $this->data['park_summary'] = $r;
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
         $this->set_admin_kingdom_auth_flags($_uid, (int)$id);
+
+        // Auth flags for revised admin template
+        $uid = $_uid;
+        $this->data['CanEditKingdom']   = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.details.edit', 'kingdom', (int)$id, AUTH_EDIT);
+        $this->data['CanManageKingdom'] = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.set', 'kingdom', (int)$id, AUTH_CREATE);
+        $this->data['CanAddPark']       = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, (int)$id, AUTH_CREATE);
+        $this->data['IsOrkAdmin']       = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $this->data['can_manage_officer_positions'] = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.officer.position.manage', 'kingdom', (int)$id, AUTH_EDIT);
+
+        $knConfigs  = Common::get_configs($id, CFG_KINGDOM);
+        $this->data['AwardRecsPublic'] = isset($knConfigs['AwardRecsPublic'])
+            ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
+
+        // Admin data for the revised template
+        $this->data['AdminInfo']       = [];
+        $this->data['AdminConfig']     = [];
+        $this->data['AdminParkTitles'] = [];
+        $this->data['AdminAwards']     = [];
+        if ($this->data['CanManageKingdom']) {
+            $parentKingdomId   = (int)($kd['KingdomInfo']['ParentKingdomId'] ?? 0);
+            $parentKingdomName = '';
+            if ($parentKingdomId > 0) {
+                $parentKingdomName = $this->Kingdom->get_kingdom_name($parentKingdomId);
+            }
+            $this->data['AdminInfo'] = [
+                'Name'             => $kd['KingdomInfo']['KingdomName']  ?? '',
+                'Abbreviation'     => $kd['KingdomInfo']['Abbreviation'] ?? '',
+                'Description'      => $kd['KingdomInfo']['Description']  ?? '',
+                'Url'              => $kd['KingdomInfo']['Url']          ?? '',
+                'IsPrincipality'   => !empty($kd['KingdomInfo']['IsPrincipality']),
+                'ParentKingdomId'  => $parentKingdomId,
+                'ParentKingdomName' => $parentKingdomName,
+                'Active'           => $kd['KingdomInfo']['Active'] ?? 'Active',
+            ];
+            $adminConfig = [];
+            foreach ($kd['KingdomConfiguration'] ?? [] as $cfg) {
+                if (!empty($cfg['UserSetting'])) {
+                    $adminConfig[] = $cfg;
+                }
+            }
+            $this->data['AdminConfig']     = $adminConfig;
+            $this->data['AdminParkTitles'] = array_values($kd['ParkTitles'] ?? []);
+
+            $rawAwards   = $kd['Awards']['Awards'] ?? [];
+            $adminAwards = [];
+            foreach ($rawAwards as $kawId => $aw) {
+                $adminAwards[] = [
+                    'KingdomAwardId'   => (int)$kawId,
+                    'KingdomAwardName' => $aw['KingdomAwardName']  ?? '',
+                    'AwardId'          => (int)($aw['AwardId']     ?? 0),
+                    'AwardName'        => $aw['AwardName']         ?? '',
+                    'IsLadder'         => (int)($aw['IsLadder']    ?? 0),
+                    'ReignLimit'       => (int)($aw['ReignLimit']  ?? 0),
+                    'MonthLimit'       => (int)($aw['MonthLimit']  ?? 0),
+                    'IsTitle'          => (int)($aw['IsTitle']     ?? 0),
+                    'TitleClass'       => (int)($aw['TitleClass']  ?? 0),
+                ];
+            }
+            $this->data['AdminAwards'] = $adminAwards;
+
+            $this->load_model('Award');
+            $sysAwardResult = $this->Award->GetAwardList(['IsLadder' => null, 'IsTitle' => null, 'OfficerRole' => 'Awards']);
+            $sysAwards = [];
+            if (($sysAwardResult['Status']['Status'] ?? 1) == 0) {
+                foreach ($sysAwardResult['Awards'] as $sa) {
+                    $sysAwards[] = ['AwardId' => (int)$sa['AwardId'], 'Name' => $sa['AwardName'] ?? $sa['KingdomAwardName']];
+                }
+                usort($sysAwards, function ($a, $b) {
+                    return strcasecmp($a['Name'], $b['Name']);
+                });
+            }
+            $this->data['SystemAwards'] = $sysAwards;
+        }
+
+        $this->template = '../revised-frontend/Admin_kingdom.tpl';
     }
 
     public function park($id = null)
@@ -1989,7 +2162,7 @@ class Controller_Admin extends Controller
             $this->data['park_summary'] = $r;
             $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
             $this->set_admin_kingdom_auth_flags($_uid, (int)$id);
-            $this->template = 'Admin_kingdom.tpl';
+            $this->template = '../revised-frontend/Admin_kingdom.tpl';
         } elseif ($type == 'park') {
             $this->park_route($id);
             $r = $this->Park->get_park_info($id);
@@ -2461,7 +2634,7 @@ class Controller_Admin extends Controller
 
     private function admin_can_edit_kingdom_reports(int $uid, int $kingdomId): bool
     {
-        return $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdomId, AUTH_EDIT);
+        return $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'kingdom.details.edit', 'kingdom', $kingdomId, AUTH_EDIT);
     }
 
     private function set_admin_kingdom_auth_flags(int $uid, int $kingdomId): void

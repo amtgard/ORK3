@@ -90,6 +90,27 @@ class Model_Park extends Model {
 		return $this->Park->GetParkDays(array('ParkId'=>$park_id));
 	}
 	
+
+	function get_officer_history($park_id, $role = null) {
+		$request = ['ParkId' => $park_id];
+		if ($role !== null && strlen(trim($role)) > 0) {
+			$request['Role'] = $role;
+		}
+		return $this->Park->GetOfficerHistory($request);
+	}
+
+	function add_officer_history($request) {
+		return $this->Park->AddOfficerHistory($request);
+	}
+
+	function edit_officer_history($request) {
+		return $this->Park->EditOfficerHistory($request);
+	}
+
+	function delete_officer_history($request) {
+		return $this->Park->DeleteOfficerHistory($request);
+	}
+
 }
 
 

@@ -277,7 +277,7 @@ class Attendance extends Ork3
                 logtrace('attendance_authority_h() - ecdid match', $detail);
                 return false;
             }
-            if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $detail['CalendarEventDetails'][0]['EventId'], AUTH_EDIT)) {
+            if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'event.attendance.manage', 'event', $detail['CalendarEventDetails'][0]['EventId'], AUTH_EDIT)) {
                 return AUTH_EVENT;
             }
             // Check event staff with can_attendance permission
@@ -287,7 +287,7 @@ class Attendance extends Ork3
                 return AUTH_EVENT;
             }
         } elseif (valid_id($request['EventId'])) {
-            if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_EVENT, $request['EventId'], AUTH_EDIT)) {
+            if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'event.attendance.manage', 'event', $request['EventId'], AUTH_EDIT)) {
                 return AUTH_EVENT;
             }
             // Check event staff with can_attendance permission (via event_id join for delete path)
@@ -297,11 +297,11 @@ class Attendance extends Ork3
                 return AUTH_EVENT;
             }
         } elseif (valid_id($request['ParkId'])) {
-            if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) {
+            if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.attendance.manage', 'park', $request['ParkId'], AUTH_EDIT)) {
                 return AUTH_PARK;
             }
         } elseif (valid_id($request['KingdomId'])) {
-            if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $request['KingdomId'], AUTH_EDIT)) {
+            if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.attendance.manage', 'kingdom', $request['KingdomId'], AUTH_EDIT)) {
                 return AUTH_KINGDOM;
             }
         } else {

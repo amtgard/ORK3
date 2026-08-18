@@ -83,7 +83,7 @@ class Player extends Ork3
     }
 
     /**
-     * @return list<array{role: mixed, entity_type: mixed, entity_name: mixed}>|array{Status: mixed, Error?: mixed, Detail?: mixed}
+     * @return list<array{role: mixed, canonical_key: mixed, DisplayTitle: mixed, entity_type: mixed, entity_name: mixed}>|array{Status: mixed, Error?: mixed, Detail?: mixed}
      */
     public function GetOfficerRoles($request)
     {
@@ -96,25 +96,32 @@ class Player extends Ork3
             return [];
         }
         $this->db->Clear();
-        $officerSql = "SELECT o.role, o.park_id,
+        $officerSql = "SELECT o.role, o.park_id, o.position_id,
+            op.canonical_key AS canonical_key,
+            IF(op.kingdom_id = 0, IF(al.title_alias IS NOT NULL AND al.title_alias != '', al.title_alias, op.title), IF(op.title_alias != '', op.title_alias, op.title)) AS display_title,
             CASE WHEN o.park_id > 0 THEN IFNULL(pt.title, 'Park')
                  WHEN k.parent_kingdom_id > 0 THEN 'Principality'
                  ELSE 'Kingdom' END AS entity_type,
             CASE WHEN o.park_id > 0 THEN p.name ELSE k.name END AS entity_name
             FROM " . DB_PREFIX . 'officer o
+            LEFT JOIN ' . DB_PREFIX . 'officer_position op ON op.position_id = o.position_id
+            LEFT JOIN ' . DB_PREFIX . 'officer_position_alias al ON al.kingdom_id = o.kingdom_id AND al.canonical_key = op.canonical_key
             LEFT JOIN ' . DB_PREFIX . 'kingdom k ON o.kingdom_id = k.kingdom_id
             LEFT JOIN ' . DB_PREFIX . 'park p ON o.park_id = p.park_id AND o.park_id > 0
             LEFT JOIN ' . DB_PREFIX . 'parktitle pt ON p.parktitle_id = pt.parktitle_id
             WHERE o.mundane_id = ' . (int) $mundaneId . "
               AND k.active = 'Active'
               AND (o.park_id = 0 OR p.active = 'Active')
-            ORDER BY o.park_id DESC, o.role";
+              AND (op.retired_at IS NULL OR op.position_id IS NULL)
+            ORDER BY o.park_id DESC, op.classification, op.sort_order";
         $officerResult = $this->db->DataSet($officerSql);
         $officerRoles = [];
         if ($officerResult && $officerResult->Size() > 0) {
             while ($officerResult->Next()) {
                 $officerRoles[] = [
                     'role' => $officerResult->role,
+                    'canonical_key' => $officerResult->canonical_key !== null ? $officerResult->canonical_key : $officerResult->role,
+                    'DisplayTitle' => $officerResult->display_title !== null ? $officerResult->display_title : $officerResult->role,
                     'entity_type' => $officerResult->entity_type,
                     'entity_name' => $officerResult->entity_name,
                 ];
@@ -630,7 +637,7 @@ class Player extends Ork3
     {
         $mundane = $this->player_info($request['MundaneId']);
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
-        if (valid_id($requester_id) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE) || $requester_id == $request['MundaneId']) {
+        if (valid_id($requester_id) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.heraldry.manage', 'park', $mundane['ParkId'], AUTH_CREATE) || $requester_id == $request['MundaneId']) {
             //try {
             $json_call = array(
                 "jsonrpc" => "2.0",
@@ -726,7 +733,7 @@ class Player extends Ork3
         $thePlayer = $this->player_info($request['MundaneId']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
+                && (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.note.manage', 'park', $thePlayer['ParkId'], AUTH_EDIT)
                     || $mundane_id == $request['MundaneId'])) {
             $this->notes->clear();
             $this->notes->mundane_id = $request['MundaneId'];
@@ -755,7 +762,7 @@ class Player extends Ork3
                 $thePlayer = $this->player_info($this->notes->mundane_id);
 
                 if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                        && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
+                        && (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.note.manage', 'park', $thePlayer['ParkId'], AUTH_EDIT)
                             || $mundane_id == $request['MundaneId'])) {
 
                     $note->mundane_note_id = $this->notes->mundane_note_id;
@@ -791,7 +798,7 @@ class Player extends Ork3
         }
         $thePlayer = $this->player_info($this->notes->mundane_id);
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-            && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)
+            && (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.note.manage', 'park', $thePlayer['ParkId'], AUTH_EDIT)
                 || $mundane_id == $request['MundaneId'])) {
             $this->notes->note         = $request['Note'];
             $this->notes->description  = $request['Description'];
@@ -828,7 +835,7 @@ class Player extends Ork3
         $thePlayer = $this->player_info($request['MundaneId']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $thePlayer['ParkId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.reconcile_credits', 'park', $thePlayer['ParkId'], AUTH_EDIT)) {
             $reconciled = new yapo($this->db, DB_PREFIX . 'class_reconciliation');
             foreach ($request['Reconcile'] as $k => $values) {
                 $reconciled->clear();
@@ -862,7 +869,7 @@ class Player extends Ork3
         $response = array();
         if (valid_id($request['MundaneId']) && $this->mundane->find()) {
             if ((($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                    && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT)) ||
+                    && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.edit', 'park', $this->mundane->park_id, AUTH_EDIT)) ||
                     $mundane_id == $request['MundaneId']) {
                 $fetchprivate = false;
             }
@@ -1741,7 +1748,7 @@ class Player extends Ork3
         }
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.create', 'park', $request['ParkId'], AUTH_CREATE)) {
             $park = new yapo($this->db, DB_PREFIX . 'park');
             $park->clear();
             $park->park_id = $request['ParkId'];
@@ -2396,8 +2403,8 @@ class Player extends Ork3
         }
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $park->park_id, AUTH_EDIT)		// New Kingdom
-                    || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT))) { // Current Kingdom
+                && (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.move', 'park', $park->park_id, AUTH_EDIT)		// New Kingdom
+                    || Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.move', 'park', $this->mundane->park_id, AUTH_EDIT))) { // Current Kingdom
 
             Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $request['MundaneId'], $player['Player']);
 
@@ -2477,7 +2484,7 @@ class Player extends Ork3
         ];
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT)
+                && (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.suspend', 'park', $this->mundane->park_id, AUTH_EDIT)
                     || Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_ADMIN, 0, AUTH_ADMIN))) {
             $this->mundane->suspended = $request['Suspended'];
             if (!$request['Suspended']) {
@@ -2625,7 +2632,7 @@ class Player extends Ork3
         }
 
         $notices = '';
-        if (valid_id($requester_id) && Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
+        if (valid_id($requester_id) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.edit', 'park', $mundane['ParkId'], AUTH_CREATE)
             || $requester_id == $request['MundaneId']) {
 
             if (Ork3::$Lib->authorization->HasAuthority($request['MundaneId'], AUTH_ADMIN, 0, AUTH_EDIT)
@@ -2761,7 +2768,7 @@ class Player extends Ork3
 
                 // reeve or corpora qual changes
                 // TODO: add error messaging
-                if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $this->mundane->park_id, AUTH_EDIT)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.qualification.edit', 'park', $this->mundane->park_id, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_KINGDOM, $this->mundane->kingdom_id, AUTH_EDIT) || Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_ADMIN, 0, AUTH_EDIT)) {
                     $this->mundane->reeve_qualified = is_null($request['ReeveQualified']) ? $this->mundane->reeve_qualified : $request['ReeveQualified'];
                     $this->mundane->reeve_qualified_until = is_null($request['ReeveQualifiedUntil']) ? $this->mundane->reeve_qualified_until : ($request['ReeveQualifiedUntil'] === '0000-00-00' ? null : $request['ReeveQualifiedUntil']);
                     $this->mundane->corpora_qualified = is_null($request['CorporaQualified']) ? $this->mundane->corpora_qualified : $request['CorporaQualified'];
@@ -2795,10 +2802,10 @@ class Player extends Ork3
                 $this->mundane->basic_fonts = is_null($request['BasicFonts']) ? $this->mundane->basic_fonts : ($request['BasicFonts'] ? 1 : 0);
                 $this->mundane->dyslexia_fonts = is_null($request['DyslexiaFonts']) ? $this->mundane->dyslexia_fonts : ($request['DyslexiaFonts'] ? 1 : 0);
 
-                if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.active_status.set', 'park', $mundane['ParkId'], AUTH_CREATE)) {
                     $this->mundane->active = is_null($request['Active']) ? $this->mundane->active : ($request['Active'] ? 1 : 0);
                 }
-                if (Ork3::$Lib->authorization->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($requester_id, 'player.edit', 'park', $mundane['ParkId'], AUTH_CREATE)) {
                     $pms = $request['ParkMemberSince'];
                     $this->mundane->park_member_since = is_null($pms) ? $this->mundane->park_member_since : (($pms === '' || $pms === '0000-00-00') ? null : $pms);
                 }
@@ -2864,7 +2871,7 @@ class Player extends Ork3
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.heraldry.manage', 'park', $mundane['ParkId'], AUTH_EDIT)
                 || $requester_id == $request['MundaneId']) {
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
@@ -2951,7 +2958,7 @@ class Player extends Ork3
 
         $notices = '';
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.waiver.manage', 'park', $mundane['ParkId'], AUTH_EDIT)) {
             $request = $this->media_fetch('Waiver', $request);
             if ($request['Waivered'] && strlen($request['Waiver']) > 0 && strlen($request['Waiver']) < 465000 && Common::supported_mime_types($request['WaiverMimeType']) && !Common::is_pdf_mime_type($request['WaiverMimeType'])) {
                 logtrace("set_waiver() - image", $request);
@@ -3015,7 +3022,7 @@ class Player extends Ork3
         $mundane = $this->player_info($request['MundaneId']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.edit', 'park', $mundane['ParkId'], AUTH_EDIT)) {
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
             if ($this->mundane->find()) {
@@ -3037,7 +3044,7 @@ class Player extends Ork3
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.heraldry.manage', 'park', $mundane['ParkId'], AUTH_EDIT)
                 || $requester_id == $request['MundaneId']) {
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
@@ -3066,7 +3073,7 @@ class Player extends Ork3
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.heraldry.manage', 'park', $mundane['ParkId'], AUTH_EDIT)
                 || $requester_id == $request['MundaneId']) {
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
@@ -3091,7 +3098,7 @@ class Player extends Ork3
         $requester_id = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
 
         if (($mundane_id = Ork3::$Lib->authorization->IsAuthorized($request['Token'])) > 0
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.waiver.manage', 'park', $mundane['ParkId'], AUTH_EDIT)) {
             $this->mundane->clear();
             $this->mundane->mundane_id = $request['MundaneId'];
             if ($this->mundane->find()) {
@@ -3253,7 +3260,7 @@ class Player extends Ork3
         }
 
         if (valid_id($mundane_id)
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipient['ParkId'], AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $recipient['ParkId'], AUTH_CREATE)) {
             if (valid_id($request['ParkId'])) {
                 $Park = new Park();
                 $park_info = $Park->GetParkShortInfo($request);
@@ -3340,7 +3347,7 @@ class Player extends Ork3
         if ($awards->find() && valid_id($mundane_id)) {
             $mundane = $this->player_info($awards->mundane_id);
             if (valid_id($request['MundaneId'])
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $mundane['ParkId'], AUTH_EDIT)) {
 
                 // Collect all IDs first: save() calls Clear()+Find() after each save,
                 // replacing the result set, so next() would exit the loop after one iteration.
@@ -3375,7 +3382,7 @@ class Player extends Ork3
         if (valid_id($request['AwardsId']) && $awards->find() && $mundane_id > 0) {
             $mundane = $this->player_info($awards->mundane_id);
             if (valid_id($mundane_id)
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $mundane['ParkId'], AUTH_CREATE)) {
 
                 $this->revoke_award($awards, $request["Revocation"], $mundane_id);
 
@@ -3429,7 +3436,7 @@ class Player extends Ork3
         if (valid_id($request['AwardsId']) && $awards->find()) {
             $mundane = $this->player_info($awards->mundane_id);
             if (valid_id($mundane_id)
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $mundane['ParkId'], AUTH_CREATE)) {
                 if (valid_id($request['ParkId'])) {
                     $Park = new Park();
                     $info = $Park->GetParkShortInfo(array( 'ParkId' => $request['ParkId'] ));
@@ -3539,7 +3546,7 @@ class Player extends Ork3
         $found = valid_id($request['AwardsId']) && $awards->find();
         if ($found) {
             $mundane = $this->player_info($awards->mundane_id);
-            $hasAuth = valid_id($mundane_id) && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT);
+            $hasAuth = valid_id($mundane_id) && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $mundane['ParkId'], AUTH_EDIT);
             if ($hasAuth) {
 
                 // Validate park and compute new location values for comparison
@@ -3646,7 +3653,7 @@ class Player extends Ork3
         if (valid_id($request['AwardsId']) && $awards->find()) {
             $mundane = $this->player_info($awards->mundane_id);
             if (valid_id($mundane_id)
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_CREATE)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.award.manage', 'park', $mundane['ParkId'], AUTH_CREATE)) {
 
                 Ork3::$Lib->dangeraudit->audit(__CLASS__ . "::" . __FUNCTION__, $request, 'Player', $awards->mundane_id, $this->get_award($awards));
 
@@ -3665,7 +3672,7 @@ class Player extends Ork3
         $dues = new yapo($this->db, DB_PREFIX . 'dues');
         $dues->clear();
 
-        if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $request['ParkId'], AUTH_EDIT)) {
+        if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.dues.manage', 'park', $request['ParkId'], AUTH_EDIT)) {
             $dues->mundane_id = $request['MundaneId'];
             $dues->created_by = Ork3::$Lib->authorization->IsAuthorized($request['Token']);
             $dues->created_on = date('Y-m-d');
@@ -3757,7 +3764,7 @@ class Player extends Ork3
         if (valid_id($request['DuesId']) && $dues->find()) {
             $mundane = $this->player_info($dues->mundane_id);
             if (valid_id($mundane_id)
-                && Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
+                && Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'park.dues.manage', 'park', $mundane['ParkId'], AUTH_EDIT)) {
                 $prior_state = [
                     'dues_id'       => (int)$dues->dues_id,
                     'mundane_id'    => (int)$dues->mundane_id,
@@ -3941,7 +3948,7 @@ class Player extends Ork3
 
             if (valid_id($request['RecommendationsId']) && $awardRec->find()) {
                 $recipientInfo = $this->player_info($awardRec->mundane_id);
-                if (Ork3::$Lib->authorization->HasAuthority($mundane_id, AUTH_PARK, $recipientInfo['ParkId'], AUTH_CREATE)) {
+                if (Ork3::$Lib->authorizationgate->checkPermissionOrAuthority($mundane_id, 'player.recommendation.manage', 'park', $recipientInfo['ParkId'], AUTH_CREATE)) {
                     $can_delete_recommendation = true;
                 }
                 if ($can_delete_recommendation || $request['RequestedBy'] == $awardRec->recommended_by_id || $request['RequestedBy'] == $awardRec->mundane_id) {

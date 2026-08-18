@@ -23,7 +23,7 @@ class Controller_Player extends Controller
             $this->session->kingdom_name = $park_info['KingdomInfo']['KingdomName'];
         }
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if ($_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
+        if ($_uid > 0 && $this->Authorization->has_permission_or_authority($_uid, 'player.edit', 'park', (int)$this->session->park_id, AUTH_EDIT)) {
             $this->data['menu']['admin'] = array( 'url' => UIR.'Admin/player/'.$id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
         }
         $this->data['menulist']['admin'] = array(
@@ -234,7 +234,7 @@ class Controller_Player extends Controller
         $this->data['AllDues'] = $this->Player->get_dues($id, 0, false);
         $this->data['Units'] = $this->Unit->get_unit_list(array( 'MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1, 'Lightweight' => 1 ));
         $this->data['menu']['player'] = array( 'url' => UIR."Player/profile/$id", 'display' => $this->data['Player']['Persona'] );
-        $canEdit    = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+        $canEdit    = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'player.edit', 'park', (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
         $this->data['canDeleteRecommendation'] = $this->award_rec_can_delete($uid, AUTH_EDIT);
         if ($canEdit) {
             $this->data['menu']['admin'] = array( 'url' => UIR."Admin/player/$id", 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
@@ -396,7 +396,7 @@ class Controller_Player extends Controller
         $this->data['Dues']          = $this->Player->get_dues($id, 1, true);
         $this->data['AllDues']       = [];  // loaded via AJAX when dues modal opens
         $this->data['Units']         = $this->Unit->get_unit_list(['MundaneId' => $id, 'IncludeCompanies' => 1, 'IncludeHouseHolds' => 1, 'IncludeEvents' => 1, 'ActiveOnly' => 1, 'Lightweight' => 1]);
-        $canEdit    = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
+        $canEdit    = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'player.edit', 'park', (int)($this->data['Player']['ParkId'] ?? 0), AUTH_EDIT);
         $playerParkId = (int)($this->data['Player']['ParkId'] ?? 0);
         $playerKingdomId = (int)($this->data['Player']['KingdomId'] ?? 0);
         $this->data['canEditAdmin'] = $canEdit;
@@ -405,7 +405,7 @@ class Controller_Player extends Controller
             || $canEdit
             || ($playerKingdomId > 0 && $uid > 0 && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $playerKingdomId, AUTH_EDIT))
             || ($uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN));
-        $this->data['canManageAwards'] = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_CREATE);
+        $this->data['canManageAwards'] = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'player.award.manage', 'park', $playerParkId, AUTH_CREATE);
         $knConfigs  = Common::get_configs($this->session->kingdom_id, CFG_KINGDOM);
         $recsPublic = isset($knConfigs['AwardRecsPublic']) ? (bool)(int)$knConfigs['AwardRecsPublic']['Value'] : true;
         $this->data['ShowRecsTab']          = $recsPublic || $canEdit;
@@ -597,7 +597,7 @@ class Controller_Player extends Controller
         $this->data['AwardOptions'] = $this->Award->fetch_award_option_list($this->session->kingdom_id, 'Awards');
 
         $playerParkId = (int)($this->data['Player']['ParkId'] ?? 0);
-        $canEditAdmin = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_PARK, $playerParkId, AUTH_EDIT);
+        $canEditAdmin = $uid > 0 && $this->Authorization->has_permission_or_authority($uid, 'park.reconcile_credits', 'park', $playerParkId, AUTH_EDIT);
         $isOwnProfile = $uid === $id;
         if (!$canEditAdmin && !$isOwnProfile) {
             header('Location: ' . UIR . "Player/profile/$id");
@@ -647,10 +647,10 @@ class Controller_Player extends Controller
         if ($uid <= 0) {
             return false;
         }
-        if (isset($this->session->park_id) && $this->Authorization->has_authority($uid, AUTH_PARK, (int)$this->session->park_id, $role)) {
+        if (isset($this->session->park_id) && $this->Authorization->has_permission_or_authority($uid, 'player.edit', 'park', (int)$this->session->park_id, $role)) {
             return true;
         }
-        if (isset($this->session->kingdom_id) && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$this->session->kingdom_id, $role)) {
+        if (isset($this->session->kingdom_id) && $this->Authorization->has_permission_or_authority($uid, 'kingdom.details.edit', 'kingdom', (int)$this->session->kingdom_id, $role)) {
             return true;
         }
 

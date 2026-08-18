@@ -144,7 +144,8 @@ class Controller_EventAjax extends Controller
         }
 
         $uid = (int)$this->session->user_id;
-        if (!$this->EventPlanning->can_add_attendance($uid, $event_id, $detail_id)) {
+        if (!$this->EventPlanning->can_add_attendance($uid, $event_id, $detail_id)
+            && !$this->Authorization->has_permission($uid, 'event.attendance.manage', 'event', $event_id)) {
             echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
             exit;
         }
@@ -216,7 +217,8 @@ class Controller_EventAjax extends Controller
 
         $uid = (int)$this->session->user_id;
         $this->load_model('EventPlanning');
-        if (!$this->EventPlanning->can_remove_rsvp($uid, $event_id, $detail_id)) {
+        if (!$this->EventPlanning->can_remove_rsvp($uid, $event_id, $detail_id)
+            && !$this->Authorization->has_permission($uid, 'event.rsvp.manage', 'event', $event_id)) {
             echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
             exit;
         }
@@ -243,7 +245,7 @@ class Controller_EventAjax extends Controller
         }
 
         $uid = (int)$this->session->user_id;
-        if (!$this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+        if (!$this->Authorization->has_permission_or_authority($uid, 'event.delete', 'event', $event_id, AUTH_CREATE)) {
             echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
             exit;
         }
@@ -280,7 +282,7 @@ class Controller_EventAjax extends Controller
         $uid = (int)$this->session->user_id;
 
         if ($action === 'playersearch') {
-            if (!$this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_permission_or_authority($uid, 'event.auth.manage', 'event', $event_id, AUTH_CREATE)) {
                 echo json_encode([]);
                 exit;
             }
@@ -300,7 +302,7 @@ class Controller_EventAjax extends Controller
             echo json_encode($results);
 
         } elseif ($action === 'addauth') {
-            if (!$this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_permission_or_authority($uid, 'event.auth.manage', 'event', $event_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -337,7 +339,7 @@ class Controller_EventAjax extends Controller
             echo json_encode(['status' => 0, 'authId' => $authId, 'persona' => $persona]);
 
         } elseif ($action === 'removeauth') {
-            if (!$this->Authorization->has_authority($uid, AUTH_EVENT, $event_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_permission_or_authority($uid, 'event.auth.manage', 'event', $event_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -624,7 +626,8 @@ class Controller_EventAjax extends Controller
 
         $hUid = (int)$this->session->user_id;
         $this->load_model('EventPlanning');
-        if (!$this->EventPlanning->can_manage_event_detail($hUid, $event_id, 0, 'manage')) {
+        if (!$this->EventPlanning->can_manage_event_detail($hUid, $event_id, 0, 'manage')
+            && !$this->Authorization->has_permission($hUid, 'event.heraldry.manage', 'event', $event_id)) {
             echo json_encode(['status' => 3, 'error' => 'Not authorized.']);
             exit;
         }

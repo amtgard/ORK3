@@ -554,7 +554,7 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'setrecsvisibility') {
             $uid = (int)$this->session->user_id;
-            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
+            if (!$this->Authorization->has_permission_or_authority($uid, 'kingdom.config.edit', 'kingdom', $kingdom_id, AUTH_EDIT)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -565,7 +565,7 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'addauth') {
             $uid = (int)$this->session->user_id;
-            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_permission_or_authority($uid, 'kingdom.auth.manage', 'kingdom', $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -606,7 +606,7 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'removeauth') {
             $uid = (int)$this->session->user_id;
-            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_permission_or_authority($uid, 'kingdom.auth.manage', 'kingdom', $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -671,8 +671,253 @@ class Controller_KingdomAjax extends Controller
                 ? json_encode(['status' => 0, 'taken' => true, 'name' => $conflictName])
                 : json_encode(['status' => 0, 'taken' => false]);
 
+        } elseif ($action === 'officerhistory') {
+            $this->load_model('Kingdom');
+            $role = trim($_GET['Role'] ?? '');
+            $r = $this->Kingdom->get_officer_history($kingdom_id, strlen($role) > 0 ? $role : null);
+            echo json_encode([
+                'status'  => 0,
+                'history' => $r['History'] ?? [],
+            ]);
+
+        } elseif ($action === 'addofficerhistory') {
+            $this->load_model('Kingdom');
+            $mid   = (int)($_POST['MundaneId'] ?? 0);
+            $role  = trim($_POST['Role']       ?? '');
+            $start = trim($_POST['StartDate']  ?? '');
+            $end   = trim($_POST['EndDate']    ?? '');
+            $notes = trim($_POST['Notes']      ?? '');
+
+            if (!$mid) {
+                echo json_encode(['status' => 1, 'error' => 'Please select a player.']);
+                exit;
+            }
+            if (!strlen($role)) {
+                echo json_encode(['status' => 1, 'error' => 'Role is required.']);
+                exit;
+            }
+            if (!strlen($start)) {
+                echo json_encode(['status' => 1, 'error' => 'Start date is required.']);
+                exit;
+            }
+
+            $r = $this->Kingdom->add_officer_history([
+                'Token'     => $this->session->token,
+                'KingdomId' => $kingdom_id,
+                'MundaneId' => $mid,
+                'Role'      => $role,
+                'StartDate' => $start,
+                'EndDate'   => $end,
+                'Notes'     => $notes,
+            ]);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'editofficerhistory') {
+            $this->load_model('Kingdom');
+            $ohid  = (int)($_POST['OfficerHistoryId'] ?? 0);
+            $role  = trim($_POST['Role']       ?? '');
+            $start = trim($_POST['StartDate']  ?? '');
+            $end   = trim($_POST['EndDate']    ?? '');
+            $notes = trim($_POST['Notes']      ?? '');
+
+            if (!$ohid) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid history record.']);
+                exit;
+            }
+            if (!strlen($role)) {
+                echo json_encode(['status' => 1, 'error' => 'Role is required.']);
+                exit;
+            }
+            if (!strlen($start)) {
+                echo json_encode(['status' => 1, 'error' => 'Start date is required.']);
+                exit;
+            }
+
+            $r = $this->Kingdom->edit_officer_history([
+                'Token'            => $this->session->token,
+                'KingdomId'        => $kingdom_id,
+                'OfficerHistoryId' => $ohid,
+                'Role'             => $role,
+                'StartDate'        => $start,
+                'EndDate'          => $end,
+                'Notes'            => $notes,
+            ]);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
+        } elseif ($action === 'deleteofficerhistory') {
+            $this->load_model('Kingdom');
+            $ohid = (int)($_POST['OfficerHistoryId'] ?? 0);
+
+            if (!$ohid) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid history record.']);
+                exit;
+            }
+
+            $r = $this->Kingdom->delete_officer_history([
+                'Token'            => $this->session->token,
+                'KingdomId'        => $kingdom_id,
+                'OfficerHistoryId' => $ohid,
+            ]);
+            echo (!isset($r['Status']) || $r['Status'] == 0)
+                ? json_encode(['status' => 0])
+                : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
+
         } else {
             echo json_encode(['status' => 1, 'error' => 'Unknown action']);
+        }
+        exit;
+    }
+
+    public function rbac($p = null)
+    {
+        header('Content-Type: application/json');
+        $parts      = explode('/', $p ?? '');
+        $kingdom_id = (int)preg_replace('/[^0-9]/', '', $parts[0] ?? '');
+        $action     = $parts[1] ?? '';
+
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+
+        $uid = (int)$this->session->user_id;
+
+        if (!valid_id($kingdom_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid kingdom ID']);
+            exit;
+        }
+
+        // All RBAC actions require kingdom.auth.manage or admin
+        if (
+            !$this->Authorization->has_permission_or_authority($uid, 'kingdom.auth.manage', 'kingdom', $kingdom_id, AUTH_CREATE)
+            && !$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)
+        ) {
+            echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
+            exit;
+        }
+
+        if ($action === 'getroles') {
+            $roles = Ork3::$Lib->rbacservice->GetAvailableRoles($kingdom_id);
+            echo json_encode(['status' => 0, 'roles' => $roles]);
+
+        } elseif ($action === 'getassignments') {
+            $this->load_model('RBACService');
+            $assignments = $this->RBACService->GetKingdomRoleAssignments($kingdom_id, true);
+            echo json_encode(['status' => 0, 'assignments' => $assignments]);
+
+        } elseif ($action === 'grantrole') {
+            $target_id  = (int)($_POST['MundaneId'] ?? 0);
+            $role_id    = (int)($_POST['RoleId'] ?? 0);
+            $scope_type = trim($_POST['ScopeType'] ?? 'kingdom');
+            $scope_id   = (int)($_POST['ScopeId'] ?? $kingdom_id);
+
+            if (!valid_id($target_id) || !valid_id($role_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid player or role.']);
+                exit;
+            }
+
+            $r = Ork3::$Lib->rbacservice->GrantRole($uid, $target_id, $role_id, $scope_type, $scope_id);
+            if (isset($r['Status']) && $r['Status'] == 0) {
+                echo json_encode(['status' => 0]);
+            } else {
+                echo json_encode(['status' => $r['Status'] ?? 1, 'error' => ($r['Error'] ?? '') . ': ' . ($r['Detail'] ?? '')]);
+            }
+
+        } elseif ($action === 'revokerole') {
+            $user_role_id = (int)($_POST['UserRoleId'] ?? 0);
+
+            if (!valid_id($user_role_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid assignment.']);
+                exit;
+            }
+
+            $r = Ork3::$Lib->rbacservice->RevokeRole($uid, $user_role_id);
+            if (isset($r['Status']) && $r['Status'] == 0) {
+                echo json_encode(['status' => 0]);
+            } else {
+                echo json_encode(['status' => $r['Status'] ?? 1, 'error' => ($r['Error'] ?? '') . ': ' . ($r['Detail'] ?? '')]);
+            }
+
+        } elseif ($action === 'createrole') {
+            $name         = trim($_POST['Name'] ?? '');
+            $display_name = trim($_POST['DisplayName'] ?? '');
+            $description  = trim($_POST['Description'] ?? '');
+            $scope_type   = trim($_POST['ScopeType'] ?? 'kingdom');
+            $perm_keys    = isset($_POST['Permissions']) ? (is_array($_POST['Permissions']) ? $_POST['Permissions'] : json_decode($_POST['Permissions'], true)) : [];
+
+            if (!strlen($name) || !strlen($display_name)) {
+                echo json_encode(['status' => 1, 'error' => 'Name and display name are required.']);
+                exit;
+            }
+
+            $r = Ork3::$Lib->rbacservice->CreateRole($uid, $kingdom_id, $name, $display_name, $description, $scope_type, $perm_keys ?: []);
+            if (isset($r['Status']) && $r['Status'] == 0) {
+                echo json_encode(['status' => 0, 'role_id' => $r['Detail'] ?? 0]);
+            } else {
+                echo json_encode(['status' => $r['Status'] ?? 1, 'error' => ($r['Error'] ?? '') . ': ' . ($r['Detail'] ?? '')]);
+            }
+
+        } elseif ($action === 'editrole') {
+            $role_id      = (int)($_POST['RoleId'] ?? 0);
+            $display_name = isset($_POST['DisplayName']) ? trim($_POST['DisplayName']) : null;
+            $description  = isset($_POST['Description']) ? trim($_POST['Description']) : null;
+            $perm_keys    = isset($_POST['Permissions']) ? (is_array($_POST['Permissions']) ? $_POST['Permissions'] : json_decode($_POST['Permissions'], true)) : [];
+
+            if (!valid_id($role_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid role.']);
+                exit;
+            }
+
+            $r = Ork3::$Lib->rbacservice->EditRole($uid, $role_id, $perm_keys ?: [], $display_name, $description);
+            if (isset($r['Status']) && $r['Status'] == 0) {
+                echo json_encode(['status' => 0]);
+            } else {
+                echo json_encode(['status' => $r['Status'] ?? 1, 'error' => ($r['Error'] ?? '') . ': ' . ($r['Detail'] ?? '')]);
+            }
+
+        } elseif ($action === 'deleterole') {
+            $role_id = (int)($_POST['RoleId'] ?? 0);
+
+            if (!valid_id($role_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid role.']);
+                exit;
+            }
+
+            $r = Ork3::$Lib->rbacservice->DeleteRole($uid, $role_id);
+            if (isset($r['Status']) && $r['Status'] == 0) {
+                echo json_encode(['status' => 0]);
+            } else {
+                echo json_encode(['status' => $r['Status'] ?? 1, 'error' => ($r['Error'] ?? '') . ': ' . ($r['Detail'] ?? '')]);
+            }
+
+        } elseif ($action === 'geteffectivepermissions') {
+            $target_id  = (int)($_GET['MundaneId'] ?? 0);
+            $scope_type = trim($_GET['ScopeType'] ?? 'kingdom');
+            $scope_id   = (int)($_GET['ScopeId'] ?? $kingdom_id);
+
+            if (!valid_id($target_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid player.']);
+                exit;
+            }
+
+            $perms = Ork3::$Lib->rbacservice->GetEffectivePermissions($target_id, $scope_type, $scope_id);
+            echo json_encode(['status' => 0, 'permissions' => $perms]);
+
+        } elseif ($action === 'getrolepermissions') {
+            $role_id = (int)($_GET['RoleId'] ?? 0);
+            if (!valid_id($role_id)) {
+                echo json_encode(['status' => 1, 'error' => 'Invalid role.']);
+                exit;
+            }
+            $perms = Ork3::$Lib->rbacservice->GetRolePermissions($role_id);
+            echo json_encode(['status' => 0, 'permissions' => $perms]);
+
+        } else {
+            echo json_encode(['status' => 1, 'error' => 'Unknown action: ' . $action]);
         }
         exit;
     }
@@ -803,7 +1048,7 @@ class Controller_KingdomAjax extends Controller
 
         $isAdmin = $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $isKingdomEditor = valid_id($player_kingdom_id)
-            && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT);
+            && $this->Authorization->has_permission_or_authority($uid, 'player.edit', 'kingdom', $player_kingdom_id, AUTH_EDIT);
         if (!$isAdmin && !$isKingdomEditor) {
             echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
             exit;
