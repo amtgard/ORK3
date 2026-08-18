@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-voting-eligible-2",
+  "imageWidth": 1280,
+  "imageHeight": 1976,
+  "calibratedAt": "2026-08-01T22:01:28Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [
+    {
+      "x": 1050,
+      "y": 155,
+      "width": 53,
+      "height": 29,
+      "source": "refuzz"
+    },
+    {
+      "x": 75,
+      "y": 480,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 153,
+      "y": 480,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 665,
+      "y": 480,
+      "width": 29,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 753,
+      "y": 480,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 265,
+      "y": 496,
+      "width": 29,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 353,
+      "y": 496,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 475,
+      "y": 499,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 876,
+      "y": 499,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 954,
+      "y": 499,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 1076,
+      "y": 499,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 65,
+      "y": 761,
+      "width": 29,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 265,
+      "y": 761,
+      "width": 29,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 353,
+      "y": 761,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 475,
+      "y": 761,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 753,
+      "y": 761,
+      "width": 19,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 866,
+      "y": 761,
+      "width": 29,
+      "height": 21,
+      "source": "refuzz"
+    },
+    {
+      "x": 1066,
+      "y": 761,
+      "width": 29,
+      "height": 21,
+      "source": "refuzz"
+    }
+  ],
+  "manualZones": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T17:06:29Z",
+  "refuzzedFromCommit": "05389516"
+}

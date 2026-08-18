@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "pageId": "atlas-index",
+  "imageWidth": 1280,
+  "imageHeight": 776,
+  "calibratedAt": "2026-08-01T23:00:39Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [],
+  "manualZones": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T01:57:24Z",
+  "refuzzedFromCommit": "5bc623cd"
+}

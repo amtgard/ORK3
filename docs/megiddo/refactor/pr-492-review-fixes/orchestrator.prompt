@@ -1,0 +1,76 @@
+# PR #492 Review Fix ORCHESTRATOR (Rev4)
+
+You drive sequential fixes for PR #492 review comments. You do **not** implement fixes yourself. You launch one serialized worker Task per checklist item, wait for completion, verify, then start the next.
+
+## Read first
+
+- `docs/megiddo/refactor/pr-492-review-fixes/README.md`
+- `docs/megiddo/refactor/pr-492-review-fixes/plan.md`
+- `docs/megiddo/refactor/pr-492-review-fixes/checklist.md`
+- `docs/megiddo/refactor/05-development-steering.md` (spirit: no `$DB` / `Ork3::$Lib` back into `orkui/`)
+- `docs/megiddo/refactor/06-test-framework.md`
+
+## Hard rules
+
+1. **Serialize:** never launch two fix workers in parallel. One completes → verify → next.
+2. **Branch:** all work on `fix-pr-492`. Do not push unless the user already asked.
+3. **One commit per checklist item** (C-XX). Commit message format:
+   `FIX-PR492 C-XX: <short why>`
+4. **Per item the worker MUST:**
+   - Implement the fix per plan.md for that C-XX (C-31 is analysis/doc-only)
+   - Add unit/integration tests that would fail on the original issue and pass with the fix (skip new product tests for C-31; still run full suite green)
+   - Run the **full** PHPUnit suite (`vendor/bin/phpunit` via project conventions / `phpunit.xml.dist`) and leave it green
+   - Mark the item complete in `checklist.md` (both table and simple list)
+   - Stage & commit (follow repo commit style; include Co-authored-by Cursor if matching recent Megiddo commits)
+   - Post a **reply** on the original PR review thread via `gh api` (or `gh pr comment` with in-reply-to) explaining how it was fixed, with the commit SHA
+   - Return: status ok|blocked|failed, commit hash, test result summary, PR comment URL
+5. **Stop** and report to the user if: unresolvable product conflict, full suite cannot go green without unrelated changes, or auth policy needs human product decision beyond plan.md.
+6. **Rev4 baked policies** (do not re-ask):
+   - **C-25:** Reactivation only via explicit `ReactivateInactive` from park-add path + dangeraudit.
+   - **C-27:** Master parity for park ladder-grid (drop park→kingdom_id lookup).
+   - **C-31:** Analysis/inventory doc only; no mass gating of pre-existing master surfaces.
+7. Resume at the first unchecked item on checklist.md.
+8. Stage only files for the current C-XX. Do not commit unrelated dirty working-tree noise.
+
+## Worker prompt template
+
+Paste this into each Task (subagent_type=generalPurpose), filling C-XX:
+
+```
+You are a PR #492 fix worker for item C-XX on branch fix-pr-492.
+
+Repo: /home/megiddo/Insync/en.gannim@gmail.com/Google Drive/Personal/Development/ORK3
+
+Read:
+- docs/megiddo/refactor/pr-492-review-fixes/plan.md (section C-XX only)
+- docs/megiddo/refactor/pr-492-review-fixes/checklist.md
+- The cited source files and existing related tests
+
+Requirements:
+1. Implement the fix described for C-XX.
+2. Add/update unit or integration tests proving the original issue and the fix.
+3. Run the full PHPUnit suite; fix failures you introduce until green.
+4. Update checklist.md to mark C-XX complete (both sections). Fill Commit column with short SHA when practical.
+5. git add only relevant files and commit with message:
+   FIX-PR492 C-XX: <concise why>
+   Use HEREDOC. Do not push. Do not amend prior commits.
+   Do not stage unrelated dirty files already in the working tree.
+6. Reply on the GitHub review thread for this comment (use the discussion URL / comment id from plan.md) summarizing the fix and including the commit SHA. Prefer:
+   gh api repos/amtgard/ORK3/pulls/492/comments/<COMMENT_ID>/replies -f body='...'
+   If gh/auth unavailable, write the intended reply body to docs/megiddo/refactor/pr-492-review-fixes/pending-replies/C-XX.md and note that in the report.
+7. Return structured report: status, commit, phpunit summary, checklist updated, reply URL/id.
+
+Do not work on other C-* items. Do not leave the working tree dirty with your changes uncommitted.
+```
+
+## Per-hop procedure
+
+1. Read checklist; pick first unchecked item.
+2. Tell the user: Starting C-XX…
+3. Launch Task with the worker prompt for that item.
+4. Wait for result; verify checklist checkbox and that HEAD commit matches.
+5. If ok → next. If blocked/failed → stop.
+
+## Final response
+
+Table: Item, Commit, PHPUnit, PR reply, Remaining.

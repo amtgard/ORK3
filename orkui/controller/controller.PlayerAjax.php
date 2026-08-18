@@ -15,26 +15,18 @@ class Controller_PlayerAjax extends Controller
             echo json_encode(['status' => 5, 'error' => 'Not logged in']);
             exit;
         }
+        $this->load_model('Player');
         $candidate = trim($_POST['UserName'] ?? '');
-        echo json_encode(self::username_check_payload($candidate));
+        echo json_encode(self::username_check_payload($candidate, $this->Player));
         exit;
     }
 
     // Shared helper — used by check_username() above AND by
     // Controller_SelfReg::check_username(). Same JSON contract so the JS
     // helper (initUsernameAvailabilityCheck in revised.js) works with both.
-    public static function username_check_payload($candidate)
+    public static function username_check_payload($candidate, $player = null)
     {
-        $candidate = trim((string)$candidate);
-        if (strlen($candidate) < 4) {
-            return ['status' => 0, 'available' => false, 'reason' => 'too-short', 'username' => $candidate];
-        }
-        global $DB;
-        $DB->Clear();
-        $DB->username = $candidate;
-        $rs = $DB->DataSet('SELECT mundane_id FROM ' . DB_PREFIX . 'mundane WHERE username = :username LIMIT 1');
-        $taken = ($rs && $rs->Next());
-        return ['status' => 0, 'available' => !$taken, 'username' => $candidate];
+        return Model_Player::username_check_payload_for($candidate, $player);
     }
 
     public function park($p = null)
@@ -374,27 +366,13 @@ class Controller_PlayerAjax extends Controller
                 : json_encode(['status' => $r['Status'], 'error' => rtrim(($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''), ': ')]);
 
         } elseif ($action === 'awardranks') {
-            global $DB;
-            $DB->Clear();
-            $pid = (int)$player_id;
-            $rs  = $DB->DataSet("
-				SELECT ka.award_id, MAX(aw.rank) AS max_rank
-				FROM ork_awards aw
-				INNER JOIN ork_kingdomaward ka ON ka.kingdomaward_id = aw.kingdomaward_id
-				WHERE aw.mundane_id = {$pid} AND aw.rank > 0
-				GROUP BY ka.award_id");
-            $ranks = [];
-            while ($rs && $rs->Next()) {
-                $ranks[(int)$rs->award_id] = (int)$rs->max_rank;
-            }
+            $ranks = $this->Player->get_award_max_ranks((int)$player_id);
             echo json_encode($ranks);
 
         } elseif ($action === 'info') {
-            global $DB;
-            $DB->Clear();
-            $rs = $DB->DataSet("SELECT mundane_id, persona FROM ork_mundane WHERE mundane_id = {$player_id} LIMIT 1");
-            if ($rs && $rs->Next()) {
-                echo json_encode(['status' => 0, 'MundaneId' => $player_id, 'Persona' => $rs->persona]);
+            $player = $this->Player->fetch_player($player_id);
+            if ($player) {
+                echo json_encode(['status' => 0, 'MundaneId' => $player_id, 'Persona' => $player['Persona']]);
             } else {
                 echo json_encode(['status' => 1, 'error' => 'Player not found']);
             }
@@ -404,7 +382,7 @@ class Controller_PlayerAjax extends Controller
             // Own-profile customization: about, colors, name prefix/suffix, photo focus.
             // ORK admins may also edit any player's profile (e.g. to remove inappropriate content).
             $uid = (int)$this->session->user_id;
-            $_isOrkAdmin = $uid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, null, null);
+            $_isOrkAdmin = $uid > 0 && $this->Authorization->has_authority($uid, AUTH_ADMIN, null, null);
             if ($uid !== $player_id && !$_isOrkAdmin) {
                 echo json_encode(['status' => 5, 'error' => 'You can only customize your own profile.']);
                 exit;
@@ -539,36 +517,6 @@ class Controller_PlayerAjax extends Controller
             echo json_encode(['status' => 1, 'error' => 'Cannot merge a player with themselves.']);
             exit;
         }
-        // Auth: mirror class.Player::MergePlayer's 3-tier check so park admins
-        // aren't rejected here before the server logic runs.
-        //   - cross-kingdom merge          => system-wide AUTH_ADMIN
-        //   - same-kingdom, different park => Kingdom EDIT (Kingdom-level officer)
-        //   - same park                    => Park EDIT (Park-level officer / admin)
-        global $DB;
-        $DB->Clear();
-        $rs = $DB->DataSet("SELECT mundane_id, park_id, kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id IN ({$from_id}, {$to_id})");
-        $rows = [];
-        while ($rs && $rs->Next()) {
-            $rows[(int)$rs->mundane_id] = ['park_id' => (int)$rs->park_id, 'kingdom_id' => (int)$rs->kingdom_id];
-        }
-        $authorized = false;
-        if (isset($rows[$from_id]) && isset($rows[$to_id])) {
-            $fKid = $rows[$from_id]['kingdom_id'];
-            $tKid = $rows[$to_id]['kingdom_id'];
-            $fPid = $rows[$from_id]['park_id'];
-            $tPid = $rows[$to_id]['park_id'];
-            if ($fKid !== $tKid) {
-                $authorized = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_EDIT);
-            } elseif ($fPid !== $tPid) {
-                $authorized = $tKid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $tKid, AUTH_EDIT);
-            } else {
-                $authorized = $tPid > 0 && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $tPid, AUTH_EDIT);
-            }
-        }
-        if (!$authorized) {
-            echo json_encode(['status' => 5, 'error' => 'Not authorized to merge these players.']);
-            exit;
-        }
         $this->load_model('Player');
         $r = $this->Player->merge_player([
             'Token'         => $this->session->token,
@@ -589,25 +537,21 @@ class Controller_PlayerAjax extends Controller
             exit;
         }
         $this->load_model('Reports');
-        global $DB;
-        $DB->Clear();
-        $rs = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = $mundane_id LIMIT 1");
-        if (!$rs || !$rs->Next()) {
+        $lookup = $this->Reports->get_voting_eligible_for_player($mundane_id, 0);
+        if (($lookup['Status']['Status'] ?? 1) != 0 && ($lookup['KingdomId'] ?? 0) <= 0) {
             echo json_encode(['status' => 1, 'error' => 'Player not found']);
             exit;
         }
-        $kingdom_id = (int)$rs->kingdom_id;
-        $DB->Clear();
-        if (!in_array($kingdom_id, $this->Reports->supported_voting_kingdom_ids())) {
+        $kingdom_id = (int)($lookup['KingdomId'] ?? 0);
+        if (!in_array($kingdom_id, $this->Reports->supported_voting_kingdom_ids(), true)) {
             echo json_encode(['status' => 0, 'eligible' => false]);
             exit;
         }
-        $vr     = $this->Reports->get_voting_eligible_for_player($mundane_id, $kingdom_id);
-        $player = $vr['Players'][0] ?? [];
+        $player = $lookup['Players'][0] ?? [];
         echo json_encode([
             'status'           => 0,
             'eligible'         => !empty($player['VotingEligible']),
-            'province_mode'    => !empty($vr['ProvinceMode']),
+            'province_mode'    => !empty($lookup['ProvinceMode']),
             'province_eligible' => !empty($player['ProvinceEligible']),
             'active_knight'    => !empty($player['ActiveKnight']),
             'active_member'    => $player['ActiveMember'] ?? null,
@@ -634,7 +578,7 @@ class Controller_PlayerAjax extends Controller
             )));
             foreach ($uniqueParkIds as $pid) {
                 if (valid_id($pid)) {
-                    $parkEditAuth[(int)$pid] = (bool)Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, (int)$pid, AUTH_EDIT);
+                    $parkEditAuth[(int)$pid] = (bool)$this->Authorization->has_authority($uid, AUTH_PARK, (int)$pid, AUTH_EDIT);
                 }
             }
         }
@@ -719,12 +663,9 @@ class Controller_PlayerAjax extends Controller
             echo json_encode(['status' => 1, 'error' => 'Please enter a valid email address.']);
             exit;
         }
-        $mundane_id = (int)$this->session->user_id;
-        global $DB;
-        $DB->Clear();
-        $DB->email = $email;
-        $DB->Execute("UPDATE ork_mundane SET email = :email WHERE mundane_id = $mundane_id");
-        echo json_encode(['status' => 0]);
+        $this->load_model('Player');
+        $r = $this->Player->save_own_email($email);
+        echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '']);
         exit;
     }
 
@@ -744,20 +685,12 @@ class Controller_PlayerAjax extends Controller
         }
         $notes = isset($_POST['notes']) ? (string)$_POST['notes'] : '';
         $this->load_model('Player');
-        $r = $this->Player->AddSecondToRecommendation([
+        $r = $this->Player->add_second_to_recommendation([
             'Token' => $this->session->token,
             'RecommendationsId' => $rec_id,
             'Notes' => $notes,
         ]);
-        $persona = '';
-        if ((int)($r['Status'] ?? 1) === 0) {
-            global $DB;
-            $DB->Clear();
-            $rs = $DB->DataSet("SELECT persona FROM " . DB_PREFIX . "mundane WHERE mundane_id = " . (int)$this->session->user_id . " LIMIT 1");
-            if ($rs && $rs->Next()) {
-                $persona = (string)$rs->persona;
-            }
-        }
+        $persona = (int)($r['Status'] ?? 1) === 0 ? (string)($r['SupporterPersona'] ?? '') : '';
         echo json_encode(['status' => (int)($r['Status'] ?? 1), 'error' => $r['Error'] ?? '', 'detail' => $r['Detail'] ?? '', 'supporter_persona' => $persona]);
         exit;
     }
@@ -776,7 +709,7 @@ class Controller_PlayerAjax extends Controller
         }
         $notes = isset($_POST['notes']) ? (string)$_POST['notes'] : '';
         $this->load_model('Player');
-        $r = $this->Player->EditSecondNotes([
+        $r = $this->Player->edit_second_notes([
             'Token' => $this->session->token,
             'RecommendationSecondsId' => $sid,
             'Notes' => $notes,
@@ -798,7 +731,7 @@ class Controller_PlayerAjax extends Controller
             exit;
         }
         $this->load_model('Player');
-        $r = $this->Player->WithdrawSecond([
+        $r = $this->Player->withdraw_second([
             'Token' => $this->session->token,
             'RecommendationSecondsId' => $sid,
         ]);
@@ -820,7 +753,7 @@ class Controller_PlayerAjax extends Controller
         }
         $reason = isset($_POST['reason']) ? (string)$_POST['reason'] : '';
         $this->load_model('Player');
-        $r = $this->Player->EditAwardRecommendationReason([
+        $r = $this->Player->edit_award_recommendation_reason([
             'Token' => $this->session->token,
             'RecommendationsId' => $rec_id,
             'Reason' => $reason,
@@ -838,165 +771,24 @@ class Controller_PlayerAjax extends Controller
             exit;
         }
 
-        $params            = explode('/', $p ?? '');
+        $params  = explode('/', $p ?? '');
         $mundane_id_target = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
-        $action            = $params[1] ?? '';
+        $action  = $params[1] ?? '';
 
         if (!valid_id($mundane_id_target)) {
             echo json_encode(['status' => 1, 'error' => 'Invalid Player ID.']);
             exit;
         }
 
-        $uid = (int)$this->session->user_id;
-
-        // Load player's park/kingdom for officer auth lookup.
-        global $DB;
-        $DB->Clear();
-        $_pInfo = $DB->DataSet("SELECT park_id, kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = " . $mundane_id_target);
-        if (!$_pInfo || !$_pInfo->Next()) {
-            echo json_encode(['status' => 1, 'error' => 'Player not found.']);
-            exit;
-        }
-        $_parkId    = (int)$_pInfo->park_id;
-        $_kingdomId = (int)$_pInfo->kingdom_id;
-
-        $canEdit = $uid > 0 && (
-            $uid === $mundane_id_target
-            || ($_parkId    && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $_parkId, AUTH_EDIT))
-            || ($_kingdomId && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $_kingdomId, AUTH_EDIT))
-            || Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)
+        $this->load_model('Banner');
+        $this->Banner->handle_ajax(
+            'Player',
+            $action,
+            $mundane_id_target,
+            $this->session->token,
+            $_POST,
+            $_FILES,
         );
-        if (!$canEdit) {
-            echo json_encode(['status' => 5, 'error' => 'Not authorized to manage this player\'s banner.']);
-            exit;
-        }
-
-        if ($action === 'remove') {
-            $DB->Clear();
-            // Reset display toggles AND framing offsets to defaults so a future
-            // upload starts fresh instead of inheriting the removed banner's
-            // config.
-            $DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET has_banner = 0, banner_show_logo = 1, banner_vignette = 1, banner_offset_x = 50, banner_offset_y = 50 WHERE mundane_id = ' . $mundane_id_target);
-            // I4 fix: verify the UPDATE landed before deleting the file.
-            // If the DB update silently failed and we delete the file, the
-            // banner column stays 1 but the file is gone -> broken banner.
-            $DB->Clear();
-            $removeCheck = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id_target);
-            if (!$removeCheck || !$removeCheck->Next() || (int)$removeCheck->has_banner !== 0) {
-                echo json_encode(['status' => 1, 'error' => 'Could not clear banner flag in database. Please try again.']);
-                exit;
-            }
-            $base = DIR_PLAYER_BANNER . sprintf('%06d', $mundane_id_target);
-            if (file_exists($base . '.jpg')) {
-                unlink($base . '.jpg');
-            }
-            if (file_exists($base . '.png')) {
-                unlink($base . '.png');
-            }
-            echo json_encode(['status' => 0]);
-            exit;
-        }
-
-        if ($action === 'config') {
-            // Refuse silent no-ops: config only meaningful with a banner present.
-            $DB->Clear();
-            $row = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id_target);
-            if (!$row || !$row->Next() || (int)$row->has_banner !== 1) {
-                echo json_encode(['status' => 1, 'error' => 'Upload a banner first before saving settings.']);
-                exit;
-            }
-            $showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
-            $vignette = !empty($_POST['Vignette']) ? 1 : 0;
-            $offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
-            $offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
-            $DB->Clear();
-            $DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE mundane_id = ' . $mundane_id_target);
-            // Verify the UPDATE landed (YapoMysql can silently swallow failures
-            // under STRICT sql_mode etc). Re-read and compare each field so the
-            // client can surface a real error rather than a false success.
-            $DB->Clear();
-            $verifyCfg = $DB->DataSet('SELECT banner_show_logo, banner_vignette, banner_offset_x, banner_offset_y FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id_target);
-            if (!$verifyCfg || !$verifyCfg->Next()
-                || (int)$verifyCfg->banner_show_logo !== $showLogo
-                || (int)$verifyCfg->banner_vignette  !== $vignette
-                || (int)$verifyCfg->banner_offset_x  !== $offX
-                || (int)$verifyCfg->banner_offset_y  !== $offY) {
-                echo json_encode(['status' => 1, 'error' => 'Could not save banner settings. Please try again.']);
-                exit;
-            }
-            echo json_encode(['status' => 0]);
-            exit;
-        }
-
-        if ($action === 'update') {
-            if (empty($_FILES['Banner']['tmp_name'])) {
-                echo json_encode(['status' => 1, 'error' => 'No file uploaded.']);
-                exit;
-            }
-            // I2 fix: validate the upload came via a real HTTP file upload (prevents spoofing).
-            if (!is_uploaded_file($_FILES['Banner']['tmp_name'])) {
-                echo json_encode(['status' => 1, 'error' => 'Invalid upload.']);
-                exit;
-            }
-            // I5 fix: server-side file size check (JS resize can be bypassed via curl).
-            if (($_FILES['Banner']['size'] ?? 0) > 1024 * 1024) {
-                echo json_encode(['status' => 1, 'error' => 'File too large (max 1 MB).']);
-                exit;
-            }
-            $tmp  = $_FILES['Banner']['tmp_name'];
-            // I3 fix: use exif_imagetype() (magic-byte check) instead of the
-            // browser-supplied MIME type, which is trivially spoofable.
-            $detectedType = exif_imagetype($tmp);
-            if ($detectedType !== IMAGETYPE_JPEG && $detectedType !== IMAGETYPE_PNG) {
-                echo json_encode(['status' => 1, 'error' => 'Only JPEG and PNG images are supported.']);
-                exit;
-            }
-            $mime = ($detectedType === IMAGETYPE_PNG) ? 'image/png' : 'image/jpeg';
-            if (!is_dir(DIR_PLAYER_BANNER)) {
-                @mkdir(DIR_PLAYER_BANNER, 0775, true);
-            }
-            $ext  = ($mime === 'image/png') ? 'png' : 'jpg';
-            $base = DIR_PLAYER_BANNER . sprintf('%06d', $mundane_id_target);
-            // Delete any previous banner files (both extensions) before saving
-            // the new one so we never leave the old image behind when the host
-            // switches images. resolve_image_ext picks whichever survives.
-            if (file_exists($base . '.jpg')) {
-                @unlink($base . '.jpg');
-            }
-            if (file_exists($base . '.png')) {
-                @unlink($base . '.png');
-            }
-            if (!@move_uploaded_file($tmp, $base . '.' . $ext)) {
-                echo json_encode(['status' => 1, 'error' => 'Could not save uploaded file.']);
-                exit;
-            }
-            $showLogo = !empty($_POST['ShowLogo']) ? 1 : 0;
-            $vignette = !empty($_POST['Vignette']) ? 1 : 0;
-            $offX = max(0, min(100, (int)($_POST['OffsetX'] ?? 50)));
-            $offY = max(0, min(100, (int)($_POST['OffsetY'] ?? 50)));
-            $DB->Clear();
-            $DB->Execute('UPDATE ' . DB_PREFIX . 'mundane SET has_banner = 1, banner_show_logo = ' . $showLogo . ', banner_vignette = ' . $vignette . ', banner_offset_x = ' . $offX . ', banner_offset_y = ' . $offY . ' WHERE mundane_id = ' . $mundane_id_target);
-            // Clear any AmtPride gradient — banner image takes precedence and the
-            // gradient would flash through before the image finishes loading.
-            $DB->Clear();
-            $DB->Execute('UPDATE ' . DB_PREFIX . 'mundane_design SET hero_gradient = NULL WHERE mundane_id = ' . $mundane_id_target);
-            // $DB->Execute() is void; the YapoMysql layer can silently swallow
-            // failures (sql_mode=STRICT etc). Verify the update landed by
-            // re-reading has_banner. If it didn't, roll back the file so we
-            // don't leave an orphan whose flag is still 0.
-            $DB->Clear();
-            $verify = $DB->DataSet('SELECT has_banner FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = ' . $mundane_id_target);
-            if (!$verify || !$verify->Next() || (int)$verify->has_banner !== 1) {
-                @unlink($base . '.' . $ext);
-                echo json_encode(['status' => 1, 'error' => 'Saved file but could not update the database. Please try again.']);
-                exit;
-            }
-            echo json_encode(['status' => 0]);
-            exit;
-        }
-
-        echo json_encode(['status' => 1, 'error' => 'Unknown action.']);
-        exit;
     }
 
     public function dietary_preferences($p = null)
@@ -1012,7 +804,7 @@ class Controller_PlayerAjax extends Controller
             exit;
         }
         $this->load_model('Player');
-        $prefs = $this->Player->GetDietaryPreferences($mundane_id);
+        $prefs = $this->Player->get_dietary_preferences($mundane_id);
         echo json_encode(['status' => 0, 'prefs' => $prefs ?: []]);
         exit;
     }
@@ -1061,7 +853,7 @@ class Controller_PlayerAjax extends Controller
             'AllergenNightshades' => max(0, min(2, (int)($_POST['AllergenNightshades'] ?? 0))),
         ];
         $this->load_model('Player');
-        $this->Player->SaveDietaryPreferences($mundane_id, $data);
+        $this->Player->save_dietary_preferences($mundane_id, $data);
         echo json_encode(['status' => 0]);
         exit;
     }

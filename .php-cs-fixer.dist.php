@@ -10,9 +10,9 @@
  * the whole tree happens gradually with minimal diff churn.
  *
  * Manual use:
- *   php tools/php-cs-fixer.phar fix                 # fix the whole project
- *   php tools/php-cs-fixer.phar fix --dry-run -v    # report what WOULD change, no writes
- *   php tools/php-cs-fixer.phar fix path/to/File.php
+ *   php tools/php-cs-fixer/php-cs-fixer.phar fix                 # fix the whole project
+ *   php tools/php-cs-fixer/php-cs-fixer.phar fix --dry-run -v    # report what WOULD change, no writes
+ *   php tools/php-cs-fixer/php-cs-fixer.phar fix path/to/File.php
  */
 
 $finder = PhpCsFixer\Finder::create()
