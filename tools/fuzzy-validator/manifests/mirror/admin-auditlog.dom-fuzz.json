@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "pageId": "admin-auditlog",
+  "calibratedAt": "2026-08-01T19:55:58Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[1]/div[3]/span[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[3]/div[0]/div[1]/a[1]/div[2]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[0]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[0]/div[1]/div[1]/span[1]/text[1]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[1]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[1]/div[1]/div[1]/span[1]/text[1]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[2]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[3]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[3]/div[1]/div[1]/span[1]/text[1]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[4]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[4]/div[1]/div[1]/span[1]/text[1]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[5]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[6]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[7]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[7]/div[1]/div[1]/span[1]/text[1]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[8]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[9]/div[1]/div[1]/span[1]/text[1]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[10]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[11]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[12]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[13]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[14]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[14]/div[1]/div[1]/span[1]/text[1]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[15]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[15]/div[1]/div[1]/span[1]/text[1]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[16]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[17]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[17]/div[1]/div[1]/span[1]/text[1]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[18]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[19]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[20]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[21]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[22]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[2]/div[1]/a[23]/div[1]/div[1]/span[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:51:07Z",
+  "refuzzedFromCommit": "05389516"
+}

@@ -5,19 +5,7 @@
 	$passwordExpiring = $passwordExpired ? 'Expired' : date('Y-m-j', strtotime($Player['PasswordExpires']));
 	$recError = isset($_GET['rec_error']) ? htmlspecialchars(urldecode($_GET['rec_error'])) : '';
 
-	$can_delete_recommendation = false;
-	if($this->__session->user_id) {
-		if (isset($this->__session->park_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $this->__session->park_id, AUTH_CREATE)) {
-				$can_delete_recommendation = true;
-			}
-		}
-		if (!$can_delete_recommendation && isset($this->__session->kingdom_id)) {
-			if (Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_KINGDOM, $this->__session->kingdom_id, AUTH_CREATE)) {
-				$can_delete_recommendation = true;
-			}
-		}
-	}
+	$can_delete_recommendation = !empty($canDeleteRecommendation);
 
 	$isSuspended = ($Player['Suspended'] == 1);
 	$isActive = ($Player['Active'] == 1 && !$isSuspended);
@@ -25,7 +13,24 @@
 	$heraldryUrl = $Player['HasHeraldry'] > 0 ? $Player['Heraldry'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
 	$imageUrl = $Player['HasImage'] > 0 ? $Player['Image'] : HTTP_PLAYER_HERALDRY . '000000.jpg';
 
-	$knightAwardIds = array(17, 18, 19, 20, 245);
+	$hasBanner       = !empty($Player['HasBanner']);
+	$bannerShowLogo  = !isset($Player['BannerShowLogo']) || (int)$Player['BannerShowLogo'] !== 0;
+	$bannerVignette  = !isset($Player['BannerVignette']) || (int)$Player['BannerVignette'] !== 0;
+	$bannerOffsetX   = isset($Player['BannerOffsetX']) ? max(0, min(100, (int)$Player['BannerOffsetX'])) : 50;
+	$bannerOffsetY   = isset($Player['BannerOffsetY']) ? max(0, min(100, (int)$Player['BannerOffsetY'])) : 50;
+	$bannerUrl       = '';
+	if ($hasBanner) {
+		$bannerFile = Common::resolve_image_ext(DIR_PLAYER_BANNER, sprintf('%06d', (int)$Player['MundaneId']));
+		$bannerFs   = DIR_PLAYER_BANNER . $bannerFile;
+		if (file_exists($bannerFs)) {
+			$bannerUrl = HTTP_PLAYER_BANNER . $bannerFile . '?v=' . filemtime($bannerFs);
+		}
+	}
+
+
+	// Knight AwardIds from domain (Award::GetKnightAwardMap via controller).
+	// Belt IMAGE URLs stay presentation-local (host/path); AwardIds come from domain.
+	$knightAwardIds = array_map('intval', array_keys(is_array($KnightAwardMap ?? null) ? $KnightAwardMap : []));
 	$_beltImgHost = '//' . $_SERVER['HTTP_HOST'] . '/assets/images/';
 	$beltImageMap = array(
 		17  => $_beltImgHost . 'belt-flame.png',
@@ -64,10 +69,11 @@
 	$_pnBeltDisplay = $Player['BeltDisplay'] ?? 'white';
 	if (!in_array($_pnBeltDisplay, array('white','own','none'))) { $_pnBeltDisplay = 'white'; }
 
-	// Auth helpers
-	$isOwnProfile  = isset($this->__session->user_id) && (int)$this->__session->user_id === (int)$Player['MundaneId'];
-	$canEditAdmin  = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_EDIT);
-	$canManageAwards = isset($this->__session->user_id) && Ork3::$Lib->authorization->HasAuthority($this->__session->user_id, AUTH_PARK, $Player['ParkId'], AUTH_CREATE);
+	// Auth helpers (precomputed in Controller_Player::profile)
+	$isOwnProfile  = !empty($IsOwnProfile);
+	$canEditAdmin  = !empty($canEditAdmin);
+	$pnCanManageBanner = !empty($pnCanManageBanner);
+	$canManageAwards = !empty($canManageAwards);
 	$canEditNotes  = $canEditAdmin; // AddNote/RemoveNote require AUTH_EDIT, same as canEditAdmin
 	$canEditImages  = $isOwnProfile || $canEditAdmin;
 	$canEditAccount = $isOwnProfile || $canEditAdmin;
@@ -83,31 +89,9 @@
 	$showLastName  = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowMundaneLast']  ?? 0));
 	$showEmail     = $canSeePrivate || (!$_isRestricted && $isLoggedIn && (int)($Player['ShowEmail']        ?? 0));
 
-	// Check if player has any reconcilable historical awards (ladder only — matches reconcile page filter)
-	$hasHistorical = false;
-	if ($canManageAwards && is_array($Details['Awards'])) {
-		foreach ($Details['Awards'] as $_ha) {
-			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1 && (int)($_ha['IsLadder'] ?? 0) === 1) {
-				if ((int)$_ha['GivenById'] === 0 && (int)($_ha['EnteredById'] ?? 0) === 0) {
-					$hasHistorical = true;
-					break;
-				}
-			}
-		}
-	}
-
-	// Same check, visible to anyone viewing the profile
-	$hasHistoricalTip = false;
-	if (is_array($Details['Awards'])) {
-		foreach ($Details['Awards'] as $_ha) {
-			if (in_array($_ha['OfficerRole'], ['none', null]) && $_ha['IsTitle'] != 1 && (int)($_ha['IsLadder'] ?? 0) === 1) {
-				if ((int)$_ha['GivenById'] === 0 && (int)($_ha['EnteredById'] ?? 0) === 0) {
-					$hasHistoricalTip = true;
-					break;
-				}
-			}
-		}
-	}
+	// Historical ladder flags from domain (Controller_Player::profile via get_reconcile_suggestions)
+	$hasHistorical = !empty($HasHistorical);
+	$hasHistoricalTip = !empty($HasHistoricalTip);
 
 	// Kingdom dues period config
 	$_kconfig = Common::get_configs((int)($KingdomId ?? 0));
@@ -125,11 +109,13 @@
 		if (!empty($_att['ClassId'])) { $_lastClassId = (int)$_att['ClassId']; break; }
 	}
 
-	// Class → Paragon award map (used by My Amtgard + Class Levels tabs)
-	$pnClassToParagon = [
-		1=>37, 2=>38, 3=>39, 4=>40, 5=>41, 6=>241, 7=>42, 8=>43,
-		9=>44, 10=>45, 11=>46, 12=>47, 14=>242, 15=>49, 16=>50, 17=>51,
-	];
+	// Class → Paragon award map from domain (controller-assigned ClassParagonMap)
+	if (!isset($ClassParagonMap) || !is_array($ClassParagonMap)) {
+		$ClassParagonMap = [];
+	}
+	if (!isset($ClassLevelThresholds) || !is_array($ClassLevelThresholds)) {
+		$ClassLevelThresholds = [];
+	}
 	$pnHeldAwardIds = [];
 	if (is_array($Details['Awards'])) {
 		foreach ($Details['Awards'] as $_pa) {
@@ -187,22 +173,7 @@
 			$_daysLeft = max(1, ceil($passwordSoonSecs / 86400));
 			$_maAlerts[] = ['type'=>'warning','icon'=>'fa-key','msg'=>"Your password expires in {$_daysLeft} day" . ($_daysLeft===1?'':'s') . ".",'actionLabel'=>'Update your password.','actionOnclick'=>'pnOpenAccountModal();return false;'];
 		}
-		// Level helpers
-		function _ma_level($credits) {
-			if ($credits >= 53) return 6;
-			if ($credits >= 34) return 5;
-			if ($credits >= 21) return 4;
-			if ($credits >= 12) return 3;
-			if ($credits >= 5)  return 2;
-			return 1;
-		}
-		function _ma_progress($credits) {
-			$t = [0,5,12,21,34,53];
-			if ($credits >= 53) return 100;
-			for ($i = count($t)-1; $i >= 0; $i--)
-				if ($credits >= $t[$i]) return round(($credits-$t[$i])/($t[$i+1]-$t[$i])*100);
-			return 0;
-		}
+		// Class level thresholds live in ClassLevel::THRESHOLDS (controller → ClassLevelThresholds / PnConfig).
 	}
 ?>
 
@@ -244,6 +215,7 @@
 	$_pnFocusX = (int)($Player['PhotoFocusX'] ?? 50);
 	$_pnFocusY = (int)($Player['PhotoFocusY'] ?? 50);
 	$_pnFocusSize = max(15, (int)($Player['PhotoFocusSize'] ?? 100));
+	$_pnShowLogo = !$bannerUrl || $bannerShowLogo;
 
 ?>
 <style>:root { --pn-hero-bg: <?= $_pnHeroBg ?>; --pn-accent: <?= $_pnAccent ?>; --pn-overlay-opacity: <?= $_pnOverlayOpacity ?>; } .pn-hero { background: <?= $_pnHeroBgValue ?>; } html[data-theme="dark"] .pn-hero { background: <?= $_pnHeroBgValueDark ?>; }</style>
@@ -274,16 +246,16 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-layout{display:flex;gap:16px;align-items:flex-start}
 .pna-sidebar{flex:0 0 260px;display:flex;flex-direction:column;gap:12px}
 .pna-feed{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0}
-.pna-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px}
-.pna-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#718096;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.pna-card{background:#fff;border:1px solid var(--ork-border);border-radius:8px;padding:14px 16px}
+.pna-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ork-text-muted);margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .pna-card-title a.pna-card-more{margin-left:auto;font-weight:600;font-size:11px;color:#4299e1;text-decoration:none;text-transform:none;letter-spacing:0}
 .pna-card-title a.pna-card-more:hover{text-decoration:underline}
 .pna-tenure{text-align:center;padding:6px 0 2px}
-.pna-tenure-years{font-size:44px;font-weight:800;color:#2c5282;line-height:1}
-.pna-tenure-label{font-size:13px;color:#718096;margin-top:2px}
-.pna-tenure-since{font-size:11px;color:#a0aec0;margin-top:6px}
+.pna-tenure-years{font-size:44px;font-weight:800;color:var(--ork-blue-primary);line-height:1}
+.pna-tenure-label{font-size:13px;color:var(--ork-text-muted);margin-top:2px}
+.pna-tenure-since{font-size:11px;color:var(--ork-text-hint);margin-top:6px}
 .pna-tenure-info-btn{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#ebf4ff;color:#2b6cb0;font-size:10px;cursor:help;border:1px solid #bee3f8;position:relative;z-index:10;flex-shrink:0;margin-top:8px;vertical-align:middle}
-.pna-tenure-info-btn .pna-tenure-info-text{display:none;position:fixed;width:260px;background:#2d3748;color:#fff;font-size:12px;font-weight:400;line-height:1.5;padding:8px 10px;border-radius:6px;pointer-events:none;z-index:9999;white-space:normal;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.pna-tenure-info-btn .pna-tenure-info-text{display:none;position:fixed;width:260px;background:var(--ork-bg-dark);color:#fff;font-size:12px;font-weight:400;line-height:1.5;padding:8px 10px;border-radius:6px;pointer-events:none;z-index:9999;white-space:normal;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 @keyframes pna-card-glow{0%,100%{box-shadow:0 0 10px 3px #f687b360,0 1px 3px rgba(0,0,0,.07)}25%{box-shadow:0 0 10px 3px #63b3ed60,0 1px 3px rgba(0,0,0,.07)}50%{box-shadow:0 0 10px 3px #68d39160,0 1px 3px rgba(0,0,0,.07)}75%{box-shadow:0 0 10px 3px #f6ad5560,0 1px 3px rgba(0,0,0,.07)}}
 .pna-card-anni{animation:pna-card-glow 3s ease infinite}
 .pna-anni-banner{font-size:12px;font-weight:700;color:#744210;text-align:center;margin-bottom:8px;letter-spacing:.02em}
@@ -292,25 +264,25 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-class-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
 .pna-class-name{font-size:12px;font-weight:600;color:#2d3748}
 .pna-class-level{font-size:11px;font-weight:700;color:#276749}
-.pna-bar-wrap{height:6px;background:#edf2f7;border-radius:4px;overflow:hidden}
+.pna-bar-wrap{height:6px;background:var(--ork-surface-hover);border-radius:4px;overflow:hidden}
 .pna-bar{height:100%;background:linear-gradient(90deg,#48bb78,#276749);border-radius:4px;transition:width .4s ease}
 .pna-bar-max{background:linear-gradient(90deg,#f6ad55,#dd6b20)}
-.pna-class-credits{font-size:10px;color:#a0aec0;margin-top:3px}
+.pna-class-credits{font-size:10px;color:var(--ork-text-hint);margin-top:3px}
 .pna-paragon-dot{color:#b7791f;font-size:10px;margin-left:3px}
-.pna-officer-row{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid #f7fafc}
+.pna-officer-row{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid var(--ork-surface-light)}
 .pna-officer-row:last-child{border-bottom:none}
 .pna-officer-title{font-size:12px;font-weight:600;color:#2d3748}
 .pna-officer-entity{font-size:11px;color:#4299e1;text-decoration:none}
 .pna-officer-entity:hover{text-decoration:underline}
-.pna-assoc-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#a0aec0;padding:8px 0 3px;margin-top:4px;border-top:1px solid #edf2f7}.pna-assoc-group:first-child{border-top:none;margin-top:0;padding-top:2px}.pna-feed-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid #f7fafc;font-size:12.5px}
+.pna-assoc-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ork-text-hint);padding:8px 0 3px;margin-top:4px;border-top:1px solid var(--ork-surface-hover)}.pna-assoc-group:first-child{border-top:none;margin-top:0;padding-top:2px}.pna-feed-row{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px solid var(--ork-surface-light);font-size:12.5px}
 .pna-feed-row:last-child{border-bottom:none}
-.pna-feed-date{flex-shrink:0;color:#a0aec0;font-size:11px;min-width:46px}
+.pna-feed-date{flex-shrink:0;color:var(--ork-text-hint);font-size:11px;min-width:46px}
 .pna-feed-label{flex:1;color:#2d3748;font-weight:500;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pna-feed-label a{color:#2d3748;text-decoration:none}
 .pna-feed-label a:hover{text-decoration:underline}
-.pna-feed-sub{flex-shrink:0;color:#718096;font-size:11px}
+.pna-feed-sub{flex-shrink:0;color:var(--ork-text-muted);font-size:11px}
 .pna-feed-rank{display:inline-block;background:#e9d8fd;color:#553c9a;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px;vertical-align:middle}
-.pna-feed-more{font-size:11px;color:#718096;padding-top:6px;text-align:center}
+.pna-feed-more{font-size:11px;color:var(--ork-text-muted);padding-top:6px;text-align:center}
 .pna-congrats-banner{background:linear-gradient(90deg,#fffff0,#fefcbf);border:1px solid #f6e05e;border-radius:6px;padding:9px 13px;font-size:12.5px;font-weight:600;color:#744210;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .pna-welcome-banner{background:linear-gradient(135deg,#1a3d2b,#276749);border-radius:10px;padding:20px 24px;margin-bottom:18px;color:#fff;display:flex;align-items:flex-start;gap:16px}
 .pna-welcome-banner-icon{font-size:32px;flex-shrink:0;line-height:1}
@@ -321,23 +293,23 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-welcome-tip{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:5px 10px;font-size:12px;display:flex;align-items:center;gap:5px}
 .pna-sparkline{display:flex;gap:3px;align-items:flex-end;height:34px;margin-bottom:2px}
 .pna-spark-week{flex:1;border-radius:2px;min-width:0}
-.pna-spark-legend{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11px;color:#718096;flex-wrap:wrap}
+.pna-spark-legend{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:11px;color:var(--ork-text-muted);flex-wrap:wrap}
 .pna-spark-swatch{width:12px;height:12px;display:inline-block;border-radius:2px;vertical-align:middle}
 .pna-spark-on{background:#48bb78}
-.pna-spark-off{background:#edf2f7;border:1px solid #e2e8f0}
+.pna-spark-off{background:var(--ork-surface-hover);border:1px solid var(--ork-border)}
 .pna-spark-swatch-on{background:#48bb78}
-.pna-spark-swatch-off{background:#edf2f7;border:1px solid #cbd5e0}
+.pna-spark-swatch-off{background:var(--ork-surface-hover);border:1px solid #cbd5e0}
 .pna-ev-cols{display:flex;gap:10px}
 .pna-ev-col{flex:1;min-width:0}
-.pna-ev-col-hdr{font-size:11px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #e2e8f0}
+.pna-ev-col-hdr{font-size:11px;font-weight:700;color:var(--ork-text-body);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--ork-border)}
 .pna-ev-park{color:#718096;font-size:11px;font-weight:500;margin-left:2px}
 .pna-spark-months{display:flex;gap:3px;margin-top:2px}
-.pna-spark-month-lbl{flex:1;font-size:9px;color:#a0aec0;text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
+.pna-spark-month-lbl{flex:1;font-size:9px;color:var(--ork-text-hint);text-align:left;white-space:nowrap;overflow:hidden;min-width:0}
 @media(max-width:700px){
 .pna-layout{flex-direction:column;align-items:stretch}
 .pna-sidebar{flex:none;width:100%}
 .pna-ev-cols{flex-direction:column}
-.pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid #e2e8f0}
+.pna-ev-col+.pna-ev-col{margin-top:12px;padding-top:12px;border-top:1px solid var(--ork-border)}
 .pna-card{padding:12px 13px}
 .pna-tenure-years{font-size:36px}
 }
@@ -349,8 +321,8 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
 .pna-congrats-banner{font-size:11.5px;padding:7px 10px}
 }
 .pn-givenby-warn{display:inline-flex;align-items:center;gap:4px;cursor:default;position:relative}
-.pn-givenby-warn .pn-tip-icon{color:#e53e3e;font-size:11px;font-weight:700;font-style:normal;border:1px solid #e53e3e;border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
-.pn-givenby-warn .pn-tip-box{display:none;position:absolute;bottom:calc(100% + 6px);left:0;background:#2d3748;color:#fff;font-size:12px;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.pn-givenby-warn .pn-tip-icon{color:var(--ork-red-danger);font-size:11px;font-weight:700;font-style:normal;border:1px solid var(--ork-red-danger);border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0}
+.pn-givenby-warn .pn-tip-box{display:none;position:absolute;bottom:calc(100% + 6px);left:0;background:var(--ork-bg-dark);color:#fff;font-size:12px;line-height:1.4;padding:7px 10px;border-radius:5px;width:260px;white-space:normal;z-index:200;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 .pn-givenby-warn:hover .pn-tip-box{display:block}
 
 /* ===================================================================
@@ -359,7 +331,7 @@ if (!in_array($_pnNameFont, $_pnFontAllowed)) $_pnNameFont = '';
    =================================================================== */
 
 /* Required field indicator */
-.required-indicator { color: #e53e3e; }
+.required-indicator { color: var(--ork-red-danger); }
 
 /* Inline danger buttons — light default, dark override below */
 .btn-danger-confirm { background: #c53030; color: #fff; border: none; cursor: pointer; }
@@ -388,7 +360,7 @@ html[data-theme="dark"] .pn-mini-table td { color: var(--ork-text); border-color
 html[data-theme="dark"] .pn-mini-table tbody tr:hover { background: var(--ork-bg-tertiary); }
 html[data-theme="dark"] .pn-badge-green { background: var(--ork-badge-green-bg, #1c4532); color: var(--ork-badge-green-text, #9ae6b4); }
 html[data-theme="dark"] .pn-badge-red { background: var(--ork-badge-red-bg, #742a2a); color: var(--ork-badge-red-text, #feb2b2); }
-html[data-theme="dark"] .pn-badge-gray { background: #374151; color: #a0aec0; }
+html[data-theme="dark"] .pn-badge-gray { background: #374151; color: var(--ork-text-hint); }
 html[data-theme="dark"] .pn-badge-blue { background: #1a365d; color: #90cdf4; }
 html[data-theme="dark"] .pn-badge-yellow { background: #744210; color: #fbd38d; }
 html[data-theme="dark"] .pn-badge-orange { background: #7b341e; color: #fbd38d; }
@@ -472,9 +444,6 @@ html[data-theme="dark"] .pn-ac-item { color: var(--ork-text); border-bottom-colo
 html[data-theme="dark"] .pn-ac-item:hover,
 html[data-theme="dark"] .pn-ac-item:focus,
 html[data-theme="dark"] .pn-ac-item.pn-ac-focused { background: var(--ork-bg-tertiary); color: var(--ork-link-bright); }
-html[data-theme="dark"] .pn-page-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
-html[data-theme="dark"] .pn-page-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
-html[data-theme="dark"] .pn-page-btn.pn-page-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
 html[data-theme="dark"] .pn-award-type-btn { background: var(--ork-bg-secondary); border-color: var(--ork-border); color: var(--ork-text-secondary); }
 html[data-theme="dark"] .pn-award-type-btn:hover { background: var(--ork-bg-tertiary); color: var(--ork-text); }
 html[data-theme="dark"] .pn-award-type-btn.pn-active { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
@@ -644,17 +613,17 @@ html[data-theme="dark"] .pn-about-edit-btn:hover,html[data-theme="dark"] .pn-abo
    A soft directional shadow only blurs the underside of the glyphs; over a near-white flag stop the
    top/sides of white text still bleed. A tight multi-directional outline wraps every glyph in a dark
    edge so the title reads on any stop — light or dark — while keeping the flag fully visible (no overlay). */
-.pn-hero-pride .pn-persona,.pn-hero-pride .pn-hero-preview-name{text-shadow:0 0 2px rgba(0,0,0,.55),1px 1px 1px rgba(0,0,0,.5),-1px 1px 1px rgba(0,0,0,.5),1px -1px 1px rgba(0,0,0,.5),-1px -1px 1px rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.45)}
+.pn-hero-pride .pn-persona,.pn-hero-pride .pn-hero-preview-name,.pn-hero-name-shadow .pn-persona,.pn-hero-name-shadow .pn-hero-preview-name{text-shadow:0 0 2px rgba(0,0,0,.55),1px 1px 1px rgba(0,0,0,.5),-1px 1px 1px rgba(0,0,0,.5),1px -1px 1px rgba(0,0,0,.5),-1px -1px 1px rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.45)}
 html[data-theme="dark"] .pn-hero-pride .pn-persona{text-shadow:0 0 2px rgba(0,0,0,.55),1px 1px 1px rgba(0,0,0,.5),-1px 1px 1px rgba(0,0,0,.5),1px -1px 1px rgba(0,0,0,.5),-1px -1px 1px rgba(0,0,0,.5),0 2px 4px rgba(0,0,0,.45)!important}
-/* Amtpride: lift the translucent subline text so it reads over light flag stops (text-shadow inherits to children).
+/* Amtpride / name-shadow: lift the translucent subline text so it reads over light flag stops (text-shadow inherits to children).
    The breadcrumb uses self-contained .pn-crumb pills (dark bg) so it needs no pride-specific shadow. */
-.pn-hero-pride .pn-hero-subline{color:rgba(255,255,255,0.95);text-shadow:0 1px 3px rgba(0,0,0,0.6)}
-.pn-hero-pride .pn-sub-pronunciation,.pn-hero-pride .pn-sub-pronouns{color:rgba(255,255,255,0.9)}
-.pn-hero-pride .pn-sub-sep{color:rgba(255,255,255,0.85);opacity:1}
-/* Amtpride: dark translucent backing box behind the subline so it reads over light flag stops.
+.pn-hero-pride .pn-hero-subline,.pn-hero-name-shadow .pn-hero-subline{color:rgba(255,255,255,0.95);text-shadow:0 1px 3px rgba(0,0,0,0.6)}
+.pn-hero-pride .pn-sub-pronunciation,.pn-hero-pride .pn-sub-pronouns,.pn-hero-name-shadow .pn-sub-pronunciation,.pn-hero-name-shadow .pn-sub-pronouns{color:rgba(255,255,255,0.9)}
+.pn-hero-pride .pn-sub-sep,.pn-hero-name-shadow .pn-sub-sep{color:rgba(255,255,255,0.85);opacity:1}
+/* Amtpride / name-shadow: dark translucent backing box behind the subline so it reads over light flag stops.
    0.22 was too faint over a bright-yellow stop (small text needs a real panel, not a halo); 0.45
    gives the white subline a reliable dark surface on any flag while staying clearly translucent. */
-.pn-hero-pride .pn-hero-subline{display:flex;width:fit-content;align-items:center;background:rgba(0,0,0,0.45);padding:2px 9px;border-radius:6px}
+.pn-hero-pride .pn-hero-subline,.pn-hero-name-shadow .pn-hero-subline{display:flex;width:fit-content;align-items:center;background:rgba(0,0,0,0.45);padding:2px 9px;border-radius:6px}
 .pn-hero-preview-sub{font-size:12px;opacity:0.7;margin-top:4px}
 /* Design-modal preview: heraldry-overlay layers mirror the production hero so the
    Low/Med/High/Vignette buttons preview live. Driven by a preview-scoped opacity var
@@ -966,21 +935,116 @@ html[data-theme="dark"] .pn-cms-title { color: var(--ork-text); }
 html[data-theme="dark"] .pn-cms-item { border-bottom-color: var(--ork-border); }
 html[data-theme="dark"] .pn-cms-line { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
+
+/* ===== Dietary Preferences Card ===== */
+.dp-intro{font-size:11.5px;color:#718096;line-height:1.45;margin:0 0 12px}
+.dp-section-hdr{font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#718096;margin:14px 0 6px;display:flex;align-items:center;gap:5px}
+.dp-section-hdr:first-of-type{margin-top:0}
+.dp-info-btn{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#e2e8f0;color:#718096;font-size:9px;font-weight:700;border:none;cursor:pointer;text-transform:none;letter-spacing:0;line-height:1;transition:background .1s}
+.dp-info-btn:hover{background:#cbd5e0}
+#dp-info-pop{position:fixed;z-index:10300;width:290px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.13);padding:13px 15px;font-size:12px;line-height:1.55;color:#4a5568;display:none}
+#dp-info-pop.dp-pop-open{display:block}
+#dp-info-pop .dp-pop-title{font-size:12.5px;font-weight:700;color:#2d3748;margin:0 0 7px}
+#dp-info-pop p{margin:0 0 8px}
+#dp-info-pop p:last-child{margin-bottom:0}
+#dp-info-pop a{color:#4299e1;text-decoration:none}
+#dp-info-pop a:hover{text-decoration:underline}
+.dp-sev-legend{font-size:11px;color:#718096;margin:0 0 10px;line-height:1.8}
+.dp-sl-eg{display:inline-block;padding:1px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.dp-sl-none{background:#e2e8f0;color:#2d3748}
+.dp-sl-mild{background:#fef3c7;color:#92400e}
+.dp-sl-severe{background:#fee2e2;color:#9b1c1c}
+html[data-theme="dark"] .dp-info-btn{background:#4a5568;color:#a0aec0}
+html[data-theme="dark"] .dp-info-btn:hover{background:#718096;color:#e2e8f0}
+html[data-theme="dark"] #dp-info-pop{background:#2d3748;border-color:#4a5568;color:#e2e8f0}
+html[data-theme="dark"] #dp-info-pop .dp-pop-title{color:#f7fafc}
+html[data-theme="dark"] #dp-info-pop a{color:#63b3ed}
+html[data-theme="dark"] .dp-sev-legend{color:#a0aec0}
+html[data-theme="dark"] .dp-sl-none{background:#4a5568;color:#e2e8f0}
+html[data-theme="dark"] .dp-sl-mild{background:#78350f;color:#fde68a}
+html[data-theme="dark"] .dp-sl-severe{background:#7f1d1d;color:#fca5a5}
+.dp-toggles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px 10px;margin-bottom:2px}
+.dp-toggle-row{display:flex;align-items:center;gap:8px;cursor:pointer;padding:3px 0}
+.dp-toggle-label{font-size:12.5px;color:var(--ork-text)}
+.dp-toggle-sw{flex-shrink:0;width:34px;height:20px;border-radius:10px;background:#cbd5e0;position:relative;cursor:pointer;transition:background .15s}
+.dp-toggle-sw::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.dp-toggle-sw.dp-on{background:#48bb78}
+.dp-toggle-sw.dp-on::after{left:17px}
+.dp-anon-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0 10px;border-bottom:1px solid var(--ork-border);margin-bottom:4px}
+.dp-anon-label{font-size:13px;font-weight:600;color:var(--ork-text)}
+.dp-anon-sub{font-size:11px;color:#a0aec0;margin-top:1px}
+.dp-allergens{display:flex;flex-direction:column;gap:6px}
+.dp-al-row{display:flex;align-items:center;gap:10px}
+.dp-al-name{font-size:12.5px;color:var(--ork-text);width:80px;flex-shrink:0}
+.dp-al-slider{flex:1;display:flex;border-radius:6px;padding:2px;gap:0}
+.dp-al-seg{flex:1;padding:5px 0;font-size:11.5px;border:none;background:transparent;cursor:pointer;border-radius:4px;color:#718096;font-weight:500;text-align:center;transition:background .15s,color .15s,box-shadow .15s}
+.dp-al-seg.dp-active[data-v="0"]{background:#e2e8f0;color:#2d3748;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.dp-al-seg.dp-active[data-v="1"]{background:#fef3c7;color:#92400e;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.dp-al-seg.dp-active[data-v="2"]{background:#fee2e2;color:#9b1c1c;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+html[data-theme="dark"] .dp-intro{color:var(--ork-text-secondary)}
+html[data-theme="dark"] .dp-section-hdr{color:#a0aec0}
+html[data-theme="dark"] .dp-toggle-label{color:var(--ork-text)}
+html[data-theme="dark"] .dp-toggle-sw{background:#4a5568}
+html[data-theme="dark"] .dp-toggle-sw.dp-on{background:#48bb78}
+html[data-theme="dark"] .dp-al-slider{background:#2d3748}
+html[data-theme="dark"] .dp-al-seg{color:#a0aec0}
+html[data-theme="dark"] .dp-al-seg.dp-active[data-v="0"]{background:#4a5568;color:#e2e8f0;box-shadow:none}
+html[data-theme="dark"] .dp-al-seg.dp-active[data-v="1"]{background:#78350f;color:#fde68a}
+html[data-theme="dark"] .dp-al-seg.dp-active[data-v="2"]{background:#7f1d1d;color:#fca5a5}
+html[data-theme="dark"] .dp-anon-label{color:var(--ork-text)}
+html[data-theme="dark"] .dp-anon-row{border-bottom-color:var(--ork-border)}
+.dp-no-restrict-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;background:#f7fafc;border:1px solid #e2e8f0;margin:8px 0 12px;cursor:pointer;transition:background .15s}
+.dp-no-restrict-row:hover{background:#edf2f7}
+.dp-no-restrict-label{font-size:13px;font-weight:600;color:var(--ork-text)}
+.dp-no-restrict-sub{font-size:11px;color:#a0aec0;margin-top:1px}
+#dp-prefs-body{transition:opacity .15s}
+#dp-prefs-body.dp-locked{opacity:.35;pointer-events:none;user-select:none}
+html[data-theme="dark"] .dp-no-restrict-row{background:rgba(255,255,255,.04);border-color:var(--ork-border)}
+html[data-theme="dark"] .dp-no-restrict-row:hover{background:rgba(255,255,255,.08)}
 </style>
 <link rel="stylesheet" href="<?= HTTP_TEMPLATE ?>revised-frontend/style/revised.css?v=<?= filemtime(DIR_TEMPLATE . 'revised-frontend/style/revised.css') ?>">
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 
 <!-- =============================================
      ZONE 1: Profile Hero Header
      ============================================= -->
-<div class="pn-hero<?= $_pnHeroGradientKey ? ' pn-hero-pride' : '' ?>">
-<?php if ($_pnOverlayIsVignette): ?>
+<?php
+	$_heroBgUrl   = $bannerUrl ?: $heraldryUrl;
+	$_heroClasses = 'pn-hero';
+	if ($bannerUrl)                    $_heroClasses .= ' pn-hero-has-banner';
+	if ($bannerUrl && $bannerVignette) $_heroClasses .= ' pn-hero-vignette';
+	if ($pnCanManageBanner)            $_heroClasses .= ' pn-hero-editable';
+	if ($_pnHeroGradientKey)           $_heroClasses .= ' pn-hero-pride';
+	if (!empty($Player['NameShadow']))  $_heroClasses .= ' pn-hero-name-shadow';
+	$_bgStyle = '';
+	if ($_heroBgUrl) {
+		$_bgStyle = "background-image: url('" . htmlspecialchars($_heroBgUrl) . "');";
+		if ($bannerUrl) {
+			$_bgStyle .= ' background-position: ' . $bannerOffsetX . '% ' . $bannerOffsetY . '%;';
+		}
+	}
+?>
+<div class="<?= $_heroClasses ?>" id="pn-hero">
+<?php if ($bannerUrl): ?>
+	<div class="pn-hero-bg"<?php if ($_bgStyle): ?> style="<?= $_bgStyle ?>"<?php endif; ?>></div>
+<?php elseif ($_pnOverlayIsVignette): ?>
 	<div class="pn-hero-bg pn-hero-bg-vignette-base" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 	<div class="pn-hero-bg-vignette-sharp" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 <?php else: ?>
 	<div class="pn-hero-bg" style="background-image: url('<?= htmlspecialchars($heraldryUrl) ?>')"></div>
 <?php endif; ?>
+	<?php if ($pnCanManageBanner): ?>
+	<button type="button" class="pn-banner-edit-btn"
+			onclick="pnOpenBannerModal()"
+			aria-label="<?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?>">
+		<i class="fas fa-image"></i>
+		<span class="pn-banner-edit-label"> <?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+		<i class="fas fa-pencil-alt pn-banner-edit-pencil" aria-hidden="true"></i>
+	</button>
+	<?php endif; ?>
 	<div class="pn-hero-content">
+		<?php if ($_pnShowLogo): ?>
 		<?php if ($canEditImages): ?>
 		<div class="pn-avatar pn-editable-img">
 			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" data-focus-x="<?= $_pnFocusX ?>" data-focus-y="<?= $_pnFocusY ?>" data-focus-size="<?= $_pnFocusSize ?>" />
@@ -990,6 +1054,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 		<div class="pn-avatar">
 			<img class="heraldry-img" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($Player['Persona']) ?>" data-focus-x="<?= $_pnFocusX ?>" data-focus-y="<?= $_pnFocusY ?>" data-focus-size="<?= $_pnFocusSize ?>" />
 		</div>
+		<?php endif; ?>
 		<?php endif; ?>
 		<div class="pn-hero-info">
 			<?php
@@ -1003,7 +1068,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<h1 class="pn-persona" id="pn-hero-persona">
 				<?= $_pnDisplayName ?>
 				<?php if ($isKnight && $_pnBeltDisplay === 'white'): ?>
-					<img class="pn-belt-icon" src="<?= $beltIconUrl ?>" alt="Knight" title="Belted Knight" />
+					<img class="pn-belt-icon" src="<?= htmlspecialchars($beltIconUrl) ?>" alt="Knight" data-tip="Belted Knight" />
 				<?php elseif ($isKnight && $_pnBeltDisplay === 'own' && !empty($ownBelts)): ?>
 					<span class="pn-hero-belts">
 					<?php foreach ($ownBelts as $_b): ?>
@@ -1072,9 +1137,14 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<?php if ($isSuspended): ?>
 				<div class="pn-suspended-detail">
 					<i class="fas fa-info-circle"></i>
-					Suspended <?= htmlspecialchars($Player['SuspendedAt'] ?? '') ?> &mdash; Until <?php $_until = $Player['SuspendedUntil'] ?? ''; echo ($_until && $_until !== '0000-00-00') ? htmlspecialchars($_until) : 'Indefinite'; ?>
-					<?php if (!empty($Player['Suspension'])): ?>
-						&mdash; <?= htmlspecialchars($Player['Suspension']) ?>
+					Suspended <?php $_susAt = $Player['SuspendedAt'] ?? ''; $_until = $Player['SuspendedUntil'] ?? ''; if (!$_until || $_until === '0000-00-00') { echo 'Indefinitely' . ($_susAt ? ' as of ' . htmlspecialchars($_susAt) : ''); } else { echo htmlspecialchars($_susAt) . ' &mdash; Until ' . htmlspecialchars($_until); } ?>
+					<?php
+						$_susReason = trim($Player['Suspension'] ?? '');
+						// Skip reason text that only restates the "Suspended Indefinitely" status (no added detail).
+						$_susRedundant = in_array(strtolower(rtrim($_susReason, " .;,")), ['suspended indefinitely', 'indefinitely', 'indefinite', 'indefinite suspension', 'suspended indefinite'], true);
+					?>
+					<?php if ($_susReason !== '' && !$_susRedundant): ?>
+						&mdash; <?= htmlspecialchars($_susReason) ?>
 					<?php endif; ?>
 				</div>
 			<?php endif; ?>
@@ -1198,7 +1268,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<h4><i class="fas fa-certificate"></i> Qualifications<?php if ($canEditAdmin): ?><button class="pn-card-edit-btn" onclick="pnOpenQualModal()" title="Edit qualifications"><i class="fas fa-pencil-alt"></i></button><?php endif; ?></h4>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Reeve</span>
-				<span class="pn-detail-value">
+				<span class="pn-detail-value" id="pn-qual-reeve-val">
 					<?php if ($Player['ReeveQualified'] != 0): ?>
 						<?php
 							$reeveUntil = (!empty($Player['ReeveQualifiedUntil']) && $Player['ReeveQualifiedUntil'] !== '0000-00-00') ? $Player['ReeveQualifiedUntil'] : '';
@@ -1216,7 +1286,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			</div>
 			<div class="pn-detail-row">
 				<span class="pn-detail-label">Corpora</span>
-				<span class="pn-detail-value">
+				<span class="pn-detail-value" id="pn-qual-corpora-val">
 					<?php if ($Player['CorporaQualified'] != 0): ?>
 						<?php
 							$corporaUntil = (!empty($Player['CorporaQualifiedUntil']) && $Player['CorporaQualifiedUntil'] !== '0000-00-00') ? $Player['CorporaQualifiedUntil'] : '';
@@ -1232,6 +1302,25 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					<?php endif; ?>
 				</span>
 			</div>
+			<?php
+			  // Offer this ONLY when there is something to do. The button used to appear whenever
+			  // the kingdom had a test switched on, so a player could press it, pick a test, and be
+			  // told "Not enough active questions available" — invited to do the impossible.
+			  // A player with past attempts still gets in, because the same modal is where they
+			  // review them.
+			  $_qtTakeable = !empty($QualTakeable['reeve']) || !empty($QualTakeable['corpora']);
+			  $_qtHasHistory = false;
+			  foreach ((array)($QualResults ?? []) as $_qr) {
+				  if (!empty($_qr)) { $_qtHasHistory = true; break; }
+			  }
+			?>
+			<?php if ($isOwnProfile && ($_qtTakeable || $_qtHasHistory)): ?>
+			<div style="margin-top:10px;display:flex;justify-content:flex-end;">
+				<button type="button" class="pn-btn pn-btn-sm pn-btn-primary" onclick="pnOpenTestChooser();return false;">
+					<i class="fas fa-play-circle"></i> <?= $_qtTakeable ? 'Take Tests' : 'Test History' ?>
+				</button>
+			</div>
+			<?php endif; ?>
 		</div>
 
 		<!-- Dues -->
@@ -1273,8 +1362,11 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<?php endif; ?>
 		</div>
 
-		<!-- Event RSVPs -->
-		<?php if (!empty($UpcomingRsvps)): ?>
+		<!-- Event RSVPs — hidden from logged-out viewers so a player's
+		     upcoming plans aren't exposed to search engines / anonymous
+		     scrapers. Any logged-in user (including the profile owner
+		     and officers) still sees the list. -->
+		<?php if (!empty($UpcomingRsvps) && isset($this->__session->user_id)): ?>
 		<div class="pn-card">
 			<h4><i class="fas fa-calendar-check"></i> Event RSVPs</h4>
 			<table class="pn-mini-table">
@@ -1630,10 +1722,148 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 						</div>
 						<?php endif; ?>
 
-					</div><!-- /.pna-feed -->
+							<!-- Feast Preferences (compact trigger) -->
+							<div class="pna-card" id="pna-dp-card">
+								<div class="pna-card-title"><i class="fas fa-utensils"></i> Feast Preferences</div>
+								<div id="pna-dp-summary" style="font-size:12px;color:#718096;margin:0 0 10px;min-height:16px"></div>
+								<button type="button" class="pn-btn pn-btn-secondary pn-btn-sm" onclick="dpOpen()">
+									<i class="fas fa-pencil-alt"></i> Edit Preferences
+								</button>
+							</div><!-- /.pna-dp-card -->
+
+						</div><!-- /.pna-feed -->
 				</div><!-- /.pna-layout -->
 			</div><!-- /#pn-tab-myamtgard -->
 			<?php endif; // isOwnProfile ?>
+
+			<?php if ($isOwnProfile): ?>
+			<!-- Feast Preferences Modal -->
+			<div class="pn-overlay" id="pn-dp-overlay">
+				<div class="pn-modal-box" style="width:500px;max-width:calc(100vw - 40px)">
+					<div class="pn-modal-header">
+						<h3 class="pn-modal-title"><i class="fas fa-utensils" style="margin-right:8px;color:#718096"></i>Feast Preferences</h3>
+						<button class="pn-modal-close-btn" id="pn-dp-close-btn" aria-label="Close">&times;</button>
+					</div>
+					<div class="pn-modal-body">
+						<p class="dp-intro">Feast organizers use these when planning meals. Your name is hidden by default&mdash;only totals are shared unless you opt in below. <strong>Remember to RSVP to events</strong>&mdash;your preferences are only included in feast planning for events you&rsquo;ve RSVPed to.</p>
+
+						<!-- Show name toggle -->
+						<div class="dp-anon-row">
+							<div>
+								<div class="dp-anon-label">Show my name to feast organizers</div>
+								<div class="dp-anon-sub">Off = only counts shared; On = organizers see your name &amp; preferences</div>
+							</div>
+							<div class="dp-toggle-sw" data-field="ShowName"></div>
+						</div>
+
+						<!-- No restrictions master toggle -->
+						<div class="dp-no-restrict-row" id="dp-no-restrict-row">
+							<div class="dp-toggle-sw" data-field="NoRestrictions"></div>
+							<div>
+								<div class="dp-no-restrict-label">No dietary restrictions</div>
+								<div class="dp-no-restrict-sub">I have no concerns — clears and disables all options below</div>
+							</div>
+						</div>
+
+						<div id="dp-prefs-body">
+						<!-- Diet -->
+						<div class="dp-section-hdr">Diet <button type="button" class="dp-info-btn" data-info-btn aria-label="About these categories">?</button></div>
+						<div class="dp-toggles">
+							<?php foreach ([
+								'DietHalal'      => 'Halal',
+								'DietKeto'       => 'Keto',
+								'DietKosher'     => 'Kosher',
+								'DietPaleo'      => 'Paleo',
+								'DietVegan'      => 'Vegan',
+								'DietVegetarian' => 'Vegetarian',
+							] as $_dpField => $_dpLabel): ?>
+							<div class="dp-toggle-row">
+								<div class="dp-toggle-sw" data-field="<?= $_dpField ?>"></div>
+								<span class="dp-toggle-label"><?= $_dpLabel ?></span>
+							</div>
+							<?php endforeach; ?>
+						</div>
+
+						<!-- Restrictions (won't eat) -->
+						<div class="dp-section-hdr">Won't Eat <button type="button" class="dp-info-btn" data-info-btn aria-label="About these categories">?</button></div>
+						<div class="dp-toggles">
+							<?php foreach ([
+								'RestrictBeef'      => 'Beef',
+								'RestrictDairy'     => 'Dairy',
+								'RestrictEggs'      => 'Eggs',
+								'RestrictFish'      => 'Fish',
+								'RestrictHoney'     => 'Honey',
+								'RestrictPork'      => 'Pork',
+								'RestrictPoultry'   => 'Poultry',
+								'RestrictShellfish' => 'Shellfish',
+							] as $_dpField => $_dpLabel): ?>
+							<div class="dp-toggle-row">
+								<div class="dp-toggle-sw" data-field="<?= $_dpField ?>"></div>
+								<span class="dp-toggle-label"><?= $_dpLabel ?></span>
+							</div>
+							<?php endforeach; ?>
+						</div>
+
+						<!-- Allergens (3-state) -->
+						<div class="dp-section-hdr">Allergens <button type="button" class="dp-info-btn" data-info-btn aria-label="About these categories">?</button></div>
+						<div class="dp-sev-legend">
+							<span class="dp-sl-eg dp-sl-none">None</span> no concern &nbsp;·&nbsp;
+							<span class="dp-sl-eg dp-sl-mild">Mild</span> prefer to avoid &nbsp;·&nbsp;
+							<span class="dp-sl-eg dp-sl-severe">Severe</span> strict, cross-contamination risk
+						</div>
+						<div class="dp-allergens">
+							<?php foreach ([
+								'AllergenCocoa'       => 'Cocoa',
+								'AllergenCoconut'     => 'Coconut',
+								'AllergenCorn'        => 'Corn',
+								'AllergenEggs'        => 'Eggs',
+								'AllergenFish'        => 'Fish',
+								'AllergenGarlic'      => 'Garlic',
+								'AllergenGluten'      => 'Gluten',
+								'AllergenMilk'        => 'Milk',
+								'AllergenMushroom'    => 'Mushroom',
+								'AllergenNightshades' => 'Nightshades',
+								'AllergenOnion'       => 'Onion',
+								'AllergenPeanuts'   => 'Peanuts',
+								'AllergenSesame'    => 'Sesame',
+								'AllergenShellfish' => 'Shellfish',
+								'AllergenSoy'       => 'Soy',
+								'AllergenTreenuts'  => 'Tree Nuts',
+								'AllergenWheat'     => 'Wheat',
+							] as $_dpField => $_dpLabel): ?>
+							<div class="dp-al-row">
+								<span class="dp-al-name"><?= $_dpLabel ?></span>
+								<div class="dp-al-slider" data-field="<?= $_dpField ?>">
+									<button type="button" class="dp-al-seg dp-active" data-v="0">None</button>
+									<button type="button" class="dp-al-seg" data-v="1">Mild</button>
+									<button type="button" class="dp-al-seg" data-v="2">Severe</button>
+								</div>
+							</div>
+							<?php endforeach; ?>
+						</div>
+						</div><!-- /#dp-prefs-body -->
+					</div><!-- /.pn-modal-body -->
+					<div class="pn-modal-footer" style="align-items:center">
+						<span id="pn-dp-dirty-warn" style="display:none;color:#e53e3e;font-size:12px;margin-right:auto">
+							<i class="fas fa-exclamation-circle"></i> Unsaved changes
+						</span>
+						<button type="button" class="pn-btn pn-btn-secondary" id="pn-dp-cancel-btn">Cancel</button>
+						<button type="button" class="pn-btn pn-btn-primary" id="pn-dp-save-btn" disabled>
+							<i class="fas fa-save"></i> Save
+						</button>
+					</div>
+				</div><!-- /.pn-modal-box -->
+			</div><!-- /#pn-dp-overlay -->
+			<div id="dp-info-pop" role="tooltip">
+				<div class="dp-pop-title">About Dietary Categories</div>
+				<p><strong>Diet</strong> — overall eating styles (Vegan, Kosher, Halal, etc.).<br>
+				<strong>Won't Eat</strong> — ingredients you avoid but aren't allergic to.<br>
+				<strong>Allergens</strong> — substances that may cause a reaction.</p>
+				<p>Allergen severity: <span class="dp-sl-eg dp-sl-none">None</span>&thinsp;=&thinsp;no concern &nbsp; <span class="dp-sl-eg dp-sl-mild">Mild</span>&thinsp;=&thinsp;prefer to avoid, not critical &nbsp; <span class="dp-sl-eg dp-sl-severe">Severe</span>&thinsp;=&thinsp;strict, cross-contamination is a real risk.</p>
+				<p>Allergen list covers all <strong>US FDA Major 9</strong> (FALCPA 2004 + FASTER Act 2023: milk, eggs, fish, shellfish, tree nuts, peanuts, wheat, soy, sesame) and key <strong>Health Canada</strong> priority allergens including gluten sources.</p>
+				<p><a href="https://www.fda.gov/food/nutrition-food-labeling-and-critical-foods/food-allergies" target="_blank" rel="noopener">FDA Food Allergens</a> &nbsp;·&nbsp; <a href="https://www.canada.ca/en/health-canada/services/food-nutrition/food-safety/food-allergies-intolerances/food-allergies.html" target="_blank" rel="noopener">Health Canada</a></p>
+			</div>
+			<?php endif; // isOwnProfile (modal) ?>
 
 			<!-- About Tab -->
 				<?php if ($_showAboutTab): ?>
@@ -1742,6 +1972,74 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							<?php endif; ?>
 							<?php endif; // $_hasBeltline ?>
 							<?php
+								// Feast Preferences sidebar card (opt-in via Show My Feast Preferences).
+								// Only rendered when the toggle is on AND the player has meaningful data.
+								// NoRestrictions=1 counts as meaningful — "I have none" is intentional.
+								$_showFeastPrefs = (int)($Player['ShowFeastPrefs'] ?? 0);
+								$_fp = $FeastPrefs ?? null;
+								if ($_showFeastPrefs && is_array($_fp)) {
+									$_fpDiets = array_filter([
+										'Vegetarian' => (int)($_fp['DietVegetarian'] ?? 0),
+										'Vegan'      => (int)($_fp['DietVegan'] ?? 0),
+										'Halal'      => (int)($_fp['DietHalal'] ?? 0),
+										'Kosher'     => (int)($_fp['DietKosher'] ?? 0),
+										'Keto'       => (int)($_fp['DietKeto'] ?? 0),
+										'Paleo'      => (int)($_fp['DietPaleo'] ?? 0),
+									]);
+									$_fpRestricts = array_filter([
+										'Dairy'     => (int)($_fp['RestrictDairy'] ?? 0),
+										'Eggs'      => (int)($_fp['RestrictEggs'] ?? 0),
+										'Fish'      => (int)($_fp['RestrictFish'] ?? 0),
+										'Honey'     => (int)($_fp['RestrictHoney'] ?? 0),
+										'Poultry'   => (int)($_fp['RestrictPoultry'] ?? 0),
+										'Beef'      => (int)($_fp['RestrictBeef'] ?? 0),
+										'Pork'      => (int)($_fp['RestrictPork'] ?? 0),
+										'Shellfish' => (int)($_fp['RestrictShellfish'] ?? 0),
+									]);
+									$_fpAllergenLabels = [
+										'Milk','Eggs','Fish','Shellfish','Treenuts','Peanuts','Wheat','Soy',
+										'Sesame','Garlic','Gluten','Onion','Mushroom','Corn','Coconut','Cocoa','Nightshades',
+									];
+									$_fpAllergens = [];
+									foreach ($_fpAllergenLabels as $_al) {
+										$_v = (int)($_fp['Allergen' . $_al] ?? 0);
+										if ($_v > 0) $_fpAllergens[$_al] = $_v; // 1=Mild, 2=Severe
+									}
+									$_fpHasAny = (int)($_fp['NoRestrictions'] ?? 0) === 1
+										|| !empty($_fpDiets) || !empty($_fpRestricts) || !empty($_fpAllergens);
+							?>
+							<?php if ($_fpHasAny): ?>
+							<div class="pn-belt-card">
+								<div class="pn-belt-card-title"><i class="fas fa-utensils"></i> <?= $isOwnProfile ? 'My' : htmlspecialchars($Player['Persona'] ?? 'Their') . "'s" ?> Feast Preferences</div>
+								<?php if ((int)$_fp['NoRestrictions'] === 1): ?>
+									<div class="pn-belt-row" style="justify-content:flex-start;color:var(--ork-text-secondary,#4a5568);font-style:italic">No dietary restrictions.</div>
+								<?php else: ?>
+									<?php if (!empty($_fpDiets)): ?>
+									<div class="pn-belt-group">Diet</div>
+									<div class="pn-belt-row" style="justify-content:flex-start;flex-wrap:wrap;gap:6px;color:var(--ork-text-secondary,#4a5568)">
+										<?= htmlspecialchars(implode(', ', array_keys($_fpDiets))) ?>
+									</div>
+									<?php endif; ?>
+									<?php if (!empty($_fpRestricts)): ?>
+									<div class="pn-belt-group">Won't eat</div>
+									<div class="pn-belt-row" style="justify-content:flex-start;flex-wrap:wrap;gap:6px;color:var(--ork-text-secondary,#4a5568)">
+										<?= htmlspecialchars(implode(', ', array_keys($_fpRestricts))) ?>
+									</div>
+									<?php endif; ?>
+									<?php if (!empty($_fpAllergens)): ?>
+									<div class="pn-belt-group">Allergens</div>
+									<?php foreach ($_fpAllergens as $_al => $_sev): ?>
+									<div class="pn-belt-row" style="justify-content:flex-start">
+										<span class="pn-belt-name" style="font-weight:500"><?= htmlspecialchars($_al) ?></span>
+										<span class="pn-belt-title" style="color:<?= $_sev === 2 ? '#e53e3e' : '#dd6b20' ?>;font-weight:600"><?= $_sev === 2 ? 'Severe' : 'Mild' ?></span>
+									</div>
+									<?php endforeach; ?>
+									<?php endif; ?>
+								<?php endif; ?>
+							</div>
+							<?php endif; ?>
+							<?php } // _showFeastPrefs ?>
+							<?php
 								// Compact view skeleton — always emit when in compact mode so
 								// JS can inject level6 items even when zero server-side ones exist.
 								$_renderCompact = $_msCompact && (!empty($_visibleMilestones)
@@ -1798,114 +2096,16 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 						}
 					}
 
-					// Build ladder progress: AwardId -> {Name, Short, MaxRank, HasMaster}
-					// Static map: Order award_id => Master award_id(s)
-					$pnOrderToMaster = [
-						21  => [1],       // Order of the Rose      → Master Rose
-						22  => [2],       // Order of the Smith      → Master Smith
-						23  => [3],       // Order of the Lion       → Master Lion
-						24  => [4],       // Order of the Owl        → Master Owl
-						25  => [5],       // Order of the Dragon     → Master Dragon
-						26  => [6],       // Order of the Garber     → Master Garber
-						27  => [12],      // Order of the Warrior    → Warlord
-						28  => [7],       // Order of the Jovius     → Master Jovius
-						29  => [9],       // Order of the Mask       → Master Mask
-						30  => [8],       // Order of the Zodiac     → Master Zodiac
-						32  => [10],      // Order of the Hydra      → Master Hydra
-						33  => [11],      // Order of the Griffin    → Master Griffin
-						239 => [240],     // Order of the Crown      → Master Crown
-						243 => [244],     // Order of Battle         → Battlemaster
-					];
-					$pnOrderNames = [
-						21  => ['Order of the Rose',    'Rose'],
-						22  => ['Order of the Smith',   'Smith'],
-						23  => ['Order of the Lion',    'Lion'],
-						24  => ['Order of the Owl',     'Owl'],
-						25  => ['Order of the Dragon',  'Dragon'],
-						26  => ['Order of the Garber',  'Garber'],
-						27  => ['Order of the Warrior', 'Warrior'],
-						28  => ['Order of the Jovius',  'Jovius'],
-						29  => ['Order of the Mask',    'Mask'],
-						30  => ['Order of the Zodiac',  'Zodiac'],
-						32  => ['Order of the Hydra',   'Hydra'],
-						33  => ['Order of the Griffin', 'Griffin'],
-						239 => ['Order of the Crown',   'Crown'],
-						243 => ['Order of Battle',      'Battle'],
-					];
-					// Index all award_ids the player holds (including titles)
-					$pnHeldAwardIds = [];
-					foreach ($awardsList as $a) {
-						$aid = (int)$a['AwardId'];
-						if ($aid > 0) $pnHeldAwardIds[$aid] = true;
+					// Ladder progress tiles from domain (Player::GetLadderProgress via controller)
+					if (!isset($LadderProgress) || !is_array($LadderProgress)) {
+						$LadderProgress = [];
 					}
-					$pnLadderProgress = [];
-					foreach ($awardsList as $a) {
-						if ((int)$a['IsLadder'] !== 1) continue;
-						$aid  = (int)$a['AwardId'];
-						$rank = (int)$a['Rank'];
-						if ($aid <= 0 || $aid === 31) continue; // 31 = Walker of the Middle
-						$displayName = trimlen($a['CustomAwardName']) > 0 ? $a['CustomAwardName']
-							: (trimlen($a['KingdomAwardName']) > 0 ? $a['KingdomAwardName'] : $a['Name']);
-						// Strip "Order of the " / "Order of " prefix to save space
-						$shortName = preg_replace('/^Order of (the )?/i', '', $displayName);
-						// Check if player holds the corresponding Master title
-						$hasMaster = false;
-						if (isset($pnOrderToMaster[$aid])) {
-							foreach ($pnOrderToMaster[$aid] as $masterId) {
-								if (isset($pnHeldAwardIds[$masterId])) { $hasMaster = true; break; }
-							}
-						}
-						// Dedup key is rank only — two awards at the same rank from different
-						// parks or dates are still the same rank, not two separate levels.
-						$rankKey = $rank;
-						if (!isset($pnLadderProgress[$aid])) {
-							$pnLadderProgress[$aid] = ['Name' => $displayName, 'Short' => $shortName, 'Rank' => $rank,
-								'RankSet' => $rank > 0 ? [$rankKey => true] : [], 'UnrankedCount' => $rank === 0 ? 1 : 0, 'HasMaster' => $hasMaster];
-						} else {
-							if ($rank > $pnLadderProgress[$aid]['Rank']) {
-								$pnLadderProgress[$aid]['Rank'] = $rank;
-							}
-							if ($rank > 0) {
-								$pnLadderProgress[$aid]['RankSet'][$rankKey] = true;
-							} else {
-								$pnLadderProgress[$aid]['UnrankedCount']++;
-							}
-						}
-					}
-					// Use max(highest_rank, effective_count) to account for unreconciled historical awards.
-					// Effective count = distinct ranked entries + unranked entries (deduplicates duplicate ranks).
-					// Cap at maxRank per award (10 for most, 12 for Zodiac)
-					// Mark as approximate when effective count exceeds highest actual rank
-					foreach ($pnLadderProgress as $_lpAid => &$lp) {
-						$_lpMax = ($_lpAid === 30) ? 12 : 10;
-						$_effectiveCount = count($lp['RankSet']) + $lp['UnrankedCount'];
-						// Suppress the "approximate" marker when the player already holds the
-						// corresponding Master title — the M badge is the authoritative signal,
-						// no need to second-guess the breakdown that got them there.
-						$lp['Approx'] = ($_effectiveCount > $lp['Rank']) && empty($lp['HasMaster']);
-						$lp['Rank'] = min($_lpMax, max($lp['Rank'], $_effectiveCount));
-					}
-					unset($lp);
-					// Add a complete tile for any masterhood held with no corresponding ladder progress
-					foreach ($pnOrderToMaster as $orderId => $masterIds) {
-						if (isset($pnLadderProgress[$orderId])) continue;
-						$hasMaster = false;
-						foreach ($masterIds as $masterId) {
-							if (isset($pnHeldAwardIds[$masterId])) { $hasMaster = true; break; }
-						}
-						if (!$hasMaster) continue;
-						$maxRank = ($orderId === 30) ? 12 : 10;
-						$name  = $pnOrderNames[$orderId][0] ?? 'Unknown Order';
-						$short = $pnOrderNames[$orderId][1] ?? $name;
-						$pnLadderProgress[$orderId] = ['Name' => $name, 'Short' => $short, 'Rank' => $maxRank, 'Count' => 0, 'HasMaster' => true, 'Approx' => false];
-					}
-					uasort($pnLadderProgress, function($a, $b) { return strcmp($a['Name'], $b['Name']); });
 				?>
-				<?php if (!empty($pnLadderProgress)): ?>
+				<?php if (!empty($LadderProgress)): ?>
 					<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:16px;">
 						<div class="pn-ladder-grid" style="flex:1;min-width:0;margin-bottom:0">
-							<?php foreach ($pnLadderProgress as $aid => $lp): ?>
-								<?php $maxRank = ($aid === 30) ? 12 : 10; ?>
+							<?php foreach ($LadderProgress as $lp): ?>
+								<?php $maxRank = (int)($lp['MaxRank'] ?? 10); ?>
 								<?php $pct = min(100, round($lp['Rank'] / $maxRank * 100)); ?>
 								<div class="pn-ladder-item" title="<?= htmlspecialchars($lp['Name'] . ($lp['Approx'] ? ' (level approximated from historical data)' : '')) ?>" data-ladname="<?= htmlspecialchars($lp['Name']) ?>" style="cursor:pointer">
 									<div class="pn-ladder-header">
@@ -1935,26 +2135,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<?php if (count($filteredAwards) === 0): ?>
 					<div class="pn-empty">No awards recorded</div>
 				<?php else: ?>
-				<div class="pn-table-toolbar">
-					<?php if (count($filteredAwards) > 10): ?>
-					<div class="pn-pagesize-bar" style="margin-bottom:0">
-						<label for="pn-awards-pagesize">Show</label>
-						<select id="pn-awards-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize('pn-awards-table', this.value)">
-							<option value="10">10</option>
-							<option value="25">25</option>
-							<option value="50">50</option>
-							<option value="100">100</option>
-							<option value="all">All</option>
-						</select>
-						<span>per page</span>
-					</div>
-					<?php endif; ?>
-					<div class="pn-award-search-bar" style="margin-bottom:0">
-						<i class="fas fa-search pn-award-search-icon"></i>
-						<input type="text" id="pn-award-search" placeholder="Search awards…" class="pn-award-search-input" autocomplete="off" oninput="pnAwardSearch(this.value)" />
-					</div>
-				</div>
-				<table class="pn-table pn-sortable" id="pn-awards-table">
+				<table class="pn-table display" id="pn-awards-table">
 					<thead>
 						<tr>
 							<th data-sorttype="text">Award</th>
@@ -1964,7 +2145,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							<th data-sorttype="text">Given At</th>
 							<th data-sorttype="text">Note</th>
 							<th data-sorttype="text">Entered By</th>
-							<?php if ($canManageAwards): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
+							<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
 						</tr>
 					</thead>
 					<tbody>
@@ -2024,12 +2205,11 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 						<?php endforeach; ?>
 					</tbody>
 				</table>
-				<div id="pn-award-search-empty" class="pn-empty" style="display:none">No awards match your search</div>
-				<?php endif; ?>
+								<?php endif; ?>
 				<?php if ($canManageAwards && !empty($RevokedAwards)): ?>
 				<div class="pn-revoked-section">
 					<h4 class="pn-revoked-heading"><i class="fas fa-ban"></i> Revoked Awards</h4>
-					<table class="pn-table pn-sortable" id="pn-revoked-awards-table">
+					<table class="pn-table display" id="pn-revoked-awards-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Award</th>
@@ -2077,19 +2257,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					}
 				?>
 				<?php if (count($filteredTitles) > 0): ?>
-					<?php if (count($filteredTitles) > 10): ?>
-					<div class="pn-pagesize-bar">
-						<label for="pn-titles-pagesize">Show</label>
-						<select id="pn-titles-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize('pn-titles-table', this.value)">
-							<option value="10">10</option>
-							<option value="25">25</option>
-							<option value="50">50</option>
-							<option value="100">100</option>
-						</select>
-						<span>per page</span>
-					</div>
-					<?php endif; ?>
-					<table class="pn-table pn-sortable" id="pn-titles-table">
+					<table class="pn-table display" id="pn-titles-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Title</th>
@@ -2099,7 +2267,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 								<th data-sorttype="text">Given At</th>
 								<th data-sorttype="text">Note</th>
 								<th data-sorttype="text">Entered By</th>
-								<?php if ($canManageAwards): ?><th style="width:52px;min-width:52px"></th><?php endif; ?>
+								<?php if ($canManageAwards): ?><th class="pn-nosort" style="width:52px;min-width:52px"></th><?php endif; ?>
 							</tr>
 						</thead>
 						<tbody>
@@ -2193,7 +2361,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				<?php if ($canManageAwards && !empty($RevokedTitles)): ?>
 				<div class="pn-revoked-section">
 					<h4 class="pn-revoked-heading"><i class="fas fa-ban"></i> Revoked Titles</h4>
-					<table class="pn-table pn-sortable" id="pn-revoked-titles-table">
+					<table class="pn-table display" id="pn-revoked-titles-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Title</th>
@@ -2269,8 +2437,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<div class="pn-tab-panel" id="pn-tab-classes" style="display:none">
 				<?php
 					$classList = is_array($Details['Classes']) ? $Details['Classes'] : array();
-					// class_id → Paragon award_id
-					// $pnClassToParagon and $pnHeldAwardIds are pre-computed in the template preamble
+					// ClassParagonMap and $pnHeldAwardIds come from controller / preamble
 				?>
 				<?php if ($canManageAwards): ?>
 				<div class="pn-tab-toolbar">
@@ -2278,7 +2445,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 				</div>
 				<?php endif; ?>
 				<?php if (count($classList) > 0): ?>
-					<table class="pn-table" id="pn-classes-table">
+					<table class="pn-table display" id="pn-classes-table">
 						<thead>
 							<tr>
 								<th data-sorttype="text">Class</th>
@@ -2290,7 +2457,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 							<?php foreach ($classList as $detail): ?>
 								<?php
 									$totalCredits = $detail['Credits'] + (isset($Player_index) ? $Player_index['Class_' . $detail['ClassId']] : $detail['Reconciled']);
-									$paragonAwardId = $pnClassToParagon[$detail['ClassId']] ?? null;
+									$paragonAwardId = $ClassParagonMap[$detail['ClassId']] ?? null;
 									$hasParagon = $paragonAwardId && isset($pnHeldAwardIds[$paragonAwardId]);
 								?>
 								<tr>
@@ -2419,6 +2586,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 			<div class="pn-acct-field">
 				<label for="pn-acct-username">Username <span class="required-indicator">*</span></label>
 				<input type="text" id="pn-acct-username" name="UserName" value="<?= htmlspecialchars($Player['UserName']) ?>" />
+					<div class="pn-acct-hint" id="pn-acct-username-status" style="display:none"></div>
 			</div>
 			<div class="pn-acct-two-col">
 				<div class="pn-acct-field">
@@ -2976,7 +3144,7 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 		<div class="pn-design-tabs-wrap">
 			<button type="button" class="pn-design-tabs-chev pn-design-tabs-chev-left" id="pn-design-tabs-chev-left" aria-label="Scroll tabs left" tabindex="-1"><i class="fas fa-chevron-left"></i></button>
 			<div class="pn-design-tabs" id="pn-design-tabs">
-				<button class="pn-design-tab pn-active" data-panel="welcome"><i class="fas fa-hand-sparkles"></i> Welcome</button>
+				<button class="pn-design-tab pn-active" data-panel="welcome"><i class="fas fa-smile-beam"></i> Welcome</button>
 				<button class="pn-design-tab" data-panel="about"><i class="fas fa-scroll"></i> About</button>
 				<button class="pn-design-tab" data-panel="colors"><i class="fas fa-palette"></i> Colors</button>
 				<button class="pn-design-tab" data-panel="name"><i class="fas fa-signature"></i> Name</button>
@@ -3149,6 +3317,13 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					</label>
 					<div class="pn-design-hint" style="margin-top:4px">Display your peerage relationships (peers and associates) on your About tab. Others can see who you're belted to and who you've belted.</div>
 				</div>
+				<div class="pn-design-field pn-about-beltline-toggle">
+					<label>
+						<input type="checkbox" id="pn-design-show-feast-prefs" <?= ((int)($Player['ShowFeastPrefs'] ?? 0)) ? 'checked' : '' ?> />
+						Show My Feast Preferences
+					</label>
+					<div class="pn-design-hint" style="margin-top:4px">Display your saved feast preferences (diet, restrictions, allergens) on your About tab. Off by default &mdash; turn on only if you're comfortable making this public.</div>
+				</div>
 			</div>
 
 			<!-- Colors Panel -->
@@ -3319,6 +3494,13 @@ html[data-theme="dark"] .pn-cms-line strong { color: var(--ork-text-muted); }
 					<label>Name Font</label>
 					<div class="pn-design-hint" style="margin-bottom:8px">Choose a decorative font for your persona name in the hero header. If a user has simple or reading-friendly fonts enabled, this custom font will not be shown.</div>
 					<div class="pn-font-picker" id="pn-font-picker"></div>
+				</div>
+				<div class="pn-design-field" style="margin-top:14px">
+					<label class="pn-section-toggle-label">
+						<input type="checkbox" id="pn-name-shadow" <?= !empty($Player['NameShadow']) ? 'checked' : '' ?> style="width:18px;height:18px;accent-color:var(--pn-accent,#4299e1)" />
+						Name shadow / outline
+						<span class="pn-tooltip-trigger" tabindex="0"><i class="fas fa-question-circle" style="color:#a0aec0;font-size:13px;cursor:help"></i><span class="pn-tooltip-text">Adds a dark outline and shadow to your persona name, improving legibility over banner images or light-colored backgrounds. Applied automatically when an AmtPride gradient is active.</span></span>
+					</label>
 				</div>
 				<div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0">
 					<div class="pn-section-heading">Persona Display Controls</div>
@@ -3604,7 +3786,7 @@ if (is_array($Details['Awards'])) {
 }
 $playerHeldAwardIds        = array_keys($playerHeldAwardIds);
 $playerHeldKingdomAwardIds = array_keys($playerHeldKingdomAwardIds);
-$ladderMasterMap           = Award::GetLadderMasterMap();
+$ladderMasterMap           = is_array($LadderMasterMap ?? null) ? $LadderMasterMap : [];
 ?>
 
 <!-- =============================================
@@ -3668,7 +3850,8 @@ var PnConfig = {
 	isOwnProfile:     <?= !empty($isOwnProfile) ? 'true' : 'false' ?>,
 	canEditDesign:    <?= (!empty($isOwnProfile) || !empty($ViewerIsOrkAdmin)) ? 'true' : 'false' ?>,
 	kingdomUrl:       <?= json_encode(UIR . 'Kingdom/profile/' . (int)($KingdomId ?? 0)) ?>,
-	classToParagon:   <?= json_encode($pnClassToParagon) ?>,
+	classToParagon:   <?= json_encode($ClassParagonMap) ?>,
+	classLevelThresholds: <?= json_encode(array_values($ClassLevelThresholds ?? [])) ?>,
 	heldAwardIds:     <?= json_encode(array_keys($pnHeldAwardIds)) ?>,
 	canDeleteRec:   <?= !empty($can_delete_recommendation) ? 'true' : 'false' ?>,
 	showRecsTab:    <?= !empty($ShowRecsTab) ? 'true' : 'false' ?>,
@@ -3694,10 +3877,198 @@ var PnConfig = {
 // Use the viewed player's kingdom for nav search prioritization if the user has no home kingdom
 if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = PnConfig.kingdomId;
 </script>
+<?php if ($pnCanManageBanner): ?>
+<script>
+var PnBannerConfig = {
+	uir:            '<?= UIR ?>',
+	canManage:      <?= $pnCanManageBanner ? 'true' : 'false' ?>,
+	entityId:       <?= (int)$Player['MundaneId'] ?>,
+	hasBanner:      <?= $hasBanner ? 'true' : 'false' ?>,
+	bannerShowLogo: <?= $bannerShowLogo ? 'true' : 'false' ?>,
+	bannerVignette: <?= $bannerVignette ? 'true' : 'false' ?>,
+	bannerOffsetX:  <?= (int)$bannerOffsetX ?>,
+	bannerOffsetY:  <?= (int)$bannerOffsetY ?>,
+	bannerUrl:      <?= json_encode($bannerUrl) ?>,
+};
+</script>
+<?php endif; ?>
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/email-spell-checker.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<?php if ($pnCanManageBanner): ?>
+<!-- pn-banner-modal -->
+<div class="pn-img-overlay pn-banner-modal" id="pn-banner-overlay">
+	<div class="pn-img-modal" style="width:min(680px, 96vw)">
+		<div class="pn-img-modal-header">
+			<span class="pn-img-modal-title" id="pn-banner-modal-title"><i class="fas fa-image" style="margin-right:8px"></i><?= $bannerUrl ? 'Update Banner Image' : 'Add Banner Image' ?></span>
+			<button class="pn-img-close-btn" id="pn-banner-close-btn" aria-label="Close">&times;</button>
+		</div>
+
+		<div class="pn-img-modal-body" id="pn-banner-step-select">
+			<p style="margin:0 0 12px;font-size:13px;line-height:1.5">
+				Banners are full-bleed across the player profile header. Recommended size <strong>1800 &times; 240&nbsp;px</strong> (7.5:1). The shaded zones below are reserved for the logo, title, badges, and crumb — keep important art on the right side so it isn't covered by overlays.
+			</p>
+			<p style="margin:0 0 12px">
+				<a href="/assets/images/banner-template.png" download="ork-banner-template.png" style="font-size:13px;color:#4299e1;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
+					<i class="fas fa-download"></i> Download blank template (1800 &times; 240 px PNG)
+				</a>
+			</p>
+
+			<div class="pn-banner-wireframes">
+				<figure class="pn-banner-wireframe pn-banner-wf-desktop">
+					<figcaption><i class="fas fa-desktop"></i> Desktop &middot; 1800 &times; 240 px</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<rect x="0" y="0" width="600" height="80" fill="#cbd5e0"/>
+						<rect x="0" y="0" width="360" height="80" fill="url(#pn-wfLeftFade)" opacity="0.55"/>
+						<rect x="0" y="58" width="600" height="22" fill="url(#pn-wfBottomFade)" opacity="0.55"/>
+						<rect x="20" y="14" width="52" height="52" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="84" y="22" width="170" height="10" rx="1.5" fill="#fff"/>
+						<rect x="84" y="38" width="52" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="142" y="38" width="46" height="7" rx="1.5" fill="#fff" opacity="0.85"/>
+						<rect x="84" y="62" width="120" height="5" rx="1" fill="#fff" opacity="0.7"/>
+						<text x="470" y="44" text-anchor="middle" font-size="10" fill="#2d3748" font-weight="700">Safe zone for art</text>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="pn-wfLeftFade" x1="0" y1="0" x2="1" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+							<linearGradient id="pn-wfBottomFade" x1="0" y1="1" x2="0" y2="0">
+								<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+
+				<figure class="pn-banner-wireframe pn-banner-wf-mobile">
+					<figcaption><i class="fas fa-mobile-alt"></i> Mobile &middot; middle ~32%</figcaption>
+					<svg viewBox="0 0 600 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+						<!-- Saved banner (1800 × 240) drawn at 7.5:1 to match the desktop wireframe -->
+						<rect x="0"   y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="396" y="0" width="204" height="80" fill="#e2e8f0"/>
+						<rect x="204" y="0" width="192" height="80" fill="#cbd5e0"/>
+						<rect x="204" y="0" width="192" height="80" fill="url(#pn-wfMobileFade)" opacity="0.40"/>
+						<!-- Tiny logo + title inside the middle band -->
+						<rect x="216" y="22" width="36" height="36" rx="3" fill="#a0aec0" stroke="#fff" stroke-width="1.2"/>
+						<rect x="262" y="30" width="120" height="9" rx="1.5" fill="#fff"/>
+						<rect x="262" y="46" width="80"  height="6" rx="1.5" fill="#fff" opacity="0.85"/>
+						<!-- Cropped labels on each flank -->
+						<text x="100" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<text x="498" y="46" text-anchor="middle" font-size="10" fill="#718096" font-weight="600">cropped</text>
+						<!-- Mobile-safe band markers -->
+						<line x1="204" y1="0" x2="204" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<line x1="396" y1="0" x2="396" y2="80" stroke="#4299e1" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>
+						<text x="596" y="11" text-anchor="end" font-size="7" fill="#2d3748" opacity="0.55">1800px wide</text>
+						<text x="4"   y="78" text-anchor="start" font-size="7" fill="#2d3748" opacity="0.55">240px tall</text>
+						<defs>
+							<linearGradient id="pn-wfMobileFade" x1="0" y1="0" x2="0" y2="1">
+								<stop offset="0" stop-color="#000" stop-opacity="0"/>
+								<stop offset="1" stop-color="#000" stop-opacity="0.5"/>
+							</linearGradient>
+						</defs>
+					</svg>
+				</figure>
+			</div>
+			<p class="pn-banner-wf-hint">
+				<i class="fas fa-info-circle"></i> On phones, the banner is cropped to the middle third — keep your subject centred so it survives.
+			</p>
+
+			<div class="pn-banner-config">
+				<label class="pn-banner-toggle">
+					<input type="checkbox" id="pn-banner-show-logo" checked>
+					<span>Show Persona Avatar on Left</span>
+					<small>When off, the logo is hidden and the title/crumb shifts left.</small>
+				</label>
+				<label class="pn-banner-toggle">
+					<input type="checkbox" id="pn-banner-vignette" checked>
+					<span>Apply Vignette Effect</span>
+					<small>Adds a soft radial blur and darkening only over the safe zones, so overlay text and pills stay legible.</small>
+				</label>
+			</div>
+
+			<label class="pn-upload-area" for="pn-banner-file-input" style="margin-top:14px">
+				<i class="fas fa-cloud-upload-alt pn-upload-icon"></i>
+				Click to choose a banner image
+				<small>JPG, PNG &middot; Max 1&nbsp;MB (larger images auto-resized)</small>
+			</label>
+			<input type="file" id="pn-banner-file-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none;" />
+			<div id="pn-banner-resize-notice" style="font-size:12px;min-height:16px;margin-top:6px;"></div>
+			<div class="pn-img-form-error" id="pn-banner-error" style="display:none;"></div>
+
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px;flex-wrap:wrap">
+				<?php if ($hasBanner): ?>
+				<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+					<button class="pn-btn pn-btn-outline" id="pn-banner-adjust-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrows-alt"></i> Adjust Image Framing</button>
+					<button class="pn-btn pn-btn-outline" id="pn-banner-save-config-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-save"></i> Save settings only</button>
+				</div>
+				<button class="pn-btn pn-btn-outline pn-btn-danger" id="pn-banner-remove-btn" type="button" style="font-size:12px;padding:5px 14px;border-color:#feb2b2;"><i class="fas fa-trash"></i> Remove Banner</button>
+				<?php else: ?>
+				<span class="pn-field-hint">Upload an image to enable banner display settings.</span>
+				<?php endif; ?>
+			</div>
+		</div>
+
+		<div class="pn-img-modal-body" id="pn-banner-step-position" style="display:none;">
+			<p style="margin:0 0 10px;font-size:13px;line-height:1.5">
+				Drag your image to set what shows through. The translucent shapes on top are where the logo, title, badges, and crumb will land — anything behind them will be partly covered.
+			</p>
+			<div class="pn-banner-position-wrap">
+				<canvas id="pn-banner-position-canvas" class="pn-banner-position-canvas" width="1800" height="240"></canvas>
+				<svg class="pn-banner-position-overlay" viewBox="0 0 1800 240" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+					<!-- Faint vignette tint for safe zones (matches the real .pn-hero-vignette) -->
+					<rect x="0" y="0" width="900" height="240" fill="url(#pn-posLeftFade)" opacity="0.40"/>
+					<rect x="0" y="150" width="1800" height="90" fill="url(#pn-posBottomFade)" opacity="0.35"/>
+					<!-- Logo placeholder (~110px tall in real layout, vertically centered) -->
+					<rect x="45" y="65" width="110" height="110" rx="8" fill="rgba(255,255,255,0.35)" stroke="#fff" stroke-width="2.5"/>
+					<text x="100" y="128" text-anchor="middle" font-size="16" fill="#fff" font-weight="700" opacity="0.85">LOGO</text>
+					<!-- Title bar -->
+					<rect x="180" y="78" width="520" height="28" rx="3" fill="rgba(255,255,255,0.45)"/>
+					<text x="190" y="99" font-size="20" font-weight="700" fill="#1a202c" opacity="0.78">Player Name goes here</text>
+					<!-- Badges row -->
+					<rect x="180" y="118" width="100" height="20" rx="10" fill="rgba(72,187,120,0.55)"/>
+					<rect x="290" y="118" width="115" height="20" rx="10" fill="rgba(66,153,225,0.55)"/>
+					<rect x="415" y="118" width="90"  height="20" rx="10" fill="rgba(159,122,234,0.55)"/>
+					<!-- Crumb -->
+					<rect x="180" y="150" width="260" height="12" rx="2" fill="rgba(255,255,255,0.40)"/>
+					<!-- Mobile-safe band markers: middle ~32% of width -->
+					<line x1="612"  y1="0" x2="612"  y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<line x1="1188" y1="0" x2="1188" y2="240" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.55"/>
+					<text x="900" y="16" text-anchor="middle" font-size="12" fill="#fff" font-weight="600" opacity="0.75">mobile shows this band</text>
+					<defs>
+						<linearGradient id="pn-posLeftFade" x1="0" y1="0" x2="1" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+						<linearGradient id="pn-posBottomFade" x1="0" y1="1" x2="0" y2="0">
+							<stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+						</linearGradient>
+					</defs>
+				</svg>
+			</div>
+			<p class="pn-banner-position-hint">
+				<i class="fas fa-arrows-alt"></i>
+				<span id="pn-banner-position-hint-text">Click and drag to position the image.</span>
+			</p>
+			<div class="pn-img-form-error" id="pn-banner-position-error" style="display:none;"></div>
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;gap:12px">
+				<button class="pn-btn pn-btn-outline" id="pn-banner-position-back-btn" type="button" style="font-size:12px;padding:5px 14px"><i class="fas fa-arrow-left"></i> Back</button>
+				<button class="pn-btn pn-btn-white" id="pn-banner-position-confirm-btn" type="button" style="font-size:13px;padding:7px 18px">Use This View <i class="fas fa-check"></i></button>
+			</div>
+		</div>
+
+		<div class="pn-img-modal-body" id="pn-banner-step-uploading" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-spinner fa-spin" style="font-size:32px;color:#4299e1;"></i>
+			<p style="margin-top:12px;">Uploading…</p>
+		</div>
+		<div class="pn-img-modal-body" id="pn-banner-step-success" style="display:none;text-align:center;padding:40px 20px;">
+			<i class="fas fa-check-circle" style="font-size:32px;color:#48bb78;"></i>
+			<p style="margin-top:12px;color:#48bb78;font-weight:600;">Updated! Refreshing&hellip;</p>
+		</div>
+	</div>
+</div>
+<?php endif; ?>
+
 <script src="<?= HTTP_TEMPLATE ?>revised-frontend/script/revised.js?v=<?= filemtime(__DIR__ . '/script/revised.js') ?>"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 <script>
 // ---- Markdown rendering for About tab ----
 (function() {
@@ -4212,6 +4583,13 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		});
 	}
 	pnRenderFontPicker();
+	var nameShadowCb = gid('pn-name-shadow');
+	var heroEl = document.querySelector('.pn-hero');
+	if (nameShadowCb && heroEl) {
+		nameShadowCb.addEventListener('change', function() {
+			heroEl.classList.toggle('pn-hero-name-shadow', nameShadowCb.checked);
+		});
+	}
 	if (pnSelectedFont) { pnLoadFont(pnSelectedFont); pnApplyFont(pnSelectedFont); }
 	// Re-render after all fonts land — fonts.ready resolves too early (before downloads finish).
 	// fonts.load() per family triggers downloads and resolves only when each is paint-ready.
@@ -4437,6 +4815,7 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		fd.append('PhotoFocusY', gid('pn-focus-y') ? gid('pn-focus-y').value : PnConfig.photoFocusY);
 		fd.append('PhotoFocusSize', gid('pn-focus-size') ? gid('pn-focus-size').value : PnConfig.photoFocusSize);
 		fd.append('ShowBeltline', gid('pn-design-show-beltline').checked ? 1 : 0);
+		fd.append('ShowFeastPrefs', gid('pn-design-show-feast-prefs') && gid('pn-design-show-feast-prefs').checked ? 1 : 0);
 		fd.append('PronunciationGuide', gid('pn-design-pronunciation').value);
 		fd.append('ShowMundaneFirst', gid('pn-design-show-first').checked ? 1 : 0);
 		fd.append('ShowMundaneLast', gid('pn-design-show-last').checked ? 1 : 0);
@@ -4454,6 +4833,8 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 		msConfig['newest_first'] = (newestFirstEl && newestFirstEl.checked) ? 1 : 0;
 		fd.append('MilestoneConfig', JSON.stringify(msConfig));
 			fd.append('NameFont', pnSelectedFont || '');
+
+		fd.append('NameShadow', gid('pn-name-shadow') && gid('pn-name-shadow').checked ? 1 : 0);
 
 		// Belt display (Icons tab — Knights only; radios aren't rendered for non-knights)
 		var beltRadios = document.querySelectorAll('input[name="pn-design-belt-display"]');
@@ -4724,9 +5105,6 @@ if (typeof nsKid !== 'undefined' && nsKid === 0 && PnConfig.kingdomId) nsKid = P
 	};
 })();
 
-pnSortDesc($('#pn-awards-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-awards-table'), 1);
-pnSortDesc($('#pn-titles-table'), 2, 'date', 1, 'numeric');     pnPaginate($('#pn-titles-table'), 1);
-pnSortDesc($('#pn-history-table'), 2, 'date');    pnPaginate($('#pn-history-table'), 1);
 // 26-week sparkline (called on load and again after attendance AJAX)
 function pnRenderSparkline() {
 	var el = document.getElementById('pna-sparkline');
@@ -4759,7 +5137,1443 @@ function pnRenderSparkline() {
 	if (mel) mel.innerHTML = mhtml;
 }
 pnRenderSparkline();
+
+<?php if ($isOwnProfile): ?>
+// ---- Dietary Preferences Modal ----
+(function() {
+	var DP_LOAD_URL = '<?= UIR ?>PlayerAjax/dietary_preferences/<?= (int)$Player['MundaneId'] ?>';
+	var DP_SAVE_URL = '<?= UIR ?>PlayerAjax/save_dietary_preferences';
+	var dpLoaded = false;
+	var dpDirty  = false;
+	var dpSnap   = null; // modal state at open time; restored on discard
+
+	var ALLERGEN_FIELDS = ['AllergenPeanuts','AllergenTreenuts','AllergenWheat','AllergenMilk','AllergenEggs',
+	                       'AllergenFish','AllergenShellfish','AllergenSoy','AllergenSesame','AllergenGarlic',
+	                       'AllergenGluten','AllergenOnion','AllergenMushroom','AllergenCorn','AllergenCoconut','AllergenCocoa','AllergenNightshades'];
+
+	// ---- DOM helpers (scoped to modal) ----
+	function gInModal(sel) { return document.querySelector('#pn-dp-overlay ' + sel); }
+	function allInModal(sel) { return document.querySelectorAll('#pn-dp-overlay ' + sel); }
+
+	function dpSetToggle(field, val) {
+		var sw = gInModal('.dp-toggle-sw[data-field="' + field + '"]');
+		if (sw) sw.classList.toggle('dp-on', !!val);
+	}
+	function dpToggleValue(field) {
+		var sw = gInModal('.dp-toggle-sw[data-field="' + field + '"]');
+		return sw ? sw.classList.contains('dp-on') : false;
+	}
+	function dpSetAllergen(grp, v) {
+		v = parseInt(v) || 0;
+		grp.querySelectorAll('.dp-al-seg').forEach(function(btn) {
+			btn.classList.toggle('dp-active', parseInt(btn.dataset.v) === v);
+		});
+	}
+	function dpGetAllergen(field) {
+		var grp = gInModal('.dp-al-slider[data-field="' + field + '"]');
+		if (!grp) return 0;
+		var active = grp.querySelector('.dp-al-seg.dp-active');
+		return active ? parseInt(active.dataset.v) : 0;
+	}
+
+	function dpLockPrefs(lock) {
+		var body = document.getElementById('dp-prefs-body');
+		if (body) body.classList.toggle('dp-locked', !!lock);
+	}
+	function dpRender(p) {
+		dpSetToggle('ShowName',         !p.IsAnonymous);
+		dpSetToggle('NoRestrictions',    p.NoRestrictions);
+		dpLockPrefs(p.NoRestrictions);
+		dpSetToggle('DietVegetarian',    p.DietVegetarian);
+		dpSetToggle('DietVegan',         p.DietVegan);
+		dpSetToggle('DietHalal',         p.DietHalal);
+		dpSetToggle('DietKosher',        p.DietKosher);
+		dpSetToggle('DietKeto',          p.DietKeto);
+		dpSetToggle('DietPaleo',         p.DietPaleo);
+		dpSetToggle('RestrictDairy',     p.RestrictDairy);
+		dpSetToggle('RestrictEggs',      p.RestrictEggs);
+		dpSetToggle('RestrictFish',      p.RestrictFish);
+		dpSetToggle('RestrictHoney',     p.RestrictHoney);
+		dpSetToggle('RestrictPoultry',   p.RestrictPoultry);
+		dpSetToggle('RestrictBeef',      p.RestrictBeef);
+		dpSetToggle('RestrictPork',      p.RestrictPork);
+		dpSetToggle('RestrictShellfish', p.RestrictShellfish);
+		ALLERGEN_FIELDS.forEach(function(f) {
+			var grp = gInModal('.dp-al-slider[data-field="' + f + '"]');
+			if (grp) dpSetAllergen(grp, p[f] || 0);
+		});
+	}
+
+	function dpCollect() {
+		var d = {
+			IsAnonymous:       dpToggleValue('ShowName')        ? 0 : 1,
+			NoRestrictions:    dpToggleValue('NoRestrictions')  ? 1 : 0,
+			DietVegetarian:    dpToggleValue('DietVegetarian')  ? 1 : 0,
+			DietVegan:         dpToggleValue('DietVegan')       ? 1 : 0,
+			DietHalal:         dpToggleValue('DietHalal')       ? 1 : 0,
+			DietKosher:        dpToggleValue('DietKosher')      ? 1 : 0,
+			DietKeto:          dpToggleValue('DietKeto')        ? 1 : 0,
+			DietPaleo:         dpToggleValue('DietPaleo')       ? 1 : 0,
+			RestrictDairy:     dpToggleValue('RestrictDairy')   ? 1 : 0,
+			RestrictEggs:      dpToggleValue('RestrictEggs')    ? 1 : 0,
+			RestrictFish:      dpToggleValue('RestrictFish')    ? 1 : 0,
+			RestrictHoney:     dpToggleValue('RestrictHoney')   ? 1 : 0,
+			RestrictPoultry:   dpToggleValue('RestrictPoultry') ? 1 : 0,
+			RestrictBeef:      dpToggleValue('RestrictBeef') ? 1 : 0,
+			RestrictPork:      dpToggleValue('RestrictPork') ? 1 : 0,
+			RestrictShellfish: dpToggleValue('RestrictShellfish') ? 1 : 0,
+		};
+		ALLERGEN_FIELDS.forEach(function(f) { d[f] = dpGetAllergen(f); });
+		return d;
+	}
+
+	// ---- Summary card ----
+	var DIET_LABELS = {DietVegetarian:'Vegetarian',DietVegan:'Vegan',DietHalal:'Halal',DietKosher:'Kosher',DietKeto:'Keto',DietPaleo:'Paleo'};
+	var RESTRICT_LABELS = {RestrictBeef:'No Beef',RestrictDairy:'No Dairy',RestrictEggs:'No Eggs',RestrictFish:'No Fish',RestrictHoney:'No Honey',RestrictPork:'No Pork',RestrictPoultry:'No Poultry',RestrictShellfish:'No Shellfish'};
+	var ALLERGEN_LABELS = {AllergenPeanuts:'Peanuts',AllergenTreenuts:'Tree Nuts',AllergenWheat:'Wheat',AllergenMilk:'Milk',AllergenEggs:'Eggs',AllergenFish:'Fish',AllergenShellfish:'Shellfish',AllergenSoy:'Soy',AllergenSesame:'Sesame',AllergenGarlic:'Garlic',AllergenGluten:'Gluten',AllergenOnion:'Onion',AllergenMushroom:'Mushroom',AllergenCorn:'Corn',AllergenCoconut:'Coconut',AllergenCocoa:'Cocoa',AllergenNightshades:'Nightshades'};
+
+	function dpUpdateSummary(p) {
+		var el = document.getElementById('pna-dp-summary');
+		if (!el) return;
+		if (p.NoRestrictions) { el.textContent = 'No dietary restrictions.'; return; }
+		var parts = [];
+		Object.keys(DIET_LABELS).forEach(function(f)     { if (p[f]) parts.push(DIET_LABELS[f]); });
+		Object.keys(RESTRICT_LABELS).forEach(function(f) { if (p[f]) parts.push(RESTRICT_LABELS[f]); });
+		ALLERGEN_FIELDS.forEach(function(f) {
+			if (p[f] >= 2) parts.push(ALLERGEN_LABELS[f] + ' allergy');
+			else if (p[f] >= 1) parts.push(ALLERGEN_LABELS[f] + ' sensitivity');
+		});
+		el.textContent = parts.length ? parts.slice(0,4).join(', ') + (parts.length > 4 ? ' +' + (parts.length - 4) + ' more' : '') : 'No preferences set.';
+	}
+
+	// ---- Dirty tracking ----
+	function dpMarkDirty() {
+		if (!dpDirty) {
+			dpDirty = true;
+			var warn = document.getElementById('pn-dp-dirty-warn');
+			var btn  = document.getElementById('pn-dp-save-btn');
+			if (warn) warn.style.display = 'inline';
+			if (btn)  btn.disabled = false;
+		}
+	}
+	function dpClearDirty() {
+		dpDirty = false;
+		var warn = document.getElementById('pn-dp-dirty-warn');
+		var btn  = document.getElementById('pn-dp-save-btn');
+		if (warn) warn.style.display = 'none';
+		if (btn)  { btn.disabled = true; btn.innerHTML = '<i class="fas fa-save"></i> Save'; }
+	}
+
+	// ---- Open / close ----
+	window.dpOpen = function() {
+		var ov = document.getElementById('pn-dp-overlay');
+		if (!ov) return;
+		dpClearDirty();
+		if (dpLoaded) {
+			dpSnap = dpCollect();
+		}
+		ov.classList.add('pn-open');
+		if (!dpLoaded) {
+			$.getJSON(DP_LOAD_URL, function(r) {
+				if (r && r.status === 0 && r.prefs) {
+					dpRender(r.prefs);
+					dpUpdateSummary(r.prefs);
+					dpLoaded = true;
+					dpSnap = dpCollect();
+					dpClearDirty();
+				}
+			});
+		}
+	};
+
+	function dpClose(force) {
+		function doClose() {
+			document.getElementById('pn-dp-overlay').classList.remove('pn-open');
+			var pop = document.getElementById('dp-info-pop');
+			if (pop) pop.classList.remove('dp-pop-open');
+			if (dpSnap) { dpRender(dpSnap); dpClearDirty(); }
+		}
+		if (!force && dpDirty) {
+			pnConfirm({ title: 'Unsaved Changes', message: 'Close without saving your feast preferences?', confirmText: 'Discard', danger: true }, doClose);
+		} else {
+			doClose();
+		}
+	}
+
+	// ---- Save ----
+	function dpSave() {
+		var btn = document.getElementById('pn-dp-save-btn');
+		if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; }
+		var data = dpCollect();
+		var fd = new FormData();
+		Object.keys(data).forEach(function(k) { fd.append(k, data[k]); });
+		fetch(DP_SAVE_URL, { method: 'POST', body: fd })
+			.then(function(res) { return res.json(); })
+			.then(function(r) {
+				if (r && r.status === 0) {
+					dpSnap = data;
+					dpClearDirty();
+					dpUpdateSummary(data);
+					document.getElementById('pn-dp-overlay').classList.remove('pn-open');
+				} else {
+					if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save'; }
+				}
+			})
+			.catch(function() {
+				if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save'; }
+			});
+	}
+
+	// ---- Wire modal controls ----
+	function dpClearNoRestrictions() {
+		if (noRestSw && noRestSw.classList.contains('dp-on')) {
+			noRestSw.classList.remove('dp-on');
+			dpLockPrefs(false);
+		}
+	}
+	allInModal('.dp-toggle-sw').forEach(function(sw) {
+		// Skip NoRestrictions (has its own row-click handler below) AND
+		// ShowName (unrelated to dietary state — clicking it should NOT
+		// clear No dietary restrictions).
+		if (sw.dataset.field === 'NoRestrictions' || sw.dataset.field === 'ShowName') return;
+		sw.addEventListener('click', function() { dpClearNoRestrictions(); sw.classList.toggle('dp-on'); dpMarkDirty(); });
+	});
+	// ShowName toggle: just flip its own state — no side-effects on the
+	// rest of the form.
+	var showNameSw = gInModal('.dp-toggle-sw[data-field="ShowName"]');
+	if (showNameSw) {
+		showNameSw.addEventListener('click', function() { showNameSw.classList.toggle('dp-on'); dpMarkDirty(); });
+	}
+	allInModal('.dp-al-seg').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			dpClearNoRestrictions();
+			var grp = btn.closest('.dp-al-slider');
+			if (grp) { dpSetAllergen(grp, btn.dataset.v); dpMarkDirty(); }
+		});
+	});
+
+	// No-restrictions master toggle — whole row is clickable
+	var noRestSw  = gInModal('.dp-toggle-sw[data-field="NoRestrictions"]');
+	var noRestRow = document.getElementById('dp-no-restrict-row');
+	if (noRestSw && noRestRow) {
+		noRestRow.addEventListener('click', function() {
+			var turningOn = !noRestSw.classList.contains('dp-on');
+			noRestSw.classList.toggle('dp-on', turningOn);
+			if (turningOn) {
+				allInModal('.dp-toggle-sw[data-field]').forEach(function(sw) {
+					if (sw.dataset.field !== 'ShowName' && sw.dataset.field !== 'NoRestrictions')
+						sw.classList.remove('dp-on');
+				});
+				allInModal('.dp-al-slider').forEach(function(grp) { dpSetAllergen(grp, 0); });
+			}
+			dpLockPrefs(turningOn);
+			dpMarkDirty();
+		});
+	}
+	document.getElementById('pn-dp-close-btn').addEventListener('click',  function() { dpClose(); });
+	document.getElementById('pn-dp-cancel-btn').addEventListener('click',  function() { dpClose(); });
+	document.getElementById('pn-dp-save-btn').addEventListener('click',    dpSave);
+	document.getElementById('pn-dp-overlay').addEventListener('click',     function(e) { if (e.target === this) dpClose(); });
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && document.getElementById('pn-dp-overlay').classList.contains('pn-open'))
+			dpClose();
+	});
+
+	// Info popover
+	var dpInfoPop = document.getElementById('dp-info-pop');
+	allInModal('[data-info-btn]').forEach(function(btn) {
+		btn.addEventListener('click', function(e) {
+			e.stopPropagation();
+			var rect = btn.getBoundingClientRect();
+			var isOpen = dpInfoPop.classList.contains('dp-pop-open');
+			dpInfoPop.classList.remove('dp-pop-open');
+			if (isOpen) return;
+			var top  = rect.bottom + 6;
+			var left = rect.left;
+			if (left + 295 > window.innerWidth - 10) left = window.innerWidth - 305;
+			dpInfoPop.style.top  = top  + 'px';
+			dpInfoPop.style.left = left + 'px';
+			dpInfoPop.classList.add('dp-pop-open');
+		});
+	});
+	document.addEventListener('click', function() { if (dpInfoPop) dpInfoPop.classList.remove('dp-pop-open'); });
+
+	// Pre-load on page load so summary is populated immediately
+	$.getJSON(DP_LOAD_URL, function(r) {
+		if (r && r.status === 0 && r.prefs) {
+			dpRender(r.prefs);
+			dpUpdateSummary(r.prefs);
+			dpLoaded = true;
+			dpSnap = dpCollect();
+		}
+	});
+})();
+<?php endif; ?>
 </script>
+
+<!-- =============================================
+     Qualification Test Quiz Modal
+     ============================================= -->
+<?php if ($isOwnProfile && (!empty($QualTestReeveEnabled) || !empty($QualTestCorporaEnabled))): ?>
+<style>
+.pn-qt-cards { display: flex; flex-direction: row; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
+.pn-qt-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 18px; flex: 1 1 260px; min-width: 220px; }
+@media (max-width: 600px) { .pn-qt-cards { flex-direction: column; } .pn-qt-card { flex: unset; min-width: 0; } }
+.pn-qt-card-title { font-weight: 700; font-size: 1rem; color: #2d3748; margin-bottom: 8px; }
+.pn-qt-status { font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; }
+.pn-qt-status-pass   { color: #276749; }
+.pn-qt-status-expired{ color: #b7791f; }
+.pn-qt-status-none   { color: #718096; }
+.pn-qt-detail { font-size: 0.8rem; color: #718096; margin-bottom: 10px; }
+.pn-qt-meta { font-size: 0.78rem; color: #718096; line-height: 1.5; margin-bottom: 10px; }
+.pn-qt-meta strong { color: #2d3748; font-weight: 600; }
+.pn-qt-take-btn { margin-top: 4px; }
+.pn-qt-retake-warning { margin-top: 6px; padding: 7px 10px; background: #fff5f5; border: 1px solid #feb2b2; border-radius: 5px; font-size: 0.8rem; color: #9b2c2c; line-height: 1.4; }
+.pn-qt-retake-warning i { margin-right: 5px; }
+.pn-qt-reset-retakes-btn { margin-top: 4px; }
+/* Past-attempts history (player + manager view) */
+.pn-qt-history { font-size: 0.8rem; }
+/* Full-width review panel below the cards (uses the whole modal width). */
+.pn-qt-history-panel { margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fafbfc; overflow: hidden; font-size: 0.85rem; }
+.pn-qt-history-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #fff; border-bottom: 1px solid #edf2f7; }
+.pn-qt-history-panel-title { font-weight: 700; font-size: 0.92rem; color: #2d3748; }
+.pn-qt-history-panel-close { background: none; border: 0; font-size: 1.4rem; line-height: 1; color: #718096; cursor: pointer; padding: 0 4px; }
+.pn-qt-history-panel-close:hover { color: #2d3748; }
+#pn-qt-history-panel-body { padding: 12px 14px; max-height: 46vh; overflow-y: auto; }
+html[data-theme="dark"] .pn-qt-history-panel { background: #252d3a; border-color: #4a5568; }
+html[data-theme="dark"] .pn-qt-history-panel-head { background: #2d3748; border-color: #4a5568; }
+html[data-theme="dark"] .pn-qt-history-panel-title { color: #e2e8f0; }
+.pn-qt-hist-empty { color: #718096; padding: 4px 2px; }
+.pn-qt-hist-row { border: 1px solid #e2e8f0; border-radius: 7px; overflow: hidden; margin-bottom: 6px; }
+.pn-qt-hist-row.pass { border-left: 3px solid #48bb78; }
+.pn-qt-hist-row.fail { border-left: 3px solid #f56565; }
+.pn-qt-hist-toggle { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 11px; background: #fff; border: 0; cursor: pointer; font: inherit; text-align: left; }
+.pn-qt-hist-toggle:hover { background: #f7fafc; }
+.pn-qt-hist-badge { font-weight: 700; font-size: 0.8rem; }
+.pn-qt-hist-row.pass .pn-qt-hist-badge { color: #276749; }
+.pn-qt-hist-row.fail .pn-qt-hist-badge { color: #9b2c2c; }
+.pn-qt-hist-score { font-weight: 600; color: #2d3748; }
+.pn-qt-hist-when { margin-left: auto; font-size: 0.76rem; color: #718096; }
+.pn-qt-hist-detail { padding: 8px 11px 10px; background: #fafbfc; border-top: 1px solid #edf2f7; }
+.pn-qt-rev-q { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; background: #fff; }
+.pn-qt-rev-q.ok  .pn-qt-rev-qh { color: #276749; }
+.pn-qt-rev-q.bad .pn-qt-rev-qh { color: #9b2c2c; }
+.pn-qt-rev-qh { font-weight: 600; margin-bottom: 5px; }
+.pn-qt-rev-opt { padding: 3px 7px; border-radius: 4px; color: #4a5568; margin: 2px 0; font-size: 0.78rem; }
+.pn-qt-rev-opt.correct { background: #f0fff4; color: #276749; }
+.pn-qt-rev-opt.wrong   { background: #fff5f5; color: #9b2c2c; }
+.pn-qt-rev-opt em { font-style: normal; font-size: 0.7rem; text-transform: uppercase; letter-spacing: .03em; opacity: .75; }
+html[data-theme="dark"] .pn-qt-hist-toggle, html[data-theme="dark"] .pn-qt-rev-q { background: #2d3748; }
+html[data-theme="dark"] .pn-qt-hist-row, html[data-theme="dark"] .pn-qt-rev-q { border-color: #4a5568; }
+html[data-theme="dark"] .pn-qt-hist-detail { background: #252d3a; }
+html[data-theme="dark"] .pn-qt-hist-score { color: #e2e8f0; }
+/* Attempt-row meta: dim #718096 timestamp and light-mode pass/fail badges are
+   too faint on the navy row — lift to readable brights. */
+html[data-theme="dark"] .pn-qt-hist-when { color: #a0aec0; }
+html[data-theme="dark"] .pn-qt-hist-row.pass .pn-qt-hist-badge { color: #68d391; }
+html[data-theme="dark"] .pn-qt-hist-row.fail .pn-qt-hist-badge { color: #fc8181; }
+/* Dark: clearly-filled pills with near-white text + left accent, matching the
+   reeve/corpora results report — high contrast for both answer and label. */
+html[data-theme="dark"] .pn-qt-rev-opt.correct { background: #24503c; color: #eafff4; border-left: 3px solid #48bb78; }
+html[data-theme="dark"] .pn-qt-rev-opt.wrong   { background: #532a2e; color: #ffe9e9; border-left: 3px solid #f56565; }
+html[data-theme="dark"] .pn-qt-rev-opt em { opacity: 1; color: #cbd5e0; }
+/* Un-picked options (neither correct nor the player's pick): the base #4a5568 is
+   near-invisible on the navy card — lift to a readable muted grey. */
+html[data-theme="dark"] .pn-qt-rev-opt { color: #a0aec0; }
+/* Question headers: the light-mode green/red are too dark on the navy card. */
+html[data-theme="dark"] .pn-qt-rev-q.ok  .pn-qt-rev-qh { color: #68d391; }
+html[data-theme="dark"] .pn-qt-rev-q.bad .pn-qt-rev-qh { color: #fc8181; }
+/* Chooser modal */
+#pn-qt-chooser-overlay .pn-modal-box { width: 720px; max-width: calc(100vw - 40px); }
+.pn-qt-chooser-prompt { font-size: 0.92rem; color: #4a5568; margin-bottom: 14px; }
+.pn-qt-chooser-empty { padding: 18px; text-align: center; color: #718096; font-size: 0.9rem; }
+
+/* Dark mode — chooser cards */
+html[data-theme="dark"] .pn-qt-card {
+	background: var(--ork-bg-secondary, #2d3748);
+	border-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .pn-qt-card-title { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pn-qt-status-pass    { color: #9ae6b4; }
+html[data-theme="dark"] .pn-qt-status-expired { color: #fbd38d; }
+html[data-theme="dark"] .pn-qt-status-none    { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-qt-detail,
+html[data-theme="dark"] .pn-qt-meta { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-qt-meta strong { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pn-qt-retake-warning {
+	background: #742a2a;
+	border-color: #fc8181;
+	color: #feb2b2;
+}
+html[data-theme="dark"] .pn-qt-reset-retakes-btn {
+	background: #44337a !important;
+	border-color: #553c9a !important;
+	color: #d6bcfa !important;
+}
+html[data-theme="dark"] .pn-qt-chooser-prompt { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .pn-qt-chooser-empty  { color: var(--ork-text-muted, #a0aec0); }
+/* Quiz modal */
+#pn-quiz-overlay .pn-modal-box { width: 640px; max-width: calc(100vw - 40px); }
+
+/* Segmented progress bar */
+.pn-quiz-progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.pn-quiz-progress { font-size: 0.8rem; font-weight: 600; color: #718096; }
+.pn-quiz-progress-score { font-size: 0.78rem; color: #a0aec0; }
+.pn-quiz-progress-segments { display: flex; gap: 3px; margin-bottom: 20px; }
+.pn-quiz-progress-seg { flex: 1; height: 7px; border-radius: 4px; background: #e2e8f0; transition: background 0.3s; }
+.pn-quiz-progress-seg-done { background: #38a169; }
+.pn-quiz-progress-seg-current { background: #2b6cb0; box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.2); }
+
+/* Question text */
+.pn-quiz-q-text { font-size: 1.08rem; font-weight: 600; color: #2d3748; margin-bottom: 18px; line-height: 1.55; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0; }
+
+/* Answer labels — card style with radio indicator */
+.pn-quiz-answers { list-style: none; padding: 0; margin: 0 0 16px; }
+.pn-quiz-answer-item { margin-bottom: 8px; }
+.pn-quiz-answer-label { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px;
+                         border: 2px solid #e2e8f0; border-radius: 8px; cursor: pointer;
+                         font-size: 0.92rem; color: #2d3748; transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s; line-height: 1.45; }
+.pn-quiz-answer-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #cbd5e0; flex-shrink: 0; margin-top: 1px;
+                         display: flex; align-items: center; justify-content: center; transition: border-color 0.15s, background 0.15s; }
+.pn-quiz-answer-radio-inner { width: 9px; height: 9px; border-radius: 50%; background: transparent; transition: background 0.15s; }
+.pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) {
+    background: #f7fafc; border-color: #bee3f8; box-shadow: 0 2px 6px rgba(0,0,0,0.05); transform: translateY(-1px); }
+.pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #2b6cb0; }
+.pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) { border-color: #2b6cb0; background: #ebf8ff; }
+.pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #2b6cb0; }
+.pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio-inner { background: #2b6cb0; }
+.pn-quiz-answer-label.pn-quiz-correct  { background: #f0fff4; border-color: #38a169; color: #276749; pointer-events: none; }
+.pn-quiz-answer-label.pn-quiz-correct .pn-quiz-answer-radio { border-color: #38a169; background: #38a169; }
+.pn-quiz-answer-label.pn-quiz-correct .pn-quiz-answer-radio-inner { background: #fff; }
+.pn-quiz-answer-label.pn-quiz-wrong    { background: #fff5f5; border-color: #e53e3e; color: #9b2c2c; pointer-events: none; }
+.pn-quiz-answer-label.pn-quiz-wrong .pn-quiz-answer-radio { border-color: #e53e3e; background: #e53e3e; }
+.pn-quiz-answer-label.pn-quiz-wrong .pn-quiz-answer-radio-inner { background: #fff; }
+.pn-quiz-answer-label.pn-quiz-disabled { pointer-events: none; opacity: 0.55; }
+.pn-quiz-answer-label.pn-quiz-correct, .pn-quiz-answer-label.pn-quiz-wrong { opacity: 1; }
+
+/* Feedback bar with slide animation */
+.pn-quiz-feedback { padding: 0; border-radius: 6px; font-size: 0.92rem; font-weight: 600; margin-top: 0;
+                     overflow: hidden; max-height: 0; opacity: 0; transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease, margin 0.3s ease; }
+.pn-quiz-feedback.pn-quiz-feedback-show { max-height: 70px; opacity: 1; padding: 10px 14px; margin-top: 12px; }
+.pn-quiz-fb-correct { background: #c6f6d5; color: #276749; }
+.pn-quiz-fb-wrong   { background: #fed7d7; color: #9b2c2c; }
+.pn-quiz-nav { display: flex; justify-content: flex-end; align-items: center; margin-top: 12px; gap: 8px; }
+
+/* Result view */
+.pn-quiz-result { text-align: center; padding: 28px 0 20px; }
+.pn-quiz-result-icon { font-size: 3.5rem; margin-bottom: 12px; }
+.pn-quiz-result-pass { color: #276749; }
+.pn-quiz-result-fail { color: #9b2c2c; }
+.pn-quiz-result-heading { font-size: 1.2rem; font-weight: 700; margin: 0 0 6px;
+    background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
+.pn-quiz-result-heading-pass { color: #276749; }
+.pn-quiz-result-heading-fail { color: #9b2c2c; }
+.pn-quiz-result-score { font-size: 2.4rem; font-weight: 800; margin-bottom: 6px; line-height: 1.1; }
+.pn-quiz-result-breakdown { font-size: 0.88rem; color: #4a5568; margin-bottom: 4px; }
+.pn-quiz-result-detail { font-size: 0.85rem; color: #718096; margin-bottom: 12px; }
+.pn-quiz-result-expiry-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px;
+    border-radius: 20px; font-size: 0.85rem; font-weight: 600; background: #c6f6d5; color: #276749; margin-bottom: 16px; }
+
+/* Loading / error / instructions */
+.pn-quiz-loading { text-align: center; padding: 40px 0; color: #718096; }
+.pn-quiz-error-msg { background: #fed7d7; border: 1px solid #fc8181; color: #9b2c2c;
+                     padding: 10px 14px; border-radius: 6px; font-size: 0.88rem; margin-bottom: 12px; display: none; }
+.pn-quiz-instructions { padding: 20px 0; }
+.pn-quiz-instructions-icon { text-align: center; font-size: 2.5rem; color: #2b6cb0; margin-bottom: 14px; }
+.pn-quiz-instructions-body { padding: 12px 16px; background: #ebf4ff; border: 1px solid #bee3f8; border-left: 4px solid #2b6cb0;
+    border-radius: 0 6px 6px 0; font-size: 0.92rem; color: #2c5282; line-height: 1.65; margin-bottom: 18px; white-space: pre-line; }
+.pn-quiz-instructions-meta { font-size: 0.85rem; color: #718096; margin-bottom: 20px; text-align: center; }
+.pn-quiz-instructions-meta strong { color: #2d3748; }
+.pn-quiz-begin-row { text-align: center; }
+
+/* ── Dark mode — quiz modal contents ──────────────────── */
+html[data-theme="dark"] .pn-quiz-progress         { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-progress-score   { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-progress-seg     { background: #4a5568; }
+/* Done/current need brighter fills on the dark modal — the light-mode green/blue
+   and the faint current-glow wash out against #2d3748, so you can't tell which
+   question you're on. */
+html[data-theme="dark"] .pn-quiz-progress-seg-done    { background: #48bb78; }
+html[data-theme="dark"] .pn-quiz-progress-seg-current { background: #63b3ed; box-shadow: 0 0 0 2px rgba(99,179,237,0.5); }
+/* "Select all that apply" hint — color moved off the inline style so dark mode
+   can lift it off the too-dark #4a5568 it used to hard-code. */
+.pn-quiz-multi-hint { color: #4a5568; }
+html[data-theme="dark"] .pn-quiz-multi-hint { color: #cbd5e0; }
+html[data-theme="dark"] .pn-quiz-q-text {
+	color: var(--ork-text, #e2e8f0);
+	border-bottom-color: var(--ork-border, #4a5568);
+}
+html[data-theme="dark"] .pn-quiz-answer-label {
+	background: var(--ork-bg-tertiary, #374151);
+	border-color: var(--ork-border, #4a5568);
+	color: var(--ork-text, #e2e8f0);
+}
+html[data-theme="dark"] .pn-quiz-answer-radio { border-color: #718096; }
+html[data-theme="dark"] .pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) {
+	background: #4a5568;
+	border-color: #63b3ed;
+}
+html[data-theme="dark"] .pn-quiz-answer-label:hover:not(.pn-quiz-disabled):not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) {
+	background: #2a4365;
+	border-color: #63b3ed;
+}
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio { border-color: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-selected:not(.pn-quiz-correct):not(.pn-quiz-wrong) .pn-quiz-answer-radio-inner { background: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-correct {
+	background: #22543d;
+	border-color: #38a169;
+	color: #9ae6b4;
+}
+html[data-theme="dark"] .pn-quiz-answer-label.pn-quiz-wrong {
+	background: #742a2a;
+	border-color: #fc8181;
+	color: #feb2b2;
+}
+html[data-theme="dark"] .pn-quiz-fb-correct { background: #22543d; color: #9ae6b4; }
+html[data-theme="dark"] .pn-quiz-fb-wrong   { background: #742a2a; color: #feb2b2; }
+/* Result view */
+html[data-theme="dark"] .pn-quiz-result-pass,
+html[data-theme="dark"] .pn-quiz-result-heading-pass { color: #9ae6b4; }
+html[data-theme="dark"] .pn-quiz-result-fail,
+html[data-theme="dark"] .pn-quiz-result-heading-fail { color: #feb2b2; }
+html[data-theme="dark"] .pn-quiz-result-score     { color: var(--ork-text, #e2e8f0); }
+html[data-theme="dark"] .pn-quiz-result-breakdown { color: var(--ork-text-secondary, #cbd5e0); }
+html[data-theme="dark"] .pn-quiz-result-detail    { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-result-expiry-badge { background: #22543d; color: #9ae6b4; }
+/* Instructions / loading / error */
+html[data-theme="dark"] .pn-quiz-loading { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-error-msg {
+	background: #742a2a;
+	border-color: #fc8181;
+	color: #feb2b2;
+}
+html[data-theme="dark"] .pn-quiz-instructions-icon { color: #63b3ed; }
+html[data-theme="dark"] .pn-quiz-instructions-body {
+	background: #2a4365;
+	border-color: #4299e1;
+	border-left-color: #63b3ed;
+	color: #ebf8ff;
+}
+html[data-theme="dark"] .pn-quiz-instructions-meta { color: var(--ork-text-muted, #a0aec0); }
+html[data-theme="dark"] .pn-quiz-instructions-meta strong { color: var(--ork-text, #e2e8f0); }
+/* Report-question form inside the quiz modal */
+html[data-theme="dark"] #pn-quiz-report-reason {
+	background: var(--ork-input-bg, #374151);
+	border-color: var(--ork-input-border, #4a5568);
+	color: var(--ork-text, #e2e8f0);
+}
+</style>
+
+<!-- Test chooser modal -->
+<?php
+	$_qualTypes = array_filter(['reeve' => "Reeve's Test", 'corpora' => 'Corpora Test'], function($k) use ($QualTestReeveEnabled, $QualTestCorporaEnabled) {
+		return ($k === 'reeve') ? !empty($QualTestReeveEnabled) : !empty($QualTestCorporaEnabled);
+	}, ARRAY_FILTER_USE_KEY);
+	$_qualResults   = is_array($QualResults ?? null) ? $QualResults : [];
+	$_qualKingdomId = $QualKingdomId ?? 0;
+	$_qualCanManage = $QualCanManage ?? false;
+	// Most kingdoms enable only ONE test, and asking "which would you like?" above a lone
+	// card reads as a choice the player doesn't actually have. The modal still earns its
+	// place (it carries the status, past attempts and retakes), so soften the wording
+	// rather than skip it.
+	$_qualOnlyOne   = (count($_qualTypes) === 1);
+?>
+<div class="pn-overlay" id="pn-qt-chooser-overlay">
+	<div class="pn-modal-box">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i><?= $_qualOnlyOne ? 'Qualification Test' : 'Which test would you like to take?' ?></h3>
+			<button class="pn-modal-close-btn" id="pn-qt-chooser-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body">
+			<?php if (empty($_qualTypes)): ?>
+			<div class="pn-qt-chooser-empty">No tests are currently enabled for your kingdom.</div>
+			<?php else: ?>
+			<div class="pn-qt-chooser-prompt"><?= $_qualOnlyOne
+				? 'Your current status, score, and remaining retakes are shown below.'
+				: 'Pick a test to begin. Your current status, score, and remaining retakes are listed below.' ?></div>
+			<div class="pn-qt-cards">
+				<?php foreach ($_qualTypes as $_qtType => $_qtLabel): ?>
+				<?php
+					$_qr           = $_qualResults[$_qtType] ?? null;
+					// A record with QualResultId == 0 is a retake/attempt-only entry:
+					// the player has TAKEN the test but never PASSED (ork_qual_result
+					// is written only on a pass). Only a genuine passing result can be
+					// "Passed" or "Expired"; otherwise they simply haven't passed yet.
+					$_qtHasPass    = $_qr && !empty($_qr['QualResultId']);
+					$_qtPassed     = $_qtHasPass && empty($_qr['Expired']);
+					$_qtExpired    = $_qtHasPass && !empty($_qr['Expired']);
+					$_qtAttempted  = $_qr && !$_qtHasPass; // taken, never passed
+					$_qtConfig     = ($QualConfigs ?? [])[$_qtType] ?? ['MaxRetakes' => 0];
+					$_qtMaxRetakes = (int)$_qtConfig['MaxRetakes'];
+					$_qtRetakes    = (int)(($_qualResults[$_qtType]['RetakeCount'] ?? 0));
+					$_qtBlocked    = $_qtMaxRetakes > 0 && $_qtRetakes >= $_qtMaxRetakes;
+					// Score/expiry only mean something for a real passing result;
+					// the synthesized attempt-only entry carries a fake 0%.
+					$_qtScore      = $_qtHasPass ? (int)$_qr['ScorePercent'] : null;
+					$_qtExpires    = $_qtHasPass && !empty($_qr['ExpiresAt']) ? date('M j, Y', strtotime($_qr['ExpiresAt'])) : '';
+				?>
+				<div class="pn-qt-card" data-type="<?= $_qtType ?>">
+					<div class="pn-qt-card-title"><i class="fas fa-scroll"></i> <?= $_qtLabel ?></div>
+					<?php if ($_qtPassed): ?>
+						<div class="pn-qt-status pn-qt-status-pass"><i class="fas fa-check-circle"></i> Passed</div>
+						<div class="pn-qt-detail">Score: <?= $_qtScore ?>% &mdash; Expires <?= $_qtExpires ?></div>
+					<?php elseif ($_qtExpired): ?>
+						<div class="pn-qt-status pn-qt-status-expired"><i class="fas fa-clock"></i> Expired<?= $_qtExpires ? ' ' . $_qtExpires : '' ?></div>
+						<?php if ($_qtScore !== null): ?>
+						<div class="pn-qt-detail">Last passing score: <?= $_qtScore ?>%</div>
+						<?php endif; ?>
+					<?php elseif ($_qtAttempted): ?>
+						<div class="pn-qt-status pn-qt-status-none"><i class="fas fa-minus-circle"></i> Not passed yet</div>
+					<?php else: ?>
+						<div class="pn-qt-status pn-qt-status-none"><i class="fas fa-minus-circle"></i> Not yet taken</div>
+					<?php endif; ?>
+					<div class="pn-qt-meta">
+						<?php if ($_qtMaxRetakes > 0): ?>
+							Retakes used: <strong><?= $_qtRetakes ?> of <?= $_qtMaxRetakes ?></strong>
+						<?php else: ?>
+							Retakes used: <strong><?= $_qtRetakes ?></strong> <span style="color:#a0aec0">(no limit)</span>
+						<?php endif; ?>
+					</div>
+					<?php
+					  // Switched on, but nothing published (or too few questions to fill a test).
+					  // Starting it would fail with "Not enough active questions available", so do
+					  // not offer it — say why, and let them see their history.
+					  $_qtTakeableNow = !empty($QualTakeable[$_qtType]);
+					?>
+					<?php if (!$_qtTakeableNow): ?>
+					<div class="pn-qt-retake-warning" style="background:#edf2f7;border-color:#cbd5e0;color:#4a5568;">
+						<i class="fas fa-hourglass-half"></i> This test isn't ready yet &mdash; your kingdom is still putting the questions together. Check back soon.
+					</div>
+					<?php elseif ($_qtBlocked): ?>
+					<div class="pn-qt-retake-warning">
+						<i class="fas fa-ban"></i> You may not retake this test again. Please reach out to your local monarchy for further instructions.
+					</div>
+					<?php else: ?>
+					<button class="pn-btn pn-btn-sm pn-btn-primary pn-qt-take-btn"
+					        data-type="<?= $_qtType ?>"
+					        data-kingdom="<?= $_qualKingdomId ?>"
+					        data-label="<?= htmlspecialchars($_qtLabel) ?>">
+						<i class="fas fa-play-circle"></i> <?= $_qtPassed ? 'Retake Test' : 'Take Test' ?>
+					</button>
+					<?php endif; ?>
+					<?php // Officer-only, and only when a retake LIMIT exists. With no limit the count never
+				      // blocks anyone, so resetting it changes nothing a player can feel — offering it
+				      // there just invites "did that actually do something?". ?>
+					<?php if ($_qualCanManage && $_qtMaxRetakes > 0): ?>
+					<button class="pn-btn pn-btn-sm pn-btn-ghost pn-qt-reset-retakes-btn"
+					        data-type="<?= $_qtType ?>"
+					        data-kingdom="<?= $_qualKingdomId ?>"
+					        data-player="<?= $QualPlayerId ?? 0 ?>"
+					        style="color:#553c9a;border-color:#d6bcfa;font-size:0.75rem;">
+						<i class="fas fa-undo-alt"></i> Reset Retakes
+					</button>
+					<?php endif; ?>
+					<?php if ($isOwnProfile || $_qualCanManage): ?>
+					<button type="button" class="pn-btn pn-btn-sm pn-btn-ghost pn-qt-history-btn"
+					        data-type="<?= $_qtType ?>"
+					        data-kingdom="<?= $_qualKingdomId ?>"
+					        data-player="<?= (int)($QualPlayerId ?? 0) ?>"
+					        data-label="<?= htmlspecialchars($_qtLabel) ?>"
+					        style="margin-top:4px;font-size:0.78rem;" aria-expanded="false">
+						<i class="fas fa-history"></i> View past attempts
+					</button>
+					<?php endif; ?>
+				</div>
+				<?php endforeach; ?>
+			</div>
+			<!-- Full-width review panel: "View past attempts" renders here, using the whole modal. -->
+			<div class="pn-qt-history-panel" id="pn-qt-history-panel" style="display:none;">
+				<div class="pn-qt-history-panel-head">
+					<span class="pn-qt-history-panel-title" id="pn-qt-history-panel-title"></span>
+					<button type="button" class="pn-qt-history-panel-close" id="pn-qt-history-panel-close" aria-label="Close">&times;</button>
+				</div>
+				<div id="pn-qt-history-panel-body"></div>
+			</div>
+			<?php endif; ?>
+		</div>
+	</div>
+</div>
+<script>
+function pnOpenTestChooser() {
+	var ov = document.getElementById('pn-qt-chooser-overlay');
+	if (!ov) return;
+	// Open cleanly: collapse and clear the shared "past attempts" panel so stale
+	// state from a previous open doesn't linger, and so reopening re-fetches
+	// (picking up attempts taken since the modal was last opened).
+	if (typeof window._pnResetQualHistory === 'function') {
+		window._pnResetQualHistory();
+	}
+	ov.querySelectorAll('.pn-qt-history-btn').forEach(function(btn) {
+		btn.setAttribute('aria-expanded', 'false');
+	});
+	ov.classList.add('pn-open');
+}
+(function() {
+	var ov = document.getElementById('pn-qt-chooser-overlay');
+	if (!ov) return;
+	var closeBtn = document.getElementById('pn-qt-chooser-close-btn');
+	if (closeBtn) closeBtn.addEventListener('click', function() { ov.classList.remove('pn-open'); });
+	ov.addEventListener('click', function(e) { if (e.target === ov) ov.classList.remove('pn-open'); });
+	// Escape closes the chooser — but if the full-width history panel is open, close
+	// that first (one layer at a time).
+	document.addEventListener('keydown', function(e) {
+		if ((e.key !== 'Escape' && e.keyCode !== 27) || !ov.classList.contains('pn-open')) return;
+		var panel = document.getElementById('pn-qt-history-panel');
+		if (panel && panel.style.display !== 'none') {
+			if (typeof window._pnResetQualHistory === 'function') window._pnResetQualHistory();
+			else panel.style.display = 'none';
+			return;
+		}
+		ov.classList.remove('pn-open');
+	});
+	// When a take button is clicked inside the chooser, close the chooser so the quiz modal isn't behind it.
+	ov.querySelectorAll('.pn-qt-take-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() { ov.classList.remove('pn-open'); });
+	});
+})();
+</script>
+
+<div class="pn-overlay" id="pn-quiz-overlay">
+	<div class="pn-modal-box">
+		<div class="pn-modal-header">
+			<h3 class="pn-modal-title" id="pn-quiz-modal-title"><i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>Take Test</h3>
+			<button class="pn-modal-close-btn" id="pn-quiz-close-btn" aria-label="Close">&times;</button>
+		</div>
+		<div class="pn-modal-body" id="pn-quiz-body">
+			<div class="pn-quiz-loading" id="pn-quiz-loading"><i class="fas fa-spinner fa-spin"></i> Loading questions&hellip;</div>
+			<div class="pn-quiz-error-msg" id="pn-quiz-error"></div>
+
+			<!-- Instructions view -->
+			<div id="pn-quiz-instructions-view" style="display:none">
+				<div class="pn-quiz-instructions">
+					<div class="pn-quiz-instructions-icon"><i class="fas fa-info-circle"></i></div>
+					<div class="pn-quiz-instructions-body" id="pn-quiz-instructions-text"></div>
+					<div class="pn-quiz-instructions-meta" id="pn-quiz-instructions-meta"></div>
+					<div class="pn-quiz-begin-row">
+						<button class="pn-btn pn-btn-primary" id="pn-quiz-begin-btn"><i class="fas fa-play-circle" style="margin-right:6px;"></i>Begin Test</button>
+					</div>
+				</div>
+			</div>
+
+			<!-- Question view -->
+			<div id="pn-quiz-question-view" style="display:none">
+				<div class="pn-quiz-progress-header">
+					<div class="pn-quiz-progress" id="pn-quiz-progress-text"></div>
+					<div class="pn-quiz-progress-score" id="pn-quiz-progress-score"></div>
+				</div>
+				<div class="pn-quiz-progress-segments" id="pn-quiz-progress-segments"></div>
+				<div class="pn-quiz-q-text" id="pn-quiz-q-text"></div>
+				<ul class="pn-quiz-answers" id="pn-quiz-answers"></ul>
+				<!-- Multi-correct affordances: hidden for single-answer questions. -->
+				<div class="pn-quiz-multi-hint" id="pn-quiz-multi-hint" style="display:none;font-size:0.82rem;margin:6px 0 10px;"><i class="fas fa-check-square" style="margin-right:5px;color:#2b6cb0;"></i>Select all that apply, then submit.</div>
+				<div id="pn-quiz-multi-submit-row" style="display:none;margin:0 0 12px;">
+					<button class="pn-btn pn-btn-primary" id="pn-quiz-multi-submit-btn" disabled><i class="fas fa-check"></i> Submit Answer</button>
+				</div>
+				<div class="pn-quiz-feedback" id="pn-quiz-feedback"></div>
+				<div id="pn-quiz-report-area" style="display:none;margin-top:10px;">
+					<button class="pn-btn pn-btn-ghost pn-btn-sm" id="pn-quiz-report-btn" style="font-size:0.8rem;"><i class="fas fa-flag" style="color:#e53e3e;margin-right:5px;"></i>Report Question</button>
+					<div id="pn-quiz-report-form" style="display:none;margin-top:8px;display:none;">
+						<select id="pn-quiz-report-reason" style="padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:0.85rem;">
+							<option value="">— Select a reason —</option>
+							<option value="wording">Question is worded poorly</option>
+							<option value="correct">My answer was correct</option>
+							<option value="outdated">This has not been updated for recent changes</option>
+							<option value="other">Other</option>
+						</select>
+						<button class="pn-btn pn-btn-sm pn-btn-primary" id="pn-quiz-report-submit" style="margin-left:6px;font-size:0.82rem;">Submit</button>
+						<button class="pn-btn pn-btn-sm pn-btn-ghost" id="pn-quiz-report-cancel" style="margin-left:4px;font-size:0.82rem;">Cancel</button>
+						<span id="pn-quiz-report-thanks" style="display:none;font-size:0.82rem;color:#276749;margin-left:8px;"><i class="fas fa-check-circle"></i> Thanks for your report.</span>
+					</div>
+				</div>
+				<div class="pn-quiz-nav">
+					<span></span>
+					<button class="pn-btn pn-btn-primary" id="pn-quiz-next" style="display:none"><i class="fas fa-chevron-right"></i> Next</button>
+					<button class="pn-btn pn-btn-primary" id="pn-quiz-submit" style="display:none"><i class="fas fa-check"></i> Submit Test</button>
+				</div>
+			</div>
+
+			<!-- Result view -->
+			<div id="pn-quiz-result-view" style="display:none">
+				<div class="pn-quiz-result">
+					<div class="pn-quiz-result-icon" id="pn-quiz-result-icon"></div>
+					<h3 class="pn-quiz-result-heading" id="pn-quiz-result-heading"></h3>
+					<div class="pn-quiz-result-score" id="pn-quiz-result-score"></div>
+					<div class="pn-quiz-result-breakdown" id="pn-quiz-result-breakdown"></div>
+					<div class="pn-quiz-result-detail" id="pn-quiz-result-detail"></div>
+					<div id="pn-quiz-result-expiry-wrap" style="display:none">
+						<div class="pn-quiz-result-expiry-badge" id="pn-quiz-result-expiry">
+							<i class="fas fa-calendar-check"></i>
+							<span id="pn-quiz-result-expiry-text"></span>
+						</div>
+					</div>
+				</div>
+				<div class="pn-modal-footer">
+					<button class="pn-btn pn-btn-secondary" id="pn-quiz-done">Close</button>
+					<button class="pn-btn pn-btn-primary" id="pn-quiz-retake" style="display:none"><i class="fas fa-redo"></i> Retake</button>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+<script>
+(function() {
+	var overlay        = document.getElementById('pn-quiz-overlay');
+	var closeBtn       = document.getElementById('pn-quiz-close-btn');
+	var modalTitle     = document.getElementById('pn-quiz-modal-title');
+	var loading        = document.getElementById('pn-quiz-loading');
+	var errorMsg       = document.getElementById('pn-quiz-error');
+	var questionView   = document.getElementById('pn-quiz-question-view');
+	var resultView     = document.getElementById('pn-quiz-result-view');
+	var progressTxt    = document.getElementById('pn-quiz-progress-text');
+	var progressScore  = document.getElementById('pn-quiz-progress-score');
+	var progressSegs   = document.getElementById('pn-quiz-progress-segments');
+	var qText          = document.getElementById('pn-quiz-q-text');
+	var answersList    = document.getElementById('pn-quiz-answers');
+	var multiHintEl    = document.getElementById('pn-quiz-multi-hint');
+	var multiSubmitRow = document.getElementById('pn-quiz-multi-submit-row');
+	var multiSubmitBtn = document.getElementById('pn-quiz-multi-submit-btn');
+	var feedbackEl     = document.getElementById('pn-quiz-feedback');
+	var nextBtn        = document.getElementById('pn-quiz-next');
+	var submitBtn      = document.getElementById('pn-quiz-submit');
+	var doneBtn        = document.getElementById('pn-quiz-done');
+	var retakeBtn      = document.getElementById('pn-quiz-retake');
+	var reportArea     = document.getElementById('pn-quiz-report-area');
+	var reportBtn      = document.getElementById('pn-quiz-report-btn');
+	var reportForm     = document.getElementById('pn-quiz-report-form');
+	var reportReason   = document.getElementById('pn-quiz-report-reason');
+	var reportCorrectOpt = reportReason ? reportReason.querySelector('option[value="correct"]') : null;
+	var reportSubmit   = document.getElementById('pn-quiz-report-submit');
+	var reportCancel   = document.getElementById('pn-quiz-report-cancel');
+	var reportThanks   = document.getElementById('pn-quiz-report-thanks');
+	var resultIcon     = document.getElementById('pn-quiz-result-icon');
+	var resultHeading  = document.getElementById('pn-quiz-result-heading');
+	var resultScore    = document.getElementById('pn-quiz-result-score');
+	var resultBreakdown= document.getElementById('pn-quiz-result-breakdown');
+	var resultDetail   = document.getElementById('pn-quiz-result-detail');
+	var resultExpiryWrap = document.getElementById('pn-quiz-result-expiry-wrap');
+	var resultExpiryText = document.getElementById('pn-quiz-result-expiry-text');
+	var instrView      = document.getElementById('pn-quiz-instructions-view');
+	var instrText      = document.getElementById('pn-quiz-instructions-text');
+	var instrMeta      = document.getElementById('pn-quiz-instructions-meta');
+	var beginBtn       = document.getElementById('pn-quiz-begin-btn');
+
+	var questions      = [];
+	var answers        = {};
+	var correctCount   = 0;
+	var currentIdx     = 0;
+	var passPercent    = 70;
+	// Set of checked answer ids for the multi-select question in view (null for single).
+	var multiSelected  = null;
+	// Pending answer id for a SINGLE-select question — chosen on click but not
+	// submitted until "Submit Answer", so a fat-fingered pick can be changed.
+	var singleSelected = null;
+	// True while the player is mid-test (questions in view, not yet finished) — used
+	// to confirm before an accidental close throws away in-progress answers.
+	var quizInProgress = false;
+	var currentType    = '';
+	var currentKingdom = 0;
+	var currentLabel   = '';
+	var isChecking     = false;
+
+	function openModal(type, kingdom, label) {
+		currentType    = type;
+		currentKingdom = kingdom;
+		currentLabel   = label;
+		questions      = [];
+		answers        = {};
+		correctCount   = 0;
+		currentIdx     = 0;
+		isChecking     = false;
+		quizInProgress = false;
+
+		modalTitle.innerHTML = '<i class="fas fa-clipboard-check" style="margin-right:8px;color:#2c5282"></i>' + label;
+		overlay.classList.add('pn-open');
+		showLoading(true);
+		errorMsg.style.display = 'none';
+		instrView.style.display = 'none';
+		questionView.style.display = 'none';
+		resultView.style.display = 'none';
+
+		var fd = new FormData();
+		fd.append('KingdomId', kingdom);
+		fd.append('TestType',  type);
+		fetch(PnConfig.uir + 'QualTestAjax/gettest', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(j) {
+				showLoading(false);
+				if (j.status !== 0) { showError(j.error || 'Unable to load test questions.'); return; }
+				questions   = j.questions;
+				passPercent = j.pass_percent;
+				buildProgressSegments();
+				if (j.instructions) {
+					showInstructions(j.instructions);
+				} else {
+					renderQuestion(0);
+				}
+			})
+			.catch(function() { showLoading(false); showError('Network error. Please try again.'); });
+	}
+
+	function showInstructions(text) {
+		instrText.innerHTML = escHtml(text);
+		instrMeta.innerHTML = '<strong>' + questions.length + '</strong> question' + (questions.length !== 1 ? 's' : '') + ' &middot; <strong>' + passPercent + '%</strong> required to pass';
+		instrView.style.display = 'block';
+	}
+
+	beginBtn.addEventListener('click', function() {
+		instrView.style.display = 'none';
+		renderQuestion(0);
+	});
+
+	function buildProgressSegments() {
+		progressSegs.innerHTML = '';
+		for (var i = 0; i < questions.length; i++) {
+			var seg = document.createElement('div');
+			seg.className = 'pn-quiz-progress-seg';
+			progressSegs.appendChild(seg);
+		}
+	}
+
+	function updateProgressSegments() {
+		var segs = progressSegs.querySelectorAll('.pn-quiz-progress-seg');
+		for (var i = 0; i < segs.length; i++) {
+			segs[i].className = 'pn-quiz-progress-seg';
+			if (answers.hasOwnProperty(questions[i].QualQuestionId)) {
+				segs[i].classList.add('pn-quiz-progress-seg-done');
+			}
+			if (i === currentIdx && !answers.hasOwnProperty(questions[i].QualQuestionId)) {
+				segs[i].classList.add('pn-quiz-progress-seg-current');
+			}
+		}
+	}
+
+	function renderQuestion(idx) {
+		var q     = questions[idx];
+		var total = questions.length;
+		currentIdx = idx;
+		quizInProgress = true; // answering questions — guard against accidental close
+
+		progressTxt.textContent = 'Question ' + (idx + 1) + ' of ' + total;
+		progressScore.textContent = correctCount + ' correct so far';
+		updateProgressSegments();
+		qText.textContent = q.QuestionText;
+
+		feedbackEl.classList.remove('pn-quiz-feedback-show', 'pn-quiz-fb-correct', 'pn-quiz-fb-wrong');
+		feedbackEl.className = 'pn-quiz-feedback';
+		nextBtn.style.display   = 'none';
+		submitBtn.style.display = 'none';
+		reportArea.style.display = 'none';
+		reportForm.style.display = 'none';
+		reportReason.value = '';
+		if (reportCorrectOpt) reportCorrectOpt.hidden = false;
+		reportThanks.style.display = 'none';
+
+		var isMulti = (q.AnswerMode === 'multi');
+		multiHintEl.style.display    = isMulti ? '' : 'none';
+		// Both single and multi now confirm with the Submit button, so a mis-click
+		// can be corrected before it counts.
+		multiSubmitRow.style.display = '';
+		multiSubmitBtn.disabled      = true;
+		multiSelected  = isMulti ? Object.create(null) : null;
+		singleSelected = null;
+
+		answersList.innerHTML = '';
+		q.Answers.forEach(function(a) {
+			var li    = document.createElement('li');
+			li.className = 'pn-quiz-answer-item';
+			var label = document.createElement('label');
+			label.className = 'pn-quiz-answer-label';
+			label.dataset.answerId = a.QualAnswerId;
+			label.setAttribute('tabindex', '0');
+			label.setAttribute('role', isMulti ? 'checkbox' : 'radio');
+			label.setAttribute('aria-checked', 'false');
+
+			var radio = document.createElement('span');
+			radio.className = 'pn-quiz-answer-radio';
+			var inner = document.createElement('span');
+			inner.className = 'pn-quiz-answer-radio-inner';
+			radio.appendChild(inner);
+			label.appendChild(radio);
+
+			var text = document.createElement('span');
+			text.textContent = a.AnswerText;
+			label.appendChild(text);
+
+			if (isMulti) {
+				// Multi: clicking toggles selection; scoring waits for Submit Answer.
+				var toggle = function() {
+					if (isChecking) return;
+					if (multiSelected[a.QualAnswerId]) {
+						delete multiSelected[a.QualAnswerId];
+						label.classList.remove('pn-quiz-selected');
+						label.setAttribute('aria-checked', 'false');
+					} else {
+						multiSelected[a.QualAnswerId] = true;
+						label.classList.add('pn-quiz-selected');
+						label.setAttribute('aria-checked', 'true');
+					}
+					multiSubmitBtn.disabled = (Object.keys(multiSelected).length === 0);
+				};
+				label.addEventListener('click', toggle);
+				label.addEventListener('keydown', function(e) {
+					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+				});
+			} else {
+				// Single: clicking selects; scoring waits for Submit Answer so a
+				// mis-tap can be changed.
+				var selectSingle = function() {
+					if (isChecking) return;
+					// Radio behaviour: clear any prior pick, then select this one.
+					answersList.querySelectorAll('.pn-quiz-answer-label').forEach(function(l) {
+						l.classList.remove('pn-quiz-selected');
+						l.setAttribute('aria-checked', 'false');
+					});
+					label.classList.add('pn-quiz-selected');
+					label.setAttribute('aria-checked', 'true');
+					singleSelected = a.QualAnswerId;
+					multiSubmitBtn.disabled = false;
+				};
+				label.addEventListener('click', selectSingle);
+				label.addEventListener('keydown', function(e) {
+					if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSingle(); }
+				});
+			}
+			li.appendChild(label);
+			answersList.appendChild(li);
+		});
+
+		questionView.style.display = 'block';
+	}
+
+	// `selected` is a number for single-select, or an array of ids for multi.
+	function checkAnswer(q, selected) {
+		if (isChecking) return;
+		var isMulti = Array.isArray(selected);
+		if (isMulti && selected.length === 0) return;
+		isChecking = true;
+
+		var allLabels = answersList.querySelectorAll('.pn-quiz-answer-label');
+		if (isMulti) {
+			allLabels.forEach(function(l) {
+				var picked = selected.indexOf(parseInt(l.dataset.answerId, 10)) !== -1;
+				l.classList.toggle('pn-quiz-selected', picked);
+				l.setAttribute('aria-checked', picked ? 'true' : 'false');
+			});
+			multiSubmitBtn.disabled = true;
+		} else {
+			allLabels.forEach(function(l) {
+				l.classList.remove('pn-quiz-selected');
+				l.setAttribute('aria-checked', 'false');
+			});
+			var sel0 = answersList.querySelector('[data-answer-id="' + selected + '"]');
+			if (sel0) { sel0.classList.add('pn-quiz-selected'); sel0.setAttribute('aria-checked', 'true'); }
+		}
+		allLabels.forEach(function(l) { l.classList.add('pn-quiz-disabled'); });
+
+		var fd = new FormData();
+		fd.append('KingdomId',  currentKingdom);
+		fd.append('TestType',   currentType);
+		fd.append('QuestionId', q.QualQuestionId);
+		if (isMulti) {
+			selected.forEach(function(id) { fd.append('AnswerIds[]', id); });
+		} else {
+			fd.append('AnswerId', selected);
+			fd.append('AnswerIds[]', selected); // dual-post for forward compat
+		}
+		fetch(PnConfig.uir + 'QualTestAjax/checkanswer', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(j) {
+				if (j.status !== 0) {
+					allLabels.forEach(function(l) { l.classList.remove('pn-quiz-disabled'); l.classList.remove('pn-quiz-selected'); });
+					showError(j.error || 'Error checking answer.');
+					isChecking = false;
+					return;
+				}
+				answers[q.QualQuestionId] = selected;
+
+				// Server returns the full correct set (correct_answer_ids); the
+				// scalar correct_answer_id stays for single back-compat.
+				var correctIds = Array.isArray(j.correct_answer_ids)
+					? j.correct_answer_ids.map(function(x) { return parseInt(x, 10); })
+					: (j.correct_answer_id ? [parseInt(j.correct_answer_id, 10)] : []);
+				var pickedIds = isMulti ? selected : [selected];
+
+				if (j.is_correct) {
+					correctCount++;
+					pickedIds.forEach(function(id) {
+						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
+						if (l) { l.classList.remove('pn-quiz-selected'); l.classList.add('pn-quiz-correct'); }
+					});
+					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-correct';
+					feedbackEl.innerHTML = '<i class="fas fa-check-circle" style="margin-right:6px;"></i> Correct!';
+				} else {
+					pickedIds.forEach(function(id) {
+						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
+						if (!l) return;
+						l.classList.remove('pn-quiz-selected');
+						// A picked id that's also correct = partially right; show green.
+						if (correctIds.indexOf(id) !== -1) l.classList.add('pn-quiz-correct');
+						else                               l.classList.add('pn-quiz-wrong');
+					});
+					// Reveal correct answers the player missed.
+					correctIds.forEach(function(id) {
+						if (pickedIds.indexOf(id) !== -1) return;
+						var l = answersList.querySelector('[data-answer-id="' + id + '"]');
+						if (l) { l.classList.remove('pn-quiz-disabled'); l.classList.add('pn-quiz-correct'); }
+					});
+					feedbackEl.className = 'pn-quiz-feedback pn-quiz-fb-wrong';
+					feedbackEl.innerHTML = '<i class="fas fa-times-circle" style="margin-right:6px;"></i> Sorry, that\'s not correct.';
+				}
+
+				// Any question can be reported — a right answer doesn't mean the
+				// question is sound (it may be poorly worded or outdated). The
+				// "My answer was correct" reason only applies to a miss, so hide
+				// it when they got it right.
+				reportArea.style.display = 'block';
+				reportBtn.dataset.questionId = q.QualQuestionId;
+				if (reportCorrectOpt) reportCorrectOpt.hidden = !!j.is_correct;
+
+				isChecking = false;
+				requestAnimationFrame(function() { feedbackEl.classList.add('pn-quiz-feedback-show'); });
+				progressScore.textContent = correctCount + ' correct so far';
+				updateProgressSegments();
+
+				// Answer locked in — retire the multi affordances.
+				multiSubmitRow.style.display = 'none';
+				multiHintEl.style.display    = 'none';
+
+				if (currentIdx < questions.length - 1) {
+					nextBtn.style.display = 'inline-block';
+				} else {
+					submitBtn.style.display = 'inline-block';
+				}
+			})
+			.catch(function() {
+				allLabels.forEach(function(l) { l.classList.remove('pn-quiz-disabled'); l.classList.remove('pn-quiz-selected'); });
+				showError('Network error. Please try again.');
+				isChecking = false;
+			});
+	}
+
+	// "Submit Answer" grades the current question — the whole selected set for
+	// multi, or the single pending pick.
+	if (multiSubmitBtn) {
+		multiSubmitBtn.addEventListener('click', function() {
+			if (multiSubmitBtn.disabled) return;
+			var q = questions[currentIdx];
+			if (q.AnswerMode === 'multi') {
+				var ids = Object.keys(multiSelected || {}).map(function(x) { return parseInt(x, 10); });
+				if (ids.length === 0) return;
+				checkAnswer(q, ids);
+			} else {
+				if (singleSelected == null) return;
+				checkAnswer(q, singleSelected);
+			}
+		});
+	}
+
+	function showLoading(show) { loading.style.display = show ? 'block' : 'none'; }
+	function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
+	function escHtml(s) { var d = document.createElement('div'); d.appendChild(document.createTextNode(s)); return d.innerHTML; }
+
+	reportBtn.addEventListener('click', function() {
+		reportForm.style.display = 'block';
+		reportBtn.style.display  = 'none';
+	});
+	reportCancel.addEventListener('click', function() {
+		reportForm.style.display = 'none';
+		reportBtn.style.display  = 'inline-block';
+	});
+	reportSubmit.addEventListener('click', function() {
+		var reason = reportReason.value;
+		if (!reason) { showError('Please select a reason.'); return; }
+		var fd = new FormData();
+		fd.append('QuestionId', reportBtn.dataset.questionId);
+		fd.append('Reason', reason);
+		fetch(PnConfig.uir + 'QualTestAjax/reportquestion', { method: 'POST', body: fd })
+			.then(function(r) { return r.json(); })
+			.then(function(j) {
+				if (j && j.status !== 0) {
+					reportForm.style.display = 'none';
+					reportBtn.style.display  = 'inline-block';
+					showError(j.error || 'Failed to submit report.');
+					return;
+				}
+				reportForm.style.display   = 'none';
+				reportThanks.style.display = 'inline';
+			})
+			.catch(function() {
+				reportForm.style.display = 'none';
+				reportBtn.style.display = 'inline-block';
+				showError('Failed to submit report. Please try again.');
+			});
+	});
+
+	nextBtn.addEventListener('click', function() {
+		if (currentIdx < questions.length - 1) renderQuestion(currentIdx + 1);
+	});
+
+	submitBtn.addEventListener('click', function() {
+		pnConfirm({ title: 'Submit Test', message: 'Submit your test? This cannot be undone.', confirmText: 'Submit', danger: false }, function() {
+			questionView.style.display = 'none';
+			showLoading(true);
+			var fd = new FormData();
+			fd.append('KingdomId', currentKingdom);
+			fd.append('TestType',  currentType);
+			fd.append('Answers',   JSON.stringify(answers));
+			fetch(PnConfig.uir + 'QualTestAjax/submittest', { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); })
+				.then(function(j) {
+					showLoading(false);
+					if (j.status !== 0) { showError(j.error || 'Error submitting test.'); questionView.style.display = 'block'; return; }
+					showResult(j);
+				})
+				.catch(function() { showLoading(false); showError('Network error. Please try again.'); questionView.style.display = 'block'; });
+		});
+	});
+
+	function animateScore(target, duration) {
+		var start = null;
+		function step(ts) {
+			if (!start) start = ts;
+			var p = Math.min((ts - start) / duration, 1);
+			var eased = 1 - Math.pow(1 - p, 3);
+			resultScore.textContent = Math.round(eased * target) + '%';
+			if (p < 1) requestAnimationFrame(step);
+		}
+		requestAnimationFrame(step);
+	}
+
+	function fireConfetti() {
+		if (typeof window.confetti !== 'function') return;
+		var end = Date.now() + 2000;
+		var colors = ['#276749', '#48bb78', '#f6e05e', '#ffffff'];
+		(function frame() {
+			window.confetti({ particleCount: 4, angle: 60,  spread: 55, origin: { x: 0, y: 0.7 }, colors: colors, zIndex: 2000 });
+			window.confetti({ particleCount: 4, angle: 120, spread: 55, origin: { x: 1, y: 0.7 }, colors: colors, zIndex: 2000 });
+			if (Date.now() < end) requestAnimationFrame(frame);
+		})();
+	}
+
+	function showResult(j) {
+		quizInProgress = false; // test finished — closing is safe now
+		if (j.passed) {
+			fireConfetti();
+			resultIcon.innerHTML    = '<i class="fas fa-check-circle pn-quiz-result-pass" style="font-size:inherit;"></i>';
+			resultHeading.className = 'pn-quiz-result-heading pn-quiz-result-heading-pass';
+			resultHeading.textContent = 'Congratulations!';
+			resultScore.className   = 'pn-quiz-result-score pn-quiz-result-pass';
+			resultBreakdown.textContent = j.correct + ' of ' + j.total + ' correct';
+			resultDetail.textContent = 'You needed ' + j.pass_percent + '% to pass. You scored ' + j.score_percent + '%. Well done!';
+			if (j.expires_at) {
+				var d = new Date(j.expires_at.replace(' ', 'T'));
+				resultExpiryText.textContent = 'Valid until ' + d.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+				resultExpiryWrap.style.display = 'block';
+			} else {
+				resultExpiryWrap.style.display = 'none';
+			}
+			retakeBtn.style.display = 'none';
+		} else {
+			resultIcon.innerHTML    = '<i class="fas fa-times-circle pn-quiz-result-fail" style="font-size:inherit;"></i>';
+			resultHeading.className = 'pn-quiz-result-heading pn-quiz-result-heading-fail';
+			resultHeading.textContent = 'Not Quite';
+			resultScore.className   = 'pn-quiz-result-score pn-quiz-result-fail';
+			resultBreakdown.textContent = j.correct + ' of ' + j.total + ' correct';
+			resultDetail.textContent = 'You needed ' + j.pass_percent + '%, you scored ' + j.score_percent + '%. Keep studying and try again!';
+			resultExpiryWrap.style.display = 'none';
+			retakeBtn.style.display = 'inline-block';
+		}
+		resultView.style.display = 'block';
+		resultScore.textContent = '0%';
+		setTimeout(function() { animateScore(j.score_percent, 800); }, 200);
+
+		if (j.passed) {
+			var card = document.querySelector('.pn-qt-card[data-type="' + currentType + '"]');
+			if (card) {
+				var statusEl = card.querySelector('.pn-qt-status');
+				var detailEl = card.querySelector('.pn-qt-detail');
+				if (statusEl) { statusEl.className = 'pn-qt-status pn-qt-status-pass'; statusEl.innerHTML = '<i class="fas fa-check-circle"></i> Passed'; }
+				if (detailEl && j.expires_at) {
+					var d2 = new Date(j.expires_at.replace(' ', 'T'));
+					detailEl.textContent = 'Score: ' + j.score_percent + '% \u2014 Expires ' + d2.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+				}
+				var takeBtn = card.querySelector('.pn-qt-take-btn');
+				if (takeBtn) takeBtn.innerHTML = '<i class="fas fa-play-circle"></i> Retake Test';
+			}
+			var valId = currentType === 'reeve' ? 'pn-qual-reeve-val' : 'pn-qual-corpora-val';
+			var sideVal = document.getElementById(valId);
+			if (sideVal && j.expires_at) {
+				var dSide = new Date(j.expires_at.replace(' ', 'T'));
+				var until = dSide.toISOString().slice(0,10);
+				sideVal.innerHTML = '<span class="pn-badge pn-badge-green">Until ' + until + '</span>';
+			}
+		}
+	}
+
+	// Guarded close: if a test is mid-progress, confirm (via the in-app dialog,
+	// matching Submit Test etc.) before discarding answers.
+	function requestCloseQuiz() {
+		if (!quizInProgress) {
+			overlay.classList.remove('pn-open');
+			return;
+		}
+		pnConfirm({
+			title: 'Leave the test?',
+			message: 'Your progress on this attempt will be lost and it won\'t be recorded.',
+			confirmText: 'Leave Test',
+			danger: true
+		}, function() {
+			quizInProgress = false;
+			overlay.classList.remove('pn-open');
+		});
+	}
+	closeBtn.addEventListener('click', requestCloseQuiz);
+	// The result-view "Close" is a finished test — no guard needed.
+	doneBtn.addEventListener('click',  function() { overlay.classList.remove('pn-open'); });
+	retakeBtn.addEventListener('click', function() {
+		resultView.style.display = 'none';
+		openModal(currentType, currentKingdom, currentLabel);
+	});
+	overlay.addEventListener('click', function(e) { if (e.target === overlay) requestCloseQuiz(); });
+	// Escape closes the quiz too — via the same guard, so a mid-test Escape prompts
+	// before discarding progress.
+	document.addEventListener('keydown', function(e) {
+		if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('pn-open')) requestCloseQuiz();
+	});
+
+	document.querySelectorAll('.pn-qt-reset-retakes-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			pnConfirm({ title: 'Reset Retake Count', message: 'Reset retake count for this player on this test?', confirmText: 'Reset', danger: true }, function() {
+				var fd = new FormData();
+				fd.append('KingdomId', btn.dataset.kingdom);
+				fd.append('PlayerId',  btn.dataset.player);
+				fd.append('TestType',  btn.dataset.type);
+				fetch(PnConfig.uir + 'QualTestAjax/resetplayerretakes', { method: 'POST', body: fd })
+					.then(function(r) { return r.json(); })
+					.then(function(j) {
+						if (j.status === 0) {
+							// Swap warning back to take button if present
+							var card = btn.closest('.pn-qt-card');
+							var warn = card && card.querySelector('.pn-qt-retake-warning');
+							if (warn) warn.style.display = 'none';
+							btn.textContent = '\u2713 Done';
+							setTimeout(function() { location.reload(); }, 1200);
+						} else { showError(j.error || 'Error resetting retakes.'); }
+					});
+			});
+		});
+	});
+
+	document.querySelectorAll('.pn-qt-take-btn').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			openModal(btn.dataset.type, btn.dataset.kingdom, btn.dataset.label);
+		});
+	});
+
+	// Past-attempts history: lazy-load the player's attempt list + per-attempt
+	// answer review. Reuses the shared attempts/attemptdetail endpoints, which
+	// authorize owner-or-manager; the button only renders for those viewers.
+	(function() {
+		function esc(s) {
+			return String(s == null ? '' : s)
+				.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+				.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+		}
+		function renderReview(attempt) {
+			if (!attempt || !attempt.Questions || !attempt.Questions.length) {
+				return '<div class="pn-qt-hist-empty">No answer detail was recorded for this attempt.</div>';
+			}
+			var html = '';
+			attempt.Questions.forEach(function(q, i) {
+				var archived = (q.Archived ? ' <span style="font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#92400e;background:#fef3c7;padding:1px 6px;border-radius:4px;margin-left:4px;white-space:nowrap;">Archived</span>' : '') + (q.NotInLiveSet ? ' <span style="font-size:0.64rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:#64748b;background:#f1f5f9;border:1px solid #e2e8f0;padding:0 6px;border-radius:4px;margin-left:4px;white-space:nowrap;">Not in current test</span>' : '');
+				html += '<div class="pn-qt-rev-q ' + (q.Correct ? 'ok' : 'bad') + '">';
+				html += '<div class="pn-qt-rev-qh">' + (q.Correct ? '✓' : '✗') + ' ' + (i + 1) + '. ' + esc(q.QuestionText) + archived + '</div>';
+				(q.Options || []).forEach(function(o) {
+					var cls = o.IsCorrect ? 'correct' : (o.WasSelected ? 'wrong' : '');
+					var tag = o.WasSelected ? ' <em>(your pick)</em>' : (o.IsCorrect ? ' <em>(correct)</em>' : '');
+					html += '<div class="pn-qt-rev-opt ' + cls + '">' + esc(o.AnswerText) + tag + '</div>';
+				});
+				html += '</div>';
+			});
+			return html;
+		}
+		function post(endpoint, params, cb) {
+			var fd = new FormData();
+			Object.keys(params).forEach(function(k) { fd.append(k, params[k]); });
+			fetch(PnConfig.uir + endpoint, { method: 'POST', body: fd })
+				.then(function(r) { return r.json(); }).then(cb).catch(function() { cb(null); });
+		}
+		// Shared full-width panel below the cards — one at a time, uses the whole modal.
+		var panel      = document.getElementById('pn-qt-history-panel');
+		var panelBody  = document.getElementById('pn-qt-history-panel-body');
+		var panelTitle = document.getElementById('pn-qt-history-panel-title');
+		var panelClose = document.getElementById('pn-qt-history-panel-close');
+		var activeBtn  = null;
+
+		function closePanel() {
+			if (panel) panel.style.display = 'none';
+			if (activeBtn) activeBtn.setAttribute('aria-expanded', 'false');
+			activeBtn = null;
+		}
+		// Exposed so pnOpenTestChooser can reset the panel each time the modal opens.
+		window._pnResetQualHistory = function() { if (panelBody) panelBody.innerHTML = ''; closePanel(); };
+		if (panelClose) panelClose.addEventListener('click', closePanel);
+
+		// Per-attempt review expansion (delegated within the shared panel body).
+		if (panelBody) panelBody.addEventListener('click', function(e) {
+			var t = e.target && e.target.closest ? e.target.closest('.pn-qt-hist-toggle') : null;
+			if (!t) return;
+			var detail = t.nextElementSibling;
+			if (detail.style.display !== 'none') { detail.style.display = 'none'; return; }
+			detail.style.display = 'block';
+			if (detail.dataset.loaded) return;
+			detail.innerHTML = '<div class="pn-qt-hist-empty">Loading…</div>';
+			post('QualTestAjax/attemptdetail', { AttemptId: t.dataset.attemptId }, function(j) {
+				detail.dataset.loaded = '1';
+				detail.innerHTML = renderReview(j && j.status === 0 ? j.attempt : null);
+			});
+		});
+
+		document.querySelectorAll('.pn-qt-history-btn').forEach(function(btn) {
+			btn.addEventListener('click', function() {
+				if (!panel) return;
+				// Same button already open → toggle closed.
+				if (activeBtn === btn && panel.style.display !== 'none') { closePanel(); return; }
+				if (activeBtn) activeBtn.setAttribute('aria-expanded', 'false');
+				activeBtn = btn;
+				btn.setAttribute('aria-expanded', 'true');
+				panelTitle.textContent = (btn.dataset.label || 'Test') + ' — Past attempts';
+				panel.style.display = 'block';
+				panelBody.innerHTML = '<div class="pn-qt-hist-empty">Loading…</div>';
+				if (panel.scrollIntoView) panel.scrollIntoView({ block: 'nearest' });
+				post('QualTestAjax/attempts', {
+					PlayerId: btn.dataset.player, KingdomId: btn.dataset.kingdom, TestType: btn.dataset.type
+				}, function(j) {
+					if (activeBtn !== btn) return; // switched away before this load returned
+					if (!j || j.status !== 0) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">Could not load history.</div>'; return; }
+					if (!j.attempts.length) { panelBody.innerHTML = '<div class="pn-qt-hist-empty">No attempts recorded yet.</div>'; return; }
+					panelBody.innerHTML = '';
+					j.attempts.forEach(function(a) {
+						var when = a.TakenAt ? new Date(a.TakenAt.replace(' ', 'T')).toLocaleString() : '';
+						var row = document.createElement('div');
+						row.className = 'pn-qt-hist-row ' + (a.Passed ? 'pass' : 'fail');
+						row.innerHTML =
+							'<button type="button" class="pn-qt-hist-toggle" data-attempt-id="' + a.QualAttemptId + '">' +
+								'<span class="pn-qt-hist-badge">' + (a.Passed ? '✓ Passed' : '✗ Not passed') + '</span>' +
+								'<span class="pn-qt-hist-score">' + a.ScorePercent + '%</span>' +
+								'<span class="pn-qt-hist-when">' + esc(when) + (a.RulesVersion ? ' · ' + esc(a.RulesVersion) : '') + '</span>' +
+							'</button>' +
+							'<div class="pn-qt-hist-detail" style="display:none;"></div>';
+						panelBody.appendChild(row);
+					});
+				});
+			});
+		});
+	})();
+})();
+</script>
+<?php endif; ?>
 
 <?php if ($canManageAwards): ?>
 <!-- Revoke Award Modal -->
@@ -4939,7 +6753,7 @@ pnRenderSparkline();
 .pn-mp-cascade-sel:disabled { background:#edf2f7; color:#718096; cursor:not-allowed; }
 #pn-moveplayer-overlay .pn-modal-body { overflow:visible; }
 #pn-moveplayer-overlay .pn-acct-field { position:relative; }
-.pn-mp-player-locked { background:#f7fafc; border:1px solid #e2e8f0; border-radius:4px; padding:8px 12px; color:#4a5568; font-size:0.95rem; }
+.pn-mp-player-locked { background:var(--ork-surface-light); border:1px solid var(--ork-border); border-radius:4px; padding:8px 12px; color:var(--ork-text-body); font-size:0.95rem; }
 </style>
 <div class="pn-overlay" id="pn-moveplayer-overlay">
 	<div class="pn-modal-box" style="width:500px;max-width:calc(100vw - 40px);">
@@ -5104,6 +6918,9 @@ pnRenderSparkline();
 <?php endif; ?>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script>
 $(function() {
 	// Voting eligibility badge — loaded async so it doesn't block page render
@@ -5184,6 +7001,8 @@ $(function() {
 				});
 
 				var newMilestones = [];
+				var levelThresholds = PnConfig.classLevelThresholds || [];
+				var maxClassCredits = levelThresholds.length ? levelThresholds[levelThresholds.length - 1] : null;
 				Object.keys(classData).forEach(function(cid) {
 					var cd = classData[cid];
 					if (!cd.history.length) return;
@@ -5191,7 +7010,7 @@ $(function() {
 					var cum = cd.reconciled;
 					for (var i = 0; i < cd.history.length; i++) {
 						cum += cd.history[i].credits;
-						if (cum >= 53) {
+						if (maxClassCredits !== null && cum >= maxClassCredits) {
 							newMilestones.push({ date: cd.history[i].date, name: cd.name });
 							break;
 						}
@@ -5294,15 +7113,12 @@ $(function() {
 				if (!att.length) {
 					body.innerHTML = '<div class="pn-empty">No attendance records</div>';
 				} else {
-					var html = '<div class="pn-pagesize-bar"><label for="pn-attendance-pagesize">Show</label>'
-						+ '<select id="pn-attendance-pagesize" class="pn-pagesize-select" onchange="pnSetPageSize(\'pn-attendance-table\', this.value)">'
-						+ '<option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option>'
-						+ '</select><span>per page</span></div>'
-						+ '<table class="pn-table pn-sortable" id="pn-attendance-table"><thead><tr>'
+					var html = '<table class="pn-table display" id="pn-attendance-table"><thead><tr>'
 						+ '<th data-sorttype="date">Date</th><th data-sorttype="text">Kingdom</th>'
 						+ '<th data-sorttype="text">Park</th><th data-sorttype="text">Event</th>'
 						+ '<th data-sorttype="text">Class</th><th data-sorttype="numeric">Credits</th>'
-						+ (canEditAny ? '<th style="width:52px;min-width:52px"></th>' : '')
+						+ '<th data-sorttype="text">By</th>'
+						+ (canEditAny ? '<th class="pn-nosort" style="width:52px;min-width:52px"></th>' : '')
 						+ '</tr></thead><tbody>';
 					att.forEach(function(d) {
 						var pid = parseInt(d.ParkId) || 0;
@@ -5313,13 +7129,28 @@ $(function() {
 							: '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.Date) + '</a>';
 						var classLabel = (d.Flavor && d.Flavor.trim()) ? esc(d.Flavor) : esc(d.ClassName);
 						var canEditThis = !!(parkAuth[pid] && eid === 0);
+						// "By" cell: show the entry source. signin_link / self_reg
+						// surface as labels (not a link to the player themselves —
+						// that would be redundant and look like "John entered
+						// John's credit"). manual shows the officer's name linked.
+						var byCell;
+						if (d.EntryMethod === 'signin_link') {
+							byCell = '<em title="Player signed in via PM-issued QR / link" style="color:var(--ork-text-muted)">Self via Sign-in Link</em>';
+						} else if (d.EntryMethod === 'self_reg') {
+							byCell = '<em title="Awarded on account creation" style="color:var(--ork-text-muted)">Self-registration</em>';
+						} else if (parseInt(d.EnteredById) > 0 && d.EnteredBy) {
+							byCell = '<a href="' + uir + 'Player/profile/' + parseInt(d.EnteredById) + '">' + esc(d.EnteredBy) + '</a>';
+						} else {
+							byCell = '<span style="color:var(--ork-text-muted)">—</span>';
+						}
 						html += '<tr>'
 							+ '<td class="pn-col-nowrap">' + dateLink + '</td>'
 							+ '<td><a href="' + uir + 'Kingdom/profile/' + esc(d.KingdomId) + '">' + esc(d.KingdomName) + '</a></td>'
 							+ '<td><a href="' + uir + 'Park/profile/' + pid + '">' + esc(d.ParkName) + '</a></td>'
 							+ '<td>' + (eid > 0 ? '<a href="' + uir + 'Event/detail/' + eid + '/' + ecid + '">' + esc(d.EventName) + '</a>' : '') + '</td>'
 							+ '<td>' + classLabel + '</td>'
-							+ '<td class="pn-col-numeric">' + esc(d.Credits) + '</td>';
+							+ '<td class="pn-col-numeric">' + esc(d.Credits) + '</td>'
+							+ '<td>' + byCell + '</td>';
 						if (canEditAny) {
 							html += '<td class="pn-award-actions-cell">';
 							if (canEditThis) {
@@ -5340,8 +7171,7 @@ $(function() {
 						html += '</tr>';
 					});
 					body.innerHTML = html + '</tbody></table>';
-					pnSortDesc($('#pn-attendance-table'), 0, 'date');
-					pnPaginate($('#pn-attendance-table'), 1);
+					pnInitDataTable('#pn-attendance-table', { order: [[0, 'desc']], filename: 'Attendance' });
 				}
 			}
 
@@ -5368,13 +7198,18 @@ $(function() {
 				});
 				if (!maClasses.length) { cpBody.innerHTML = ''; return; }
 				var maHtml = '<div class="pna-card"><div class="pna-card-title"><i class="fas fa-shield-alt"></i> Class Progress <a class="pna-card-more" href="#" onclick="pnActivateTab(\'classes\');return false;">All &rarr;</a></div><div style="font-size:11px;color:#a0aec0;margin-bottom:6px;">Your recent classes&hellip;</div>';
-				var thresholds = [0,5,12,21,34,53];
+				var levelThresholds = PnConfig.classLevelThresholds || [];
+				var thresholds = [0].concat(levelThresholds);
+				var maxCredits = levelThresholds.length ? levelThresholds[levelThresholds.length - 1] : null;
 				maClasses.forEach(function(mc) {
 					var total = parseInt(mc.Credits||0) + parseInt(mc.Reconciled||0);
-					var lvl = total>=53?6:total>=34?5:total>=21?4:total>=12?3:total>=5?2:1;
-					var pct = total>=53?100:Math.round((total/thresholds[lvl])*100);
-					var isMax = total >= 53;
-					var next = thresholds[lvl] || 53;
+					var lvl = 1;
+					for (var ti = levelThresholds.length - 1; ti >= 0; ti--) {
+						if (total >= levelThresholds[ti]) { lvl = ti + 2; break; }
+					}
+					var isMax = maxCredits !== null && total >= maxCredits;
+					var pct = isMax ? 100 : Math.round((total / (thresholds[lvl] || 1)) * 100);
+					var next = thresholds[lvl] || maxCredits;
 					var parId = classToParagon[parseInt(mc.ClassId)] || 0;
 					var hasPar = parId > 0 && !!heldAwardIds[parId];
 					maHtml += '<div class="pna-class-row">'
@@ -5475,8 +7310,8 @@ $(function() {
 			if (_inone) _inone.style.display = notes.length > 0 ? 'none' : '';
 			if (!notes.length) { body.innerHTML = '<div class="pn-empty" id="pn-history-empty">No notes</div>'; return; }
 			var esc = function(s) { return $('<div>').text(s || '').html(); };
-			var html = '<table class="pn-table" id="pn-history-table"><thead><tr><th>Note</th><th>Description</th><th>Date</th>'
-				+ (PnConfig.canEditAdmin ? '<th style="width:60px"></th>' : '') + '</tr></thead><tbody>';
+			var html = '<table class="pn-table display" id="pn-history-table"><thead><tr><th data-sorttype="text">Note</th><th data-sorttype="text">Description</th><th data-sorttype="date">Date</th>'
+				+ (PnConfig.canEditAdmin ? '<th class="pn-nosort" style="width:60px"></th>' : '') + '</tr></thead><tbody>';
 			notes.forEach(function(n) {
 				var nid = parseInt(n.NoteId) || 0;
 				var dt = esc(n.Date || '');
@@ -5484,7 +7319,7 @@ $(function() {
 				html += '<tr data-notes-id="' + nid + '">'
 					+ '<td>' + esc(n.Note) + '</td>'
 					+ '<td>' + esc(n.Description) + '</td>'
-					+ '<td class="pn-col-nowrap">' + dt + dc + '</td>';
+					+ '<td class="pn-col-nowrap" data-order="' + esc(n.Date || '') + '">' + dt + dc + '</td>';
 				if (PnConfig.canEditAdmin) {
 					html += '<td class="pn-award-actions-cell">'
 						+ '<button class="pn-award-action-btn pn-award-edit-btn pn-note-edit-btn"'
@@ -5500,6 +7335,7 @@ $(function() {
 				html += '</tr>';
 			});
 			body.innerHTML = html + '</tbody></table>';
+			pnInitDataTable('#pn-history-table', { order: [[2, 'desc']], filename: 'Notes' });
 		}).fail(function() { body.innerHTML = '<div class="pn-empty">Unable to load notes.</div>'; });
 	}
 
@@ -5530,8 +7366,8 @@ $(function() {
 					+ '</span>';
 			};
 			var html = '<table class="pn-table display" id="pn-rec-table"><thead><tr>'
-				+ '<th>Award</th><th>Rank</th><th>Date</th><th>Sent By</th><th>Reason</th>'
-				+ (hasActions ? '<th style="white-space:nowrap;width:1%">Actions</th>' : '')
+				+ '<th>Award</th><th>Rank</th><th data-sorttype="date">Date</th><th>Sent By</th><th>Reason</th>'
+				+ (hasActions ? '<th class="pn-nosort" style="white-space:nowrap;width:1%">Actions</th>' : '')
 				+ '</tr></thead><tbody>';
 			recList.forEach(function(rec) {
 				var kaid  = parseInt(rec.KingdomAwardId) || 0;
@@ -5597,19 +7433,13 @@ $(function() {
 				html += '</tr>';
 			});
 			body.innerHTML = html + '</tbody></table>';
-			if ($.fn.DataTable) {
-				$('#pn-rec-table').DataTable({
-					order: [[2, 'desc']],
-					columnDefs: [{ targets: [2], type: 'date' }].concat(hasActions ? [{ targets: [-1], orderable: false, searchable: false }] : []),
-					pageLength: 25,
-					scrollX: true
-				});
-			}
+			pnInitDataTable('#pn-rec-table', { order: [[2, 'desc']], filename: 'Recommendations' });
 		}).fail(function() { body.innerHTML = '<div class="pn-empty">Unable to load recommendations.</div>'; });
 	}
 
 	// Allow OrkRsCfg.reload (set above) to force a recs reload after seconds actions.
 	window.pnReloadRecs = function() { pnRecsLoaded = false; pnLoadRecs(); };
+	window.pnReloadNotes = function() { pnNotesLoaded = false; pnLoadNotes(); };
 
 	// Hook tab clicks to trigger lazy loading
 	$(document).on('click', '.pn-tab-nav li', function() {
@@ -5619,4 +7449,29 @@ $(function() {
 	});
 });
 initEmailSpellCheck('pn-acct-email', 'pn-acct-email-suggestion');
+// Username availability check on the Update Account modal. currentValue
+// prevents the player's existing username from being flagged as "taken"
+// against their own row.
+if (typeof initUsernameAvailabilityCheck === 'function' && document.getElementById('pn-acct-username')) {
+	window.pnAcctUsernameCheck = initUsernameAvailabilityCheck({
+		inputId:      'pn-acct-username',
+		statusId:     'pn-acct-username-status',
+		submitBtnId:  'pn-acct-save',
+		endpointUrl:  '<?= UIR ?>PlayerAjax/check_username',
+		gateMode:     'soft',
+		currentValue: <?= json_encode($Player['UserName'] ?? '') ?>
+	});
+	// Reset on modal open so a stale "X is taken" from a previous edit
+	// session doesn't linger when the modal is reopened.
+	var _origPnOpenAcct = window.pnOpenAccountModal;
+	if (typeof _origPnOpenAcct === 'function') {
+		window.pnOpenAccountModal = function() {
+			var r = _origPnOpenAcct.apply(this, arguments);
+			if (window.pnAcctUsernameCheck && window.pnAcctUsernameCheck.reset) window.pnAcctUsernameCheck.reset();
+			return r;
+		};
+	}
+}
 </script>
+
+

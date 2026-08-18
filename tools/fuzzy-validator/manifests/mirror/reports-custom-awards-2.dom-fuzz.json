@@ -1,0 +1,598 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-custom-awards-2",
+  "calibratedAt": "2026-08-01T21:15:05Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[0]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[1]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[2]/div[2]/div[1]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[4]/span[0]/a[5]",
+      "mode": "attributes",
+      "attrs": [
+        "data-dt-idx"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[4]/span[0]/a[5]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/thead[0]/tr[0]/th[0]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/thead[0]/tr[0]/th[1]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/thead[0]/tr[0]/th[2]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/thead[0]/tr[0]/th[3]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/thead[0]/tr[0]/th[4]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/thead[0]/tr[0]/th[5]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/thead[0]/tr[0]/th[6]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[11]/td[6]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[13]/td[6]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[16]/td[5]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[17]/td[5]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[18]/td[5]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[19]/td[5]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[23]/td[5]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[11]/td[0]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[11]/td[1]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[11]/td[2]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[11]/td[5]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[12]/td[0]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[12]/td[1]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[12]/td[2]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[12]/td[5]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[13]/td[2]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[13]/td[5]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[14]/td[5]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[15]/td[5]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[16]/td[2]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[17]/td[2]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[20]/td[5]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[21]/td[5]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[24]/td[5]/a[0]",
+      "mode": "attributes",
+      "attrs": [
+        "href"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/table[0]/thead[0]/tr[0]/th[0]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/table[0]/thead[0]/tr[0]/th[1]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/table[0]/thead[0]/tr[0]/th[2]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/table[0]/thead[0]/tr[0]/th[3]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/table[0]/thead[0]/tr[0]/th[4]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/table[0]/thead[0]/tr[0]/th[5]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[0]/div[0]/table[0]/thead[0]/tr[0]/th[6]",
+      "mode": "attributes",
+      "attrs": [
+        "style"
+      ],
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[11]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[11]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[12]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[12]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[12]/td[6]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[13]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[13]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[14]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[14]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[14]/td[6]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[15]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[15]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[15]/td[6]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[16]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[16]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[16]/td[6]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[17]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[17]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[17]/td[6]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[18]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[18]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[18]/td[6]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[19]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[19]/td[6]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[20]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[20]/td[6]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[21]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[21]/td[6]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[22]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[22]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[22]/td[6]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[23]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[23]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[23]/td[6]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[24]/td[3]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[24]/td[4]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[24]/td[6]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[11]/td[0]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[11]/td[1]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[11]/td[2]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[11]/td[5]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[12]/td[0]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[12]/td[1]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[12]/td[2]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[12]/td[5]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[13]/td[2]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[13]/td[5]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[14]/td[5]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[15]/td[5]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[16]/td[2]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[17]/td[2]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[20]/td[5]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[21]/td[5]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/body[0]/div[1]/div[1]/div[0]/div[4]/div[1]/div[1]/div[0]/div[2]/div[1]/table[0]/tbody[0]/tr[24]/td[5]/a[0]/text[0]",
+      "mode": "text",
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:58:39Z",
+  "refuzzedFromCommit": "05389516"
+}

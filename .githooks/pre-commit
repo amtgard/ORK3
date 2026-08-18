@@ -4,7 +4,7 @@
 #
 # Does two things:
 #   1. Keeps the local-only class.Authorization.php (login-bypass override) out of every commit.
-#   2. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer.phar,
+#   2. Auto-formats the PHP files you are committing to PSR-12 via tools/php-cs-fixer/php-cs-fixer.phar,
 #      then re-stages them. Only files that are FULLY staged are touched — a file with both
 #      staged and unstaged changes is skipped, so unstaged hunks are never swept into the commit.
 #
@@ -30,7 +30,7 @@ fi
 # ---------------------------------------------------------------------------
 # 2. PSR-12 auto-format staged PHP files (boy-scout: only what you touch).
 # ---------------------------------------------------------------------------
-PHAR="tools/php-cs-fixer.phar"
+PHAR="tools/php-cs-fixer/php-cs-fixer.phar"
 CONFIG=".php-cs-fixer.dist.php"
 
 # Find a PHP runtime; if none, skip formatting silently-ish (do not block the commit).

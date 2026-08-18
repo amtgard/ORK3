@@ -343,6 +343,7 @@ if ($has_results && ($mode ?? '') == 'all_parks') {
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
 <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -411,7 +412,7 @@ $(function() {
 	});
 <?php endif; ?>
 	$('.rp-btn-export').on('click', function() { apTable.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { apTable.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(apTable); });
 
 <?php elseif (($mode ?? '') == 'single_park' && !empty($players)) : ?>
 	var periodCount = <?= count($all_periods ?? []) ?>;
@@ -434,7 +435,7 @@ $(function() {
 		fixedColumns: { left: 1 }
 	});
 	$('.rp-btn-export').on('click', function() { spTable.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { spTable.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(spTable); });
 <?php endif; ?>
 });
 </script>
