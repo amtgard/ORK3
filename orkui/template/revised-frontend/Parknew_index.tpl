@@ -578,6 +578,15 @@
 			</ul>
 		</div>
 
+		<!-- Digital Waivers CTA -->
+		<?php $wvActive = $park_info['WaiverActive'] ?? null; if ($wvActive && ($wvActive['Status']['Status'] ?? 1) === 0 && (int)($wvActive['Template']['IsEnabled'] ?? 0) === 1): ?>
+		<div class="pk-card pk-waiver-cta">
+			<h4 style="background: transparent !important; border: none !important; padding: 0 !important; border-radius: 0 !important; text-shadow: none !important;"><i class="fas fa-file-signature"></i> Digital Waiver</h4>
+			<p class="pk-waiver-cta-msg">This park has a digital waiver available for players to sign online.</p>
+			<a class="pk-btn pk-waiver-cta-btn" href="<?= UIR ?>Waiver/sign/park/<?= (int)$park_info['ParkInfo']['ParkId'] ?>">Sign Park Waiver</a>
+		</div>
+		<?php endif; ?>
+
 	</aside>
 
 	<!-- ---- Tabbed Main ---- -->
@@ -1231,6 +1240,8 @@
 							<li><a href="<?= UIR ?>Reports/dues/Park&id=<?= $park_id ?>">Dues Paid</a></li>
 							<li><a href="<?= UIR ?>Reports/waivered/Park&id=<?= $park_id ?>">Waivered Players</a></li>
 							<li><a href="<?= UIR ?>Reports/unwaivered/Park&id=<?= $park_id ?>">Unwaivered Players</a></li>
+								<li><a href="<?= UIR ?>Reports/waivers/Park&id=<?= $park_id ?>">Digital Waivers</a></li>
+								<li><a href="<?= UIR ?>Reports/waiverhistory/Park&id=<?= $park_id ?>">Waiver Change History</a></li>
 							<li><a href="<?= UIR ?>Reports/suspended/Park&id=<?= $park_id ?>">Suspended Players</a></li>
 							<li><a href="<?= UIR ?>Reports/active_duespaid/Park&id=<?= $park_id ?>">Player Attendance</a></li>
 							<li><a href="<?= UIR ?>Reports/active_waivered_duespaid/Park&id=<?= $park_id ?>">Waivered Attendance</a></li>
@@ -1294,6 +1305,7 @@
 						<h5><i class="fas fa-cog"></i> Park</h5>
 						<ul>
 							<li><a href="<?= UIR ?>Admin/permissions/Park/<?= $park_id ?>">Roles &amp; Permissions</a></li>
+							<li><a href="<?= UIR ?>Waiver/queue/park/<?= (int)$park_id ?>">Waiver Review Queue</a></li>
 						</ul>
 					</div>
 				</div>
@@ -2790,6 +2802,14 @@ html[data-theme="dark"] [data-tip]::before { border-top-color: #1a202c; }
 html[data-theme="dark"] .pk-copy-link { color: var(--ork-text-muted); }
 html[data-theme="dark"] .pk-copy-link:hover { color: #63b3ed; }
 html[data-theme="dark"] .pk-copy-link.pk-copied::after { background: #1a202c; color: #f7fafc; box-shadow: 0 0 0 1px var(--ork-border); }
+
+/* --- Digital Waiver sidebar CTA --- */
+.pk-waiver-cta-msg { margin: 0 0 10px 0; color: #4a5568; font-size: 13px; }
+.pk-waiver-cta-btn { background: #2b6cb0; color: #fff; }
+.pk-waiver-cta-btn:hover { background: #2c5282; color: #fff; }
+html[data-theme="dark"] .pk-waiver-cta-msg { color: var(--ork-text-secondary, #a0aec0); }
+html[data-theme="dark"] .pk-waiver-cta-btn { background: #4c5fa8; color: #fff; }
+html[data-theme="dark"] .pk-waiver-cta-btn:hover { background: #5b6cb9; color: #fff; }
 
 /* ============================================================
 
