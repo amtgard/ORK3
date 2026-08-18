@@ -558,6 +558,7 @@ if ($kingdom_id && !empty($knights)) {
 
 		dtTable = $('#be-table').DataTable({
 			dom: 'lfrtip',
+			scrollX: true,
 			pageLength: 50,
 			order: [[3, 'asc']],
 			destroy: true

@@ -1,0 +1,28 @@
+/* ork-datatables.css — shared toolbar theming for ORK DataTables (light + dark) */
+.ork-dt-top { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; margin-bottom:.5rem; }
+.ork-dt-top .dataTables_length { margin:0; }
+.ork-dt-top .dataTables_filter { margin:0 0 0 auto; }           /* search pushed right */
+.ork-dt-top .dataTables_filter input { margin-left:.4rem; padding:.35rem .6rem;
+    border:1px solid #cbd2dc; border-radius:6px; min-width:180px; }
+.ork-dt-top .dataTables_length select { padding:.3rem 1.4rem .3rem .5rem; border:1px solid #cbd2dc; border-radius:6px; }
+.ork-dt-bot { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; margin-top:.5rem; }
+button.ork-dt-csv { display:inline-flex; align-items:center; gap:.4rem; padding:.4rem .75rem;
+    background:#1f2d4d; color:#fff; border:1px solid #1f2d4d; border-radius:6px; cursor:pointer;
+    font-size:.85rem; line-height:1; }
+button.ork-dt-csv:hover { background:#2a3d68; }
+button.ork-dt-csv:focus-visible { outline:2px solid #c9a23a; outline-offset:2px; }
+
+/* Dark mode */
+html[data-theme="dark"] .ork-dt-top .dataTables_filter input,
+html[data-theme="dark"] .ork-dt-top .dataTables_length select {
+    background:#1c2432; color:#e6e9ef; border-color:#3a4557; }
+html[data-theme="dark"] .ork-dt-top .dataTables_filter input::placeholder { color:#8b95a7; }
+html[data-theme="dark"] .dataTables_wrapper .dataTables_info,
+html[data-theme="dark"] .dataTables_wrapper .dataTables_length,
+html[data-theme="dark"] .dataTables_wrapper label { color:#c3cad6; }
+html[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button { color:#c3cad6 !important; }
+html[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+html[data-theme="dark"] .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    color:#fff !important; background:#2a3d68; border-color:#3a4557; }
+html[data-theme="dark"] button.ork-dt-csv { background:#c9a23a; color:#1a1f29; border-color:#c9a23a; }
+html[data-theme="dark"] button.ork-dt-csv:hover { background:#d8b24a; }

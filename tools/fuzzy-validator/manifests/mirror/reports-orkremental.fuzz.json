@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "pageId": "reports-orkremental",
+  "imageWidth": 1280,
+  "imageHeight": 917,
+  "calibratedAt": "2026-08-01T21:28:47Z",
+  "calibrationRuns": 5,
+  "params": {
+    "colorThreshold": 20,
+    "minAreaPx": 64,
+    "padPx": 4
+  },
+  "fuzzZones": [
+    {
+      "x": 162,
+      "y": 215,
+      "width": 24,
+      "height": 25,
+      "source": "refuzz"
+    },
+    {
+      "x": 393,
+      "y": 310,
+      "width": 192,
+      "height": 42,
+      "source": "refuzz"
+    },
+    {
+      "x": 639,
+      "y": 322,
+      "width": 21,
+      "height": 23,
+      "source": "refuzz"
+    },
+    {
+      "x": 755,
+      "y": 322,
+      "width": 21,
+      "height": 23,
+      "source": "refuzz"
+    },
+    {
+      "x": 1118,
+      "y": 322,
+      "width": 31,
+      "height": 23,
+      "source": "refuzz"
+    },
+    {
+      "x": 75,
+      "y": 325,
+      "width": 22,
+      "height": 25,
+      "source": "refuzz"
+    },
+    {
+      "x": 572,
+      "y": 366,
+      "width": 21,
+      "height": 23,
+      "source": "refuzz"
+    },
+    {
+      "x": 161,
+      "y": 382,
+      "width": 35,
+      "height": 43,
+      "source": "refuzz"
+    }
+  ],
+  "manualZones": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T17:00:27Z",
+  "refuzzedFromCommit": "05389516"
+}

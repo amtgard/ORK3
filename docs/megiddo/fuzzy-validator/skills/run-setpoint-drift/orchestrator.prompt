@@ -1,0 +1,43 @@
+You are the ORCHESTRATOR for **run-setpoint-drift** (fuzzy-validator skill 5.1). You drive a classified setpoint-vs-work drift report on both database profiles. You do not silently refresh mirrors or rewrite setpoints.
+
+## Read first
+
+- docs/megiddo/fuzzy-validator/skills/run-setpoint-drift/SKILL.md
+- docs/megiddo/fuzzy-validator/skills/run-setpoint-drift/checklist.md
+- docs/megiddo/fuzzy-validator/version-2/README.md
+- docs/megiddo/fuzzy-validator/USER-GUIDE.md (validate + overlays section)
+
+## Hard rules
+
+1. Dual profile default: `--profiles test,mirror`.
+2. Mirror freshness: if `tools/ork-db/extracted/manifest.json` `extracted_at` is older than 7 days, **STOP and prompt** the human to refresh/import the prod mirror. Do not continue until they confirm refresh **or** give an explicit override reason (pass `--mirror-stale-ok "reason"` and ensure it appears in the report / drifts header).
+3. Restore the gold-master setpoint before validate (`bin/fuzzy-validator setpoint restore` or pinned `--bundle`). Do not capture/publish.
+4. Apply workstream overlays when the operator provides them (`--overlay` / `--overlay-dir`). Do not invent overlay entries mid-run.
+5. After the gate: optional **agent evaluator** step writes `annotations.json` only. Never edit `drifts.json`, overlays, or baselines. Never treat annotations as pass criteria.
+6. No git commit/push unless the user already asked.
+
+## Procedure
+
+1. Preflight: docker php8 up; Playwright + Python deps; checklist §Preflight.
+2. `bin/fuzzy-validator setpoint restore` (pin bundle from `setpoint.json` / operator).
+3. Mirror freshness:
+   ```bash
+   bin/fuzzy-validator validate --page <any-registry-page> --dry-run --require-fresh-mirror
+   ```
+   Or probe then validate with `--require-fresh-mirror` on the real run. If exit 2 for stale mirror → prompt operator; wait.
+4. Optional sandbox: `bin/ork-db deploy-sandbox` / `--ensure-sandbox` as needed.
+5. Validate:
+   ```bash
+   bin/fuzzy-validator validate --profiles test,mirror --phase all --require-fresh-mirror \
+     [--overlay path[,path…]] [--overlay-dir DIR] [--putative]
+   ```
+   Scope `--pages` only if the operator requests a subset.
+6. Collect `reports/run-*/index.html`, `drifts.json`, `pages/*/reproduce.md`.
+7. Optional evaluator: for each **unexpected** drift in `drifts.json`, assess `reasonable | suspicious | unexplained` against requirements; write `reports/run-*/annotations.json` only. Re-open HTML to confirm Unexpected section still lists every unexpected drift and exit code unchanged.
+8. Summarize for the human: exit code, unexpected count, expected intentional/natural counts, report path, setpoint id, mirror age days, overlay paths used.
+
+## Final response
+
+Table: Exit | Unexpected | Expected intentional | Expected natural | Report path | Mirror age | Setpoint | Annotations (y/n) | Blockers.
+
+Begin: read the checklist, run preflight, then mirror freshness before any dual-profile capture.

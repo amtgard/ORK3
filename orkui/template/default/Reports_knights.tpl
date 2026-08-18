@@ -43,7 +43,6 @@ if (($report_type ?? null) === 'Park' && !empty($report_id)) {
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
 <link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
@@ -214,8 +213,8 @@ if (($report_type ?? null) === 'Park' && !empty($report_id)) {
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
 <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -240,9 +239,7 @@ $(function() {
 			}
 		],
 		columnDefs: [
-			{ targets: numericCols, type: 'num', className: 'dt-right' },
-			{ targets: numericCols, responsivePriority: 10001 },
-			{ targets: [0],         responsivePriority: 1 }
+			{ targets: numericCols, type: 'num', className: 'dt-right' }
 		],
 		pageLength: 25,
 		order: <?php
@@ -257,12 +254,11 @@ $(function() {
 			echo json_encode($sortOrder);
 		?>,
 		fixedHeader : { headerOffset: 48 },
-		responsive  : true,
 		scrollX     : true,
 		fixedColumns: { left: 1 }
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(table); });
 });
 </script>

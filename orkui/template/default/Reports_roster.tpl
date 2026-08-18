@@ -86,34 +86,8 @@ if ($variant === 'suspended' && is_array($roster) && count($roster) > 1) {
 }
 
 /* ── Remove-suspension auth ────────────────────────────────── */
-$_canRemoveAny = false;
-$_canRemoveMap = [];
-if ($variant === 'suspended' && $this->__session->user_id) {
-	$_uid        = $this->__session->user_id;
-	$_isOrkAdmin = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_ADMIN, 0, AUTH_ADMIN);
-if ($_isOrkAdmin) {
-		$_canRemoveAny = true;
-		// Mark every roster player as removable
-		if (is_array($roster)) {
-			foreach ($roster as $player) {
-				$_canRemoveMap[(int)$player['MundaneId']] = true;
-			}
-		}
-	} elseif (is_array($roster)) {
-		// Check if user has authority for the report's scope kingdom directly —
-		// covers cases where a player's KingdomId differs from the scoped kingdom
-		// (e.g. parent/child kingdom relationships or data inconsistencies).
-		$_scopeKingdomAuth = $_scopeType === 'kingdom' && valid_id($_scopeId)
-			&& Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$_scopeId, AUTH_EDIT);
-		foreach ($roster as $player) {
-			$mid = (int)$player['MundaneId'];
-			$can = $_scopeKingdomAuth
-				|| Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, (int)$player['KingdomId'], AUTH_EDIT);
-			$_canRemoveMap[$mid] = $can;
-			if ($can) $_canRemoveAny = true;
-		}
-	}
-}
+$_canRemoveAny = !empty($RosterCanRemoveAny);
+$_canRemoveMap = is_array($RosterCanRemoveMap ?? null) ? $RosterCanRemoveMap : [];
 ?>
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
@@ -280,7 +254,7 @@ if ($_isOrkAdmin) {
 <?php if ($_canRemoveAny) : ?>
 						<th class="rp-col-actions">Actions</th>
 <?php endif; ?>
-<?php if (!empty($canViewMundane)) : ?>
+<?php if (!empty($CanViewMundane)) : ?>
 						<th>Mundane</th>
 <?php endif; ?>
 <?php if (!$is_suspended) : ?>
@@ -336,7 +310,7 @@ if ($_isOrkAdmin) {
 					</a>
 				<?php endif; ?></td>
 <?php 		endif; ?>
-<?php if (!empty($canViewMundane)) : ?>
+<?php if (!empty($CanViewMundane)) : ?>
 					<td><?= $player['Displayable'] == 0 ? "<span class='restricted-player-display'>Restricted</span>" : htmlspecialchars($player['Surname'].', '.$player['GivenName']) ?></td>
 <?php endif; ?>
 <?php if (!$is_suspended) : ?>
@@ -380,6 +354,7 @@ if ($_isOrkAdmin) {
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -428,7 +403,7 @@ $(function() {
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(table); });
 
 <?php if ($is_suspended) : ?>
 	// Propagates filter
@@ -438,7 +413,7 @@ $(function() {
 		<?php if (!isset($this->__session->park_id)) { echo 'idx++;'; } ?>
 		idx++; // Persona
 		<?php if ($_canRemoveAny) { echo 'idx++;'; } ?>
-		<?php if (!empty($canViewMundane)) { echo 'idx++;'; } ?>
+		<?php if (!empty($CanViewMundane)) { echo 'idx++;'; } ?>
 		idx++; // Last Sign-in
 		idx++; // Suspended At
 		idx++; // Suspended Until
@@ -509,7 +484,7 @@ $(function() {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <div id="es-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
-	<div id="es-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;overflow-y:auto;">
+	<div id="es-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;max-height:90dvh;overflow-y:auto;">
 		<div style="font-size:1.08em;font-weight:600;color:#2d3748;margin-bottom:18px"><i class="fas fa-pencil-alt" style="color:#4a5568;margin-right:7px"></i>Edit Suspension</div>
 
 		<div id="es-error" style="display:none;background:#fff5f5;border:1px solid #fc8181;color:#c53030;border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.93em"></div>
@@ -749,7 +724,7 @@ $(function() {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <div id="sp-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
-	<div id="sp-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;overflow-y:auto;">
+	<div id="sp-box" style="background:#fff;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.22);max-width:520px;width:95%;padding:28px 28px 22px;max-height:90vh;max-height:90dvh;overflow-y:auto;">
 		<div style="font-size:1.08em;font-weight:600;color:#2d3748;margin-bottom:18px"><i class="fas fa-ban" style="color:#e53e3e;margin-right:7px"></i>Suspend Player</div>
 
 		<div id="sp-error" style="display:none;background:#fff5f5;border:1px solid #fc8181;color:#c53030;border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.93em"></div>

@@ -19,6 +19,7 @@ return [
 	'pansexual'   => ['name' => 'Pansexual',                    'colors' => ['#ff218c','#ffd800','#21b1ff']],
 	'polysexual'  => ['name' => 'Polysexual',                   'colors' => ['#f714ba','#01d66a','#1594f6']],
 	'asexual'     => ['name' => 'Asexual',                      'colors' => ['#000000','#a3a3a3','#ffffff','#800080']],
+	'demisexual'  => ['name' => 'Demisexual',                   'colors' => ['#000000','#ffffff','#6e0070','#d2d2d2']],
 	'aromantic'   => ['name' => 'Aromantic',                    'colors' => ['#3da542','#a7d379','#ffffff','#a9a9a9','#000000']],
 	'transgender' => ['name' => 'Transgender',                  'colors' => ['#5bcffa','#f5a9b8','#ffffff','#f5a9b8','#5bcffa']],
 	'nonbinary'   => ['name' => 'Nonbinary',                    'colors' => ['#fcf434','#ffffff','#9c59d1','#2c2c2c']],

@@ -1,0 +1,24 @@
+{
+    "$schema": "../../vendor/infection/infection/resources/schema.json",
+    "timeout": 120,
+    "source": {
+        "directories": [
+            "system/lib/ork3"
+        ]
+    },
+    "logs": {
+        "text": "build/infection-t02.log",
+        "summary": "build/infection-t02-summary.log"
+    },
+    "mutators": {
+        "@default": true
+    },
+    "minMsi": 15,
+    "minCoveredMsi": 15,
+    "testFramework": "phpunit",
+    "bootstrap": "tests/bootstrap.php",
+    "phpUnit": {
+        "configDir": "."
+    },
+    "tmpDir": "build/infection-t02"
+}
