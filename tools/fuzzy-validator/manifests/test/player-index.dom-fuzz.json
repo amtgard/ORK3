@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "pageId": "player-index",
+  "calibratedAt": "2026-08-01T20:44:53Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "refuzzedAt": "2026-08-02T16:46:38Z",
+  "refuzzedFromCommit": "05389516"
+}

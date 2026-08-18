@@ -65,6 +65,10 @@ $atKingdomCount = count($atKingdomIds);
 	background:transparent; border:none; padding:0; border-radius:0;
 	text-shadow:none;
 }
+html[data-theme="dark"] .at-header-title,
+html:not([data-theme="light"]):not([data-theme="dark"]) .at-header-title {
+	background:transparent; border:none; color:#e2e8f0; text-shadow:none;
+}
 .at-header-sub { font-size:13px; color:#718096; margin-top:1px; }
 
 /* ── Stats bar ── */
@@ -163,7 +167,7 @@ $atKingdomCount = count($atKingdomIds);
 .at-park-heraldry {
 	width:84px; height:84px; border-radius:8px;
 	object-fit:contain;
-	background:#fff; border:2px solid rgba(255,255,255,.5);
+	background:transparent; border:2px solid rgba(255,255,255,.5);
 	box-shadow:0 2px 8px rgba(0,0,0,.18);
 }
 .at-park-heraldry-placeholder {

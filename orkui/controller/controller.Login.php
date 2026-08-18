@@ -10,6 +10,12 @@ class Controller_Login extends Controller {
 
 	public function index($action = null) {
 		$this->template = '../revised-frontend/Login_index.tpl';
+		if (!empty($_GET['return'])) {
+			$_ret = trim($_GET['return']);
+			if ($_ret !== '' && strncasecmp($_ret, 'Login', 5) !== 0) {
+				$this->session->location = $_ret;
+			}
+		}
 		if (($_GET['msg'] ?? '') === 'session_replaced') {
 			$this->data['session_message'] = 'You were logged in from another device or browser. Please log in again.';
 		}
@@ -26,13 +32,20 @@ class Controller_Login extends Controller {
 		if (($_GET['msg'] ?? '') === 'session_replaced') {
 			$this->data['session_message'] = 'You were logged in from another device or browser. Please log in again.';
 		}
+		if (!empty($_GET['return'])) {
+			$_ret = trim($_GET['return']);
+			if ($_ret !== '' && strncasecmp($_ret, 'Login', 5) !== 0) {
+				$this->session->location = $_ret;
+			}
+		}
 		if (strlen(trim($this->session->location)) == 0) {
 			$this->session->location = $location;
 		}
 
 		if ((strlen($this->request->username) > 0 && strlen($this->request->password) > 0) && ($r = $this->Login->login($this->request->username, $this->request->password)) === true) {
 			if ($this->session->location == null) {
-				header('Location: ' . UIR);
+				$uid = (int)$this->session->user_id;
+				header('Location: ' . UIR . ($uid > 0 ? 'Player/profile/' . $uid : ''));
 			} else {
 				//$this->session->location = null;
 				header('Location: ' . UIR . $this->session->location);
@@ -110,7 +123,13 @@ class Controller_Login extends Controller {
 			$this->session->user_name = $result['UserName'];
 			$this->session->token = $result['Token'];
 			$this->session->timeout = $result['Timeout'];
-			header('Location: ' . UIR);
+			if (!empty($this->session->location)) {
+				$_dest = $this->session->location;
+				header('Location: ' . UIR . $_dest);
+			} else {
+				$uid = (int)$this->session->user_id;
+				header('Location: ' . UIR . ($uid > 0 ? 'Player/profile/' . $uid : ''));
+			}
 		} else {
 			$this->data['error'] = $result['Status']['Error'];
 			$this->data['detail'] = $result['Status']['Detail'];

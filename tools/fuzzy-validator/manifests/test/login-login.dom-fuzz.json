@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "pageId": "login-login",
+  "calibratedAt": "2026-08-01T20:42:08Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd"
+}

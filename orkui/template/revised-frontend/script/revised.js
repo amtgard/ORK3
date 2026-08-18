@@ -1,3 +1,70 @@
+/* ============================================================
+   Rank pill painter — shared by every "add award" / "recommend"
+   surface (player / kingdom / park). Given the player's held rank
+   and the chosen rank, paints each pill:
+     r <= held              -> held    (green + ✓ watermark)
+     held < r <= selected   -> forward (blue  + → watermark; each step
+                               forward of the chosen rank)
+     r === selected         -> selected (pops up)
+   `prefix` is the class namespace ('pn' | 'kn' | 'pk'). The number is
+   wrapped in a .<prefix>-rank-num span so the watermark sits behind it.
+   ============================================================ */
+function tnRankPaint(wrap, prefix, held, selected) {
+    if (!wrap) return;
+    held     = parseInt(held, 10)     || 0;
+    selected = parseInt(selected, 10) || 0;
+    wrap.querySelectorAll('.' + prefix + '-rank-pill').forEach(function(pill) {
+        var r = parseInt(pill.dataset.rank, 10);
+        pill.classList.remove(prefix + '-rank-held', prefix + '-rank-forward',
+                              prefix + '-rank-selected', prefix + '-rank-suggested');
+        if (r <= held)          pill.classList.add(prefix + '-rank-held');
+        else if (r <= selected) pill.classList.add(prefix + '-rank-forward');
+        if (r === selected)     pill.classList.add(prefix + '-rank-selected');
+    });
+}
+/* Build the inner markup for a single pill (number wrapped for the watermark). */
+function tnRankPillInner(prefix, r) {
+    return '<span class="' + prefix + '-rank-num">' + r + '</span>';
+}
+if (typeof window !== 'undefined') { window.tnRankPaint = tnRankPaint; window.tnRankPillInner = tnRankPillInner; }
+
+/* ============================================================
+   Viewport-safe positioner for position:fixed autocomplete dropdowns.
+   Anchors `el` to `inputEl`, but (a) clamps width + left so the list
+   never overflows the right/left edge, (b) flips the list ABOVE the
+   input when there isn't enough room below (mobile, top-aligned event
+   modals), and (c) caps max-height + enables scroll so long result
+   lists never run off-screen. Desktop behaviour is unchanged in the
+   common case (plenty of room below).
+   ============================================================ */
+function tnPositionAcFixed(inputEl, el, opts) {
+    if (!inputEl || !el) return;
+    opts = opts || {};
+    var rect   = inputEl.getBoundingClientRect();
+    var vw     = window.innerWidth;
+    var vh     = window.innerHeight;
+    var w      = Math.min(rect.width || opts.width || 300, vw - 16);
+    el.style.width = w + 'px';
+    el.style.left  = Math.max(8, Math.min(rect.left, vw - w - 8)) + 'px';
+    el.style.right = 'auto';
+
+    var spaceBelow = vh - rect.bottom;
+    var spaceAbove = rect.top;
+    var flipAbove  = spaceBelow < 200 && spaceAbove > spaceBelow;
+    var avail      = flipAbove ? spaceAbove : spaceBelow;
+
+    if (flipAbove) {
+        el.style.top    = 'auto';
+        el.style.bottom = (vh - rect.top + 2) + 'px';
+    } else {
+        el.style.bottom = 'auto';
+        el.style.top    = (rect.bottom + 2) + 'px';
+    }
+    el.style.maxHeight = Math.max(140, avail - 12) + 'px';
+    el.style.overflowY = 'auto';
+}
+if (typeof window !== 'undefined') { window.tnPositionAcFixed = tnPositionAcFixed; }
+
 /* ===========================
    HTML escape helper
    =========================== */
@@ -15,6 +82,114 @@ function escHtml(str) {
    =========================== */
 var AUTOCOMPLETE_DEBOUNCE_MS = 250;
 var AWARD_NOTE_MAX_CHARS     = 400;
+
+/* ===========================================================================
+   Move Player cascade helper
+   Turns a Kingdom <select> + Park <select> pair into a cascading filter:
+   choosing a kingdom loads its parks; selection changes fire onChange so the
+   owning search can re-scope. Used by every Move Player modal (Kingdom, Park,
+   Player, Admin) for both the source-player and destination-park searches.
+   =========================================================================== */
+window.MpCascade = (function () {
+    var kingdomsCache = null, kingdomsPromise = null;
+
+    function loadKingdoms(uir) {
+        if (kingdomsCache) return Promise.resolve(kingdomsCache);
+        if (!kingdomsPromise) {
+            kingdomsPromise = fetch(uir + 'KingdomAjax/getkingdoms')
+                .then(function (r) { return r.json(); })
+                .then(function (d) { kingdomsCache = (d && d.kingdoms) || []; return kingdomsCache; })
+                .catch(function () { kingdomsPromise = null; return []; });
+        }
+        return kingdomsPromise;
+    }
+    function loadParks(uir, kingdomId) {
+        return fetch(uir + 'KingdomAjax/kingdom/' + kingdomId + '/getparks')
+            .then(function (r) { return r.json(); })
+            .then(function (d) { return (d && d.parks) || []; })
+            .catch(function () { return []; });
+    }
+
+    /**
+     * wire(opts) — wires a kingdom/park <select> pair as a cascade.
+     *   opts.uir         base UIR
+     *   opts.kingdomSel  kingdom <select> element
+     *   opts.parkSel     park <select> element
+     *   opts.allLabel    label for the "no filter" kingdom option (default 'All Kingdoms'); null to omit
+     *   opts.parkAllLabel label for the "no filter" park option (default 'All Parks')
+     *   opts.onChange    fn(kingdomId, parkId) on any selection change
+     * returns { get(), reset(), lockTo(kingdomId, name) }
+     */
+    function wire(opts) {
+        var kSel = opts.kingdomSel, pSel = opts.parkSel, uir = opts.uir;
+        var allLabel     = (opts.allLabel === undefined) ? 'All Kingdoms' : opts.allLabel;
+        var parkAllLabel = opts.parkAllLabel || 'All Parks';
+
+        function fire() {
+            if (opts.onChange) opts.onChange(parseInt(kSel.value, 10) || 0, parseInt(pSel.value, 10) || 0);
+        }
+        function resetPark(show) {
+            pSel.innerHTML = '<option value="">' + escHtml(parkAllLabel) + '</option>';
+            pSel.style.display = show ? '' : 'none';
+        }
+        function fillParks(kingdomId) {
+            return loadParks(uir, kingdomId).then(function (parks) {
+                resetPark(true);
+                parks.forEach(function (pk) {
+                    var o = document.createElement('option');
+                    o.value = pk.ParkId; o.textContent = pk.Name;
+                    pSel.appendChild(o);
+                });
+            });
+        }
+        function populate() {
+            return loadKingdoms(uir).then(function (kingdoms) {
+                kSel.innerHTML = (allLabel !== null ? '<option value="">' + escHtml(allLabel) + '</option>' : '');
+                kingdoms.forEach(function (k) {
+                    var o = document.createElement('option');
+                    o.value = k.KingdomId; o.textContent = k.KingdomName;
+                    kSel.appendChild(o);
+                });
+            });
+        }
+
+        kSel.addEventListener('change', function () {
+            var kid = parseInt(this.value, 10) || 0;
+            if (kid) fillParks(kid).then(fire);
+            else { resetPark(false); fire(); }
+        });
+        pSel.addEventListener('change', fire);
+
+        resetPark(false);
+        populate();
+
+        return {
+            get: function () { return { kingdomId: parseInt(kSel.value, 10) || 0, parkId: parseInt(pSel.value, 10) || 0 }; },
+            reset: function () {
+                kSel.disabled = false;
+                populate().then(function () { kSel.value = ''; resetPark(false); fire(); });
+            },
+            /* Lock the kingdom to a single value (disabled select) but keep the
+               park dropdown usable — used for "within"/"out" where the player
+               must come from the current kingdom. */
+            lockTo: function (kingdomId, name) {
+                function render(nm) {
+                    kSel.innerHTML = '<option value="' + kingdomId + '">' + escHtml(nm || 'This Kingdom') + '</option>';
+                    kSel.value = String(kingdomId);
+                    kSel.disabled = true;
+                    fillParks(kingdomId).then(fire);
+                }
+                if (name) { render(name); return; }
+                loadKingdoms(uir).then(function (ks) {
+                    var f = ks.filter(function (k) { return String(k.KingdomId) === String(kingdomId); })[0];
+                    render(f ? f.KingdomName : null);
+                });
+            }
+        };
+    }
+
+    return { loadKingdoms: loadKingdoms, loadParks: loadParks, wire: wire };
+})();
 
 /* ===========================
    Award descriptions (keyed by base AwardId)
@@ -36,6 +211,119 @@ var AWARD_DESCRIPTIONS = {
     33: 'Awarded for demonstrating positive character traits that reflect well on the club.',
     34: 'Awarded for service as a group (a park, company, household, event team, etc.).'
 };
+
+/* ===========================
+   Dark Mode Theme Toggle
+   =========================== */
+function orkInitTheme() {
+    if (orkInitTheme._done) return;
+    orkInitTheme._done = true;
+    var stored = localStorage.getItem('ork_theme');
+    if (stored === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else if (stored === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    }
+
+    // Wire up the toggle button
+    var btn = document.getElementById('ork-theme-toggle');
+    if (btn) {
+        btn.addEventListener('click', function() {
+            var stored = localStorage.getItem('ork_theme');
+            // Cycle: auto → dark → light → auto (keyed off stored pref, not data-theme)
+            if (!stored) {
+                // auto → dark
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('ork_theme', 'dark');
+            } else if (stored === 'dark') {
+                // dark → light
+                document.documentElement.setAttribute('data-theme', 'light');
+                localStorage.setItem('ork_theme', 'light');
+            } else {
+                // light → auto: remove pref, re-apply OS preference live
+                localStorage.removeItem('ork_theme');
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                } else {
+                    document.documentElement.removeAttribute('data-theme');
+                }
+            }
+            // Update icon
+            orkUpdateThemeIcon();
+            // Reapply hero color with new lightness
+            var heroImg = document.querySelector('.kn-heraldry-frame img, .pk-heraldry-frame img');
+            if (heroImg && heroImg.complete) {
+                if (typeof knApplyHeroColor === 'function') knApplyHeroColor(heroImg);
+                if (typeof pkApplyHeroColor === 'function') pkApplyHeroColor(heroImg);
+                if (typeof evApplyHeroColor === 'function') evApplyHeroColor();
+                if (typeof enApplyHeroColor === 'function') enApplyHeroColor();
+                if (typeof ecApplyBannerColor === 'function') ecApplyBannerColor();
+            }
+        });
+        orkUpdateThemeIcon();
+    }
+
+    // Live OS preference listener — only fires when user is in auto mode (no stored pref)
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+            if (localStorage.getItem('ork_theme')) return; // user has a manual pref, ignore
+            if (e.matches) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+            }
+            var heroImg = document.querySelector('.kn-heraldry-frame img, .pk-heraldry-frame img');
+            if (heroImg && heroImg.complete) {
+                if (typeof knApplyHeroColor === 'function') knApplyHeroColor(heroImg);
+                if (typeof pkApplyHeroColor === 'function') pkApplyHeroColor(heroImg);
+                if (typeof evApplyHeroColor === 'function') evApplyHeroColor();
+                if (typeof enApplyHeroColor === 'function') enApplyHeroColor();
+                if (typeof ecApplyBannerColor === 'function') ecApplyBannerColor();
+            }
+        });
+    }
+}
+
+function orkUpdateThemeIcon() {
+    var btn = document.getElementById('ork-theme-toggle');
+    if (!btn) return;
+    var stored = localStorage.getItem('ork_theme');
+    // Sun icon (light mode)
+    var sunSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9A9.01 9.01 0 0 0 12 3zm0 16a7 7 0 1 1 7-7 7.008 7.008 0 0 1-7 7z"/><path d="M12 7a5 5 0 1 0 5 5 5.006 5.006 0 0 0-5-5z"/></svg>';
+    // Moon icon (dark mode)
+    var moonSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11.807A9.002 9.002 0 0 1 10.049 2a9.942 9.942 0 0 0-5.12 2.735c-3.905 3.905-3.905 10.237 0 14.142 3.906 3.906 10.237 3.905 14.143 0a9.946 9.946 0 0 0 2.735-5.119A9.003 9.003 0 0 1 12 11.807z"/></svg>';
+    // Auto icon (half-filled circle — left half dark, right half outline)
+    var autoSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2a10 10 0 0 1 0 20V2z" fill="currentColor"/></svg>';
+    if (stored === 'dark') {
+        btn.setAttribute('title', 'Dark mode (click for light)');
+        btn.innerHTML = moonSvg;
+    } else if (stored === 'light') {
+        btn.setAttribute('title', 'Light mode (click for auto)');
+        btn.innerHTML = sunSvg;
+    } else {
+        btn.setAttribute('title', 'Auto mode (follows OS setting, click for dark)');
+        btn.innerHTML = autoSvg;
+    }
+}
+
+// Run theme init on DOMContentLoaded to ensure button is in DOM
+// Theme attr is applied immediately via stored value in case it was already set server-side
+(function() {
+    var stored = localStorage.getItem('ork_theme');
+    if (stored === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else if (stored === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', orkInitTheme);
+    } else {
+        orkInitTheme();
+    }
+})();
+
 
 /* ===========================
    Autocomplete keyboard nav
@@ -95,11 +383,13 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
         dropdown.className = 'aw-dropdown';
         dropdown.innerHTML =
             '<div class="aw-dropdown-search-wrap"><i class="fas fa-search"></i>' +
-                '<input type="text" class="aw-dropdown-search" placeholder="Type to filter\u2026"></div>' +
+                '<input type="text" class="aw-dropdown-search" placeholder="Type to filter\u2026">' +
+                '<button type="button" class="aw-dropdown-close" aria-label="Close">&times;</button></div>' +
             '<div class="aw-dropdown-body"></div>';
         document.body.appendChild(dropdown);
         searchInput = dropdown.querySelector('.aw-dropdown-search');
         body = dropdown.querySelector('.aw-dropdown-body');
+        dropdown.querySelector('.aw-dropdown-close').addEventListener('click', function() { closeDropdown(); });
 
         // Close on outside click
         document.addEventListener('mousedown', function(e) {
@@ -209,13 +499,17 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
         var vw = window.innerWidth, vh = window.innerHeight;
         var mobile = vw <= 600;
         if (mobile) {
-            dropdown.style.left = '8px';
-            dropdown.style.right = '8px';
-            dropdown.style.width = 'auto';
+            // Fullscreen on mobile so the on-screen keyboard doesn't clip the
+            // results list. visualViewport shrinks when the keyboard opens,
+            // so the dropdown's inset:0 covers exactly the visible area and
+            // the results scroll below the sticky search input.
+            dropdown.style.left = '0';
+            dropdown.style.right = '0';
+            dropdown.style.top = '0';
             dropdown.style.bottom = '0';
-            dropdown.style.top = 'auto';
-            dropdown.style.maxHeight = '55vh';
-            dropdown.style.borderRadius = '10px 10px 0 0';
+            dropdown.style.width = 'auto';
+            dropdown.style.maxHeight = 'none';
+            dropdown.style.borderRadius = '0';
         } else {
             var w = Math.max(rect.width, 320);
             var left = rect.left;
@@ -283,27 +577,12 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
 
     window.awInitPicker = initPicker;
     window.awSyncTrigger = syncTrigger;
+    window.awCloseDropdown = closeDropdown;
 })();
 
 /* ===========================
    Player Profile (PnConfig)
    =========================== */
-// ---- Pagination Helpers ----
-function pnPageRange(current, total) {
-    var pages = [];
-    if (total <= 7) {
-        for (var p = 1; p <= total; p++) pages.push(p);
-    } else {
-        pages.push(1);
-        if (current > 3) pages.push(-1);
-        var s = Math.max(2, current - 1);
-        var e = Math.min(total - 1, current + 1);
-        for (var p = s; p <= e; p++) pages.push(p);
-        if (current < total - 2) pages.push(-1);
-        pages.push(total);
-    }
-    return pages;
-}
 
 /* ===========================
    Generic confirm dialog
@@ -321,7 +600,7 @@ function pnPageRange(current, total) {
                     '<h3 class="pn-modal-title" id="pn-confirm-title"></h3>' +
                     '<button class="pn-modal-close-btn" id="pn-confirm-close-btn" aria-label="Close">&times;</button>' +
                 '</div>' +
-                '<div class="pn-modal-body"><p id="pn-confirm-message" style="margin:0;font-size:14px;color:#4a5568"></p></div>' +
+                '<div class="pn-modal-body"><p id="pn-confirm-message" class="pn-confirm-message"></p></div>' +
                 '<div class="pn-modal-footer">' +
                     '<button class="pn-btn pn-btn-secondary" id="pn-confirm-cancel">Cancel</button>' +
                     '<button class="pn-btn" id="pn-confirm-ok">Confirm</button>' +
@@ -362,102 +641,45 @@ function pnPageRange(current, total) {
     };
 })();
 
-function pnSetPageSize(tableId, size) {
-    var $table = $('#' + tableId);
-    if (!$table.length) return;
-    $table.data('pagesize', size === 'all' ? 99999 : parseInt(size));
-    pnPaginate($table, 1);
-}
 
-function pnAwardSearch(q) {
-    q = q.trim().toLowerCase();
-    var table = document.getElementById('pn-awards-table');
-    var noResults = document.getElementById('pn-award-search-empty');
-    if (!table) return;
-    var rows = table.querySelectorAll('tbody tr');
-    if (!q) {
-        rows.forEach(function(r) { r.style.display = ''; });
-        if (noResults) noResults.style.display = 'none';
-        if (typeof pnPaginate === 'function') pnPaginate($('#pn-awards-table'), 1);
-        return;
-    }
-    var matchCount = 0;
-    rows.forEach(function(r) {
-        var match = r.textContent.toLowerCase().indexOf(q) !== -1;
-        r.style.display = match ? '' : 'none';
-        if (match) matchCount++;
-    });
-    var pg = table.nextElementSibling;
-    while (pg && !pg.classList.contains('pn-pagination')) { pg = pg.nextElementSibling; }
-    if (pg) pg.style.display = 'none';
-    if (noResults) noResults.style.display = matchCount === 0 ? '' : 'none';
-}
+// ---- Unified DataTables initializer for player-profile data tables ----
+// Gives every profile grid the same feature set: click-sort, "Show N" length
+// menu, pagination, a search box, and CSV export. Header cells:
+//   - data-sorttype="date" -> that column sorts as a date
+//   - class="pn-nosort"     -> action-button column (no sort/search/export)
+// opts: { order: [[col,'desc']], filename: 'Awards', pageLength: 25 }
+function pnInitDataTable(selector, opts) {
+    opts = opts || {};
+    if (!$.fn || !$.fn.DataTable) return null;
+    var $table = $(selector);
+    if (!$table.length) return null;
+    if ($.fn.DataTable.isDataTable($table)) { $table.DataTable().destroy(); }
 
-function pnPaginate($table, page) {
-    var pageSize = parseInt($table.data('pagesize')) || 10;
-    var $rows = $table.find('tbody tr');
-    var total = $rows.length;
-    if (total === 0) return;
-    var totalPages = Math.max(1, Math.ceil(total / pageSize));
-    page = Math.max(1, Math.min(page, totalPages));
-    $table.data('pn-page', page);
-    $rows.each(function(i) {
-        $(this).toggle(i >= (page - 1) * pageSize && i < page * pageSize);
+    var colDefs = [];
+    var hasAction = false;
+    $table.find('thead th').each(function(i) {
+        var $th = $(this);
+        if ($th.hasClass('pn-nosort')) { hasAction = true; colDefs.push({ targets: i, orderable: false, searchable: false }); }
+        if ($th.data('sorttype') === 'date') colDefs.push({ targets: i, type: 'date' });
     });
-    var $pg = $table.next('.pn-pagination');
-    if ($pg.length === 0) $pg = $('<div class="pn-pagination"></div>').insertAfter($table);
-    if (total <= pageSize) { $pg.empty().hide(); return; }
-    $pg.show();
-    var start = (page - 1) * pageSize + 1;
-    var end = Math.min(page * pageSize, total);
-    var html = '<span class="pn-pagination-info">Showing ' + start + '\u2013' + end + ' of ' + total + '</span>';
-    html += '<div class="pn-pagination-controls">';
-    html += '<button class="pn-page-btn pn-page-prev"' + (page === 1 ? ' disabled' : '') + '>&#8249;</button>';
-    var range = pnPageRange(page, totalPages);
-    for (var ri = 0; ri < range.length; ri++) {
-        if (range[ri] === -1) {
-            html += '<span class="pn-page-ellipsis">&hellip;</span>';
-        } else {
-            html += '<button class="pn-page-btn pn-page-num' + (range[ri] === page ? ' pn-page-active' : '') + '" data-page="' + range[ri] + '">' + range[ri] + '</button>';
-        }
-    }
-    html += '<button class="pn-page-btn pn-page-next"' + (page === totalPages ? ' disabled' : '') + '>&#8250;</button>';
-    html += '</div>';
-    $pg.html(html);
-}
 
-function pnSortDesc($table, colIndex, sortType, secondaryColIndex, secondarySortType) {
-    if (!$table.length) return;
-    $table.find('thead th').removeClass('sort-asc sort-desc');
-    $table.find('thead th').eq(colIndex).addClass('sort-desc');
-    var $tbody = $table.find('tbody');
-    var rows = $tbody.find('tr').get();
-    rows.sort(function(a, b) {
-        var aVal = $(a).find('td').eq(colIndex).text().trim();
-        var bVal = $(b).find('td').eq(colIndex).text().trim();
-        var cmp = 0;
-        if (sortType === 'numeric') {
-            cmp = (parseFloat(aVal) || 0) - (parseFloat(bVal) || 0);
-        } else if (sortType === 'date') {
-            cmp = (new Date(aVal).getTime() || 0) - (new Date(bVal).getTime() || 0);
-        } else {
-            cmp = aVal.localeCompare(bVal);
-        }
-        if (cmp === 0 && secondaryColIndex != null) {
-            var aVal2 = $(a).find('td').eq(secondaryColIndex).text().trim();
-            var bVal2 = $(b).find('td').eq(secondaryColIndex).text().trim();
-            var st = secondarySortType || 'text';
-            if (st === 'numeric') {
-                cmp = (parseFloat(aVal2) || 0) - (parseFloat(bVal2) || 0);
-            } else if (st === 'date') {
-                cmp = (new Date(aVal2).getTime() || 0) - (new Date(bVal2).getTime() || 0);
-            } else {
-                cmp = aVal2.localeCompare(bVal2);
-            }
-        }
-        return -cmp;
+    return $table.DataTable({
+        dom: "<'pn-dt-toolbar'lfB>rtip",
+        buttons: [{
+            extend: 'csv',
+            className: 'pn-dt-csv-btn',
+            text: '<i class="fas fa-download"></i> CSV',
+            filename: opts.filename || 'Export',
+            exportOptions: { columns: hasAction ? ':not(.pn-nosort)' : ':visible' }
+        }],
+        columnDefs: colDefs,
+        order: opts.order || [],
+        pageLength: opts.pageLength || 25,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+        scrollX: true,
+        autoWidth: false,
+        language: { search: '', searchPlaceholder: 'Search…' }
     });
-    $.each(rows, function(i, row) { $tbody.append(row); });
 }
 
 function pnActivateTab(tab) {
@@ -466,6 +688,12 @@ function pnActivateTab(tab) {
     $pnTab.addClass('pn-tab-active');
     $('.pn-tab-panel').hide();
     $('#pn-tab-' + tab).show();
+    // DataTables can't measure column widths while a tab is hidden; re-adjust on show.
+    if ($.fn && $.fn.DataTable) {
+        $('#pn-tab-' + tab).find('table.dataTable').each(function() {
+            $(this).DataTable().columns.adjust();
+        });
+    }
     var pnLabel = $pnTab.find('.pn-tab-label').text().trim();
     if (pnLabel) $('#pn-active-tab-label').text(pnLabel);
 }
@@ -493,29 +721,29 @@ $(document).ready(function() {
     $('.pn-ladder-item[data-ladname]').on('click', function() {
         var name = $(this).data('ladname');
         pnActivateTab('awards');
-        var $input = $('#pn-award-search');
-        $input.val(name);
-        pnAwardSearch(name);
+        if ($.fn.DataTable && $.fn.DataTable.isDataTable('#pn-awards-table')) {
+            $('#pn-awards-table').DataTable().search(name).draw();
+        }
     });
 
-    // ---- Class Level Calculation ----
+    // ---- Class Level Calculation (thresholds from ClassLevel via PnConfig) ----
     $('#pn-classes-table tbody tr').each(function() {
         var credits = Number($(this).find('.pn-credits').text());
+        var thresholds = PnConfig.classLevelThresholds || [];
         var level = 1;
-        if (credits >= 53) level = 6;
-        else if (credits >= 34) level = 5;
-        else if (credits >= 21) level = 4;
-        else if (credits >= 12) level = 3;
-        else if (credits >= 5) level = 2;
+        for (var ti = thresholds.length - 1; ti >= 0; ti--) {
+            if (credits >= thresholds[ti]) { level = ti + 2; break; }
+        }
         $(this).find('.pn-level').text(level);
 
-        var thresholds = [5, 12, 21, 34];
+        var maxCredits = thresholds.length ? thresholds[thresholds.length - 1] : null;
+        var nearThresholds = thresholds.length > 1 ? thresholds.slice(0, -1) : [];
         var badge = '';
-        if (credits >= 53) {
+        if (maxCredits !== null && credits >= maxCredits) {
             badge = 'max';
         } else {
-            for (var i = 0; i < thresholds.length; i++) {
-                var t = thresholds[i];
+            for (var i = 0; i < nearThresholds.length; i++) {
+                var t = nearThresholds[i];
                 if (credits === t) { badge = 'leveled'; break; }
                 else if (credits === t - 1 || credits === t - 2) { badge = 'soon'; break; }
             }
@@ -531,41 +759,7 @@ $(document).ready(function() {
         }
     });
 
-    // ---- Sortable Tables ----
-    $('.pn-sortable').each(function() {
-        var table = $(this);
-        table.find('thead th').on('click', function() {
-            var columnIndex = $(this).index();
-            var sortType = $(this).data('sorttype') || 'text';
-            var isAscending = !$(this).hasClass('sort-asc');
-
-            table.find('thead th').removeClass('sort-asc sort-desc');
-            $(this).addClass(isAscending ? 'sort-asc' : 'sort-desc');
-
-            var tbody = table.find('tbody');
-            var rows = tbody.find('tr').get();
-
-            rows.sort(function(a, b) {
-                var aText = $(a).find('td').eq(columnIndex).text().trim();
-                var bText = $(b).find('td').eq(columnIndex).text().trim();
-                var cmp = 0;
-
-                if (sortType === 'numeric') {
-                    cmp = (parseFloat(aText) || 0) - (parseFloat(bText) || 0);
-                } else if (sortType === 'date') {
-                    cmp = (new Date(aText).getTime() || 0) - (new Date(bText).getTime() || 0);
-                } else {
-                    cmp = aText.localeCompare(bText);
-                }
-                return isAscending ? cmp : -cmp;
-            });
-
-            $.each(rows, function(i, row) {
-                tbody.append(row);
-            });
-            pnPaginate(table, 1);
-        });
-    });
+    // Profile data tables use DataTables for sorting/paging/search/CSV — see pnInitDataTable().
 
 
     // ---- Custom Recommendation Modal ----
@@ -594,6 +788,60 @@ if (PnConfig.recError) {
         }
     });
 
+    // Classify a rec-form award <option>: 'ladder' | 'custom' | 'title' | 'none'
+    function pnRecAwardCategory(opt) {
+        if (!opt || !opt.value) return 'none';
+        if (opt.getAttribute('data-is-ladder') === '1') return 'ladder';
+        var parent = opt.parentElement;
+        if (!parent || parent.tagName !== 'OPTGROUP') return 'custom';
+        return 'title';
+    }
+    function pnRecSelectedOpt() {
+        var sel = document.getElementById('pn-rec-award');
+        if (!sel) return null;
+        return sel.options[sel.selectedIndex] || null;
+    }
+    function pnRecHeldRankForSelected() {
+        var opt = pnRecSelectedOpt();
+        if (!opt) return 0;
+        var baseAwardId = parseInt(opt.getAttribute('data-award-id'), 10) || 0;
+        return (PnConfig.awardRanks && PnConfig.awardRanks[baseAwardId]) || 0;
+    }
+    function pnRecWarnEl() { return document.getElementById('pn-rec-warn'); }
+    function pnRecShowWarn(msg) {
+        var w = pnRecWarnEl(); if (!w) return;
+        w.textContent = msg;
+        w.style.display = 'block';
+    }
+    function pnRecHideWarn() {
+        var w = pnRecWarnEl(); if (!w) return;
+        w.textContent = '';
+        w.style.display = 'none';
+    }
+    function pnRecRefreshWarn() {
+        var opt = pnRecSelectedOpt();
+        var cat = pnRecAwardCategory(opt);
+        if (cat === 'ladder') {
+            var held = pnRecHeldRankForSelected();
+            var chosen = parseInt(($('#pn-rec-rank-val').val() || '0'), 10);
+            if (held > 0 && chosen > 0 && chosen <= held) {
+                pnRecShowWarn('The player already has this award at or above the rank selected. Please select rank ' + (held + 1) + ' or higher to continue.');
+            } else {
+                pnRecHideWarn();
+            }
+        } else if (cat === 'title') {
+            var kaid = parseInt(opt.value, 10) || 0;
+            var held = (PnConfig.heldKingdomAwardIds || []).indexOf(kaid) !== -1;
+            if (held) {
+                pnRecShowWarn('The player already has this title. Are you sure you wish to continue?');
+            } else {
+                pnRecHideWarn();
+            }
+        } else {
+            pnRecHideWarn();
+        }
+    }
+
     // Submit with validation
     $('#pn-rec-submit').on('click', function() {
         var award  = $('#pn-rec-award').val();
@@ -603,6 +851,19 @@ if (PnConfig.recError) {
             return;
         }
         $('#pn-rec-error').hide();
+
+        // Block ladder submissions where rank is at or below current rank held.
+        var opt = pnRecSelectedOpt();
+        if (pnRecAwardCategory(opt) === 'ladder') {
+            var held = pnRecHeldRankForSelected();
+            var chosen = parseInt(($('#pn-rec-rank-val').val() || '0'), 10);
+            if (held > 0 && chosen > 0 && chosen <= held) {
+                pnRecShowWarn('The player already has this award at or above the rank selected. Please select rank ' + (held + 1) + ' or higher to continue.');
+                return;
+            }
+        }
+        // Title duplicates: warning is informational, submission proceeds.
+
         $('#pn-rec-submit').prop('disabled', true).text('Submitting…');
         $('#pn-recommend-form').submit();
     });
@@ -630,39 +891,153 @@ if (PnConfig.recError) {
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var hint = document.getElementById('pn-rec-rank-hint');
+        if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = pnAwardRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
+        wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('div');
             pill.className = 'pn-rank-pill';
-            if (r <= held)       pill.className += ' pn-rank-held';
-            if (r === suggested) pill.className += ' pn-rank-suggested';
-            pill.textContent  = r;
+            pill.innerHTML  = tnRankPillInner('pn', r);
             pill.dataset.rank = r;
             wrap.appendChild(pill);
         }
-        var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
-        if (suggestedPill) { suggestedPill.classList.add('pn-rank-selected'); input.value = suggested; }
+        tnRankPaint(wrap, 'pn', held, suggested);
+        input.value = suggested;
     }
     var pnRecRankPillsEl = document.getElementById('pn-rec-rank-pills');
     if (pnRecRankPillsEl) pnRecRankPillsEl.addEventListener('click', function(e) {
         var p = e.target.closest ? e.target.closest('.pn-rank-pill') : (e.target.classList.contains('pn-rank-pill') ? e.target : null);
         if (!p) return;
         var input = document.getElementById('pn-rec-rank-val');
-        this.querySelectorAll('.pn-rank-pill').forEach(function(x) { x.classList.remove('pn-rank-selected'); });
-        p.classList.add('pn-rank-selected');
         input.value = p.dataset.rank;
+        tnRankPaint(this, 'pn', this.dataset.rankHeld, p.dataset.rank);
+        pnRecRefreshWarn();
     });
     var _recAwardEl = document.getElementById('pn-rec-award');
-    if (_recAwardEl) awInitPicker(_recAwardEl);
+    if (_recAwardEl) {
+        _recAwardEl.querySelectorAll('optgroup[label="Associate Titles"]').forEach(function(og) { og.parentNode.removeChild(og); });
+        awInitPicker(_recAwardEl);
+    }
     $('#pn-rec-award').on('change', function() {
         buildRecRankPills($(this).val());
         var aid = parseInt($(this).find(':selected').data('award-id') || 0);
         var desc = AWARD_DESCRIPTIONS[aid] || '';
         var el = document.getElementById('pn-rec-award-desc');
         if (el) { el.textContent = desc; el.style.display = desc ? '' : 'none'; }
+        pnApplyLadderSuggestion($(this).val());
     });
+
+    // Called whenever the award picker changes. If the player has already achieved the
+    // Master peerage for a ladder, hard-block submit. If they've reached the top rank but
+    // not the Master yet, offer a clickable suggestion that swaps the select to the Master.
+    function pnApplyLadderSuggestion(kingdomAwardId) {
+        var $err    = $('#pn-rec-error');
+        var $submit = $('#pn-rec-submit');
+        // Reset any previous suggestion state
+        $err.removeClass('pn-rec-suggest pn-rec-block').hide().empty();
+        $submit.prop('disabled', false);
+
+        if (!kingdomAwardId) return;
+        var opt = document.querySelector('#pn-rec-award option[value="' + kingdomAwardId + '"]');
+        if (!opt) return;
+
+        var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var map  = (PnConfig && PnConfig.ladderMasterMap) || {};
+        var held = (PnConfig.heldAwardIds || []).reduce(function(s, x) { s[x] = true; return s; }, {});
+        var name = PnConfig.playerName || 'This player';
+
+        // Case A — recommending a Master peerage the player already holds
+        if (baseAwardId > 0 && opt.getAttribute('data-peerage') === 'Master' && held[baseAwardId]) {
+            $err.addClass('pn-rec-block')
+                .text(name + ' has already achieved the rank of ' + (opt.textContent || '').trim() + '. Maybe consider recommending for a different award?')
+                .show();
+            $submit.prop('disabled', true);
+            return;
+        }
+
+        if (opt.getAttribute('data-is-ladder') !== '1') return;
+
+        var info = map[baseAwardId];
+        if (!info) return;
+
+        var maxRank  = parseInt(info.MaxRank) || (/zodiac/i.test(opt.textContent) ? 12 : 10);
+        var rankHeld = (PnConfig.awardRanks || {})[baseAwardId] || 0;
+
+        // Branch 1 — player already holds the Master peerage
+        var masterHeld = (info.MasterAwardIds || []).some(function(mid) { return !!held[mid]; });
+        if (masterHeld) {
+            $err.addClass('pn-rec-block')
+                .text(name + ' has already achieved the rank of ' + info.MasterName + '. Maybe consider recommending for a different award?')
+                .show();
+            $submit.prop('disabled', true);
+            return;
+        }
+
+        // Branch 2 — player at top rank of the ladder, no Master peerage yet
+        if (rankHeld >= maxRank) {
+            var masterOpt = null;
+            (info.MasterAwardIds || []).some(function(mid) {
+                masterOpt = document.querySelector('#pn-rec-award option[data-peerage="Master"][data-award-id="' + mid + '"]');
+                return !!masterOpt;
+            });
+            var msgParts = [
+                pnEscapeHtml(name),
+                ' has already received the ',
+                pnOrdinal(maxRank),
+                ' ',
+                pnEscapeHtml(info.LadderName),
+                '.'
+            ];
+            if (masterOpt) {
+                msgParts.push(
+                    ' Would you like to recommend them for ',
+                    '<a href="#" class="pn-rec-suggest-link" data-master-value="',
+                    pnEscapeAttr(masterOpt.value),
+                    '">',
+                    pnEscapeHtml(info.MasterName),
+                    '</a> instead?'
+                );
+            } else {
+                msgParts.push(' No higher rank is available.');
+            }
+            $err.addClass('pn-rec-suggest').html(msgParts.join('')).show();
+            $submit.prop('disabled', true);
+            return;
+        }
+    }
+
+    // Click handler: swap the select to the suggested Master option
+    $(document).on('click', '.pn-rec-suggest-link', function(e) {
+        e.preventDefault();
+        var val = $(this).data('master-value');
+        if (!val) return;
+        var $sel = $('#pn-rec-award');
+        $sel.val(String(val));
+        // Rebuild the Select2-style picker if present; otherwise fire change
+        if (typeof awInitPicker === 'function') {
+            try { awInitPicker($sel.get(0)); } catch(e) {}
+        }
+        $sel.trigger('change');
+        $('#pn-rec-reason').focus();
+    });
+
+    function pnOrdinal(n) {
+        n = parseInt(n) || 0;
+        var s = ['th','st','nd','rd'];
+        var v = n % 100;
+        return n + (s[(v - 20) % 10] || s[v] || s[0]);
+    }
+    function pnEscapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function pnEscapeAttr(s) {
+        return pnEscapeHtml(s);
+    }
 
     // ---- Rec dismiss button (player page) ----
     document.addEventListener('click', function(e) {
@@ -705,21 +1080,6 @@ if (PnConfig.recError) {
         $cell.find('.pn-delete-confirm').removeClass('pn-active');
     });
 
-    // ---- Pagination: page button handlers ----
-    $(document).on('click', '.pn-page-num', function() {
-        var $table = $(this).closest('.pn-pagination').prev('.pn-table');
-        if ($table.length) pnPaginate($table, parseInt($(this).data('page')));
-    });
-    $(document).on('click', '.pn-page-prev', function() {
-        if ($(this).prop('disabled')) return;
-        var $table = $(this).closest('.pn-pagination').prev('.pn-table');
-        if ($table.length) pnPaginate($table, ($table.data('pn-page') || 1) - 1);
-    });
-    $(document).on('click', '.pn-page-next', function() {
-        if ($(this).prop('disabled')) return;
-        var $table = $(this).closest('.pn-pagination').prev('.pn-table');
-        if ($table.length) pnPaginate($table, ($table.data('pn-page') || 1) + 1);
-    });
 
 
     // ---- Image Upload Modal ----
@@ -728,6 +1088,7 @@ if (PnConfig.recError) {
         var UPLOAD_URL = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/update';
         var imgType  = null;  // 'photo' | 'heraldry'
         var origImg  = null;  // HTMLImageElement (resized if needed)
+        var origImgIsPng = false; // source was PNG — preserve alpha on output
         var cropBox  = null;  // {x,y,w,h} in image pixels
         var dispScale = 1;    // display scale factor
         var cropBound = null; // bound event listener refs for cleanup
@@ -792,6 +1153,7 @@ if (PnConfig.recError) {
                 this.value = '';
                 return;
             }
+            origImgIsPng = (imgType === 'heraldry') && (ext === 'png' || file.type === 'image/png');
             gid('pn-img-error').style.display = 'none';
 
             function loadIntoModal(blob) {
@@ -811,14 +1173,13 @@ if (PnConfig.recError) {
             }
 
             if (file.size > 348836) {
-                var isPng = (file.type === 'image/png');
                 gid('pn-img-resize-notice').textContent = 'Resizing\u2026';
                 resizeImageToLimit(file, 348836, function(blob) {
                     gid('pn-img-resize-notice').textContent = 'Auto-resized to ' + Math.round(blob.size / 1024) + '\u00a0KB';
                     loadIntoModal(blob);
                 }, function(errMsg) {
                     showError(errMsg);
-                }, isPng);
+                }, origImgIsPng);
             } else {
                 loadIntoModal(file);
             }
@@ -983,23 +1344,26 @@ if (PnConfig.recError) {
             outCanvas.width  = Math.round(cb.w);
             outCanvas.height = Math.round(cb.h);
             outCanvas.getContext('2d').drawImage(origImg, cb.x, cb.y, cb.w, cb.h, 0, 0, cb.w, cb.h);
+            var outMime    = origImgIsPng ? 'image/png'  : 'image/jpeg';
+            var outQuality = origImgIsPng ? undefined    : 0.88;
             outCanvas.toBlob(function(blob) {
                 if (blob.size > 348836) {
                     resizeImageToLimit(blob, 348836, doUpload, function(err) {
                         showStep('pn-img-step-select');
                         showError(err);
-                    }, false);
+                    }, origImgIsPng);
                 } else {
                     doUpload(blob);
                 }
-            }, 'image/jpeg', 0.88);
+            }, outMime, outQuality);
         }
 
         function doUpload(blob) {
             showStep('pn-img-step-uploading');
             var fd = new FormData();
             fd.append('Update', 'Update Media');
-            fd.append(imgType === 'photo' ? 'PlayerImage' : 'Heraldry', blob, 'image.jpg');
+            var outName = origImgIsPng ? 'image.png' : 'image.jpg';
+            fd.append(imgType === 'photo' ? 'PlayerImage' : 'Heraldry', blob, outName);
             fetch(UPLOAD_URL, { method: 'POST', body: fd })
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('Server returned ' + resp.status);
@@ -1077,9 +1441,16 @@ if (PnConfig.recError) {
 
         gid('pn-acct-close-btn').addEventListener('click', pnCloseAccountModal);
         gid('pn-acct-cancel').addEventListener('click', pnCloseAccountModal);
-        gid('pn-acct-overlay').addEventListener('click', function(e) {
-            if (e.target === this) pnCloseAccountModal();
-        });
+        // Only close on a click that BOTH started and ended on the overlay.
+        // Without the mousedown gate, drag-selecting text in an input and
+        // releasing outside the input fires a click on the overlay and
+        // closes the modal mid-selection.
+        (function() {
+            var ov = gid('pn-acct-overlay');
+            var downOnSelf = false;
+            ov.addEventListener('mousedown', function(e) { downOnSelf = (e.target === this); });
+            ov.addEventListener('click', function(e) { if (downOnSelf && e.target === this) pnCloseAccountModal(); });
+        })();
         document.addEventListener('keydown', function(e) {
             if ((e.key === 'Escape' || e.keyCode === 27) && gid('pn-acct-overlay').classList.contains('pn-open'))
                 pnCloseAccountModal();
@@ -1105,19 +1476,19 @@ if (PnConfig.recError) {
             // Client-side validation
             if (!persona) {
                 errEl.textContent = 'Persona is required.';
-                errEl.style.display = '';
+                errEl.style.display = 'block';
                 gid('pn-acct-persona').focus();
                 return;
             }
             if (!username) {
                 errEl.textContent = 'Username is required.';
-                errEl.style.display = '';
+                errEl.style.display = 'block';
                 gid('pn-acct-username').focus();
                 return;
             }
             if (password !== password2) {
                 errEl.textContent = 'Passwords do not match.';
-                errEl.style.display = '';
+                errEl.style.display = 'block';
                 gid('pn-acct-password').focus();
                 return;
             }
@@ -1145,11 +1516,23 @@ if (PnConfig.recError) {
             fetch(SAVE_URL, { method: 'POST', body: fd })
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                    return resp.text();
+                })
+                .then(function(html) {
+                    var m = html.match(/<div class=['"]error-message['"][^>]*>([\s\S]*?)<\/div>/i);
+                    if (m) {
+                        var msg = m[1].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+                        errEl.textContent = msg || 'Save failed.';
+                        errEl.style.display = 'block';
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                        return;
+                    }
                     window.location.reload();
                 })
                 .catch(function(err) {
                     errEl.textContent = 'Save failed: ' + err.message;
-                    errEl.style.display = '';
+                    errEl.style.display = 'block';
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
                 });
@@ -1163,6 +1546,31 @@ if (PnConfig.recError) {
             subjectId: 'pn-p-subject', objectId: 'pn-p-object', possId: 'pn-p-possessive',
             posspId: 'pn-p-possessivepronoun', reflexId: 'pn-p-reflexive',
             existingJson: (function() { var el = document.getElementById('pn-pronoun-custom-val'); return el ? el.value : ''; })(),
+        });
+
+        // Help-tip bubbles inside the modal (position:fixed so modal overflow doesn't clip them)
+        var helpBubble = null;
+        function ensureBubble() {
+            if (!helpBubble) {
+                helpBubble = document.createElement('div');
+                helpBubble.className = 'pn-acct-help-bubble';
+                helpBubble.style.display = 'none';
+                document.body.appendChild(helpBubble);
+            }
+            return helpBubble;
+        }
+        gid('pn-acct-overlay').querySelectorAll('.pn-acct-help-tip[data-tip]').forEach(function(el) {
+            el.addEventListener('mouseenter', function() {
+                var b = ensureBubble();
+                b.textContent = el.getAttribute('data-tip');
+                var r = el.getBoundingClientRect();
+                b.style.display = 'block';
+                b.style.top  = (r.bottom + 6) + 'px';
+                b.style.left = Math.max(6, Math.min(r.left, window.innerWidth - 286)) + 'px';
+            });
+            el.addEventListener('mouseleave', function() {
+                if (helpBubble) helpBubble.style.display = 'none';
+            });
         });
     })();
 
@@ -1267,7 +1675,7 @@ if (PnConfig.recError) {
 
             if (!duesFrom) {
                 errEl.textContent = 'Date Paid is required.';
-                errEl.style.display = '';
+                errEl.style.display = 'block';
                 gid('pn-dues-from').focus();
                 return;
             }
@@ -1293,7 +1701,7 @@ if (PnConfig.recError) {
                 })
                 .catch(function(err) {
                     errEl.textContent = 'Save failed: ' + err.message;
-                    errEl.style.display = '';
+                    errEl.style.display = 'block';
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fas fa-save"></i> Add Dues';
                 });
@@ -1391,11 +1799,23 @@ if (PnConfig.recError) {
             fetch(SAVE_URL, { method: 'POST', body: fd })
                 .then(function(resp) {
                     if (!resp.ok) throw new Error('Server returned ' + resp.status);
+                    return resp.text();
+                })
+                .then(function(html) {
+                    var m = html.match(/<div class=['"]error-message['"][^>]*>([\s\S]*?)<\/div>/i);
+                    if (m) {
+                        var msg = m[1].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+                        errEl.textContent = msg || 'Save failed.';
+                        errEl.style.display = 'block';
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                        return;
+                    }
                     window.location.reload();
                 })
                 .catch(function(err) {
                     errEl.textContent = 'Save failed: ' + err.message;
-                    errEl.style.display = '';
+                    errEl.style.display = 'block';
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
                 });
@@ -1414,28 +1834,93 @@ if (PnConfig.recError) {
         var awardOptHTML = PnConfig.awardOptHTML;
         var officerOptHTML = PnConfig.officerOptHTML;
 
+        // Split awardOptHTML into: awards-only (Ladder+Custom+Other), achievements, associations
+        var awardsOnlyHTML, achievementsHTML, associationsHTML;
+        (function() {
+            var tmp = document.createElement('select');
+            tmp.innerHTML = awardOptHTML;
+            var aw  = '<option value="">Select award...</option>';
+            var ach = '<option value="">Select title...</option>';
+            var asc = '<option value="">Select association...</option>';
+            Array.from(tmp.children).forEach(function(child) {
+                if (child.tagName === 'OPTION') {
+                    if (child.value === '') return;
+                    aw += child.outerHTML;
+                    // "Custom Title" also belongs under Achievement Titles — surface it at the very
+                    // top of that dropdown (it precedes the title optgroups in document order).
+                    if (child.getAttribute('data-custom-title') === '1') ach += child.outerHTML;
+                } else if (child.tagName === 'OPTGROUP') {
+                    var lbl = child.label;
+                    if (lbl === 'Knighthoods' || lbl === 'Masterhoods' || lbl === 'Paragons' || lbl === 'Noble Titles') {
+                        ach += child.outerHTML;
+                    } else if (lbl === 'Associate Titles') {
+                        asc += child.outerHTML;
+                    } else {
+                        aw += child.outerHTML;
+                    }
+                }
+            });
+            awardsOnlyHTML = aw; achievementsHTML = ach; associationsHTML = asc;
+        })();
+
+        // Hide type buttons for empty buckets
+        (function() {
+            var tmp = document.createElement('select');
+            tmp.innerHTML = achievementsHTML;
+            var hasAch = Array.from(tmp.options).some(function(o) { return o.value !== ''; });
+            var btnAch = gid('pn-award-type-achievements');
+            if (btnAch) btnAch.style.display = hasAch ? '' : 'none';
+
+            tmp.innerHTML = associationsHTML;
+            var hasAsc = Array.from(tmp.options).some(function(o) { return o.value !== ''; });
+            var btnAsc = gid('pn-award-type-associations');
+            if (btnAsc) btnAsc.style.display = hasAsc ? '' : 'none';
+        })();
+
         var currentType = 'awards';
 
         function gid(id) { return document.getElementById(id); }
 
         // ---- Award Type Toggle ----
+        var pnTypeHTML = {
+            awards:       awardsOnlyHTML,
+            officers:     officerOptHTML,
+            achievements: achievementsHTML,
+            associations: associationsHTML
+        };
+        var pnTypeTitles = {
+            awards:       '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award',
+            officers:     '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title',
+            achievements: '<i class="fas fa-star" style="margin-right:8px;color:#744210"></i>Add Achievement Title',
+            associations: '<i class="fas fa-handshake" style="margin-right:8px;color:#276749"></i>Add Association'
+        };
+        var pnSelectLabelText = { awards: 'Award', officers: 'Title', achievements: 'Title', associations: 'Association' };
         function setAwardType(type) {
+            if (typeof awCloseDropdown === 'function') awCloseDropdown();
             currentType = type;
-            var isOfficer = (type === 'officers');
-            gid('pn-award-type-awards').classList.toggle('pn-active', !isOfficer);
-            gid('pn-award-type-officers').classList.toggle('pn-active', isOfficer);
-            gid('pn-award-modal-title').innerHTML = isOfficer
-                ? '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title'
-                : '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award';
-            gid('pn-award-select').innerHTML = isOfficer ? officerOptHTML : awardOptHTML;
+            var isAssoc = (type === 'associations');
+            gid('pn-award-modal-title').innerHTML = pnTypeTitles[type] || pnTypeTitles.awards;
+            gid('pn-award-select').innerHTML = pnTypeHTML[type] || awardsOnlyHTML;
             gid('pn-award-rank-row').style.display   = 'none';
             gid('pn-award-custom-row').style.display  = 'none';
             gid('pn-award-info-line').innerHTML       = '';
             gid('pn-award-rank-val').value            = '';
+            var lbl = gid('pn-award-select-label');
+            if (lbl) lbl.innerHTML = (pnSelectLabelText[type] || 'Award') + ' <span style="color:#e53e3e">*</span>';
+            var note = gid('pn-award-givenby-note');
+            if (note) note.style.display = isAssoc ? '' : 'none';
+            var chips = gid('pn-award-officer-chips');
+            if (chips) chips.style.display = isAssoc ? 'none' : '';
+            ['awards', 'officers', 'achievements', 'associations'].forEach(function(t) {
+                var btn = gid('pn-award-type-' + t);
+                if (btn) btn.classList.toggle('pn-active', t === type);
+            });
             checkRequired();
         }
-        gid('pn-award-type-awards').addEventListener('click',   function() { setAwardType('awards'); });
-        gid('pn-award-type-officers').addEventListener('click', function() { setAwardType('officers'); });
+        gid('pn-award-type-awards').addEventListener('click',       function() { setAwardType('awards'); });
+        gid('pn-award-type-officers').addEventListener('click',     function() { setAwardType('officers'); });
+        gid('pn-award-type-achievements').addEventListener('click', function() { setAwardType('achievements'); });
+        gid('pn-award-type-associations').addEventListener('click', function() { setAwardType('associations'); });
 
         // ---- Award Picker init ----
         if (gid('pn-award-select')) awInitPicker(gid('pn-award-select'));
@@ -1446,11 +1931,23 @@ if (PnConfig.recError) {
             var opt      = this.options[this.selectedIndex];
             var isLadder = (opt.getAttribute('data-is-ladder') == '1');
             var awardId  = parseInt(opt.getAttribute('data-award-id')) || 0;
-            var isCustom = (opt.text.indexOf('Custom Award') !== -1);
+            var isCustomAward = opt.getAttribute('data-custom-award') === '1' || opt.text === 'Custom Award';
+            var isCustomTitle = opt.getAttribute('data-custom-title') === '1' || opt.text === 'Custom Title';
+            var needsCustomName = isCustomAward || isCustomTitle;
             var optName  = opt.text.toLowerCase();
             var showBadge = isLadder && !pnNoBadgeAwards.some(function(n) { return optName.indexOf(n) !== -1; });
 
-            gid('pn-award-custom-row').style.display  = isCustom ? '' : 'none';
+            gid('pn-award-custom-row').style.display  = needsCustomName ? '' : 'none';
+            var labelEl = gid('pn-award-custom-label');
+            if (labelEl) labelEl.textContent = isCustomTitle ? 'Custom Title Name' : 'Custom Award Name';
+            var nameInput = gid('pn-award-custom-name');
+            if (nameInput) nameInput.placeholder = isCustomTitle ? 'Enter custom title name…' : 'Enter custom award name…';
+            var aliasRow = gid('pn-award-alias-row');
+            if (aliasRow) aliasRow.style.display = isCustomTitle ? '' : 'none';
+            if (!isCustomTitle) {
+                var aliasSel = gid('pn-award-alias');
+                if (aliasSel) aliasSel.value = '0';
+            }
             gid('pn-award-info-line').innerHTML        = showBadge
                 ? '<span class="pn-badge-ladder"><i class="fas fa-chart-line"></i> Ladder Award</span>'
                 : '';
@@ -1471,23 +1968,21 @@ if (PnConfig.recError) {
             var maxRank  = /zodiac/i.test(opt ? opt.textContent : '') ? 12 : 10;
             var held      = playerRanks[awardId] || 0;
             var suggested = Math.min(held + 1, maxRank);
+            var hint = gid('pn-rank-hint');
+            if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
             var html = '';
             for (var i = 1; i <= maxRank; i++) {
-                var cls = 'pn-rank-pill';
-                if (i <= held)       cls += ' pn-rank-held';
-                if (i === suggested) cls += ' pn-rank-suggested';
-                html += '<div class="' + cls + '" data-rank="' + i + '">' + i + '</div>';
+                html += '<div class="pn-rank-pill" data-rank="' + i + '">' + tnRankPillInner('pn', i) + '</div>';
             }
             var pills = gid('pn-rank-pills');
+            pills.dataset.rankHeld = held;
             pills.innerHTML = html;
             selectRankPill(suggested, pills);
         }
         function selectRankPill(rank, container) {
             var c = container || gid('pn-rank-pills');
-            c.querySelectorAll('.pn-rank-pill').forEach(function(p) { p.classList.remove('pn-rank-selected'); });
-            var target = c.querySelector('[data-rank="' + rank + '"]');
-            if (target) {
-                target.classList.add('pn-rank-selected');
+            tnRankPaint(c, 'pn', c.dataset.rankHeld, rank);
+            if (c.querySelector('[data-rank="' + rank + '"]')) {
                 gid('pn-award-rank-val').value = rank;
             }
         }
@@ -1519,7 +2014,7 @@ if (PnConfig.recError) {
             var term = this.value.trim();
             if (term.length < 2) { gid('pn-award-givenby-results').classList.remove('pn-ac-open'); return; }
             givenByTimer = setTimeout(function() {
-                var url = PnConfig.uir + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&q=' + encodeURIComponent(term);
+                var url = PnConfig.uir + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
                 fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                     var results = gid('pn-award-givenby-results');
                     if (!data || !data.length) {
@@ -1530,6 +2025,7 @@ if (PnConfig.recError) {
                                 + escHtml(p.Persona)
                                 + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
                                 + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+                                + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '')
                                 + '</div>';
                         }).join('');
                     }
@@ -1634,11 +2130,13 @@ if (PnConfig.recError) {
             gid('pn-award-givenby-results').classList.remove('pn-ac-open');
             gid('pn-award-givenat-text').value = PnConfig.parkName;
             gid('pn-award-park-id').value = String(PnConfig.parkId);
-            gid('pn-award-kingdom-id').value      = '0';
+            gid('pn-award-kingdom-id').value      = String(PnConfig.kingdomId || 0);
             gid('pn-award-event-id').value        = '0';
             gid('pn-award-givenat-results').classList.remove('pn-ac-open');
             gid('pn-award-custom-name').value     = '';
             gid('pn-award-custom-row').style.display = 'none';
+            if (gid('pn-award-alias')) gid('pn-award-alias').value = '0';
+            if (gid('pn-award-alias-row')) gid('pn-award-alias-row').style.display = 'none';
             gid('pn-award-rank-row').style.display   = 'none';
             gid('pn-award-rank-val').value           = '';
             gid('pn-award-info-line').innerHTML      = '';
@@ -1710,20 +2208,23 @@ if (PnConfig.recError) {
             gid('pn-award-select').value             = '';
             gid('pn-award-rank-val').value           = '';
             gid('pn-award-rank-row').style.display   = 'none';
-            gid('pn-award-rank-pills').innerHTML     = '';
+            gid('pn-rank-pills').innerHTML           = '';
             gid('pn-award-note').value               = '';
             gid('pn-award-char-count').textContent   = '400 characters remaining';
             gid('pn-award-char-count').classList.remove('pn-char-warn');
             gid('pn-award-info-line').innerHTML      = '';
             gid('pn-award-custom-name').value        = '';
             gid('pn-award-custom-row').style.display = 'none';
+            if (gid('pn-award-alias')) gid('pn-award-alias').value = '0';
+            if (gid('pn-award-alias-row')) gid('pn-award-alias-row').style.display = 'none';
             gid('pn-award-givenat-text').value       = PnConfig.parkName;
             gid('pn-award-park-id').value            = String(PnConfig.parkId);
-            gid('pn-award-kingdom-id').value         = '0';
+            gid('pn-award-kingdom-id').value         = String(PnConfig.kingdomId || 0);
             gid('pn-award-event-id').value           = '0';
             gid('pn-award-givenat-results').classList.remove('pn-ac-open');
             checkRequired();
-            gid('pn-award-select').focus();
+            var _pnSelTrigger = gid('pn-award-select') && gid('pn-award-select')._awTrigger;
+            if (_pnSelTrigger) _pnSelTrigger.focus();
         }
         function pnDoSave(onSuccess) {
             var errEl   = gid('pn-award-error');
@@ -1732,9 +2233,9 @@ if (PnConfig.recError) {
             var date    = gid('pn-award-date').value;
 
             errEl.style.display = 'none';
-            if (!awardId) { errEl.textContent = 'Please select an award.';            errEl.style.display = ''; return; }
-            if (!giverId) { errEl.textContent = 'Please select who gave this award.'; errEl.style.display = ''; return; }
-            if (!date)    { errEl.textContent = 'Please enter the award date.';       errEl.style.display = ''; return; }
+            if (!awardId) { errEl.textContent = 'Please select an award.';            errEl.style.display = 'block'; return; }
+            if (!giverId) { errEl.textContent = 'Please select who gave this award.'; errEl.style.display = 'block'; return; }
+            if (!date)    { errEl.textContent = 'Please enter the award date.';       errEl.style.display = 'block'; return; }
 
             var fd = new FormData();
             fd.append('KingdomAwardId', awardId);
@@ -1748,6 +2249,9 @@ if (PnConfig.recError) {
             if (rank) fd.append('Rank', rank);
             var customName = gid('pn-award-custom-name').value.trim();
             if (customName) fd.append('AwardName', customName);
+            var aliasSel = gid('pn-award-alias');
+            var aliasVal = aliasSel && aliasSel.value ? parseInt(aliasSel.value, 10) : 0;
+            if (aliasVal > 0) fd.append('AliasAwardId', String(aliasVal));
 
             var btnSame = gid('pn-award-save-same');
             btnSame.disabled = true;
@@ -1760,7 +2264,7 @@ if (PnConfig.recError) {
                 })
                 .catch(function(err) {
                     errEl.textContent = 'Save failed: ' + err.message;
-                    errEl.style.display = '';
+                    errEl.style.display = 'block';
                 })
                 .finally(function() {
                     btnSame.innerHTML = '<i class="fas fa-plus"></i> Add Award';
@@ -1773,28 +2277,12 @@ if (PnConfig.recError) {
         });
     })();
 
-    pnSortDesc($('#pn-classes-table'), 2, 'numeric');
-    // Classes table: click-to-sort without pagination
-    $('#pn-classes-table thead th').on('click', function() {
-        var $th    = $(this);
-        var $table = $('#pn-classes-table');
-        var col    = $th.index();
-        var stype  = $th.data('sorttype') || 'text';
-        var isAsc  = !$th.hasClass('sort-asc');
-        $table.find('thead th').removeClass('sort-asc sort-desc');
-        $th.addClass(isAsc ? 'sort-asc' : 'sort-desc');
-        var $tbody = $table.find('tbody');
-        var rows   = $tbody.find('tr').get();
-        rows.sort(function(a, b) {
-            var av = $(a).find('td').eq(col).text().trim();
-            var bv = $(b).find('td').eq(col).text().trim();
-            var cmp = stype === 'numeric'
-                ? (parseFloat(av) || 0) - (parseFloat(bv) || 0)
-                : av.localeCompare(bv);
-            return isAsc ? cmp : -cmp;
-        });
-        $.each(rows, function(i, row) { $tbody.append(row); });
-    });
+    // Initialize server-rendered profile tables as DataTables (AJAX tabs init after their fetch).
+    pnInitDataTable('#pn-awards-table',         { order: [[2, 'desc'], [1, 'desc']], filename: 'Awards' });
+    pnInitDataTable('#pn-titles-table',         { order: [[2, 'desc'], [1, 'desc']], filename: 'Titles' });
+    pnInitDataTable('#pn-classes-table',        { order: [[2, 'desc']],              filename: 'Class Levels' });
+    pnInitDataTable('#pn-revoked-awards-table', { order: [[3, 'desc']],              filename: 'Revoked Awards' });
+    pnInitDataTable('#pn-revoked-titles-table', { order: [[3, 'desc']],              filename: 'Revoked Titles' });
 
 });
 
@@ -1810,8 +2298,15 @@ if (typeof KnConfig !== 'undefined') {
 var knMapLoaded = false;
 var knCalLoaded = false;
 var knCalendar  = null;
-var knFilters   = { 'kingdom-event': true, 'park-event': true, 'park-day': false };
+var knFilters   = { 'kingdom-event': true, 'park-event': true, 'calendar-item': true, 'park-day': false };
 var knCalCache  = {}; // raw events keyed by "startISO|endISO" — avoids re-fetching on filter toggle
+
+function orkIsDarkMode() {
+    var attr = document.documentElement.getAttribute('data-theme');
+    if (attr === 'dark') return true;
+    if (attr === 'light') return false;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
 
 function knIsMobile() { return window.innerWidth <= 768; }
 
@@ -1889,8 +2384,9 @@ function knRenderCalendar() {
             if (raw) {
                 // Re-apply filter from cache — no HTTP request needed
                 successCallback(raw.filter(function(e) {
-                    if (e.type === 'park-day') return knFilters['park-day'];
-                    if (e.type === 'park-event') return knFilters['park-event'];
+                    if (e.type === 'park-day')      return knFilters['park-day'];
+                    if (e.type === 'park-event')    return knFilters['park-event'];
+                    if (e.type === 'calendar-item') return knFilters['calendar-item'];
                     return knFilters['kingdom-event'];
                 }));
                 return;
@@ -1900,8 +2396,9 @@ function knRenderCalendar() {
                     if (data && data.status === 0) {
                         knCalCache[cacheKey] = data.events || [];
                         successCallback((data.events || []).filter(function(e) {
-                            if (e.type === 'park-day') return knFilters['park-day'];
-                            if (e.type === 'park-event') return knFilters['park-event'];
+                            if (e.type === 'park-day')      return knFilters['park-day'];
+                            if (e.type === 'park-event')    return knFilters['park-event'];
+                            if (e.type === 'calendar-item') return knFilters['calendar-item'];
                             return knFilters['kingdom-event'];
                         }));
                     } else {
@@ -1912,7 +2409,30 @@ function knRenderCalendar() {
         },
         eventClick: function(info) {
             info.jsEvent.preventDefault();
+            var xp = info.event.extendedProps || {};
+            if (xp.calendarItemId) { knShowCalendarItemOverlay(xp.calendarItemId); return; }
+            if (xp.eventId) { window.evpvOpen(xp.eventId, xp.detailId || 0); return; }
             if (info.event.url) window.location.href = info.event.url;
+        },
+        eventDidMount: function(info) {
+            var rp = info.event.extendedProps && info.event.extendedProps.royalPresence;
+            if (!rp || typeof rp !== 'object') return;
+            var titleEl = info.el.querySelector('.fc-event-title');
+            if (!titleEl) return;
+            // Up to 4 distinct royals: km/kr = kingdom monarch/regent (up), pm/pr = principality (down).
+            [
+                { k: 'km', cls: 'kn-crown-km', tip: 'Kingdom Monarch in Attendance' },
+                { k: 'kr', cls: 'kn-crown-kr', tip: 'Kingdom Regent in Attendance' },
+                { k: 'pm', cls: 'kn-crown-pm', tip: 'Principality Monarch in Attendance' },
+                { k: 'pr', cls: 'kn-crown-pr', tip: 'Principality Regent in Attendance' }
+            ].forEach(function (r) {
+                if (!rp[r.k]) return;
+                var crown = document.createElement('span');
+                crown.className = 'kn-cal-royal-crown ' + r.cls;
+                crown.setAttribute('data-tip', r.tip);
+                crown.innerHTML = ' <i class="fas fa-crown"></i>';
+                titleEl.appendChild(crown);
+            });
         },
         dayCellDidMount: function(info) {
             if (typeof KnConfig === 'undefined' || !KnConfig.loggedIn) return;
@@ -1920,7 +2440,7 @@ function knRenderCalendar() {
             if (!top) return;
             var btn = document.createElement('button');
             btn.className = 'kn-cal-add-btn';
-            btn.title = 'Create event';
+            btn.setAttribute('data-tip', 'Create event');
             btn.innerHTML = '<i class="fas fa-plus"></i>';
             btn.addEventListener('click', function(e) {
                 e.stopPropagation();
@@ -1949,7 +2469,8 @@ function knRenderMapSidebar(loc) {
         : '<a href="' + profileUrl + '"><div class="kn-park-heraldry-placeholder"><i class="fas fa-shield-alt"></i></div></a>';
     var heroHtml = heraldryHtml
         + '<a href="' + profileUrl + '" class="kn-park-hero-name" style="text-decoration:none">' + escHtml(loc.name) + '</a>'
-        + (locLine ? '<div class="kn-park-hero-location"><i class="fas fa-map-marker-alt" style="font-size:10px"></i>' + escHtml(locLine) + '</div>' : '');
+        + (locLine ? '<div class="kn-park-hero-location"><i class="fas fa-map-marker-alt" style="font-size:10px"></i>' + escHtml(locLine) + '</div>' : '')
+        + (loc.prinz && loc.prName ? '<div class="kn-park-hero-location"><i class="fas fa-crown" style="font-size:10px"></i>Principality: ' + escHtml(loc.prName) + '</div>' : '');
 
     var bodyHtml = '';
     if (loc.dir) {
@@ -2008,10 +2529,35 @@ window.knInitMap = async function() {
         // fitBounds zoom used as-is (no pullback)
     }
 
+    // ---- Map legend (Kingdom vs Principality pin colors) ----
+    var knHasPrinz = false;
+    for (var li = 0; li < knMapLocations.length; li++) {
+        if (knMapLocations[li].prinz) { knHasPrinz = true; break; }
+    }
+    var legendCard = document.getElementById('kn-map-sidebar-card');
+    if (legendCard && !document.getElementById('kn-map-legend')) {
+        var legendEl = document.createElement('div');
+        legendEl.id = 'kn-map-legend';
+        legendEl.style.cssText = 'display:flex;flex-wrap:wrap;gap:14px;align-items:center;'
+            + 'margin-top:12px;padding:8px 10px;border-radius:6px;font-size:12px;'
+            + 'background:rgba(127,127,127,0.12);';
+        var legendHtml = '<span style="display:inline-flex;align-items:center;gap:6px">'
+            + '<span style="width:12px;height:12px;border-radius:2px;background:#8B1A1A;border:1px solid #B8860B;display:inline-block"></span>'
+            + 'Kingdom</span>';
+        if (knHasPrinz) {
+            legendHtml += '<span style="display:inline-flex;align-items:center;gap:6px">'
+                + '<span style="width:12px;height:12px;border-radius:2px;background:#2C5F8B;border:1px solid #B8860B;display:inline-block"></span>'
+                + 'Principality</span>';
+        }
+        legendEl.innerHTML = legendHtml;
+        legendCard.appendChild(legendEl);
+    }
+
     var infowindow = new google.maps.InfoWindow();
     for (var i = 0; i < knMapLocations.length; i++) {
         (function(loc) {
-            var pinGlyph = new PinElement({ scale: 0.7, background: '#8B1A1A', borderColor: '#B8860B', glyphColor: '#FFD700' });
+            var pinBg = loc.prinz ? '#2C5F8B' : '#8B1A1A';
+            var pinGlyph = new PinElement({ scale: 0.7, background: pinBg, borderColor: '#B8860B', glyphColor: '#FFD700' });
             var marker = new google.maps.marker.AdvancedMarkerElement({
                 position: new google.maps.LatLng(loc.lat, loc.lng),
                 map: map,
@@ -2079,43 +2625,6 @@ function knAvatarFallback(img, initial) {
     img.parentElement.innerText = initial;
 }
 
-// ---- Load More: card view (reveals next hidden period block) ----
-function knLoadMoreCards(group, btn) {
-    var $wrap = $(btn).closest('.kn-load-more-wrap');
-    var next  = parseInt($wrap.attr('data-next') || '1');
-    var $block = $('#' + group + '-block-' + next);
-    if ($block.length) {
-        $block.show();
-        var newNext = next + 1;
-        $wrap.attr('data-next', newNext);
-        if (!$('#' + group + '-block-' + newNext).length) {
-            $wrap.hide();
-        }
-    } else {
-        $wrap.hide();
-    }
-}
-
-// ---- Load More: list view (appends template rows to table, re-paginates) ----
-function knLoadMoreList(tableId, tmplBase, btn) {
-    var $wrap  = $(btn).closest('.kn-load-more-wrap');
-    var next   = parseInt($wrap.attr('data-next') || '1');
-    var tmpl   = document.getElementById(tmplBase + '-' + next);
-    if (tmpl) {
-        var $tbody = $('#' + tableId + ' tbody');
-        var frag = document.importNode(tmpl.content, true);
-        $(frag.querySelectorAll('tr')).appendTo($tbody);
-        var newNext = next + 1;
-        $wrap.attr('data-next', newNext);
-        knPaginate($('#' + tableId), 1);
-        if (!document.getElementById(tmplBase + '-' + newNext)) {
-            $wrap.hide();
-        }
-    } else {
-        $wrap.hide();
-    }
-}
-
 // ---- Activate a tab by name (used by buttons + links) ----
 function knActivateTab(tab) {
     $('.kn-tab-nav li').removeClass('kn-tab-active');
@@ -2135,6 +2644,51 @@ function knActivateTab(tab) {
     if (tab === 'events' && knCalendar) {
         knCalendar.updateSize();
     }
+    if (tab === 'recommendations') {
+        knLazyLoadRecs();
+    }
+    if (tab === 'parks') {
+        window.orkAdjustDataTables($('#kn-tab-parks'));
+    }
+}
+
+// Lazily fetch the Recommendations tab's inner HTML the first time the tab is
+// activated. Inlining the rows on initial page render was blocking the
+// browser's DOMContentLoaded for 1+ seconds on busy kingdoms.
+function knLazyLoadRecs() {
+    var host = document.getElementById('kn-recs-lazy');
+    if (!host) return;
+    if (host.getAttribute('data-loaded') !== '0') return; // 'loading' or '1' — skip
+    var kid = host.getAttribute('data-kid');
+    if (!kid) return;
+    host.setAttribute('data-loaded', 'loading');
+    fetch('/orkui/index.php?Route=Kingdom/recommendations_panel/' + encodeURIComponent(kid), {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'text/html' }
+    }).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var count = r.headers.get('X-Recs-Count');
+        return r.text().then(function(html) { return { html: html, count: count }; });
+    }).then(function(payload) {
+        host.innerHTML = payload.html;
+        host.setAttribute('data-loaded', '1');
+        // Tab badge: show count if non-zero.
+        var badge = document.getElementById('kn-tab-count-recs');
+        if (badge && payload.count !== null && payload.count !== '0') {
+            badge.textContent = '(' + payload.count + ')';
+            badge.style.display = '';
+        }
+        // Let other initializers (rec filters, datatables, etc.) wire up.
+        if (typeof knInitRecsTab === 'function') {
+            try { knInitRecsTab(host); } catch (e) { console.error('knInitRecsTab failed:', e); }
+        }
+        document.dispatchEvent(new CustomEvent('kn:recs-loaded', { detail: { host: host, count: payload.count } }));
+    }).catch(function(err) {
+        host.setAttribute('data-loaded', '0'); // allow retry
+        host.innerHTML = '<div class="pk-recs-empty" style="color:#fc8181">Could not load recommendations: '
+            + String(err).replace(/[<>&]/g, function(c){ return '&#' + c.charCodeAt(0) + ';'; })
+            + ' &mdash; <a href="#" onclick="knLazyLoadRecs();return false">retry</a></div>';
+    });
 }
 
 // ---- Hero color from heraldry ----
@@ -2180,16 +2734,18 @@ function knApplyHeroColor(img) {
             h /= 6;
         }
 
-        // Clamp: keep hue, boost saturation if washed out, fix lightness for dark bg
-        var finalS = Math.max(s, 0.28);
+        // Clamp: keep hue, boost saturation proportionately for dark mode
+        var _kn_dark = orkIsDarkMode();
+        var finalS = _kn_dark ? Math.min(Math.max(s * 1.15, 0.35), 0.90) : Math.max(s, 0.28);
         var hDeg   = Math.round(h * 360);
         var sPct   = Math.round(finalS * 100);
         document.documentElement.style.setProperty('--kn-hue', hDeg);
         document.documentElement.style.setProperty('--kn-sat', sPct + '%');
         var heroEl = document.querySelector('.kn-hero');
         if (heroEl) {
+            var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_kn_dark ? '22%' : '18%');
             heroEl.style.backgroundColor =
-                'hsl(' + hDeg + ',' + sPct + '%,18%)';
+                'hsl(' + hDeg + ',' + sPct + '%,' + heroL + ')';
         }
     } catch(e) { /* CORS or tainted canvas — keep default green */ }
 }
@@ -2244,6 +2800,81 @@ function knPaginate($table, page) {
     html += '</div>';
     $pg.html(html);
 }
+
+// Readable text color (dark/white) for a #rrggbb background — mirrors
+// CalendarItem::TextColorFor() so client-inserted rows match the server.
+function orkCiTextColor(hex) {
+    hex = String(hex || '').replace('#', '');
+    if (hex.length !== 6) return '#ffffff';
+    var r = parseInt(hex.substr(0, 2), 16), g = parseInt(hex.substr(2, 2), 16), b = parseInt(hex.substr(4, 2), 16);
+    return ((0.299 * r + 0.587 * g + 0.114 * b) / 255) > 0.6 ? '#1a202c' : '#ffffff';
+}
+
+// ---- Shared themed confirmation dialog (drop-in for window.confirm) ----
+// orkConfirm(message, onConfirm, { title, okLabel, danger }). danger defaults to true
+// (red OK button) since the current callers are destructive actions.
+window.orkConfirm = function(message, onConfirm, opts) {
+    opts = opts || {};
+    var overlay = document.getElementById('ork-confirm-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'ork-confirm-overlay';
+        overlay.className = 'ork-confirm-overlay';
+        overlay.innerHTML =
+            '<div class="ork-confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="ork-confirm-title" aria-describedby="ork-confirm-msg">' +
+                '<div class="ork-confirm-title" id="ork-confirm-title"></div>' +
+                '<div class="ork-confirm-msg" id="ork-confirm-msg"></div>' +
+                '<div class="ork-confirm-actions">' +
+                    '<button type="button" class="ork-confirm-cancel" id="ork-confirm-cancel">Cancel</button>' +
+                    '<button type="button" class="ork-confirm-ok" id="ork-confirm-ok">OK</button>' +
+                '</div>' +
+            '</div>';
+        document.body.appendChild(overlay);
+    }
+    var titleEl   = overlay.querySelector('#ork-confirm-title');
+    var msgEl     = overlay.querySelector('#ork-confirm-msg');
+    var okBtn     = overlay.querySelector('#ork-confirm-ok');
+    var cancelBtn = overlay.querySelector('#ork-confirm-cancel');
+
+    titleEl.textContent = opts.title || 'Please confirm';
+    titleEl.style.display = (opts.title === '') ? 'none' : '';
+    msgEl.textContent = message || '';
+    okBtn.textContent = opts.okLabel || 'OK';
+    okBtn.className = 'ork-confirm-ok' + (opts.danger === false ? ' ork-confirm-ok-neutral' : '');
+    // alertMode: informational one-button dialog (no Cancel). Same shell,
+    // no second button — used as a styled replacement for window.alert().
+    cancelBtn.style.display = opts.alertMode ? 'none' : '';
+
+    function cleanup() {
+        overlay.classList.remove('ork-confirm-open');
+        document.body.style.overflow = '';
+        okBtn.onclick = null; cancelBtn.onclick = null; overlay.onclick = null;
+        document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) {
+        if (e.key === 'Escape') cleanup();
+        else if (e.key === 'Enter') { cleanup(); if (typeof onConfirm === 'function') onConfirm(); }
+    }
+    okBtn.onclick     = function() { cleanup(); if (typeof onConfirm === 'function') onConfirm(); };
+    cancelBtn.onclick = function() { cleanup(); };
+    overlay.onclick   = function(e) { if (e.target === overlay) cleanup(); };
+    document.addEventListener('keydown', onKey);
+
+    overlay.classList.add('ork-confirm-open');
+    document.body.style.overflow = 'hidden';
+    setTimeout(function() { okBtn.focus(); }, 30);
+};
+
+// Drop-in styled replacement for window.alert. Same visual as orkConfirm,
+// but one button, no Cancel. Opts: { title, okLabel }.
+window.orkAlert = function(message, opts) {
+    opts = opts || {};
+    opts.alertMode = true;
+    opts.danger    = (opts.danger !== false);
+    if (!opts.title)   opts.title   = 'Heads up';
+    if (!opts.okLabel) opts.okLabel = 'OK';
+    window.orkConfirm(message, null, opts);
+};
 
 function knSortDesc($table, colIndex, sortType) {
     if (!$table.length) return;
@@ -2312,11 +2943,16 @@ $(document).ready(function() {
         if (view === 'list') {
             $('#kn-parks-tiles').hide();
             $('#kn-parks-list-view').show();
+            $('#kn-prinz-tile-sections').hide();
+            $('#kn-prinz-tables').show();
             $('#kn-view-list').addClass('kn-view-active');
             $('#kn-view-tiles').removeClass('kn-view-active');
+            window.orkAdjustDataTables($('#kn-tab-parks'));
         } else {
             $('#kn-parks-list-view').hide();
             $('#kn-parks-tiles').show();
+            $('#kn-prinz-tables').hide();
+            $('#kn-prinz-tile-sections').show();
             $('#kn-view-tiles').addClass('kn-view-active');
             $('#kn-view-list').removeClass('kn-view-active');
         }
@@ -2353,29 +2989,32 @@ $(document).ready(function() {
         knSetEventsView('list');
     }
 
-    // ---- Sortable tables ----
-    $('.kn-sortable').each(function() {
-        var $table = $(this);
-        $table.find('thead th').on('click', function() {
-            var colIndex = $(this).index();
-            var sortType = $(this).data('sorttype') || 'text';
-            var isAsc = !$(this).hasClass('sort-asc');
-            $table.find('thead th').removeClass('sort-asc sort-desc');
-            $(this).addClass(isAsc ? 'sort-asc' : 'sort-desc');
-            var $tbody = $table.find('tbody');
-            var rows = $tbody.find('tr').get();
-            rows.sort(function(a, b) {
-                var aVal = $(a).find('td').eq(colIndex).text().trim();
-                var bVal = $(b).find('td').eq(colIndex).text().trim();
-                var cmp = 0;
-                if (sortType === 'numeric')   cmp = (parseFloat(aVal) || 0) - (parseFloat(bVal) || 0);
-                else if (sortType === 'date') cmp = (new Date(aVal).getTime() || 0) - (new Date(bVal).getTime() || 0);
-                else                          cmp = aVal.localeCompare(bVal);
-                return isAsc ? cmp : -cmp;
-            });
-            $.each(rows, function(i, row) { $tbody.append(row); });
-            knPaginate($table, 1);
+    // ---- Sortable tables (delegated so JS-injected tables like the Players
+    //      list are covered too) ----
+    $(document).on('click', '.kn-sortable thead th', function() {
+        var $th = $(this);
+        var $table = $th.closest('table');
+        var colIndex = $th.index();
+        var sortType = $th.data('sorttype') || 'text';
+        var isAsc = !$th.hasClass('sort-asc');
+        $table.find('thead th').removeClass('sort-asc sort-desc');
+        $th.addClass(isAsc ? 'sort-asc' : 'sort-desc');
+        var $tbody = $table.find('tbody');
+        var rows = $tbody.find('tr').get();
+        rows.sort(function(a, b) {
+            var aVal = $(a).find('td').eq(colIndex).text().trim();
+            var bVal = $(b).find('td').eq(colIndex).text().trim();
+            var cmp = 0;
+            if (sortType === 'numeric')   cmp = (parseFloat(aVal) || 0) - (parseFloat(bVal) || 0);
+            else if (sortType === 'date') cmp = (new Date(aVal).getTime() || 0) - (new Date(bVal).getTime() || 0);
+            else                          cmp = aVal.localeCompare(bVal);
+            return isAsc ? cmp : -cmp;
         });
+        $.each(rows, function(i, row) { $tbody.append(row); });
+        // The year-grouped Players list shows every member per year section
+        // (no pagination) — sorting only reorders it. Other kn-sortable tables
+        // (e.g. Events) keep their pager.
+        if (!$table.hasClass('kn-year-table')) knPaginate($table, 1);
     });
 
     // ---- Pagination event delegation ----
@@ -2408,31 +3047,58 @@ $(document).ready(function() {
         }
     });
 
-    // ---- Players: search (filters all .kn-player-card across all periods) ----
+    // ---- Players: search across every year section (cards + list rows) ----
+    // The DOM is fully populated up-front; content-visibility:auto on each year
+    // section keeps off-screen ones cheap. Search filters in place and force-opens
+    // any year section that has matches.
     $('#kn-player-search').on('input', function() {
         var q = $(this).val().trim().toLowerCase();
+        var $roots = $('#kn-players-cards, #kn-players-list');
         if (q === '') {
-            $('.kn-period-block').show();
-            $('.kn-player-card').show();
-        } else {
-            // Show all period blocks first so cards inside are visible/searchable
-            $('.kn-period-block').show();
-            $('.kn-player-card').each(function() {
-                var name = $(this).find('.kn-player-name').text().toLowerCase();
-                $(this).toggle(name.indexOf(q) !== -1);
-            });
-            // Hide period blocks with no visible cards
-            $('.kn-period-block').each(function() {
-                var hasVisible = $(this).find('.kn-player-card:visible').length > 0;
-                $(this).toggle(hasVisible);
-            });
+            $roots.find('.kn-player-card, .kn-year-table tbody tr').show();
+            $roots.find('.kn-year-section').show();
+            return;
         }
+        $roots.each(function() {
+            var $root = $(this);
+            $root.find('.kn-player-card').each(function() {
+                var name = $(this).find('.kn-player-name').text().toLowerCase();
+                var mn   = ($(this).attr('data-mundane-name') || '').toLowerCase();
+                $(this).toggle(name.indexOf(q) !== -1 || mn.indexOf(q) !== -1);
+            });
+            $root.find('.kn-year-table tbody tr').each(function() {
+                var persona = (this.cells[0] ? this.cells[0].textContent : '').toLowerCase();
+                var mn      = ($(this).attr('data-mundane-name') || '').toLowerCase();
+                $(this).toggle(persona.indexOf(q) !== -1 || mn.indexOf(q) !== -1);
+            });
+            $root.find('.kn-year-section').each(function() {
+                var hasVisible =
+                    $(this).find('.kn-player-card:visible, .kn-year-table tbody tr:visible').length > 0;
+                $(this).toggle(hasVisible);
+                if (hasVisible) this.open = true;
+            });
+        });
     });
 
     // ---- Default sort + initial pagination ----
 
-    knSortAsc($('#kn-parks-table'), 0, 'text');
-    knPaginate($('#kn-parks-table'), 1);
+    // Parks + principality tables → standard DataTables toolbar.
+    // Capture the whole set in ONE pass, before any init runs. DataTables'
+    // scrollX clone tables copy the source table's kn-parks-dt class, so a
+    // second selector pass after the first table initialises would match
+    // those clones and try to re-initialise them ("Cannot reinitialise
+    // table" alert). Selecting up-front — while nothing is a DataTable yet —
+    // means the collection holds only the real tables.
+    $('.kn-parks-dt').each(function() {
+        var lastCol = this.tHead ? this.tHead.rows[0].cells.length - 1 : 0;
+        var hasGear = $(this).find('thead th.no-export').length > 0;
+        var isMain  = this.id === 'kn-parks-table';
+        window.orkInitDataTable($(this), {
+            order: [[0, 'asc']],
+            csvName: isMain ? 'Kingdom Parks' : ($(this).data('csvname') || 'Parks'),
+            columnDefs: hasGear ? [{ targets: lastCol, orderable: false, searchable: false }] : []
+        });
+    });
 
     knSortAsc($('#kn-events-table'), 0, 'date');
     knPaginate($('#kn-events-table'), 1);
@@ -2440,16 +3106,59 @@ $(document).ready(function() {
     // [TOURNAMENTS HIDDEN] knSortDesc($('#kn-tournaments-table'), 0, 'date');
     // [TOURNAMENTS HIDDEN] knPaginate($('#kn-tournaments-table'), 1);
 
-    knPaginate($('#kn-players-table'), 1);
-
 });
 (function() {
+    if (typeof KnConfig === 'undefined') return;
     if (!document.getElementById('kn-award-overlay')) return;
     var UIR_JS = KnConfig.uir;
     var SEARCH_URL = KnConfig.httpService + 'Search/SearchService.php';
     var KINGDOM_ID = KnConfig.kingdomId;
     var awardOptHTML = KnConfig.awardOptHTML;
     var officerOptHTML = KnConfig.officerOptHTML;
+
+    // Split awardOptHTML into: awards-only (Ladder+Custom+Other), achievements, associations
+    var awardsOnlyHTML, achievementsHTML, associationsHTML;
+    (function() {
+        var tmp = document.createElement('select');
+        tmp.innerHTML = awardOptHTML;
+        var aw  = '<option value="">Select award...</option>';
+        var ach = '<option value="">Select title...</option>';
+        var asc = '<option value="">Select association...</option>';
+        Array.from(tmp.children).forEach(function(child) {
+            if (child.tagName === 'OPTION') {
+                if (child.value === '') return;
+                aw += child.outerHTML;
+                // "Custom Title" also belongs under Achievement Titles — surface it at the very
+                // top of that dropdown (it precedes the title optgroups in document order).
+                if (child.getAttribute('data-custom-title') === '1') ach += child.outerHTML;
+            } else if (child.tagName === 'OPTGROUP') {
+                var lbl = child.label;
+                if (lbl === 'Knighthoods' || lbl === 'Masterhoods' || lbl === 'Paragons' || lbl === 'Noble Titles') {
+                    ach += child.outerHTML;
+                } else if (lbl === 'Associate Titles') {
+                    asc += child.outerHTML;
+                } else {
+                    aw += child.outerHTML;
+                }
+            }
+        });
+        awardsOnlyHTML = aw; achievementsHTML = ach; associationsHTML = asc;
+    })();
+
+    // Hide type buttons for empty buckets
+    (function() {
+        var tmp = document.createElement('select');
+        tmp.innerHTML = achievementsHTML;
+        var hasAch = Array.from(tmp.options).some(function(o) { return o.value !== ''; });
+        var btnAch = gid('kn-award-type-achievements');
+        if (btnAch) btnAch.style.display = hasAch ? '' : 'none';
+
+        tmp.innerHTML = associationsHTML;
+        var hasAsc = Array.from(tmp.options).some(function(o) { return o.value !== ''; });
+        var btnAsc = gid('kn-award-type-associations');
+        if (btnAsc) btnAsc.style.display = hasAsc ? '' : 'none';
+    })();
+
     var currentType = 'awards';
     var givenByTimer, givenAtTimer, playerTimer;
     var knPlayerRanks = {};
@@ -2465,23 +3174,46 @@ $(document).ready(function() {
         gid('kn-award-save-same').disabled = !ok;
     }
 
+    var knTypeHTML = {
+        awards:       awardsOnlyHTML,
+        officers:     officerOptHTML,
+        achievements: achievementsHTML,
+        associations: associationsHTML
+    };
+    var knTypeTitles = {
+        awards:       '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award',
+        officers:     '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title',
+        achievements: '<i class="fas fa-star" style="margin-right:8px;color:#744210"></i>Add Achievement Title',
+        associations: '<i class="fas fa-handshake" style="margin-right:8px;color:#276749"></i>Add Association'
+    };
+    var knSelectLabelText = { awards: 'Award', officers: 'Title', achievements: 'Title', associations: 'Association' };
     function setAwardType(type) {
+        if (typeof awCloseDropdown === 'function') awCloseDropdown();
         currentType = type;
-        var isOfficer = type === 'officers';
-        gid('kn-award-modal-title').innerHTML = isOfficer
-            ? '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title'
-            : '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award';
-        gid('kn-award-select').innerHTML = isOfficer ? officerOptHTML : awardOptHTML;
+        var isAssoc = (type === 'associations');
+        gid('kn-award-modal-title').innerHTML = knTypeTitles[type] || knTypeTitles.awards;
+        gid('kn-award-select').innerHTML = knTypeHTML[type] || awardsOnlyHTML;
         gid('kn-award-rank-row').style.display   = 'none';
+        gid('kn-award-custom-row').style.display = 'none';
         gid('kn-award-rank-val').value           = '';
         gid('kn-award-info-line').innerHTML      = '';
-        gid('kn-award-type-awards').classList.toggle('kn-active', !isOfficer);
-        gid('kn-award-type-officers').classList.toggle('kn-active', isOfficer);
+        var lbl = gid('kn-award-select-label');
+        if (lbl) lbl.innerHTML = (knSelectLabelText[type] || 'Award') + ' <span style="color:#e53e3e">*</span>';
+        var note = gid('kn-award-givenby-note');
+        if (note) note.style.display = isAssoc ? '' : 'none';
+        var chips = gid('kn-award-officer-chips');
+        if (chips) chips.style.display = isAssoc ? 'none' : '';
+        ['awards', 'officers', 'achievements', 'associations'].forEach(function(t) {
+            var btn = gid('kn-award-type-' + t);
+            if (btn) btn.classList.toggle('kn-active', t === type);
+        });
         checkRequired();
     }
 
-    gid('kn-award-type-awards').addEventListener('click',   function() { setAwardType('awards'); });
-    gid('kn-award-type-officers').addEventListener('click', function() { setAwardType('officers'); });
+    gid('kn-award-type-awards').addEventListener('click',       function() { setAwardType('awards'); });
+    gid('kn-award-type-officers').addEventListener('click',     function() { setAwardType('officers'); });
+    gid('kn-award-type-achievements').addEventListener('click', function() { setAwardType('achievements'); });
+    gid('kn-award-type-associations').addEventListener('click', function() { setAwardType('associations'); });
 
     function buildRankPills(awardId) {
         var row   = gid('kn-award-rank-row');
@@ -2495,39 +3227,47 @@ $(document).ready(function() {
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var hint = gid('kn-rank-hint');
+        if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = knPlayerRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
+        wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type      = 'button';
             pill.className = 'kn-rank-pill';
-            if (r <= held)       pill.className += ' kn-rank-held';
-            if (r === suggested) pill.className += ' kn-rank-suggested';
-            pill.textContent = r;
+            pill.innerHTML = tnRankPillInner('kn', r);
             pill.dataset.rank = r;
-            pill.addEventListener('click', (function(rank, el) {
+            pill.addEventListener('click', (function(rank) {
                 return function() {
-                    document.querySelectorAll('#kn-rank-pills .kn-rank-pill').forEach(function(p) { p.classList.remove('kn-rank-selected'); });
-                    el.classList.add('kn-rank-selected');
                     input.value = rank;
+                    tnRankPaint(wrap, 'kn', held, rank);
                 };
-            })(r, pill));
+            })(r));
             wrap.appendChild(pill);
         }
-        var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
-        if (suggestedPill) { suggestedPill.classList.add('kn-rank-selected'); input.value = suggested; }
+        tnRankPaint(wrap, 'kn', held, suggested);
+        input.value = suggested;
     }
 
     if (gid('kn-award-select')) awInitPicker(gid('kn-award-select'));
     gid('kn-award-select').addEventListener('change', function() {
         var awardId = this.value;
-        var isCustom = this.options[this.selectedIndex] && this.options[this.selectedIndex].text.toLowerCase().indexOf('custom') >= 0;
-        gid('kn-award-custom-row').style.display = isCustom ? '' : 'none';
+        var opt = this.options[this.selectedIndex];
+        var isCustomAward = opt && (opt.getAttribute('data-custom-award') === '1' || opt.text === 'Custom Award');
+        var isCustomTitle = opt && (opt.getAttribute('data-custom-title') === '1' || opt.text === 'Custom Title');
+        gid('kn-award-custom-row').style.display = (isCustomAward || isCustomTitle) ? '' : 'none';
+        var labelEl = gid('kn-award-custom-label');
+        if (labelEl) labelEl.textContent = isCustomTitle ? 'Custom Title Name' : 'Custom Award Name';
+        var nameInput = gid('kn-award-custom-name');
+        if (nameInput) nameInput.placeholder = isCustomTitle ? 'Enter custom title name...' : 'Enter custom award name...';
+        var aliasRow = gid('kn-award-alias-row');
+        if (aliasRow) aliasRow.style.display = isCustomTitle ? '' : 'none';
+        if (!isCustomTitle) { var aliasSel = gid('kn-award-alias'); if (aliasSel) aliasSel.value = '0'; }
         buildRankPills(awardId);
         var infoEl = gid('kn-award-info-line');
         if (awardId) {
-            var opt = this.querySelector('option[value="' + awardId + '"]');
             infoEl.innerHTML = opt && opt.getAttribute('data-is-ladder') === '1'
                 ? '<span class="kn-badge-ladder"><i class="fas fa-layer-group"></i> Ladder Award</span>'
                 : '';
@@ -2596,14 +3336,15 @@ $(document).ready(function() {
         if (term.length < 2) { gid('kn-award-givenby-results').classList.remove('kn-ac-open'); return; }
         clearTimeout(givenByTimer);
         givenByTimer = setTimeout(function() {
-            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'KingdomAjax/playersearch/' + KINGDOM_ID + '&scope=all&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('kn-award-givenby-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
+                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+                            + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
                     }).join('')
                     : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
                 el.classList.add('kn-ac-open');
@@ -2624,6 +3365,9 @@ $(document).ready(function() {
         var term = this.value.trim();
         if (term.length < 2) { gid('kn-award-givenat-results').classList.remove('kn-ac-open'); return; }
         clearTimeout(givenAtTimer);
+        gid('kn-award-park-id').value    = '0';
+        gid('kn-award-kingdom-id').value = '0';
+        gid('kn-award-event-id').value   = '0';
         givenAtTimer = setTimeout(function() {
             var today = new Date().toISOString().slice(0, 10);
             var url = SEARCH_URL + '?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=6';
@@ -2677,6 +3421,7 @@ $(document).ready(function() {
         gid('kn-award-player-results').classList.remove('kn-ac-open');
         gid('kn-award-note').value               = '';
         gid('kn-award-char-count').textContent   = '400 characters remaining';
+        gid('kn-award-char-count').classList.remove('kn-char-warn');
         gid('kn-award-givenby-text').value       = '';
         gid('kn-award-givenby-id').value         = '';
         gid('kn-award-givenby-results').classList.remove('kn-ac-open');
@@ -2832,9 +3577,12 @@ $(document).ready(function() {
         gid('kn-rank-pills').innerHTML           = '';
         gid('kn-award-note').value               = '';
         gid('kn-award-char-count').textContent   = '400 characters remaining';
+        gid('kn-award-char-count').classList.remove('kn-char-warn');
         gid('kn-award-info-line').innerHTML      = '';
         gid('kn-award-custom-name').value        = '';
         gid('kn-award-custom-row').style.display = 'none';
+        if (gid('kn-award-alias')) gid('kn-award-alias').value = '0';
+        if (gid('kn-award-alias-row')) gid('kn-award-alias-row').style.display = 'none';
         checkRequired();
     }
     function knDoSave(onSuccess) {
@@ -2845,10 +3593,10 @@ $(document).ready(function() {
         var date     = gid('kn-award-date').value;
 
         errEl.style.display = 'none';
-        if (!playerId) { errEl.textContent = 'Please select a player.';             errEl.style.display = ''; return; }
-        if (!awardId)  { errEl.textContent = 'Please select an award.';             errEl.style.display = ''; return; }
-        if (!giverId)  { errEl.textContent = 'Please select who gave this award.';  errEl.style.display = ''; return; }
-        if (!date)     { errEl.textContent = 'Please enter the award date.';        errEl.style.display = ''; return; }
+        if (!playerId) { errEl.textContent = 'Please select a player.';             errEl.style.display = 'block'; return; }
+        if (!awardId)  { errEl.textContent = 'Please select an award.';             errEl.style.display = 'block'; return; }
+        if (!giverId)  { errEl.textContent = 'Please select who gave this award.';  errEl.style.display = 'block'; return; }
+        if (!date)     { errEl.textContent = 'Please enter the award date.';        errEl.style.display = 'block'; return; }
 
         var fd = new FormData();
         fd.append('KingdomAwardId', awardId);
@@ -2862,6 +3610,9 @@ $(document).ready(function() {
         if (rank) fd.append('Rank', rank);
         var customName = gid('kn-award-custom-name') ? gid('kn-award-custom-name').value.trim() : '';
         if (customName) fd.append('AwardName', customName);
+        var aliasSel = gid('kn-award-alias');
+        var aliasVal = aliasSel && aliasSel.value ? parseInt(aliasSel.value, 10) : 0;
+        if (aliasVal > 0) fd.append('AliasAwardId', String(aliasVal));
 
         var btnNew  = gid('kn-award-save-new');
         var btnSame = gid('kn-award-save-same');
@@ -2877,7 +3628,7 @@ $(document).ready(function() {
             })
             .catch(function(err) {
                 errEl.textContent = 'Save failed: ' + err.message;
-                errEl.style.display = '';
+                errEl.style.display = 'block';
             })
             .finally(function() {
                 btnNew.innerHTML  = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player';
@@ -2910,6 +3661,7 @@ $(document).ready(function() {
     });
 })();
 (function() {
+    if (typeof KnConfig === 'undefined') return;
     if (!document.getElementById('kn-rec-overlay')) return;
     var UIR_JS     = KnConfig.uir;
     var KINGDOM_ID = KnConfig.kingdomId;
@@ -2937,39 +3689,42 @@ $(document).ready(function() {
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var hint = gid('kn-rec-rank-hint');
+        if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = knRecRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
+        wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type = 'button';
-            pill.className = 'pk-rank-pill';
-            if (r <= held)       pill.className += ' pk-rank-held';
-            if (r === suggested) pill.className += ' pk-rank-suggested';
-            pill.textContent = r;
+            pill.className = 'kn-rank-pill';
+            pill.innerHTML = tnRankPillInner('kn', r);
             pill.dataset.rank = r;
-            pill.addEventListener('click', (function(rank, el) {
+            pill.addEventListener('click', (function(rank) {
                 return function() {
-                    wrap.querySelectorAll('.pk-rank-pill').forEach(function(p) { p.classList.remove('pk-rank-selected'); });
-                    el.classList.add('pk-rank-selected');
                     input.value = rank;
+                    tnRankPaint(wrap, 'kn', held, rank);
                 };
-            })(r, pill));
+            })(r));
             wrap.appendChild(pill);
         }
-        var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
-        if (suggestedPill) { suggestedPill.classList.add('pk-rank-selected'); input.value = suggested; }
+        tnRankPaint(wrap, 'kn', held, suggested);
+        input.value = suggested;
     }
 
-    if (gid('kn-rec-award-select')) awInitPicker(gid('kn-rec-award-select'));
-    gid('kn-rec-award-select').addEventListener('change', function() {
-        buildRecRankPills(this.value);
-        checkRequired();
-        var aid = parseInt(this.options[this.selectedIndex].getAttribute('data-award-id') || 0);
-        var desc = AWARD_DESCRIPTIONS[aid] || '';
-        var el = gid('kn-rec-award-desc');
-        if (el) { el.textContent = desc; el.style.display = desc ? '' : 'none'; }
-    });
+    if (gid('kn-rec-award-select')) {
+        gid('kn-rec-award-select').querySelectorAll('optgroup[label="Associate Titles"]').forEach(function(og) { og.parentNode.removeChild(og); });
+        awInitPicker(gid('kn-rec-award-select'));
+        gid('kn-rec-award-select').addEventListener('change', function() {
+            buildRecRankPills(this.value);
+            checkRequired();
+            var aid = parseInt(this.options[this.selectedIndex].getAttribute('data-award-id') || 0);
+            var desc = AWARD_DESCRIPTIONS[aid] || '';
+            var el = gid('kn-rec-award-desc');
+            if (el) { el.textContent = desc; el.style.display = desc ? '' : 'none'; }
+        });
+    }
 
     gid('kn-rec-player-text').addEventListener('input', function() {
         gid('kn-rec-player-id').value = '';
@@ -3072,12 +3827,12 @@ $(document).ready(function() {
                     setTimeout(function() { gid('kn-rec-success').style.display = 'none'; }, 3000);
                 } else {
                     errEl.textContent = data.error || 'Save failed.';
-                    errEl.style.display = '';
+                    errEl.style.display = 'block';
                 }
             })
             .catch(function() {
                 errEl.textContent = 'Request failed. Please try again.';
-                errEl.style.display = '';
+                errEl.style.display = 'block';
             })
             .finally(function() {
                 btn.disabled = false;
@@ -3096,14 +3851,117 @@ $(document).ready(function() {
         el.textContent = msg; el.style.display = '';
     }
 
+    var CI_CREATE_URL = KnConfig.uir + 'CalendarItemAjax/create';
+    var CI_UPDATE_URL = KnConfig.uir + 'CalendarItemAjax/update';
+    var CI_DELETE_URL = KnConfig.uir + 'CalendarItemAjax/delete';
+    var CI_GET_URL    = KnConfig.uir + 'CalendarItemAjax/get/';
+    var RSVP_SET_URL  = KnConfig.uir + 'EventRsvpAjax/set';
+    var RSVP_OFF_URL  = KnConfig.uir + 'EventRsvpAjax/withdraw';
+    var knCiEditingId = 0; // 0 = create mode; >0 = editing existing item
+    var knCiFlatStart = null, knCiFlatEnd = null;
+
+    function knCiResetForm(presetDate) {
+        document.getElementById('kn-ci-park-name').value = '';
+        document.getElementById('kn-ci-park-id').value   = '';
+        document.getElementById('kn-ci-description').value = '';
+        document.getElementById('kn-ci-allday').checked = false;
+        var off = document.getElementById('kn-ci-officer-only'); if (off) off.checked = false;
+        var loc = document.getElementById('kn-ci-locals-only');  if (loc) loc.checked = false;
+        knCiSetColor('#64748b');
+        knCiRebuildPickers(presetDate || '', '', false);
+    }
+
+    // Select a palette swatch and stash the chosen hex in the hidden input.
+    function knCiSetColor(color) {
+        var input = document.getElementById('kn-ci-color');
+        if (input) input.value = color || '#64748b';
+        var box = document.getElementById('kn-ci-swatches');
+        if (!box) return;
+        box.querySelectorAll('.ci-swatch').forEach(function(b) {
+            b.classList.toggle('selected', b.getAttribute('data-color') === (color || '#64748b'));
+        });
+    }
+
+    function knCiRebuildPickers(startVal, endVal, allDay) {
+        if (knCiFlatStart) { knCiFlatStart.destroy(); knCiFlatStart = null; }
+        if (knCiFlatEnd)   { knCiFlatEnd.destroy();   knCiFlatEnd   = null; }
+        var fmt = allDay ? 'Y-m-d' : 'Y-m-d H:i';
+        var opts = { enableTime: !allDay, dateFormat: fmt, altInput: true, altFormat: allDay ? 'F j, Y' : 'F j, Y h:i K', minuteIncrement: 15, time_24hr: false };
+        // Track the previous start so onChange can slide the end by the same
+        // delta, preserving the item's duration — same rule as the event modal.
+        var _prevStart = null;
+        knCiFlatStart = flatpickr('#kn-ci-start', Object.assign({}, opts, {
+            onReady: function(sel) { _prevStart = sel[0] || null; },
+            onChange: function(sel) {
+                if (!sel[0] || !knCiFlatEnd) return;
+                var endDate = knCiFlatEnd.selectedDates[0];
+                if (endDate && _prevStart) {
+                    var offset = endDate.getTime() - _prevStart.getTime();
+                    knCiFlatEnd.setDate(new Date(sel[0].getTime() + offset), true);
+                } else if (!endDate) {
+                    knCiFlatEnd.setDate(new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000)), true);
+                }
+                _prevStart = sel[0];
+            }
+        }));
+        knCiFlatEnd = flatpickr('#kn-ci-end', opts);
+        if (startVal) knCiFlatStart.setDate(startVal, true);
+        if (endVal)   knCiFlatEnd.setDate(endVal, true);
+        // Sync the cache to the initial start value (setDate() does not fire
+        // onChange when called with `true`).
+        _prevStart = knCiFlatStart.selectedDates[0] || null;
+    }
+
+    function knGetModalType() {
+        var r = document.querySelector('input[name="kn-emod-type"]:checked');
+        return r ? r.value : 'event';
+    }
+
+    function knApplyModalType() {
+        var t = knGetModalType();
+        var isCi = (t === 'calendar-item');
+        document.querySelectorAll('.kn-emod-event-only').forEach(function(el) { el.style.display = isCi ? 'none' : ''; });
+        document.querySelectorAll('.kn-emod-ci-only').forEach(function(el) { el.style.display = isCi ? '' : 'none'; });
+        var dbtn = document.getElementById('kn-emod-draft-btn');
+        if (dbtn) dbtn.style.display = isCi ? 'none' : '';
+        document.getElementById('kn-emod-go-label').textContent = isCi ? (knCiEditingId > 0 ? 'Save Calendar Item' : 'Create Calendar Item') : 'Create Event';
+        var title = document.getElementById('kn-emod-title');
+        title.innerHTML = isCi
+            ? '<i class="fas fa-calendar-day" style="margin-right:8px;color:#64748b"></i>' + (knCiEditingId > 0 ? 'Edit Calendar Item' : 'New Calendar Item')
+            : '<i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event';
+        knUpdateGoBtn();
+        if (isCi && !knCiFlatStart) {
+            var presetDate = document.getElementById('kn-event-modal').dataset.presetDate || '';
+            knCiResetForm(presetDate);
+        }
+    }
+
+    function knUpdateGoBtn() {
+        var t = knGetModalType();
+        var ok;
+        if (t === 'calendar-item') {
+            ok = !!document.getElementById('kn-event-name').value.trim()
+              && !!document.getElementById('kn-ci-start').value
+              && !!document.getElementById('kn-ci-end').value;
+        } else {
+            ok = !!document.getElementById('kn-event-name').value.trim();
+        }
+        document.getElementById('kn-emod-go-btn').disabled = !ok;
+        var dbtn = document.getElementById('kn-emod-draft-btn');
+        if (dbtn) dbtn.disabled = !ok;
+    }
+
     window.knOpenEventModal = function(dateStr) {
         var modal = document.getElementById('kn-event-modal');
         modal.dataset.presetDate = dateStr || '';
+        knCiEditingId = 0;
+        // Default to Amtgard Event on fresh open.
+        var typeRadios = document.querySelectorAll('input[name="kn-emod-type"]');
+        typeRadios.forEach(function(r) { r.disabled = false; r.checked = (r.value === 'event'); });
         document.getElementById('kn-event-name').value     = '';
         document.getElementById('kn-event-park-name').value = '';
         document.getElementById('kn-event-park-id').value   = '';
         document.getElementById('kn-emod-feedback').style.display = 'none';
-        document.getElementById('kn-emod-go-btn').disabled  = true;
         var dateRow  = document.getElementById('kn-emod-date-row');
         var dateText = document.getElementById('kn-emod-date-text');
         if (dateRow && dateText) {
@@ -3115,6 +3973,8 @@ $(document).ready(function() {
                 dateRow.style.display = 'none';
             }
         }
+        knCiResetForm(dateStr || '');
+        knApplyModalType();
         modal.classList.add('kn-emod-open');
         document.body.style.overflow = 'hidden';
         setTimeout(function() { document.getElementById('kn-event-name').focus(); }, 50);
@@ -3125,13 +3985,16 @@ $(document).ready(function() {
         document.body.style.overflow = '';
     };
 
-    window.knCreateEvent = function() {
+    window.knCreateEvent = function(statusOverride) {
+        if (knGetModalType() === 'calendar-item') return knSubmitCalendarItem();
         var name   = document.getElementById('kn-event-name').value.trim();
         var parkId = parseInt(document.getElementById('kn-event-park-id').value) || 0;
         if (!name) return;
         var btn = document.getElementById('kn-emod-go-btn');
-        btn.disabled = true;
-        $.post(CREATE_URL, { Name: name, KingdomId: KnConfig.kingdomId, ParkId: parkId },
+        var dbtn = document.getElementById('kn-emod-draft-btn');
+        btn.disabled = true; if (dbtn) dbtn.disabled = true;
+        var status = (statusOverride === 'draft') ? 'draft' : 'published';
+        $.post(CREATE_URL, { Name: name, KingdomId: KnConfig.kingdomId, ParkId: parkId, Status: status },
             function(r) {
                 if (r && r.status === 0) {
                     var presetDate = document.getElementById('kn-event-modal').dataset.presetDate || '';
@@ -3141,39 +4004,302 @@ $(document).ready(function() {
                     window.location.href = url;
                 } else {
                     knEvFeedback((r && r.error) ? r.error : 'Failed to create event.');
-                    btn.disabled = false;
+                    btn.disabled = false; if (dbtn) dbtn.disabled = false;
                 }
             }, 'json'
-        ).fail(function() { knEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
+        ).fail(function() { knEvFeedback('Request failed. Please try again.'); btn.disabled = false; if (dbtn) dbtn.disabled = false; });
+    };
+
+    // Reload while preserving the Events tab (reuses the ?tab= auto-activation on load).
+    function knReloadToEventsTab() {
+        try {
+            var u = new URL(window.location.href);
+            u.searchParams.set('tab', 'events');
+            window.location.href = u.toString();
+        } catch (e) {
+            window.location.reload();
+        }
+    }
+
+    function knCiEsc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function knBumpEventsTabCount(delta) {
+        var cnt = document.querySelector('.kn-tab-nav li[data-kntab="events"] .kn-tab-count');
+        if (!cnt) return;
+        var m = cnt.textContent.match(/\d+/);
+        var n = (m ? parseInt(m[0], 10) : 0) + delta;
+        cnt.textContent = '(' + (n < 0 ? 0 : n) + ')';
+    }
+
+    // Insert a freshly-created calendar item into the list view in place (no page reload),
+    // mirroring the server-rendered row markup so rapid entry never bounces off the tab.
+    // Build the 4 <td> cells for a kingdom calendar-item row (shared by insert + edit).
+    function knCiRowCellsHtml(name, parkName, startVal, officerOnly, localsOnly, color) {
+        var dateCell = '<span style="color:#a0aec0">—</span>';
+        var sd = String(startVal || '').substring(0, 10);
+        if (sd && sd !== '0000-00-00') {
+            var d = new Date(sd + 'T00:00:00');
+            if (!isNaN(d.getTime())) dateCell = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+        var offPill = officerOnly ? ' <span class="kn-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span>' : '';
+        var locPill = localsOnly ? ' <span class="kn-locals-pill" data-tip="Locals-only — hidden from out-of-area players"><i class="fas fa-map-marker-alt"></i></span>' : '';
+        color = color || '#64748b';
+        var pillStyle = ' style="background:' + color + ';border-color:' + color + ';color:' + orkCiTextColor(color) + '"';
+        return '<td class="kn-col-nowrap">' + dateCell + '</td>' +
+            '<td class="kn-col-nowrap"><span class="kn-ci-pill"' + pillStyle + '><i class="fas fa-calendar-day"></i> Calendar Item</span>' + offPill + locPill + ' ' + knCiEsc(name) + '</td>' +
+            '<td>' + knCiEsc(parkName) + '</td>' +
+            '<td colspan="2" style="text-align:right;color:#a0aec0;padding-right:8px;">—</td>';
+    }
+
+    function knInsertCalendarItemRow(id, name, parkName, startVal, officerOnly, localsOnly, color) {
+        var table = document.getElementById('kn-events-table');
+        if (!table) return;
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        if (table.style.display === 'none') table.style.display = '';
+        var empty = document.getElementById('kn-events-empty');
+        if (empty) empty.style.display = 'none';
+
+        var tr = document.createElement('tr');
+        tr.className = 'kn-row-link' + (officerOnly ? ' kn-officer-only' : '') + (localsOnly ? ' kn-locals-only' : '');
+        tr.setAttribute('data-type', 'calendar-item');
+        tr.setAttribute('onclick', 'knShowCalendarItemOverlay(' + id + ')');
+        tr.innerHTML = knCiRowCellsHtml(name, parkName, startVal, officerOnly, localsOnly, color);
+
+        // Honor the active "Calendar Items" filter toggle.
+        if (typeof knFilters !== 'undefined' && knFilters['calendar-item'] === false) tr.style.display = 'none';
+
+        tbody.insertBefore(tr, tbody.firstChild);
+        knBumpEventsTabCount(1);
+        if (window.jQuery) knPaginate(jQuery('#kn-events-table'), 1);
+    }
+
+    // Update an existing kingdom calendar-item row in place. Returns false if the row
+    // isn't present (e.g. it was filtered out of the rendered window) so the caller can reload.
+    function knUpdateCalendarItemRow(id, name, parkName, startVal, officerOnly, localsOnly, color) {
+        var row = document.querySelector('#kn-events-table tr[onclick="knShowCalendarItemOverlay(' + id + ')"]');
+        if (!row) return false;
+        // The edit form clears the park-name field, so when it's blank keep whatever the
+        // row already shows (park unchanged) rather than wiping it.
+        if (!parkName && row.children[2]) parkName = row.children[2].textContent.trim();
+        row.className = 'kn-row-link' + (officerOnly ? ' kn-officer-only' : '') + (localsOnly ? ' kn-locals-only' : '');
+        row.innerHTML = knCiRowCellsHtml(name, parkName, startVal, officerOnly, localsOnly, color);
+        if (typeof knFilters !== 'undefined' && knFilters['calendar-item'] === false) row.style.display = 'none';
+        return true;
+    }
+
+    function knSubmitCalendarItem() {
+        var name    = document.getElementById('kn-event-name').value.trim();
+        var allDay  = document.getElementById('kn-ci-allday').checked ? 1 : 0;
+        var start   = document.getElementById('kn-ci-start').value;
+        var end     = document.getElementById('kn-ci-end').value;
+        var desc    = document.getElementById('kn-ci-description').value;
+        var parkId  = parseInt(document.getElementById('kn-ci-park-id').value) || 0;
+        if (!name || !start || !end) return;
+
+        var btn = document.getElementById('kn-emod-go-btn');
+        btn.disabled = true;
+
+        var officerOnly = document.getElementById('kn-ci-officer-only');
+        var localsOnly  = document.getElementById('kn-ci-locals-only');
+        var colorEl     = document.getElementById('kn-ci-color');
+        var color       = (colorEl && colorEl.value) || '#64748b';
+        var payload = {
+            Name: name, Description: desc, AllDay: allDay,
+            EventStart: start, EventEnd: end,
+            KingdomId: KnConfig.kingdomId, ParkId: parkId,
+            IsOfficerOnly: (officerOnly && officerOnly.checked) ? 1 : 0,
+            IsLocalsOnly:  (localsOnly  && localsOnly.checked)  ? 1 : 0,
+            Color: color
+        };
+        var url = CI_CREATE_URL;
+        var wasEditing = (knCiEditingId > 0);
+        if (wasEditing) { payload.CalendarItemId = knCiEditingId; url = CI_UPDATE_URL; }
+
+        $.post(url, payload, function(r) {
+            if (r && r.status === 0) {
+                knCloseEventModal();
+                knCalCache = {}; // bust cached raw events so the new item appears
+                if (knCalendar) knCalendar.refetchEvents();
+                var parkName = document.getElementById('kn-ci-park-name').value || '';
+                if (wasEditing) {
+                    // Update the existing row in place; the calendar grid already refreshed
+                    // via refetchEvents above. Reload only if the row isn't in the DOM.
+                    if (!knUpdateCalendarItemRow(payload.CalendarItemId, name, parkName, start,
+                            payload.IsOfficerOnly == 1, payload.IsLocalsOnly == 1, color)) {
+                        knReloadToEventsTab();
+                    }
+                } else {
+                    // New item: insert the list row in place so repeated entry never reloads
+                    // and never bounces back to the default tab.
+                    knInsertCalendarItemRow(
+                        parseInt(r.id) || 0, name, parkName,
+                        start, payload.IsOfficerOnly == 1, payload.IsLocalsOnly == 1, color
+                    );
+                }
+            } else {
+                knEvFeedback((r && r.error) ? r.error : 'Failed to save calendar item.');
+                btn.disabled = false;
+            }
+        }, 'json').fail(function() { knEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
+    }
+
+    // ---- View / edit / delete overlay ----
+    var knCiCurrent = null;
+
+    window.knShowCalendarItemOverlay = function(id) {
+        $.getJSON(CI_GET_URL + id, function(r) {
+            if (!r || r.status !== 0) { alert((r && r.error) || 'Calendar item not found.'); return; }
+            knCiCurrent = r;
+            document.getElementById('kn-ci-view-name').textContent = r.Name || '';
+            document.getElementById('kn-ci-view-when').textContent = knCiFormatWhen(r);
+            document.getElementById('kn-ci-view-scope').innerHTML = (r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item')
+                + (r.IsOfficerOnly == 1 ? ' &middot; <span style="color:#805ad5"><i class="fas fa-shield-alt"></i> Officer-only</span>' : '')
+                + (r.IsLocalsOnly  == 1 ? ' &middot; <span style="color:#0d9488"><i class="fas fa-map-marker-alt"></i> Locals-only</span>' : '');
+            var descEl = document.getElementById('kn-ci-view-desc');
+            descEl.textContent = r.Description || '';
+            descEl.style.display = r.Description ? '' : 'none';
+            document.getElementById('kn-ci-edit-btn').style.display   = r.CanEdit ? '' : 'none';
+            document.getElementById('kn-ci-delete-btn').style.display = r.CanEdit ? '' : 'none';
+            document.getElementById('kn-ci-overlay').classList.add('kn-ci-open');
+            document.body.style.overflow = 'hidden';
+        }).fail(function() { alert('Failed to load calendar item.'); });
+    };
+
+    window.knCloseCalendarItemOverlay = function() {
+        document.getElementById('kn-ci-overlay').classList.remove('kn-ci-open');
+        document.body.style.overflow = '';
+    };
+
+    function knCiFormatWhen(r) {
+        var s = r.EventStart || '';
+        var e = r.EventEnd   || s;
+        var sd = s.substring(0, 10), ed = e.substring(0, 10);
+        var sdObj = new Date(sd + 'T00:00:00');
+        var edObj = new Date(ed + 'T00:00:00');
+        var fmt = { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' };
+        if (r.AllDay == 1 || r.AllDay === true) {
+            return (sd === ed)
+                ? 'All day · ' + sdObj.toLocaleDateString(undefined, fmt)
+                : 'All day · ' + sdObj.toLocaleDateString(undefined, fmt) + ' → ' + edObj.toLocaleDateString(undefined, fmt);
+        }
+        var tfmt = { hour: 'numeric', minute: '2-digit' };
+        var startStr = new Date(s.replace(' ', 'T')).toLocaleString(undefined, Object.assign({}, fmt, tfmt));
+        var endStr   = new Date(e.replace(' ', 'T')).toLocaleString(undefined, Object.assign({}, fmt, tfmt));
+        return (sd === ed)
+            ? startStr + ' → ' + new Date(e.replace(' ', 'T')).toLocaleTimeString(undefined, tfmt)
+            : startStr + ' → ' + endStr;
+    }
+
+    window.knEditCalendarItem = function() {
+        if (!knCiCurrent) return;
+        knCloseCalendarItemOverlay();
+        var modal = document.getElementById('kn-event-modal');
+        modal.dataset.presetDate = '';
+        knCiEditingId = knCiCurrent.CalendarItemId;
+        document.querySelectorAll('input[name="kn-emod-type"]').forEach(function(r) {
+            r.checked = (r.value === 'calendar-item');
+            r.disabled = true; // cannot switch type when editing an existing item
+        });
+        document.getElementById('kn-event-name').value = knCiCurrent.Name || '';
+        document.getElementById('kn-ci-description').value = knCiCurrent.Description || '';
+        document.getElementById('kn-ci-allday').checked = (knCiCurrent.AllDay == 1);
+        var off = document.getElementById('kn-ci-officer-only'); if (off) off.checked = (knCiCurrent.IsOfficerOnly == 1);
+        var loc = document.getElementById('kn-ci-locals-only');  if (loc) loc.checked = (knCiCurrent.IsLocalsOnly == 1);
+        document.getElementById('kn-ci-park-id').value = knCiCurrent.ParkId || '';
+        document.getElementById('kn-ci-park-name').value = ''; // user can re-select if they want to change
+        document.getElementById('kn-emod-feedback').style.display = 'none';
+        document.getElementById('kn-emod-date-row').style.display = 'none';
+        var sVal = (knCiCurrent.AllDay == 1) ? knCiCurrent.EventStart.substring(0, 10) : knCiCurrent.EventStart.replace(' ', 'T').substring(0, 16).replace('T', ' ');
+        var eVal = (knCiCurrent.AllDay == 1) ? knCiCurrent.EventEnd.substring(0, 10)   : knCiCurrent.EventEnd.replace(' ', 'T').substring(0, 16).replace('T', ' ');
+        knCiSetColor(knCiCurrent.Color || '#64748b');
+        knCiRebuildPickers(sVal, eVal, (knCiCurrent.AllDay == 1));
+        knApplyModalType();
+        modal.classList.add('kn-emod-open');
+        document.body.style.overflow = 'hidden';
+    };
+
+    window.knDeleteCalendarItem = function() {
+        if (!knCiCurrent) return;
+        var delId = knCiCurrent.CalendarItemId;
+        orkConfirm('Delete this calendar item? This cannot be undone.', function() {
+            $.post(CI_DELETE_URL, { CalendarItemId: delId }, function(r) {
+                if (r && r.status === 0) {
+                    knCloseCalendarItemOverlay();
+                    knCalCache = {}; // bust cached raw events so the calendar drops it
+                    if (knCalendar) knCalendar.refetchEvents();
+                    // Remove the list row in place; fall back to a tab-preserving reload if not found.
+                    var row = document.querySelector('#kn-events-table tr[onclick="knShowCalendarItemOverlay(' + delId + ')"]');
+                    if (row) {
+                        row.parentNode.removeChild(row);
+                        knBumpEventsTabCount(-1);
+                        var tbody = document.querySelector('#kn-events-table tbody');
+                        if (tbody && tbody.children.length === 0) {
+                            document.getElementById('kn-events-table').style.display = 'none';
+                            var empty = document.getElementById('kn-events-empty');
+                            if (empty) empty.style.display = '';
+                        }
+                        if (window.jQuery) knPaginate(jQuery('#kn-events-table'), 1);
+                    } else {
+                        knReloadToEventsTab();
+                    }
+                } else {
+                    alert((r && r.error) || 'Failed to delete calendar item.');
+                }
+            }, 'json').fail(function() { alert('Request failed.'); });
+        }, { title: 'Delete calendar item', okLabel: 'Delete', danger: true });
     };
 
     $(document).ready(function() {
-        $('#kn-event-name').on('input', function() {
-            document.getElementById('kn-emod-go-btn').disabled = !this.value.trim();
-        }).on('keydown', function(e) {
+        $('#kn-event-name, #kn-ci-start, #kn-ci-end').on('input change', function() { knUpdateGoBtn(); });
+        $('#kn-ci-swatches').on('click', '.ci-swatch', function() { knCiSetColor(this.getAttribute('data-color')); });
+        $('#kn-event-name').on('keydown', function(e) {
             if (e.key === 'Enter' && !document.getElementById('kn-emod-go-btn').disabled) knCreateEvent();
         });
-
-        $('#kn-event-park-name').autocomplete({
-            source: function(req, res) {
-                $.getJSON(KnConfig.httpService + 'Search/SearchService.php',
-                    { Action: 'Search/Park', name: req.term, kingdom_id: KnConfig.kingdomId, limit: 8 },
-                    function(data) { res($.map(data || [], function(v) { return { label: v.Name, value: v.ParkId }; })); }
-                );
-            },
-            focus:  function(e, ui) { $('#kn-event-park-name').val(ui.item.label); return false; },
-            select: function(e, ui) { $('#kn-event-park-name').val(ui.item.label); $('#kn-event-park-id').val(ui.item.value); return false; },
-            change: function(e, ui) { if (!ui.item) $('#kn-event-park-id').val(''); return false; },
-            delay: 250, minLength: 2
+        $(document).on('change', 'input[name="kn-emod-type"]', knApplyModalType);
+        $('#kn-ci-allday').on('change', function() {
+            var allDay  = this.checked;
+            var curS    = document.getElementById('kn-ci-start').value;
+            var curE    = document.getElementById('kn-ci-end').value;
+            // Reset to just the date portion when toggling to all-day.
+            knCiRebuildPickers(curS ? curS.substring(0, 10) : '', curE ? curE.substring(0, 10) : '', allDay);
+            knUpdateGoBtn();
         });
+
+        function knWireParkAutocomplete(inputSel, hiddenSel) {
+            $(inputSel).autocomplete({
+                source: function(req, res) {
+                    $.getJSON(KnConfig.httpService + 'Search/SearchService.php',
+                        { Action: 'Search/Park', name: req.term, kingdom_id: KnConfig.kingdomId, limit: 8 },
+                        function(data) { res($.map(data || [], function(v) { return { label: v.Name, value: v.ParkId }; })); }
+                    );
+                },
+                focus:  function(e, ui) { $(inputSel).val(ui.item.label); return false; },
+                select: function(e, ui) { $(inputSel).val(ui.item.label); $(hiddenSel).val(ui.item.value); return false; },
+                change: function(e, ui) { if (!ui.item) $(hiddenSel).val(''); return false; },
+                delay: 250, minLength: 2
+            });
+        }
+        knWireParkAutocomplete('#kn-event-park-name', '#kn-event-park-id');
+        knWireParkAutocomplete('#kn-ci-park-name',    '#kn-ci-park-id');
 
         var knEvtOverlay = document.getElementById('kn-event-modal');
         if (knEvtOverlay) {
             knEvtOverlay.addEventListener('click', function(e) { if (e.target === this) knCloseEventModal(); });
         }
+        var knCiOverlayEl = document.getElementById('kn-ci-overlay');
+        if (knCiOverlayEl) {
+            knCiOverlayEl.addEventListener('click', function(e) { if (e.target === this) knCloseCalendarItemOverlay(); });
+        }
         document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && document.getElementById('kn-event-modal') &&
-                document.getElementById('kn-event-modal').classList.contains('kn-emod-open')) knCloseEventModal();
+            if (e.key !== 'Escape') return;
+            var m = document.getElementById('kn-event-modal');
+            if (m && m.classList.contains('kn-emod-open')) { knCloseEventModal(); return; }
+            var o = document.getElementById('kn-ci-overlay');
+            if (o && o.classList.contains('kn-ci-open')) { knCloseCalendarItemOverlay(); }
         });
     });
 })();
@@ -3729,13 +4855,16 @@ $(document).ready(function() {
         buildParks();
         overlay.classList.add('kn-open');
         document.body.style.overflow = 'hidden';
+        // Drop any stale "no active links" cache so reopening the Admin modal
+        // (which hosts the Sign-in Link tab) always shows the current state.
+        if (typeof window.knResetSigninLinksCache === 'function') window.knResetSigninLinksCache();
     };
     function knCloseAdminModal() {
         var overlay = gid('kn-admin-overlay');
         if (!overlay) return;
         if (_knPending.size > 0) {
             var names = Array.from(_knPending).map(function(id) { return _knPanelNames[id] || id; });
-            knConfirm('You have unsaved changes in: ' + names.join(', ') + '. Close anyway?', function() {
+            knConfirm('You have unsaved changes in: ' + names.join(', ') + '.\nClose anyway?', function() {
                 _knPending.clear();
                 knCloseAdminModal();
             }, 'Unsaved Changes');
@@ -3857,8 +4986,27 @@ $(document).ready(function() {
 
             var lbl = document.createElement('div');
             lbl.className   = 'kn-admin-config-label';
-            var keyLabels = { 'AwardRecsPublic': 'Award Recommendations Visibility' };
+            var keyLabels = {
+                'AwardRecsPublic': 'Award Recommendations Visibility',
+                'IncludePrincipalityInStatistics': 'Include Principality in Statistics',
+                'QualTestReeveEnabled': "Reeve's Test",
+                'QualTestCorporaEnabled': 'Corpora Test'
+            };
             lbl.textContent = keyLabels[cfg.Key] || cfg.Key;
+            var keyHints = {
+                'AttendanceWeeklyMinimum': 'Minimum distinct weeks with at least one sign-in in the last 6 months. Leave blank to not require this.',
+                'AttendanceDailyMinimum':  'Minimum distinct days with at least one sign-in in the last 6 months. Leave blank to not require this.',
+                'AttendanceCreditMinimum': 'Minimum total credits earned in the last 6 months. Leave blank to not require this.',
+                'MonthlyCreditMaximum':    'Cap on credits counted per calendar month (excess is discarded). Leave blank for no cap.',
+                'IncludePrincipalityInStatistics': 'When looking at statistics, graphs, and reports, include relevant metrics from Principality(ies) such as attendance and player counts.',
+            };
+            if (keyHints[cfg.Key]) {
+                var hint = document.createElement('span');
+                hint.className = 'kn-cfg-hint';
+                hint.setAttribute('data-hint', keyHints[cfg.Key]);
+                hint.textContent = '?';
+                lbl.appendChild(hint);
+            }
             row.appendChild(lbl);
 
             var inputs = document.createElement('div');
@@ -3908,6 +5056,53 @@ $(document).ready(function() {
                     else optPrivate.selected = true;
                     inp.appendChild(optPublic);
                     inp.appendChild(optPrivate);
+                } else if (cfg.Key === 'IncludePrincipalityInStatistics') {
+                    inp = document.createElement('input');
+                    inp.type = 'checkbox';
+                    inp.className = 'kn-admin-config-input';
+                    inp.checked = (String(val) === '1');
+                    // Make `.value` resolve to '1'/'0' from checked state so the existing
+                    // wireConfig collector + setconfig POST persist it unchanged.
+                    Object.defineProperty(inp, 'value', {
+                        get: function() { return this.checked ? '1' : '0'; }
+                    });
+                } else if (cfg.Key === 'QualTestReeveEnabled' || cfg.Key === 'QualTestCorporaEnabled') {
+                    // Yes/No toggle button
+                    inp = document.createElement('input');
+                    inp.type = 'hidden';
+                    inp.value = String(val) === '1' ? '1' : '0';
+                    inp.className = 'kn-admin-config-input';
+                    inp.dataset.configId = cfg.ConfigurationId;
+                    inputs.appendChild(inp);
+
+                    var wrap = document.createElement('span');
+                    wrap.className = 'kn-toggle-wrap';
+                    var btnYes = document.createElement('button');
+                    btnYes.type = 'button'; btnYes.textContent = 'Yes';
+                    btnYes.className = 'kn-toggle-btn kn-toggle-btn-yes' + (inp.value === '1' ? ' kn-toggle-active' : '');
+                    var btnNo = document.createElement('button');
+                    btnNo.type = 'button'; btnNo.textContent = 'No';
+                    btnNo.className = 'kn-toggle-btn kn-toggle-btn-no' + (inp.value === '0' ? ' kn-toggle-active' : '');
+                    // The value lives on a hidden input, and assigning `.value` in JS fires
+                    // no event — so the panel's dirty-tracker (knWirePendingPanel, which
+                    // listens for bubbling input/change) never saw these toggles and the
+                    // page could be closed on unsaved changes. Emit a real event.
+                    var setToggle = function(on) {
+                        if (inp.value === (on ? '1' : '0')) return;   // no-op re-click isn't a change
+                        inp.value = on ? '1' : '0';
+                        btnYes.classList.toggle('kn-toggle-active', on);
+                        btnNo.classList.toggle('kn-toggle-active', !on);
+                        inp.dispatchEvent(new Event('change', { bubbles: true }));
+                    };
+                    btnYes.addEventListener('click', function() { setToggle(true); });
+                    btnNo.addEventListener('click', function() { setToggle(false); });
+                    wrap.appendChild(btnYes);
+                    wrap.appendChild(btnNo);
+                    inputs.appendChild(wrap);
+                    // skip the default inp append below
+                    row.appendChild(inputs);
+                    container.appendChild(row);
+                    return;
                 } else {
                     inp = document.createElement('input');
                     inp.type  = (cfg.Type === 'color')  ? 'color'
@@ -3963,7 +5158,7 @@ $(document).ready(function() {
             } else {
                 saveRecs(function(ok, err) {
                     btn.disabled = false;
-                    if (ok) feedback('kn-admin-config-feedback', 'Configuration saved!', true);
+                    if (ok) { knClearPending('kn-admin-body-config'); feedback('kn-admin-config-feedback', 'Configuration saved!', true); }
                     else feedback('kn-admin-config-feedback', err, false);
                 });
             }
@@ -4083,6 +5278,104 @@ $(document).ready(function() {
     }
 
     // ── Section: Awards ──────────────────────────────────────
+    // Filters the rendered admin-awards table based on the search input's value.
+    // O(rows) per keystroke — fine up to a few hundred. Each row carries the
+    // pre-lowered haystack on its dataset, set in makeAwardRow().
+    // Duplicate-name guard: soft, override-able warning before saving an award whose
+    // name collides with an existing one (normalized: case- and whitespace-insensitive).
+    function knNormalizeAwardName(s) {
+        return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    }
+    function knFindAwardNameCollision(name, excludeKawId) {
+        var norm = knNormalizeAwardName(name);
+        if (!norm) return null;
+        var list = (window.KnConfig && KnConfig.adminAwards) || [];
+        var ex = parseInt(excludeKawId || 0, 10);
+        for (var i = 0; i < list.length; i++) {
+            if (ex && parseInt(list[i].KingdomAwardId, 10) === ex) continue;
+            if (knNormalizeAwardName(list[i].KingdomAwardName) === norm) return list[i].KingdomAwardName;
+        }
+        return null;
+    }
+    function knGuardDuplicateName(name, excludeKawId, proceed) {
+        var existing = knFindAwardNameCollision(name, excludeKawId);
+        if (!existing) { proceed(); return; }
+        knConfirm(
+            'It looks like you already have an award called "' + existing + '" in your awards list. ' +
+            'Did you mean to set an alias of it, or create a different award? Duplicate awards can cause ' +
+            'data-integrity issues, so we don\'t recommend saving this. Continue anyway?',
+            proceed,
+            'Possible Duplicate Award'
+        );
+    }
+
+    function applyAdminAwardFilter() {
+        var inp = gid('kn-admin-award-search');
+        if (!inp) return;
+        var q     = inp.value.trim().toLowerCase();
+        var tbody = gid('kn-admin-awards-tbody');
+        var clear = gid('kn-admin-award-search-clear');
+        var empty = gid('kn-admin-award-search-empty');
+        if (clear) clear.style.display = q ? '' : 'none';
+        if (!tbody) return;
+        var rows = tbody.querySelectorAll('tr');
+        var visible = 0;
+        var groupVisible = {};
+        rows.forEach(function(tr) {
+            if (tr.dataset.groupHeader) return;
+            var hay  = tr.dataset.searchHaystack || '';
+            var show = !q || hay.indexOf(q) !== -1;
+            tr.style.display = show ? '' : 'none';
+            if (show) {
+                visible++;
+                var g = tr.dataset.group || '';
+                groupVisible[g] = (groupVisible[g] || 0) + 1;
+            }
+        });
+        rows.forEach(function(tr) {
+            if (!tr.dataset.groupHeader) return;
+            tr.style.display = (groupVisible[tr.dataset.group] > 0) ? '' : 'none';
+        });
+        if (empty) empty.style.display = (q && visible === 0) ? '' : 'none';
+    }
+
+    var awardSearchWired = false;
+    function wireAwardSearch() {
+        if (awardSearchWired) return;
+        var inp   = gid('kn-admin-award-search');
+        var clear = gid('kn-admin-award-search-clear');
+        if (!inp) return;
+        awardSearchWired = true;
+        inp.addEventListener('input', applyAdminAwardFilter);
+        if (clear) clear.addEventListener('click', function() {
+            inp.value = '';
+            inp.focus();
+            applyAdminAwardFilter();
+        });
+    }
+
+    function classifyAdminAward(aw) {
+        var awardId = parseInt(aw.AwardId || 0, 10);
+        var sysName = String(aw.AwardName || '').trim();
+        var knName  = String(aw.KingdomAwardName || '').trim();
+        if (awardId === 94) return 'specific';
+        if (sysName === '')  return 'specific';
+        if (sysName === knName) return 'standard';
+        return 'alias';
+    }
+
+    function makeAwardGroupHeader(label, count, key) {
+        var tr = document.createElement('tr');
+        tr.className = 'kn-admin-award-group';
+        tr.dataset.groupHeader = '1';
+        tr.dataset.group = key;
+        var td = document.createElement('td');
+        td.colSpan = 6;
+        td.textContent = label + ' (' + count + ')';
+        tr.appendChild(td);
+        return tr;
+    }
+
     var awardsBuilt = false;
     function buildAwards() {
         if (awardsBuilt) return;
@@ -4090,13 +5383,41 @@ $(document).ready(function() {
         var tbody = gid('kn-admin-awards-tbody');
         if (!tbody) return;
         tbody.innerHTML = '';
+        var groups = { standard: [], alias: [], specific: [] };
         (KnConfig.adminAwards || []).forEach(function(aw) {
-            tbody.appendChild(makeAwardRow(aw));
+            groups[classifyAdminAward(aw)].push(aw);
         });
+        var orgName = String(KnConfig.kingdomName || 'Kingdom');
+        [
+            { key: 'standard', label: 'System Standard Awards' },
+            { key: 'alias',    label: 'Aliases of System Awards' },
+            { key: 'specific', label: orgName + ' \u2014 Specific Awards' }
+        ].forEach(function(sec) {
+            var list = groups[sec.key];
+            if (!list.length) return;
+            list.sort(function(a, b) {
+                return String(a.KingdomAwardName || '').localeCompare(String(b.KingdomAwardName || ''));
+            });
+            tbody.appendChild(makeAwardGroupHeader(sec.label, list.length, sec.key));
+            list.forEach(function(aw) {
+                var tr = makeAwardRow(aw);
+                tr.dataset.group = sec.key;
+                tbody.appendChild(tr);
+            });
+        });
+        wireAwardSearch();
     }
 
     function makeAwardRow(aw) {
         var tr = document.createElement('tr');
+        // Cached searchable haystack for the filter input above the table —
+        // built once at render time, lower-cased, and re-read on each keystroke
+        // instead of walking the DOM for every cell.
+        tr.dataset.searchHaystack = (
+            (aw.KingdomAwardName || '') + ' ' +
+            (aw.AwardName        || '') + ' ' +
+            (aw.TitleClass       || '')
+        ).toLowerCase();
 
         function ntd(isText, val) {
             var td  = document.createElement('td');
@@ -4141,12 +5462,24 @@ $(document).ready(function() {
         var saveBtn = document.createElement('button');
         saveBtn.className   = 'kn-admin-tsave';
         saveBtn.innerHTML   = '<i class="fas fa-save"></i>';
-        saveBtn.title       = 'Save';
+        saveBtn.title       = 'No changes to save';
+        saveBtn.disabled    = true;                  // clean rows start "nothing to save"
         saveBtn.style.marginRight = '4px';
+        // Flip the save button live when any field in this row gets edited.
+        // Click on the save button itself doesn't bubble through these listeners.
+        function markDirty() {
+            saveBtn.disabled = false;
+            saveBtn.title    = 'Save';
+        }
+        [nameCell.inp, reignCell.inp, monthCell.inp, classCell.inp].forEach(function(inp) {
+            inp.addEventListener('input', markDirty);
+        });
+        titleCb.addEventListener('change', markDirty);
         (function(btn, nc, rc, mc, cb, cc, kawId) {
             btn.addEventListener('click', function() {
                 clearFeedback('kn-admin-awards-feedback');
-                btn.disabled = true;
+                knGuardDuplicateName(nc.value.trim(), kawId, function() {
+                    btn.disabled = true;
                 $.post(BASE_URL + 'setaward', {
                     KingdomAwardId:   kawId,
                     KingdomAwardName: nc.value.trim(),
@@ -4155,10 +5488,18 @@ $(document).ready(function() {
                     IsTitle:          cb.checked ? 1 : 0,
                     TitleClass:       cc.value,
                 }, function(r) {
-                    btn.disabled = false;
-                    if (r && r.status === 0) feedback('kn-admin-awards-feedback', 'Award saved!', true);
-                    else feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Save failed.', false);
+                    if (r && r.status === 0) {
+                        // Save succeeded — row is "clean" again, leave disabled.
+                        btn.title = 'No changes to save';
+                        knClearPending('kn-admin-body-awards');
+                        feedback('kn-admin-awards-feedback', 'Award saved!', true);
+                    } else {
+                        // Save failed — re-enable so they can retry.
+                        btn.disabled = false;
+                        feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Save failed.', false);
+                    }
                 }, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
+                    });
             });
         })(saveBtn, nameCell.inp, reignCell.inp, monthCell.inp, titleCb, classCell.inp, aw.KingdomAwardId);
 
@@ -4168,17 +5509,18 @@ $(document).ready(function() {
         delBtn.title       = 'Delete';
         (function(btn, row, kawId, awName) {
             btn.addEventListener('click', function() {
-                if (!confirm('Delete award "' + awName + '"? This cannot be undone.')) return;
-                btn.disabled = true;
-                $.post(BASE_URL + 'deleteaward', { KingdomAwardId: kawId }, function(r) {
-                    if (r && r.status === 0) {
-                        row.parentNode && row.parentNode.removeChild(row);
-                        feedback('kn-admin-awards-feedback', 'Award deleted.', true);
-                    } else {
-                        btn.disabled = false;
-                        feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Delete failed.', false);
-                    }
-                }, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
+                knConfirm('Delete award "' + awName + '"? This cannot be undone.', function() {
+                    btn.disabled = true;
+                    $.post(BASE_URL + 'deleteaward', { KingdomAwardId: kawId }, function(r) {
+                        if (r && r.status === 0) {
+                            row.parentNode && row.parentNode.removeChild(row);
+                            knClearPending('kn-admin-body-awards'); feedback('kn-admin-awards-feedback', 'Award deleted.', true);
+                        } else {
+                            btn.disabled = false;
+                            feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Delete failed.', false);
+                        }
+                    }, 'json').fail(function() { btn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
+                }, 'Delete Award');
             });
         })(delBtn, tr, aw.KingdomAwardId, aw.KingdomAwardName);
 
@@ -4350,6 +5692,7 @@ $(document).ready(function() {
                 if (!awardId) { feedback('kn-admin-awards-feedback', 'Please select a system award.', false); return; }
                 if (!name)    { feedback('kn-admin-awards-feedback', 'Award name is required.', false); return; }
 
+                knGuardDuplicateName(name, 0, function() {
                 saveNewBtn.disabled = true;
                 $.post(BASE_URL + 'setaward', {
                     KingdomAwardId:   0,
@@ -4368,6 +5711,7 @@ $(document).ready(function() {
                         feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Create failed.', false);
                     }
                 }, 'json').fail(function() { saveNewBtn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
+                });
             });
         }
 
@@ -4401,6 +5745,7 @@ $(document).ready(function() {
 
                 if (!name) { feedback('kn-admin-awards-feedback', 'Award name is required.', false); return; }
 
+                knGuardDuplicateName(name, 0, function() {
                 saveCustomBtn.disabled = true;
                 $.post(BASE_URL + 'setaward', {
                     KingdomAwardId:   0,
@@ -4419,6 +5764,7 @@ $(document).ready(function() {
                         feedback('kn-admin-awards-feedback', (r && r.error) ? r.error : 'Create failed.', false);
                     }
                 }, 'json').fail(function() { saveCustomBtn.disabled = false; feedback('kn-admin-awards-feedback', 'Request failed.', false); });
+                });
             });
         }
     }
@@ -4721,8 +6067,16 @@ $(document).ready(function() {
         wireToggle('kn-admin-hdr-config',  'kn-admin-body-config',  'kn-admin-chev-config');
         wireToggle('kn-admin-hdr-titles',  'kn-admin-body-titles',  'kn-admin-chev-titles');
         wireToggle('kn-admin-hdr-awards',  'kn-admin-body-awards',  'kn-admin-chev-awards');
-        wireToggle('kn-admin-hdr-parks',   'kn-admin-body-parks',   'kn-admin-chev-parks');
-        wireToggle('kn-admin-hdr-ops',     'kn-admin-body-ops',     'kn-admin-chev-ops');
+        wireToggle('kn-admin-hdr-parks',      'kn-admin-body-parks',      'kn-admin-chev-parks');
+        wireToggle('kn-admin-hdr-signinlink', 'kn-admin-body-signinlink', 'kn-admin-chev-signinlink');
+        wireToggle('kn-admin-hdr-ops',        'kn-admin-body-ops',        'kn-admin-chev-ops');
+
+        // Arm the unsaved-changes tracking. These listeners sit on the panel itself and
+        // catch edits by bubbling, so they survive the buildConfig/buildTitles/... rebuilds
+        // that replace the panel's children. Only panels listed in _knPanelNames are wired;
+        // Sign-in Link and Operations are excluded on purpose (their inputs are searches and
+        // one-shot actions, not pending edits, and would raise false "unsaved" prompts).
+        Object.keys(_knPanelNames).forEach(knWirePendingPanel);
 
         wireDetails();
         wirePrinz();
@@ -4744,9 +6098,12 @@ $(document).ready(function() {
 
         var overlay = gid('kn-admin-overlay');
         if (overlay) {
-            overlay.addEventListener('click', function(e) {
-                if (e.target === this) knCloseAdminModal();
-            });
+            // Only close on a click that BOTH started and ended on the overlay.
+            // Without the mousedown gate, drag-selecting text in an input and
+            // releasing outside the input fires a click on the overlay and closes it.
+            var knDownOnSelf = false;
+            overlay.addEventListener('mousedown', function(e) { knDownOnSelf = (e.target === this); });
+            overlay.addEventListener('click', function(e) { if (knDownOnSelf && e.target === this) knCloseAdminModal(); });
         }
 
         document.addEventListener('keydown', function(e) {
@@ -4760,6 +6117,61 @@ $(document).ready(function() {
 // ── Shared: Styled confirmation modal (used by Kingdom + Park admin dialogs) ──
 (function() {
     var _confirmCallback = null;
+
+    // ── In-app help ("?" beside a section heading) ────────────────────────────
+    // The body is a docs/*.md guide rendered to HTML by the server, so the help a GMR reads in
+    // the app is literally the same document that lives in the repo. Fetched on demand and
+    // cached per topic — the guide is long and does not change between clicks.
+    var _knHelpCache = {};
+    function knHelpClose() {
+        var o = document.getElementById('kn-help-overlay');
+        if (o) o.classList.remove('kn-open');
+        document.body.style.overflow = '';
+    }
+    function knHelpOpen(doc, title) {
+        var overlay = document.getElementById('kn-help-overlay');
+        var bodyEl  = document.getElementById('kn-help-body');
+        if (!overlay || !bodyEl) return;
+        var titleEl = document.getElementById('kn-help-title');
+        if (titleEl) titleEl.innerHTML = '<i class="fas fa-question-circle" style="margin-right:8px;color:#2b6cb0"></i>' + (title || 'Help');
+        overlay.classList.add('kn-open');
+        document.body.style.overflow = 'hidden';
+        bodyEl.scrollTop = 0;
+
+        if (_knHelpCache[doc]) { bodyEl.innerHTML = _knHelpCache[doc]; return; }
+        bodyEl.innerHTML = '<div style="text-align:center;padding:32px;color:#718096"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>';
+        // KnConfig.uir is the UI root; BASE_URL is Kingdom-scoped (KingdomAjax/kingdom/<id>/)
+        // and would not reach this controller.
+        $.post(KnConfig.uir + 'QualTestAjax/help', { Doc: doc }, function(r) {
+            if (r && r.status === 0) {
+                _knHelpCache[doc] = r.html;
+                bodyEl.innerHTML  = r.html;
+                bodyEl.scrollTop  = 0;
+            } else {
+                bodyEl.innerHTML = '<div style="padding:24px;color:#c53030">'
+                    + ((r && r.error) ? r.error : 'Could not load help.') + '</div>';
+            }
+        }, 'json').fail(function() {
+            bodyEl.innerHTML = '<div style="padding:24px;color:#c53030">Could not load help.</div>';
+        });
+    }
+    $(document).ready(function() {
+        document.querySelectorAll('.kn-help-btn').forEach(function(b) {
+            b.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                knHelpOpen(b.dataset.doc, b.getAttribute('title'));
+            });
+        });
+        var hc = document.getElementById('kn-help-close-btn');
+        if (hc) hc.addEventListener('click', knHelpClose);
+        var ho = document.getElementById('kn-help-overlay');
+        if (ho) ho.addEventListener('click', function(e) { if (e.target === ho) knHelpClose(); });
+        document.addEventListener('keydown', function(e) {
+            var o = document.getElementById('kn-help-overlay');
+            if (e.key === 'Escape' && o && o.classList.contains('kn-open')) knHelpClose();
+        });
+    });
 
     window.knConfirm = function(message, onConfirm, title) {
         var overlay = document.getElementById('kn-confirm-overlay');
@@ -4788,6 +6200,76 @@ $(document).ready(function() {
         if (close)  close.addEventListener('click',  knCloseConfirm);
         if (over)   over.addEventListener('click',   function(e) { if (e.target === this) knCloseConfirm(); });
     });
+})();
+
+// ── Shared: bannerConfirm — self-injecting confirm modal for banner removes ──
+// Works on any page (pk/kn/pn/un/ev) without requiring template-side overlay markup.
+// Uses .banner-confirm-overlay class (defined in revised.css) and supports dark mode.
+window.bannerConfirm = (function() {
+    var overlay = null;
+    var msgEl = null;
+    var titleEl = null;
+    var okBtn = null;
+    var cancelBtn = null;
+    var currentCb = null;
+    var keyHandler = null;
+
+    function ensureDom() {
+        if (overlay) return;
+        overlay = document.createElement('div');
+        overlay.className = 'banner-confirm-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.innerHTML =
+            '<div class="banner-confirm-modal">' +
+                '<h3 class="banner-confirm-title"></h3>' +
+                '<p class="banner-confirm-message"></p>' +
+                '<div class="banner-confirm-actions">' +
+                    '<button type="button" class="banner-confirm-cancel">Cancel</button>' +
+                    '<button type="button" class="banner-confirm-ok">Remove</button>' +
+                '</div>' +
+            '</div>';
+        document.body.appendChild(overlay);
+        titleEl    = overlay.querySelector('.banner-confirm-title');
+        msgEl      = overlay.querySelector('.banner-confirm-message');
+        okBtn      = overlay.querySelector('.banner-confirm-ok');
+        cancelBtn  = overlay.querySelector('.banner-confirm-cancel');
+
+        okBtn.addEventListener('click', function() {
+            var cb = currentCb;
+            close();
+            if (cb) cb();
+        });
+        cancelBtn.addEventListener('click', close);
+        overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+    }
+
+    function close() {
+        if (!overlay) return;
+        overlay.classList.remove('open');
+        document.body.style.overflow = '';
+        currentCb = null;
+        if (keyHandler) {
+            document.removeEventListener('keydown', keyHandler);
+            keyHandler = null;
+        }
+    }
+
+    return function(title, message, onConfirm, okLabel) {
+        ensureDom();
+        titleEl.textContent = title || 'Confirm';
+        msgEl.textContent   = message || '';
+        okBtn.textContent   = okLabel || 'Remove';
+        currentCb = onConfirm;
+        overlay.classList.add('open');
+        document.body.style.overflow = 'hidden';
+        keyHandler = function(e) {
+            if (e.key === 'Escape' || e.keyCode === 27) close();
+        };
+        document.addEventListener('keydown', keyHandler);
+        // Focus cancel by default for safety on destructive action
+        setTimeout(function() { if (cancelBtn) cancelBtn.focus(); }, 0);
+    };
 })();
 
 // ---- Kingdom heraldry modal ----
@@ -4822,7 +6304,10 @@ $(document).ready(function() {
 
     window.knDoRemoveHeraldry = function() {
         fetch(REMOVE_URL, { method: 'POST' })
-            .then(function(r) { return r.json(); })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
             .then(function(r) {
                 if (r && r.status === 0) {
                 } else {
@@ -4846,22 +6331,41 @@ $(document).ready(function() {
                 var done = gid('kn-heraldry-step-done');
                 if (sel) sel.style.display = 'none';
                 if (upl) upl.style.display = '';
-                var fd = new FormData();
-                fd.append('Heraldry', file);
-                fetch(UPLOAD_URL, { method: 'POST', body: fd })
-                    .then(function(r) { return r.json(); })
-                    .then(function(r) {
-                        if (upl) upl.style.display = 'none';
-                        if (r && r.status === 0) {
-                            setTimeout(function() { window.location.reload(); }, 1200);
-                        } else {
-                            alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
-                        }
-                    })
-                    .catch(function() {
-                        if (sel) sel.style.display = '';
-                        alert('Request failed. Please try again.');
-                    });
+
+                function doUpload(blob) {
+                    var fd = new FormData();
+                    fd.append('Heraldry', blob, file.name);
+                    fetch(UPLOAD_URL, { method: 'POST', body: fd })
+                        .then(function(r) { return r.json(); })
+                        .then(function(r) {
+                            if (upl) upl.style.display = 'none';
+                            if (r && r.status === 0) {
+                                setTimeout(function() { window.location.reload(); }, 1200);
+                            } else {
+                                if (sel) sel.style.display = '';
+                                alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
+                            }
+                        })
+                        .catch(function() {
+                            if (upl) upl.style.display = 'none';
+                            if (sel) sel.style.display = '';
+                            alert('Request failed. Please try again.');
+                        });
+                }
+
+                trimTransparentEdges(file, function(trimmed) {
+                    file = trimmed;
+                    if (file.size > 348836) {
+                        var isPng = (file.type === 'image/png');
+                        resizeImageToLimit(file, 348836, doUpload, function(errMsg) {
+                            if (upl) upl.style.display = 'none';
+                            if (sel) sel.style.display = '';
+                            alert(errMsg || 'Could not resize image. Please choose a smaller file.');
+                        }, isPng);
+                    } else {
+                        doUpload(file);
+                    }
+                });
             });
         }
 
@@ -4905,7 +6409,7 @@ var pkCalEvents;
 if (typeof PkConfig !== 'undefined') { pkCalEvents = PkConfig.calEvents; }
 var pkCalParkDays = [];
 if (typeof PkConfig !== 'undefined' && PkConfig.calParkDays) { pkCalParkDays = PkConfig.calParkDays; }
-var pkFilters   = { 'event': true, 'park-day': false };
+var pkFilters   = { 'event': true, 'calendar-item': true, 'park-day': false };
 var pkCalLoaded = false;
 var pkCalendar  = null;
 
@@ -4959,14 +6463,17 @@ function pkRenderCalendar() {
         height: 'auto',
         events: function(fetchInfo, successCallback) {
             var combined = [];
-            if (pkFilters['event']) {
-                pkCalEvents.forEach(function(e) {
-                    var ev = { title: e.title, start: e.start, color: e.color };
-                    if (e.url) ev.url = e.url;
-                    if (e.end) ev.end = e.end;
-                    combined.push(ev);
-                });
-            }
+            pkCalEvents.forEach(function(e) {
+                var isCi = (e.type === 'calendar-item');
+                if (isCi  && !pkFilters['calendar-item']) return;
+                if (!isCi && !pkFilters['event'])         return;
+                var ev = { title: e.title, start: e.start, color: e.color };
+                if (e.url)    ev.url    = e.url;
+                if (e.end)    ev.end    = e.end;
+                if (e.allDay !== undefined) ev.allDay = e.allDay;
+                if (e.extendedProps) ev.extendedProps = e.extendedProps;
+                combined.push(ev);
+            });
             if (pkFilters['park-day']) {
                 pkCalParkDays.forEach(function(e) {
                     combined.push({ title: e.title, start: e.start, color: e.color });
@@ -4976,6 +6483,9 @@ function pkRenderCalendar() {
         },
         eventClick: function(info) {
             info.jsEvent.preventDefault();
+            var xp = info.event.extendedProps || {};
+            if (xp.calendarItemId) { pkShowCalendarItemOverlay(xp.calendarItemId); return; }
+            if (xp.eventId) { window.evpvOpen(xp.eventId, xp.detailId || 0); return; }
             if (info.event.url) window.location.href = info.event.url;
         },
         dayCellDidMount: function(info) {
@@ -5016,50 +6526,6 @@ function pkAvatarFallback(img, initial) {
     img.parentElement.innerText = initial;
 }
 
-// ---- Load More: card view (reveals next hidden period block) ----
-// group: prefix string like 'pk-players' or 'pk-hoa'
-// btn:   the button element inside .pk-load-more-wrap[data-next][data-group]
-function pkLoadMoreCards(group, btn) {
-    var $wrap = $(btn).closest('.pk-load-more-wrap');
-    var next  = parseInt($wrap.attr('data-next') || '1');
-    var $block = $('#' + group + '-block-' + next);
-    if ($block.length) {
-        $block.show();
-        var newNext = next + 1;
-        $wrap.attr('data-next', newNext);
-        if (!$('#' + group + '-block-' + newNext).length) {
-            $wrap.hide(); // no more periods to load
-        }
-    } else {
-        $wrap.hide();
-    }
-}
-
-// ---- Load More: list view (appends template rows to table, re-paginates) ----
-// tableId:  id of the <table> element
-// tmplBase: id prefix of <template> elements (e.g. 'pk-players-tmpl')
-// btn:      the button element inside .pk-load-more-wrap[data-next]
-function pkLoadMoreList(tableId, tmplBase, btn) {
-    var $wrap  = $(btn).closest('.pk-load-more-wrap');
-    var next   = parseInt($wrap.attr('data-next') || '1');
-    var tmpl   = document.getElementById(tmplBase + '-' + next);
-    if (tmpl) {
-        var $tbody = $('#' + tableId + ' tbody');
-        // Clone template content and append to tbody
-        var frag = document.importNode(tmpl.content, true);
-        $(frag.querySelectorAll('tr')).appendTo($tbody);
-        var newNext = next + 1;
-        $wrap.attr('data-next', newNext);
-        // Re-paginate from page 1 with the expanded row set
-        pkPaginate($('#' + tableId), 1);
-        if (!document.getElementById(tmplBase + '-' + newNext)) {
-            $wrap.hide();
-        }
-    } else {
-        $wrap.hide();
-    }
-}
-
 // ---- Hero color from heraldry ----
 // Samples the heraldry image via Canvas to find its dominant non-white, non-black
 // color and applies a darkened version as the hero background.
@@ -5097,15 +6563,17 @@ function pkApplyHeroColor(img) {
             else                 h = (rf-gf)/d + 4;
             h /= 6;
         }
-        var finalS = Math.max(s, 0.28);
+        var _pk_dark = orkIsDarkMode();
+        var finalS = _pk_dark ? Math.min(Math.max(s * 1.15, 0.35), 0.90) : Math.max(s, 0.28);
         var hDeg   = Math.round(h * 360);
         var sPct   = Math.round(finalS * 100);
         document.documentElement.style.setProperty('--pk-hue', hDeg);
         document.documentElement.style.setProperty('--pk-sat', sPct + '%');
         var heroEl = document.querySelector('.pk-hero');
         if (heroEl) {
+            var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_pk_dark ? '22%' : '18%');
             heroEl.style.backgroundColor =
-                'hsl(' + hDeg + ',' + sPct + '%,18%)';
+                'hsl(' + hDeg + ',' + sPct + '%,' + heroL + ')';
         }
         document.documentElement.style.setProperty(
             '--pk-page-tint', 'rgba(' + dr + ',' + dg + ',' + db + ',0.05)'
@@ -5124,6 +6592,11 @@ function pkActivateTab(tab) {
     if (pkLabel) $('#pk-active-tab-label').text(pkLabel);
     if (tab === 'events' && pkCalendar) {
         pkCalendar.updateSize();
+    }
+    // scrollX-enabled DataTables measure 0-width columns while their panel is hidden;
+    // recompute now that the recommendations panel is visible.
+    if (tab === 'recommendations' && window.pkRecDT) {
+        window.pkRecDT.columns.adjust();
     }
 }
 
@@ -5300,29 +6773,44 @@ $(document).ready(function() {
         pkPaginate($table, page);
     });
 
-    // ---- Player search (filters cards + list rows across all periods) ----
-    $('#pk-player-search').on('input', function() {
-        var q = $(this).val().trim().toLowerCase();
-        if (q === '') {
-            $('.pk-period-block').show();
-            $('.pk-player-card').show();
-        } else {
-            $('.pk-period-block').show();
-            $('.pk-player-card').each(function() {
+    // ---- Player search + active-only filter (cards + list rows) ----
+    // The DOM holds every player up-front; content-visibility:auto on each year
+    // section keeps off-screen ones cheap. Filters apply in place and force-open
+    // any year section that has matches.
+    function pkApplyPlayerFilters() {
+        var q = ($('#pk-player-search').val() || '').trim().toLowerCase();
+        var activeOnly = $('#pk-active-only-btn').hasClass('pk-view-active');
+        var filtering  = q || activeOnly;
+        var $roots = $('#pk-players-cards, #pk-players-list');
+        $roots.each(function() {
+            var $root = $(this);
+            $root.find('.pk-player-card').each(function() {
                 var name = $(this).find('.pk-player-name').text().toLowerCase();
-                $(this).toggle(name.indexOf(q) !== -1);
+                var mn   = ($(this).attr('data-mundane-name') || '').toLowerCase();
+                var sc   = parseInt($(this).attr('data-signin-count') || '0', 10);
+                var match = (!q || name.indexOf(q) !== -1 || mn.indexOf(q) !== -1) && (!activeOnly || sc > 0);
+                $(this).toggle(match);
             });
-            // Hide period blocks with no visible cards
-            $('.pk-period-block').each(function() {
-                var hasVisible = $(this).find('.pk-player-card:visible').length > 0;
+            $root.find('.pk-year-table tbody tr').each(function() {
+                var persona = (this.cells[0] ? this.cells[0].textContent : '').toLowerCase();
+                var mn      = ($(this).attr('data-mundane-name') || '').toLowerCase();
+                var sc      = parseInt($(this).attr('data-signin-count') || '0', 10);
+                var match = (!q || persona.indexOf(q) !== -1 || mn.indexOf(q) !== -1) && (!activeOnly || sc > 0);
+                $(this).toggle(match);
+            });
+            $root.find('.pk-year-section').each(function() {
+                if (!filtering) { $(this).show(); return; }
+                var hasVisible =
+                    $(this).find('.pk-player-card:visible, .pk-year-table tbody tr:visible').length > 0;
                 $(this).toggle(hasVisible);
+                if (hasVisible) this.open = true;
             });
-        }
-        // Also filter list view rows
-        $('#pk-players-table tbody tr').each(function() {
-            var name = $(this).find('td:first').text().toLowerCase();
-            $(this).toggle(!q || name.indexOf(q) !== -1);
         });
+    }
+    $('#pk-player-search').on('input', pkApplyPlayerFilters);
+    $('#pk-active-only-btn').on('click', function() {
+        $(this).toggleClass('pk-view-active');
+        pkApplyPlayerFilters();
     });
 
     // ---- Players view toggle (cards / list) ----
@@ -5347,8 +6835,6 @@ $(document).ready(function() {
     pkSortDesc($('#pk-tournaments-table'), 2, 'date');
     pkPaginate($('#pk-tournaments-table'), 1);
 
-    pkPaginate($('#pk-players-table'), 1);
-
 });
 (function() {
     if (typeof PkConfig === 'undefined') return;
@@ -5358,6 +6844,50 @@ $(document).ready(function() {
     var PARK_ID = PkConfig.parkId;
     var awardOptHTML = PkConfig.awardOptHTML;
     var officerOptHTML = PkConfig.officerOptHTML;
+
+    // Split awardOptHTML into: awards-only (Ladder+Custom+Other), achievements, associations
+    var awardsOnlyHTML, achievementsHTML, associationsHTML;
+    (function() {
+        var tmp = document.createElement('select');
+        tmp.innerHTML = awardOptHTML;
+        var aw  = '<option value="">Select award...</option>';
+        var ach = '<option value="">Select title...</option>';
+        var asc = '<option value="">Select association...</option>';
+        Array.from(tmp.children).forEach(function(child) {
+            if (child.tagName === 'OPTION') {
+                if (child.value === '') return;
+                aw += child.outerHTML;
+                // "Custom Title" also belongs under Achievement Titles — surface it at the very
+                // top of that dropdown (it precedes the title optgroups in document order).
+                if (child.getAttribute('data-custom-title') === '1') ach += child.outerHTML;
+            } else if (child.tagName === 'OPTGROUP') {
+                var lbl = child.label;
+                if (lbl === 'Knighthoods' || lbl === 'Masterhoods' || lbl === 'Paragons' || lbl === 'Noble Titles') {
+                    ach += child.outerHTML;
+                } else if (lbl === 'Associate Titles') {
+                    asc += child.outerHTML;
+                } else {
+                    aw += child.outerHTML;
+                }
+            }
+        });
+        awardsOnlyHTML = aw; achievementsHTML = ach; associationsHTML = asc;
+    })();
+
+    // Hide type buttons for empty buckets
+    (function() {
+        var tmp = document.createElement('select');
+        tmp.innerHTML = achievementsHTML;
+        var hasAch = Array.from(tmp.options).some(function(o) { return o.value !== ''; });
+        var btnAch = gid('pk-award-type-achievements');
+        if (btnAch) btnAch.style.display = hasAch ? '' : 'none';
+
+        tmp.innerHTML = associationsHTML;
+        var hasAsc = Array.from(tmp.options).some(function(o) { return o.value !== ''; });
+        var btnAsc = gid('pk-award-type-associations');
+        if (btnAsc) btnAsc.style.display = hasAsc ? '' : 'none';
+    })();
+
     var currentType = 'awards';
     var givenByTimer, givenAtTimer, playerTimer;
     var pkPlayerRanks = {};
@@ -5365,10 +6895,7 @@ $(document).ready(function() {
     function gid(id) { return document.getElementById(id); }
 
     function pkFixedAcPosition(inputEl, dropdownEl) {
-        var rect = inputEl.getBoundingClientRect();
-        dropdownEl.style.top   = (rect.bottom + 2) + 'px';
-        dropdownEl.style.left  = rect.left + 'px';
-        dropdownEl.style.width = rect.width + 'px';
+        tnPositionAcFixed(inputEl, dropdownEl);
     }
 
     function checkRequired() {
@@ -5380,23 +6907,46 @@ $(document).ready(function() {
         gid('pk-award-save-same').disabled = !ok;
     }
 
+    var pkTypeHTML = {
+        awards:       awardsOnlyHTML,
+        officers:     officerOptHTML,
+        achievements: achievementsHTML,
+        associations: associationsHTML
+    };
+    var pkTypeTitles = {
+        awards:       '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award',
+        officers:     '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title',
+        achievements: '<i class="fas fa-star" style="margin-right:8px;color:#744210"></i>Add Achievement Title',
+        associations: '<i class="fas fa-handshake" style="margin-right:8px;color:#276749"></i>Add Association'
+    };
+    var pkSelectLabelText = { awards: 'Award', officers: 'Title', achievements: 'Title', associations: 'Association' };
     function setAwardType(type) {
+        if (typeof awCloseDropdown === 'function') awCloseDropdown();
         currentType = type;
-        var isOfficer = type === 'officers';
-        gid('pk-award-modal-title').innerHTML = isOfficer
-            ? '<i class="fas fa-crown" style="margin-right:8px;color:#553c9a"></i>Add Officer Title'
-            : '<i class="fas fa-trophy" style="margin-right:8px;color:#2c5282"></i>Add Award';
-        gid('pk-award-select').innerHTML = isOfficer ? officerOptHTML : awardOptHTML;
+        var isAssoc = (type === 'associations');
+        gid('pk-award-modal-title').innerHTML = pkTypeTitles[type] || pkTypeTitles.awards;
+        gid('pk-award-select').innerHTML = pkTypeHTML[type] || awardsOnlyHTML;
         gid('pk-award-rank-row').style.display   = 'none';
+        gid('pk-award-custom-row').style.display = 'none';
         gid('pk-award-rank-val').value           = '';
         gid('pk-award-info-line').innerHTML      = '';
-        gid('pk-award-type-awards').classList.toggle('pk-active', !isOfficer);
-        gid('pk-award-type-officers').classList.toggle('pk-active', isOfficer);
+        var lbl = gid('pk-award-select-label');
+        if (lbl) lbl.innerHTML = (pkSelectLabelText[type] || 'Award') + ' <span style="color:#e53e3e">*</span>';
+        var note = gid('pk-award-givenby-note');
+        if (note) note.style.display = isAssoc ? '' : 'none';
+        var chips = gid('pk-award-officer-chips');
+        if (chips) chips.style.display = isAssoc ? 'none' : '';
+        ['awards', 'officers', 'achievements', 'associations'].forEach(function(t) {
+            var btn = gid('pk-award-type-' + t);
+            if (btn) btn.classList.toggle('pk-active', t === type);
+        });
         checkRequired();
     }
 
-    gid('pk-award-type-awards').addEventListener('click',   function() { setAwardType('awards'); });
-    gid('pk-award-type-officers').addEventListener('click', function() { setAwardType('officers'); });
+    gid('pk-award-type-awards').addEventListener('click',       function() { setAwardType('awards'); });
+    gid('pk-award-type-officers').addEventListener('click',     function() { setAwardType('officers'); });
+    gid('pk-award-type-achievements').addEventListener('click', function() { setAwardType('achievements'); });
+    gid('pk-award-type-associations').addEventListener('click', function() { setAwardType('associations'); });
 
     function buildRankPills(awardId) {
         var row   = gid('pk-award-rank-row');
@@ -5410,40 +6960,48 @@ $(document).ready(function() {
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var hint = gid('pk-rank-hint');
+        if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank   = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held      = pkPlayerRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
+        wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type      = 'button';
             pill.className = 'pk-rank-pill';
-            if (r <= held)       pill.className += ' pk-rank-held';
-            if (r === suggested) pill.className += ' pk-rank-suggested';
-            pill.textContent = r;
+            pill.innerHTML = tnRankPillInner('pk', r);
             pill.dataset.rank = r;
-            pill.addEventListener('click', (function(rank, el) {
+            pill.addEventListener('click', (function(rank) {
                 return function() {
-                    document.querySelectorAll('#pk-rank-pills .pk-rank-pill').forEach(function(p) { p.classList.remove('pk-rank-selected'); });
-                    el.classList.add('pk-rank-selected');
                     input.value = rank;
+                    tnRankPaint(wrap, 'pk', held, rank);
                 };
-            })(r, pill));
+            })(r));
             wrap.appendChild(pill);
         }
         // Auto-select suggested rank
-        var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
-        if (suggestedPill) { suggestedPill.classList.add('pk-rank-selected'); input.value = suggested; }
+        tnRankPaint(wrap, 'pk', held, suggested);
+        input.value = suggested;
     }
 
     if (gid('pk-award-select')) awInitPicker(gid('pk-award-select'));
     gid('pk-award-select').addEventListener('change', function() {
         var awardId = this.value;
-        var isCustom = this.options[this.selectedIndex] && this.options[this.selectedIndex].text.toLowerCase().indexOf('custom') >= 0;
-        gid('pk-award-custom-row').style.display = isCustom ? '' : 'none';
+        var opt = this.options[this.selectedIndex];
+        var isCustomAward = opt && (opt.getAttribute('data-custom-award') === '1' || opt.text === 'Custom Award');
+        var isCustomTitle = opt && (opt.getAttribute('data-custom-title') === '1' || opt.text === 'Custom Title');
+        gid('pk-award-custom-row').style.display = (isCustomAward || isCustomTitle) ? '' : 'none';
+        var labelEl = gid('pk-award-custom-label');
+        if (labelEl) labelEl.textContent = isCustomTitle ? 'Custom Title Name' : 'Custom Award Name';
+        var nameInput = gid('pk-award-custom-name');
+        if (nameInput) nameInput.placeholder = isCustomTitle ? 'Enter custom title name...' : 'Enter custom award name...';
+        var aliasRow = gid('pk-award-alias-row');
+        if (aliasRow) aliasRow.style.display = isCustomTitle ? '' : 'none';
+        if (!isCustomTitle) { var aliasSel = gid('pk-award-alias'); if (aliasSel) aliasSel.value = '0'; }
         buildRankPills(awardId);
         var infoEl = gid('pk-award-info-line');
         if (awardId) {
-            var opt = this.querySelector('option[value="' + awardId + '"]');
             infoEl.innerHTML = opt && opt.getAttribute('data-is-ladder') === '1'
                 ? '<span class="pk-badge-ladder"><i class="fas fa-layer-group"></i> Ladder Award</span>'
                 : '';
@@ -5514,14 +7072,15 @@ $(document).ready(function() {
         if (term.length < 2) { gid('pk-award-givenby-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(givenByTimer);
         givenByTimer = setTimeout(function() {
-            var url = UIR_JS + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=all&prioritize=1&include_inactive=1&q=' + encodeURIComponent(term);
+            var url = UIR_JS + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=all&prioritize=1&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
             fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                 var el = gid('pk-award-givenby-results');
                 el.innerHTML = (data && data.length)
                     ? data.map(function(p) {
                         return '<div class="pk-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                             + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr||'') + ':' + escHtml(p.PAbbr||'') + ')</span>'
-                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '') + '</div>';
+                            + (p.Active === 0 ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+                            + (p.Suspended   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '') + '</div>';
                     }).join('')
                     : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No results</div>';
                 pkFixedAcPosition(gid('pk-award-givenby-text'), el);
@@ -5543,6 +7102,9 @@ $(document).ready(function() {
         var term = this.value.trim();
         if (term.length < 2) { gid('pk-award-givenat-results').classList.remove('pk-ac-open'); return; }
         clearTimeout(givenAtTimer);
+        gid('pk-award-park-id').value    = '0';
+        gid('pk-award-kingdom-id').value = '0';
+        gid('pk-award-event-id').value   = '0';
         givenAtTimer = setTimeout(function() {
             var today = new Date().toISOString().slice(0, 10);
             var url = SEARCH_URL + '?Action=Search%2FLocation&name=' + encodeURIComponent(term) + '&date=' + today + '&limit=6';
@@ -5597,12 +7159,13 @@ $(document).ready(function() {
         gid('pk-award-player-results').classList.remove('pk-ac-open');
         gid('pk-award-note').value               = '';
         gid('pk-award-char-count').textContent   = '400 characters remaining';
+        gid('pk-award-char-count').classList.remove('pk-char-warn');
         gid('pk-award-givenby-text').value       = '';
         gid('pk-award-givenby-id').value         = '';
         gid('pk-award-givenby-results').classList.remove('pk-ac-open');
         gid('pk-award-givenat-text').value = PkConfig.parkName;
         gid('pk-award-park-id').value = String(PkConfig.parkId);
-        gid('pk-award-kingdom-id').value         = '0';
+        gid('pk-award-kingdom-id').value         = String(PkConfig.kingdomId || 0);
         gid('pk-award-event-id').value           = '0';
         gid('pk-award-givenat-results').classList.remove('pk-ac-open');
         gid('pk-award-custom-name').value        = '';
@@ -5690,14 +7253,6 @@ $(document).ready(function() {
             try { window.pkGiveFromRec(JSON.parse(grantBtn.getAttribute('data-rec') || '{}')); } catch(ex) {}
             return;
         }
-        var expandBtn = e.target.closest ? e.target.closest('.pk-rec-expand-btn') : null;
-        if (expandBtn && expandBtn.closest('.pk-rec-notes')) {
-            var notesCell = expandBtn.closest('.pk-rec-notes');
-            var isCollapse = expandBtn.classList.contains('pk-rec-collapse-btn');
-            notesCell.querySelector('.pk-rec-notes-ellipsis').style.display = isCollapse ? '' : 'none';
-            notesCell.querySelector('.pk-rec-notes-full').style.display     = isCollapse ? 'none' : '';
-            return;
-        }
         var dimBtn = e.target.closest ? e.target.closest('.pk-rec-dismiss-btn') : null;
         if (dimBtn && dimBtn.closest('#pk-tab-recommendations')) {
             if (!dimBtn.dataset.confirm) {
@@ -5760,9 +7315,12 @@ $(document).ready(function() {
         gid('pk-rank-pills').innerHTML           = '';
         gid('pk-award-note').value               = '';
         gid('pk-award-char-count').textContent   = '400 characters remaining';
+        gid('pk-award-char-count').classList.remove('pk-char-warn');
         gid('pk-award-info-line').innerHTML      = '';
         gid('pk-award-custom-name').value        = '';
         gid('pk-award-custom-row').style.display = 'none';
+        if (gid('pk-award-alias')) gid('pk-award-alias').value = '0';
+        if (gid('pk-award-alias-row')) gid('pk-award-alias-row').style.display = 'none';
         checkRequired();
     }
     function pkDoSave(onSuccess) {
@@ -5773,10 +7331,10 @@ $(document).ready(function() {
         var date     = gid('pk-award-date').value;
 
         errEl.style.display = 'none';
-        if (!playerId) { errEl.textContent = 'Please select a player.';             errEl.style.display = ''; return; }
-        if (!awardId)  { errEl.textContent = 'Please select an award.';             errEl.style.display = ''; return; }
-        if (!giverId)  { errEl.textContent = 'Please select who gave this award.';  errEl.style.display = ''; return; }
-        if (!date)     { errEl.textContent = 'Please enter the award date.';        errEl.style.display = ''; return; }
+        if (!playerId) { errEl.textContent = 'Please select a player.';             errEl.style.display = 'block'; return; }
+        if (!awardId)  { errEl.textContent = 'Please select an award.';             errEl.style.display = 'block'; return; }
+        if (!giverId)  { errEl.textContent = 'Please select who gave this award.';  errEl.style.display = 'block'; return; }
+        if (!date)     { errEl.textContent = 'Please enter the award date.';        errEl.style.display = 'block'; return; }
 
         var fd = new FormData();
         fd.append('KingdomAwardId', awardId);
@@ -5790,6 +7348,9 @@ $(document).ready(function() {
         if (rank) fd.append('Rank', rank);
         var customName = gid('pk-award-custom-name') ? gid('pk-award-custom-name').value.trim() : '';
         if (customName) fd.append('AwardName', customName);
+        var aliasSel = gid('pk-award-alias');
+        var aliasVal = aliasSel && aliasSel.value ? parseInt(aliasSel.value, 10) : 0;
+        if (aliasVal > 0) fd.append('AliasAwardId', String(aliasVal));
 
         var btnNew  = gid('pk-award-save-new');
         var btnSame = gid('pk-award-save-same');
@@ -5805,7 +7366,7 @@ $(document).ready(function() {
             })
             .catch(function(err) {
                 errEl.textContent = 'Save failed: ' + err.message;
-                errEl.style.display = '';
+                errEl.style.display = 'block';
             })
             .finally(function() {
                 btnNew.innerHTML  = '<i class="fas fa-plus"></i> <span class="award-btn-prefix">Add + </span>New Player';
@@ -5837,6 +7398,25 @@ $(document).ready(function() {
         });
     });
 })();
+
+(function() {
+    if (window.__pkRecExpandBound) return;
+    window.__pkRecExpandBound = true;
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest ? e.target.closest('.pk-rec-expand-btn') : null;
+        if (!btn) return;
+        var short = btn.closest('.pk-rec-notes-short');
+        if (!short) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var isCollapse = btn.classList.contains('pk-rec-collapse-btn');
+        var ell  = short.querySelector('.pk-rec-notes-ellipsis');
+        var full = short.querySelector('.pk-rec-notes-full');
+        if (ell)  ell.style.display  = isCollapse ? '' : 'none';
+        if (full) full.style.display = isCollapse ? 'none' : '';
+    });
+})();
+
 (function() {
     if (typeof PkConfig === 'undefined') return;
     if (!document.getElementById('pk-rec-overlay')) return;
@@ -5867,39 +7447,42 @@ $(document).ready(function() {
         if (!opt || opt.getAttribute('data-is-ladder') !== '1') return;
         row.style.display = '';
         var baseAwardId = parseInt(opt.getAttribute('data-award-id')) || 0;
+        var hint = gid('pk-rec-rank-hint');
+        if (hint) hint.textContent = '— Select a rank of the award to recommend. Green ranks have already been awarded. You can suggest a rank higher than their next if you believe they have achieved it.';
         var maxRank  = /zodiac/i.test(opt.textContent) ? 12 : 10;
         var held     = pkRecRanks[baseAwardId] || 0;
         var suggested = Math.min(held + 1, maxRank);
+        wrap.dataset.rankHeld = held;
         for (var r = 1; r <= maxRank; r++) {
             var pill = document.createElement('button');
             pill.type = 'button';
             pill.className = 'pk-rank-pill';
-            if (r <= held)       pill.className += ' pk-rank-held';
-            if (r === suggested) pill.className += ' pk-rank-suggested';
-            pill.textContent = r;
+            pill.innerHTML = tnRankPillInner('pk', r);
             pill.dataset.rank = r;
-            pill.addEventListener('click', (function(rank, el) {
+            pill.addEventListener('click', (function(rank) {
                 return function() {
-                    wrap.querySelectorAll('.pk-rank-pill').forEach(function(p) { p.classList.remove('pk-rank-selected'); });
-                    el.classList.add('pk-rank-selected');
                     input.value = rank;
+                    tnRankPaint(wrap, 'pk', held, rank);
                 };
-            })(r, pill));
+            })(r));
             wrap.appendChild(pill);
         }
-        var suggestedPill = wrap.querySelector('[data-rank="' + suggested + '"]');
-        if (suggestedPill) { suggestedPill.classList.add('pk-rank-selected'); input.value = suggested; }
+        tnRankPaint(wrap, 'pk', held, suggested);
+        input.value = suggested;
     }
 
-    if (gid('pk-rec-award-select')) awInitPicker(gid('pk-rec-award-select'));
-    gid('pk-rec-award-select').addEventListener('change', function() {
-        buildRecRankPills(this.value);
-        checkRequired();
-        var aid = parseInt(this.options[this.selectedIndex].getAttribute('data-award-id') || 0);
-        var desc = AWARD_DESCRIPTIONS[aid] || '';
-        var el = gid('pk-rec-award-desc');
-        if (el) { el.textContent = desc; el.style.display = desc ? '' : 'none'; }
-    });
+    if (gid('pk-rec-award-select')) {
+        gid('pk-rec-award-select').querySelectorAll('optgroup[label="Associate Titles"]').forEach(function(og) { og.parentNode.removeChild(og); });
+        awInitPicker(gid('pk-rec-award-select'));
+        gid('pk-rec-award-select').addEventListener('change', function() {
+            buildRecRankPills(this.value);
+            checkRequired();
+            var aid = parseInt(this.options[this.selectedIndex].getAttribute('data-award-id') || 0);
+            var desc = AWARD_DESCRIPTIONS[aid] || '';
+            var el = gid('pk-rec-award-desc');
+            if (el) { el.textContent = desc; el.style.display = desc ? '' : 'none'; }
+        });
+    }
 
     // Player search
     gid('pk-rec-player-text').addEventListener('input', function() {
@@ -6003,12 +7586,12 @@ $(document).ready(function() {
                     setTimeout(function() { gid('pk-rec-success').style.display = 'none'; }, 3000);
                 } else {
                     errEl.textContent = data.error || 'Save failed.';
-                    errEl.style.display = '';
+                    errEl.style.display = 'block';
                 }
             })
             .catch(function() {
                 errEl.textContent = 'Request failed. Please try again.';
-                errEl.style.display = '';
+                errEl.style.display = 'block';
             })
             .finally(function() {
                 btn.disabled = false;
@@ -6020,20 +7603,109 @@ $(document).ready(function() {
 (function() {
     if (typeof PkConfig === 'undefined') return;
 
-    var CREATE_URL  = PkConfig.uir + 'EventAjax/create';
+    var CREATE_URL    = PkConfig.uir + 'EventAjax/create';
+    var CI_CREATE_URL = PkConfig.uir + 'CalendarItemAjax/create';
+    var CI_UPDATE_URL = PkConfig.uir + 'CalendarItemAjax/update';
+    var CI_DELETE_URL = PkConfig.uir + 'CalendarItemAjax/delete';
+    var CI_GET_URL    = PkConfig.uir + 'CalendarItemAjax/get/';
+
+    var pkCiEditingId = 0;
+    var pkCiFlatStart = null, pkCiFlatEnd = null;
+    var pkCiCurrent   = null;
 
     function pkEvFeedback(msg) {
         var el = document.getElementById('pk-emod-feedback');
         el.textContent = msg; el.style.display = '';
     }
 
+    function pkCiRebuildPickers(startVal, endVal, allDay) {
+        if (pkCiFlatStart) { pkCiFlatStart.destroy(); pkCiFlatStart = null; }
+        if (pkCiFlatEnd)   { pkCiFlatEnd.destroy();   pkCiFlatEnd   = null; }
+        var fmt  = allDay ? 'Y-m-d' : 'Y-m-d H:i';
+        var opts = { enableTime: !allDay, dateFormat: fmt, altInput: true, altFormat: allDay ? 'F j, Y' : 'F j, Y h:i K', minuteIncrement: 15, time_24hr: false };
+        var _prevStart = null;
+        pkCiFlatStart = flatpickr('#pk-ci-start', Object.assign({}, opts, {
+            onReady: function(sel) { _prevStart = sel[0] || null; },
+            onChange: function(sel) {
+                if (!sel[0] || !pkCiFlatEnd) return;
+                var endDate = pkCiFlatEnd.selectedDates[0];
+                if (endDate && _prevStart) {
+                    var offset = endDate.getTime() - _prevStart.getTime();
+                    pkCiFlatEnd.setDate(new Date(sel[0].getTime() + offset), true);
+                } else if (!endDate) {
+                    pkCiFlatEnd.setDate(new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000)), true);
+                }
+                _prevStart = sel[0];
+            }
+        }));
+        pkCiFlatEnd = flatpickr('#pk-ci-end', opts);
+        if (startVal) pkCiFlatStart.setDate(startVal, true);
+        if (endVal)   pkCiFlatEnd.setDate(endVal, true);
+        _prevStart = pkCiFlatStart.selectedDates[0] || null;
+    }
+
+    function pkCiResetForm(presetDate) {
+        document.getElementById('pk-ci-description').value = '';
+        document.getElementById('pk-ci-allday').checked = false;
+        var off = document.getElementById('pk-ci-officer-only'); if (off) off.checked = false;
+        var loc = document.getElementById('pk-ci-locals-only');  if (loc) loc.checked = false;
+        pkCiSetColor('#64748b');
+        pkCiRebuildPickers(presetDate || '', '', false);
+    }
+
+    // Select a palette swatch and stash the chosen hex in the hidden input.
+    function pkCiSetColor(color) {
+        var input = document.getElementById('pk-ci-color');
+        if (input) input.value = color || '#64748b';
+        var box = document.getElementById('pk-ci-swatches');
+        if (!box) return;
+        box.querySelectorAll('.ci-swatch').forEach(function(b) {
+            b.classList.toggle('selected', b.getAttribute('data-color') === (color || '#64748b'));
+        });
+    }
+
+    function pkGetModalType() {
+        var r = document.querySelector('input[name="pk-emod-type"]:checked');
+        return r ? r.value : 'event';
+    }
+
+    function pkApplyModalType() {
+        var t = pkGetModalType();
+        var isCi = (t === 'calendar-item');
+        document.querySelectorAll('.pk-emod-event-only').forEach(function(el) { el.style.display = isCi ? 'none' : ''; });
+        document.querySelectorAll('.pk-emod-ci-only').forEach(function(el) { el.style.display = isCi ? '' : 'none'; });
+        var dbtn = document.getElementById('pk-emod-draft-btn');
+        if (dbtn) dbtn.style.display = isCi ? 'none' : '';
+        document.getElementById('pk-emod-go-label').textContent = isCi ? (pkCiEditingId > 0 ? 'Save Calendar Item' : 'Create Calendar Item') : 'Create Event';
+        var title = document.getElementById('pk-emod-title');
+        title.innerHTML = isCi
+            ? '<i class="fas fa-calendar-day" style="margin-right:8px;color:#64748b"></i>' + (pkCiEditingId > 0 ? 'Edit Calendar Item' : 'New Calendar Item')
+            : '<i class="fas fa-calendar-plus" style="margin-right:8px;color:#276749"></i>Create New Event';
+        pkUpdateGoBtn();
+    }
+
+    function pkUpdateGoBtn() {
+        var t = pkGetModalType();
+        var ok;
+        if (t === 'calendar-item') {
+            ok = !!document.getElementById('pk-event-name').value.trim()
+              && !!document.getElementById('pk-ci-start').value
+              && !!document.getElementById('pk-ci-end').value;
+        } else {
+            ok = !!document.getElementById('pk-event-name').value.trim();
+        }
+        document.getElementById('pk-emod-go-btn').disabled = !ok;
+        var dbtn = document.getElementById('pk-emod-draft-btn');
+        if (dbtn) dbtn.disabled = !ok;
+    }
+
     window.pkOpenEventModal = function(dateStr) {
         var modal = document.getElementById('pk-event-modal');
         modal.dataset.presetDate = dateStr || '';
+        pkCiEditingId = 0;
+        document.querySelectorAll('input[name="pk-emod-type"]').forEach(function(r) { r.disabled = false; r.checked = (r.value === 'event'); });
         document.getElementById('pk-event-name').value = '';
         document.getElementById('pk-emod-feedback').style.display = 'none';
-        document.getElementById('pk-emod-go-btn').disabled = true;
-        // Show date hint when opened from a calendar cell
         var dateRow  = document.getElementById('pk-emod-date-row');
         var dateText = document.getElementById('pk-emod-date-text');
         if (dateRow && dateText) {
@@ -6045,6 +7717,8 @@ $(document).ready(function() {
                 dateRow.style.display = 'none';
             }
         }
+        pkCiResetForm(dateStr || '');
+        pkApplyModalType();
         modal.classList.add('pk-emod-open');
         document.body.style.overflow = 'hidden';
         setTimeout(function() { document.getElementById('pk-event-name').focus(); }, 50);
@@ -6055,12 +7729,15 @@ $(document).ready(function() {
         document.body.style.overflow = '';
     };
 
-    window.pkCreateEvent = function() {
+    window.pkCreateEvent = function(statusOverride) {
+        if (pkGetModalType() === 'calendar-item') return pkSubmitCalendarItem();
         var name = document.getElementById('pk-event-name').value.trim();
         if (!name) return;
         var btn = document.getElementById('pk-emod-go-btn');
-        btn.disabled = true;
-        $.post(CREATE_URL, { Name: name, KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId },
+        var dbtn = document.getElementById('pk-emod-draft-btn');
+        btn.disabled = true; if (dbtn) dbtn.disabled = true;
+        var status = (statusOverride === 'draft') ? 'draft' : 'published';
+        $.post(CREATE_URL, { Name: name, KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId, Status: status },
             function(r) {
                 if (r && r.status === 0) {
                     var presetDate = document.getElementById('pk-event-modal').dataset.presetDate || '';
@@ -6069,26 +7746,305 @@ $(document).ready(function() {
                     window.location.href = url;
                 } else {
                     pkEvFeedback((r && r.error) ? r.error : 'Failed to create event.');
-                    btn.disabled = false;
+                    btn.disabled = false; if (dbtn) dbtn.disabled = false;
                 }
             }, 'json'
-        ).fail(function() { pkEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
+        ).fail(function() { pkEvFeedback('Request failed. Please try again.'); btn.disabled = false; if (dbtn) dbtn.disabled = false; });
+    };
+
+    // Reload while preserving the Events tab (reuses the ?tab= auto-activation on load).
+    function pkReloadToEventsTab() {
+        try {
+            var u = new URL(window.location.href);
+            u.searchParams.set('tab', 'events');
+            window.location.href = u.toString();
+        } catch (e) {
+            window.location.reload();
+        }
+    }
+
+    function pkCiEsc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function pkBumpEventsTabCount(delta) {
+        var cnt = document.querySelector('.pk-tab-nav li[data-pktab="events"] .pk-tab-count');
+        if (!cnt) return;
+        var m = cnt.textContent.match(/\d+/);
+        var n = (m ? parseInt(m[0], 10) : 0) + delta;
+        cnt.textContent = '(' + (n < 0 ? 0 : n) + ')';
+    }
+
+    function pkPad2(n) { return String(n).length < 2 ? '0' + n : String(n); }
+
+    // Keep the static calendar-grid array in sync (the Park grid reads pkCalEvents directly,
+    // so unlike the Kingdom page there is no server re-fetch to lean on).
+    function pkGridAddCalendarItem(id, name, startVal, endVal, allDay, color) {
+        if (typeof pkCalEvents === 'undefined' || !pkCalEvents) return;
+        color = color || '#64748b';
+        var sIso = allDay ? String(startVal).substring(0, 10) : String(startVal).replace(' ', 'T');
+        var eIso;
+        if (allDay) {
+            var ed = new Date(String(endVal).substring(0, 10) + 'T00:00:00');
+            if (!isNaN(ed.getTime())) { ed.setDate(ed.getDate() + 1); eIso = ed.getFullYear() + '-' + pkPad2(ed.getMonth() + 1) + '-' + pkPad2(ed.getDate()); }
+        } else {
+            eIso = String(endVal).replace(' ', 'T');
+        }
+        var ev = { title: name, start: sIso, color: color, textColor: orkCiTextColor(color), type: 'calendar-item', allDay: !!allDay, extendedProps: { calendarItemId: id } };
+        if (eIso) ev.end = eIso;
+        pkCalEvents.push(ev);
+        if (pkCalendar) pkCalendar.refetchEvents();
+    }
+
+    function pkGridRemoveCalendarItem(id) {
+        if (typeof pkCalEvents === 'undefined' || !pkCalEvents) return;
+        for (var i = pkCalEvents.length - 1; i >= 0; i--) {
+            var xp = pkCalEvents[i] && pkCalEvents[i].extendedProps;
+            if (xp && String(xp.calendarItemId) === String(id)) pkCalEvents.splice(i, 1);
+        }
+        if (pkCalendar) pkCalendar.refetchEvents();
+    }
+
+    // Insert a new calendar item into the Park events list in place (no reload). Returns false
+    // if the list is currently empty (no table rendered) so the caller can fall back to a reload.
+    function pkCiClassName(officerOnly, localsOnly) {
+        var cls = [];
+        if (officerOnly) cls.push('pk-officer-only');
+        if (localsOnly)  cls.push('pk-locals-only');
+        return cls.join(' ');
+    }
+
+    // Build the cells for a park calendar-item row (shared by insert + edit).
+    function pkCiRowCellsHtml(name, startVal, officerOnly, localsOnly, color) {
+        var sd = String(startVal || '').substring(0, 10);
+        var dateTxt = '';
+        if (sd && sd !== '0000-00-00') {
+            var d = new Date(sd + 'T00:00:00');
+            if (!isNaN(d.getTime())) dateTxt = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+        var offPill = officerOnly ? ' <span class="pk-officer-pill" data-tip="Officer-only — hidden from non-officers"><i class="fas fa-shield-alt"></i></span>' : '';
+        var locPill = localsOnly ? ' <span class="pk-locals-pill" data-tip="Locals-only — hidden from out-of-area players"><i class="fas fa-map-marker-alt"></i></span>' : '';
+        color = color || '#64748b';
+        var pillStyle = ' style="background:' + color + ';border-color:' + color + ';color:' + orkCiTextColor(color) + '"';
+        return '<td><span class="pk-ci-pill"' + pillStyle + '><i class="fas fa-calendar-day"></i> Calendar Item</span>' + offPill + locPill + ' ' + pkCiEsc(name) + '</td>' +
+            '<td class="pk-date-col" data-sortval="' + pkCiEsc(sd) + '">' + dateTxt + '</td>' +
+            '<td class="pk-date-col" colspan="2" style="text-align:right;color:#a0aec0;padding-right:8px;">—</td>';
+    }
+
+    function pkInsertCalendarItemRow(id, name, startVal, officerOnly, localsOnly, color) {
+        var table = document.getElementById('pk-events-table');
+        if (!table) return false;
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return false;
+
+        var tr = document.createElement('tr');
+        tr.className = pkCiClassName(officerOnly, localsOnly);
+        tr.setAttribute('data-type', 'calendar-item');
+        tr.setAttribute('onclick', 'pkShowCalendarItemOverlay(' + id + ')');
+        tr.innerHTML = pkCiRowCellsHtml(name, startVal, officerOnly, localsOnly, color);
+
+        if (typeof pkFilters !== 'undefined' && pkFilters['calendar-item'] === false) tr.style.display = 'none';
+
+        tbody.insertBefore(tr, tbody.firstChild);
+        pkBumpEventsTabCount(1);
+        if (window.jQuery) pkPaginate(jQuery('#pk-events-table'), 1);
+        return true;
+    }
+
+    // Update an existing park calendar-item row in place. Returns false if not found.
+    function pkUpdateCalendarItemRow(id, name, startVal, officerOnly, localsOnly, color) {
+        var row = document.querySelector('#pk-events-table tr[onclick="pkShowCalendarItemOverlay(' + id + ')"]');
+        if (!row) return false;
+        row.className = pkCiClassName(officerOnly, localsOnly);
+        row.innerHTML = pkCiRowCellsHtml(name, startVal, officerOnly, localsOnly, color);
+        if (typeof pkFilters !== 'undefined' && pkFilters['calendar-item'] === false) row.style.display = 'none';
+        return true;
+    }
+
+    function pkSubmitCalendarItem() {
+        var name   = document.getElementById('pk-event-name').value.trim();
+        var allDay = document.getElementById('pk-ci-allday').checked ? 1 : 0;
+        var start  = document.getElementById('pk-ci-start').value;
+        var end    = document.getElementById('pk-ci-end').value;
+        var desc   = document.getElementById('pk-ci-description').value;
+        if (!name || !start || !end) return;
+
+        var btn = document.getElementById('pk-emod-go-btn');
+        btn.disabled = true;
+
+        var officerOnly = document.getElementById('pk-ci-officer-only');
+        var localsOnly  = document.getElementById('pk-ci-locals-only');
+        var colorEl     = document.getElementById('pk-ci-color');
+        var color       = (colorEl && colorEl.value) || '#64748b';
+        var payload = {
+            Name: name, Description: desc, AllDay: allDay,
+            EventStart: start, EventEnd: end,
+            KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId,
+            IsOfficerOnly: (officerOnly && officerOnly.checked) ? 1 : 0,
+            IsLocalsOnly:  (localsOnly  && localsOnly.checked)  ? 1 : 0,
+            Color: color
+        };
+        var url = CI_CREATE_URL;
+        var wasEditing = (pkCiEditingId > 0);
+        if (wasEditing) { payload.CalendarItemId = pkCiEditingId; url = CI_UPDATE_URL; }
+
+        $.post(url, payload, function(r) {
+            if (r && r.status === 0) {
+                pkCloseEventModal();
+                if (wasEditing) {
+                    // Replace the grid entry (remove old, add updated) and update the list row
+                    // in place. Reload only if the row isn't present in the DOM.
+                    pkGridRemoveCalendarItem(payload.CalendarItemId);
+                    pkGridAddCalendarItem(payload.CalendarItemId, name, start, end, allDay == 1, color);
+                    if (!pkUpdateCalendarItemRow(payload.CalendarItemId, name, start, payload.IsOfficerOnly == 1, payload.IsLocalsOnly == 1, color)) {
+                        pkReloadToEventsTab();
+                    }
+                } else {
+                    // New item: update the grid array + list row in place so repeated entry
+                    // never reloads. If the list was empty (no table yet), fall back to reload.
+                    pkGridAddCalendarItem(parseInt(r.id) || 0, name, start, end, allDay == 1, color);
+                    if (!pkInsertCalendarItemRow(parseInt(r.id) || 0, name, start, payload.IsOfficerOnly == 1, payload.IsLocalsOnly == 1, color)) {
+                        pkReloadToEventsTab();
+                    }
+                }
+            } else {
+                pkEvFeedback((r && r.error) ? r.error : 'Failed to save calendar item.');
+                btn.disabled = false;
+            }
+        }, 'json').fail(function() { pkEvFeedback('Request failed. Please try again.'); btn.disabled = false; });
+    }
+
+    // ---- View / edit / delete overlay ----
+    window.pkShowCalendarItemOverlay = function(id) {
+        $.getJSON(CI_GET_URL + id, function(r) {
+            if (!r || r.status !== 0) { alert((r && r.error) || 'Calendar item not found.'); return; }
+            pkCiCurrent = r;
+            document.getElementById('pk-ci-view-name').textContent = r.Name || '';
+            document.getElementById('pk-ci-view-when').textContent = pkCiFormatWhen(r);
+            document.getElementById('pk-ci-view-scope').innerHTML = (r.ParkId > 0 ? 'Park-level calendar item' : 'Kingdom-level calendar item')
+                + (r.IsOfficerOnly == 1 ? ' &middot; <span style="color:#805ad5"><i class="fas fa-shield-alt"></i> Officer-only</span>' : '')
+                + (r.IsLocalsOnly  == 1 ? ' &middot; <span style="color:#0d9488"><i class="fas fa-map-marker-alt"></i> Locals-only</span>' : '');
+            var descEl = document.getElementById('pk-ci-view-desc');
+            descEl.textContent = r.Description || '';
+            descEl.style.display = r.Description ? '' : 'none';
+            document.getElementById('pk-ci-edit-btn').style.display   = r.CanEdit ? '' : 'none';
+            document.getElementById('pk-ci-delete-btn').style.display = r.CanEdit ? '' : 'none';
+            document.getElementById('pk-ci-overlay').classList.add('pk-ci-open');
+            document.body.style.overflow = 'hidden';
+        }).fail(function() { alert('Failed to load calendar item.'); });
+    };
+
+    window.pkCloseCalendarItemOverlay = function() {
+        document.getElementById('pk-ci-overlay').classList.remove('pk-ci-open');
+        document.body.style.overflow = '';
+    };
+
+    function pkCiFormatWhen(r) {
+        var s = r.EventStart || '';
+        var e = r.EventEnd   || s;
+        var sd = s.substring(0, 10), ed = e.substring(0, 10);
+        var sdObj = new Date(sd + 'T00:00:00');
+        var edObj = new Date(ed + 'T00:00:00');
+        var fmt = { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' };
+        if (r.AllDay == 1 || r.AllDay === true) {
+            return (sd === ed)
+                ? 'All day · ' + sdObj.toLocaleDateString(undefined, fmt)
+                : 'All day · ' + sdObj.toLocaleDateString(undefined, fmt) + ' → ' + edObj.toLocaleDateString(undefined, fmt);
+        }
+        var tfmt = { hour: 'numeric', minute: '2-digit' };
+        var startStr = new Date(s.replace(' ', 'T')).toLocaleString(undefined, Object.assign({}, fmt, tfmt));
+        var endStr   = new Date(e.replace(' ', 'T')).toLocaleString(undefined, Object.assign({}, fmt, tfmt));
+        return (sd === ed)
+            ? startStr + ' → ' + new Date(e.replace(' ', 'T')).toLocaleTimeString(undefined, tfmt)
+            : startStr + ' → ' + endStr;
+    }
+
+    window.pkEditCalendarItem = function() {
+        if (!pkCiCurrent) return;
+        pkCloseCalendarItemOverlay();
+        var modal = document.getElementById('pk-event-modal');
+        if (!modal) { alert('You do not have permission to edit this item.'); return; }
+        modal.dataset.presetDate = '';
+        pkCiEditingId = pkCiCurrent.CalendarItemId;
+        document.querySelectorAll('input[name="pk-emod-type"]').forEach(function(r) {
+            r.checked = (r.value === 'calendar-item');
+            r.disabled = true;
+        });
+        document.getElementById('pk-event-name').value = pkCiCurrent.Name || '';
+        document.getElementById('pk-ci-description').value = pkCiCurrent.Description || '';
+        document.getElementById('pk-ci-allday').checked = (pkCiCurrent.AllDay == 1);
+        var off = document.getElementById('pk-ci-officer-only'); if (off) off.checked = (pkCiCurrent.IsOfficerOnly == 1);
+        var loc = document.getElementById('pk-ci-locals-only');  if (loc) loc.checked = (pkCiCurrent.IsLocalsOnly  == 1);
+        document.getElementById('pk-emod-feedback').style.display = 'none';
+        document.getElementById('pk-emod-date-row').style.display = 'none';
+        var sVal = (pkCiCurrent.AllDay == 1) ? pkCiCurrent.EventStart.substring(0, 10) : pkCiCurrent.EventStart.substring(0, 16).replace('T', ' ');
+        var eVal = (pkCiCurrent.AllDay == 1) ? pkCiCurrent.EventEnd.substring(0, 10)   : pkCiCurrent.EventEnd.substring(0, 16).replace('T', ' ');
+        pkCiSetColor(pkCiCurrent.Color || '#64748b');
+        pkCiRebuildPickers(sVal, eVal, (pkCiCurrent.AllDay == 1));
+        pkApplyModalType();
+        modal.classList.add('pk-emod-open');
+        document.body.style.overflow = 'hidden';
+    };
+
+    window.pkDeleteCalendarItem = function() {
+        if (!pkCiCurrent) return;
+        var delId = pkCiCurrent.CalendarItemId;
+        orkConfirm('Delete this calendar item? This cannot be undone.', function() {
+            $.post(CI_DELETE_URL, { CalendarItemId: delId }, function(r) {
+                if (r && r.status === 0) {
+                    pkCloseCalendarItemOverlay();
+                    pkGridRemoveCalendarItem(delId);
+                    // Remove the list row in place; fall back to a tab-preserving reload if not found.
+                    var row = document.querySelector('#pk-events-table tr[onclick="pkShowCalendarItemOverlay(' + delId + ')"]');
+                    if (row) {
+                        var tbody = row.parentNode;
+                        tbody.removeChild(row);
+                        pkBumpEventsTabCount(-1);
+                        if (tbody.children.length === 0) {
+                            pkReloadToEventsTab(); // list now empty — reload to render the empty state
+                            return;
+                        }
+                        if (window.jQuery) pkPaginate(jQuery('#pk-events-table'), 1);
+                    } else {
+                        pkReloadToEventsTab();
+                    }
+                } else {
+                    alert((r && r.error) || 'Failed to delete calendar item.');
+                }
+            }, 'json').fail(function() { alert('Request failed.'); });
+        }, { title: 'Delete calendar item', okLabel: 'Delete', danger: true });
     };
 
     $(document).ready(function() {
-        $('#pk-event-name').on('input', function() {
-            document.getElementById('pk-emod-go-btn').disabled = !this.value.trim();
-        }).on('keydown', function(e) {
+        $('#pk-event-name, #pk-ci-start, #pk-ci-end').on('input change', function() { pkUpdateGoBtn(); });
+        $('#pk-ci-swatches').on('click', '.ci-swatch', function() { pkCiSetColor(this.getAttribute('data-color')); });
+        $('#pk-event-name').on('keydown', function(e) {
             if (e.key === 'Enter' && !document.getElementById('pk-emod-go-btn').disabled) pkCreateEvent();
+        });
+        $(document).on('change', 'input[name="pk-emod-type"]', pkApplyModalType);
+        $('#pk-ci-allday').on('change', function() {
+            var allDay = this.checked;
+            var curS = document.getElementById('pk-ci-start').value;
+            var curE = document.getElementById('pk-ci-end').value;
+            pkCiRebuildPickers(curS ? curS.substring(0, 10) : '', curE ? curE.substring(0, 10) : '', allDay);
+            pkUpdateGoBtn();
         });
 
         var pkEvtOverlay = document.getElementById('pk-event-modal');
         if (pkEvtOverlay) {
             pkEvtOverlay.addEventListener('click', function(e) { if (e.target === this) pkCloseEventModal(); });
         }
+        var pkCiOverlayEl = document.getElementById('pk-ci-overlay');
+        if (pkCiOverlayEl) {
+            pkCiOverlayEl.addEventListener('click', function(e) { if (e.target === this) pkCloseCalendarItemOverlay(); });
+        }
         document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && document.getElementById('pk-event-modal') &&
-                document.getElementById('pk-event-modal').classList.contains('pk-emod-open')) pkCloseEventModal();
+            if (e.key !== 'Escape') return;
+            var m = document.getElementById('pk-event-modal');
+            if (m && m.classList.contains('pk-emod-open')) { pkCloseEventModal(); return; }
+            var o = document.getElementById('pk-ci-overlay');
+            if (o && o.classList.contains('pk-ci-open')) { pkCloseCalendarItemOverlay(); }
         });
     });
 })();
@@ -6097,6 +8053,7 @@ $(document).ready(function() {
    Event Detail (EvConfig)
    =========================== */
 (function() {
+    if (typeof EvConfig === 'undefined') return;
     // ---- Tab switching ----
     window.evShowTab = function(li, tabId) {
         var nav    = document.getElementById('ev-tab-nav');
@@ -6147,44 +8104,129 @@ $(document).ready(function() {
             return ids;
         }
 
-        $('#ev-PlayerName').autocomplete({
-            source: function(req, res) {
-                var attended = evAttendedIds();
-                $.getJSON(EvConfig.httpService + 'Search/SearchService.php',
-                    { Action: 'Search/Player', type: 'all', search: req.term, limit: 15 },
-                    function(data) {
-                        res($.map(data, function(v) {
-                            if (attended[parseInt(v.MundaneId, 10)]) return null;
-                            var abbr = evAttAbbr(v);
-                            return { label: v.Persona + (abbr ? ' — ' + abbr : ''), name: v.Persona, value: v.MundaneId + '|' + v.PenaltyBox, suspended: !!(v.PenaltyBox || v.Suspended) };
-                        }));
-                    });
-            },
-            focus:  function(e,ui) { if (ui.item) $('#ev-PlayerName').val(ui.item.name); return false; },
-            delay: 250, minLength: 2,
-            select: function(e,ui) {
-                $('#ev-PlayerName').val(ui.item.name);
-                $('#ev-MundaneId').val(ui.item.value.split('|')[0]);
-                evUpdateAddBtn();
-                return false;
-            },
-            change: function(e,ui) { if(!ui.item) { $('#ev-MundaneId').val(''); evUpdateAddBtn(); } return false; }
-        });
-        $('#ev-PlayerName').on('input', function() {
-            if (!$(this).val()) { $('#ev-MundaneId').val(''); evUpdateAddBtn(); }
-        });
-        var _evAcWidget = $('#ev-PlayerName').data('autocomplete');
-        if (_evAcWidget) _evAcWidget._renderItem = function(ul, item) {
-            var a = $('<a>');
-            if (item.suspended) {
-                a.addClass('pk-att-ac-suspended').html(
-                    '<i class="fas fa-ban" style="margin-right:5px;font-size:11px"></i>' + $('<span>').text(item.label).html()
-                );
-            } else {
-                a.text(item.label);
+        // Scoped player-search autocomplete (park members > kingdom members > everyone else)
+        var evPnInput   = document.getElementById('ev-PlayerName');
+        var evPnHidden  = document.getElementById('ev-MundaneId');
+        var evPnResults = document.getElementById('ev-PlayerName-results');
+        var evPnTimer   = null;
+        var evPnSeq     = 0;
+
+        function evPnRenderItem(p, attended, seen) {
+            if (attended[p.MundaneId] || seen[p.MundaneId]) return '';
+            seen[p.MundaneId] = true;
+            var abbr = (p.KAbbr || '') + ':' + (p.PAbbr || '');
+            var tags = '';
+            if (p.Suspended) tags += ' <span style="color:#c53030;font-size:10px;font-weight:600;margin-left:4px">(Banned)</span>';
+            if (p.Active === 0) tags += ' <span style="color:#c53030;font-size:10px;font-weight:600;margin-left:4px">(Inactive)</span>';
+            return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona || '') + '">'
+                + escHtml(p.Persona || '') + ' <span style="color:#a0aec0;font-size:11px">— ' + escHtml(abbr) + '</span>' + tags + '</div>';
+        }
+
+        function evPnRenderSection(label, items, attended, seen) {
+            var itemHtml = '';
+            (items || []).forEach(function(p) { itemHtml += evPnRenderItem(p, attended, seen); });
+            if (!itemHtml) return '';
+            return '<div class="ev-ac-section">' + escHtml(label) + '</div>' + itemHtml;
+        }
+
+        function evPnBuildGroups(term) {
+            var kid = parseInt(EvConfig.kingdomId, 10) || 0;
+            var pid = parseInt(EvConfig.parkId, 10) || 0;
+            var base = EvConfig.uir + 'KingdomAjax/playersearch/' + kid;
+            var q = '&include_inactive=1&include_suspended=1&q=' + encodeURIComponent(term);
+            // When an abbreviation prefix (e.g. "kcg: miller") is present, the server
+            // ignores scope/park_id and filters by abbreviation instead — use a single
+            // group so results aren't falsely labelled as "Park Members".
+            if (/^[a-z0-9]{2,3}:[a-z0-9*]{0,3}\s+\S/i.test(term)) {
+                return [ { label: 'Players', url: base + '&scope=all' + q } ];
             }
-            return $('<li></li>').data('item.autocomplete', item).append(a).appendTo(ul);
-        };
+            if (pid > 0 && kid > 0) {
+                return [
+                    { label: 'Park Members',     url: base + '&scope=own&park_id=' + pid + q },
+                    { label: 'Kingdom Members',  url: base + '&scope=own' + q },
+                    { label: 'Everyone Else',    url: base + '&scope=exclude' + q }
+                ];
+            }
+            if (kid > 0) {
+                return [
+                    { label: 'Kingdom Members',  url: base + '&scope=own' + q },
+                    { label: 'Everyone Else',    url: base + '&scope=exclude' + q }
+                ];
+            }
+            return [ { label: 'All Players', url: base + '&scope=all' + q } ];
+        }
+
+        function evPnPosition() {
+            if (!evPnInput || !evPnResults) return;
+            tnPositionAcFixed(evPnInput, evPnResults);
+        }
+
+        function evPnOpen() {
+            evPnPosition();
+            evPnResults.classList.add('kn-ac-open');
+        }
+
+        function evPnSearch(term) {
+            var groups = evPnBuildGroups(term);
+            if (!groups.length) return;
+            var seq = ++evPnSeq;
+            Promise.all(groups.map(function(g) {
+                return fetch(g.url).then(function(r) { return r.json(); }).catch(function() { return []; });
+            })).then(function(resultsArr) {
+                if (seq !== evPnSeq) return;
+                var attended = evAttendedIds();
+                var seen = {};
+                var html = '';
+                groups.forEach(function(g, i) {
+                    html += evPnRenderSection(g.label, resultsArr[i], attended, seen);
+                });
+                if (!html) html = '<div class="ev-ac-empty">No players found</div>';
+                evPnResults.innerHTML = html;
+                evPnOpen();
+            });
+        }
+
+        if (evPnInput && evPnResults) {
+            evPnInput.addEventListener('input', function() {
+                evPnHidden.value = '';
+                evUpdateAddBtn();
+                var term = this.value.trim();
+                if (term.length < 2) {
+                    clearTimeout(evPnTimer);
+                    ++evPnSeq;
+                    evPnResults.classList.remove('kn-ac-open');
+                    return;
+                }
+                clearTimeout(evPnTimer);
+                evPnTimer = setTimeout(function() { evPnSearch(term); }, AUTOCOMPLETE_DEBOUNCE_MS);
+            });
+
+            evPnResults.addEventListener('click', function(e) {
+                var item = e.target.closest('.kn-ac-item[data-id]');
+                if (!item) return;
+                evPnInput.value  = decodeURIComponent(item.dataset.name);
+                evPnHidden.value = item.dataset.id;
+                evPnResults.classList.remove('kn-ac-open');
+                evUpdateAddBtn();
+            });
+
+            document.addEventListener('click', function(e) {
+                if (e.target !== evPnInput && !evPnResults.contains(e.target)) {
+                    evPnResults.classList.remove('kn-ac-open');
+                }
+            });
+
+            if (typeof acKeyNav === 'function') {
+                acKeyNav(evPnInput, evPnResults, 'kn-ac-open', '.kn-ac-item');
+            }
+
+            window.addEventListener('scroll', function() {
+                if (evPnResults.classList.contains('kn-ac-open')) evPnPosition();
+            }, true);
+            window.addEventListener('resize', function() {
+                if (evPnResults.classList.contains('kn-ac-open')) evPnPosition();
+            });
+        }
     });
 
     // ---- Hero dominant-color tint ----
@@ -6216,7 +8258,12 @@ $(document).ready(function() {
                     h*=60;
                 }
                 var hero = document.getElementById('ev-hero');
-                if (hero) hero.style.backgroundColor = 'hsl('+Math.round(h)+','+Math.round(s*55)+'%,18%)';
+                if (hero) {
+                    var _ev_dark = orkIsDarkMode();
+                    var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_ev_dark ? '22%' : '18%');
+                    var evSPct = _ev_dark ? Math.round(s * 68) : Math.round(s * 55);
+                    hero.style.backgroundColor = 'hsl('+Math.round(h)+','+evSPct+'%,'+heroL+')';
+                }
             } catch(e){}
         }
         if (img.complete && img.naturalWidth > 0) { extract(); }
@@ -6230,10 +8277,10 @@ $(document).ready(function() {
     var _evEditSaveBtn = document.getElementById('ev-edit-save-btn');
 
     if (_evEditForm) {
-        _evEditForm.querySelectorAll('input, textarea').forEach(function(el) {
+        _evEditForm.querySelectorAll('input, textarea, select').forEach(function(el) {
             if (el.name) _evEditOriginals[el.name] = el.value;
         });
-        _evEditForm.querySelectorAll('input, textarea').forEach(function(el) {
+        _evEditForm.querySelectorAll('input, textarea, select').forEach(function(el) {
             el.addEventListener('input', evCheckEditDirty);
             el.addEventListener('change', evCheckEditDirty);
         });
@@ -6242,7 +8289,7 @@ $(document).ready(function() {
     function evCheckEditDirty() {
         if (!_evEditForm) return;
         var dirty = false;
-        _evEditForm.querySelectorAll('input, textarea').forEach(function(el) {
+        _evEditForm.querySelectorAll('input, textarea, select').forEach(function(el) {
             if (el.name && _evEditOriginals.hasOwnProperty(el.name) && el.value !== _evEditOriginals[el.name]) {
                 dirty = true;
             }
@@ -6252,7 +8299,7 @@ $(document).ready(function() {
 
     function evRestoreEditForm() {
         if (!_evEditForm) return;
-        _evEditForm.querySelectorAll('input, textarea').forEach(function(el) {
+        _evEditForm.querySelectorAll('input, textarea, select').forEach(function(el) {
             if (el.name && _evEditOriginals.hasOwnProperty(el.name)) {
                 el.value = _evEditOriginals[el.name];
                 if (el._flatpickr) el._flatpickr.setDate(el.value, false);
@@ -6265,12 +8312,37 @@ $(document).ready(function() {
         var overlay = document.getElementById('ev-edit-modal');
         if (overlay) overlay.classList.remove('ev-modal-open');
         document.body.style.overflow = '';
+        // Reset the "Help Me Write…" button so the next open requires confirm
+        // before overwriting existing description content. Otherwise the
+        // data-last-idx attribute persists across modal close, causing the
+        // second click on existing content to silently overwrite.
+        if (overlay) {
+            overlay.querySelectorAll('.ev-help-write-btn').forEach(function(btn) {
+                btn.removeAttribute('data-last-idx');
+                if (btn.dataset.origLabel) {
+                    btn.innerHTML = btn.dataset.origLabel;
+                    delete btn.dataset.origLabel;
+                }
+            });
+        }
     }
 
     window.evOpenEditModal = function() {
         var overlay = document.getElementById('ev-edit-modal');
         if (overlay) overlay.classList.add('ev-modal-open');
         document.body.style.overflow = 'hidden';
+        if (typeof evFeesReset === 'function') evFeesReset(EvConfig.fees || []);
+        if (typeof evLinksReset === 'function') evLinksReset(EvConfig.links || []);
+        if (typeof evTicketLinkReset === 'function') evTicketLinkReset();
+        // Re-baseline dirty tracking AFTER fees/links/ticket fields are populated.
+        // Those resets write the hidden JSON inputs (and now fire input events), so
+        // the originals must be re-snapshotted here or the form would open dirty.
+        if (_evEditForm) {
+            _evEditForm.querySelectorAll('input, textarea, select').forEach(function(el) {
+                if (el.name) _evEditOriginals[el.name] = el.value;
+            });
+        }
+        if (_evEditSaveBtn) _evEditSaveBtn.disabled = true;
     };
     window.evCloseEditModal = function() {
         if (_evEditSaveBtn && !_evEditSaveBtn.disabled) {
@@ -6282,10 +8354,19 @@ $(document).ready(function() {
         }
         evActuallyCloseEditModal();
     };
-    // Close on backdrop click
+    // Close on backdrop click — but only when the mousedown ALSO started on the
+    // backdrop. Without this guard, drag-selecting text inside a field and
+    // releasing the mouse outside the modal triggers a synthetic click on the
+    // backdrop and closes the modal mid-selection.
+    var _evBackdropDownId = null;
+    document.addEventListener('mousedown', function(e) {
+        _evBackdropDownId = (e.target && (e.target.id === 'ev-edit-modal' || e.target.id === 'ev-checkin-modal'))
+            ? e.target.id : null;
+    });
     document.addEventListener('click', function(e) {
-        if (e.target && e.target.id === 'ev-edit-modal') evCloseEditModal();
-        if (e.target && e.target.id === 'ev-checkin-modal') evCloseCheckinModal();
+        if (e.target && e.target.id === 'ev-edit-modal'    && _evBackdropDownId === 'ev-edit-modal')    evCloseEditModal();
+        if (e.target && e.target.id === 'ev-checkin-modal' && _evBackdropDownId === 'ev-checkin-modal') evCloseCheckinModal();
+        _evBackdropDownId = null;
     });
     // Close on Escape key
     document.addEventListener('keydown', function(e) {
@@ -6303,7 +8384,11 @@ $(document).ready(function() {
         document.getElementById('ev-checkin-mundane-id').value = mundaneId;
         document.getElementById('ev-checkin-name').textContent = personaName;
         var creditsInput = document.querySelector('#ev-checkin-form [name="Credits"]');
-        if (creditsInput) creditsInput.value = evGetSavedCredits();
+        if (creditsInput) {
+            var rsvpCr = document.getElementById('ev-rsvp-credits');
+            var rsvpVal = rsvpCr ? parseFloat(rsvpCr.value) : NaN;
+            creditsInput.value = (rsvpVal > 0) ? rsvpVal : evGetSavedCredits();
+        }
         if (classId) {
             var classSelect = document.querySelector('#ev-checkin-form [name="ClassId"]');
             if (classSelect) classSelect.value = classId;
@@ -6354,11 +8439,16 @@ $(document).ready(function() {
         var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
         var kingCell = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
         var parkCell = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
-        var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '">' +
+        var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '" data-att-class="' + (att.ClassId || '') + '" data-att-date="' + escHtml(att.Date || '') + '">' +
             '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
-            '<td>' + kingCell + '</td><td>' + parkCell + '</td>' +
-            '<td>' + escHtml(att.ClassName || '') + '</td><td>' + escHtml(att.Credits || '') + '</td>' +
-            '<td class="ev-del-cell"><a class="ev-del-link" title="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a></td>' +
+            '<td>' + kingCell + '</td>' +
+            '<td>' + parkCell + '</td>' +
+            '<td class="ev-class-cell">' + escHtml(att.ClassName || '') + '</td>' +
+            '<td class="ev-credits-cell">' + escHtml(att.Credits || '') + '</td>' +
+            '<td class="ev-del-cell">' +
+                '<button class="ev-icon-btn" data-tip="Edit class &amp; credits" style="color:#9ca3af;border:none;background:none;padding:2px 4px;font-size:0.8rem;" onclick="evOpenAttEdit(this)"><i class="fas fa-pencil-alt"></i></button>' +
+                '<a class="ev-del-link" data-tip="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a>' +
+            '</td>' +
             '</tr>';
         var tableBody = document.querySelector('#ev-attendance-table tbody');
         if (tableBody) {
@@ -6465,36 +8555,19 @@ $(document).ready(function() {
         })
         .then(function(response) { return response.json(); })
         .then(function(data) {
-            if (data.status === 0 && data.attendance) {
+            if (data.status === 0) {
                 evSaveCredits(form.querySelector('[name="Credits"]').value);
                 var att = data.attendance;
-                var delUrl = EvConfig.uir + 'AttendanceAjax/attendance/' + att.AttendanceId + '/delete';
-                var kingCell  = att.KingdomId ? '<a href="' + EvConfig.uir + 'Kingdom/profile/' + att.KingdomId + '">' + escHtml(att.KingdomName || '') + '</a>' : escHtml(att.KingdomName || '');
-                var parkCell  = att.ParkId    ? '<a href="' + EvConfig.uir + 'Park/profile/'    + att.ParkId    + '">' + escHtml(att.ParkName    || '') + '</a>' : escHtml(att.ParkName    || '');
-                var newRow = '<tr data-att-id="' + att.AttendanceId + '" data-mundane-id="' + att.MundaneId + '">' +
-                    '<td><a href="' + EvConfig.uir + 'Player/profile/' + att.MundaneId + '">' + escHtml(att.Persona || '') + '</a></td>' +
-                    '<td>' + kingCell + '</td>' +
-                    '<td>' + parkCell + '</td>' +
-                    '<td>' + escHtml(att.ClassName || '') + '</td>' +
-                    '<td>' + escHtml(att.Credits || '') + '</td>' +
-                    '<td class="ev-del-cell">' +
-                        '<a class="ev-del-link" title="Remove" href="#" data-del-url="' + delUrl + '" onclick="evConfirmAttDelete(event,this)">×</a>' +
-                    '</td>' +
-                '</tr>';
-
-                var tableBody = document.querySelector('#ev-attendance-table tbody');
-                if (tableBody) {
-                    tableBody.insertAdjacentHTML('beforeend', newRow);
-                } else {
-                    // Table doesn't exist yet — create it
-                    var emptyMsg = document.querySelector('#ev-tab-attendance .ev-empty');
-                    var tableHtml = '<table class="display" id="ev-attendance-table" style="width:100%">' +
-                        '<thead><tr><th>Player</th><th>Kingdom</th><th>Park</th><th>Class</th><th>Credits</th><th class="ev-del-cell"></th></tr></thead>' +
-                        '<tbody>' + newRow + '</tbody></table>';
-                    if (emptyMsg) { emptyMsg.outerHTML = tableHtml; }
+                if (!att) {
+                    var _mid = form.querySelector('[name="MundaneId"]').value;
+                    evMarkCheckedIn(_mid);
+                    form.reset();
+                    var _cf = form.querySelector('[name="Credits"]');
+                    if (_cf) _cf.value = evGetSavedCredits();
+                    $('#ev-PlayerName').val(''); $('#ev-MundaneId').val('');
+                    return;
                 }
-
-                // Mark RSVP check-in buttons as done, remove quick-checkin button
+                evAppendAttendanceRow(att);
                 evMarkCheckedIn(att.MundaneId);
 
                 form.reset();
@@ -6524,6 +8597,1047 @@ $(document).ready(function() {
             submitBtn.disabled = !(pid && parseInt(pid.value, 10) > 0 && cls && cls.value && cred && parseFloat(cred.value) > 0);
         });
     };
+
+    // ---- Staff Modal ----
+    if (EvConfig.canManageStaff || EvConfig.canManageSchedule || EvConfig.canManageFeast) {
+        var gid = function(id) { return document.getElementById(id); };
+        var evStaffAcTimer = null;
+        // 0 = adding a new staffer. Nonzero = editing an existing row —
+        // evSubmitStaff() reads this to decide whether to REPLACE the row
+        // in the table or APPEND. The upsert endpoint handles both cases,
+        // but only the frontend knows which visual to render.
+        var evEditingStaffId = 0;
+
+        window.evOpenStaffModal = function(prefill) {
+            var modal = gid('ev-staff-modal');
+            if (!modal) return;
+            var editing = !!(prefill && prefill.staffId);
+            evEditingStaffId = editing ? prefill.staffId : 0;
+            gid('ev-staff-role').value             = editing ? prefill.role      : '';
+            gid('ev-staff-player-name').value      = editing ? prefill.persona   : '';
+            gid('ev-staff-player-id').value        = editing ? prefill.mundaneId : '';
+            // Player is fixed when editing — the upsert key is (detail, mundane),
+            // so changing the player would create a second row rather than
+            // updating this one.
+            gid('ev-staff-player-name').readOnly   = editing;
+            gid('ev-staff-can-manage').checked     = editing ? !!prefill.canManage     : false;
+            gid('ev-staff-can-attendance').checked = editing ? !!prefill.canAttendance : false;
+            if (gid('ev-staff-can-schedule')) gid('ev-staff-can-schedule').checked = editing ? !!prefill.canSchedule : false;
+            if (gid('ev-staff-can-feast'))    gid('ev-staff-can-feast').checked    = editing ? !!prefill.canFeast    : false;
+            gid('ev-staff-error').style.display = 'none';
+            gid('ev-staff-ac').classList.remove('kn-ac-open');
+            // Title + submit-button copy switch on mode.
+            var titleEl = modal.querySelector('.ev-modal-header h3');
+            if (titleEl) titleEl.innerHTML = '<i class="fas fa-id-badge" style="margin-right:8px"></i>' + (editing ? 'Edit Staff Member' : 'Add Staff Member');
+            var saveBtn = gid('ev-staff-save-btn');
+            if (saveBtn) saveBtn.innerHTML = editing
+                ? '<i class="fas fa-save" style="margin-right:5px"></i>Save Changes'
+                : '<i class="fas fa-plus" style="margin-right:5px"></i>Add Staff';
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            setTimeout(function() { gid('ev-staff-role').focus(); }, 50);
+        };
+
+        window.evEditStaff = function(btn, staffId) {
+            var row = btn.closest('tr');
+            if (!row) return;
+            evOpenStaffModal({
+                staffId:       staffId,
+                mundaneId:     row.getAttribute('data-mundane-id') || '',
+                persona:       row.getAttribute('data-persona')    || '',
+                role:          row.getAttribute('data-role')       || '',
+                canManage:     row.getAttribute('data-manage')     === '1',
+                canAttendance: row.getAttribute('data-attendance') === '1',
+                canSchedule:   row.getAttribute('data-schedule')   === '1',
+                canFeast:      row.getAttribute('data-feast')      === '1'
+            });
+        };
+
+        window.evCloseStaffModal = function() {
+            var modal = gid('ev-staff-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.style.overflow = '';
+        };
+
+        // Backdrop click closes — but require the mousedown to have also started
+        // on the backdrop, so drag-selecting text out of a field doesn't close.
+        var _evStaffDownOnBackdrop = false;
+        document.addEventListener('mousedown', function(e) {
+            _evStaffDownOnBackdrop = !!(e.target && e.target.id === 'ev-staff-modal');
+        });
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.id === 'ev-staff-modal' && _evStaffDownOnBackdrop) evCloseStaffModal();
+            _evStaffDownOnBackdrop = false;
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && gid('ev-staff-modal') && gid('ev-staff-modal').style.display === 'flex') {
+                evCloseStaffModal();
+            }
+        });
+
+        // Player autocomplete in staff modal
+        var staffAcEl  = gid('ev-staff-ac');
+        var staffNameEl = gid('ev-staff-player-name');
+        var staffIdEl   = gid('ev-staff-player-id');
+        var OPEN_CLASS  = 'kn-ac-open';
+        var ITEM_SEL    = '.kn-ac-item[data-id]';
+
+        function escHtmlSt(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        function evStaffPositionAc() {
+            if (!staffNameEl || !staffAcEl) return;
+            tnPositionAcFixed(staffNameEl, staffAcEl);
+        }
+
+        function evStaffRenderAc(results) {
+            if (!staffAcEl) return;
+            if (!results || !results.length) {
+                staffAcEl.classList.remove(OPEN_CLASS);
+                return;
+            }
+            staffAcEl.innerHTML = results.map(function(pl) {
+                var abbr = (pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + escHtmlSt(pl.KAbbr) + ':' + escHtmlSt(pl.PAbbr) + ')</span>' : '';
+                return '<div class="kn-ac-item" tabindex="-1" data-id="' + pl.MundaneId + '" data-name="' + encodeURIComponent(pl.Persona) + '">'
+                    + escHtmlSt(pl.Persona) + abbr + '</div>';
+            }).join('');
+            evStaffPositionAc();
+            staffAcEl.classList.add(OPEN_CLASS);
+        }
+
+        if (staffNameEl && staffAcEl) {
+            // Override CSS positioning so the dropdown escapes the modal's overflow-y:auto
+            staffAcEl.style.position = 'fixed';
+            staffAcEl.style.zIndex   = '9999';
+            staffAcEl.style.width    = '300px';
+            // Apply kn-ac-results styling class
+            staffAcEl.className = 'kn-ac-results';
+            staffAcEl.style.display = ''; // clear inline display:none so CSS class controls visibility
+
+            staffNameEl.addEventListener('input', function() {
+                var term = this.value.trim();
+                staffIdEl.value = '';
+                if (term.length < 2) { staffAcEl.classList.remove(OPEN_CLASS); return; }
+                clearTimeout(evStaffAcTimer);
+                evStaffAcTimer = setTimeout(function() {
+                    var kid = EvConfig.kingdomId || 0;
+                    if (!kid) {
+                        // No kingdom on this event — search all players via SearchService
+                        fetch(EvConfig.httpService + 'Search/SearchService.php?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=10')
+                            .then(function(r) { return r.json(); })
+                            .then(function(d) {
+                                var res = (d || []).map(function(pl) {
+                                    return { MundaneId: pl.MundaneId, Persona: pl.Persona, KAbbr: pl.KAbbr || '', PAbbr: pl.PAbbr || '' };
+                                });
+                                evStaffRenderAc(res.length ? res : [{ MundaneId: -1, Persona: 'No players found' }]);
+                                var ph = staffAcEl.querySelector('[data-id="-1"]');
+                                if (ph) ph.removeAttribute('data-id');
+                            });
+                        return;
+                    }
+                    // Kingdom-scoped first
+                    fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=own')
+                        .then(function(r) { return r.json(); })
+                        .then(function(own) {
+                            own = own || [];
+                            if (own.length >= 5) {
+                                evStaffRenderAc(own);
+                            } else {
+                                // Fewer than 5 kingdom results — also fetch outside kingdom and append
+                                fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=exclude')
+                                    .then(function(r2) { return r2.json(); })
+                                    .then(function(other) {
+                                        // Dedup by MundaneId. With an abbreviation
+                                        // prefix like "nb:ff alt", the backend
+                                        // ignores scope entirely so both fetches
+                                        // return the same rows — same player would
+                                        // otherwise render twice in the dropdown.
+                                        var seen = {};
+                                        own.forEach(function(pl) { seen[pl.MundaneId] = true; });
+                                        other = (other || []).filter(function(pl) { return !seen[pl.MundaneId]; }).slice(0, 10 - own.length);
+                                        var combined = own.concat(other);
+                                        evStaffRenderAc(combined.length ? combined : [{ MundaneId: 0, Persona: 'No players found', KAbbr: '', PAbbr: '' }]);
+                                        // Remove no-results placeholder from being selectable
+                                        if (!combined.length) staffAcEl.querySelector('[data-id="0"]') && (staffAcEl.querySelector('[data-id="0"]').removeAttribute('data-id'));
+                                    });
+                            }
+                        });
+                }, 220);
+            });
+
+            staffAcEl.addEventListener('click', function(e) {
+                var item = e.target.closest(ITEM_SEL);
+                if (!item) return;
+                staffNameEl.value = decodeURIComponent(item.dataset.name);
+                staffIdEl.value   = item.dataset.id;
+                staffAcEl.classList.remove(OPEN_CLASS);
+            });
+
+            staffNameEl.addEventListener('blur', function() {
+                setTimeout(function() {
+                    // Keep the dropdown open when focus moves INTO it — otherwise
+                    // arrow-key navigation (which focuses the first item) fires
+                    // this blur handler and hides the list mid-navigation.
+                    if (staffAcEl.contains(document.activeElement)) return;
+                    staffAcEl.classList.remove(OPEN_CLASS);
+                }, 160);
+            });
+
+            // Close only once focus leaves the whole widget (item→elsewhere),
+            // not on item→item/input transitions during arrow-key nav.
+            staffAcEl.addEventListener('focusout', function() {
+                setTimeout(function() {
+                    var a = document.activeElement;
+                    if (a === staffNameEl || staffAcEl.contains(a)) return;
+                    staffAcEl.classList.remove(OPEN_CLASS);
+                }, 160);
+            });
+
+            acKeyNav(staffNameEl, staffAcEl, OPEN_CLASS, ITEM_SEL);
+        }
+
+        window.evSubmitStaff = function() {
+            var role       = gid('ev-staff-role').value.trim();
+            var mundaneId  = gid('ev-staff-player-id').value;
+            var canManage  = gid('ev-staff-can-manage').checked ? 1 : 0;
+            var canAtt     = gid('ev-staff-can-attendance').checked ? 1 : 0;
+            var canSched   = gid('ev-staff-can-schedule') && gid('ev-staff-can-schedule').checked ? 1 : 0;
+            var canFeast   = gid('ev-staff-can-feast')    && gid('ev-staff-can-feast').checked    ? 1 : 0;
+            var errEl      = gid('ev-staff-error');
+            var saveBtn    = gid('ev-staff-save-btn');
+
+            errEl.style.display = 'none';
+            if (!role)       { errEl.textContent = 'Please enter a role.'; errEl.style.display = 'block'; return; }
+            if (!mundaneId)  { errEl.textContent = 'Please select a player.'; errEl.style.display = 'block'; return; }
+
+            var orig = saveBtn.innerHTML;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+
+            var fd = new FormData();
+            fd.append('MundaneId',     mundaneId);
+            fd.append('Persona',       gid('ev-staff-player-name').value.trim());
+            fd.append('RoleName',      role);
+            fd.append('CanManage',     canManage);
+            fd.append('CanAttendance', canAtt);
+            fd.append('CanSchedule',   canSched);
+            fd.append('CanFeast',      canFeast);
+            // Editing? Send the staff row id so the backend does an UPDATE
+            // instead of an INSERT. ork_event_staff has no UNIQUE constraint
+            // on (detail_id, mundane_id) yet, so a bare insert-upsert makes
+            // duplicates instead of updating the row we're editing.
+            if (evEditingStaffId) fd.append('StaffId', evEditingStaffId);
+
+            fetch(EvConfig.uir + 'EventAjax/add_staff/' + EvConfig.eventId + '/' + EvConfig.detailId, {
+                method: 'POST', body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0 && data.staff) {
+                    evCloseStaffModal();
+                    var s = data.staff;
+                    var chk = '<i class="fas fa-check" style="color:#276749"></i>';
+                    var x   = '<i class="fas fa-times" style="color:#a0aec0"></i>';
+                    var newRow = '<tr id="ev-staff-row-' + s.EventStaffId + '"'
+                        + ' data-mundane-id="' + s.MundaneId + '"'
+                        + ' data-persona="'    + escHtmlSt(s.Persona || '') + '"'
+                        + ' data-role="'       + escHtmlSt(s.RoleName || '') + '"'
+                        + ' data-manage="'     + (s.CanManage     ? 1 : 0) + '"'
+                        + ' data-attendance="' + (s.CanAttendance ? 1 : 0) + '"'
+                        + ' data-schedule="'   + (s.CanSchedule   ? 1 : 0) + '"'
+                        + ' data-feast="'      + (s.CanFeast      ? 1 : 0) + '">' +
+                        '<td><a href="' + EvConfig.uir + 'Player/profile/' + s.MundaneId + '">' + escHtmlSt(s.Persona || '') + '</a></td>' +
+                        '<td>' + escHtmlSt(s.RoleName || '') + '</td>' +
+                        '<td>' + (s.CanManage ? chk : x) + '</td>' +
+                        '<td>' + (s.CanAttendance ? chk : x) + '</td>' +
+                        '<td>' + (s.CanSchedule ? chk : x) + '</td>' +
+                        '<td>' + (s.CanFeast ? chk : x) + '</td>' +
+                        '<td class="ev-del-cell" style="white-space:nowrap">' +
+                            '<button class="ev-del-link" data-tip="Edit" onclick="evEditStaff(this,' + s.EventStaffId + ')" style="background:none;border:none;cursor:pointer;color:#4299e1;font-size:14px;padding:0 8px 0 0"><i class="fas fa-pencil-alt"></i></button>' +
+                            '<button class="ev-del-link" data-tip="Remove" onclick="evRemoveStaff(this,' + s.EventStaffId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button>' +
+                        '</td>' +
+                        '</tr>';
+                    var tbody = gid('ev-staff-tbody');
+                    if (tbody) {
+                        // Editing → REPLACE the existing row so we don't render
+                        // a duplicate; adding → APPEND.
+                        var existing = evEditingStaffId ? gid('ev-staff-row-' + evEditingStaffId) : null;
+                        if (existing) {
+                            existing.outerHTML = newRow;
+                        } else {
+                            tbody.insertAdjacentHTML('beforeend', newRow);
+                        }
+                    } else {
+                        // First staff member: table doesn't exist yet, reload to render it properly
+                        location.reload();
+                        return;
+                    }
+                    var empty = gid('ev-staff-empty');
+                    if (empty) empty.style.display = 'none';
+                    // Only bump the tab count when we actually added a new row.
+                    if (!evEditingStaffId) {
+                        var navItems = document.querySelectorAll('#ev-tab-nav li');
+                        navItems.forEach(function(li) {
+                            if (li.getAttribute('data-tab') === 'ev-tab-staff') {
+                                var badge = li.querySelector('.ev-tab-count');
+                                if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
+                            }
+                        });
+                    }
+                } else {
+                    errEl.textContent = data.error || 'An error occurred.';
+                    errEl.style.display = 'block';
+                }
+            })
+            .catch(function(err) {
+                errEl.textContent = 'Request failed: ' + err.message;
+                errEl.style.display = 'block';
+            })
+            .finally(function() {
+                // Staff modal has a single save button and no postAction concept —
+                // the schedule modal's allSaveBtns/postAction logic was copy-pasted
+                // here and would throw ReferenceError, stranding the spinner.
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = orig;
+            });
+        };
+
+        window.evShowScheduleSaveButtons = function(mode) {
+            var secondaries = document.querySelectorAll('#ev-schedule-modal .ev-sched-save-secondary');
+            secondaries.forEach(function(b) { b.style.display = (mode === 'add') ? '' : 'none'; });
+        };
+
+        window.evRemoveStaff = function(btn, staffId) {
+            // Pull the persona out of the row so the confirm dialog names who's
+            // being removed — the native confirm() said only "Remove this staff
+            // member?" which is easy to misfire on the wrong row.
+            var row     = btn.closest('tr');
+            var nameEl  = row ? row.querySelector('td a, td') : null;
+            var persona = nameEl ? nameEl.textContent.trim() : '';
+            var msg     = persona
+                ? 'Remove ' + persona + ' from this event’s staff?'
+                : 'Remove this staff member?';
+            orkConfirm(msg, function() {
+            var fd = new FormData();
+            fd.append('StaffId', staffId);
+            fetch(EvConfig.uir + 'EventAjax/remove_staff/' + EvConfig.eventId + '/' + EvConfig.detailId, {
+                method: 'POST', body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0) {
+                    var row = gid('ev-staff-row-' + staffId);
+                    if (row) row.remove();
+                    var tbody = gid('ev-staff-tbody');
+                    if (tbody && tbody.querySelectorAll('tr').length === 0) {
+                        var table = gid('ev-staff-table');
+                        if (table) {
+                            table.style.display = 'none';
+                            var empty = gid('ev-staff-empty');
+                            if (empty) empty.style.display = '';
+                        }
+                    }
+                    // Update tab count badge
+                    var navItems = document.querySelectorAll('#ev-tab-nav li');
+                    navItems.forEach(function(li) {
+                        if (li.getAttribute('data-tab') === 'ev-tab-staff') {
+                            var badge = li.querySelector('.ev-tab-count');
+                            if (badge) {
+                                var n = parseInt(badge.textContent || '1') - 1;
+                                badge.textContent = Math.max(0, n);
+                            }
+                        }
+                    });
+                } else {
+                    alert(data.error || 'Could not remove staff member.');
+                }
+            })
+            .catch(function(err) { alert('Request failed: ' + err.message); });
+            }, { title: 'Remove Staff Member', okLabel: 'Remove' });
+        };
+
+        // ---- Schedule modal ----
+
+        // --- Schedule leads state & helpers ---
+        var evSchedLeads = [];
+        var evSchedLeadAcTimer = null;
+
+        function evSchedLeadsCell(leads) {
+            if (!leads || !leads.length) return '';
+            return leads.map(function(l) {
+                return '<a href="' + EvConfig.uir + 'Playernew/index/' + l.MundaneId + '">' + escHtmlSt(l.Persona) + '</a>';
+            }).join(', ');
+        }
+
+        function evRenderSchedLeads() {
+            var list = gid('ev-sched-leads-list');
+            if (!list) return;
+            if (!evSchedLeads.length) {
+                list.innerHTML = '<span style="color:#a0aec0;font-size:12px;line-height:26px">None assigned</span>';
+                return;
+            }
+            list.innerHTML = evSchedLeads.map(function(l) {
+                return '<span style="display:inline-flex;align-items:center;gap:4px;background:#e2e8f0;color:#2d3748;border-radius:4px;padding:3px 8px;font-size:12px">' +
+                    escHtmlSt(l.Persona) +
+                    '<button type="button" onclick="evRemoveSchedLead(' + l.MundaneId + ')" style="background:none;border:none;cursor:pointer;color:#718096;font-size:13px;padding:0;margin-left:2px;line-height:1">&times;</button>' +
+                    '</span>';
+            }).join('');
+        }
+
+        window.evRemoveSchedLead = function(mundaneId) {
+            evSchedLeads = evSchedLeads.filter(function(l) { return l.MundaneId !== mundaneId; });
+            evRenderSchedLeads();
+            evRefreshStaffQuickAdd();
+        };
+
+        // Bridge for the feast edit modal (defined in the page template — a
+        // different scope) to seed + render leads through this closure's state.
+        // Without it, the template can't reach evSchedLeads/evRenderSchedLeads,
+        // so feast items opened for edit showed no leads.
+        window.evSetSchedLeads = function(leads) {
+            evSchedLeads = Array.isArray(leads) ? leads : [];
+            evRenderSchedLeads();
+        };
+
+        function evRefreshStaffQuickAdd() {
+            var qaRow  = gid('ev-sched-staff-quickadd-row');
+            var qaList = gid('ev-sched-staff-qa-list');
+            if (!qaRow || !qaList) return;
+            var staff = (EvConfig.staffList || []).filter(function(s) {
+                return !evSchedLeads.some(function(l) { return l.MundaneId === s.MundaneId; });
+            });
+            if (!staff.length) { qaRow.style.display = 'none'; return; }
+            qaRow.style.display = '';
+            qaList.innerHTML = staff.map(function(s) {
+                return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-bottom:1px solid #f0f0f0;font-size:13px">' +
+                    '<span>' + escHtmlSt(s.Persona) + '</span>' +
+                    '<button type="button" onclick="evStaffQuickAddLead(' + s.MundaneId + ',\'' + encodeURIComponent(s.Persona) + '\')" ' +
+                    'style="background:#276749;color:#fff;border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:12px">+ Add</button>' +
+                    '</div>';
+            }).join('');
+        }
+
+        window.evToggleStaffQuickAdd = function() {
+            var list    = gid('ev-sched-staff-qa-list');
+            var chevron = gid('ev-sched-staff-qa-chevron');
+            if (!list) return;
+            var open = list.style.display !== 'none';
+            list.style.display = open ? 'none' : '';
+            if (chevron) chevron.style.transform = open ? '' : 'rotate(90deg)';
+        };
+
+        window.evStaffQuickAddLead = function(mundaneId, encodedName) {
+            var name = decodeURIComponent(encodedName);
+            if (!evSchedLeads.some(function(l) { return l.MundaneId === mundaneId; })) {
+                evSchedLeads.push({ MundaneId: mundaneId, Persona: name });
+                evRenderSchedLeads();
+                evRefreshStaffQuickAdd();
+            }
+        };
+
+        // Lead player autocomplete
+        var leadAcEl    = gid('ev-sched-lead-ac');
+        var leadInputEl = gid('ev-sched-lead-input');
+        if (leadInputEl && leadAcEl) {
+            leadAcEl.style.position = 'fixed';
+            leadAcEl.style.zIndex   = '9999';
+            leadAcEl.style.display  = '';
+            leadAcEl.className      = 'kn-ac-results';
+
+            function evLeadPositionAc() {
+                tnPositionAcFixed(leadInputEl, leadAcEl);
+            }
+
+            function evLeadRenderAc(results) {
+                if (!results || !results.length) { leadAcEl.classList.remove(OPEN_CLASS); return; }
+                leadAcEl.innerHTML = results.map(function(pl) {
+                    var abbr = (pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + escHtmlSt(pl.KAbbr) + ':' + escHtmlSt(pl.PAbbr) + ')</span>' : '';
+                    return '<div class="kn-ac-item" tabindex="-1" data-id="' + pl.MundaneId + '" data-name="' + encodeURIComponent(pl.Persona) + '">' + escHtmlSt(pl.Persona) + abbr + '</div>';
+                }).join('');
+                evLeadPositionAc();
+                leadAcEl.classList.add(OPEN_CLASS);
+            }
+
+            leadInputEl.addEventListener('input', function() {
+                var term = this.value.trim();
+                if (term.length < 2) { leadAcEl.classList.remove(OPEN_CLASS); return; }
+                clearTimeout(evSchedLeadAcTimer);
+                evSchedLeadAcTimer = setTimeout(function() {
+                    var kid = EvConfig.kingdomId || 0;
+                    if (!kid) {
+                        fetch(EvConfig.httpService + 'Search/SearchService.php?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=10')
+                            .then(function(r) { return r.json(); })
+                            .then(function(d) {
+                                var res = (d || []).map(function(pl) { return { MundaneId: pl.MundaneId, Persona: pl.Persona, KAbbr: pl.KAbbr || '', PAbbr: pl.PAbbr || '' }; });
+                                evLeadRenderAc(res.length ? res : [{ MundaneId: -1, Persona: 'No players found' }]);
+                                var ph = leadAcEl.querySelector('[data-id="-1"]');
+                                if (ph) ph.removeAttribute('data-id');
+                            });
+                        return;
+                    }
+                    fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=own')
+                        .then(function(r) { return r.json(); })
+                        .then(function(own) {
+                            own = own || [];
+                            if (own.length >= 5) {
+                                evLeadRenderAc(own);
+                            } else {
+                                fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=exclude')
+                                    .then(function(r2) { return r2.json(); })
+                                    .then(function(other) {
+                                        other = (other || []).slice(0, 10 - own.length);
+                                        var combined = own.concat(other);
+                                        evLeadRenderAc(combined.length ? combined : [{ MundaneId: 0, Persona: 'No players found' }]);
+                                        if (!combined.length && leadAcEl.querySelector('[data-id="0"]')) leadAcEl.querySelector('[data-id="0"]').removeAttribute('data-id');
+                                    });
+                            }
+                        });
+                }, 220);
+            });
+
+            leadAcEl.addEventListener('click', function(e) {
+                var item = e.target.closest(ITEM_SEL);
+                if (!item) return;
+                var mid  = parseInt(item.dataset.id);
+                var name = decodeURIComponent(item.dataset.name);
+                leadAcEl.classList.remove(OPEN_CLASS);
+                leadInputEl.value = '';
+                if (!mid || evSchedLeads.some(function(l) { return l.MundaneId === mid; })) return;
+                evSchedLeads.push({ MundaneId: mid, Persona: name });
+                evRenderSchedLeads();
+            });
+
+            leadInputEl.addEventListener('blur', function() {
+                setTimeout(function() {
+                    // Keep the dropdown open if focus moved into it — acKeyNav focuses
+                    // an item on ArrowDown (which blurs the input), and clicks land on
+                    // items too. Only close when focus truly left the widget.
+                    if (leadAcEl.contains(document.activeElement)) return;
+                    leadAcEl.classList.remove(OPEN_CLASS);
+                }, 160);
+            });
+
+            // When keyboard nav has focus on a dropdown item, close only once focus
+            // leaves the whole widget (item -> elsewhere), not on item -> item/input.
+            leadAcEl.addEventListener('focusout', function() {
+                setTimeout(function() {
+                    var a = document.activeElement;
+                    if (a === leadInputEl || leadAcEl.contains(a)) return;
+                    leadAcEl.classList.remove(OPEN_CLASS);
+                }, 160);
+            });
+
+            acKeyNav(leadInputEl, leadAcEl, OPEN_CLASS, ITEM_SEL);
+        }
+
+
+        var EV_CATEGORIES = {
+            'Administrative':    { icon: 'fa-clipboard-list', color: '#546e7a', bg: '#eceff1' },
+            'Tournament':        { icon: 'fa-trophy',          color: '#b8860b', bg: '#fffde7' },
+            'Battlegame':        { icon: 'fa-shield-alt',      color: '#c0392b', bg: '#fdecea' },
+            'Arts and Sciences': { icon: 'fa-palette',         color: '#7b1fa2', bg: '#f3e5f5' },
+            'Class':             { icon: 'fa-graduation-cap',  color: '#1565c0', bg: '#e3f2fd' },
+            'Feast and Food':    { icon: 'fa-utensils',        color: '#e65100', bg: '#fff3e0' },
+            'Court':             { icon: 'fa-crown',           color: '#4e342e', bg: '#efebe9' },
+            'Meeting':           { icon: 'fa-users',           color: '#276749', bg: '#f0fff4' },
+            'Other':             { icon: 'fa-star',            color: '#757575', bg: '#fafafa' }
+        };
+
+        window.evOpenScheduleModal = function() {
+            var modal = gid('ev-schedule-modal');
+            if (!modal) return;
+            gid('ev-sched-mode').value         = 'add';
+            gid('ev-sched-id').value           = '';
+            gid('ev-sched-modal-title').textContent = 'Add Schedule Item';
+            gid('ev-sched-save-label').textContent  = 'Save and Close';
+            if (typeof evShowScheduleSaveButtons === 'function') evShowScheduleSaveButtons('add');
+            gid('ev-sched-category').value           = 'Other';
+            gid('ev-sched-secondary-category').value = '';
+            gid('ev-sched-title').value       = '';
+            gid('ev-sched-location').value     = '';
+            gid('ev-sched-description').value  = '';
+            gid('ev-sched-error').style.display = 'none';
+            evSchedLeads = [];
+            evRenderSchedLeads();
+            // Collapse staff quick-add and refresh
+            var qaList = gid('ev-sched-staff-qa-list');
+            var qaChevron = gid('ev-sched-staff-qa-chevron');
+            if (qaList) { qaList.style.display = 'none'; }
+            if (qaChevron) { qaChevron.style.transform = ''; }
+            evRefreshStaffQuickAdd();
+            // Apply event bounds as min/max and default start to event start
+            var startEl = gid('ev-sched-start');
+            var endEl   = gid('ev-sched-end');
+            if (EvConfig.eventStart) { startEl.min = EvConfig.eventStart; endEl.min = EvConfig.eventStart; }
+            if (EvConfig.eventEnd)   { startEl.max = EvConfig.eventEnd;   endEl.max = EvConfig.eventEnd; }
+            // Default start to event start, end to start + 1hr
+            startEl.value = EvConfig.eventStart || '';
+            if (EvConfig.eventStart) {
+                var pad = function(n) { return String(n).padStart(2, '0'); };
+                var ts = new Date(EvConfig.eventStart);
+                ts.setHours(ts.getHours() + 1);
+                endEl.value = ts.getFullYear() + '-' + pad(ts.getMonth()+1) + '-' + pad(ts.getDate()) +
+                              'T' + pad(ts.getHours()) + ':' + pad(ts.getMinutes());
+            } else {
+                endEl.value = '';
+            }
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            setTimeout(function() { gid('ev-sched-title').focus(); }, 50);
+        };
+
+        // Dirty-tracking so a stray Escape / backdrop click can't silently
+        // discard typed content. User-driven input/change events flip the
+        // flag; the field-population in evOpenScheduleModal{,Edit} doesn't
+        // trigger these events because programmatic .value sets are silent.
+        var _evSchedDirty = false;
+        var schedModalEl  = gid('ev-schedule-modal');
+        if (schedModalEl) {
+            schedModalEl.addEventListener('input',  function() { _evSchedDirty = true; });
+            schedModalEl.addEventListener('change', function() { _evSchedDirty = true; });
+        }
+        // Reset the flag whenever the modal opens (covers both add and edit).
+        var _origEvOpenSched   = window.evOpenScheduleModal;
+        var _origEvOpenSchedEd = window.evOpenScheduleEditModal;
+        window.evOpenScheduleModal     = function() { _evSchedDirty = false; return _origEvOpenSched.apply(this, arguments); };
+        window.evOpenScheduleEditModal = function() { _evSchedDirty = false; return _origEvOpenSchedEd.apply(this, arguments); };
+
+        function _evSchedDoClose() {
+            _evSchedDirty = false;
+            var modal = gid('ev-schedule-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+        window.evCloseScheduleModal = function(force) {
+            if (!force && _evSchedDirty) {
+                // knConfirm is async + callback-based, so we have to defer the close.
+                // It falls back to native confirm() if kn-confirm-overlay isn't on the page.
+                knConfirm('You have unsaved changes in this schedule item. Discard them?', _evSchedDoClose, 'Discard changes?');
+                return;
+            }
+            _evSchedDoClose();
+        };
+
+        // Backdrop click closes — but require the mousedown to have also started
+        // on the backdrop, so drag-selecting text out of a field doesn't close.
+        var _evSchedDownOnBackdrop = false;
+        document.addEventListener('mousedown', function(e) {
+            _evSchedDownOnBackdrop = !!(e.target && e.target.id === 'ev-schedule-modal');
+        });
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.id === 'ev-schedule-modal' && _evSchedDownOnBackdrop) evCloseScheduleModal();
+            _evSchedDownOnBackdrop = false;
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && gid('ev-schedule-modal') && gid('ev-schedule-modal').style.display === 'flex') {
+                evCloseScheduleModal();
+            }
+        });
+
+        // Auto-set end = start + 1hr whenever start changes
+        var schedStartEl = gid('ev-sched-start');
+        if (schedStartEl) {
+            schedStartEl.addEventListener('change', function() {
+                var endEl = gid('ev-sched-end');
+                if (!endEl) return;
+                var ts = new Date(this.value);
+                if (isNaN(ts)) return;
+                ts.setHours(ts.getHours() + 1);
+                var pad = function(n) { return String(n).padStart(2, '0'); };
+                endEl.value = ts.getFullYear() + '-' + pad(ts.getMonth()+1) + '-' + pad(ts.getDate()) +
+                              'T' + pad(ts.getHours()) + ':' + pad(ts.getMinutes());
+            });
+        }
+
+        function evFmtDayHeader(dateStr) {
+            var d = new Date(dateStr + 'T12:00:00');
+            var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+            var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            return days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+        }
+
+        function evFmtTime(dtStr) {
+            var d = new Date(dtStr.replace(' ', 'T'));
+            if (isNaN(d)) return dtStr;
+            var h = d.getHours(), m = d.getMinutes(), ampm = h >= 12 ? 'pm' : 'am';
+            h = h % 12 || 12;
+            return h + ':' + String(m).padStart(2,'0') + ampm;
+        }
+
+        function escHtmlSch(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        window.evOpenScheduleEditModal = function(scheduleId, btn) {
+            var modal = gid('ev-schedule-modal');
+            if (!modal) return;
+            var row = btn.closest('tr');
+            gid('ev-sched-mode').value         = 'edit';
+            gid('ev-sched-id').value           = scheduleId;
+            gid('ev-sched-modal-title').textContent = 'Edit Schedule Item';
+            gid('ev-sched-save-label').textContent  = 'Save Changes';
+            if (typeof evShowScheduleSaveButtons === 'function') evShowScheduleSaveButtons('edit');
+            gid('ev-sched-category').value           = row.getAttribute('data-category') || 'Other';
+            gid('ev-sched-secondary-category').value = row.getAttribute('data-secondary-category') || '';
+            gid('ev-sched-title').value       = row.getAttribute('data-title') || '';
+            gid('ev-sched-location').value     = row.getAttribute('data-location') || '';
+            gid('ev-sched-description').value  = row.getAttribute('data-description') || '';
+            gid('ev-sched-error').style.display = 'none';
+            try { evSchedLeads = JSON.parse(row.getAttribute('data-leads') || '[]'); } catch(e) { evSchedLeads = []; }
+            evRenderSchedLeads();
+            // Collapse staff quick-add and refresh
+            var qaList = gid('ev-sched-staff-qa-list');
+            var qaChevron = gid('ev-sched-staff-qa-chevron');
+            if (qaList) { qaList.style.display = 'none'; }
+            if (qaChevron) { qaChevron.style.transform = ''; }
+            evRefreshStaffQuickAdd();
+            var startEl = gid('ev-sched-start');
+            var endEl   = gid('ev-sched-end');
+            if (EvConfig.eventStart) { startEl.min = EvConfig.eventStart; endEl.min = EvConfig.eventStart; }
+            if (EvConfig.eventEnd)   { startEl.max = EvConfig.eventEnd;   endEl.max = EvConfig.eventEnd; }
+            startEl.value = row.getAttribute('data-start') || '';
+            endEl.value   = row.getAttribute('data-end')   || '';
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            setTimeout(function() { gid('ev-sched-title').focus(); }, 50);
+        };
+
+        window.evSubmitSchedule = function(postAction) {
+            postAction = postAction || 'close';
+            var title   = gid('ev-sched-title').value.trim();
+            var start   = gid('ev-sched-start').value;
+            var end     = gid('ev-sched-end').value;
+            var loc     = gid('ev-sched-location').value.trim();
+            var desc    = gid('ev-sched-description').value.trim();
+            var errEl   = gid('ev-sched-error');
+            var activeBtnId = postAction === 'similar' ? 'ev-sched-save-similar-btn'
+                            : postAction === 'new'     ? 'ev-sched-save-new-btn'
+                            : 'ev-sched-save-btn';
+            var saveBtn = gid(activeBtnId) || gid('ev-sched-save-btn');
+            var allSaveBtns = document.querySelectorAll('#ev-schedule-modal .ev-sched-save-any');
+
+            // Use innerHTML so the icon renders alongside the message. All four
+            // strings below are hand-crafted literals, no user input, so this
+            // is safe. Focus the offending field too so it's visually obvious.
+            function _schedShowErr(msg, focusEl) {
+                errEl.innerHTML = '<i class="fas fa-exclamation-circle"></i>' + msg;
+                errEl.style.display = 'block';
+                if (focusEl) focusEl.focus();
+            }
+            errEl.style.display = 'none';
+            if (!title) { _schedShowErr('Please enter a title.',       gid('ev-sched-title'));      return; }
+            if (!start) { _schedShowErr('Please enter a start time.',  gid('ev-sched-start')); return; }
+            if (!end)   { _schedShowErr('Please enter an end time.',   gid('ev-sched-end'));   return; }
+            if (new Date(end) < new Date(start)) {
+                _schedShowErr('End time cannot be before start time.', gid('ev-sched-end'));
+                return;
+            }
+
+            var orig = saveBtn.innerHTML;
+            allSaveBtns.forEach(function(b) { b.disabled = true; });
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+
+            var cat    = gid('ev-sched-category').value || 'Other';
+            var secCat = gid('ev-sched-secondary-category').value || '';
+            var fd = new FormData();
+            fd.append('Category',          cat);
+            fd.append('SecondaryCategory', secCat);
+            fd.append('Title',       title);
+            fd.append('StartTime',   start.replace('T', ' '));
+            fd.append('EndTime',     end.replace('T', ' '));
+            fd.append('Location',    loc);
+            fd.append('Description', desc);
+            fd.append('Leads',       JSON.stringify(evSchedLeads));
+
+            var isEdit = gid('ev-sched-mode').value === 'edit';
+            var schedId = gid('ev-sched-id').value;
+            var url = isEdit
+                ? EvConfig.uir + 'EventAjax/update_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId
+                : EvConfig.uir + 'EventAjax/add_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId;
+            if (isEdit) fd.append('ScheduleId', schedId);
+
+            fetch(url, {
+                method: 'POST', body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0 && data.schedule) {
+                    if (postAction === 'close') evCloseScheduleModal(true);
+                    var s = data.schedule;
+                    // Keep the Feast tab in sync: a "Feast and Food" schedule item must
+                    // surface as a meal card there (and a card must drop if an edit moved
+                    // the item out of that category). Defined in the template's feast IIFE.
+                    if (typeof window.evSyncFeastCard === 'function') window.evSyncFeastCard(s);
+                    var startCell = escHtmlSch(evFmtTime(s.StartTime));
+                    var endCell   = escHtmlSch(evFmtTime(s.EndTime));
+                    var catCfg = EV_CATEGORIES[s.Category] || EV_CATEGORIES['Other'];
+                    var glyphHtml = (function(cat, secCat) {
+                        var cfg    = EV_CATEGORIES[cat]    || EV_CATEGORIES['Other'];
+                        var secCfg = secCat ? (EV_CATEGORIES[secCat] || EV_CATEGORIES['Other']) : null;
+                        var p = '<i class="fas fa-fw ' + cfg.icon + '" style="color:' + cfg.color + '" data-tip="' + escHtmlSch(cat) + '"></i>';
+                        var s2 = secCfg
+                            ? '<i class="fas fa-fw ' + secCfg.icon + '" style="color:' + secCfg.color + ';margin-right:4px" data-tip="' + escHtmlSch(secCat) + '"></i>'
+                            : '<span style="display:inline-block;width:1.25em;margin-right:4px"></span>';
+                        return p + s2;
+                    })(s.Category, s.SecondaryCategory || '');
+                    var actionCells = '<td class="ev-del-cell">' +
+                        '<button class="ev-edit-link" data-tip="Edit" onclick="evOpenScheduleEditModal(' + s.EventScheduleId + ',this)" style="background:none;border:none;cursor:pointer;color:#666;font-size:13px;padding:0 5px 0 0"><i class="fas fa-pencil-alt"></i></button>' +
+                        '<button class="ev-del-link" data-tip="Remove" onclick="evRemoveSchedule(this,' + s.EventScheduleId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button>' +
+                        '</td>';
+                    if (isEdit) {
+                        var row = gid('ev-schedule-row-' + s.EventScheduleId);
+                        if (row) {
+                            row.setAttribute('data-title',       s.Title);
+                            row.setAttribute('data-start',       (s.StartTime || '').replace(' ', 'T').substring(0, 16));
+                            row.setAttribute('data-end',         (s.EndTime || '').replace(' ', 'T').substring(0, 16));
+                            row.setAttribute('data-location',    s.Location);
+                            row.setAttribute('data-description', s.Description);
+                            row.setAttribute('data-category',           s.Category);
+                            row.setAttribute('data-secondary-category', s.SecondaryCategory || '');
+                            row.setAttribute('data-leads',              JSON.stringify(s.Leads || []));
+                            row.style.background = catCfg.bg;
+                            row.cells[0].innerHTML = startCell;
+                            row.cells[1].innerHTML = endCell;
+                            row.cells[2].innerHTML = glyphHtml + escHtmlSch(s.Title);
+                            row.cells[3].textContent = s.Location;
+                            row.cells[4].innerHTML = evSchedLeadsCell(s.Leads || []);
+                            row.cells[5].textContent = s.Description;
+                            if (row.cells[6]) row.cells[6].innerHTML = actionCells.replace(/^<td[^>]*>/, '').replace(/<\/td>$/, '');
+                        }
+                    } else {
+                        var newRow = '<tr id="ev-schedule-row-' + s.EventScheduleId + '"' +
+                            ' data-schedule-id="' + s.EventScheduleId + '"' +
+                            ' data-title="' + s.Title.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
+                            ' data-start="' + (s.StartTime || '').replace(' ','T').substring(0,16) + '"' +
+                            ' data-end="'   + (s.EndTime || '').replace(' ','T').substring(0,16) + '"' +
+                            ' data-location="' + s.Location.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
+                            ' data-description="' + s.Description.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
+                            ' data-category="' + escHtmlSch(s.Category) + '"' +
+                            ' data-secondary-category="' + escHtmlSch(s.SecondaryCategory || '') + '"' +
+                            ' data-leads="' + JSON.stringify(s.Leads || []).replace(/"/g,'&quot;') + '"' +
+                            ' style="background:' + catCfg.bg + '">' +
+                            '<td style="white-space:nowrap">' + startCell + '</td>' +
+                            '<td style="white-space:nowrap">' + endCell + '</td>' +
+                            '<td>' + glyphHtml + escHtmlSch(s.Title) + '</td>' +
+                            '<td>' + escHtmlSch(s.Location) + '</td>' +
+                            '<td>' + evSchedLeadsCell(s.Leads || []) + '</td>' +
+                            '<td>' + escHtmlSch(s.Description) + '</td>' +
+                            actionCells +
+                            '</tr>';
+                        var dateKey = s.StartTime.substring(0, 10).replace(/-/g, '');
+                        var tbody = gid('ev-schedule-tbody-' + dateKey);
+                        if (!tbody) {
+                            // Build a new day section and insert in chronological order
+                            var dateStr = s.StartTime.substring(0, 10);
+                            var dayLabel = evFmtDayHeader(dateStr);
+                            var delTh = EvConfig.canManageSchedule ? '<th class="ev-del-cell"></th>' : '';
+                            var delCol = EvConfig.canManageSchedule ? '<col style="width:56px">' : '';
+                            var newSection = '<div class="ev-sched-day-section" data-date="' + dateStr + '">' +
+                                '<div class="ev-sched-day-header">' + dayLabel + '</div>' +
+                                '<table class="ev-table ev-sched-table" id="ev-schedule-table-' + dateKey + '">' +
+                                '<colgroup><col style="width:90px"><col style="width:90px"><col style="width:22%"><col style="width:15%"><col style="width:18%"><col>' + delCol + '</colgroup>' +
+                                '<thead><tr><th>Start</th><th>End</th><th>Title</th><th>Location</th><th>Lead(s)</th><th>Description</th>' + delTh + '</tr></thead>' +
+                                '<tbody id="ev-schedule-tbody-' + dateKey + '"></tbody>' +
+                                '</table></div>';
+                            var container = gid('ev-schedule-container');
+                            if (!container) { location.reload(); return; }
+                            var sections = container.querySelectorAll('.ev-sched-day-section');
+                            var inserted = false;
+                            sections.forEach(function(sec) {
+                                if (!inserted && sec.getAttribute('data-date') > dateStr) {
+                                    sec.insertAdjacentHTML('beforebegin', newSection);
+                                    inserted = true;
+                                }
+                            });
+                            if (!inserted) container.insertAdjacentHTML('beforeend', newSection);
+                            tbody = gid('ev-schedule-tbody-' + dateKey);
+                        }
+                        if (tbody) {
+                            tbody.insertAdjacentHTML('beforeend', newRow);
+                        } else {
+                            location.reload(); return;
+                        }
+                        var empty = gid('ev-schedule-empty');
+                        if (empty) empty.style.display = 'none';
+                        var navItems = document.querySelectorAll('#ev-tab-nav li');
+                        navItems.forEach(function(li) {
+                            if (li.getAttribute('data-tab') === 'ev-tab-schedule') {
+                                var badge = li.querySelector('.ev-tab-count');
+                                if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
+                            }
+                        });
+                        evBuildScheduleFilters();
+                    }
+                    // Keep the server-rendered grid in sync with this list mutation.
+                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
+                } else {
+                    errEl.textContent = data.error || 'An error occurred.';
+                    errEl.style.display = 'block';
+                }
+            })
+            .catch(function(err) {
+                errEl.textContent = 'Request failed: ' + err.message;
+                errEl.style.display = 'block';
+            })
+            .finally(function() {
+                // Re-enable EVERY save button, not just the one that was clicked.
+                // "Save and Create Similar"/"…New" keep the modal open for another
+                // entry, so leaving the other two disabled stranded them — the user
+                // could change fields and the buttons never came back. (line 8317
+                // disables all of them on submit; the finally must mirror that.)
+                allSaveBtns.forEach(function(b) { b.disabled = false; });
+                saveBtn.innerHTML = orig;
+            });
+        };
+
+        window.evBuildScheduleFilters = function() {
+            var container = gid('ev-sched-filters');
+            if (!container) return;
+            var rows = document.querySelectorAll('[id^="ev-schedule-tbody-"] tr');
+            var present = {};
+            rows.forEach(function(row) {
+                var cat = row.getAttribute('data-category') || 'Other';
+                present[cat] = true;
+                var sec = row.getAttribute('data-secondary-category') || '';
+                if (sec) present[sec] = true;
+            });
+            var order = ['Administrative','Tournament','Battlegame','Arts and Sciences','Class','Feast and Food','Court','Meeting','Other'];
+            container.innerHTML = '';
+            var count = 0;
+            order.forEach(function(cat) {
+                if (!present[cat]) return;
+                count++;
+                var cfg = EV_CATEGORIES[cat] || EV_CATEGORIES['Other'];
+                var pill = document.createElement('button');
+                pill.className = 'ev-sched-pill ev-sched-pill-active';
+                pill.setAttribute('data-cat', cat);
+                pill.style.background = cfg.bg;
+                pill.style.borderColor = cfg.color;
+                pill.style.color = '#333';
+                pill.innerHTML = '<i class="fas ' + cfg.icon + '" style="color:' + cfg.color + ';margin-right:5px"></i>' + escHtmlSch(cat);
+                pill.addEventListener('click', function() { evToggleScheduleFilter(cat); });
+                container.appendChild(pill);
+            });
+            container.style.display = count >= 2 ? 'flex' : 'none';
+        };
+
+        window.evToggleScheduleFilter = function(cat) {
+            var pill = document.querySelector('#ev-sched-filters [data-cat="' + cat + '"]');
+            if (!pill) return;
+            var isActive = pill.classList.contains('ev-sched-pill-active');
+            var cfg = EV_CATEGORIES[cat] || EV_CATEGORIES['Other'];
+            if (isActive) {
+                pill.classList.remove('ev-sched-pill-active');
+                pill.classList.add('ev-sched-pill-inactive');
+            } else {
+                pill.classList.remove('ev-sched-pill-inactive');
+                pill.classList.add('ev-sched-pill-active');
+                pill.style.background = cfg.bg;
+                pill.style.borderColor = cfg.color;
+                pill.style.color = '#333';
+                var icon = pill.querySelector('i');
+                if (icon) icon.style.color = cfg.color;
+            }
+            document.querySelectorAll('[id^="ev-schedule-tbody-"] tr').forEach(function(row) {
+                var primary = row.getAttribute('data-category') || 'Other';
+                var secondary = row.getAttribute('data-secondary-category') || '';
+                if (primary !== cat && secondary !== cat) return;
+                // Re-evaluate visibility: show if any of the row's categories has an active pill
+                var primPill = document.querySelector('#ev-sched-filters [data-cat="' + primary + '"]');
+                var secPill  = secondary ? document.querySelector('#ev-sched-filters [data-cat="' + secondary + '"]') : null;
+                var primActive = primPill ? primPill.classList.contains('ev-sched-pill-active') : true;
+                var secActive  = secPill  ? secPill.classList.contains('ev-sched-pill-active')  : false;
+                row.style.display = (primActive || secActive) ? '' : 'none';
+            });
+            // Grid view shares these pills: hide/show the toggled category's column too.
+            evApplyGridFilter();
+        };
+
+        // Grid filter: hide the column (header + body) of any category whose pill is
+        // inactive, then reflow --ev-grid-cols so the remaining columns fill the width.
+        // Categories with no pill (not present that day) stay visible.
+        window.evApplyGridFilter = function() {
+            var pills = document.querySelectorAll('#ev-sched-filters .ev-sched-pill');
+            if (!pills.length) return;
+            var active = {};
+            pills.forEach(function(p) {
+                active[p.getAttribute('data-cat')] = p.classList.contains('ev-sched-pill-active');
+            });
+            document.querySelectorAll('.ev-grid-day').forEach(function(day) {
+                var visible = 0;
+                day.querySelectorAll('.ev-grid-cat-head[data-category]').forEach(function(head) {
+                    var show = active[head.getAttribute('data-category')] !== false;
+                    head.style.display = show ? '' : 'none';
+                    if (show) visible++;
+                });
+                day.querySelectorAll('.ev-grid-col[data-category]').forEach(function(col) {
+                    col.style.display = (active[col.getAttribute('data-category')] !== false) ? '' : 'none';
+                });
+                var inner = day.querySelector('.ev-grid-inner');
+                if (inner) inner.style.setProperty('--ev-grid-cols', Math.max(1, visible));
+            });
+        };
+
+        window.evRemoveSchedule = function(btn, scheduleId) {
+            if (!confirm('Remove this schedule item?')) return;
+            var fd = new FormData();
+            fd.append('ScheduleId', scheduleId);
+            fetch(EvConfig.uir + 'EventAjax/remove_schedule/' + EvConfig.eventId + '/' + EvConfig.detailId, {
+                method: 'POST', body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0) {
+                    // A multi-day item renders one row per day it spans, so remove them all.
+                    var rows = document.querySelectorAll('tr[data-schedule-id="' + scheduleId + '"]');
+                    // Capture the day-sections BEFORE removing the rows — closest() on a
+                    // detached node returns null, so empty sections never got cleaned up.
+                    var daySections = [];
+                    rows.forEach(function(row) {
+                        var sec = row.closest('.ev-sched-day-section');
+                        if (sec && daySections.indexOf(sec) === -1) daySections.push(sec);
+                        row.remove();
+                    });
+                    daySections.forEach(function(daySection) {
+                        var tbody = daySection.querySelector('tbody');
+                        if (tbody && tbody.querySelectorAll('tr').length === 0) {
+                            daySection.remove();
+                        }
+                    });
+                    var container = gid('ev-schedule-container');
+                    if (container && container.querySelectorAll('.ev-sched-day-section').length === 0) {
+                        var empty = gid('ev-schedule-empty');
+                        if (empty) empty.style.display = '';
+                    }
+                    var navItems = document.querySelectorAll('#ev-tab-nav li');
+                    navItems.forEach(function(li) {
+                        if (li.getAttribute('data-tab') === 'ev-tab-schedule') {
+                            var badge = li.querySelector('.ev-tab-count');
+                            if (badge) {
+                                var n = parseInt(badge.textContent || '1') - 1;
+                                badge.textContent = Math.max(0, n);
+                            }
+                        }
+                    });
+                    evBuildScheduleFilters();
+                    // Keep the server-rendered grid in sync with this removal.
+                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
+                } else {
+                    alert(data.error || 'Could not remove schedule item.');
+                }
+            })
+            .catch(function(err) { alert('Request failed: ' + err.message); });
+        };
+        // Initialize schedule filters on page load
+        evBuildScheduleFilters();
+    }
 })();
 
 /* ===========================
@@ -6618,7 +9732,12 @@ if (typeof EnConfig !== 'undefined') (function() {
                     h*=60;
                 }
                 var hero = document.getElementById('en-hero');
-                if (hero) hero.style.backgroundColor = 'hsl('+Math.round(h)+','+Math.round(s*55)+'%,18%)';
+                if (hero) {
+                    var _en_dark = orkIsDarkMode();
+                    var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_en_dark ? '22%' : '18%');
+                    var enSPct = _en_dark ? Math.round(s * 68) : Math.round(s * 55);
+                    hero.style.backgroundColor = 'hsl('+Math.round(h)+','+enSPct+'%,'+heroL+')';
+                }
             } catch(e){}
         }
         if (img.complete && img.naturalWidth > 0) { extract(); }
@@ -6683,7 +9802,12 @@ if (typeof EcConfig !== 'undefined') (function() {
                     h*=60;
                 }
                 var banner = document.getElementById('ec-banner');
-                if (banner) banner.style.backgroundColor = 'hsl('+Math.round(h)+','+Math.round(s*55)+'%,18%)';
+                if (banner) {
+                    var _ec_dark = orkIsDarkMode();
+                    var heroL = getComputedStyle(document.documentElement).getPropertyValue('--ork-hero-lightness').trim() || (_ec_dark ? '22%' : '18%');
+                    var ecSPct = _ec_dark ? Math.round(s * 68) : Math.round(s * 55);
+                    banner.style.backgroundColor = 'hsl('+Math.round(h)+','+ecSPct+'%,'+heroL+')';
+                }
             } catch(e){}
         }
         if (img.complete && img.naturalWidth > 0) { extract(); }
@@ -7143,6 +10267,41 @@ $(document).ready(function() {
         gid('pk-att-date-display').classList.remove('pk-cal-open');
         gid('pk-att-date-display').setAttribute('aria-expanded', 'false');
     }
+    // Nudge user toward Event-attendance when a real event is active at this
+    // park on the modal's selected date. Filters PkConfig.calEvents (which the
+    // controller already populates with park-owned events plus kingdom events
+    // whose calendar detail has at_park_id matching this park).
+    function pkUpdateEventNudge(dateStr) {
+        var nudge = gid('pk-att-event-nudge');
+        if (!nudge) return;
+        var all = (window.PkConfig && PkConfig.calEvents) || [];
+        var match = null;
+        for (var i = 0; i < all.length; i++) {
+            var e = all[i];
+            if (!e || !e.start || e.type === 'calendar-item') continue;
+            var ext = e.extendedProps || {};
+            if (ext.isDraft) continue;
+            if (!ext.eventId || !ext.detailId) continue;
+            var startDay = String(e.start).slice(0, 10);
+            var endDay   = e.end ? String(e.end).slice(0, 10) : startDay;
+            // FullCalendar's `end` is exclusive (controller adds +1 day for
+            // multi-day events). For single-day events `end` is unset.
+            var inRange = e.end
+                ? (dateStr >= startDay && dateStr < endDay)
+                : (dateStr === startDay);
+            if (inRange) { match = e; break; }
+        }
+        if (match) {
+            var nameEl = gid('pk-att-event-nudge-name');
+            if (nameEl) nameEl.textContent = match.title || 'this event';
+            var link = gid('pk-att-event-nudge-link');
+            if (link && match.url) link.href = match.url;
+            nudge.style.display = '';
+        } else {
+            nudge.style.display = 'none';
+        }
+    }
+
     function pkSetDate(val, cb) {
         gid('pk-att-date').value = val;
         gid('pk-att-date-label').textContent = pkFormatDateDisplay(val);
@@ -7153,6 +10312,7 @@ $(document).ready(function() {
         if (gid('pk-att-panel-recent') && gid('pk-att-panel-recent').style.display !== 'none') {
             pkBuildQuickAddRows();
         }
+        pkUpdateEventNudge(val);
         pkFetchDayEntered(val, cb);
     }
 
@@ -7164,6 +10324,7 @@ $(document).ready(function() {
         pkBuildClassOptions();
         gid('pk-att-player-name').value = '';
         gid('pk-att-player-id').value   = '';
+        pkAttSelectedInactive = false;
         pkAttHideFeedback();
         pkAttUpdateAddBtn();
         // Reset to Search tab and clear quick-add rows so they rebuild fresh
@@ -7182,6 +10343,10 @@ $(document).ready(function() {
         gid('pk-att-overlay').classList.add('pk-att-open');
         document.body.style.overflow = 'hidden';
         pkSetDate(today);
+        // Drop any stale "no active links" cache so every modal open reflects
+        // current DB state. The reset helper lives in the sign-in-link IIFE
+        // below since that's where pkLinksLoaded is in scope.
+        if (typeof window.pkResetSigninLinksCache === 'function') window.pkResetSigninLinksCache();
     };
     window.pkCloseAttendanceModal = function() {
         gid('pk-att-overlay').classList.remove('pk-att-open');
@@ -7293,17 +10458,23 @@ $(document).ready(function() {
         if (!cls)  { pkAttShowFeedback('Select a class.', false); return; }
         var btn = gid('pk-att-add-btn');
         btn.disabled = true;
+        var wasInactive = pkAttSelectedInactive;
         pkSubmit(
             { AttendanceDate: gid('pk-att-date').value, MundaneId: pid, ClassId: cls, Credits: cred },
-            function(ok, err, aid) {
+            function(ok, err, aid, reactivated) {
                 if (ok) {
                     var midInt = parseInt(pid, 10);
                     pkAttEntered[midInt] = true;
                     pkLastClass[midInt]  = cls;
-                    pkAttHideFeedback();
+                    if (reactivated || wasInactive) {
+                        pkAttShowFeedback(name + ' reactivated and attendance added.', true);
+                    } else {
+                        pkAttHideFeedback();
+                    }
                     pkAttRecorded({ AttendanceId: aid, MundaneId: midInt, Persona: name, ClassId: cls, Credits: cred });
                     gid('pk-att-player-name').value = '';
                     gid('pk-att-player-id').value   = '';
+                    pkAttSelectedInactive = false;
                     pkUpdateQuickAddEntered();
                 } else {
                     pkAttShowFeedback(err, false);
@@ -7316,9 +10487,9 @@ $(document).ready(function() {
     // --- Core AJAX ---
     function pkSubmit(data, cb) {
         $.post(ADD_URL, data, function(r) {
-            if (r && r.status === 0) {  cb(true, null, r.attendanceId || 0); }
-            else                     cb(false, (r && r.error) ? r.error : 'Submission failed.', 0);
-        }, 'json').fail(function() { cb(false, 'Request failed. Please try again.', 0); });
+            if (r && r.status === 0) {  cb(true, null, r.attendanceId || 0, !!r.reactivated); }
+            else                     cb(false, (r && r.error) ? r.error : 'Submission failed.', 0, false);
+        }, 'json').fail(function() { cb(false, 'Request failed. Please try again.', 0, false); });
     }
 
     // --- Feedback helpers ---
@@ -7418,9 +10589,19 @@ $(document).ready(function() {
     // --- Close handlers ---
     gid('pk-att-close-btn').addEventListener('click', pkCloseAttendanceModal);
     gid('pk-att-done-btn').addEventListener('click',  pkCloseAttendanceModal);
-    gid('pk-att-overlay').addEventListener('click', function(e) {
-        if (e.target === this) pkCloseAttendanceModal();
-    });
+    // Backdrop click closes — but only when mousedown also started on the
+    // backdrop. Without this, drag-selecting text inside an input and
+    // releasing outside it triggers a synthetic click on the backdrop and
+    // dismisses the modal mid-selection.
+    (function() {
+        var ov = gid('pk-att-overlay');
+        var downOnSelf = false;
+        ov.addEventListener('mousedown', function(e) { downOnSelf = (e.target === this); });
+        ov.addEventListener('click', function(e) {
+            if (downOnSelf && e.target === this) pkCloseAttendanceModal();
+            downOnSelf = false;
+        });
+    })();
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && gid('pk-att-overlay').classList.contains('pk-att-open'))
             pkCloseAttendanceModal();
@@ -7430,51 +10611,74 @@ $(document).ready(function() {
     function pkAttAbbr(v) {
         return (v.KAbbr && v.PAbbr) ? v.KAbbr + ':' + v.PAbbr : (v.ParkName || '');
     }
+    // Tracks whether the currently selected player in the search field is inactive.
+    // When true, clicking Add triggers a reactivation confirm dialog before submit.
+    var pkAttSelectedInactive = false;
+
+    function pkAttMakeItem(v) {
+        return {
+            label: v.Persona + ' \u2014 ' + pkAttAbbr(v),
+            name: v.Persona,
+            value: v.MundaneId,
+            suspended: !!(v.PenaltyBox || v.Suspended),
+            inactive: (typeof v.Active !== 'undefined') ? (parseInt(v.Active, 10) === 0) : false
+        };
+    }
     var pkAttAC = $('#pk-att-player-name').autocomplete({
         source: function(req, res) {
             var s = req.term;
-            function toItems(list) {
-                var items = [];
+            function splitToItems(list, seen) {
+                var active = [], inactive = [];
                 $.each(list || [], function(i, v) {
-                    if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
-                    items.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId, suspended: !!(v.PenaltyBox || v.Suspended) });
+                    var mid = parseInt(v.MundaneId, 10);
+                    if (pkAttEntered[mid]) return;
+                    if (seen && seen[mid]) return;
+                    if (seen) seen[mid] = true;
+                    var item = pkAttMakeItem(v);
+                    if (item.inactive) inactive.push(item); else active.push(item);
                 });
+                return { active: active, inactive: inactive };
+            }
+            function assemble(groups, inactiveItems) {
+                var sep = { label: '', name: '', value: null, separator: true };
+                var items = [];
+                groups.forEach(function(g) {
+                    if (!g || !g.length) return;
+                    if (items.length) items.push(sep);
+                    items = items.concat(g);
+                });
+                if (inactiveItems && inactiveItems.length) {
+                    if (items.length) items.push(sep);
+                    items = items.concat(inactiveItems);
+                }
                 return items;
             }
             if (pkAttScope === 'park') {
                 $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, park_id: PkConfig.parkId, limit: 12 })
-                    .done(function(r) { res(toItems(r)); });
+                    .done(function(r) {
+                        var split = splitToItems(r);
+                        res(assemble([split.active], split.inactive));
+                    });
             } else if (pkAttScope === 'kingdom') {
                 $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, kingdom_id: PkConfig.kingdomId, limit: 12 })
-                    .done(function(r) { res(toItems(r)); });
+                    .done(function(r) {
+                        var split = splitToItems(r);
+                        res(assemble([split.active], split.inactive));
+                    });
             } else {
                 $.when(
                     $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, park_id: PkConfig.parkId, limit: 8 }),
                     $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, kingdom_id: PkConfig.kingdomId, limit: 8 }),
                     $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: s, limit: 8 })
                 ).done(function(parkRes, kingRes, allRes) {
-                    var seen = {}, parkItems = [], kingItems = [], otherItems = [];
-                    $.each(parkRes[0] || [], function(i, v) {
-                        if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
-                        seen[v.MundaneId] = true;
-                        parkItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId, suspended: !!(v.PenaltyBox || v.Suspended) });
-                    });
-                    $.each(kingRes[0] || [], function(i, v) {
-                        if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
-                        if (seen[v.MundaneId]) return;
-                        seen[v.MundaneId] = true;
-                        kingItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId, suspended: !!(v.PenaltyBox || v.Suspended) });
-                    });
-                    $.each(allRes[0] || [], function(i, v) {
-                        if (pkAttEntered[parseInt(v.MundaneId, 10)]) return;
-                        if (seen[v.MundaneId]) return;
-                        otherItems.push({ label: v.Persona + ' \u2014 ' + pkAttAbbr(v), name: v.Persona, value: v.MundaneId, suspended: !!(v.PenaltyBox || v.Suspended) });
-                    });
-                    var sep = { label: '', name: '', value: null, separator: true };
-                    var items = parkItems;
-                    if (kingItems.length) { if (items.length) items.push(sep); items = items.concat(kingItems); }
-                    if (otherItems.length) { if (items.length) items.push(sep); items = items.concat(otherItems); }
-                    res(items);
+                    var seen = {};
+                    var parkSplit  = splitToItems(parkRes[0],  seen);
+                    var kingSplit  = splitToItems(kingRes[0],  seen);
+                    var otherSplit = splitToItems(allRes[0],   seen);
+                    var inactiveAll = parkSplit.inactive
+                        .concat(kingSplit.inactive)
+                        .concat(otherSplit.inactive);
+                    res(assemble([parkSplit.active, kingSplit.active, otherSplit.active], inactiveAll));
                 });
             }
         },
@@ -7483,6 +10687,7 @@ $(document).ready(function() {
             if (!ui.item.value) return false;
             $('#pk-att-player-name').val(ui.item.name);
             $('#pk-att-player-id').val(ui.item.value);
+            pkAttSelectedInactive = !!ui.item.inactive;
             // Pre-fill class from last class map
             var lastCls = pkLastClass[parseInt(ui.item.value, 10)];
             if (lastCls) {
@@ -7492,18 +10697,35 @@ $(document).ready(function() {
             pkAttUpdateAddBtn();
             return false;
         },
-        change: function(e, ui) { if (!ui.item) { $('#pk-att-player-id').val(''); pkAttUpdateAddBtn(); } return false; },
+        change: function(e, ui) {
+            if (!ui.item) {
+                $('#pk-att-player-id').val('');
+                pkAttSelectedInactive = false;
+                pkAttUpdateAddBtn();
+            }
+            return false;
+        },
         delay: 250, minLength: 2,
     });
     $('#pk-att-player-name').on('input', function() {
-        if (!$(this).val()) { pkAttAC.autocomplete('close'); $('#pk-att-player-id').val(''); pkAttUpdateAddBtn(); }
+        if (!$(this).val()) {
+            pkAttAC.autocomplete('close');
+            $('#pk-att-player-id').val('');
+            pkAttSelectedInactive = false;
+            pkAttUpdateAddBtn();
+        }
     });
     pkAttAC.data('autocomplete')._renderItem = function(ul, item) {
         if (item.separator) {
             return $('<li class="pk-att-ac-sep">').appendTo(ul);
         }
         var a = $('<a>');
-        if (item.suspended) {
+        if (item.inactive) {
+            a.addClass('pk-att-ac-inactive').html(
+                $('<span>').text(item.label).html() +
+                '<span class="pk-att-ac-inactive-badge">inactive</span>'
+            );
+        } else if (item.suspended) {
             a.addClass('pk-att-ac-suspended').html(
                 '<i class="fas fa-ban" style="margin-right:5px;font-size:11px"></i>' + $('<span>').text(item.label).html()
             );
@@ -7512,6 +10734,911 @@ $(document).ready(function() {
         }
         return $('<li></li>').data('item.autocomplete', item).append(a).appendTo(ul);
     };
+
+    // Capture-phase click interceptor on the Add button: if the selected player
+    // is inactive, confirm before the regular submit handler fires. The backend
+    // auto-reactivates on successful add; this dialog makes the side effect
+    // visible to the user.
+    (function() {
+        var addBtn = gid('pk-att-add-btn');
+        if (!addBtn) return;
+        addBtn.addEventListener('click', function(e) {
+            if (!pkAttSelectedInactive) return;
+            var ok = confirm('You have selected a player whose record has been marked inactive. By adding attendance for this player, the ORK will automatically reactivate their profile. Proceed?');
+            if (!ok) {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+            }
+        }, true);
+    }());
+});
+
+
+// ============================================================
+// Compose a labeled PNG (title above the QR, expiry below) on a canvas.
+// Used to make the *downloaded* QR self-describing — the on-screen modal
+// keeps showing the bare QR so the scannable area stays large.
+function orkBuildLabeledQrPng(qrImg, titleText, expiresText, callback) {
+    var QR_SIZE       = 512;             // upscaled so print stays sharp
+    var PAD           = 40;
+    var TITLE_FONT    = 'bold 28px sans-serif';
+    var SUBTITLE_FONT = '18px sans-serif';
+    var EXPIRES_FONT  = '20px sans-serif';
+    var LINE_H_TITLE  = 34;
+    var subtitle      = 'Scan to sign in';
+
+    function wrap(ctx, text, maxWidth) {
+        if (!text) return [];
+        var words = text.split(/\s+/);
+        var lines = [];
+        var line  = '';
+        for (var i = 0; i < words.length; i++) {
+            var test = line ? line + ' ' + words[i] : words[i];
+            if (ctx.measureText(test).width > maxWidth && line) {
+                lines.push(line);
+                line = words[i];
+            } else {
+                line = test;
+            }
+        }
+        if (line) lines.push(line);
+        return lines;
+    }
+
+    var canvas = document.createElement('canvas');
+    var ctx    = canvas.getContext('2d');
+
+    var width        = QR_SIZE + PAD * 2;
+    ctx.font         = TITLE_FONT;
+    var titleLines   = wrap(ctx, titleText || '', QR_SIZE);
+    var titleH       = titleLines.length * LINE_H_TITLE;
+    var subH         = subtitle ? 22 : 0;
+    var expH         = expiresText ? 26 : 0;
+    var height       = PAD + titleH + 8 + subH + 16 + QR_SIZE + 16 + expH + PAD;
+
+    canvas.width  = width;
+    canvas.height = height;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'top';
+
+    var y = PAD;
+    ctx.font      = TITLE_FONT;
+    ctx.fillStyle = '#1a202c';
+    titleLines.forEach(function(line) {
+        ctx.fillText(line, width / 2, y);
+        y += LINE_H_TITLE;
+    });
+    y += 8;
+
+    if (subtitle) {
+        ctx.font      = SUBTITLE_FONT;
+        ctx.fillStyle = '#718096';
+        ctx.fillText(subtitle, width / 2, y);
+        y += subH;
+    }
+    y += 16;
+
+    ctx.drawImage(qrImg, PAD, y, QR_SIZE, QR_SIZE);
+    y += QR_SIZE + 16;
+
+    if (expiresText) {
+        ctx.font      = EXPIRES_FONT;
+        ctx.fillStyle = '#4a5568';
+        ctx.fillText(expiresText, width / 2, y);
+    }
+
+    canvas.toBlob(function(blob) { callback(blob); }, 'image/png');
+}
+
+// ============================================================
+// Shared QR modal helper
+function orkOpenQrModal(overlayId, imgId, downloadId, expiresId, token, expiresText, uir, titleText) {
+    var imgEl  = document.getElementById(imgId);
+    var dlEl   = document.getElementById(downloadId);
+    var overlay = document.getElementById(overlayId);
+    if (expiresId) document.getElementById(expiresId).textContent = expiresText || '';
+    // Show a loading placeholder (1x1 transparent PNG) so we don't render the
+    // browser's "broken image" icon while the AJAX is in flight.
+    var TRANSPARENT_PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    imgEl.src = TRANSPARENT_PX;
+    imgEl.alt = 'Loading QR code…';
+    imgEl.style.opacity = '0.4';
+    // Hide download link until we have valid bytes — otherwise the user can
+    // click it and save a 0-byte file Preview can't open.
+    dlEl.removeAttribute('href');
+    dlEl.style.pointerEvents = 'none';
+    dlEl.style.opacity = '0.5';
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    function showError(msg) {
+        imgEl.src    = TRANSPARENT_PX;
+        imgEl.alt    = msg;
+        imgEl.title  = msg;
+        imgEl.style.opacity = '1';
+        // Render a visible message via parent — write into a sibling if present,
+        // otherwise overlay it on the img using alt + a title.
+        var errEl = imgEl.parentNode && imgEl.parentNode.querySelector('.ork-qr-error');
+        if (!errEl) {
+            errEl = document.createElement('div');
+            errEl.className = 'ork-qr-error';
+            errEl.style.cssText = 'color:#c53030;font-size:13px;padding:60px 12px;text-align:center;background:#fff5f5;border:1px solid #fed7d7;border-radius:6px;margin:0 auto 14px;width:220px;height:220px;box-sizing:border-box;display:flex;align-items:center;justify-content:center';
+            imgEl.parentNode.insertBefore(errEl, imgEl);
+            imgEl.style.display = 'none';
+        }
+        errEl.textContent = msg;
+    }
+    function clearError() {
+        var errEl = imgEl.parentNode && imgEl.parentNode.querySelector('.ork-qr-error');
+        if (errEl) errEl.remove();
+        imgEl.style.display = '';
+    }
+
+    $.get(uir + 'QR/link/' + token, function(r) {
+        if (!r || r.status !== 0) {
+            console.error('QR error', r);
+            showError((r && r.error) ? r.error : 'Could not generate QR code.');
+            return;
+        }
+        clearError();
+        var dataUri = 'data:image/png;base64,' + r.data;
+        imgEl.src = dataUri;
+        imgEl.alt = 'Sign-in QR code';
+        imgEl.style.opacity = '1';
+        // Build a blob URL for the download link. This bare-QR PNG is the
+        // fallback — if titleText is set we'll upgrade the href to a
+        // labeled composite asynchronously below.
+        try {
+            var bytes = atob(r.data);
+            var arr = new Uint8Array(bytes.length);
+            for (var i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+            var blob = new Blob([arr], {type: 'image/png'});
+            dlEl.href = URL.createObjectURL(blob);
+        } catch(e) {
+            dlEl.href = dataUri;
+        }
+        dlEl.style.pointerEvents = '';
+        dlEl.style.opacity = '';
+
+        // Compose a labeled PNG for download: title (scope name) + QR + expiry.
+        // The modal still shows the bare QR — only the downloaded file gets
+        // the surrounding text. If anything fails we keep the bare-QR href.
+        if (titleText) {
+            var labelImg = new Image();
+            labelImg.onload = function() {
+                try {
+                    orkBuildLabeledQrPng(labelImg, titleText, expiresText, function(labeledBlob) {
+                        if (!labeledBlob) return;
+                        try { URL.revokeObjectURL(dlEl.href); } catch(e) {}
+                        dlEl.href = URL.createObjectURL(labeledBlob);
+                    });
+                } catch(e) {
+                    console.error('QR label compose failed', e);
+                }
+            };
+            labelImg.src = dataUri;
+        }
+    }, 'json').fail(function(xhr) {
+        console.error('QR request failed', xhr.status, xhr.responseText);
+        showError('Could not reach the QR service (' + (xhr.status || 'network') + ').');
+    });
+}
+function orkCloseQrModal(overlayId) {
+    var overlay = document.getElementById(overlayId);
+    overlay.style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+// ============================================================
+// Shared clipboard helper
+function orkCopyToClipboard(text, successEl, successHtml, resetHtml) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(function() {
+            successEl.innerHTML = successHtml;
+            setTimeout(function() { successEl.innerHTML = resetHtml; }, 2000);
+        }).catch(function() { orkCopyFallback(text, successEl, successHtml, resetHtml); });
+    } else {
+        orkCopyFallback(text, successEl, successHtml, resetHtml);
+    }
+}
+function orkCopyFallback(text, successEl, successHtml, resetHtml) {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand('copy'); successEl.innerHTML = successHtml; setTimeout(function() { successEl.innerHTML = resetHtml; }, 2000); } catch(e) {}
+    document.body.removeChild(ta);
+}
+
+// ============================================================
+// Parknew — Sign-in Link tab (pk-att-panel-link)
+$(document).ready(function() {
+    if (typeof PkConfig === 'undefined') return;
+    var genBtn  = document.getElementById('pk-att-link-gen-btn');
+    var copyBtn = document.getElementById('pk-att-link-copy-btn');
+    if (!genBtn) return;   // only managers see the tab
+
+    // Active links panel state
+    var pkLinksLoaded = false;
+    var pkLinksOpen   = false;
+    var pkCurrentToken = '';
+    var pkCurrentLinkId = 0;
+
+    // Expose a cache invalidator so pkOpenAttendanceModal (defined in a sibling
+    // IIFE) can drop stale "no active links" results from earlier in the page
+    // lifecycle. Without this, a fetch that returned empty before any link
+    // existed sticks around forever and the user keeps seeing "No active links".
+    window.pkResetSigninLinksCache = function() {
+        pkLinksLoaded = false;
+        if (pkLinksOpen && typeof pkLoadActiveLinks === 'function') pkLoadActiveLinks();
+    };
+    var pkCurrentExpires = '';
+
+    window.pkCloseQrModal = function() { orkCloseQrModal('pk-qr-overlay'); };
+
+    genBtn.addEventListener('click', function() {
+        var hours   = Math.max(1, Math.min(96, parseInt(document.getElementById('pk-att-link-hours').value, 10) || 3));
+        var credits = Math.max(0.5, Math.min(10, parseFloat(document.getElementById('pk-att-link-credits').value) || 1));
+        genBtn.disabled = true;
+        genBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating\u2026';
+        document.getElementById('pk-att-link-result').style.display = 'none';
+        $.post(PkConfig.uir + 'AttendanceAjax/link/park/' + PkConfig.parkId + '/create',
+            { Hours: hours, Credits: credits },
+            function(r) {
+                genBtn.disabled = false;
+                genBtn.innerHTML = '<i class="fas fa-link"></i> Generate';
+                if (r && r.status === 0) {
+                    pkCurrentToken   = r.token;
+                    var _pkExpDt = r.expires_iso ? new Date(r.expires_iso) : null;
+                    if (_pkExpDt && !isNaN(_pkExpDt.getTime())) {
+                        r.expires = 'Expires ' + _pkExpDt.toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+                    }
+                    pkCurrentExpires = r.expires || '';
+                    pkCurrentLinkId  = r.linkId || 0;
+                    document.getElementById('pk-att-link-url').value = r.url;
+                    document.getElementById('pk-att-link-expires').textContent = r.expires;
+                    document.getElementById('pk-att-link-result').style.display = '';
+                    // Auto-copy and reset the copy button
+                    orkCopyToClipboard(r.url, copyBtn,
+                        '<i class="fas fa-check"></i> Copied!',
+                        '<i class="fas fa-copy"></i> Copy');
+                    // Reload active links list if it was open
+                    pkLinksLoaded = false;
+                    if (pkLinksOpen) pkLoadActiveLinks();
+                } else {
+                    pkAttShowFeedback((r && r.error) ? r.error : 'Could not generate link.', false);
+                }
+            }, 'json'
+        ).fail(function() {
+            genBtn.disabled = false;
+            genBtn.innerHTML = '<i class="fas fa-link"></i> Generate';
+            pkAttShowFeedback('Request failed.', false);
+        });
+    });
+
+    copyBtn.addEventListener('click', function() {
+        var url = document.getElementById('pk-att-link-url').value;
+        if (!url) return;
+        orkCopyToClipboard(url, copyBtn,
+            '<i class="fas fa-check"></i> Copied!',
+            '<i class="fas fa-copy"></i> Copy');
+    });
+
+    var qrBtn = document.getElementById('pk-att-link-qr-btn');
+    if (qrBtn) {
+        qrBtn.addEventListener('click', function() {
+            if (!pkCurrentToken) return;
+            // Close the Enter Attendance modal first — its overlay stacks above
+            // anything that could realistically live above it, and the QR is a
+            // standalone "show this code" surface anyway. User can reopen
+            // Enter Attendance afterward to grab the link again.
+            var att = document.getElementById('pk-att-overlay');
+            if (att) att.classList.remove('pk-att-open');
+            orkOpenQrModal('pk-qr-overlay', 'pk-qr-img', 'pk-qr-download', 'pk-qr-expires',
+                pkCurrentToken, pkCurrentExpires, PkConfig.uir, PkConfig.parkName || 'Park Sign-In');
+        });
+    }
+
+    var removeBtn = document.getElementById('pk-att-link-remove-btn');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', function() {
+            if (!pkCurrentLinkId) return;
+            var doRevoke = function() {
+                removeBtn.disabled = true;
+                $.post(PkConfig.uir + 'AttendanceAjax/link/delete/' + pkCurrentLinkId, function(r) {
+                    removeBtn.disabled = false;
+                    if (r && r.status === 0) {
+                        // Clear the result panel and reset state — link no longer exists.
+                        document.getElementById('pk-att-link-result').style.display = 'none';
+                        document.getElementById('pk-att-link-url').value = '';
+                        document.getElementById('pk-att-link-expires').textContent = '';
+                        pkCurrentToken = '';
+                        pkCurrentExpires = '';
+                        pkCurrentLinkId = 0;
+                        // Invalidate the active-links cache so a re-expand re-fetches without the revoked row.
+                        if (typeof window.pkResetSigninLinksCache === 'function') window.pkResetSigninLinksCache();
+                    } else {
+                        pkAttShowFeedback((r && r.error) ? r.error : 'Could not revoke link.', false);
+                    }
+                }, 'json').fail(function() {
+                    removeBtn.disabled = false;
+                    pkAttShowFeedback('Network error revoking link.', false);
+                });
+            };
+            // Prefer the project's styled confirm; fall back to native if it isn't loaded on this page.
+            if (typeof knConfirm === 'function') {
+                knConfirm('Revoke this sign-in link? Anyone holding the URL or QR will no longer be able to sign in with it.', doRevoke, 'Revoke link?');
+            } else if (confirm('Revoke this sign-in link?')) {
+                doRevoke();
+            }
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') { var o = document.getElementById('pk-qr-overlay'); if (o && o.style.display !== 'none') pkCloseQrModal(); }
+    });
+
+    // Active links area is always visible (typically 0-3 at any time), so load
+    // on init. pkLinksOpen kept true so the cache-reset path still triggers a
+    // reload after generate/revoke.
+    pkLinksOpen = true;
+    if (document.getElementById('pk-att-links-body')) pkLoadActiveLinks();
+
+    function pkLoadActiveLinks() {
+        pkLinksLoaded = true;
+        document.getElementById('pk-att-links-loading').style.display = '';
+        document.getElementById('pk-att-links-empty').style.display   = 'none';
+        document.getElementById('pk-att-links-table').style.display   = 'none';
+        $.get(PkConfig.uir + 'AttendanceAjax/link/park/' + PkConfig.parkId + '/list', function(r) {
+            document.getElementById('pk-att-links-loading').style.display = 'none';
+            if (!r || r.status !== 0 || !r.links.length) {
+                document.getElementById('pk-att-links-empty').style.display = '';
+                document.getElementById('pk-att-links-count').textContent = '';
+                return;
+            }
+            document.getElementById('pk-att-links-count').textContent = '(' + r.links.length + ')';
+            var tbody = document.getElementById('pk-att-links-tbody');
+            tbody.innerHTML = '';
+            r.links.forEach(function(lnk) {
+                var exp = new Date(lnk.ExpiresAtIso || lnk.ExpiresAt.replace(' ', 'T') + 'Z');
+                var expStr = exp.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+                var tr = document.createElement('tr');
+                tr.dataset.linkId = lnk.LinkId;
+                tr.innerHTML =
+                    '<td style="padding:4px 6px">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px">' + lnk.Credits + '</td>' +
+                    '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
+                        '<button class="pk-btn pk-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-copy"></i> Copy</button>' +
+                        '<button class="pk-btn pk-links-qr" data-token="' + lnk.Token + '" data-expires="' + expStr + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-qrcode"></i> QR</button>' +
+                        '<button class="pk-btn pk-links-revoke" data-id="' + lnk.LinkId + '" style="font-size:11px;padding:2px 8px;background:#fed7d7;border-color:#fc8181;color:#c53030"><i class="fas fa-times"></i> Revoke</button>' +
+                    '</td>';
+                tbody.appendChild(tr);
+            });
+            document.getElementById('pk-att-links-table').style.display = '';
+            // Copy buttons
+            tbody.querySelectorAll('.pk-links-copy').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    orkCopyToClipboard(this.dataset.url, this,
+                        '<i class="fas fa-check"></i> Copied!',
+                        '<i class="fas fa-copy"></i> Copy');
+                });
+            });
+            // QR buttons — same flow as the generated-link QR: dismiss the
+            // attendance modal first, then open QR on its own.
+            tbody.querySelectorAll('.pk-links-qr').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var token   = this.dataset.token;
+                    var expires = this.dataset.expires;
+                    if (!token) return;
+                    var att = document.getElementById('pk-att-overlay');
+                    if (att) att.classList.remove('pk-att-open');
+                    orkOpenQrModal('pk-qr-overlay', 'pk-qr-img', 'pk-qr-download', 'pk-qr-expires',
+                        token, 'Expires ' + expires, PkConfig.uir, PkConfig.parkName || 'Park Sign-In');
+                });
+            });
+            // Revoke buttons
+            tbody.querySelectorAll('.pk-links-revoke').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var lid = this.dataset.id;
+                    var row = this.closest('tr');
+                    this.disabled = true;
+                    $.post(PkConfig.uir + 'AttendanceAjax/link/delete/' + lid, function(r) {
+                        if (r && r.status === 0) {
+                            row.remove();
+                            var remaining = tbody.querySelectorAll('tr').length;
+                            if (!remaining) {
+                                document.getElementById('pk-att-links-table').style.display = 'none';
+                                document.getElementById('pk-att-links-empty').style.display = '';
+                                document.getElementById('pk-att-links-count').textContent = '';
+                            } else {
+                                document.getElementById('pk-att-links-count').textContent = '(' + remaining + ')';
+                            }
+                            // If the revoked link is the one currently shown in the top form,
+                            // clear it too — otherwise Copy/QR/Remove there reference a dead link.
+                            if (parseInt(lid, 10) === parseInt(pkCurrentLinkId, 10)) {
+                                document.getElementById('pk-att-link-result').style.display = 'none';
+                                document.getElementById('pk-att-link-url').value = '';
+                                document.getElementById('pk-att-link-expires').textContent = '';
+                                pkCurrentToken   = '';
+                                pkCurrentExpires = '';
+                                pkCurrentLinkId  = 0;
+                            }
+                        }
+                    }, 'json');
+                });
+            });
+        }, 'json').fail(function() {
+            document.getElementById('pk-att-links-loading').style.display = 'none';
+            document.getElementById('pk-att-links-empty').style.display = '';
+        });
+    }
+});
+
+
+// ============================================================
+// Eventnew — Sign-in Link & QR (event-scoped)
+window.evOpenSigninLinkModal = function() {
+    var ov = document.getElementById('ev-signin-link-overlay');
+    if (!ov) return;
+    ov.classList.add('ev-open');
+    document.body.style.overflow = 'hidden';
+    // Drop any stale "no active links" cache from earlier in the page lifecycle.
+    if (typeof window.evResetSigninLinksCache === 'function') window.evResetSigninLinksCache();
+    // Reset feedback. For past events, show the "event ended" notice so the
+    // disabled Generate button doesn't look broken; for everything else, clear.
+    var fb = document.getElementById('ev-signin-feedback');
+    if (fb) {
+        if (typeof EvConfig !== 'undefined' && EvConfig.isPastEvent) {
+            fb.textContent = 'This event has ended — sign-in links can no longer be generated.';
+            fb.className   = 'ev-signin-feedback ev-signin-err';
+            fb.style.display = '';
+        } else {
+            fb.style.display = 'none';
+        }
+    }
+};
+window.evCloseSigninLinkModal = function() {
+    var ov = document.getElementById('ev-signin-link-overlay');
+    if (!ov) return;
+    ov.classList.remove('ev-open');
+    document.body.style.overflow = '';
+};
+$(document).ready(function() {
+    if (typeof EvConfig === 'undefined') return;
+    if (!EvConfig.canManageAttendance || !EvConfig.checkinOpen) return;
+    var genBtn  = document.getElementById('ev-signin-gen-btn');
+    var copyBtn = document.getElementById('ev-signin-copy-btn');
+    var creditsEl = document.getElementById('ev-signin-credits');
+    if (!genBtn || !creditsEl || !copyBtn) return;
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            var ov = document.getElementById('ev-signin-link-overlay');
+            if (ov && ov.classList.contains('ev-open')) evCloseSigninLinkModal();
+        }
+    });
+
+    var evCurrentToken   = '';
+    var evCurrentExpires = '';
+    var evCurrentLinkId  = 0;
+    var evLinksLoaded    = false;
+    var evLinksOpen      = false;
+
+    // Expose a cache invalidator so the open-modal handler (in a sibling
+    // scope) can drop stale "no active links" results from previous sessions.
+    window.evResetSigninLinksCache = function() {
+        evLinksLoaded = false;
+        if (evLinksOpen) evLoadActiveLinks();
+    };
+
+    function evSyncGenBtn() {
+        var v = parseFloat(creditsEl.value);
+        // Past events can't accept new sign-ins, so don't let the officer
+        // generate a link that would only error out on submit.
+        genBtn.disabled = !(v > 0) || !!EvConfig.isPastEvent;
+    }
+    creditsEl.addEventListener('input', evSyncGenBtn);
+    evSyncGenBtn();
+
+    // Styled in-modal feedback replaces native alert() so server errors
+    // ("This event has already ended", etc.) render inline with the same
+    // visual treatment as the rest of the modal.
+    function evSigninFeedback(msg, ok) {
+        var el = document.getElementById('ev-signin-feedback');
+        if (!el) return;
+        el.textContent = msg;
+        el.className   = 'ev-signin-feedback ' + (ok ? 'ev-signin-ok' : 'ev-signin-err');
+        el.style.display = '';
+    }
+    function evSigninFeedbackClear() {
+        var el = document.getElementById('ev-signin-feedback');
+        if (el) el.style.display = 'none';
+    }
+
+    genBtn.addEventListener('click', function() {
+        var credits = parseFloat(creditsEl.value);
+        if (!(credits > 0)) { creditsEl.focus(); return; }
+        genBtn.disabled = true;
+        var origHtml = '<i class="fas fa-link"></i> Generate';
+        genBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating\u2026';
+        document.getElementById('ev-signin-link-result').style.display = 'none';
+        evSigninFeedbackClear();
+        $.post(EvConfig.uir + 'AttendanceAjax/link/event/' + EvConfig.eventId + '/create',
+            { Credits: credits, EventCalendarDetailId: EvConfig.detailId },
+            function(r) {
+                genBtn.innerHTML = origHtml;
+                evSyncGenBtn();
+                if (r && r.status === 0) {
+                    evCurrentToken   = r.token;
+                    evCurrentExpires = r.expires || '';
+                    evCurrentLinkId  = r.linkId || 0;
+                    var _evExpDt = r.expires_iso ? new Date(r.expires_iso) : null;
+                    if (_evExpDt && !isNaN(_evExpDt.getTime())) {
+                        r.expires = 'Expires ' + _evExpDt.toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+                        evCurrentExpires = r.expires;
+                    }
+                    document.getElementById('ev-signin-link-url').value = r.url;
+                    document.getElementById('ev-signin-link-expires').textContent = r.expires;
+                    document.getElementById('ev-signin-link-result').style.display = '';
+                    orkCopyToClipboard(r.url, copyBtn,
+                        '<i class="fas fa-check"></i> Copied!',
+                        '<i class="fas fa-copy"></i> Copy');
+                    evLinksLoaded = false;
+                    if (evLinksOpen) evLoadActiveLinks();
+                } else {
+                    evSigninFeedback((r && r.error) ? r.error : 'Could not generate link.', false);
+                }
+            }, 'json'
+        ).fail(function() {
+            genBtn.innerHTML = origHtml;
+            evSyncGenBtn();
+            evSigninFeedback('Request failed.', false);
+        });
+    });
+
+    copyBtn.addEventListener('click', function() {
+        var url = document.getElementById('ev-signin-link-url').value;
+        if (!url) return;
+        orkCopyToClipboard(url, copyBtn,
+            '<i class="fas fa-check"></i> Copied!',
+            '<i class="fas fa-copy"></i> Copy');
+    });
+
+    var qrBtn = document.getElementById('ev-signin-qr-btn');
+    if (qrBtn) {
+        qrBtn.addEventListener('click', function() {
+            if (!evCurrentToken) return;
+            // Dismiss the Sign-in Link modal before showing the QR so the QR
+            // isn't stuck behind it. See the pk-att-link-qr-btn equivalent.
+            if (typeof evCloseSigninLinkModal === 'function') evCloseSigninLinkModal();
+            orkOpenQrModal('ev-qr-overlay', 'ev-qr-img', 'ev-qr-download', 'ev-qr-expires',
+                evCurrentToken, evCurrentExpires, EvConfig.uir, EvConfig.eventName || 'Event Sign-In');
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            var o = document.getElementById('ev-qr-overlay');
+            if (o && o.style.display !== 'none') { if (typeof evCloseQrModal === 'function') evCloseQrModal(); }
+        }
+    });
+
+    // Active links area is always visible — auto-load on init.
+    evLinksOpen = true;
+    if (document.getElementById('ev-signin-links-body')) evLoadActiveLinks();
+
+    function evLoadActiveLinks() {
+        evLinksLoaded = true;
+        document.getElementById('ev-signin-links-loading').style.display = '';
+        document.getElementById('ev-signin-links-empty').style.display   = 'none';
+        document.getElementById('ev-signin-links-table').style.display   = 'none';
+        $.get(EvConfig.uir + 'AttendanceAjax/link/event/' + EvConfig.eventId + '/list',
+            { EventCalendarDetailId: EvConfig.detailId }, function(r) {
+            document.getElementById('ev-signin-links-loading').style.display = 'none';
+            if (!r || r.status !== 0 || !r.links.length) {
+                document.getElementById('ev-signin-links-empty').style.display = '';
+                document.getElementById('ev-signin-links-count').textContent = '';
+                return;
+            }
+            document.getElementById('ev-signin-links-count').textContent = '(' + r.links.length + ')';
+            var tbody = document.getElementById('ev-signin-links-tbody');
+            tbody.innerHTML = '';
+            r.links.forEach(function(lnk) {
+                var exp = new Date(lnk.ExpiresAtIso || lnk.ExpiresAt.replace(' ', 'T') + 'Z');
+                var expStr = exp.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+                var tr = document.createElement('tr');
+                tr.dataset.linkId = lnk.LinkId;
+                tr.innerHTML =
+                    '<td style="padding:4px 6px">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px">' + lnk.Credits + '</td>' +
+                    '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
+                        '<button type="button" class="ev-icon-btn ev-signin-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px"><i class="fas fa-copy"></i> Copy</button>' +
+                        '<button type="button" class="ev-icon-btn ev-signin-links-qr" data-token="' + lnk.Token + '" data-expires="' + expStr + '" style="font-size:11px;padding:2px 8px;margin-right:4px"><i class="fas fa-qrcode"></i> QR</button>' +
+                        '<button type="button" class="ev-icon-btn ev-signin-links-revoke" data-id="' + lnk.LinkId + '" style="font-size:11px;padding:2px 8px;background:#fed7d7;border-color:#fc8181;color:#c53030"><i class="fas fa-times"></i> Revoke</button>' +
+                    '</td>';
+                tbody.appendChild(tr);
+            });
+            document.getElementById('ev-signin-links-table').style.display = '';
+            tbody.querySelectorAll('.ev-signin-links-copy').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    orkCopyToClipboard(this.dataset.url, this,
+                        '<i class="fas fa-check"></i> Copied!',
+                        '<i class="fas fa-copy"></i> Copy');
+                });
+            });
+            tbody.querySelectorAll('.ev-signin-links-qr').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var token   = this.dataset.token;
+                    var expires = this.dataset.expires;
+                    if (!token) return;
+                    if (typeof evCloseSigninLinkModal === 'function') evCloseSigninLinkModal();
+                    orkOpenQrModal('ev-qr-overlay', 'ev-qr-img', 'ev-qr-download', 'ev-qr-expires',
+                        token, 'Expires ' + expires, EvConfig.uir, EvConfig.eventName || 'Event Sign-In');
+                });
+            });
+            tbody.querySelectorAll('.ev-signin-links-revoke').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var lid = this.dataset.id;
+                    var row = this.closest('tr');
+                    this.disabled = true;
+                    $.post(EvConfig.uir + 'AttendanceAjax/link/delete/' + lid, function(r) {
+                        if (r && r.status === 0) {
+                            row.remove();
+                            var remaining = tbody.querySelectorAll('tr').length;
+                            if (!remaining) {
+                                document.getElementById('ev-signin-links-table').style.display = 'none';
+                                document.getElementById('ev-signin-links-empty').style.display = '';
+                                document.getElementById('ev-signin-links-count').textContent = '';
+                            } else {
+                                document.getElementById('ev-signin-links-count').textContent = '(' + remaining + ')';
+                            }
+                            if (parseInt(lid, 10) === parseInt(evCurrentLinkId, 10)) {
+                                document.getElementById('ev-signin-link-result').style.display = 'none';
+                                document.getElementById('ev-signin-link-url').value = '';
+                                document.getElementById('ev-signin-link-expires').textContent = '';
+                                evCurrentToken   = '';
+                                evCurrentExpires = '';
+                                evCurrentLinkId  = 0;
+                            }
+                        }
+                    }, 'json');
+                });
+            });
+        }, 'json').fail(function() {
+            document.getElementById('ev-signin-links-loading').style.display = 'none';
+            document.getElementById('ev-signin-links-empty').style.display = '';
+        });
+    }
+});
+
+
+// ============================================================
+// Kingdomnew — Sign-in Link (inline in Admin Tasks panel)
+$(document).ready(function() {
+    if (typeof KnConfig === 'undefined') return;
+    var genBtn = document.getElementById('kn-signinlink-gen-btn');
+    if (!genBtn) return;
+
+    var knLinksLoaded  = false;
+    var knLinksOpen    = false;
+    var knCurrentToken   = '';
+    var knCurrentExpires = '';
+    var knCurrentLinkId  = 0;
+
+    // Expose a cache invalidator so the open-modal handler (in a sibling
+    // scope) can drop stale "no active links" results from previous sessions.
+    window.knResetSigninLinksCache = function() {
+        knLinksLoaded = false;
+        if (knLinksOpen && typeof knLoadActiveLinks === 'function') knLoadActiveLinks();
+    };
+
+    window.knCloseQrModal = function() { orkCloseQrModal('kn-qr-overlay'); };
+
+    var copyBtn = document.getElementById('kn-signinlink-copy-btn');
+
+    // Park autocomplete
+    var parkNameEl = document.getElementById('kn-signinlink-park-name');
+    var parkIdEl   = document.getElementById('kn-signinlink-park-id');
+    var parkAcEl   = document.getElementById('kn-signinlink-park-results');
+    var parkTimer;
+    if (parkNameEl) {
+        parkNameEl.addEventListener('input', function() {
+            parkIdEl.value = '';
+            clearTimeout(parkTimer);
+            var term = this.value.trim();
+            if (term.length < 2) { parkAcEl.classList.remove('kn-ac-open'); return; }
+            parkTimer = setTimeout(function() {
+                $.getJSON(KnConfig.uir + 'SearchAjax/search', { Action: 'Search/Park', name: term, kingdom_id: KnConfig.kingdomId, limit: 10 }, function(data) {
+                    parkAcEl.innerHTML = (data && data.length)
+                        ? data.map(function(pk) {
+                            return '<div class="kn-ac-item" data-id="' + pk.ParkId + '" data-name="' + encodeURIComponent(pk.Name) + '">' + escHtml(pk.Name) + '</div>';
+                        }).join('')
+                        : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
+                    // Position fixed so dropdown escapes the scrolling admin panel body
+                    parkAcEl.style.position = 'fixed';
+                    parkAcEl.style.zIndex = '9999';
+                    tnPositionAcFixed(parkNameEl, parkAcEl);
+                    parkAcEl.classList.add('kn-ac-open');
+                });
+            }, AUTOCOMPLETE_DEBOUNCE_MS || 220);
+        });
+        parkAcEl.addEventListener('click', function(e) {
+            var item = e.target.closest('.kn-ac-item[data-id]');
+            if (!item) return;
+            parkNameEl.value = decodeURIComponent(item.dataset.name);
+            parkIdEl.value   = item.dataset.id;
+            parkAcEl.classList.remove('kn-ac-open');
+            // Reset result when park changes
+            document.getElementById('kn-signinlink-result').style.display = 'none';
+            knLinksLoaded = false;
+        });
+        parkNameEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') { parkAcEl.classList.remove('kn-ac-open'); }
+        });
+        // Clear hidden id if text is cleared
+        parkNameEl.addEventListener('change', function() {
+            if (!this.value.trim()) parkIdEl.value = '';
+        });
+        setupAcKeyNav(parkNameEl, parkAcEl, '.kn-ac-item[data-id]', 'kn-ac-focused', function(item) { item.click(); });
+    }
+
+    genBtn.addEventListener('click', function() {
+        var btn     = this;
+        var errEl   = document.getElementById('kn-signinlink-error');
+        var hours   = Math.max(1, Math.min(96, parseInt(document.getElementById('kn-signinlink-hours').value, 10) || 3));
+        var credits = Math.max(0.5, Math.min(10, parseFloat(document.getElementById('kn-signinlink-credits').value) || 1));
+
+        // Scope: use park if one is selected, otherwise kingdom
+        var selectedParkId = parkIdEl ? parkIdEl.value.trim() : '';
+        var postUrl = selectedParkId
+            ? KnConfig.uir + 'AttendanceAjax/link/park/' + selectedParkId + '/create'
+            : KnConfig.uir + 'AttendanceAjax/link/kingdom/' + KnConfig.kingdomId + '/create';
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating\u2026';
+        errEl.style.display = 'none';
+        document.getElementById('kn-signinlink-result').style.display = 'none';
+        $.post(postUrl, { Hours: hours, Credits: credits }, function(r) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-link"></i> Generate';
+            if (r && r.status === 0) {
+                knCurrentToken   = r.token;
+                knCurrentExpires = r.expires || '';
+                knCurrentLinkId  = r.linkId || 0;
+                var _knExpDt = r.expires_iso ? new Date(r.expires_iso) : null;
+                if (_knExpDt && !isNaN(_knExpDt.getTime())) {
+                    r.expires = 'Expires ' + _knExpDt.toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+                    knCurrentExpires = r.expires;
+                }
+                document.getElementById('kn-signinlink-url').value = r.url;
+                document.getElementById('kn-signinlink-expires').textContent = r.expires;
+                document.getElementById('kn-signinlink-result').style.display = '';
+                orkCopyToClipboard(r.url, copyBtn,
+                    '<i class="fas fa-check"></i> Copied!',
+                    '<i class="fas fa-copy"></i> Copy');
+                knLinksLoaded = false;
+                if (knLinksOpen) knLoadActiveLinks();
+            } else {
+                errEl.textContent = (r && r.error) ? r.error : 'Could not generate link.';
+                errEl.style.display = '';
+            }
+        }, 'json').fail(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-link"></i> Generate';
+            errEl.textContent = 'Request failed.';
+            errEl.style.display = '';
+        });
+    });
+
+    copyBtn.addEventListener('click', function() {
+        var url = document.getElementById('kn-signinlink-url').value;
+        if (!url) return;
+        orkCopyToClipboard(url, copyBtn,
+            '<i class="fas fa-check"></i> Copied!',
+            '<i class="fas fa-copy"></i> Copy');
+    });
+
+    var knQrBtn = document.getElementById('kn-signinlink-qr-btn');
+    if (knQrBtn) {
+        knQrBtn.addEventListener('click', function() {
+            if (!knCurrentToken) return;
+            // Dismiss the Admin modal (which hosts the Sign-in Link tab) before
+            // showing the QR. See the pk-att-link-qr-btn equivalent.
+            var adm = document.getElementById('kn-admin-overlay');
+            if (adm) adm.classList.remove('kn-open');
+            orkOpenQrModal('kn-qr-overlay', 'kn-qr-img', 'kn-qr-download', 'kn-qr-expires',
+                knCurrentToken, knCurrentExpires, KnConfig.uir, KnConfig.kingdomName || 'Kingdom Sign-In');
+        });
+    }
+
+    // Active links area is always visible — auto-load on init. Lists all kingdom
+    // links (park and kingdom-wide).
+    knLinksOpen = true;
+    if (document.getElementById('kn-signinlink-links-body')) knLoadActiveLinks();
+
+    function knLoadActiveLinks() {
+        knLinksLoaded = true;
+        document.getElementById('kn-signinlink-links-loading').style.display = '';
+        document.getElementById('kn-signinlink-links-empty').style.display   = 'none';
+        document.getElementById('kn-signinlink-links-table').style.display   = 'none';
+        $.get(KnConfig.uir + 'AttendanceAjax/link/kingdom/' + KnConfig.kingdomId + '/list', function(r) {
+            document.getElementById('kn-signinlink-links-loading').style.display = 'none';
+            if (!r || r.status !== 0 || !r.links.length) {
+                document.getElementById('kn-signinlink-links-empty').style.display = '';
+                document.getElementById('kn-signinlink-links-count').textContent = '';
+                return;
+            }
+            document.getElementById('kn-signinlink-links-count').textContent = '(' + r.links.length + ')';
+            var tbody = document.getElementById('kn-signinlink-links-tbody');
+            tbody.innerHTML = '';
+            r.links.forEach(function(lnk) {
+                var exp = new Date(lnk.ExpiresAtIso || lnk.ExpiresAt.replace(' ', 'T') + 'Z');
+                var expStr = exp.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+                var scope = lnk.ParkId > 0 ? (escHtml(lnk.ParkName || 'Park')) : 'Kingdom';
+                var tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td style="padding:4px 6px;color:#4a5568;font-size:11px">' + scope + '</td>' +
+                    '<td style="padding:4px 6px;color:#4a5568">' + expStr + '</td>' +
+                    '<td style="padding:4px 6px;color:#4a5568">' + lnk.Credits + '</td>' +
+                    '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' +
+                        '<button class="kn-btn kn-links-copy" data-url="' + lnk.Url + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-copy"></i> Copy</button>' +
+                        '<button class="kn-btn kn-links-qr" data-token="' + lnk.Token + '" data-expires="' + expStr + '" style="font-size:11px;padding:2px 8px;margin-right:4px;background:#edf2f7;border:1px solid #cbd5e0;color:#4a5568"><i class="fas fa-qrcode"></i> QR</button>' +
+                        '<button class="kn-btn kn-links-revoke" data-id="' + lnk.LinkId + '" style="font-size:11px;padding:2px 8px;background:#fed7d7;border-color:#fc8181;color:#c53030"><i class="fas fa-times"></i> Revoke</button>' +
+                    '</td>';
+                tbody.appendChild(tr);
+            });
+            document.getElementById('kn-signinlink-links-table').style.display = '';
+            tbody.querySelectorAll('.kn-links-copy').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    orkCopyToClipboard(this.dataset.url, this,
+                        '<i class="fas fa-check"></i> Copied!',
+                        '<i class="fas fa-copy"></i> Copy');
+                });
+            });
+            tbody.querySelectorAll('.kn-links-qr').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var token   = this.dataset.token;
+                    var expires = this.dataset.expires;
+                    if (!token) return;
+                    var adm = document.getElementById('kn-admin-overlay');
+                    if (adm) adm.classList.remove('kn-open');
+                    orkOpenQrModal('kn-qr-overlay', 'kn-qr-img', 'kn-qr-download', 'kn-qr-expires',
+                        token, 'Expires ' + expires, KnConfig.uir, KnConfig.kingdomName || 'Kingdom Sign-In');
+                });
+            });
+            tbody.querySelectorAll('.kn-links-revoke').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var lid = this.dataset.id;
+                    var row = this.closest('tr');
+                    this.disabled = true;
+                    $.post(KnConfig.uir + 'AttendanceAjax/link/delete/' + lid, function(r) {
+                        if (r && r.status === 0) {
+                            row.remove();
+                            var remaining = tbody.querySelectorAll('tr').length;
+                            if (!remaining) {
+                                document.getElementById('kn-signinlink-links-table').style.display = 'none';
+                                document.getElementById('kn-signinlink-links-empty').style.display = '';
+                                document.getElementById('kn-signinlink-links-count').textContent = '';
+                            } else {
+                                document.getElementById('kn-signinlink-links-count').textContent = '(' + remaining + ')';
+                            }
+                            if (parseInt(lid, 10) === parseInt(knCurrentLinkId, 10)) {
+                                document.getElementById('kn-signinlink-result').style.display = 'none';
+                                document.getElementById('kn-signinlink-url').value = '';
+                                document.getElementById('kn-signinlink-expires').textContent = '';
+                                knCurrentToken   = '';
+                                knCurrentExpires = '';
+                                knCurrentLinkId  = 0;
+                            }
+                        }
+                    }, 'json');
+                });
+            });
+        }, 'json').fail(function() {
+            document.getElementById('kn-signinlink-links-loading').style.display = 'none';
+            document.getElementById('kn-signinlink-links-empty').style.display = '';
+        });
+    }
 });
 
 // ---- Shared: pronoun picker helper ----
@@ -7665,8 +11792,17 @@ function setupPronounPicker(cfg) {
 
         gid('kn-addplayer-close-btn').addEventListener('click', knCloseAddPlayerModal);
         gid('kn-addplayer-cancel').addEventListener('click',    knCloseAddPlayerModal);
+        // Backdrop click closes — but only when the mousedown ALSO started on
+        // the backdrop. Without this, drag-selecting text inside an input and
+        // releasing outside fires a synthetic click on the backdrop and the
+        // user loses their work.
+        var _knAddDownOnBackdrop = false;
+        gid('kn-addplayer-overlay').addEventListener('mousedown', function(e) {
+            _knAddDownOnBackdrop = (e.target === this);
+        });
         gid('kn-addplayer-overlay').addEventListener('click', function(e) {
-            if (e.target === this) knCloseAddPlayerModal();
+            if (e.target === this && _knAddDownOnBackdrop) knCloseAddPlayerModal();
+            _knAddDownOnBackdrop = false;
         });
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && gid('kn-addplayer-overlay') && gid('kn-addplayer-overlay').classList.contains('kn-addplayer-open'))
@@ -7768,8 +11904,15 @@ function setupPronounPicker(cfg) {
 
         gid('pk-addplayer-close-btn').addEventListener('click', pkCloseAddPlayerModal);
         gid('pk-addplayer-cancel').addEventListener('click',    pkCloseAddPlayerModal);
+        // Backdrop click closes — but only when the mousedown ALSO started on
+        // the backdrop (see knAddPlayer above for rationale).
+        var _pkAddDownOnBackdrop = false;
+        gid('pk-addplayer-overlay').addEventListener('mousedown', function(e) {
+            _pkAddDownOnBackdrop = (e.target === this);
+        });
         gid('pk-addplayer-overlay').addEventListener('click', function(e) {
-            if (e.target === this) pkCloseAddPlayerModal();
+            if (e.target === this && _pkAddDownOnBackdrop) pkCloseAddPlayerModal();
+            _pkAddDownOnBackdrop = false;
         });
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && gid('pk-addplayer-overlay') && gid('pk-addplayer-overlay').classList.contains('pk-addplayer-open'))
@@ -7827,6 +11970,165 @@ function setupPronounPicker(cfg) {
 
 })();
 
+// ---- Self-Registration QR Modal (Parknew) ----
+(function() {
+    if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
+
+    var SELFREG_URL = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/selfreg_link';
+    var selfregTimer = null;
+    var selfregExpiresAt = null;
+    var selfregUrl = '';
+
+    function gid(id) { return document.getElementById(id); }
+
+    function showSelfRegFeedback(msg, ok) {
+        var el = gid('pk-selfreg-feedback');
+        if (!el) return;
+        el.textContent = msg;
+        el.className = 'plr-feedback ' + (ok ? 'plr-ok' : 'plr-err');
+        el.style.display = '';
+    }
+    function hideSelfRegFeedback() {
+        var el = gid('pk-selfreg-feedback');
+        if (el) el.style.display = 'none';
+    }
+
+    function fetchAndRenderQR() {
+        var qrEl = gid('pk-selfreg-qr');
+        if (!qrEl) return;
+        qrEl.innerHTML = '<div style="padding:40px;color:#a0aec0;"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+        hideSelfRegFeedback();
+        gid('pk-selfreg-regen-btn').style.display = 'none';
+        var badge = gid('pk-selfreg-expired-badge');
+        if (badge) badge.style.display = 'none';
+        $.ajax({
+            url: SELFREG_URL,
+            type: 'POST',
+            dataType: 'json',
+            success: function(r) {
+                if (r && r.status === 0 && r.token) {
+                    selfregUrl = PkConfig.uir + 'SelfReg/form/' + r.token;
+                    qrEl.innerHTML = '';
+                    new QRCode(qrEl, {
+                        text: selfregUrl,
+                        width: 220,
+                        height: 220,
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                    // A3: Use seconds_remaining instead of absolute timestamp
+                    selfregExpiresAt = Date.now() + (r.seconds_remaining * 1000);
+                    startTimer();
+                } else {
+                    qrEl.innerHTML = '';
+                    showSelfRegFeedback((r && r.error) ? r.error : 'Could not generate QR code.', false);
+                }
+            },
+            error: function() {
+                qrEl.innerHTML = '';
+                showSelfRegFeedback('Request failed. Please try again.', false);
+            }
+        });
+    }
+
+    function startTimer() {
+        stopTimer();
+        updateTimer();
+        selfregTimer = setInterval(updateTimer, 1000);
+    }
+
+    function stopTimer() {
+        if (selfregTimer) { clearInterval(selfregTimer); selfregTimer = null; }
+    }
+
+    function updateTimer() {
+        var timerEl = gid('pk-selfreg-timer');
+        if (!timerEl || !selfregExpiresAt) return;
+
+        var remaining = Math.max(0, Math.floor((selfregExpiresAt - Date.now()) / 1000));
+        if (remaining <= 0) {
+            timerEl.textContent = 'Expired';
+            timerEl.parentElement.classList.add('pk-selfreg-timer-expired');
+            gid('pk-selfreg-regen-btn').style.display = '';
+            stopTimer();
+            // A18: Gray out QR and show expired badge
+            var qrEl = gid('pk-selfreg-qr');
+            if (qrEl) qrEl.style.opacity = '0.3';
+            var badge = gid('pk-selfreg-expired-badge');
+            if (badge) badge.style.display = '';
+        } else {
+            var min = Math.floor(remaining / 60);
+            var sec = remaining % 60;
+            timerEl.textContent = min + ':' + (sec < 10 ? '0' : '') + sec;
+            timerEl.parentElement.classList.remove('pk-selfreg-timer-expired');
+        }
+    }
+
+    // A7: Focus management
+    window.pkOpenSelfRegModal = function() {
+        // Close Add Player modal first
+        if (typeof pkCloseAddPlayerModal === 'function') pkCloseAddPlayerModal();
+
+        var ov = gid('pk-selfreg-overlay');
+        if (!ov) return;
+        hideSelfRegFeedback();
+        ov.classList.add('pk-selfreg-open');
+        document.body.style.overflow = 'hidden';
+        fetchAndRenderQR();
+        // A7: Focus close button on open
+        setTimeout(function() { var cb = gid('pk-selfreg-close-btn'); if (cb) cb.focus(); }, 50);
+    };
+
+    window.pkCloseSelfRegModal = function() {
+        var ov = gid('pk-selfreg-overlay');
+        if (ov) ov.classList.remove('pk-selfreg-open');
+        document.body.style.overflow = '';
+        stopTimer();
+        // A7: Return focus to Add Player button
+        var addBtn = document.querySelector('[onclick*="pkOpenAddPlayerModal"]');
+        if (addBtn) addBtn.focus();
+    };
+
+    // Anti-copy protections + event listeners
+    $(document).ready(function() {
+        var wrap = gid('pk-selfreg-qr-wrap');
+        if (wrap) {
+            wrap.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+            wrap.addEventListener('dragstart', function(e) { e.preventDefault(); });
+        }
+
+        var shield = gid('pk-selfreg-shield');
+        if (shield) {
+            shield.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+        }
+
+        if (gid('pk-selfreg-close-btn'))
+            gid('pk-selfreg-close-btn').addEventListener('click', pkCloseSelfRegModal);
+        if (gid('pk-selfreg-cancel'))
+            gid('pk-selfreg-cancel').addEventListener('click', pkCloseSelfRegModal);
+
+        var overlay = gid('pk-selfreg-overlay');
+        if (overlay) {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === this) pkCloseSelfRegModal();
+            });
+        }
+
+        if (gid('pk-selfreg-regen-btn')) {
+            gid('pk-selfreg-regen-btn').addEventListener('click', function() {
+                var qrEl = gid('pk-selfreg-qr');
+                if (qrEl) qrEl.style.opacity = '1';
+                fetchAndRenderQR();
+            });
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && overlay && overlay.classList.contains('pk-selfreg-open'))
+                pkCloseSelfRegModal();
+        });
+    });
+
+})();
+
 // ---- Playernew: Award Edit + Delete ----
 (function() {
     if (typeof PnConfig === 'undefined' || !PnConfig.canManageAwards) return;
@@ -7851,18 +12153,19 @@ function setupPronounPicker(cfg) {
         for (var i = 1; i <= maxRank; i++) {
             var pill = document.createElement('button');
             pill.type        = 'button';
-            pill.className   = 'pn-rank-pill' + (i == currentRank ? ' pn-rank-selected' : '');
-            pill.textContent = i;
+            pill.className   = 'pn-rank-pill';
+            pill.innerHTML   = tnRankPillInner('pn', i);
             pill.dataset.rank = i;
             (function(p, rank) {
                 p.addEventListener('click', function() {
-                    wrap.querySelectorAll('.pn-rank-pill').forEach(function(el) { el.classList.remove('pn-rank-selected'); });
-                    p.classList.add('pn-rank-selected');
                     gid('pn-edit-rank-val').value = rank;
+                    tnRankPaint(wrap, 'pn', rank, rank);
                 });
             })(pill, i);
             wrap.appendChild(pill);
         }
+        var _curRank = parseInt(currentRank, 10) || 0;
+        tnRankPaint(wrap, 'pn', _curRank, _curRank);
         gid('pn-edit-rank-val') && (gid('pn-edit-rank-val').value = currentRank || '');
     }
 
@@ -7930,6 +12233,37 @@ function setupPronounPicker(cfg) {
         }
         var fb = gid('pn-edit-award-feedback');
         if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
+
+        // Custom Award / Custom Title reclassification UI
+        var awardIdNum = parseInt(data.AwardId || 0, 10);
+        var isCA = awardIdNum === parseInt(PnConfig.customAwardId || 0, 10);
+        var isCT = PnConfig.customTitleAwardId && awardIdNum === parseInt(PnConfig.customTitleAwardId, 10);
+        var typeRow = gid('pn-edit-type-row');
+        var customRow = gid('pn-edit-custom-name-row');
+        var customInput = gid('pn-edit-custom-name');
+        var customLabel = gid('pn-edit-custom-name-label');
+        var aliasRow = gid('pn-edit-alias-row');
+        var aliasSel = gid('pn-edit-alias');
+        var radioA = gid('pn-edit-type-award');
+        var radioT = gid('pn-edit-type-title');
+        if (typeRow) typeRow.style.display = (isCA || isCT) ? '' : 'none';
+        if (customRow) customRow.style.display = (isCA || isCT) ? '' : 'none';
+        if (aliasRow) aliasRow.style.display = isCT ? '' : 'none';
+        if (radioA) radioA.checked = isCA;
+        if (radioT) radioT.checked = isCT;
+        if (customInput) customInput.value = data.CustomName || data.displayName || '';
+        if (customLabel) customLabel.textContent = isCT ? 'Custom Title Name' : 'Custom Award Name';
+        if (aliasSel) aliasSel.value = String(data.AliasAwardId || 0);
+
+        function pnEditTypeChanged() {
+            var nowCT = radioT && radioT.checked;
+            if (aliasRow) aliasRow.style.display = nowCT ? '' : 'none';
+            if (!nowCT && aliasSel) aliasSel.value = '0';
+            if (customLabel) customLabel.textContent = nowCT ? 'Custom Title Name' : 'Custom Award Name';
+        }
+        if (radioA) radioA.onchange = pnEditTypeChanged;
+        if (radioT) radioT.onchange = pnEditTypeChanged;
+
         var overlay = gid('pn-award-edit-overlay');
         if (overlay) { overlay.classList.add('pn-open'); document.body.style.overflow = 'hidden'; }
     };
@@ -7955,15 +12289,36 @@ function setupPronounPicker(cfg) {
                 var term = this.value.trim();
                 if (term.length < 2) { editGbResults.classList.remove('pn-ac-open'); return; }
                 editGbTimer = setTimeout(function() {
-                    var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&kingdom_id=' + PnConfig.kingdomId + '&limit=8';
+                    // SearchService already returns inactive and suspended players; sort
+                    // them last and badge them so users can knowingly attribute historical
+                    // awards to a now-banned officer during reconciliation.
+                    // Award giver is intentionally global (cross-kingdom): a noble from another kingdom
+                    // can grant an award, so do not scope the giver search by kingdom.
+                    var url = SEARCH_URL + '?Action=Search%2FPlayer&type=all&search=' + encodeURIComponent(term) + '&limit=15';
                     fetch(url).then(function(r) { return r.json(); }).then(function(data) {
                         if (!data || !data.length) {
                             editGbResults.innerHTML = '<div class="pn-ac-no-results">No players found</div>';
                         } else {
+                            function rank(p) {
+                                var banned   = !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
+                                var inactive = parseInt(p.Active, 10) === 0;
+                                if (banned)   return 2;
+                                if (inactive) return 1;
+                                return 0;
+                            }
+                            data.sort(function(a, b) {
+                                var ra = rank(a), rb = rank(b);
+                                if (ra !== rb) return ra - rb;
+                                return (a.Persona || '').localeCompare(b.Persona || '');
+                            });
                             editGbResults.innerHTML = data.map(function(p) {
+                                var inactive = parseInt(p.Active, 10) === 0;
+                                var banned   = !!(parseInt(p.Suspended, 10) || parseInt(p.PenaltyBox, 10));
                                 return '<div class="pn-ac-item" tabindex="-1" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
                                     + escHtml(p.Persona)
                                     + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>'
+                                    + (inactive ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Inactive)</span>' : '')
+                                    + (banned   ? ' <span style="color:#c53030;font-size:10px;font-weight:600">(Banned)</span>'   : '')
                                     + '</div>';
                             }).join('');
                         }
@@ -8102,25 +12457,20 @@ function setupPronounPicker(cfg) {
                 for (var i = 1; i <= maxRank; i++) {
                     var pill = document.createElement('button');
                     pill.type      = 'button';
-                    pill.className = 'pn-rank-pill'
-                        + (i <= heldMax    ? ' pn-rank-held'     : '')
-                        + (i === suggested ? ' pn-rank-suggested' : '');
-                    pill.textContent  = i;
+                    pill.className = 'pn-rank-pill';
+                    pill.innerHTML  = tnRankPillInner('pn', i);
                     pill.dataset.rank = i;
                     (function(p, rank) {
                         p.addEventListener('click', function() {
-                            rcRankPills.querySelectorAll('.pn-rank-pill').forEach(function(el) { el.classList.remove('pn-rank-selected'); });
-                            p.classList.add('pn-rank-selected');
                             rcRankVal.value = rank;
+                            tnRankPaint(rcRankPills, 'pn', heldMax, rank);
                         });
                     })(pill, i);
                     rcRankPills.appendChild(pill);
                 }
-                /* auto-select the suggested rank */
-                if (suggested > 0) {
-                    var sugPill = rcRankPills.querySelector('[data-rank="' + suggested + '"]');
-                    if (sugPill) { sugPill.classList.add('pn-rank-selected'); rcRankVal.value = suggested; }
-                }
+                rcRankPills.dataset.rankHeld = heldMax;
+                tnRankPaint(rcRankPills, 'pn', heldMax, suggested);
+                if (suggested > 0) { rcRankVal.value = suggested; }
             });
         }
 
@@ -8135,7 +12485,7 @@ function setupPronounPicker(cfg) {
                     fb.textContent = msg;
                     fb.style.display = '';
                     fb.className = cls;
-                    fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    fb.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
                 if (!date) {
                     showFb('Date is required.', 'pn-form-error');
@@ -8188,6 +12538,19 @@ function setupPronounPicker(cfg) {
                     endpoint = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/reconcileaward/' + currentAwardsId;
                 } else {
                     fd.append('Rank', gid('pn-edit-rank-val') ? gid('pn-edit-rank-val').value : '');
+                    // Custom Award/Title reclassification payload
+                    var editRadioA = gid('pn-edit-type-award');
+                    var editRadioT = gid('pn-edit-type-title');
+                    if (editRadioA && (editRadioA.checked || editRadioT.checked)) {
+                        var targetAwardId = editRadioT.checked
+                            ? parseInt(PnConfig.customTitleAwardId || 0, 10)
+                            : parseInt(PnConfig.customAwardId || 0, 10);
+                        if (targetAwardId > 0) fd.append('AwardId', String(targetAwardId));
+                        var cn = gid('pn-edit-custom-name');
+                        if (cn) fd.append('AwardName', cn.value || '');
+                        var alSel = gid('pn-edit-alias');
+                        fd.append('AliasAwardId', (editRadioT.checked && alSel) ? (alSel.value || '0') : '0');
+                    }
                     endpoint = PnConfig.uir + 'Admin/player/' + PnConfig.playerId + '/updateaward/' + currentAwardsId;
                 }
 
@@ -8200,9 +12563,9 @@ function setupPronounPicker(cfg) {
                         console.log('[EditAward] Response body (first 500 chars):', body.substring(0, 500));
                         saveBtn.disabled = false;
                         if (r.ok) {
-                            if (doReconcile)                            var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
+                            var msg = doReconcile ? 'Award reconciled!' : 'Award updated!';
                             showFb(msg, 'pn-award-edit-success');
-                            setTimeout(function() { location.reload(); }, 900);
+                            setTimeout(function() { location.reload(); }, 1500);
                         } else {
                             showFb('Save failed (server error ' + r.status + ').', 'pn-form-error');
                         }
@@ -8220,7 +12583,15 @@ function setupPronounPicker(cfg) {
         var closeBtn  = gid('pn-edit-award-close-btn');
         if (closeBtn)  closeBtn.addEventListener('click', pnCloseAwardEditModal);
         var overlay = gid('pn-award-edit-overlay');
-        if (overlay) overlay.addEventListener('click', function(e) { if (e.target === this) pnCloseAwardEditModal(); });
+        if (overlay) {
+            // Only close on a click that BOTH started and ended on the overlay.
+            // Without the mousedown gate, drag-selecting text in an input and
+            // releasing outside the input fires a click on the overlay and
+            // closes the modal mid-selection.
+            var overlayDownOnSelf = false;
+            overlay.addEventListener('mousedown', function(e) { overlayDownOnSelf = (e.target === this); });
+            overlay.addEventListener('click', function(e) { if (overlayDownOnSelf && e.target === this) pnCloseAwardEditModal(); });
+        }
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && gid('pn-award-edit-overlay') && gid('pn-award-edit-overlay').classList.contains('pn-open'))
                 pnCloseAwardEditModal();
@@ -8440,7 +12811,12 @@ function setupPronounPicker(cfg) {
             (function(ni, hi, vb) {
                 $(ni).autocomplete({
                     source: function(req, res) {
-                        $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: req.term, kingdom_id: PkConfig.kingdomId, park_id: PkConfig.parkId, limit: 12 }, function(data) {
+                        // Search all players in the kingdom — do NOT filter by park_id.
+                        // Park officers don't have to already be at this park (the
+                        // Edit Officers flow is the way they get assigned here in
+                        // the first place), and on a freshly-created park with zero
+                        // members, the park-scoped search returns empty for everyone.
+                        $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: req.term, kingdom_id: PkConfig.kingdomId, limit: 12 }, function(data) {
                             res($.map(data || [], function(v) { return { label: v.Persona, value: v.MundaneId }; }));
                         });
                     },
@@ -8506,12 +12882,18 @@ function setupPronounPicker(cfg) {
     function gid(id) { return document.getElementById(id); }
 
     function pkUpdateRecurrenceFields(recurrence) {
-        var weekdayRow  = gid('pk-addday-weekday-row');
-        var weekofRow   = gid('pk-addday-weekof-row');
-        var monthdayRow = gid('pk-addday-monthday-row');
-        if (weekdayRow)  weekdayRow.style.display  = (recurrence === 'weekly' || recurrence === 'week-of-month') ? '' : 'none';
-        if (weekofRow)   weekofRow.style.display   = (recurrence === 'week-of-month') ? '' : 'none';
-        if (monthdayRow) monthdayRow.style.display = (recurrence === 'monthly') ? '' : 'none';
+        var weekdayRow   = gid('pk-addday-weekday-row');
+        var weekofRow    = gid('pk-addday-weekof-row');
+        var monthdayRow  = gid('pk-addday-monthday-row');
+        var intervalRow  = gid('pk-addday-interval-row');
+        var startdateRow = gid('pk-addday-startdate-row');
+        // For every-x-weeks the weekday is derived from the start date, so the
+        // weekday dropdown is hidden in that mode.
+        if (weekdayRow)   weekdayRow.style.display   = (recurrence === 'weekly' || recurrence === 'week-of-month') ? '' : 'none';
+        if (weekofRow)    weekofRow.style.display    = (recurrence === 'week-of-month') ? '' : 'none';
+        if (monthdayRow)  monthdayRow.style.display  = (recurrence === 'monthly') ? '' : 'none';
+        if (intervalRow)  intervalRow.style.display  = (recurrence === 'every-x-weeks') ? '' : 'none';
+        if (startdateRow) startdateRow.style.display = (recurrence === 'every-x-weeks') ? '' : 'none';
     }
 
     function pkToggleAltLoc(show) {
@@ -8538,11 +12920,15 @@ function setupPronounPicker(cfg) {
         if (timeEl) timeEl.value = '';
         var descEl = gid('pk-addday-desc');
         if (descEl) descEl.value = '';
+        var intervalEl = gid('pk-addday-interval');
+        if (intervalEl) intervalEl.value = '2';
+        var startdateEl = gid('pk-addday-startdate');
+        if (startdateEl) startdateEl.value = '';
         overlay.querySelectorAll('.pk-seg-btn[data-group="purpose"]').forEach(function(btn) {
-            btn.classList.toggle('pk-seg-active', btn.dataset.val === 'fighter-practice');
+            btn.classList.toggle('pk-seg-active', btn.dataset.val === 'park-day');
         });
         var purposeHid = gid('pk-addday-purpose');
-        if (purposeHid) purposeHid.value = 'fighter-practice';
+        if (purposeHid) purposeHid.value = 'park-day';
         overlay.querySelectorAll('.pk-seg-btn[data-group="recurrence"]').forEach(function(btn) {
             btn.classList.toggle('pk-seg-active', btn.dataset.val === 'weekly');
         });
@@ -8623,6 +13009,16 @@ function setupPronounPicker(cfg) {
         var monthdayEl = gid('pk-addday-monthday');
         if (monthdayEl) monthdayEl.value = card.dataset.monthday || '1';
 
+        // Interval + start date (every-x-weeks)
+        var intervalEl = gid('pk-addday-interval');
+        if (intervalEl) intervalEl.value = card.dataset.interval && parseInt(card.dataset.interval, 10) >= 2 ? card.dataset.interval : '2';
+        var startdateEl = gid('pk-addday-startdate');
+        if (startdateEl) {
+            var sd = card.dataset.startdate || '';
+            // Guard against the '1000-01-01' NOT-NULL sentinel from non-interval rows.
+            startdateEl.value = (sd && sd.indexOf('1000-01-01') === -1) ? sd.substring(0, 10) : '';
+        }
+
         // Time
         var timeEl = gid('pk-addday-time');
         if (timeEl) timeEl.value = card.dataset.time || '';
@@ -8693,6 +13089,11 @@ function setupPronounPicker(cfg) {
                 var fb         = gid('pk-addday-feedback');
                 if (!recurrence) { if (fb) { fb.textContent = 'Recurrence is required.'; fb.style.display = ''; fb.className = 'pk-addday-err'; } return; }
                 if (!time)       { if (fb) { fb.textContent = 'Time is required.';       fb.style.display = ''; fb.className = 'pk-addday-err'; } return; }
+                var startDate = gid('pk-addday-startdate') ? gid('pk-addday-startdate').value.trim() : '';
+                if (recurrence === 'every-x-weeks' && !startDate) {
+                    if (fb) { fb.textContent = 'A start date is required for the "every X weeks" cadence.'; fb.style.display = ''; fb.className = 'pk-addday-err'; }
+                    return;
+                }
                 saveBtn.disabled = true;
                 var fd = new FormData();
                 fd.append('Recurrence',        recurrence);
@@ -8702,6 +13103,8 @@ function setupPronounPicker(cfg) {
                 fd.append('WeekDay',           gid('pk-addday-weekday')  ? gid('pk-addday-weekday').value  : '');
                 fd.append('WeekOfMonth',       gid('pk-addday-weekof')   ? gid('pk-addday-weekof').value   : 0);
                 fd.append('MonthDay',          gid('pk-addday-monthday') ? gid('pk-addday-monthday').value : 0);
+                fd.append('StartDate',         startDate);
+                fd.append('WeekInterval',      gid('pk-addday-interval') ? gid('pk-addday-interval').value : 0);
                 var locType = pkGetAddDayLocType();
                 fd.append('Online',            locType === 'online' ? '1' : '0');
                 fd.append('AlternateLocation', locType === '1'      ? '1' : '0');
@@ -8754,8 +13157,13 @@ function setupPronounPicker(cfg) {
                             delBtn.disabled = false;
                             if (result && result.status === 0) {
                                 pkCloseAddDayModal();
+                                // Reload so the schedule cards, the Events-tab list, AND the
+                                // calendar all drop the deleted day. The old card-only removal
+                                // left the events list + calendar showing it until a refresh
+                                // (the save path already reloads, so this stays consistent).
                                 var card = document.querySelector('.pk-schedule-card[data-day-id="' + _editingDayId + '"]');
-                                if (card) $(card).fadeOut(300, function() { $(card).remove(); });
+                                if (card) $(card).fadeOut(200);
+                                setTimeout(function() { location.reload(); }, 250);
                             } else {
                                 alert((result && result.error) ? result.error : 'Delete failed.');
                             }
@@ -8881,6 +13289,49 @@ function setupPronounPicker(cfg) {
                 btn.textContent = 'Revoke Award';
             });
         });
+
+        // Reactivate a revoked award/title — two-click confirm, no modal.
+        $(document).on('click', '.pn-reactivate-btn', function(e) {
+            e.preventDefault();
+            var btn = this;
+            var awardsId = parseInt(btn.getAttribute('data-awards-id'), 10) || 0;
+            if (!awardsId) return;
+            if (!btn.dataset.confirm) {
+                btn.dataset.confirm = '1';
+                btn._origHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Confirm Reactivate?';
+                btn._confirmTimer = setTimeout(function() {
+                    btn.dataset.confirm = '';
+                    if (btn._origHtml) btn.innerHTML = btn._origHtml;
+                }, 3000);
+                return;
+            }
+            clearTimeout(btn._confirmTimer);
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reactivating...';
+            fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/reactivateaward', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'AwardsId=' + encodeURIComponent(awardsId),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 0) {
+                    location.reload();
+                } else {
+                    alert(data.error || 'Error reactivating award.');
+                    btn.disabled = false;
+                    btn.dataset.confirm = '';
+                    if (btn._origHtml) btn.innerHTML = btn._origHtml;
+                }
+            })
+            .catch(function() {
+                alert('Request failed. Please try again.');
+                btn.disabled = false;
+                btn.dataset.confirm = '';
+                if (btn._origHtml) btn.innerHTML = btn._origHtml;
+            });
+        });
     });
 })();
 
@@ -8889,6 +13340,19 @@ function setupPronounPicker(cfg) {
     if (typeof PnConfig === 'undefined' || !PnConfig.canEditAdmin) return;
 
     function gid(id) { return document.getElementById(id); }
+
+    // Toggle the Notes-tab infobox between the "has notes" message (with the
+    // close-out link) and the "no notes" message based on the current tab
+    // count. Called after any add/delete so the message stays in sync without
+    // a page reload.
+    function pnSyncNotesInfobox() {
+        var tabCount = document.querySelector('[data-tab="history"] .pn-tab-count');
+        var n = tabCount ? (parseInt(tabCount.textContent.replace(/[^0-9]/g, ''), 10) || 0) : 0;
+        var has  = gid('pn-notes-infobox-has');
+        var none = gid('pn-notes-infobox-none');
+        if (has)  has.style.display  = n > 0 ? '' : 'none';
+        if (none) none.style.display = n > 0 ? 'none' : '';
+    }
 
     var editNoteId = 0; // 0 = add mode, >0 = edit mode
 
@@ -8916,6 +13380,10 @@ function setupPronounPicker(cfg) {
         }
         var overlay = gid('pn-addnote-overlay');
         if (overlay) { overlay.classList.add('pn-open'); document.body.style.overflow = 'hidden'; }
+        // Re-evaluate save button state after fields are populated
+        var title = (gid('pn-note-title') || {}).value || '';
+        var date  = (gid('pn-note-date')  || {}).value || '';
+        var sb = gid('pn-addnote-save'); if (sb) sb.disabled = !title.trim() || !date;
     };
 
     function pnCloseAddNoteModal() {
@@ -8929,6 +13397,14 @@ function setupPronounPicker(cfg) {
         $(document).on('click', '#pn-addnote-overlay', function(e) {
             if ($(e.target).is('#pn-addnote-overlay')) pnCloseAddNoteModal();
         });
+
+        // Enable save only when Title and Date are filled
+        function pnValidateNoteForm() {
+            var title = $.trim($('#pn-note-title').val());
+            var date  = $.trim($('#pn-note-date').val());
+            $('#pn-addnote-save').prop('disabled', !title || !date);
+        }
+        $(document).on('input change', '#pn-note-title, #pn-note-date', pnValidateNoteForm);
 
         // Open edit modal from edit button
         $(document).on('click', '.pn-note-edit-btn', function() {
@@ -8976,58 +13452,9 @@ function setupPronounPicker(cfg) {
             .then(function(data) {
                 if (data.status === 0) {
                     pnCloseAddNoteModal();
-                    var dateDisp  = date + (dateComp ? ' - ' + dateComp : '');
-                    var safeTitle = $('<div>').text(title.trim()).html();
-                    var safeDesc  = $('<div>').text(desc).html();
-                    var safeDate  = $('<div>').text(dateDisp).html();
-                    if (isEdit) {
-                        // Update the existing row in place
-                        var row = document.querySelector('tr[data-notes-id="' + editNoteId + '"]');
-                        if (row) {
-                            var cells = row.cells;
-                            if (cells[0]) cells[0].innerHTML = safeTitle;
-                            if (cells[1]) cells[1].innerHTML = safeDesc;
-                            if (cells[2]) cells[2].innerHTML = safeDate;
-                            var eb = row.querySelector('.pn-note-edit-btn');
-                            if (eb) {
-                                eb.setAttribute('data-note', title.trim());
-                                eb.setAttribute('data-desc', desc);
-                                eb.setAttribute('data-date', date);
-                                eb.setAttribute('data-date-complete', dateComp);
-                            }
-                        }
-                    } else {
-                        // Prepend new row to the table
-                        var tbody = document.querySelector('#pn-history-table tbody');
-                        if (tbody) {
-                            var tr = document.createElement('tr');
-                            var newId = data.notesId || 0;
-                            tr.setAttribute('data-notes-id', newId);
-                            tr.innerHTML = '<td>' + safeTitle + '</td>'
-                                + '<td>' + safeDesc + '</td>'
-                                + '<td class="pn-col-nowrap">' + safeDate + '</td>'
-                                + '<td>'
-                                + '<button class="pn-note-edit-btn"'
-                                + ' data-notes-id="' + newId + '"'
-                                + ' data-note="' + $('<div>').text(title.trim()).html().replace(/"/g, '&quot;') + '"'
-                                + ' data-desc="' + $('<div>').text(desc).html().replace(/"/g, '&quot;') + '"'
-                                + ' data-date="' + $('<div>').text(date).html() + '"'
-                                + ' data-date-complete="' + $('<div>').text(dateComp).html() + '"'
-                                + ' title="Edit note"><i class="fas fa-pencil-alt"></i></button>'
-                                + ' <button class="pn-note-del-btn" data-notes-id="' + newId + '" title="Delete note"><i class="fas fa-times"></i></button>'
-                                + '</td>';
-                            tbody.insertBefore(tr, tbody.firstChild);
-                            var tabCount = document.querySelector('[data-tab="history"] .pn-tab-count');
-                            if (tabCount) {
-                                var n = parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0;
-                                tabCount.textContent = '(' + (n + 1) + ')';
-                            }
-                            var table = document.getElementById('pn-history-table');
-                            if (table) table.style.display = '';
-                            var emptyState = document.getElementById('pn-history-empty');
-                            if (emptyState) emptyState.style.display = 'none';
-                        }
-                    }
+                    // Re-fetch the tab so the DataTable (sort/search/paging/CSV/count) stays in sync
+                    // with the server. Hand-patching the DOM would desync DataTables' row cache.
+                    if (typeof window.pnReloadNotes === 'function') window.pnReloadNotes(); else location.reload();
                 } else {
                     if (fb) { fb.textContent = data.error || 'Error saving note.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
                     btn.disabled = false;
@@ -9049,31 +13476,106 @@ function setupPronounPicker(cfg) {
         $(document).on('click', '.pn-note-del-btn', function() {
             var notesId = $(this).data('notes-id');
             var row     = $(this).closest('tr');
-            if (!notesId || !confirm('Delete this note?')) return;
+            if (!notesId) return;
             var self = this;
-            self.disabled = true;
-            fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/deletenote', {
+            pnConfirm({
+                title: 'Delete Note?',
+                message: 'This note will be permanently removed. This cannot be undone.',
+                confirmText: 'Delete',
+                danger: true,
+            }, function() {
+                self.disabled = true;
+                fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/deletenote', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'NotesId=' + encodeURIComponent(notesId),
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.status === 0) {
+                        // Re-fetch the tab so the DataTable stays in sync — a raw row.remove()
+                        // leaves DataTables' cache holding the row, so it can reappear on next draw.
+                        if (typeof window.pnReloadNotes === 'function') window.pnReloadNotes(); else location.reload();
+                    } else {
+                        self.disabled = false;
+                        pnConfirm({ title: 'Delete Failed', message: data.error || 'Error deleting note.', confirmText: 'OK', danger: false }, function() {});
+                    }
+                })
+                .catch(function() {
+                    self.disabled = false;
+                    pnConfirm({ title: 'Delete Failed', message: 'Request failed. Please try again.', confirmText: 'OK', danger: false }, function() {});
+                });
+            });
+        });
+
+    });
+})();
+
+// ---- Playernew: Clear Notes Tab (owner OR park admin) ----
+// Lives outside the admin-only IIFE above so the close-out flow is available
+// to non-admin players viewing their own profile. The server-side ClearNotes
+// already permits both (owner-self OR park-admin).
+(function() {
+    if (typeof PnConfig === 'undefined') return;
+    var isOwner = PnConfig.loggedInUserId && PnConfig.playerId
+        && parseInt(PnConfig.loggedInUserId, 10) === parseInt(PnConfig.playerId, 10);
+    if (!PnConfig.canEditAdmin && !isOwner) return;
+
+    function gid(id) { return document.getElementById(id); }
+
+    $(document).ready(function() {
+        $(document).on('click', '#pn-clear-notes-link', function(e) {
+            e.preventDefault();
+            var overlay = gid('pn-clearnotes-overlay');
+            if (overlay) overlay.classList.add('pn-open');
+        });
+        $(document).on('click', '#pn-clearnotes-close-btn, #pn-clearnotes-cancel', function() {
+            var overlay = gid('pn-clearnotes-overlay');
+            if (overlay) overlay.classList.remove('pn-open');
+        });
+        $(document).on('click', '#pn-clearnotes-overlay', function(e) {
+            if ($(e.target).is('#pn-clearnotes-overlay')) {
+                var overlay = gid('pn-clearnotes-overlay');
+                if (overlay) overlay.classList.remove('pn-open');
+            }
+        });
+        $(document).on('click', '#pn-clearnotes-confirm', function() {
+            var btn = this;
+            var fb  = gid('pn-clearnotes-feedback');
+            btn.disabled = true;
+            fetch(PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/clearnotes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'NotesId=' + encodeURIComponent(notesId),
+                body: '',
             })
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.status === 0) {
-                    row.fadeOut(300, function() {
-                        row.remove();
-                        var tabCount = document.querySelector('[data-tab="history"] .pn-tab-count');
-                        if (tabCount) {
-                            var n = parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0;
-                            tabCount.textContent = '(' + Math.max(0, n - 1) + ')';
-                        }
-                    });
+                    var overlay = gid('pn-clearnotes-overlay');
+                    if (overlay) overlay.classList.remove('pn-open');
+                    var tabPanel = gid('pn-tab-history');
+                    if (tabPanel) tabPanel.style.display = 'none';
+                    var tabLi = document.querySelector('[data-tab=history]');
+                    if (tabLi) tabLi.style.display = 'none';
+                    var awardsLi = document.querySelector('[data-tab=awards]');
+                    if (awardsLi) awardsLi.click();
                 } else {
-                    self.disabled = false;
-                    alert(data.error || 'Error deleting note.');
+                    btn.disabled = false;
+                    if (fb) {
+                        fb.textContent = data.error || 'Error removing notes.';
+                        fb.className = 'pn-feedback pn-feedback-err';
+                        fb.style.display = '';
+                    }
                 }
             })
-            .catch(function() { self.disabled = false; alert('Request failed.'); });
+            .catch(function() {
+                btn.disabled = false;
+                if (fb) {
+                    fb.textContent = 'Request failed.';
+                    fb.className = 'pn-feedback pn-feedback-err';
+                    fb.style.display = '';
+                }
+            });
         });
     });
 })();
@@ -9294,6 +13796,7 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
     var PARK_URL  = PnConfig.httpService + 'Search/SearchService.php';
     var MOVE_URL  = PnConfig.uir + 'PlayerAjax/player/' + PnConfig.playerId + '/moveplayer';
     var pnmpMode  = 'within';
+    var pnDestCascade = null;
     var mpParkTimer;
 
     function gid(id) { return document.getElementById(id); }
@@ -9327,6 +13830,12 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
         if (parkResults) parkResults.classList.remove('pn-ac-open');
         var btn = gid('pn-move-submit');
         if (btn) btn.disabled = true;
+        // Destination cascade: locked to the player's kingdom for 'within',
+        // free to pick any kingdom for 'out'.
+        if (pnDestCascade) {
+            if (mode === 'within') pnDestCascade.lockTo(PnConfig.kingdomId);
+            else pnDestCascade.reset();
+        }
     }
 
     function closeMovePlayer() {
@@ -9359,6 +13868,22 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
             if (btn) btn.addEventListener('click', function() { setMode(m); });
         });
 
+        // Destination cascade (Kingdom -> Park)
+        if (gid('pn-mp-dfilter-kingdom')) {
+            pnDestCascade = MpCascade.wire({
+                uir: PnConfig.uir,
+                kingdomSel: gid('pn-mp-dfilter-kingdom'),
+                parkSel: gid('pn-mp-dfilter-park'),
+                allLabel: 'Select Kingdom',
+                parkAllLabel: 'Select Park',
+                onChange: function(kingdomId, parkId) {
+                    var btn = gid('pn-move-submit');
+                    gid('pn-moveplayer-park-id').value = parkId ? parkId : '';
+                    if (btn) btn.disabled = !parkId;
+                }
+            });
+        }
+
         // Close handlers
         $(document).on('click', '#pn-moveplayer-close-btn, #pn-move-cancel', function() { closeMovePlayer(); });
         $(document).on('click', '#pn-moveplayer-overlay', function(e) {
@@ -9389,7 +13914,10 @@ function setupAcKeyNav(inputEl, resultsEl, itemSel, focusedClass, selectFn) {
                 clearTimeout(mpParkTimer);
                 mpParkTimer = setTimeout(function() {
                     var params = { Action: 'Search/Park', name: term, limit: 12 };
-                    if (pnmpMode === 'within') {
+                    var dsel = pnDestCascade ? pnDestCascade.get() : { kingdomId: 0, parkId: 0 };
+                    if (dsel.kingdomId) {
+                        params.kingdom_id = dsel.kingdomId;
+                    } else if (pnmpMode === 'within') {
                         params.kingdom_id = PnConfig.kingdomId;
                     } else {
                         params.exclude_kingdom_id = PnConfig.kingdomId;
@@ -9660,6 +14188,48 @@ window.pnCloseUnitCreateModal = function() {
             if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('pn-open'))
                 pnCloseUnitCreateModal();
         });
+
+        // ---- Confirmation dialog ----
+        var confirmOverlay = document.getElementById('pn-unit-confirm-overlay');
+        var submitBtn      = document.getElementById('pn-unit-create-submit-btn');
+        var confirmBack    = document.getElementById('pn-unit-confirm-back');
+        var confirmYes     = document.getElementById('pn-unit-confirm-yes');
+        var nameInput      = document.getElementById('pn-unit-create-name');
+        var typeSelect     = document.getElementById('pn-unit-create-type');
+
+        if (submitBtn && confirmOverlay) {
+            submitBtn.addEventListener('click', function() {
+                var form = document.getElementById('pn-unit-create-form');
+                if (form && !form.reportValidity()) return;
+                var name = nameInput ? nameInput.value.trim() : '';
+                var type = typeSelect ? typeSelect.value : 'unit';
+                document.getElementById('pn-unit-confirm-name').textContent = name || '(unnamed)';
+                document.getElementById('pn-unit-confirm-type').textContent = type;
+                overlay.classList.remove('pn-open');
+                confirmOverlay.classList.add('pn-open');
+            });
+        }
+        if (confirmBack && confirmOverlay) {
+            confirmBack.addEventListener('click', function() {
+                confirmOverlay.classList.remove('pn-open');
+                overlay.classList.add('pn-open');
+            });
+        }
+        if (confirmYes) {
+            confirmYes.addEventListener('click', function() {
+                confirmOverlay.classList.remove('pn-open');
+                document.body.style.overflow = '';
+                document.getElementById('pn-unit-create-form').submit();
+            });
+        }
+        if (confirmOverlay) {
+            confirmOverlay.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    confirmOverlay.classList.remove('pn-open');
+                    overlay.classList.add('pn-open');
+                }
+            });
+        }
     });
 })();
 
@@ -9669,10 +14239,12 @@ window.pnCloseUnitCreateModal = function() {
 
     var MOVE_URL    = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/moveplayer';
     var PSEARCH_URL = KnConfig.uir + 'KingdomAjax/playersearch/' + KnConfig.kingdomId;
+    var PSEARCH_BASE = KnConfig.uir + 'KingdomAjax/playersearch/';
     var PARK_URL    = KnConfig.httpService + 'Search/SearchService.php';
 
     // Modes: 'in' | 'within' | 'out'
     var knmpMode = 'in';
+    var knmpPlayerCascade = null, knmpDestCascade = null;
 
     function gid(id) { return document.getElementById(id); }
 
@@ -9703,33 +14275,39 @@ window.pnCloseUnitCreateModal = function() {
             if (btn) btn.classList.toggle('kn-mp-active', m === mode);
         });
         var playerInput = gid('kn-moveplayer-player-name');
-        var parkInput   = gid('kn-moveplayer-park-name');
         var playerLabel = gid('kn-moveplayer-player-label');
         var parkLabel   = gid('kn-moveplayer-park-label');
         if (mode === 'in') {
             playerInput.placeholder = 'Search by name, or KD:PK name\u2026';
-            parkInput.placeholder   = 'Search parks in this kingdom\u2026';
             if (playerLabel) playerLabel.innerHTML = 'Player (outside kingdom) <span style="color:#e53e3e">*</span>';
             if (parkLabel)   parkLabel.innerHTML   = 'Destination Park (in kingdom) <span style="color:#e53e3e">*</span>';
         } else if (mode === 'within') {
             playerInput.placeholder = 'Search kingdom members\u2026';
-            parkInput.placeholder   = 'Search parks in this kingdom\u2026';
             if (playerLabel) playerLabel.innerHTML = 'Player <span style="color:#e53e3e">*</span>';
             if (parkLabel)   parkLabel.innerHTML   = 'New Home Park <span style="color:#e53e3e">*</span>';
         } else {
             playerInput.placeholder = 'Search kingdom members\u2026';
-            parkInput.placeholder   = 'Search parks outside this kingdom\u2026';
             if (playerLabel) playerLabel.innerHTML = 'Player <span style="color:#e53e3e">*</span>';
             if (parkLabel)   parkLabel.innerHTML   = 'Destination Park (outside kingdom) <span style="color:#e53e3e">*</span>';
         }
         // Reset fields
         playerInput.value = '';
-        parkInput.value   = '';
         gid('kn-moveplayer-player-id').value = '';
         gid('kn-moveplayer-park-id').value   = '';
         gid('kn-moveplayer-player-results').classList.remove('kn-ac-open');
-        gid('kn-moveplayer-park-results').classList.remove('kn-ac-open');
         gid('kn-moveplayer-feedback').style.display = 'none';
+        // Source-player cascade: free for 'in' (search other kingdoms), locked to
+        // the current kingdom for 'within'/'out' (park dropdown stays usable).
+        if (knmpPlayerCascade) {
+            if (mode === 'in') knmpPlayerCascade.reset();
+            else knmpPlayerCascade.lockTo(KnConfig.kingdomId, KnConfig.kingdomName);
+        }
+        // Destination cascade: free for 'out' (pick target kingdom), locked to the
+        // current kingdom otherwise (destination park is in-kingdom).
+        if (knmpDestCascade) {
+            if (mode === 'out') knmpDestCascade.reset();
+            else knmpDestCascade.lockTo(KnConfig.kingdomId, KnConfig.kingdomName);
+        }
         knmpCheckSubmit();
     }
 
@@ -9762,28 +14340,61 @@ window.pnCloseUnitCreateModal = function() {
             if (btn) btn.addEventListener('click', function() { setMode(m); });
         });
 
-        // Player autocomplete
+        // Cascade filters (Kingdom -> Park) for source player and destination park
+        knmpPlayerCascade = MpCascade.wire({
+            uir: KnConfig.uir,
+            kingdomSel: gid('kn-mp-pfilter-kingdom'),
+            parkSel: gid('kn-mp-pfilter-park'),
+            onChange: function() { knmpDoPlayerSearch(); }
+        });
+        knmpDestCascade = MpCascade.wire({
+            uir: KnConfig.uir,
+            kingdomSel: gid('kn-mp-dfilter-kingdom'),
+            parkSel: gid('kn-mp-dfilter-park'),
+            allLabel: 'Select Kingdom',
+            parkAllLabel: 'Select Park',
+            onChange: function(kingdomId, parkId) {
+                gid('kn-moveplayer-park-id').value = parkId ? parkId : '';
+                knmpCheckSubmit();
+            }
+        });
+
+        // Player autocomplete (scoped by mode + cascade filter)
+        function knmpPlayerUrl(term) {
+            var sel = knmpPlayerCascade ? knmpPlayerCascade.get() : { kingdomId: 0, parkId: 0 };
+            var kid, scope;
+            if (knmpMode === 'in') {
+                if (sel.kingdomId) { kid = sel.kingdomId; scope = 'own'; }   // a specific other kingdom
+                else { kid = KnConfig.kingdomId; scope = 'exclude'; }        // all kingdoms except this one
+            } else {
+                kid = KnConfig.kingdomId; scope = 'own';                     // within/out: locked to this kingdom
+            }
+            return PSEARCH_BASE + kid + '&scope=' + scope + '&include_inactive=1&include_suspended=1'
+                + (sel.parkId ? '&park_id=' + sel.parkId : '')
+                + '&q=' + encodeURIComponent(term);
+        }
+        function knmpDoPlayerSearch() {
+            var term = gid('kn-moveplayer-player-name').value.trim();
+            var el = gid('kn-moveplayer-player-results');
+            if (term.length < 2) { el.classList.remove('kn-ac-open'); return; }
+            fetch(knmpPlayerUrl(term))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    el.innerHTML = (data && data.length)
+                        ? data.map(function(p) {
+                            var inactive = p.Active === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
+                            var suspended = p.Suspended === 1 ? ' <span style="margin-left:6px;background:#c53030;color:#fff;font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px">suspended</span>' : '';
+                            return '<div class="kn-ac-item' + (p.Suspended === 1 ? ' kn-ac-suspended' : '') + '" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
+                                + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>' + suspended + inactive + '</div>';
+                        }).join('')
+                        : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
+                    el.classList.add('kn-ac-open');
+                }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
+        }
         gid('kn-moveplayer-player-name').addEventListener('input', function() {
             gid('kn-moveplayer-player-id').value = '';
             clearTimeout(mpPlayerTimer);
-            var term = this.value.trim();
-            if (term.length < 2) { gid('kn-moveplayer-player-results').classList.remove('kn-ac-open'); return; }
-            mpPlayerTimer = setTimeout(function() {
-                var scope = (knmpMode === 'in') ? 'exclude' : 'own';
-                fetch(PSEARCH_URL + '&scope=' + scope + '&include_inactive=1&q=' + encodeURIComponent(term))
-                    .then(function(r) { return r.json(); })
-                    .then(function(data) {
-                        var el = gid('kn-moveplayer-player-results');
-                        el.innerHTML = (data && data.length)
-                            ? data.map(function(p) {
-                                var inactive = p.Active === 0 ? ' <span style="color:#e53e3e;font-size:10px;font-weight:600">inactive</span>' : '';
-                                return '<div class="kn-ac-item" data-id="' + p.MundaneId + '" data-name="' + encodeURIComponent(p.Persona) + '">'
-                                    + escHtml(p.Persona) + ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(p.KAbbr || '') + ':' + escHtml(p.PAbbr || '') + ')</span>' + inactive + '</div>';
-                            }).join('')
-                            : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
-                        el.classList.add('kn-ac-open');
-                    }).catch(function(err) { if (err.name !== 'AbortError') console.warn('[revised.js] fetch failed:', err); });
-            }, AUTOCOMPLETE_DEBOUNCE_MS);
+            mpPlayerTimer = setTimeout(knmpDoPlayerSearch, AUTOCOMPLETE_DEBOUNCE_MS);
         });
         gid('kn-moveplayer-player-results').addEventListener('click', function(e) {
             var item = e.target.closest('.kn-ac-item[data-id]');
@@ -9798,44 +14409,7 @@ window.pnCloseUnitCreateModal = function() {
         });
         setupAcKeyNav(gid('kn-moveplayer-player-name'), gid('kn-moveplayer-player-results'), '.kn-ac-item[data-id]', 'kn-ac-focused', function(item) { item.click(); });
 
-        // Park autocomplete
-        gid('kn-moveplayer-park-name').addEventListener('input', function() {
-            gid('kn-moveplayer-park-id').value = '';
-            clearTimeout(mpParkTimer);
-            var term = this.value.trim();
-            if (term.length < 2) { gid('kn-moveplayer-park-results').classList.remove('kn-ac-open'); return; }
-            mpParkTimer = setTimeout(function() {
-                var params = { Action: 'Search/Park', name: term, limit: 10 };
-                if (knmpMode === 'in' || knmpMode === 'within') {
-                    params.kingdom_id = KnConfig.kingdomId;
-                } else {
-                    params.exclude_kingdom_id = KnConfig.kingdomId;
-                }
-                $.getJSON(PARK_URL, params, function(data) {
-                    var el = gid('kn-moveplayer-park-results');
-                    el.innerHTML = (data && data.length)
-                        ? data.map(function(pk) {
-                            var sub = pk.KingdomName ? ' <span style="color:#a0aec0;font-size:11px">(' + escHtml(pk.KingdomName) + ')</span>' : '';
-                            return '<div class="kn-ac-item" data-id="' + pk.ParkId + '" data-name="' + encodeURIComponent(pk.Name) + '">'
-                                + escHtml(pk.Name) + sub + '</div>';
-                        }).join('')
-                        : '<div class="kn-ac-item" style="color:#a0aec0;cursor:default">No parks found</div>';
-                    el.classList.add('kn-ac-open');
-                });
-            }, AUTOCOMPLETE_DEBOUNCE_MS);
-        });
-        gid('kn-moveplayer-park-results').addEventListener('click', function(e) {
-            var item = e.target.closest('.kn-ac-item[data-id]');
-            if (!item) return;
-            gid('kn-moveplayer-park-name').value = decodeURIComponent(item.dataset.name);
-            gid('kn-moveplayer-park-id').value   = item.dataset.id;
-            this.classList.remove('kn-ac-open');
-            knmpCheckSubmit();
-        });
-        gid('kn-moveplayer-park-name').addEventListener('input', function() {
-            if (!this.value.trim()) { gid('kn-moveplayer-park-id').value = ''; knmpCheckSubmit(); }
-        });
-        setupAcKeyNav(gid('kn-moveplayer-park-name'), gid('kn-moveplayer-park-results'), '.kn-ac-item[data-id]', 'kn-ac-focused', function(item) { item.click(); });
+        // Destination park is chosen via the Kingdom -> Park cascade (knmpDestCascade) — no free-text park search.
 
         gid('kn-moveplayer-submit').addEventListener('click', function() {
             var mundaneId = gid('kn-moveplayer-player-id').value;
@@ -9947,18 +14521,20 @@ window.pnCloseUnitCreateModal = function() {
                     var seen = {};
                     local.forEach(function(pl) { seen[pl.MundaneId] = true; });
                     var combined = local.concat(global.filter(function(pl) { return !seen[pl.MundaneId]; }));
-                    var localIds = {};
-                    local.forEach(function(pl) { localIds[pl.MundaneId] = true; });
                     var otherId_val = gid(otherId) ? gid(otherId).value : '';
                     results.innerHTML = combined.length
                         ? combined.map(function(pl) {
-                            var isLocal = localIds[pl.MundaneId];
+                            // Trust the player's actual KingdomId — the server's
+                            // magic_search lets a "GP: monkey" prefix override the
+                            // request's kingdom_id filter, so request-list membership
+                            // would mislabel out-of-kingdom hits as local.
+                            var isLocal = String(pl.KingdomId) === String(KnConfig.kingdomId);
                             var sub = isLocal
                                 ? ' <span style="color:#68d391;font-size:11px">&#x2713; Kingdom</span>'
                                 : ((pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '');
                             var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
                             return '<div class="kn-ac-item' + (same ? ' kn-ac-disabled' : '') + '"'
-                                + (same ? '' : ' data-id="' + pl.MundaneId + '"')
+                                + (same ? '' : ' data-id="' + pl.MundaneId + '" tabindex="-1"')
                                 + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
                                 + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
                                 + '>' + escHtml(pl.Persona) + sub + '</div>';
@@ -10001,6 +14577,8 @@ window.pnCloseUnitCreateModal = function() {
 
         makePlayerSearch('kn-merge-keep-name',   'kn-merge-keep-id',   'kn-merge-keep-results',   'kn-merge-remove-id');
         makePlayerSearch('kn-merge-remove-name', 'kn-merge-remove-id', 'kn-merge-remove-results', 'kn-merge-keep-id');
+        acKeyNav(gid('kn-merge-keep-name'),   gid('kn-merge-keep-results'),   'kn-ac-open', '.kn-ac-item[data-id]');
+        acKeyNav(gid('kn-merge-remove-name'), gid('kn-merge-remove-results'), 'kn-ac-open', '.kn-ac-item[data-id]');
 
         gid('kn-mergeplayer-submit').addEventListener('click', function() {
             var btn        = gid('kn-mergeplayer-submit');
@@ -10097,25 +14675,42 @@ window.pnCloseUnitCreateModal = function() {
                 var done = gid('pk-heraldry-step-done');
                 if (sel) sel.style.display = 'none';
                 if (upl) upl.style.display = '';
-                var fd = new FormData();
-                fd.append('Heraldry', file);
-                fetch(UPLOAD_URL, { method: 'POST', body: fd })
-                    .then(function(r) { return r.json(); })
-                    .then(function(r) {
-                        if (upl) upl.style.display = 'none';
-                        if (r && r.status === 0) {
-                            if (done) done.style.display = '';
-                            setTimeout(function() { window.location.reload(); }, 1200);
-                        } else {
+
+                function doUpload(blob) {
+                    var fd = new FormData();
+                    fd.append('Heraldry', blob, file.name);
+                    fetch(UPLOAD_URL, { method: 'POST', body: fd })
+                        .then(function(r) { return r.json(); })
+                        .then(function(r) {
+                            if (upl) upl.style.display = 'none';
+                            if (r && r.status === 0) {
+                                if (done) done.style.display = '';
+                                setTimeout(function() { window.location.reload(); }, 1200);
+                            } else {
+                                if (sel) sel.style.display = '';
+                                alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
+                            }
+                        })
+                        .catch(function() {
+                            if (upl) upl.style.display = 'none';
                             if (sel) sel.style.display = '';
-                            alert((r && r.error) ? r.error : 'Upload failed. Please try again.');
-                        }
-                    })
-                    .catch(function() {
-                        if (upl) upl.style.display = 'none';
-                        if (sel) sel.style.display = '';
-                        alert('Request failed. Please try again.');
-                    });
+                            alert('Request failed. Please try again.');
+                        });
+                }
+
+                trimTransparentEdges(file, function(trimmed) {
+                    file = trimmed;
+                    if (file.size > 348836) {
+                        var isPng = (file.type === 'image/png');
+                        resizeImageToLimit(file, 348836, doUpload, function(errMsg) {
+                            if (upl) upl.style.display = 'none';
+                            if (sel) sel.style.display = '';
+                            alert(errMsg || 'Could not resize image. Please choose a smaller file.');
+                        }, isPng);
+                    } else {
+                        doUpload(file);
+                    }
+                });
             });
         }
 
@@ -10155,9 +14750,11 @@ window.pnCloseUnitCreateModal = function() {
     if (typeof PkConfig === 'undefined' || !PkConfig.canAdmin) return;
 
     var MOVE_URL        = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/moveplayer';
-    var PSEARCH_EXCLUDE = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=exclude&include_inactive=1&q=';
-    var PSEARCH_OWN     = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=own&include_inactive=1&q=';
+    var PSEARCH_EXCLUDE = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=exclude&include_inactive=1&include_suspended=1&q=';
+    var PSEARCH_OWN     = PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/playersearch&scope=own&include_inactive=1&include_suspended=1&q=';
+    var KPSEARCH_BASE   = PkConfig.uir + 'KingdomAjax/playersearch/';
 
+    var pkPlayerCascade = null, pkDestCascade = null;
     var mpPlayerId = 0, mpParkId = 0;
     var mpPlayerTimer = null, mpParkTimer = null;
     var mpMode = 'in'; // 'in' = Transfer Into Your Park, 'out' = Transfer to New Park
@@ -10205,12 +14802,16 @@ window.pnCloseUnitCreateModal = function() {
         var fb = gid('pk-moveplayer-feedback');
         if (fb) { fb.style.display = 'none'; fb.textContent = ''; }
 
+        var pfilterWrap = gid('pk-mp-pfilter-wrap');
         if (mode === 'in') {
             if (btnIn)  btnIn.classList.add('pk-mp-active');
             if (btnOut) btnOut.classList.remove('pk-mp-active');
             if (parkSection) parkSection.style.display = 'none';
             if (playerInput) playerInput.placeholder = 'Search by name, or KD:PK name\u2026';
             mpParkId = PkConfig.parkId;
+            // Source player can come from anywhere: show the free cascade filter.
+            if (pfilterWrap) pfilterWrap.style.display = '';
+            if (pkPlayerCascade) pkPlayerCascade.reset();
         } else {
             if (btnOut) btnOut.classList.add('pk-mp-active');
             if (btnIn)  btnIn.classList.remove('pk-mp-active');
@@ -10221,6 +14822,10 @@ window.pnCloseUnitCreateModal = function() {
             gid('pk-moveplayer-park-id').value = '';
             closeDropdown('pk-moveplayer-park-results');
             mpParkId = 0;
+            // Player is a member of this park: cascade not useful, hide it.
+            if (pfilterWrap) pfilterWrap.style.display = 'none';
+            // Destination is a new park anywhere: free cascade to pick it.
+            if (pkDestCascade) pkDestCascade.reset();
         }
         pkmpCheckSubmit();
     }
@@ -10232,11 +14837,53 @@ window.pnCloseUnitCreateModal = function() {
         overlay.classList.add('pk-open');
     };
 
+    // Build the player-search URL from mode + cascade filter. For 'in', a chosen
+    // source kingdom routes through KingdomAjax (kingdom-scoped); with no kingdom
+    // it falls back to 'everyone not already in this park'. 'out' = this park's members.
+    function pkmpPlayerUrl(term) {
+        if (mpMode === 'in') {
+            var sel = pkPlayerCascade ? pkPlayerCascade.get() : { kingdomId: 0, parkId: 0 };
+            if (sel.kingdomId) {
+                return KPSEARCH_BASE + sel.kingdomId + '&scope=own&include_inactive=1&include_suspended=1'
+                    + (sel.parkId ? '&park_id=' + sel.parkId : '') + '&q=' + encodeURIComponent(term);
+            }
+            return PSEARCH_EXCLUDE + encodeURIComponent(term);
+        }
+        return PSEARCH_OWN + encodeURIComponent(term);
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         var btnIn  = gid('pk-mp-btn-in');
         var btnOut = gid('pk-mp-btn-out');
         if (btnIn)  btnIn.addEventListener('click',  function() { setMode('in');  });
         if (btnOut) btnOut.addEventListener('click', function() { setMode('out'); });
+
+        // Cascade filters (Kingdom -> Park)
+        if (gid('pk-mp-pfilter-kingdom')) {
+            pkPlayerCascade = MpCascade.wire({
+                uir: PkConfig.uir,
+                kingdomSel: gid('pk-mp-pfilter-kingdom'),
+                parkSel: gid('pk-mp-pfilter-park'),
+                onChange: function() {
+                    var inp = gid('pk-moveplayer-player-name');
+                    if (inp && inp.value.trim().length >= 2) inp.dispatchEvent(new Event('input'));
+                }
+            });
+        }
+        if (gid('pk-mp-dfilter-kingdom')) {
+            pkDestCascade = MpCascade.wire({
+                uir: PkConfig.uir,
+                kingdomSel: gid('pk-mp-dfilter-kingdom'),
+                parkSel: gid('pk-mp-dfilter-park'),
+                allLabel: 'Select Kingdom',
+                parkAllLabel: 'Select Park',
+                onChange: function(kingdomId, parkId) {
+                    mpParkId = parkId ? parkId : 0;
+                    gid('pk-moveplayer-park-id').value = parkId ? parkId : '';
+                    pkmpCheckSubmit();
+                }
+            });
+        }
 
         // Player autocomplete
         var playerInput = gid('pk-moveplayer-player-name');
@@ -10248,9 +14895,9 @@ window.pnCloseUnitCreateModal = function() {
                 pkmpCheckSubmit();
                 var term = this.value.trim();
                 if (term.length < 2) { closeDropdown('pk-moveplayer-player-results'); return; }
-                var searchUrl = (mpMode === 'in') ? PSEARCH_EXCLUDE : PSEARCH_OWN;
+                var searchUrl = pkmpPlayerUrl(term);
                 mpPlayerTimer = setTimeout(function() {
-                    fetch(searchUrl + encodeURIComponent(term))
+                    fetch(searchUrl)
                         .then(function(r) { return r.json(); })
                         .then(function(results) {
                             var res = gid('pk-moveplayer-player-results');
@@ -10260,10 +14907,17 @@ window.pnCloseUnitCreateModal = function() {
                             results.forEach(function(player) {
                                 var item = document.createElement('div');
                                 item.className = 'pk-ac-item';
+                                if (player.Suspended === 1) item.classList.add('pk-ac-suspended');
                                 var abbr = (player.PAbbr && player.KAbbr)
                                     ? ' — ' + player.PAbbr + ' (' + player.KAbbr + ')'
                                     : (player.ParkName ? ' — ' + player.ParkName : '');
                                 item.textContent = player.Persona + abbr;
+                                if (player.Suspended === 1) {
+                                    var sbadge = document.createElement('span');
+                                    sbadge.textContent = 'suspended';
+                                    sbadge.style.cssText = 'margin-left:6px;background:#c53030;color:#fff;font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px';
+                                    item.appendChild(sbadge);
+                                }
                                 if (player.Active === 0) {
                                     var badge = document.createElement('span');
                                     badge.textContent = ' inactive';
@@ -10304,7 +14958,10 @@ window.pnCloseUnitCreateModal = function() {
                 var term = this.value.trim();
                 if (term.length < 2) { closeDropdown('pk-moveplayer-park-results'); return; }
                 mpParkTimer = setTimeout(function() {
-                    $.getJSON(PkConfig.httpService + 'Search/SearchService.php', { Action: 'Search/Park', name: term, limit: 8 }, function(data) {
+                    var pkParams = { Action: 'Search/Park', name: term, limit: 8 };
+                    var dsel = pkDestCascade ? pkDestCascade.get() : { kingdomId: 0, parkId: 0 };
+                    if (dsel.kingdomId) pkParams.kingdom_id = dsel.kingdomId;
+                    $.getJSON(PkConfig.httpService + 'Search/SearchService.php', pkParams, function(data) {
                         var res = gid('pk-moveplayer-park-results');
                         if (!res) return;
                         res.innerHTML = '';
@@ -10356,7 +15013,6 @@ window.pnCloseUnitCreateModal = function() {
                         gid('pk-moveplayer-player-id').value = '';
                         if (mpMode === 'out') {
                             mpParkId = 0;
-                            gid('pk-moveplayer-park-name').value = '';
                             gid('pk-moveplayer-park-id').value = '';
                         }
                         pkmpCheckSubmit();
@@ -10462,33 +15118,32 @@ window.pnCloseUnitCreateModal = function() {
             if (term.length < 2) { results.classList.remove('pk-ac-open'); return; }
             clearTimeout(timer);
             timer = setTimeout(function() {
-                var scopedReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, park_id: PkConfig.parkId });
-                var globalReq = $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10 });
-                $.when(scopedReq, globalReq).done(function(sr, gr) {
-                    var local  = sr[0] || [];
-                    var global = gr[0] || [];
-                    var seen = {};
-                    local.forEach(function(pl) { seen[pl.MundaneId] = true; });
-                    var combined = local.concat(global.filter(function(pl) { return !seen[pl.MundaneId]; }));
-                    var localIds = {};
-                    local.forEach(function(pl) { localIds[pl.MundaneId] = true; });
-                    var otherId_val = gid(otherId) ? gid(otherId).value : '';
-                    results.innerHTML = combined.length
-                        ? combined.map(function(pl) {
-                            var isLocal = localIds[pl.MundaneId];
-                            var sub = isLocal
-                                ? ' <span style="color:#68d391;font-size:11px">&#x2713; This Park</span>'
-                                : ((pl.KAbbr && pl.PAbbr) ? ' <span style="color:#a0aec0;font-size:11px">(' + pl.KAbbr + ':' + pl.PAbbr + ')</span>' : '');
-                            var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
-                            return '<div class="pk-ac-item' + (same ? ' pk-ac-disabled' : '') + '"'
-                                + (same ? '' : ' data-id="' + pl.MundaneId + '"')
-                                + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
-                                + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
-                                + '>' + escHtml(pl.Persona) + sub + '</div>';
-                        }).join('')
-                        : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players found</div>';
-                    results.classList.add('pk-ac-open');
-                });
+                // Park-level merge requires both players to be at THIS park
+                // (server-side MergePlayer rejects cross-park merges with
+                // park-scope auth). Pass park_id to the server AND filter
+                // client-side as defense-in-depth: a "kk:" prefix in the search
+                // term invokes SearchService::magic_search which can redirect
+                // the kingdom and clear the park filter, so out-of-park hits
+                // can sneak through. The client filter guarantees same-park
+                // regardless of how the server interpreted the term.
+                $.getJSON(SEARCH_URL, { Action: 'Search/Player', type: 'all', search: term, limit: 10, park_id: PkConfig.parkId },
+                    function(data) {
+                        var local = (data || []).filter(function(pl) {
+                            return String(pl.ParkId) === String(PkConfig.parkId);
+                        });
+                        var otherId_val = gid(otherId) ? gid(otherId).value : '';
+                        results.innerHTML = local.length
+                            ? local.map(function(pl) {
+                                var same = otherId_val && String(pl.MundaneId) === String(otherId_val);
+                                return '<div class="pk-ac-item' + (same ? ' pk-ac-disabled' : '') + '"'
+                                    + (same ? '' : ' data-id="' + pl.MundaneId + '" tabindex="-1"')
+                                    + ' data-name="' + encodeURIComponent(pl.Persona) + '"'
+                                    + (same ? ' style="opacity:0.4;cursor:not-allowed" title="Already selected"' : '')
+                                    + '>' + escHtml(pl.Persona) + '</div>';
+                            }).join('')
+                            : '<div class="pk-ac-item" style="color:#a0aec0;cursor:default">No players at this park match</div>';
+                        results.classList.add('pk-ac-open');
+                    });
             }, AUTOCOMPLETE_DEBOUNCE_MS);
         });
         results.addEventListener('click', function(e) {
@@ -10524,6 +15179,8 @@ window.pnCloseUnitCreateModal = function() {
 
         makePlayerSearch('pk-merge-keep-name',   'pk-merge-keep-id',   'pk-merge-keep-results',   'pk-merge-remove-id');
         makePlayerSearch('pk-merge-remove-name', 'pk-merge-remove-id', 'pk-merge-remove-results', 'pk-merge-keep-id');
+        acKeyNav(gid('pk-merge-keep-name'),   gid('pk-merge-keep-results'),   'pk-ac-open', '.pk-ac-item[data-id]');
+        acKeyNav(gid('pk-merge-remove-name'), gid('pk-merge-remove-results'), 'pk-ac-open', '.pk-ac-item[data-id]');
 
         gid('pk-mergeplayer-submit').addEventListener('click', function() {
             var keepId     = gid('pk-merge-keep-id').value;
@@ -10558,7 +15215,7 @@ window.pnCloseUnitCreateModal = function() {
 
 // ---- Player Attendance Edit/Delete (Playernew) ----
 (function() {
-    if (typeof PnConfig === 'undefined' || !PnConfig.canEditAdmin) return;
+    if (typeof PnConfig === 'undefined' || !PnConfig.canEditAnyAttendance) return;
 
     var BASE_URL = PnConfig.uir + 'AttendanceAjax/attendance/';
     function gid(id) { return document.getElementById(id); }
@@ -10650,20 +15307,27 @@ window.pnCloseUnitCreateModal = function() {
     });
 
     $(document).on('click', '.pn-att-del-btn', function() {
-        var attId = this.dataset.attId;
-        var btn   = this;
-        if (!confirm('Delete this attendance record?')) return;
-        btn.disabled = true;
-        $.post(BASE_URL + attId + '/delete', {}, function(r) {
-            btn.disabled = false;
-            if (r && r.status === 0) {
-                location.reload();
-            } else {
-                alert((r && r.error) ? r.error : 'Delete failed.');
-            }
-        }, 'json').fail(function() {
-            btn.disabled = false;
-            alert('Request failed. Please try again.');
+        var attId     = this.dataset.attId;
+        var mundaneId = this.dataset.mundaneId || '';
+        var btn       = this;
+        pnConfirm({
+            title:       'Delete Attendance',
+            message:     'Delete this attendance record?',
+            confirmText: 'Delete',
+            danger:      true
+        }, function() {
+            btn.disabled = true;
+            $.post(BASE_URL + attId + '/delete', { MundaneId: mundaneId }, function(r) {
+                btn.disabled = false;
+                if (r && r.status === 0) {
+                    location.reload();
+                } else {
+                    alert((r && r.error) ? r.error : 'Delete failed.');
+                }
+            }, 'json').fail(function() {
+                btn.disabled = false;
+                alert('Request failed. Please try again.');
+            });
         });
     });
 })();
@@ -11079,7 +15743,7 @@ window.pnCloseUnitCreateModal = function() {
     var removeBtn = gid('ev-img-remove-btn');
     if (removeBtn) {
         removeBtn.addEventListener('click', function() {
-            if (!confirm('Remove the event heraldry? This cannot be undone.')) return;
+            if (!confirm('Remove the event logo? This cannot be undone.')) return;
             removeBtn.disabled = true;
             fetch(REMOVE_URL, { method: 'POST' })
                 .then(function(r) { return r.json(); })
@@ -11100,7 +15764,6 @@ window.pnCloseUnitCreateModal = function() {
     }
 })();
 
-/* [TOURNAMENTS HIDDEN] KN delete tournament buttons */
 // ---- Recs table export helpers (shared by Kingdom + Park) ----
 function recsCellText(td) {
     // Clone so we don't mutate the live DOM; strip expand/collapse buttons and
@@ -11110,6 +15773,70 @@ function recsCellText(td) {
     $c.find('button, .pk-rec-notes-ellipsis').remove();
     return $c.text().replace(/\s+/g, ' ').trim();
 }
+// ---- Shared DataTables helpers (ORK standard toolbar + CSV) ----
+// CSV: data columns only (skip <th class="no-export">), current filtered+sorted view, ALL rows.
+window.orkExportDataTableCsv = function(dt, filename) {
+    var keep = [], headers = [];
+    dt.columns().every(function(i) {
+        var $h = $(this.header());
+        if ($h.hasClass('no-export')) return;
+        keep.push(i);
+        headers.push($h.text().trim());
+    });
+    var rows = [headers];
+    dt.rows({ search: 'applied', order: 'applied' }).every(function() {
+        var $tds = $(this.node()).find('td');
+        rows.push(keep.map(function(ci) { return $tds.eq(ci).text().trim().replace(/\s+/g, ' '); }));
+    });
+    var csv = rows.map(function(r) {
+        return r.map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\r\n');
+    var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+};
+
+// Init a table as a DataTable with the ORK standard toolbar + an Export CSV button.
+// opts: { order, columnDefs, csvName, dt (extra config merged last) }
+window.orkInitDataTable = function($table, opts) {
+    opts = opts || {};
+    if (!$table || !$table.length) return null;
+    // Never operate on a DataTables scrollX clone table — the clones copy the
+    // source table's classes, so a class-based selector can hand us one. Real
+    // (un-initialised) tables are not yet inside a .dataTables_scroll wrapper.
+    if ($table.closest('.dataTables_scroll').length) return null;
+    if ($.fn.dataTable.isDataTable($table)) { $table.DataTable().destroy(); }
+    var dt = $table.DataTable($.extend(true, {
+        dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>",
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+        pagingType: 'simple_numbers',
+        autoWidth: false,
+        scrollX: true,
+        order: (opts.order || []),
+        columnDefs: (opts.columnDefs || []),
+        language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' }
+    }, opts.dt || {}));
+    var $top = $(dt.table().container()).find('.ork-dt-top');
+    var $btn = $('<button type="button" class="ork-dt-csv"><i class="fas fa-file-csv"></i> Export CSV</button>');
+    $btn.on('click', function() { window.orkExportDataTableCsv(dt, (opts.csvName || 'export') + '.csv'); });
+    $top.append($btn);
+    return dt;
+};
+
+// Re-measure columns for any DataTables inside a just-revealed container
+// (fixes zero-width columns when a table was initialised while its tab was hidden).
+window.orkAdjustDataTables = function($scope) {
+    $($scope || document).find('table').each(function() {
+        if ($.fn.dataTable.isDataTable(this)) {
+            try { $(this).DataTable().columns.adjust(); } catch (e) {}
+        }
+    });
+};
+
 window.recsExportCsv = function(dt, filename) {
     var EXPORT_COLS = 6; // skip actions column
     var headers = [];
@@ -11205,3 +15932,3996 @@ window.recsExportPrint = function(dt, title) {
         }
     });
 })();
+// ── Email spell-checker ──────────────────────────────────────────────────────
+// Attaches a "Did you mean …?" suggestion banner to an email input.
+// inputId:      id of the <input type="email"> element
+// suggestionId: id of the companion .esc-suggestion <div>
+window.initEmailSpellCheck = function(inputId, suggestionId) {
+    var input = document.getElementById(inputId);
+    var box   = document.getElementById(suggestionId);
+    if (!input || !box) return;
+
+    var useBtn     = box.querySelector('.esc-suggestion-use');
+    var dismissBtn = box.querySelector('.esc-suggestion-dismiss');
+    var suggText   = box.querySelector('.esc-suggestion strong');
+
+    function check() {
+        if (typeof window.EmailSpellChecker === 'undefined') return;
+        var val = (input.value || '').trim();
+        if (!val) { box.classList.remove('esc-visible'); return; }
+        var result = window.EmailSpellChecker.run({ email: val });
+        if (result && result.full && result.full !== val) {
+            suggText.textContent = result.full;
+            box.classList.add('esc-visible');
+        } else {
+            box.classList.remove('esc-visible');
+        }
+    }
+
+    input.addEventListener('blur', check);
+
+    if (useBtn) useBtn.addEventListener('click', function() {
+        input.value = suggText.textContent;
+        box.classList.remove('esc-visible');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    if (dismissBtn) dismissBtn.addEventListener('click', function() {
+        box.classList.remove('esc-visible');
+    });
+};
+
+// ── Username availability check (reusable) ───────────────────────────────────
+// Live availability probe for any username input — used by SelfReg, the
+// Park/Kingdom "Create Player" modal, profile edit. Without this, the backend
+// silently mangles a duplicate with a "-xxxxx" suffix and the player ends up
+// with a weird name.
+//
+// opts:
+//   inputId      — id of the username <input>
+//   statusId     — id of a <div> to write the "Checking…/✓/✗" line into
+//   submitBtnId  — (optional) id of the submit <button> to gate
+//   endpointUrl  — POST URL; expects {status, available, username} JSON back
+//                  (e.g. UIR + 'PlayerAjax/check_username' for logged-in users,
+//                   or UIR + 'SelfReg/check_username/' + token for self-reg)
+//   currentValue — (optional) the username that is already saved against the
+//                  current record, so editing your own profile doesn't flag
+//                  your own name as taken.
+window.initUsernameAvailabilityCheck = function(opts) {
+    var input    = document.getElementById(opts.inputId);
+    var statusEl = document.getElementById(opts.statusId);
+    var submit   = opts.submitBtnId ? document.getElementById(opts.submitBtnId) : null;
+    var url      = opts.endpointUrl;
+    if (!input || !statusEl || !url) return;
+    var current = (opts.currentValue || '').trim().toLowerCase();
+
+    var timer    = null;
+    var inflight = null;
+    var lastResult = null; // {username, available}
+
+    function setStatus(kind, text) {
+        statusEl.style.display = text ? '' : 'none';
+        statusEl.textContent   = text || '';
+        statusEl.style.color = kind === 'ok'  ? '#2f855a'
+                             : kind === 'bad' ? '#c53030'
+                             : '';
+    }
+    // Two gating modes:
+    //   'strict' (default) — submit stays disabled until we have a confirmed
+    //       "available" result. Suited to flows where the server silently
+    //       mangles dupes (SelfRegister appends -xxxxx and proceeds), so the
+    //       client is the only thing standing between the user and a weird
+    //       username.
+    //   'soft' — only DISABLE when the name is known to be taken; leave the
+    //       button alone for empty/short/checking. Suited to flows where the
+    //       host form has its own required/min-length validation and won't
+    //       silently mangle on dupe (e.g. Park/Kingdom Create Player modal).
+    var strict = (opts.gateMode || 'strict') === 'strict';
+    function gate() {
+        if (!submit) return;
+        var v = (input.value || '').trim();
+        if (current && v.toLowerCase() === current) { submit.disabled = false; return; }
+        var hasDecision  = lastResult && lastResult.username === v;
+        var knownTaken   = v.length >= 4 && hasDecision && !lastResult.available;
+        var knownOk      = v.length >= 4 && hasDecision &&  lastResult.available;
+        if (strict) {
+            submit.disabled = !knownOk;
+        } else {
+            if (knownTaken)       submit.disabled = true;
+            else if (knownOk)     submit.disabled = false;
+            // else: leave whatever state the host form has chosen
+        }
+    }
+    function run() {
+        var v = (input.value || '').trim();
+        if (current && v.toLowerCase() === current) {
+            setStatus('', '');
+            lastResult = null;
+            gate();
+            return;
+        }
+        if (v.length < 4) {
+            setStatus('', '');
+            lastResult = null;
+            gate();
+            return;
+        }
+        if (lastResult && lastResult.username === v) {
+            setStatus(lastResult.available ? 'ok' : 'bad',
+                      lastResult.available
+                          ? '✓ Username is available'
+                          : '✗ "' + v + '" is already taken');
+            gate();
+            return;
+        }
+        setStatus('', 'Checking availability…');
+        gate();
+        if (inflight) try { inflight.abort(); } catch (e) {}
+        inflight = new AbortController();
+        var fd = new FormData(); fd.append('UserName', v);
+        fetch(url, { method: 'POST', body: fd, signal: inflight.signal,
+                     headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
+            .then(function(j) {
+                if (!j || j.status !== 0) {
+                    setStatus('', '');
+                    lastResult = null;
+                } else {
+                    lastResult = { username: j.username, available: !!j.available };
+                    setStatus(j.available ? 'ok' : 'bad',
+                              j.available
+                                  ? '✓ Username is available'
+                                  : '✗ "' + j.username + '" is already taken');
+                }
+                gate();
+            })
+            .catch(function() { /* aborted or network — leave status alone */ });
+    }
+
+    input.addEventListener('input', function() {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(run, 350);
+    });
+    input.addEventListener('blur', run);
+    if ((input.value || '').length >= 4) run();
+
+    // Return a small API so callers can drive the helper from outside:
+    //   trigger()  — force a re-check now (used by SelfReg's persona→username auto-fill)
+    //   reset()    — clear cached result and visible status (used when a host modal
+    //                closes/reopens, so stale "X is taken" doesn't linger)
+    // We keep the historical contract of returning a callable for back-compat:
+    // callers that captured the return value still get the trigger function.
+    var trigger = run;
+    trigger.reset = function() {
+        if (inflight) try { inflight.abort(); } catch (e) {}
+        if (timer) clearTimeout(timer);
+        lastResult = null;
+        setStatus('', '');
+        if (submit) submit.disabled = false; // host re-disables based on its own rules
+    };
+    return trigger;
+};
+
+/* ===========================================================
+ * Deleted Recommendations panel (Park + Kingdom Recs tabs)
+ * =========================================================== */
+(function () {
+    function escHtml(s) {
+        if (s == null) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function fmtDt(s) {
+        if (!s) return '';
+        // Strip seconds for compactness, leave the date+time visible.
+        return String(s).replace(/:\d{2}$/, '');
+    }
+    function uirBase() {
+        if (typeof PkConfig !== 'undefined' && PkConfig.uir) return PkConfig.uir;
+        if (typeof KnConfig !== 'undefined' && KnConfig.uir) return KnConfig.uir;
+        return '/orkui/';
+    }
+
+    function renderRows(tbody, recs) {
+        var html = '';
+        for (var i = 0; i < recs.length; i++) {
+            var r = recs[i];
+            var rid = parseInt(r.RecommendationsId, 10) || 0;
+            var rank = parseInt(r.Rank, 10) > 0 ? parseInt(r.Rank, 10) : '&mdash;';
+            var notes = r.Reason ? escHtml(r.Reason) : '&mdash;';
+            var recBy = r.RecommendedById
+                ? '<a href="' + uirBase() + 'Player/profile/' + parseInt(r.RecommendedById, 10) + '">' + escHtml(r.RecommendedByName || '') + '</a>'
+                : '&mdash;';
+            var delBy = r.DeletedById
+                ? '<a href="' + uirBase() + 'Player/profile/' + parseInt(r.DeletedById, 10) + '">' + escHtml(r.DeletedByName || '') + '</a>'
+                : '&mdash;';
+            html += '<tr data-rec-id="' + rid + '">'
+                + '<td><a href="' + uirBase() + 'Player/profile/' + parseInt(r.MundaneId, 10) + '">' + escHtml(r.Persona || '') + '</a></td>'
+                + '<td>' + escHtml(r.AwardName || '') + '</td>'
+                + '<td data-order="' + (parseInt(r.Rank, 10) || 0) + '">' + rank + '</td>'
+                + '<td>' + notes + '</td>'
+                + '<td data-order="' + (Date.parse(r.DateRecommended) || 0) + '">' + escHtml(r.DateRecommended || '') + '</td>'
+                + '<td>' + recBy + '</td>'
+                + '<td data-order="' + (Date.parse(r.DeletedAt) || 0) + '">' + escHtml(fmtDt(r.DeletedAt)) + '</td>'
+                + '<td>' + delBy + '</td>'
+                + '<td style="text-align:right;white-space:nowrap"><button type="button" class="pk-deleted-restore-btn" data-rec-id="' + rid + '"><i class="fas fa-undo"></i> Restore</button></td>'
+                + '</tr>';
+        }
+        tbody.innerHTML = html;
+    }
+
+    function loadDeleted(panel, fetchUrl, onRendered) {
+        var loading = panel.querySelector('.pk-deleted-recs-loading');
+        var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
+        var wrap    = panel.querySelector('.pk-deleted-recs-table-wrap');
+        var tbody   = panel.querySelector('tbody');
+        var countEl = panel.querySelector('.pk-deleted-recs-count');
+
+        if (loading) loading.style.display = '';
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (wrap)    wrap.style.display = 'none';
+
+        fetch(fetchUrl, { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (loading) loading.style.display = 'none';
+                if (d.status !== 0) {
+                    if (emptyEl) { emptyEl.textContent = d.error || 'Failed to load.'; emptyEl.style.display = ''; }
+                    return;
+                }
+                var recs = Array.isArray(d.recommendations) ? d.recommendations : [];
+                if (countEl) {
+                    countEl.textContent = recs.length;
+                    countEl.style.display = recs.length > 0 ? '' : 'none';
+                }
+                if (recs.length === 0) {
+                    if (emptyEl) emptyEl.style.display = '';
+                    return;
+                }
+                renderRows(tbody, recs);
+                if (wrap) wrap.style.display = '';
+                var $delTable = $(panel).find('.pk-deleted-recs-table');
+                panel.__dt = window.orkInitDataTable($delTable, {
+                    order: [[6, 'desc']],   // Deleted At, newest first
+                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Deleted Recommendations',
+                    columnDefs: [{ targets: 8, orderable: false, searchable: false }]
+                });
+                window.orkAdjustDataTables($(panel));
+                panel.dataset.loaded = '1';
+                if (onRendered) onRendered();
+            })
+            .catch(function () {
+                if (loading) loading.style.display = 'none';
+                if (emptyEl) { emptyEl.textContent = 'Network error.'; emptyEl.style.display = ''; }
+            });
+    }
+
+    function wirePanel(panelId, listUrl, restoreUrl) {
+        var panel = document.getElementById(panelId);
+        if (!panel) return;
+        // Guard against double-wiring. The kingdom panel is lazy-loaded
+        // (see kn:recs-loaded handler below) — we want one call from there
+        // and a no-op from DOMContentLoaded. Without this, the click handler
+        // attaches twice and the toggle opens-and-closes in the same click.
+        if (panel.dataset.wired === '1') return;
+        var toggle = panel.querySelector('.pk-deleted-recs-toggle');
+        var body   = panel.querySelector('.pk-deleted-recs-body');
+        if (!toggle || !body) return;
+        panel.dataset.wired = '1';
+
+        toggle.addEventListener('click', function () {
+            var open = panel.classList.toggle('pk-deleted-open');
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            var lbl = toggle.querySelector('.pk-deleted-recs-toggle-label');
+            if (lbl) lbl.textContent = open ? 'Hide Deleted Recommendations' : 'Show Deleted Recommendations';
+            body.style.display = open ? '' : 'none';
+            if (open && panel.dataset.loaded !== '1') {
+                loadDeleted(panel, listUrl);
+            }
+        });
+
+        panel.addEventListener('click', function (e) {
+            var btn = e.target.closest ? e.target.closest('.pk-deleted-restore-btn') : null;
+            if (!btn || !panel.contains(btn)) return;
+            if (!btn.dataset.confirm) {
+                btn.dataset.confirm = '1';
+                var origHtml = btn.innerHTML;
+                btn._origHtml = origHtml;
+                btn.innerHTML = 'Click again to confirm';
+                btn.classList.add('pk-deleted-restore-confirm');
+                btn._confirmTimer = setTimeout(function () {
+                    btn.dataset.confirm = '';
+                    btn.innerHTML = btn._origHtml || '<i class="fas fa-undo"></i> Restore';
+                    btn.classList.remove('pk-deleted-restore-confirm');
+                }, 4000);
+                return;
+            }
+            clearTimeout(btn._confirmTimer);
+            btn.dataset.confirm = '';
+            btn.disabled = true;
+            var recId = btn.getAttribute('data-rec-id');
+            var fd = new FormData();
+            fd.append('RecommendationsId', recId);
+            fetch(restoreUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.status !== 0) {
+                        alert(d.error || 'Failed to restore.');
+                        btn.disabled = false;
+                        btn.innerHTML = btn._origHtml || '<i class="fas fa-undo"></i> Restore';
+                        btn.classList.remove('pk-deleted-restore-confirm');
+                        return;
+                    }
+                    var row = btn.closest('tr');
+                    if (row) row.classList.add('pk-deleted-restored');
+                    var recIdDone = btn.getAttribute('data-rec-id');
+                    setTimeout(function () {
+                        if (panel.__dt) {
+                            panel.__dt.rows(function (i, data, node) {
+                                return node.getAttribute('data-rec-id') === recIdDone;
+                            }).remove().draw(false);
+                        }
+                        var remaining = panel.__dt ? panel.__dt.rows().count() : 0;
+                        var countEl = panel.querySelector('.pk-deleted-recs-count');
+                        if (countEl) {
+                            countEl.textContent = remaining;
+                            countEl.style.display = remaining > 0 ? '' : 'none';
+                        }
+                        if (remaining === 0) {
+                            var wrap = panel.querySelector('.pk-deleted-recs-table-wrap');
+                            var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
+                            if (wrap)    wrap.style.display = 'none';
+                            if (emptyEl) emptyEl.style.display = '';
+                        }
+                    }, 500);
+                })
+                .catch(function () {
+                    alert('Network error.');
+                    btn.disabled = false;
+                    btn.innerHTML = btn._origHtml || '<i class="fas fa-undo"></i> Restore';
+                    btn.classList.remove('pk-deleted-restore-confirm');
+                });
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof PkConfig !== 'undefined' && PkConfig.parkId) {
+            wirePanel(
+                'pk-deleted-recs',
+                PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/deletedrecommendations',
+                PkConfig.uir + 'ParkAjax/park/' + PkConfig.parkId + '/restorerecommendation'
+            );
+        }
+        if (typeof KnConfig !== 'undefined' && KnConfig.kingdomId) {
+            // The Kingdom recommendations panel — which contains the
+            // kn-deleted-recs markup — is lazy-loaded via Kingdom::
+            // recommendations_panel after the user opens the Recs tab. Call
+            // wirePanel here for the lucky case where it's already in the
+            // DOM, and again on `kn:recs-loaded` once the markup arrives.
+            var knListUrl    = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/deletedrecommendations';
+            var knRestoreUrl = KnConfig.uir + 'KingdomAjax/kingdom/' + KnConfig.kingdomId + '/restorerecommendation';
+            wirePanel('kn-deleted-recs', knListUrl, knRestoreUrl);
+            document.addEventListener('kn:recs-loaded', function () {
+                wirePanel('kn-deleted-recs', knListUrl, knRestoreUrl);
+            });
+        }
+    });
+})();
+
+// ---- Admission & Fees management (event detail + create) ----
+(function() {
+    var cfg = (typeof EvConfig !== 'undefined' && EvConfig.hasFees) ? EvConfig
+            : (typeof EcConfig !== 'undefined' && EcConfig.hasFees) ? EcConfig : null;
+    if (!cfg) return;
+
+    var evFees = (cfg.fees || []).map(function(f) {
+        return { AdmissionType: f.AdmissionType || '', Cost: parseFloat(f.Cost) || 0 };
+    });
+
+    var listId = cfg.feesListId || 'ev-fees-list';
+
+    function render() {
+        var list = document.getElementById(listId);
+        if (!list) return;
+        list.innerHTML = '';
+        if (evFees.length === 0) {
+            list.innerHTML = '<div style="color:#718096;font-size:13px;padding:4px 0">No fees added — event is free.</div>';
+            serialize();
+            return;
+        }
+        evFees.forEach(function(fee, idx) {
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
+            var typeVal = (fee.AdmissionType || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+            var costVal = (typeof fee.Cost === 'number' ? fee.Cost : 0).toFixed(2);
+            row.innerHTML =
+                '<input type="text" placeholder="Admission type (e.g. Full Weekend)" value="' + typeVal + '" ' +
+                'data-fees-idx="' + idx + '" data-fees-field="AdmissionType" ' +
+                'style="flex:1;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px">' +
+                '<span style="color:#718096;font-size:13px;flex-shrink:0">$</span>' +
+                '<input type="number" min="0" step="0.01" value="' + costVal + '" ' +
+                'data-fees-idx="' + idx + '" data-fees-field="Cost" ' +
+                'style="width:80px;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px">' +
+                '<button type="button" data-fees-remove="' + idx + '" data-tip="Remove" ' +
+                'style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0 3px;line-height:1">&times;</button>';
+            list.appendChild(row);
+        });
+        list.querySelectorAll('input[data-fees-idx]').forEach(function(inp) {
+            inp.addEventListener('input', function() {
+                var i = parseInt(this.getAttribute('data-fees-idx'));
+                var f = this.getAttribute('data-fees-field');
+                if (!evFees[i]) return;
+                evFees[i][f] = (f === 'Cost') ? (parseFloat(this.value) || 0) : this.value;
+                serialize();
+            });
+        });
+        list.querySelectorAll('button[data-fees-remove]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var i = parseInt(this.getAttribute('data-fees-remove'));
+                evFees.splice(i, 1);
+                render();
+            });
+        });
+        serialize();
+    }
+
+    function serialize() {
+        var el = document.getElementById('ev-fees-json');
+        if (el) {
+            el.value = JSON.stringify(evFees);
+            // See ev-links-json serialize(): fire input so the dirty tracker runs
+            // and the Save button unlocks when fees change.
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    }
+
+    window.evFeesAdd = function() {
+        evFees.push({ AdmissionType: '', Cost: 0 });
+        render();
+        var inputs = document.querySelectorAll('#' + listId + ' input[type="text"]');
+        if (inputs.length) inputs[inputs.length - 1].focus();
+    };
+
+    // Re-init fees from server data when edit modal opens
+    window.evFeesReset = function(fees) {
+        evFees = (fees || []).map(function(f) {
+            return { AdmissionType: f.AdmissionType || '', Cost: parseFloat(f.Cost) || 0 };
+        });
+        render();
+    };
+
+    // Hook form submit to serialize
+    var form = document.getElementById('ev-edit-form') || document.getElementById('ec-form');
+    if (form) {
+        form.addEventListener('submit', function() { serialize(); });
+    }
+
+    render();
+})();
+// Ticket links use this icon as their internal marker. They are managed by the
+// Ticket Link box in the Fees section (not shown in the External Links list).
+var EV_TICKET_ICON = 'fas fa-ticket-alt';
+
+// ---- External Links management (event detail + create) ----
+(function() {
+    var LINK_ICONS = [
+        { icon: 'fab fa-facebook',  label: 'Facebook'  },
+        { icon: 'fab fa-discord',   label: 'Discord'   },
+        { icon: 'fas fa-globe',     label: 'Globe'     },
+        { icon: 'far fa-clipboard', label: 'Clipboard' },
+        { icon: 'fas fa-link',      label: 'Link'      },
+    ];
+
+    var cfg = (typeof EvConfig !== 'undefined' && EvConfig.hasLinks) ? EvConfig
+            : (typeof EcConfig !== 'undefined' && EcConfig.hasLinks) ? EcConfig : null;
+    if (!cfg) return;
+
+    var evLinks = (cfg.links || []).map(function(l) {
+        return { Title: l.Title || '', Url: l.Url || '', Icon: l.Icon || '' };
+    });
+
+    var listId = cfg.linksListId || 'ev-links-list';
+
+    // Close all icon menus on outside click
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('[data-links-icon-btn],[data-links-icon-menu],[data-links-icon-pick]')) {
+            var list = document.getElementById(listId);
+            if (list) list.querySelectorAll('[data-links-icon-menu]').forEach(function(m) { m.style.display = 'none'; });
+        }
+    });
+
+    function isTicketLink(link) { return link && link.Icon === EV_TICKET_ICON; }
+
+    function render() {
+        var list = document.getElementById(listId);
+        if (!list) return;
+        list.innerHTML = '';
+        // Ticket links are managed in the Fees section, not shown here.
+        var visibleCount = evLinks.filter(function(l) { return !isTicketLink(l); }).length;
+        if (visibleCount === 0) {
+            list.innerHTML = '<div style="color:#718096;font-size:13px;padding:4px 0">No links added.</div>';
+            serialize();
+            return;
+        }
+        evLinks.forEach(function(link, idx) {
+            if (isTicketLink(link)) return;
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
+
+            var menuHtml = '<div data-links-icon-menu="' + idx + '" ' +
+                'style="display:none;position:absolute;top:100%;left:0;z-index:999;background:#fff;' +
+                'border:1px solid #cbd5e0;border-radius:6px;padding:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);' +
+                'flex-wrap:wrap;gap:4px;width:160px">' +
+                LINK_ICONS.map(function(li) {
+                    var active = link.Icon === li.icon;
+                    return '<button type="button" data-tip="' + li.label + '" data-links-icon-pick="' + idx + '" data-links-icon-val="' + li.icon + '" ' +
+                        'style="width:34px;height:34px;border:1px solid ' + (active ? '#4299e1' : '#e2e8f0') + ';' +
+                        'border-radius:4px;background:' + (active ? '#ebf8ff' : '#fff') + ';cursor:pointer;' +
+                        'font-size:14px;display:flex;align-items:center;justify-content:center">' +
+                        '<i class="' + li.icon + '"></i></button>';
+                }).join('') +
+                '</div>';
+
+            var titleVal = (link.Title || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+            var urlVal   = (link.Url   || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+
+            var noIcon = !link.Icon;
+            row.innerHTML =
+                '<div style="position:relative;flex-shrink:0">' +
+                    '<button type="button" data-links-icon-btn="' + idx + '" data-tip="Choose icon" ' +
+                    'style="width:36px;height:34px;border:1px solid ' + (noIcon ? '#fc8181' : '#cbd5e0') + ';' +
+                    'border-radius:4px;background:' + (noIcon ? '#fff5f5' : '#fff') + ';' +
+                    'cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;' +
+                    (noIcon ? 'box-shadow:0 0 0 2px #fed7d7;' : '') + '">' +
+                    (noIcon ? '<i class="fas fa-question" style="color:#fc8181;font-size:13px"></i>' : '<i class="' + link.Icon + '"></i>') +
+                    '</button>' +
+                    menuHtml +
+                '</div>' +
+                '<input type="text" placeholder="Title (e.g. Register Here)" value="' + titleVal + '" ' +
+                'data-links-idx="' + idx + '" data-links-field="Title" ' +
+                'style="flex:1;min-width:0;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px">' +
+                '<input type="text" placeholder="https://\u2026" value="' + urlVal + '" ' +
+                'data-links-idx="' + idx + '" data-links-field="Url" ' +
+                'style="flex:2;min-width:0;padding:5px 8px;border:1px solid #cbd5e0;border-radius:4px;font-size:13px">' +
+                '<button type="button" data-links-remove="' + idx + '" data-tip="Remove" ' +
+                'style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:18px;padding:0 3px;line-height:1;flex-shrink:0">\xd7</button>';
+
+            list.appendChild(row);
+        });
+
+        list.querySelectorAll('button[data-links-icon-btn]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var i    = parseInt(this.getAttribute('data-links-icon-btn'));
+                var menu = list.querySelector('[data-links-icon-menu="' + i + '"]');
+                if (!menu) return;
+                var showing = menu.style.display === 'flex';
+                list.querySelectorAll('[data-links-icon-menu]').forEach(function(m) { m.style.display = 'none'; });
+                if (!showing) menu.style.display = 'flex';
+            });
+        });
+
+        list.querySelectorAll('button[data-links-icon-pick]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var i   = parseInt(this.getAttribute('data-links-icon-pick'));
+                var val = this.getAttribute('data-links-icon-val');
+                if (!evLinks[i]) return;
+                evLinks[i].Icon = val;
+                list.querySelectorAll('[data-links-icon-menu]').forEach(function(m) { m.style.display = 'none'; });
+                render();
+            });
+        });
+
+        list.querySelectorAll('input[data-links-idx]').forEach(function(inp) {
+            inp.addEventListener('input', function() {
+                var i = parseInt(this.getAttribute('data-links-idx'));
+                var f = this.getAttribute('data-links-field');
+                if (!evLinks[i]) return;
+                evLinks[i][f] = this.value;
+                serialize();
+            });
+        });
+
+        list.querySelectorAll('button[data-links-remove]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var i = parseInt(this.getAttribute('data-links-remove'));
+                evLinks.splice(i, 1);
+                render();
+            });
+        });
+
+        serialize();
+    }
+
+    function serialize() {
+        var el = document.getElementById('ev-links-json');
+        if (el) {
+            el.value = JSON.stringify(evLinks);
+            // Hidden field is updated programmatically, so fire an input event to
+            // wake the edit-form dirty tracker — otherwise adding/editing a link
+            // never unlocks the Save button and the links never POST.
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    }
+
+    window.evLinksAdd = function() {
+        evLinks.push({ Title: '', Url: '', Icon: '' });
+        render();
+        var inputs = document.querySelectorAll('#' + listId + ' input[data-links-field="Title"]');
+        if (inputs.length) inputs[inputs.length - 1].focus();
+    };
+
+    window.evLinksReset = function(links) {
+        evLinks = (links || []).map(function(l) {
+            return { Title: l.Title || '', Url: l.Url || '', Icon: l.Icon || '' };
+        });
+        render();
+    };
+
+    var form = document.getElementById('ev-edit-form') || document.getElementById('ec-form');
+    if (form) {
+        form.addEventListener('submit', function() { serialize(); });
+    }
+
+    render();
+})();
+
+// ---- Ticket Link shortcut (Fees section) ----
+// A convenience UI inside the Admission & Fees section that lets the user
+// attach a single "Buy Tickets" URL when at least one fee is non-zero. The
+// entry is stored in the same ExternalLinks array (with the ticket-alt
+// icon as its marker) but is rendered ONLY in the Fees section, not in
+// the External Links list, to keep the relationship to fees explicit.
+(function() {
+    var TICKET_TITLE_DEFAULT = 'Buy Tickets';
+    var block, labelInput, urlInput, feesJson, linksJson;
+
+    function getJSON(el) {
+        try { return JSON.parse((el && el.value) || '[]'); } catch (e) { return []; }
+    }
+    function hasPositiveFee() {
+        return getJSON(feesJson).some(function(f) { return parseFloat(f.Cost) > 0; });
+    }
+    function findTicketIdx(links) {
+        for (var i = 0; i < links.length; i++) {
+            if (links[i] && links[i].Icon === EV_TICKET_ICON) return i;
+        }
+        return -1;
+    }
+    function syncFromLinks() {
+        var links = getJSON(linksJson);
+        var idx   = findTicketIdx(links);
+        if (idx >= 0) {
+            urlInput.value   = links[idx].Url   || '';
+            labelInput.value = links[idx].Title || TICKET_TITLE_DEFAULT;
+        } else {
+            urlInput.value   = '';
+            labelInput.value = TICKET_TITLE_DEFAULT;
+        }
+    }
+    function syncVisibility() {
+        var show = hasPositiveFee();
+        block.style.display = show ? '' : 'none';
+        if (show) syncFromLinks();
+    }
+    function upsertTicketLink() {
+        var url   = (urlInput.value   || '').trim();
+        var title = (labelInput.value || '').trim() || TICKET_TITLE_DEFAULT;
+        var links = getJSON(linksJson);
+        var idx   = findTicketIdx(links);
+        if (url) {
+            if (idx >= 0) { links[idx].Url = url; links[idx].Title = title; }
+            else          { links.push({ Title: title, Url: url, Icon: EV_TICKET_ICON }); }
+        } else if (idx >= 0) {
+            links.splice(idx, 1);
+        }
+        if (typeof window.evLinksReset === 'function') window.evLinksReset(links);
+        else if (linksJson) linksJson.value = JSON.stringify(links);
+    }
+
+    function init() {
+        block      = document.getElementById('ev-ticket-link-block');
+        labelInput = document.getElementById('ev-ticket-link-label');
+        urlInput   = document.getElementById('ev-ticket-link-url');
+        feesJson   = document.getElementById('ev-fees-json');
+        linksJson  = document.getElementById('ev-links-json');
+        if (!block || !labelInput || !urlInput || !feesJson || !linksJson) return;
+
+        // Initial state — wait a tick so the fees/links IIFEs have populated their JSON inputs
+        setTimeout(syncVisibility, 0);
+
+        var feesList = document.getElementById(
+            (typeof EvConfig !== 'undefined' && EvConfig.feesListId) ? EvConfig.feesListId
+            : (typeof EcConfig !== 'undefined' && EcConfig.feesListId) ? EcConfig.feesListId
+            : 'ev-fees-list'
+        );
+        if (feesList) {
+            feesList.addEventListener('input', syncVisibility);
+            feesList.addEventListener('click', function(e) {
+                if (e.target.closest('button[data-fees-remove]')) setTimeout(syncVisibility, 0);
+            });
+        }
+        document.querySelectorAll('button[onclick*="evFeesAdd"]').forEach(function(btn) {
+            btn.addEventListener('click', function() { setTimeout(syncVisibility, 0); });
+        });
+
+        labelInput.addEventListener('input', upsertTicketLink);
+        urlInput.addEventListener('input',   upsertTicketLink);
+
+        // Belt-and-suspenders: force the ticket link into the ExternalLinks
+        // JSON on form submit. Without this, a URL entered without a
+        // subsequent `input` event landing (e.g. autocomplete / paste in
+        // some browsers, or focus lost before the value settled) would
+        // never make it into the hidden JSON and the link wouldn't save.
+        var form = document.getElementById('ev-edit-form') || document.getElementById('ec-form');
+        if (form) {
+            form.addEventListener('submit', upsertTicketLink, true); // capture so we run before the external-links IIFE's serialize()
+        }
+
+        // Re-sync when the edit modal is opened with fresh data.
+        window.evTicketLinkReset = syncVisibility;
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+
+// ---- "Help Me Write..." description starter ----
+// Populates the About / Description textarea with one of several
+// Markdown-friendly templates, randomly chosen so events don't all
+// read identically. Templates use {NAME} as a substitution token for
+// the current event name, and leave bracketed placeholders for the
+// host to fill in.
+(function() {
+    var TEMPLATES = [
+        // 1 — classic invite
+        "# Join us at {NAME}!\n\n" +
+        "Whether you're a long-time veteran or this will be your very first time on the field, we'd love to have you out for **{NAME}**.\n\n" +
+        "## Featuring fun activities such as:\n" +
+        "- [activity — e.g. open battlegames all day]\n" +
+        "- [activity — e.g. a class on shield construction]\n" +
+        "- [activity — e.g. arts & sciences competition]\n\n" +
+        "## Court & Awards\n" +
+        "Celebrate your fellow Amtgarders at Court. **Don't forget to submit award recommendations!**\n\n" +
+        "## What to bring\n" +
+        "- Garb (loaner gear available — just ask!)\n" +
+        "- Water and snacks for the day\n" +
+        "- Cash or card if you'd like feast or merch\n\n" +
+        "See you on the field!",
+
+        // 2 — adventurer's call
+        "# {NAME} awaits!\n\n" +
+        "Pack your gear, sharpen your wit, and meet us at **{NAME}** for a day of swords, story, and good company.\n\n" +
+        "## On the schedule:\n" +
+        "- [main battlegame or tournament]\n" +
+        "- [class or workshop]\n" +
+        "- [arts & sciences activity]\n\n" +
+        "## Bring your nominees\n" +
+        "Court is one of the best parts of any Amtgard event — it's how we recognize the people who make this game what it is. Celebrate your fellow Amtgarders at Court. **Don't forget to submit award recommendations!**\n\n" +
+        "## Heads up\n" +
+        "- Bring water — lots of it\n" +
+        "- Garb is encouraged; loaner gear is available\n" +
+        "- All experience levels welcome\n\n" +
+        "Questions? Reach out to the host park before the event.",
+
+        // 3 — short and punchy
+        "# Come fight, feast, and friend up at {NAME}.\n\n" +
+        "A quick rundown of what's in store:\n\n" +
+        "**Featuring fun activities such as:**\n" +
+        "- [activity 1]\n" +
+        "- [activity 2]\n" +
+        "- [activity 3]\n\n" +
+        "**Court & recognition** — Celebrate your fellow Amtgarders at Court. Don't forget to submit award recommendations!\n\n" +
+        "**Brand new?** No problem. We have loaner garb and weapons, and someone will walk you through the basics. Just show up.\n\n" +
+        "**Logistics**\n" +
+        "- Bring water, sunscreen, and something to sit on\n" +
+        "- Cash for merch or food\n" +
+        "- [anything specific you want attendees to know]",
+
+        // 4 — narrative
+        "# {NAME}\n\n" +
+        "The horns are about to sound. **{NAME}** is coming, and we want you there — whether you're picking up a sword for the first time or returning to the field after a long absence.\n\n" +
+        "## What's planned:\n" +
+        "- [signature activity — e.g. open weapons tournament]\n" +
+        "- [class or workshop]\n" +
+        "- [evening activity — court, feast, bardic, etc.]\n\n" +
+        "## At Court\n" +
+        "Court is where we celebrate one another. Tell us who has made the game better for you this season. **Submit your award recommendations** before Court so the heralds have time to read them.\n\n" +
+        "## Practical bits\n" +
+        "- [gate time and any check-in details]\n" +
+        "- [parking or camping notes]\n" +
+        "- Loaner gear is available — just ask anyone in garb\n\n" +
+        "Looking forward to seeing you there.",
+
+        // 5 — rallying cry
+        "# {NAME} — let's make it a good one.\n\n" +
+        "We're putting together **{NAME}**, and the more of you who come out, the better it'll be. Here's a taste of what's planned:\n\n" +
+        "## Featuring fun activities such as:\n" +
+        "- [activity 1]\n" +
+        "- [activity 2]\n" +
+        "- [activity 3]\n\n" +
+        "## Honor the people who make this game great\n" +
+        "Celebrate your fellow Amtgarders at Court. **Don't forget to submit award recommendations** — the heralds love a deep stack to read from.\n\n" +
+        "## Before you head out\n" +
+        "- [date, time, location quick-reference]\n" +
+        "- [what to bring]\n" +
+        "- [special notes — RSVP deadline, fees, etc.]\n\n" +
+        "If this is your first time, welcome — you'll fit right in. Reach out with questions."
+    ];
+
+    function pickTemplate(prevIdx) {
+        if (TEMPLATES.length <= 1) return 0;
+        var i = Math.floor(Math.random() * TEMPLATES.length);
+        // Avoid back-to-back duplicates so a re-roll always changes copy.
+        if (i === prevIdx) i = (i + 1) % TEMPLATES.length;
+        return i;
+    }
+
+    function getEventName(btn) {
+        var nameInput = document.querySelector('input[name="EventName"], input[name="Name"]');
+        var fromInput = nameInput && nameInput.value && nameInput.value.trim();
+        return fromInput || (btn.getAttribute('data-event-name') || '').trim() || 'this event';
+    }
+
+    function fill(textarea, btn) {
+        var idx  = pickTemplate(parseInt(btn.getAttribute('data-last-idx'), 10));
+        var body = TEMPLATES[idx].split('{NAME}').join(getEventName(btn));
+        textarea.value = body;
+        btn.setAttribute('data-last-idx', idx);
+        // Notify any listeners (autosave, char counters, etc.)
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        textarea.focus();
+        // Briefly relabel the button so re-clicks read "Try Another..."
+        if (!btn.dataset.origLabel) btn.dataset.origLabel = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-dice"></i> Try Another…';
+    }
+
+    window.evHelpMeWrite = function(btn) {
+        var sel = btn.getAttribute('data-target');
+        var textarea = sel ? document.querySelector(sel) : null;
+        if (!textarea) return;
+
+        var hasContent = (textarea.value || '').trim().length > 0;
+        // Only confirm when the user typed something themselves — re-rolling a
+        // previously-generated template should be a single click.
+        var alreadyGenerated = !!btn.getAttribute('data-last-idx');
+        if (hasContent && !alreadyGenerated) {
+            var go = function() { fill(textarea, btn); };
+            if (typeof window.pnConfirm === 'function') {
+                pnConfirm({
+                    title: 'Replace your description?',
+                    message: 'This will overwrite the text currently in the description box.',
+                    confirmText: 'Replace',
+                    danger: true
+                }, go);
+            } else if (window.confirm('Replace the current description?')) {
+                go();
+            }
+            return;
+        }
+        fill(textarea, btn);
+    };
+})();
+
+// ---- Event Banner upload + config (mirrors heraldry, resizes to 1MB) ----
+(function() {
+    if (typeof EvConfig === 'undefined' || !EvConfig.canManage) return;
+    var BANNER_BYTE_LIMIT = 1024 * 1024; // 1 MB
+    var UPLOAD_URL = EvConfig.uir + 'EventAjax/banner/' + EvConfig.eventId + '/update';
+    var REMOVE_URL = EvConfig.uir + 'EventAjax/banner/' + EvConfig.eventId + '/remove';
+    var CONFIG_URL = EvConfig.uir + 'EventAjax/banner/' + EvConfig.eventId + '/config';
+
+    function gid(id) { return document.getElementById(id); }
+
+    var TARGET_W = 1800, TARGET_H = 240;
+
+    var overlay     = gid('ev-banner-overlay');
+    var fileInput   = gid('ev-banner-file-input');
+    var showLogoCb  = gid('ev-banner-show-logo');
+    var vignetteCb  = gid('ev-banner-vignette');
+    var resizeNote  = gid('ev-banner-resize-notice');
+    var errorEl     = gid('ev-banner-error');
+    var stepSelect  = gid('ev-banner-step-select');
+    var stepPosition  = gid('ev-banner-step-position');
+    var stepUploading = gid('ev-banner-step-uploading');
+    var stepSuccess = gid('ev-banner-step-success');
+    var saveCfgBtn  = gid('ev-banner-save-config-btn');
+    var removeBtn   = gid('ev-banner-remove-btn');
+    var adjustBtn   = gid('ev-banner-adjust-btn');
+    var closeBtn    = gid('ev-banner-close-btn');
+    var posCanvas       = gid('ev-banner-position-canvas');
+    var posBackBtn      = gid('ev-banner-position-back-btn');
+    var posConfirmBtn   = gid('ev-banner-position-confirm-btn');
+    var posHintText     = gid('ev-banner-position-hint-text');
+    var posErrorEl      = gid('ev-banner-position-error');
+    if (!overlay || !fileInput) return;
+
+    function showStep(active) {
+        [stepSelect, stepPosition, stepUploading, stepSuccess].forEach(function(el) {
+            if (el) el.style.display = (el === active) ? '' : 'none';
+        });
+    }
+    function showError(msg) { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; } }
+    function clearError()   { if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; } }
+
+    window.evOpenBannerModal = function() {
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        clearError();
+        // Reset toggles to current persisted config
+        if (showLogoCb) showLogoCb.checked = !!EvConfig.bannerShowLogo;
+        if (vignetteCb) vignetteCb.checked = !!EvConfig.bannerVignette;
+        showStep(stepSelect);
+        overlay.classList.add('ev-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window.evCloseBannerModal = function() {
+        overlay.classList.remove('ev-open');
+        document.body.style.overflow = '';
+    };
+
+    if (closeBtn) closeBtn.addEventListener('click', evCloseBannerModal);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) evCloseBannerModal(); });
+    document.addEventListener('keydown', function(e) {
+        if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('ev-open')) evCloseBannerModal();
+    });
+
+    function postConfigWithOffsets(offX, offY, cb) {
+        var fd = new FormData();
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(offX));
+        fd.append('OffsetY', String(offY));
+        fetch(CONFIG_URL, { method: 'POST', body: fd })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function(result) {
+                cb(!!(result && result.status === 0), result && result.error);
+            })
+            .catch(function() { cb(false, 'Request failed.'); });
+    }
+
+    if (saveCfgBtn) saveCfgBtn.addEventListener('click', function() {
+        clearError();
+        saveCfgBtn.disabled = true;
+        postConfigWithOffsets(
+            (typeof EvConfig.bannerOffsetX === 'number') ? EvConfig.bannerOffsetX : 50,
+            (typeof EvConfig.bannerOffsetY === 'number') ? EvConfig.bannerOffsetY : 50,
+            function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    saveCfgBtn.disabled = false;
+                    showError(err || 'Save failed.');
+                }
+            }
+        );
+    });
+
+    // "Adjust Image Framing" loads the saved banner (now stored uncropped)
+    // back into the position tool with the current offsets pre-applied so
+    // the user can re-frame without re-uploading. On confirm we send only
+    // the offsets via /config — no image bytes go over the wire.
+    if (adjustBtn) adjustBtn.addEventListener('click', function() {
+        var url = EvConfig.bannerUrl;
+        if (!url) { showError('No banner image to adjust.'); return; }
+        clearError();
+        adjustBtn.disabled = true;
+        fetch(url, { cache: 'no-store' })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+            })
+            .then(function(blob) {
+                adjustBtn.disabled = false;
+                var isPng = (blob.type === 'image/png') || /\.png(\?|$)/i.test(url);
+                if (resizeNote) resizeNote.textContent = '';
+                loadIntoPositionStep(blob, isPng, {
+                    fromAdjust: true,
+                    startPct: {
+                        x: (typeof EvConfig.bannerOffsetX === 'number') ? EvConfig.bannerOffsetX : 50,
+                        y: (typeof EvConfig.bannerOffsetY === 'number') ? EvConfig.bannerOffsetY : 50
+                    }
+                });
+            })
+            .catch(function(err) {
+                adjustBtn.disabled = false;
+                showError('Could not load current banner: ' + err.message);
+            });
+    });
+
+    if (removeBtn) removeBtn.addEventListener('click', function() {
+        bannerConfirm('Remove banner', 'Remove the banner image? This cannot be undone.', function() {
+            removeBtn.disabled = true;
+            fetch(REMOVE_URL, { method: 'POST' })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function(result) {
+                    if (result && result.status === 0) {
+                        showStep(stepSuccess);
+                        setTimeout(function() { window.location.reload(); }, 900);
+                    } else {
+                        removeBtn.disabled = false;
+                        showError((result && result.error) || 'Remove failed.');
+                    }
+                })
+                .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        });
+    });
+
+    function doUpload(blob, isPng, offX, offY) {
+        showStep(stepUploading);
+        var fd = new FormData();
+        var name = isPng ? 'banner.png' : 'banner.jpg';
+        // Force the MIME on resized blobs so the server's whitelist matches.
+        if (blob && !blob.type) {
+            try { blob = new Blob([blob], { type: isPng ? 'image/png' : 'image/jpeg' }); } catch (e) {}
+        }
+        fd.append('Banner', blob, name);
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
+        fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
+        fetch(UPLOAD_URL, { method: 'POST', body: fd })
+            .then(function(r) {
+                if (!r.ok) {
+                    var msg = (r.status === 413) ? 'File too large (server limit).' : 'Upload failed (HTTP ' + r.status + ').';
+                    throw new Error(msg);
+                }
+                return r.json();
+            })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 1200);
+                } else {
+                    showStep(stepSelect);
+                    if (posConfirmBtn) posConfirmBtn.disabled = false;
+                    showError((result && result.error) || 'Upload failed.');
+                }
+            })
+            .catch(function(err) {
+                showStep(stepSelect);
+                if (posConfirmBtn) posConfirmBtn.disabled = false;
+                showError('Upload failed: ' + err.message);
+            });
+    }
+
+    // ---- Position step ----
+    // Source image is saved uncropped server-side; the framing is stored as
+    // background-position percentages (0–100 on each axis). posState.pct
+    // holds the current percentages; the canvas draws the image at cover-fit
+    // scale with the same crop semantics that CSS background-position will
+    // apply on display, so the position step is WYSIWYG.
+    //
+    // `sourceBlob` is the original file we will upload. `fromAdjust` flags
+    // the case where we loaded the existing banner from the server — on
+    // commit we send only the offsets via /config (no re-upload).
+    var posState = {
+        img: null, isPng: false,
+        sourceBlob: null, fromAdjust: false,
+        scale: 1, pct: { x: 50, y: 50 },
+        dragging: false
+    };
+
+    // Translate offset percentage → pixel position of image on the TARGET frame.
+    // pct=0   → image's 0%  point aligned with frame's 0%  point (left/top)
+    // pct=100 → image's 100% point aligned with frame's 100% point (right/bottom)
+    // CSS background-position uses the same convention.
+    function pctToPx() {
+        var img = posState.img;
+        var scaledW = img.width  * posState.scale;
+        var scaledH = img.height * posState.scale;
+        var overflowX = scaledW - TARGET_W; // ≥0
+        var overflowY = scaledH - TARGET_H; // ≥0
+        return {
+            x: -overflowX * (posState.pct.x / 100),
+            y: -overflowY * (posState.pct.y / 100),
+            overflowX: overflowX, overflowY: overflowY,
+            scaledW: scaledW, scaledH: scaledH
+        };
+    }
+    function clampPct() {
+        if (posState.pct.x < 0) posState.pct.x = 0;
+        if (posState.pct.x > 100) posState.pct.x = 100;
+        if (posState.pct.y < 0) posState.pct.y = 0;
+        if (posState.pct.y > 100) posState.pct.y = 100;
+    }
+
+    function drawPosition() {
+        if (!posCanvas || !posState.img) return;
+        var ctx = posCanvas.getContext('2d');
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, posCanvas.width, posCanvas.height);
+        var p = pctToPx();
+        ctx.drawImage(
+            posState.img,
+            Math.round(p.x), Math.round(p.y),
+            Math.round(p.scaledW), Math.round(p.scaledH)
+        );
+    }
+
+    function applyHintForOverflow() {
+        if (!posHintText) return;
+        var p = pctToPx();
+        if (p.overflowX < 1 && p.overflowY < 1) {
+            posHintText.textContent = 'Image already fits — nothing to re-frame.';
+        } else if (p.overflowX > p.overflowY) {
+            posHintText.textContent = 'Drag left or right to choose what shows.';
+        } else {
+            posHintText.textContent = 'Drag up or down to choose what shows.';
+        }
+    }
+
+    // `opts.fromAdjust` → don't re-upload, just save offsets.
+    // `opts.startPct`   → initial percentages (used when re-loading the saved
+    //                      banner so the canvas reflects the current framing).
+    function loadIntoPositionStep(file, isPng, opts) {
+        opts = opts || {};
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function() {
+            URL.revokeObjectURL(url);
+            posState.img        = img;
+            posState.isPng      = isPng;
+            posState.sourceBlob = file;
+            posState.fromAdjust = !!opts.fromAdjust;
+            // Cover-fit: scale so the image fully covers the target frame.
+            var targetAspect = TARGET_W / TARGET_H;
+            var imgAspect    = img.width / img.height;
+            posState.scale = (imgAspect > targetAspect)
+                ? (TARGET_H / img.height)   // wider than target → scale by height
+                : (TARGET_W / img.width);   // taller than target → scale by width
+            posState.pct.x = (opts.startPct && typeof opts.startPct.x === 'number') ? opts.startPct.x : 50;
+            posState.pct.y = (opts.startPct && typeof opts.startPct.y === 'number') ? opts.startPct.y : 50;
+            clampPct();
+            applyHintForOverflow();
+            drawPosition();
+            showStep(stepPosition);
+        };
+        img.onerror = function() {
+            URL.revokeObjectURL(url);
+            showError('Could not load image. Please try a different file.');
+        };
+        img.src = url;
+    }
+
+    function bindPositionDrag() {
+        if (!posCanvas) return;
+        var rect, startClient, startPct;
+        function onDown(e) {
+            if (!posState.img) return;
+            e.preventDefault();
+            rect = posCanvas.getBoundingClientRect();
+            var p = e.touches ? e.touches[0] : e;
+            startClient = { x: p.clientX, y: p.clientY };
+            startPct    = { x: posState.pct.x, y: posState.pct.y };
+            posState.dragging = true;
+        }
+        function onMove(e) {
+            if (!posState.dragging) return;
+            e.preventDefault();
+            var p = e.touches ? e.touches[0] : e;
+            // Map screen px delta → target px delta → percentage delta.
+            // Sign flip: dragging the image to the RIGHT means showing more
+            // of the LEFT side, which is pct.x → 0.
+            var info = pctToPx();
+            var dxScreenToTarget = TARGET_W / rect.width;
+            var dyScreenToTarget = TARGET_H / rect.height;
+            var dxTarget = (p.clientX - startClient.x) * dxScreenToTarget;
+            var dyTarget = (p.clientY - startClient.y) * dyScreenToTarget;
+            if (info.overflowX > 0) posState.pct.x = startPct.x - (dxTarget / info.overflowX) * 100;
+            if (info.overflowY > 0) posState.pct.y = startPct.y - (dyTarget / info.overflowY) * 100;
+            clampPct();
+            drawPosition();
+        }
+        function onUp() { posState.dragging = false; }
+        posCanvas.addEventListener('mousedown',  onDown);
+        posCanvas.addEventListener('touchstart', onDown, { passive: false });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('mouseup',   onUp);
+        window.addEventListener('touchend',  onUp);
+    }
+    bindPositionDrag();
+
+    function showPosError(msg) { if (posErrorEl) { posErrorEl.textContent = msg; posErrorEl.style.display = ''; } }
+    function clearPosError()   { if (posErrorEl) { posErrorEl.style.display = 'none'; posErrorEl.textContent = ''; } }
+
+    if (posBackBtn) posBackBtn.addEventListener('click', function() {
+        clearPosError();
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        showStep(stepSelect);
+    });
+
+    if (posConfirmBtn) posConfirmBtn.addEventListener('click', function() {
+        if (!posState.img) return;
+        clearPosError();
+        posConfirmBtn.disabled = true;
+        var offX = Math.round(posState.pct.x);
+        var offY = Math.round(posState.pct.y);
+        // From Adjust: image unchanged, just persist new offsets + toggles.
+        if (posState.fromAdjust) {
+            showStep(stepUploading);
+            postConfigWithOffsets(offX, offY, function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    showStep(stepPosition);
+                    posConfirmBtn.disabled = false;
+                    showPosError(err || 'Save failed.');
+                }
+            });
+            return;
+        }
+        // Fresh upload path: send the source blob untouched along with the
+        // chosen offsets. Server stores the file as-is (no re-encode here);
+        // resizeImageToLimit will downscale only if it exceeds 1 MB.
+        var blob = posState.sourceBlob;
+        var isPng = posState.isPng;
+        function send(b) { doUpload(b, isPng, offX, offY); }
+        if (blob.size > BANNER_BYTE_LIMIT) {
+            if (resizeNote) resizeNote.textContent = 'Resizing…';
+            resizeImageToLimit(blob, BANNER_BYTE_LIMIT, send, function(err) {
+                posConfirmBtn.disabled = false;
+                showPosError(err);
+            }, isPng);
+        } else {
+            send(blob);
+        }
+    });
+
+    fileInput.addEventListener('change', function() {
+        var file = this.files && this.files[0];
+        if (!file) return;
+        var ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (['jpg','jpeg','png'].indexOf(ext) < 0) {
+            showError('Invalid file type. Please use JPG or PNG.');
+            this.value = '';
+            return;
+        }
+        clearError();
+        clearPosError();
+        var isPng = (file.type === 'image/png' || ext === 'png');
+        loadIntoPositionStep(file, isPng);
+    });
+})();
+
+// ---- Mobile-only: tap to collapse/expand the Admission & Fees card on the
+// About tab. Class toggle is unconditional; CSS only honors it under the
+// mobile breakpoint, so toggling on desktop is a no-op.
+(function() {
+    function bind() {
+        document.querySelectorAll('.ev-fees-toggle').forEach(function(t) {
+            if (t.dataset.bound) return;
+            t.dataset.bound = '1';
+            function toggle() {
+                var card = t.closest('.ev-fees-card');
+                if (!card) return;
+                card.classList.toggle('ev-open');
+                t.setAttribute('aria-expanded', card.classList.contains('ev-open') ? 'true' : 'false');
+            }
+            t.addEventListener('click', toggle);
+            t.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+            });
+        });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+    else bind();
+})();
+
+// =============================================================================
+// Event status setter — reachable from any page that includes revised.js
+// (Event detail, Kingdomnew, Parknew). Resolves UIR from whichever config is
+// loaded; falls back to the document base if none is.
+// =============================================================================
+window.evSetEventStatus = function(eventId, status, btn) {
+    var uir = (typeof EvConfig !== 'undefined' && EvConfig.uir) ? EvConfig.uir
+            : (typeof KnConfig !== 'undefined' && KnConfig.uir) ? KnConfig.uir
+            : (typeof PkConfig !== 'undefined' && PkConfig.uir) ? PkConfig.uir
+            : '/orkui/';
+    if (btn) btn.disabled = true;
+    $.post(uir + 'EventAjax/set_status', { EventId: eventId, Status: status }, function(r) {
+        if (r && r.status === 0) {
+            window.location.reload();
+        } else {
+            var err = (r && r.error) || 'Failed to set event status.';
+            var isAuth = (r && (r.status === 3 || /not authoriz/i.test(err)));
+            orkAlert(err, { title: isAuth ? 'Not Authorized' : 'Could Not Update Event' });
+            if (btn) btn.disabled = false;
+        }
+    }, 'json').fail(function() {
+        orkAlert('Could not reach the server. Please try again.', { title: 'Request Failed' });
+        if (btn) btn.disabled = false;
+    });
+};
+
+// =============================================================================
+// Calendar Enhancements R2: RSVP dropdowns, Map view
+// Works on both Kingdomnew (kn-*) and Parknew (pk-*) surfaces.
+// =============================================================================
+(function() {
+    var Cfg = (typeof KnConfig !== 'undefined') ? KnConfig
+            : (typeof PkConfig !== 'undefined') ? PkConfig : null;
+    if (!Cfg) return;
+    var UIR = Cfg.uir;
+
+    // ---- RSVP component (portal-based menu — escapes Google Maps InfoWindow clipping) ----
+    var RSVP_LABELS = {
+        '':           { html: 'RSVP <i class="fas fa-caret-down"></i>',                                cls: 'rsvp-none' },
+        'going':      { html: '<i class="fas fa-check-circle"></i> Going <i class="fas fa-caret-down"></i>',   cls: 'rsvp-going' },
+        'interested': { html: '<i class="fas fa-star"></i> Interested <i class="fas fa-caret-down"></i>',      cls: 'rsvp-interested' }
+    };
+
+    // Build the inner HTML for an RSVP wrap span based on going/interested counts
+    // and the viewer's own RSVP state. Pulled out so the Google Maps InfoWindow
+    // can render the final button shape on first paint (Google measures content
+    // when the InfoWindow opens and won't shrink later if we inject content via
+    // setTimeout — was leaving ~80px of empty space below the popover).
+    //
+    // Anonymous viewers get just the counts (informational): no RSVP button,
+    // since clicking it would only redirect to login.
+    function rsvpButtonInnerHtml(goingCnt, interestCnt, mine) {
+        var countsHtml = '';
+        if (goingCnt > 0 || interestCnt > 0) {
+            var parts = [];
+            if (goingCnt    > 0) parts.push('<span class="ev-rsvp-count-going">'    + goingCnt    + ' going</span>');
+            if (interestCnt > 0) parts.push('<span class="ev-rsvp-count-interest">' + interestCnt + ' interested</span>');
+            countsHtml = '<span class="ev-rsvp-counts">' + parts.join('<span class="ev-rsvp-count-sep">·</span>') + '</span>';
+        }
+        if (!Cfg.loggedIn) return countsHtml;
+        var lbl = RSVP_LABELS[mine] || RSVP_LABELS[''];
+        return '<span class="ev-rsvp-btn ev-rsvp-' + lbl.cls + '" tabindex="0">' + lbl.html + '</span>' + countsHtml;
+    }
+
+    function renderRsvpButton(span, prefix) {
+        var detailId    = parseInt(span.getAttribute('data-detail') || '0', 10);
+        var goingCnt    = parseInt(span.getAttribute('data-going') || '0', 10);
+        var interestCnt = parseInt(span.getAttribute('data-interested') || '0', 10);
+        var mine        = span.getAttribute('data-mine') || '';
+        if (!detailId) return;
+        span.innerHTML = rsvpButtonInnerHtml(goingCnt, interestCnt, mine);
+    }
+
+    // ---- Single shared portal menu (lazy-init) ----
+    var rsvpPortal       = null;
+    var rsvpActiveWrap   = null;
+    var rsvpActivePrefix = null;
+
+    function ensureRsvpPortal() {
+        if (rsvpPortal) return rsvpPortal;
+        rsvpPortal = document.createElement('div');
+        rsvpPortal.className = 'ev-rsvp-portal';
+        rsvpPortal.setAttribute('role', 'menu');
+        rsvpPortal.innerHTML = ''
+            + '<button type="button" class="ev-rsvp-menu-item ev-rsvp-mi-going"    data-rsvp="going"      role="menuitem"><i class="fas fa-check-circle"></i> Going</button>'
+            + '<button type="button" class="ev-rsvp-menu-item ev-rsvp-mi-interest" data-rsvp="interested" role="menuitem"><i class="fas fa-star"></i> Interested</button>'
+            + '<button type="button" class="ev-rsvp-menu-item ev-rsvp-withdraw"    data-rsvp=""           role="menuitem"><i class="fas fa-times"></i> Withdraw RSVP</button>';
+        document.body.appendChild(rsvpPortal);
+        rsvpPortal.addEventListener('click', function(e) {
+            var item = e.target.closest('.ev-rsvp-menu-item');
+            if (!item || item.disabled) return;
+            e.stopPropagation();
+            if (rsvpActiveWrap) commitRsvp(rsvpActiveWrap, rsvpActivePrefix, item.getAttribute('data-rsvp') || '');
+            closeRsvpPortal();
+        });
+        return rsvpPortal;
+    }
+
+    function openRsvpPortal(wrap, prefix) {
+        var portal = ensureRsvpPortal();
+        rsvpActiveWrap   = wrap;
+        rsvpActivePrefix = prefix;
+
+        var mine = wrap.getAttribute('data-mine') || '';
+        portal.querySelector('.ev-rsvp-withdraw').disabled = !mine;
+        portal.classList.toggle('ev-rsvp-mine-going',      mine === 'going');
+        portal.classList.toggle('ev-rsvp-mine-interested', mine === 'interested');
+
+        var btn = wrap.querySelector('.ev-rsvp-btn');
+        if (!btn) return;
+        var r = btn.getBoundingClientRect();
+        // Render hidden first to measure, then position with overflow guards.
+        portal.style.visibility = 'hidden';
+        portal.classList.add('ev-rsvp-portal-open');
+        var pw = portal.offsetWidth  || 180;
+        var ph = portal.offsetHeight || 120;
+        var top  = r.bottom + 6;
+        if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 6);
+        var left = Math.min(Math.max(8, r.left), window.innerWidth - pw - 8);
+        portal.style.top  = top  + 'px';
+        portal.style.left = left + 'px';
+        portal.style.visibility = '';
+    }
+
+    function closeRsvpPortal() {
+        if (rsvpPortal) rsvpPortal.classList.remove('ev-rsvp-portal-open', 'ev-rsvp-mine-going', 'ev-rsvp-mine-interested');
+        rsvpActiveWrap   = null;
+        rsvpActivePrefix = null;
+    }
+
+    // Sync the matching event-map location object so a future InfoWindow open
+    // rebuilds popoverHtml() with fresh values instead of the original page-load
+    // snapshot. Without this, changing RSVP, closing the InfoWindow, and opening
+    // it again shows the pre-change RSVP state.
+    function syncMapLocAfterRsvp(prefix, detailId, myStatus, goingCount, interestedCount) {
+        var arr = (prefix === 'kn') ? window.knEventMapLocations
+                : (prefix === 'pk') ? window.pkEventMapLocations
+                : null;
+        if (!Array.isArray(arr)) return;
+        for (var i = 0; i < arr.length; i++) {
+            if ((arr[i].event_calendardetail_id | 0) === detailId) {
+                arr[i].my_rsvp    = myStatus || '';
+                arr[i].going      = goingCount     | 0;
+                arr[i].interested = interestedCount | 0;
+                break;
+            }
+        }
+    }
+
+    function commitRsvp(wrap, prefix, status) {
+        var detailId = parseInt(wrap.getAttribute('data-detail') || '0', 10);
+        var url = status ? (UIR + 'EventRsvpAjax/set') : (UIR + 'EventRsvpAjax/withdraw');
+        var payload = { EventCalendarDetailId: detailId };
+        if (status) payload.Status = status;
+        wrap.classList.add('ev-rsvp-busy');
+        $.post(url, payload, function(r) {
+            wrap.classList.remove('ev-rsvp-busy');
+            if (r && r.status === 0) {
+                wrap.setAttribute('data-mine',       r.my_status || '');
+                wrap.setAttribute('data-going',      r.going_count || 0);
+                wrap.setAttribute('data-interested', r.interested_count || 0);
+                renderRsvpButton(wrap, prefix);
+                syncMapLocAfterRsvp(prefix, detailId, r.my_status, r.going_count, r.interested_count);
+            } else {
+                alert((r && r.error) || 'Failed to update RSVP.');
+            }
+        }, 'json').fail(function() {
+            wrap.classList.remove('ev-rsvp-busy');
+            alert('Request failed.');
+        });
+    }
+
+    function wireRsvp(prefix) {
+        document.querySelectorAll('.' + prefix + '-rsvp-wrap').forEach(function(span) {
+            renderRsvpButton(span, prefix);
+        });
+        document.body.addEventListener('click', function(e) {
+            var btn = e.target.closest('.ev-rsvp-btn');
+            if (btn) {
+                e.stopPropagation();
+                if (!Cfg.loggedIn) { window.location.href = UIR + 'Account/login'; return; }
+                var wrap = btn.closest('.' + prefix + '-rsvp-wrap');
+                if (!wrap) return;
+                if (rsvpActiveWrap === wrap) closeRsvpPortal();
+                else openRsvpPortal(wrap, prefix);
+            } else if (!e.target.closest('.ev-rsvp-portal')) {
+                closeRsvpPortal();
+            }
+        });
+    }
+
+    // Expose renderRsvpButton + ensure both prefixes' click delegates are active
+    // (so the event-preview overlay can render via either context).
+    window.renderRsvpButton = renderRsvpButton;
+    if (typeof KnConfig !== 'undefined') wireRsvp('kn');
+    if (typeof PkConfig !== 'undefined') wireRsvp('pk');
+
+    // Close portal on scroll/resize/escape — relevant inside scrollable map containers and InfoWindows.
+    window.addEventListener('scroll',  closeRsvpPortal, true);
+    window.addEventListener('resize',  closeRsvpPortal);
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeRsvpPortal();
+    });
+
+    // ---- Events Map view (lazy Google Maps) ----
+    var GMAPS_API_KEY = 'AIzaSyB_hIughnMCuRdutIvw_M_uwQUCREhHuI8'; // mirrors knInitMap's key
+    var gmapsLoading  = false;
+    var gmapsReady    = (typeof google !== 'undefined' && google.maps && google.maps.Map);
+
+    function ensureGoogleMaps(cb) {
+        if (gmapsReady) return cb();
+        if (gmapsLoading) {
+            window.addEventListener('orkGmapsReady', cb, { once: true });
+            return;
+        }
+        gmapsLoading = true;
+        window.__orkGmapsCb = function() {
+            gmapsReady = true;
+            window.dispatchEvent(new Event('orkGmapsReady'));
+            cb();
+        };
+        var s = document.createElement('script');
+        s.src = 'https://maps.googleapis.com/maps/api/js?key=' + GMAPS_API_KEY + '&callback=__orkGmapsCb&v=weekly';
+        s.async = true; s.defer = true;
+        document.head.appendChild(s);
+    }
+
+    function popoverHtml(loc) {
+        // Pre-render the RSVP button's inner HTML rather than leaving the wrap span
+        // empty for a deferred fill. Google InfoWindow measures content on open and
+        // doesn't shrink afterward — a deferred fill leaves ~80px empty below.
+        var rsvpHtml = loc.event_calendardetail_id
+            ? '<span class="kn-rsvp-wrap" data-detail="' + loc.event_calendardetail_id
+              + '" data-going="' + (loc.going || 0)
+              + '" data-interested="' + (loc.interested || 0)
+              + '" data-mine="' + (loc.my_rsvp || '') + '">'
+              + rsvpButtonInnerHtml((loc.going || 0), (loc.interested || 0), (loc.my_rsvp || ''))
+              + '</span>'
+            : '';
+        var metaParts = [
+            '<span class="ev-map-popover-meta-date">' + escapeHtml(loc.date_label || loc.date) + '</span>'
+        ];
+        if (loc.park_name) {
+            metaParts.push('<span class="ev-map-popover-meta-dot"></span><span class="ev-map-popover-meta-park">' + escapeHtml(loc.park_name) + '</span>');
+        }
+        return ''
+            + '<div class="ev-map-popover' + (loc.is_draft ? ' ev-map-popover-isdraft' : '') + '">'
+                + '<div class="ev-map-popover-head">'
+                    + '<a class="ev-map-popover-name" href="' + UIR + 'Event/detail/' + loc.event_id + '/' + (loc.event_calendardetail_id || '') + '">'
+                        + escapeHtml(loc.name)
+                    + '</a>'
+                    + (loc.is_draft ? '<span class="kn-draft-pill ev-map-popover-draft">DRAFT</span>' : '')
+                + '</div>'
+                + '<div class="ev-map-popover-meta">' + metaParts.join('') + '</div>'
+                + '<div class="ev-map-popover-action">'
+                    + '<div class="ev-map-popover-rsvp">' + rsvpHtml + '</div>'
+                + '</div>'
+            + '</div>';
+    }
+
+    function escapeHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, function(c) {
+            return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+        });
+    }
+
+    // Teardrop pin with a small calendar visible inside — reads as "location of an
+    // event" rather than the generic star we used to render. Color flips to gray
+    // when the event is a draft.
+    function eventPinSvg(color) {
+        return '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">'
+            + '<path d="M14 0 C6.27 0 0 6.27 0 14 C0 24.5 14 36 14 36 S28 24.5 28 14 C28 6.27 21.73 0 14 0 z" fill="' + color + '" stroke="#fff" stroke-width="1.5"/>'
+            + '<rect x="7" y="9" width="14" height="11" rx="1" fill="#fff"/>'
+            + '<rect x="7" y="9" width="14" height="3" fill="' + color + '"/>'
+            + '<rect x="10" y="7" width="2" height="4" fill="' + color + '"/>'
+            + '<rect x="16" y="7" width="2" height="4" fill="' + color + '"/>'
+            + '<circle cx="14" cy="16" r="2" fill="' + color + '"/>'
+            + '</svg>';
+    }
+
+    function eventPinIcon(color) {
+        return {
+            url: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(eventPinSvg(color)),
+            scaledSize: new google.maps.Size(28, 36),
+            anchor: new google.maps.Point(14, 36)
+        };
+    }
+
+    function buildEventMap(prefix, locations) {
+        var elId = prefix + '-events-map';
+        var el = document.getElementById(elId);
+        if (!el) return;
+        if (!locations || !locations.length) {
+            el.innerHTML = '<div style="padding:32px;text-align:center;color:#a0aec0">No upcoming events with map locations.</div>';
+            return;
+        }
+        var bounds = new google.maps.LatLngBounds();
+        var map = new google.maps.Map(el, {
+            zoom: 4, center: { lat: locations[0].lat, lng: locations[0].lng },
+            mapTypeControl: false, streetViewControl: false, fullscreenControl: false
+        });
+        var infow = new google.maps.InfoWindow();
+        locations.forEach(function(loc) {
+            var pos = { lat: parseFloat(loc.lat), lng: parseFloat(loc.lng) };
+            bounds.extend(pos);
+            var m = new google.maps.Marker({
+                position: pos, map: map, title: loc.name,
+                icon: eventPinIcon(loc.is_draft ? '#a0aec0' : '#dd6b20')
+            });
+            m.addListener('click', function() {
+                infow.setContent(popoverHtml(loc));
+                infow.open(map, m);
+                // Re-render RSVP button inside the freshly opened InfoWindow.
+                setTimeout(function() {
+                    document.querySelectorAll('.gm-style .' + prefix + '-rsvp-wrap').forEach(function(span) {
+                        renderRsvpButton(span, prefix);
+                    });
+                }, 50);
+            });
+        });
+        if (locations.length > 1) {
+            map.fitBounds(bounds);
+            var listener = google.maps.event.addListenerOnce(map, 'idle', function() {
+                if (map.getZoom() > 11) map.setZoom(11);
+            });
+        } else {
+            map.setZoom(11);
+        }
+    }
+
+    function getEventLocations(prefix) {
+        if (prefix === 'kn' && typeof KnConfig !== 'undefined') {
+            return window.knEventMapLocations || [];
+        }
+        if (prefix === 'pk' && typeof PkConfig !== 'undefined') {
+            return window.pkEventMapLocations || [];
+        }
+        return [];
+    }
+
+    var mapInited = { kn: false, pk: false };
+
+    function showEventMap(prefix) {
+        var listView = document.getElementById(prefix + '-events-list-view');
+        var calWrap  = document.getElementById(prefix + '-events-cal-wrap') || document.getElementById(prefix + '-events-cal');
+        var mapWrap  = document.getElementById(prefix + '-events-map-wrap');
+        if (!mapWrap) return;
+        if (listView) listView.style.display = 'none';
+        if (calWrap)  calWrap.style.display  = 'none';
+        mapWrap.style.display = '';
+
+        // Update toggle button active state
+        document.querySelectorAll('.' + prefix + '-view-btn').forEach(function(b) { b.classList.remove(prefix + '-view-active'); });
+        var btn = document.getElementById(prefix + '-ev-view-map');
+        if (btn) btn.classList.add(prefix + '-view-active');
+
+        if (mapInited[prefix]) return;
+        mapInited[prefix] = true;
+        ensureGoogleMaps(function() {
+            var locs = getEventLocations(prefix);
+            buildEventMap(prefix, locs);
+
+            // Footer: legend (what the pin colors mean) + summary of what's
+            // shown / hidden, so the picture matches the filter buttons above
+            // (calendar items and park days are intentionally not mapped).
+            var shownCount = (locs || []).length;
+            var noLocCount = (prefix === 'kn') ? (window.knEventMapNoLocCount || 0) : (window.pkEventMapNoLocCount || 0);
+            var footer = document.getElementById(prefix + '-events-map-footer');
+            if (footer) {
+                var pinImg = function(color) {
+                    return '<img src="data:image/svg+xml;charset=utf-8,'
+                        + encodeURIComponent(eventPinSvg(color))
+                        + '" alt="" style="height:18px;width:14px;vertical-align:-4px;margin-right:3px">';
+                };
+                var parts = [
+                    '<span>' + pinImg('#dd6b20') + 'Event</span>',
+                    '<span>' + pinImg('#a0aec0') + 'Draft</span>',
+                ];
+                parts.push('<span><strong>' + shownCount + '</strong> shown</span>');
+                if (noLocCount > 0) {
+                    parts.push('<span><strong>' + noLocCount + '</strong> without location</span>');
+                }
+                parts.push('<span style="color:#a0aec0;font-style:italic">Calendar items &amp; park days are not mapped</span>');
+                footer.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:8px 12px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;color:#4a5568">'
+                    + parts.join('<span style="color:#cbd5e0">·</span>')
+                    + '</div>';
+                footer.style.display = '';
+            }
+        });
+    }
+
+    function showListView(prefix) {
+        var listView = document.getElementById(prefix + '-events-list-view');
+        var calWrap  = document.getElementById(prefix + '-events-cal-wrap') || document.getElementById(prefix + '-events-cal');
+        var mapWrap  = document.getElementById(prefix + '-events-map-wrap');
+        if (mapWrap)  mapWrap.style.display  = 'none';
+        if (calWrap)  calWrap.style.display  = 'none';
+        if (listView) listView.style.display = '';
+        document.querySelectorAll('.' + prefix + '-view-btn').forEach(function(b) { b.classList.remove(prefix + '-view-active'); });
+        var btn = document.getElementById(prefix + '-ev-view-list');
+        if (btn) btn.classList.add(prefix + '-view-active');
+    }
+
+    function showCalView(prefix) {
+        var listView = document.getElementById(prefix + '-events-list-view');
+        var calWrap  = document.getElementById(prefix + '-events-cal-wrap') || document.getElementById(prefix + '-events-cal');
+        var mapWrap  = document.getElementById(prefix + '-events-map-wrap');
+        if (mapWrap)  mapWrap.style.display  = 'none';
+        if (listView) listView.style.display = 'none';
+        if (calWrap)  calWrap.style.display  = '';
+        document.querySelectorAll('.' + prefix + '-view-btn').forEach(function(b) { b.classList.remove(prefix + '-view-active'); });
+        var btn = document.getElementById(prefix + '-ev-view-cal');
+        if (btn) btn.classList.add(prefix + '-view-active');
+    }
+
+    // Wire the Map button (List + Calendar already wired by existing code).
+    function wireMapBtn(prefix) {
+        var btn = document.getElementById(prefix + '-ev-view-map');
+        if (!btn) return;
+        btn.addEventListener('click', function() { showEventMap(prefix); });
+        // Also intercept the existing list/cal buttons to hide map when clicked.
+        var listBtn = document.getElementById(prefix + '-ev-view-list');
+        var calBtn  = document.getElementById(prefix + '-ev-view-cal');
+        if (listBtn) listBtn.addEventListener('click', function() { showListView(prefix); });
+        if (calBtn)  calBtn.addEventListener('click', function() { showCalView(prefix);  });
+    }
+
+    if (typeof KnConfig !== 'undefined') wireMapBtn('kn');
+    if (typeof PkConfig !== 'undefined') wireMapBtn('pk');
+})();
+
+
+// =============================================================================
+// Event Preview overlay — calendar grid quick-look modal for full Amtgard events.
+// Triggered by FullCalendar eventClick on Kingdomnew + Parknew. Renders basic
+// info + RSVP ▾ + a "See Full Details" CTA so casual browsing doesn't trigger
+// a page load per click.
+// =============================================================================
+(function() {
+    var Cfg = (typeof KnConfig !== 'undefined') ? KnConfig
+            : (typeof PkConfig !== 'undefined') ? PkConfig : null;
+    if (!Cfg) return;
+    if (!document.getElementById('evpv-overlay')) return;
+
+    var UIR  = Cfg.uir;
+    var HTTP_EVENT_HERALDRY = (typeof HTTP_EVENT_HERALDRY !== 'undefined') ? HTTP_EVENT_HERALDRY : (Cfg.uir.replace(/\/orkui\/.*/, '') + '/assets/heraldry/event/');
+    var heraldryFallback = HTTP_EVENT_HERALDRY + '00000.jpg';
+
+    function gid(id) { return document.getElementById(id); }
+    function show(el, on) { if (el) el.style.display = on ? '' : 'none'; }
+
+    function escapeHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, function(c) {
+            return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+        });
+    }
+
+    function heraldryUrl(eventId, hasHeraldry) {
+        if (!hasHeraldry) return heraldryFallback;
+        var padded = String(eventId).padStart(5, '0');
+        return HTTP_EVENT_HERALDRY + padded + '.jpg';
+    }
+
+    window.evpvOpen = function(eventId, detailId) {
+        var overlay = gid('evpv-overlay');
+        if (!overlay) return;
+        overlay.classList.add('evpv-loading');
+        overlay.classList.add('evpv-open');
+        document.body.style.overflow = 'hidden';
+
+        $.getJSON(UIR + 'EventAjax/preview/' + eventId + '/' + (detailId || 0), function(r) {
+            overlay.classList.remove('evpv-loading');
+            if (!r || r.status !== 0) {
+                alert((r && r.error) || 'Failed to load event preview.');
+                evpvClose();
+                return;
+            }
+            // Header pills
+            var kindLabel = r.is_park_event ? 'Park Event' : 'Kingdom Event';
+            var kindIcon  = r.is_park_event ? 'fa-tree' : 'fa-crown';
+            var kindPill  = gid('evpv-kind-pill');
+            kindPill.className = 'evpv-kind-pill ' + (r.is_park_event ? 'evpv-kind-park' : 'evpv-kind-kingdom');
+            kindPill.innerHTML = '<i class="fas ' + kindIcon + '"></i> <span>' + escapeHtml(kindLabel) + '</span>';
+            show(gid('evpv-draft-pill'), !!r.is_draft);
+
+            // Hero
+            var img = gid('evpv-heraldry');
+            img.src = heraldryUrl(r.event_id, r.has_heraldry);
+            img.onerror = function() { this.onerror = null; this.src = heraldryFallback; };
+            img.alt = r.name + ' heraldry';
+
+            var nameLink = gid('evpv-name');
+            nameLink.textContent = r.name;
+            nameLink.href = r.detail_url;
+
+            gid('evpv-date').textContent = r.date_label || '';
+            var timeRow = gid('evpv-time-row');
+            if (r.time_label) { gid('evpv-time').textContent = r.time_label; show(timeRow, true); } else { show(timeRow, false); }
+
+            var parkRow = gid('evpv-park-row');
+            if (r.park_name) { gid('evpv-park').textContent = r.park_name; show(parkRow, true); } else { show(parkRow, false); }
+
+            // Description excerpt
+            var descEl = gid('evpv-description');
+            if (r.description_excerpt) {
+                descEl.textContent = r.description_excerpt;
+                show(descEl, true);
+            } else {
+                show(descEl, false);
+            }
+
+            // RSVP wrap — match the page context's prefix so the right click delegate fires.
+            var rsvpPrefix = (typeof KnConfig !== 'undefined') ? 'kn' : 'pk';
+            var rsvpWrap = gid('evpv-rsvp');
+            rsvpWrap.className = rsvpPrefix + '-rsvp-wrap';
+            rsvpWrap.setAttribute('data-detail',     r.event_calendardetail_id || 0);
+            rsvpWrap.setAttribute('data-going',      r.going_count || 0);
+            rsvpWrap.setAttribute('data-interested', r.interested_count || 0);
+            rsvpWrap.setAttribute('data-mine',       r.my_rsvp || '');
+            if (typeof window.renderRsvpButton === 'function') {
+                window.renderRsvpButton(rsvpWrap, rsvpPrefix);
+            } else {
+                // Fallback: dispatch a synthetic event the wireRsvp body listener won't help here, so
+                // we rely on the existing renderer being available. Render a minimal label so it's not
+                // empty if the helper hasn't been exposed.
+                rsvpWrap.innerHTML = '<span class="ev-rsvp-btn ev-rsvp-rsvp-none">RSVP <i class="fas fa-caret-down"></i></span>';
+            }
+
+            // CTA
+            gid('evpv-cta').href = r.detail_url;
+        }).fail(function() {
+            overlay.classList.remove('evpv-loading');
+            alert('Request failed.');
+            evpvClose();
+        });
+    };
+
+    window.evpvClose = function() {
+        var overlay = gid('evpv-overlay');
+        if (overlay) overlay.classList.remove('evpv-open', 'evpv-loading');
+        document.body.style.overflow = '';
+    };
+
+    // Outside-click + escape
+    var overlay = gid('evpv-overlay');
+    if (overlay) {
+        overlay.addEventListener('click', function(e) { if (e.target === this) evpvClose(); });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && overlay && overlay.classList.contains('evpv-open')) evpvClose();
+    });
+})();
+
+// ── Ported entity banner IIFEs (park/kingdom/player/unit) ──────────────
+// ── Park banner ─────────────────────────────────── //
+(function() {
+    if (typeof PkBannerConfig === 'undefined' || !PkBannerConfig.canManage) return;
+
+    // Hoisted to be safe even if later setup throws.
+    window.pkOpenBannerModal = function() {
+        if (!overlay) return;
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        clearError();
+        // I6 fix: refresh modal title based on current bannerUrl state
+        var titleEl = document.getElementById('pk-banner-modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = '<i class="fas fa-image" style="margin-right:8px"></i>' +
+                (PkBannerConfig.bannerUrl ? 'Update Banner Image' : 'Add Banner Image');
+        }
+        // Reset toggles to current persisted config
+        if (showLogoCb) showLogoCb.checked = !!PkBannerConfig.bannerShowLogo;
+        if (vignetteCb) vignetteCb.checked = !!PkBannerConfig.bannerVignette;
+        showStep(stepSelect);
+        overlay.classList.add('pk-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window.pkCloseBannerModal = function() {
+        if (!overlay) return;
+        overlay.classList.remove('pk-open');
+        document.body.style.overflow = '';
+    };
+
+    var BANNER_BYTE_LIMIT = 1024 * 1024; // 1 MB
+    var UPLOAD_URL = PkBannerConfig.uir + 'ParkAjax/banner/' + PkBannerConfig.entityId + '/update';
+    var REMOVE_URL = PkBannerConfig.uir + 'ParkAjax/banner/' + PkBannerConfig.entityId + '/remove';
+    var CONFIG_URL = PkBannerConfig.uir + 'ParkAjax/banner/' + PkBannerConfig.entityId + '/config';
+
+    function gid(id) { return document.getElementById(id); }
+
+    var TARGET_W = 1800, TARGET_H = 240;
+
+    var overlay     = gid('pk-banner-overlay');
+    var fileInput   = gid('pk-banner-file-input');
+    var showLogoCb  = gid('pk-banner-show-logo');
+    var vignetteCb  = gid('pk-banner-vignette');
+    var resizeNote  = gid('pk-banner-resize-notice');
+    var errorEl     = gid('pk-banner-error');
+    var stepSelect  = gid('pk-banner-step-select');
+    var stepPosition  = gid('pk-banner-step-position');
+    var stepUploading = gid('pk-banner-step-uploading');
+    var stepSuccess = gid('pk-banner-step-success');
+    var saveCfgBtn  = gid('pk-banner-save-config-btn');
+    var removeBtn   = gid('pk-banner-remove-btn');
+    var adjustBtn   = gid('pk-banner-adjust-btn');
+    var closeBtn    = gid('pk-banner-close-btn');
+    var posCanvas       = gid('pk-banner-position-canvas');
+    var posBackBtn      = gid('pk-banner-position-back-btn');
+    var posConfirmBtn   = gid('pk-banner-position-confirm-btn');
+    var posHintText     = gid('pk-banner-position-hint-text');
+    var posErrorEl      = gid('pk-banner-position-error');
+    if (!overlay || !fileInput) return;
+
+    function showStep(active) {
+        [stepSelect, stepPosition, stepUploading, stepSuccess].forEach(function(el) {
+            if (el) el.style.display = (el === active) ? '' : 'none';
+        });
+    }
+    function showError(msg) { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; } }
+    function clearError()   { if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; } }
+
+
+    if (closeBtn) closeBtn.addEventListener('click', pkCloseBannerModal);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) pkCloseBannerModal(); });
+    document.addEventListener('keydown', function(e) {
+        if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('pk-open')) pkCloseBannerModal();
+    });
+
+    function postConfigWithOffsets(offX, offY, cb) {
+        var fd = new FormData();
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(offX));
+        fd.append('OffsetY', String(offY));
+        fetch(CONFIG_URL, { method: 'POST', body: fd })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function(result) {
+                cb(!!(result && result.status === 0), result && result.error);
+            })
+            .catch(function() { cb(false, 'Request failed.'); });
+    }
+
+    if (saveCfgBtn) saveCfgBtn.addEventListener('click', function() {
+        clearError();
+        saveCfgBtn.disabled = true;
+        postConfigWithOffsets(
+            (typeof PkBannerConfig.bannerOffsetX === 'number') ? PkBannerConfig.bannerOffsetX : 50,
+            (typeof PkBannerConfig.bannerOffsetY === 'number') ? PkBannerConfig.bannerOffsetY : 50,
+            function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    saveCfgBtn.disabled = false;
+                    showError(err || 'Save failed.');
+                }
+            }
+        );
+    });
+
+    // "Adjust Image Framing" loads the saved banner (now stored uncropped)
+    // back into the position tool with the current offsets pre-applied so
+    // the user can re-frame without re-uploading. On confirm we send only
+    // the offsets via /config — no image bytes go over the wire.
+    if (adjustBtn) adjustBtn.addEventListener('click', function() {
+        var url = PkBannerConfig.bannerUrl;
+        if (!url) { showError('No banner image to adjust.'); return; }
+        clearError();
+        adjustBtn.disabled = true;
+        fetch(url, { cache: 'no-store' })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+            })
+            .then(function(blob) {
+                adjustBtn.disabled = false;
+                var isPng = (blob.type === 'image/png') || /\.png(\?|$)/i.test(url);
+                if (resizeNote) resizeNote.textContent = '';
+                loadIntoPositionStep(blob, isPng, {
+                    fromAdjust: true,
+                    startPct: {
+                        x: (typeof PkBannerConfig.bannerOffsetX === 'number') ? PkBannerConfig.bannerOffsetX : 50,
+                        y: (typeof PkBannerConfig.bannerOffsetY === 'number') ? PkBannerConfig.bannerOffsetY : 50
+                    }
+                });
+            })
+            .catch(function(err) {
+                adjustBtn.disabled = false;
+                showError('Could not load current banner: ' + err.message);
+            });
+    });
+
+    if (removeBtn) removeBtn.addEventListener('click', function() {
+        bannerConfirm('Remove banner', 'Remove the banner image? This cannot be undone.', function() {
+            removeBtn.disabled = true;
+            fetch(REMOVE_URL, { method: 'POST' })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function(result) {
+                    if (result && result.status === 0) {
+                        showStep(stepSuccess);
+                        setTimeout(function() { window.location.reload(); }, 900);
+                    } else {
+                        removeBtn.disabled = false;
+                        showError((result && result.error) || 'Remove failed.');
+                    }
+                })
+                .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        });
+    });
+
+    function doUpload(blob, isPng, offX, offY) {
+        showStep(stepUploading);
+        var fd = new FormData();
+        var name = isPng ? 'banner.png' : 'banner.jpg';
+        // Force the MIME on resized blobs so the server's whitelist matches.
+        if (blob && !blob.type) {
+            try { blob = new Blob([blob], { type: isPng ? 'image/png' : 'image/jpeg' }); } catch (e) {}
+        }
+        fd.append('Banner', blob, name);
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
+        fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
+        fetch(UPLOAD_URL, { method: 'POST', body: fd })
+            .then(function(r) {
+                if (!r.ok) {
+                    var msg = (r.status === 413) ? 'File too large (server limit).' : 'Upload failed (HTTP ' + r.status + ').';
+                    throw new Error(msg);
+                }
+                return r.json();
+            })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 1200);
+                } else {
+                    showStep(stepSelect);
+                    if (posConfirmBtn) posConfirmBtn.disabled = false;
+                    showError((result && result.error) || 'Upload failed.');
+                }
+            })
+            .catch(function(err) {
+                showStep(stepSelect);
+                if (posConfirmBtn) posConfirmBtn.disabled = false;
+                showError('Upload failed: ' + err.message);
+            });
+    }
+
+    // ---- Position step ----
+    // Source image is saved uncropped server-side; the framing is stored as
+    // background-position percentages (0–100 on each axis). posState.pct
+    // holds the current percentages; the canvas draws the image at cover-fit
+    // scale with the same crop semantics that CSS background-position will
+    // apply on display, so the position step is WYSIWYG.
+    //
+    // `sourceBlob` is the original file we will upload. `fromAdjust` flags
+    // the case where we loaded the existing banner from the server — on
+    // commit we send only the offsets via /config (no re-upload).
+    var posState = {
+        img: null, isPng: false,
+        sourceBlob: null, fromAdjust: false,
+        scale: 1, pct: { x: 50, y: 50 },
+        dragging: false
+    };
+
+    // Translate offset percentage → pixel position of image on the TARGET frame.
+    // pct=0   → image's 0%  point aligned with frame's 0%  point (left/top)
+    // pct=100 → image's 100% point aligned with frame's 100% point (right/bottom)
+    // CSS background-position uses the same convention.
+    function pctToPx() {
+        var img = posState.img;
+        var scaledW = img.width  * posState.scale;
+        var scaledH = img.height * posState.scale;
+        var overflowX = scaledW - TARGET_W; // ≥0
+        var overflowY = scaledH - TARGET_H; // ≥0
+        return {
+            x: -overflowX * (posState.pct.x / 100),
+            y: -overflowY * (posState.pct.y / 100),
+            overflowX: overflowX, overflowY: overflowY,
+            scaledW: scaledW, scaledH: scaledH
+        };
+    }
+    function clampPct() {
+        if (posState.pct.x < 0) posState.pct.x = 0;
+        if (posState.pct.x > 100) posState.pct.x = 100;
+        if (posState.pct.y < 0) posState.pct.y = 0;
+        if (posState.pct.y > 100) posState.pct.y = 100;
+    }
+
+    function drawPosition() {
+        if (!posCanvas || !posState.img) return;
+        var ctx = posCanvas.getContext('2d');
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, posCanvas.width, posCanvas.height);
+        var p = pctToPx();
+        ctx.drawImage(
+            posState.img,
+            Math.round(p.x), Math.round(p.y),
+            Math.round(p.scaledW), Math.round(p.scaledH)
+        );
+    }
+
+    function applyHintForOverflow() {
+        if (!posHintText) return;
+        var p = pctToPx();
+        if (p.overflowX < 1 && p.overflowY < 1) {
+            posHintText.textContent = 'Image already fits — nothing to re-frame.';
+        } else if (p.overflowX > p.overflowY) {
+            posHintText.textContent = 'Drag left or right to choose what shows.';
+        } else {
+            posHintText.textContent = 'Drag up or down to choose what shows.';
+        }
+    }
+
+    // `opts.fromAdjust` → don't re-upload, just save offsets.
+    // `opts.startPct`   → initial percentages (used when re-loading the saved
+    //                      banner so the canvas reflects the current framing).
+    function loadIntoPositionStep(file, isPng, opts) {
+        opts = opts || {};
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function() {
+            URL.revokeObjectURL(url);
+            posState.img        = img;
+            posState.isPng      = isPng;
+            posState.sourceBlob = file;
+            posState.fromAdjust = !!opts.fromAdjust;
+            // Cover-fit: scale so the image fully covers the target frame.
+            var targetAspect = TARGET_W / TARGET_H;
+            var imgAspect    = img.width / img.height;
+            posState.scale = (imgAspect > targetAspect)
+                ? (TARGET_H / img.height)   // wider than target → scale by height
+                : (TARGET_W / img.width);   // taller than target → scale by width
+            posState.pct.x = (opts.startPct && typeof opts.startPct.x === 'number') ? opts.startPct.x : 50;
+            posState.pct.y = (opts.startPct && typeof opts.startPct.y === 'number') ? opts.startPct.y : 50;
+            clampPct();
+            applyHintForOverflow();
+            drawPosition();
+            showStep(stepPosition);
+        };
+        img.onerror = function() {
+            URL.revokeObjectURL(url);
+            showError('Could not load image. Please try a different file.');
+        };
+        img.src = url;
+    }
+
+    function bindPositionDrag() {
+        if (!posCanvas) return;
+        var rect, startClient, startPct;
+        function onDown(e) {
+            if (!posState.img) return;
+            e.preventDefault();
+            rect = posCanvas.getBoundingClientRect();
+            var p = e.touches ? e.touches[0] : e;
+            startClient = { x: p.clientX, y: p.clientY };
+            startPct    = { x: posState.pct.x, y: posState.pct.y };
+            posState.dragging = true;
+        }
+        function onMove(e) {
+            if (!posState.dragging) return;
+            e.preventDefault();
+            var p = e.touches ? e.touches[0] : e;
+            // Map screen px delta → target px delta → percentage delta.
+            // Sign flip: dragging the image to the RIGHT means showing more
+            // of the LEFT side, which is pct.x → 0.
+            var info = pctToPx();
+            var dxScreenToTarget = TARGET_W / rect.width;
+            var dyScreenToTarget = TARGET_H / rect.height;
+            var dxTarget = (p.clientX - startClient.x) * dxScreenToTarget;
+            var dyTarget = (p.clientY - startClient.y) * dyScreenToTarget;
+            if (info.overflowX > 0) posState.pct.x = startPct.x - (dxTarget / info.overflowX) * 100;
+            if (info.overflowY > 0) posState.pct.y = startPct.y - (dyTarget / info.overflowY) * 100;
+            clampPct();
+            drawPosition();
+        }
+        function onUp() { posState.dragging = false; }
+        posCanvas.addEventListener('mousedown',  onDown);
+        posCanvas.addEventListener('touchstart', onDown, { passive: false });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('mouseup',   onUp);
+        window.addEventListener('touchend',  onUp);
+    }
+    bindPositionDrag();
+
+    function showPosError(msg) { if (posErrorEl) { posErrorEl.textContent = msg; posErrorEl.style.display = ''; } }
+    function clearPosError()   { if (posErrorEl) { posErrorEl.style.display = 'none'; posErrorEl.textContent = ''; } }
+
+    if (posBackBtn) posBackBtn.addEventListener('click', function() {
+        clearPosError();
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        showStep(stepSelect);
+    });
+
+    if (posConfirmBtn) posConfirmBtn.addEventListener('click', function() {
+        if (!posState.img) return;
+        clearPosError();
+        posConfirmBtn.disabled = true;
+        var offX = Math.round(posState.pct.x);
+        var offY = Math.round(posState.pct.y);
+        // From Adjust: image unchanged, just persist new offsets + toggles.
+        if (posState.fromAdjust) {
+            showStep(stepUploading);
+            postConfigWithOffsets(offX, offY, function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    showStep(stepPosition);
+                    posConfirmBtn.disabled = false;
+                    showPosError(err || 'Save failed.');
+                }
+            });
+            return;
+        }
+        // Fresh upload path: send the source blob untouched along with the
+        // chosen offsets. Server stores the file as-is (no re-encode here);
+        // resizeImageToLimit will downscale only if it exceeds 1 MB.
+        var blob = posState.sourceBlob;
+        var isPng = posState.isPng;
+        function send(b) { doUpload(b, isPng, offX, offY); }
+        if (blob.size > BANNER_BYTE_LIMIT) {
+            if (resizeNote) resizeNote.textContent = 'Resizing…';
+            resizeImageToLimit(blob, BANNER_BYTE_LIMIT, send, function(err) {
+                posConfirmBtn.disabled = false;
+                showPosError(err);
+            }, isPng);
+        } else {
+            send(blob);
+        }
+    });
+
+    fileInput.addEventListener('change', function() {
+        var file = this.files && this.files[0];
+        if (!file) return;
+        var ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (['jpg','jpeg','png'].indexOf(ext) < 0) {
+            showError('Invalid file type. Please use JPG or PNG.');
+            this.value = '';
+            return;
+        }
+        clearError();
+        clearPosError();
+        var isPng = (file.type === 'image/png' || ext === 'png');
+        loadIntoPositionStep(file, isPng);
+    });
+})();
+
+
+// ── Kingdom banner ─────────────────────────────────── //
+(function() {
+    if (typeof KnBannerConfig === 'undefined' || !KnBannerConfig.canManage) return;
+
+    // Hoisted to be safe even if later setup throws.
+    window.knOpenBannerModal = function() {
+        if (!overlay) return;
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        clearError();
+        // I6 fix: refresh modal title based on current bannerUrl state
+        var titleEl = document.getElementById('kn-banner-modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = '<i class="fas fa-image" style="margin-right:8px"></i>' +
+                (KnBannerConfig.bannerUrl ? 'Update Banner Image' : 'Add Banner Image');
+        }
+        // Reset toggles to current persisted config
+        if (showLogoCb) showLogoCb.checked = !!KnBannerConfig.bannerShowLogo;
+        if (vignetteCb) vignetteCb.checked = !!KnBannerConfig.bannerVignette;
+        showStep(stepSelect);
+        overlay.classList.add('kn-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window.knCloseBannerModal = function() {
+        if (!overlay) return;
+        overlay.classList.remove('kn-open');
+        document.body.style.overflow = '';
+    };
+
+    var BANNER_BYTE_LIMIT = 1024 * 1024; // 1 MB
+    var UPLOAD_URL = KnBannerConfig.uir + 'KingdomAjax/banner/' + KnBannerConfig.entityId + '/update';
+    var REMOVE_URL = KnBannerConfig.uir + 'KingdomAjax/banner/' + KnBannerConfig.entityId + '/remove';
+    var CONFIG_URL = KnBannerConfig.uir + 'KingdomAjax/banner/' + KnBannerConfig.entityId + '/config';
+
+    function gid(id) { return document.getElementById(id); }
+
+    var TARGET_W = 1800, TARGET_H = 240;
+
+    var overlay     = gid('kn-banner-overlay');
+    var fileInput   = gid('kn-banner-file-input');
+    var showLogoCb  = gid('kn-banner-show-logo');
+    var vignetteCb  = gid('kn-banner-vignette');
+    var resizeNote  = gid('kn-banner-resize-notice');
+    var errorEl     = gid('kn-banner-error');
+    var stepSelect  = gid('kn-banner-step-select');
+    var stepPosition  = gid('kn-banner-step-position');
+    var stepUploading = gid('kn-banner-step-uploading');
+    var stepSuccess = gid('kn-banner-step-success');
+    var saveCfgBtn  = gid('kn-banner-save-config-btn');
+    var removeBtn   = gid('kn-banner-remove-btn');
+    var adjustBtn   = gid('kn-banner-adjust-btn');
+    var closeBtn    = gid('kn-banner-close-btn');
+    var posCanvas       = gid('kn-banner-position-canvas');
+    var posBackBtn      = gid('kn-banner-position-back-btn');
+    var posConfirmBtn   = gid('kn-banner-position-confirm-btn');
+    var posHintText     = gid('kn-banner-position-hint-text');
+    var posErrorEl      = gid('kn-banner-position-error');
+    if (!overlay || !fileInput) return;
+
+    function showStep(active) {
+        [stepSelect, stepPosition, stepUploading, stepSuccess].forEach(function(el) {
+            if (el) el.style.display = (el === active) ? '' : 'none';
+        });
+    }
+    function showError(msg) { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; } }
+    function clearError()   { if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; } }
+
+
+    if (closeBtn) closeBtn.addEventListener('click', knCloseBannerModal);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) knCloseBannerModal(); });
+    document.addEventListener('keydown', function(e) {
+        if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('kn-open')) knCloseBannerModal();
+    });
+
+    function postConfigWithOffsets(offX, offY, cb) {
+        var fd = new FormData();
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(offX));
+        fd.append('OffsetY', String(offY));
+        fetch(CONFIG_URL, { method: 'POST', body: fd })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function(result) {
+                cb(!!(result && result.status === 0), result && result.error);
+            })
+            .catch(function() { cb(false, 'Request failed.'); });
+    }
+
+    if (saveCfgBtn) saveCfgBtn.addEventListener('click', function() {
+        clearError();
+        saveCfgBtn.disabled = true;
+        postConfigWithOffsets(
+            (typeof KnBannerConfig.bannerOffsetX === 'number') ? KnBannerConfig.bannerOffsetX : 50,
+            (typeof KnBannerConfig.bannerOffsetY === 'number') ? KnBannerConfig.bannerOffsetY : 50,
+            function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    saveCfgBtn.disabled = false;
+                    showError(err || 'Save failed.');
+                }
+            }
+        );
+    });
+
+    // "Adjust Image Framing" loads the saved banner (now stored uncropped)
+    // back into the position tool with the current offsets pre-applied so
+    // the user can re-frame without re-uploading. On confirm we send only
+    // the offsets via /config — no image bytes go over the wire.
+    if (adjustBtn) adjustBtn.addEventListener('click', function() {
+        var url = KnBannerConfig.bannerUrl;
+        if (!url) { showError('No banner image to adjust.'); return; }
+        clearError();
+        adjustBtn.disabled = true;
+        fetch(url, { cache: 'no-store' })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+            })
+            .then(function(blob) {
+                adjustBtn.disabled = false;
+                var isPng = (blob.type === 'image/png') || /\.png(\?|$)/i.test(url);
+                if (resizeNote) resizeNote.textContent = '';
+                loadIntoPositionStep(blob, isPng, {
+                    fromAdjust: true,
+                    startPct: {
+                        x: (typeof KnBannerConfig.bannerOffsetX === 'number') ? KnBannerConfig.bannerOffsetX : 50,
+                        y: (typeof KnBannerConfig.bannerOffsetY === 'number') ? KnBannerConfig.bannerOffsetY : 50
+                    }
+                });
+            })
+            .catch(function(err) {
+                adjustBtn.disabled = false;
+                showError('Could not load current banner: ' + err.message);
+            });
+    });
+
+    if (removeBtn) removeBtn.addEventListener('click', function() {
+        bannerConfirm('Remove banner', 'Remove the banner image? This cannot be undone.', function() {
+            removeBtn.disabled = true;
+            fetch(REMOVE_URL, { method: 'POST' })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function(result) {
+                    if (result && result.status === 0) {
+                        showStep(stepSuccess);
+                        setTimeout(function() { window.location.reload(); }, 900);
+                    } else {
+                        removeBtn.disabled = false;
+                        showError((result && result.error) || 'Remove failed.');
+                    }
+                })
+                .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        });
+    });
+
+    function doUpload(blob, isPng, offX, offY) {
+        showStep(stepUploading);
+        var fd = new FormData();
+        var name = isPng ? 'banner.png' : 'banner.jpg';
+        // Force the MIME on resized blobs so the server's whitelist matches.
+        if (blob && !blob.type) {
+            try { blob = new Blob([blob], { type: isPng ? 'image/png' : 'image/jpeg' }); } catch (e) {}
+        }
+        fd.append('Banner', blob, name);
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
+        fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
+        fetch(UPLOAD_URL, { method: 'POST', body: fd })
+            .then(function(r) {
+                if (!r.ok) {
+                    var msg = (r.status === 413) ? 'File too large (server limit).' : 'Upload failed (HTTP ' + r.status + ').';
+                    throw new Error(msg);
+                }
+                return r.json();
+            })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 1200);
+                } else {
+                    showStep(stepSelect);
+                    if (posConfirmBtn) posConfirmBtn.disabled = false;
+                    showError((result && result.error) || 'Upload failed.');
+                }
+            })
+            .catch(function(err) {
+                showStep(stepSelect);
+                if (posConfirmBtn) posConfirmBtn.disabled = false;
+                showError('Upload failed: ' + err.message);
+            });
+    }
+
+    // ---- Position step ----
+    // Source image is saved uncropped server-side; the framing is stored as
+    // background-position percentages (0–100 on each axis). posState.pct
+    // holds the current percentages; the canvas draws the image at cover-fit
+    // scale with the same crop semantics that CSS background-position will
+    // apply on display, so the position step is WYSIWYG.
+    //
+    // `sourceBlob` is the original file we will upload. `fromAdjust` flags
+    // the case where we loaded the existing banner from the server — on
+    // commit we send only the offsets via /config (no re-upload).
+    var posState = {
+        img: null, isPng: false,
+        sourceBlob: null, fromAdjust: false,
+        scale: 1, pct: { x: 50, y: 50 },
+        dragging: false
+    };
+
+    // Translate offset percentage → pixel position of image on the TARGET frame.
+    // pct=0   → image's 0%  point aligned with frame's 0%  point (left/top)
+    // pct=100 → image's 100% point aligned with frame's 100% point (right/bottom)
+    // CSS background-position uses the same convention.
+    function pctToPx() {
+        var img = posState.img;
+        var scaledW = img.width  * posState.scale;
+        var scaledH = img.height * posState.scale;
+        var overflowX = scaledW - TARGET_W; // ≥0
+        var overflowY = scaledH - TARGET_H; // ≥0
+        return {
+            x: -overflowX * (posState.pct.x / 100),
+            y: -overflowY * (posState.pct.y / 100),
+            overflowX: overflowX, overflowY: overflowY,
+            scaledW: scaledW, scaledH: scaledH
+        };
+    }
+    function clampPct() {
+        if (posState.pct.x < 0) posState.pct.x = 0;
+        if (posState.pct.x > 100) posState.pct.x = 100;
+        if (posState.pct.y < 0) posState.pct.y = 0;
+        if (posState.pct.y > 100) posState.pct.y = 100;
+    }
+
+    function drawPosition() {
+        if (!posCanvas || !posState.img) return;
+        var ctx = posCanvas.getContext('2d');
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, posCanvas.width, posCanvas.height);
+        var p = pctToPx();
+        ctx.drawImage(
+            posState.img,
+            Math.round(p.x), Math.round(p.y),
+            Math.round(p.scaledW), Math.round(p.scaledH)
+        );
+    }
+
+    function applyHintForOverflow() {
+        if (!posHintText) return;
+        var p = pctToPx();
+        if (p.overflowX < 1 && p.overflowY < 1) {
+            posHintText.textContent = 'Image already fits — nothing to re-frame.';
+        } else if (p.overflowX > p.overflowY) {
+            posHintText.textContent = 'Drag left or right to choose what shows.';
+        } else {
+            posHintText.textContent = 'Drag up or down to choose what shows.';
+        }
+    }
+
+    // `opts.fromAdjust` → don't re-upload, just save offsets.
+    // `opts.startPct`   → initial percentages (used when re-loading the saved
+    //                      banner so the canvas reflects the current framing).
+    function loadIntoPositionStep(file, isPng, opts) {
+        opts = opts || {};
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function() {
+            URL.revokeObjectURL(url);
+            posState.img        = img;
+            posState.isPng      = isPng;
+            posState.sourceBlob = file;
+            posState.fromAdjust = !!opts.fromAdjust;
+            // Cover-fit: scale so the image fully covers the target frame.
+            var targetAspect = TARGET_W / TARGET_H;
+            var imgAspect    = img.width / img.height;
+            posState.scale = (imgAspect > targetAspect)
+                ? (TARGET_H / img.height)   // wider than target → scale by height
+                : (TARGET_W / img.width);   // taller than target → scale by width
+            posState.pct.x = (opts.startPct && typeof opts.startPct.x === 'number') ? opts.startPct.x : 50;
+            posState.pct.y = (opts.startPct && typeof opts.startPct.y === 'number') ? opts.startPct.y : 50;
+            clampPct();
+            applyHintForOverflow();
+            drawPosition();
+            showStep(stepPosition);
+        };
+        img.onerror = function() {
+            URL.revokeObjectURL(url);
+            showError('Could not load image. Please try a different file.');
+        };
+        img.src = url;
+    }
+
+    function bindPositionDrag() {
+        if (!posCanvas) return;
+        var rect, startClient, startPct;
+        function onDown(e) {
+            if (!posState.img) return;
+            e.preventDefault();
+            rect = posCanvas.getBoundingClientRect();
+            var p = e.touches ? e.touches[0] : e;
+            startClient = { x: p.clientX, y: p.clientY };
+            startPct    = { x: posState.pct.x, y: posState.pct.y };
+            posState.dragging = true;
+        }
+        function onMove(e) {
+            if (!posState.dragging) return;
+            e.preventDefault();
+            var p = e.touches ? e.touches[0] : e;
+            // Map screen px delta → target px delta → percentage delta.
+            // Sign flip: dragging the image to the RIGHT means showing more
+            // of the LEFT side, which is pct.x → 0.
+            var info = pctToPx();
+            var dxScreenToTarget = TARGET_W / rect.width;
+            var dyScreenToTarget = TARGET_H / rect.height;
+            var dxTarget = (p.clientX - startClient.x) * dxScreenToTarget;
+            var dyTarget = (p.clientY - startClient.y) * dyScreenToTarget;
+            if (info.overflowX > 0) posState.pct.x = startPct.x - (dxTarget / info.overflowX) * 100;
+            if (info.overflowY > 0) posState.pct.y = startPct.y - (dyTarget / info.overflowY) * 100;
+            clampPct();
+            drawPosition();
+        }
+        function onUp() { posState.dragging = false; }
+        posCanvas.addEventListener('mousedown',  onDown);
+        posCanvas.addEventListener('touchstart', onDown, { passive: false });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('mouseup',   onUp);
+        window.addEventListener('touchend',  onUp);
+    }
+    bindPositionDrag();
+
+    function showPosError(msg) { if (posErrorEl) { posErrorEl.textContent = msg; posErrorEl.style.display = ''; } }
+    function clearPosError()   { if (posErrorEl) { posErrorEl.style.display = 'none'; posErrorEl.textContent = ''; } }
+
+    if (posBackBtn) posBackBtn.addEventListener('click', function() {
+        clearPosError();
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        showStep(stepSelect);
+    });
+
+    if (posConfirmBtn) posConfirmBtn.addEventListener('click', function() {
+        if (!posState.img) return;
+        clearPosError();
+        posConfirmBtn.disabled = true;
+        var offX = Math.round(posState.pct.x);
+        var offY = Math.round(posState.pct.y);
+        // From Adjust: image unchanged, just persist new offsets + toggles.
+        if (posState.fromAdjust) {
+            showStep(stepUploading);
+            postConfigWithOffsets(offX, offY, function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    showStep(stepPosition);
+                    posConfirmBtn.disabled = false;
+                    showPosError(err || 'Save failed.');
+                }
+            });
+            return;
+        }
+        // Fresh upload path: send the source blob untouched along with the
+        // chosen offsets. Server stores the file as-is (no re-encode here);
+        // resizeImageToLimit will downscale only if it exceeds 1 MB.
+        var blob = posState.sourceBlob;
+        var isPng = posState.isPng;
+        function send(b) { doUpload(b, isPng, offX, offY); }
+        if (blob.size > BANNER_BYTE_LIMIT) {
+            if (resizeNote) resizeNote.textContent = 'Resizing…';
+            resizeImageToLimit(blob, BANNER_BYTE_LIMIT, send, function(err) {
+                posConfirmBtn.disabled = false;
+                showPosError(err);
+            }, isPng);
+        } else {
+            send(blob);
+        }
+    });
+
+    fileInput.addEventListener('change', function() {
+        var file = this.files && this.files[0];
+        if (!file) return;
+        var ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (['jpg','jpeg','png'].indexOf(ext) < 0) {
+            showError('Invalid file type. Please use JPG or PNG.');
+            this.value = '';
+            return;
+        }
+        clearError();
+        clearPosError();
+        var isPng = (file.type === 'image/png' || ext === 'png');
+        loadIntoPositionStep(file, isPng);
+    });
+})();
+
+
+// ── Player banner ─────────────────────────────────── //
+(function() {
+    if (typeof PnBannerConfig === 'undefined' || !PnBannerConfig.canManage) return;
+
+    // Hoisted to be safe even if later setup throws.
+    window.pnOpenBannerModal = function() {
+        if (!overlay) return;
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        clearError();
+        // I6 fix: refresh modal title based on current bannerUrl state
+        var titleEl = document.getElementById('pn-banner-modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = '<i class="fas fa-image" style="margin-right:8px"></i>' +
+                (PnBannerConfig.bannerUrl ? 'Update Banner Image' : 'Add Banner Image');
+        }
+        // Reset toggles to current persisted config
+        if (showLogoCb) showLogoCb.checked = !!PnBannerConfig.bannerShowLogo;
+        if (vignetteCb) vignetteCb.checked = !!PnBannerConfig.bannerVignette;
+        showStep(stepSelect);
+        overlay.classList.add('pn-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window.pnCloseBannerModal = function() {
+        if (!overlay) return;
+        overlay.classList.remove('pn-open');
+        document.body.style.overflow = '';
+    };
+
+    var BANNER_BYTE_LIMIT = 1024 * 1024; // 1 MB
+    var UPLOAD_URL = PnBannerConfig.uir + 'PlayerAjax/banner/' + PnBannerConfig.entityId + '/update';
+    var REMOVE_URL = PnBannerConfig.uir + 'PlayerAjax/banner/' + PnBannerConfig.entityId + '/remove';
+    var CONFIG_URL = PnBannerConfig.uir + 'PlayerAjax/banner/' + PnBannerConfig.entityId + '/config';
+
+    function gid(id) { return document.getElementById(id); }
+
+    var TARGET_W = 1800, TARGET_H = 240;
+
+    var overlay     = gid('pn-banner-overlay');
+    var fileInput   = gid('pn-banner-file-input');
+    var showLogoCb  = gid('pn-banner-show-logo');
+    var vignetteCb  = gid('pn-banner-vignette');
+    var resizeNote  = gid('pn-banner-resize-notice');
+    var errorEl     = gid('pn-banner-error');
+    var stepSelect  = gid('pn-banner-step-select');
+    var stepPosition  = gid('pn-banner-step-position');
+    var stepUploading = gid('pn-banner-step-uploading');
+    var stepSuccess = gid('pn-banner-step-success');
+    var saveCfgBtn  = gid('pn-banner-save-config-btn');
+    var removeBtn   = gid('pn-banner-remove-btn');
+    var adjustBtn   = gid('pn-banner-adjust-btn');
+    var closeBtn    = gid('pn-banner-close-btn');
+    var posCanvas       = gid('pn-banner-position-canvas');
+    var posBackBtn      = gid('pn-banner-position-back-btn');
+    var posConfirmBtn   = gid('pn-banner-position-confirm-btn');
+    var posHintText     = gid('pn-banner-position-hint-text');
+    var posErrorEl      = gid('pn-banner-position-error');
+    if (!overlay || !fileInput) return;
+
+    function showStep(active) {
+        [stepSelect, stepPosition, stepUploading, stepSuccess].forEach(function(el) {
+            if (el) el.style.display = (el === active) ? '' : 'none';
+        });
+    }
+    function showError(msg) { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; } }
+    function clearError()   { if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; } }
+
+
+    if (closeBtn) closeBtn.addEventListener('click', pnCloseBannerModal);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) pnCloseBannerModal(); });
+    document.addEventListener('keydown', function(e) {
+        if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('pn-open')) pnCloseBannerModal();
+    });
+
+    function postConfigWithOffsets(offX, offY, cb) {
+        var fd = new FormData();
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(offX));
+        fd.append('OffsetY', String(offY));
+        fetch(CONFIG_URL, { method: 'POST', body: fd })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function(result) {
+                cb(!!(result && result.status === 0), result && result.error);
+            })
+            .catch(function() { cb(false, 'Request failed.'); });
+    }
+
+    if (saveCfgBtn) saveCfgBtn.addEventListener('click', function() {
+        clearError();
+        saveCfgBtn.disabled = true;
+        // If the user has loaded an image into the position step (e.g. via
+        // "Adjust Image Framing"), use the live canvas offsets so partial
+        // re-framing isn't silently discarded in favor of stale persisted values.
+        var useLive = !!(posState && posState.img);
+        var offX = useLive
+            ? Math.round(posState.pct.x)
+            : ((typeof PnBannerConfig.bannerOffsetX === 'number') ? PnBannerConfig.bannerOffsetX : 50);
+        var offY = useLive
+            ? Math.round(posState.pct.y)
+            : ((typeof PnBannerConfig.bannerOffsetY === 'number') ? PnBannerConfig.bannerOffsetY : 50);
+        postConfigWithOffsets(offX, offY, function(ok, err) {
+            if (ok) {
+                showStep(stepSuccess);
+                setTimeout(function() { window.location.reload(); }, 900);
+            } else {
+                saveCfgBtn.disabled = false;
+                showError(err || 'Save failed.');
+            }
+        });
+    });
+
+    // "Adjust Image Framing" loads the saved banner (now stored uncropped)
+    // back into the position tool with the current offsets pre-applied so
+    // the user can re-frame without re-uploading. On confirm we send only
+    // the offsets via /config — no image bytes go over the wire.
+    if (adjustBtn) adjustBtn.addEventListener('click', function() {
+        var url = PnBannerConfig.bannerUrl;
+        if (!url) { showError('No banner image to adjust.'); return; }
+        clearError();
+        adjustBtn.disabled = true;
+        fetch(url, { cache: 'no-store' })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+            })
+            .then(function(blob) {
+                adjustBtn.disabled = false;
+                var isPng = (blob.type === 'image/png') || /\.png(\?|$)/i.test(url);
+                if (resizeNote) resizeNote.textContent = '';
+                loadIntoPositionStep(blob, isPng, {
+                    fromAdjust: true,
+                    startPct: {
+                        x: (typeof PnBannerConfig.bannerOffsetX === 'number') ? PnBannerConfig.bannerOffsetX : 50,
+                        y: (typeof PnBannerConfig.bannerOffsetY === 'number') ? PnBannerConfig.bannerOffsetY : 50
+                    }
+                });
+            })
+            .catch(function(err) {
+                adjustBtn.disabled = false;
+                showError('Could not load current banner: ' + err.message);
+            });
+    });
+
+    if (removeBtn) removeBtn.addEventListener('click', function() {
+        bannerConfirm('Remove banner', 'Remove the banner image? This cannot be undone.', function() {
+            removeBtn.disabled = true;
+            fetch(REMOVE_URL, { method: 'POST' })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function(result) {
+                    if (result && result.status === 0) {
+                        showStep(stepSuccess);
+                        setTimeout(function() { window.location.reload(); }, 900);
+                    } else {
+                        removeBtn.disabled = false;
+                        showError((result && result.error) || 'Remove failed.');
+                    }
+                })
+                .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        });
+    });
+
+    function doUpload(blob, isPng, offX, offY) {
+        showStep(stepUploading);
+        var fd = new FormData();
+        var name = isPng ? 'banner.png' : 'banner.jpg';
+        // Force the MIME on resized blobs so the server's whitelist matches.
+        if (blob && !blob.type) {
+            try { blob = new Blob([blob], { type: isPng ? 'image/png' : 'image/jpeg' }); } catch (e) {}
+        }
+        fd.append('Banner', blob, name);
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
+        fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
+        fetch(UPLOAD_URL, { method: 'POST', body: fd })
+            .then(function(r) {
+                if (!r.ok) {
+                    var msg = (r.status === 413) ? 'File too large (server limit).' : 'Upload failed (HTTP ' + r.status + ').';
+                    throw new Error(msg);
+                }
+                return r.json();
+            })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 1200);
+                } else {
+                    showStep(stepSelect);
+                    if (posConfirmBtn) posConfirmBtn.disabled = false;
+                    showError((result && result.error) || 'Upload failed.');
+                }
+            })
+            .catch(function(err) {
+                showStep(stepSelect);
+                if (posConfirmBtn) posConfirmBtn.disabled = false;
+                showError('Upload failed: ' + err.message);
+            });
+    }
+
+    // ---- Position step ----
+    // Source image is saved uncropped server-side; the framing is stored as
+    // background-position percentages (0–100 on each axis). posState.pct
+    // holds the current percentages; the canvas draws the image at cover-fit
+    // scale with the same crop semantics that CSS background-position will
+    // apply on display, so the position step is WYSIWYG.
+    //
+    // `sourceBlob` is the original file we will upload. `fromAdjust` flags
+    // the case where we loaded the existing banner from the server — on
+    // commit we send only the offsets via /config (no re-upload).
+    var posState = {
+        img: null, isPng: false,
+        sourceBlob: null, fromAdjust: false,
+        scale: 1, pct: { x: 50, y: 50 },
+        dragging: false
+    };
+
+    // Translate offset percentage → pixel position of image on the TARGET frame.
+    // pct=0   → image's 0%  point aligned with frame's 0%  point (left/top)
+    // pct=100 → image's 100% point aligned with frame's 100% point (right/bottom)
+    // CSS background-position uses the same convention.
+    function pctToPx() {
+        var img = posState.img;
+        var scaledW = img.width  * posState.scale;
+        var scaledH = img.height * posState.scale;
+        var overflowX = scaledW - TARGET_W; // ≥0
+        var overflowY = scaledH - TARGET_H; // ≥0
+        return {
+            x: -overflowX * (posState.pct.x / 100),
+            y: -overflowY * (posState.pct.y / 100),
+            overflowX: overflowX, overflowY: overflowY,
+            scaledW: scaledW, scaledH: scaledH
+        };
+    }
+    function clampPct() {
+        if (posState.pct.x < 0) posState.pct.x = 0;
+        if (posState.pct.x > 100) posState.pct.x = 100;
+        if (posState.pct.y < 0) posState.pct.y = 0;
+        if (posState.pct.y > 100) posState.pct.y = 100;
+    }
+
+    function drawPosition() {
+        if (!posCanvas || !posState.img) return;
+        var ctx = posCanvas.getContext('2d');
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, posCanvas.width, posCanvas.height);
+        var p = pctToPx();
+        ctx.drawImage(
+            posState.img,
+            Math.round(p.x), Math.round(p.y),
+            Math.round(p.scaledW), Math.round(p.scaledH)
+        );
+    }
+
+    function applyHintForOverflow() {
+        if (!posHintText) return;
+        var p = pctToPx();
+        if (p.overflowX < 1 && p.overflowY < 1) {
+            posHintText.textContent = 'Image already fits — nothing to re-frame.';
+        } else if (p.overflowX > p.overflowY) {
+            posHintText.textContent = 'Drag left or right to choose what shows.';
+        } else {
+            posHintText.textContent = 'Drag up or down to choose what shows.';
+        }
+    }
+
+    // `opts.fromAdjust` → don't re-upload, just save offsets.
+    // `opts.startPct`   → initial percentages (used when re-loading the saved
+    //                      banner so the canvas reflects the current framing).
+    function loadIntoPositionStep(file, isPng, opts) {
+        opts = opts || {};
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function() {
+            URL.revokeObjectURL(url);
+            posState.img        = img;
+            posState.isPng      = isPng;
+            posState.sourceBlob = file;
+            posState.fromAdjust = !!opts.fromAdjust;
+            // Cover-fit: scale so the image fully covers the target frame.
+            var targetAspect = TARGET_W / TARGET_H;
+            var imgAspect    = img.width / img.height;
+            posState.scale = (imgAspect > targetAspect)
+                ? (TARGET_H / img.height)   // wider than target → scale by height
+                : (TARGET_W / img.width);   // taller than target → scale by width
+            posState.pct.x = (opts.startPct && typeof opts.startPct.x === 'number') ? opts.startPct.x : 50;
+            posState.pct.y = (opts.startPct && typeof opts.startPct.y === 'number') ? opts.startPct.y : 50;
+            clampPct();
+            applyHintForOverflow();
+            drawPosition();
+            showStep(stepPosition);
+        };
+        img.onerror = function() {
+            URL.revokeObjectURL(url);
+            showError('Could not load image. Please try a different file.');
+        };
+        img.src = url;
+    }
+
+    function bindPositionDrag() {
+        if (!posCanvas) return;
+        var rect, startClient, startPct;
+        function onDown(e) {
+            if (!posState.img) return;
+            e.preventDefault();
+            rect = posCanvas.getBoundingClientRect();
+            var p = e.touches ? e.touches[0] : e;
+            startClient = { x: p.clientX, y: p.clientY };
+            startPct    = { x: posState.pct.x, y: posState.pct.y };
+            posState.dragging = true;
+        }
+        function onMove(e) {
+            if (!posState.dragging) return;
+            e.preventDefault();
+            var p = e.touches ? e.touches[0] : e;
+            // Map screen px delta → target px delta → percentage delta.
+            // Sign flip: dragging the image to the RIGHT means showing more
+            // of the LEFT side, which is pct.x → 0.
+            var info = pctToPx();
+            var dxScreenToTarget = TARGET_W / rect.width;
+            var dyScreenToTarget = TARGET_H / rect.height;
+            var dxTarget = (p.clientX - startClient.x) * dxScreenToTarget;
+            var dyTarget = (p.clientY - startClient.y) * dyScreenToTarget;
+            if (info.overflowX > 0) posState.pct.x = startPct.x - (dxTarget / info.overflowX) * 100;
+            if (info.overflowY > 0) posState.pct.y = startPct.y - (dyTarget / info.overflowY) * 100;
+            clampPct();
+            drawPosition();
+        }
+        function onUp() { posState.dragging = false; }
+        posCanvas.addEventListener('mousedown',  onDown);
+        posCanvas.addEventListener('touchstart', onDown, { passive: false });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('mouseup',   onUp);
+        window.addEventListener('touchend',  onUp);
+    }
+    bindPositionDrag();
+
+    function showPosError(msg) { if (posErrorEl) { posErrorEl.textContent = msg; posErrorEl.style.display = ''; } }
+    function clearPosError()   { if (posErrorEl) { posErrorEl.style.display = 'none'; posErrorEl.textContent = ''; } }
+
+    if (posBackBtn) posBackBtn.addEventListener('click', function() {
+        clearPosError();
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        showStep(stepSelect);
+    });
+
+    if (posConfirmBtn) posConfirmBtn.addEventListener('click', function() {
+        if (!posState.img) return;
+        clearPosError();
+        posConfirmBtn.disabled = true;
+        var offX = Math.round(posState.pct.x);
+        var offY = Math.round(posState.pct.y);
+        // From Adjust: image unchanged, just persist new offsets + toggles.
+        if (posState.fromAdjust) {
+            showStep(stepUploading);
+            postConfigWithOffsets(offX, offY, function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    showStep(stepPosition);
+                    posConfirmBtn.disabled = false;
+                    showPosError(err || 'Save failed.');
+                }
+            });
+            return;
+        }
+        // Fresh upload path: send the source blob untouched along with the
+        // chosen offsets. Server stores the file as-is (no re-encode here);
+        // resizeImageToLimit will downscale only if it exceeds 1 MB.
+        var blob = posState.sourceBlob;
+        var isPng = posState.isPng;
+        function send(b) { doUpload(b, isPng, offX, offY); }
+        if (blob.size > BANNER_BYTE_LIMIT) {
+            if (resizeNote) resizeNote.textContent = 'Resizing…';
+            resizeImageToLimit(blob, BANNER_BYTE_LIMIT, send, function(err) {
+                posConfirmBtn.disabled = false;
+                showPosError(err);
+            }, isPng);
+        } else {
+            send(blob);
+        }
+    });
+
+    fileInput.addEventListener('change', function() {
+        var file = this.files && this.files[0];
+        if (!file) return;
+        var ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (['jpg','jpeg','png'].indexOf(ext) < 0) {
+            showError('Invalid file type. Please use JPG or PNG.');
+            this.value = '';
+            return;
+        }
+        clearError();
+        clearPosError();
+        var isPng = (file.type === 'image/png' || ext === 'png');
+        loadIntoPositionStep(file, isPng);
+    });
+})();
+
+
+// ── Unit banner ─────────────────────────────────── //
+(function() {
+    if (typeof UnBannerConfig === 'undefined' || !UnBannerConfig.canManage) return;
+
+    // Hoisted to be safe even if later setup throws.
+    window.unOpenBannerModal = function() {
+        if (!overlay) return;
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        clearError();
+        // Refresh modal title based on current bannerUrl state (matches kn pattern)
+        var titleEl = document.getElementById('un-banner-modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = '<i class="fas fa-image" style="margin-right:8px"></i>' +
+                (UnBannerConfig.bannerUrl ? 'Update Banner Image' : 'Add Banner Image');
+        }
+        // Reset toggles to current persisted config
+        if (showLogoCb) showLogoCb.checked = !!UnBannerConfig.bannerShowLogo;
+        if (vignetteCb) vignetteCb.checked = !!UnBannerConfig.bannerVignette;
+        showStep(stepSelect);
+        overlay.classList.add('un-open');
+        document.body.style.overflow = 'hidden';
+    };
+    window.unCloseBannerModal = function() {
+        if (!overlay) return;
+        overlay.classList.remove('un-open');
+        document.body.style.overflow = '';
+    };
+
+    var BANNER_BYTE_LIMIT = 1024 * 1024; // 1 MB
+    var UPLOAD_URL = UnBannerConfig.uir + 'UnitAjax/banner/' + UnBannerConfig.entityId + '/update';
+    var REMOVE_URL = UnBannerConfig.uir + 'UnitAjax/banner/' + UnBannerConfig.entityId + '/remove';
+    var CONFIG_URL = UnBannerConfig.uir + 'UnitAjax/banner/' + UnBannerConfig.entityId + '/config';
+
+    function gid(id) { return document.getElementById(id); }
+
+    var TARGET_W = 1800, TARGET_H = 240;
+
+    var overlay     = gid('un-banner-overlay');
+    var fileInput   = gid('un-banner-file-input');
+    var showLogoCb  = gid('un-banner-show-logo');
+    var vignetteCb  = gid('un-banner-vignette');
+    var resizeNote  = gid('un-banner-resize-notice');
+    var errorEl     = gid('un-banner-error');
+    var stepSelect  = gid('un-banner-step-select');
+    var stepPosition  = gid('un-banner-step-position');
+    var stepUploading = gid('un-banner-step-uploading');
+    var stepSuccess = gid('un-banner-step-success');
+    var saveCfgBtn  = gid('un-banner-save-config-btn');
+    var removeBtn   = gid('un-banner-remove-btn');
+    var adjustBtn   = gid('un-banner-adjust-btn');
+    var closeBtn    = gid('un-banner-close-btn');
+    var posCanvas       = gid('un-banner-position-canvas');
+    var posBackBtn      = gid('un-banner-position-back-btn');
+    var posConfirmBtn   = gid('un-banner-position-confirm-btn');
+    var posHintText     = gid('un-banner-position-hint-text');
+    var posErrorEl      = gid('un-banner-position-error');
+    if (!overlay || !fileInput) return;
+
+    function showStep(active) {
+        [stepSelect, stepPosition, stepUploading, stepSuccess].forEach(function(el) {
+            if (el) el.style.display = (el === active) ? '' : 'none';
+        });
+    }
+    function showError(msg) { if (errorEl) { errorEl.textContent = msg; errorEl.style.display = ''; } }
+    function clearError()   { if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; } }
+
+
+    if (closeBtn) closeBtn.addEventListener('click', unCloseBannerModal);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) unCloseBannerModal(); });
+    document.addEventListener('keydown', function(e) {
+        if ((e.key === 'Escape' || e.keyCode === 27) && overlay.classList.contains('un-open')) unCloseBannerModal();
+    });
+
+    function postConfigWithOffsets(offX, offY, cb) {
+        var fd = new FormData();
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(offX));
+        fd.append('OffsetY', String(offY));
+        fetch(CONFIG_URL, { method: 'POST', body: fd })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function(result) {
+                cb(!!(result && result.status === 0), result && result.error);
+            })
+            .catch(function() { cb(false, 'Request failed.'); });
+    }
+
+    if (saveCfgBtn) saveCfgBtn.addEventListener('click', function() {
+        clearError();
+        saveCfgBtn.disabled = true;
+        postConfigWithOffsets(
+            (typeof UnBannerConfig.bannerOffsetX === 'number') ? UnBannerConfig.bannerOffsetX : 50,
+            (typeof UnBannerConfig.bannerOffsetY === 'number') ? UnBannerConfig.bannerOffsetY : 50,
+            function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    saveCfgBtn.disabled = false;
+                    showError(err || 'Save failed.');
+                }
+            }
+        );
+    });
+
+    // "Adjust Image Framing" loads the saved banner (now stored uncropped)
+    // back into the position tool with the current offsets pre-applied so
+    // the user can re-frame without re-uploading. On confirm we send only
+    // the offsets via /config — no image bytes go over the wire.
+    if (adjustBtn) adjustBtn.addEventListener('click', function() {
+        var url = UnBannerConfig.bannerUrl;
+        if (!url) { showError('No banner image to adjust.'); return; }
+        clearError();
+        adjustBtn.disabled = true;
+        fetch(url, { cache: 'no-store' })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+            })
+            .then(function(blob) {
+                adjustBtn.disabled = false;
+                var isPng = (blob.type === 'image/png') || /\.png(\?|$)/i.test(url);
+                if (resizeNote) resizeNote.textContent = '';
+                loadIntoPositionStep(blob, isPng, {
+                    fromAdjust: true,
+                    startPct: {
+                        x: (typeof UnBannerConfig.bannerOffsetX === 'number') ? UnBannerConfig.bannerOffsetX : 50,
+                        y: (typeof UnBannerConfig.bannerOffsetY === 'number') ? UnBannerConfig.bannerOffsetY : 50
+                    }
+                });
+            })
+            .catch(function(err) {
+                adjustBtn.disabled = false;
+                showError('Could not load current banner: ' + err.message);
+            });
+    });
+
+    if (removeBtn) removeBtn.addEventListener('click', function() {
+        bannerConfirm('Remove banner', 'Remove the banner image? This cannot be undone.', function() {
+            removeBtn.disabled = true;
+            fetch(REMOVE_URL, { method: 'POST' })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function(result) {
+                    if (result && result.status === 0) {
+                        showStep(stepSuccess);
+                        setTimeout(function() { window.location.reload(); }, 900);
+                    } else {
+                        removeBtn.disabled = false;
+                        showError((result && result.error) || 'Remove failed.');
+                    }
+                })
+                .catch(function() { removeBtn.disabled = false; showError('Request failed.'); });
+        });
+    });
+
+    function doUpload(blob, isPng, offX, offY) {
+        showStep(stepUploading);
+        var fd = new FormData();
+        var name = isPng ? 'banner.png' : 'banner.jpg';
+        // Force the MIME on resized blobs so the server's whitelist matches.
+        if (blob && !blob.type) {
+            try { blob = new Blob([blob], { type: isPng ? 'image/png' : 'image/jpeg' }); } catch (e) {}
+        }
+        fd.append('Banner', blob, name);
+        fd.append('ShowLogo', showLogoCb && showLogoCb.checked ? '1' : '0');
+        fd.append('Vignette', vignetteCb && vignetteCb.checked ? '1' : '0');
+        fd.append('OffsetX', String(typeof offX === 'number' ? offX : 50));
+        fd.append('OffsetY', String(typeof offY === 'number' ? offY : 50));
+        fetch(UPLOAD_URL, { method: 'POST', body: fd })
+            .then(function(r) {
+                if (!r.ok) {
+                    var msg = (r.status === 413) ? 'File too large (server limit).' : 'Upload failed (HTTP ' + r.status + ').';
+                    throw new Error(msg);
+                }
+                return r.json();
+            })
+            .then(function(result) {
+                if (result && result.status === 0) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 1200);
+                } else {
+                    showStep(stepSelect);
+                    if (posConfirmBtn) posConfirmBtn.disabled = false;
+                    showError((result && result.error) || 'Upload failed.');
+                }
+            })
+            .catch(function(err) {
+                showStep(stepSelect);
+                if (posConfirmBtn) posConfirmBtn.disabled = false;
+                showError('Upload failed: ' + err.message);
+            });
+    }
+
+    // ---- Position step ----
+    // Source image is saved uncropped server-side; the framing is stored as
+    // background-position percentages (0–100 on each axis). posState.pct
+    // holds the current percentages; the canvas draws the image at cover-fit
+    // scale with the same crop semantics that CSS background-position will
+    // apply on display, so the position step is WYSIWYG.
+    //
+    // `sourceBlob` is the original file we will upload. `fromAdjust` flags
+    // the case where we loaded the existing banner from the server — on
+    // commit we send only the offsets via /config (no re-upload).
+    var posState = {
+        img: null, isPng: false,
+        sourceBlob: null, fromAdjust: false,
+        scale: 1, pct: { x: 50, y: 50 },
+        dragging: false
+    };
+
+    // Translate offset percentage → pixel position of image on the TARGET frame.
+    // pct=0   → image's 0%  point aligned with frame's 0%  point (left/top)
+    // pct=100 → image's 100% point aligned with frame's 100% point (right/bottom)
+    // CSS background-position uses the same convention.
+    function pctToPx() {
+        var img = posState.img;
+        var scaledW = img.width  * posState.scale;
+        var scaledH = img.height * posState.scale;
+        var overflowX = scaledW - TARGET_W; // ≥0
+        var overflowY = scaledH - TARGET_H; // ≥0
+        return {
+            x: -overflowX * (posState.pct.x / 100),
+            y: -overflowY * (posState.pct.y / 100),
+            overflowX: overflowX, overflowY: overflowY,
+            scaledW: scaledW, scaledH: scaledH
+        };
+    }
+    function clampPct() {
+        if (posState.pct.x < 0) posState.pct.x = 0;
+        if (posState.pct.x > 100) posState.pct.x = 100;
+        if (posState.pct.y < 0) posState.pct.y = 0;
+        if (posState.pct.y > 100) posState.pct.y = 100;
+    }
+
+    function drawPosition() {
+        if (!posCanvas || !posState.img) return;
+        var ctx = posCanvas.getContext('2d');
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, posCanvas.width, posCanvas.height);
+        var p = pctToPx();
+        ctx.drawImage(
+            posState.img,
+            Math.round(p.x), Math.round(p.y),
+            Math.round(p.scaledW), Math.round(p.scaledH)
+        );
+    }
+
+    function applyHintForOverflow() {
+        if (!posHintText) return;
+        var p = pctToPx();
+        if (p.overflowX < 1 && p.overflowY < 1) {
+            posHintText.textContent = 'Image already fits — nothing to re-frame.';
+        } else if (p.overflowX > p.overflowY) {
+            posHintText.textContent = 'Drag left or right to choose what shows.';
+        } else {
+            posHintText.textContent = 'Drag up or down to choose what shows.';
+        }
+    }
+
+    // `opts.fromAdjust` → don't re-upload, just save offsets.
+    // `opts.startPct`   → initial percentages (used when re-loading the saved
+    //                      banner so the canvas reflects the current framing).
+    function loadIntoPositionStep(file, isPng, opts) {
+        opts = opts || {};
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function() {
+            URL.revokeObjectURL(url);
+            posState.img        = img;
+            posState.isPng      = isPng;
+            posState.sourceBlob = file;
+            posState.fromAdjust = !!opts.fromAdjust;
+            // Cover-fit: scale so the image fully covers the target frame.
+            var targetAspect = TARGET_W / TARGET_H;
+            var imgAspect    = img.width / img.height;
+            posState.scale = (imgAspect > targetAspect)
+                ? (TARGET_H / img.height)   // wider than target → scale by height
+                : (TARGET_W / img.width);   // taller than target → scale by width
+            posState.pct.x = (opts.startPct && typeof opts.startPct.x === 'number') ? opts.startPct.x : 50;
+            posState.pct.y = (opts.startPct && typeof opts.startPct.y === 'number') ? opts.startPct.y : 50;
+            clampPct();
+            applyHintForOverflow();
+            drawPosition();
+            showStep(stepPosition);
+        };
+        img.onerror = function() {
+            URL.revokeObjectURL(url);
+            showError('Could not load image. Please try a different file.');
+        };
+        img.src = url;
+    }
+
+    function bindPositionDrag() {
+        if (!posCanvas) return;
+        var rect, startClient, startPct;
+        function onDown(e) {
+            if (!posState.img) return;
+            e.preventDefault();
+            rect = posCanvas.getBoundingClientRect();
+            var p = e.touches ? e.touches[0] : e;
+            startClient = { x: p.clientX, y: p.clientY };
+            startPct    = { x: posState.pct.x, y: posState.pct.y };
+            posState.dragging = true;
+        }
+        function onMove(e) {
+            if (!posState.dragging) return;
+            e.preventDefault();
+            var p = e.touches ? e.touches[0] : e;
+            // Map screen px delta → target px delta → percentage delta.
+            // Sign flip: dragging the image to the RIGHT means showing more
+            // of the LEFT side, which is pct.x → 0.
+            var info = pctToPx();
+            var dxScreenToTarget = TARGET_W / rect.width;
+            var dyScreenToTarget = TARGET_H / rect.height;
+            var dxTarget = (p.clientX - startClient.x) * dxScreenToTarget;
+            var dyTarget = (p.clientY - startClient.y) * dyScreenToTarget;
+            if (info.overflowX > 0) posState.pct.x = startPct.x - (dxTarget / info.overflowX) * 100;
+            if (info.overflowY > 0) posState.pct.y = startPct.y - (dyTarget / info.overflowY) * 100;
+            clampPct();
+            drawPosition();
+        }
+        function onUp() { posState.dragging = false; }
+        posCanvas.addEventListener('mousedown',  onDown);
+        posCanvas.addEventListener('touchstart', onDown, { passive: false });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('mouseup',   onUp);
+        window.addEventListener('touchend',  onUp);
+    }
+    bindPositionDrag();
+
+    function showPosError(msg) { if (posErrorEl) { posErrorEl.textContent = msg; posErrorEl.style.display = ''; } }
+    function clearPosError()   { if (posErrorEl) { posErrorEl.style.display = 'none'; posErrorEl.textContent = ''; } }
+
+    if (posBackBtn) posBackBtn.addEventListener('click', function() {
+        clearPosError();
+        if (fileInput) fileInput.value = '';
+        if (resizeNote) resizeNote.textContent = '';
+        showStep(stepSelect);
+    });
+
+    if (posConfirmBtn) posConfirmBtn.addEventListener('click', function() {
+        if (!posState.img) return;
+        clearPosError();
+        posConfirmBtn.disabled = true;
+        var offX = Math.round(posState.pct.x);
+        var offY = Math.round(posState.pct.y);
+        // From Adjust: image unchanged, just persist new offsets + toggles.
+        if (posState.fromAdjust) {
+            showStep(stepUploading);
+            postConfigWithOffsets(offX, offY, function(ok, err) {
+                if (ok) {
+                    showStep(stepSuccess);
+                    setTimeout(function() { window.location.reload(); }, 900);
+                } else {
+                    showStep(stepPosition);
+                    posConfirmBtn.disabled = false;
+                    showPosError(err || 'Save failed.');
+                }
+            });
+            return;
+        }
+        // Fresh upload path: send the source blob untouched along with the
+        // chosen offsets. Server stores the file as-is (no re-encode here);
+        // resizeImageToLimit will downscale only if it exceeds 1 MB.
+        var blob = posState.sourceBlob;
+        var isPng = posState.isPng;
+        function send(b) { doUpload(b, isPng, offX, offY); }
+        if (blob.size > BANNER_BYTE_LIMIT) {
+            if (resizeNote) resizeNote.textContent = 'Resizing…';
+            resizeImageToLimit(blob, BANNER_BYTE_LIMIT, send, function(err) {
+                posConfirmBtn.disabled = false;
+                showPosError(err);
+            }, isPng);
+        } else {
+            send(blob);
+        }
+    });
+
+    fileInput.addEventListener('change', function() {
+        var file = this.files && this.files[0];
+        if (!file) return;
+        var ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (['jpg','jpeg','png'].indexOf(ext) < 0) {
+            showError('Invalid file type. Please use JPG or PNG.');
+            this.value = '';
+            return;
+        }
+        clearError();
+        clearPosError();
+        var isPng = (file.type === 'image/png' || ext === 'png');
+        loadIntoPositionStep(file, isPng);
+    });
+})();
+
+/* ============================================================================
+   Kingdomnew — Copy From Past Event (kn-cfe-*)
+   Wires the collapsible section inside #kn-event-modal that lets the host
+   pick a prior in-scope event, dates, and modules to copy. On submit it
+   bypasses the stub-create + redirect path and instead POSTs everything to
+   EventAjax/create_with_copy, landing the user directly on the new event's
+   detail page.
+   IIFE guarded by KnConfig — never by getElementById (modal markup may not
+   yet be in the DOM when this script first loads).
+   ============================================================================ */
+(function() {
+    if (typeof KnConfig === 'undefined' || !KnConfig.kingdomId) return;
+
+    var SRC_URL = KnConfig.uir + 'EventAjax/copy_source_list';
+    var GO_URL  = KnConfig.uir + 'EventAjax/create_with_copy';
+    var CFE_DEBOUNCE_MS = 200;
+    var DELTA_MS_DEFAULT = 0;
+    var pickerStart = null;
+    var pickerEnd   = null;
+    var debounceTimer = null;
+    var lastQuery = null; // null = never searched; '' = empty search done
+
+    function gid(id) { return document.getElementById(id); }
+    function fireInput(el) {
+        if (!el) return;
+        try { el.dispatchEvent(new Event('input',  { bubbles: true })); } catch(e) {}
+        try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch(e) {}
+    }
+
+    // Modal-safe positioning for the typeahead results: the parent modal has
+    // overflow:hidden, so the default position:absolute on .kn-ac-results gets
+    // clipped. Switch to position:fixed and pin to the input's bounding rect.
+    // Also re-pin on scroll/resize while the dropdown is open.
+    var _knCfeReposBound = false;
+    function knCfePositionResults() {
+        var input = gid('kn-cfe-search');
+        var box   = gid('kn-cfe-results');
+        if (!input || !box) return;
+        box.style.position = 'fixed';
+        box.style.zIndex   = '10000';
+        tnPositionAcFixed(input, box);
+    }
+    function knCfeBindReposition() {
+        if (_knCfeReposBound) return;
+        _knCfeReposBound = true;
+        var handler = function() {
+            var box = gid('kn-cfe-results');
+            if (box && box.classList.contains('kn-ac-open')) knCfePositionResults();
+        };
+        window.addEventListener('scroll', handler, true);
+        window.addEventListener('resize', handler);
+    }
+
+    window.knCfeToggleExpander = function() {
+        var body = gid('kn-cfe-body');
+        var btn  = gid('kn-cfe-toggle');
+        if (!body || !btn) return;
+        var open = body.style.display !== 'none';
+        body.style.display = open ? 'none' : '';
+        btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+        if (!open) {
+            setTimeout(function() { var s = gid('kn-cfe-search'); if (s) s.focus(); }, 50);
+        }
+    };
+
+    function fmtDate(s) {
+        if (!s) return '';
+        var d = new Date(s.replace(' ', 'T'));
+        if (isNaN(d.getTime())) return s;
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function renderResults(rows) {
+        var box = gid('kn-cfe-results');
+        var input = gid('kn-cfe-search');
+        if (!box || !input) return;
+        box.innerHTML = '';
+        if (!rows || rows.length === 0) {
+            box.innerHTML = '<div class="kn-ac-empty">No matching past events</div>';
+            knCfePositionResults();
+            knCfeBindReposition();
+            box.classList.add('kn-ac-open');
+            return;
+        }
+        rows.forEach(function(r) {
+            var row = document.createElement('div');
+            row.className = 'kn-ac-row';
+            var occ = r.occurrenceCount > 1 ? (' · ' + r.occurrenceCount + ' occurrences') : '';
+            row.innerHTML = '<div class="kn-ac-row-title"></div><div class="kn-ac-row-meta"></div>';
+            row.querySelector('.kn-ac-row-title').textContent = r.name;
+            row.querySelector('.kn-ac-row-meta').textContent  = fmtDate(r.lastStart) + occ;
+            row.addEventListener('mousedown', function(e) { e.preventDefault(); knCfePick(r); });
+            box.appendChild(row);
+        });
+        knCfePositionResults();
+        knCfeBindReposition();
+        box.classList.add('kn-ac-open');
+    }
+
+    function runSearch(q) {
+        var params = '&KingdomId=' + encodeURIComponent(KnConfig.kingdomId) + '&Query=' + encodeURIComponent(q);
+        fetch(SRC_URL + params, { credentials: 'same-origin' })
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(d) {
+                if (!d || d.status !== 0) { renderResults([]); return; }
+                var rows = d.results || [];
+                // Empty query (initial focus) → show only the 3 most recent as a teaser.
+                if (q === '') rows = rows.slice(0, 3);
+                renderResults(rows);
+            })
+            .catch(function() { renderResults([]); });
+    }
+
+    function onSearchInput() {
+        var input = gid('kn-cfe-search');
+        var q = input ? input.value.trim() : '';
+        if (debounceTimer) clearTimeout(debounceTimer);
+        if (q === lastQuery) return;
+        lastQuery = q;
+        debounceTimer = setTimeout(function() { runSearch(q); }, CFE_DEBOUNCE_MS);
+    }
+
+    window.knCfePick = function(srcRow) {
+        gid('kn-cfe-source-id').value    = srcRow.eventId;
+        gid('kn-cfe-source-start').value = srcRow.lastStart || '';
+        gid('kn-cfe-source-end').value   = srcRow.lastEnd   || '';
+        gid('kn-cfe-chip-label').textContent = srcRow.name + ' · ' + fmtDate(srcRow.lastStart);
+        gid('kn-cfe-chip').style.display = '';
+        gid('kn-cfe-picker-wrap').style.display = 'none';
+        gid('kn-cfe-detail').style.display = '';
+        gid('kn-cfe-results').classList.remove('kn-ac-open');
+
+        // Name prefill (only if user hasn't typed anything yet)
+        var nameEl = gid('kn-event-name');
+        if (nameEl && nameEl.value.trim() === '') {
+            var yr = new Date().getFullYear();
+            nameEl.value = srcRow.name + ' ' + yr;
+            fireInput(nameEl);
+        }
+
+        // Compute delta from source occurrence and reset pickers.
+        var sStart = srcRow.lastStart ? new Date(srcRow.lastStart.replace(' ', 'T')) : null;
+        var sEnd   = srcRow.lastEnd   ? new Date(srcRow.lastEnd.replace(' ', 'T'))   : null;
+        DELTA_MS_DEFAULT = (sStart && sEnd && !isNaN(sStart) && !isNaN(sEnd)) ? (sEnd.getTime() - sStart.getTime()) : 0;
+        initPickers();
+    };
+
+    window.knCfeClear = function() {
+        gid('kn-cfe-source-id').value    = '';
+        gid('kn-cfe-source-start').value = '';
+        gid('kn-cfe-source-end').value   = '';
+        gid('kn-cfe-chip').style.display = 'none';
+        gid('kn-cfe-picker-wrap').style.display = '';
+        gid('kn-cfe-detail').style.display = 'none';
+        var s = gid('kn-cfe-search'); if (s) { s.value = ''; lastQuery = null; }
+    };
+
+    function initPickers() {
+        if (typeof flatpickr !== 'function') return;
+        var startEl = gid('kn-cfe-start');
+        var endEl   = gid('kn-cfe-end');
+        if (!startEl || !endEl) return;
+        if (startEl._flatpickr) startEl._flatpickr.destroy();
+        if (endEl._flatpickr)   endEl._flatpickr.destroy();
+        var opts = {
+            enableTime: true, dateFormat: 'Y-m-d H:i',
+            altInput: true,  altFormat: 'F j, Y  h:i K',
+            minuteIncrement: 5, time_24hr: false, allowInput: false
+        };
+        pickerEnd = flatpickr(endEl, opts);
+        pickerStart = flatpickr(startEl, Object.assign({}, opts, {
+            onChange: function(selDates) {
+                if (!selDates[0]) return;
+                var d = new Date(selDates[0].getTime() + DELTA_MS_DEFAULT);
+                pickerEnd.setDate(d, true);
+            }
+        }));
+    }
+
+    window.knCfeToggleAll = function(masterCb) {
+        document.querySelectorAll('.kn-cfe-mod').forEach(function(cb) { cb.checked = masterCb.checked; });
+    };
+    window.knCfeSyncAll = function() {
+        var all = gid('kn-cfe-mod-all');
+        if (!all) return;
+        var boxes = Array.from(document.querySelectorAll('.kn-cfe-mod'));
+        var checked = boxes.filter(function(cb) { return cb.checked; }).length;
+        all.checked = (checked === boxes.length);
+        all.indeterminate = (checked > 0 && checked < boxes.length);
+    };
+
+    // Submit override — replaces the default knCreateEvent path WHEN a source is selected.
+    function knCfeFeedback(msg) {
+        var el = document.getElementById('kn-emod-feedback');
+        if (el) { el.textContent = msg; el.style.display = ''; }
+        try { console.log('[knCfe]', msg); } catch(e) {}
+    }
+
+    var _origKnCreateEvent = window.knCreateEvent;
+    window.knCreateEvent = function(statusOverride) {
+        var srcEl = gid('kn-cfe-source-id');
+        var srcId = srcEl ? parseInt(srcEl.value || '0', 10) : 0;
+        try { console.log('[knCfe] create click — srcId:', srcId, 'statusOverride:', statusOverride); } catch(e) {}
+        if (!srcId) { if (_origKnCreateEvent) return _origKnCreateEvent(statusOverride); return; }
+
+        var name   = (gid('kn-event-name') || {}).value || '';
+        name = name.trim();
+        var parkId = parseInt((gid('kn-event-park-id') || {}).value || '0', 10);
+        var start  = (gid('kn-cfe-start') || {}).value || '';
+        var end    = (gid('kn-cfe-end')   || {}).value || '';
+        try { console.log('[knCfe] fields — name:', name, 'parkId:', parkId, 'start:', start, 'end:', end); } catch(e) {}
+        if (!name)  { knCfeFeedback('Event name is required.'); return; }
+        if (!start || !end) { knCfeFeedback('Start and end times are required.'); return; }
+
+        var btn  = gid('kn-emod-go-btn');
+        var dbtn = gid('kn-emod-draft-btn');
+        if (btn)  btn.disabled  = true;
+        if (dbtn) dbtn.disabled = true;
+
+        var status = (statusOverride === 'draft') ? 'draft' : 'published';
+        var modules = {
+            details:  gid('kn-cfe-mod-details').checked,
+            schedule: gid('kn-cfe-mod-schedule').checked,
+            staff:    gid('kn-cfe-mod-staff').checked,
+            feast:    gid('kn-cfe-mod-feast').checked,
+            banner:   gid('kn-cfe-mod-banner').checked
+        };
+
+        $.post(GO_URL, {
+            Name: name, KingdomId: KnConfig.kingdomId, ParkId: parkId,
+            SourceEventId: srcId, NewStart: start, NewEnd: end,
+            Modules: JSON.stringify(modules), Status: status
+        }, function(r) {
+            if (r && r.status === 0) {
+                if (r.warnings && r.warnings.length) {
+                    try { console.log('Copy completed with warnings:', r.warnings); } catch(e) {}
+                }
+                window.location.href = r.url;
+            } else {
+                knCfeFeedback((r && r.error) ? r.error : 'Failed to copy event.');
+                if (btn)  btn.disabled  = false;
+                if (dbtn) dbtn.disabled = false;
+            }
+        }, 'json').fail(function(xhr) {
+            try { console.error('[knCfe] POST failed:', xhr && xhr.status, xhr && xhr.responseText); } catch(e) {}
+            knCfeFeedback('Request failed. Please try again.');
+            if (btn)  btn.disabled  = false;
+            if (dbtn) dbtn.disabled = false;
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var s = gid('kn-cfe-search');
+        if (s) {
+            s.addEventListener('input', onSearchInput);
+            s.addEventListener('focus', function() { if (lastQuery === null) runSearch(''); });
+            s.addEventListener('blur',  function() { setTimeout(function() { var b = gid('kn-cfe-results'); if (b) b.classList.remove('kn-ac-open'); }, 150); });
+        }
+    });
+
+    // Outside-click close for the date pickers. Flatpickr's default close-on-outside
+    // doesn't fire reliably inside the modal stacking context, so we walk the click
+    // target and close any open picker the click didn't land inside.
+    function knCfeIsInsidePicker(picker, target) {
+        if (!picker) return false;
+        if (picker.altInput && picker.altInput.contains(target)) return true;
+        if (picker.input    && picker.input.contains(target))    return true;
+        if (picker.calendarContainer && picker.calendarContainer.contains(target)) return true;
+        return false;
+    }
+    document.addEventListener('mousedown', function(e) {
+        if (pickerStart && pickerStart.isOpen && !knCfeIsInsidePicker(pickerStart, e.target)) pickerStart.close();
+        if (pickerEnd   && pickerEnd.isOpen   && !knCfeIsInsidePicker(pickerEnd,   e.target)) pickerEnd.close();
+    }, true);
+})();
+
+/* ============================================================================
+   Parknew — Copy From Past Event (pk-cfe-*)
+   Park-scope mirror of the Kingdom block above. Sources are scoped to
+   PkConfig.parkId; the request omits KingdomId so the backend uses pure
+   park scope.
+   ============================================================================ */
+(function() {
+    if (typeof PkConfig === 'undefined' || !PkConfig.parkId) return;
+
+    var SRC_URL = PkConfig.uir + 'EventAjax/copy_source_list';
+    var GO_URL  = PkConfig.uir + 'EventAjax/create_with_copy';
+    var CFE_DEBOUNCE_MS = 200;
+    var DELTA_MS_DEFAULT = 0;
+    var pickerStart = null;
+    var pickerEnd   = null;
+    var debounceTimer = null;
+    var lastQuery = null;
+
+    function gid(id) { return document.getElementById(id); }
+    function fireInput(el) {
+        if (!el) return;
+        try { el.dispatchEvent(new Event('input',  { bubbles: true })); } catch(e) {}
+        try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch(e) {}
+    }
+
+    var _pkCfeReposBound = false;
+    function pkCfePositionResults() {
+        var input = gid('pk-cfe-search');
+        var box   = gid('pk-cfe-results');
+        if (!input || !box) return;
+        box.style.position = 'fixed';
+        box.style.zIndex   = '10000';
+        tnPositionAcFixed(input, box);
+    }
+    function pkCfeBindReposition() {
+        if (_pkCfeReposBound) return;
+        _pkCfeReposBound = true;
+        var handler = function() {
+            var box = gid('pk-cfe-results');
+            if (box && box.classList.contains('kn-ac-open')) pkCfePositionResults();
+        };
+        window.addEventListener('scroll', handler, true);
+        window.addEventListener('resize', handler);
+    }
+
+    window.pkCfeToggleExpander = function() {
+        var body = gid('pk-cfe-body');
+        var btn  = gid('pk-cfe-toggle');
+        if (!body || !btn) return;
+        var open = body.style.display !== 'none';
+        body.style.display = open ? 'none' : '';
+        btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+        if (!open) {
+            setTimeout(function() { var s = gid('pk-cfe-search'); if (s) s.focus(); }, 50);
+        }
+    };
+
+    function fmtDate(s) {
+        if (!s) return '';
+        var d = new Date(s.replace(' ', 'T'));
+        if (isNaN(d.getTime())) return s;
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function renderResults(rows) {
+        var box = gid('pk-cfe-results');
+        var input = gid('pk-cfe-search');
+        if (!box || !input) return;
+        box.innerHTML = '';
+        if (!rows || rows.length === 0) {
+            box.innerHTML = '<div class="kn-ac-empty">No matching past events</div>';
+            pkCfePositionResults();
+            pkCfeBindReposition();
+            box.classList.add('kn-ac-open');
+            return;
+        }
+        rows.forEach(function(r) {
+            var row = document.createElement('div');
+            row.className = 'kn-ac-row';
+            var occ = r.occurrenceCount > 1 ? (' · ' + r.occurrenceCount + ' occurrences') : '';
+            row.innerHTML = '<div class="kn-ac-row-title"></div><div class="kn-ac-row-meta"></div>';
+            row.querySelector('.kn-ac-row-title').textContent = r.name;
+            row.querySelector('.kn-ac-row-meta').textContent  = fmtDate(r.lastStart) + occ;
+            row.addEventListener('mousedown', function(e) { e.preventDefault(); pkCfePick(r); });
+            box.appendChild(row);
+        });
+        pkCfePositionResults();
+        pkCfeBindReposition();
+        box.classList.add('kn-ac-open');
+    }
+
+    function runSearch(q) {
+        var params = '&ParkId=' + encodeURIComponent(PkConfig.parkId) + '&Query=' + encodeURIComponent(q);
+        fetch(SRC_URL + params, { credentials: 'same-origin' })
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(d) {
+                if (!d || d.status !== 0) { renderResults([]); return; }
+                var rows = d.results || [];
+                if (q === '') rows = rows.slice(0, 3);
+                renderResults(rows);
+            })
+            .catch(function() { renderResults([]); });
+    }
+
+    function onSearchInput() {
+        var input = gid('pk-cfe-search');
+        var q = input ? input.value.trim() : '';
+        if (debounceTimer) clearTimeout(debounceTimer);
+        if (q === lastQuery) return;
+        lastQuery = q;
+        debounceTimer = setTimeout(function() { runSearch(q); }, CFE_DEBOUNCE_MS);
+    }
+
+    window.pkCfePick = function(srcRow) {
+        gid('pk-cfe-source-id').value    = srcRow.eventId;
+        gid('pk-cfe-source-start').value = srcRow.lastStart || '';
+        gid('pk-cfe-source-end').value   = srcRow.lastEnd   || '';
+        gid('pk-cfe-chip-label').textContent = srcRow.name + ' · ' + fmtDate(srcRow.lastStart);
+        gid('pk-cfe-chip').style.display = '';
+        gid('pk-cfe-picker-wrap').style.display = 'none';
+        gid('pk-cfe-detail').style.display = '';
+        gid('pk-cfe-results').classList.remove('kn-ac-open');
+
+        var nameEl = gid('pk-event-name');
+        if (nameEl && nameEl.value.trim() === '') {
+            var yr = new Date().getFullYear();
+            nameEl.value = srcRow.name + ' ' + yr;
+            fireInput(nameEl);
+        }
+
+        var sStart = srcRow.lastStart ? new Date(srcRow.lastStart.replace(' ', 'T')) : null;
+        var sEnd   = srcRow.lastEnd   ? new Date(srcRow.lastEnd.replace(' ', 'T'))   : null;
+        DELTA_MS_DEFAULT = (sStart && sEnd && !isNaN(sStart) && !isNaN(sEnd)) ? (sEnd.getTime() - sStart.getTime()) : 0;
+        initPickers();
+    };
+
+    window.pkCfeClear = function() {
+        gid('pk-cfe-source-id').value    = '';
+        gid('pk-cfe-source-start').value = '';
+        gid('pk-cfe-source-end').value   = '';
+        gid('pk-cfe-chip').style.display = 'none';
+        gid('pk-cfe-picker-wrap').style.display = '';
+        gid('pk-cfe-detail').style.display = 'none';
+        var s = gid('pk-cfe-search'); if (s) { s.value = ''; lastQuery = null; }
+    };
+
+    function initPickers() {
+        if (typeof flatpickr !== 'function') return;
+        var startEl = gid('pk-cfe-start');
+        var endEl   = gid('pk-cfe-end');
+        if (!startEl || !endEl) return;
+        if (startEl._flatpickr) startEl._flatpickr.destroy();
+        if (endEl._flatpickr)   endEl._flatpickr.destroy();
+        var opts = {
+            enableTime: true, dateFormat: 'Y-m-d H:i',
+            altInput: true,  altFormat: 'F j, Y  h:i K',
+            minuteIncrement: 5, time_24hr: false, allowInput: false
+        };
+        pickerEnd = flatpickr(endEl, opts);
+        pickerStart = flatpickr(startEl, Object.assign({}, opts, {
+            onChange: function(selDates) {
+                if (!selDates[0]) return;
+                var d = new Date(selDates[0].getTime() + DELTA_MS_DEFAULT);
+                pickerEnd.setDate(d, true);
+            }
+        }));
+    }
+
+    window.pkCfeToggleAll = function(masterCb) {
+        document.querySelectorAll('.pk-cfe-mod').forEach(function(cb) { cb.checked = masterCb.checked; });
+    };
+    window.pkCfeSyncAll = function() {
+        var all = gid('pk-cfe-mod-all');
+        if (!all) return;
+        var boxes = Array.from(document.querySelectorAll('.pk-cfe-mod'));
+        var checked = boxes.filter(function(cb) { return cb.checked; }).length;
+        all.checked = (checked === boxes.length);
+        all.indeterminate = (checked > 0 && checked < boxes.length);
+    };
+
+    function pkCfeFeedback(msg) {
+        var el = document.getElementById('pk-emod-feedback');
+        if (el) { el.textContent = msg; el.style.display = ''; }
+        try { console.log('[pkCfe]', msg); } catch(e) {}
+    }
+
+    var _origPkCreateEvent = window.pkCreateEvent;
+    window.pkCreateEvent = function(statusOverride) {
+        var srcEl = gid('pk-cfe-source-id');
+        var srcId = srcEl ? parseInt(srcEl.value || '0', 10) : 0;
+        try { console.log('[pkCfe] create click — srcId:', srcId, 'statusOverride:', statusOverride); } catch(e) {}
+        if (!srcId) { if (_origPkCreateEvent) return _origPkCreateEvent(statusOverride); return; }
+
+        var name  = ((gid('pk-event-name') || {}).value || '').trim();
+        var start = (gid('pk-cfe-start') || {}).value || '';
+        var end   = (gid('pk-cfe-end')   || {}).value || '';
+        try { console.log('[pkCfe] fields — name:', name, 'start:', start, 'end:', end); } catch(e) {}
+        if (!name)  { pkCfeFeedback('Event name is required.'); return; }
+        if (!start || !end) { pkCfeFeedback('Start and end times are required.'); return; }
+
+        var btn  = gid('pk-emod-go-btn');
+        var dbtn = gid('pk-emod-draft-btn');
+        if (btn)  btn.disabled  = true;
+        if (dbtn) dbtn.disabled = true;
+
+        var status = (statusOverride === 'draft') ? 'draft' : 'published';
+        var modules = {
+            details:  gid('pk-cfe-mod-details').checked,
+            schedule: gid('pk-cfe-mod-schedule').checked,
+            staff:    gid('pk-cfe-mod-staff').checked,
+            feast:    gid('pk-cfe-mod-feast').checked,
+            banner:   gid('pk-cfe-mod-banner').checked
+        };
+
+        $.post(GO_URL, {
+            Name: name, KingdomId: PkConfig.kingdomId, ParkId: PkConfig.parkId,
+            SourceEventId: srcId, NewStart: start, NewEnd: end,
+            Modules: JSON.stringify(modules), Status: status
+        }, function(r) {
+            if (r && r.status === 0) {
+                if (r.warnings && r.warnings.length) { try { console.log('Copy completed with warnings:', r.warnings); } catch(e) {} }
+                window.location.href = r.url;
+            } else {
+                pkCfeFeedback((r && r.error) ? r.error : 'Failed to copy event.');
+                if (btn)  btn.disabled  = false;
+                if (dbtn) dbtn.disabled = false;
+            }
+        }, 'json').fail(function(xhr) {
+            try { console.error('[pkCfe] POST failed:', xhr && xhr.status, xhr && xhr.responseText); } catch(e) {}
+            pkCfeFeedback('Request failed. Please try again.');
+            if (btn)  btn.disabled  = false;
+            if (dbtn) dbtn.disabled = false;
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var s = gid('pk-cfe-search');
+        if (s) {
+            s.addEventListener('input', onSearchInput);
+            s.addEventListener('focus', function() { if (lastQuery === null) runSearch(''); });
+            s.addEventListener('blur',  function() { setTimeout(function() { var b = gid('pk-cfe-results'); if (b) b.classList.remove('kn-ac-open'); }, 150); });
+        }
+    });
+
+    function pkCfeIsInsidePicker(picker, target) {
+        if (!picker) return false;
+        if (picker.altInput && picker.altInput.contains(target)) return true;
+        if (picker.input    && picker.input.contains(target))    return true;
+        if (picker.calendarContainer && picker.calendarContainer.contains(target)) return true;
+        return false;
+    }
+    document.addEventListener('mousedown', function(e) {
+        if (pickerStart && pickerStart.isOpen && !pkCfeIsInsidePicker(pickerStart, e.target)) pickerStart.close();
+        if (pickerEnd   && pickerEnd.isOpen   && !pkCfeIsInsidePicker(pickerEnd,   e.target)) pickerEnd.close();
+    }, true);
+})();
+

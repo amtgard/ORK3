@@ -37,7 +37,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <div class="rp-root">
 
@@ -203,6 +203,7 @@ if (isset($this->__session->park_id) && !empty($Awards)) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -239,6 +240,6 @@ $(function() {
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(table); });
 });
 </script>

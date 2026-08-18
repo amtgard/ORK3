@@ -26,16 +26,16 @@ $scope_link  = '';
 $scope_icon  = 'fa-globe';
 $scope_noun  = 'kingdom';
 
-if (isset($this->__session->park_id) && !empty($active_players)) {
-	$first       = reset($active_players);
-	$scope_label = $first['ParkName']    ?? '';
-	$scope_link  = UIR . 'Park/profile/'    . (int)$this->__session->park_id;
+// Scope label comes from the request (set by controller via
+// _peerage_waivered_duespaid), not the session or the first row.
+if (($report_type ?? null) === 'Park' && !empty($report_id)) {
+	$scope_label = $scope_name ?? '';
+	$scope_link  = UIR . 'Park/profile/' . (int)$report_id;
 	$scope_icon  = 'fa-tree';
 	$scope_noun  = 'park';
-} elseif (isset($this->__session->kingdom_id) && !empty($active_players)) {
-	$first       = reset($active_players);
-	$scope_label = $first['KingdomName'] ?? '';
-	$scope_link  = UIR . 'Kingdom/profile/' . (int)$this->__session->kingdom_id;
+} elseif (($report_type ?? null) === 'Kingdom' && !empty($report_id)) {
+	$scope_label = $scope_name ?? '';
+	$scope_link  = UIR . 'Kingdom/profile/' . (int)$report_id;
 	$scope_icon  = 'fa-chess-rook';
 }
 ?>
@@ -43,9 +43,8 @@ if (isset($this->__session->park_id) && !empty($active_players)) {
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
-<link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
-<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css">
+<link rel="stylesheet" href="<?=HTTP_TEMPLATE?>default/style/reports.css?v=<?=filemtime(__DIR__.'/style/reports.css')?>">
 
 <div class="rp-root">
 
@@ -214,8 +213,8 @@ if (isset($this->__session->park_id) && !empty($active_players)) {
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
-<script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
 <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -240,9 +239,7 @@ $(function() {
 			}
 		],
 		columnDefs: [
-			{ targets: numericCols, type: 'num', className: 'dt-right' },
-			{ targets: numericCols, responsivePriority: 10001 },
-			{ targets: [0],         responsivePriority: 1 }
+			{ targets: numericCols, type: 'num', className: 'dt-right' }
 		],
 		pageLength: 25,
 		order: <?php
@@ -257,12 +254,11 @@ $(function() {
 			echo json_encode($sortOrder);
 		?>,
 		fixedHeader : { headerOffset: 48 },
-		responsive  : true,
 		scrollX     : true,
 		fixedColumns: { left: 1 }
 	});
 
 	$('.rp-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('.rp-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('.rp-btn-print' ).on('click', function() { orkPrintTable(table); });
 });
 </script>

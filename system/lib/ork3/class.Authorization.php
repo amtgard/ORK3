@@ -115,11 +115,10 @@ class Authorization extends Ork3
 
 	public function ResetPassword($request)
 	{
-		$this->log->Write('Credential', 0, LOG_EDIT, array($request, $_SESSION, $_SERVER));
 		$response = array();
 		$this->mundane->clear();
-		$this->mundane->like('username', $request['UserName']);
-		$this->mundane->like('email', $request['Email']);
+		$this->mundane->like('username', trim($request['UserName']));
+		$this->mundane->like('email', trim($request['Email']));
 		if ($this->mundane->find()) {
 			$password = substr(md5(microtime()), 2, 11);
 			$this->mundane->password_expires = date("Y-m-d H:i:s", time() + 60 * 60 * 24 * 1);
@@ -215,7 +214,8 @@ class Authorization extends Ork3
 				} else if ($type == AUTH_UNIT) {
 					$mundane = Ork3::$Lib->player->player_info($requester_id);
 
-					if ($this->HasAuthority($requester_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT)) {
+					if ($this->HasAuthority($requester_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) ||
+						$this->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 						logtrace("RemoveAuthorization(): KPM Unit Bypass: ", $requester_id);
 						$response = $this->remove_auth_h($request);
 					}
@@ -320,7 +320,7 @@ class Authorization extends Ork3
 		$this->mundane->clear();
 
 		if ($request['Token'] == null) {
-			$this->mundane->like('username', $request['UserName']);
+			$this->mundane->like('username', trim($request['UserName']));
 			if ($this->mundane->find()) {
 				$mundane_id = $this->mundane->mundane_id;
 				// Harmonizes old password style with new password style
@@ -549,10 +549,45 @@ class Authorization extends Ork3
 	public function remove_auth_h($request)
 	{
 		logtrace('remove_auth_h', $request);
+		$_auth_id = (int)$request['AuthorizationId'];
+		if (!valid_id($_auth_id)) {
+			return ProcessingError();
+		}
+
+		// Fresh raw SELECT for the audit snapshot. Reading via the shared
+		// $this->auth yapo object here produced rows with mundane_id=0 in
+		// prod (probably state pollution from RemoveAuthorization's own
+		// find() + the HasAuthority chain that runs before this point —
+		// next()/clear()/find() over the same yapo can leave the active
+		// record set in an unexpected position). Going straight to the DB
+		// for the audit data sidesteps all of that.
+		global $DB;
+		$DB->Clear();
+		$_priorRs = $DB->DataSet("SELECT mundane_id, park_id, kingdom_id, event_id, unit_id, role FROM " . DB_PREFIX . "authorization WHERE authorization_id = " . $_auth_id . " LIMIT 1");
+		if (!$_priorRs || !$_priorRs->Next()) {
+			return ProcessingError();
+		}
+		$_prior = [
+			'authorization_id' => $_auth_id,
+			'mundane_id'       => (int)$_priorRs->mundane_id,
+			'park_id'          => (int)$_priorRs->park_id,
+			'kingdom_id'       => (int)$_priorRs->kingdom_id,
+			'event_id'         => (int)$_priorRs->event_id,
+			'unit_id'          => (int)$_priorRs->unit_id,
+			'role'             => $_priorRs->role,
+		];
+		$DB->Clear();
+
 		$this->auth->clear();
-		$this->auth->authorization_id = $request['AuthorizationId'];
-		if (valid_id($request['AuthorizationId']) && $this->auth->find()) {
+		$this->auth->authorization_id = $_auth_id;
+		if ($this->auth->find()) {
+			$_audit_req = $request;
+			unset($_audit_req['Token']);
 			$this->log->Write('Authorization', $requester_id, LOG_REMOVE, $request);
+			// Anchor the audit to the affected player so the entry surfaces on
+			// the grantee's audit history. Authority changes are security-relevant
+			// — they should be discoverable from the player's profile audit.
+			Ork3::$Lib->dangeraudit->audit(__CLASS__ . '::RemoveAuthorization', $_audit_req, 'Player', $_prior['mundane_id'], $_prior, null);
 			$this->auth->delete();
 			$response = Success();
 		} else {
@@ -583,7 +618,8 @@ class Authorization extends Ork3
 		} else if (AUTH_UNIT == $request['Type']) {
 			$mundane = Ork3::$Lib->player->player_info($requester_id);
 
-			if ($this->HasAuthority($requester_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT)) {
+			if ($this->HasAuthority($requester_id, AUTH_KINGDOM, $mundane['KingdomId'], AUTH_EDIT) ||
+				$this->HasAuthority($requester_id, AUTH_PARK, $mundane['ParkId'], AUTH_EDIT)) {
 				$this->log->Write('Authorization:KPM Unit Bypass', $requester_id, LOG_ADD, $request);
 				$response = $this->add_auth_h($request);
 				return $response;
@@ -681,7 +717,7 @@ class Authorization extends Ork3
 		return array($type, $id);
 	}
 
-	public function HasAuthority($mundane_id, $type, $id, $role)
+	public function HasAuthority($mundane_id, $type, $id, $role, $visited = array())
 	{
 		logtrace("HasAuthority", array($mundane_id, $type, $id, $role));
 
@@ -693,12 +729,25 @@ class Authorization extends Ork3
 			return false;
 			;
 		}
-		// Is Admin?
+		// Is Ork Admin? Only TRUE global-admin grants — those with no scope
+		// attached (park_id / kingdom_id / unit_id / event_id all zero) —
+		// may short-circuit here. Scoped admin grants must fall through to
+		// the scope-specific check below; otherwise a park admin row would
+		// silently confer system-wide authority on any HasAuthority call,
+		// which is the bug that let multiple compromised park-officer
+		// accounts edit players across other kingdoms.
 		$this->auth->clear();
 		$this->auth->mundane_id = $mundane_id;
 		$this->auth->role = AUTH_ADMIN;
-		if ($this->auth->find() && $this->auth->size() > 0) {
-			return true;
+		if ($this->auth->find()) {
+			do {
+				if ($this->auth->park_id    == 0
+				 && $this->auth->kingdom_id == 0
+				 && $this->auth->unit_id    == 0
+				 && $this->auth->event_id   == 0) {
+					return true;
+				}
+			} while ($this->auth->next());
 		}
 		// Playing shenanigans
 		if (0 == $id)
@@ -715,10 +764,10 @@ class Authorization extends Ork3
 
 		$this->auth->clear();
 		$this->auth->mundane_id = $mundane_id;
-		// Basic check -- does the user have direct access?
-		// NOTE: Admin check here does not check for admin privileges per se, but for whether
-		// 		an Admin Authorization request is avail (Admin == Admin)
-		// 		For elevated privileges (Admin > Park|Kingdom|Event|Unit), the check is handled below
+		// Scope-specific lookup. AUTH_ADMIN is intentionally NOT a case here:
+		// system-wide admin is handled by the all-zero-scope short-circuit
+		// above, and a scoped AUTH_ADMIN request is not meaningful (callers
+		// wanting kingdom-level authority should use AUTH_KINGDOM).
 		switch ($type) {
 			case AUTH_PARK:
 				$this->auth->park_id = $id;
@@ -731,9 +780,6 @@ class Authorization extends Ork3
 				break;
 			case AUTH_UNIT:
 				$this->auth->unit_id = $id;
-				break;
-			case AUTH_ADMIN:
-				$this->auth->role = AUTH_ADMIN;
 				break;
 			default:
 				return false;
@@ -760,7 +806,7 @@ class Authorization extends Ork3
 		// Upper-level authority check, we have to find the parents of
 		// of the subject, and check their auths
 		// !$sufficient is redundant, but I don't trust the next guy to hold the invariant
-		if (!$sufficient && $type != AUTH_KINGDOM) {
+		if (!$sufficient) {
 			switch ($type) {
 				case AUTH_PARK:
 					$park = new yapo($this->db, DB_PREFIX . 'park');
@@ -780,6 +826,23 @@ class Authorization extends Ork3
 						if ($this->HasAuthority($mundane_id, AUTH_KINGDOM, $event->kingdom_id, $role) || $this->HasAuthority($mundane_id, AUTH_PARK, $event->park_id, $role) || $event->mundane_id == $mundane_id)
 							return true;
 					}
+					break;
+				case AUTH_KINGDOM:
+					// Principalities are sub-groups of their parent kingdom: parent-kingdom
+					// officers hold the same authority over a principality (and its parks)
+					// as over the kingdom itself. Walk up the parent_kingdom_id chain.
+					// Guard against a corrupt/cyclic parent_kingdom_id (e.g. A->B->A or a
+					// self-parent) with a visited-set of kingdom ids plus a hard depth cap,
+					// so the recursion can never loop forever.
+					$kingdom = new yapo($this->db, DB_PREFIX . 'kingdom');
+					$kingdom->clear();
+					$kingdom->kingdom_id = $id;
+					$visited[] = (int) $id;
+					if ($kingdom->find() && valid_id($kingdom->parent_kingdom_id)
+						&& !in_array((int) $kingdom->parent_kingdom_id, $visited, true)
+						&& count($visited) < 10
+						&& $this->HasAuthority($mundane_id, AUTH_KINGDOM, $kingdom->parent_kingdom_id, $role, $visited))
+						return true;
 					break;
 			}
 		}

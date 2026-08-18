@@ -36,19 +36,18 @@ class Model_Principality extends Model {
 	}
 	
 	function get_officers($principality_id) {
-		$r = $this->Kingdom->GetOfficers(array( 'PrincipalityId' => $principality_id ));
-		logtrace("get_officers($principality_id)", $r);
+		$r = $this->Principality->GetPrincipalityOfficers(array( 'PrincipalityId' => $principality_id ));
 		if ($r['Status']['Status'] == 0)
 			return $r['Officers'];
 		return false;
 	}
-	
+
 	function set_officers($token, $principality_id, $request) {
 		$r = array();
 		foreach ($request as $k => $officer_request) {
 			$officer_request['Token'] = $token;
 			$officer_request['PrincipalityId'] = $principality_id;
-			$r[] = $this->Kingdom->SetOfficer($officer_request);
+			$r[] = $this->Principality->SetPrincipalityOfficer($officer_request);
 		}
 		return $r;
 	}
