@@ -1156,6 +1156,98 @@ class RBACService extends Ork3
 		return $roles;
 	}
 
+	/**
+	 * Get every active role assignment scoped to a kingdom, joined to the role
+	 * and to the assignee / granter personas.
+	 *
+	 * Rows whose expires_at has passed are excluded.
+	 *
+	 * @param int  $kingdom_id
+	 * @param bool $with_park_names  When true, each row also carries a 'ParkName'
+	 *                               key resolved from ork_park (empty string when
+	 *                               the assignment is not park-scoped).
+	 * @return array  Array of assignment records
+	 */
+	public function GetKingdomRoleAssignments( $kingdom_id, $with_park_names = false )
+	{
+		global $DB;
+		$kingdom_id = (int) $kingdom_id;
+		$assignments = [];
+
+		$DB->Clear();
+		$sql = "SELECT ur.user_role_id, ur.mundane_id, ur.role_id, ur.kingdom_id, ur.park_id,
+				ur.granted_by, ur.created_at, ur.expires_at,
+				r.name AS role_name, r.display_name AS role_display_name, r.is_system,
+				m.persona, m.username,
+				g.persona AS granter_persona
+			FROM " . DB_PREFIX . "user_role ur
+			JOIN " . DB_PREFIX . "role r ON r.role_id = ur.role_id
+			JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ur.mundane_id
+			LEFT JOIN " . DB_PREFIX . "mundane g ON g.mundane_id = ur.granted_by
+			WHERE ur.kingdom_id = " . $kingdom_id . "
+			  AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+			ORDER BY r.display_name, m.persona";
+
+		$result = $DB->DataSet( $sql );
+		if ( $result !== false && $result->size() > 0 ) {
+			while ( $result->Next() ) {
+				$a = [
+					'UserRoleId' => $result->user_role_id,
+					'MundaneId' => $result->mundane_id,
+					'RoleId' => $result->role_id,
+					'KingdomId' => $result->kingdom_id,
+					'ParkId' => $result->park_id,
+					'GrantedBy' => $result->granted_by,
+					'CreatedAt' => $result->created_at,
+					'ExpiresAt' => $result->expires_at,
+					'RoleName' => $result->role_name,
+					'RoleDisplayName' => $result->role_display_name,
+					'IsSystem' => $result->is_system,
+					'Persona' => $result->persona,
+					'Username' => $result->username,
+					'GranterPersona' => $result->granter_persona,
+				];
+
+				if ( $with_park_names ) {
+					// Look up park name if park-scoped
+					if ( valid_id( $result->park_id ) ) {
+						$DB->Clear();
+						$prs = $DB->DataSet( "SELECT name FROM " . DB_PREFIX . "park WHERE park_id = " . (int) $result->park_id );
+						$a['ParkName'] = ( $prs && $prs->Next() ) ? $prs->name : '';
+					} else {
+						$a['ParkName'] = '';
+					}
+				}
+
+				$assignments[] = $a;
+			}
+		}
+
+		return $assignments;
+	}
+
+	/**
+	 * Count how many user-role assignments reference a role (all scopes,
+	 * including expired ones).
+	 *
+	 * @param int $role_id
+	 * @return int
+	 */
+	public function GetRoleUserCount( $role_id )
+	{
+		global $DB;
+		$role_id = (int) $role_id;
+
+		$DB->Clear();
+		$sql = "SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "user_role WHERE role_id = " . $role_id;
+		$result = $DB->DataSet( $sql );
+		if ( $result && $result->Next() ) {
+			return (int) $result->cnt;
+		}
+
+		return 0;
+	}
+
 	// ================================================================
 	// AUDIT LOGGING
 	// ================================================================

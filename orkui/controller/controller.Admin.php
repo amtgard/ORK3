@@ -1787,6 +1787,7 @@ class Controller_Admin extends Controller
 
         $this->kingdom_route($id);
         $this->load_model('Kingdom');
+        $this->load_model('RBACService');
 
         $kd = $this->Kingdom->get_kingdom_details($id);
         foreach ($kd as $key => $detail) {
@@ -1800,43 +1801,7 @@ class Controller_Admin extends Controller
         $this->data['AvailableRoles'] = Ork3::$Lib->rbacservice->GetAvailableRoles($id);
 
         // All role assignments scoped to this kingdom
-        global $DB;
-        $DB->Clear();
-        $sql = "SELECT ur.user_role_id, ur.mundane_id, ur.role_id, ur.kingdom_id, ur.park_id,
-                        ur.granted_by, ur.created_at, ur.expires_at,
-                        r.name AS role_name, r.display_name AS role_display_name, r.is_system,
-                        m.persona, m.username,
-                        g.persona AS granter_persona
-                 FROM " . DB_PREFIX . "user_role ur
-                 JOIN " . DB_PREFIX . "role r ON r.role_id = ur.role_id
-                 JOIN " . DB_PREFIX . "mundane m ON m.mundane_id = ur.mundane_id
-                 LEFT JOIN " . DB_PREFIX . "mundane g ON g.mundane_id = ur.granted_by
-                 WHERE ur.kingdom_id = " . (int)$id . "
-                   AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
-                 ORDER BY r.display_name, m.persona";
-        $result = $DB->DataSet($sql);
-        $assignments = [];
-        if ($result !== false && $result->size() > 0) {
-            while ($result->Next()) {
-                $assignments[] = [
-                    'UserRoleId'       => $result->user_role_id,
-                    'MundaneId'        => $result->mundane_id,
-                    'RoleId'           => $result->role_id,
-                    'KingdomId'        => $result->kingdom_id,
-                    'ParkId'           => $result->park_id,
-                    'GrantedBy'        => $result->granted_by,
-                    'CreatedAt'        => $result->created_at,
-                    'ExpiresAt'        => $result->expires_at,
-                    'RoleName'         => $result->role_name,
-                    'RoleDisplayName'  => $result->role_display_name,
-                    'IsSystem'         => $result->is_system,
-                    'Persona'          => $result->persona,
-                    'Username'         => $result->username,
-                    'GranterPersona'   => $result->granter_persona,
-                ];
-            }
-        }
-        $this->data['RoleAssignments'] = $assignments;
+        $this->data['RoleAssignments'] = $this->RBACService->GetKingdomRoleAssignments($id);
 
         // Parks for scope selector
         $r = $this->Kingdom->get_park_summary($id);
@@ -1853,13 +1818,7 @@ class Controller_Admin extends Controller
         foreach ($this->data['AvailableRoles'] as $role) {
             if (!$role['IsSystem'] && $role['KingdomId'] == $id) {
                 $perms = Ork3::$Lib->rbacservice->GetRolePermissions($role['RoleId']);
-                $DB->Clear();
-                $sql = "SELECT COUNT(*) AS cnt FROM " . DB_PREFIX . "user_role WHERE role_id = " . (int)$role['RoleId'];
-                $cntResult = $DB->DataSet($sql);
-                $userCount = 0;
-                if ($cntResult && $cntResult->Next()) {
-                    $userCount = (int)$cntResult->cnt;
-                }
+                $userCount = $this->RBACService->GetRoleUserCount($role['RoleId']);
                 $customRoles[] = [
                     'RoleId'       => $role['RoleId'],
                     'Name'         => $role['Name'],
