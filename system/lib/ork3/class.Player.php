@@ -4649,6 +4649,29 @@ class Player extends Ork3
     }
 
     /**
+     * Display name for the front-door member bar: the persona when the player has
+     * one, otherwise their given name. Empty string when the player has no row.
+     */
+    public function GetViewerDisplayName(int $mundaneId): string
+    {
+        if (!valid_id($mundaneId)) {
+            return '';
+        }
+        $this->db->Clear();
+        $rs = $this->db->DataSet(
+            'SELECT persona, given_name FROM ' . DB_PREFIX . 'mundane WHERE mundane_id = '
+            . (int) $mundaneId . ' LIMIT 1'
+        );
+        if ($rs && $rs->Next()) {
+            return trim((string) $rs->persona) !== ''
+                ? (string) $rs->persona
+                : (string) $rs->given_name;
+        }
+
+        return '';
+    }
+
+    /**
      * Record that the user dismissed the What's New modal (T-WN-01).
      */
     public function DismissWhatsNew(int $mundaneId, string $version): array

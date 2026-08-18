@@ -266,14 +266,8 @@ class Controller
         // Display name for the member bar (logged-in only)
         $this->data[ 'ViewerName' ] = '';
         if ($this->data['LoggedIn'] && isset($this->session->user_id)) {
-            global $DB;
-            $DB->Clear();
-            $_vid = (int) $this->session->user_id;
-            $_vn = $DB->DataSet("SELECT persona, given_name FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$_vid} LIMIT 1");
-            if ($_vn && $_vn->Next()) {
-                $this->data[ 'ViewerName' ] = trim((string) $_vn->persona) !== '' ? $_vn->persona : $_vn->given_name;
-            }
-            $DB->Clear();
+            $this->load_model('Player');
+            $this->data[ 'ViewerName' ] = $this->Player->get_viewer_display_name((int) $this->session->user_id);
         }
 
         $this->data[ 'menu' ][ 'home' ] = [ 'url' => UIR, 'display' => 'Home <i class="fas fa-home"></i> ', 'no-crumb' => 'no-crumb' ];
