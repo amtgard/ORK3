@@ -195,4 +195,108 @@ class CmsRenderCache
         }
         return $out;
     }
+
+    /* ------------------------------------------------------------------ *
+     * cache mechanics — the ONE place that touches the GhettoCache handle
+     *
+     * The key space above and the read/write below are two halves of one
+     * contract (a key format that changes here must flush there), so they live
+     * together in this class. Controllers and templates call the two public
+     * methods; neither reaches for Ork3::$Lib->ghettocache itself.
+     * ------------------------------------------------------------------ */
+
+    /**
+     * The GhettoCache handle, or null when none is configured.
+     *
+     * Probed defensively on purpose: a missing/failed Memcached must degrade the
+     * front door to uncached rendering, never to an error.
+     *
+     * @return object|null
+     */
+    private static function _handle()
+    {
+        return (isset(Ork3::$Lib) && is_object(Ork3::$Lib)
+            && isset(Ork3::$Lib->ghettocache) && is_object(Ork3::$Lib->ghettocache))
+            ? Ork3::$Lib->ghettocache : null;
+    }
+
+    /**
+     * Read-through cache for the DYNAMIC front-door blocks.
+     *
+     * Every live-data block ran the same probe/hydrate/store dance inline; five
+     * copies meant five chances to skip the null-handle guard. This owns those
+     * mechanics once. The namespace, key format and TTL still come from the
+     * constants above, because BustScope() has to enumerate that same key space.
+     *
+     * @param  string        $ns      namespace (self::NS_*)
+     * @param  string        $key     key within that namespace
+     * @param  int           $ttl     seconds a hit stays valid (self::TTL)
+     * @param  callable      $build   () => array — runs ONLY on a miss
+     * @param  callable|null $storeIf (array $built) => bool — optional gate on
+     *                                WRITING the result. kingdoms_teaser uses it
+     *                                to refuse to cache an empty list built in a
+     *                                context that never injected its source data,
+     *                                which would otherwise pin an empty grid on
+     *                                the front door for the whole TTL.
+     * @return mixed the cached payload, or $build()'s value verbatim — including
+     *               when there is no cache handle at all
+     */
+    public static function Remember($ns, $key, $ttl, callable $build, ?callable $storeIf = null)
+    {
+        $cache = self::_handle();
+
+        // No cache configured → this is a plain function call.
+        if ($cache === null) {
+            return $build();
+        }
+
+        $hit = $cache->get($ns, $key, $ttl);
+        if (is_array($hit)) {
+            return $hit;
+        }
+
+        $built = $build();
+        if ($storeIf === null || $storeIf($built)) {
+            $cache->cache($ns, $key, $built);
+        }
+        return $built;
+    }
+
+    /**
+     * Flush every cached block payload belonging to one scope.
+     *
+     * The org blocks source by kingdom_id / park_id and render nothing outside
+     * their own scope, so a scope maps to exactly one of the three key sets.
+     * Anything that is not a kingdom/park scope is the global front door, whose
+     * only scope-less cached block is kingdoms_teaser.
+     *
+     * @param  string $scopeType 'kingdom' | 'park' | 'global'
+     * @param  int    $scopeId
+     * @return int    number of keys busted (0 when no cache is configured)
+     */
+    public static function BustScope($scopeType, $scopeId)
+    {
+        $scopeType = (string)$scopeType;
+        $scopeId   = (int)$scopeId;
+
+        if ($scopeType === 'kingdom' && $scopeId > 0) {
+            $keys = self::KingdomKeys($scopeId);
+        } elseif ($scopeType === 'park' && $scopeId > 0) {
+            $keys = self::ParkKeys($scopeId);
+        } else {
+            $keys = self::GlobalKeys();
+        }
+
+        $cache = self::_handle();
+        if ($cache === null) {
+            return 0;
+        }
+
+        $cleared = 0;
+        foreach ($keys as $entry) {
+            $cache->bust($entry['ns'], $entry['key']);
+            $cleared++;
+        }
+        return $cleared;
+    }
 }

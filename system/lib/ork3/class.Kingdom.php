@@ -71,6 +71,38 @@ class Kingdom extends Ork3
         return $out;
     }
 
+    /**
+     * A kingdom's display name by id — nothing else.
+     *
+     * GetKingdomShortInfo() answers the same question but costs a yapo find()
+     * plus a second banner-column query, and GetKingdomDetails() costs far more
+     * still; callers that only need to label something (the park hero's
+     * "{Title} · {Kingdom}" eyebrow, breadcrumbs) should not pay for either.
+     * Single bound parameter; returns '' for an unknown/invalid id so callers can
+     * concatenate the result without a null check.
+     *
+     * @param  int $kingdomId
+     * @return string the kingdom's name, or '' when it does not resolve
+     */
+    public function GetKingdomName($kingdomId)
+    {
+        $kingdomId = (int)$kingdomId;
+        if ($kingdomId <= 0) {
+            return '';
+        }
+
+        global $DB;
+        $DB->Clear();
+        $DB->kingdom_id = $kingdomId;
+        $rs = $DB->DataSet(
+            'SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = :kingdom_id LIMIT 1'
+        );
+        // DataSet() needs an explicit Next() before any field read.
+        $name = ($rs !== false && $rs->Next()) ? trim((string)$rs->name) : '';
+        $DB->Clear();
+        return $name;
+    }
+
     public function GetKingdomByAbbreviation($request)
     {
         if (trimlen($request['Abbreviation']) < 2 || trimlen($request['Abbreviation']) > 3) {

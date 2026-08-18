@@ -129,17 +129,14 @@ if (!function_exists('fdBlockCache')) {
     /**
      * Read-through GhettoCache wrapper for the DYNAMIC front-door blocks.
      *
-     * Every live-data block ran the same six-line dance inline: probe
-     * Ork3::$Lib->ghettocache defensively, get() under a namespace+key, accept the
-     * hit only when it is an array, otherwise build the payload and cache() it.
-     * Five copies meant five chances for one of them to skip the null-handle guard
-     * (which is what makes the blocks survive a Memcached outage) or to store on a
-     * path that should not have.
+     * Presentation-side alias ONLY. The probe/hydrate/store mechanics — and the
+     * GhettoCache handle itself — live in CmsRenderCache::Remember(), alongside
+     * the namespace/key/TTL definitions they have to stay in step with (a key
+     * format that changes there must flush in CmsAjax::clearrendercache). A
+     * template does not talk to the cache layer; it calls this, and this forwards.
      *
-     * The namespace, the key FORMAT and the clamp bounds are NOT decided here —
-     * they come from CmsRenderCache, because CmsAjax::clearrendercache has to
-     * enumerate that exact key space to flush it. This helper only owns the
-     * probe/hydrate/store mechanics.
+     * Kept as a function so the five block templates read as
+     * fdBlockCache(ns, key, ttl, fn) rather than repeating the lib class name.
      *
      * @param string        $ns      GhettoCache namespace (CmsRenderCache::NS_*)
      * @param string        $key     the key within that namespace
@@ -156,25 +153,12 @@ if (!function_exists('fdBlockCache')) {
      */
     function fdBlockCache($ns, $key, $ttl, callable $build, ?callable $storeIf = null)
     {
-        $cache = (isset(Ork3::$Lib) && is_object(Ork3::$Lib)
-            && isset(Ork3::$Lib->ghettocache) && is_object(Ork3::$Lib->ghettocache))
-            ? Ork3::$Lib->ghettocache : null;
-
-        // No cache configured → this is a plain function call. Never let a missing
-        // Memcached turn a public page into an error.
-        if ($cache === null) {
+        // Missing lib (or a stripped-down render context) must never turn a public
+        // page into an error — fall back to building uncached, exactly as
+        // Remember() does when no cache handle is configured.
+        if (!class_exists('CmsRenderCache')) {
             return $build();
         }
-
-        $hit = $cache->get($ns, $key, $ttl);
-        if (is_array($hit)) {
-            return $hit;
-        }
-
-        $built = $build();
-        if ($storeIf === null || $storeIf($built)) {
-            $cache->cache($ns, $key, $built);
-        }
-        return $built;
+        return CmsRenderCache::Remember($ns, $key, $ttl, $build, $storeIf);
     }
 }

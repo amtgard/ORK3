@@ -95,9 +95,13 @@ trait CmsScopeContext
         // short-circuit; publish-tier caps are gated separately via CmsCan).
         $uid      = (int)$uid;
         $authType = ($scopeType === 'park') ? AUTH_PARK : AUTH_KINGDOM;
+        // Through the model layer (Model_Authorization::has_authority), never the
+        // lib handle directly — that is how every other controller asks this, and
+        // it keeps the auth gate swappable behind one seam.
+        $this->load_model('Authorization');
         $ok = ($uid > 0)
-            && is_object(Ork3::$Lib->authorization)
-            && Ork3::$Lib->authorization->HasAuthority($uid, $authType, $scopeId, AUTH_EDIT);
+            && isset($this->Authorization)
+            && $this->Authorization->has_authority($uid, $authType, $scopeId, AUTH_EDIT);
         if (!$ok) {
             $this->_cmsScope = false;
             return false;

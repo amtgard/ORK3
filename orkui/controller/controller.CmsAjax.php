@@ -1184,32 +1184,14 @@ class Controller_CmsAjax extends Controller
         // Editing the site is the bar for forcing its public cache to refresh.
         $this->_require($uid, 'page.edit', $scope);
 
-        // The org blocks source by kingdom_id / park_id and render nothing outside
-        // their own scope, so at most one of these is ever non-zero.
+        // Key-space enumeration and the cache handle both live in CmsRenderCache —
+        // the controller only says WHICH scope to flush and reports the count.
+        $cleared = CmsRenderCache::BustScope((string)$scope['type'], (int)$scope['id']);
+
+        // Echoed back so the caller can confirm what was flushed. The org blocks
+        // render nothing outside their own scope, so at most one is ever non-zero.
         $kid = ((string)$scope['type'] === 'kingdom') ? (int)$scope['id'] : 0;
         $pid = ((string)$scope['type'] === 'park') ? (int)$scope['id'] : 0;
-
-        $cache = (isset(Ork3::$Lib) && is_object(Ork3::$Lib)
-            && isset(Ork3::$Lib->ghettocache) && is_object(Ork3::$Lib->ghettocache))
-            ? Ork3::$Lib->ghettocache : null;
-
-        $keys = array();
-        if ($kid > 0) {
-            $keys = CmsRenderCache::KingdomKeys($kid);
-        } elseif ($pid > 0) {
-            $keys = CmsRenderCache::ParkKeys($pid);
-        } else {
-            // Global front door: only its own shared blocks.
-            $keys = CmsRenderCache::GlobalKeys();
-        }
-
-        $cleared = 0;
-        if ($cache !== null) {
-            foreach ($keys as $entry) {
-                $cache->bust($entry['ns'], $entry['key']);
-                $cleared++;
-            }
-        }
 
         $this->_ok(array(
             'cleared'    => $cleared,
@@ -1315,7 +1297,8 @@ class Controller_CmsAjax extends Controller
             $this->_fail('A valid person id is required.', 4);
         }
 
-        $info = Ork3::$Lib->player->player_info($mundaneId);
+        $this->load_model('Player');
+        $info = $this->Player->player_info($mundaneId);
         if (!$info || empty($info['Persona'])) {
             $this->_fail('Person not found.', 4);
         }

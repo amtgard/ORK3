@@ -43,19 +43,18 @@ $phCity    = trim((string) ($phPark['City'] ?? ''));
 $phProv    = trim((string) ($phPark['Province'] ?? ''));
 $phRetired = (string) ($phPark['Active'] ?? 'Active') !== 'Active';
 
-// The kingdom NAME is not in the park detail payload — only its id — so resolve it.
+// The kingdom NAME is not in the park detail payload — only its id — so resolve it
+// through the model layer, exactly like the park/heraldry lookups above. The query
+// itself lives in Kingdom::GetKingdomName(); a template never talks to $DB.
 $phKingdom = '';
 $phKingdomId = (int) ($phPark['KingdomId'] ?? 0);
 if ($phKingdomId > 0) {
-    global $DB;
-    $DB->Clear();
-    $DB->kingdom_id = $phKingdomId;
-    $phKRes = $DB->DataSet(
-        'SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = :kingdom_id LIMIT 1'
-    );
-    // DataSet() needs an explicit Next() before any field read.
-    if ($phKRes && $phKRes->Next()) {
-        $phKingdom = trim((string) $phKRes->name);
+    try {
+        if (class_exists('APIModel')) {
+            $phKingdom = (string) (new APIModel('Kingdom'))->GetKingdomName($phKingdomId);
+        }
+    } catch (\Throwable $e) {
+        $phKingdom = '';
     }
 }
 
@@ -140,8 +139,10 @@ try {
         // Weather degrades SILENTLY past a 7-day horizon — the forecast table only
         // carries 7 days, and a stale or missing reading must never look broken.
         $phWithinWeek = ($phTs - time()) <= (7 * 86400);
-        if ($phWithinWeek && !empty($blockFields['show_weather']) && class_exists('Weather')) {
-            $phF = (new Weather())->forecast_for_date($phParkId, date('Y-m-d', $phTs));
+        // Through APIModel like every other lookup in this file — a template does
+        // not instantiate a domain class directly.
+        if ($phWithinWeek && !empty($blockFields['show_weather']) && class_exists('APIModel')) {
+            $phF = (new APIModel('Weather'))->forecast_for_date($phParkId, date('Y-m-d', $phTs));
             // Weather::forecast_from_row() returns 'hi_f' (float|null), NOT 'high' —
             // see class.Weather.php:99-118. It always sets the key, using null for a
             // missing reading, so isset() alone is not enough; the explicit !== null
