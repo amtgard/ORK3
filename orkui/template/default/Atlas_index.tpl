@@ -231,6 +231,10 @@ html:not([data-theme="light"]):not([data-theme="dark"]) .at-header-title {
 	transition:background .15s; margin-left:auto;
 }
 .at-heatmap-btn:hover { background:#9b2c2c; color:#fff; text-decoration:none; }
+/* Dark mode: follow the project's danger-button convention (light red fill,
+   dark text) and brighten on hover instead of darkening. */
+html[data-theme="dark"] .at-heatmap-btn { background:#fc8181; color:#1a202c; }
+html[data-theme="dark"] .at-heatmap-btn:hover { background:#feb2b2; color:#1a202c; }
 
 /* ── Empty ── */
 .at-empty {

@@ -247,6 +247,57 @@ $atHmCount      = count(array_filter($atHmPoints, fn($p) => $p['hw_p'] > 0 || $p
 	.at-controls { flex-wrap:wrap; gap:10px; }
 	.at-page { overflow-x:hidden; }
 }
+
+/* ===================================================================
+   DARK MODE OVERRIDES — Atlas heatmap
+   Activated by: html[data-theme="dark"]
+   =================================================================== */
+
+/* Header. The red icon disc and the white-on-kingdom-color park hero are
+   already dark-safe, so only the type and the back link need remapping. */
+html[data-theme="dark"] .at-header-title { background:transparent; border:none; color:var(--ork-text); text-shadow:none; }
+html[data-theme="dark"] .at-header-sub { color:var(--ork-text-muted); }
+html[data-theme="dark"] .at-back-link { background:var(--ork-badge-blue-bg); border-color:var(--ork-badge-blue-bg); color:var(--ork-link); }
+html[data-theme="dark"] .at-back-link:hover { background:#2c5282; color:var(--ork-link-bright); }
+
+/* Stats bar */
+html[data-theme="dark"] .at-stats-bar { background:var(--ork-card-bg); border-color:var(--ork-border); }
+html[data-theme="dark"] .at-stat { border-right-color:var(--ork-border); }
+html[data-theme="dark"] .at-stat-value { color:var(--ork-text); }
+html[data-theme="dark"] .at-stat-label { color:var(--ork-text-muted); }
+
+/* Controls bar + mode pills. Light mode tints the active pill with a pale red
+   wash; dark mode inverts that to a deep red ground with light red type. */
+html[data-theme="dark"] .at-controls { background:var(--ork-card-bg); border-color:var(--ork-border); }
+html[data-theme="dark"] .at-controls-label { color:var(--ork-text-secondary); }
+html[data-theme="dark"] .at-controls-label i { color:#fc8181 !important; }
+html[data-theme="dark"] .at-hm-pill { background:var(--ork-bg-tertiary); border-color:var(--ork-border); color:var(--ork-text-secondary); }
+html[data-theme="dark"] .at-hm-pill:hover { background:var(--ork-badge-red-bg); border-color:#9b2c2c; color:var(--ork-badge-red-text); }
+html[data-theme="dark"] .at-hm-pill.active { background:var(--ork-badge-red-bg); border-color:#fc8181; color:var(--ork-badge-red-text); }
+
+/* Map + sidebar shells */
+html[data-theme="dark"] .at-map-loading { color:var(--ork-text-muted); }
+html[data-theme="dark"] #at-map { border-color:var(--ork-border); }
+html[data-theme="dark"] .at-sidebar-card { background:var(--ork-card-bg); border-color:var(--ork-border); }
+html[data-theme="dark"] .at-sidebar-empty-icon { background:var(--ork-badge-red-bg); color:var(--ork-badge-red-text); }
+html[data-theme="dark"] .at-sidebar-empty p { color:var(--ork-text-muted); }
+
+/* Sidebar park body */
+html[data-theme="dark"] .at-park-section-label { color:var(--ork-text-muted); }
+html[data-theme="dark"] .at-park-section-text { color:var(--ork-text-secondary); }
+html[data-theme="dark"] .at-park-section-text a { color:var(--ork-link); }
+html[data-theme="dark"] .at-park-divider { border-top-color:var(--ork-border); }
+html[data-theme="dark"] .at-park-profile-btn:hover { background:#4299e1; color:#fff; }
+
+/* Legend */
+html[data-theme="dark"] .at-hm-legend { color:var(--ork-text-muted); }
+html[data-theme="dark"] .at-hm-legend-bar { border-color:var(--ork-border); }
+
+@media (max-width:768px) {
+	html[data-theme="dark"] .at-map-hint {
+		background:var(--ork-badge-red-bg); border-color:#9b2c2c; color:var(--ork-badge-red-text);
+	}
+}
 </style>
 
 <div class="at-page">

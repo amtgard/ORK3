@@ -2287,6 +2287,17 @@ tr:hover .kn-copy-link { opacity: 1; }
 .kn-hm-btn.kn-hm-active { background:#fff; color:#c53030; box-shadow:0 1px 3px rgba(0,0,0,0.15); }
 .kn-hm-btn:hover:not(.kn-hm-active) { color:#4a5568; background:rgba(255,255,255,0.5); }
 
+/* Heatmap mode toggle — dark mode. The active pill must stay LIGHTER than the
+   track it sits in, so the recessed/raised relationship survives the flip:
+   track drops to the page background, the active pill rises to bg-tertiary. */
+html[data-theme="dark"] .kn-hm-toggle-row { background:var(--ork-bg-secondary); border-bottom-color:var(--ork-border); }
+html[data-theme="dark"] .kn-hm-toggle-label { color:var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-hm-toggle-label i { color:#fc8181 !important; }
+html[data-theme="dark"] .kn-hm-toggle { background:var(--ork-bg); }
+html[data-theme="dark"] .kn-hm-btn { color:var(--ork-text-muted); }
+html[data-theme="dark"] .kn-hm-btn.kn-hm-active { background:var(--ork-bg-tertiary); color:#feb2b2; box-shadow:0 1px 3px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .kn-hm-btn:hover:not(.kn-hm-active) { color:var(--ork-text); background:rgba(255,255,255,0.06); }
+
 .kn-qt-cards { display: flex; flex-wrap: wrap; gap: 16px; padding: 4px 0; }
 .kn-qt-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 20px; min-width: 220px; flex: 1; }
 .kn-qt-card-title { font-weight: 700; font-size: 1rem; color: #2d3748; margin-bottom: 10px; }
