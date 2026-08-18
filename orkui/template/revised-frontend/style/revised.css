@@ -923,45 +923,6 @@ html[data-theme="dark"] .pn-ladder-bar-track { background: var(--ork-bg-tertiary
 	font-style: italic;
 }
 
-/* Pagination */
-.pn-pagination {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 10px 0 0 0;
-	margin-top: 6px;
-	border-top: 1px solid #edf2f7;
-}
-.pn-pagination-info {
-	color: #a0aec0;
-	font-size: 12px;
-}
-.pn-pagination-controls {
-	display: flex;
-	gap: 3px;
-	align-items: center;
-}
-.pn-page-btn {
-	min-width: 28px;
-	height: 28px;
-	border: 1px solid #e2e8f0;
-	border-radius: 4px;
-	background: #fff;
-	color: #4a5568;
-	font-size: 12px;
-	font-weight: 600;
-	cursor: pointer;
-	padding: 0 6px;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	transition: background 0.1s, border-color 0.1s;
-	line-height: 1;
-}
-.pn-page-btn:hover:not(:disabled) { background: #edf2f7; border-color: #cbd5e0; }
-.pn-page-btn.pn-page-active { background: #2c5282; color: #fff; border-color: #2c5282; }
-.pn-page-btn:disabled { opacity: 0.4; cursor: default; }
-.pn-page-ellipsis { color: #a0aec0; padding: 0 3px; font-size: 12px; line-height: 28px; }
 
 /* Recommendation form in modal */
 .pn-rec-field {
@@ -1313,6 +1274,7 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 .pn-acct-modal-body {
 	padding: 20px;
 	max-height: calc(80vh - 120px);
+	max-height: calc(80dvh - 120px);
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	-webkit-overflow-scrolling: touch;
@@ -1639,61 +1601,6 @@ html[data-theme="dark"] .pn-acct-help-tip:hover { background: var(--ork-hover); 
 .pn-ac-item:last-child { border-bottom: none; }
 .pn-ac-item:hover, .pn-ac-item:focus, .pn-ac-item.pn-ac-focused { background: #ebf4ff; color: #0891b2; outline: none; }
 .pn-ac-no-results { padding: 8px 12px; font-size: 13px; color: #a0aec0; font-style: italic; }
-/* Page size selector */
-.pn-pagesize-bar {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	margin-bottom: 8px;
-	font-size: 13px;
-	color: #4a5568;
-}
-.pn-pagesize-select {
-	border: 1px solid #e2e8f0;
-	border-radius: 4px;
-	padding: 3px 6px;
-	font-size: 13px;
-	outline: none;
-	appearance: none;
-	-webkit-appearance: none;
-}
-.pn-pagesize-select:focus { border-color: #90cdf4; }
-/* Table toolbar (pagesize + search side by side) */
-.pn-table-toolbar {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	margin-bottom: 10px;
-}
-.pn-table-toolbar .pn-award-search-bar {
-	flex: 1;
-	min-width: 0;
-}
-/* Award search bar */
-.pn-award-search-bar {
-	position: relative;
-	margin-bottom: 10px;
-}
-.pn-award-search-icon {
-	position: absolute;
-	left: 9px;
-	top: 50%;
-	transform: translateY(-50%);
-	color: #a0aec0;
-	font-size: 12px;
-	pointer-events: none;
-}
-.pn-award-search-input {
-	width: 100%;
-	box-sizing: border-box;
-	border: 1px solid #e2e8f0;
-	border-radius: 5px;
-	padding: 6px 10px 6px 28px;
-	font-size: 13px;
-	outline: none;
-	transition: border-color 0.15s;
-}
-.pn-award-search-input:focus { border-color: #90cdf4; }
 /* Tab toolbar (Add Award / Add Title button) */
 .pn-tab-toolbar {
 	display: flex;
@@ -2874,7 +2781,7 @@ html[data-theme="dark"] .kn-ac-item.kn-ac-suspended:hover, html[data-theme="dark
 /* Reuse modal structure for kn- award modal */
 #kn-award-overlay, #kn-rec-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-award-overlay.kn-open, #kn-rec-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-award-overlay .kn-modal-box, #kn-rec-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; width:90vw; max-width:520px; }
+#kn-award-overlay .kn-modal-box, #kn-rec-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; width:90vw; max-width:520px; }
 #kn-award-overlay .kn-modal-header, #kn-rec-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; background:var(--ork-bg-secondary); }
 /* Reset global h1-h6 box styles for all kn modal titles (fights orkui.css gray box) */
 .kn-modal-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
@@ -4148,7 +4055,7 @@ html[data-theme="dark"] .pk-ac-item.pk-ac-suspended:hover, html[data-theme="dark
 /* Reuse pn- overlay/modal styles for pk- award modal */
 #pk-award-overlay, #pk-rec-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-award-overlay.pk-open, #pk-rec-overlay.pk-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-award-overlay .pk-modal-box, #pk-rec-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; width:90vw; max-width:520px; }
+#pk-award-overlay .pk-modal-box, #pk-rec-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; width:90vw; max-width:520px; }
 #pk-award-overlay .pk-modal-header, #pk-rec-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; }
 /* Reset global h1-h6 box styles for all pk modal titles */
 .pk-modal-title { background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none; }
@@ -4930,7 +4837,12 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 	border-radius: 8px;
 	max-width: 700px;
 	width: 100%;
+	/* vh first as fallback; dvh (dynamic viewport height) overrides on
+	   browsers that support it, so mobile Safari sizes against the ACTUAL
+	   visible viewport with URL bar shown — otherwise the pinned footer
+	   gets pushed off-screen when browser chrome is visible. */
 	max-height: 90vh;
+	max-height: 90dvh;
 	display: flex;
 	flex-direction: column;
 	box-shadow: 0 20px 60px rgba(0,0,0,0.3);
@@ -5123,7 +5035,7 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 		align-items: flex-start;
 		padding: 8px;
 	}
-	.ev-modal { max-height: calc(100vh - 64px); }
+	.ev-modal { max-height: calc(100vh - 64px); max-height: calc(100dvh - 64px); }
 	.ev-checkin-label { display: none; }
 	/* Contain RSVP/Staff table horizontal scroll inside the table itself
 	   (not the whole tab panel). Never touch the schedule table. */
@@ -5806,7 +5718,7 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 /* ---- Attendance Modal (pk-att-) ---- */
 #pk-att-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:flex-start; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-att-overlay.pk-att-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-att-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; width:620px; max-width:calc(100vw - 40px); margin-top:60px; }
+#pk-att-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; width:620px; max-width:calc(100vw - 40px); margin-top:60px; }
 #pk-att-overlay .pk-modal-header { display:flex; align-items:flex-start; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; gap:12px; }
 #pk-att-overlay .pk-modal-title { font-size:16px; font-weight:700; color:var(--ork-text, #1a202c); margin:0 0 2px; }
 #pk-att-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-lighter, #a0aec0); cursor:pointer; line-height:1; padding:0 4px; flex-shrink:0; }
@@ -5975,7 +5887,7 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 /* ---- Add Park Modal (kn-addpark-) ---- */
 #kn-addpark-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-addpark-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-addpark-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-addpark-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-addpark-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; background:var(--ork-bg-secondary); }
 #kn-addpark-overlay .kn-modal-title { font-size:16px; font-weight:700; color:var(--ork-text); margin:0; }
 #kn-addpark-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
@@ -5993,7 +5905,7 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 /* ---- Edit Park Modal (kn-editpark-) ---- */
 #kn-editpark-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-editpark-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-editpark-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-editpark-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-editpark-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; background:var(--ork-bg-secondary); }
 #kn-editpark-overlay .kn-modal-title { font-size:16px; font-weight:700; color:var(--ork-text); margin:0; }
 #kn-editpark-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
@@ -6013,7 +5925,7 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 /* ---- Edit Officers Modal (kn-editoff-) ---- */
 #kn-editoff-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-editoff-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-editoff-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-editoff-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-editoff-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
 #kn-editoff-overlay .kn-modal-title { font-size:16px; font-weight:700; color:var(--ork-text); margin:0; }
 #kn-editoff-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
@@ -6039,7 +5951,7 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 /* ---- Kingdom Admin Overlay (kn-admin-) ---- */
 #kn-admin-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-admin-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-admin-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-admin-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-admin-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
 #kn-admin-overlay .kn-modal-title { font-size:16px; font-weight:700; color:var(--ork-text); margin:0; }
 #kn-admin-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
@@ -6102,6 +6014,11 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 .kn-admin-config-input { padding:5px 8px; border:1.5px solid #e2e8f0; border-radius:5px; font-size:13px; color:#2d3748; background:#fff; box-sizing:border-box; }
 .kn-admin-config-input:focus { outline:none; border-color:#90cdf4; box-shadow:0 0 0 2px rgba(66,153,225,0.12); }
 .kn-admin-config-sublabel { font-size:11px; color:#a0aec0; margin-right:2px; }
+.kn-toggle-wrap { display:inline-flex; border:1.5px solid #e2e8f0; border-radius:6px; overflow:hidden; }
+.kn-toggle-btn { padding:5px 14px; font-size:13px; font-weight:600; border:none; cursor:pointer; background:#f7fafc; color:#718096; transition:all 0.15s; }
+.kn-toggle-btn:first-child { border-right:1px solid #e2e8f0; }
+.kn-toggle-btn-yes.kn-toggle-active { background:#276749; color:#fff; }
+.kn-toggle-btn-no.kn-toggle-active { background:#9b2c2c; color:#fff; }
 .kn-admin-add-award-wrap { margin-top:12px; padding:14px; background:#f7fafc; border:1px solid #e2e8f0; border-radius:8px; }
 .kn-admin-add-award-title { font-size:12px; font-weight:700; color:#4a5568; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:10px; }
 .kn-admin-form-hint { font-size:12px; color:#718096; line-height:1.5; margin:0 0 12px 0; }
@@ -6130,13 +6047,42 @@ html[data-theme="dark"] .ev-buy-tickets-btn:hover { background: rgba(72,187,120,
 /* ---- Confirmation modal ---- */
 #kn-md-help-overlay, #pk-md-help-overlay, #ev-md-help-overlay, #un-md-help-overlay, #ec-md-help-overlay, #pn-md-help-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:var(--z-help-overlay, 1300); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-md-help-overlay.kn-open, #pk-md-help-overlay.kn-open, #ev-md-help-overlay.kn-open, #un-md-help-overlay.kn-open, #ec-md-help-overlay.kn-open, #pn-md-help-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-md-help-overlay .kn-modal-box, #pk-md-help-overlay .kn-modal-box, #ev-md-help-overlay .kn-modal-box, #un-md-help-overlay .kn-modal-box, #ec-md-help-overlay .kn-modal-box, #pn-md-help-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-md-help-overlay .kn-modal-box, #pk-md-help-overlay .kn-modal-box, #ev-md-help-overlay .kn-modal-box, #un-md-help-overlay .kn-modal-box, #ec-md-help-overlay .kn-modal-box, #pn-md-help-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-md-help-overlay .kn-modal-header, #pk-md-help-overlay .kn-modal-header, #ev-md-help-overlay .kn-modal-header, #un-md-help-overlay .kn-modal-header, #ec-md-help-overlay .kn-modal-header, #pn-md-help-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
 #kn-md-help-overlay .kn-modal-close-btn, #pk-md-help-overlay .kn-modal-close-btn, #ev-md-help-overlay .kn-modal-close-btn, #un-md-help-overlay .kn-modal-close-btn, #ec-md-help-overlay .kn-modal-close-btn, #pn-md-help-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
 #kn-md-help-overlay .kn-modal-close-btn:hover, #pk-md-help-overlay .kn-modal-close-btn:hover, #ev-md-help-overlay .kn-modal-close-btn:hover, #un-md-help-overlay .kn-modal-close-btn:hover, #ec-md-help-overlay .kn-modal-close-btn:hover, #pn-md-help-overlay .kn-modal-close-btn:hover { color:var(--ork-text); }
+/* ── In-app help ("?" beside a section heading) ────────────────────────────────
+   Body is Markdown rendered to HTML server-side, so the styles below have to cover
+   whatever the guide uses: headings, tables, lists, blockquotes, code, rules. */
+.kn-help-btn { background:none; border:none; cursor:pointer; color:#a0aec0; font-size:0.85em; padding:0 2px; line-height:1; vertical-align:middle; }
+.kn-help-btn:hover { color:#2b6cb0; }
+
+#kn-help-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal-top, 1200); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; padding:20px; }
+#kn-help-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
+#kn-help-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); display:flex; flex-direction:column; width:100%; max-width:860px; max-height:90vh; max-height:90dvh; }
+#kn-help-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
+#kn-help-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
+#kn-help-overlay .kn-modal-close-btn:hover { color:var(--ork-text); }
+/* min-height:0 is what lets the body actually scroll inside a flex column. */
+.kn-help-body { padding:20px 24px; overflow-y:auto; flex:1; min-height:0; color:var(--ork-text,#2d3748); font-size:14px; line-height:1.65; }
+.kn-help-body h1 { font-size:1.45rem; margin:0 0 12px; }
+.kn-help-body h2 { font-size:1.15rem; margin:26px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--ork-border,#e2e8f0); }
+.kn-help-body h3 { font-size:1rem; margin:20px 0 8px; }
+.kn-help-body p { margin:0 0 12px; }
+.kn-help-body ul, .kn-help-body ol { margin:0 0 12px; padding-left:22px; }
+.kn-help-body li { margin-bottom:5px; }
+.kn-help-body hr { border:none; border-top:1px solid var(--ork-border,#e2e8f0); margin:22px 0; }
+.kn-help-body code { background:var(--ork-bg-muted,#edf2f7); padding:1px 5px; border-radius:4px; font-size:0.88em; }
+.kn-help-body blockquote { margin:0 0 12px; padding:10px 14px; border-left:4px solid #f59e0b; background:#fffbeb; color:#78350f; border-radius:4px; }
+/* Tables must scroll on their own rather than force the page sideways. */
+.kn-help-body table { width:100%; border-collapse:collapse; margin:0 0 14px; display:block; overflow-x:auto; }
+.kn-help-body th, .kn-help-body td { border:1px solid var(--ork-border,#e2e8f0); padding:7px 10px; text-align:left; vertical-align:top; }
+.kn-help-body th { background:var(--ork-bg-muted,#f7fafc); font-weight:700; }
+html[data-theme="dark"] .kn-help-body blockquote { background:#3b2f14; border-left-color:#a16207; color:#fde68a; }
+
 #kn-confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal-top, 1200); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-confirm-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-confirm-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-confirm-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-confirm-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
 #kn-confirm-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
 #kn-confirm-overlay .kn-modal-close-btn:hover { color:var(--ork-text); }
@@ -6184,7 +6130,7 @@ html[data-theme="dark"] .kn-admin-award-search-empty { color:var(--ork-text-mute
 /* ---- Add Player Modal (plr- shared, kn-addplayer / pk-addplayer overlays) ---- */
 #kn-addplayer-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-addplayer-overlay.kn-addplayer-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-addplayer-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-addplayer-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-addplayer-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
 #kn-addplayer-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
 #kn-addplayer-overlay .kn-modal-close-btn:hover { color:var(--ork-text); }
@@ -6192,7 +6138,7 @@ html[data-theme="dark"] .kn-admin-award-search-empty { color:var(--ork-text-mute
 #kn-addplayer-overlay .kn-modal-footer { padding:14px 20px; border-top:1px solid var(--ork-border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
 #pk-addplayer-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-addplayer-overlay.pk-addplayer-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-addplayer-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-addplayer-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #pk-addplayer-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; }
 #pk-addplayer-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-lighter, #a0aec0); cursor:pointer; line-height:1; padding:0 4px; }
 #pk-addplayer-overlay .pk-modal-close-btn:hover { color:var(--ork-text, #4a5568); }
@@ -6270,7 +6216,7 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 .pk-edit-officers-btn:hover { color:#0891b2; background:#ebf4ff; }
 #pk-editoff-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-editoff-overlay.pk-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-editoff-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-editoff-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #pk-editoff-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; }
 #pk-editoff-overlay .pk-modal-title { font-size:16px; font-weight:700; color:var(--ork-text, #1a202c); margin:0; }
 #pk-editoff-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-lighter, #a0aec0); cursor:pointer; line-height:1; padding:0 4px; }
@@ -6296,7 +6242,7 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
    ============================================== */
 #pk-addday-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-addday-overlay.pk-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-addday-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-addday-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #pk-addday-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; }
 #pk-addday-overlay .pk-modal-title { font-size:16px; font-weight:700; color:var(--ork-text, #1a202c); margin:0; }
 #pk-addday-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-lighter, #a0aec0); cursor:pointer; line-height:1; padding:0 4px; }
@@ -6375,7 +6321,7 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 .pk-edit-details-btn:hover { color:#0891b2; background:#ebf4ff; }
 #pk-admin-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-admin-overlay.pk-admin-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-admin-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-admin-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #pk-admin-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
 #pk-admin-overlay .kn-modal-title { font-size:16px; font-weight:700; color:var(--ork-text); margin:0; }
 #pk-admin-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
@@ -6392,7 +6338,7 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 #kn-mergeplayer-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
 #kn-moveplayer-overlay .kn-modal-box,
 #kn-claimpark-overlay .kn-modal-box,
-#kn-mergeplayer-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-mergeplayer-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-moveplayer-overlay .kn-modal-header,
 #kn-claimpark-overlay .kn-modal-header,
 #kn-mergeplayer-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
@@ -6495,7 +6441,7 @@ html[data-theme="dark"] .plr-merge-scope-note i { color:rgba(66,153,225,0.9); }
 #pk-mergeplayer-overlay .pk-modal-box {
     background: var(--ork-card-bg, #fff); border-radius: 12px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-    max-height: 90vh; display: flex; flex-direction: column;
+    max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column;
 }
 #pk-heraldry-overlay .pk-modal-header,
 #pk-moveplayer-overlay .pk-modal-header,
@@ -6732,7 +6678,7 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 /* ---- Add Tournament Modal (Kingdom: kn-addtournament-) ---- */
 #kn-addtournament-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #kn-addtournament-overlay.kn-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#kn-addtournament-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#kn-addtournament-overlay .kn-modal-box { background:var(--ork-card-bg); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #kn-addtournament-overlay .kn-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border); flex-shrink:0; }
 #kn-addtournament-overlay .kn-modal-title { font-size:16px; font-weight:700; color:var(--ork-text); margin:0; }
 #kn-addtournament-overlay .kn-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-muted); cursor:pointer; line-height:1; padding:0 4px; }
@@ -6752,7 +6698,7 @@ html[data-theme="dark"] .pk-deleted-recs-table .pk-deleted-restore-btn.pk-delete
 /* ---- Add Tournament Modal (Park: pk-addtournament-) ---- */
 #pk-addtournament-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:var(--z-modal, 1100); opacity:0; pointer-events:none; visibility:hidden; transition:opacity 0.2s, visibility 0s 0.2s; }
 #pk-addtournament-overlay.pk-open { opacity:1; pointer-events:auto; visibility:visible; transition:opacity 0.2s, visibility 0s 0s; }
-#pk-addtournament-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; display:flex; flex-direction:column; }
+#pk-addtournament-overlay .pk-modal-box { background:var(--ork-card-bg, #fff); border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; max-height:90dvh; display:flex; flex-direction:column; }
 #pk-addtournament-overlay .pk-modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--ork-border, #e2e8f0); flex-shrink:0; }
 #pk-addtournament-overlay .pk-modal-title { font-size:16px; font-weight:700; color:var(--ork-text, #1a202c); margin:0; }
 #pk-addtournament-overlay .pk-modal-close-btn { background:none; border:none; font-size:22px; color:var(--ork-text-lighter, #a0aec0); cursor:pointer; line-height:1; padding:0 4px; }
@@ -7018,7 +6964,6 @@ table.dataTable.adm-table tbody tr.even:hover {
 @media (max-width: 768px) {
     .kn-player-search-input,
     .pk-player-search-input,
-    .pn-award-search-input,
     .kn-emod-input,
     .pk-emod-input,
     input[type="text"],
@@ -7032,7 +6977,6 @@ table.dataTable.adm-table tbody tr.even:hover {
     textarea {
         font-size: 16px !important;
     }
-    .pn-pagesize-select,
     .kn-pagesize-select,
     .pk-pagesize-select {
         font-size: 16px !important;
@@ -7045,6 +6989,24 @@ table.dataTable.adm-table tbody tr.even:hover {
     .pn-unit-quit-cell { opacity: 1; }
     .kn-heraldry-edit-btn { opacity: 1; }
     .pk-heraldry-edit-btn { opacity: 1; }
+    .ev-heraldry-edit-btn { opacity: 1; }
+
+    /* Leave-household / inline-confirm controls: the desktop-hover glyphs are
+       micro-targets (× ~7x13px, Yes ~21x13px) that can't be reliably tapped
+       with a finger, so leaving a household was impossible on mobile. Grow the
+       hit areas on coarse pointers only; desktop layout is unchanged. */
+    .pn-delete-link,
+    .pn-delete-yes,
+    .pn-delete-no {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 40px;
+        min-height: 40px;
+        font-size: 16px;
+    }
+    .pn-delete-confirm { gap: 14px; }
+    .pn-unit-row { padding: 6px 0; }
 }
 
 /* === Park Profile: 425px Hero Breakpoint === */
@@ -8043,6 +8005,13 @@ html[data-theme="dark"] .kn-admin-config-label { color: var(--ork-text-secondary
 html[data-theme="dark"] .kn-admin-config-input { background: var(--ork-input-bg); border-color: var(--ork-input-border); color: var(--ork-text); }
 html[data-theme="dark"] .kn-admin-config-input:focus { border-color: #90cdf4; }
 html[data-theme="dark"] .kn-admin-config-sublabel { color: var(--ork-text-muted); }
+html[data-theme="dark"] .kn-toggle-wrap { border-color: var(--ork-input-border); }
+html[data-theme="dark"] .kn-toggle-btn { background: var(--ork-input-bg); color: var(--ork-text-secondary); }
+html[data-theme="dark"] .kn-toggle-btn:first-child { border-right-color: var(--ork-input-border); }
+/* The base dark .kn-toggle-btn rule above out-specifies the plain .kn-toggle-active
+   colours, so the active Yes/No state has to be restored explicitly for dark mode. */
+html[data-theme="dark"] .kn-toggle-btn-yes.kn-toggle-active { background:#2f855a; color:#fff; }
+html[data-theme="dark"] .kn-toggle-btn-no.kn-toggle-active { background:#c53030; color:#fff; }
 /* Add Award / Add Kingdom-Specific Award forms */
 /* Operations section */
 html[data-theme="dark"] .kn-admin-ops-info strong { color: var(--ork-text); }
@@ -8589,6 +8558,66 @@ html[data-theme="dark"] #ev-attendance-table_wrapper .dataTables_paginate .pagin
   color: #fff !important;
   border-color: #2b6cb0 !important;
 }
+
+/* ── Player-profile DataTables controls (unified sort/length/search/CSV) ── */
+.pn-tab-panel .pn-dt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.pn-tab-panel .pn-dt-toolbar .dataTables_length { margin: 0; }
+.pn-tab-panel .pn-dt-toolbar .dataTables_filter { margin: 0 0 0 auto; }
+.pn-tab-panel .pn-dt-toolbar .dt-buttons { margin: 0; }
+.pn-tab-panel .dataTables_filter input {
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  padding: 5px 10px;
+  margin-left: 6px;
+}
+.pn-tab-panel .dataTables_length select {
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+.pn-tab-panel .pn-dt-csv-btn {
+  background: #1a365d;
+  color: #fff;
+  border: 1px solid #1a365d;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pn-tab-panel .pn-dt-csv-btn:hover { background: #142a4a; border-color: #142a4a; }
+.pn-tab-panel .pn-dt-csv-btn i { margin-right: 5px; }
+
+html[data-theme="dark"] .pn-tab-panel .dataTables_filter input,
+html[data-theme="dark"] .pn-tab-panel .dataTables_length select {
+  background: var(--ork-input-bg) !important;
+  border-color: var(--ork-input-border) !important;
+  color: var(--ork-text) !important;
+}
+html[data-theme="dark"] .pn-tab-panel .dataTables_info,
+html[data-theme="dark"] .pn-tab-panel .dataTables_filter label,
+html[data-theme="dark"] .pn-tab-panel .dataTables_length label {
+  color: var(--ork-text-muted) !important;
+}
+html[data-theme="dark"] .pn-tab-panel .dataTables_paginate .paginate_button {
+  background-color: #2d3748 !important;
+  background-image: none !important;
+  color: #cbd5e0 !important;
+  border-color: #4a5568 !important;
+}
+html[data-theme="dark"] .pn-tab-panel .dataTables_paginate .paginate_button.current {
+  background: #2b6cb0 !important;
+  color: #fff !important;
+  border-color: #2b6cb0 !important;
+}
+html[data-theme="dark"] .pn-tab-panel .pn-dt-csv-btn { background: #2b6cb0; border-color: #2b6cb0; }
+html[data-theme="dark"] .pn-tab-panel .pn-dt-csv-btn:hover { background: #2c5282; border-color: #2c5282; }
 
 /* Attendance form */
 html[data-theme="dark"] .ev-att-form {
@@ -10409,7 +10438,11 @@ html[data-theme="dark"] .pk-emod-input::placeholder {
 .evpv-cta {
 	display: inline-flex; align-items: center; gap: 6px;
 	background: var(--kn-accent, #276749);
-	color: #fff;
+	/* !important: the CTA is an <a>, and the global dark link tint
+	   `html[data-theme="dark"] #theme_container a { color:#63b3ed }` is an ID
+	   selector that out-specifies any class rule — without this the label renders
+	   blue-on-green in dark mode. Same override pattern as #ev-attendance-table a. */
+	color: #fff !important;
 	padding: 8px 16px;
 	border-radius: 6px;
 	font-size: 13px;
@@ -10470,8 +10503,11 @@ html[data-theme="dark"] .evpv-footer {
 }
 
 /* CTA stays accent green in both themes — readable on either bg */
-html[data-theme="dark"] .evpv-cta { background: #38a169; }
-html[data-theme="dark"] .evpv-cta:hover { background: #2f855a; }
+/* Deep enough that the (now !important) white label clears AA contrast — the old
+   #38a169 was too light for white text (~3.2:1). Text color is forced on the base
+   rule above; here we only darken the fill. */
+html[data-theme="dark"] .evpv-cta { background: #2b7a4b; }
+html[data-theme="dark"] .evpv-cta:hover { background: #22543d; }
 
 /* Mobile tweaks */
 @media (max-width: 540px) {
@@ -10657,7 +10693,7 @@ html[data-theme="dark"] .pk-banner-position-hint i { color: var(--ork-link-brigh
 	background: #fff; border-radius: 10px; width: min(520px, 96vw);
 	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
 	/* I3 fix: scroll internally on small viewports so buttons are never clipped */
-	max-height: 90vh; overflow-y: auto;
+	max-height: 90vh; max-height: 90dvh; overflow-y: auto;
 }
 .pk-img-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
@@ -10884,7 +10920,7 @@ html[data-theme="dark"] .kn-banner-position-hint i { color: var(--ork-link-brigh
 	background: #fff; border-radius: 10px; width: min(520px, 96vw);
 	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
 	/* I3 fix: scroll internally on small viewports so buttons are never clipped */
-	max-height: 90vh; overflow-y: auto;
+	max-height: 90vh; max-height: 90dvh; overflow-y: auto;
 }
 .kn-img-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
@@ -11116,7 +11152,7 @@ html[data-theme="dark"] .pn-banner-position-hint i { color: var(--ork-link-brigh
 	background: #fff; border-radius: 10px; width: min(520px, 96vw);
 	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
 	/* I3 fix: scroll internally on small viewports so buttons are never clipped */
-	max-height: 90vh; overflow-y: auto;
+	max-height: 90vh; max-height: 90dvh; overflow-y: auto;
 }
 .pn-img-modal-header {
 	display: flex; align-items: center; justify-content: space-between;
@@ -11335,7 +11371,7 @@ html[data-theme="dark"] .un-banner-position-hint i { color: var(--ork-link-brigh
 	background: #fff; border-radius: 10px; width: min(520px, 96vw);
 	box-shadow: 0 8px 32px rgba(0,0,0,.22); overflow: hidden;
 	/* I3 fix: scroll internally on small viewports so buttons are never clipped */
-	max-height: 90vh; overflow-y: auto;
+	max-height: 90vh; max-height: 90dvh; overflow-y: auto;
 }
 .un-img-modal-header {
 	display: flex; align-items: center; justify-content: space-between;

@@ -2,7 +2,7 @@
 -- Consolidated migration (Rose-cycle, fresh-deploy edition):
 --   * original CREATE
 --   * + can_schedule, can_feast columns
-CREATE TABLE `ork_event_staff` (
+CREATE TABLE IF NOT EXISTS `ork_event_staff` (
     `event_staff_id` int(11) NOT NULL AUTO_INCREMENT,
     `event_calendardetail_id` int(11) NOT NULL,
     `mundane_id` int(11) NOT NULL,

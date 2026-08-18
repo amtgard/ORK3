@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "pageId": "atlas-map-2",
+  "calibratedAt": "2026-08-01T22:20:54Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [
+    {
+      "path": "/html[0]/body[0]",
+      "mode": "subtree",
+      "source": "auto"
+    },
+    {
+      "path": "/html[0]/head[0]/script[13]",
+      "mode": "attributes",
+      "attrs": [
+        "src"
+      ],
+      "source": "auto"
+    }
+  ],
+  "manualNodes": [],
+  "refuzzedAt": "2026-08-02T18:52:11Z",
+  "refuzzedFromCommit": "05389516"
+}

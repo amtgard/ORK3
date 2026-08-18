@@ -479,6 +479,7 @@ html[data-theme="dark"] .att-edit-btn-cancel { background: var(--ork-bg-secondar
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 
 <script>
 $(function() {
@@ -569,7 +570,7 @@ $(function() {
 		scrollX: true
 	});
 	$('#att-btn-export').on('click', function() { table.button(0).trigger(); });
-	$('#att-btn-print' ).on('click', function() { table.button(1).trigger(); });
+	$('#att-btn-print' ).on('click', function() { orkPrintTable(table); });
 
 	/* ── Charts ──────────────────────────────────────── */
 	var _isDark = document.documentElement.getAttribute('data-theme') === 'dark';

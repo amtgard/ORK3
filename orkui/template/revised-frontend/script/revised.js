@@ -583,22 +583,6 @@ function acKeyNav(inputEl, resultsEl, openClass, itemSel) {
 /* ===========================
    Player Profile (PnConfig)
    =========================== */
-// ---- Pagination Helpers ----
-function pnPageRange(current, total) {
-    var pages = [];
-    if (total <= 7) {
-        for (var p = 1; p <= total; p++) pages.push(p);
-    } else {
-        pages.push(1);
-        if (current > 3) pages.push(-1);
-        var s = Math.max(2, current - 1);
-        var e = Math.min(total - 1, current + 1);
-        for (var p = s; p <= e; p++) pages.push(p);
-        if (current < total - 2) pages.push(-1);
-        pages.push(total);
-    }
-    return pages;
-}
 
 /* ===========================
    Generic confirm dialog
@@ -657,102 +641,45 @@ function pnPageRange(current, total) {
     };
 })();
 
-function pnSetPageSize(tableId, size) {
-    var $table = $('#' + tableId);
-    if (!$table.length) return;
-    $table.data('pagesize', size === 'all' ? 99999 : parseInt(size));
-    pnPaginate($table, 1);
-}
 
-function pnAwardSearch(q) {
-    q = q.trim().toLowerCase();
-    var table = document.getElementById('pn-awards-table');
-    var noResults = document.getElementById('pn-award-search-empty');
-    if (!table) return;
-    var rows = table.querySelectorAll('tbody tr');
-    if (!q) {
-        rows.forEach(function(r) { r.style.display = ''; });
-        if (noResults) noResults.style.display = 'none';
-        if (typeof pnPaginate === 'function') pnPaginate($('#pn-awards-table'), 1);
-        return;
-    }
-    var matchCount = 0;
-    rows.forEach(function(r) {
-        var match = r.textContent.toLowerCase().indexOf(q) !== -1;
-        r.style.display = match ? '' : 'none';
-        if (match) matchCount++;
-    });
-    var pg = table.nextElementSibling;
-    while (pg && !pg.classList.contains('pn-pagination')) { pg = pg.nextElementSibling; }
-    if (pg) pg.style.display = 'none';
-    if (noResults) noResults.style.display = matchCount === 0 ? '' : 'none';
-}
+// ---- Unified DataTables initializer for player-profile data tables ----
+// Gives every profile grid the same feature set: click-sort, "Show N" length
+// menu, pagination, a search box, and CSV export. Header cells:
+//   - data-sorttype="date" -> that column sorts as a date
+//   - class="pn-nosort"     -> action-button column (no sort/search/export)
+// opts: { order: [[col,'desc']], filename: 'Awards', pageLength: 25 }
+function pnInitDataTable(selector, opts) {
+    opts = opts || {};
+    if (!$.fn || !$.fn.DataTable) return null;
+    var $table = $(selector);
+    if (!$table.length) return null;
+    if ($.fn.DataTable.isDataTable($table)) { $table.DataTable().destroy(); }
 
-function pnPaginate($table, page) {
-    var pageSize = parseInt($table.data('pagesize')) || 10;
-    var $rows = $table.find('tbody tr');
-    var total = $rows.length;
-    if (total === 0) return;
-    var totalPages = Math.max(1, Math.ceil(total / pageSize));
-    page = Math.max(1, Math.min(page, totalPages));
-    $table.data('pn-page', page);
-    $rows.each(function(i) {
-        $(this).toggle(i >= (page - 1) * pageSize && i < page * pageSize);
+    var colDefs = [];
+    var hasAction = false;
+    $table.find('thead th').each(function(i) {
+        var $th = $(this);
+        if ($th.hasClass('pn-nosort')) { hasAction = true; colDefs.push({ targets: i, orderable: false, searchable: false }); }
+        if ($th.data('sorttype') === 'date') colDefs.push({ targets: i, type: 'date' });
     });
-    var $pg = $table.next('.pn-pagination');
-    if ($pg.length === 0) $pg = $('<div class="pn-pagination"></div>').insertAfter($table);
-    if (total <= pageSize) { $pg.empty().hide(); return; }
-    $pg.show();
-    var start = (page - 1) * pageSize + 1;
-    var end = Math.min(page * pageSize, total);
-    var html = '<span class="pn-pagination-info">Showing ' + start + '\u2013' + end + ' of ' + total + '</span>';
-    html += '<div class="pn-pagination-controls">';
-    html += '<button class="pn-page-btn pn-page-prev"' + (page === 1 ? ' disabled' : '') + '>&#8249;</button>';
-    var range = pnPageRange(page, totalPages);
-    for (var ri = 0; ri < range.length; ri++) {
-        if (range[ri] === -1) {
-            html += '<span class="pn-page-ellipsis">&hellip;</span>';
-        } else {
-            html += '<button class="pn-page-btn pn-page-num' + (range[ri] === page ? ' pn-page-active' : '') + '" data-page="' + range[ri] + '">' + range[ri] + '</button>';
-        }
-    }
-    html += '<button class="pn-page-btn pn-page-next"' + (page === totalPages ? ' disabled' : '') + '>&#8250;</button>';
-    html += '</div>';
-    $pg.html(html);
-}
 
-function pnSortDesc($table, colIndex, sortType, secondaryColIndex, secondarySortType) {
-    if (!$table.length) return;
-    $table.find('thead th').removeClass('sort-asc sort-desc');
-    $table.find('thead th').eq(colIndex).addClass('sort-desc');
-    var $tbody = $table.find('tbody');
-    var rows = $tbody.find('tr').get();
-    rows.sort(function(a, b) {
-        var aVal = $(a).find('td').eq(colIndex).text().trim();
-        var bVal = $(b).find('td').eq(colIndex).text().trim();
-        var cmp = 0;
-        if (sortType === 'numeric') {
-            cmp = (parseFloat(aVal) || 0) - (parseFloat(bVal) || 0);
-        } else if (sortType === 'date') {
-            cmp = (new Date(aVal).getTime() || 0) - (new Date(bVal).getTime() || 0);
-        } else {
-            cmp = aVal.localeCompare(bVal);
-        }
-        if (cmp === 0 && secondaryColIndex != null) {
-            var aVal2 = $(a).find('td').eq(secondaryColIndex).text().trim();
-            var bVal2 = $(b).find('td').eq(secondaryColIndex).text().trim();
-            var st = secondarySortType || 'text';
-            if (st === 'numeric') {
-                cmp = (parseFloat(aVal2) || 0) - (parseFloat(bVal2) || 0);
-            } else if (st === 'date') {
-                cmp = (new Date(aVal2).getTime() || 0) - (new Date(bVal2).getTime() || 0);
-            } else {
-                cmp = aVal2.localeCompare(bVal2);
-            }
-        }
-        return -cmp;
+    return $table.DataTable({
+        dom: "<'pn-dt-toolbar'lfB>rtip",
+        buttons: [{
+            extend: 'csv',
+            className: 'pn-dt-csv-btn',
+            text: '<i class="fas fa-download"></i> CSV',
+            filename: opts.filename || 'Export',
+            exportOptions: { columns: hasAction ? ':not(.pn-nosort)' : ':visible' }
+        }],
+        columnDefs: colDefs,
+        order: opts.order || [],
+        pageLength: opts.pageLength || 25,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+        scrollX: true,
+        autoWidth: false,
+        language: { search: '', searchPlaceholder: 'Search…' }
     });
-    $.each(rows, function(i, row) { $tbody.append(row); });
 }
 
 function pnActivateTab(tab) {
@@ -761,6 +688,12 @@ function pnActivateTab(tab) {
     $pnTab.addClass('pn-tab-active');
     $('.pn-tab-panel').hide();
     $('#pn-tab-' + tab).show();
+    // DataTables can't measure column widths while a tab is hidden; re-adjust on show.
+    if ($.fn && $.fn.DataTable) {
+        $('#pn-tab-' + tab).find('table.dataTable').each(function() {
+            $(this).DataTable().columns.adjust();
+        });
+    }
     var pnLabel = $pnTab.find('.pn-tab-label').text().trim();
     if (pnLabel) $('#pn-active-tab-label').text(pnLabel);
 }
@@ -788,29 +721,29 @@ $(document).ready(function() {
     $('.pn-ladder-item[data-ladname]').on('click', function() {
         var name = $(this).data('ladname');
         pnActivateTab('awards');
-        var $input = $('#pn-award-search');
-        $input.val(name);
-        pnAwardSearch(name);
+        if ($.fn.DataTable && $.fn.DataTable.isDataTable('#pn-awards-table')) {
+            $('#pn-awards-table').DataTable().search(name).draw();
+        }
     });
 
-    // ---- Class Level Calculation ----
+    // ---- Class Level Calculation (thresholds from ClassLevel via PnConfig) ----
     $('#pn-classes-table tbody tr').each(function() {
         var credits = Number($(this).find('.pn-credits').text());
+        var thresholds = PnConfig.classLevelThresholds || [];
         var level = 1;
-        if (credits >= 53) level = 6;
-        else if (credits >= 34) level = 5;
-        else if (credits >= 21) level = 4;
-        else if (credits >= 12) level = 3;
-        else if (credits >= 5) level = 2;
+        for (var ti = thresholds.length - 1; ti >= 0; ti--) {
+            if (credits >= thresholds[ti]) { level = ti + 2; break; }
+        }
         $(this).find('.pn-level').text(level);
 
-        var thresholds = [5, 12, 21, 34];
+        var maxCredits = thresholds.length ? thresholds[thresholds.length - 1] : null;
+        var nearThresholds = thresholds.length > 1 ? thresholds.slice(0, -1) : [];
         var badge = '';
-        if (credits >= 53) {
+        if (maxCredits !== null && credits >= maxCredits) {
             badge = 'max';
         } else {
-            for (var i = 0; i < thresholds.length; i++) {
-                var t = thresholds[i];
+            for (var i = 0; i < nearThresholds.length; i++) {
+                var t = nearThresholds[i];
                 if (credits === t) { badge = 'leveled'; break; }
                 else if (credits === t - 1 || credits === t - 2) { badge = 'soon'; break; }
             }
@@ -826,41 +759,7 @@ $(document).ready(function() {
         }
     });
 
-    // ---- Sortable Tables ----
-    $('.pn-sortable').each(function() {
-        var table = $(this);
-        table.find('thead th').on('click', function() {
-            var columnIndex = $(this).index();
-            var sortType = $(this).data('sorttype') || 'text';
-            var isAscending = !$(this).hasClass('sort-asc');
-
-            table.find('thead th').removeClass('sort-asc sort-desc');
-            $(this).addClass(isAscending ? 'sort-asc' : 'sort-desc');
-
-            var tbody = table.find('tbody');
-            var rows = tbody.find('tr').get();
-
-            rows.sort(function(a, b) {
-                var aText = $(a).find('td').eq(columnIndex).text().trim();
-                var bText = $(b).find('td').eq(columnIndex).text().trim();
-                var cmp = 0;
-
-                if (sortType === 'numeric') {
-                    cmp = (parseFloat(aText) || 0) - (parseFloat(bText) || 0);
-                } else if (sortType === 'date') {
-                    cmp = (new Date(aText).getTime() || 0) - (new Date(bText).getTime() || 0);
-                } else {
-                    cmp = aText.localeCompare(bText);
-                }
-                return isAscending ? cmp : -cmp;
-            });
-
-            $.each(rows, function(i, row) {
-                tbody.append(row);
-            });
-            pnPaginate(table, 1);
-        });
-    });
+    // Profile data tables use DataTables for sorting/paging/search/CSV — see pnInitDataTable().
 
 
     // ---- Custom Recommendation Modal ----
@@ -1181,21 +1080,6 @@ if (PnConfig.recError) {
         $cell.find('.pn-delete-confirm').removeClass('pn-active');
     });
 
-    // ---- Pagination: page button handlers ----
-    $(document).on('click', '.pn-page-num', function() {
-        var $table = $(this).closest('.pn-pagination').prev('.pn-table');
-        if ($table.length) pnPaginate($table, parseInt($(this).data('page')));
-    });
-    $(document).on('click', '.pn-page-prev', function() {
-        if ($(this).prop('disabled')) return;
-        var $table = $(this).closest('.pn-pagination').prev('.pn-table');
-        if ($table.length) pnPaginate($table, ($table.data('pn-page') || 1) - 1);
-    });
-    $(document).on('click', '.pn-page-next', function() {
-        if ($(this).prop('disabled')) return;
-        var $table = $(this).closest('.pn-pagination').prev('.pn-table');
-        if ($table.length) pnPaginate($table, ($table.data('pn-page') || 1) + 1);
-    });
 
 
     // ---- Image Upload Modal ----
@@ -2393,28 +2277,12 @@ if (PnConfig.recError) {
         });
     })();
 
-    pnSortDesc($('#pn-classes-table'), 2, 'numeric');
-    // Classes table: click-to-sort without pagination
-    $('#pn-classes-table thead th').on('click', function() {
-        var $th    = $(this);
-        var $table = $('#pn-classes-table');
-        var col    = $th.index();
-        var stype  = $th.data('sorttype') || 'text';
-        var isAsc  = !$th.hasClass('sort-asc');
-        $table.find('thead th').removeClass('sort-asc sort-desc');
-        $th.addClass(isAsc ? 'sort-asc' : 'sort-desc');
-        var $tbody = $table.find('tbody');
-        var rows   = $tbody.find('tr').get();
-        rows.sort(function(a, b) {
-            var av = $(a).find('td').eq(col).text().trim();
-            var bv = $(b).find('td').eq(col).text().trim();
-            var cmp = stype === 'numeric'
-                ? (parseFloat(av) || 0) - (parseFloat(bv) || 0)
-                : av.localeCompare(bv);
-            return isAsc ? cmp : -cmp;
-        });
-        $.each(rows, function(i, row) { $tbody.append(row); });
-    });
+    // Initialize server-rendered profile tables as DataTables (AJAX tabs init after their fetch).
+    pnInitDataTable('#pn-awards-table',         { order: [[2, 'desc'], [1, 'desc']], filename: 'Awards' });
+    pnInitDataTable('#pn-titles-table',         { order: [[2, 'desc'], [1, 'desc']], filename: 'Titles' });
+    pnInitDataTable('#pn-classes-table',        { order: [[2, 'desc']],              filename: 'Class Levels' });
+    pnInitDataTable('#pn-revoked-awards-table', { order: [[3, 'desc']],              filename: 'Revoked Awards' });
+    pnInitDataTable('#pn-revoked-titles-table', { order: [[3, 'desc']],              filename: 'Revoked Titles' });
 
 });
 
@@ -2731,6 +2599,9 @@ function knActivateTab(tab) {
     if (tab === 'recommendations') {
         knLazyLoadRecs();
     }
+    if (tab === 'parks') {
+        window.orkAdjustDataTables($('#kn-tab-parks'));
+    }
 }
 
 // Lazily fetch the Recommendations tab's inner HTML the first time the tab is
@@ -2922,6 +2793,9 @@ window.orkConfirm = function(message, onConfirm, opts) {
     msgEl.textContent = message || '';
     okBtn.textContent = opts.okLabel || 'OK';
     okBtn.className = 'ork-confirm-ok' + (opts.danger === false ? ' ork-confirm-ok-neutral' : '');
+    // alertMode: informational one-button dialog (no Cancel). Same shell,
+    // no second button — used as a styled replacement for window.alert().
+    cancelBtn.style.display = opts.alertMode ? 'none' : '';
 
     function cleanup() {
         overlay.classList.remove('ork-confirm-open');
@@ -2941,6 +2815,17 @@ window.orkConfirm = function(message, onConfirm, opts) {
     overlay.classList.add('ork-confirm-open');
     document.body.style.overflow = 'hidden';
     setTimeout(function() { okBtn.focus(); }, 30);
+};
+
+// Drop-in styled replacement for window.alert. Same visual as orkConfirm,
+// but one button, no Cancel. Opts: { title, okLabel }.
+window.orkAlert = function(message, opts) {
+    opts = opts || {};
+    opts.alertMode = true;
+    opts.danger    = (opts.danger !== false);
+    if (!opts.title)   opts.title   = 'Heads up';
+    if (!opts.okLabel) opts.okLabel = 'OK';
+    window.orkConfirm(message, null, opts);
 };
 
 function knSortDesc($table, colIndex, sortType) {
@@ -3014,6 +2899,7 @@ $(document).ready(function() {
             $('#kn-prinz-tables').show();
             $('#kn-view-list').addClass('kn-view-active');
             $('#kn-view-tiles').removeClass('kn-view-active');
+            window.orkAdjustDataTables($('#kn-tab-parks'));
         } else {
             $('#kn-parks-list-view').hide();
             $('#kn-parks-tiles').show();
@@ -3055,29 +2941,32 @@ $(document).ready(function() {
         knSetEventsView('list');
     }
 
-    // ---- Sortable tables ----
-    $('.kn-sortable').each(function() {
-        var $table = $(this);
-        $table.find('thead th').on('click', function() {
-            var colIndex = $(this).index();
-            var sortType = $(this).data('sorttype') || 'text';
-            var isAsc = !$(this).hasClass('sort-asc');
-            $table.find('thead th').removeClass('sort-asc sort-desc');
-            $(this).addClass(isAsc ? 'sort-asc' : 'sort-desc');
-            var $tbody = $table.find('tbody');
-            var rows = $tbody.find('tr').get();
-            rows.sort(function(a, b) {
-                var aVal = $(a).find('td').eq(colIndex).text().trim();
-                var bVal = $(b).find('td').eq(colIndex).text().trim();
-                var cmp = 0;
-                if (sortType === 'numeric')   cmp = (parseFloat(aVal) || 0) - (parseFloat(bVal) || 0);
-                else if (sortType === 'date') cmp = (new Date(aVal).getTime() || 0) - (new Date(bVal).getTime() || 0);
-                else                          cmp = aVal.localeCompare(bVal);
-                return isAsc ? cmp : -cmp;
-            });
-            $.each(rows, function(i, row) { $tbody.append(row); });
-            knPaginate($table, 1);
+    // ---- Sortable tables (delegated so JS-injected tables like the Players
+    //      list are covered too) ----
+    $(document).on('click', '.kn-sortable thead th', function() {
+        var $th = $(this);
+        var $table = $th.closest('table');
+        var colIndex = $th.index();
+        var sortType = $th.data('sorttype') || 'text';
+        var isAsc = !$th.hasClass('sort-asc');
+        $table.find('thead th').removeClass('sort-asc sort-desc');
+        $th.addClass(isAsc ? 'sort-asc' : 'sort-desc');
+        var $tbody = $table.find('tbody');
+        var rows = $tbody.find('tr').get();
+        rows.sort(function(a, b) {
+            var aVal = $(a).find('td').eq(colIndex).text().trim();
+            var bVal = $(b).find('td').eq(colIndex).text().trim();
+            var cmp = 0;
+            if (sortType === 'numeric')   cmp = (parseFloat(aVal) || 0) - (parseFloat(bVal) || 0);
+            else if (sortType === 'date') cmp = (new Date(aVal).getTime() || 0) - (new Date(bVal).getTime() || 0);
+            else                          cmp = aVal.localeCompare(bVal);
+            return isAsc ? cmp : -cmp;
         });
+        $.each(rows, function(i, row) { $tbody.append(row); });
+        // The year-grouped Players list shows every member per year section
+        // (no pagination) — sorting only reorders it. Other kn-sortable tables
+        // (e.g. Events) keep their pager.
+        if (!$table.hasClass('kn-year-table')) knPaginate($table, 1);
     });
 
     // ---- Pagination event delegation ----
@@ -3145,8 +3034,23 @@ $(document).ready(function() {
 
     // ---- Default sort + initial pagination ----
 
-    knSortAsc($('#kn-parks-table'), 0, 'text');
-    knPaginate($('#kn-parks-table'), 1);
+    // Parks + principality tables → standard DataTables toolbar.
+    // Capture the whole set in ONE pass, before any init runs. DataTables'
+    // scrollX clone tables copy the source table's kn-parks-dt class, so a
+    // second selector pass after the first table initialises would match
+    // those clones and try to re-initialise them ("Cannot reinitialise
+    // table" alert). Selecting up-front — while nothing is a DataTable yet —
+    // means the collection holds only the real tables.
+    $('.kn-parks-dt').each(function() {
+        var lastCol = this.tHead ? this.tHead.rows[0].cells.length - 1 : 0;
+        var hasGear = $(this).find('thead th.no-export').length > 0;
+        var isMain  = this.id === 'kn-parks-table';
+        window.orkInitDataTable($(this), {
+            order: [[0, 'asc']],
+            csvName: isMain ? 'Kingdom Parks' : ($(this).data('csvname') || 'Parks'),
+            columnDefs: hasGear ? [{ targets: lastCol, orderable: false, searchable: false }] : []
+        });
+    });
 
     knSortAsc($('#kn-events-table'), 0, 'date');
     knPaginate($('#kn-events-table'), 1);
@@ -3935,18 +3839,29 @@ $(document).ready(function() {
         if (knCiFlatEnd)   { knCiFlatEnd.destroy();   knCiFlatEnd   = null; }
         var fmt = allDay ? 'Y-m-d' : 'Y-m-d H:i';
         var opts = { enableTime: !allDay, dateFormat: fmt, altInput: true, altFormat: allDay ? 'F j, Y' : 'F j, Y h:i K', minuteIncrement: 15, time_24hr: false };
+        // Track the previous start so onChange can slide the end by the same
+        // delta, preserving the item's duration — same rule as the event modal.
+        var _prevStart = null;
         knCiFlatStart = flatpickr('#kn-ci-start', Object.assign({}, opts, {
+            onReady: function(sel) { _prevStart = sel[0] || null; },
             onChange: function(sel) {
                 if (!sel[0] || !knCiFlatEnd) return;
-                if (!knCiFlatEnd.selectedDates[0] || knCiFlatEnd.selectedDates[0] < sel[0]) {
-                    var end = new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000));
-                    knCiFlatEnd.setDate(end, true);
+                var endDate = knCiFlatEnd.selectedDates[0];
+                if (endDate && _prevStart) {
+                    var offset = endDate.getTime() - _prevStart.getTime();
+                    knCiFlatEnd.setDate(new Date(sel[0].getTime() + offset), true);
+                } else if (!endDate) {
+                    knCiFlatEnd.setDate(new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000)), true);
                 }
+                _prevStart = sel[0];
             }
         }));
         knCiFlatEnd = flatpickr('#kn-ci-end', opts);
         if (startVal) knCiFlatStart.setDate(startVal, true);
         if (endVal)   knCiFlatEnd.setDate(endVal, true);
+        // Sync the cache to the initial start value (setDate() does not fire
+        // onChange when called with `true`).
+        _prevStart = knCiFlatStart.selectedDates[0] || null;
     }
 
     function knGetModalType() {
@@ -4901,7 +4816,7 @@ $(document).ready(function() {
         if (!overlay) return;
         if (_knPending.size > 0) {
             var names = Array.from(_knPending).map(function(id) { return _knPanelNames[id] || id; });
-            knConfirm('You have unsaved changes in: ' + names.join(', ') + '. Close anyway?', function() {
+            knConfirm('You have unsaved changes in: ' + names.join(', ') + '.\nClose anyway?', function() {
                 _knPending.clear();
                 knCloseAdminModal();
             }, 'Unsaved Changes');
@@ -5023,7 +4938,12 @@ $(document).ready(function() {
 
             var lbl = document.createElement('div');
             lbl.className   = 'kn-admin-config-label';
-            var keyLabels = { 'AwardRecsPublic': 'Award Recommendations Visibility', 'IncludePrincipalityInStatistics': 'Include Principality in Statistics' };
+            var keyLabels = {
+                'AwardRecsPublic': 'Award Recommendations Visibility',
+                'IncludePrincipalityInStatistics': 'Include Principality in Statistics',
+                'QualTestReeveEnabled': "Reeve's Test",
+                'QualTestCorporaEnabled': 'Corpora Test'
+            };
             lbl.textContent = keyLabels[cfg.Key] || cfg.Key;
             var keyHints = {
                 'AttendanceWeeklyMinimum': 'Minimum distinct weeks with at least one sign-in in the last 6 months. Leave blank to not require this.',
@@ -5098,6 +5018,43 @@ $(document).ready(function() {
                     Object.defineProperty(inp, 'value', {
                         get: function() { return this.checked ? '1' : '0'; }
                     });
+                } else if (cfg.Key === 'QualTestReeveEnabled' || cfg.Key === 'QualTestCorporaEnabled') {
+                    // Yes/No toggle button
+                    inp = document.createElement('input');
+                    inp.type = 'hidden';
+                    inp.value = String(val) === '1' ? '1' : '0';
+                    inp.className = 'kn-admin-config-input';
+                    inp.dataset.configId = cfg.ConfigurationId;
+                    inputs.appendChild(inp);
+
+                    var wrap = document.createElement('span');
+                    wrap.className = 'kn-toggle-wrap';
+                    var btnYes = document.createElement('button');
+                    btnYes.type = 'button'; btnYes.textContent = 'Yes';
+                    btnYes.className = 'kn-toggle-btn kn-toggle-btn-yes' + (inp.value === '1' ? ' kn-toggle-active' : '');
+                    var btnNo = document.createElement('button');
+                    btnNo.type = 'button'; btnNo.textContent = 'No';
+                    btnNo.className = 'kn-toggle-btn kn-toggle-btn-no' + (inp.value === '0' ? ' kn-toggle-active' : '');
+                    // The value lives on a hidden input, and assigning `.value` in JS fires
+                    // no event — so the panel's dirty-tracker (knWirePendingPanel, which
+                    // listens for bubbling input/change) never saw these toggles and the
+                    // page could be closed on unsaved changes. Emit a real event.
+                    var setToggle = function(on) {
+                        if (inp.value === (on ? '1' : '0')) return;   // no-op re-click isn't a change
+                        inp.value = on ? '1' : '0';
+                        btnYes.classList.toggle('kn-toggle-active', on);
+                        btnNo.classList.toggle('kn-toggle-active', !on);
+                        inp.dispatchEvent(new Event('change', { bubbles: true }));
+                    };
+                    btnYes.addEventListener('click', function() { setToggle(true); });
+                    btnNo.addEventListener('click', function() { setToggle(false); });
+                    wrap.appendChild(btnYes);
+                    wrap.appendChild(btnNo);
+                    inputs.appendChild(wrap);
+                    // skip the default inp append below
+                    row.appendChild(inputs);
+                    container.appendChild(row);
+                    return;
                 } else {
                     inp = document.createElement('input');
                     inp.type  = (cfg.Type === 'color')  ? 'color'
@@ -5153,7 +5110,7 @@ $(document).ready(function() {
             } else {
                 saveRecs(function(ok, err) {
                     btn.disabled = false;
-                    if (ok) feedback('kn-admin-config-feedback', 'Configuration saved!', true);
+                    if (ok) { knClearPending('kn-admin-body-config'); feedback('kn-admin-config-feedback', 'Configuration saved!', true); }
                     else feedback('kn-admin-config-feedback', err, false);
                 });
             }
@@ -6066,6 +6023,13 @@ $(document).ready(function() {
         wireToggle('kn-admin-hdr-signinlink', 'kn-admin-body-signinlink', 'kn-admin-chev-signinlink');
         wireToggle('kn-admin-hdr-ops',        'kn-admin-body-ops',        'kn-admin-chev-ops');
 
+        // Arm the unsaved-changes tracking. These listeners sit on the panel itself and
+        // catch edits by bubbling, so they survive the buildConfig/buildTitles/... rebuilds
+        // that replace the panel's children. Only panels listed in _knPanelNames are wired;
+        // Sign-in Link and Operations are excluded on purpose (their inputs are searches and
+        // one-shot actions, not pending edits, and would raise false "unsaved" prompts).
+        Object.keys(_knPanelNames).forEach(knWirePendingPanel);
+
         wireDetails();
         wirePrinz();
         wireStatus();
@@ -6105,6 +6069,61 @@ $(document).ready(function() {
 // ── Shared: Styled confirmation modal (used by Kingdom + Park admin dialogs) ──
 (function() {
     var _confirmCallback = null;
+
+    // ── In-app help ("?" beside a section heading) ────────────────────────────
+    // The body is a docs/*.md guide rendered to HTML by the server, so the help a GMR reads in
+    // the app is literally the same document that lives in the repo. Fetched on demand and
+    // cached per topic — the guide is long and does not change between clicks.
+    var _knHelpCache = {};
+    function knHelpClose() {
+        var o = document.getElementById('kn-help-overlay');
+        if (o) o.classList.remove('kn-open');
+        document.body.style.overflow = '';
+    }
+    function knHelpOpen(doc, title) {
+        var overlay = document.getElementById('kn-help-overlay');
+        var bodyEl  = document.getElementById('kn-help-body');
+        if (!overlay || !bodyEl) return;
+        var titleEl = document.getElementById('kn-help-title');
+        if (titleEl) titleEl.innerHTML = '<i class="fas fa-question-circle" style="margin-right:8px;color:#2b6cb0"></i>' + (title || 'Help');
+        overlay.classList.add('kn-open');
+        document.body.style.overflow = 'hidden';
+        bodyEl.scrollTop = 0;
+
+        if (_knHelpCache[doc]) { bodyEl.innerHTML = _knHelpCache[doc]; return; }
+        bodyEl.innerHTML = '<div style="text-align:center;padding:32px;color:#718096"><i class="fas fa-spinner fa-spin"></i> Loading&hellip;</div>';
+        // KnConfig.uir is the UI root; BASE_URL is Kingdom-scoped (KingdomAjax/kingdom/<id>/)
+        // and would not reach this controller.
+        $.post(KnConfig.uir + 'QualTestAjax/help', { Doc: doc }, function(r) {
+            if (r && r.status === 0) {
+                _knHelpCache[doc] = r.html;
+                bodyEl.innerHTML  = r.html;
+                bodyEl.scrollTop  = 0;
+            } else {
+                bodyEl.innerHTML = '<div style="padding:24px;color:#c53030">'
+                    + ((r && r.error) ? r.error : 'Could not load help.') + '</div>';
+            }
+        }, 'json').fail(function() {
+            bodyEl.innerHTML = '<div style="padding:24px;color:#c53030">Could not load help.</div>';
+        });
+    }
+    $(document).ready(function() {
+        document.querySelectorAll('.kn-help-btn').forEach(function(b) {
+            b.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                knHelpOpen(b.dataset.doc, b.getAttribute('title'));
+            });
+        });
+        var hc = document.getElementById('kn-help-close-btn');
+        if (hc) hc.addEventListener('click', knHelpClose);
+        var ho = document.getElementById('kn-help-overlay');
+        if (ho) ho.addEventListener('click', function(e) { if (e.target === ho) knHelpClose(); });
+        document.addEventListener('keydown', function(e) {
+            var o = document.getElementById('kn-help-overlay');
+            if (e.key === 'Escape' && o && o.classList.contains('kn-open')) knHelpClose();
+        });
+    });
 
     window.knConfirm = function(message, onConfirm, title) {
         var overlay = document.getElementById('kn-confirm-overlay');
@@ -7556,18 +7575,25 @@ $(document).ready(function() {
         if (pkCiFlatEnd)   { pkCiFlatEnd.destroy();   pkCiFlatEnd   = null; }
         var fmt  = allDay ? 'Y-m-d' : 'Y-m-d H:i';
         var opts = { enableTime: !allDay, dateFormat: fmt, altInput: true, altFormat: allDay ? 'F j, Y' : 'F j, Y h:i K', minuteIncrement: 15, time_24hr: false };
+        var _prevStart = null;
         pkCiFlatStart = flatpickr('#pk-ci-start', Object.assign({}, opts, {
+            onReady: function(sel) { _prevStart = sel[0] || null; },
             onChange: function(sel) {
                 if (!sel[0] || !pkCiFlatEnd) return;
-                if (!pkCiFlatEnd.selectedDates[0] || pkCiFlatEnd.selectedDates[0] < sel[0]) {
-                    var end = new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000));
-                    pkCiFlatEnd.setDate(end, true);
+                var endDate = pkCiFlatEnd.selectedDates[0];
+                if (endDate && _prevStart) {
+                    var offset = endDate.getTime() - _prevStart.getTime();
+                    pkCiFlatEnd.setDate(new Date(sel[0].getTime() + offset), true);
+                } else if (!endDate) {
+                    pkCiFlatEnd.setDate(new Date(sel[0].getTime() + (allDay ? 0 : 60 * 60 * 1000)), true);
                 }
+                _prevStart = sel[0];
             }
         }));
         pkCiFlatEnd = flatpickr('#pk-ci-end', opts);
         if (startVal) pkCiFlatStart.setDate(startVal, true);
         if (endVal)   pkCiFlatEnd.setDate(endVal, true);
+        _prevStart = pkCiFlatStart.selectedDates[0] || null;
     }
 
     function pkCiResetForm(presetDate) {
@@ -8528,22 +8554,55 @@ $(document).ready(function() {
     if (EvConfig.canManageStaff || EvConfig.canManageSchedule || EvConfig.canManageFeast) {
         var gid = function(id) { return document.getElementById(id); };
         var evStaffAcTimer = null;
+        // 0 = adding a new staffer. Nonzero = editing an existing row —
+        // evSubmitStaff() reads this to decide whether to REPLACE the row
+        // in the table or APPEND. The upsert endpoint handles both cases,
+        // but only the frontend knows which visual to render.
+        var evEditingStaffId = 0;
 
-        window.evOpenStaffModal = function() {
+        window.evOpenStaffModal = function(prefill) {
             var modal = gid('ev-staff-modal');
             if (!modal) return;
-            gid('ev-staff-role').value = '';
-            gid('ev-staff-player-name').value = '';
-            gid('ev-staff-player-id').value = '';
-            gid('ev-staff-can-manage').checked = false;
-            gid('ev-staff-can-attendance').checked = false;
-            if (gid('ev-staff-can-schedule')) gid('ev-staff-can-schedule').checked = false;
-            if (gid('ev-staff-can-feast'))    gid('ev-staff-can-feast').checked    = false;
+            var editing = !!(prefill && prefill.staffId);
+            evEditingStaffId = editing ? prefill.staffId : 0;
+            gid('ev-staff-role').value             = editing ? prefill.role      : '';
+            gid('ev-staff-player-name').value      = editing ? prefill.persona   : '';
+            gid('ev-staff-player-id').value        = editing ? prefill.mundaneId : '';
+            // Player is fixed when editing — the upsert key is (detail, mundane),
+            // so changing the player would create a second row rather than
+            // updating this one.
+            gid('ev-staff-player-name').readOnly   = editing;
+            gid('ev-staff-can-manage').checked     = editing ? !!prefill.canManage     : false;
+            gid('ev-staff-can-attendance').checked = editing ? !!prefill.canAttendance : false;
+            if (gid('ev-staff-can-schedule')) gid('ev-staff-can-schedule').checked = editing ? !!prefill.canSchedule : false;
+            if (gid('ev-staff-can-feast'))    gid('ev-staff-can-feast').checked    = editing ? !!prefill.canFeast    : false;
             gid('ev-staff-error').style.display = 'none';
             gid('ev-staff-ac').classList.remove('kn-ac-open');
+            // Title + submit-button copy switch on mode.
+            var titleEl = modal.querySelector('.ev-modal-header h3');
+            if (titleEl) titleEl.innerHTML = '<i class="fas fa-id-badge" style="margin-right:8px"></i>' + (editing ? 'Edit Staff Member' : 'Add Staff Member');
+            var saveBtn = gid('ev-staff-save-btn');
+            if (saveBtn) saveBtn.innerHTML = editing
+                ? '<i class="fas fa-save" style="margin-right:5px"></i>Save Changes'
+                : '<i class="fas fa-plus" style="margin-right:5px"></i>Add Staff';
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
             setTimeout(function() { gid('ev-staff-role').focus(); }, 50);
+        };
+
+        window.evEditStaff = function(btn, staffId) {
+            var row = btn.closest('tr');
+            if (!row) return;
+            evOpenStaffModal({
+                staffId:       staffId,
+                mundaneId:     row.getAttribute('data-mundane-id') || '',
+                persona:       row.getAttribute('data-persona')    || '',
+                role:          row.getAttribute('data-role')       || '',
+                canManage:     row.getAttribute('data-manage')     === '1',
+                canAttendance: row.getAttribute('data-attendance') === '1',
+                canSchedule:   row.getAttribute('data-schedule')   === '1',
+                canFeast:      row.getAttribute('data-feast')      === '1'
+            });
         };
 
         window.evCloseStaffModal = function() {
@@ -8642,7 +8701,14 @@ $(document).ready(function() {
                                 fetch(EvConfig.uir + 'KingdomAjax/playersearch/' + kid + '&q=' + encodeURIComponent(term) + '&scope=exclude')
                                     .then(function(r2) { return r2.json(); })
                                     .then(function(other) {
-                                        other = (other || []).slice(0, 10 - own.length);
+                                        // Dedup by MundaneId. With an abbreviation
+                                        // prefix like "nb:ff alt", the backend
+                                        // ignores scope entirely so both fetches
+                                        // return the same rows — same player would
+                                        // otherwise render twice in the dropdown.
+                                        var seen = {};
+                                        own.forEach(function(pl) { seen[pl.MundaneId] = true; });
+                                        other = (other || []).filter(function(pl) { return !seen[pl.MundaneId]; }).slice(0, 10 - own.length);
                                         var combined = own.concat(other);
                                         evStaffRenderAc(combined.length ? combined : [{ MundaneId: 0, Persona: 'No players found', KAbbr: '', PAbbr: '' }]);
                                         // Remove no-results placeholder from being selectable
@@ -8662,7 +8728,23 @@ $(document).ready(function() {
             });
 
             staffNameEl.addEventListener('blur', function() {
-                setTimeout(function() { staffAcEl.classList.remove(OPEN_CLASS); }, 160);
+                setTimeout(function() {
+                    // Keep the dropdown open when focus moves INTO it — otherwise
+                    // arrow-key navigation (which focuses the first item) fires
+                    // this blur handler and hides the list mid-navigation.
+                    if (staffAcEl.contains(document.activeElement)) return;
+                    staffAcEl.classList.remove(OPEN_CLASS);
+                }, 160);
+            });
+
+            // Close only once focus leaves the whole widget (item→elsewhere),
+            // not on item→item/input transitions during arrow-key nav.
+            staffAcEl.addEventListener('focusout', function() {
+                setTimeout(function() {
+                    var a = document.activeElement;
+                    if (a === staffNameEl || staffAcEl.contains(a)) return;
+                    staffAcEl.classList.remove(OPEN_CLASS);
+                }, 160);
             });
 
             acKeyNav(staffNameEl, staffAcEl, OPEN_CLASS, ITEM_SEL);
@@ -8694,6 +8776,11 @@ $(document).ready(function() {
             fd.append('CanAttendance', canAtt);
             fd.append('CanSchedule',   canSched);
             fd.append('CanFeast',      canFeast);
+            // Editing? Send the staff row id so the backend does an UPDATE
+            // instead of an INSERT. ork_event_staff has no UNIQUE constraint
+            // on (detail_id, mundane_id) yet, so a bare insert-upsert makes
+            // duplicates instead of updating the row we're editing.
+            if (evEditingStaffId) fd.append('StaffId', evEditingStaffId);
 
             fetch(EvConfig.uir + 'EventAjax/add_staff/' + EvConfig.eventId + '/' + EvConfig.detailId, {
                 method: 'POST', body: fd,
@@ -8706,18 +8793,35 @@ $(document).ready(function() {
                     var s = data.staff;
                     var chk = '<i class="fas fa-check" style="color:#276749"></i>';
                     var x   = '<i class="fas fa-times" style="color:#a0aec0"></i>';
-                    var newRow = '<tr id="ev-staff-row-' + s.EventStaffId + '">' +
+                    var newRow = '<tr id="ev-staff-row-' + s.EventStaffId + '"'
+                        + ' data-mundane-id="' + s.MundaneId + '"'
+                        + ' data-persona="'    + escHtmlSt(s.Persona || '') + '"'
+                        + ' data-role="'       + escHtmlSt(s.RoleName || '') + '"'
+                        + ' data-manage="'     + (s.CanManage     ? 1 : 0) + '"'
+                        + ' data-attendance="' + (s.CanAttendance ? 1 : 0) + '"'
+                        + ' data-schedule="'   + (s.CanSchedule   ? 1 : 0) + '"'
+                        + ' data-feast="'      + (s.CanFeast      ? 1 : 0) + '">' +
                         '<td><a href="' + EvConfig.uir + 'Player/profile/' + s.MundaneId + '">' + escHtmlSt(s.Persona || '') + '</a></td>' +
                         '<td>' + escHtmlSt(s.RoleName || '') + '</td>' +
                         '<td>' + (s.CanManage ? chk : x) + '</td>' +
                         '<td>' + (s.CanAttendance ? chk : x) + '</td>' +
                         '<td>' + (s.CanSchedule ? chk : x) + '</td>' +
                         '<td>' + (s.CanFeast ? chk : x) + '</td>' +
-                        '<td class="ev-del-cell"><button class="ev-del-link" data-tip="Remove" onclick="evRemoveStaff(this,' + s.EventStaffId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button></td>' +
+                        '<td class="ev-del-cell" style="white-space:nowrap">' +
+                            '<button class="ev-del-link" data-tip="Edit" onclick="evEditStaff(this,' + s.EventStaffId + ')" style="background:none;border:none;cursor:pointer;color:#4299e1;font-size:14px;padding:0 8px 0 0"><i class="fas fa-pencil-alt"></i></button>' +
+                            '<button class="ev-del-link" data-tip="Remove" onclick="evRemoveStaff(this,' + s.EventStaffId + ')" style="background:none;border:none;cursor:pointer;color:#e53e3e;font-size:16px;padding:0">&times;</button>' +
+                        '</td>' +
                         '</tr>';
                     var tbody = gid('ev-staff-tbody');
                     if (tbody) {
-                        tbody.insertAdjacentHTML('beforeend', newRow);
+                        // Editing → REPLACE the existing row so we don't render
+                        // a duplicate; adding → APPEND.
+                        var existing = evEditingStaffId ? gid('ev-staff-row-' + evEditingStaffId) : null;
+                        if (existing) {
+                            existing.outerHTML = newRow;
+                        } else {
+                            tbody.insertAdjacentHTML('beforeend', newRow);
+                        }
                     } else {
                         // First staff member: table doesn't exist yet, reload to render it properly
                         location.reload();
@@ -8725,14 +8829,16 @@ $(document).ready(function() {
                     }
                     var empty = gid('ev-staff-empty');
                     if (empty) empty.style.display = 'none';
-                    // Update tab count badge
-                    var navItems = document.querySelectorAll('#ev-tab-nav li');
-                    navItems.forEach(function(li) {
-                        if (li.getAttribute('data-tab') === 'ev-tab-staff') {
-                            var badge = li.querySelector('.ev-tab-count');
-                            if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
-                        }
-                    });
+                    // Only bump the tab count when we actually added a new row.
+                    if (!evEditingStaffId) {
+                        var navItems = document.querySelectorAll('#ev-tab-nav li');
+                        navItems.forEach(function(li) {
+                            if (li.getAttribute('data-tab') === 'ev-tab-staff') {
+                                var badge = li.querySelector('.ev-tab-count');
+                                if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
+                            }
+                        });
+                    }
                 } else {
                     errEl.textContent = data.error || 'An error occurred.';
                     errEl.style.display = 'block';
@@ -8757,7 +8863,16 @@ $(document).ready(function() {
         };
 
         window.evRemoveStaff = function(btn, staffId) {
-            if (!confirm('Remove this staff member?')) return;
+            // Pull the persona out of the row so the confirm dialog names who's
+            // being removed — the native confirm() said only "Remove this staff
+            // member?" which is easy to misfire on the wrong row.
+            var row     = btn.closest('tr');
+            var nameEl  = row ? row.querySelector('td a, td') : null;
+            var persona = nameEl ? nameEl.textContent.trim() : '';
+            var msg     = persona
+                ? 'Remove ' + persona + ' from this event’s staff?'
+                : 'Remove this staff member?';
+            orkConfirm(msg, function() {
             var fd = new FormData();
             fd.append('StaffId', staffId);
             fetch(EvConfig.uir + 'EventAjax/remove_staff/' + EvConfig.eventId + '/' + EvConfig.detailId, {
@@ -8794,6 +8909,7 @@ $(document).ready(function() {
                 }
             })
             .catch(function(err) { alert('Request failed: ' + err.message); });
+            }, { title: 'Remove Staff Member', okLabel: 'Remove' });
         };
 
         // ---- Schedule modal ----
@@ -9157,12 +9273,21 @@ $(document).ready(function() {
             var saveBtn = gid(activeBtnId) || gid('ev-sched-save-btn');
             var allSaveBtns = document.querySelectorAll('#ev-schedule-modal .ev-sched-save-any');
 
+            // Use innerHTML so the icon renders alongside the message. All four
+            // strings below are hand-crafted literals, no user input, so this
+            // is safe. Focus the offending field too so it's visually obvious.
+            function _schedShowErr(msg, focusEl) {
+                errEl.innerHTML = '<i class="fas fa-exclamation-circle"></i>' + msg;
+                errEl.style.display = 'block';
+                if (focusEl) focusEl.focus();
+            }
             errEl.style.display = 'none';
-            if (!title) { errEl.textContent = 'Please enter a title.'; errEl.style.display = 'block'; return; }
-            if (!start) { errEl.textContent = 'Please enter a start time.'; errEl.style.display = 'block'; return; }
-            if (!end)   { errEl.textContent = 'Please enter an end time.'; errEl.style.display = 'block'; return; }
+            if (!title) { _schedShowErr('Please enter a title.',       gid('ev-sched-title'));      return; }
+            if (!start) { _schedShowErr('Please enter a start time.',  gid('ev-sched-start')); return; }
+            if (!end)   { _schedShowErr('Please enter an end time.',   gid('ev-sched-end'));   return; }
             if (new Date(end) < new Date(start)) {
-                errEl.textContent = 'End time cannot be before start time.'; errEl.style.display = 'block'; return;
+                _schedShowErr('End time cannot be before start time.', gid('ev-sched-end'));
+                return;
             }
 
             var orig = saveBtn.innerHTML;
@@ -9239,6 +9364,7 @@ $(document).ready(function() {
                         }
                     } else {
                         var newRow = '<tr id="ev-schedule-row-' + s.EventScheduleId + '"' +
+                            ' data-schedule-id="' + s.EventScheduleId + '"' +
                             ' data-title="' + s.Title.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' +
                             ' data-start="' + (s.StartTime || '').replace(' ','T').substring(0,16) + '"' +
                             ' data-end="'   + (s.EndTime || '').replace(' ','T').substring(0,16) + '"' +
@@ -9300,6 +9426,8 @@ $(document).ready(function() {
                         });
                         evBuildScheduleFilters();
                     }
+                    // Keep the server-rendered grid in sync with this list mutation.
+                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
                 } else {
                     errEl.textContent = data.error || 'An error occurred.';
                     errEl.style.display = 'block';
@@ -9419,17 +9547,22 @@ $(document).ready(function() {
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.status === 0) {
-                    var row = gid('ev-schedule-row-' + scheduleId);
-                    // Capture the day-section BEFORE removing the row — closest() on a
+                    // A multi-day item renders one row per day it spans, so remove them all.
+                    var rows = document.querySelectorAll('tr[data-schedule-id="' + scheduleId + '"]');
+                    // Capture the day-sections BEFORE removing the rows — closest() on a
                     // detached node returns null, so empty sections never got cleaned up.
-                    var daySection = row ? row.closest('.ev-sched-day-section') : null;
-                    if (row) row.remove();
-                    if (daySection) {
+                    var daySections = [];
+                    rows.forEach(function(row) {
+                        var sec = row.closest('.ev-sched-day-section');
+                        if (sec && daySections.indexOf(sec) === -1) daySections.push(sec);
+                        row.remove();
+                    });
+                    daySections.forEach(function(daySection) {
                         var tbody = daySection.querySelector('tbody');
                         if (tbody && tbody.querySelectorAll('tr').length === 0) {
                             daySection.remove();
                         }
-                    }
+                    });
                     var container = gid('ev-schedule-container');
                     if (container && container.querySelectorAll('.ev-sched-day-section').length === 0) {
                         var empty = gid('ev-schedule-empty');
@@ -9446,6 +9579,8 @@ $(document).ready(function() {
                         }
                     });
                     evBuildScheduleFilters();
+                    // Keep the server-rendered grid in sync with this removal.
+                    if (typeof window.evRefreshScheduleGrid === 'function') window.evRefreshScheduleGrid();
                 } else {
                     alert(data.error || 'Could not remove schedule item.');
                 }
@@ -13269,59 +13404,9 @@ function setupPronounPicker(cfg) {
             .then(function(data) {
                 if (data.status === 0) {
                     pnCloseAddNoteModal();
-                    var dateDisp  = date + (dateComp ? ' - ' + dateComp : '');
-                    var safeTitle = $('<div>').text(title.trim()).html();
-                    var safeDesc  = $('<div>').text(desc).html();
-                    var safeDate  = $('<div>').text(dateDisp).html();
-                    if (isEdit) {
-                        // Update the existing row in place
-                        var row = document.querySelector('tr[data-notes-id="' + editNoteId + '"]');
-                        if (row) {
-                            var cells = row.cells;
-                            if (cells[0]) cells[0].innerHTML = safeTitle;
-                            if (cells[1]) cells[1].innerHTML = safeDesc;
-                            if (cells[2]) cells[2].innerHTML = safeDate;
-                            var eb = row.querySelector('.pn-note-edit-btn');
-                            if (eb) {
-                                eb.setAttribute('data-note', title.trim());
-                                eb.setAttribute('data-desc', desc);
-                                eb.setAttribute('data-date', date);
-                                eb.setAttribute('data-date-complete', dateComp);
-                            }
-                        }
-                    } else {
-                        // Prepend new row to the table
-                        var tbody = document.querySelector('#pn-history-table tbody');
-                        if (tbody) {
-                            var tr = document.createElement('tr');
-                            var newId = data.notesId || 0;
-                            tr.setAttribute('data-notes-id', newId);
-                            tr.innerHTML = '<td>' + safeTitle + '</td>'
-                                + '<td>' + safeDesc + '</td>'
-                                + '<td class="pn-col-nowrap">' + safeDate + '</td>'
-                                + '<td>'
-                                + '<button class="pn-note-edit-btn"'
-                                + ' data-notes-id="' + newId + '"'
-                                + ' data-note="' + $('<div>').text(title.trim()).html().replace(/"/g, '&quot;') + '"'
-                                + ' data-desc="' + $('<div>').text(desc).html().replace(/"/g, '&quot;') + '"'
-                                + ' data-date="' + $('<div>').text(date).html() + '"'
-                                + ' data-date-complete="' + $('<div>').text(dateComp).html() + '"'
-                                + ' title="Edit note"><i class="fas fa-pencil-alt"></i></button>'
-                                + ' <button class="pn-note-del-btn" data-notes-id="' + newId + '" title="Delete note"><i class="fas fa-times"></i></button>'
-                                + '</td>';
-                            tbody.insertBefore(tr, tbody.firstChild);
-                            var tabCount = document.querySelector('[data-tab="history"] .pn-tab-count');
-                            if (tabCount) {
-                                var n = parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0;
-                                tabCount.textContent = '(' + (n + 1) + ')';
-                            }
-                            var table = document.getElementById('pn-history-table');
-                            if (table) table.style.display = '';
-                            var emptyState = document.getElementById('pn-history-empty');
-                            if (emptyState) emptyState.style.display = 'none';
-                            pnSyncNotesInfobox();
-                        }
-                    }
+                    // Re-fetch the tab so the DataTable (sort/search/paging/CSV/count) stays in sync
+                    // with the server. Hand-patching the DOM would desync DataTables' row cache.
+                    if (typeof window.pnReloadNotes === 'function') window.pnReloadNotes(); else location.reload();
                 } else {
                     if (fb) { fb.textContent = data.error || 'Error saving note.'; fb.style.display = ''; fb.className = 'pn-form-error'; }
                     btn.disabled = false;
@@ -13360,15 +13445,9 @@ function setupPronounPicker(cfg) {
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (data.status === 0) {
-                        row.fadeOut(300, function() {
-                            row.remove();
-                            var tabCount = document.querySelector('[data-tab="history"] .pn-tab-count');
-                            if (tabCount) {
-                                var n = parseInt(tabCount.textContent.replace(/[^0-9]/g, '')) || 0;
-                                tabCount.textContent = '(' + Math.max(0, n - 1) + ')';
-                            }
-                            pnSyncNotesInfobox();
-                        });
+                        // Re-fetch the tab so the DataTable stays in sync — a raw row.remove()
+                        // leaves DataTables' cache holding the row, so it can reappear on next draw.
+                        if (typeof window.pnReloadNotes === 'function') window.pnReloadNotes(); else location.reload();
                     } else {
                         self.disabled = false;
                         pnConfirm({ title: 'Delete Failed', message: data.error || 'Error deleting note.', confirmText: 'OK', danger: false }, function() {});
@@ -15646,6 +15725,70 @@ function recsCellText(td) {
     $c.find('button, .pk-rec-notes-ellipsis').remove();
     return $c.text().replace(/\s+/g, ' ').trim();
 }
+// ---- Shared DataTables helpers (ORK standard toolbar + CSV) ----
+// CSV: data columns only (skip <th class="no-export">), current filtered+sorted view, ALL rows.
+window.orkExportDataTableCsv = function(dt, filename) {
+    var keep = [], headers = [];
+    dt.columns().every(function(i) {
+        var $h = $(this.header());
+        if ($h.hasClass('no-export')) return;
+        keep.push(i);
+        headers.push($h.text().trim());
+    });
+    var rows = [headers];
+    dt.rows({ search: 'applied', order: 'applied' }).every(function() {
+        var $tds = $(this.node()).find('td');
+        rows.push(keep.map(function(ci) { return $tds.eq(ci).text().trim().replace(/\s+/g, ' '); }));
+    });
+    var csv = rows.map(function(r) {
+        return r.map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\r\n');
+    var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+};
+
+// Init a table as a DataTable with the ORK standard toolbar + an Export CSV button.
+// opts: { order, columnDefs, csvName, dt (extra config merged last) }
+window.orkInitDataTable = function($table, opts) {
+    opts = opts || {};
+    if (!$table || !$table.length) return null;
+    // Never operate on a DataTables scrollX clone table — the clones copy the
+    // source table's classes, so a class-based selector can hand us one. Real
+    // (un-initialised) tables are not yet inside a .dataTables_scroll wrapper.
+    if ($table.closest('.dataTables_scroll').length) return null;
+    if ($.fn.dataTable.isDataTable($table)) { $table.DataTable().destroy(); }
+    var dt = $table.DataTable($.extend(true, {
+        dom: "<'ork-dt-top'lf>rt<'ork-dt-bot'ip>",
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
+        pagingType: 'simple_numbers',
+        autoWidth: false,
+        scrollX: true,
+        order: (opts.order || []),
+        columnDefs: (opts.columnDefs || []),
+        language: { searchPlaceholder: 'Search…', search: '', lengthMenu: 'Show _MENU_' }
+    }, opts.dt || {}));
+    var $top = $(dt.table().container()).find('.ork-dt-top');
+    var $btn = $('<button type="button" class="ork-dt-csv"><i class="fas fa-file-csv"></i> Export CSV</button>');
+    $btn.on('click', function() { window.orkExportDataTableCsv(dt, (opts.csvName || 'export') + '.csv'); });
+    $top.append($btn);
+    return dt;
+};
+
+// Re-measure columns for any DataTables inside a just-revealed container
+// (fixes zero-width columns when a table was initialised while its tab was hidden).
+window.orkAdjustDataTables = function($scope) {
+    $($scope || document).find('table').each(function() {
+        if ($.fn.dataTable.isDataTable(this)) {
+            try { $(this).DataTable().columns.adjust(); } catch (e) {}
+        }
+    });
+};
+
 window.recsExportCsv = function(dt, filename) {
     var EXPORT_COLS = 6; // skip actions column
     var headers = [];
@@ -15943,21 +16086,14 @@ window.initUsernameAvailabilityCheck = function(opts) {
             var delBy = r.DeletedById
                 ? '<a href="' + uirBase() + 'Player/profile/' + parseInt(r.DeletedById, 10) + '">' + escHtml(r.DeletedByName || '') + '</a>'
                 : '&mdash;';
-            var searchKey = [
-                r.Persona || '',
-                r.AwardName || '',
-                r.Reason || '',
-                r.RecommendedByName || '',
-                r.DeletedByName || ''
-            ].join(' ').toLowerCase();
-            html += '<tr data-rec-id="' + rid + '" data-search="' + escHtml(searchKey) + '">'
+            html += '<tr data-rec-id="' + rid + '">'
                 + '<td><a href="' + uirBase() + 'Player/profile/' + parseInt(r.MundaneId, 10) + '">' + escHtml(r.Persona || '') + '</a></td>'
                 + '<td>' + escHtml(r.AwardName || '') + '</td>'
-                + '<td>' + rank + '</td>'
+                + '<td data-order="' + (parseInt(r.Rank, 10) || 0) + '">' + rank + '</td>'
                 + '<td>' + notes + '</td>'
-                + '<td>' + escHtml(r.DateRecommended || '') + '</td>'
+                + '<td data-order="' + (Date.parse(r.DateRecommended) || 0) + '">' + escHtml(r.DateRecommended || '') + '</td>'
                 + '<td>' + recBy + '</td>'
-                + '<td>' + escHtml(fmtDt(r.DeletedAt)) + '</td>'
+                + '<td data-order="' + (Date.parse(r.DeletedAt) || 0) + '">' + escHtml(fmtDt(r.DeletedAt)) + '</td>'
                 + '<td>' + delBy + '</td>'
                 + '<td style="text-align:right;white-space:nowrap"><button type="button" class="pk-deleted-restore-btn" data-rec-id="' + rid + '"><i class="fas fa-undo"></i> Restore</button></td>'
                 + '</tr>';
@@ -15995,8 +16131,13 @@ window.initUsernameAvailabilityCheck = function(opts) {
                 }
                 renderRows(tbody, recs);
                 if (wrap) wrap.style.display = '';
-                var searchWrap = panel.querySelector('.pk-deleted-recs-search-wrap');
-                if (searchWrap) searchWrap.style.display = recs.length > 5 ? '' : 'none';
+                var $delTable = $(panel).find('.pk-deleted-recs-table');
+                panel.__dt = window.orkInitDataTable($delTable, {
+                    order: [[6, 'desc']],   // Deleted At, newest first
+                    csvName: (panel.id === 'kn-deleted-recs' ? 'Kingdom' : 'Park') + ' Deleted Recommendations',
+                    columnDefs: [{ targets: 8, orderable: false, searchable: false }]
+                });
+                window.orkAdjustDataTables($(panel));
                 panel.dataset.loaded = '1';
                 if (onRendered) onRendered();
             })
@@ -16029,25 +16170,6 @@ window.initUsernameAvailabilityCheck = function(opts) {
                 loadDeleted(panel, listUrl);
             }
         });
-
-        var searchInput = panel.querySelector('.pk-deleted-recs-search');
-        if (searchInput) {
-            searchInput.addEventListener('input', function () {
-                var q = this.value.trim().toLowerCase();
-                var tbody = panel.querySelector('tbody');
-                if (!tbody) return;
-                var rows = tbody.querySelectorAll('tr');
-                var visible = 0;
-                for (var i = 0; i < rows.length; i++) {
-                    var key = rows[i].getAttribute('data-search') || '';
-                    var match = !q || key.indexOf(q) !== -1;
-                    rows[i].style.display = match ? '' : 'none';
-                    if (match) visible++;
-                }
-                var noMatch = panel.querySelector('.pk-deleted-recs-no-match');
-                if (noMatch) noMatch.style.display = (q && visible === 0) ? '' : 'none';
-            });
-        }
 
         panel.addEventListener('click', function (e) {
             var btn = e.target.closest ? e.target.closest('.pk-deleted-restore-btn') : null;
@@ -16082,25 +16204,27 @@ window.initUsernameAvailabilityCheck = function(opts) {
                         return;
                     }
                     var row = btn.closest('tr');
-                    if (row) {
-                        row.classList.add('pk-deleted-restored');
-                        setTimeout(function () {
-                            row.parentNode && row.parentNode.removeChild(row);
-                            var countEl = panel.querySelector('.pk-deleted-recs-count');
-                            var tbody   = panel.querySelector('tbody');
-                            var remaining = tbody ? tbody.querySelectorAll('tr').length : 0;
-                            if (countEl) {
-                                countEl.textContent = remaining;
-                                countEl.style.display = remaining > 0 ? '' : 'none';
-                            }
-                            if (remaining === 0) {
-                                var wrap = panel.querySelector('.pk-deleted-recs-table-wrap');
-                                var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
-                                if (wrap)    wrap.style.display = 'none';
-                                if (emptyEl) emptyEl.style.display = '';
-                            }
-                        }, 500);
-                    }
+                    if (row) row.classList.add('pk-deleted-restored');
+                    var recIdDone = btn.getAttribute('data-rec-id');
+                    setTimeout(function () {
+                        if (panel.__dt) {
+                            panel.__dt.rows(function (i, data, node) {
+                                return node.getAttribute('data-rec-id') === recIdDone;
+                            }).remove().draw(false);
+                        }
+                        var remaining = panel.__dt ? panel.__dt.rows().count() : 0;
+                        var countEl = panel.querySelector('.pk-deleted-recs-count');
+                        if (countEl) {
+                            countEl.textContent = remaining;
+                            countEl.style.display = remaining > 0 ? '' : 'none';
+                        }
+                        if (remaining === 0) {
+                            var wrap = panel.querySelector('.pk-deleted-recs-table-wrap');
+                            var emptyEl = panel.querySelector('.pk-deleted-recs-empty');
+                            if (wrap)    wrap.style.display = 'none';
+                            if (emptyEl) emptyEl.style.display = '';
+                        }
+                    }, 500);
                 })
                 .catch(function () {
                     alert('Network error.');
@@ -16475,6 +16599,16 @@ var EV_TICKET_ICON = 'fas fa-ticket-alt';
 
         labelInput.addEventListener('input', upsertTicketLink);
         urlInput.addEventListener('input',   upsertTicketLink);
+
+        // Belt-and-suspenders: force the ticket link into the ExternalLinks
+        // JSON on form submit. Without this, a URL entered without a
+        // subsequent `input` event landing (e.g. autocomplete / paste in
+        // some browsers, or focus lost before the value settled) would
+        // never make it into the hidden JSON and the link wouldn't save.
+        var form = document.getElementById('ev-edit-form') || document.getElementById('ec-form');
+        if (form) {
+            form.addEventListener('submit', upsertTicketLink, true); // capture so we run before the external-links IIFE's serialize()
+        }
 
         // Re-sync when the edit modal is opened with fresh data.
         window.evTicketLinkReset = syncVisibility;
@@ -17054,10 +17188,15 @@ window.evSetEventStatus = function(eventId, status, btn) {
         if (r && r.status === 0) {
             window.location.reload();
         } else {
-            alert((r && r.error) || 'Failed to set event status.');
+            var err = (r && r.error) || 'Failed to set event status.';
+            var isAuth = (r && (r.status === 3 || /not authoriz/i.test(err)));
+            orkAlert(err, { title: isAuth ? 'Not Authorized' : 'Could Not Update Event' });
             if (btn) btn.disabled = false;
         }
-    }, 'json').fail(function() { alert('Request failed.'); if (btn) btn.disabled = false; });
+    }, 'json').fail(function() {
+        orkAlert('Could not reach the server. Please try again.', { title: 'Request Failed' });
+        if (btn) btn.disabled = false;
+    });
 };
 
 // =============================================================================
