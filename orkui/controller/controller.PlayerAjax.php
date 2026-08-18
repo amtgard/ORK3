@@ -219,7 +219,8 @@ class Controller_PlayerAjax extends Controller
                 // Pass the cluster key too so a court line under a sibling/older
                 // representative rec id (or an ad-hoc line for the same
                 // person+award+rank) is still reconciled and can't re-grant.
-                Ork3::$Lib->court->reconcileGrantForRecommendation($rec_id, $new_award_id, $given_by_id, $rank, $player_id, $kingdomaward_id);
+                $this->load_model('Court');
+                $this->Court->reconcile_grant_for_recommendation($rec_id, $new_award_id, $given_by_id, $rank, $player_id, $kingdomaward_id);
             }
             echo json_encode(['status' => 0]);
             exit;

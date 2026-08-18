@@ -263,12 +263,13 @@ class Controller_Reports extends Controller
 			exit;
 		}
 
-		$scope         = Ork3::$Lib->court->getCourtReportScope($kingdom_id, $park_id);
+		$this->load_model('Court');
+		$scope         = $this->Court->get_court_report_scope($kingdom_id, $park_id);
 		$location_name = $scope['Name'];
 		$kingdom_id    = $scope['KingdomId'];
 
 		$this->template = 'Reports_courts.tpl';
-		$this->data['Courts']       = Ork3::$Lib->court->getCourtReportList($kingdom_id, $park_id, $from, $until);
+		$this->data['Courts']       = $this->Court->get_court_report_list($kingdom_id, $park_id, $from, $until);
 		$this->data['ScopeType']    = $park_id > 0 ? 'park' : 'kingdom';
 		$this->data['KingdomId']    = $kingdom_id;
 		$this->data['ParkId']       = $park_id;
@@ -291,7 +292,8 @@ class Controller_Reports extends Controller
 			exit;
 		}
 
-		$report = Ork3::$Lib->court->getCourtReportDetail($court_id);
+		$this->load_model('Court');
+		$report = $this->Court->get_court_report_detail($court_id);
 		if (!$report) {
 			header('Location: ' . UIR);
 			exit;

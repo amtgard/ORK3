@@ -5,6 +5,7 @@ class Controller_Court extends Controller
     public function __construct($call = null, $id = null)
     {
         parent::__construct($call, $id);
+        $this->load_model('Court');
     }
 
     // -----------------------------------------------------------------------
@@ -44,15 +45,15 @@ class Controller_Court extends Controller
             return;
         }
 
-        $canManage = Ork3::$Lib->court->canManage($uid, $kingdom_id, $park_id);
+        $canManage = $this->Court->can_manage($uid, $kingdom_id, $park_id);
 
         if (!$canManage) {
             $this->data['Error'] = 'You do not have permission to view the Court Planner.';
             return;
         }
 
-        $courtList     = Ork3::$Lib->court->getCourtList($kingdom_id, $park_id);
-        $upcomingEvents = Ork3::$Lib->court->getUpcomingEvents($kingdom_id);
+        $courtList     = $this->Court->get_court_list($kingdom_id, $park_id);
+        $upcomingEvents = $this->Court->get_upcoming_events($kingdom_id);
 
         // Location name
         $locationName = '';
@@ -92,20 +93,20 @@ class Controller_Court extends Controller
             return;
         }
 
-        $court = Ork3::$Lib->court->getCourtDetail($court_id);
+        $court = $this->Court->get_court_detail($court_id);
         if (!$court) {
             $this->data['Error'] = 'Court not found.';
             return;
         }
 
-        $canManage = Ork3::$Lib->court->canManage($uid, $court['KingdomId'], $court['ParkId']);
+        $canManage = $this->Court->can_manage($uid, $court['KingdomId'], $court['ParkId']);
         if (!$canManage) {
             $this->data['Error'] = 'You do not have permission to manage this court.';
             return;
         }
 
-        $courtAwards  = Ork3::$Lib->court->getCourtAwards($court_id);
-        $pendingRecs  = Ork3::$Lib->court->getPendingRecommendations($court['KingdomId'], $court['ParkId'], $uid, $court_id);
+        $courtAwards  = $this->Court->get_court_awards($court_id);
+        $pendingRecs  = $this->Court->get_pending_recommendations($court['KingdomId'], $court['ParkId'], $uid, $court_id);
         // Grouped ad-hoc award/title picker options (mirrors the player Add Award
         // modal grouping). Scoped to the COURT's kingdom, not the session's.
         $this->load_model('Award');
@@ -113,14 +114,14 @@ class Controller_Court extends Controller
 
         // ---- Stage/finalize planner data (spec §6) ----
         // Grant-modal giver roster (default monarch + quick-pick pills).
-        $giverOptions = Ork3::$Lib->court->getCourtGiverOptions($court_id);
+        $giverOptions = $this->Court->get_court_giver_options($court_id);
         // Cheap heartbeat state doubles as the source of the stored run/plan `mode`
         // (getCourtDetail does not expose it) and the initial heartbeat version stamp.
-        $courtState   = Ork3::$Lib->court->getCourtState($court_id);
+        $courtState   = $this->Court->get_court_state($court_id);
         // Unfinalized-staged safeguard indicator (spec §5.3).
-        $stagedCount  = Ork3::$Lib->court->countStagedAwards($court_id);
+        $stagedCount  = $this->Court->count_staged_awards($court_id);
         // Prev-court "prepopulate skipped" banner source (spec §6.5) — empty if none.
-        $prevSkipped  = Ork3::$Lib->court->getUngrantedFromLastCourt($court['KingdomId'], $court['ParkId']);
+        $prevSkipped  = $this->Court->get_ungranted_from_last_court($court['KingdomId'], $court['ParkId']);
         // NOTE: rec_reason is already carried per-row by getCourtAwards() (`RecReason`),
         // so the grant modal can fall back to it without a separate lookup.
 

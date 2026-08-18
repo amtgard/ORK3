@@ -5,6 +5,7 @@ class Controller_Recommendations extends Controller
     public function __construct($call = null, $id = null)
     {
         parent::__construct($call, $id);
+        $this->load_model('Court');
     }
 
     // Route: ?Route=Recommendations/manage/kingdom/{kingdom_id}
@@ -57,7 +58,7 @@ class Controller_Recommendations extends Controller
         $courtMap = $this->rmCourtMap($kingdom_id, $park_id);
 
         // Courts in scope (Add-to-Court existing-court picker + specific-court filter).
-        $courts = Ork3::$Lib->court->getCourtList($kingdom_id, $park_id);
+        $courts = $this->Court->get_court_list($kingdom_id, $park_id);
 
         $this->data['CourtMap'] = $courtMap;
         $this->data['Courts']   = $courts;
@@ -273,7 +274,7 @@ class Controller_Recommendations extends Controller
         $status = null;
         if (!valid_id($kingdom_id)) {
             $status = 'invalid';
-        } elseif (!Ork3::$Lib->court->canManage($uid, $kingdom_id, $park_id)) {
+        } elseif (!$this->Court->can_manage($uid, $kingdom_id, $park_id)) {
             $status = 'forbidden';
         }
         return [$kingdom_id, $park_id, $context, $uid, $status];
@@ -283,7 +284,7 @@ class Controller_Recommendations extends Controller
     // (Court::getRecommendationCourtMap); this is a thin scope-typed accessor.
     private function rmCourtMap($kingdom_id, $park_id)
     {
-        return Ork3::$Lib->court->getRecommendationCourtMap($kingdom_id, $park_id);
+        return $this->Court->get_recommendation_court_map($kingdom_id, $park_id);
     }
 
     // Park map for the kingdom-scope filter + row abbrev. DB lives in the lib
