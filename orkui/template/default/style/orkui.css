@@ -128,7 +128,12 @@ html[data-theme="dark"] .pn-btn-secondary,
 html[data-theme="dark"] .kn-btn-secondary,
 html[data-theme="dark"] .pk-btn-secondary,
 html[data-theme="dark"] .ev-btn-secondary,
-html[data-theme="dark"] .en-btn-secondary {
+html[data-theme="dark"] .en-btn-secondary,
+html[data-theme="dark"] .pn-btn-white,
+html[data-theme="dark"] .kn-btn-white,
+html[data-theme="dark"] .pk-btn-white,
+html[data-theme="dark"] .ev-btn-white,
+html[data-theme="dark"] .en-btn-white {
   background: var(--ork-bg-secondary);
   color: var(--ork-text);
   border-color: var(--ork-border);
@@ -152,16 +157,6 @@ html[data-theme="dark"] .kn-btn-ghost:hover,
 html[data-theme="dark"] .pk-btn-ghost:hover {
   background: var(--ork-bg-tertiary);
 }
-html[data-theme="dark"] .pn-btn-white,
-html[data-theme="dark"] .kn-btn-white,
-html[data-theme="dark"] .pk-btn-white,
-html[data-theme="dark"] .ev-btn-white,
-html[data-theme="dark"] .en-btn-white {
-  background: var(--ork-bg-secondary);
-  color: var(--ork-text);
-  border-color: var(--ork-border);
-}
-
 /* FontAwesome 7.0.1 is loaded from the CDN in default.theme; the
    embedded copy that used to live here (lines 1-5717) was removed
    because it was fully shadowed by the CDN link and added 100KB
@@ -253,9 +248,9 @@ html[data-theme="dark"] .en-btn-white {
 .ui-icon { width: 16px; height: 16px; background-image: url(css/ui-lightness/images/ui-icons_222222_256x240.png); }
 .ui-widget-content .ui-icon {background-image: url(css/ui-lightness/images/ui-icons_222222_256x240.png); }
 .ui-widget-header .ui-icon {background-image: url(css/ui-lightness/images/ui-icons_ffffff_256x240.png); }
-.ui-state-default .ui-icon { background-image: url(css/ui-lightness/images/ui-icons_ef8c08_256x240.png); }
-.ui-state-hover .ui-icon, .ui-state-focus .ui-icon {background-image: url(css/ui-lightness/images/ui-icons_ef8c08_256x240.png); }
-.ui-state-active .ui-icon {background-image: url(css/ui-lightness/images/ui-icons_ef8c08_256x240.png); }
+.ui-state-default .ui-icon,
+.ui-state-hover .ui-icon, .ui-state-focus .ui-icon,
+.ui-state-active .ui-icon { background-image: url(css/ui-lightness/images/ui-icons_ef8c08_256x240.png); }
 .ui-state-highlight .ui-icon {background-image: url(css/ui-lightness/images/ui-icons_228ef1_256x240.png); }
 .ui-state-error .ui-icon, .ui-state-error-text .ui-icon {background-image: url(css/ui-lightness/images/ui-icons_ffd27a_256x240.png); }
 
@@ -447,7 +442,8 @@ html[data-theme="dark"] .en-btn-white {
 
 /* Overlays */
 .ui-widget-overlay { background: #666666 url(css/ui-lightness/images/ui-bg_diagonals-thick_20_666666_40x40.png) 50% 50% repeat; opacity: .50;filter:Alpha(Opacity=50); }
-.ui-widget-shadow { margin: -5px 0 0 -5px; padding: 5px; background: #000000 url(css/ui-lightness/images/ui-bg_flat_10_000000_40x100.png) 50% 50% repeat-x; opacity: .20;filter:Alpha(Opacity=20); -moz-border-radius: 5px; -khtml-border-radius: 5px; -webkit-border-radius: 5px; border-radius: 5px; }/*
+.ui-widget-shadow { margin: -5px 0 0 -5px; padding: 5px; background: #000000 url(css/ui-lightness/images/ui-bg_flat_10_000000_40x100.png) 50% 50% repeat-x; opacity: .20;filter:Alpha(Opacity=20); -moz-border-radius: 5px; -khtml-border-radius: 5px; -webkit-border-radius: 5px; border-radius: 5px; }
+/*
  * jQuery UI Resizable 1.8.18
  *
  * Copyright 2011, AUTHORS.txt (http://jqueryui.com/about)
@@ -466,7 +462,8 @@ html[data-theme="dark"] .en-btn-white {
 .ui-resizable-se { cursor: se-resize; width: 12px; height: 12px; right: 1px; bottom: 1px; }
 .ui-resizable-sw { cursor: sw-resize; width: 9px; height: 9px; left: -5px; bottom: -5px; }
 .ui-resizable-nw { cursor: nw-resize; width: 9px; height: 9px; left: -5px; top: -5px; }
-.ui-resizable-ne { cursor: ne-resize; width: 9px; height: 9px; right: -5px; top: -5px;}/*
+.ui-resizable-ne { cursor: ne-resize; width: 9px; height: 9px; right: -5px; top: -5px;}
+/*
  * jQuery UI Selectable 1.8.18
  *
  * Copyright 2011, AUTHORS.txt (http://jqueryui.com/about)
@@ -630,7 +627,8 @@ button.ui-button::-moz-focus-inner { border: 0; padding: 0; } /* reset extra pad
 .ui-slider-vertical .ui-slider-handle { left: -.3em; margin-left: 0; margin-bottom: -.6em; }
 .ui-slider-vertical .ui-slider-range { left: 0; width: 100%; }
 .ui-slider-vertical .ui-slider-range-min { bottom: 0; }
-.ui-slider-vertical .ui-slider-range-max { top: 0; }/*
+.ui-slider-vertical .ui-slider-range-max { top: 0; }
+/*
  * jQuery UI Tabs 1.8.18
  *
  * Copyright 2011, AUTHORS.txt (http://jqueryui.com/about)
@@ -701,9 +699,8 @@ button.ui-button::-moz-focus-inner { border: 0; padding: 0; } /* reset extra pad
 .ui-datepicker-rtl .ui-datepicker-buttonpane button { float: left; }
 .ui-datepicker-rtl .ui-datepicker-buttonpane button.ui-datepicker-current { float:right; }
 .ui-datepicker-rtl .ui-datepicker-group { float:right; }
-.ui-datepicker-rtl .ui-datepicker-group-last .ui-datepicker-header { border-right-width:0; border-left-width:1px; }
+.ui-datepicker-rtl .ui-datepicker-group-last .ui-datepicker-header,
 .ui-datepicker-rtl .ui-datepicker-group-middle .ui-datepicker-header { border-right-width:0; border-left-width:1px; }
-
 /* IE6 IFRAME FIX (taken from datepicker 1.5.3 */
 .ui-datepicker-cover {
     display: none; /*sorry for IE5*/
@@ -715,7 +712,8 @@ button.ui-button::-moz-focus-inner { border: 0; padding: 0; } /* reset extra pad
     left: -4px; /*must have*/
     width: 200px; /*must have*/
     height: 200px; /*must have*/
-}/*
+}
+/*
  * jQuery UI Progressbar 1.8.18
  *
  * Copyright 2011, AUTHORS.txt (http://jqueryui.com/about)
@@ -868,7 +866,8 @@ p {
     padding: 0;
 }
 .nav-icon-btn:hover, .nav-icon-btn.active,
-.nav-dropdown-wrap.open .nav-icon-btn {
+.nav-dropdown-wrap.open .nav-icon-btn,
+.nav-home-btn:hover {
     background: rgba(255,255,255,0.12);
     text-decoration: none;
 }
@@ -891,7 +890,6 @@ p {
     flex-shrink: 0;
     transition: background 0.15s;
 }
-.nav-home-btn:hover { background: rgba(255,255,255,0.12); text-decoration: none; }
 .nav-home-label {
     font-size: 12px;
     font-weight: 500;
@@ -1695,7 +1693,8 @@ html[data-theme="dark"] .success-message {
 html[data-theme="dark"] .form-container input[type="password"],
 html[data-theme="dark"] .form-container input[type="text"],
 html[data-theme="dark"] .form-container select,
-html[data-theme="dark"] .form-container textarea {
+html[data-theme="dark"] .form-container textarea,
+html[data-theme="dark"] .tablesorter-jui .tablesorter-filter {
     background-color: #374151;
     border-color: #4a5568;
     color: #e2e8f0;
@@ -1705,18 +1704,15 @@ html[data-theme="dark"] .login-box {
     border-color: #4a5568;
 }
 html[data-theme="dark"] .ui-state-default,
-html[data-theme="dark"] .ui-widget-content .ui-state-default {
-    background: #374151;
-    border-color: #4a5568;
-    color: #e2e8f0;
-}
-html[data-theme="dark"] .ui-datepicker {
-    background: #2d3748;
-    border-color: #4a5568;
-    color: #e2e8f0;
-}
+html[data-theme="dark"] .ui-widget-content .ui-state-default,
 html[data-theme="dark"] .ui-datepicker .ui-datepicker-header {
     background: #374151;
+    border-color: #4a5568;
+    color: #e2e8f0;
+}
+html[data-theme="dark"] .ui-datepicker,
+html[data-theme="dark"] table.dataTable {
+    background: #2d3748;
     border-color: #4a5568;
     color: #e2e8f0;
 }
@@ -1742,20 +1738,11 @@ html[data-theme="dark"] .ui-datepicker td .ui-state-highlight {
     color: #9ae6b4 !important;
     border-color: #48bb78 !important;
 }
-html[data-theme="dark"] .ui-datepicker td .ui-state-active {
-    background: #2b6cb0 !important;
-    color: #fff !important;
-    border-color: #4299e1 !important;
-}
+html[data-theme="dark"] .ui-datepicker td .ui-state-active,
 html[data-theme="dark"] .ui-datepicker td .ui-state-highlight.ui-state-active {
     background: #2b6cb0 !important;
     color: #fff !important;
     border-color: #4299e1 !important;
-}
-html[data-theme="dark"] .tablesorter-jui .tablesorter-filter {
-    background-color: #374151;
-    border-color: #4a5568;
-    color: #e2e8f0;
 }
 html[data-theme="dark"] ul.triple > li {
     border-color: #4a5568;
@@ -1815,11 +1802,6 @@ html[data-theme="dark"] .dataTables_wrapper .dataTables_filter input,
 html[data-theme="dark"] .dataTables_wrapper .dataTables_length select {
   background: #374151;
   border: 1px solid #4a5568;
-  color: #e2e8f0;
-}
-html[data-theme="dark"] table.dataTable {
-  background: #2d3748;
-  border-color: #4a5568;
   color: #e2e8f0;
 }
 html[data-theme="dark"] table.dataTable thead th,
@@ -1966,25 +1948,41 @@ html[data-theme="dark"] .heraldry-item {
   background-color: var(--ork-card-bg);
   border-color: var(--ork-border);
 }
-
 /* =====================================================
    DARK MODE — Search pages (sr-*, se-*)
    ===================================================== */
-html[data-theme="dark"] .sr-search-card {
+html[data-theme="dark"] .sr-search-card,
+html[data-theme="dark"] .sr-results-card,
+/* =====================================================
+   DARK MODE — Release Notes (rn-*)
+   ===================================================== */
+html[data-theme="dark"] .rn-release,
+/* =====================================================
+   DARK MODE — Roles & Permissions (ap-*)
+   ===================================================== */
+html[data-theme="dark"] .ap-card,
+html[data-theme="dark"] .ap-role-block,
+html[data-theme="dark"] .at-stats-bar,
+html[data-theme="dark"] .at-controls,
+html[data-theme="dark"] .at-sidebar-card,
+html[data-theme="dark"] .se-search-card,
+html[data-theme="dark"] .se-results-card {
   background: var(--ork-card-bg);
   border-color: var(--ork-border);
 }
 html[data-theme="dark"] .sr-search-input,
-html[data-theme="dark"] .su-search-input {
+html[data-theme="dark"] .su-search-input,
+html[data-theme="dark"] .ap-field input,
+html[data-theme="dark"] .ap-field select,
+html[data-theme="dark"] .uc-field input,
+html[data-theme="dark"] .uc-field select,
+html[data-theme="dark"] .se-search-input {
   background: var(--ork-input-bg);
   border-color: var(--ork-input-border);
   color: var(--ork-text);
 }
-html[data-theme="dark"] .sr-results-card {
-  background: var(--ork-card-bg);
-  border-color: var(--ork-border);
-}
-html[data-theme="dark"] .sr-results-header {
+html[data-theme="dark"] .sr-results-header,
+html[data-theme="dark"] .login-box h3 {
   background: var(--ork-bg-secondary);
   border-color: var(--ork-border);
   color: var(--ork-text);
@@ -2004,17 +2002,10 @@ html[data-theme="dark"] .sr-table td {
 html[data-theme="dark"] .sr-table tbody tr:hover {
   background: var(--ork-bg-secondary);
 }
-html[data-theme="dark"] .sr-row-banned {
+html[data-theme="dark"] .sr-row-banned,
+html[data-theme="dark"] .ap-role-admin {
   background: var(--ork-badge-red-bg);
   color: var(--ork-badge-red-text);
-}
-
-/* =====================================================
-   DARK MODE — Release Notes (rn-*)
-   ===================================================== */
-html[data-theme="dark"] .rn-release {
-  background: var(--ork-card-bg);
-  border-color: var(--ork-border);
 }
 html[data-theme="dark"] .rn-release-header {
   background: var(--ork-bg-tertiary);
@@ -2027,15 +2018,8 @@ html[data-theme="dark"] .rn-item {
 html[data-theme="dark"] .rn-item-title {
   color: var(--ork-text);
 }
-
-/* =====================================================
-   DARK MODE — Roles & Permissions (ap-*)
-   ===================================================== */
-html[data-theme="dark"] .ap-card {
-  background: var(--ork-card-bg);
-  border-color: var(--ork-border);
-}
-html[data-theme="dark"] .ap-card-header {
+html[data-theme="dark"] .ap-card-header,
+html[data-theme="dark"] .ap-table th {
   background: var(--ork-bg-tertiary);
   color: var(--ork-text-muted);
   border-color: var(--ork-border);
@@ -2043,27 +2027,12 @@ html[data-theme="dark"] .ap-card-header {
 html[data-theme="dark"] .ap-card-body {
   color: var(--ork-text);
 }
-html[data-theme="dark"] .ap-field input,
-html[data-theme="dark"] .ap-field select {
-  background: var(--ork-input-bg);
-  border-color: var(--ork-input-border);
-  color: var(--ork-text);
-}
-html[data-theme="dark"] .ap-table th {
-  background: var(--ork-bg-tertiary);
-  color: var(--ork-text-muted);
-  border-color: var(--ork-border);
-}
 html[data-theme="dark"] .ap-table td {
   border-color: var(--ork-border);
   color: var(--ork-text-secondary);
 }
 html[data-theme="dark"] .ap-table tr:hover td {
   background: var(--ork-bg-secondary);
-}
-html[data-theme="dark"] .ap-role-block {
-  background: var(--ork-card-bg);
-  border-color: var(--ork-border);
 }
 html[data-theme="dark"] .ap-explainer {
   background: var(--ork-bg-secondary);
@@ -2080,10 +2049,6 @@ html[data-theme="dark"] .ap-role-create {
 html[data-theme="dark"] .ap-role-edit {
   background: var(--ork-badge-blue-bg);
   color: var(--ork-badge-blue-text);
-}
-html[data-theme="dark"] .ap-role-admin {
-  background: var(--ork-badge-red-bg);
-  color: var(--ork-badge-red-text);
 }
 html[data-theme="dark"] .ap-officer {
   background: var(--ork-badge-yellow-bg);
@@ -2115,7 +2080,8 @@ html[data-theme="dark"] .highcharts-grid-line {
 html[data-theme="dark"] .highcharts-tick {
   stroke: var(--ork-border) !important;
 }
-html[data-theme="dark"] .highcharts-tooltip-box {
+html[data-theme="dark"] .highcharts-tooltip-box,
+html[data-theme="dark"] .highcharts-legend-box {
   fill: var(--ork-card-bg) !important;
   stroke: var(--ork-border) !important;
 }
@@ -2130,10 +2096,6 @@ html[data-theme="dark"] .highcharts-tooltip tspan {
 html[data-theme="dark"] .highcharts-data-label text {
   fill: var(--ork-text-secondary) !important;
 }
-html[data-theme="dark"] .highcharts-legend-box {
-  fill: var(--ork-card-bg) !important;
-  stroke: var(--ork-border) !important;
-}
 html[data-theme="dark"] .highcharts-container {
   background: transparent !important;
 }
@@ -2147,12 +2109,6 @@ html[data-theme="dark"] .uc-modal {
 }
 html[data-theme="dark"] .uc-modal-header {
   border-bottom-color: var(--ork-border);
-  color: var(--ork-text);
-}
-html[data-theme="dark"] .uc-field input,
-html[data-theme="dark"] .uc-field select {
-  background: var(--ork-input-bg);
-  border-color: var(--ork-input-border);
   color: var(--ork-text);
 }
 html[data-theme="dark"] .uc-btn-secondary {
@@ -2177,13 +2133,9 @@ html[data-theme="dark"] .login-box input[type="password"] {
   border-color: var(--ork-input-border);
   color: var(--ork-text);
 }
-html[data-theme="dark"] .login-box input[type="submit"] {
+html[data-theme="dark"] .login-box input[type="submit"],
+html[data-theme="dark"] .form-container input[type="submit"] {
   background: var(--ork-bg-tertiary);
-  border-color: var(--ork-border);
-  color: var(--ork-text);
-}
-html[data-theme="dark"] .login-box h3 {
-  background: var(--ork-bg-secondary);
   border-color: var(--ork-border);
   color: var(--ork-text);
 }
@@ -2199,11 +2151,6 @@ html[data-theme="dark"] .form-container > div > span {
 }
 html[data-theme="dark"] .form-container label {
   color: var(--ork-text-secondary);
-}
-html[data-theme="dark"] .form-container input[type="submit"] {
-  background: var(--ork-bg-tertiary);
-  border-color: var(--ork-border);
-  color: var(--ork-text);
 }
 html[data-theme="dark"] .info-container h3 {
   background: var(--ork-bg-secondary);
@@ -2239,7 +2186,13 @@ html[data-theme="dark"] .sr-results-title {
 html[data-theme="dark"] .sr-results-title i {
   color: #63b3ed;
 }
-html[data-theme="dark"] .sr-results-count {
+html[data-theme="dark"] .sr-results-count,
+html[data-theme="dark"] .sr-badge-inactive,
+/* =====================================================
+   DARK MODE — Release notes text extras
+   ===================================================== */
+html[data-theme="dark"] .rn-tag,
+html[data-theme="dark"] .se-date-past {
   background: var(--ork-bg-tertiary);
   color: var(--ork-text-muted);
 }
@@ -2250,10 +2203,6 @@ html[data-theme="dark"] .sr-row-inactive td {
   color: var(--ork-text-muted);
 }
 html[data-theme="dark"] .sr-row-inactive .sr-player-name {
-  color: var(--ork-text-muted);
-}
-html[data-theme="dark"] .sr-badge-inactive {
-  background: var(--ork-bg-tertiary);
   color: var(--ork-text-muted);
 }
 html[data-theme="dark"] .sr-row-banned td {
@@ -2277,14 +2226,6 @@ html[data-theme="dark"] .sr-search-hint {
 }
 html[data-theme="dark"] .sr-search-icon,
 html[data-theme="dark"] .se-search-icon {
-  color: var(--ork-text-muted);
-}
-
-/* =====================================================
-   DARK MODE — Release notes text extras
-   ===================================================== */
-html[data-theme="dark"] .rn-tag {
-  background: var(--ork-bg-tertiary);
   color: var(--ork-text-muted);
 }
 html[data-theme="dark"] .rn-release-body {
@@ -2321,10 +2262,6 @@ html[data-theme="dark"] .at-header-sub {
 html[data-theme="dark"] .at-header-icon {
   background: #2c5282;
 }
-html[data-theme="dark"] .at-stats-bar {
-  background: var(--ork-card-bg);
-  border-color: var(--ork-border);
-}
 html[data-theme="dark"] .at-stat {
   border-color: var(--ork-border);
 }
@@ -2334,10 +2271,6 @@ html[data-theme="dark"] .at-stat-value {
 html[data-theme="dark"] .at-stat-label {
   color: var(--ork-text-muted);
 }
-html[data-theme="dark"] .at-controls {
-  background: var(--ork-card-bg);
-  border-color: var(--ork-border);
-}
 html[data-theme="dark"] .at-toggle-label {
   color: var(--ork-text-secondary);
 }
@@ -2345,10 +2278,6 @@ html[data-theme="dark"] .at-toggle-track {
   background: #4a5568;
 }
 html[data-theme="dark"] #at-map {
-  border-color: var(--ork-border);
-}
-html[data-theme="dark"] .at-sidebar-card {
-  background: var(--ork-card-bg);
   border-color: var(--ork-border);
 }
 html[data-theme="dark"] .at-sidebar-empty-icon {
@@ -2414,26 +2343,13 @@ html[data-theme="dark"] .se-header-title {
   text-shadow: none;
 }
 html[data-theme="dark"] .se-header-sub { color: var(--ork-text-muted); }
-html[data-theme="dark"] .se-search-card {
-  background: var(--ork-card-bg);
-  border-color: var(--ork-border);
-}
 html[data-theme="dark"] .se-search-label { color: var(--ork-text-secondary); }
 html[data-theme="dark"] .se-search-label i { color: #63b3ed; }
-html[data-theme="dark"] .se-search-input {
-  background: var(--ork-input-bg);
-  border-color: var(--ork-input-border);
-  color: var(--ork-text);
-}
 html[data-theme="dark"] .se-search-input:focus {
   border-color: #63b3ed;
   box-shadow: 0 0 0 3px rgba(99,179,237,0.15);
 }
 html[data-theme="dark"] .se-search-hint { color: var(--ork-text-muted); }
-html[data-theme="dark"] .se-results-card {
-  background: var(--ork-card-bg);
-  border-color: var(--ork-border);
-}
 html[data-theme="dark"] .se-results-header {
   border-bottom-color: var(--ork-border);
   background: var(--ork-bg-tertiary);
@@ -2461,10 +2377,6 @@ html[data-theme="dark"] .se-event-name { color: var(--ork-text); }
 html[data-theme="dark"] .se-date-badge {
   background: rgba(43,108,176,0.15);
   color: #90cdf4;
-}
-html[data-theme="dark"] .se-date-past {
-  background: var(--ork-bg-tertiary);
-  color: var(--ork-text-muted);
 }
 html[data-theme="dark"] .se-no-date { color: var(--ork-text-muted); }
 html[data-theme="dark"] .se-empty { color: var(--ork-text-muted); }

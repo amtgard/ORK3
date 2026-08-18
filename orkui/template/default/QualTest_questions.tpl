@@ -87,7 +87,7 @@
 .qt-vq-text { font-weight:600; color:#2d3748; margin-bottom:6px; }
 .qt-vq-ans { font-size:0.85rem; color:#4a5568; padding:2px 0 2px 18px; position:relative; }
 .qt-vq-ans.qt-vq-correct { color:#22543d; font-weight:600; }
-.qt-vq-ans.qt-vq-correct::before { content:"\f00c"; font-family:"Font Awesome 5 Free"; font-weight:900;
+.qt-vq-ans.qt-vq-correct::before { content:"\f00c"; font-family:"Font Awesome 7 Free"; font-weight:900;
 	position:absolute; left:0; color:#38a169; }
 .qt-vq-archived { display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px; font-size:0.68rem;
 	font-weight:700; text-transform:uppercase; background:#fed7d7; color:#742a2a; }

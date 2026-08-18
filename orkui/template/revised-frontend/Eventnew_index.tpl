@@ -231,7 +231,7 @@
 #ev-signin-links-table th { color:#718096; text-align:left; padding:4px 6px; font-weight:600; }
 #ev-signin-links-table td { color:#4a5568; }
 /* QR modal */
-#ev-qr-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:var(--z-modal-top, 10200); align-items:center; justify-content:center; }
+#ev-qr-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:var(--z-modal-top); align-items:center; justify-content:center; }
 #ev-qr-overlay .ev-qr-box { background:#fff; border-radius:12px; padding:28px 28px 20px; box-shadow:0 8px 32px rgba(0,0,0,0.22); max-width:320px; width:calc(100vw - 40px); text-align:center; }
 #ev-qr-img { width:220px; height:220px; border:1px solid #e2e8f0; border-radius:6px; display:block; margin:0 auto 14px; }
 .ev-rsvp-th-tooltip { position:relative; display:inline-block; cursor:default; }
