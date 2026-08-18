@@ -296,7 +296,7 @@ html[data-theme="dark"] .sr-timer.sr-timer-expired { background: var(--ork-alert
 	</div>
 	<div class="sr-body">
 		<div class="sr-expired-wrap" style="color:inherit">
-			<i class="fas fa-circle-check" style="color:#38a169"></i>
+			<i class="fas fa-check-circle" style="color:#38a169"></i>
 			<h3>Signed in as <?= htmlspecialchars($current_user['persona'] ?: 'your account') ?></h3>
 			<?php
 			$_locParts = array_filter([

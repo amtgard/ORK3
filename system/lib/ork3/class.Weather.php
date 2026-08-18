@@ -355,6 +355,35 @@ class Weather extends Ork3
         return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.archive_for_coords', $key, $result);
     }
 
+    public function GetArchiveForPark($request)
+    {
+        $parkId = (int)($request['ParkId'] ?? 0);
+        $date = (string)($request['Date'] ?? '');
+        if (!valid_id($parkId)) {
+            return InvalidParameter('Invalid park ID');
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return InvalidParameter('Invalid date');
+        }
+
+        return Success(['Weather' => $this->archive_for_date($parkId, $date)]);
+    }
+
+    public function GetArchiveForCoords($request)
+    {
+        $lat = $request['Lat'] ?? null;
+        $lng = $request['Lng'] ?? null;
+        $date = (string)($request['Date'] ?? '');
+        if (!is_numeric($lat) || !is_numeric($lng)) {
+            return InvalidParameter('Invalid coordinates');
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return InvalidParameter('Invalid date');
+        }
+
+        return Success(['Weather' => $this->archive_for_coords((float)$lat, (float)$lng, $date)]);
+    }
+
     /**
      * Convenience: look up a park's forecast for a date AND its 7-day daily
      * block in one call, return the badges for that date with week-relative
@@ -447,6 +476,33 @@ class Weather extends Ork3
             return array($lat, $lng);
         }
         return $this->parse_location_blob($rs->location);
+    }
+
+    /**
+     * Event occurrence coordinates when set on event_calendardetail (R-18).
+     *
+     * @return array{0: float, 1: float}|null
+     */
+    public function coords_for_calendar_detail(int $detailId): ?array
+    {
+        $detailId = (int) $detailId;
+        if ($detailId <= 0) {
+            return null;
+        }
+        $rs = $this->db->query(
+            'SELECT latitude, longitude FROM ' . DB_PREFIX . 'event_calendardetail
+             WHERE event_calendardetail_id = ' . $detailId . ' LIMIT 1'
+        );
+        if (!$rs || $rs->size() === 0 || !$rs->next()) {
+            return null;
+        }
+        $lat = (float) $rs->latitude;
+        $lng = (float) $rs->longitude;
+        if ($lat === 0.0 || $lng === 0.0) {
+            return null;
+        }
+
+        return [$lat, $lng];
     }
 
     /**
@@ -1391,7 +1447,9 @@ class Weather extends Ork3
                 'blocked_archive'      => (int)($s['blocked_archive']   ?? 0),
             );
         }
-        $cooldown_ts = Ork3::$Lib->ghettocache->get(__CLASS__ . '.cooldown_429', 'global', 1800);
+        $cooldown_ts     = Ork3::$Lib->ghettocache->get(__CLASS__ . '.cooldown_429', 'global', 1800);
+        $cooldown_err_ts = Ork3::$Lib->ghettocache->get(__CLASS__ . '.cooldown_err', 'global', 300);
+        $error_streak    = (int)Ork3::$Lib->ghettocache->get(__CLASS__ . '.error_streak', 'global', 60);
 
         // Pull memcached server's own clock so we can tell clock skew from a
         // stuck (non-evicting) key. If 'remaining' is negative AND the key
@@ -1412,11 +1470,16 @@ class Weather extends Ork3
         $remaining_mc    = ($clears_unix !== null && $mc_time !== null) ? $clears_unix - $mc_time : null;
         $skew_seconds    = $mc_time !== null ? $mc_time - $now : null;
 
+        $err_clears_unix = $cooldown_err_ts ? (int)$cooldown_err_ts + 300 : null;
         return array(
             'days'                => $out,
             'cooldown_set_at'     => $cooldown_ts ? date('Y-m-d H:i:s', (int)$cooldown_ts) : null,
             'cooldown_clears_at'  => $clears_unix ? date('Y-m-d H:i:s', $clears_unix) : null,
             'cooldown_present'    => $cooldown_ts !== false,
+            'cooldown_err_set_at'    => $cooldown_err_ts ? date('Y-m-d H:i:s', (int)$cooldown_err_ts) : null,
+            'cooldown_err_clears_at' => $err_clears_unix ? date('Y-m-d H:i:s', $err_clears_unix) : null,
+            'cooldown_err_present'   => $cooldown_err_ts !== false,
+            'error_streak'           => $error_streak,
             'remaining_seconds_server'   => $remaining_srv,
             'remaining_seconds_memcache' => $remaining_mc,
             'server_time'         => date('Y-m-d H:i:s', $now),
@@ -1441,6 +1504,20 @@ class Weather extends Ork3
             return false;
         }
 
+        // Error-cascade cooldown — bail when a recent burst of non-429 errors
+        // (5xx, connect timeout, DNS, TLS) tripped the streak. Without this,
+        // every page load hits a dead upstream synchronously, blocking on the
+        // 5s connect + 30s read timeout and pinning FPM workers. On 2026-07-03
+        // an Open-Meteo forecast outage 03:44–06:25 UTC generated 2826 errors
+        // in a single day for exactly this reason. Shorter TTL than the 429
+        // cooldown so we probe again quickly once upstream is likely back.
+        $err_cooldown = Ork3::$Lib->ghettocache->get(__CLASS__ . '.cooldown_err', 'global', 300);
+        if ($err_cooldown !== false) {
+            $this->last_http_status = 0;
+            $this->wx_stats_bump(array('blocked', 'blocked_' . $endpoint));
+            return false;
+        }
+
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -1454,11 +1531,25 @@ class Weather extends Ork3
             $this->last_http_status = $http;
             if ($http === 200) {
                 $this->wx_stats_bump('success');
+                // Any success clears the error streak — one good call means
+                // upstream is healthy again, no reason to keep counting.
+                Ork3::$Lib->ghettocache->bust(__CLASS__ . '.error_streak', 'global');
             } elseif ($http === 429) {
                 $this->wx_stats_bump('rate_limited');
                 Ork3::$Lib->ghettocache->cache(__CLASS__ . '.cooldown_429', 'global', time());
             } else {
                 $this->wx_stats_bump('error');
+                // Track consecutive non-200/non-429 errors. Three in a rolling
+                // 60s window trips a 5-min cooldown — long enough to spare us
+                // from the cascade, short enough to recover quickly once the
+                // upstream comes back.
+                $streak  = (int)Ork3::$Lib->ghettocache->get(__CLASS__ . '.error_streak', 'global', 60);
+                $streak += 1;
+                Ork3::$Lib->ghettocache->cache(__CLASS__ . '.error_streak', 'global', $streak);
+                if ($streak >= 3) {
+                    Ork3::$Lib->ghettocache->get(__CLASS__ . '.cooldown_err', 'global', 300);
+                    Ork3::$Lib->ghettocache->cache(__CLASS__ . '.cooldown_err', 'global', time());
+                }
             }
             if ($http !== 200) {
                 return false;
@@ -1466,5 +1557,45 @@ class Weather extends Ork3
             return $body;
         }
         return @file_get_contents($url);
+    }
+
+    /**
+     * @return array{total_active: int, fresh: int, aging: int, stale_row: int}|array{Status: mixed, Error?: mixed, Detail?: mixed}
+     */
+    public function GetFreshnessBuckets($Token = null): array
+    {
+        $admin = new Administration();
+
+        return $admin->GetServerHealthWeatherSummary($Token);
+    }
+
+    public function GetPreviousFetchedAt(): ?string
+    {
+        $this->db->Clear();
+        $rs = $this->db->DataSet('SELECT MAX(fetched_at) AS prev FROM ' . DB_PREFIX . 'park_weather');
+        if ($rs && $rs->Size() > 0 && $rs->Next()) {
+            return $rs->prev ?: null;
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{count: int, elapsed_ms: int, previous_fetched_at: ?string, previous_age_min: ?int}
+     */
+    public function AdminRefreshWithPrior(): array
+    {
+        $prev = $this->GetPreviousFetchedAt();
+        $prevAgeMin = $prev ? (int) round((time() - strtotime($prev)) / 60) : null;
+        $start = microtime(true);
+        $count = $this->refresh_all_active_parks();
+        $elapsedMs = (int) round((microtime(true) - $start) * 1000);
+
+        return [
+            'count' => $count,
+            'elapsed_ms' => $elapsedMs,
+            'previous_fetched_at' => $prev,
+            'previous_age_min' => $prevAgeMin,
+        ];
     }
 }

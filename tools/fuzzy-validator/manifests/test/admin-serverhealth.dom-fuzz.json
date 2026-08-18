@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "pageId": "admin-serverhealth",
+  "calibratedAt": "2026-08-01T20:10:38Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "refuzzedAt": "2026-08-02T16:43:33Z",
+  "refuzzedFromCommit": "05389516"
+}
