@@ -1865,7 +1865,8 @@ var KnBannerConfig = {
 				</div>
 			</div>
 
-			<?php if (!empty($CanAddPark)): ?>
+			<?php /* Kingdom-level managers only -- park officers reach this modal too. */ ?>
+			<?php if (!empty($CanManageKingdom)): ?>
 			<!-- ── Panel: Operations ── -->
 			<?php if ($CanEditKingdom ?? false): ?>
 			<div class="kn-admin-panel" id="kn-admin-panel-signinlink">

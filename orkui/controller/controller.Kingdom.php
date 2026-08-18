@@ -332,8 +332,12 @@ class Controller_Kingdom extends Controller
         $this->data['knCanManageBanner'] = $this->data['CanEditKingdom'];
         $this->data['CanManageKingdom'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+        // Park creation is GLOBAL ADMIN ONLY, by design -- see Park::CreatePark,
+        // which checks HasAuthority(AUTH_ADMIN, 0, AUTH_CREATE). This affordance
+        // must mirror that check exactly; gating it on kingdom authority showed
+        // monarchy an Add Park button whose submit the service always refused.
         $this->data['CanAddPark'] = $uid > 0
-            && $this->Authorization->has_authority($uid, AUTH_KINGDOM, (int)$kingdom_id, AUTH_CREATE);
+            && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_CREATE);
         $this->data['IsOrkAdmin'] = $uid > 0
             && $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
 
