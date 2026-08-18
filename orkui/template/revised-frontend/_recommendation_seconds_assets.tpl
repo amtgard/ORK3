@@ -192,7 +192,7 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 			}
 			return '<span class="rs-notes">&mdash; "' + inner + '"</span>';
 		}
-		return '<span class="rs-notes-empty">&mdash; (no comment)</span>';
+		return '';
 	}
 
 	function buildOwnSecondHtml(secondId, notes, supPersona) {
@@ -208,11 +208,18 @@ html[data-theme="dark"] .rs-textarea { background: var(--ork-card-bg); color: va
 		if (!editBtn) return false;
 		var secondEl = editBtn.closest('.rs-second');
 		if (!secondEl) return false;
-		var oldNotes = secondEl.querySelector('.rs-notes, .rs-notes-empty');
-		if (!oldNotes) return false;
 		var holder = document.createElement('div');
 		holder.innerHTML = buildNotesSpanHtml(newNotes);
-		secondEl.replaceChild(holder.firstChild, oldNotes);
+		var newNotesEl = holder.firstChild; // null when newNotes is empty (no-comment second)
+		var oldNotes = secondEl.querySelector('.rs-notes, .rs-notes-empty');
+		if (oldNotes) {
+			if (newNotesEl) secondEl.replaceChild(newNotesEl, oldNotes);
+			else secondEl.removeChild(oldNotes);
+		} else if (newNotesEl) {
+			var actions = secondEl.querySelector('.rs-second-actions');
+			if (actions) secondEl.insertBefore(newNotesEl, actions);
+			else secondEl.appendChild(newNotesEl);
+		}
 		editBtn.setAttribute('data-notes', newNotes || '');
 		return true;
 	}

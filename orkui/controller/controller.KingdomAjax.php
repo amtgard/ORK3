@@ -67,7 +67,7 @@ class Controller_KingdomAjax extends Controller
             }
 
         } elseif ($action === 'setstatus') {
-            if (!Ork3::$Lib->authorization->HasAuthority((int)$this->session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            if (!$this->Authorization->has_authority((int)$this->session->user_id, AUTH_ADMIN, 0, AUTH_ADMIN)) {
                 echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
                 exit;
             }
@@ -140,14 +140,6 @@ class Controller_KingdomAjax extends Controller
                 'KingdomId'            => $kingdom_id,
                 'KingdomConfiguration' => $configList,
             ]);
-            if ($r['Status'] == 0) {
-                // Kingdom config can change which kingdoms roll up into stats
-                // (IncludePrincipalityInStatistics) and a lot of other derived
-                // values across reports / averages / recap. Cheapest correct
-                // fix is a full memcached flush — config saves are infrequent
-                // admin actions, not worth enumerating every dependent cache key.
-                Ork3::$Lib->ghettocache->memcache->flush();
-            }
             echo $r['Status'] == 0
                 ? json_encode(['status' => 0])
                 : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
@@ -365,6 +357,7 @@ class Controller_KingdomAjax extends Controller
         } elseif ($action === 'moveplayer') {
             $uid = (int)$this->session->user_id;
             $this->load_model('Player');
+            $this->load_model('KingdomProfile');
             $mundane_id   = (int)($_POST['MundaneId']  ?? 0);
             $dest_park_id = (int)($_POST['DestParkId'] ?? 0);
             if (!valid_id($mundane_id)) {
@@ -375,22 +368,10 @@ class Controller_KingdomAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Select a destination park.']);
                 exit;
             }
-            // Auth: allow the move when the actor has kingdom-level authority over EITHER the
-            // player's current (source) kingdom — moving/releasing one of your own members — OR
-            // the destination park's kingdom — claiming a player into your kingdom. This mirrors
-            // Player::MovePlayer (and the Park/Player move endpoints), which authorize on
-            // destination OR source. A source-only check wrongly blocked officers from claiming
-            // players who belong to another kingdom.
-            global $DB;
-            $DB->Clear();
-            $plrKingdom = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mundane_id} LIMIT 1");
-            $player_kingdom_id = ($plrKingdom && $plrKingdom->Next()) ? (int)$plrKingdom->kingdom_id : 0;
-            $DB->Clear();
-            $destKingdom = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$dest_park_id} LIMIT 1");
-            $dest_kingdom_id = ($destKingdom && $destKingdom->Next()) ? (int)$destKingdom->kingdom_id : 0;
-            $canSource = $player_kingdom_id && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT);
-            $canDest   = $dest_kingdom_id   && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $dest_kingdom_id, AUTH_EDIT);
-            if (!$canSource && !$canDest) {
+            $ctx = $this->KingdomProfile->suspension_context($mundane_id);
+            $player_kingdom_id = (int)($ctx['kingdom_id'] ?? 0);
+            $dest_kingdom_id = $this->KingdomProfile->park_kingdom_id($dest_park_id);
+            if (!$this->KingdomProfile->authorize_move_player($uid, $player_kingdom_id, $dest_kingdom_id)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized to move this player.']);
                 exit;
             }
@@ -405,19 +386,18 @@ class Controller_KingdomAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Missing park ID.']);
                 exit;
             }
-            global $DB;
-            $DB->Clear();
-            $rs = $DB->DataSet("SELECT abbreviation FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} LIMIT 1");
-            if (!$rs || !$rs->Next()) {
-                echo json_encode(['status' => 1, 'error' => 'Park not found.']);
+            $this->load_model('AdminDashboard');
+            $abbrCheck = $this->AdminDashboard->park_abbr_check($park_id, $kingdom_id);
+            if (($abbrCheck['status'] ?? 1) !== 0) {
+                echo json_encode(['status' => 1, 'error' => $abbrCheck['error'] ?? 'Park not found.']);
                 exit;
             }
-            $abbr = strtoupper($rs->abbreviation);
-            $DB->Clear();
-            $abbrEsc = mysql_real_escape_string($abbr);
-            $rs2 = $DB->DataSet("SELECT name FROM " . DB_PREFIX . "park WHERE kingdom_id = {$kingdom_id} AND abbreviation = '{$abbrEsc}' AND park_id != {$park_id} AND active = 'Active' LIMIT 1");
-            $taken = ($rs2 && $rs2->Next());
-            echo json_encode(['status' => 0, 'abbr' => $abbr, 'taken' => $taken, 'conflictName' => $taken ? $rs2->name : '']);
+            echo json_encode([
+                'status' => 0,
+                'abbr' => $abbrCheck['abbr'],
+                'taken' => $abbrCheck['taken'],
+                'conflictName' => $abbrCheck['conflictName'],
+            ]);
             exit;
 
         } elseif ($action === 'claimpark') {
@@ -435,9 +415,6 @@ class Controller_KingdomAjax extends Controller
             $new_abbr = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
             $r = $this->Park->TransferPark(['Token' => $this->session->token, 'ParkId' => $park_id, 'KingdomId' => $dest_kingdom_id, 'Abbreviation' => $new_abbr]);
             if ($r['Status'] == 0) {
-                $bustKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $dest_kingdom_id]);
-                Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkAverages', $bustKey);
-                Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkMonthlyAverages', $bustKey);
                 echo json_encode(['status' => 0]);
             } else {
                 echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
@@ -495,7 +472,7 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'deletedrecommendations') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -505,7 +482,7 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'restorerecommendation') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -524,24 +501,8 @@ class Controller_KingdomAjax extends Controller
                 : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
         } elseif ($action === 'geteventtemplates') {
-            global $DB;
-            $kid = $kingdom_id;
-            $sql = "SELECT e.event_id, e.name, p.park_id, p.name AS park_name
-			        FROM ork_event e
-			        LEFT JOIN ork_park p ON p.park_id = e.park_id
-			        WHERE e.kingdom_id = $kid ORDER BY e.name";
-            $rs        = $DB->DataSet($sql);
-            $templates = [];
-            if ($rs && $rs->Size() > 0) {
-                while ($rs->Next()) {
-                    $templates[] = [
-                        'EventId'  => (int)$rs->event_id,
-                        'Name'     => $rs->name,
-                        'ParkId'   => (int)$rs->park_id,
-                        'ParkName' => $rs->park_name ?? '',
-                    ];
-                }
-            }
+            $this->load_model('Event');
+            $templates = $this->Event->get_event_templates_for_kingdom($kingdom_id);
             echo json_encode(['status' => 0, 'templates' => $templates]);
 
         } elseif ($action === 'createtournament') {
@@ -593,28 +554,18 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'setrecsvisibility') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_EDIT)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
-            $value = (int)($_POST['Value'] ?? 1) ? '1' : '0';
-            global $DB;
-            $kid = (int)$kingdom_id;
-            $DB->Clear();
-            $existing = $DB->DataSet("SELECT configuration_id FROM " . DB_PREFIX . "configuration WHERE type='Kingdom' AND id=$kid AND `key`='AwardRecsPublic' LIMIT 1");
-            if ($existing && $existing->Next()) {
-                $cid = (int)$existing->configuration_id;
-                $DB->Clear();
-                $DB->Execute("UPDATE " . DB_PREFIX . "configuration SET value='" . json_encode($value) . "', modified=NOW() WHERE configuration_id=$cid");
-            } else {
-                $DB->Clear();
-                $DB->Execute("INSERT INTO " . DB_PREFIX . "configuration (type, var_type, id, `key`, value, user_setting, allowed_values, modified) VALUES ('Kingdom', 'fixed', $kid, 'AwardRecsPublic', '" . json_encode($value) . "', 1, 'null', NOW())");
-            }
+            $value = (int)($_POST['Value'] ?? 1) ? true : false;
+            $this->load_model('KingdomProfile');
+            $this->KingdomProfile->set_award_recs_public((int)$kingdom_id, $value);
             echo json_encode(['status' => 0]);
 
         } elseif ($action === 'addauth') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -627,22 +578,22 @@ class Controller_KingdomAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Invalid player.']);
                 exit;
             }
-            global $DB;
-            $DB->Clear();
-            $DB->Execute("INSERT INTO ork_authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
-				VALUES ({$mid}, 0, {$kingdom_id}, 0, 0, '{$role}', NOW())");
-            $DB->Clear();
-            $rs = $DB->DataSet("SELECT a.authorization_id, m.persona FROM ork_authorization a
-				LEFT JOIN ork_mundane m ON m.mundane_id = a.mundane_id
-				WHERE a.mundane_id = {$mid} AND a.kingdom_id = {$kingdom_id}
-				ORDER BY a.authorization_id DESC LIMIT 1");
-            $authId = 0;
-            $persona = '';
-            if ($rs && $rs->Next()) {
-                $authId = (int)$rs->authorization_id;
-                $persona = $rs->persona;
+            $this->load_model('Authorization');
+            $r = $this->Authorization->add_auth([
+                'Token'     => $this->session->token,
+                'MundaneId' => $mid,
+                'Type'      => AUTH_KINGDOM,
+                'Id'        => $kingdom_id,
+                'Role'      => $role,
+            ]);
+            if ($r['Status'] != 0) {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . (isset($r['Detail']) && $r['Detail'] !== '' ? ': ' . $r['Detail'] : '')]);
+                exit;
             }
-            Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_KINGDOM, 'Id' => $kingdom_id, 'Role' => $role], 'Player', $mid, null, [
+            $authId = (int)($r['Detail'] ?? 0);
+            $this->load_model('Player');
+            $persona = $this->Player->get_persona($mid);
+            $this->Authorization->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_KINGDOM, 'Id' => $kingdom_id, 'Role' => $role], 'Player', $mid, null, [
                 'authorization_id' => $authId,
                 'mundane_id'       => $mid,
                 'park_id'          => 0,
@@ -655,7 +606,7 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'removeauth') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -670,7 +621,8 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'getparks') {
             // Always return family parks (kingdom + child principalities) for dropdowns.
-            $r = Ork3::$Lib->kingdom->GetParks(['KingdomIds' => Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id)]);
+            $this->load_model('Kingdom');
+            $r = $this->Kingdom->get_family_parks($kingdom_id);
             $parks = [];
             foreach ($r['Parks'] ?? [] as $park) {
                 $parks[] = ['ParkId' => $park['ParkId'], 'Name' => $park['Name']];
@@ -681,7 +633,8 @@ class Controller_KingdomAjax extends Controller
             });
             echo json_encode(['status' => 0, 'parks' => $parks]);
         } elseif ($action === 'parktitles') {
-            $result = Ork3::$Lib->kingdom->GetKingdomParkTitles(['KingdomId' => $kingdom_id]);
+            $this->load_model('Kingdom');
+            $result = $this->Kingdom->get_kingdom_park_titles($kingdom_id);
             $titles = [];
             foreach ($result['ParkTitles'] ?? [] as $pt) {
                 $titles[] = ['ParkTitleId' => (int)$pt['ParkTitleId'], 'Title' => $pt['Title']];
@@ -690,7 +643,7 @@ class Controller_KingdomAjax extends Controller
 
         } elseif ($action === 'setparent') {
             $uid = (int)($this->session->user_id ?? 0);
-            if (!$uid || !Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
+            if (!$uid || !$this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN)) {
                 echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
                 exit;
             }
@@ -712,12 +665,10 @@ class Controller_KingdomAjax extends Controller
                 echo json_encode(['status' => 0, 'taken' => false]);
                 exit;
             }
-            global $DB;
-            $DB->Clear();
-            $excludeClause = $excludeId > 0 ? " AND kingdom_id != {$excludeId}" : '';
-            $rs = $DB->DataSet("SELECT kingdom_id, name FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$abbr}'{$excludeClause} LIMIT 1");
-            echo ($rs && $rs->Next())
-                ? json_encode(['status' => 0, 'taken' => true,  'name' => $rs->name])
+            $this->load_model('KingdomProfile');
+            $conflictName = $this->KingdomProfile->abbreviation_conflict($abbr, $excludeId);
+            echo $conflictName !== null
+                ? json_encode(['status' => 0, 'taken' => true, 'name' => $conflictName])
                 : json_encode(['status' => 0, 'taken' => false]);
 
         } else {
@@ -744,129 +695,10 @@ class Controller_KingdomAjax extends Controller
             exit;
         }
 
-        $kid    = (int)$kingdom_id;
-        global $DB;
-        $events = [];
-
-        // Events in range (all calendar-detail occurrences within window)
-        $evtSql = "
-			SELECT e.event_id, e.name, e.park_id, p.abbreviation AS park_abbr,
-			       cd.event_start, cd.event_end, cd.event_calendardetail_id AS detail_id
-			FROM ork_event e
-			LEFT JOIN ork_park p ON p.park_id = e.park_id
-			INNER JOIN ork_event_calendardetail cd ON cd.event_id = e.event_id
-			WHERE e.kingdom_id = {$kid}
-			  AND cd.event_start >= '{$start}'
-			  AND cd.event_start < '{$end}'
-			ORDER BY cd.event_start";
-        $evtResult = $DB->DataSet($evtSql);
-        if ($evtResult && $evtResult->Size() > 0) {
-            while ($evtResult->Next()) {
-                $isPark = (int)$evtResult->park_id > 0;
-                $abbr   = ($isPark && $evtResult->park_abbr) ? $evtResult->park_abbr . ': ' : '';
-                $eid    = (int)$evtResult->event_id;
-                $did    = (int)$evtResult->detail_id;
-                $ev = [
-                    'title' => $abbr . $evtResult->name,
-                    'start' => $evtResult->event_start,
-                    'url'   => $did ? UIR . "Event/detail/{$eid}/{$did}" : '',
-                    'color' => $isPark ? '#6b46c1' : '#0891b2',
-                    'type'  => $isPark ? 'park-event' : 'kingdom-event',
-                ];
-                $endRaw = $evtResult->event_end ?? '';
-                if ($endRaw && substr($endRaw, 0, 10) > substr($evtResult->event_start, 0, 10)) {
-                    $endDt = new DateTime(substr($endRaw, 0, 10));
-                    $endDt->modify('+1 day');
-                    $ev['end'] = $endDt->format('Y-m-d');
-                }
-                $events[] = $ev;
-            }
-        }
-
-        // Park day recurrences expanded for the requested range
-        $pdSql = "
-			SELECT pd.park_id, pd.recurrence, pd.week_day, pd.week_of_month,
-			       pd.month_day, pd.time, pd.purpose, p.abbreviation AS park_abbr
-			FROM ork_parkday pd
-			JOIN ork_park p ON p.park_id = pd.park_id
-			WHERE p.kingdom_id = {$kid} AND p.active = 'Active'";
-        $pdResult = $DB->DataSet($pdSql);
-        if ($pdResult && $pdResult->Size() > 0) {
-            $dayNames   = ['Sunday' => 0,'Monday' => 1,'Tuesday' => 2,'Wednesday' => 3,'Thursday' => 4,'Friday' => 5,'Saturday' => 6];
-            $rangeStart = new DateTime($start);
-            $rangeEnd   = new DateTime($end);
-            while ($pdResult->Next()) {
-                switch ($pdResult->purpose) {
-                    case 'fighter-practice': $purposeLabel = 'Fighter Practice';
-                        break;
-                    case 'arts-day':         $purposeLabel = 'A&S Day';
-                        break;
-                    case 'park-day':         $purposeLabel = 'Park Day';
-                        break;
-                    default:                 $purposeLabel = ucwords(str_replace('-', ' ', $pdResult->purpose));
-                }
-                $abbr    = $pdResult->park_abbr ? $pdResult->park_abbr . ': ' : '';
-                $title   = $abbr . $purposeLabel;
-                $url     = UIR . 'Park/profile/' . (int)$pdResult->park_id;
-                $timeStr = ($pdResult->time && $pdResult->time !== '00:00:00') ? 'T' . $pdResult->time : '';
-                $rec     = $pdResult->recurrence;
-
-                if ($rec === 'weekly') {
-                    $targetWd = $dayNames[$pdResult->week_day] ?? -1;
-                    if ($targetWd < 0) {
-                        continue;
-                    }
-                    $cur = clone $rangeStart;
-                    while ((int)$cur->format('w') !== $targetWd) {
-                        $cur->modify('+1 day');
-                    }
-                    while ($cur < $rangeEnd) {
-                        $events[] = ['title' => $title,'start' => $cur->format('Y-m-d').$timeStr,'url' => $url,'color' => '#b7791f','type' => 'park-day'];
-                        $cur->modify('+7 days');
-                    }
-                } elseif ($rec === 'week-of-month') {
-                    $targetWd = $dayNames[$pdResult->week_day] ?? -1;
-                    $nth = (int)$pdResult->week_of_month;
-                    if ($targetWd < 0 || $nth < 1) {
-                        continue;
-                    }
-                    $curMonth = clone $rangeStart;
-                    $curMonth->modify('first day of this month');
-                    while ($curMonth < $rangeEnd) {
-                        $cnt = 0;
-                        $cur = clone $curMonth;
-                        $mn  = (int)$curMonth->format('n');
-                        while ((int)$cur->format('n') === $mn) {
-                            if ((int)$cur->format('w') === $targetWd && ++$cnt === $nth) {
-                                if ($cur >= $rangeStart && $cur < $rangeEnd) {
-                                    $events[] = ['title' => $title,'start' => $cur->format('Y-m-d').$timeStr,'url' => $url,'color' => '#b7791f','type' => 'park-day'];
-                                }
-                                break;
-                            }
-                            $cur->modify('+1 day');
-                        }
-                        $curMonth->modify('first day of next month');
-                    }
-                } elseif ($rec === 'monthly') {
-                    $dayNum = (int)$pdResult->month_day;
-                    if ($dayNum < 1) {
-                        continue;
-                    }
-                    $curMonth = clone $rangeStart;
-                    $curMonth->modify('first day of this month');
-                    while ($curMonth < $rangeEnd) {
-                        $mEnd = clone $curMonth;
-                        $mEnd->modify('last day of this month');
-                        $d    = min($dayNum, (int)$mEnd->format('d'));
-                        $cur  = new DateTime($curMonth->format('Y-m-') . sprintf('%02d', $d));
-                        if ($cur >= $rangeStart && $cur < $rangeEnd) {
-                            $events[] = ['title' => $title,'start' => $cur->format('Y-m-d').$timeStr,'url' => $url,'color' => '#b7791f','type' => 'park-day'];
-                        }
-                        $curMonth->modify('first day of next month');
-                    }
-                }
-            }
-        }
+        $kn_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
+        $kn_isAdmin = ($kn_uid > 0) ? $this->Authorization->has_authority($kn_uid, AUTH_ADMIN, 0, AUTH_CREATE) : false;
+        $this->load_model('KingdomProfile');
+        $events = $this->KingdomProfile->calendar_feed((int)$kingdom_id, $start, $end, $kn_uid, $kn_isAdmin);
 
         echo json_encode(['status' => 0, 'events' => $events]);
         exit;
@@ -889,9 +721,9 @@ class Controller_KingdomAjax extends Controller
             exit;
         }
 
-        $q                 = trim($_GET['q']                ?? '');
-        $scope             = trim($_GET['scope']            ?? 'own'); // 'own' | 'all' | 'exclude'
-        $park_id           = (int)($_GET['park_id']         ?? 0);
+        $q                = trim($_GET['q']               ?? '');
+        $scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'all' | 'exclude'
+        $park_id          = (int)($_GET['park_id']        ?? 0);
         $include_inactive  = !empty($_GET['include_inactive']);
         $include_suspended = !empty($_GET['include_suspended']);
         if (strlen($q) < 2) {
@@ -899,7 +731,7 @@ class Controller_KingdomAjax extends Controller
             exit;
         }
 
-        // Map scope → RankedPlayers params
+        // Map scope -> RankedPlayers params
         $restrictTo         = null;
         $excludeKingdomId   = null;
         $restrictKingdomIds = null;
@@ -910,7 +742,7 @@ class Controller_KingdomAjax extends Controller
             // Find players NOT in this kingdom (move-player "in" mode)
             $excludeKingdomId = $kingdom_id;
         }
-        // scope=all → no restrict, no exclude (global ranking)
+        // scope=all -> no restrict, no exclude (global ranking)
 
         $svc     = new SearchService();
         $results = $svc->RankedPlayers([
@@ -937,7 +769,8 @@ class Controller_KingdomAjax extends Controller
             echo json_encode([]);
             exit;
         }
-        $r = Ork3::$Lib->kingdom->GetKingdoms(array());
+        $this->load_model('Kingdom');
+        $r = $this->Kingdom->get_kingdoms_response();
         $kingdoms = [];
         foreach ($r['Kingdoms'] ?? [] as $k) {
             $kingdoms[] = ['KingdomId' => (int)$k['KingdomId'], 'KingdomName' => $k['KingdomName'], 'Abbreviation' => $k['Abbreviation']];
@@ -964,19 +797,19 @@ class Controller_KingdomAjax extends Controller
         }
 
         // Determine the player's kingdom so we can check auth
-        global $DB;
-        $rs = $DB->DataSet("SELECT kingdom_id, suspended_by_id, suspended FROM " . DB_PREFIX . "mundane WHERE mundane_id = {$mid} LIMIT 1");
-        if (!$rs || !$rs->Next()) {
+        $this->load_model('KingdomProfile');
+        $context = $this->KingdomProfile->suspension_context($mid);
+        if ($context['kingdom_id'] <= 0) {
             echo json_encode(['status' => 1, 'error' => 'Player not found.']);
             exit;
         }
-        $player_kingdom_id        = (int)$rs->kingdom_id;
-        $existing_suspended_by_id = (int)$rs->suspended_by_id;
-        $is_currently_suspended   = (bool)$rs->suspended;
+        $player_kingdom_id        = (int)$context['kingdom_id'];
+        $existing_suspended_by_id = (int)($context['suspended_by_id'] ?? 0);
+        $is_currently_suspended   = (bool)$context['suspended'];
 
-        $isAdmin = Ork3::$Lib->authorization->HasAuthority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
+        $isAdmin = $this->Authorization->has_authority($uid, AUTH_ADMIN, 0, AUTH_ADMIN);
         $isKingdomEditor = valid_id($player_kingdom_id)
-            && Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT);
+            && $this->Authorization->has_authority($uid, AUTH_KINGDOM, $player_kingdom_id, AUTH_EDIT);
         if (!$isAdmin && !$isKingdomEditor) {
             echo json_encode(['status' => 5, 'error' => 'Unauthorized']);
             exit;
@@ -1006,4 +839,34 @@ class Controller_KingdomAjax extends Controller
             : json_encode(['status' => $r['Status'] ?? 1, 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
         exit;
     }
+
+    public function banner($p = null)
+    {
+        header('Content-Type: application/json');
+
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+
+        $params   = explode('/', $p ?? '');
+        $kingdom_id = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $action   = $params[1] ?? '';
+
+        if (!valid_id($kingdom_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid Kingdom ID.']);
+            exit;
+        }
+
+        $this->load_model('Banner');
+        $this->Banner->handle_ajax(
+            'Kingdom',
+            $action,
+            $kingdom_id,
+            $this->session->token,
+            $_POST,
+            $_FILES,
+        );
+    }
+
 }

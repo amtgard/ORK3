@@ -1,0 +1,17 @@
+{
+  "kingdom_ids": [100001, 100002, 100003, 100004, 100005],
+  "extras_per_kingdom": {
+    "min": 2,
+    "max": 8
+  },
+  "extra_name_pool": [
+    "Order of the Test Blade",
+    "Golden Quill",
+    "Silver Oak",
+    "Iron Star",
+    "Crimson Feather",
+    "Azure Shield",
+    "Verdant Crown",
+    "Obsidian Ring"
+  ]
+}

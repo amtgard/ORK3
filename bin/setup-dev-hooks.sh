@@ -10,4 +10,4 @@ set -e
 cd "$(git rev-parse --show-toplevel)"
 git config core.hooksPath .githooks
 echo "✅ git hooks activated (core.hooksPath = .githooks)."
-echo "   PHP files you commit will be auto-formatted to PSR-12 via tools/php-cs-fixer.phar."
+echo "   PHP files you commit will be auto-formatted to PSR-12 via tools/php-cs-fixer/php-cs-fixer.phar."

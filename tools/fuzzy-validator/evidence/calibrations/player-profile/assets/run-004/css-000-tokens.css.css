@@ -1,0 +1,82 @@
+/* ==========================================================================
+   ORK3 Design Tokens
+   ==========================================================================
+   Loaded before all other CSS via default.theme. Defines custom properties
+   only — this file produces zero visual output on its own.
+
+   Naming: --ork-* for global/app tokens. Component-scoped tokens
+   (--kn-*, --pk-*, --pn-*, --rp-*, --ev-*) remain where they are defined.
+
+   Tokens that already live in orkui.css's dark-mode :root pair (--ork-border,
+   --ork-text-muted, --ork-text-secondary, --ork-bg-secondary, etc.) are NOT
+   redefined here — they are owned by orkui.css which carries their dark-mode
+   override. Defining them in two places risked silent drift when the dark
+   override moved.
+   ========================================================================== */
+
+:root {
+	/* ----- Colors ------------------------------------------------------- */
+	--ork-bg-dark:        #2d3748;  /* Nav background — always dark, no flip */
+	--ork-text-light:     #e2e8f0;  /* Nav text/icons on dark — always light */
+	--ork-surface-hover:  #edf2f7;  /* Row/tab/button hover */
+	--ork-surface-light:  #f7fafc;  /* Card BGs, table header fills */
+	--ork-text-body:      #4a5568;  /* Body/label text on cards */
+	--ork-text-hint:      #a0aec0;  /* Placeholder, muted labels */
+	--ork-blue-primary:   #2c5282;  /* Player hero default, primary action */
+	--ork-blue-link:      #3182ce;  /* Table links */
+	--ork-teal-accent:    #0891b2;  /* Park/event accent */
+	--ork-red-danger:     #e53e3e;  /* Error, danger, deletion */
+
+	/* ----- Spacing ------------------------------------------------------ */
+	--ork-space-card:     16px;     /* Card internal padding */
+	--ork-space-section:  24px;     /* Hero/section padding */
+
+	/* ----- Typography --------------------------------------------------- */
+	--ork-font-body:           "Gill Sans MT","lucida sans unicode",helvetica,arial;
+	--ork-font-heading:        "Gill Sans MT Bold","lucida sans unicode",helvetica,arial;
+	--ork-font-size-sm:        12px;
+	--ork-font-size-base:      13px;
+	--ork-font-weight-semibold: 600;
+	--ork-font-weight-bold:     700;
+
+	/* ----- Border Radii ------------------------------------------------- */
+	--ork-radius-sm:  4px;
+	--ork-radius-md:  6px;
+	--ork-radius-lg:  8px;
+	--ork-radius-xl: 10px;
+
+	/* ----- Shadows ------------------------------------------------------ */
+	--ork-shadow-card:       0 1px 3px rgba(0,0,0,0.05);
+	--ork-shadow-card-hover: 0 3px 10px rgba(0,0,0,0.10);
+	--ork-shadow-dropdown:   0 4px 12px rgba(0,0,0,0.12);
+	--ork-shadow-focus:      0 0 0 2px rgba(49,130,206,0.12);
+
+	/* ----- Z-Index Scale ------------------------------------------------ */
+	--z-dropdown:        300;
+	--z-tooltip:         500;
+	--z-modal-backdrop: 1040;
+	--z-modal:          1100;
+	--z-modal-top:      1200;
+	--z-help-overlay:   1300;
+	--ork-z-nav:        9999;   /* #newmenu in orkui.css */
+	--ork-z-nav-dropdown: 10000; /* nav avatar/resources dropdown menu */
+	--ork-z-nav-overlay: 10001; /* nav search dropdown */
+
+	/* ----- Transitions -------------------------------------------------- */
+	--ork-transition-base:      border-color 0.15s, box-shadow 0.15s;
+	--ork-transition-opacity:   opacity 0.2s;
+	--ork-transition-transform: transform 0.15s;
+}
+
+/* Dark-mode overrides for tokens defined in this file. Tokens that are
+   intentionally always-dark (--ork-bg-dark, --ork-text-light) or already
+   color-safe in dark mode (--ork-text-hint, --ork-red-danger) are not
+   overridden. */
+html[data-theme="dark"] {
+	--ork-surface-hover: #374151;  /* Row/tab/button hover on dark cards */
+	--ork-surface-light: #2d3748;  /* Card BGs in dark mode (= --ork-card-bg) */
+	--ork-text-body:     #cbd5e0;  /* Body/label text on dark cards */
+	--ork-blue-primary:  #63b3ed;  /* Lighter blue, readable on dark bg */
+	--ork-blue-link:     #63b3ed;  /* Table links in dark mode */
+	--ork-teal-accent:   #4fd1c5;  /* Lighter teal, readable on dark bg */
+}

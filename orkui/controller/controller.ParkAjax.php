@@ -66,6 +66,10 @@ class Controller_ParkAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Time is required.']);
                 exit;
             }
+            if ($recurrence === 'every-x-weeks' && !strlen(trim($_POST['StartDate'] ?? ''))) {
+                echo json_encode(['status' => 1, 'error' => 'A start date is required for the "every X weeks" cadence.']);
+                exit;
+            }
             $online = (($_POST['Online'] ?? '0') === '1') ? 1 : 0;
             $altLoc = (!$online && (($_POST['AlternateLocation'] ?? '0') === '1')) ? 1 : 0;
             $r = $this->Park->add_park_day([
@@ -75,6 +79,8 @@ class Controller_ParkAjax extends Controller
                 'WeekDay'           => trim($_POST['WeekDay']     ?? ''),
                 'WeekOfMonth'       => (int)($_POST['WeekOfMonth'] ?? 0),
                 'MonthDay'          => (int)($_POST['MonthDay']    ?? 0),
+                'StartDate'         => trim($_POST['StartDate']   ?? ''),
+                'WeekInterval'      => (int)($_POST['WeekInterval'] ?? 0),
                 'Time'              => $time,
                 'Purpose'           => trim($_POST['Purpose']     ?? 'other'),
                 'Description'       => trim($_POST['Description'] ?? ''),
@@ -107,6 +113,10 @@ class Controller_ParkAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Time is required.']);
                 exit;
             }
+            if ($recurrence === 'every-x-weeks' && !strlen(trim($_POST['StartDate'] ?? ''))) {
+                echo json_encode(['status' => 1, 'error' => 'A start date is required for the "every X weeks" cadence.']);
+                exit;
+            }
             $online = (($_POST['Online'] ?? '0') === '1') ? 1 : 0;
             $altLoc = (!$online && (($_POST['AlternateLocation'] ?? '0') === '1')) ? 1 : 0;
             $r = $this->Park->edit_park_day([
@@ -116,6 +126,8 @@ class Controller_ParkAjax extends Controller
                 'WeekDay'           => trim($_POST['WeekDay']     ?? ''),
                 'WeekOfMonth'       => (int)($_POST['WeekOfMonth'] ?? 0),
                 'MonthDay'          => (int)($_POST['MonthDay']    ?? 0),
+                'StartDate'         => trim($_POST['StartDate']   ?? ''),
+                'WeekInterval'      => (int)($_POST['WeekInterval'] ?? 0),
                 'Time'              => $time,
                 'Purpose'           => trim($_POST['Purpose']     ?? 'other'),
                 'Description'       => trim($_POST['Description'] ?? ''),
@@ -164,8 +176,9 @@ class Controller_ParkAjax extends Controller
                 : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
         } elseif ($action === 'playersearch') {
-            $q                 = trim($_GET['q']                ?? '');
-            $scope             = trim($_GET['scope']            ?? 'own'); // 'own' | 'exclude' | 'all'
+            $q                = trim($_GET['q']               ?? '');
+            $scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude' | 'all'
+            $prioritize       = !empty($_GET['prioritize']);
             $include_inactive  = !empty($_GET['include_inactive']);
             $include_suspended = !empty($_GET['include_suspended']);
             if (strlen($q) < 2) {
@@ -183,7 +196,7 @@ class Controller_ParkAjax extends Controller
                 $pkKingdom = (int)$pkRow->kingdom_id;
             }
 
-            // Map scope → RankedPlayers params
+            // Map scope -> RankedPlayers params
             $restrictTo      = null;
             $excludeParkId   = null;
             if ($scope === 'own') {
@@ -191,7 +204,7 @@ class Controller_ParkAjax extends Controller
             } elseif ($scope === 'exclude') {
                 $excludeParkId = $pid;
             }
-            // scope=all → no restrict, no exclude; ring still centers on park/kingdom
+            // scope=all -> no restrict, no exclude; ring still centers on park/kingdom
 
             $svc     = new SearchService();
             $results = $svc->RankedPlayers([
@@ -205,6 +218,7 @@ class Controller_ParkAjax extends Controller
             ]);
 
             echo json_encode($results);
+
         } elseif ($action === 'setheraldry') {
             if (empty($_FILES['Heraldry']['tmp_name']) || !is_uploaded_file($_FILES['Heraldry']['tmp_name'])) {
                 echo json_encode(['status' => 1, 'error' => 'No image file received.']);
@@ -318,7 +332,7 @@ class Controller_ParkAjax extends Controller
 
         } elseif ($action === 'deletedrecommendations') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -328,7 +342,7 @@ class Controller_ParkAjax extends Controller
 
         } elseif ($action === 'restorerecommendation') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -348,7 +362,7 @@ class Controller_ParkAjax extends Controller
 
         } elseif ($action === 'addauth') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -361,22 +375,22 @@ class Controller_ParkAjax extends Controller
                 echo json_encode(['status' => 1, 'error' => 'Invalid player.']);
                 exit;
             }
-            global $DB;
-            $DB->Clear();
-            $DB->Execute("INSERT INTO ork_authorization (mundane_id, park_id, kingdom_id, event_id, unit_id, role, modified)
-				VALUES ({$mid}, {$park_id}, 0, 0, 0, '{$role}', NOW())");
-            $DB->Clear();
-            $rs = $DB->DataSet("SELECT a.authorization_id, m.persona FROM ork_authorization a
-				LEFT JOIN ork_mundane m ON m.mundane_id = a.mundane_id
-				WHERE a.mundane_id = {$mid} AND a.park_id = {$park_id}
-				ORDER BY a.authorization_id DESC LIMIT 1");
-            $authId = 0;
-            $persona = '';
-            if ($rs && $rs->Next()) {
-                $authId = (int)$rs->authorization_id;
-                $persona = $rs->persona;
+            $this->load_model('Authorization');
+            $r = $this->Authorization->add_auth([
+                'Token'     => $this->session->token,
+                'MundaneId' => $mid,
+                'Type'      => AUTH_PARK,
+                'Id'        => $park_id,
+                'Role'      => $role,
+            ]);
+            if ($r['Status'] != 0) {
+                echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . (isset($r['Detail']) && $r['Detail'] !== '' ? ': ' . $r['Detail'] : '')]);
+                exit;
             }
-            Ork3::$Lib->dangeraudit->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_PARK, 'Id' => $park_id, 'Role' => $role], 'Player', $mid, null, [
+            $authId = (int)($r['Detail'] ?? 0);
+            $this->load_model('Player');
+            $persona = $this->Player->get_persona($mid);
+            $this->Authorization->audit('Authorization::AddAuthorization', ['MundaneId' => $mid, 'Type' => AUTH_PARK, 'Id' => $park_id, 'Role' => $role], 'Player', $mid, null, [
                 'authorization_id' => $authId,
                 'mundane_id'       => $mid,
                 'park_id'          => (int)$park_id,
@@ -389,7 +403,7 @@ class Controller_ParkAjax extends Controller
 
         } elseif ($action === 'removeauth') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_PARK, $park_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized.']);
                 exit;
             }
@@ -434,6 +448,27 @@ class Controller_ParkAjax extends Controller
                 ? json_encode(['status' => 0, 'tournamentId' => (int)($r['Detail'] ?? 0)])
                 : json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
 
+        } elseif ($action === 'selfreg_link') {
+            $this->load_model('Player');
+            $r = $this->Player->create_selfreg_link([
+                'Token'  => $this->session->token,
+                'ParkId' => $park_id,
+            ]);
+            if ($r['Status'] == 0) {
+                $detail = $r['Detail'];
+                echo json_encode([
+                    'status'            => 0,
+                    'token'             => $detail['token'],
+                    'expires_at'        => $detail['expires_at'],
+                    'seconds_remaining' => $detail['seconds_remaining'],
+                ]);
+            } else {
+                echo json_encode([
+                    'status' => $r['Status'],
+                    'error'  => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? ''),
+                ]);
+            }
+
         } else {
             echo json_encode(['status' => 1, 'error' => 'Unknown action']);
         }
@@ -459,7 +494,7 @@ class Controller_ParkAjax extends Controller
 
         if ($action === 'create') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized to create parks in this kingdom.']);
                 exit;
             }
@@ -490,16 +525,13 @@ class Controller_ParkAjax extends Controller
             ]);
 
             if ($r['Status'] == 0) {
-                $bustKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kingdom_id]);
-                Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkAverages', $bustKey);
-                Ork3::$Lib->ghettocache->bust('Report.GetKingdomParkMonthlyAverages', $bustKey);
                 echo json_encode(['status' => 0, 'parkId' => (int)($r['Detail'] ?? 0)]);
             } else {
                 echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
             }
         } elseif ($action === 'editpark') {
             $uid = (int)$this->session->user_id;
-            if (!Ork3::$Lib->authorization->HasAuthority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
+            if (!$this->Authorization->has_authority($uid, AUTH_KINGDOM, $kingdom_id, AUTH_CREATE)) {
                 echo json_encode(['status' => 5, 'error' => 'Not authorized to edit parks in this kingdom.']);
                 exit;
             }
@@ -515,10 +547,8 @@ class Controller_ParkAjax extends Controller
                 exit;
             }
             // Verify the park belongs to this kingdom
-            global $DB;
-            $DB->Clear();
-            $pkCheck = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE park_id = {$park_id} AND kingdom_id = {$kingdom_id} LIMIT 1");
-            if (!$pkCheck || !$pkCheck->Next()) {
+            $this->load_model('ParkProfile');
+            if (!$this->ParkProfile->park_belongs_to_kingdom($park_id, $kingdom_id)) {
                 echo json_encode(['status' => 1, 'error' => 'Park does not belong to this kingdom.']);
                 exit;
             }
@@ -550,23 +580,50 @@ class Controller_ParkAjax extends Controller
                 echo json_encode(['status' => $r['Status'], 'error' => ($r['Error'] ?? 'Error') . ': ' . ($r['Detail'] ?? '')]);
             }
         } elseif ($action === 'checkabbr') {
-            $abbr        = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
-            $excludeId   = (int)($_POST['ExcludeParkId'] ?? 0);
+            $abbr      = preg_replace('/[^A-Za-z0-9]/', '', strtoupper(trim($_POST['Abbreviation'] ?? '')));
+            $excludeId = (int)($_POST['ExcludeParkId'] ?? 0);
             if (!strlen($abbr)) {
                 echo json_encode(['status' => 0, 'taken' => false]);
                 exit;
             }
-            global $DB;
-            $DB->Clear();
-            $excludeClause = $excludeId > 0 ? " AND park_id != {$excludeId}" : '';
-            $rs = $DB->DataSet("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$abbr}' AND kingdom_id = {$kingdom_id}{$excludeClause} LIMIT 1");
-            echo ($rs && $rs->Next())
-                ? json_encode(['status' => 0, 'taken' => true])
-                : json_encode(['status' => 0, 'taken' => false]);
+            $this->load_model('ParkProfile');
+            $taken = $this->ParkProfile->abbreviation_taken((int)$kingdom_id, $abbr, $excludeId);
+            echo json_encode(['status' => 0, 'taken' => $taken]);
 
         } else {
             echo json_encode(['status' => 1, 'error' => 'Unknown action']);
         }
         exit;
     }
+
+
+    public function banner($p = null)
+    {
+        header('Content-Type: application/json');
+
+        if (!isset($this->session->user_id)) {
+            echo json_encode(['status' => 5, 'error' => 'Not logged in']);
+            exit;
+        }
+
+        $params  = explode('/', $p ?? '');
+        $park_id = (int)preg_replace('/[^0-9]/', '', $params[0] ?? '');
+        $action  = $params[1] ?? '';
+
+        if (!valid_id($park_id)) {
+            echo json_encode(['status' => 1, 'error' => 'Invalid Park ID.']);
+            exit;
+        }
+
+        $this->load_model('Banner');
+        $this->Banner->handle_ajax(
+            'Park',
+            $action,
+            $park_id,
+            $this->session->token,
+            $_POST,
+            $_FILES,
+        );
+    }
+
 }

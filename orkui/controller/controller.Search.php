@@ -8,7 +8,7 @@ class Controller_Search extends Controller
         $this->data['no_index'] = true;
         header('X-Robots-Tag: noindex, nofollow');
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        if ($_uid > 0 && valid_id($this->session->park_id) && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
+        if ($_uid > 0 && valid_id($this->session->park_id) && $this->Authorization->has_authority($_uid, AUTH_PARK, (int)$this->session->park_id, AUTH_EDIT)) {
             $this->data['menu']['admin'] = array( 'url' => UIR.'Admin/park/'.$this->session->park_id, 'display' => 'Admin Panel <i class="fas fa-cog"></i>', 'no-crumb' => 'no-crumb' );
         }
         // Expose the auth token so the search-results JS can pass it to the SOAP service
@@ -131,25 +131,8 @@ class Controller_Search extends Controller
             exit;
         }
         $ids = array_slice($ids, 0, 25);
-        $cache_key = Ork3::$Lib->ghettocache->key($ids);
-        if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.unitactivity', $cache_key, 300)) !== false) {
-            echo json_encode($cache, JSON_FORCE_OBJECT);
-            exit;
-        }
-        global $DB;
-        $in = implode(',', $ids);
-        $sql = "select um.unit_id, count(distinct um.mundane_id) as active_count
-				from " . DB_PREFIX . "unit_mundane um
-					join " . DB_PREFIX . "attendance a on a.mundane_id = um.mundane_id and a.date >= date_sub(curdate(), interval 1 year)
-				where um.unit_id in ($in)
-				group by um.unit_id";
-        $DB->Clear();
-        $rs = $DB->DataSet($sql);
-        $out = array();
-        while ($rs->Next()) {
-            $out[(int)$rs->unit_id] = (int)$rs->active_count;
-        }
-        Ork3::$Lib->ghettocache->cache(__CLASS__ . '.unitactivity', $cache_key, $out);
+        $this->load_model('Search');
+        $out = $this->Search->get_unit_activity_counts($ids);
         echo json_encode($out, JSON_FORCE_OBJECT);
         exit;
     }

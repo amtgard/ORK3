@@ -1,0 +1,113 @@
+<?php
+
+class Controller_SignIn extends Controller
+{
+    public function __construct($call = null, $method = null)
+    {
+        parent::__construct($call, $method);
+        $this->data['page_title'] = 'Sign In';
+    }
+
+    public function index($p = null)
+    {
+        $link_token = preg_replace('/[^a-f0-9]/', '', (string)($p ?? ''));
+
+        // Require login — redirect back here after
+        if (!isset($this->session->user_id) || !(int)$this->session->user_id) {
+            $this->session->location = 'SignIn/index/' . $link_token;
+            header('Location: ' . UIR . 'Login/login');
+            exit;
+        }
+
+        $this->load_model('Attendance');
+
+        // Validate the link
+        $link_result = $this->Attendance->get_attendance_link_info($link_token);
+        if ($link_result['Status'] != 0) {
+            $this->data['error']      = $link_result['Detail'] ?? 'This sign-in link is invalid or has expired.';
+            $this->data['link_token'] = $link_token;
+            $this->template = 'SignIn_index.tpl';
+            return;
+        }
+
+        $link = $link_result['Detail'];
+
+        // Resolve scope name + type from enriched link info.
+        $scope_name = 'your group';
+        $scope_type = (string)($link['ScopeType'] ?? 'park');
+        if ($scope_type === 'event') {
+            $scope_name = (string)($link['EventName'] ?? $scope_name);
+        } elseif (valid_id($link['ParkId'])) {
+            $scope_type = 'park';
+            $this->load_model('Park');
+            $scope_name = $this->Park->get_park_name($link['ParkId']) ?: $scope_name;
+        } elseif (valid_id($link['KingdomId'])) {
+            $scope_type = 'kingdom';
+            $this->load_model('Kingdom');
+            $scope_name = $this->Kingdom->get_kingdom_name($link['KingdomId']) ?: $scope_name;
+        }
+
+        // Get available classes
+        $classes_result = $this->Attendance->get_classes();
+        $classes = array_filter($classes_result['Classes'] ?? [], function ($c) {
+            return (int)($c['Active'] ?? 1) === 1;
+        });
+
+        // Check whether the player already has a row for this link's scope
+        // (today's date at the park, or this event's calendar detail). If so,
+        // the page switches to a "change my class" flow rather than rejecting
+        // them outright.
+        $existing = $this->Attendance->get_existing_signin((int)$this->session->user_id, $link);
+
+        // Handle submission. Two paths:
+        //   - No existing row → consume the link and INSERT a new attendance row
+        //   - Existing row    → UPDATE the class on that row (no new credit)
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $class_id = (int)($_POST['ClassId'] ?? 0);
+            if ($existing) {
+                $r = $this->Attendance->update_self_signin_class(
+                    $this->session->token,
+                    $existing['AttendanceId'],
+                    $class_id
+                );
+                $success_msg = 'Class updated. No additional credit was recorded.';
+            } else {
+                $r = $this->Attendance->use_attendance_link(
+                    $this->session->token,
+                    $link_token,
+                    $class_id
+                );
+                $success_msg = '';
+            }
+            if ($r['Status'] == 0) {
+                header('Location: ' . UIR . 'Player/profile/' . (int)$this->session->user_id);
+                exit;
+            } else {
+                $this->data['error'] = $r['Detail'] ?? $r['Error'] ?? 'Could not record attendance.';
+            }
+        }
+
+        $last_class_id = (int)$this->Attendance->get_player_last_class((int)$this->session->user_id);
+        $last_class_name = '';
+        if ($last_class_id > 0) {
+            foreach (array_values($classes) as $c) {
+                if ((int)$c['ClassId'] === $last_class_id) {
+                    $last_class_name = $c['Name'];
+                    break;
+                }
+            }
+        }
+
+        $classes = $this->Attendance->enrich_classes_with_progress((int)$this->session->user_id, array_values($classes));
+
+        $this->data['link']            = $link;
+        $this->data['scope_name']      = $scope_name;
+        $this->data['scope_type']      = $scope_type;
+        $this->data['link_token']      = $link_token;
+        $this->data['classes']         = $classes;
+        $this->data['last_class_id']   = $last_class_id;
+        $this->data['last_class_name'] = $last_class_name;
+        $this->data['existing']        = $existing; // null, or ['AttendanceId','ClassId','ClassName']
+        $this->template = 'SignIn_index.tpl';
+    }
+}

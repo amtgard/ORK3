@@ -182,6 +182,7 @@ html[data-theme="dark"] .rp-main table.dataTable tbody tr.even > td { background
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
+<script src="<?=HTTP_TEMPLATE?>default/script/ork-print.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 (function() {
@@ -193,6 +194,7 @@ html[data-theme="dark"] .rp-main table.dataTable tbody tr.even > td { background
 			orderClasses: false,
 			pageLength: 25,
 			dom: 'lfrtip',
+			scrollX: true,
 			buttons: [
 				{ extend: 'csv',   text: 'Export CSV' },
 				{ extend: 'print', text: 'Print' }
@@ -215,7 +217,7 @@ html[data-theme="dark"] .rp-main table.dataTable tbody tr.even > td { background
 		syncStatsMuted();
 		dt.on('search.dt', syncStatsMuted);
 		$('.rp-btn-export').on('click', function() { dt.button('.buttons-csv').trigger(); });
-		$('.rp-btn-print').on('click', function() { dt.button('.buttons-print').trigger(); });
+		$('.rp-btn-print').on('click', function() { orkPrintTable(dt); });
 	});
 })();
 </script>

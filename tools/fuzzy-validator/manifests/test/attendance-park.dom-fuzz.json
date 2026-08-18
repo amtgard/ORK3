@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "pageId": "attendance-park",
+  "calibratedAt": "2026-08-01T20:18:43Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "refuzzedAt": "2026-08-02T16:44:27Z",
+  "refuzzedFromCommit": "05389516"
+}

@@ -1,0 +1,4 @@
+DOM fuzz discovery report
+============================
+
+/html[0]/body[0]/div[1]  mode=attributes  attrs=data-session-token

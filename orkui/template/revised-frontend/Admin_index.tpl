@@ -323,26 +323,26 @@ function _cp_trend($cur, $prev, $fmt = 'number') {
 .cp-overlay.cp-open { display: flex; }
 .cp-modal-box {
 	background: #fff; border-radius: 10px; width: 520px; max-width: calc(100vw - 32px);
-	max-height: calc(100vh - 48px); display: flex; flex-direction: column;
+	max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); display: flex; flex-direction: column;
 	box-shadow: 0 8px 32px rgba(0,0,0,0.22); overflow: visible;
 }
 .cp-modal-header {
-	padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+	padding: 16px 20px; border-bottom: 1px solid var(--ork-border);
 	display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
 }
 .cp-modal-title {
 	font-size: 16px; font-weight: 700; color: #1a202c; margin: 0;
 	background: transparent; border: none; padding: 0; border-radius: 0; text-shadow: none;
 }
-.cp-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #a0aec0; line-height: 1; padding: 2px 6px; }
+.cp-modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--ork-text-hint); line-height: 1; padding: 2px 6px; }
 .cp-modal-close:hover { color: #2d3748; }
 .cp-modal-body { padding: 20px; overflow: visible; flex: 1; }
-.cp-modal-footer { padding: 14px 20px; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; background: #f7fafc; border-radius: 0 0 10px 10px; }
+.cp-modal-footer { padding: 14px 20px; border-top: 1px solid var(--ork-border); display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; background: var(--ork-surface-light); border-radius: 0 0 10px 10px; }
 /* Field rows */
 .cp-field { margin-bottom: 14px; }
-.cp-field label { display: block; font-size: 12px; font-weight: 600; color: #4a5568; margin-bottom: 5px; }
+.cp-field label { display: block; font-size: 12px; font-weight: 600; color: var(--ork-text-body); margin-bottom: 5px; }
 .cp-field input[type=text], .cp-field input[type=email], .cp-field input[type=password], .cp-field input[type=date], .cp-field select, .cp-field textarea {
-	width: 100%; padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 6px;
+	width: 100%; padding: 7px 10px; border: 1.5px solid var(--ork-border); border-radius: 6px;
 	font-size: 13px; color: #2d3748; background: #fff; box-sizing: border-box;
 }
 .cp-field input:focus, .cp-field select:focus, .cp-field textarea:focus {
@@ -460,7 +460,7 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 <div class="cp-overlay" id="cp-moveplayer-overlay">
 	<div class="cp-modal-box">
 		<div class="cp-modal-header">
-			<h3 class="cp-modal-title"><i class="fas fa-people-arrows" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
+			<h3 class="cp-modal-title"><i class="fas fa-exchange-alt" style="margin-right:8px;color:#2b6cb0"></i>Move Player</h3>
 			<button class="cp-modal-close" onclick="cpCloseModal('cp-moveplayer-overlay')">&times;</button>
 		</div>
 		<div class="cp-modal-body">
@@ -494,7 +494,7 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 <div class="cp-overlay" id="cp-mergeplayer-overlay">
 	<div class="cp-modal-box" style="width:560px">
 		<div class="cp-modal-header">
-			<h3 class="cp-modal-title"><i class="fas fa-compress-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
+			<h3 class="cp-modal-title"><i class="fas fa-compress-arrows-alt" style="margin-right:8px;color:#c53030"></i>Merge Players</h3>
 			<button class="cp-modal-close" onclick="cpCloseModal('cp-mergeplayer-overlay')">&times;</button>
 		</div>
 		<div class="cp-modal-body">
@@ -519,7 +519,7 @@ html[data-theme="dark"] .cp-warning { background: #744210; border-color: #975a16
 		</div>
 		<div class="cp-modal-footer">
 			<button class="adm-btn adm-btn-ghost" onclick="cpCloseModal('cp-mergeplayer-overlay')">Cancel</button>
-			<button class="adm-btn adm-btn-danger" id="cp-mgp-submit" disabled><i class="fas fa-compress-alt"></i> Merge Players</button>
+			<button class="adm-btn adm-btn-danger" id="cp-mgp-submit" disabled><i class="fas fa-compress-arrows-alt"></i> Merge Players</button>
 		</div>
 	</div>
 </div>

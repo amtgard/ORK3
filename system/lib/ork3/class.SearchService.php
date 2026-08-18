@@ -135,7 +135,8 @@ class SearchService extends Ork3
                     'City' => $eventdetail->city,
                     'Country' => $eventdetail->country,
                     'MapUrl' => $eventdetail->map_url,
-                    'MapUrlName' => $eventdetail->map_url_name
+                    'MapUrlName' => $eventdetail->map_url_name,
+                'EventType'  => $eventdetail->event_type
                 );
             return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $detail);
         } else {
@@ -143,7 +144,7 @@ class SearchService extends Ork3
         }
     }
 
-    public function Event($name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1, $multi = 0)
+    public function Event($name = null, $kingdom_id = null, $park_id = null, $mundane_id = null, $unit_id = null, $limit = 10, $event_id = null, $date_order = null, $date_start = null, $current = 1, $multi = 0, $include_drafts = false)
     {
         // Cache key must reflect the FULL search term — historically this truncated
         // the name to the first 4 chars, so "iron" and "ironclad" collided and the
@@ -181,7 +182,7 @@ class SearchService extends Ork3
 						)";
         }
 
-        $sql = "select e.*, IF(e.kingdom_id > 0, k.name, pk.name) as kingdom_name, IF(e.kingdom_id > 0, e.kingdom_id, p.kingdom_id) as resolved_kingdom_id, p.name as park_name, m.persona, cd.event_start, cd.event_calendardetail_id as next_detail_id, u.name as unit_name, substring(cd.description, 1, 100) as short_description,
+        $sql = "select e.*, IF(e.kingdom_id > 0, k.name, pk.name) as kingdom_name, IF(e.kingdom_id > 0, e.kingdom_id, p.kingdom_id) as resolved_kingdom_id, p.name as park_name, m.persona, cd.event_start, cd.event_calendardetail_id as next_detail_id, u.name as unit_name, substring(cd.description, 1, 100) as short_description, cd.event_type as event_type,
 					(SELECT COUNT(*) FROM " . DB_PREFIX . "event_rsvp r WHERE r.event_calendardetail_id = cd.event_calendardetail_id AND r.status = 'going') AS rsvp_going,
 					(SELECT COUNT(*) FROM " . DB_PREFIX . "event_rsvp r WHERE r.event_calendardetail_id = cd.event_calendardetail_id AND r.status = 'interested') AS rsvp_interested
 					from " . DB_PREFIX . "event e
@@ -196,6 +197,10 @@ class SearchService extends Ork3
 
         $sql .= " e.name like '%" . $this->likeEscape($name) . "%' ";
         $sql .= " and e.kingdom_id != 15 and (p.kingdom_id is null or p.kingdom_id != 15) ";
+        // Filter out draft events by default. Admin callers may opt in via $include_drafts=true.
+        if (!$include_drafts) {
+            $sql .= " and (e.status is null or e.status = 'published') ";
+        }
         if (valid_id($kingdom_id)) {
             $sql .= " and e.kingdom_id = $kingdom_id ";
         }
@@ -241,9 +246,15 @@ class SearchService extends Ork3
                         'NextDetailId' => $d->next_detail_id,
                         'ShortDescription' => $d->short_description,
                         'HasHeraldry' => $d->has_heraldry,
+                        'HasBanner'      => isset($d->has_banner) ? (int)$d->has_banner : 0,
+                        'BannerShowLogo' => isset($d->banner_show_logo) ? (int)$d->banner_show_logo : 1,
+                        'BannerVignette' => isset($d->banner_vignette) ? (int)$d->banner_vignette : 1,
+                        'BannerOffsetX'  => isset($d->banner_offset_x) ? (int)$d->banner_offset_x : 50,
+                        'BannerOffsetY'  => isset($d->banner_offset_y) ? (int)$d->banner_offset_y : 50,
                         'RsvpGoing' => (int)$d->rsvp_going,
                         'RsvpInterested' => (int)$d->rsvp_interested,
-                        'RsvpTotal' => (int)$d->rsvp_going + (int)$d->rsvp_interested
+                        'RsvpTotal' => (int)$d->rsvp_going + (int)$d->rsvp_interested,
+                        'EventType' => $d->event_type ?? ''
                     );
                 if (!is_null($limit)) {
                     $limit--;
@@ -358,11 +369,13 @@ class SearchService extends Ork3
         list($search, $kingdom_id, $park_id) = $this->magic_search($search, $kingdom_id, $park_id);
 
         // ORK admins may search by mundane info regardless of a player's restricted flag.
-        // IsAuthorized/HasAuthority run yapo internally which leaves bound parameters on the
-        // shared DB handle; clear them so the next raw query in this function doesn't try
-        // to bind them.
+        // IsAuthorized_h caches the first authorized mundane_id in $_SESSION for the request;
+        // clear it so an explicit Token is evaluated for this call (not a prior actor).
+        // IsAuthorized/HasAuthority also leave bound parameters on the shared DB handle;
+        // clear them so the next raw query in this function doesn't try to bind them.
         $is_ork_admin = false;
         if (!empty($token)) {
+            unset($_SESSION['is_authorized_mundane_id']);
             $_caller_uid = Ork3::$Lib->authorization->IsAuthorized($token);
             if ($_caller_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_caller_uid, AUTH_ADMIN, null, null)) {
                 $is_ork_admin = true;
@@ -927,4 +940,429 @@ class SearchService extends Ork3
         return array_merge(['rows' => $rows, 'hasMore' => $hasMore, 'offset' => $offset], $meta);
     }
 
+    /** @return array<string, string> */
+    public static function PunctFolds(): array
+    {
+        return [
+            "\u{2019}" => "'", "\u{2018}" => "'",
+            "\u{201C}" => '"', "\u{201D}" => '"',
+            "\u{2014}" => '-', "\u{2013}" => '-',
+            "\u{00A0}" => ' ', "\u{02DC}" => '~',
+        ];
+    }
+
+    public static function EscapeLike(string $term): string
+    {
+        return str_replace(["'", '%', '_', '\\'], ["''", '\\%', '\\_', '\\\\'], $term);
+    }
+
+    public function FoldPunctText(string $text): string
+    {
+        return strtr($text, self::PunctFolds());
+    }
+
+    public function SqlFoldColumn(string $col): string
+    {
+        foreach (self::PunctFolds() as $from => $to) {
+            $fromLit = "'" . str_replace("'", "''", $from) . "'";
+            $toLit   = "'" . str_replace("'", "''", $to) . "'";
+            $col     = "REPLACE({$col}, {$fromLit}, {$toLit})";
+        }
+
+        return $col;
+    }
+
+    /**
+     * @param list<int> $unitIds
+     * @return array<int, int>
+     */
+    public function GetUnitActivityCounts(array $unitIds): array
+    {
+        $unitIds = array_values(array_unique(array_filter(array_map('intval', $unitIds))));
+        if ($unitIds === []) {
+            return [];
+        }
+        $unitIds = array_slice($unitIds, 0, 25);
+        $cacheKey = Ork3::$Lib->ghettocache->key($unitIds);
+        if (($cached = Ork3::$Lib->ghettocache->get(__CLASS__ . '.GetUnitActivityCounts', $cacheKey, 300)) !== false) {
+            return $cached;
+        }
+
+        $in      = implode(',', $unitIds);
+        $sql     = "SELECT um.unit_id, COUNT(DISTINCT um.mundane_id) AS active_count
+				FROM " . DB_PREFIX . "unit_mundane um
+				JOIN " . DB_PREFIX . "attendance a ON a.mundane_id = um.mundane_id
+				  AND a.date >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
+				WHERE um.unit_id IN ({$in})
+				GROUP BY um.unit_id";
+        $this->db->clear();
+        $d = $this->db->query($sql);
+        $out = [];
+        if ($d !== false && $d->size() > 0) {
+            while ($d->next()) {
+                $out[(int)$d->unit_id] = (int)$d->active_count;
+            }
+        }
+
+        return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.GetUnitActivityCounts', $cacheKey, $out);
+    }
+
+    /**
+     * @return array{player: int, park: int, kingdom: int, unit: int}
+     */
+    public function UniversalBudgets(string $focus = ''): array
+    {
+        $focus = trim($focus);
+
+        return [
+            'player'  => $focus === 'player' ? 10 : ($focus ? 0 : 4),
+            'park'    => $focus === 'park' ? 10 : ($focus ? 0 : 3),
+            'kingdom' => $focus === 'kingdom' ? 10 : ($focus ? 0 : 2),
+            'unit'    => $focus === 'unit' ? 10 : ($focus ? 0 : 3),
+        ];
+    }
+
+    /**
+     * @param array{Query?: string, Kid?: int, Pid?: int, IncludeInactive?: bool, Focus?: string, CallerUserId?: int, Token?: string} $request
+     * @return array{players: list<array<string, mixed>>, parks: list<array<string, mixed>>, kingdoms: list<array<string, mixed>>, units: list<array<string, mixed>>}
+     */
+    public function UniversalSearch(array $request): array
+    {
+        $q = trim($request['Query'] ?? '');
+        if (strlen($q) < 2) {
+            return ['players' => [], 'parks' => [], 'kingdoms' => [], 'units' => []];
+        }
+
+        $kid             = (int)($request['Kid'] ?? 0);
+        $pid             = (int)($request['Pid'] ?? 0);
+        $includeInactive = !empty($request['IncludeInactive']);
+        $focus           = trim($request['Focus'] ?? '');
+        $callerUserId    = (int)($request['CallerUserId'] ?? 0);
+        // RankedPlayers resolves the banned-tier auth gate from a session token, not a user id.
+        $token           = $request['Token'] ?? null;
+
+        $filterKid = 0;
+        $filterPid = 0;
+        $searchQ   = $q;
+        if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\*)?\s+(.+)$/i', $q, $m)) {
+            $kAbbr = self::EscapeLike($m[1]);
+            $rs    = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
+            if ($rs !== false && $rs->size() > 0 && $rs->next()) {
+                $filterKid = (int)$rs->kingdom_id;
+            }
+            if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
+                $pAbbr = self::EscapeLike($m[2]);
+                $rs    = $this->db->query("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
+                if ($rs !== false && $rs->size() > 0 && $rs->next()) {
+                    $filterPid = (int)$rs->park_id;
+                }
+            }
+            $searchQ = trim($m[3]);
+        }
+
+        $searchQ = $this->FoldPunctText($searchQ);
+        $term    = self::EscapeLike($searchQ);
+        $fold    = fn (string $col): string => $this->SqlFoldColumn($col);
+
+        $budgets       = $this->UniversalBudgets($focus);
+        $playerBudget  = $budgets['player'];
+        $parkBudget    = $budgets['park'];
+        $kingdomBudget = $budgets['kingdom'];
+        $unitBudget    = $budgets['unit'];
+
+        $parkWhere = "p.active = 'Active' AND (" . $fold('p.name') . " LIKE '%{$term}%' OR p.abbreviation LIKE '%{$term}%')";
+        if ($filterPid > 0) {
+            $parkWhere .= " AND p.park_id = {$filterPid}";
+        } elseif ($filterKid > 0) {
+            $parkWhere .= " AND p.kingdom_id = {$filterKid}";
+        }
+        $parkOrder = valid_id($pid)
+            ? "CASE WHEN p.park_id = {$pid} THEN 0 WHEN p.kingdom_id = {$kid} THEN 1 ELSE 2 END, p.name"
+            : (valid_id($kid) ? "CASE WHEN p.kingdom_id = {$kid} THEN 0 ELSE 1 END, p.name" : 'p.name');
+        $this->db->clear();
+        $rs = $this->db->query("
+			SELECT p.park_id, p.name, k.abbreviation AS k_abbr, k.name AS k_name, k.kingdom_id
+			FROM " . DB_PREFIX . "park p
+			LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = p.kingdom_id
+			WHERE {$parkWhere}
+			ORDER BY {$parkOrder}
+			LIMIT {$parkBudget}");
+        $parks = [];
+        if ($rs !== false && $rs->size() > 0) {
+            while ($rs->next()) {
+                $parks[] = [
+                    'type'       => 'park',
+                    'id'         => (int)$rs->park_id,
+                    'name'       => $rs->name,
+                    'abbr'       => $rs->k_abbr ?? '',
+                    'kingdom'    => $rs->k_name ?? '',
+                    'kingdom_id' => (int)$rs->kingdom_id,
+                ];
+            }
+        }
+        $playerBudget += $parkBudget - count($parks);
+
+        $kingdoms = [];
+        if ($filterKid === 0) {
+            $kingdomWhere = $fold('k.name') . " LIKE '%{$term}%' OR k.abbreviation LIKE '%{$term}%'";
+            $this->db->clear();
+            $rs = $this->db->query("
+				SELECT k.kingdom_id, k.name, k.abbreviation
+				FROM " . DB_PREFIX . "kingdom k
+				WHERE {$kingdomWhere}
+				ORDER BY k.name
+				LIMIT {$kingdomBudget}");
+            if ($rs !== false && $rs->size() > 0) {
+                while ($rs->next()) {
+                    $kingdoms[] = [
+                        'type' => 'kingdom',
+                        'id'   => (int)$rs->kingdom_id,
+                        'name' => $rs->name,
+                        'abbr' => $rs->abbreviation ?? '',
+                    ];
+                }
+            }
+        }
+        $playerBudget += $kingdomBudget - count($kingdoms);
+
+        $unitWhere = "active = 'Active' AND (" . $fold('name') . " LIKE '%{$term}%')";
+        $this->db->clear();
+        $rs = $this->db->query("
+			SELECT unit_id, name, type
+			FROM " . DB_PREFIX . "unit
+			WHERE {$unitWhere}
+			ORDER BY name
+			LIMIT {$unitBudget}");
+        $units = [];
+        if ($rs !== false && $rs->size() > 0) {
+            while ($rs->next()) {
+                $units[] = [
+                    'type'     => 'unit',
+                    'id'       => (int)$rs->unit_id,
+                    'name'     => $rs->name,
+                    'unitType' => $rs->type ?? '',
+                ];
+            }
+        }
+        $playerBudget += $unitBudget - count($units);
+
+        // Players — delegate to RankedPlayers for the standardized concentric-ring ranking and the
+        // active/inactive/banned tier model. $q is passed as-is; resolveAbbrevPrefix() handles the
+        // "KD:PK term" prefix internally. bannedScope 'all' so an officer's Amtgard-wide header
+        // search surfaces bans (still auth-gated inside RankedPlayers). Skip the query entirely when
+        // a focused non-player search left no budget.
+        $players = [];
+        if ($playerBudget > 0) {
+            $rows = $this->RankedPlayers([
+                'q'           => $q,
+                'parkId'      => ($pid > 0 ? $pid : null),
+                'kingdomId'   => ($kid > 0 ? $kid : null),
+                'limit'       => $playerBudget,
+                'bannedScope' => 'all',
+                'token'       => $token,
+            ]);
+            foreach ($rows as $row) {
+                $players[] = [
+                    'type'   => 'player',
+                    'id'     => $row['MundaneId'],
+                    'name'   => $row['Persona'],
+                    'abbr'   => $row['KAbbr'] ?? '',
+                    'park'   => $row['ParkName'] ?? '',
+                    'active' => $row['Active'],
+                    'banned' => $row['Banned'] ?? 0,
+                ];
+            }
+        }
+
+        return ['players' => $players, 'parks' => $parks, 'kingdoms' => $kingdoms, 'units' => $units];
+    }
+
+    /**
+     * @param array{
+     *   Query?: string,
+     *   Scope?: string,
+     *   KingdomId?: int,
+     *   ParkId?: int,
+     *   EventId?: int,
+     *   ScopeParkId?: int,
+     *   IncludeInactive?: bool,
+     *   IncludeSuspended?: bool,
+     *   Prioritize?: bool,
+     *   Limit?: int,
+     *   Format?: string
+     * } $request
+     * @return list<array<string, mixed>>
+     */
+    public function ScopedPlayerSearch(array $request): array
+    {
+        $q = trim($request['Query'] ?? '');
+        if (strlen($q) < 2) {
+            return [];
+        }
+
+        $scope            = trim($request['Scope'] ?? 'global');
+        $kingdomId        = (int)($request['KingdomId'] ?? 0);
+        $parkId           = (int)($request['ParkId'] ?? 0);
+        $eventId          = (int)($request['EventId'] ?? 0);
+        $scopeParkId      = (int)($request['ScopeParkId'] ?? 0);
+        $includeInactive  = !empty($request['IncludeInactive']);
+        $includeSuspended = !empty($request['IncludeSuspended']);
+        $prioritize       = !empty($request['Prioritize']);
+        $limit            = min(max((int)($request['Limit'] ?? 15), 1), 100);
+        $format           = trim($request['Format'] ?? 'kingdom');
+
+        $filterKid = 0;
+        $filterPid = 0;
+        $searchQ   = $q;
+        if (preg_match('/^([a-z0-9]{2,3}):([a-z0-9]{2,3}|\*)?\s+(.+)$/i', $q, $m)) {
+            $kAbbr = self::EscapeLike($m[1]);
+            $rs    = $this->db->query("SELECT kingdom_id FROM " . DB_PREFIX . "kingdom WHERE abbreviation = '{$kAbbr}' LIMIT 1");
+            if ($rs !== false && $rs->size() > 0 && $rs->next()) {
+                $filterKid = (int)$rs->kingdom_id;
+            }
+            if ($filterKid > 0 && !empty($m[2]) && $m[2] !== '*') {
+                $pAbbr = self::EscapeLike($m[2]);
+                $rs    = $this->db->query("SELECT park_id FROM " . DB_PREFIX . "park WHERE abbreviation = '{$pAbbr}' AND kingdom_id = {$filterKid} LIMIT 1");
+                if ($rs !== false && $rs->size() > 0 && $rs->next()) {
+                    $filterPid = (int)$rs->park_id;
+                }
+            }
+            $searchQ = trim($m[3]);
+        }
+        $term = self::EscapeLike($searchQ);
+
+        $kingdomClause = '';
+        $parkClause    = '';
+        $orderClause   = 'm.suspended ASC, m.active DESC, m.persona';
+
+        if ($filterPid > 0) {
+            $parkClause = "AND m.park_id = {$filterPid}";
+        } elseif ($filterKid > 0) {
+            $kingdomClause = "AND m.kingdom_id = {$filterKid}";
+        } elseif ($scope === 'global') {
+            $limit = min($limit, 20);
+        } elseif ($scope === 'kingdom_exclude') {
+            $kingdomClause = "AND m.kingdom_id != {$kingdomId}";
+            $parkClause    = valid_id($scopeParkId) ? "AND m.park_id = {$scopeParkId}" : '';
+            $orderClause   = "m.suspended ASC, m.active DESC, CASE WHEN m.kingdom_id = {$kingdomId} THEN 0 ELSE 1 END, m.persona";
+        } elseif ($scope === 'kingdom_all') {
+            $orderClause = "m.suspended ASC, m.active DESC, CASE WHEN m.kingdom_id = {$kingdomId} THEN 0 ELSE 1 END, m.persona";
+        } elseif ($scope === 'kingdom_own') {
+            $familyIds     = implode(',', array_map('intval', Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdomId)));
+            $kingdomClause = "AND m.kingdom_id IN ({$familyIds})";
+            $parkClause    = valid_id($scopeParkId) ? "AND m.park_id = {$scopeParkId}" : '';
+            $orderClause   = "m.suspended ASC, m.active DESC, CASE WHEN m.kingdom_id = {$kingdomId} THEN 0 ELSE 1 END, m.persona";
+        } elseif ($scope === 'park_own') {
+            $parkClause  = "AND m.park_id = {$parkId}";
+            $orderClause = $this->parkOrderClause($parkId, $prioritize);
+        } elseif ($scope === 'park_exclude') {
+            $parkClause  = "AND m.park_id != {$parkId}";
+            $orderClause = $this->parkOrderClause($parkId, $prioritize);
+        } elseif ($scope === 'park_all') {
+            $orderClause = $this->parkOrderClause($parkId, $prioritize);
+        } elseif ($scope === 'event_prioritized') {
+            $includeInactive  = false;
+            $includeSuspended = false;
+            $limit            = min($limit, 15);
+            $this->db->clear();
+            $evRow = $this->db->query('SELECT park_id, kingdom_id FROM ' . DB_PREFIX . "event WHERE event_id = {$eventId} LIMIT 1");
+            $evParkId    = 0;
+            $evKingdomId = 0;
+            if ($evRow !== false && $evRow->size() > 0 && $evRow->next()) {
+                $evParkId    = (int)$evRow->park_id;
+                $evKingdomId = (int)$evRow->kingdom_id;
+            }
+            $orderClause = "CASE
+			   WHEN m.park_id = {$evParkId} AND {$evParkId} > 0 THEN 0
+			   WHEN m.kingdom_id = {$evKingdomId} AND {$evKingdomId} > 0 THEN 1
+			   ELSE 2 END, m.persona";
+        }
+
+        $suspendedSql = $includeSuspended ? '' : 'AND m.suspended = 0';
+        $activeSql    = $includeInactive ? '' : 'AND m.active = 1';
+
+        $sql = "
+			SELECT m.mundane_id, m.persona, m.park_id, m.kingdom_id,
+			       k.name AS kingdom_name, p.name AS park_name,
+			       p.abbreviation AS p_abbr, k.abbreviation AS k_abbr,
+			       m.suspended, m.active
+			FROM " . DB_PREFIX . "mundane m
+			LEFT JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = m.kingdom_id
+			LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = m.park_id
+			WHERE LENGTH(m.persona) > 0
+			  {$suspendedSql}
+			  {$activeSql}
+			  {$kingdomClause}
+			  {$parkClause}
+			  AND (m.persona LIKE '%{$term}%'
+			    OR m.given_name LIKE '%{$term}%'
+			    OR m.surname LIKE '%{$term}%'
+			    OR m.username LIKE '%{$term}%')
+			ORDER BY {$orderClause}
+			LIMIT {$limit}";
+
+        $this->db->clear();
+        $d = $this->db->query($sql);
+        if ($d === false || $d->size() === 0) {
+            return [];
+        }
+
+        $results = [];
+        while ($d->next()) {
+            $results[] = $this->formatScopedPlayerRow($d, $format);
+        }
+
+        return $results;
+    }
+
+    private function parkOrderClause(int $parkId, bool $prioritize): string
+    {
+        $order = $prioritize
+            ? "CASE WHEN m.park_id = {$parkId} THEN 0 WHEN m.kingdom_id = (SELECT kingdom_id FROM " . DB_PREFIX . "park WHERE park_id = {$parkId} LIMIT 1) THEN 1 ELSE 2 END,"
+            : '';
+
+        return 'm.suspended ASC, m.active DESC, ' . $order . ' m.persona';
+    }
+
+    /**
+     * @param object $row
+     * @return array<string, mixed>
+     */
+    private function formatScopedPlayerRow($row, string $format): array
+    {
+        if ($format === 'admin') {
+            return [
+                'MundaneId' => (int)$row->mundane_id,
+                'Persona'   => $row->persona,
+                'PAbbr'     => $row->p_abbr,
+                'KAbbr'     => $row->k_abbr,
+            ];
+        }
+        if ($format === 'event') {
+            return [
+                'MundaneId'   => (int)$row->mundane_id,
+                'Persona'     => $row->persona,
+                'KingdomId'   => (int)$row->kingdom_id,
+                'ParkId'      => (int)$row->park_id,
+                'KingdomName' => $row->kingdom_name,
+                'ParkName'    => $row->park_name,
+                'KAbbr'       => $row->k_abbr,
+                'PAbbr'       => $row->p_abbr,
+                'Suspended'   => (int)$row->suspended,
+            ];
+        }
+
+        return [
+            'MundaneId'   => (int)$row->mundane_id,
+            'Persona'     => $row->persona,
+            'KingdomId'   => (int)$row->kingdom_id,
+            'ParkId'      => (int)$row->park_id,
+            'KingdomName' => $row->kingdom_name,
+            'ParkName'    => $row->park_name,
+            'KAbbr'       => $row->k_abbr,
+            'PAbbr'       => $row->p_abbr,
+            'Suspended'   => (int)$row->suspended,
+            'Active'      => (int)$row->active,
+        ];
+    }
 }

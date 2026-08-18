@@ -293,6 +293,7 @@ $(function() {
 	if ($('#psr-table-reactivate').length) {
 		$('#psr-table-reactivate').DataTable({
 			dom: 'lfrtip',
+			scrollX: true,
 			pageLength: 25,
 			order: [[<?=$react_col_start?>, 'asc']],
 			columnDefs: [<?php if ($can_edit): ?>{ targets: [0], orderable: false },<?php endif; ?>]
@@ -301,6 +302,7 @@ $(function() {
 	if ($('#psr-table-deactivate').length) {
 		$('#psr-table-deactivate').DataTable({
 			dom: 'lfrtip',
+			scrollX: true,
 			pageLength: 25,
 			order: [[<?=$deact_col_start?>, 'asc']],
 			columnDefs: [<?php if ($can_edit): ?>{ targets: [0], orderable: false },<?php endif; ?>]
