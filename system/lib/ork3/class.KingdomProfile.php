@@ -132,6 +132,9 @@ class KingdomProfile extends Ork3
      * 365 days; "residents" = distinct players whose home park IS the park and
      * who signed in ANYWHERE in the same window (a resident who only ever plays
      * at a neighbouring park still counts toward their home park).
+     * Both counts exclude suspended and inactive players, matching the
+     * Atlas-wide heatmap (Map::GetAtlasHeatmapWeights) so the same park reports
+     * the same weights on either surface.
      *
      * @return array<int, array{participation: int, residents: int}>
      */
@@ -144,6 +147,8 @@ class KingdomProfile extends Ork3
         $partResult = $this->db->DataSet(
             'SELECT a.park_id, COUNT(DISTINCT a.mundane_id) AS cnt
              FROM ' . DB_PREFIX . 'attendance a
+             INNER JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = a.mundane_id
+                 AND m.suspended = 0 AND m.active = 1
              INNER JOIN ' . DB_PREFIX . "park p ON p.park_id = a.park_id AND p.kingdom_id = {$kid}
              WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 365 DAY) AND a.mundane_id > 0
              GROUP BY a.park_id"
@@ -161,6 +166,7 @@ class KingdomProfile extends Ork3
             'SELECT m.park_id, COUNT(DISTINCT a.mundane_id) AS cnt
              FROM ' . DB_PREFIX . 'attendance a
              INNER JOIN ' . DB_PREFIX . 'mundane m ON m.mundane_id = a.mundane_id
+                 AND m.suspended = 0 AND m.active = 1
              INNER JOIN ' . DB_PREFIX . "park p ON p.park_id = m.park_id AND p.kingdom_id = {$kid}
              WHERE a.date >= DATE_SUB(CURDATE(), INTERVAL 365 DAY) AND a.mundane_id > 0
              GROUP BY m.park_id"
