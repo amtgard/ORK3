@@ -32,50 +32,22 @@ class Controller_EventEmbed extends Controller
             $this->json(['ok' => false, 'error' => 'Invalid event id'], 400);
         }
 
-        global $DB;
-
-        // Event row — must be published; drafts never leave the building.
-        $DB->Clear();
-        $ev = $DB->DataSet("
-            SELECT e.event_id, e.name, e.status, e.park_id, p.name AS park_name
-            FROM " . DB_PREFIX . "event e
-            LEFT JOIN " . DB_PREFIX . "park p ON p.park_id = e.park_id
-            WHERE e.event_id = {$eventId} LIMIT 1");
-        if (!$ev || !$ev->Next()) {
-            $this->json(['ok' => false, 'error' => 'Event not found'], 404);
-        }
-        if ((string)$ev->status !== 'published') {
-            $this->json(['ok' => false, 'error' => 'Event not available'], 404);
-        }
-
-        // Resolve the occurrence: the given detail, else the next upcoming one.
-        $DB->Clear();
-        if ($detailId > 0) {
-            $cdRs = $DB->DataSet("
-                SELECT event_calendardetail_id, event_start, event_end
-                FROM " . DB_PREFIX . "event_calendardetail
-                WHERE event_calendardetail_id = {$detailId} AND event_id = {$eventId} LIMIT 1");
-        } else {
-            $cdRs = $DB->DataSet("
-                SELECT event_calendardetail_id, event_start, event_end
-                FROM " . DB_PREFIX . "event_calendardetail
-                WHERE event_id = {$eventId} AND event_start >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-                ORDER BY event_start LIMIT 1");
-        }
-        if (!$cdRs || !$cdRs->Next()) {
-            $this->json(['ok' => false, 'error' => 'Occurrence not found'], 404);
-        }
-        $detailId  = (int)$cdRs->event_calendardetail_id;
-        $startTs   = strtotime($cdRs->event_start);
-        $dateLabel = $startTs ? date('l, F j, Y', $startTs) : '';
-
-        // Schedule items — same source as the event page (Model_Event::get_schedule).
         $this->load_model('Event');
-        $items = $this->Event->get_schedule($detailId);
+        $embed = $this->Event->get_published_schedule_embed($eventId, $detailId);
+        if (empty($embed['ok'])) {
+            $this->json(
+                ['ok' => false, 'error' => (string) ($embed['error'] ?? 'Event not found')],
+                (int) ($embed['http'] ?? 404)
+            );
+        }
+
+        $detailId  = (int) $embed['detail_id'];
+        $startTs   = strtotime((string) $embed['event_start']);
+        $dateLabel = $startTs ? date('l, F j, Y', $startTs) : '';
 
         // Group by the item's start-time calendar day for a tidy per-day render.
         $days = [];
-        foreach ($items as $it) {
+        foreach ($embed['schedule'] as $it) {
             $ts  = strtotime($it['StartTime']);
             $key = $ts ? date('Y-m-d', $ts) : 'tbd';
             if (!isset($days[$key])) {
@@ -109,8 +81,8 @@ class Controller_EventEmbed extends Controller
             'ok'           => true,
             'event_id'     => $eventId,
             'detail_id'    => $detailId,
-            'name'         => $ev->name,
-            'park_name'    => $ev->park_name,
+            'name'         => $embed['name'],
+            'park_name'    => $embed['park_name'],
             'date_label'   => $dateLabel,
             'detail_url'   => $detailUrl,
             'schedule_url' => $detailUrl . '#ev-tab-schedule',

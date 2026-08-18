@@ -17,8 +17,31 @@ class YapoMysql extends YapoDb
 
     public function __construct($host, $dbname, $user, $password)
     {
-        $this->DBH = new PDO("mysql:host=$host;dbname=$dbname", $user, $password);
+        $fallback = defined('DB_PORT') ? (int) DB_PORT : 3306;
+        list($host, $port) = self::splitHostPort($host, $fallback);
+        $this->DBH = new PDO("mysql:host=$host;port=$port;dbname=$dbname", $user, $password);
         $this->DBH->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_WARNING);
+    }
+
+    /**
+     * Legacy configs smuggle the port inside DB_HOSTNAME PDO-DSN style
+     * ('db.example.com;port=24306'). Before explicit port support, that
+     * fragment rode into the DSN and worked; appending our own port key
+     * produced a duplicate ('...;port=24306;port=3306') and PDO used the
+     * later one — the 2026-08-18 prod outage. An embedded port therefore
+     * wins over the fallback; the fragment is stripped from the host so
+     * the DSN only ever carries a single port key.
+     *
+     * @return array{0: string, 1: int} [host, port]
+     */
+    public static function splitHostPort($host, $fallbackPort)
+    {
+        $port = (int) $fallbackPort;
+        if (is_string($host) && preg_match('/;\s*port\s*=\s*(\d+)/i', $host, $m)) {
+            $port = (int) $m[1];
+            $host = preg_replace('/;\s*port\s*=\s*\d+/i', '', $host);
+        }
+        return array(trim((string) $host, " \t;"), $port);
     }
 
     public function TableDescription($table)

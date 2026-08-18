@@ -1,0 +1,28 @@
+# Worker — VALIDATE-20-rerun (Phase 3 re-audit after FIX-06)
+
+```
+You are executing **Megiddo VALIDATE-20-rerun** only — full automated re-audit after FIX-06 (no production refactors unless gate still fails and fix is trivial).
+
+Read: docs/megiddo/refactor/skills/phase3-gate-fix/workers/VALIDATE-20.md, docs/megiddo/refactor/02-requirements.md § Success Criteria, docs/megiddo/refactor/06-test-framework.md, docs/megiddo/refactor/phase3-audit-report.md
+
+| Field | Value |
+|-------|-------|
+| Branch | `megiddo/p3-validate-20-audit` |
+| Stack base | `megiddo/p3-fix-06-gate-blockers` @ checklist |
+| Prior hop | FIX-06 |
+| Scope | Audit and verification only — same gates as VALIDATE-20 |
+
+Run V20-A through V20-F exactly as VALIDATE-20.md. Overwrite `phase3-audit-report.md` with new timestamp, branch, commit, results, `status: ok|failed`.
+
+## Gates (summary)
+
+- V20-A: `rg '\$DB->' orkui/`, `rg 'Ork3::\$Lib' orkui/`, DML grep → zero
+- V20-B: `sh bin/run-unit-tests.sh` exit 0
+- V20-C: `bin/fuzzy-validator validate --all --phase all` exit 0
+- V20-D: Playwright mirror `--grep-invert heraldry` + sandbox `heraldry.spec.ts` both exit 0
+- V20-E: plan/checklist completeness
+- V20-F: update `04-milestone-checklist.md` § Phase 3 + remediation milestone-checklist VALIDATE-20 section
+
+Commit: `VALIDATE-20: Phase 3 re-audit after FIX-06.`  
+Return report with `status`, gate table, `human_next` if ok → **idiom enforcement** (I-0) then P3-4/P3-5.
+```

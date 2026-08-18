@@ -514,7 +514,8 @@ class Kingdom extends Ork3
                     );
             }
         } else {
-            $response['Status'] = InvalidParameter();
+            // Always include Parks so callers (e.g. Kingdom/map) never array_filter(null).
+            $response = array('Status' => InvalidParameter(), 'Parks' => array());
         }
         return $response;
     }
@@ -640,6 +641,10 @@ class Kingdom extends Ork3
                                 $c->add_config($mundane_id, CFG_KINGDOM, $config['Type'], $this->kingdom->kingdom_id, $config['Key'], $config['Value'], $config['UserSetting'], $config['AllowedValues']);
                                 break;
                         }
+                    }
+                    // Kingdom config can change rollup stats and many derived report values.
+                    if (Ork3::$Lib->ghettocache->memcache instanceof Memcached) {
+                        Ork3::$Lib->ghettocache->memcache->flush();
                     }
                 }
                 $response = Success();

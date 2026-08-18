@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "pageId": "kingdom-index-2",
+  "calibratedAt": "2026-08-01T20:31:25Z",
+  "calibrationRuns": 5,
+  "fuzzNodes": [],
+  "manualNodes": [],
+  "calibratedFromCommit": "5bc623cd",
+  "refuzzedAt": "2026-08-02T16:45:46Z",
+  "refuzzedFromCommit": "05389516"
+}

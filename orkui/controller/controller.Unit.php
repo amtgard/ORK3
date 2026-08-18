@@ -34,13 +34,10 @@ class Controller_Unit extends Controller
         if (!valid_id($unit_id)) {
             if (valid_id($this->session->park_id)) {
                 header('Location: ' . UIR . 'Unit/unitlist&ParkId=' . (int)$this->session->park_id);
-                exit;
             } elseif (valid_id($this->session->kingdom_id)) {
                 header('Location: ' . UIR . 'Unit/unitlist&KingdomId=' . (int)$this->session->kingdom_id);
-                exit;
             } else {
                 header('Location: ' . UIR . 'Unit/unitlist');
-                exit;
             }
             exit;
         }
@@ -153,7 +150,7 @@ class Controller_Unit extends Controller
                         // so the audit call lives here to mirror the pattern used by
                         // the raw-INSERT paths. Anchored to the grantee so the entry
                         // shows on the affected player's audit history.
-                        Ork3::$Lib->dangeraudit->audit(
+                        $this->Authorization->audit(
                             'Authorization::AddAuthorization',
                             ['MundaneId' => $_grantee_mid, 'Type' => AUTH_UNIT, 'Id' => $unit_id_int, 'Role' => AUTH_CREATE],
                             'Player',
@@ -228,7 +225,7 @@ class Controller_Unit extends Controller
             exit;
         }
         $_uid = isset($this->session->user_id) ? (int)$this->session->user_id : 0;
-        $_canEdit = $_uid > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_UNIT, (int)$unit_id, AUTH_EDIT);
+        $_canEdit = $_uid > 0 && $this->Authorization->has_authority($_uid, AUTH_UNIT, (int)$unit_id, AUTH_EDIT);
         $this->data['CanEdit'] = $_canEdit;
 
         // ── Retire / Claim / Transfer state ───────────────────────────────
@@ -269,14 +266,15 @@ class Controller_Unit extends Controller
         $_scope_kingdom_id = null;
         $_scope_park_id    = null;
         if ($_uid > 0) {
-            $_pinfo        = Ork3::$Lib->player->player_info($this->session->token);
+            $this->load_model('Player');
+            $_pinfo        = $this->Player->player_info($this->session->token);
             $_home_kingdom = isset($_pinfo['KingdomId']) ? (int)$_pinfo['KingdomId'] : 0;
             $_home_park    = isset($_pinfo['ParkId']) ? (int)$_pinfo['ParkId'] : 0;
             if ($_home_kingdom > 0) {
                 $_scope_kingdom_id = $_home_kingdom;
                 $_scope_park_id    = $_home_park > 0 ? $_home_park : null;
-                $_can_officer = Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_KINGDOM, $_home_kingdom, AUTH_EDIT)
-                    || ($_home_park > 0 && Ork3::$Lib->authorization->HasAuthority($_uid, AUTH_PARK, $_home_park, AUTH_EDIT));
+                $_can_officer = $this->Authorization->has_authority($_uid, AUTH_KINGDOM, $_home_kingdom, AUTH_EDIT)
+                    || ($_home_park > 0 && $this->Authorization->has_authority($_uid, AUTH_PARK, $_home_park, AUTH_EDIT));
             }
         }
         $this->data['ScopeKingdomId']   = $_scope_kingdom_id;
@@ -327,8 +325,8 @@ class Controller_Unit extends Controller
         // manager search. Sorted by name for the dropdown.
         $this->data['FilterKingdoms'] = array();
         if ($_show_addmgr) {
-            $_kd = Ork3::$Lib->kingdom->GetKingdoms(array());
-            $_kingdoms = array_values($_kd['Kingdoms'] ?? array());
+            $this->load_model('Kingdom');
+            $_kingdoms = $this->Kingdom->list_kingdoms();
             usort($_kingdoms, function ($a, $b) {
                 return strcasecmp($a['KingdomName'] ?? '', $b['KingdomName'] ?? '');
             });
