@@ -1014,6 +1014,7 @@ class Controller_Admin extends Controller
                                     'DyslexiaFonts' =>  $this->request->Admin_player->DyslexiaFonts == 'DyslexiaFonts' ? 1 : 0,
                                     'Active' =>  $this->request->Admin_player->Active == 'Active' ? 1 : 0,
                                     'ParkMemberSince' => $this->request->Admin_player->ParkMemberSince,
+                                    'PlayerSinceOverride' => $this->request->Admin_player->PlayerSinceOverride,
                                     'HasImage' => strlen($pi_imdata),
                                     'Image' => strlen($pi_imdata) > 0 ? $pi_imdata : null,
                                     'ImageMimeType' => strlen($pi_imdata) > 0 ? $_FILES['PlayerImage']['type'] : '',
