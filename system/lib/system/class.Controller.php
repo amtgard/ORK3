@@ -104,7 +104,7 @@ class Controller
             $this->data['ViewerBasicFonts']    = (int) ($prefs['BasicFonts'] ?? 0);
             $this->data['ViewerDyslexiaFonts'] = (int) ($prefs['DyslexiaFonts'] ?? 0);
 
-            require_once(DIR_UI . 'whats_new_content.php');
+            require(DIR_UI . 'whats_new_content.php'); // require, not require_once — see the note in that file
             foreach ($WHATS_NEW_ITEMS as $_release) {
                 if ($_release['date'] === WHATS_NEW_VERSION) {
                     $this->data['WhatsNewRelease'] = $_release;

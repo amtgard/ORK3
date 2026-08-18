@@ -1,11 +1,21 @@
 <?php
 
+// This file is included from more than one scope (Controller::__construct for the
+// What's New modal, Controller_ReleaseNotes::index for the notes page), so callers
+// use `require`, not `require_once` — with require_once the second caller gets a
+// no-op and $WHATS_NEW_ITEMS is never defined in its scope. The defines below are
+// therefore guarded so repeat includes don't re-declare them.
+
 // Bump WHATS_NEW_VERSION whenever you add new items — every logged-in user will see
 // the modal once on their next page load, then not again until the version changes.
-define('WHATS_NEW_VERSION', '2026-07-15');
+if (!defined('WHATS_NEW_VERSION')) {
+    define('WHATS_NEW_VERSION', '2026-07-15');
+}
 
 // Application version — shown in the site footer. Change this if you change the above date.
-define('ORK_VERSION', '3.5.4 Walker');
+if (!defined('ORK_VERSION')) {
+    define('ORK_VERSION', '3.5.4 Walker');
+}
 
 // An array of releases, each with a version, date, and array of items. Each item has an icon (Font Awesome class), title, and body. Make sure the latest
 // version matches the ORK_VERSION above, and that the date is in YYYY-MM-DD format and matches the WHATS_NEW_VERSION above.
