@@ -190,15 +190,39 @@
 html[data-theme="dark"] .ev-share-btn { background:#2a2f37; border-color:#444b56; color:#e3e7ee; }
 html[data-theme="dark"] .ev-share-btn:hover { background:#333a44; border-color:#566070; }
 html[data-theme="dark"] .ev-share-btn.is-shared { background:#1f3a29; border-color:#2f6b45; color:#9be3b4; }
-/* Already-shared: hovering reveals a red "Stop Sharing?" affordance; clicking unshares. */
+/* Already-shared: hovering (or keyboard focus) reveals a red "Stop Sharing?" affordance; clicking unshares. */
 .ev-share-btn .ev-share-ic-stop, .ev-share-btn .ev-share-stop-label { display:none; }
-.ev-share-btn.is-shared:hover { background:#fdeaea; border-color:#e2a3a3; color:#b02a2a; }
-.ev-share-btn.is-shared:hover .ev-share-ic-on, .ev-share-btn.is-shared:hover .ev-share-label { display:none; }
-.ev-share-btn.is-shared:hover .ev-share-ic-stop, .ev-share-btn.is-shared:hover .ev-share-stop-label { display:inline; }
-html[data-theme="dark"] .ev-share-btn.is-shared:hover { background:#3a1f1f; border-color:#7a3a3a; color:#f3a6a6; }
+.ev-share-btn.is-shared:hover,
+.ev-share-btn.is-shared:focus-visible { background:#fdeaea; border-color:#e2a3a3; color:#b02a2a; }
+.ev-share-btn.is-shared:hover .ev-share-ic-on, .ev-share-btn.is-shared:hover .ev-share-label,
+.ev-share-btn.is-shared:focus-visible .ev-share-ic-on, .ev-share-btn.is-shared:focus-visible .ev-share-label { display:none; }
+.ev-share-btn.is-shared:hover .ev-share-ic-stop, .ev-share-btn.is-shared:hover .ev-share-stop-label,
+.ev-share-btn.is-shared:focus-visible .ev-share-ic-stop, .ev-share-btn.is-shared:focus-visible .ev-share-stop-label { display:inline; }
+html[data-theme="dark"] .ev-share-btn.is-shared:hover,
+html[data-theme="dark"] .ev-share-btn.is-shared:focus-visible { background:#3a1f1f; border-color:#7a3a3a; color:#f3a6a6; }
 html[data-theme="dark"] .ev-share-menu { background:#23272e; border-color:#3a414b; box-shadow:0 6px 22px rgba(0,0,0,.5); }
 html[data-theme="dark"] .ev-share-row { color:#e3e7ee; }
 html[data-theme="dark"] .ev-share-row:hover { background:#2d333c; }
+/* Kingdoms this event has been shared INTO (shown to the event's own managers). */
+.ev-sharedinto { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:10px 0 0;
+	font-size:12.5px; color:#4a5568; }
+.ev-sharedinto-head { font-weight:600; color:#2d3748; }
+.ev-sharedinto-head i { margin-right:5px; opacity:.7; }
+.ev-sharedinto-list { display:flex; flex-wrap:wrap; gap:6px; }
+.ev-sharedinto-chip { display:inline-flex; align-items:center; gap:6px; padding:3px 5px 3px 9px;
+	border:1px solid #9bd3ad; background:#e6f4ea; color:#1f6b3a; border-radius:999px; font-weight:600; }
+.ev-sharedinto-revoke { display:inline-flex; align-items:center; justify-content:center;
+	width:18px; height:18px; padding:0; border:none; border-radius:50%; cursor:pointer;
+	background:transparent; color:#1f6b3a; font-size:11px; line-height:1;
+	transition:background .15s, color .15s; }
+.ev-sharedinto-revoke:hover, .ev-sharedinto-revoke:focus-visible { background:#fdeaea; color:#b02a2a; }
+.ev-sharedinto-revoke[disabled] { opacity:.5; cursor:default; }
+html[data-theme="dark"] .ev-sharedinto { color:#b6bdc9; }
+html[data-theme="dark"] .ev-sharedinto-head { color:#e3e7ee; }
+html[data-theme="dark"] .ev-sharedinto-chip { background:#1f3a29; border-color:#2f6b45; color:#9be3b4; }
+html[data-theme="dark"] .ev-sharedinto-revoke { color:#9be3b4; }
+html[data-theme="dark"] .ev-sharedinto-revoke:hover,
+html[data-theme="dark"] .ev-sharedinto-revoke:focus-visible { background:#3a1f1f; color:#f3a6a6; }
 .ev-export-bar { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 10px; }
 .ev-checkin-locked { display:flex; align-items:flex-start; gap:10px; background:#fffbeb; border:1px solid #f6e05e; border-radius:7px; padding:11px 14px; margin-bottom:14px; font-size:13px; color:#744210; line-height:1.45; }
 .ev-checkin-locked i { color:#d69e2e; margin-top:1px; flex-shrink:0; }
@@ -911,6 +935,33 @@ html[data-theme="dark"] .ev-ds-action-btn:hover{background:rgba(72,187,120,.2)}
 
 	</div>
 </div>
+
+<?php // ---- KINGDOMS THIS EVENT IS SHARED INTO (event managers only) ---- ?>
+<?php if (!empty($SharedIntoKingdoms)): ?>
+<div class="ev-sharedinto" id="ev-sharedinto">
+	<span class="ev-sharedinto-head"><i class="fas fa-share-alt"></i>Shared with:</span>
+	<span class="ev-sharedinto-list">
+		<?php foreach ($SharedIntoKingdoms as $sik): ?>
+		<?php // An orphaned share row (kingdom deleted) joins to an empty name; label it
+		      // rather than rendering a bare x with a nonsense tooltip. ?>
+		<?php $sikName = $sik['KingdomName'] !== '' ? $sik['KingdomName'] : '(unknown kingdom)'; ?>
+		<span class="ev-sharedinto-chip">
+			<?= htmlspecialchars($sikName) ?>
+			<?php if (!empty($sik['CanRevoke'])): ?>
+			<button type="button" class="ev-sharedinto-revoke"
+				data-event="<?= (int)$event_id ?>"
+				data-kingdom="<?= (int)$sik['KingdomId'] ?>"
+				data-tip="Stop showing this event on <?= htmlspecialchars($sikName) ?>'s events list"
+				aria-label="Stop sharing this event with <?= htmlspecialchars($sikName) ?>"
+				onclick="evRevokeShare(this)">
+				<i class="fas fa-times"></i>
+			</button>
+			<?php endif; ?>
+		</span>
+		<?php endforeach; ?>
+	</span>
+</div>
+<?php endif; ?>
 
 <?php // ---- DRAFT BANNER (visible to editors) ---- ?>
 <?php if ($evtIsDraft): ?>
@@ -2483,11 +2534,79 @@ function evToggleShare(el) {
 			if (doShare) { el.removeAttribute('data-tip'); }
 			else if (el.dataset.shareTip) { el.setAttribute('data-tip', el.dataset.shareTip); }
 		}
+		// Keep the "Shared with:" chip list in step with the hero control.
+		if (!doShare) { evDropSharedIntoChip(el.dataset.kingdom); }
 	})
 	.catch(function(err){
 		console.error('[evToggleShare]', err);
 		if (isCheckbox) { el.checked = !el.checked; el.disabled = false; }
 		else { el.style.pointerEvents = ''; }
+	});
+}
+
+// --- Keeping the two share surfaces in step -------------------------------
+// The hero button/menu and the "Shared with:" chip list can both represent the
+// same kingdom. Whichever one performs the change updates the other, so the page
+// never shows "Shared with X" next to a list that no longer contains X.
+
+// Reset the hero control for a kingdom to the not-shared state.
+function evSyncHeroControl(kingdomId, isShared) {
+	var check = document.querySelector('.ev-share-check[data-kingdom="' + kingdomId + '"]');
+	if (check) { check.checked = isShared; }
+	var single = document.getElementById('ev-share-single');
+	if (single && single.dataset.kingdom === String(kingdomId)) {
+		single.dataset.shared = isShared ? '1' : '0';
+		single.classList.toggle('is-shared', isShared);
+		var lbl = single.querySelector('.ev-share-label');
+		var kname = single.dataset.kingdomName || 'My Kingdom';
+		if (lbl) { lbl.textContent = isShared ? ('Shared with ' + kname) : 'Share with My Kingdom'; }
+		if (isShared) { single.removeAttribute('data-tip'); }
+		else if (single.dataset.shareTip) { single.setAttribute('data-tip', single.dataset.shareTip); }
+	}
+}
+
+// Remove a kingdom's chip from the "Shared with:" list, dropping the whole block
+// once the last chip is gone.
+function evDropSharedIntoChip(kingdomId) {
+	var wrap = document.getElementById('ev-sharedinto');
+	if (!wrap || !kingdomId) { return; }
+	var btn = wrap.querySelector('.ev-sharedinto-revoke[data-kingdom="' + kingdomId + '"]');
+	var chip = btn ? btn.closest('.ev-sharedinto-chip') : null;
+	if (chip) { chip.parentNode.removeChild(chip); }
+	if (!wrap.querySelector('.ev-sharedinto-chip')) { wrap.parentNode.removeChild(wrap); }
+}
+
+// Revoke a share another kingdom created on this event. Same endpoint as the share
+// control; the domain layer also authorises the event's OWNING kingdom to unshare.
+function evRevokeShare(btn) {
+	var eventId = btn.dataset.event;
+	var kingdomId = btn.dataset.kingdom;
+	btn.disabled = true;
+	fetch('<?= UIR ?>EventAjax/share/' + encodeURIComponent(eventId) + '/unshare', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+		body: 'KingdomId=' + encodeURIComponent(kingdomId)
+	})
+	.then(function(r){ return r.json(); })
+	.then(function(d){
+		if (d.status !== 0) { throw new Error(d.error || 'Unshare failed'); }
+		var chip = btn.closest('.ev-sharedinto-chip');
+		if (chip) chip.parentNode.removeChild(chip);
+		var wrap = document.getElementById('ev-sharedinto');
+		if (wrap && !wrap.querySelector('.ev-sharedinto-chip')) {
+			// The activating button is going away with it; move focus somewhere
+			// real instead of letting it fall to <body> silently.
+			var refocus = document.getElementById('ev-share-single')
+				|| document.querySelector('.ev-share-btn');
+			wrap.parentNode.removeChild(wrap);
+			if (refocus) refocus.focus();
+		}
+		// The hero share control may show the same kingdom; keep them in step.
+		evSyncHeroControl(kingdomId, false);
+	})
+	.catch(function(err){
+		console.error('[evRevokeShare]', err);
+		btn.disabled = false;
 	});
 }
 

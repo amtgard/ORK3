@@ -316,7 +316,13 @@ class KingdomProfile extends Ork3
         $knEventMapLocs = [];
         $knMapNoLocCount = 0;
         if ($includeMapCoords) {
-            [$knEventMapLocs, $knMapNoLocCount] = $this->buildMapLocations($eventSummary);
+            // Map tab shows only the kingdom's OWN events; events shared in from other
+            // kingdoms are Events-tab-only and must not render as unlabelled pins.
+            $ownEventsForMap = array_values(array_filter(
+                $eventSummary,
+                static fn ($e) => empty($e['IsShared'])
+            ));
+            [$knEventMapLocs, $knMapNoLocCount] = $this->buildMapLocations($ownEventsForMap);
         }
 
         $this->db->Clear();

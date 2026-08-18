@@ -55,6 +55,12 @@ class Model_Event extends Model
         return $r['KingdomIds'] ?? array();
     }
 
+    public function get_shared_kingdom_list_for_event($event_id)
+    {
+        $r = $this->Event->GetSharedKingdomsForEvent(array('EventId' => $event_id));
+        return $r['Kingdoms'] ?? array();
+    }
+
     public function get_event_details($event_id)
     {
 
