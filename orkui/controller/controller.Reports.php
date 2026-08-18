@@ -263,17 +263,9 @@ class Controller_Reports extends Controller
 			exit;
 		}
 
-		global $DB;
-		$location_name = '';
-		if ($park_id > 0) {
-			$DB->Clear();
-			$r = $DB->DataSet('SELECT name, kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id . ' LIMIT 1');
-			if ($r && $r->Next()) { $location_name = $r->name; if (!$kingdom_id) $kingdom_id = (int)$r->kingdom_id; }
-		} else {
-			$DB->Clear();
-			$r = $DB->DataSet('SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id . ' LIMIT 1');
-			if ($r && $r->Next()) $location_name = $r->name;
-		}
+		$scope         = Ork3::$Lib->court->getCourtReportScope($kingdom_id, $park_id);
+		$location_name = $scope['Name'];
+		$kingdom_id    = $scope['KingdomId'];
 
 		$this->template = 'Reports_courts.tpl';
 		$this->data['Courts']       = Ork3::$Lib->court->getCourtReportList($kingdom_id, $park_id, $from, $until);

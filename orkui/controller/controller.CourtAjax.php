@@ -706,11 +706,7 @@ class Controller_CourtAjax extends Controller
     /** Persona for a mundane id (presence display), or '' if unknown. */
     private function lookupPersona($uid)
     {
-        global $DB;
-        $DB->Clear();
-        $r = $DB->DataSet('SELECT persona FROM ' . DB_PREFIX . 'mundane
-                           WHERE mundane_id = ' . (int)$uid . ' LIMIT 1');
-        return ($r && $r->Next()) ? (string)$r->persona : '';
+        return Ork3::$Lib->player->GetPersona((int)$uid);
     }
 
     // -----------------------------------------------------------------------
@@ -763,15 +759,12 @@ class Controller_CourtAjax extends Controller
             $this->jsonOut(['status' => 1, 'error' => 'Invalid award.']);
         }
 
-        global $DB;
-        $DB->Clear();
-        $r = $DB->DataSet('SELECT court_id FROM ' . DB_PREFIX . 'court_award
-                            WHERE court_award_id = ' . $court_award_id . ' LIMIT 1');
-        if (!$r || !$r->Next()) {
+        $court_id = Ork3::$Lib->court->getCourtAwardCourtId($court_award_id);
+        if (!$court_id) {
             $this->jsonOut(['status' => 1, 'error' => 'Award not found.']);
         }
 
-        $this->requireCourtAuth((int)$r->court_id);
+        $this->requireCourtAuth($court_id);
 
         $type = $_POST['Type'] ?? '';
 

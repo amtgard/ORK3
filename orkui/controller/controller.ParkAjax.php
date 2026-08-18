@@ -299,31 +299,8 @@ class Controller_ParkAjax extends Controller
 			$rank         = (int)($_POST['Rank']           ?? 0);
 			$caller_uid   = (int)$this->session->user_id;
 			if (!valid_id($mundane_id) || !valid_id($award_id)) { echo json_encode(['status' => 0, 'existing' => []]); exit; }
-			global $DB;
-			$rank_clause = $rank > 0 ? ' AND r.rank = ' . $rank : ' AND r.rank = 0';
-			$DB->Clear();
-			$rs = $DB->DataSet(
-				'SELECT r.date_recommended, r.mask_giver, rbi.persona AS recommender_persona
-				 FROM ' . DB_PREFIX . 'recommendations r
-				 LEFT JOIN ' . DB_PREFIX . 'mundane rbi ON rbi.mundane_id = r.recommended_by_id
-				 WHERE r.mundane_id = ' . $mundane_id .
-				 ' AND r.kingdomaward_id = ' . $award_id .
-				 $rank_clause .
-				 ' AND (r.deleted_by IS NULL OR r.deleted_by = 0)
-				 AND r.recommended_by_id != ' . $caller_uid .
-				 ' LIMIT 5'
-			);
-			$existing = [];
-			if ($rs && $rs->Size() > 0) {
-				while ($rs->Next()) {
-					$isAnon = (int)$rs->mask_giver === 1;
-					$existing[] = [
-						'DateRecommended'   => $rs->date_recommended,
-						'IsAnonymous'       => $isAnon,
-						'RecommendedByName' => $isAnon ? null : $rs->recommender_persona,
-					];
-				}
-			}
+			$this->load_model('Player');
+			$existing = $this->Player->get_peer_award_recommendations($mundane_id, $award_id, $rank, $caller_uid);
 			echo json_encode(['status' => 0, 'existing' => $existing]);
 
 		} elseif ($action === 'dismissrecommendation') {

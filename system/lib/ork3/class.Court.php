@@ -1523,6 +1523,43 @@ class Court
     }
 
     /**
+     * Resolve the heading/scope for a court report request.
+     * Park scope ($park_id > 0): the park's name, plus its owning kingdom when the
+     * caller did not already supply one. Kingdom scope: the kingdom's name.
+     * Returns ['Name' => string, 'KingdomId' => int]; Name is '' and KingdomId is
+     * echoed back unchanged when the row does not exist.
+     */
+    public function getCourtReportScope($kingdom_id, $park_id)
+    {
+        $kingdom_id = (int)$kingdom_id;
+        $park_id    = (int)$park_id;
+        $name       = '';
+
+        if ($park_id > 0) {
+            $this->db->Clear();
+            $r = $this->db->DataSet(
+                'SELECT name, kingdom_id FROM ' . DB_PREFIX . 'park WHERE park_id = ' . $park_id . ' LIMIT 1'
+            );
+            if ($r && $r->Next()) {
+                $name = $r->name;
+                if (!$kingdom_id) {
+                    $kingdom_id = (int)$r->kingdom_id;
+                }
+            }
+        } else {
+            $this->db->Clear();
+            $r = $this->db->DataSet(
+                'SELECT name FROM ' . DB_PREFIX . 'kingdom WHERE kingdom_id = ' . $kingdom_id . ' LIMIT 1'
+            );
+            if ($r && $r->Next()) {
+                $name = $r->name;
+            }
+        }
+
+        return ['Name' => $name, 'KingdomId' => $kingdom_id];
+    }
+
+    /**
      * Courts in [$from_date, $until_date] (inclusive on court_date) that have at
      * least one award with status='given'.
      *   Kingdom report ($kingdom_id set, $park_id = 0): courts in that kingdom.
