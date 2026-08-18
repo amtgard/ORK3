@@ -722,7 +722,7 @@ class Controller_KingdomAjax extends Controller
         }
 
         $q                = trim($_GET['q']               ?? '');
-        $scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'exclude'
+        $scope            = trim($_GET['scope']           ?? 'own'); // 'own' | 'all' | 'exclude'
         $park_id          = (int)($_GET['park_id']        ?? 0);
         $include_inactive  = !empty($_GET['include_inactive']);
         $include_suspended = !empty($_GET['include_suspended']);
@@ -731,23 +731,29 @@ class Controller_KingdomAjax extends Controller
             exit;
         }
 
-        $scopeKey = 'kingdom_own';
-        if ($scope === 'exclude') {
-            $scopeKey = 'kingdom_exclude';
-        } elseif ($scope === 'all') {
-            $scopeKey = 'kingdom_all';
+        // Map scope -> RankedPlayers params
+        $restrictTo         = null;
+        $excludeKingdomId   = null;
+        $restrictKingdomIds = null;
+        if ($scope === 'own') {
+            // Own-kingdom scope ALWAYS includes child principalities (family), not toggle-gated.
+            $restrictKingdomIds = Ork3::$Lib->kingdom->GetFamilyKingdomIds($kingdom_id);
+        } elseif ($scope === 'exclude') {
+            // Find players NOT in this kingdom (move-player "in" mode)
+            $excludeKingdomId = $kingdom_id;
         }
+        // scope=all -> no restrict, no exclude (global ranking)
 
-        $this->load_model('Search');
-        $results = $this->Search->scoped_player_search([
-            'Query'            => $q,
-            'Scope'            => $scopeKey,
-            'KingdomId'        => $kingdom_id,
-            'ScopeParkId'      => $park_id,
-            'IncludeInactive'  => $include_inactive,
-            'IncludeSuspended' => $include_suspended,
-            'Limit'            => 15,
-            'Format'           => 'kingdom',
+        $svc     = new SearchService();
+        $results = $svc->RankedPlayers([
+            'q'                  => $q,
+            'parkId'             => valid_id($park_id) ? $park_id : null,
+            'kingdomId'          => $kingdom_id,
+            'restrictTo'         => $restrictTo,
+            'restrictKingdomIds' => $restrictKingdomIds,
+            'excludeKingdomId'   => $excludeKingdomId,
+            'limit'              => 15,
+            'token'              => $this->session->token ?? null,
         ]);
 
         echo json_encode($results);

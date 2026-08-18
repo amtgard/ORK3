@@ -51,11 +51,7 @@
 #ap-admin-table th.tablesorter-headerAsc .tablesorter-header-inner::after  { content:'\f0de' !important; opacity:1; color:var(--rp-accent); }
 #ap-admin-table th.tablesorter-headerDesc .tablesorter-header-inner::after { content:'\f0dd' !important; opacity:1; color:var(--rp-accent); }
 
-.kn-ac-results { position:absolute; top:100%; left:0; right:0; z-index:9999; margin-top:2px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.12); max-height:220px; overflow-y:auto; display:none; }
-.kn-ac-results.kn-ac-open { display:block; }
-.kn-ac-item { padding:8px 12px; font-size:13px; cursor:pointer; color:#2d3748; border-bottom:1px solid #f7fafc; }
-.kn-ac-item:last-child { border-bottom:none; }
-.kn-ac-item:hover, .kn-ac-item.kn-ac-focused { background:#ebf4ff; color:#2c7a7b; }
+
 
 .gp-kd-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:10px; margin-top:4px; }
 .gp-kd-tile { background:#fff; border:1px solid var(--rp-border); border-radius:7px; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; font-size:13px; text-decoration:none; color:var(--rp-text); transition:box-shadow .12s, border-color .12s; }
@@ -79,9 +75,7 @@ html[data-theme="dark"] .ap-del { border-color:rgba(197,48,48,0.4); color:#fc818
 html[data-theme="dark"] .ap-del:hover { background:rgba(197,48,48,0.15); }
 html[data-theme="dark"] .ap-del.ap-del-confirm { background:#c53030; border-color:#c53030; color:#fff; }
 html[data-theme="dark"] .ap-empty { color:var(--ork-text-muted); }
-html[data-theme="dark"] .kn-ac-results { background:var(--ork-card-bg); border-color:var(--ork-border); box-shadow:0 4px 12px rgba(0,0,0,0.4); }
-html[data-theme="dark"] .kn-ac-item { color:var(--ork-text); border-bottom-color:var(--ork-border); }
-html[data-theme="dark"] .kn-ac-item:hover, html[data-theme="dark"] .kn-ac-item.kn-ac-focused { background:var(--ork-bg-tertiary); color:var(--ork-link-bright); }
+
 html[data-theme="dark"] .gp-kd-tile { background:var(--ork-card-bg); border-color:var(--ork-border); color:var(--ork-text-secondary); }
 html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2px 8px rgba(72,187,120,0.15); color:var(--ork-text); }
 </style>
@@ -127,7 +121,7 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 					<div style="position:relative">
 						<input type="text" id="ap-player-input" placeholder="Search by persona or username&hellip;" autocomplete="off" style="width:100%;box-sizing:border-box">
 						<input type="hidden" id="ap-player-id">
-						<div class="kn-ac-results" id="ap-player-results"></div>
+						
 					</div>
 				</div>
 				<button class="ap-btn" id="ap-add-btn" disabled>
@@ -221,48 +215,26 @@ html[data-theme="dark"] .gp-kd-tile:hover { border-color:#48bb78; box-shadow:0 2
 
 	function apEsc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-	// ── Autocomplete ─────────────────────────────────────────────
-	var apResults = document.getElementById('ap-player-results');
-	var apTimer   = null;
+	// ── Autocomplete via OrkPlayerSearch (global — no scope restriction) ──
+	(function () {
+		var apInput  = document.getElementById('ap-player-input');
+		var apHidden = document.getElementById('ap-player-id');
+		var apBtn    = document.getElementById('ap-add-btn');
 
-	function apClose() { apResults.classList.remove('kn-ac-open'); apResults.innerHTML = ''; }
-
-	function apOpen(items) {
-		if (!items.length) { apClose(); return; }
-		apResults.innerHTML = items.map(function (p) {
-			return '<div class="kn-ac-item" tabindex="-1" data-id="' + p.MundaneId
-				+ '" data-name="' + encodeURIComponent(p.Persona) + '">'
-				+ apEsc(p.Persona)
-				+ ' <span style="color:#a0aec0;font-size:11px">(' + apEsc((p.KAbbr||'') + ':' + (p.PAbbr||'')) + ')</span></div>';
-		}).join('');
-		apResults.classList.add('kn-ac-open');
-	}
-
-	document.getElementById('ap-player-input').addEventListener('input', function () {
-		var term = this.value.trim();
-		document.getElementById('ap-player-id').value = '';
-		document.getElementById('ap-add-btn').disabled = true;
-		if (term.length < 2) { apClose(); return; }
-		clearTimeout(apTimer);
-		apTimer = setTimeout(function () {
-			$.getJSON(AJAX_BASE + 'playersearch&q=' + encodeURIComponent(term), function (data) {
-				apOpen(data || []);
-			}).fail(apClose);
-		}, 220);
-	});
-
-	apResults.addEventListener('click', function (e) {
-		var item = e.target.closest('.kn-ac-item[data-id]');
-		if (!item) return;
-		document.getElementById('ap-player-input').value = decodeURIComponent(item.dataset.name);
-		document.getElementById('ap-player-id').value    = item.dataset.id;
-		document.getElementById('ap-add-btn').disabled   = false;
-		apClose();
-	});
-
-	document.addEventListener('click', function (e) {
-		if (!e.target.closest('#ap-player-input, #ap-player-results')) apClose();
-	});
+		OrkPlayerSearch.attach(apInput, {
+			uir: <?= json_encode(UIR) ?>,
+			// No kingdomId / parkId / restrictTo — system admin is org-wide
+			onSelect: function (player) {
+				apHidden.value = player.MundaneId;
+				apBtn.disabled = false;
+				apInput.focus();
+			},
+			onClear: function () {
+				apHidden.value = '';
+				apBtn.disabled = true;
+			}
+		});
+	})();
 
 	// ── Add ──────────────────────────────────────────────────────
 	function showFb(msg, ok) {
