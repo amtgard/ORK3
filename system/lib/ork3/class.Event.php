@@ -1324,6 +1324,54 @@ class Event extends Ork3
         return Success();
     }
 
+    // Kingdoms the viewer may share this event INTO: derived from AUTH_KINGDOM
+    // grants in ork_authorization (park grants do NOT qualify). Excludes the
+    // event's own owning kingdom; each entry carries whether it is already shared.
+    public function GetShareableKingdomsForEvent($request)
+    {
+        $mundane_id     = (int)($request['MundaneId'] ?? 0);
+        $event_id       = (int)($request['EventId'] ?? 0);
+        $owning_kingdom = (int)($request['OwningKingdomId'] ?? 0);
+        if ($mundane_id <= 0 || !valid_id($event_id)) {
+            return ['Status' => Success(), 'Kingdoms' => []];
+        }
+
+        global $DB;
+        $DB->Clear();
+        $rows = $DB->DataSet(
+            "SELECT DISTINCT k.kingdom_id, k.name AS kingdom_name
+             FROM " . DB_PREFIX . "authorization a
+             JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = a.kingdom_id
+             WHERE a.mundane_id = " . $mundane_id . "
+               AND a.kingdom_id > 0
+               AND a.kingdom_id <> " . $owning_kingdom . "
+               AND a.role IN ('create','edit','admin')
+             ORDER BY k.name"
+        );
+
+        $alreadyShared = [];
+        $DB->Clear();
+        $sh = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "event_kingdom_share WHERE event_id = " . $event_id);
+        if ($sh) {
+            while ($sh->Next()) {
+                $alreadyShared[(int)$sh->kingdom_id] = true;
+            }
+        }
+
+        $kingdoms = [];
+        if ($rows) {
+            while ($rows->Next()) {
+                $kid = (int)$rows->kingdom_id;
+                $kingdoms[] = [
+                    'KingdomId'   => $kid,
+                    'KingdomName' => (string)$rows->kingdom_name,
+                    'IsShared'    => isset($alreadyShared[$kid]),
+                ];
+            }
+        }
+        return ['Status' => Success(), 'Kingdoms' => $kingdoms];
+    }
+
     public function GetSharedKingdomsForEvent($request)
     {
         $event_id = (int)($request['EventId'] ?? 0);

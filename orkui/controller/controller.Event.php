@@ -502,35 +502,11 @@ class Controller_Event extends Controller
         $this->data['ShareableKingdoms'] = [];
         $_owningKingdom = (int)($info['KingdomId'] ?? 0);
         if ($uid > 0 && $_evtStatus === 'published') {
-            $DB->Clear();
-            $_shareRows = $DB->DataSet(
-                "SELECT DISTINCT k.kingdom_id, k.name AS kingdom_name
-                 FROM " . DB_PREFIX . "authorization a
-                 JOIN " . DB_PREFIX . "kingdom k ON k.kingdom_id = a.kingdom_id
-                 WHERE a.mundane_id = " . (int)$uid . "
-                   AND a.kingdom_id > 0
-                   AND a.kingdom_id <> " . $_owningKingdom . "
-                   AND a.role IN ('create','edit','admin')
-                 ORDER BY k.name"
+            $this->data['ShareableKingdoms'] = $this->Event->get_shareable_kingdoms_for_event(
+                $uid,
+                (int)$event_id,
+                $_owningKingdom
             );
-            $_alreadyShared = [];
-            $DB->Clear();
-            $_sh = $DB->DataSet("SELECT kingdom_id FROM " . DB_PREFIX . "event_kingdom_share WHERE event_id = " . (int)$event_id);
-            if ($_sh) {
-                while ($_sh->Next()) {
-                    $_alreadyShared[(int)$_sh->kingdom_id] = true;
-                }
-            }
-            if ($_shareRows) {
-                while ($_shareRows->Next()) {
-                    $_kid = (int)$_shareRows->kingdom_id;
-                    $this->data['ShareableKingdoms'][] = [
-                        'KingdomId'   => $_kid,
-                        'KingdomName' => (string)$_shareRows->kingdom_name,
-                        'IsShared'    => isset($_alreadyShared[$_kid]),
-                    ];
-                }
-            }
         }
         $this->data['EventCanEditStatus'] = $this->data['CanManageEvent'];
         if ($this->Event->is_draft_blocked_for_viewer(
