@@ -1,0 +1,14 @@
+[run]
+source =
+    lib
+    .
+omit =
+    */tests/*
+    tests/*
+    */__pycache__/*
+
+[report]
+omit =
+    */tests/*
+    tests/*
+    */__pycache/*

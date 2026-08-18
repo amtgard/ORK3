@@ -1,266 +1,598 @@
 <?php
 
-class Model_Player extends Model {
+class Model_Player extends Model
+{
+    public function __construct()
+    {
+        parent::__construct();
+        $this->Player = new APIModel('Player');
+        $this->Award = new APIModel('Award');
+    }
 
-	function __construct() {
-		parent::__construct();
-		$this->Player = new APIModel('Player');
-		$this->Award = new APIModel('Award');
-	}
-	
-    function remove_note($request) {
+    public function remove_note($request)
+    {
         return $this->Player->RemoveNote($request);
     }
 
-    function clear_notes($request) {
+    public function clear_notes($request)
+    {
         return $this->Player->ClearNotes($request);
     }
 
-    function edit_note($request) {
-        return Ork3::$Lib->player->EditNote($request);
+    public function edit_note($request)
+    {
+        return $this->_player()->EditNote($request);
     }
-    
-    function get_notes($id) {
+
+    public function get_notes($id)
+    {
         return $this->Player->GetNotes(array('MundaneId' => $id));
     }
-    
-	function update_class_reconciliation($request) {
-		return $this->Player->SetPlayerReconciledCredits($request);
-	}
-	
-	function fetch_player($mundane_id) {
-		$player = $this->Player->GetPlayer(array( 'MundaneId' => $mundane_id, 'Token' => $this->session->token ));
-		if ($player['Status']['Status'] != 0) return false;
-		$player = $player['Player'];
-		return $player;
-	}
-	
-	function fetch_player_details($mundane_id) {
-		$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
-			return $cache;
-		$awards = $this->Player->AwardsForPlayer(array( 'MundaneId' => $mundane_id ));
-		if ($awards['Status']['Status'] != 0) return $awards;
-		$classes = $this->Player->GetPlayerClasses(array( 'MundaneId' => $mundane_id ));
-		if ($classes['Status']['Status'] != 0) return $classes;
-		$details = array( 'Awards' => $awards['Awards'], 'Attendance' => [], 'Classes' => $classes['Classes'] );
-		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $details);
-	}
 
-	function fetch_player_attendance($mundane_id) {
-		$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
-		if (($cache = Ork3::$Lib->ghettocache->get(__CLASS__ . '.' . __FUNCTION__, $key, 60)) !== false)
-			return $cache;
-		$attendance = $this->Player->AttendanceForPlayer(array( 'MundaneId' => $mundane_id ));
-		if ($attendance['Status']['Status'] != 0) return [];
-		return Ork3::$Lib->ghettocache->cache(__CLASS__ . '.' . __FUNCTION__, $key, $attendance['Attendance'] ?? []);
-	}
+    public function update_class_reconciliation($request)
+    {
+        return $this->Player->SetPlayerReconciledCredits($request);
+    }
 
-	private function bust_player_details_cache($request) {
-		$mundane_id = $request['RecipientId'] ?? $request['MundaneId'] ?? null;
-		if (!$mundane_id) return;
-		$key = Ork3::$Lib->ghettocache->key(['MundaneId' => $mundane_id]);
-		Ork3::$Lib->ghettocache->bust('Model_Player.fetch_player_details', $key);
-	}
+    public function fetch_player($mundane_id)
+    {
+        $player = $this->Player->GetPlayer(array( 'MundaneId' => $mundane_id, 'Token' => $this->session->token ));
+        if ($player['Status']['Status'] != 0) {
+            return false;
+        }
+        $player = $player['Player'];
+        return $player;
+    }
 
-	// Bust the kingdom + park roster caches for the player's current home.
-	// Roster JSON is cached for 20 minutes and was previously never invalidated when a
-	// player's name, persona, or restricted flag changed — leading to stale rosters
-	// (e.g. a restricted player still showed up in client-side searches by mundane name
-	// for up to 20 minutes after the toggle).
-	private function bust_player_roster_caches($request) {
-		$mundane_id = (int)($request['RecipientId'] ?? $request['MundaneId'] ?? 0);
-		if (!$mundane_id) return;
-		global $DB;
-		$DB->Clear();
-		$rs = $DB->DataSet("SELECT kingdom_id, park_id FROM " . DB_PREFIX . "mundane WHERE mundane_id = $mundane_id LIMIT 1");
-		if (!$rs || !$rs->Next()) return;
-		$kid = (int)$rs->kingdom_id;
-		$pid = (int)$rs->park_id;
-		if ($kid > 0) {
-			$kKey = Ork3::$Lib->ghettocache->key(['KingdomId' => $kid]);
-			Ork3::$Lib->ghettocache->bust('Controller_Kingdom.players_json', $kKey);
-		}
-		if ($pid > 0) {
-			$pKey = Ork3::$Lib->ghettocache->key(['ParkId' => $pid]);
-			Ork3::$Lib->ghettocache->bust('Controller_Park.park_players', $pKey);
-		}
-	}
+    public function fetch_player_details($mundane_id)
+    {
+        return $this->_player()->GetPlayerProfileDetails((int) $mundane_id);
+    }
 
-	function delete_player_award($request) {
-		$r = $this->Player->RemoveAward($request);
-		if ($r['Status']['Status'] == 0) $this->bust_player_details_cache($request);
-		return $r;
-	}
+    public function fetch_player_attendance($mundane_id)
+    {
+        return $this->_player()->GetPlayerAttendanceList((int) $mundane_id);
+    }
 
-	function revoke_player_award($request) {
-		$r = $this->Player->RevokeAward($request);
-		if ($r['Status']['Status'] == 0) $this->bust_player_details_cache($request);
-		return $r;
-	}
+    private function bust_player_details_cache($request)
+    {
+        $mundane_id = $request['RecipientId'] ?? $request['MundaneId'] ?? null;
+        if (!$mundane_id) {
+            return;
+        }
+        $this->_player()->bustPlayerProfileCaches((int) $mundane_id);
+    }
 
-	function reactivate_player_award($request) {
-		$r = $this->Player->ReactivateAward($request);
-		if ($r['Status']['Status'] == 0) $this->bust_player_details_cache($request);
-		return $r;
-	}
+    // Bust the kingdom + park roster caches for the player's current home.
+    // Roster JSON is cached for 20 minutes and was previously never invalidated when a
+    // player's name, persona, or restricted flag changed — leading to stale rosters
+    // (e.g. a restricted player still showed up in client-side searches by mundane name
+    // for up to 20 minutes after the toggle).
+    private function bust_player_roster_caches($request)
+    {
+        $mundane_id = (int)($request['RecipientId'] ?? $request['MundaneId'] ?? 0);
+        if (!$mundane_id) {
+            return;
+        }
+        $this->_player()->bustRosterCachesForPlayer($mundane_id);
+    }
 
-	function add_note($request) {
-		return $this->Player->AddNote($request);
-	}
-	
-	function revoke_all_awards($request) {
-		$r = $this->Player->RevokeAllAwards($request);
-		if ($r['Status']['Status'] == 0) { $this->bust_player_details_cache($request); }
-		return $r;
-	}
-	
-	function add_player_award($request) {
-		$r = $this->Player->AddAward($request);
-		if ($r['Status']['Status'] == 0) { $this->bust_player_details_cache($request); }
-		return $r;
-	}
+    public function delete_player_award($request)
+    {
+        $r = $this->Player->RemoveAward($request);
+        if ($r['Status']['Status'] == 0) {
+            $this->bust_player_details_cache($request);
+        }
+        return $r;
+    }
 
-	function update_player_award($request) {
-		$r = $this->Player->UpdateAward($request);
-		if ($r['Status']['Status'] == 0) { $this->bust_player_details_cache($request); }
-		return $r;
-	}
+    public function revoke_player_award($request)
+    {
+        $r = $this->Player->RevokeAward($request);
+        if ($r['Status']['Status'] == 0) {
+            $this->bust_player_details_cache($request);
+        }
+        return $r;
+    }
 
-	function reconcile_player_award($request) {
-		return $this->Player->ReconcileAward($request);
-	}
+    public function reactivate_player_award($request)
+    {
+        $r = $this->Player->ReactivateAward($request);
+        if ($r['Status']['Status'] == 0) {
+            $this->bust_player_details_cache($request);
+        }
+        return $r;
+    }
 
-	function add_dues($request) {
-		return $this->Player->AddDues($request);
-	}
+    public function add_note($request)
+    {
+        return $this->Player->AddNote($request);
+    }
 
-	function get_dues($id, $exclude_revoked = 0, $active = false) {
+    public function revoke_all_awards($request)
+    {
+        $r = $this->Player->RevokeAllAwards($request);
+        if ($r['Status']['Status'] == 0) {
+            $this->bust_player_details_cache($request);
+        }
+        return $r;
+    }
+
+    public function add_player_award($request)
+    {
+        $r = $this->Player->AddAward($request);
+        if ($r['Status']['Status'] == 0) {
+            $this->bust_player_details_cache($request);
+        }
+        return $r;
+    }
+
+    public function update_player_award($request)
+    {
+        $r = $this->Player->UpdateAward($request);
+        if ($r['Status']['Status'] == 0) {
+            $this->bust_player_details_cache($request);
+        }
+        return $r;
+    }
+
+    public function reconcile_player_award($request)
+    {
+        return $this->Player->ReconcileAward($request);
+    }
+
+    public function add_dues($request)
+    {
+        return $this->Player->AddDues($request);
+    }
+
+    public function get_dues($id, $exclude_revoked = 0, $active = false)
+    {
         return $this->Player->GetDues(array('MundaneId' => $id, 'ExcludeRevoked' => $exclude_revoked, 'Active' => $active));
-	}
+    }
 
-	function revoke_dues($request) {
+    public function revoke_dues($request)
+    {
         return $this->Player->RevokeDues($request);
-	}
-	
-	function one_shot($request) {
-		return $this->Player->AddOneShotFaceImage($request); 
-	}
-  
-	function update_player($request) {
-		$r = $this->Player->UpdatePlayer($request);
-		$this->bust_player_details_cache($request);
-		$this->bust_player_roster_caches($request);
-		return $r;
-	}
-	
-	function set_ban($request) {
-		$r = $this->Player->SetBan($request);
-		return $r;
-	}
-	function create_player($request) {
-		return $this->Player->CreatePlayer($request);
-	}
-	function create_selfreg_link($request) {
-		return $this->Player->CreateSelfRegLink($request);
-	}
-	function validate_selfreg_link($token) {
-		return $this->Player->ValidateSelfRegLink(['SelfRegToken' => $token]);
-	}
-	function self_register($request) {
-		return $this->Player->SelfRegister($request);
-	}
-	function move_player($request) {
-		// Bust source kingdom/park caches BEFORE the move (player still has old park_id),
-		// and again AFTER so the destination's caches refresh too.
-		$this->bust_player_roster_caches($request);
-		$r = $this->Player->MovePlayer($request);
-		$this->bust_player_roster_caches($request);
-		$this->bust_player_details_cache($request);
-		return $r;
-	}
+    }
 
-	function suspend_player($request) {
-		$r = $this->Player->SetPlayerSuspension($request);
-		$this->bust_player_roster_caches($request);
-		$this->bust_player_details_cache($request);
-		return $r;
-	}
+    public function one_shot($request)
+    {
+        return $this->Player->AddOneShotFaceImage($request);
+    }
 
-	function merge_player($request) {
-		$r = $this->Player->MergePlayer($request);
-		$this->bust_player_roster_caches($request);
-		$this->bust_player_details_cache($request);
-		return $r;
-	}
+    public function update_player($request)
+    {
+        $r = $this->Player->UpdatePlayer($request);
+        $this->bust_player_details_cache($request);
+        $this->bust_player_roster_caches($request);
+        return $r;
+    }
 
-	function reset_waivers($request) {
-		return $this->Player->ResetWaivers($request);
-	}
+    public function set_ban($request)
+    {
+        $r = $this->Player->SetBan($request);
+        return $r;
+    }
+    public function create_player($request)
+    {
+        return $this->Player->CreatePlayer($request);
+    }
+    public function create_selfreg_link($request)
+    {
+        return $this->Player->CreateSelfRegLink($request);
+    }
+    public function validate_selfreg_link($token)
+    {
+        return $this->Player->ValidateSelfRegLink(['SelfRegToken' => $token]);
+    }
+    public function self_register($request)
+    {
+        return $this->Player->SelfRegister($request);
+    }
+    public function move_player($request)
+    {
+        // Bust source kingdom/park caches BEFORE the move (player still has old park_id),
+        // and again AFTER so the destination's caches refresh too.
+        $this->bust_player_roster_caches($request);
+        $r = $this->Player->MovePlayer($request);
+        $this->bust_player_roster_caches($request);
+        $this->bust_player_details_cache($request);
+        return $r;
+    }
 
-	function add_player_recommendation($request) {
-		return $this->Player->AddAwardRecommendation($request);
-	}
+    public function suspend_player($request)
+    {
+        $r = $this->Player->SetPlayerSuspension($request);
+        $this->bust_player_roster_caches($request);
+        $this->bust_player_details_cache($request);
+        return $r;
+    }
 
-	function delete_player_recommendation($request) {
-		return $this->Player->DeleteAwardRecommendation($request);
-	}
+    public function merge_player($request)
+    {
+        $r = $this->Player->MergePlayer($request);
+        $this->bust_player_roster_caches($request);
+        $this->bust_player_details_cache($request);
+        return $r;
+    }
 
-	function resolve_player_recommendation_cluster($request) {
-		return $this->Player->ResolveRecommendationCluster($request);
-	}
+    public function reset_waivers($request)
+    {
+        return $this->Player->ResetWaivers($request);
+    }
 
-	function restore_player_recommendation($request) {
-		return $this->Player->RestoreAwardRecommendation($request);
-	}
+    public function add_player_recommendation($request)
+    {
+        return $this->Player->AddAwardRecommendation($request);
+    }
 
-	function snooze_recommendation($request) {
-		return $this->Player->SnoozeAwardRecommendation($request);
-	}
+    public function resolve_player_recommendation_cluster($request)
+    {
+        return $this->Player->ResolveRecommendationCluster($request);
+    }
 
-	function unsnooze_recommendation($request) {
-		return $this->Player->UnsnoozeAwardRecommendation($request);
-	}
+    public function snooze_recommendation($request)
+    {
+        return $this->Player->SnoozeAwardRecommendation($request);
+    }
 
-	function set_recommendation_passed_to_local($request) {
-		return $this->Player->SetRecommendationPassedToLocal($request);
-	}
+    public function unsnooze_recommendation($request)
+    {
+        return $this->Player->UnsnoozeAwardRecommendation($request);
+    }
 
-	function remove_heraldry($request) {
-		return $this->Player->RemoveHeraldry($request);
-	}
+    public function set_recommendation_passed_to_local($request)
+    {
+        return $this->Player->SetRecommendationPassedToLocal($request);
+    }
 
-	function remove_image($request) {
-		return $this->Player->RemoveImage($request);
-	}
+    public function delete_player_recommendation($request)
+    {
+        return $this->Player->DeleteAwardRecommendation($request);
+    }
 
-	function get_custom_milestones($mundane_id) {
-		return Ork3::$Lib->player->GetCustomMilestones($mundane_id);
-	}
+    public function restore_player_recommendation($request)
+    {
+        return $this->Player->RestoreAwardRecommendation($request);
+    }
 
-	function add_custom_milestone($request) {
-		return Ork3::$Lib->player->AddCustomMilestone($request);
-	}
+    public function remove_heraldry($request)
+    {
+        return $this->Player->RemoveHeraldry($request);
+    }
 
-	function update_custom_milestone($request) {
-		return Ork3::$Lib->player->UpdateCustomMilestone($request);
-	}
+    public function remove_image($request)
+    {
+        return $this->Player->RemoveImage($request);
+    }
 
-	function delete_custom_milestone($request) {
-		return Ork3::$Lib->player->DeleteCustomMilestone($request);
-	}
+    public function get_circle_award_ids($mundane_id)
+    {
+        return $this->_player()->GetCircleAwardIds($mundane_id);
+    }
 
-	function get_latest_attendance_date($mundane_id) {
-		return Ork3::$Lib->player->get_latest_attendance_date($mundane_id);
-	}
+    public function player_info($token_or_id)
+    {
+        return $this->_player()->player_info($token_or_id);
+    }
 
-	function get_earliest_attendance_date($mundane_id) {
-		return Ork3::$Lib->player->get_earliest_attendance_date($mundane_id);
-	}
+    public function get_custom_milestones($mundane_id)
+    {
+        return $this->_player()->GetCustomMilestones($mundane_id);
+    }
 
-	function get_earliest_park_attendance_date($mundane_id, $park_id) {
-		return Ork3::$Lib->player->get_earliest_park_attendance_date($mundane_id, $park_id);
-	}
+    public function add_custom_milestone($request)
+    {
+        return $this->_player()->AddCustomMilestone($request);
+    }
+
+    public function update_custom_milestone($request)
+    {
+        return $this->_player()->UpdateCustomMilestone($request);
+    }
+
+    public function delete_custom_milestone($request)
+    {
+        return $this->_player()->DeleteCustomMilestone($request);
+    }
+
+    public function get_latest_attendance_date($mundane_id)
+    {
+        return $this->_player()->get_latest_attendance_date($mundane_id);
+    }
+
+    public function get_earliest_attendance_date($mundane_id)
+    {
+        return $this->_player()->get_earliest_attendance_date($mundane_id);
+    }
+
+    public function get_earliest_park_attendance_date($mundane_id, $park_id)
+    {
+        return $this->_player()->get_earliest_park_attendance_date($mundane_id, $park_id);
+    }
+
+    public function get_custom_title_award_id()
+    {
+        return $this->_player()->getCustomTitleAwardId();
+    }
+
+    public function has_notes($mundane_id)
+    {
+        return $this->_player()->GetNotesCount($mundane_id);
+    }
+
+    public function get_officer_roles($mundane_id)
+    {
+        $r = $this->_player()->GetOfficerRoles([
+            'Token' => $this->session->token ?? '',
+            'MundaneId' => (int) $mundane_id,
+        ]);
+        if (isset($r['Status'])) {
+            return [];
+        }
+
+        return $r;
+    }
+
+    public function get_display_grants($mundane_id)
+    {
+        $r = $this->_player()->GetDisplayGrants([
+            'Token' => $this->session->token ?? '',
+            'MundaneId' => (int) $mundane_id,
+        ]);
+        if (isset($r['Status'])) {
+            return ['IsOrkAdmin' => false, 'AdminGrants' => []];
+        }
+
+        return $r;
+    }
+
+    public function get_beltline_for_player($mundane_id, $viewer_mundane_id = 0)
+    {
+        $r = $this->_player()->GetBeltlineForPlayer([
+            'Token' => $this->session->token ?? '',
+            'MundaneId' => (int) $mundane_id,
+            'ViewerMundaneId' => (int) $viewer_mundane_id,
+        ]);
+        if (isset($r['Status'])) {
+            return [
+                'Peers' => [],
+                'Associates' => [],
+                'MyAssociates' => [],
+                'Titles' => [],
+            ];
+        }
+
+        return $r;
+    }
+
+    public function get_reconcile_award_map($kingdom_id)
+    {
+        return $this->_player()->GetReconcileAwardMap($kingdom_id);
+    }
+
+    /**
+     * Pure historical partition + smart-rank (no kingdom map / no DB).
+     *
+     * @param list<array<string, mixed>> $awards
+     * @return array{
+     *   HistoricalAwards: list<array<string, mixed>>,
+     *   RankSuggestions: array<int, int>,
+     *   RealRanksByAwardId: array<int, list<int>>,
+     *   Summary: array{AwardTypeCount: int, TotalCount: int},
+     *   HasHistoricalLadder: bool
+     * }
+     */
+    public function get_reconcile_suggestions(array $awards): array
+    {
+        return $this->_player()->GetReconcileSuggestions($awards);
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     * @return array{
+     *   HistoricalAwards: list<array<string, mixed>>,
+     *   RankSuggestions: array<int, int>,
+     *   RealRanksByAwardId: array<int, list<int>>,
+     *   AwardIdToKingdomAwardId: array<int, int>,
+     *   Summary: array{AwardTypeCount: int, TotalCount: int},
+     *   HasHistoricalLadder: bool
+     * }
+     */
+    public function get_reconcile_page_data(array $request): array
+    {
+        $empty = [
+            'HistoricalAwards' => [],
+            'RankSuggestions' => [],
+            'RealRanksByAwardId' => [],
+            'AwardIdToKingdomAwardId' => [],
+            'Summary' => ['AwardTypeCount' => 0, 'TotalCount' => 0],
+            'HasHistoricalLadder' => false,
+        ];
+        $response = $this->_player()->GetReconcilePageData($request);
+        if (($response['Status'] ?? 1) != 0) {
+            return $empty;
+        }
+        $detail = $response['Detail'] ?? null;
+
+        return is_array($detail) ? array_merge($empty, $detail) : $empty;
+    }
+
+    public function get_highest_class_level(int $mundane_id): int
+    {
+        return $this->_player()->GetHighestClassLevel($mundane_id);
+    }
+
+    /**
+     * ClassLevel::THRESHOLDS for client UX (PnConfig) — single source, no UI copy.
+     *
+     * @return list<float|int>
+     */
+    public function get_class_level_thresholds(): array
+    {
+        return ClassLevel::THRESHOLDS;
+    }
+
+    /**
+     * @return array{Level: int, ToNext: ?float}
+     */
+    public function compute_class_level(float $credits): array
+    {
+        return ClassLevel::computeClassLevel($credits);
+    }
+
+    public function get_class_paragon_map(): array
+    {
+        return Award::GetClassParagonMap();
+    }
+
+    public function get_ladder_master_map(): array
+    {
+        return Award::GetLadderMasterMap();
+    }
+
+    public function get_knight_award_map(): array
+    {
+        return Award::GetKnightAwardMap();
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     * @return list<array<string, mixed>>
+     */
+    public function get_player_milestones(array $request): array
+    {
+        $response = $this->_player()->GetPlayerMilestones($request);
+        if (($response['Status'] ?? 1) != 0) {
+            return [];
+        }
+
+        return is_array($response['Detail'] ?? null) ? $response['Detail'] : [];
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     * @return list<array<string, mixed>>
+     */
+    public function get_ladder_progress(array $request): array
+    {
+        $response = $this->_player()->GetLadderProgress($request);
+        if (($response['Status'] ?? 1) != 0) {
+            return [];
+        }
+
+        return is_array($response['Detail'] ?? null) ? $response['Detail'] : [];
+    }
+
+    public function dismiss_whats_new($mundane_id, $version)
+    {
+        return $this->_player()->DismissWhatsNew((int)$mundane_id, (string)$version);
+    }
+
+    /** @return array{BasicFonts: int, DyslexiaFonts: int} */
+    public function get_viewer_preferences(int $mundane_id): array
+    {
+        return $this->_player()->GetViewerPreferences($mundane_id);
+    }
+
+    public function get_whats_new_seen(int $mundane_id, string $version): bool
+    {
+        return $this->_player()->GetWhatsNewSeen($mundane_id, $version);
+    }
+
+    /** @return array{KingdomId: int, ParentKingdomId: int} */
+    public function get_home_kingdom(int $mundane_id): array
+    {
+        return $this->_player()->GetHomeKingdom($mundane_id);
+    }
+
+    public function check_username_available($username, $exclude_mundane_id = 0)
+    {
+        return $this->_player()->CheckUsernameAvailable($username, $exclude_mundane_id);
+    }
+
+    public function username_check_payload($candidate)
+    {
+        $candidate = trim((string)$candidate);
+        if (strlen($candidate) < 4) {
+            return ['status' => 0, 'available' => false, 'reason' => 'too-short', 'username' => $candidate];
+        }
+        $available = $this->check_username_available($candidate);
+        return ['status' => 0, 'available' => $available, 'username' => $candidate];
+    }
+
+    public static function username_check_payload_for($candidate, $player = null)
+    {
+        if ($player === null) {
+            $player = new Model_Player();
+        }
+        return $player->username_check_payload($candidate);
+    }
+
+    public function add_second_to_recommendation($request)
+    {
+        return $this->_player()->AddSecondToRecommendation($request);
+    }
+
+    public function edit_second_notes($request)
+    {
+        return $this->_player()->EditSecondNotes($request);
+    }
+
+    public function withdraw_second($request)
+    {
+        return $this->_player()->WithdrawSecond($request);
+    }
+
+    public function edit_award_recommendation_reason($request)
+    {
+        return $this->_player()->EditAwardRecommendationReason($request);
+    }
+
+    public function get_dietary_preferences($mundane_id)
+    {
+        return $this->_player()->GetDietaryPreferences($mundane_id);
+    }
+
+    public function save_dietary_preferences($mundane_id, $data)
+    {
+        return $this->_player()->SaveDietaryPreferences($mundane_id, $data);
+    }
+
+    public function get_award_max_ranks($mundane_id)
+    {
+        return $this->_player()->GetAwardMaxRanks($mundane_id);
+    }
+
+    public function save_own_email($email)
+    {
+        return $this->_player()->SaveOwnEmail([
+            'Token' => $this->session->token,
+            'Email' => $email,
+        ]);
+    }
+
+    public function get_persona(int $mundaneId): string
+    {
+        return $this->Player->GetPersona($mundaneId);
+    }
+
+    public function get_revoked_awards(int $mundaneId): array
+    {
+        $r = $this->Player->GetRevokedAwardsForPlayer([
+            'Token' => $this->session->token ?? '',
+            'MundaneId' => $mundaneId,
+        ]);
+        if (isset($r['Status'])) {
+            return ['RevokedAwards' => [], 'RevokedTitles' => []];
+        }
+
+        return $r;
+    }
+
+    private function _player(): Player
+    {
+        return new Player();
+    }
 }
-
-?>
